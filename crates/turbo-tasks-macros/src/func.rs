@@ -319,13 +319,27 @@ impl TurboFn {
             let inputs = self.inputs();
             parse_quote! {
                 {
+                    let turbo_tasks_transient = #( turbo_tasks::TaskInput::is_transient(&#inputs) ||)* false;
+                    let turbo_tasks_trait = *#trait_type_id_ident;
+                    let turbo_tasks_name = std::borrow::Cow::Borrowed(stringify!(#ident));
+                    let turbo_tasks_this = #converted_this;
+                    let turbo_tasks_arg = Box::new((#(#inputs,)*)) as Box<dyn turbo_tasks::MagicAny>;
                     <#output as turbo_tasks::task::TaskOutput>::try_from_raw_vc(
-                        turbo_tasks::trait_call(
-                            *#trait_type_id_ident,
-                            std::borrow::Cow::Borrowed(stringify!(#ident)),
-                            #converted_this,
-                            Box::new((#(#inputs,)*)) as Box<dyn turbo_tasks::MagicAny>,
-                        )
+                        if turbo_tasks_transient {
+                            turbo_tasks::transient_trait_call(
+                                turbo_tasks_trait,
+                                turbo_tasks_name,
+                                turbo_tasks_this,
+                                turbo_tasks_arg,
+                            )
+                        } else {
+                            turbo_tasks::trait_call(
+                                turbo_tasks_trait,
+                                turbo_tasks_name,
+                                turbo_tasks_this,
+                                turbo_tasks_arg,
+                            )
+                        }
                     )
                 }
             }
@@ -346,23 +360,45 @@ impl TurboFn {
         if let Some(converted_this) = self.converted_this() {
             parse_quote! {
                 {
+                    let turbo_tasks_transient = #( turbo_tasks::TaskInput::is_transient(&#inputs) ||)* false;
+                    let turbo_tasks_func = *#native_function_id_ident;
+                    let turbo_tasks_this = #converted_this;
+                    let turbo_tasks_arg = Box::new((#(#inputs,)*)) as Box<dyn turbo_tasks::MagicAny>;
                     <#output as turbo_tasks::task::TaskOutput>::try_from_raw_vc(
-                        turbo_tasks::dynamic_this_call(
-                            *#native_function_id_ident,
-                            #converted_this,
-                            Box::new((#(#inputs,)*)) as Box<dyn turbo_tasks::MagicAny>,
-                        )
+                        if turbo_tasks_transient {
+                            turbo_tasks::transient_dynamic_this_call(
+                                turbo_tasks_func,
+                                turbo_tasks_this,
+                                turbo_tasks_arg,
+                            )
+                        } else {
+                            turbo_tasks::dynamic_this_call(
+                                turbo_tasks_func,
+                                turbo_tasks_this,
+                                turbo_tasks_arg,
+                            )
+                        }
                     )
                 }
             }
         } else {
             parse_quote! {
                 {
+                    let turbo_tasks_transient = #( turbo_tasks::TaskInput::is_transient(&#inputs) ||)* false;
+                    let turbo_tasks_func = *#native_function_id_ident;
+                    let turbo_tasks_arg = Box::new((#(#inputs,)*)) as Box<dyn turbo_tasks::MagicAny>;
                     <#output as turbo_tasks::task::TaskOutput>::try_from_raw_vc(
-                        turbo_tasks::dynamic_call(
-                            *#native_function_id_ident,
-                            Box::new((#(#inputs,)*)) as Box<dyn turbo_tasks::MagicAny>,
-                        )
+                        if turbo_tasks_transient {
+                            turbo_tasks::transient_dynamic_call(
+                                turbo_tasks_func,
+                                turbo_tasks_arg,
+                            )
+                        } else {
+                            turbo_tasks::dynamic_call(
+                                turbo_tasks_func,
+                                turbo_tasks_arg,
+                            )
+                        }
                     )
                 }
             }
