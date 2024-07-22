@@ -475,9 +475,9 @@ pub fn should_skip_tree_shaking(m: &Program, special_exports: &[RcStr]) -> bool 
             }
         }
 
-        let mut visitor = ShouldAbort::default();
+        let mut visitor = ShouldSkip::default();
         m.visit_with(&mut visitor);
-        if visitor.abort {
+        if visitor.skip {
             return true;
         }
 
@@ -492,23 +492,23 @@ pub fn should_skip_tree_shaking(m: &Program, special_exports: &[RcStr]) -> bool 
 }
 
 #[derive(Default)]
-struct ShouldAbort {
-    abort: bool,
+struct ShouldSkip {
+    skip: bool,
 }
 
-impl Visit for ShouldAbort {
+impl Visit for ShouldSkip {
     fn visit_expr_stmt(&mut self, e: &ExprStmt) {
         e.visit_children_with(self);
 
         if let Expr::Lit(Lit::Str(Str { value, .. })) = &*e.expr {
             if value == "use server" {
-                self.abort = true;
+                self.skip = true;
             }
         }
     }
 
     fn visit_stmt(&mut self, n: &Stmt) {
-        if self.abort {
+        if self.skip {
             return;
         }
 
@@ -524,7 +524,7 @@ impl Visit for ShouldAbort {
         }) = &*n.arg
         {
             if expr.is_ident_ref_to("__turbopack_wasm_module__") {
-                self.abort = true;
+                self.skip = true;
                 return;
             }
         }
