@@ -490,6 +490,7 @@ impl<'a> TaskHasher<'a> {
                         "JB_INTERPRETER",
                         "_JETBRAINS_TEST_RUNNER_RUN_SCOPE_TYPE",
                         // Vercel specific
+                        "VERCEL",
                         "VERCEL_*",
                         "NEXT_*",
                         "USE_OUTPUT_FOR_EDGE_FUNCTIONS",

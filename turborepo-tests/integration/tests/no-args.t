@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../helpers/setup.sh
+  $ . ${TESTDIR}/../../helpers/setup_integration_test.sh
 
 Make sure exit code is 2 when no args are passed
   $ ${TURBO}
@@ -14,6 +14,7 @@ Make sure exit code is 2 when no args are passed
     generate    Generate a new app / package
     telemetry   Enable or disable anonymous telemetry
     scan        Turbo your monorepo by running a number of 'repo lints' to identify common issues, suggest fixes, and improve performance
+    ls          EXPERIMENTAL: List packages in your monorepo
     link        Link your local directory to a Vercel organization and enable remote caching
     login       Login to your Vercel account
     logout      Logout to your Vercel account
@@ -111,10 +112,26 @@ Make sure exit code is 2 when no args are passed
             Use "none" to remove prefixes from task logs. Use "task" to get task id prefixing. Use "auto" to let turbo decide how to prefix the logs based on the execution environment. In most cases this will be the same as "task". Note that tasks running in parallel interleave their logs, so removing prefixes can make it difficult to associate logs with tasks. Use --log-order=grouped to prevent interleaving. (default auto) [default: auto] [possible values: auto, none, task]
   [1]
 
+Run without any tasks, get a list of potential tasks to run
   $ ${TURBO} run
-    x at least one task must be specified
+  No tasks provided, here are some potential ones to run
   
+    build
+      my-app, util
+    maybefails
+      my-app, util
   [1]
+
+Run again with a filter and get only the packages that match
+  $ ${TURBO} run --filter my-app
+  No tasks provided, here are some potential ones to run
+  
+    build
+      my-app
+    maybefails
+      my-app
+  [1]
+
 
 Run again with an environment variable that corresponds to a run argument and assert that
 we get the full help output.
@@ -122,3 +139,79 @@ we get the full help output.
   [1]
   $ cat out.txt | head -n1
   The build system that makes ship happen
+
+Initialize a new monorepo
+  $ . ${TESTDIR}/../../helpers/setup_integration_test.sh composable_config > /dev/null 2>&1
+
+  $ ${TURBO} run
+  No tasks provided, here are some potential ones to run
+  
+    build
+      invalid-config, my-app, util
+    maybefails
+      my-app, util
+    add-keys-task
+      add-keys
+    add-keys-underlying-task
+      add-keys
+    added-task
+      add-tasks
+    cached-task-1
+      cached
+    cached-task-2
+      cached
+    cached-task-3
+      cached
+    cached-task-4
+      missing-workspace-config
+    config-change-task
+      config-change
+    cross-workspace-task
+      cross-workspace
+    cross-workspace-underlying-task
+      blank-pkg
+    missing-workspace-config-task
+      missing-workspace-config
+    missing-workspace-config-task-with-deps
+      missing-workspace-config
+    missing-workspace-config-underlying-task
+      missing-workspace-config
+    missing-workspace-config-underlying-topo-task
+      blank-pkg
+    omit-keys-task
+      omit-keys
+    omit-keys-task-with-deps
+      omit-keys
+    omit-keys-underlying-task
+      omit-keys
+    omit-keys-underlying-topo-task
+      blank-pkg
+    override-values-task
+      override-values
+    override-values-task-with-deps
+      override-values
+    override-values-task-with-deps-2
+      override-values
+    override-values-underlying-task
+      override-values
+    override-values-underlying-topo-task
+      blank-pkg
+    persistent-task-1
+      persistent
+    persistent-task-1-parent
+      persistent
+    persistent-task-2
+      persistent
+    persistent-task-2-parent
+      persistent
+    persistent-task-3
+      persistent
+    persistent-task-3-parent
+      persistent
+    persistent-task-4
+      persistent
+    persistent-task-4-parent
+      persistent
+    trailing-comma
+      bad-json
+  [1]

@@ -24,8 +24,8 @@ impl<'a> PnpmDetector<'a> {
     }
 
     pub fn detect_pnpm6_or_pnpm(version: &Version) -> Result<PackageManager, Error> {
-        let pnpm6_constraint: Range = "<7.0.0".parse()?;
-        let pnpm9_constraint: Range = ">=9.0.0-alpha.0".parse()?;
+        let pnpm6_constraint: Range = "<7.0.0".parse().expect("valid version");
+        let pnpm9_constraint: Range = ">=9.0.0-alpha.0".parse().expect("valid version");
         if pnpm6_constraint.satisfies(version) {
             Ok(PackageManager::Pnpm6)
         } else if pnpm9_constraint.satisfies(version) {
