@@ -81,7 +81,7 @@ Additionally, Turborepo has a built-in set of global passthrough variables for c
   include them in [`env`](#env) or [`globalEnv`](#globalenv).
 </Callout>
 
-### ui
+### `ui`
 
 Default: `"stream"`
 
@@ -94,6 +94,28 @@ Select a terminal UI for the repository.
   "ui": "tui" | "stream"
 }
 ```
+
+### `dangerouslyDisablePackageManagerCheck`
+
+Default: `false`
+
+Turborepo uses your repository's lockfile to determine caching behavior, [Package Graphs](https://turbo.build/repo/docs/core-concepts/internal-packages), and more. Because of this, we use [the `packageManager` field](https://nodejs.org/api/packages.html#packagemanager) to help you stabilize your Turborepo.
+
+To help with incremental migration or in situations where you can't use the `packageManager` field, you may use `--dangerously-disable-package-manager-check` to opt out of this check and assume the risks of unstable lockfiles producing unpredictable behavior. When disabled, Turborepo will attempt a best-effort discovery of the intended package manager meant for the repository.
+
+```jsonc title="./turbo.json"
+{
+  "dangerouslyDisablePackageManagerCheck": true
+}
+```
+
+<Callout type="info">
+  You may also opt out of this check via
+  [`flag`](/repo/docs/reference/run#dangerously-disable-package-manager-check)
+  or the
+  [`TURBO_DANGEROUSLY_DISABLE_PACKAGE_MANAGER_CHECK`](https://turbo.build/repo/docs/reference/system-environment-variables)
+  environment variable.
+</Callout>
 
 ## Defining tasks
 

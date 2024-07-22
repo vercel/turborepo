@@ -82,6 +82,20 @@ Set the working directory of the command.
 turbo run build --cwd=./somewhere/else/in/your/repo
 ```
 
+### `--dangerously-disable-package-manager-check`
+
+Turborepo uses your repository's lockfile to determine caching behavior, [Package Graphs](https://turbo.build/repo/docs/core-concepts/internal-packages), and more. Because of this, we use [the `packageManager` field](https://nodejs.org/api/packages.html#packagemanager) to help you stabilize your Turborepo.
+
+To help with incremental migration or in situations where you cannot use the `packageManager` field, you may use `--dangerously-disable-package-manager-check` to opt out of this check and assume the risks of unstable lockfiles producing unpredictable behavior. When disabled, Turborepo will attempt a best-effort discovery of the intended package manager meant for the repository.
+
+<Callout type="info">
+  You may also opt out of this check using [configuration in
+  `turbo.json`](/repo/docs/reference/configuration#dangerouslydisablepacakgemanagercheck)
+  or the
+  [`TURBO_DANGEROUSLY_DISABLE_PACKAGE_MANAGER_CHECK`](/repo/docs/reference/system-environment-variables)
+  environment variable for broader coverage.
+</Callout>
+
 ### `--dry / --dry-run`
 
 Instead of executing tasks, display details about the packages and tasks that would be run.
