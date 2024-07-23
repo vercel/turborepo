@@ -191,7 +191,6 @@ impl<T> Deref for Spanned<T> {
         &self.value
     }
 }
-
 pub trait WithMetadata {
     fn add_text(&mut self, text: Arc<str>);
     fn add_path(&mut self, path: Arc<str>);

@@ -9,7 +9,7 @@ use clap::{
 use clap_complete::{generate, Shell};
 pub use error::Error;
 use serde::Serialize;
-use tracing::{debug, error};
+use tracing::{debug, error, log::warn};
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::AnonAPIClient;
 use turborepo_repository::inference::{RepoMode, RepoState};
@@ -26,8 +26,8 @@ use turborepo_ui::UI;
 use crate::{
     cli::error::print_potential_tasks,
     commands::{
-        bin, daemon, generate, info, link, login, logout, prune, run, scan, telemetry, unlink,
-        CommandBase,
+        bin, config, daemon, generate, link, login, logout, ls, prune, run, scan, telemetry,
+        unlink, CommandBase,
     },
     get_version,
     run::watch::WatchClient,
@@ -491,13 +491,20 @@ pub enum Command {
     },
     /// Turbo your monorepo by running a number of 'repo lints' to
     /// identify common issues, suggest fixes, and improve performance.
-    Scan {},
+    Scan,
     #[clap(hide = true)]
-    Info {
-        workspace: Option<String>,
-        // We output turbo info as json. Currently just for internal testing
-        #[clap(long)]
-        json: bool,
+    Config,
+    /// EXPERIMENTAL: List packages in your monorepo.
+    Ls {
+        /// Use the given selector to specify package(s) to act as
+        /// entry points. The syntax mirrors pnpm's syntax, and
+        /// additional documentation and examples can be found in
+        /// turbo's documentation https://turbo.build/repo/docs/reference/command-line-reference/run#--filter
+        #[clap(short = 'F', long, group = "scope-filter-group")]
+        filter: Vec<String>,
+        /// Get insight into a specific package, such as
+        /// its dependencies and tasks
+        packages: Vec<String>,
     },
     /// Link your local directory to a Vercel organization and enable remote
     /// caching.
@@ -1134,14 +1141,20 @@ pub async fn run(
                 Ok(1)
             }
         }
-        Command::Info { workspace, json } => {
-            CommandEventBuilder::new("info")
-                .with_parent(&root_telemetry)
-                .track_call();
-            let json = *json;
-            let workspace = workspace.clone();
-            let mut base = CommandBase::new(cli_args, repo_root, version, ui);
-            info::run(&mut base, workspace.as_deref(), json).await?;
+        Command::Config => {
+            let base = CommandBase::new(cli_args.clone(), repo_root, version, ui);
+            config::run(base).await?;
+            Ok(0)
+        }
+        Command::Ls { filter, packages } => {
+            warn!("ls command is experimental and may change in the future");
+            let event = CommandEventBuilder::new("info").with_parent(&root_telemetry);
+
+            event.track_call();
+            let filter = filter.clone();
+            let packages = packages.clone();
+            let base = CommandBase::new(cli_args, repo_root, version, ui);
+            ls::run(base, packages, event, filter).await?;
 
             Ok(0)
         }

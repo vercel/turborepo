@@ -29,6 +29,7 @@ pub enum Error {
     #[diagnostic(transparent)]
     PackageJson(#[from] turborepo_repository::package_json::Error),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     PackageManager(#[from] turborepo_repository::package_manager::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
@@ -49,6 +50,7 @@ pub enum Error {
     #[error(transparent)]
     TaskHash(#[from] task_hash::Error),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Visitor(#[from] task_graph::VisitorError),
     #[error("error registering signal handler: {0}")]
     SignalHandler(std::io::Error),

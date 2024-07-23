@@ -8,7 +8,7 @@ use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_ui::{color, BOLD, GREY};
 
 use crate::{
-    commands::{bin, generate, prune, run::get_signal, CommandBase},
+    commands::{bin, generate, ls, prune, run::get_signal, CommandBase},
     daemon::DaemonError,
     rewrite_json::RewriteError,
     run,
@@ -30,6 +30,7 @@ pub enum Error {
     #[error(transparent)]
     ChromeTracing(#[from] crate::tracing::Error),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     BuildPackageGraph(#[from] package_graph::builder::Error),
     #[error(transparent)]
     Rewrite(#[from] RewriteError),
@@ -39,6 +40,9 @@ pub enum Error {
     Daemon(#[from] DaemonError),
     #[error(transparent)]
     Generate(#[from] generate::Error),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Ls(#[from] ls::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Prune(#[from] prune::Error),
