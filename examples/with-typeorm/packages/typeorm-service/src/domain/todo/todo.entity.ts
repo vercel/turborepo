@@ -15,7 +15,6 @@ export class Todo {
 
   @Column({
     nullable: false,
-    comment: "내용",
     length: 100,
   })
   content: string;

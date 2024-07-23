@@ -54,23 +54,8 @@ const LINKS = [
 
 export default async function Page(): Promise<JSX.Element> {
   const todoService = inject(TodoService);
-  /**
-   * This example uses an error handler named 'databaseConnectionErrorHandler'.
-   * If you have correctly configured the database connection information in 'packages/typeorm-service/src/orm-config.ts',
-   * and have verified the connection to the database, you can remove this error handler.
-   */
-  const databaseConnectionErrorHandler = (e: Error) => {
-    if (e.name === "AggregateError")
-      throw new Error(`
-        This example uses an error handler named 'databaseConnectionErrorHandler'.
-        If you have correctly configured the database connection information in 'packages/typeorm-service/src/orm-config.ts',
-        and have verified the connection to the database, you can remove this error handler.`);
-    throw e;
-  };
 
-  const todoList = await todoService
-    .findAll()
-    .catch(databaseConnectionErrorHandler);
+  const todoList = await todoService.findAll();
 
   console.log(
     JSON.stringify(

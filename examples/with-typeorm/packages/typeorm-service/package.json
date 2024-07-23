@@ -9,23 +9,23 @@
     "lint": "eslint src/ --max-warnings 0",
     "test:watch": "vitest",
     "test": "vitest run",
-    "type-check":"tsc --noEmit"
+    "type-check": "tsc --noEmit"
   },
   "peerDependencies": {
     "typeorm": "^0.3.20"
   },
   "dependencies": {
-    "mysql2": "^3.9.7",
     "reflect-metadata": "^0.2.2",
+    "sql.js": "^1.10.3",
     "typeorm": "^0.3.20"
   },
   "devDependencies": {
     "@repo/eslint-config": "workspace:*",
-    "unplugin-swc": "^1.4.5",
     "@repo/typescript-config": "workspace:*",
     "@types/node": "^20.11.24",
-    "typescript": "^5.3.3",
     "eslint": "^8.57.0",
+    "typescript": "^5.3.3",
+    "unplugin-swc": "^1.4.5",
     "vitest": "^1.5.0"
   }
 }
