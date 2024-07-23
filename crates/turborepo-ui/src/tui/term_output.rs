@@ -148,10 +148,9 @@ impl<W> TerminalOutput<W> {
     pub fn handle_mouse(&mut self, event: crossterm::event::MouseEvent) -> Result<(), Error> {
         match event.kind {
             crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left) => {
-                // Here we enter copy mode with this position
-                let selection = SelectionState::new(event);
-                // we now store this in the task
-                self.selection = Some(selection);
+                self.selection = None;
+                // We need to update the vterm so we don't continue to render the selection
+                self.parser.screen_mut().clear_selection();
             }
             crossterm::event::MouseEventKind::Drag(crossterm::event::MouseButton::Left) => {
                 // Here we change an endpoint of the selection
