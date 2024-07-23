@@ -7,4 +7,6 @@ export const AppDataSource = new DataSource({
   synchronize: true,
   logging: true,
   entities: [Todo],
+  autoSave: false,
+  dropSchema: true,
 });

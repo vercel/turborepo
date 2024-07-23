@@ -35,6 +35,8 @@ suite("typeorm with SQL.js", () => {
       type: "sqljs",
       entities: [Todo],
       synchronize: true,
+      autoSave: false,
+      dropSchema: true,
     });
 
     await dataSource.initialize();
