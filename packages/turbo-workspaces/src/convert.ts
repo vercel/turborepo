@@ -1,4 +1,4 @@
-import chalk from "chalk";
+import { yellow } from "picocolors";
 import { MANAGERS } from "./managers";
 import type {
   Project,
@@ -70,7 +70,7 @@ export async function convertProject({
     await MANAGERS[to.name].convertLock({ project, to, logger, options });
     await install({ project, to, logger, options });
   } else {
-    logger.subStep(chalk.yellow("Skipping install"));
+    logger.subStep(yellow("Skipping install"));
   }
 
   logger.mainStep(`Cleaning up ${project.packageManager} workspaces`);

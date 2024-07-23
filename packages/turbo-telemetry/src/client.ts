@@ -1,6 +1,6 @@
+import { randomUUID } from "node:crypto";
 import got, { type Response } from "got";
 import { logger } from "@turbo/utils";
-import { v4 as uuidv4 } from "uuid";
 import utils from "./utils";
 import { TelemetryConfig } from "./config";
 import type { Event, PackageInfo } from "./events/types";
@@ -25,7 +25,7 @@ export class TelemetryClient {
   private packageInfo: PackageInfo;
   private batchSize = DEFAULT_BATCH_SIZE;
   private timeout = 250;
-  private sessionId = uuidv4();
+  private sessionId = randomUUID();
   private eventBatches: Array<Promise<Response<string> | undefined>> = [];
   private events: Array<Record<"package", Event>> = [];
 
@@ -95,7 +95,7 @@ export class TelemetryClient {
     isSensitive?: boolean;
   }): Event {
     const event = {
-      id: uuidv4(),
+      id: randomUUID(),
       key,
       value: isSensitive ? this.config.oneWayHash(value) : value,
       package_name: this.packageInfo.name,

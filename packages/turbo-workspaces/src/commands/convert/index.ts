@@ -1,5 +1,5 @@
 import inquirer from "inquirer";
-import chalk from "chalk";
+import { dim } from "picocolors";
 import { getAvailablePackageManagers, type PackageManager } from "@turbo/utils";
 import { Logger } from "../../logger";
 import { directoryInfo } from "../../utils";
@@ -51,7 +51,7 @@ export async function convertCommand(
       if (exists) {
         return true;
       }
-      return `Directory ${chalk.dim(`(${absolute})`)} does not exist`;
+      return `Directory ${dim(`(${absolute})`)} does not exist`;
     },
     filter: (d: string) => d.trim(),
   });
@@ -61,7 +61,7 @@ export async function convertCommand(
     directory: selectedDirectory,
   });
   if (!exists) {
-    logger.error(`Directory ${chalk.dim(`(${root})`)} does not exist`);
+    logger.error(`Directory ${dim(`(${root})`)} does not exist`);
     return process.exit(1);
   }
 

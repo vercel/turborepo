@@ -53,7 +53,7 @@ impl Environment {
 }
 
 #[turbo_tasks::value(serialization = "auto_for_input")]
-#[derive(PartialOrd, Ord, Debug, Hash, Clone, Copy)]
+#[derive(Debug, Hash, Clone, Copy)]
 pub enum ExecutionEnvironment {
     NodeJsBuildTime(Vc<NodeJsEnvironment>),
     NodeJsLambda(Vc<NodeJsEnvironment>),
@@ -86,7 +86,7 @@ impl Environment {
             ExecutionEnvironment::Browser(browser_env) => {
                 Vc::cell(Versions::parse_versions(browserslist::resolve(
                     browser_env.await?.browserslist_query.split(','),
-                    &browserslist::Opts::new(),
+                    &browserslist::Opts::default(),
                 )?)?)
             }
             ExecutionEnvironment::EdgeWorker(_) => todo!(),

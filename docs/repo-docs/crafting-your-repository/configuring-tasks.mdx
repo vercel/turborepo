@@ -99,7 +99,7 @@ If you run `turbo run build` at this point, Turborepo will run all `build` scrip
 
 You now have the build order you would expect, building _dependencies_ before _dependents_.
 
-**But be careful.** At this point, you haven't marked the build outputs for caching. To do so, jump to the [Specifying outputs](#specifying-options) section.
+**But be careful.** At this point, you haven't marked the build outputs for caching. To do so, jump to the [Specifying outputs](#specifying-outputs) section.
 
 #### Depending on tasks in dependencies with `^`
 
@@ -260,7 +260,7 @@ In this task definition, Turborepo will use the default `inputs` behavior for th
 
 ### Registering Root Tasks
 
-You can also run scripts in the `package.json` in the Workspace root using `turbo`. For example, you may want to run a `lint` task for the files in your Workspace's root directory in addition to the `lint` task in each package:
+You can also run scripts in the `package.json` in the Workspace root using `turbo`. For example, you may want to run a `lint:root` task for the files in your Workspace's root directory in addition to the `lint` task in each package:
 
 <Tabs items={["turbo.json", "package.json"]}>
 <Tab value="turbo.json">

@@ -123,6 +123,16 @@ pub struct APIAuth {
     pub team_slug: Option<String>,
 }
 
+impl std::fmt::Debug for APIAuth {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("APIAuth")
+            .field("team_id", &self.team_id)
+            .field("token", &"***")
+            .field("team_slug", &self.team_slug)
+            .finish()
+    }
+}
+
 pub fn is_linked(api_auth: &Option<APIAuth>) -> bool {
     api_auth
         .as_ref()

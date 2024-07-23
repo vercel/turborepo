@@ -6,6 +6,7 @@ use std::{
 
 use biome_deserialize_macros::Deserializable;
 use camino::Utf8Path;
+use clap::ValueEnum;
 use miette::{NamedSource, SourceSpan};
 use serde::{Deserialize, Serialize};
 use struct_iterable::Iterable;
@@ -125,6 +126,11 @@ pub struct RawTurboJson {
     pub(crate) remote_cache: Option<RawRemoteCacheOptions>,
     #[serde(skip_serializing_if = "Option::is_none", rename = "ui")]
     pub ui: Option<UI>,
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        rename = "dangerouslyDisablePackageManagerCheck"
+    )]
+    pub allow_no_package_manager: Option<bool>,
 
     #[deserializable(rename = "//")]
     #[serde(skip)]
@@ -159,10 +165,12 @@ impl DerefMut for Pipeline {
     }
 }
 
-#[derive(Serialize, Debug, Copy, Clone, Deserializable, PartialEq, Eq)]
+#[derive(Serialize, Debug, Copy, Clone, Deserializable, PartialEq, Eq, ValueEnum)]
 #[serde(rename_all = "camelCase")]
 pub enum UI {
+    /// Use the TUI interface
     Tui,
+    /// Use the standard output stream
     Stream,
 }
 
@@ -786,7 +794,7 @@ mod tests {
     #[test_case(
         None,
         PackageJson {
-             scripts: [("build".to_string(), "echo build".to_string())].into_iter().collect(),
+             scripts: [("build".to_string(), Spanned::new("echo build".to_string()))].into_iter().collect(),
              ..PackageJson::default()
         },
         TurboJson {
@@ -810,7 +818,7 @@ mod tests {
             }
         }"#),
         PackageJson {
-             scripts: [("test".to_string(), "echo test".to_string())].into_iter().collect(),
+             scripts: [("test".to_string(), Spanned::new("echo test".to_string()))].into_iter().collect(),
              ..PackageJson::default()
         },
         TurboJson {
@@ -1081,5 +1089,15 @@ mod tests {
         let parsed = RawTurboJson::parse(input, AnchoredSystemPath::new("").unwrap()).unwrap();
         let actual = serde_json::to_string(&parsed).unwrap();
         assert_eq!(actual, expected);
+    }
+
+    #[test_case(r#"{"dangerouslyDisablePackageManagerCheck":true}"#, Some(true) ; "t")]
+    #[test_case(r#"{"dangerouslyDisablePackageManagerCheck":false}"#, Some(false) ; "f")]
+    #[test_case(r#"{}"#, None ; "missing")]
+    fn test_allow_no_package_manager_serde(json_str: &str, expected: Option<bool>) {
+        let json = RawTurboJson::parse(json_str, AnchoredSystemPath::new("").unwrap()).unwrap();
+        assert_eq!(json.allow_no_package_manager, expected);
+        let serialized = serde_json::to_string(&json).unwrap();
+        assert_eq!(serialized, json_str);
     }
 }

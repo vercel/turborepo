@@ -3,6 +3,7 @@ use std::{
     cell::RefCell,
     future::Future,
     hash::{BuildHasher, BuildHasherDefault, Hash},
+    num::NonZeroU32,
     pin::Pin,
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -12,7 +13,6 @@ use std::{
 };
 
 use anyhow::{bail, Result};
-use auto_hash_map::AutoMap;
 use dashmap::{mapref::entry::Entry, DashMap};
 use rustc_hash::FxHasher;
 use tokio::task::futures::TaskLocalFuture;
@@ -20,11 +20,11 @@ use tracing::trace_span;
 use turbo_prehash::{BuildHasherExt, PassThroughHash, PreHashed};
 use turbo_tasks::{
     backend::{
-        Backend, BackendJobId, CellContent, PersistentTaskType, TaskExecutionSpec,
-        TransientTaskType,
+        Backend, BackendJobId, CellContent, PersistentTaskType, TaskCollectiblesMap,
+        TaskExecutionSpec, TransientTaskType,
     },
     event::EventListener,
-    util::{IdFactory, NoMoveVec},
+    util::{IdFactoryWithReuse, NoMoveVec},
     CellId, RawVc, TaskId, TaskIdSet, TraitTypeId, TurboTasksBackendApi, Unused,
 };
 
@@ -44,7 +44,7 @@ fn prehash_task_type(task_type: PersistentTaskType) -> PreHashed<PersistentTaskT
 pub struct MemoryBackend {
     memory_tasks: NoMoveVec<Task, 13>,
     backend_jobs: NoMoveVec<Job>,
-    backend_job_id_factory: IdFactory<BackendJobId>,
+    backend_job_id_factory: IdFactoryWithReuse<BackendJobId>,
     task_cache:
         DashMap<Arc<PreHashed<PersistentTaskType>>, TaskId, BuildHasherDefault<PassThroughHash>>,
     memory_limit: usize,
@@ -64,7 +64,7 @@ impl MemoryBackend {
         Self {
             memory_tasks: NoMoveVec::new(),
             backend_jobs: NoMoveVec::new(),
-            backend_job_id_factory: IdFactory::new(),
+            backend_job_id_factory: IdFactoryWithReuse::new(),
             task_cache: DashMap::with_hasher_and_shard_amount(
                 Default::default(),
                 (std::thread::available_parallelism().map_or(1, usize::from) * 32)
@@ -137,7 +137,7 @@ impl MemoryBackend {
     pub fn run_gc(
         &self,
         idle: bool,
-        _turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
+        turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) -> bool {
         if let Some(gc_queue) = &self.gc_queue {
             let mut did_something = false;
@@ -154,7 +154,7 @@ impl MemoryBackend {
                     return did_something;
                 }
 
-                let collected = gc_queue.run_gc(self);
+                let collected = gc_queue.run_gc(self, turbo_tasks);
 
                 // Collecting less than 100 tasks is not worth it
                 if !collected.map_or(false, |(_, count)| count > 100) {
@@ -294,12 +294,13 @@ impl Backend for MemoryBackend {
         DEPENDENCIES_TO_TRACK.scope(RefCell::new(TaskEdgesSet::new()), future)
     }
 
-    fn try_start_task_execution(
-        &self,
+    fn try_start_task_execution<'a>(
+        &'a self,
         task: TaskId,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
-    ) -> Option<TaskExecutionSpec> {
-        self.with_task(task, |task| task.execute(self, turbo_tasks))
+    ) -> Option<TaskExecutionSpec<'a>> {
+        let task = self.task(task);
+        task.execute(self, turbo_tasks)
     }
 
     fn task_execution_result(
@@ -330,21 +331,28 @@ impl Backend for MemoryBackend {
         let generation = if let Some(gc_queue) = &self.gc_queue {
             gc_queue.generation()
         } else {
-            0
+            // SAFETY: 1 is not zero
+            unsafe { NonZeroU32::new_unchecked(1) }
         };
-        let reexecute = self.with_task(task_id, |task| {
-            task.execution_completed(
-                duration,
-                memory_usage,
-                generation,
-                stateful,
-                self,
-                turbo_tasks,
+        let (reexecute, once_task) = self.with_task(task_id, |task| {
+            (
+                task.execution_completed(
+                    duration,
+                    memory_usage,
+                    generation,
+                    stateful,
+                    self,
+                    turbo_tasks,
+                ),
+                task.is_once(),
             )
         });
         if !reexecute {
             if let Some(gc_queue) = &self.gc_queue {
-                gc_queue.task_executed(task_id);
+                let _ = gc_queue.task_executed(task_id);
+                if once_task {
+                    gc_queue.task_potentially_no_longer_active(task_id);
+                }
                 self.run_gc(false, turbo_tasks);
             }
         }
@@ -402,7 +410,7 @@ impl Backend for MemoryBackend {
         } else {
             Task::add_dependency_to_current(TaskEdge::Cell(task_id, index));
             self.with_task(task_id, |task| {
-                match task.with_cell_mut(index, self.gc_queue.as_ref(), |cell| {
+                match task.with_cell_mut(index, self.gc_queue.as_ref(), |cell, _| {
                     cell.read_content(
                         reader,
                         move || format!("{task_id} {index}"),
@@ -439,7 +447,7 @@ impl Backend for MemoryBackend {
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) -> Result<Result<CellContent, EventListener>> {
         self.with_task(task_id, |task| {
-            match task.with_cell_mut(index, self.gc_queue.as_ref(), |cell| {
+            match task.with_cell_mut(index, self.gc_queue.as_ref(), |cell, _| {
                 cell.read_content_untracked(
                     move || format!("{task_id}"),
                     move || format!("reading {} {} untracked", task_id, index),
@@ -462,7 +470,8 @@ impl Backend for MemoryBackend {
         trait_id: TraitTypeId,
         reader: TaskId,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
-    ) -> AutoMap<RawVc, i32> {
+    ) -> TaskCollectiblesMap {
+        Task::add_dependency_to_current(TaskEdge::Collectibles(id, trait_id));
         Task::read_collectibles(id, trait_id, reader, self, turbo_tasks)
     }
 
@@ -499,8 +508,8 @@ impl Backend for MemoryBackend {
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) {
         self.with_task(task, |task| {
-            task.with_cell_mut(index, self.gc_queue.as_ref(), |cell| {
-                cell.assign(content, turbo_tasks)
+            task.with_cell_mut(index, self.gc_queue.as_ref(), |cell, clean| {
+                cell.assign(content, clean, turbo_tasks)
             })
         })
     }
@@ -537,12 +546,25 @@ impl Backend for MemoryBackend {
         {
             // fast pass without creating a new task
             self.task_statistics().map(|stats| match &*task_type {
-                PersistentTaskType::ResolveNative(function_id, ..)
-                | PersistentTaskType::Native(function_id, ..) => {
+                PersistentTaskType::ResolveNative {
+                    fn_type: function_id,
+                    this: _,
+                    arg: _,
+                }
+                | PersistentTaskType::Native {
+                    fn_type: function_id,
+                    this: _,
+                    arg: _,
+                } => {
                     stats.increment_cache_hit(*function_id);
                 }
-                PersistentTaskType::ResolveTrait(trait_type, name, inputs) => {
-                    // HACK: Resolve the first argument (`self`) in order to attribute the cache hit
+                PersistentTaskType::ResolveTrait {
+                    trait_type,
+                    method_name: name,
+                    this,
+                    arg: _,
+                } => {
+                    // HACK: Resolve the this argument (`self`) in order to attribute the cache hit
                     // to the concrete trait implementation, rather than the dynamic trait method.
                     // This ensures cache hits and misses are both attributed to the same thing.
                     //
@@ -557,10 +579,7 @@ impl Backend for MemoryBackend {
                     // ResolveTrait tasks.
                     let trait_type = *trait_type;
                     let name = name.clone();
-                    let this = inputs
-                        .first()
-                        .cloned()
-                        .expect("No arguments for trait call");
+                    let this = *this;
                     let stats = Arc::clone(stats);
                     turbo_tasks.run_once(Box::pin(async move {
                         let function_id =
@@ -574,10 +593,15 @@ impl Backend for MemoryBackend {
             task
         } else {
             self.task_statistics().map(|stats| match &*task_type {
-                PersistentTaskType::Native(function_id, ..) => {
+                PersistentTaskType::Native {
+                    fn_type: function_id,
+                    this: _,
+                    arg: _,
+                } => {
                     stats.increment_cache_miss(*function_id);
                 }
-                PersistentTaskType::ResolveTrait(..) | PersistentTaskType::ResolveNative(..) => {
+                PersistentTaskType::ResolveTrait { .. }
+                | PersistentTaskType::ResolveNative { .. } => {
                     // these types re-execute themselves as `Native` after
                     // resolving their arguments, skip counting their
                     // executions here to avoid double-counting
@@ -585,8 +609,7 @@ impl Backend for MemoryBackend {
             });
             // It's important to avoid overallocating memory as this will go into the task
             // cache and stay there forever. We can to be as small as possible.
-            let (task_type_hash, mut task_type) = PreHashed::into_parts(task_type);
-            task_type.shrink_to_fit();
+            let (task_type_hash, task_type) = PreHashed::into_parts(task_type);
             let task_type = Arc::new(PreHashed::new(task_type_hash, task_type));
             // slow pass with key lock
             let id = turbo_tasks.get_fresh_task_id();
