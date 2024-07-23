@@ -4,7 +4,7 @@ use crate::{self as turbo_tasks, RawVc, TryJoinIterExt, Vc};
 /// to have a concrete reference that can be awaited.
 /// It will invalidate the awaiting task everytime the referenced
 /// task has been executed.
-#[turbo_tasks::value(cell = "new")]
+#[turbo_tasks::value(cell = "new", eq = "manual")]
 pub struct Completion;
 
 #[turbo_tasks::value_impl]
