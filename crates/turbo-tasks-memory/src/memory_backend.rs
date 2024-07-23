@@ -12,7 +12,7 @@ use std::{
     time::Duration,
 };
 
-use anyhow::{bail, Result};
+use anyhow::{anyhow, bail, Result};
 use dashmap::{mapref::entry::Entry, DashMap};
 use rustc_hash::FxHasher;
 use tokio::task::futures::TaskLocalFuture;
@@ -410,15 +410,18 @@ impl Backend for MemoryBackend {
         } else {
             Task::add_dependency_to_current(TaskEdge::Cell(task_id, index));
             self.with_task(task_id, |task| {
-                match task.with_cell_mut(index, self.gc_queue.as_ref(), |cell, _| {
-                    cell.read_content(
-                        reader,
-                        move || format!("{task_id} {index}"),
-                        move || format!("reading {} {} from {}", task_id, index, reader),
-                    )
+                match task.access_cell_for_read(index, self.gc_queue.as_ref(), |cell| {
+                    cell.map(|cell| {
+                        cell.read_content(
+                            reader,
+                            move || format!("{task_id} {index}"),
+                            move || format!("reading {} {} from {}", task_id, index, reader),
+                        )
+                    })
                 }) {
-                    Ok(content) => Ok(Ok(content)),
-                    Err(RecomputingCell { listener, schedule }) => {
+                    None => Err(anyhow!("Cell doesn't exist (anymore)")),
+                    Some(Ok(content)) => Ok(Ok(content)),
+                    Some(Err(RecomputingCell { listener, schedule })) => {
                         if schedule {
                             task.recompute(self, turbo_tasks);
                         }
@@ -447,14 +450,17 @@ impl Backend for MemoryBackend {
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) -> Result<Result<CellContent, EventListener>> {
         self.with_task(task_id, |task| {
-            match task.with_cell_mut(index, self.gc_queue.as_ref(), |cell, _| {
-                cell.read_content_untracked(
-                    move || format!("{task_id}"),
-                    move || format!("reading {} {} untracked", task_id, index),
-                )
+            match task.access_cell_for_read(index, self.gc_queue.as_ref(), |cell| {
+                cell.map(|cell| {
+                    cell.read_content_untracked(
+                        move || format!("{task_id} {index}"),
+                        move || format!("reading {} {} untracked", task_id, index),
+                    )
+                })
             }) {
-                Ok(content) => Ok(Ok(content)),
-                Err(RecomputingCell { listener, schedule }) => {
+                None => Err(anyhow!("Cell doesn't exist (anymore)")),
+                Some(Ok(content)) => Ok(Ok(content)),
+                Some(Err(RecomputingCell { listener, schedule })) => {
                     if schedule {
                         task.recompute(self, turbo_tasks);
                     }
@@ -508,7 +514,7 @@ impl Backend for MemoryBackend {
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) {
         self.with_task(task, |task| {
-            task.with_cell_mut(index, self.gc_queue.as_ref(), |cell, clean| {
+            task.access_cell_for_write(index, |cell, clean| {
                 cell.assign(content, clean, turbo_tasks)
             })
         })

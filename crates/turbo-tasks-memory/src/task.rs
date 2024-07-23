@@ -635,14 +635,14 @@ impl Task {
         match dep {
             TaskEdge::Output(task) => {
                 backend.with_task(task, |task| {
-                    task.with_output_mut_if_available(|output| {
+                    task.access_output_for_removing_dependents(|output| {
                         output.dependent_tasks.remove(&reader);
                     });
                 });
             }
             TaskEdge::Cell(task, index) => {
                 backend.with_task(task, |task| {
-                    task.with_cell_mut_if_available(index, |cell| {
+                    task.access_cell_for_removing_dependents(index, |cell| {
                         cell.remove_dependent_task(reader);
                     });
                 });
@@ -1281,7 +1281,7 @@ impl Task {
     }
 
     /// Access to the output cell.
-    pub(crate) fn with_output_mut_if_available<T>(
+    pub(crate) fn access_output_for_removing_dependents<T>(
         &self,
         func: impl FnOnce(&mut Output) -> T,
     ) -> Option<T> {
@@ -1293,11 +1293,11 @@ impl Task {
     }
 
     /// Access to a cell.
-    pub(crate) fn with_cell_mut<T>(
+    pub(crate) fn access_cell_for_read<T>(
         &self,
         index: CellId,
         gc_queue: Option<&GcQueue>,
-        func: impl FnOnce(&mut Cell, bool) -> T,
+        func: impl FnOnce(Option<&mut Cell>) -> T,
     ) -> T {
         let mut state = self.full_state_mut();
         if let Some(gc_queue) = gc_queue {
@@ -1306,6 +1306,22 @@ impl Task {
                 let _ = gc_queue.task_accessed(self.id);
             }
         }
+        let list = state.cells.entry(index.type_id).or_default();
+        let i = index.index as usize;
+        if list.len() <= i {
+            func(None)
+        } else {
+            func(Some(&mut list[i]))
+        }
+    }
+
+    /// Access to a cell.
+    pub(crate) fn access_cell_for_write<T>(
+        &self,
+        index: CellId,
+        func: impl FnOnce(&mut Cell, bool) -> T,
+    ) -> T {
+        let mut state = self.full_state_mut();
         let clean = match state.state_type {
             InProgress(box InProgressState { clean, .. }) => clean,
             _ => false,
@@ -1319,7 +1335,7 @@ impl Task {
     }
 
     /// Access to a cell.
-    pub(crate) fn with_cell_mut_if_available<T>(
+    pub(crate) fn access_cell_for_removing_dependents<T>(
         &self,
         index: CellId,
         func: impl FnOnce(&mut Cell) -> T,
