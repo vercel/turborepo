@@ -1,6 +1,6 @@
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { rimraf } from "rimraf";
+import { rm } from "node:fs/promises";
 import {
   mkdirSync,
   existsSync,
@@ -30,18 +30,22 @@ export function setupTestFixtures({
   afterEach(async () => {
     await Promise.all(
       fixtures.map((fixture) =>
-        rimraf(fixture, {
+        rm(fixture, {
           retryDelay: 50,
           maxRetries: 5,
+          recursive: true,
+          force: true,
         })
       )
     );
   });
 
   afterAll(async () => {
-    await rimraf(parentDirectory, {
+    await rm(parentDirectory, {
       retryDelay: 50,
       maxRetries: 5,
+      recursive: true,
+      force: true,
     });
   });
 
