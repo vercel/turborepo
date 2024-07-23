@@ -1026,8 +1026,8 @@ enum ExportsFieldResult {
     None,
 }
 
-/// Extracts the "exports" field out of the nearest package.json, parsing it
-/// into an appropriate [AliasMap] for lookups.
+/// Extracts the "exports" field out of the package.json, parsing it into an
+/// appropriate [AliasMap] for lookups.
 #[turbo_tasks::function]
 async fn exports_field(package_json_path: Vc<FileSystemPath>) -> Result<Vc<ExportsFieldResult>> {
     let read = read_package_json(package_json_path).await?;
