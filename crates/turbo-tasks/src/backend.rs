@@ -335,7 +335,7 @@ pub struct TaskExecutionSpec<'a> {
 
 // TODO technically CellContent is already indexed by the ValueTypeId, so we
 // don't need to store it here
-#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct CellContent(pub Option<SharedReference>);
 
 impl Display for CellContent {
@@ -376,6 +376,14 @@ impl CellContent {
 
     pub fn try_cast<T: Any + VcValueType>(self) -> Option<ReadRef<T>> {
         Some(ReadRef::new_arc(self.0?.downcast().ok()?))
+    }
+
+    pub fn ptr_eq(&self, other: &Self) -> bool {
+        match (&self.0, &other.0) {
+            (Some(this), Some(other)) => this.ptr_eq(other),
+            (None, None) => true,
+            (_, _) => false,
+        }
     }
 }
 

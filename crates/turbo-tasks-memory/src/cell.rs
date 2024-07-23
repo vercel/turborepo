@@ -225,7 +225,7 @@ impl Cell {
                 content: ref mut cell_content,
                 dependent_tasks,
             } => {
-                if content != *cell_content {
+                if content.ptr_eq(cell_content) {
                     if !dependent_tasks.is_empty() {
                         turbo_tasks.schedule_notify_tasks_set(dependent_tasks);
                         dependent_tasks.clear();

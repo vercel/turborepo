@@ -1,4 +1,4 @@
-use std::{fmt::Debug, marker::PhantomData, ops::Deref};
+use std::{fmt::Debug, hash::Hash, marker::PhantomData, ops::Deref};
 
 use serde::{Deserialize, Serialize};
 
@@ -91,17 +91,17 @@ impl<T> Clone for TransientInstance<T> {
     }
 }
 
-impl<T> Eq for TransientInstance<T> {}
-
 impl<T> PartialEq for TransientInstance<T> {
     fn eq(&self, other: &Self) -> bool {
-        self.inner == other.inner
+        self.inner.ptr_eq(&other.inner)
     }
 }
 
-impl<T> std::hash::Hash for TransientInstance<T> {
+impl<T> Eq for TransientInstance<T> {}
+
+impl<T> Hash for TransientInstance<T> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.inner.hash(state);
+        self.inner.1.as_ptr().hash(state);
     }
 }
 

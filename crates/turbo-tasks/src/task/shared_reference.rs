@@ -1,7 +1,6 @@
 use std::{
     any::Any,
     fmt::{Debug, Display},
-    hash::Hash,
 };
 
 use anyhow::Result;
@@ -32,22 +31,11 @@ impl SharedReference {
             Err(data) => Err(Self(self.0, data)),
         }
     }
-}
 
-impl Hash for SharedReference {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        Hash::hash(&(&*self.1 as *const (dyn Any + Send + Sync)), state)
-    }
-}
-impl PartialEq for SharedReference {
-    // Must compare with PartialEq rather than std::ptr::addr_eq since the latter
-    // only compares their addresses.
-    #[allow(ambiguous_wide_pointer_comparisons)]
-    fn eq(&self, other: &Self) -> bool {
+    pub fn ptr_eq(&self, other: &Self) -> bool {
         triomphe::Arc::ptr_eq(&self.1, &other.1)
     }
 }
-impl Eq for SharedReference {}
 
 impl Debug for SharedReference {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

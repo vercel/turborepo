@@ -31,7 +31,7 @@ pub trait VersionedContent {
         let to_ref = to.into_trait_ref().await?;
 
         // Fast path: versions are the same.
-        if from_ref == to_ref {
+        if from_ref.ptr_eq(&to_ref) {
             return Ok(Update::None.into());
         }
 
@@ -181,15 +181,23 @@ pub enum Update {
 }
 
 /// A total update to a versioned object.
-#[derive(PartialEq, Eq, Debug, Clone, TraceRawVcs, ValueDebugFormat, Serialize, Deserialize)]
+#[derive(Debug, Clone, TraceRawVcs, ValueDebugFormat, Serialize, Deserialize)]
 pub struct TotalUpdate {
     /// The version this update will bring the object to.
     #[turbo_tasks(trace_ignore)]
     pub to: TraitRef<Box<dyn Version>>,
 }
 
+impl PartialEq for TotalUpdate {
+    fn eq(&self, other: &Self) -> bool {
+        self.to.ptr_eq(&other.to)
+    }
+}
+
+impl Eq for TotalUpdate {}
+
 /// A partial update to a versioned object.
-#[derive(PartialEq, Eq, Debug, Clone, TraceRawVcs, ValueDebugFormat, Serialize, Deserialize)]
+#[derive(Debug, Clone, TraceRawVcs, ValueDebugFormat, Serialize, Deserialize)]
 pub struct PartialUpdate {
     /// The version this update will bring the object to.
     #[turbo_tasks(trace_ignore)]
@@ -199,6 +207,14 @@ pub struct PartialUpdate {
     #[turbo_tasks(trace_ignore)]
     pub instruction: Arc<serde_json::Value>,
 }
+
+impl PartialEq for PartialUpdate {
+    fn eq(&self, other: &Self) -> bool {
+        self.to.ptr_eq(&other.to) && self.instruction == other.instruction
+    }
+}
+
+impl Eq for PartialUpdate {}
 
 /// [`Version`] implementation that hashes a file at a given path and returns
 /// the hex encoded hash as a version identifier.
@@ -260,7 +276,14 @@ impl VersionState {
 
     pub async fn set(self: Vc<Self>, new_version: TraitRef<Box<dyn Version>>) -> Result<()> {
         let this = self.await?;
-        this.version.set(new_version);
+        this.version.update_conditionally(|version| {
+            if !version.ptr_eq(&new_version) {
+                *version = new_version;
+                true
+            } else {
+                false
+            }
+        });
         Ok(())
     }
 }

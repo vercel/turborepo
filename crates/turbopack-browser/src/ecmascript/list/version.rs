@@ -1,3 +1,5 @@
+use std::hash::Hash;
+
 use anyhow::Result;
 use indexmap::IndexMap;
 use turbo_tasks::{RcStr, TraitRef, TryJoinIterExt, Vc};
@@ -9,7 +11,7 @@ type VersionTraitRef = TraitRef<Box<dyn Version>>;
 /// The version of a [`EcmascriptDevChunkListContent`].
 ///
 /// [`EcmascriptDevChunkListContent`]: super::content::EcmascriptDevChunkListContent
-#[turbo_tasks::value(shared)]
+#[turbo_tasks::value(shared, eq = "manual")]
 pub(super) struct EcmascriptDevChunkListVersion {
     /// A map from chunk path to its version.
     #[turbo_tasks(trace_ignore)]
@@ -18,6 +20,27 @@ pub(super) struct EcmascriptDevChunkListVersion {
     #[turbo_tasks(trace_ignore)]
     pub by_merger: IndexMap<Vc<Box<dyn VersionedContentMerger>>, VersionTraitRef>,
 }
+
+fn eq_index_map<K: Hash + Eq, V>(
+    this: &IndexMap<K, TraitRef<V>>,
+    other: &IndexMap<K, TraitRef<V>>,
+) -> bool {
+    if this.len() != other.len() {
+        return false;
+    }
+
+    this.iter()
+        .all(|(key, value)| other.get(key).map_or(false, |v| value.ptr_eq(v)))
+}
+
+impl PartialEq for EcmascriptDevChunkListVersion {
+    fn eq(&self, other: &Self) -> bool {
+        eq_index_map(&self.by_path, &other.by_path)
+            || eq_index_map(&self.by_merger, &other.by_merger)
+    }
+}
+
+impl Eq for EcmascriptDevChunkListVersion {}
 
 #[turbo_tasks::value_impl]
 impl Version for EcmascriptDevChunkListVersion {

@@ -1575,7 +1575,7 @@ impl CurrentCellRef {
         let tt = turbo_tasks();
         let content = tt.read_own_task_cell(self.current_task, self.index).ok();
         let update = if let Some(CellContent(Some(content))) = content {
-            content != shared_ref
+            content.ptr_eq(&shared_ref)
         } else {
             true
         };

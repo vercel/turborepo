@@ -40,20 +40,6 @@ impl<T> Clone for TraitRef<T> {
     }
 }
 
-impl<T> PartialEq for TraitRef<T> {
-    fn eq(&self, other: &Self) -> bool {
-        self.shared_reference == other.shared_reference
-    }
-}
-
-impl<T> Eq for TraitRef<T> {}
-
-impl<T> std::hash::Hash for TraitRef<T> {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.shared_reference.hash(state)
-    }
-}
-
 impl<T> Serialize for TraitRef<T> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         self.shared_reference.serialize(serializer)
@@ -88,6 +74,10 @@ where
             shared_reference,
             _t: PhantomData,
         }
+    }
+
+    pub fn ptr_eq(&self, other: &Self) -> bool {
+        self.shared_reference.ptr_eq(&other.shared_reference)
     }
 }
 
