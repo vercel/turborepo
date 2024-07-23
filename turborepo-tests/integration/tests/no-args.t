@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../helpers/setup.sh
+  $ . ${TESTDIR}/../../helpers/setup_integration_test.sh
 
 Make sure exit code is 2 when no args are passed
   $ ${TURBO}
@@ -14,6 +14,7 @@ Make sure exit code is 2 when no args are passed
     generate    Generate a new app / package
     telemetry   Enable or disable anonymous telemetry
     scan        Turbo your monorepo by running a number of 'repo lints' to identify common issues, suggest fixes, and improve performance
+    ls          EXPERIMENTAL: List packages in your monorepo
     link        Link your local directory to a Vercel organization and enable remote caching
     login       Login to your Vercel account
     logout      Logout to your Vercel account
@@ -23,23 +24,42 @@ Make sure exit code is 2 when no args are passed
     unlink      Unlink the current directory from your Vercel organization and disable Remote Caching
   
   Options:
-        --version                         
-        --skip-infer                      Skip any attempts to infer which version of Turbo the project is configured to use
-        --no-update-notifier              Disable the turbo update notification
-        --api <API>                       Override the endpoint for API calls
-        --color                           Force color usage in the terminal
-        --cwd <CWD>                       The directory in which to run turbo
-        --heap <HEAP>                     Specify a file to save a pprof heap profile
-        --ui <UI>                         Specify whether to use the streaming UI or TUI [possible values: tui, stream]
-        --login <LOGIN>                   Override the login endpoint
-        --no-color                        Suppress color usage in the terminal
-        --preflight                       When enabled, turbo will precede HTTP requests with an OPTIONS request for authorization
-        --remote-cache-timeout <TIMEOUT>  Set a timeout for all HTTP requests
-        --team <TEAM>                     Set the team slug for API calls
-        --token <TOKEN>                   Set the auth token for API calls
-        --trace <TRACE>                   Specify a file to save a pprof trace
-        --verbosity <COUNT>               Verbosity level
-    -h, --help                            Print help (see more with '--help')
+        --version
+            
+        --skip-infer
+            Skip any attempts to infer which version of Turbo the project is configured to use
+        --no-update-notifier
+            Disable the turbo update notification
+        --api <API>
+            Override the endpoint for API calls
+        --color
+            Force color usage in the terminal
+        --cwd <CWD>
+            The directory in which to run turbo
+        --heap <HEAP>
+            Specify a file to save a pprof heap profile
+        --ui <UI>
+            Specify whether to use the streaming UI or TUI [possible values: tui, stream]
+        --login <LOGIN>
+            Override the login endpoint
+        --no-color
+            Suppress color usage in the terminal
+        --preflight
+            When enabled, turbo will precede HTTP requests with an OPTIONS request for authorization
+        --remote-cache-timeout <TIMEOUT>
+            Set a timeout for all HTTP requests
+        --team <TEAM>
+            Set the team slug for API calls
+        --token <TOKEN>
+            Set the auth token for API calls
+        --trace <TRACE>
+            Specify a file to save a pprof trace
+        --verbosity <COUNT>
+            Verbosity level
+        --dangerously-disable-package-manager-check
+            Allow for missing `packageManager` in `package.json`
+    -h, --help
+            Print help (see more with '--help')
   
   Run Arguments:
         --cache-workers <CACHE_WORKERS>
@@ -77,7 +97,7 @@ Make sure exit code is 2 when no args are passed
         --global-deps <GLOBAL_DEPS>
             Specify glob of global filesystem dependencies to be hashed. Useful for .env and files
         --env-mode [<ENV_MODE>]
-            Environment variable mode. Use "loose" to pass the entire existing environment. Use "strict" to use an allowlist specified in turbo.json [default: strict] [possible values: loose, strict]
+            Environment variable mode. Use "loose" to pass the entire existing environment. Use "strict" to use an allowlist specified in turbo.json [possible values: loose, strict]
     -F, --filter <FILTER>
             Use the given selector to specify package(s) to act as entry points. The syntax mirrors pnpm's syntax, and additional documentation and examples can be found in turbo's documentation https://turbo.build/repo/docs/reference/command-line-reference/run#--filter
         --output-logs <OUTPUT_LOGS>
@@ -92,10 +112,26 @@ Make sure exit code is 2 when no args are passed
             Use "none" to remove prefixes from task logs. Use "task" to get task id prefixing. Use "auto" to let turbo decide how to prefix the logs based on the execution environment. In most cases this will be the same as "task". Note that tasks running in parallel interleave their logs, so removing prefixes can make it difficult to associate logs with tasks. Use --log-order=grouped to prevent interleaving. (default auto) [default: auto] [possible values: auto, none, task]
   [1]
 
+Run without any tasks, get a list of potential tasks to run
   $ ${TURBO} run
-    x at least one task must be specified
+  No tasks provided, here are some potential ones to run
   
+    build
+      my-app, util
+    maybefails
+      my-app, util
   [1]
+
+Run again with a filter and get only the packages that match
+  $ ${TURBO} run --filter my-app
+  No tasks provided, here are some potential ones to run
+  
+    build
+      my-app
+    maybefails
+      my-app
+  [1]
+
 
 Run again with an environment variable that corresponds to a run argument and assert that
 we get the full help output.
@@ -103,3 +139,79 @@ we get the full help output.
   [1]
   $ cat out.txt | head -n1
   The build system that makes ship happen
+
+Initialize a new monorepo
+  $ . ${TESTDIR}/../../helpers/setup_integration_test.sh composable_config > /dev/null 2>&1
+
+  $ ${TURBO} run
+  No tasks provided, here are some potential ones to run
+  
+    build
+      invalid-config, my-app, util
+    maybefails
+      my-app, util
+    add-keys-task
+      add-keys
+    add-keys-underlying-task
+      add-keys
+    added-task
+      add-tasks
+    cached-task-1
+      cached
+    cached-task-2
+      cached
+    cached-task-3
+      cached
+    cached-task-4
+      missing-workspace-config
+    config-change-task
+      config-change
+    cross-workspace-task
+      cross-workspace
+    cross-workspace-underlying-task
+      blank-pkg
+    missing-workspace-config-task
+      missing-workspace-config
+    missing-workspace-config-task-with-deps
+      missing-workspace-config
+    missing-workspace-config-underlying-task
+      missing-workspace-config
+    missing-workspace-config-underlying-topo-task
+      blank-pkg
+    omit-keys-task
+      omit-keys
+    omit-keys-task-with-deps
+      omit-keys
+    omit-keys-underlying-task
+      omit-keys
+    omit-keys-underlying-topo-task
+      blank-pkg
+    override-values-task
+      override-values
+    override-values-task-with-deps
+      override-values
+    override-values-task-with-deps-2
+      override-values
+    override-values-underlying-task
+      override-values
+    override-values-underlying-topo-task
+      blank-pkg
+    persistent-task-1
+      persistent
+    persistent-task-1-parent
+      persistent
+    persistent-task-2
+      persistent
+    persistent-task-2-parent
+      persistent
+    persistent-task-3
+      persistent
+    persistent-task-3-parent
+      persistent
+    persistent-task-4
+      persistent
+    persistent-task-4-parent
+      persistent
+    trailing-comma
+      bad-json
+  [1]

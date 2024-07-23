@@ -1,6 +1,6 @@
 import path from "node:path";
 import { writeJSONSync } from "fs-extra";
-import chalk from "chalk";
+import { green } from "picocolors";
 import type { DependencyList, DependencyGroups } from "@turbo/utils";
 import type {
   Project,
@@ -99,7 +99,7 @@ export function updateDependencies({
   const toLog = (key: keyof DependencyGroups) => {
     const total = stats[key].length;
     if (total > 0) {
-      return `${chalk.green(total.toString())} ${key}`;
+      return `${green(total.toString())} ${key}`;
     }
     return undefined;
   };

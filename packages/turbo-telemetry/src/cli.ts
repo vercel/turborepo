@@ -1,4 +1,4 @@
-import chalk from "chalk";
+import { bold, green, red } from "picocolors";
 import { logger } from "@turbo/utils";
 import { type Command, Argument } from "commander";
 import { type TelemetryClient } from "./client";
@@ -14,11 +14,7 @@ interface TelemetryCLIOptions {
 function status(options: TelemetryCLIOptions) {
   const isEnabled = options.telemetry?.config.isEnabled();
   logger.log(
-    `Status: ${
-      isEnabled
-        ? chalk.bold(chalk.green("Enabled"))
-        : chalk.bold(chalk.red("Disabled"))
-    }`
+    `Status: ${isEnabled ? bold(green("Enabled")) : bold(red("Disabled"))}`
   );
   logger.log();
   if (isEnabled) {

@@ -175,7 +175,7 @@ impl<'a> DependencyVersion<'a> {
             _ => {
                 // If we got this far, then we need to check the workspace package version to
                 // see it satisfies the dependencies range to determin whether
-                // or not its an internal or external dependency.
+                // or not it's an internal or external dependency.
                 let constraint = node_semver::Range::parse(self.version);
                 let version = node_semver::Version::parse(package_version);
 

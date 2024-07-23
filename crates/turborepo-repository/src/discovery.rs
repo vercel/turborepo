@@ -84,6 +84,7 @@ pub struct LocalPackageDiscoveryBuilder {
     repo_root: AbsoluteSystemPathBuf,
     package_manager: Option<PackageManager>,
     package_json: Option<PackageJson>,
+    allow_missing_package_manager: bool,
 }
 
 impl LocalPackageDiscoveryBuilder {
@@ -96,7 +97,12 @@ impl LocalPackageDiscoveryBuilder {
             repo_root,
             package_manager,
             package_json,
+            allow_missing_package_manager: false,
         }
+    }
+
+    pub fn with_allow_no_package_manager(&mut self, allow_missing_package_manager: bool) {
+        self.allow_missing_package_manager = allow_missing_package_manager;
     }
 }
 
@@ -111,7 +117,11 @@ impl PackageDiscoveryBuilder for LocalPackageDiscoveryBuilder {
                 let package_json = self.package_json.map(Ok).unwrap_or_else(|| {
                     PackageJson::load(&self.repo_root.join_component("package.json"))
                 })?;
-                PackageManager::get_package_manager(&package_json)?
+                if self.allow_missing_package_manager {
+                    PackageManager::read_or_detect_package_manager(&package_json, &self.repo_root)?
+                } else {
+                    PackageManager::get_package_manager(&package_json)?
+                }
             }
         };
 

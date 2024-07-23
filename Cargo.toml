@@ -108,18 +108,18 @@ strip = true
 [workspace.dependencies]
 async-recursion = "1.0.2"
 # Keep consistent with preset_env_base through swc_core
-browserslist-rs = { version = "0.15.0" }
+browserslist-rs = { version = "0.16.0" }
 miette = { version = "5.10.0", features = ["fancy"] }
-mdxjs = "0.2.4"
-modularize_imports = { version = "0.68.16" }
-styled_components = { version = "0.96.17" }
-styled_jsx = { version = "0.73.24" }
-swc_core = { version = "0.95.4", features = [
+mdxjs = "0.2.5"
+modularize_imports = { version = "0.68.7" }
+styled_components = { version = "0.96.6" }
+styled_jsx = { version = "0.73.10" }
+swc_core = { version = "0.96.9", features = [
   "ecma_loader_lru",
   "ecma_loader_parking_lot",
 ] }
-swc_emotion = { version = "0.72.15" }
-swc_relay = { version = "0.44.16" }
+swc_emotion = { version = "0.72.6" }
+swc_relay = { version = "0.44.5" }
 testing = { version = "0.36.0" }
 # Temporary: Reference the latest git minor version of pathfinder_simd until it's published.
 pathfinder_simd = "0.5.3"
@@ -226,7 +226,7 @@ camino = { version = "1.1.4", features = ["serde1"] }
 chrono = "0.4.23"
 clap = "4.5.2"
 clap_complete = "4.5.1"
-concurrent-queue = "2.1.0"
+concurrent-queue = "2.5.0"
 console = "0.15.5"
 console-subscriber = "0.1.8"
 criterion = "0.4.0"
@@ -252,8 +252,6 @@ lightningcss = { version = "1.0.0-alpha.57", features = [
 ] }
 mime = "0.3.16"
 notify = "6.1.1"
-notify-debouncer-full = "0.3.1"
-notify-debouncer-mini = { version = "0.3.0", default-features = false }
 once_cell = "1.17.1"
 owo-colors = "3.5.0"
 parcel_selectors = "0.26.0"

@@ -2,14 +2,16 @@ use std::{backtrace, backtrace::Backtrace};
 
 use thiserror::Error;
 use turbopath::AnchoredSystemPathBuf;
-use turborepo_cache::CacheOpts;
+use turborepo_api_client::APIAuth;
+use turborepo_cache::{CacheOpts, RemoteCacheOpts};
 
 use crate::{
     cli::{
         Command, DryRunMode, EnvMode, ExecutionArgs, LogOrder, LogPrefix, OutputLogsMode, RunArgs,
     },
+    commands::CommandBase,
+    config::ConfigurationOptions,
     run::task_id::TaskId,
-    Args,
 };
 
 #[derive(Debug, Error)]
@@ -30,6 +32,8 @@ pub enum Error {
     ConcurrencyOutOfBounds(#[backtrace] backtrace::Backtrace, String),
     #[error(transparent)]
     Path(#[from] turbopath::PathError),
+    #[error(transparent)]
+    Config(#[from] crate::config::Error),
 }
 
 #[derive(Debug)]
@@ -76,10 +80,12 @@ impl Opts {
     }
 }
 
-impl<'a> TryFrom<&'a Args> for Opts {
-    type Error = self::Error;
+impl Opts {
+    pub fn new(base: &CommandBase) -> Result<Self, Error> {
+        let args = base.args();
+        let config = base.config()?;
+        let api_auth = base.api_auth()?;
 
-    fn try_from(args: &'a Args) -> Result<Self, Self::Error> {
         let Some(Command::Run {
             run_args,
             execution_args,
@@ -87,9 +93,12 @@ impl<'a> TryFrom<&'a Args> for Opts {
         else {
             return Err(Error::ExpectedRun(Backtrace::capture()));
         };
-        let run_and_execution_args = RunAndExecutionArgs {
+
+        let run_and_execution_args = OptsInputs {
             run_args: run_args.as_ref(),
             execution_args: execution_args.as_ref(),
+            config,
+            api_auth: &api_auth,
         };
         let run_opts = RunOpts::try_from(run_and_execution_args)?;
         let cache_opts = CacheOpts::from(run_and_execution_args);
@@ -105,11 +114,12 @@ impl<'a> TryFrom<&'a Args> for Opts {
     }
 }
 
-// This is not ideal, but it allows us to impl From
 #[derive(Debug, Clone, Copy)]
-struct RunAndExecutionArgs<'a> {
+struct OptsInputs<'a> {
     run_args: &'a RunArgs,
     execution_args: &'a ExecutionArgs,
+    config: &'a ConfigurationOptions,
+    api_auth: &'a Option<APIAuth>,
 }
 
 #[derive(Debug, Default)]
@@ -119,12 +129,12 @@ pub struct RunCacheOpts {
     pub(crate) task_output_logs_override: Option<OutputLogsMode>,
 }
 
-impl<'a> From<RunAndExecutionArgs<'a>> for RunCacheOpts {
-    fn from(args: RunAndExecutionArgs<'a>) -> Self {
+impl<'a> From<OptsInputs<'a>> for RunCacheOpts {
+    fn from(inputs: OptsInputs<'a>) -> Self {
         RunCacheOpts {
-            skip_reads: args.execution_args.force.flatten().is_some_and(|f| f),
-            skip_writes: args.run_args.no_cache,
-            task_output_logs_override: args.execution_args.output_logs,
+            skip_reads: inputs.execution_args.force.flatten().is_some_and(|f| f),
+            skip_writes: inputs.run_args.no_cache,
+            task_output_logs_override: inputs.execution_args.output_logs,
         }
     }
 }
@@ -187,11 +197,11 @@ pub enum ResolvedLogPrefix {
 
 const DEFAULT_CONCURRENCY: u32 = 10;
 
-impl<'a> TryFrom<RunAndExecutionArgs<'a>> for RunOpts {
+impl<'a> TryFrom<OptsInputs<'a>> for RunOpts {
     type Error = self::Error;
 
-    fn try_from(args: RunAndExecutionArgs) -> Result<Self, Self::Error> {
-        let concurrency = args
+    fn try_from(inputs: OptsInputs) -> Result<Self, Self::Error> {
+        let concurrency = inputs
             .execution_args
             .concurrency
             .as_deref()
@@ -199,16 +209,16 @@ impl<'a> TryFrom<RunAndExecutionArgs<'a>> for RunOpts {
             .transpose()?
             .unwrap_or(DEFAULT_CONCURRENCY);
 
-        let graph = args.run_args.graph.as_deref().map(|file| match file {
+        let graph = inputs.run_args.graph.as_deref().map(|file| match file {
             "" => GraphOpts::Stdout,
             f => GraphOpts::File(f.to_string()),
         });
 
-        let (is_github_actions, log_order, log_prefix) = match args.execution_args.log_order {
+        let (is_github_actions, log_order, log_prefix) = match inputs.execution_args.log_order {
             LogOrder::Auto if turborepo_ci::Vendor::get_constant() == Some("GITHUB_ACTIONS") => (
                 true,
                 ResolvedLogOrder::Grouped,
-                match args.execution_args.log_prefix {
+                match inputs.execution_args.log_prefix {
                     LogPrefix::Task => ResolvedLogPrefix::Task,
                     _ => ResolvedLogPrefix::None,
                 },
@@ -218,33 +228,37 @@ impl<'a> TryFrom<RunAndExecutionArgs<'a>> for RunOpts {
             LogOrder::Auto | LogOrder::Stream => (
                 false,
                 ResolvedLogOrder::Stream,
-                args.execution_args.log_prefix.into(),
+                inputs.execution_args.log_prefix.into(),
             ),
             LogOrder::Grouped => (
                 false,
                 ResolvedLogOrder::Grouped,
-                args.execution_args.log_prefix.into(),
+                inputs.execution_args.log_prefix.into(),
             ),
         };
 
         Ok(Self {
-            tasks: args.execution_args.tasks.clone(),
+            tasks: inputs.execution_args.tasks.clone(),
             log_prefix,
             log_order,
-            summarize: args.run_args.summarize,
-            experimental_space_id: args.run_args.experimental_space_id.clone(),
-            framework_inference: args.execution_args.framework_inference,
-            env_mode: args.execution_args.env_mode,
+            summarize: inputs.run_args.summarize,
+            experimental_space_id: inputs
+                .run_args
+                .experimental_space_id
+                .clone()
+                .or(inputs.config.spaces_id().map(|s| s.to_owned())),
+            framework_inference: inputs.execution_args.framework_inference,
             concurrency,
-            parallel: args.run_args.parallel,
-            profile: args.run_args.profile.clone(),
-            continue_on_error: args.execution_args.continue_execution,
-            pass_through_args: args.execution_args.pass_through_args.clone(),
-            only: args.execution_args.only,
-            daemon: args.run_args.daemon(),
-            single_package: args.execution_args.single_package,
+            parallel: inputs.run_args.parallel,
+            profile: inputs.run_args.profile.clone(),
+            continue_on_error: inputs.execution_args.continue_execution,
+            pass_through_args: inputs.execution_args.pass_through_args.clone(),
+            only: inputs.execution_args.only,
+            daemon: inputs.run_args.daemon(),
+            single_package: inputs.execution_args.single_package,
             graph,
-            dry_run: args.run_args.dry_run,
+            dry_run: inputs.run_args.dry_run,
+            env_mode: inputs.execution_args.env_mode.unwrap_or_default(),
             is_github_actions,
         })
     }
@@ -288,11 +302,11 @@ pub struct ScopeOpts {
     pub filter_patterns: Vec<String>,
 }
 
-impl<'a> TryFrom<RunAndExecutionArgs<'a>> for ScopeOpts {
+impl<'a> TryFrom<OptsInputs<'a>> for ScopeOpts {
     type Error = self::Error;
 
-    fn try_from(args: RunAndExecutionArgs<'a>) -> Result<Self, Self::Error> {
-        let pkg_inference_root = args
+    fn try_from(inputs: OptsInputs<'a>) -> Result<Self, Self::Error> {
+        let pkg_inference_root = inputs
             .execution_args
             .pkg_inference_root
             .as_ref()
@@ -300,21 +314,44 @@ impl<'a> TryFrom<RunAndExecutionArgs<'a>> for ScopeOpts {
             .transpose()?;
 
         Ok(Self {
-            global_deps: args.execution_args.global_deps.clone(),
+            global_deps: inputs.execution_args.global_deps.clone(),
             pkg_inference_root,
-            filter_patterns: args.execution_args.filter.clone(),
+            filter_patterns: inputs.execution_args.filter.clone(),
         })
     }
 }
 
-impl<'a> From<RunAndExecutionArgs<'a>> for CacheOpts {
-    fn from(args: RunAndExecutionArgs<'a>) -> Self {
+impl<'a> From<OptsInputs<'a>> for CacheOpts {
+    fn from(inputs: OptsInputs<'a>) -> Self {
+        let is_linked = turborepo_api_client::is_linked(inputs.api_auth);
+        let skip_remote = if !is_linked {
+            true
+        } else if let Some(enabled) = inputs.config.enabled {
+            // We're linked, but if the user has explicitly enabled or disabled, use that
+            // value
+            !enabled
+        } else {
+            false
+        };
+
+        // Note that we don't currently use the team_id value here. In the future, we
+        // should probably verify that we only use the signature value when the
+        // configured team_id matches the final resolved team_id.
+        let unused_remote_cache_opts_team_id =
+            inputs.config.team_id().map(|team_id| team_id.to_string());
+        let signature = inputs.config.signature();
+        let remote_cache_opts = Some(RemoteCacheOpts::new(
+            unused_remote_cache_opts_team_id,
+            signature,
+        ));
+
         CacheOpts {
-            override_dir: args.execution_args.cache_dir.clone(),
-            skip_filesystem: args.execution_args.remote_only,
-            remote_cache_read_only: args.run_args.remote_cache_read_only,
-            workers: args.run_args.cache_workers,
-            ..CacheOpts::default()
+            override_dir: inputs.execution_args.cache_dir.clone(),
+            skip_filesystem: inputs.execution_args.remote_only,
+            remote_cache_read_only: inputs.run_args.remote_cache_read_only,
+            workers: inputs.run_args.cache_workers,
+            skip_remote,
+            remote_cache_opts,
         }
     }
 }

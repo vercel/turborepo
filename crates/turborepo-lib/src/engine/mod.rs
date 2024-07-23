@@ -586,8 +586,11 @@ mod test {
                     let scripts = if had_build {
                         BTreeMap::from_iter(
                             [
-                                ("build".to_string(), "echo built!".to_string()),
-                                ("dev".to_string(), "echo running dev!".to_string()),
+                                ("build".to_string(), Spanned::new("echo built!".to_string())),
+                                (
+                                    "dev".to_string(),
+                                    Spanned::new("echo running dev!".to_string()),
+                                ),
                             ]
                             .into_iter(),
                         )

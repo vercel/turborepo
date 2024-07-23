@@ -11,13 +11,18 @@ use std::{
     str::FromStr,
 };
 
+use bun::BunDetector;
 use globwalk::{fix_glob_pattern, ValidatedGlob};
 use itertools::{Either, Itertools};
 use lazy_regex::{lazy_regex, Lazy};
+use miette::{Diagnostic, NamedSource, SourceSpan};
+use node_semver::SemverError;
+use npm::NpmDetector;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError, RelativeUnixPath};
+use turborepo_errors::Spanned;
 use turborepo_lockfiles::Lockfile;
 use wax::{Any, Glob, Program};
 use which::which;
@@ -260,7 +265,7 @@ impl From<wax::BuildError> for Error {
     }
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Diagnostic)]
 pub enum Error {
     #[error("io error: {0}")]
     Io(#[from] std::io::Error, #[backtrace] backtrace::Backtrace),
@@ -281,8 +286,15 @@ pub enum Error {
     #[error("We detected multiple package managers in your repository: {}. Please remove one \
     of them.", managers.join(", "))]
     MultiplePackageManagers { managers: Vec<String> },
-    #[error(transparent)]
-    Semver(#[from] node_semver::SemverError),
+    #[error("invalid semantic version: {explanation}")]
+    #[diagnostic(code(invalid_semantic_version))]
+    InvalidVersion {
+        explanation: String,
+        #[label("version found here")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource,
+    },
     #[error("{0}: {1}")]
     // this will be something like "cannot find binary: <thing we tried to find>"
     Which(which::Error, String),
@@ -291,9 +303,17 @@ pub enum Error {
     #[error(transparent)]
     Path(#[from] turbopath::PathError),
     #[error(
-        "We could not parse the packageManager field in package.json, expected: {0}, received: {1}"
+        "could not parse the packageManager field in package.json, expected to match regular \
+         expression {pattern}"
     )]
-    InvalidPackageManager(String, String),
+    #[diagnostic(code(invalid_package_manager_field))]
+    InvalidPackageManager {
+        pattern: String,
+        #[label("invalid `packageManager` field")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource,
+    },
     #[error(transparent)]
     WalkError(#[from] globwalk::WalkError),
     #[error("invalid workspace glob {0}: {1}")]
@@ -307,8 +327,6 @@ pub enum Error {
     WorkspaceDiscovery(#[from] discovery::Error),
     #[error("missing packageManager field in package.json")]
     MissingPackageManager,
-    #[error("{0} set in packageManager is not a supported package manager")]
-    UnsupportedPackageManager(String),
 }
 
 impl From<std::convert::Infallible> for Error {
@@ -427,12 +445,7 @@ impl PackageManager {
         )
     }
 
-    /// Try to detect the package manager by inspecting the repository.
-    /// This method does not read the package.json, instead looking for
-    /// lockfiles and other files that indicate the package manager.
-    ///
-    /// TODO: consider if this method should not need an Option, and possibly be
-    /// a method on PackageJSON
+    /// Try to extract the package manager from package.json.
     pub fn get_package_manager(package_json: &PackageJson) -> Result<Self, Error> {
         Self::read_package_manager(package_json)
     }
@@ -444,26 +457,71 @@ impl PackageManager {
         };
 
         let (manager, version) = Self::parse_package_manager_string(package_manager)?;
-        let version = version.parse()?;
+        let version = version.parse().map_err(|err: SemverError| {
+            let (span, text) = package_manager.span_and_text("package.json");
+            Error::InvalidVersion {
+                explanation: err.to_string(),
+                span,
+                text,
+            }
+        })?;
+
         match manager {
             "npm" => Ok(PackageManager::Npm),
             "bun" => Ok(PackageManager::Bun),
             "yarn" => Ok(YarnDetector::detect_berry_or_yarn(&version)?),
             "pnpm" => Ok(PnpmDetector::detect_pnpm6_or_pnpm(&version)?),
-            _ => Err(Error::UnsupportedPackageManager(manager.to_owned())),
+            _ => unreachable!(
+                "found invalid package manager even though regex should have caught it"
+            ),
         }
     }
 
-    pub(crate) fn parse_package_manager_string(manager: &str) -> Result<(&str, &str), Error> {
+    /// Try to detect package manager based on configuration files and binaries
+    /// installed on the system.
+    pub fn detect_package_manager(repo_root: &AbsoluteSystemPath) -> Result<Self, Error> {
+        let detected_package_managers = PnpmDetector::new(repo_root)
+            .chain(NpmDetector::new(repo_root))
+            .chain(YarnDetector::new(repo_root))
+            .chain(BunDetector::new(repo_root))
+            .collect::<Result<Vec<_>, Error>>()?;
+
+        match detected_package_managers.as_slice() {
+            [] => Err(NoPackageManager.into()),
+            [package_manager] => Ok(*package_manager),
+            _ => {
+                let managers = detected_package_managers
+                    .iter()
+                    .map(|mgr| mgr.to_string())
+                    .collect();
+                Err(Error::MultiplePackageManagers { managers })
+            }
+        }
+    }
+
+    /// Try to extract package manager from package.json, otherwise detect based
+    /// on configuration files and binaries installed on the system
+    pub fn read_or_detect_package_manager(
+        package_json: &PackageJson,
+        repo_root: &AbsoluteSystemPath,
+    ) -> Result<Self, Error> {
+        Self::get_package_manager(package_json).or_else(|_| Self::detect_package_manager(repo_root))
+    }
+
+    pub(crate) fn parse_package_manager_string(
+        manager: &Spanned<String>,
+    ) -> Result<(&str, &str), Error> {
         if let Some(captures) = PACKAGE_MANAGER_PATTERN.captures(manager) {
             let manager = captures.name("manager").unwrap().as_str();
             let version = captures.name("version").unwrap().as_str();
             Ok((manager, version))
         } else {
-            Err(Error::InvalidPackageManager(
-                PACKAGE_MANAGER_PATTERN.to_string(),
-                manager.to_string(),
-            ))
+            let (span, text) = manager.span_and_text("package.json");
+            Err(Error::InvalidPackageManager {
+                pattern: PACKAGE_MANAGER_PATTERN.to_string(),
+                span,
+                text,
+            })
         }
     }
 
@@ -603,7 +661,7 @@ mod tests {
 
     struct TestCase {
         name: String,
-        package_manager: String,
+        package_manager: Spanned<String>,
         expected_manager: String,
         expected_version: String,
         expected_error: bool,
@@ -701,70 +759,70 @@ mod tests {
         let tests = vec![
             TestCase {
                 name: "errors with a tag version".to_owned(),
-                package_manager: "npm@latest".to_owned(),
+                package_manager: Spanned::new("npm@latest".to_owned()),
                 expected_manager: "".to_owned(),
                 expected_version: "".to_owned(),
                 expected_error: true,
             },
             TestCase {
                 name: "errors with no version".to_owned(),
-                package_manager: "npm".to_owned(),
+                package_manager: Spanned::new("npm".to_owned()),
                 expected_manager: "".to_owned(),
                 expected_version: "".to_owned(),
                 expected_error: true,
             },
             TestCase {
                 name: "requires fully-qualified semver versions (one digit)".to_owned(),
-                package_manager: "npm@1".to_owned(),
+                package_manager: Spanned::new("npm@1".to_owned()),
                 expected_manager: "".to_owned(),
                 expected_version: "".to_owned(),
                 expected_error: true,
             },
             TestCase {
                 name: "requires fully-qualified semver versions (two digits)".to_owned(),
-                package_manager: "npm@1.2".to_owned(),
+                package_manager: Spanned::new("npm@1.2".to_owned()),
                 expected_manager: "".to_owned(),
                 expected_version: "".to_owned(),
                 expected_error: true,
             },
             TestCase {
                 name: "supports custom labels".to_owned(),
-                package_manager: "npm@1.2.3-alpha.1".to_owned(),
+                package_manager: Spanned::new("npm@1.2.3-alpha.1".to_owned()),
                 expected_manager: "npm".to_owned(),
                 expected_version: "1.2.3-alpha.1".to_owned(),
                 expected_error: false,
             },
             TestCase {
                 name: "only supports specified package managers".to_owned(),
-                package_manager: "pip@1.2.3".to_owned(),
+                package_manager: Spanned::new("pip@1.2.3".to_owned()),
                 expected_manager: "".to_owned(),
                 expected_version: "".to_owned(),
                 expected_error: true,
             },
             TestCase {
                 name: "supports npm".to_owned(),
-                package_manager: "npm@0.0.1".to_owned(),
+                package_manager: Spanned::new("npm@0.0.1".to_owned()),
                 expected_manager: "npm".to_owned(),
                 expected_version: "0.0.1".to_owned(),
                 expected_error: false,
             },
             TestCase {
                 name: "supports pnpm".to_owned(),
-                package_manager: "pnpm@0.0.1".to_owned(),
+                package_manager: Spanned::new("pnpm@0.0.1".to_owned()),
                 expected_manager: "pnpm".to_owned(),
                 expected_version: "0.0.1".to_owned(),
                 expected_error: false,
             },
             TestCase {
                 name: "supports yarn".to_owned(),
-                package_manager: "yarn@111.0.1".to_owned(),
+                package_manager: Spanned::new("yarn@111.0.1".to_owned()),
                 expected_manager: "yarn".to_owned(),
                 expected_version: "111.0.1".to_owned(),
                 expected_error: false,
             },
             TestCase {
                 name: "supports bun".to_owned(),
-                package_manager: "bun@1.0.1".to_owned(),
+                package_manager: Spanned::new("bun@1.0.1".to_owned()),
                 expected_manager: "bun".to_owned(),
                 expected_version: "1.0.1".to_owned(),
                 expected_error: false,
@@ -786,29 +844,29 @@ mod tests {
     #[test]
     fn test_read_package_manager() -> Result<(), Error> {
         let mut package_json = PackageJson {
-            package_manager: Some("npm@8.19.4".to_string()),
+            package_manager: Some(Spanned::new("npm@8.19.4".to_string())),
             ..Default::default()
         };
         let package_manager = PackageManager::read_package_manager(&package_json)?;
         assert_eq!(package_manager, PackageManager::Npm);
 
-        package_json.package_manager = Some("yarn@2.0.0".to_string());
+        package_json.package_manager = Some(Spanned::new("yarn@2.0.0".to_string()));
         let package_manager = PackageManager::read_package_manager(&package_json)?;
         assert_eq!(package_manager, PackageManager::Berry);
 
-        package_json.package_manager = Some("yarn@1.9.0".to_string());
+        package_json.package_manager = Some(Spanned::new("yarn@1.9.0".to_string()));
         let package_manager = PackageManager::read_package_manager(&package_json)?;
         assert_eq!(package_manager, PackageManager::Yarn);
 
-        package_json.package_manager = Some("pnpm@6.0.0".to_string());
+        package_json.package_manager = Some(Spanned::new("pnpm@6.0.0".to_string()));
         let package_manager = PackageManager::read_package_manager(&package_json)?;
         assert_eq!(package_manager, PackageManager::Pnpm6);
 
-        package_json.package_manager = Some("pnpm@7.2.0".to_string());
+        package_json.package_manager = Some(Spanned::new("pnpm@7.2.0".to_string()));
         let package_manager = PackageManager::read_package_manager(&package_json)?;
         assert_eq!(package_manager, PackageManager::Pnpm);
 
-        package_json.package_manager = Some("bun@1.0.1".to_string());
+        package_json.package_manager = Some(Spanned::new("bun@1.0.1".to_string()));
         let package_manager = PackageManager::read_package_manager(&package_json)?;
         assert_eq!(package_manager, PackageManager::Bun);
 

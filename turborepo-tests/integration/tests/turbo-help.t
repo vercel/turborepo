@@ -14,6 +14,7 @@ Test help flag
     generate    Generate a new app / package
     telemetry   Enable or disable anonymous telemetry
     scan        Turbo your monorepo by running a number of 'repo lints' to identify common issues, suggest fixes, and improve performance
+    ls          EXPERIMENTAL: List packages in your monorepo
     link        Link your local directory to a Vercel organization and enable remote caching
     login       Login to your Vercel account
     logout      Logout to your Vercel account
@@ -23,23 +24,42 @@ Test help flag
     unlink      Unlink the current directory from your Vercel organization and disable Remote Caching
   
   Options:
-        --version                         
-        --skip-infer                      Skip any attempts to infer which version of Turbo the project is configured to use
-        --no-update-notifier              Disable the turbo update notification
-        --api <API>                       Override the endpoint for API calls
-        --color                           Force color usage in the terminal
-        --cwd <CWD>                       The directory in which to run turbo
-        --heap <HEAP>                     Specify a file to save a pprof heap profile
-        --ui <UI>                         Specify whether to use the streaming UI or TUI [possible values: tui, stream]
-        --login <LOGIN>                   Override the login endpoint
-        --no-color                        Suppress color usage in the terminal
-        --preflight                       When enabled, turbo will precede HTTP requests with an OPTIONS request for authorization
-        --remote-cache-timeout <TIMEOUT>  Set a timeout for all HTTP requests
-        --team <TEAM>                     Set the team slug for API calls
-        --token <TOKEN>                   Set the auth token for API calls
-        --trace <TRACE>                   Specify a file to save a pprof trace
-        --verbosity <COUNT>               Verbosity level
-    -h, --help                            Print help (see more with '--help')
+        --version
+            
+        --skip-infer
+            Skip any attempts to infer which version of Turbo the project is configured to use
+        --no-update-notifier
+            Disable the turbo update notification
+        --api <API>
+            Override the endpoint for API calls
+        --color
+            Force color usage in the terminal
+        --cwd <CWD>
+            The directory in which to run turbo
+        --heap <HEAP>
+            Specify a file to save a pprof heap profile
+        --ui <UI>
+            Specify whether to use the streaming UI or TUI [possible values: tui, stream]
+        --login <LOGIN>
+            Override the login endpoint
+        --no-color
+            Suppress color usage in the terminal
+        --preflight
+            When enabled, turbo will precede HTTP requests with an OPTIONS request for authorization
+        --remote-cache-timeout <TIMEOUT>
+            Set a timeout for all HTTP requests
+        --team <TEAM>
+            Set the team slug for API calls
+        --token <TOKEN>
+            Set the auth token for API calls
+        --trace <TRACE>
+            Specify a file to save a pprof trace
+        --verbosity <COUNT>
+            Verbosity level
+        --dangerously-disable-package-manager-check
+            Allow for missing `packageManager` in `package.json`
+    -h, --help
+            Print help (see more with '--help')
   
   Run Arguments:
         --cache-workers <CACHE_WORKERS>
@@ -77,7 +97,7 @@ Test help flag
         --global-deps <GLOBAL_DEPS>
             Specify glob of global filesystem dependencies to be hashed. Useful for .env and files
         --env-mode [<ENV_MODE>]
-            Environment variable mode. Use "loose" to pass the entire existing environment. Use "strict" to use an allowlist specified in turbo.json [default: strict] [possible values: loose, strict]
+            Environment variable mode. Use "loose" to pass the entire existing environment. Use "strict" to use an allowlist specified in turbo.json [possible values: loose, strict]
     -F, --filter <FILTER>
             Use the given selector to specify package(s) to act as entry points. The syntax mirrors pnpm's syntax, and additional documentation and examples can be found in turbo's documentation https://turbo.build/repo/docs/reference/command-line-reference/run#--filter
         --output-logs <OUTPUT_LOGS>
@@ -108,6 +128,7 @@ Test help flag
     generate    Generate a new app / package
     telemetry   Enable or disable anonymous telemetry
     scan        Turbo your monorepo by running a number of 'repo lints' to identify common issues, suggest fixes, and improve performance
+    ls          EXPERIMENTAL: List packages in your monorepo
     link        Link your local directory to a Vercel organization and enable remote caching
     login       Login to your Vercel account
     logout      Logout to your Vercel account
@@ -168,6 +189,11 @@ Test help flag
   
         --verbosity <COUNT>
             Verbosity level
+  
+        --dangerously-disable-package-manager-check
+            Allow for missing `packageManager` in `package.json`.
+            
+            `turbo` will use hints from codebase to guess which package manager should be used.
   
     -h, --help
             Print help (see a summary with '-h')
@@ -244,7 +270,6 @@ Test help flag
         --env-mode [<ENV_MODE>]
             Environment variable mode. Use "loose" to pass the entire existing environment. Use "strict" to use an allowlist specified in turbo.json
             
-            [default: strict]
             [possible values: loose, strict]
   
     -F, --filter <FILTER>
@@ -285,25 +310,46 @@ Test help flag for link command
   Usage: turbo(\.exe)? link \[OPTIONS\] (re)
   
   Options:
-        --no-gitignore                    Do not create or modify .gitignore (default false)
-        --version                         
-        --skip-infer                      Skip any attempts to infer which version of Turbo the project is configured to use
-        --target <TARGET>                 Specify what should be linked (default "remote cache") [default: remote-cache] [possible values: remote-cache, spaces]
-        --no-update-notifier              Disable the turbo update notification
-        --api <API>                       Override the endpoint for API calls
-        --color                           Force color usage in the terminal
-        --cwd <CWD>                       The directory in which to run turbo
-        --heap <HEAP>                     Specify a file to save a pprof heap profile
-        --ui <UI>                         Specify whether to use the streaming UI or TUI [possible values: tui, stream]
-        --login <LOGIN>                   Override the login endpoint
-        --no-color                        Suppress color usage in the terminal
-        --preflight                       When enabled, turbo will precede HTTP requests with an OPTIONS request for authorization
-        --remote-cache-timeout <TIMEOUT>  Set a timeout for all HTTP requests
-        --team <TEAM>                     Set the team slug for API calls
-        --token <TOKEN>                   Set the auth token for API calls
-        --trace <TRACE>                   Specify a file to save a pprof trace
-        --verbosity <COUNT>               Verbosity level
-    -h, --help                            Print help (see more with '--help')
+        --no-gitignore
+            Do not create or modify .gitignore (default false)
+        --version
+            
+        --skip-infer
+            Skip any attempts to infer which version of Turbo the project is configured to use
+        --target <TARGET>
+            Specify what should be linked (default "remote cache") [default: remote-cache] [possible values: remote-cache, spaces]
+        --no-update-notifier
+            Disable the turbo update notification
+        --api <API>
+            Override the endpoint for API calls
+        --color
+            Force color usage in the terminal
+        --cwd <CWD>
+            The directory in which to run turbo
+        --heap <HEAP>
+            Specify a file to save a pprof heap profile
+        --ui <UI>
+            Specify whether to use the streaming UI or TUI [possible values: tui, stream]
+        --login <LOGIN>
+            Override the login endpoint
+        --no-color
+            Suppress color usage in the terminal
+        --preflight
+            When enabled, turbo will precede HTTP requests with an OPTIONS request for authorization
+        --remote-cache-timeout <TIMEOUT>
+            Set a timeout for all HTTP requests
+        --team <TEAM>
+            Set the team slug for API calls
+        --token <TOKEN>
+            Set the auth token for API calls
+        --trace <TRACE>
+            Specify a file to save a pprof trace
+        --verbosity <COUNT>
+            Verbosity level
+        --dangerously-disable-package-manager-check
+            Allow for missing `packageManager` in `package.json`
+    -h, --help
+            Print help (see more with '--help')
 
 Test help flag for unlink command
   $ ${TURBO} unlink -h
@@ -312,24 +358,44 @@ Test help flag for unlink command
   Usage: turbo(\.exe)? unlink \[OPTIONS\] (re)
   
   Options:
-        --target <TARGET>                 Specify what should be unlinked (default "remote cache") [default: remote-cache] [possible values: remote-cache, spaces]
-        --version                         
-        --skip-infer                      Skip any attempts to infer which version of Turbo the project is configured to use
-        --no-update-notifier              Disable the turbo update notification
-        --api <API>                       Override the endpoint for API calls
-        --color                           Force color usage in the terminal
-        --cwd <CWD>                       The directory in which to run turbo
-        --heap <HEAP>                     Specify a file to save a pprof heap profile
-        --ui <UI>                         Specify whether to use the streaming UI or TUI [possible values: tui, stream]
-        --login <LOGIN>                   Override the login endpoint
-        --no-color                        Suppress color usage in the terminal
-        --preflight                       When enabled, turbo will precede HTTP requests with an OPTIONS request for authorization
-        --remote-cache-timeout <TIMEOUT>  Set a timeout for all HTTP requests
-        --team <TEAM>                     Set the team slug for API calls
-        --token <TOKEN>                   Set the auth token for API calls
-        --trace <TRACE>                   Specify a file to save a pprof trace
-        --verbosity <COUNT>               Verbosity level
-    -h, --help                            Print help (see more with '--help')
+        --target <TARGET>
+            Specify what should be unlinked (default "remote cache") [default: remote-cache] [possible values: remote-cache, spaces]
+        --version
+            
+        --skip-infer
+            Skip any attempts to infer which version of Turbo the project is configured to use
+        --no-update-notifier
+            Disable the turbo update notification
+        --api <API>
+            Override the endpoint for API calls
+        --color
+            Force color usage in the terminal
+        --cwd <CWD>
+            The directory in which to run turbo
+        --heap <HEAP>
+            Specify a file to save a pprof heap profile
+        --ui <UI>
+            Specify whether to use the streaming UI or TUI [possible values: tui, stream]
+        --login <LOGIN>
+            Override the login endpoint
+        --no-color
+            Suppress color usage in the terminal
+        --preflight
+            When enabled, turbo will precede HTTP requests with an OPTIONS request for authorization
+        --remote-cache-timeout <TIMEOUT>
+            Set a timeout for all HTTP requests
+        --team <TEAM>
+            Set the team slug for API calls
+        --token <TOKEN>
+            Set the auth token for API calls
+        --trace <TRACE>
+            Specify a file to save a pprof trace
+        --verbosity <COUNT>
+            Verbosity level
+        --dangerously-disable-package-manager-check
+            Allow for missing `packageManager` in `package.json`
+    -h, --help
+            Print help (see more with '--help')
 
 Test help flag for login command
   $ ${TURBO} login -h
@@ -338,25 +404,46 @@ Test help flag for login command
   Usage: turbo(\.exe)? login \[OPTIONS\] (re)
   
   Options:
-        --sso-team <SSO_TEAM>             
-        --version                         
-    -f, --force                           Force a login to receive a new token. Will overwrite any existing tokens for the given login url
-        --skip-infer                      Skip any attempts to infer which version of Turbo the project is configured to use
-        --no-update-notifier              Disable the turbo update notification
-        --api <API>                       Override the endpoint for API calls
-        --color                           Force color usage in the terminal
-        --cwd <CWD>                       The directory in which to run turbo
-        --heap <HEAP>                     Specify a file to save a pprof heap profile
-        --ui <UI>                         Specify whether to use the streaming UI or TUI [possible values: tui, stream]
-        --login <LOGIN>                   Override the login endpoint
-        --no-color                        Suppress color usage in the terminal
-        --preflight                       When enabled, turbo will precede HTTP requests with an OPTIONS request for authorization
-        --remote-cache-timeout <TIMEOUT>  Set a timeout for all HTTP requests
-        --team <TEAM>                     Set the team slug for API calls
-        --token <TOKEN>                   Set the auth token for API calls
-        --trace <TRACE>                   Specify a file to save a pprof trace
-        --verbosity <COUNT>               Verbosity level
-    -h, --help                            Print help (see more with '--help')
+        --sso-team <SSO_TEAM>
+            
+        --version
+            
+    -f, --force
+            Force a login to receive a new token. Will overwrite any existing tokens for the given login url
+        --skip-infer
+            Skip any attempts to infer which version of Turbo the project is configured to use
+        --no-update-notifier
+            Disable the turbo update notification
+        --api <API>
+            Override the endpoint for API calls
+        --color
+            Force color usage in the terminal
+        --cwd <CWD>
+            The directory in which to run turbo
+        --heap <HEAP>
+            Specify a file to save a pprof heap profile
+        --ui <UI>
+            Specify whether to use the streaming UI or TUI [possible values: tui, stream]
+        --login <LOGIN>
+            Override the login endpoint
+        --no-color
+            Suppress color usage in the terminal
+        --preflight
+            When enabled, turbo will precede HTTP requests with an OPTIONS request for authorization
+        --remote-cache-timeout <TIMEOUT>
+            Set a timeout for all HTTP requests
+        --team <TEAM>
+            Set the team slug for API calls
+        --token <TOKEN>
+            Set the auth token for API calls
+        --trace <TRACE>
+            Specify a file to save a pprof trace
+        --verbosity <COUNT>
+            Verbosity level
+        --dangerously-disable-package-manager-check
+            Allow for missing `packageManager` in `package.json`
+    -h, --help
+            Print help (see more with '--help')
 
 Test help flag for logout command
   $ ${TURBO} logout -h
@@ -365,21 +452,41 @@ Test help flag for logout command
   Usage: turbo(\.exe)? logout \[OPTIONS\] (re)
   
   Options:
-        --invalidate                      Invalidate the token on the server
-        --version                         
-        --skip-infer                      Skip any attempts to infer which version of Turbo the project is configured to use
-        --no-update-notifier              Disable the turbo update notification
-        --api <API>                       Override the endpoint for API calls
-        --color                           Force color usage in the terminal
-        --cwd <CWD>                       The directory in which to run turbo
-        --heap <HEAP>                     Specify a file to save a pprof heap profile
-        --ui <UI>                         Specify whether to use the streaming UI or TUI [possible values: tui, stream]
-        --login <LOGIN>                   Override the login endpoint
-        --no-color                        Suppress color usage in the terminal
-        --preflight                       When enabled, turbo will precede HTTP requests with an OPTIONS request for authorization
-        --remote-cache-timeout <TIMEOUT>  Set a timeout for all HTTP requests
-        --team <TEAM>                     Set the team slug for API calls
-        --token <TOKEN>                   Set the auth token for API calls
-        --trace <TRACE>                   Specify a file to save a pprof trace
-        --verbosity <COUNT>               Verbosity level
-    -h, --help                            Print help (see more with '--help')
+        --invalidate
+            Invalidate the token on the server
+        --version
+            
+        --skip-infer
+            Skip any attempts to infer which version of Turbo the project is configured to use
+        --no-update-notifier
+            Disable the turbo update notification
+        --api <API>
+            Override the endpoint for API calls
+        --color
+            Force color usage in the terminal
+        --cwd <CWD>
+            The directory in which to run turbo
+        --heap <HEAP>
+            Specify a file to save a pprof heap profile
+        --ui <UI>
+            Specify whether to use the streaming UI or TUI [possible values: tui, stream]
+        --login <LOGIN>
+            Override the login endpoint
+        --no-color
+            Suppress color usage in the terminal
+        --preflight
+            When enabled, turbo will precede HTTP requests with an OPTIONS request for authorization
+        --remote-cache-timeout <TIMEOUT>
+            Set a timeout for all HTTP requests
+        --team <TEAM>
+            Set the team slug for API calls
+        --token <TOKEN>
+            Set the auth token for API calls
+        --trace <TRACE>
+            Specify a file to save a pprof trace
+        --verbosity <COUNT>
+            Verbosity level
+        --dangerously-disable-package-manager-check
+            Allow for missing `packageManager` in `package.json`
+    -h, --help
+            Print help (see more with '--help')

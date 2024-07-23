@@ -10,7 +10,7 @@ use tracing::debug;
 use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath};
 use turborepo_analytics::{start_analytics, AnalyticsHandle, AnalyticsSender};
 use turborepo_api_client::{APIAuth, APIClient};
-use turborepo_cache::{AsyncCache, RemoteCacheOpts};
+use turborepo_cache::AsyncCache;
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_errors::Spanned;
 use turborepo_repository::{
@@ -64,35 +64,18 @@ pub struct RunBuilder {
     // this package.
     entrypoint_packages: Option<HashSet<PackageName>>,
     should_print_prelude_override: Option<bool>,
+    allow_missing_package_manager: bool,
 }
 
 impl RunBuilder {
     pub fn new(base: CommandBase) -> Result<Self, Error> {
-        let api_auth = base.api_auth()?;
         let api_client = base.api_client()?;
 
-        let mut opts: Opts = base.args().try_into()?;
+        let opts = Opts::new(&base)?;
+        let api_auth = base.api_auth()?;
         let config = base.config()?;
-        let is_linked = turborepo_api_client::is_linked(&api_auth);
-        if !is_linked {
-            opts.cache_opts.skip_remote = true;
-        } else if let Some(enabled) = config.enabled {
-            // We're linked, but if the user has explicitly enabled or disabled, use that
-            // value
-            opts.cache_opts.skip_remote = !enabled;
-        }
-        // Note that we don't currently use the team_id value here. In the future, we
-        // should probably verify that we only use the signature value when the
-        // configured team_id matches the final resolved team_id.
-        let unused_remote_cache_opts_team_id = config.team_id().map(|team_id| team_id.to_string());
-        let signature = config.signature();
-        opts.cache_opts.remote_cache_opts = Some(RemoteCacheOpts::new(
-            unused_remote_cache_opts_team_id,
-            signature,
-        ));
-        if opts.run_opts.experimental_space_id.is_none() {
-            opts.run_opts.experimental_space_id = config.spaces_id().map(|s| s.to_owned());
-        }
+        let allow_missing_package_manager = config.allow_no_package_manager();
+
         let version = base.version();
         let experimental_ui = config.ui();
         let processes = ProcessManager::new(
@@ -108,14 +91,15 @@ impl RunBuilder {
             processes,
             opts,
             api_client,
-            api_auth,
             repo_root,
             ui,
             version,
             experimental_ui,
+            api_auth,
             analytics_sender: None,
             entrypoint_packages: None,
             should_print_prelude_override: None,
+            allow_missing_package_manager,
         })
     }
 
@@ -187,6 +171,10 @@ impl RunBuilder {
         // Pulled from initAnalyticsClient in run.go
         let is_linked = turborepo_api_client::is_linked(&self.api_auth);
         run_telemetry.track_is_linked(is_linked);
+        run_telemetry.track_arg_usage(
+            "dangerously_allow_missing_package_manager",
+            self.allow_missing_package_manager,
+        );
         // we only track the remote cache if we're linked because this defaults to
         // Vercel
         if is_linked {
@@ -206,8 +194,7 @@ impl RunBuilder {
         run_telemetry.track_ci(turborepo_ci::Vendor::get_name());
 
         // Remove allow when daemon is flagged back on
-        #[allow(unused_mut)]
-        let mut daemon = match (is_ci_or_not_tty, self.opts.run_opts.daemon) {
+        let daemon = match (is_ci_or_not_tty, self.opts.run_opts.daemon) {
             (true, None) => {
                 run_telemetry.track_daemon_init(DaemonInitStatus::Skipped);
                 debug!("skipping turbod since we appear to be in a non-interactive context");
@@ -246,10 +233,13 @@ impl RunBuilder {
 
         let mut pkg_dep_graph = {
             let builder = PackageGraph::builder(&self.repo_root, root_package_json.clone())
-                .with_single_package_mode(self.opts.run_opts.single_package);
+                .with_single_package_mode(self.opts.run_opts.single_package)
+                .with_allow_no_package_manager(self.allow_missing_package_manager);
 
-            #[cfg(feature = "daemon-package-discovery")]
-            let graph = {
+            // Daemon package discovery depends on packageManager existing in package.json
+            let graph = if cfg!(feature = "daemon-package-discovery")
+                && !self.allow_missing_package_manager
+            {
                 match (&daemon, self.opts.run_opts.daemon) {
                     (None, Some(true)) => {
                         // We've asked for the daemon, but it's not available. This is an error
@@ -291,9 +281,9 @@ impl RunBuilder {
                             .await
                     }
                 }
+            } else {
+                builder.build().await
             };
-            #[cfg(not(feature = "daemon-package-discovery"))]
-            let graph = builder.build().await;
 
             match graph {
                 Ok(graph) => graph,
