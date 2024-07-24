@@ -5,12 +5,12 @@ use turbo_tasks_memory::MemoryBackend;
 
 pub struct Registration {
     execution_lock: OnceLock<()>,
-    func: &'static fn(),
+    func: fn(),
 }
 
 impl Registration {
     #[doc(hidden)]
-    pub const fn new(func: &'static fn()) -> Self {
+    pub const fn new(func: fn()) -> Self {
         Registration {
             execution_lock: OnceLock::new(),
             func,
@@ -38,7 +38,7 @@ macro_rules! register {
                 ".rs",
             ));
         }
-        turbo_tasks_testing::Registration::new(&(register_impl as fn()))
+        turbo_tasks_testing::Registration::new(register_impl)
     }};
 }
 
