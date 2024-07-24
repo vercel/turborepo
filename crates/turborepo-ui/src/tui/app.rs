@@ -102,10 +102,8 @@ impl<W> App<W> {
         }
     }
 
-    pub fn active_task(&self) -> String {
-        self.tasks_by_status
-            .task_name(self.selected_task_index)
-            .to_string()
+    pub fn active_task(&self) -> &str {
+        self.tasks_by_status.task_name(self.selected_task_index)
     }
 
     fn input_options(&self) -> InputOptions {
@@ -118,11 +116,11 @@ impl<W> App<W> {
     }
 
     pub fn get_full_task(&self) -> &TerminalOutput<W> {
-        self.tasks.get(&self.active_task()).unwrap()
+        self.tasks.get(self.active_task()).unwrap()
     }
 
     pub fn get_full_task_mut(&mut self) -> &mut TerminalOutput<W> {
-        self.tasks.get_mut(&self.active_task()).unwrap()
+        self.tasks.get_mut(&self.active_task().to_owned()).unwrap()
     }
 
     #[tracing::instrument(skip(self))]
@@ -147,11 +145,7 @@ impl<W> App<W> {
 
     #[tracing::instrument(skip_all)]
     pub fn scroll_terminal_output(&mut self, direction: Direction) {
-        self.tasks
-            .get_mut(&self.active_task())
-            .unwrap()
-            .scroll(direction)
-            .unwrap_or_default();
+        self.get_full_task_mut().scroll(direction).unwrap();
     }
 
     /// Mark the given task as started.
@@ -267,8 +261,7 @@ impl<W> App<W> {
     }
 
     pub fn has_stdin(&self) -> bool {
-        let active_task = self.active_task();
-        if let Some(term) = self.tasks.get(&active_task) {
+        if let Some(term) = self.tasks.get(self.active_task()) {
             term.stdin.is_some()
         } else {
             false
@@ -354,7 +347,7 @@ impl<W> App<W> {
     pub fn copy_selection(&self) {
         let task = self
             .tasks
-            .get(&self.active_task())
+            .get(self.active_task())
             .expect("active task should exist");
         let Some(text) = task.copy_selection() else {
             return;
@@ -382,7 +375,7 @@ impl<W: Write> App<W> {
             let task_output = self.get_full_task_mut();
             if let Some(stdin) = &mut task_output.stdin {
                 stdin.write_all(bytes).map_err(|e| Error::Stdin {
-                    name: self.active_task(),
+                    name: self.active_task().to_owned(),
                     e,
                 })?;
             }
@@ -587,7 +580,7 @@ fn view<W>(app: &mut App<W>, f: &mut Frame) {
     let horizontal = Layout::horizontal([Constraint::Fill(1), Constraint::Length(cols)]);
     let [table, pane] = horizontal.areas(f.size());
 
-    let active_task = app.active_task();
+    let active_task = app.active_task().to_string();
 
     let output_logs = app.tasks.get(&active_task).unwrap();
     let pane_to_render: TerminalPane<W> =
