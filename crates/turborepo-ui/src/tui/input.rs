@@ -28,9 +28,6 @@ pub fn input(options: InputOptions) -> Result<Option<Event>, Error> {
                 | crossterm::event::MouseEventKind::Drag(crossterm::event::MouseButton::Left) => {
                     Ok(Some(Event::Mouse(m)))
                 }
-                crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Right) => {
-                    Ok(Some(Event::CopySelection))
-                }
                 _ => Ok(None),
             },
             _ => Ok(None),
@@ -53,9 +50,7 @@ fn translate_key_event(interact: &LayoutSections, key_event: KeyEvent) -> Option
         KeyCode::Char('c') if key_event.modifiers == crossterm::event::KeyModifiers::CONTROL => {
             ctrl_c()
         }
-        KeyCode::Char('c') => {
-            return Some(Event::CopySelection);
-        }
+        KeyCode::Char('c') => Some(Event::CopySelection),
         // Interactive branches
         KeyCode::Char('z')
             if matches!(interact, LayoutSections::Pane)
