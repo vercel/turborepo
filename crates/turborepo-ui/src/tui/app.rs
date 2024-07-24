@@ -37,7 +37,8 @@ pub struct App<W> {
     pane_cols: u16,
     tasks: BTreeMap<String, TerminalOutput<W>>,
     tasks_by_status: TasksByStatus,
-    input_options: InputOptions,
+    focus: LayoutSections,
+    tty_stdin: bool,
     scroll: TableState,
     selected_task_index: usize,
     has_user_scrolled: bool,
@@ -80,11 +81,9 @@ impl<W> App<W> {
             pane_rows: rows,
             pane_cols,
             done: false,
-            input_options: InputOptions {
-                focus: LayoutSections::TaskList,
-                // Check if stdin is a tty that we should read input from
-                tty_stdin: atty::is(atty::Stream::Stdin),
-            },
+            focus: LayoutSections::TaskList,
+            // Check if stdin is a tty that we should read input from
+            tty_stdin: atty::is(atty::Stream::Stdin),
             tasks: tasks_by_status
                 .task_names_in_displayed_order()
                 .map(|task_name| (task_name.to_owned(), TerminalOutput::new(rows, cols, None)))
@@ -97,7 +96,7 @@ impl<W> App<W> {
     }
 
     pub fn is_focusing_pane(&self) -> bool {
-        match self.input_options.focus {
+        match self.focus {
             LayoutSections::Pane => true,
             LayoutSections::TaskList => false,
         }
@@ -107,6 +106,19 @@ impl<W> App<W> {
         self.tasks_by_status
             .task_name(self.selected_task_index)
             .to_string()
+    }
+
+    fn input_options(&self) -> InputOptions {
+        let has_selection = self.get_full_task().has_selection();
+        InputOptions {
+            focus: self.focus,
+            tty_stdin: self.tty_stdin,
+            has_selection,
+        }
+    }
+
+    pub fn get_full_task(&self) -> &TerminalOutput<W> {
+        self.tasks.get(&self.active_task()).unwrap()
     }
 
     pub fn get_full_task_mut(&mut self) -> &mut TerminalOutput<W> {
@@ -264,10 +276,10 @@ impl<W> App<W> {
     }
 
     pub fn interact(&mut self) {
-        if matches!(self.input_options.focus, LayoutSections::Pane) {
-            self.input_options.focus = LayoutSections::TaskList
+        if matches!(self.focus, LayoutSections::Pane) {
+            self.focus = LayoutSections::TaskList
         } else if self.has_stdin() {
-            self.input_options.focus = LayoutSections::Pane;
+            self.focus = LayoutSections::Pane;
         }
     }
 
@@ -366,7 +378,7 @@ impl<W: Write> App<W> {
 
     #[tracing::instrument(skip_all)]
     pub fn forward_input(&mut self, bytes: &[u8]) -> Result<(), Error> {
-        if matches!(self.input_options.focus, LayoutSections::Pane) {
+        if matches!(self.focus, LayoutSections::Pane) {
             let task_output = self.get_full_task_mut();
             if let Some(stdin) = &mut task_output.stdin {
                 stdin.write_all(bytes).map_err(|e| Error::Stdin {
@@ -417,7 +429,7 @@ fn run_app_inner<B: Backend + std::io::Write>(
     terminal.draw(|f| view(app, f))?;
     let mut last_render = Instant::now();
     let mut callback = None;
-    while let Some(event) = poll(app.input_options, &receiver, last_render + FRAMERATE) {
+    while let Some(event) = poll(app.input_options(), &receiver, last_render + FRAMERATE) {
         callback = update(app, event)?;
         if app.done {
             break;
