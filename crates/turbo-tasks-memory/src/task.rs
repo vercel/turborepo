@@ -1378,9 +1378,7 @@ impl Task {
                         }
                         Err(ReadCellError::Recomputing(listener))
                     }
-                    Err(ReadContentError::Unused) => {
-                        return Err(ReadCellError::CellRemoved);
-                    }
+                    Err(ReadContentError::Unused) => Err(ReadCellError::CellRemoved),
                 }
             }
             Dirty {

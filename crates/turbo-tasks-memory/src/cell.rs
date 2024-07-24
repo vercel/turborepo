@@ -228,11 +228,8 @@ impl Cell {
         if !self.dependent_tasks.is_empty() {
             turbo_tasks.schedule_notify_tasks_set(&self.dependent_tasks);
         }
-        match self.state {
-            CellState::Computing { event } => {
-                event.notify(usize::MAX);
-            }
-            _ => {}
+        if let CellState::Computing { event } = self.state {
+            event.notify(usize::MAX);
         }
     }
 }
