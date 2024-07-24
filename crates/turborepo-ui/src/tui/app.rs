@@ -60,6 +60,9 @@ impl<W> App<W> {
         let full_task_width = cols.saturating_sub(task_width_hint);
         let pane_cols = full_task_width.max(ratio_pane_width);
 
+        // We use 2 rows for pane title and for the interaction info
+        let rows = rows.saturating_sub(2).max(1);
+
         // Initializes with the planned tasks
         // and will mutate as tasks change
         // to running, finished, etc.
