@@ -963,12 +963,11 @@ impl Task {
                     .gc
                     .execution_completed(duration, memory_usage, generation);
 
-                for (value_type, cells) in state.cells.iter_mut() {
-                    let counter = cell_counters.get(value_type).copied().unwrap_or_default();
-                    if counter != cells.len() as u32 {
-                        drained_cells.extend(cells.drain(counter as usize..));
-                    }
-                }
+                let TaskState {
+                    ref mut cells,
+                    ref mut state_type,
+                    ..
+                } = *state;
 
                 let InProgress(box InProgressState {
                     ref mut done_event,
@@ -976,15 +975,31 @@ impl Task {
                     ref mut outdated_edges,
                     ref mut outdated_collectibles,
                     ref mut new_children,
-                    clean: _,
+                    clean,
                     stale,
-                }) = state.state_type
+                }) = *state_type
                 else {
                     panic!(
                         "Task execution completed in unexpected state {}",
                         Task::state_string(&state)
                     )
                 };
+                for (value_type, cells) in cells.iter_mut() {
+                    let counter =
+                        cell_counters.get(value_type).copied().unwrap_or_default() as usize;
+                    let mut is_unused = true;
+                    while counter < cells.len() {
+                        let last = cells.last_mut().unwrap();
+                        last.empty(clean, turbo_tasks);
+                        if is_unused {
+                            if last.is_unused() {
+                                drained_cells.push(cells.pop().unwrap());
+                            } else {
+                                is_unused = false;
+                            }
+                        }
+                    }
+                }
                 let done_event = done_event.take();
                 let outdated_collectibles = outdated_collectibles.take_collectibles();
                 let mut outdated_edges = take(outdated_edges);
