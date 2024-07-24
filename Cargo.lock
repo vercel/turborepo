@@ -10146,14 +10146,12 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "httpmock",
- "lazy_static",
  "reqwest",
  "serde",
  "tokio",
  "turbo-tasks",
  "turbo-tasks-build",
  "turbo-tasks-fs",
- "turbo-tasks-memory",
  "turbo-tasks-testing",
  "turbopack-core",
 ]
@@ -10231,13 +10229,11 @@ name = "turbo-tasks-macros-tests"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "lazy_static",
  "serde",
  "tokio",
  "trybuild",
  "turbo-tasks",
  "turbo-tasks-build",
- "turbo-tasks-memory",
  "turbo-tasks-testing",
 ]
 
@@ -10259,7 +10255,6 @@ dependencies = [
  "dashmap",
  "either",
  "indexmap 1.9.3",
- "lazy_static",
  "loom",
  "num_cpus",
  "once_cell",
@@ -10290,10 +10285,10 @@ dependencies = [
  "anyhow",
  "auto-hash-map",
  "futures",
- "lazy_static",
  "rustc-hash",
  "tokio",
  "turbo-tasks",
+ "turbo-tasks-memory",
 ]
 
 [[package]]
