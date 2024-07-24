@@ -113,6 +113,10 @@ impl<W> TerminalOutput<W> {
         Ok(())
     }
 
+    pub fn has_selection(&self) -> bool {
+        self.parser.screen().selected_text().is_some()
+    }
+
     pub fn handle_mouse(&mut self, event: crossterm::event::MouseEvent) -> Result<(), Error> {
         match event.kind {
             crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left) => {

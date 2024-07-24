@@ -322,12 +322,14 @@ impl<W> App<W> {
 
     pub fn handle_mouse(&mut self, mut event: crossterm::event::MouseEvent) -> Result<(), Error> {
         let table_width = self.term_cols - self.pane_cols;
+        debug!("original mouse event: {event:?}, table_width: {table_width}");
         // Only handle mouse event if it happens inside of pane
         if event.row > 0 && event.column > table_width {
             // Subtract 1 from the y axis due to the title of the pane
             event.row -= 1;
             // Subtract the width of the table
             event.column -= table_width;
+            debug!("translated mouse event: {event:?}");
 
             let task = self.get_full_task_mut();
             task.handle_mouse(event)?;
