@@ -419,7 +419,7 @@ impl Backend for MemoryBackend {
                 ) {
                     Ok(content) => Ok(Ok(content)),
                     Err(ReadCellError::Recomputing(listener)) => Ok(Err(listener)),
-                    Err(ReadCellError::CellRemoved) => Err(anyhow!("Cell {index:?} doesn't exist")),
+                    Err(ReadCellError::CellRemoved) => Err(anyhow!("Cell doesn't exist")),
                 }
             })
         }
@@ -453,7 +453,7 @@ impl Backend for MemoryBackend {
             ) {
                 Ok(content) => Ok(Ok(content)),
                 Err(ReadCellError::Recomputing(listener)) => Ok(Err(listener)),
-                Err(ReadCellError::CellRemoved) => Err(anyhow!("Cell {index:?} doesn't exist")),
+                Err(ReadCellError::CellRemoved) => Err(anyhow!("Cell doesn't exist")),
             }
         })
     }

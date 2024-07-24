@@ -32,7 +32,7 @@ use crate::{
         aggregation_data, handle_new_edge, prepare_aggregation_data, query_root_info,
         AggregationDataGuard, PreparedOperation,
     },
-    cell::{Cell, RecomputingCell},
+    cell::{Cell, ReadContentError},
     edges_set::{TaskEdge, TaskEdgesList, TaskEdgesSet},
     gc::{GcQueue, GcTaskState},
     output::{Output, OutputContent},
@@ -956,6 +956,7 @@ impl Task {
                 state
                     .gc
                     .execution_completed(duration, memory_usage, generation);
+
                 let InProgress(box InProgressState {
                     ref mut done_event,
                     count_as_finished,
@@ -1359,27 +1360,26 @@ impl Task {
                 let list = state.cells.entry(index.type_id).or_default();
                 let i = index.index as usize;
                 if list.len() <= i {
-                    if is_done {
-                        return Err(ReadCellError::CellRemoved);
-                    } else {
-                        list.resize_with(i + 1, Default::default);
-                    }
+                    list.resize_with(i + 1, Default::default);
                 }
                 let cell = &mut list[i];
                 let description = move || format!("{task_id} {index}");
                 let read_result = if let Some(reader) = reader {
-                    cell.read_content(reader, description, note)
+                    cell.read_content(reader, is_done, description, note)
                 } else {
-                    cell.read_content_untracked(description, note)
+                    cell.read_content_untracked(is_done, description, note)
                 };
                 drop(state);
                 match read_result {
                     Ok(content) => Ok(content),
-                    Err(RecomputingCell { listener, schedule }) => {
+                    Err(ReadContentError::Computing { listener, schedule }) => {
                         if schedule {
                             self.recompute(backend, turbo_tasks);
                         }
                         Err(ReadCellError::Recomputing(listener))
+                    }
+                    Err(ReadContentError::Unused) => {
+                        return Err(ReadCellError::CellRemoved);
                     }
                 }
             }
