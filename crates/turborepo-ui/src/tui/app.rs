@@ -324,7 +324,8 @@ impl<W> App<W> {
         let table_width = self.term_cols - self.pane_cols;
         debug!("original mouse event: {event:?}, table_width: {table_width}");
         // Only handle mouse event if it happens inside of pane
-        if event.row > 0 && event.column > table_width {
+        // We give a 1 cell buffer to make it easier to select the first column of a row
+        if event.row > 0 && event.column >= table_width {
             // Subtract 1 from the y axis due to the title of the pane
             event.row -= 1;
             // Subtract the width of the table
