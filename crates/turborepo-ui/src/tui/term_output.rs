@@ -114,7 +114,10 @@ impl<W> TerminalOutput<W> {
     }
 
     pub fn has_selection(&self) -> bool {
-        self.parser.screen().selected_text().is_some()
+        self.parser
+            .screen()
+            .selected_text()
+            .map_or(false, |s| !s.is_empty())
     }
 
     pub fn handle_mouse(&mut self, event: crossterm::event::MouseEvent) -> Result<(), Error> {
