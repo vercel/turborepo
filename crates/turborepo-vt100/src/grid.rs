@@ -16,6 +16,11 @@ pub struct Grid {
     selection: Option<Selection>,
 }
 
+/// Represents a selection that starts at start (inclusive) and ends at
+/// end (column-wise exclusive).
+///
+/// Start position is not required to be less than the end position, if that ordering is desired
+/// use `.ordered()` to ensure that start is before end.
 #[derive(Clone, Debug, Copy)]
 pub struct Selection {
     pub start: AbsPos,
@@ -262,17 +267,31 @@ impl Grid {
         self.clear_selection();
         let start = self.translate_pos(start_row, start_col);
         let end = self.translate_pos(end_row, end_col);
-        let (start, end) = match start.row.cmp(&end.row) {
-            // Keep
-            std::cmp::Ordering::Less => (start, end),
-            std::cmp::Ordering::Equal if start.col < end.col => (start, end),
-            // Flip
-            std::cmp::Ordering::Equal | std::cmp::Ordering::Greater => {
-                (end, start)
+        self.selection = Some(Selection { start, end });
+        if let Some(selected_cells) = self.selection_cells() {
+            for cell in selected_cells {
+                debug_assert!(
+                    !cell.selected(),
+                    "cell shouldn't be selected at start"
+                );
+                cell.select(true);
             }
         };
+    }
 
-        self.selection = Some(Selection { start, end });
+    pub fn update_selection(&mut self, row: u16, col: u16) {
+        let pos = self.translate_pos(row, col);
+        // Copy out current selection
+        let old_selection = self.selection;
+        // Unselect current selection
+        self.clear_selection();
+
+        // Update selection with new endpoint
+        let mut selection =
+            old_selection.unwrap_or_else(|| Selection::new(pos));
+        selection.update(pos);
+        self.selection = Some(selection);
+        // Mark cells in new selection as selected
         if let Some(selected_cells) = self.selection_cells() {
             for cell in selected_cells {
                 debug_assert!(
@@ -298,7 +317,7 @@ impl Grid {
     fn selection_cells(
         &mut self,
     ) -> Option<impl Iterator<Item = &mut crate::Cell> + '_> {
-        let Selection { start, end } = self.selection?;
+        let Selection { start, end } = self.selection()?;
         let cols = self.size.cols;
         Some(
             self.all_rows_mut()
@@ -312,7 +331,7 @@ impl Grid {
                     );
                     let (cells_to_skip, cells_to_take) =
                         if row_index == start.row && row_index == end.row {
-                            (start.col, end.col - start.col)
+                            (start.col, end.col - start.col + 1)
                         } else if row_index == start.row {
                             (start.col, cols)
                         } else if row_index == end.row {
@@ -328,7 +347,7 @@ impl Grid {
     }
 
     pub fn selection(&self) -> Option<Selection> {
-        self.selection
+        self.selection.map(|s| s.ordered())
     }
 
     pub fn write_contents(&self, contents: &mut String) {
@@ -886,16 +905,44 @@ pub struct Size {
     pub cols: u16,
 }
 
-#[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq, PartialOrd, Ord)]
 pub struct Pos {
     pub row: u16,
     pub col: u16,
 }
 
-#[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq, PartialOrd, Ord)]
 pub struct AbsPos {
     pub row: usize,
     pub col: u16,
 }
 
-// pub struct SelectionIterMut<'a> {}
+impl Selection {
+    /// Create a new selection that starts and ends at pos
+    pub fn new(pos: AbsPos) -> Self {
+        Self {
+            start: pos,
+            end: pos,
+        }
+    }
+
+    /// Updates the end of the selection
+    pub fn update(&mut self, pos: AbsPos) {
+        self.end = pos;
+    }
+
+    /// Returns a selection where start is before after
+    pub fn ordered(&self) -> Self {
+        let Self { start, end } = *self;
+        let (start, end) = match start.row.cmp(&end.row) {
+            // Keep
+            std::cmp::Ordering::Less => (start, end),
+            std::cmp::Ordering::Equal if start.col < end.col => (start, end),
+            // Flip
+            std::cmp::Ordering::Equal | std::cmp::Ordering::Greater => {
+                (end, start)
+            }
+        };
+        Self { start, end }
+    }
+}

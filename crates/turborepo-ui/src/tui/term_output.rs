@@ -17,7 +17,6 @@ pub struct TerminalOutput<W> {
     pub output_logs: Option<OutputLogs>,
     pub task_result: Option<TaskResult>,
     pub cache_result: Option<CacheResult>,
-    selection: Option<SelectionState>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -25,36 +24,6 @@ enum LogBehavior {
     Full,
     Status,
     Nothing,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct SelectionState {
-    start: Pos,
-    end: Pos,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct Pos {
-    pub x: u16,
-    pub y: u16,
-}
-
-impl SelectionState {
-    pub fn new(event: crossterm::event::MouseEvent) -> Self {
-        let start = Pos {
-            x: event.column,
-            y: event.row,
-        };
-        let end = start;
-        Self { start, end }
-    }
-
-    pub fn update(&mut self, event: crossterm::event::MouseEvent) {
-        self.end = Pos {
-            x: event.column,
-            y: event.row,
-        };
-    }
 }
 
 impl<W> TerminalOutput<W> {
@@ -68,7 +37,6 @@ impl<W> TerminalOutput<W> {
             output_logs: None,
             task_result: None,
             cache_result: None,
-            selection: None,
         }
     }
 
@@ -148,25 +116,14 @@ impl<W> TerminalOutput<W> {
     pub fn handle_mouse(&mut self, event: crossterm::event::MouseEvent) -> Result<(), Error> {
         match event.kind {
             crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left) => {
-                self.selection = None;
                 // We need to update the vterm so we don't continue to render the selection
                 self.parser.screen_mut().clear_selection();
             }
             crossterm::event::MouseEventKind::Drag(crossterm::event::MouseButton::Left) => {
-                // Here we change an endpoint of the selection
-                // Should be noted that it can go backwards
-                // If we didn't catch the start of a selection, use the current position
-                let selection = self
-                    .selection
-                    .get_or_insert_with(|| SelectionState::new(event));
-                selection.update(event);
                 // Update selection of underlying parser
-                self.parser.screen_mut().set_selection(
-                    selection.start.y,
-                    selection.start.x,
-                    selection.end.y,
-                    selection.end.x,
-                );
+                self.parser
+                    .screen_mut()
+                    .update_selection(event.row, event.column);
             }
             // Scrolling is handled elsewhere
             crossterm::event::MouseEventKind::ScrollDown => (),

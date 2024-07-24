@@ -315,7 +315,14 @@ impl Screen {
         end_col: u16,
     ) {
         self.grid_mut()
-            .set_selection(start_row, start_col, end_row, end_col)
+            .set_selection(start_row, start_col, end_row, end_col);
+    }
+
+    /// Updates the current selection to end at row and col.
+    ///
+    /// If no selection is currently set, then a selection will be created that starts and ends at the same position.
+    pub fn update_selection(&mut self, row: u16, col: u16) {
+        self.grid_mut().update_selection(row, col);
     }
 
     /// Clears current selection if one exists
@@ -323,12 +330,17 @@ impl Screen {
         self.grid_mut().clear_selection();
     }
 
+    /// Returns text contained in selection
+    #[must_use]
     pub fn selected_text(&self) -> Option<String> {
         let selection = self.grid().selection()?;
         let start = selection.start;
         let end = selection.end;
         Some(self.contents_between_absolute(
-            start.row, start.col, end.row, end.col,
+            start.row,
+            start.col,
+            end.row,
+            end.col + 1,
         ))
     }
 
