@@ -334,7 +334,7 @@ Additionally, create a [Package Configuration](/repo/docs/reference/package-conf
 ```json title="./apps/storybook/turbo.json"
 {
   "extends": ["//"],
-  "pipeline": {
+  "tasks": {
     "build:storybook": {
       "dependsOn": ["^build:storybook"],
       "outputs": ["storybook-static/**"]
