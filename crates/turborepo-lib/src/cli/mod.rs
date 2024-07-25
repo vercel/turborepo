@@ -990,7 +990,13 @@ pub async fn run(
             debug!("Failed to create AnonAPIClient: {:?}", error);
         }
     }
-    println!("{}\n", GREY.apply_to(format!("turbo {}", get_version())));
+
+    let should_print_version = env::var("TURBO_PRINT_VERSION_DISABLED")
+        .map_or(true, |disable| !matches!(disable.as_str(), "1" | "true"));
+
+    if should_print_version {
+        eprintln!("{}\n", GREY.apply_to(format!("turbo {}", get_version())));
+    }
 
     // If there is no command, we set the command to `Command::Run` with
     // `self.parsed_args.run_args` as arguments.
