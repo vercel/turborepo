@@ -347,4 +347,28 @@ mod test {
             PackageManager::Npm
         );
     }
+
+    fn test_gh_8599() {
+        // TODO: this test documents existing broken behavior, when we have time we
+        // should fix this and update the assertions
+        let (_tmp, tmp_dir) = tmp_dir();
+        let monorepo_root = tmp_dir.join_component("monorepo_root");
+        let monorepo_pkg_json = monorepo_root.join_component("package.json");
+        monorepo_pkg_json.ensure_dir().unwrap();
+        monorepo_pkg_json.create_with_contents(r#"{"name": "mono", "packageManager": "npm@10.2.4", "workspaces": ["./packages/*"]}"#.as_bytes()).unwrap();
+        let package_foo = monorepo_root.join_components(&["packages", "foo"]);
+        let foo_package_json = package_foo.join_component("package.json");
+        foo_package_json.ensure_dir().unwrap();
+        foo_package_json
+            .create_with_contents(r#"{"name": "foo"}"#.as_bytes())
+            .unwrap();
+
+        let repo_state = RepoState::infer(&package_foo).unwrap();
+        // These assertions are the buggy behavior
+        assert_eq!(repo_state.root, package_foo);
+        assert_eq!(repo_state.mode, RepoMode::SinglePackage);
+        // TODO: the following assertions are the correct behavior
+        // assert_eq!(repo_state.root, monorepo_root);
+        // assert_eq!(repo_state.mode, RepoMode::MultiPackage);
+    }
 }
