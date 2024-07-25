@@ -21,7 +21,7 @@ use turborepo_telemetry::{
     },
     init_telemetry, track_usage, TelemetryHandle,
 };
-use turborepo_ui::UI;
+use turborepo_ui::{GREY, UI};
 
 use crate::{
     cli::error::print_potential_tasks,
@@ -990,6 +990,7 @@ pub async fn run(
             debug!("Failed to create AnonAPIClient: {:?}", error);
         }
     }
+    println!("{}\n", GREY.apply_to(format!("turbo {}", get_version())));
 
     // If there is no command, we set the command to `Command::Run` with
     // `self.parsed_args.run_args` as arguments.
