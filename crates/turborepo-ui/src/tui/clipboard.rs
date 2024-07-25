@@ -98,9 +98,8 @@ fn copy_impl(s: &str, provider: &Provider) -> std::io::Result<()> {
         }
 
         #[cfg(windows)]
-        Provider::Win => {
-            clipboard_win::set_clipboard_string(s).map_err(|e| anyhow::Error::msg(e.to_string()))?
-        }
+        Provider::Win => clipboard_win::set_clipboard_string(s)
+            .map_err(|e| std::io::Error::other(e.to_string()))?,
 
         Provider::NoOp => (),
     };
