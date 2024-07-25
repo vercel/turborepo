@@ -151,7 +151,7 @@ impl Cell {
             CellState::Empty | CellState::Computing { .. } | CellState::TrackedValueless => {
                 CellContent(None)
             }
-            CellState::Value { content, .. } => content.to_owned(),
+            CellState::Value { content } => content.to_owned(),
         }
     }
 
