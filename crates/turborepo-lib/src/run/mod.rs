@@ -207,6 +207,13 @@ impl Run {
         Ok(Some((sender, handle)))
     }
 
+    /// Returns a handle that can be used to stop a run
+    pub fn stopper(&self) -> RunStopper {
+        RunStopper {
+            manager: self.processes.clone(),
+        }
+    }
+
     pub async fn run(
         &mut self,
         experimental_ui_sender: Option<AppSender>,
@@ -215,6 +222,11 @@ impl Run {
         if let Some(subscriber) = self.signal_handler.subscribe() {
             let run_cache = self.run_cache.clone();
             tokio::spawn(async move {
+                // Caching is disabled for watch so we don't need to wait on shutting down the
+                // cache.
+                if is_watch {
+                    return;
+                }
                 let _guard = subscriber.listen().await;
                 let spinner = turborepo_ui::start_spinner("...Finishing writing to cache...");
                 if let Ok((status, closed)) = run_cache.shutdown_cache().await {
@@ -437,5 +449,16 @@ impl Run {
             .await?;
 
         Ok(exit_code)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct RunStopper {
+    manager: ProcessManager,
+}
+
+impl RunStopper {
+    pub async fn stop(&self) {
+        self.manager.stop().await;
     }
 }
