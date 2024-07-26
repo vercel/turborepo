@@ -6,13 +6,14 @@ use std::{
     num::NonZeroU32,
     pin::Pin,
     sync::{
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicUsize, Ordering},
         Arc,
     },
     time::Duration,
 };
 
-use anyhow::{bail, Result};
+use anyhow::{anyhow, bail, Result};
+use auto_hash_map::AutoMap;
 use dashmap::{mapref::entry::Entry, DashMap};
 use rustc_hash::FxHasher;
 use tokio::task::futures::TaskLocalFuture;
@@ -21,19 +22,21 @@ use turbo_prehash::{BuildHasherExt, PassThroughHash, PreHashed};
 use turbo_tasks::{
     backend::{
         Backend, BackendJobId, CellContent, PersistentTaskType, TaskCollectiblesMap,
-        TaskExecutionSpec, TransientTaskType,
+        TaskExecutionSpec, TransientTaskType, TypedCellContent,
     },
     event::EventListener,
     util::{IdFactoryWithReuse, NoMoveVec},
-    CellId, RawVc, TaskId, TaskIdSet, TraitTypeId, TurboTasksBackendApi, Unused,
+    CellId, RawVc, TaskId, TaskIdSet, TraitTypeId, TurboTasksBackendApi, Unused, ValueTypeId,
 };
 
 use crate::{
-    cell::RecomputingCell,
     edges_set::{TaskEdge, TaskEdgesSet},
-    gc::{GcQueue, PERCENTAGE_IDLE_TARGET_MEMORY, PERCENTAGE_TARGET_MEMORY},
+    gc::{
+        GcQueue, MAX_GC_STEPS, PERCENTAGE_MAX_IDLE_TARGET_MEMORY, PERCENTAGE_MAX_TARGET_MEMORY,
+        PERCENTAGE_MIN_IDLE_TARGET_MEMORY, PERCENTAGE_MIN_TARGET_MEMORY,
+    },
     output::Output,
-    task::{Task, DEPENDENCIES_TO_TRACK},
+    task::{ReadCellError, Task, DEPENDENCIES_TO_TRACK},
     task_statistics::TaskStatisticsApi,
 };
 
@@ -47,7 +50,7 @@ pub struct MemoryBackend {
     backend_job_id_factory: IdFactoryWithReuse<BackendJobId>,
     task_cache:
         DashMap<Arc<PreHashed<PersistentTaskType>>, TaskId, BuildHasherDefault<PassThroughHash>>,
-    memory_limit: usize,
+    memory_limit: AtomicUsize,
     gc_queue: Option<GcQueue>,
     idle_gc_active: AtomicBool,
     task_statistics: TaskStatisticsApi,
@@ -70,7 +73,7 @@ impl MemoryBackend {
                 (std::thread::available_parallelism().map_or(1, usize::from) * 32)
                     .next_power_of_two(),
             ),
-            memory_limit,
+            memory_limit: AtomicUsize::new(memory_limit),
             gc_queue: (memory_limit != usize::MAX).then(GcQueue::new),
             idle_gc_active: AtomicBool::new(false),
             task_statistics: TaskStatisticsApi::default(),
@@ -141,27 +144,78 @@ impl MemoryBackend {
     ) -> bool {
         if let Some(gc_queue) = &self.gc_queue {
             let mut did_something = false;
-            loop {
-                let mem_limit = self.memory_limit;
-
-                let usage = turbo_tasks_malloc::TurboMalloc::memory_usage();
-                let target = if idle {
-                    mem_limit * PERCENTAGE_IDLE_TARGET_MEMORY / 100
+            let mut remaining_generations = 0;
+            let mut mem_limit = self.memory_limit.load(Ordering::Relaxed);
+            let mut span = None;
+            'outer: loop {
+                let mut collected_generations = 0;
+                let (min, max) = if idle {
+                    (
+                        mem_limit * PERCENTAGE_MIN_IDLE_TARGET_MEMORY / 100,
+                        mem_limit * PERCENTAGE_MAX_IDLE_TARGET_MEMORY / 100,
+                    )
                 } else {
-                    mem_limit * PERCENTAGE_TARGET_MEMORY / 100
+                    (
+                        mem_limit * PERCENTAGE_MIN_TARGET_MEMORY / 100,
+                        mem_limit * PERCENTAGE_MAX_TARGET_MEMORY / 100,
+                    )
                 };
-                if usage < target {
-                    return did_something;
+                let mut target = max;
+                let mut counter = 0;
+                loop {
+                    let usage = turbo_tasks_malloc::TurboMalloc::memory_usage();
+                    if usage < target {
+                        return did_something;
+                    }
+                    target = min;
+                    if span.is_none() {
+                        span =
+                            Some(tracing::trace_span!(parent: None, "garbage collection", usage));
+                    }
+
+                    let progress = gc_queue.run_gc(self, turbo_tasks);
+
+                    if progress.is_some() {
+                        did_something = true;
+                    }
+
+                    if let Some(g) = progress {
+                        remaining_generations = g;
+                        if g > 0 {
+                            collected_generations += 1;
+                        }
+                    }
+
+                    counter += 1;
+                    if counter > MAX_GC_STEPS
+                        || collected_generations > remaining_generations
+                        || progress.is_none()
+                    {
+                        let new_mem_limit = mem_limit * 4 / 3;
+                        if self
+                            .memory_limit
+                            .compare_exchange(
+                                mem_limit,
+                                new_mem_limit,
+                                Ordering::Relaxed,
+                                Ordering::Relaxed,
+                            )
+                            .is_ok()
+                        {
+                            println!(
+                                "Ineffective GC, increasing memory limit {} MB -> {} MB",
+                                mem_limit / 1024 / 1024,
+                                new_mem_limit / 1024 / 1024
+                            );
+                            mem_limit = new_mem_limit;
+                        } else {
+                            mem_limit = self.memory_limit.load(Ordering::Relaxed);
+                        }
+                        continue 'outer;
+                    }
+
+                    did_something = true;
                 }
-
-                let collected = gc_queue.run_gc(self, turbo_tasks);
-
-                // Collecting less than 100 tasks is not worth it
-                if !collected.map_or(false, |(_, count)| count > 100) {
-                    return true;
-                }
-
-                did_something = true;
             }
         }
         false
@@ -325,6 +379,7 @@ impl Backend for MemoryBackend {
         task_id: TaskId,
         duration: Duration,
         memory_usage: usize,
+        cell_counters: AutoMap<ValueTypeId, u32, BuildHasherDefault<FxHasher>, 8>,
         stateful: bool,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) -> bool {
@@ -340,6 +395,7 @@ impl Backend for MemoryBackend {
                     duration,
                     memory_usage,
                     generation,
+                    cell_counters,
                     stateful,
                     self,
                     turbo_tasks,
@@ -402,28 +458,27 @@ impl Backend for MemoryBackend {
         index: CellId,
         reader: TaskId,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
-    ) -> Result<Result<CellContent, EventListener>> {
+    ) -> Result<Result<TypedCellContent, EventListener>> {
         if task_id == reader {
-            Ok(Ok(self.with_task(task_id, |task| {
-                task.with_cell(index, |cell| cell.read_own_content_untracked())
-            })))
+            Ok(Ok(self
+                .with_task(task_id, |task| {
+                    task.with_cell(index, |cell| cell.read_own_content_untracked())
+                })
+                .into_typed(index.type_id)))
         } else {
             Task::add_dependency_to_current(TaskEdge::Cell(task_id, index));
             self.with_task(task_id, |task| {
-                match task.with_cell_mut(index, self.gc_queue.as_ref(), |cell, _| {
-                    cell.read_content(
-                        reader,
-                        move || format!("{task_id} {index}"),
-                        move || format!("reading {} {} from {}", task_id, index, reader),
-                    )
-                }) {
-                    Ok(content) => Ok(Ok(content)),
-                    Err(RecomputingCell { listener, schedule }) => {
-                        if schedule {
-                            task.recompute(self, turbo_tasks);
-                        }
-                        Ok(Err(listener))
-                    }
+                match task.read_cell(
+                    index,
+                    self.gc_queue.as_ref(),
+                    move || format!("reading {} {} from {}", task_id, index, reader),
+                    Some(reader),
+                    self,
+                    turbo_tasks,
+                ) {
+                    Ok(content) => Ok(Ok(content.into_typed(index.type_id))),
+                    Err(ReadCellError::Recomputing(listener)) => Ok(Err(listener)),
+                    Err(ReadCellError::CellRemoved) => Err(anyhow!("Cell doesn't exist")),
                 }
             })
         }
@@ -434,9 +489,10 @@ impl Backend for MemoryBackend {
         current_task: TaskId,
         index: CellId,
         _turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
-    ) -> Result<CellContent> {
+    ) -> Result<TypedCellContent> {
         Ok(self.with_task(current_task, |task| {
             task.with_cell(index, |cell| cell.read_own_content_untracked())
+                .into_typed(index.type_id)
         }))
     }
 
@@ -445,21 +501,19 @@ impl Backend for MemoryBackend {
         task_id: TaskId,
         index: CellId,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
-    ) -> Result<Result<CellContent, EventListener>> {
+    ) -> Result<Result<TypedCellContent, EventListener>> {
         self.with_task(task_id, |task| {
-            match task.with_cell_mut(index, self.gc_queue.as_ref(), |cell, _| {
-                cell.read_content_untracked(
-                    move || format!("{task_id}"),
-                    move || format!("reading {} {} untracked", task_id, index),
-                )
-            }) {
-                Ok(content) => Ok(Ok(content)),
-                Err(RecomputingCell { listener, schedule }) => {
-                    if schedule {
-                        task.recompute(self, turbo_tasks);
-                    }
-                    Ok(Err(listener))
-                }
+            match task.read_cell(
+                index,
+                self.gc_queue.as_ref(),
+                move || format!("reading {} {} untracked", task_id, index),
+                None,
+                self,
+                turbo_tasks,
+            ) {
+                Ok(content) => Ok(Ok(content.into_typed(index.type_id))),
+                Err(ReadCellError::Recomputing(listener)) => Ok(Err(listener)),
+                Err(ReadCellError::CellRemoved) => Err(anyhow!("Cell doesn't exist")),
             }
         })
     }
@@ -500,6 +554,9 @@ impl Backend for MemoryBackend {
         });
     }
 
+    /// SAFETY: This function does not validate that the data in `content` is of
+    /// the same type as in `index`. It is the caller's responsibility to ensure
+    /// that the content is of the correct type.
     fn update_task_cell(
         &self,
         task: TaskId,
@@ -508,7 +565,7 @@ impl Backend for MemoryBackend {
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) {
         self.with_task(task, |task| {
-            task.with_cell_mut(index, self.gc_queue.as_ref(), |cell, clean| {
+            task.access_cell_for_write(index, |cell, clean| {
                 cell.assign(content, clean, turbo_tasks)
             })
         })

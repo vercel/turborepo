@@ -23,7 +23,7 @@ use crate::{
 /// This type is used for an advanced tree shkaing.
 #[turbo_tasks::value]
 pub struct EcmascriptModulePartAsset {
-    pub(crate) full_module: Vc<EcmascriptModuleAsset>,
+    pub full_module: Vc<EcmascriptModuleAsset>,
     pub(crate) part: Vc<ModulePart>,
     pub(crate) import_externals: bool,
 }
@@ -50,7 +50,7 @@ impl EcmascriptModulePartAsset {
     #[turbo_tasks::function]
     pub async fn is_async_module(self: Vc<Self>) -> Result<Vc<bool>> {
         let this = self.await?;
-        let result = this.full_module.failsafe_analyze();
+        let result = this.full_module.analyze();
 
         if let Some(async_module) = *result.await?.async_module.await? {
             Ok(async_module.is_self_async(self.references()))

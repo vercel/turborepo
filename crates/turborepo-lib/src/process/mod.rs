@@ -43,6 +43,7 @@ struct ProcessManagerInner {
 
 impl ProcessManager {
     pub fn new(use_pty: bool) -> Self {
+        debug!("spawning children with pty: {use_pty}");
         Self {
             state: Arc::new(Mutex::new(ProcessManagerInner {
                 is_closing: false,
@@ -75,8 +76,14 @@ impl ProcessManager {
         command: Command,
         stop_timeout: Duration,
     ) -> Option<io::Result<child::Child>> {
+        let label = tracing::enabled!(tracing::Level::TRACE)
+            .then(|| command.label())
+            .unwrap_or_default();
+        trace!("acquiring lock for spawning {label}");
         let mut lock = self.state.lock().unwrap();
+        trace!("acquired lock for spawning {label}");
         if lock.is_closing {
+            debug!("process manager closing");
             return None;
         }
         let child = child::Child::spawn(
@@ -87,6 +94,7 @@ impl ProcessManager {
         if let Ok(child) = &child {
             lock.children.push(child.clone());
         }
+        trace!("releasing lock for spawning {label}");
         Some(child)
     }
 
