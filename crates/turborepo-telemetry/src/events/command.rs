@@ -126,19 +126,6 @@ impl CommandEventBuilder {
         self
     }
 
-    // run
-    pub fn track_run_code_path(&self, path: CodePath) -> &Self {
-        self.track(Event {
-            key: "binary".to_string(),
-            value: match path {
-                CodePath::Go => "go".to_string(),
-                CodePath::Rust => "rust".to_string(),
-            },
-            is_sensitive: EventType::NonSensitive,
-        });
-        self
-    }
-
     // login
     pub fn track_login_method(&self, method: LoginMethod) -> &Self {
         self.track(Event {
