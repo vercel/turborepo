@@ -12,12 +12,13 @@ use crate::{
 };
 
 pub(crate) mod bin;
+pub(crate) mod config;
 pub(crate) mod daemon;
 pub(crate) mod generate;
-pub(crate) mod info;
 pub(crate) mod link;
 pub(crate) mod login;
 pub(crate) mod logout;
+pub(crate) mod ls;
 pub(crate) mod prune;
 pub(crate) mod run;
 pub(crate) mod scan;

@@ -10,6 +10,7 @@ use console::{Style, StyledObject};
 use either::Either;
 use futures::{stream::FuturesUnordered, StreamExt};
 use itertools::Itertools;
+use miette::{Diagnostic, NamedSource, SourceSpan};
 use regex::Regex;
 use tokio::sync::{mpsc, oneshot};
 use tracing::{debug, error, Instrument, Span};
@@ -67,7 +68,7 @@ pub struct Visitor<'a> {
     is_watch: bool,
 }
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error, Diagnostic)]
 pub enum Error {
     #[error("cannot find package {package_name} for task {task_id}")]
     MissingPackage {
@@ -77,7 +78,14 @@ pub enum Error {
     #[error(
         "root task {task_name} ({command}) looks like it invokes turbo and might cause a loop"
     )]
-    RecursiveTurbo { task_name: String, command: String },
+    RecursiveTurbo {
+        task_name: String,
+        command: String,
+        #[label("task found here")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource,
+    },
     #[error("Could not find definition for task")]
     MissingDefinition,
     #[error("error while executing engine: {0}")]
@@ -186,9 +194,12 @@ impl<'a> Visitor<'a> {
             match command {
                 Some(cmd) if info.package() == ROOT_PKG_NAME && turbo_regex().is_match(&cmd) => {
                     package_task_event.track_error(TrackedErrors::RecursiveError);
+                    let (span, text) = cmd.span_and_text("package.json");
                     return Err(Error::RecursiveTurbo {
                         task_name: info.to_string(),
                         command: cmd.to_string(),
+                        span,
+                        text,
                     });
                 }
                 _ => (),
@@ -939,6 +950,13 @@ impl ExecContext {
                     task.set_stdin(stdin);
                 }
             }
+        }
+
+        // Even if user does not have the TUI and cannot interact with a task, we keep
+        // stdin open for persistent tasks as some programs will shut down if stdin is
+        // closed.
+        if !self.takes_input {
+            process.stdin();
         }
 
         let mut stdout_writer = self

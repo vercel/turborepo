@@ -1,15 +1,15 @@
 #![feature(arbitrary_self_types)]
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 use indexmap::{IndexMap, IndexSet};
 use turbo_tasks::{debug::ValueDebug, RcStr, Value, ValueToString, Vc};
-use turbo_tasks_testing::{register, run};
+use turbo_tasks_testing::{register, run, Registration};
 
-register!();
+static REGISTRATION: Registration = register!();
 
 #[tokio::test]
 async fn all_in_one() {
-    run! {
+    run(&REGISTRATION, async {
         let a: Vc<u32> = Vc::cell(4242);
         assert_eq!(*a.await?, 4242);
 
@@ -35,7 +35,7 @@ async fn all_in_one() {
 
         let a: Vc<Number> = Vc::cell(32);
         let b: Vc<Number> = Vc::cell(10);
-        let c: Vc<Number> = a.add(b);
+        let c: Vc<Number> = a.add(Vc::upcast(b));
 
         assert_eq!(*c.await?, 42);
 
@@ -43,7 +43,13 @@ async fn all_in_one() {
         let b_erased: Vc<Box<dyn Add>> = Vc::upcast(b);
         let c_erased: Vc<Box<dyn Add>> = a_erased.add(b_erased);
 
-        assert_eq!(*Vc::try_resolve_downcast_type::<Number>(c_erased).await?.unwrap().await?, 42);
+        assert_eq!(
+            *Vc::try_resolve_downcast_type::<Number>(c_erased)
+                .await?
+                .unwrap()
+                .await?,
+            42
+        );
 
         let b_erased_other: Vc<Box<dyn Add>> = Vc::upcast(Vc::<NumberB>::cell(10));
         let c_erased_invalid: Vc<Box<dyn Add>> = a_erased.add(b_erased_other);
@@ -103,15 +109,19 @@ async fn all_in_one() {
         assert_eq!(*map.is_empty().await?, true);
         assert_eq!(&*map.await?, &IndexMap::<Vc<u32>, Vc<u32>>::default());
         assert_eq!(map.dbg().await?.to_string(), "{}");
-    }
+
+        anyhow::Ok(())
+    })
+    .await
+    .unwrap()
 }
 
 #[turbo_tasks::value(transparent, serialization = "auto_for_input")]
-#[derive(Debug, Clone, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Hash)]
 struct MyTransparentValue(u32);
 
 #[turbo_tasks::value(shared, serialization = "auto_for_input")]
-#[derive(Debug, Clone, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Hash)]
 enum MyEnumValue {
     Yeah(u32),
     Nah,
@@ -215,7 +225,7 @@ async fn my_function(
 
 #[turbo_tasks::value_trait]
 trait Add {
-    fn add(self: Vc<Self>, other: Vc<Self>) -> Vc<Self>;
+    fn add(self: Vc<Self>, other: Vc<Box<dyn Add>>) -> Vc<Self>;
 }
 
 #[turbo_tasks::value(transparent)]
@@ -224,7 +234,10 @@ struct Number(u32);
 #[turbo_tasks::value_impl]
 impl Add for Number {
     #[turbo_tasks::function]
-    async fn add(self: Vc<Self>, other: Vc<Self>) -> Result<Vc<Self>> {
+    async fn add(self: Vc<Self>, other: Vc<Box<dyn Add>>) -> Result<Vc<Self>> {
+        let Some(other) = Vc::try_resolve_downcast_type::<Number>(other).await? else {
+            bail!("Expected Number");
+        };
         Ok(Vc::cell(*self.await? + *other.await?))
     }
 }
@@ -235,7 +248,10 @@ struct NumberB(u32);
 #[turbo_tasks::value_impl]
 impl Add for NumberB {
     #[turbo_tasks::function]
-    async fn add(self: Vc<Self>, other: Vc<Self>) -> Result<Vc<Self>> {
+    async fn add(self: Vc<Self>, other: Vc<Box<dyn Add>>) -> Result<Vc<Self>> {
+        let Some(other) = Vc::try_resolve_downcast_type::<NumberB>(other).await? else {
+            bail!("Expected NumberB");
+        };
         Ok(Vc::cell(*self.await? + *other.await?))
     }
 }

@@ -10,7 +10,7 @@ use tracing::debug;
 use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath};
 use turborepo_analytics::{start_analytics, AnalyticsHandle, AnalyticsSender};
 use turborepo_api_client::{APIAuth, APIClient};
-use turborepo_cache::{AsyncCache, RemoteCacheOpts};
+use turborepo_cache::AsyncCache;
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_errors::Spanned;
 use turborepo_repository::{
@@ -69,33 +69,13 @@ pub struct RunBuilder {
 
 impl RunBuilder {
     pub fn new(base: CommandBase) -> Result<Self, Error> {
-        let api_auth = base.api_auth()?;
         let api_client = base.api_client()?;
 
-        let mut opts: Opts = base.args().try_into()?;
+        let opts = Opts::new(&base)?;
+        let api_auth = base.api_auth()?;
         let config = base.config()?;
         let allow_missing_package_manager = config.allow_no_package_manager();
 
-        let is_linked = turborepo_api_client::is_linked(&api_auth);
-        if !is_linked {
-            opts.cache_opts.skip_remote = true;
-        } else if let Some(enabled) = config.enabled {
-            // We're linked, but if the user has explicitly enabled or disabled, use that
-            // value
-            opts.cache_opts.skip_remote = !enabled;
-        }
-        // Note that we don't currently use the team_id value here. In the future, we
-        // should probably verify that we only use the signature value when the
-        // configured team_id matches the final resolved team_id.
-        let unused_remote_cache_opts_team_id = config.team_id().map(|team_id| team_id.to_string());
-        let signature = config.signature();
-        opts.cache_opts.remote_cache_opts = Some(RemoteCacheOpts::new(
-            unused_remote_cache_opts_team_id,
-            signature,
-        ));
-        if opts.run_opts.experimental_space_id.is_none() {
-            opts.run_opts.experimental_space_id = config.spaces_id().map(|s| s.to_owned());
-        }
         let version = base.version();
         let experimental_ui = config.ui();
         let processes = ProcessManager::new(
@@ -111,11 +91,11 @@ impl RunBuilder {
             processes,
             opts,
             api_client,
-            api_auth,
             repo_root,
             ui,
             version,
             experimental_ui,
+            api_auth,
             analytics_sender: None,
             entrypoint_packages: None,
             should_print_prelude_override: None,

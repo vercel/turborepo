@@ -1,8 +1,6 @@
-use std::{
-    backtrace::Backtrace,
-    collections::{BTreeMap, HashMap, HashSet},
-};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
+use miette::Diagnostic;
 use petgraph::graph::{Graph, NodeIndex};
 use tracing::{warn, Instrument};
 use turbopath::{
@@ -33,13 +31,11 @@ pub struct PackageGraphBuilder<'a, T> {
     package_discovery: T,
 }
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Diagnostic, thiserror::Error)]
 pub enum Error {
-    #[error("could not resolve workspaces: {0}")]
-    PackageManager(
-        #[from] crate::package_manager::Error,
-        #[backtrace] Backtrace,
-    ),
+    #[error("could not resolve workspaces")]
+    #[diagnostic(transparent)]
+    PackageManager(#[from] crate::package_manager::Error),
     #[error(
         "Failed to add workspace \"{name}\" from \"{path}\", it already exists at \
          \"{existing_path}\""
@@ -51,7 +47,8 @@ pub enum Error {
     },
     #[error("path error: {0}")]
     Path(#[from] turbopath::PathError),
-    #[error("unable to parse workspace package.json: {0}")]
+    #[diagnostic(transparent)]
+    #[error(transparent)]
     PackageJson(#[from] crate::package_json::Error),
     #[error("package.json must have a name field:\n{0}")]
     PackageJsonMissingName(AbsoluteSystemPathBuf),

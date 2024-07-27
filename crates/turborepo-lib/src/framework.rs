@@ -31,7 +31,7 @@ impl Framework {
     }
 }
 
-static FRAMEWORKS: OnceLock<[Framework; 12]> = OnceLock::new();
+static FRAMEWORKS: OnceLock<[Framework; 13]> = OnceLock::new();
 
 fn get_frameworks() -> &'static [Framework] {
     FRAMEWORKS.get_or_init(|| {
@@ -101,8 +101,16 @@ fn get_frameworks() -> &'static [Framework] {
                 },
             },
             Framework {
+                slug: "nitro",
+                env_wildcards: vec!["NITRO_*"],
+                dependency_match: Matcher {
+                    strategy: Strategy::Some,
+                    dependencies: vec!["nitropack", "nitropack-nightly"],
+                },
+            },
+            Framework {
                 slug: "nuxtjs",
-                env_wildcards: vec!["NUXT_*"],
+                env_wildcards: vec!["NUXT_*", "NITRO_*"],
                 dependency_match: Matcher {
                     strategy: Strategy::Some,
                     dependencies: vec!["nuxt", "nuxt-edge", "nuxt3", "nuxt3-edge"],

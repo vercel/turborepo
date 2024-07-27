@@ -14,6 +14,7 @@ Test help flag
     generate    Generate a new app / package
     telemetry   Enable or disable anonymous telemetry
     scan        Turbo your monorepo by running a number of 'repo lints' to identify common issues, suggest fixes, and improve performance
+    ls          EXPERIMENTAL: List packages in your monorepo
     link        Link your local directory to a Vercel organization and enable remote caching
     login       Login to your Vercel account
     logout      Logout to your Vercel account
@@ -96,7 +97,7 @@ Test help flag
         --global-deps <GLOBAL_DEPS>
             Specify glob of global filesystem dependencies to be hashed. Useful for .env and files
         --env-mode [<ENV_MODE>]
-            Environment variable mode. Use "loose" to pass the entire existing environment. Use "strict" to use an allowlist specified in turbo.json [default: strict] [possible values: loose, strict]
+            Environment variable mode. Use "loose" to pass the entire existing environment. Use "strict" to use an allowlist specified in turbo.json [possible values: loose, strict]
     -F, --filter <FILTER>
             Use the given selector to specify package(s) to act as entry points. The syntax mirrors pnpm's syntax, and additional documentation and examples can be found in turbo's documentation https://turbo.build/repo/docs/reference/command-line-reference/run#--filter
         --output-logs <OUTPUT_LOGS>
@@ -127,6 +128,7 @@ Test help flag
     generate    Generate a new app / package
     telemetry   Enable or disable anonymous telemetry
     scan        Turbo your monorepo by running a number of 'repo lints' to identify common issues, suggest fixes, and improve performance
+    ls          EXPERIMENTAL: List packages in your monorepo
     link        Link your local directory to a Vercel organization and enable remote caching
     login       Login to your Vercel account
     logout      Logout to your Vercel account
@@ -268,7 +270,6 @@ Test help flag
         --env-mode [<ENV_MODE>]
             Environment variable mode. Use "loose" to pass the entire existing environment. Use "strict" to use an allowlist specified in turbo.json
             
-            [default: strict]
             [possible values: loose, strict]
   
     -F, --filter <FILTER>

@@ -45,6 +45,7 @@ use crate::{
 #[turbo_tasks::value(shared, serialization = "none", eq = "manual")]
 #[allow(clippy::large_enum_variant)]
 pub enum ParseResult {
+    // Note: Ok must not contain any Vc as it's snapshot by failsafe_parse
     Ok {
         #[turbo_tasks(debug_ignore, trace_ignore)]
         program: Program,
@@ -432,7 +433,6 @@ async fn parse_content(
                 &parsed_program,
                 unresolved_mark,
                 top_level_mark,
-                false,
                 Some(source),
             );
 

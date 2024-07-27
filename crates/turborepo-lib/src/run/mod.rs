@@ -12,7 +12,12 @@ pub mod task_access;
 pub mod task_id;
 pub mod watch;
 
-use std::{collections::HashSet, io::Write, sync::Arc, time::Duration};
+use std::{
+    collections::{BTreeMap, HashSet},
+    io::Write,
+    sync::Arc,
+    time::Duration,
+};
 
 pub use cache::{CacheOutput, ConfigCache, Error as CacheError, RunCache, TaskCache};
 use chrono::{DateTime, Local};
@@ -134,6 +139,37 @@ impl Run {
                 PackageNode::Workspace(pkg) => Some(pkg.clone()),
             })
             .collect()
+    }
+
+    // Produces a map of tasks to the packages where they're defined.
+    // Used to print a list of potential tasks to run. Obeys the `--filter` flag
+    pub fn get_potential_tasks(&self) -> Result<BTreeMap<String, Vec<String>>, Error> {
+        let mut tasks = BTreeMap::new();
+        for (name, info) in self.pkg_dep_graph.packages() {
+            if !self.filtered_pkgs.contains(name) {
+                continue;
+            }
+            for task_name in info.package_json.scripts.keys() {
+                tasks
+                    .entry(task_name.clone())
+                    .or_insert_with(Vec::new)
+                    .push(name.to_string())
+            }
+        }
+
+        Ok(tasks)
+    }
+
+    pub fn pkg_dep_graph(&self) -> &PackageGraph {
+        &self.pkg_dep_graph
+    }
+
+    pub fn filtered_pkgs(&self) -> &HashSet<PackageName> {
+        &self.filtered_pkgs
+    }
+
+    pub fn ui(&self) -> UI {
+        self.ui
     }
 
     pub fn has_experimental_ui(&self) -> bool {
