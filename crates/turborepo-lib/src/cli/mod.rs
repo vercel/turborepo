@@ -21,7 +21,7 @@ use turborepo_telemetry::{
     },
     init_telemetry, track_usage, TelemetryHandle,
 };
-use turborepo_ui::UI;
+use turborepo_ui::{GREY, UI};
 
 use crate::{
     cli::error::print_potential_tasks,
@@ -991,6 +991,13 @@ pub async fn run(
         }
     }
 
+    let should_print_version = env::var("TURBO_PRINT_VERSION_DISABLED")
+        .map_or(true, |disable| !matches!(disable.as_str(), "1" | "true"));
+
+    if should_print_version {
+        eprintln!("{}\n", GREY.apply_to(format!("turbo {}", get_version())));
+    }
+
     // If there is no command, we set the command to `Command::Run` with
     // `self.parsed_args.run_args` as arguments.
     let mut command = if let Some(command) = mem::take(&mut cli_args.command) {
@@ -1250,7 +1257,6 @@ pub async fn run(
             }
 
             run_args.track(&event);
-            event.track_run_code_path(CodePath::Rust);
             let exit_code = run::run(base, event).await.inspect(|code| {
                 if *code != 0 {
                     error!("run failed: command  exited ({code})");

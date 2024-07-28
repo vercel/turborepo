@@ -952,6 +952,13 @@ impl ExecContext {
             }
         }
 
+        // Even if user does not have the TUI and cannot interact with a task, we keep
+        // stdin open for persistent tasks as some programs will shut down if stdin is
+        // closed.
+        if !self.takes_input {
+            process.stdin();
+        }
+
         let mut stdout_writer = self
             .task_cache
             .output_writer(prefixed_ui.task_writer())
