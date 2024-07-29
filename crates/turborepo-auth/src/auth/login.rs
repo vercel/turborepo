@@ -3,7 +3,7 @@ use std::sync::Arc;
 pub use error::Error;
 use reqwest::Url;
 use tokio::sync::OnceCell;
-use tracing::warn;
+use tracing::{debug, warn};
 use turborepo_api_client::{CacheClient, Client, TokenClient};
 use turborepo_ui::{start_spinner, BOLD, UI};
 
@@ -49,6 +49,7 @@ pub async fn login<T: Client + TokenClient + CacheClient>(
     // Check if passed in token exists first.
     if !force {
         if let Some(token) = existing_token {
+            debug!("found existing turbo token");
             let token = Token::existing(token.into());
             if token
                 .is_valid(
@@ -64,6 +65,7 @@ pub async fn login<T: Client + TokenClient + CacheClient>(
             // The extraction can return an error, but we don't want to fail the login if
             // the token is not found.
             if let Ok(Some(token)) = extract_vercel_token() {
+                debug!("found existing Vercel token");
                 let token = Token::existing(token);
                 if token
                     .is_valid(
