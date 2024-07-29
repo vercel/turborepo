@@ -1474,6 +1474,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "98cc8fbded0c607b7ba9dd60cd98df59af97e84d24e49c8557331cfc26d301ce"
 
 [[package]]
+name = "clipboard-win"
+version = "5.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "15efe7a882b08f34e38556b14f2fb3daa98769d06c7f0c1b076dfd0d983bc892"
+dependencies = [
+ "error-code",
+]
+
+[[package]]
 name = "cmake"
 version = "0.1.49"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2660,6 +2669,12 @@ dependencies = [
  "libc",
  "windows-sys 0.52.0",
 ]
+
+[[package]]
+name = "error-code"
+version = "3.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a0474425d51df81997e2f90a21591180b38eccf27292d755f3e30750225c175b"
 
 [[package]]
 name = "event-listener"
@@ -11430,7 +11445,9 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "atty",
+ "base64 0.22.1",
  "chrono",
+ "clipboard-win",
  "console",
  "crossterm 0.27.0",
  "dialoguer",
@@ -11447,6 +11464,7 @@ dependencies = [
  "turbopath",
  "turborepo-ci",
  "turborepo-vt100",
+ "which",
  "winapi",
 ]
 

@@ -36,6 +36,8 @@ pub enum Event {
     UpdateTasks {
         tasks: Vec<String>,
     },
+    Mouse(crossterm::event::MouseEvent),
+    CopySelection,
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
