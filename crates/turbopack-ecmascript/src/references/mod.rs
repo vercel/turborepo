@@ -1218,8 +1218,11 @@ async fn handle_call<G: Fn(Vec<Effect>) + Send + Sync>(
             .await
     };
     match func {
-        JsValue::Alternatives(_, alts) => {
-            for alt in alts {
+        JsValue::Alternatives {
+            total_nodes: _,
+            values,
+        } => {
+            for alt in values {
                 handle_call_boxed(
                     ast_path,
                     span,

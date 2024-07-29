@@ -4,9 +4,9 @@
         Function(
             16,
             2666,
-            Alternatives(
-                15,
-                [
+            Alternatives {
+                total_nodes: 15,
+                values: [
                     Array {
                         total_nodes: 10,
                         items: [
@@ -90,7 +90,7 @@
                         mutable: true,
                     },
                 ],
-            ),
+            },
         ),
     ),
     (
@@ -118,9 +118,9 @@
     ),
     (
         "binPath",
-        Alternatives(
-            13,
-            [
+        Alternatives {
+            total_nodes: 13,
+            values: [
                 Unknown {
                     original_value: Some(
                         Variable(
@@ -193,7 +193,7 @@
                     ],
                 ),
             ],
-        ),
+        },
     ),
     (
         "binTargetPath",
@@ -381,9 +381,9 @@
         Function(
             5,
             1409,
-            Alternatives(
-                4,
-                [
+            Alternatives {
+                total_nodes: 4,
+                values: [
                     FreeVar(
                         "ESBUILD_BINARY_PATH",
                     ),
@@ -400,14 +400,14 @@
                         ),
                     ),
                 ],
-            ),
+            },
         ),
     ),
     (
         "isYarnPnP",
-        Alternatives(
-            3,
-            [
+        Alternatives {
+            total_nodes: 3,
+            values: [
                 Constant(
                     False,
                 ),
@@ -415,7 +415,7 @@
                     True,
                 ),
             ],
-        ),
+        },
     ),
     (
         "knownUnixlikePackages",
@@ -779,9 +779,9 @@
     ),
     (
         "pkg#3",
-        Alternatives(
-            8,
-            [
+        Alternatives {
+            total_nodes: 8,
+            values: [
                 Unknown {
                     original_value: Some(
                         Variable(
@@ -825,7 +825,7 @@
                     ),
                 ),
             ],
-        ),
+        },
     ),
     (
         "pkg#7",
@@ -964,9 +964,9 @@
     ),
     (
         "subpath#3",
-        Alternatives(
-            4,
-            [
+        Alternatives {
+            total_nodes: 4,
+            values: [
                 Unknown {
                     original_value: Some(
                         Variable(
@@ -994,7 +994,7 @@
                     ),
                 ),
             ],
-        ),
+        },
     ),
     (
         "subpath#7",

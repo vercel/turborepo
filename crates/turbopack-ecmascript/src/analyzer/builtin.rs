@@ -30,7 +30,7 @@ pub fn early_replace_builtin(value: &mut JsValue) -> bool {
                 | JsValue::WellKnownObject(_)
                 | JsValue::Array { .. }
                 | JsValue::Object { .. }
-                | JsValue::Alternatives(_, _)
+                | JsValue::Alternatives { .. }
                 | JsValue::Concat(_, _)
                 | JsValue::Add(_, _)
                 | JsValue::Not(_, _) => {
@@ -102,9 +102,12 @@ pub fn replace_builtin(value: &mut JsValue) -> bool {
             // matching property access when obj is a bunch of alternatives
             // like `(obj1 | obj2 | obj3).prop`
             // We expand these to `obj1.prop | obj2.prop | obj3.prop`
-            JsValue::Alternatives(_, alts) => {
+            JsValue::Alternatives {
+                total_nodes: _,
+                values,
+            } => {
                 *value = JsValue::alternatives(
-                    take(alts)
+                    take(values)
                         .into_iter()
                         .map(|alt| JsValue::member(Box::new(alt), prop.clone()))
                         .collect(),
@@ -157,9 +160,12 @@ pub fn replace_builtin(value: &mut JsValue) -> bool {
                     }
                     // accessing multiple alternative properties on an array like `[1,2,3][(1 | 2 |
                     // prop3)]`
-                    JsValue::Alternatives(_, alts) => {
+                    JsValue::Alternatives {
+                        total_nodes: _,
+                        values,
+                    } => {
                         *value = JsValue::alternatives(
-                            take(alts)
+                            take(values)
                                 .into_iter()
                                 .map(|alt| JsValue::member(Box::new(obj.clone()), Box::new(alt)))
                                 .collect(),
@@ -297,9 +303,12 @@ pub fn replace_builtin(value: &mut JsValue) -> bool {
                     }
                     // matching mutliple alternative properties on an object like `{a: 1, b: 2}[(a |
                     // b)]`
-                    JsValue::Alternatives(_, alts) => {
+                    JsValue::Alternatives {
+                        total_nodes: _,
+                        values,
+                    } => {
                         *value = JsValue::alternatives(
-                            take(alts)
+                            take(values)
                                 .into_iter()
                                 .map(|alt| JsValue::member(Box::new(obj.clone()), Box::new(alt)))
                                 .collect(),
@@ -395,9 +404,12 @@ pub fn replace_builtin(value: &mut JsValue) -> bool {
                 }
                 // matching calls on multiple alternative objects like `(obj1 | obj2).prop(arg1,
                 // arg2, ...)`
-                JsValue::Alternatives(_, alts) => {
+                JsValue::Alternatives {
+                    total_nodes: _,
+                    values,
+                } => {
                     *value = JsValue::alternatives(
-                        take(alts)
+                        take(values)
                             .into_iter()
                             .map(|alt| {
                                 JsValue::member_call(
@@ -437,9 +449,16 @@ pub fn replace_builtin(value: &mut JsValue) -> bool {
         }
         // match calls when the callee are multiple alternative functions like `(func1 |
         // func2)(arg1, arg2, ...)`
-        JsValue::Call(_, box JsValue::Alternatives(_, alts), ref mut args) => {
+        JsValue::Call(
+            _,
+            box JsValue::Alternatives {
+                total_nodes: _,
+                values,
+            },
+            ref mut args,
+        ) => {
             *value = JsValue::alternatives(
-                take(alts)
+                take(values)
                     .into_iter()
                     .map(|alt| JsValue::call(Box::new(alt), args.clone()))
                     .collect(),

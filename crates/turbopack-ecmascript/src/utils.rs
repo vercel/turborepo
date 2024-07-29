@@ -29,9 +29,10 @@ pub fn js_value_to_pattern(value: &JsValue) -> Pattern {
             ConstantValue::Regex(exp, flags) => format!("/{exp}/{flags}").into(),
             ConstantValue::Undefined => "undefined".into(),
         }),
-        JsValue::Alternatives(_, alts) => {
-            Pattern::Alternatives(alts.iter().map(js_value_to_pattern).collect())
-        }
+        JsValue::Alternatives {
+            total_nodes: _,
+            values,
+        } => Pattern::Alternatives(values.iter().map(js_value_to_pattern).collect()),
         JsValue::Concat(_, parts) => {
             Pattern::Concatenation(parts.iter().map(js_value_to_pattern).collect())
         }
