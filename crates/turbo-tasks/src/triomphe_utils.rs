@@ -5,6 +5,8 @@ use unsize::Coercion;
 /// Attempt to downcast a [`triomphe::Arc<dyn Any + Send +
 /// Sync>`][`triomphe::Arc`] to a concrete type.
 ///
+/// Checks that the downcast is safe using [`Any::is`].
+///
 /// Ported from [`std::sync::Arc::downcast`] to [`triomphe::Arc`].
 pub fn downcast_triomphe_arc<T: Any + Send + Sync>(
     this: triomphe::Arc<dyn Any + Send + Sync>,
@@ -16,6 +18,16 @@ pub fn downcast_triomphe_arc<T: Any + Send + Sync>(
     }
 }
 
+/// Transmutes the contents of `Arc<T>` to `Arc<U>`. Updates the `Arc`'s fat
+/// pointer metadata.
+///
+/// Unlike [`downcast_triomphe_arc`] this make no checks the transmute is safe.
+///
+/// # Safety
+///
+/// It must be [safe to transmute][transmutes] from `T` to `U`.
+///
+/// [transmutes]: https://doc.rust-lang.org/nomicon/transmutes.html
 pub unsafe fn unchecked_sidecast_triomphe_arc<T, U>(this: triomphe::Arc<T>) -> triomphe::Arc<U>
 where
     T: ?Sized,
