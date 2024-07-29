@@ -45,13 +45,26 @@ impl<'b> TaskTable<'b> {
 
     fn finished_rows(&self) -> impl Iterator<Item = Row> + '_ {
         self.tasks_by_type.finished.iter().map(move |task| {
+            let name = if matches!(task.result(), TaskResult::CacheHit) {
+                Cell::new(Text::styled(task.name(), Style::default().italic()))
+            } else {
+                Cell::new(task.name())
+            };
+
             Row::new(vec![
-                Cell::new(task.name()),
-                Cell::new(match task.result() {
+                name,
+                match task.result() {
                     // matches Next.js (and many other CLI tools) https://github.com/vercel/next.js/blob/1a04d94aaec943d3cce93487fea3b8c8f8898f31/packages/next/src/build/output/log.ts
-                    TaskResult::Success => Text::styled("✓", Style::default().green().bold()),
-                    TaskResult::Failure => Text::styled("⨯", Style::default().red().bold()),
-                }),
+                    TaskResult::Success => {
+                        Cell::new(Text::styled("✓", Style::default().green().bold()))
+                    }
+                    TaskResult::CacheHit => {
+                        Cell::new(Text::styled("⊙", Style::default().magenta()))
+                    }
+                    TaskResult::Failure => {
+                        Cell::new(Text::styled("⨯", Style::default().red().bold()))
+                    }
+                },
             ])
         })
     }
