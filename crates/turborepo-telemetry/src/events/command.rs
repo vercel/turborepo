@@ -48,12 +48,6 @@ impl EventBuilder for CommandEventBuilder {
 
 // events
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum CodePath {
-    Go,
-    Rust,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, Copy)]
 pub enum LoginMethod {
     SSO,

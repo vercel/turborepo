@@ -14,11 +14,7 @@ use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::AnonAPIClient;
 use turborepo_repository::inference::{RepoMode, RepoState};
 use turborepo_telemetry::{
-    events::{
-        command::{CodePath, CommandEventBuilder},
-        generic::GenericEventBuilder,
-        EventBuilder, EventType,
-    },
+    events::{command::CommandEventBuilder, generic::GenericEventBuilder, EventBuilder, EventType},
     init_telemetry, track_usage, TelemetryHandle,
 };
 use turborepo_ui::{GREY, UI};
