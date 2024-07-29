@@ -766,7 +766,8 @@ impl ExecContext {
         // If the task resulted in an error, do not group in order to better highlight
         // the error.
         let is_error = matches!(result, Ok(ExecOutcome::Task { .. }));
-        let logs = match output_client.finish(is_error) {
+        let is_cache_hit = matches!(result, Ok(ExecOutcome::Success(SuccessOutcome::CacheHit)));
+        let logs = match output_client.finish(is_error, is_cache_hit) {
             Ok(logs) => logs,
             Err(e) => {
                 telemetry.track_error(TrackedErrors::DaemonFailedToMarkOutputsAsCached);
@@ -1136,11 +1137,11 @@ impl<W: Write> CacheOutput for TaskCacheOutput<W> {
 
 /// Struct for displaying information about task
 impl<W: Write> TaskOutput<W> {
-    pub fn finish(self, use_error: bool) -> std::io::Result<Option<Vec<u8>>> {
+    pub fn finish(self, use_error: bool, is_cache_hit: bool) -> std::io::Result<Option<Vec<u8>>> {
         match self {
             TaskOutput::Direct(client) => client.finish(use_error),
             TaskOutput::UI(client) if use_error => Ok(Some(client.failed())),
-            TaskOutput::UI(client) => Ok(Some(client.succeeded())),
+            TaskOutput::UI(client) => Ok(Some(client.succeeded(is_cache_hit))),
         }
     }
 

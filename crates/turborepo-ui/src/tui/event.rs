@@ -42,6 +42,7 @@ pub enum Event {
 pub enum TaskResult {
     Success,
     Failure,
+    CacheHit,
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
