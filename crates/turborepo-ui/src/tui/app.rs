@@ -123,6 +123,8 @@ impl<W> App<W> {
     }
 
     pub fn get_full_task_mut(&mut self) -> &mut TerminalOutput<W> {
+        // Clippy is wrong here, we need this to avoid a borrow checker error
+        #[allow(clippy::unnecessary_to_owned)]
         self.tasks.get_mut(&self.active_task().to_owned()).unwrap()
     }
 
