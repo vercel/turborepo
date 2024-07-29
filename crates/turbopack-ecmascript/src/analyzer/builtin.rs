@@ -2,7 +2,9 @@ use std::mem::take;
 
 use swc_core::ecma::atoms::js_word;
 
-use super::{ConstantNumber, ConstantValue, JsValue, LogicalOperator, ObjectPart};
+use super::{
+    AdditionalProperty, ConstantNumber, ConstantValue, JsValue, LogicalOperator, ObjectPart,
+};
 
 /// Replaces some builtin values with their resulting values. Called early
 /// without lazy nested values. This allows to skip a lot of work to process the
@@ -501,43 +503,100 @@ pub fn replace_builtin(value: &mut JsValue) -> bool {
         // Reduce logical expressions to their final value(s)
         JsValue::Logical(_, op, ref mut parts) => {
             let len = parts.len();
-            for (i, part) in take(parts).into_iter().enumerate() {
+            let input_parts: Vec<JsValue> = take(parts);
+            *parts = Vec::with_capacity(len);
+            let mut part_properties = Vec::with_capacity(len);
+            for (i, part) in input_parts.into_iter().enumerate() {
                 // The last part is never skipped.
                 if i == len - 1 {
+                    // We intentionally omit the part_properties for the last part.
+                    // This isn't always needed so we only compute it when actually needed.
                     parts.push(part);
                     break;
                 }
-                // We might know at compile-time if a part is skipped or the final value.
-                let skip_part = match op {
+                let property = match op {
                     LogicalOperator::And => part.is_truthy(),
                     LogicalOperator::Or => part.is_falsy(),
                     LogicalOperator::NullishCoalescing => part.is_nullish(),
                 };
-                match skip_part {
+                // We might know at compile-time if a part is skipped or the final value.
+                match property {
                     Some(true) => {
                         // We known this part is skipped, so we can remove it.
                         continue;
                     }
                     Some(false) => {
                         // We known this part is the final value, so we can remove the rest.
+                        part_properties.push(property);
                         parts.push(part);
                         break;
                     }
                     None => {
                         // We don't know if this part is skipped or the final value, so we keep it.
+                        part_properties.push(property);
                         parts.push(part);
                         continue;
                     }
                 }
             }
+            part_properties.truncate(parts.len());
             // If we reduced the expression to a single value, we can replace it.
             if parts.len() == 1 {
                 *value = parts.pop().unwrap();
                 true
             } else {
                 // If not, we know that it will be one of the remaining values.
-                *value = JsValue::alternatives(take(parts));
-                true
+                let last_part = parts.last().unwrap();
+                let property = match op {
+                    LogicalOperator::And => last_part.is_truthy(),
+                    LogicalOperator::Or => last_part.is_falsy(),
+                    LogicalOperator::NullishCoalescing => last_part.is_nullish(),
+                };
+                part_properties.push(property);
+                let (any_unset, all_set) =
+                    part_properties
+                        .iter()
+                        .fold((false, true), |(any_unset, all_set), part| match part {
+                            Some(true) => (any_unset, all_set),
+                            Some(false) => (true, false),
+                            None => (any_unset, false),
+                        });
+                let property = match op {
+                    LogicalOperator::Or => {
+                        if any_unset {
+                            Some(AdditionalProperty::Truthy)
+                        } else if all_set {
+                            Some(AdditionalProperty::Falsy)
+                        } else {
+                            None
+                        }
+                    }
+                    LogicalOperator::And => {
+                        if any_unset {
+                            Some(AdditionalProperty::Falsy)
+                        } else if all_set {
+                            Some(AdditionalProperty::Truthy)
+                        } else {
+                            None
+                        }
+                    }
+                    LogicalOperator::NullishCoalescing => {
+                        if any_unset {
+                            Some(AdditionalProperty::NonNullish)
+                        } else if all_set {
+                            Some(AdditionalProperty::Nullish)
+                        } else {
+                            None
+                        }
+                    }
+                };
+                if let Some(property) = property {
+                    *value = JsValue::alternatives_with_addtional_property(take(parts), property);
+                    true
+                } else {
+                    *value = JsValue::alternatives(take(parts));
+                    true
+                }
             }
         }
         JsValue::Tenary(_, test, cons, alt) => {
