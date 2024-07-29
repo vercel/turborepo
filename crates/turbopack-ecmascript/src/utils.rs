@@ -32,6 +32,7 @@ pub fn js_value_to_pattern(value: &JsValue) -> Pattern {
         JsValue::Alternatives {
             total_nodes: _,
             values,
+            additional_property: _,
         } => Pattern::Alternatives(values.iter().map(js_value_to_pattern).collect()),
         JsValue::Concat(_, parts) => {
             Pattern::Concatenation(parts.iter().map(js_value_to_pattern).collect())

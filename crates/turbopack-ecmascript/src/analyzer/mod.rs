@@ -350,6 +350,25 @@ enum JsValueMetaKind {
     Placeholder,
 }
 
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
+pub enum AdditionalProperty {
+    Truthy,
+    Falsy,
+    Nullish,
+    NonNullish,
+}
+
+impl Display for AdditionalProperty {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AdditionalProperty::Truthy => write!(f, "truthy"),
+            AdditionalProperty::Falsy => write!(f, "falsy"),
+            AdditionalProperty::Nullish => write!(f, "nullish"),
+            AdditionalProperty::NonNullish => write!(f, "non-nullish"),
+        }
+    }
+}
+
 /// TODO: Use `Arc`
 /// There are 4 kinds of values: Leaves, Nested, Operations, and Placeholders
 /// (see [JsValueMetaKind] for details). Values are processed in two phases:
@@ -410,6 +429,7 @@ pub enum JsValue {
     Alternatives {
         total_nodes: usize,
         values: Vec<JsValue>,
+        additional_property: Option<AdditionalProperty>,
     },
     /// A function reference. The return value might contain [JsValue::Argument]
     /// placeholders that need to be replaced when calling this function.
@@ -574,14 +594,19 @@ impl Display for JsValue {
             JsValue::Alternatives {
                 total_nodes: _,
                 values: list,
-            } => write!(
-                f,
-                "({})",
-                list.iter()
+                additional_property,
+            } => {
+                let list = list
+                    .iter()
                     .map(|v| v.to_string())
                     .collect::<Vec<_>>()
-                    .join(" | ")
-            ),
+                    .join(" | ");
+                if let Some(additional_property) = additional_property {
+                    write!(f, "({}){{{}}}", list, additional_property)
+                } else {
+                    write!(f, "({})", list)
+                }
+            }
             JsValue::FreeVar(name) => write!(f, "FreeVar({:?})", name),
             JsValue::Variable(name) => write!(f, "Variable({}#{:?})", name.0, name.1),
             JsValue::Concat(_, list) => write!(
@@ -745,6 +770,18 @@ impl JsValue {
         Self::Alternatives {
             total_nodes: 1 + total_nodes(&list),
             values: list,
+            additional_property: None,
+        }
+    }
+
+    pub fn alternatives_with_addtional_property(
+        list: Vec<JsValue>,
+        additional_property: AdditionalProperty,
+    ) -> Self {
+        Self::Alternatives {
+            total_nodes: 1 + total_nodes(&list),
+            values: list,
+            additional_property: Some(additional_property),
         }
     }
 
@@ -972,6 +1009,7 @@ impl JsValue {
             | JsValue::Alternatives {
                 total_nodes: c,
                 values: list,
+                ..
             }
             | JsValue::Concat(c, list)
             | JsValue::Add(c, list)
@@ -1080,6 +1118,7 @@ impl JsValue {
                 | JsValue::Alternatives {
                     total_nodes: _,
                     values: list,
+                    additional_property: _,
                 }
                 | JsValue::Concat(_, list)
                 | JsValue::Logical(_, _, list)
@@ -1266,24 +1305,26 @@ impl JsValue {
             JsValue::Alternatives {
                 total_nodes: _,
                 values,
-            } => format!(
-                "({})",
-                pretty_join(
+                additional_property,
+            } => {
+                let list = pretty_join(
                     &values
                         .iter()
-                        .map(|v| v.explain_internal_inner(
-                            hints,
-                            indent_depth + 1,
-                            depth,
-                            unknown_depth
-                        ))
+                        .map(|v| {
+                            v.explain_internal_inner(hints, indent_depth + 1, depth, unknown_depth)
+                        })
                         .collect::<Vec<_>>(),
                     indent_depth,
                     " | ",
                     "",
-                    "| "
-                )
-            ),
+                    "| ",
+                );
+                if let Some(additional_property) = additional_property {
+                    format!("({}){{{}}}", list, additional_property)
+                } else {
+                    format!("({})", list)
+                }
+            }
             JsValue::FreeVar(name) => format!("FreeVar({})", name),
             JsValue::Variable(name) => {
                 format!("{}", name.0)
@@ -1840,6 +1881,7 @@ impl JsValue {
             | JsValue::Alternatives {
                 total_nodes: _,
                 values,
+                additional_property: _,
             } => values.iter().any(JsValue::has_side_effects),
             JsValue::Binary(_, a, _, b) => a.has_side_effects() || b.has_side_effects(),
             JsValue::Tenary(_, test, cons, alt) => {
@@ -1892,7 +1934,13 @@ impl JsValue {
             JsValue::Alternatives {
                 total_nodes: _,
                 values,
-            } => merge_if_known(values, JsValue::is_truthy),
+                additional_property,
+            } => match additional_property {
+                Some(AdditionalProperty::Truthy) => Some(true),
+                Some(AdditionalProperty::Falsy) => Some(false),
+                Some(AdditionalProperty::Nullish) => Some(false),
+                _ => merge_if_known(values, JsValue::is_truthy),
+            },
             JsValue::Not(_, value) => value.is_truthy().map(|x| !x),
             JsValue::Logical(_, op, list) => match op {
                 LogicalOperator::And => all_if_known(list, JsValue::is_truthy),
@@ -1973,7 +2021,11 @@ impl JsValue {
             JsValue::Alternatives {
                 total_nodes: _,
                 values,
-            } => merge_if_known(values, JsValue::is_nullish),
+                additional_property,
+            } => match additional_property {
+                Some(AdditionalProperty::Nullish) => Some(true),
+                _ => merge_if_known(values, JsValue::is_nullish),
+            },
             JsValue::Logical(_, op, list) => match op {
                 LogicalOperator::And => {
                     shortcircuit_if_known(list, JsValue::is_truthy, JsValue::is_nullish)
@@ -2004,6 +2056,7 @@ impl JsValue {
             JsValue::Alternatives {
                 total_nodes: _,
                 values,
+                additional_property: _,
             } => merge_if_known(values, JsValue::is_empty_string),
             JsValue::Logical(_, op, list) => match op {
                 LogicalOperator::And => {
@@ -2037,6 +2090,7 @@ impl JsValue {
             JsValue::Alternatives {
                 total_nodes: _,
                 values,
+                additional_property: _,
             } => values.iter().any(|x| x.is_unknown()),
             _ => false,
         }
@@ -2079,6 +2133,7 @@ impl JsValue {
             JsValue::Alternatives {
                 total_nodes: _,
                 values,
+                additional_property: _,
             } => merge_if_known(values, JsValue::is_string),
 
             JsValue::Call(
@@ -2120,6 +2175,7 @@ impl JsValue {
             JsValue::Alternatives {
                 total_nodes: _,
                 values,
+                additional_property: _,
             } => merge_if_known(values, |a| a.starts_with(str)),
             JsValue::Concat(_, list) => {
                 if let Some(item) = list.iter().next() {
@@ -2154,6 +2210,7 @@ impl JsValue {
             JsValue::Alternatives {
                 total_nodes: _,
                 values,
+                additional_property: _,
             } => merge_if_known(values, |alt| alt.ends_with(str)),
             JsValue::Concat(_, list) => {
                 if let Some(item) = list.last() {
@@ -2257,7 +2314,7 @@ fn shortcircuit_if_known<T: Copy>(
 macro_rules! for_each_children_async {
     ($value:expr, $visit_fn:expr, $($args:expr),+) => {
         Ok(match &mut $value {
-            JsValue::Alternatives { total_nodes: _, values: list }
+            JsValue::Alternatives { total_nodes: _, values: list, additional_property: _ }
             | JsValue::Concat(_, list)
             | JsValue::Add(_, list)
             | JsValue::Logical(_, _, list)
@@ -2561,6 +2618,7 @@ impl JsValue {
             JsValue::Alternatives {
                 total_nodes: _,
                 values: list,
+                additional_property: _,
             }
             | JsValue::Concat(_, list)
             | JsValue::Add(_, list)
@@ -2799,6 +2857,7 @@ impl JsValue {
             JsValue::Alternatives {
                 total_nodes: _,
                 values: list,
+                additional_property: _,
             }
             | JsValue::Concat(_, list)
             | JsValue::Add(_, list)
@@ -2893,6 +2952,7 @@ impl JsValue {
         if let JsValue::Alternatives {
             total_nodes: c,
             values,
+            additional_property: _,
         } = self
         {
             if !values.contains(&v) {
@@ -2904,6 +2964,7 @@ impl JsValue {
             *self = JsValue::Alternatives {
                 total_nodes: 1 + l.total_nodes() + v.total_nodes(),
                 values: vec![l, v],
+                additional_property: None,
             };
         }
     }
@@ -2918,6 +2979,7 @@ impl JsValue {
             JsValue::Alternatives {
                 total_nodes: _,
                 values,
+                additional_property: _,
             } => {
                 if values.len() == 1 {
                     *self = take(&mut values[0]);
@@ -2928,6 +2990,7 @@ impl JsValue {
                             JsValue::Alternatives {
                                 total_nodes: _,
                                 values,
+                                additional_property: _,
                             } => {
                                 for v in values {
                                     set.insert(SimilarJsValue(v));
@@ -3106,12 +3169,14 @@ impl JsValue {
                 JsValue::Alternatives {
                     total_nodes: lc,
                     values: l,
+                    additional_property: lp,
                 },
                 JsValue::Alternatives {
                     total_nodes: rc,
                     values: r,
+                    additional_property: rp,
                 },
-            ) => lc == rc && all_similar(l, r, depth - 1),
+            ) => lc == rc && all_similar(l, r, depth - 1) && lp == rp,
             (JsValue::FreeVar(l), JsValue::FreeVar(r)) => l == r,
             (JsValue::Variable(l), JsValue::Variable(r)) => l == r,
             (JsValue::Concat(lc, l), JsValue::Concat(rc, r)) => {
@@ -3210,6 +3275,7 @@ impl JsValue {
             | JsValue::Alternatives {
                 total_nodes: _,
                 values: v,
+                additional_property: _,
             }
             | JsValue::Concat(_, v)
             | JsValue::Add(_, v)

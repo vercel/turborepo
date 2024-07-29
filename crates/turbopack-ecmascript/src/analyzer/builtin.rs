@@ -105,6 +105,7 @@ pub fn replace_builtin(value: &mut JsValue) -> bool {
             JsValue::Alternatives {
                 total_nodes: _,
                 values,
+                additional_property: _,
             } => {
                 *value = JsValue::alternatives(
                     take(values)
@@ -163,6 +164,7 @@ pub fn replace_builtin(value: &mut JsValue) -> bool {
                     JsValue::Alternatives {
                         total_nodes: _,
                         values,
+                        additional_property: _,
                     } => {
                         *value = JsValue::alternatives(
                             take(values)
@@ -306,6 +308,7 @@ pub fn replace_builtin(value: &mut JsValue) -> bool {
                     JsValue::Alternatives {
                         total_nodes: _,
                         values,
+                        additional_property: _,
                     } => {
                         *value = JsValue::alternatives(
                             take(values)
@@ -407,6 +410,7 @@ pub fn replace_builtin(value: &mut JsValue) -> bool {
                 JsValue::Alternatives {
                     total_nodes: _,
                     values,
+                    additional_property: _,
                 } => {
                     *value = JsValue::alternatives(
                         take(values)
@@ -454,6 +458,7 @@ pub fn replace_builtin(value: &mut JsValue) -> bool {
             box JsValue::Alternatives {
                 total_nodes: _,
                 values,
+                additional_property: _,
             },
             ref mut args,
         ) => {
