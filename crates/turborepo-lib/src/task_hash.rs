@@ -366,7 +366,7 @@ impl<'a> TaskHasher<'a> {
         let external_deps_hash =
             is_monorepo.then(|| get_external_deps_hash(&workspace.transitive_dependencies));
 
-        if hashable_env_pairs.len() > 0 {
+        if !hashable_env_pairs.is_empty() {
             debug!(
                 "task hash env vars for {}:{}\n vars: {:?}",
                 task_id.package(),
