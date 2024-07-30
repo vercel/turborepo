@@ -956,7 +956,7 @@ impl ExecContext {
         // Even if user does not have the TUI and cannot interact with a task, we keep
         // stdin open for persistent tasks as some programs will shut down if stdin is
         // closed.
-        if !self.takes_input {
+        if !self.takes_input && !self.manager.closing_stdin_ends_process() {
             process.stdin();
         }
 
