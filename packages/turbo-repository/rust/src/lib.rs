@@ -7,9 +7,7 @@ use napi::Error;
 use napi_derive::napi;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 use turborepo_repository::{
-    change_mapper::{
-        AllPackageChangeReason, ChangeMapper, DefaultPackageChangeMapper, PackageChanges,
-    },
+    change_mapper::{ChangeMapper, DefaultPackageChangeMapper, PackageChanges},
     inference::RepoState as WorkspaceState,
     package_graph::{PackageGraph, PackageName, PackageNode, WorkspacePackage, ROOT_PKG_NAME},
 };
