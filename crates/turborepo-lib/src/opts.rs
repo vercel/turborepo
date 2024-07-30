@@ -254,7 +254,7 @@ impl<'a> TryFrom<OptsInputs<'a>> for RunOpts {
             continue_on_error: inputs.execution_args.continue_execution,
             pass_through_args: inputs.execution_args.pass_through_args.clone(),
             only: inputs.execution_args.only,
-            daemon: inputs.run_args.daemon(),
+            daemon: inputs.config.daemon(),
             single_package: inputs.execution_args.single_package,
             graph,
             dry_run: inputs.run_args.dry_run,
@@ -465,13 +465,13 @@ mod test {
             only: opts_input.only,
             dry_run: opts_input.dry_run,
             graph: None,
-            daemon: None,
             single_package: false,
             log_prefix: crate::opts::ResolvedLogPrefix::Task,
             log_order: crate::opts::ResolvedLogOrder::Stream,
             summarize: None,
             experimental_space_id: None,
             is_github_actions: false,
+            daemon: None,
         };
         let cache_opts = CacheOpts::default();
         let runcache_opts = RunCacheOpts::default();
