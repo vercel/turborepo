@@ -120,7 +120,7 @@ mod tests {
 
     use super::{DefaultPackageChangeMapper, GlobalDepsPackageChangeMapper};
     use crate::{
-        change_mapper::{ChangeMapper, PackageChanges},
+        change_mapper::{AllPackageChangeReason, ChangeMapper, PackageChanges},
         discovery,
         discovery::PackageDiscovery,
         package_graph::{PackageGraphBuilder, WorkspacePackage},
