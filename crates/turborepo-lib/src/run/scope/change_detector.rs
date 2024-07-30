@@ -66,6 +66,7 @@ impl<'a> ScopeChangeDetector<'a> {
             changed_files,
             &lockfile_path,
         ) {
+            debug!("lockfile did not change");
             return None;
         }
 
@@ -99,15 +100,24 @@ impl<'a> GitChangeDetector for ScopeChangeDetector<'a> {
             .change_mapper
             .changed_packages(changed_files, lockfile_contents)?
         {
-            PackageChanges::All => Ok(self
-                .pkg_graph
-                .packages()
-                .map(|(name, _)| name.to_owned())
-                .collect()),
-            PackageChanges::Some(packages) => Ok(packages
-                .iter()
-                .map(|package| package.name.to_owned())
-                .collect()),
+            PackageChanges::All => {
+                debug!("all packages changed");
+                Ok(self
+                    .pkg_graph
+                    .packages()
+                    .map(|(name, _)| name.to_owned())
+                    .collect())
+            }
+            PackageChanges::Some(packages) => {
+                debug!(
+                    "determined {} packages changed: {packages:?}",
+                    packages.len()
+                );
+                Ok(packages
+                    .iter()
+                    .map(|package| package.name.to_owned())
+                    .collect())
+            }
         }
     }
 }
