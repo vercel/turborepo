@@ -57,3 +57,22 @@ Run build with invalid env var
   
   [1]
 
+Confirm that the daemon is not configured
+  $ ${TURBO} config | jq .daemon
+  null
+
+Add env var: `TURBO_DAEMON=true`
+  $ TURBO_DAEMON=true ${TURBO} config | jq .daemon
+  true
+
+Add env var: `TURBO_DAEMON=false`
+  $ TURBO_DAEMON=false ${TURBO} config | jq .daemon
+  false
+
+Add flag: `--daemon`
+  $ ${TURBO} --daemon config | jq .daemon
+  true
+
+Add flag: `--no-daemon`
+  $ ${TURBO} --no-daemon config | jq .daemon
+  false
