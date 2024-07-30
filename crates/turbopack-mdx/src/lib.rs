@@ -189,20 +189,22 @@ impl MdxTransformedAsset {
             Err(err) => {
                 let loc = Vc::cell(err.place.map(|p| {
                     let (start, end) = match *p {
+                        // markdown's positions are 1-indexed, SourcePos is 0-indexed.
+                        // Both end positions point to the first character after the range
                         markdown::message::Place::Position(p) => (
                             SourcePos {
-                                line: p.start.line,
-                                column: p.start.column,
+                                line: p.start.line - 1,
+                                column: p.start.column - 1,
                             },
                             SourcePos {
-                                line: p.end.line,
-                                column: p.end.column,
+                                line: p.end.line - 1,
+                                column: p.end.column - 1,
                             },
                         ),
                         markdown::message::Place::Point(p) => {
                             let p = SourcePos {
-                                line: p.line,
-                                column: p.column,
+                                line: p.line - 1,
+                                column: p.column - 1,
                             };
                             (p, p)
                         }
