@@ -71,7 +71,9 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
     ) -> Result<PackageChanges, ChangeMapError> {
         if Self::default_global_file_changed(&changed_files) {
             debug!("global file changed");
-            return Ok(PackageChanges::All(AllPackageChangeReason::DefaultGlobalFileChanged,));
+            return Ok(PackageChanges::All(
+                AllPackageChangeReason::DefaultGlobalFileChanged,
+            ));
         }
 
         // get filtered files and add the packages that contain them
@@ -86,7 +88,10 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
                         // if we run into issues, don't error, just assume all packages have changed
                         let Ok(lockfile_changes) = self.get_changed_packages_from_lockfile(content)
                         else {
-                            debug!("unable to determine lockfile changes, assuming all packages changed");
+                            debug!(
+                                "unable to determine lockfile changes, assuming all packages \
+                                 changed"
+                            );
                             return Ok(PackageChanges::All(
                                 AllPackageChangeReason::LockfileChangeDetectionFailed,
                             ));
@@ -101,10 +106,12 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
                     }
 
                     // We don't have the actual contents, so just invalidate everything
-                    Some(LockfileChange::Empty) => Ok(PackageChanges::All(
+                    Some(LockfileChange::Empty) => {
                         debug!("no previous lockfile available, assuming all packages changed");
-                        AllPackageChangeReason::LockfileChangedWithoutDetails,
-                    )),
+                        Ok(PackageChanges::All(
+                            AllPackageChangeReason::LockfileChangedWithoutDetails,
+                        ))
+                    }
                     None => Ok(PackageChanges::Some(changed_pkgs)),
                 }
             }
