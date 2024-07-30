@@ -442,7 +442,7 @@ impl CodeGenerateable for EsmExports {
                 EsmExport::LocalBinding(name, mutable) => {
                     if *mutable {
                         Some(quote!(
-                            "([() => $local, (v) => $local = v])" as Expr,
+                            "([() => $local, (____v) => $local = ____v])" as Expr,
                             local = Ident::new((name as &str).into(), DUMMY_SP)
                         ))
                     } else {
