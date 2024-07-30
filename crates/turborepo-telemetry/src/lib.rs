@@ -21,7 +21,7 @@ use tokio::{
     sync::{mpsc, oneshot},
     task::{JoinError, JoinHandle},
 };
-use tracing::{debug, error};
+use tracing::{debug, error, trace};
 use turborepo_api_client::telemetry;
 use turborepo_ui::{color, BOLD, GREY, UI};
 use uuid::Uuid;
@@ -203,15 +203,15 @@ impl<C: telemetry::TelemetryClient + Clone + Send + Sync + 'static> Worker<C> {
     pub fn flush_events(&mut self) {
         if !self.buffer.is_empty() {
             let events = std::mem::take(&mut self.buffer);
-            debug!(
-                "Starting telemetry event queue flush (num_events={:?})",
-                events.len()
-            );
+            let num_events = events.len();
             let handle = self.send_events(events);
             if let Some(handle) = handle {
                 self.senders.push(handle);
             }
-            debug!("Done telemetry event queue flush");
+            trace!(
+                "Flushed telemetry event queue (num_events={:?})",
+                num_events
+            );
         }
     }
 
