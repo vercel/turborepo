@@ -78,12 +78,10 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
         let filtered_changed_files = self.filter_ignored_files(changed_files.iter())?;
 
         match self.get_changed_packages(filtered_changed_files.into_iter()) {
-            PackageChanges::All(reason) => {
-                return Ok(PackageChanges::All(reason));
-            }
+            PackageChanges::All(reason) => Ok(PackageChanges::All(reason)),
 
             PackageChanges::Some(mut changed_pkgs) => {
-                return match lockfile_change {
+                match lockfile_change {
                     Some(LockfileChange::WithContent(content)) => {
                         // if we run into issues, don't error, just assume all packages have changed
                         let Ok(lockfile_changes) = self.get_changed_packages_from_lockfile(content)
@@ -108,9 +106,9 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
                         AllPackageChangeReason::LockfileChangedWithoutDetails,
                     )),
                     None => Ok(PackageChanges::Some(changed_pkgs)),
-                };
+                }
             }
-        };
+        }
     }
 
     fn filter_ignored_files<'b>(
