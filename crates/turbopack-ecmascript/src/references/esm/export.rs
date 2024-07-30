@@ -470,7 +470,7 @@ impl CodeGenerateable for EsmExports {
                         });
                         if *mutable {
                             quote!(
-                                "([() => $expr, (v) => $expr = v])" as Expr,
+                                "([() => $expr, (____v) => $expr = ____v])" as Expr,
                                 expr: Expr = expr,
                             )
                         } else {
