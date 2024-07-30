@@ -364,6 +364,7 @@ fn get_env_var_config(
         "allow_no_package_manager",
     );
     turbo_mapping.insert(OsString::from("turbo_daemon"), "daemon");
+    turbo_mapping.insert(OsString::from("turbo_env_mode"), "env_mode");
     turbo_mapping.insert(OsString::from("turbo_preflight"), "preflight");
 
     // We do not enable new config sources:
@@ -462,6 +463,15 @@ fn get_env_var_config(
         _ => None,
     });
 
+    let env_mode = output_map
+        .get("env_mode")
+        .map(|s| s.as_str())
+        .and_then(|s| match s {
+            "strict" => Some(EnvMode::Strict),
+            "loose" => Some(EnvMode::Loose),
+            _ => None,
+        });
+
     // We currently don't pick up a Spaces ID via env var, we likely won't
     // continue using the Spaces name, we can add an env var when we have the
     // name we want to stick with.
@@ -486,7 +496,7 @@ fn get_env_var_config(
         timeout,
         upload_timeout,
         spaces_id,
-        env_mode: None,
+        env_mode,
     };
 
     Ok(output)
@@ -793,9 +803,12 @@ mod test {
     use tempfile::TempDir;
     use turbopath::AbsoluteSystemPathBuf;
 
-    use crate::config::{
-        get_env_var_config, get_override_env_var_config, ConfigurationOptions,
-        TurborepoConfigBuilder, DEFAULT_API_URL, DEFAULT_LOGIN_URL, DEFAULT_TIMEOUT,
+    use crate::{
+        cli::EnvMode,
+        config::{
+            get_env_var_config, get_override_env_var_config, ConfigurationOptions,
+            TurborepoConfigBuilder, DEFAULT_API_URL, DEFAULT_LOGIN_URL, DEFAULT_TIMEOUT,
+        },
     };
 
     #[test]
@@ -854,6 +867,7 @@ mod test {
         assert_eq!(Some(true), config.ui);
         assert_eq!(Some(true), config.allow_no_package_manager);
         assert_eq!(Some(true), config.daemon);
+        assert_eq!(Some(EnvMode::Strict), config.env_mode);
     }
 
     #[test]
@@ -866,6 +880,7 @@ mod test {
         env.insert("turbo_token".into(), "".into());
         env.insert("turbo_ui".into(), "".into());
         env.insert("turbo_daemon".into(), "".into());
+        env.insert("turbo_env_mode".into(), "".into());
         env.insert("turbo_preflight".into(), "".into());
 
         let config = get_env_var_config(&env).unwrap();
@@ -876,6 +891,7 @@ mod test {
         assert_eq!(config.token(), None);
         assert_eq!(config.ui, None);
         assert_eq!(config.daemon, None);
+        assert_eq!(config.env_mode, None);
         assert!(!config.preflight());
     }
 
