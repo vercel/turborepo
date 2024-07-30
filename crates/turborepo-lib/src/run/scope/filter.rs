@@ -163,6 +163,7 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
     /// It applies the following rules:
     pub(crate) fn resolve(
         &self,
+        affected: &Option<(String, String)>,
         patterns: &[String],
     ) -> Result<(HashSet<PackageName>, bool), ResolutionError> {
         // inference is None only if we are in the root
@@ -176,7 +177,7 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
                 .map(|(name, _)| name.to_owned())
                 .collect()
         } else {
-            self.get_packages_from_patterns(patterns)?
+            self.get_packages_from_patterns(affected, patterns)?
         };
 
         Ok((filter_patterns, is_all_packages))
@@ -184,12 +185,24 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
 
     fn get_packages_from_patterns(
         &self,
+        affected: &Option<(String, String)>,
         patterns: &[String],
     ) -> Result<HashSet<PackageName>, ResolutionError> {
-        let selectors = patterns
+        let mut selectors = patterns
             .iter()
             .map(|pattern| TargetSelector::from_str(pattern))
             .collect::<Result<Vec<_>, _>>()?;
+
+        if let Some((from_ref, to_ref)) = affected {
+            selectors.push(TargetSelector {
+                git_range: Some(GitRange {
+                    from_ref: from_ref.to_string(),
+                    to_ref: Some(to_ref.to_string()),
+                    include_uncommitted: true,
+                }),
+                ..Default::default()
+            });
+        }
 
         self.get_filtered_packages(selectors)
     }
@@ -534,8 +547,11 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
         &self,
         git_range: &GitRange,
     ) -> Result<HashSet<PackageName>, ResolutionError> {
-        self.change_detector
-            .changed_packages(&git_range.from_ref, git_range.to_ref.as_deref())
+        self.change_detector.changed_packages(
+            &git_range.from_ref,
+            git_range.to_ref.as_deref(),
+            git_range.include_uncommitted,
+        )
     }
 
     fn match_package_names_to_vertices(

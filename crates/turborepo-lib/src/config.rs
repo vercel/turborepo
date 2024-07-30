@@ -213,6 +213,8 @@ pub struct ConfigurationOptions {
     pub(crate) daemon: Option<bool>,
     #[serde(rename = "envMode")]
     pub(crate) env_mode: Option<EnvMode>,
+    pub(crate) scm_base: Option<String>,
+    pub(crate) scm_head: Option<String>,
 }
 
 #[derive(Default)]
@@ -370,6 +372,8 @@ fn get_env_var_config(
     turbo_mapping.insert(OsString::from("turbo_daemon"), "daemon");
     turbo_mapping.insert(OsString::from("turbo_env_mode"), "env_mode");
     turbo_mapping.insert(OsString::from("turbo_preflight"), "preflight");
+    turbo_mapping.insert(OsString::from("turbo_scm_base"), "scm_base");
+    turbo_mapping.insert(OsString::from("turbo_scm_head"), "scm_head");
 
     // We do not enable new config sources:
     // turbo_mapping.insert(String::from("turbo_signature"), "signature"); // new
@@ -488,6 +492,8 @@ fn get_env_var_config(
         team_slug: output_map.get("team_slug").cloned(),
         team_id: output_map.get("team_id").cloned(),
         token: output_map.get("token").cloned(),
+        scm_base: output_map.get("scm_base").cloned(),
+        scm_head: output_map.get("scm_head").cloned(),
 
         // Processed booleans
         signature,
@@ -552,6 +558,8 @@ fn get_override_env_var_config(
         team_slug: None,
         team_id: output_map.get("team_id").cloned(),
         token: output_map.get("token").cloned(),
+        scm_base: None,
+        scm_head: None,
 
         signature: None,
         preflight: None,

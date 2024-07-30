@@ -26,9 +26,12 @@ impl SCM {
         turbo_root: &AbsoluteSystemPath,
         from_commit: &str,
         to_commit: Option<&str>,
+        include_uncommitted: bool,
     ) -> Result<HashSet<AnchoredSystemPathBuf>, Error> {
         match self {
-            Self::Git(git) => git.changed_files(turbo_root, from_commit, to_commit),
+            Self::Git(git) => {
+                git.changed_files(turbo_root, from_commit, to_commit, include_uncommitted)
+            }
             Self::Manual => Err(Error::GitRequired(turbo_root.to_owned())),
         }
     }
@@ -43,40 +46,6 @@ impl SCM {
             Self::Manual => Err(Error::GitRequired(file_path.to_owned())),
         }
     }
-}
-
-/// Finds the changed files in a repository between index and working directory
-/// (unstaged changes) and between two commits. Includes untracked files,
-/// i.e. files not yet in git.
-///
-/// We shell out to git instead of using a git2 library because git2 doesn't
-/// support shallow clones, and therefore errors on repositories that
-/// are shallow cloned.
-///
-/// # Arguments
-///
-/// * `repo_root`: The root of the repository. Guaranteed to be the root.
-/// * `commit_range`: If Some, the range of commits that should be searched for
-///   changes
-/// * `monorepo_root`: The path to which the results should be relative. Must be
-///   an absolute path
-///
-/// returns: Result<HashSet<String, RandomState>, Error>
-pub fn changed_files(
-    git_root: PathBuf,
-    turbo_root: PathBuf,
-    from_commit: &str,
-    to_commit: Option<&str>,
-) -> Result<HashSet<String>, Error> {
-    let git_root = AbsoluteSystemPath::from_std_path(&git_root)?;
-    let scm = SCM::new(git_root);
-
-    let turbo_root = AbsoluteSystemPathBuf::try_from(turbo_root.as_path())?;
-    let files = scm.changed_files(&turbo_root, from_commit, to_commit)?;
-    Ok(files
-        .into_iter()
-        .map(|f| f.to_string())
-        .collect::<HashSet<_>>())
 }
 
 impl Git {
@@ -97,6 +66,7 @@ impl Git {
         turbo_root: &AbsoluteSystemPath,
         from_commit: &str,
         to_commit: Option<&str>,
+        include_uncommitted: bool,
     ) -> Result<HashSet<AnchoredSystemPathBuf>, Error> {
         let turbo_root_relative_to_git_root = self.root.anchor(turbo_root)?;
         let pathspec = turbo_root_relative_to_git_root.as_str();
@@ -119,12 +89,13 @@ impl Git {
                 self.execute_git_command(&["diff", "--name-only", from_commit], pathspec)?;
 
             self.add_files_from_stdout(&mut files, turbo_root, output);
+        }
 
-            // We only care about non-tracked files if we haven't specified both ends up the
-            // comparison
+        // We only care about non-tracked files if we haven't specified both ends up the
+        // comparison or if we are using `--affected`
+        if include_uncommitted {
             let output = self
                 .execute_git_command(&["ls-files", "--others", "--exclude-standard"], pathspec)?;
-
             self.add_files_from_stdout(&mut files, turbo_root, output);
         }
 
@@ -221,7 +192,11 @@ pub fn previous_content(
 #[cfg(test)]
 mod tests {
     use std::{
-        assert_matches::assert_matches, collections::HashSet, fs, path::Path, process::Command,
+        assert_matches::assert_matches,
+        collections::HashSet,
+        fs,
+        path::{Path, PathBuf},
+        process::Command,
     };
 
     use git2::{Oid, Repository};
@@ -230,7 +205,7 @@ mod tests {
     use which::which;
 
     use super::previous_content;
-    use crate::{git::changed_files, Error};
+    use crate::{git::changed_files, Error, Git, SCM};
 
     fn setup_repository() -> Result<(TempDir, Repository), Error> {
         let repo_root = tempfile::tempdir()?;
@@ -242,7 +217,30 @@ mod tests {
         Ok((repo_root, repo))
     }
 
-    fn commit_file(repo: &Repository, path: &Path, previous_commit: Option<Oid>) -> Oid {
+
+    fn changed_files(
+        git_root: PathBuf,
+        turbo_root: PathBuf,
+        from_commit: &str,
+        to_commit: Option<&str>,
+        include_uncommitted: bool,
+    ) -> Result<HashSet<String>, Error> {
+        let git_root = AbsoluteSystemPath::from_std_path(&git_root)?;
+        let scm = SCM::new(git_root);
+
+        let turbo_root = AbsoluteSystemPathBuf::try_from(turbo_root.as_path())?;
+        let files = scm.changed_files(&turbo_root, from_commit, to_commit, include_uncommitted)?;
+        Ok(files
+            .into_iter()
+            .map(|f| f.to_string())
+            .collect::<HashSet<_>>())
+    }
+
+    fn commit_file(
+        repo: &Repository,
+        path: &Path,
+        previous_commit: Option<Oid>,
+    ) -> Oid {
         let mut index = repo.index().unwrap();
         index.add_path(path).unwrap();
         let tree_oid = index.write_tree().unwrap();

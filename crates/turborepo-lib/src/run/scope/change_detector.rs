@@ -19,6 +19,7 @@ pub trait GitChangeDetector {
         &self,
         from_ref: &str,
         to_ref: Option<&str>,
+        include_uncommitted: bool,
     ) -> Result<HashSet<PackageName>, ResolutionError>;
 }
 
@@ -88,10 +89,13 @@ impl<'a> GitChangeDetector for ScopeChangeDetector<'a> {
         &self,
         from_ref: &str,
         to_ref: Option<&str>,
+        include_uncommitted: bool,
     ) -> Result<HashSet<PackageName>, ResolutionError> {
         let mut changed_files = HashSet::new();
         if !from_ref.is_empty() {
-            changed_files = self.scm.changed_files(self.turbo_root, from_ref, to_ref)?;
+            changed_files =
+                self.scm
+                    .changed_files(self.turbo_root, from_ref, to_ref, include_uncommitted)?;
         }
 
         let lockfile_contents = self.get_lockfile_contents(from_ref, &changed_files);
