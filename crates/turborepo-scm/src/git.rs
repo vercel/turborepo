@@ -110,7 +110,7 @@ impl Git {
             .map_err(|e| {
                 match e {
                     // `git merge base` doesn't return an error smh
-                    Error::Git(message, backtrace) if message == "" => Error::Git(
+                    Error::Git(message, backtrace) if message.is_empty() => Error::Git(
                         format!(
                             "no common commit (merge base) found between {} and {}",
                             base, head
