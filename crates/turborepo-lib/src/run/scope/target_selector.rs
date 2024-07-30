@@ -9,6 +9,10 @@ pub struct GitRange {
     pub from_ref: String,
     pub to_ref: Option<String>,
     pub include_uncommitted: bool,
+    // Allow unknown objects to be included in the range, without returning an error.
+    // this is useful for shallow clones where objects may not exist.
+    // When this happens, we assume that everything has changed.
+    pub allow_unknown_objects: bool,
 }
 
 #[derive(Debug, Default, PartialEq)]
@@ -154,6 +158,7 @@ impl FromStr for TargetSelector {
                     from_ref: a.to_string(),
                     to_ref: Some(b.to_string()),
                     include_uncommitted: false,
+                    allow_unknown_objects: false,
                 }
             } else {
                 // If only the start of the range is specified, we assume that
@@ -162,6 +167,7 @@ impl FromStr for TargetSelector {
                     from_ref: commits_str.to_string(),
                     to_ref: None,
                     include_uncommitted: true,
+                    allow_unknown_objects: false,
                 }
             };
             Some(git_range)

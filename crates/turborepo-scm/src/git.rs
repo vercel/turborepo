@@ -1,10 +1,16 @@
 use std::{backtrace::Backtrace, collections::HashSet, path::PathBuf, process::Command};
 
+use tracing::log::warn;
 use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeUnixPath,
 };
 
 use crate::{Error, Git, SCM};
+
+pub enum ChangedFiles {
+    All,
+    Some(HashSet<AnchoredSystemPathBuf>),
+}
 
 impl SCM {
     pub fn get_current_branch(&self, path: &AbsoluteSystemPath) -> Result<String, Error> {
@@ -27,10 +33,21 @@ impl SCM {
         from_commit: &str,
         to_commit: Option<&str>,
         include_uncommitted: bool,
-    ) -> Result<HashSet<AnchoredSystemPathBuf>, Error> {
+        allow_unknown_objects: bool,
+    ) -> Result<ChangedFiles, Error> {
         match self {
             Self::Git(git) => {
-                git.changed_files(turbo_root, from_commit, to_commit, include_uncommitted)
+                match git.changed_files(turbo_root, from_commit, to_commit, include_uncommitted) {
+                    Ok(files) => Ok(ChangedFiles::Some(files)),
+                    Err(e) if allow_unknown_objects => {
+                        warn!(
+                            "unable to detect git range, assuming all files have changed: {}",
+                            e
+                        );
+                        Ok(ChangedFiles::All)
+                    }
+                    Err(e) => Err(e),
+                }
             }
             Self::Manual => Err(Error::GitRequired(turbo_root.to_owned())),
         }

@@ -167,7 +167,7 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
         patterns: &[String],
     ) -> Result<(HashSet<PackageName>, bool), ResolutionError> {
         // inference is None only if we are in the root
-        let is_all_packages = patterns.is_empty() && self.inference.is_none();
+        let is_all_packages = patterns.is_empty() && self.inference.is_none() && affected.is_none();
 
         let filter_patterns = if is_all_packages {
             // return all packages in the workspace
@@ -199,6 +199,7 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
                     from_ref: from_ref.to_string(),
                     to_ref: Some(to_ref.to_string()),
                     include_uncommitted: true,
+                    allow_unknown_objects: true,
                 }),
                 ..Default::default()
             });
@@ -551,6 +552,7 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
             &git_range.from_ref,
             git_range.to_ref.as_deref(),
             git_range.include_uncommitted,
+            git_range.allow_unknown_objects,
         )
     }
 
@@ -637,9 +639,7 @@ mod test {
     };
 
     use super::{FilterResolver, PackageInference, TargetSelector};
-    use crate::run::scope::{
-        change_detector::GitChangeDetector, target_selector::GitRange, ResolutionError,
-    };
+    use crate::run::scope::{change_detector::GitChangeDetector, ResolutionError};
 
     fn get_name(name: &str) -> (Option<&str>, &str) {
         if let Some(idx) = name.rfind('/') {
@@ -1250,6 +1250,7 @@ mod test {
             &self,
             from: &str,
             to: Option<&str>,
+            _include_uncommitted: bool,
         ) -> Result<HashSet<PackageName>, ResolutionError> {
             Ok(self
                 .0
