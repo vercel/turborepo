@@ -80,12 +80,12 @@ Add flag: `--no-daemon`
 
 Confirm that the envMode is `strict` by default
   $ ${TURBO} config | jq .envMode
-  strict
+  "strict"
 
 Add env var: `TURBO_ENV_MODE=loose`
   $ TURBO_ENV_MODE=loose ${TURBO} config | jq .envMode
-  loose
+  "loose"
 
 Add flag: `--env-mode=loose`
   $ ${TURBO} --env-mode=loose config | jq .envMode
-  loose
+  "loose"
