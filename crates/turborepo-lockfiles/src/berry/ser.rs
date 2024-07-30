@@ -157,9 +157,9 @@ where
         for (i, (setting, field)) in settings.iter().enumerate() {
             if let Some(value) = setting {
                 string.push_str(&format!("      {}: {}", wrap_string(field), value));
-            }
-            if i < settings.len() - 1 {
-                string.push('\n');
+                if i < settings.len() - 1 {
+                    string.push('\n');
+                }
             }
         }
 
