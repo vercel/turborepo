@@ -25,3 +25,11 @@ Bad flag with an implied run command should display run flags
   
   [1]
 
+Cannot use run args before and after run
+  $ ${TURBO} --filter=web run build
+  error: cannot specify run arguments before and after 'run' subcommand
+  
+  Usage: turbo [OPTIONS] [COMMAND]
+  
+  For more information, try '--help'.
+  [2]

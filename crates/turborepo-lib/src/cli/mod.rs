@@ -328,6 +328,14 @@ impl Args {
 
         let mut clap_args = match Args::try_parse_from(single_package_free) {
             Ok(mut args) => {
+                if args.multiple_execution_args() {
+                    let mut cmd = Args::command();
+                    cmd.error(
+                        clap::error::ErrorKind::ArgumentConflict,
+                        "cannot specify run arguments before and after 'run' subcommand",
+                    )
+                    .exit();
+                }
                 // And then only add them back in when we're in `run`.
                 // The value can appear in two places in the struct.
                 // We defensively attempt to set both.
@@ -437,6 +445,10 @@ impl Args {
                 turborepo_telemetry::events::EventType::NonSensitive,
             );
         }
+    }
+
+    fn multiple_execution_args(&self) -> bool {
+        matches!(self.command.as_ref(), Some(Command::Run { .. })) && self.execution_args.is_some()
     }
 }
 
@@ -2558,5 +2570,17 @@ mod test {
             .unwrap()
             .dangerously_disable_package_manager_check
         );
+    }
+
+    #[test]
+    fn test_filter_before_run() {
+        let filter_before_run =
+            Args::try_parse_from(["turbo", "--filter", "foo", "run", "build"]).unwrap();
+        let filter_after_run =
+            Args::try_parse_from(["turbo", "run", "--filter", "foo", "build"]).unwrap();
+        let no_run = Args::try_parse_from(["turbo", "--filter", "foo", "build"]).unwrap();
+        assert!(!filter_after_run.multiple_execution_args());
+        assert!(!no_run.multiple_execution_args());
+        assert!(filter_before_run.multiple_execution_args());
     }
 }
