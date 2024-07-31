@@ -222,7 +222,7 @@ fn collect_idents(pat: &Pat, idents: &mut Vec<Ident>) {
             for prop in props.iter() {
                 match prop {
                     ObjectPatProp::KeyValue(KeyValuePatProp { value, .. }) => {
-                        collect_idents(&value, idents);
+                        collect_idents(value, idents);
                     }
                     ObjectPatProp::Assign(AssignPatProp { key, .. }) => {
                         idents.push(key.id.clone());
