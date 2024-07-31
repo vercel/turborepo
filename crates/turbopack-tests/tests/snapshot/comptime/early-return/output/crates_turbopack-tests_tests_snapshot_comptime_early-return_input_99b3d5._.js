@@ -143,6 +143,15 @@ class K {
         }
         n5();
     };
+    o() {
+        if (something) {
+            __turbopack_require__("[project]/crates/turbopack-tests/tests/snapshot/comptime/early-return/input/module.js [test] (ecmascript)");
+            return;
+        } else {
+            __turbopack_require__("[project]/crates/turbopack-tests/tests/snapshot/comptime/early-return/input/module.js [test] (ecmascript)");
+            return;
+        }
+    }
 }
 z1();
 return;

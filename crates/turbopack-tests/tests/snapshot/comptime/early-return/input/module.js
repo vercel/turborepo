@@ -147,6 +147,16 @@ class K {
     }
     n5();
   };
+
+  o() {
+    if (something) {
+      require("./module");
+      return;
+    } else {
+      require("./module");
+      return;
+    }
+  }
 }
 
 z1();

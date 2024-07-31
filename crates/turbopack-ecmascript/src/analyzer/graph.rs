@@ -1979,12 +1979,6 @@ impl<'a> Analyzer<'a> {
             return;
         }
         match (early_return_when_true, early_return_when_false) {
-            (true, true) => {
-                self.early_return_stack.push(EarlyReturn::Always {
-                    prev_effects: take(&mut self.effects),
-                    start_ast_path: as_parent_path(ast_path),
-                });
-            }
             (true, false) => {
                 self.early_return_stack.push(EarlyReturn::Conditional {
                     prev_effects: take(&mut self.effects),
@@ -2011,7 +2005,7 @@ impl<'a> Analyzer<'a> {
                     early_return_condition_value: false,
                 });
             }
-            (false, false) => {
+            (false, false) | (true, true) => {
                 let kind = match (then, r#else) {
                     (Some(then), Some(r#else)) => ConditionalKind::IfElse { then, r#else },
                     (Some(then), None) => ConditionalKind::If { then },
@@ -2025,6 +2019,12 @@ impl<'a> Analyzer<'a> {
                     span,
                     in_try: is_in_try(ast_path),
                 });
+                if early_return_when_false && early_return_when_true {
+                    self.early_return_stack.push(EarlyReturn::Always {
+                        prev_effects: take(&mut self.effects),
+                        start_ast_path: as_parent_path(ast_path),
+                    });
+                }
             }
         }
     }
