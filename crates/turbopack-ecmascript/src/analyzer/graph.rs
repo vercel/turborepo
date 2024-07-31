@@ -1850,8 +1850,8 @@ impl VisitAstPath for Analyzer<'_> {
             ast_path,
             AstParentKind::IfStmt(IfStmtField::Test),
             stmt.span(),
-            (!then.is_empty()).then(|| then),
-            r#else.and_then(|block| (!block.is_empty()).then(|| block)),
+            (!then.is_empty()).then_some(then),
+            r#else.and_then(|block| (!block.is_empty()).then_some(block)),
             then_returning,
             else_returning,
         );
