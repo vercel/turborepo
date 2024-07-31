@@ -244,16 +244,6 @@ impl BrowserChunkingContext {
 #[turbo_tasks::value_impl]
 impl ChunkingContext for BrowserChunkingContext {
     #[turbo_tasks::function]
-    async fn chunk_item_id_from_ident(
-        self: Vc<Self>,
-        ident: Vc<AssetIdent>,
-    ) -> Result<Vc<ModuleId>> {
-        let this = self.await?;
-        dbg!(this.global_information.dbg().await?);
-        Ok(ModuleId::String(ident.to_string().await?.clone_value()).cell())
-    }
-
-    #[turbo_tasks::function]
     fn name(&self) -> Vc<RcStr> {
         if let Some(name) = &self.name {
             Vc::cell(name.clone())
@@ -523,5 +513,10 @@ impl ChunkingContext for BrowserChunkingContext {
         } else {
             self.chunk_item_id_from_ident(AsyncLoaderModule::asset_ident_for(module))
         })
+    }
+
+    #[turbo_tasks::function]
+    async fn global_information(self: Vc<Self>) -> Result<Vc<OptionGlobalInformation>> {
+        Ok(self.await?.global_information)
     }
 }

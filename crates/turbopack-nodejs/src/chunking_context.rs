@@ -2,7 +2,7 @@ use std::iter::once;
 
 use anyhow::{bail, Context, Result};
 use tracing::Instrument;
-use turbo_tasks::{debug::ValueDebug, RcStr, Value, ValueToString, Vc};
+use turbo_tasks::{RcStr, Value, ValueToString, Vc};
 use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::{
     chunk::{
@@ -136,16 +136,6 @@ impl NodeJsChunkingContext {
 
 #[turbo_tasks::value_impl]
 impl NodeJsChunkingContext {
-    #[turbo_tasks::function]
-    async fn chunk_item_id_from_ident(
-        self: Vc<Self>,
-        ident: Vc<AssetIdent>,
-    ) -> Result<Vc<ModuleId>> {
-        let this = self.await?;
-        dbg!(this.global_information.dbg().await?);
-        Ok(ModuleId::String(ident.to_string().await?.clone_value()).cell())
-    }
-
     #[turbo_tasks::function]
     fn new(this: Value<NodeJsChunkingContext>) -> Vc<Self> {
         this.into_value().cell()
@@ -394,5 +384,10 @@ impl ChunkingContext for NodeJsChunkingContext {
         } else {
             self.chunk_item_id_from_ident(AsyncLoaderModule::asset_ident_for(module))
         })
+    }
+
+    #[turbo_tasks::function]
+    async fn global_information(self: Vc<Self>) -> Result<Vc<OptionGlobalInformation>> {
+        Ok(self.await?.global_information)
     }
 }
