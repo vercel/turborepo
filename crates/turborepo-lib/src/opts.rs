@@ -319,8 +319,8 @@ impl<'a> TryFrom<OptsInputs<'a>> for ScopeOpts {
             .transpose()?;
 
         let affected_range = inputs.execution_args.affected.then(|| {
-            let scm_base = inputs.config.scm_base.as_deref().unwrap_or("main");
-            let scm_head = inputs.config.scm_head.as_deref().unwrap_or("HEAD");
+            let scm_base = inputs.config.scm_base();
+            let scm_head = inputs.config.scm_head();
             (scm_base.to_string(), scm_head.to_string())
         });
 

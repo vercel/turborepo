@@ -5,12 +5,10 @@ Create a new branch
   $ git checkout -b my-branch
   Switched to a new branch 'my-branch'
 
-Edit and commit a file that affects `my-app`
+Edit a file that affects `my-app`
   $ echo "foo" >> apps/my-app/index.js
-  $ git add .
-  $ git commit -m "add foo" --quiet
 
-Validate that we only run `my-app#build`
+Validate that we only run `my-app#build` with change not committed
   $ ${TURBO} run build --affected --log-order grouped
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
@@ -26,6 +24,57 @@ Validate that we only run `my-app#build`
   Cached:    0 cached, 1 total
     Time:\s*[\.0-9]+m?s  (re)
   
+
+
+Commit the change
+  $ git add .
+  $ git commit -m "add foo" --quiet
+
+Validate that we only run `my-app#build` with change committed
+  $ ${TURBO} run build --affected --log-order grouped
+  \xe2\x80\xa2 Packages in scope: my-app (esc)
+  \xe2\x80\xa2 Running build in 1 packages (esc)
+  \xe2\x80\xa2 Remote caching disabled (esc)
+  my-app:build: cache hit, replaying logs 97b34acb6e848096
+  my-app:build: 
+  my-app:build: > build
+  my-app:build: > echo building
+  my-app:build: 
+  my-app:build: building
+  
+   Tasks:    1 successful, 1 total
+  Cached:    1 cached, 1 total
+    Time:\s*[\.0-9]+m?s >>> FULL TURBO (re)
+  
+
+
+Override the SCM base to be HEAD, so nothing runs
+  $ TURBO_SCM_BASE="HEAD" ${TURBO} run build --affected --log-order grouped
+  \xe2\x80\xa2 Packages in scope:  (esc)
+  \xe2\x80\xa2 Running build in 0 packages (esc)
+  \xe2\x80\xa2 Remote caching disabled (esc)
+  
+  No tasks were executed as part of this run.
+  
+   Tasks:    0 successful, 0 total
+  Cached:    0 cached, 0 total
+    Time:\s*[\.0-9]+m?s  (re)
+  
+
+Override the SCM head to be main, so nothing runs
+  $ TURBO_SCM_HEAD="main" ${TURBO} run build --affected --log-order grouped
+  \xe2\x80\xa2 Packages in scope:  (esc)
+  \xe2\x80\xa2 Running build in 0 packages (esc)
+  \xe2\x80\xa2 Remote caching disabled (esc)
+  
+  No tasks were executed as part of this run.
+  
+   Tasks:    0 successful, 0 total
+  Cached:    0 cached, 0 total
+    Time:\s*[\.0-9]+m?s  (re)
+  
+
+
 
 
 Now do some magic to change the repo to be shallow
@@ -59,5 +108,3 @@ Now try running `--affected` again, we should run all tasks
   Cached:    1 cached, 2 total
     Time:\s*[\.0-9]+m?s  (re)
   
-
-

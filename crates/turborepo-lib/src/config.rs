@@ -286,6 +286,14 @@ impl ConfigurationOptions {
         self.ui.unwrap_or(UIMode::Stream)
     }
 
+    pub fn scm_base(&self) -> &str {
+        self.scm_base.as_deref().unwrap_or("main")
+    }
+
+    pub fn scm_head(&self) -> &str {
+        self.scm_head.as_deref().unwrap_or("HEAD")
+    }
+
     pub fn allow_no_package_manager(&self) -> bool {
         self.allow_no_package_manager.unwrap_or_default()
     }
@@ -800,6 +808,12 @@ impl TurborepoConfigBuilder {
                     }
                     if let Some(env_mode) = current_source_config.env_mode {
                         acc.env_mode = Some(env_mode);
+                    }
+                    if let Some(scm_base) = current_source_config.scm_base {
+                        acc.scm_base = Some(scm_base);
+                    }
+                    if let Some(scm_head) = current_source_config.scm_head {
+                        acc.scm_head = Some(scm_head);
                     }
 
                     acc
