@@ -29,6 +29,10 @@ function a() {
     let a10;
     let a11;
     let a12, a15, a17, a18, a19;
+    function a20() {
+        return;
+        "TURBOPACK unreachable";
+    }
 }
 function b() {
     if ("TURBOPACK compile-time truthy", 1) {

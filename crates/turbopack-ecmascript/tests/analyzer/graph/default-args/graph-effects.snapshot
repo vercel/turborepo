@@ -10,96 +10,6 @@
             ),
             Module(
                 Body(
-                    1,
-                ),
-            ),
-            ModuleItem(
-                Stmt,
-            ),
-            Stmt(
-                Decl,
-            ),
-            Decl(
-                Fn,
-            ),
-            FnDecl(
-                Function,
-            ),
-            Function(
-                Params(
-                    0,
-                ),
-            ),
-            Param(
-                Pat,
-            ),
-            Pat(
-                Object,
-            ),
-            ObjectPat(
-                Props(
-                    0,
-                ),
-            ),
-            ObjectPatProp(
-                Assign,
-            ),
-            AssignPatProp(
-                Value,
-            ),
-            Expr(
-                Ident,
-            ),
-        ],
-        span: 62..67#2,
-        in_try: false,
-    },
-    Unreachable {
-        start_ast_path: [
-            Program(
-                Module,
-            ),
-            Module(
-                Body(
-                    1,
-                ),
-            ),
-            ModuleItem(
-                Stmt,
-            ),
-            Stmt(
-                Decl,
-            ),
-            Decl(
-                Fn,
-            ),
-            FnDecl(
-                Function,
-            ),
-            Function(
-                Body,
-            ),
-            BlockStmt(
-                Stmts(
-                    0,
-                ),
-            ),
-            Stmt(
-                Return,
-            ),
-        ],
-    },
-    ImportedBinding {
-        esm_reference_index: 1,
-        export: Some(
-            "named",
-        ),
-        ast_path: [
-            Program(
-                Module,
-            ),
-            Module(
-                Body(
                     2,
                 ),
             ),
@@ -184,6 +94,96 @@
             ),
             BlockStmtOrExpr(
                 BlockStmt,
+            ),
+            BlockStmt(
+                Stmts(
+                    0,
+                ),
+            ),
+            Stmt(
+                Return,
+            ),
+        ],
+    },
+    ImportedBinding {
+        esm_reference_index: 1,
+        export: Some(
+            "named",
+        ),
+        ast_path: [
+            Program(
+                Module,
+            ),
+            Module(
+                Body(
+                    1,
+                ),
+            ),
+            ModuleItem(
+                Stmt,
+            ),
+            Stmt(
+                Decl,
+            ),
+            Decl(
+                Fn,
+            ),
+            FnDecl(
+                Function,
+            ),
+            Function(
+                Params(
+                    0,
+                ),
+            ),
+            Param(
+                Pat,
+            ),
+            Pat(
+                Object,
+            ),
+            ObjectPat(
+                Props(
+                    0,
+                ),
+            ),
+            ObjectPatProp(
+                Assign,
+            ),
+            AssignPatProp(
+                Value,
+            ),
+            Expr(
+                Ident,
+            ),
+        ],
+        span: 62..67#2,
+        in_try: false,
+    },
+    Unreachable {
+        start_ast_path: [
+            Program(
+                Module,
+            ),
+            Module(
+                Body(
+                    1,
+                ),
+            ),
+            ModuleItem(
+                Stmt,
+            ),
+            Stmt(
+                Decl,
+            ),
+            Decl(
+                Fn,
+            ),
+            FnDecl(
+                Function,
+            ),
+            Function(
+                Body,
             ),
             BlockStmt(
                 Stmts(

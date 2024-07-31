@@ -24,6 +24,10 @@ export function a() {
     },
     ...a19
   } = {};
+  function a20() {
+    return;
+    a12();
+  }
 }
 
 export function b() {

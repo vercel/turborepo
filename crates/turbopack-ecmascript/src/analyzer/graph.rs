@@ -263,6 +263,7 @@ pub fn create_graph(m: &Program, eval_context: &EvalContext) -> VarGraph {
             data: &mut graph,
             eval_context,
             effects: Default::default(),
+            hoisted_effects: Default::default(),
             early_return_stack: Default::default(),
             var_decl_kind: Default::default(),
             current_value: Default::default(),
@@ -690,6 +691,7 @@ struct Analyzer<'a> {
     data: &'a mut VarGraph,
 
     effects: Vec<Effect>,
+    hoisted_effects: Vec<Effect>,
     early_return_stack: Vec<EarlyReturn>,
 
     eval_context: &'a EvalContext,
@@ -1409,6 +1411,7 @@ impl VisitAstPath for Analyzer<'_> {
         self.cur_fn_ident = decl.function.span.lo.0;
         decl.visit_children_with_path(self, ast_path);
         let return_value = self.take_return_values();
+        self.hoisted_effects.append(&mut self.effects);
 
         self.add_value(
             decl.ident.to_id(),
@@ -1763,6 +1766,7 @@ impl VisitAstPath for Analyzer<'_> {
         self.effects = take(&mut self.data.effects);
         program.visit_children_with_path(self, ast_path);
         self.end_early_return_block();
+        self.effects.append(&mut self.hoisted_effects);
         self.data.effects = take(&mut self.effects);
     }
 
@@ -1909,8 +1913,7 @@ impl VisitAstPath for Analyzer<'_> {
         n: &'ast BlockStmt,
         ast_path: &mut swc_core::ecma::visit::AstNodePath<'r>,
     ) {
-        n.visit_children_with_path(self, ast_path);
-        let handle = if ast_path.len() < 2 {
+        let block_type = if ast_path.len() < 2 {
             Some(false)
         } else if matches!(
             &ast_path[ast_path.len() - 2..],
@@ -1941,12 +1944,30 @@ impl VisitAstPath for Analyzer<'_> {
         } else {
             Some(false)
         };
-        if let Some(func) = handle {
-            if self.end_early_return_block() && !func {
-                self.early_return_stack.push(EarlyReturn::Always {
-                    prev_effects: take(&mut self.effects),
-                    start_ast_path: as_parent_path(ast_path),
-                });
+        match block_type {
+            Some(true) => {
+                let early_return_stack = take(&mut self.early_return_stack);
+                let mut effects = take(&mut self.effects);
+                let hoisted_effects = take(&mut self.hoisted_effects);
+                n.visit_children_with_path(self, ast_path);
+                self.end_early_return_block();
+                self.effects.append(&mut self.hoisted_effects);
+                effects.append(&mut self.effects);
+                self.hoisted_effects = hoisted_effects;
+                self.effects = effects;
+                self.early_return_stack = early_return_stack;
+            }
+            Some(false) => {
+                n.visit_children_with_path(self, ast_path);
+                if self.end_early_return_block() {
+                    self.early_return_stack.push(EarlyReturn::Always {
+                        prev_effects: take(&mut self.effects),
+                        start_ast_path: as_parent_path(ast_path),
+                    });
+                }
+            }
+            None => {
+                n.visit_children_with_path(self, ast_path);
             }
         }
     }
