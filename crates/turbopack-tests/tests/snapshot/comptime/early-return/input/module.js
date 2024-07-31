@@ -52,6 +52,7 @@ export function e() {
   }
   e2();
 }
+
 export function f() {
   if (false) {
   } else {
@@ -69,6 +70,7 @@ export function g() {
   }
   g3();
 }
+
 export function h() {
   if (false) {
   } else {
