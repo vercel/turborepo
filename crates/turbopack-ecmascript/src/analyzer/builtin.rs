@@ -2,9 +2,7 @@ use std::mem::take;
 
 use swc_core::ecma::atoms::js_word;
 
-use super::{
-    AdditionalProperty, ConstantNumber, ConstantValue, JsValue, LogicalOperator, ObjectPart,
-};
+use super::{ConstantNumber, ConstantValue, JsValue, LogicalOperator, LogicalProperty, ObjectPart};
 
 /// Replaces some builtin values with their resulting values. Called early
 /// without lazy nested values. This allows to skip a lot of work to process the
@@ -107,7 +105,7 @@ pub fn replace_builtin(value: &mut JsValue) -> bool {
             JsValue::Alternatives {
                 total_nodes: _,
                 values,
-                additional_property: _,
+                logical_property: _,
             } => {
                 *value = JsValue::alternatives(
                     take(values)
@@ -166,7 +164,7 @@ pub fn replace_builtin(value: &mut JsValue) -> bool {
                     JsValue::Alternatives {
                         total_nodes: _,
                         values,
-                        additional_property: _,
+                        logical_property: _,
                     } => {
                         *value = JsValue::alternatives(
                             take(values)
@@ -310,7 +308,7 @@ pub fn replace_builtin(value: &mut JsValue) -> bool {
                     JsValue::Alternatives {
                         total_nodes: _,
                         values,
-                        additional_property: _,
+                        logical_property: _,
                     } => {
                         *value = JsValue::alternatives(
                             take(values)
@@ -412,7 +410,7 @@ pub fn replace_builtin(value: &mut JsValue) -> bool {
                 JsValue::Alternatives {
                     total_nodes: _,
                     values,
-                    additional_property: _,
+                    logical_property: _,
                 } => {
                     *value = JsValue::alternatives(
                         take(values)
@@ -460,7 +458,7 @@ pub fn replace_builtin(value: &mut JsValue) -> bool {
             box JsValue::Alternatives {
                 total_nodes: _,
                 values,
-                additional_property: _,
+                logical_property: _,
             },
             ref mut args,
         ) => {
@@ -564,27 +562,27 @@ pub fn replace_builtin(value: &mut JsValue) -> bool {
                 let property = match op {
                     LogicalOperator::Or => {
                         if any_unset {
-                            Some(AdditionalProperty::Truthy)
+                            Some(LogicalProperty::Truthy)
                         } else if all_set {
-                            Some(AdditionalProperty::Falsy)
+                            Some(LogicalProperty::Falsy)
                         } else {
                             None
                         }
                     }
                     LogicalOperator::And => {
                         if any_unset {
-                            Some(AdditionalProperty::Falsy)
+                            Some(LogicalProperty::Falsy)
                         } else if all_set {
-                            Some(AdditionalProperty::Truthy)
+                            Some(LogicalProperty::Truthy)
                         } else {
                             None
                         }
                     }
                     LogicalOperator::NullishCoalescing => {
                         if any_unset {
-                            Some(AdditionalProperty::NonNullish)
+                            Some(LogicalProperty::NonNullish)
                         } else if all_set {
-                            Some(AdditionalProperty::Nullish)
+                            Some(LogicalProperty::Nullish)
                         } else {
                             None
                         }

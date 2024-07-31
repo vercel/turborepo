@@ -1221,7 +1221,7 @@ async fn handle_call<G: Fn(Vec<Effect>) + Send + Sync>(
         JsValue::Alternatives {
             total_nodes: _,
             values,
-            additional_property: _,
+            logical_property: _,
         } => {
             for alt in values {
                 handle_call_boxed(
