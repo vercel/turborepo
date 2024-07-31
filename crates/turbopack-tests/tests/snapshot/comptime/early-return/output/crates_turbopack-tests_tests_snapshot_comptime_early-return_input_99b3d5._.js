@@ -28,6 +28,7 @@ function a() {
     const a8 = undefined;
     let a10;
     let a11;
+    let a12, a15, a17, a18, a19;
 }
 function b() {
     if ("TURBOPACK compile-time truthy", 1) {

@@ -16,6 +16,14 @@ export function a() {
   };
   class a10 {}
   let a11 = 11;
+  let {
+    a12 = 12,
+    a14: {
+      a15,
+      a16: [a17, ...a18],
+    },
+    ...a19
+  } = {};
 }
 
 export function b() {

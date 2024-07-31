@@ -1,10 +1,13 @@
+use std::mem::take;
+
 use anyhow::Result;
 use swc_core::{
     common::{util::take::Take, Spanned},
     ecma::{
         ast::{
-            ArrowExpr, BindingIdent, BlockStmt, ClassDecl, Decl, FnDecl, FnExpr, Pat, Stmt,
-            VarDecl, VarDeclKind, VarDeclarator,
+            ArrayPat, ArrowExpr, AssignPat, AssignPatProp, BindingIdent, BlockStmt, ClassDecl,
+            Decl, FnDecl, FnExpr, Ident, KeyValuePatProp, ObjectPat, ObjectPatProp, Pat, RestPat,
+            Stmt, VarDecl, VarDeclKind, VarDeclarator,
         },
         visit::{
             fields::{BlockStmtField, SwitchCaseField},
@@ -132,14 +135,26 @@ impl<'a> VisitMut for ExtractDeclarations<'a> {
             declare,
             decls,
         } = decl;
-        let mut decls = decls.take();
-        for decl in decls.iter_mut() {
-            if matches!(kind, VarDeclKind::Const) {
-                decl.init = Some(quote!("undefined" as Box<Expr>));
-            } else {
-                decl.init = None;
-            }
+        let mut idents = Vec::new();
+        for decl in take(decls) {
+            collect_idents(&decl.name, &mut idents);
         }
+        let decls = idents
+            .into_iter()
+            .map(|ident| VarDeclarator {
+                span: ident.span,
+                name: Pat::Ident(BindingIdent {
+                    id: ident,
+                    type_ann: None,
+                }),
+                init: if matches!(kind, VarDeclKind::Const) {
+                    Some(quote!("undefined" as Box<Expr>))
+                } else {
+                    None
+                },
+                definite: false,
+            })
+            .collect();
         self.stmts.push(Stmt::Decl(Decl::Var(Box::new(VarDecl {
             span: *span,
             kind: *kind,
@@ -185,5 +200,44 @@ impl<'a> VisitMut for ExtractDeclarations<'a> {
             }],
             kind: VarDeclKind::Let,
         }))));
+    }
+}
+
+fn collect_idents(pat: &Pat, idents: &mut Vec<Ident>) {
+    match pat {
+        Pat::Ident(ident) => {
+            idents.push(ident.id.clone());
+        }
+        Pat::Array(ArrayPat { elems, .. }) => {
+            for elem in elems.iter() {
+                if let Some(elem) = elem.as_ref() {
+                    collect_idents(elem, idents);
+                }
+            }
+        }
+        Pat::Rest(RestPat { arg, .. }) => {
+            collect_idents(arg, idents);
+        }
+        Pat::Object(ObjectPat { props, .. }) => {
+            for prop in props.iter() {
+                match prop {
+                    ObjectPatProp::KeyValue(KeyValuePatProp { value, .. }) => {
+                        collect_idents(&value, idents);
+                    }
+                    ObjectPatProp::Assign(AssignPatProp { key, .. }) => {
+                        idents.push(key.id.clone());
+                    }
+                    ObjectPatProp::Rest(RestPat { arg, .. }) => {
+                        collect_idents(arg, idents);
+                    }
+                }
+            }
+        }
+        Pat::Assign(AssignPat { left, .. }) => {
+            collect_idents(left, idents);
+        }
+        Pat::Invalid(_) | Pat::Expr(_) => {
+            // ignore
+        }
     }
 }
