@@ -218,11 +218,11 @@ mod tests {
 
     use git2::{Oid, Repository};
     use tempfile::TempDir;
-    use turbopath::{AbsoluteSystemPathBuf, PathError};
+    use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError};
     use which::which;
 
-    use super::previous_content;
-    use crate::{git::changed_files, Error, Git, SCM};
+    use super::{previous_content, ChangedFiles};
+    use crate::{Error, SCM};
 
     fn setup_repository() -> Result<(TempDir, Repository), Error> {
         let repo_root = tempfile::tempdir()?;
@@ -233,7 +233,6 @@ mod tests {
 
         Ok((repo_root, repo))
     }
-
 
     fn changed_files(
         git_root: PathBuf,
@@ -246,18 +245,24 @@ mod tests {
         let scm = SCM::new(git_root);
 
         let turbo_root = AbsoluteSystemPathBuf::try_from(turbo_root.as_path())?;
-        let files = scm.changed_files(&turbo_root, from_commit, to_commit, include_uncommitted)?;
+        let ChangedFiles::Some(files) = scm.changed_files(
+            &turbo_root,
+            from_commit,
+            to_commit,
+            include_uncommitted,
+            false,
+        )?
+        else {
+            unreachable!("changed_files should always return Some");
+        };
+
         Ok(files
             .into_iter()
             .map(|f| f.to_string())
             .collect::<HashSet<_>>())
     }
 
-    fn commit_file(
-        repo: &Repository,
-        path: &Path,
-        previous_commit: Option<Oid>,
-    ) -> Oid {
+    fn commit_file(repo: &Repository, path: &Path, previous_commit: Option<Oid>) -> Oid {
         let mut index = repo.index().unwrap();
         index.add_path(path).unwrap();
         let tree_oid = index.write_tree().unwrap();
@@ -323,6 +328,7 @@ mod tests {
             tmp_dir.path().to_owned(),
             "HEAD~1",
             Some("HEAD"),
+            false,
         )
         .is_ok());
 
@@ -331,6 +337,7 @@ mod tests {
             tmp_dir.path().to_owned(),
             "HEAD",
             None,
+            true,
         )
         .is_ok());
 
@@ -353,7 +360,13 @@ mod tests {
         let first_commit_sha = first_commit_oid.to_string();
         let git_root = repo_root.path().to_owned();
         let turborepo_root = repo_root.path().to_owned();
-        let files = changed_files(git_root, turborepo_root, &first_commit_sha, Some("HEAD"))?;
+        let files = changed_files(
+            git_root,
+            turborepo_root,
+            &first_commit_sha,
+            Some("HEAD"),
+            false,
+        )?;
 
         assert_eq!(files, HashSet::from(["foo.js".to_string()]));
         Ok(())
@@ -396,6 +409,7 @@ mod tests {
             repo_root.path().to_path_buf(),
             &third_commit_oid.to_string(),
             Some(&fourth_commit_oid.to_string()),
+            false,
         )?;
 
         assert_eq!(
@@ -427,6 +441,7 @@ mod tests {
             turbo_root.to_path_buf(),
             "HEAD",
             None,
+            true,
         )?;
         assert_eq!(files, HashSet::from(["bar.js".to_string()]));
 
@@ -440,6 +455,7 @@ mod tests {
             turbo_root.to_path_buf(),
             "HEAD",
             None,
+            true,
         )?;
         assert_eq!(files, HashSet::from(["bar.js".to_string()]));
 
@@ -452,6 +468,7 @@ mod tests {
             turbo_root.to_path_buf(),
             first_commit_oid.to_string().as_str(),
             Some(second_commit_oid.to_string().as_str()),
+            false,
         )?;
         assert_eq!(files, HashSet::from(["bar.js".to_string()]));
 
@@ -466,6 +483,7 @@ mod tests {
             repo_root.path().to_path_buf(),
             first_commit_oid.to_string().as_str(),
             Some(second_commit_oid.to_string().as_str()),
+            false,
         )?;
         assert_eq!(files, HashSet::from(["bar.js".to_string()]));
 
@@ -475,6 +493,7 @@ mod tests {
             repo_root.path().to_path_buf(),
             second_commit_oid.to_string().as_str(),
             None,
+            true,
         )?;
         assert_eq!(
             files,
@@ -494,6 +513,7 @@ mod tests {
             repo_root.path().join("subdir"),
             first_commit_oid.to_string().as_str(),
             Some(third_commit_oid.to_string().as_str()),
+            false,
         )?;
         assert_eq!(files, HashSet::from(["baz.js".to_string()]));
 
@@ -520,6 +540,7 @@ mod tests {
             repo_root.path().to_path_buf(),
             "HEAD",
             None,
+            true,
         )?;
         assert_eq!(files, HashSet::from(["bar.js".to_string()]));
 
@@ -549,6 +570,7 @@ mod tests {
             repo_root.path().join("subdir"),
             "HEAD",
             None,
+            true,
         )?;
 
         #[cfg(unix)]
@@ -576,6 +598,7 @@ mod tests {
                     .to_string()
                     .as_str(),
             ),
+            false,
         )?;
 
         #[cfg(unix)]
@@ -650,6 +673,7 @@ mod tests {
             repo_root.path().to_path_buf(),
             "HEAD^",
             Some("HEAD"),
+            false,
         )?;
         assert_eq!(files, HashSet::from(["foo.js".to_string()]));
 
@@ -667,6 +691,7 @@ mod tests {
             repo_root.path().to_path_buf(),
             "HEAD~1",
             Some("release-1"),
+            false,
         )?;
         assert_eq!(files, HashSet::from(["bar.js".to_string()]));
 
@@ -681,6 +706,7 @@ mod tests {
             repo_dir.path().to_path_buf(),
             "HEAD",
             None,
+            true,
         );
 
         assert_matches!(repo_does_not_exist, Err(Error::GitRequired(_)));
@@ -693,6 +719,7 @@ mod tests {
             repo_root.path().to_path_buf(),
             "does-not-exist",
             None,
+            true,
         );
 
         assert_matches!(commit_does_not_exist, Err(Error::Git(_, _)));
@@ -710,6 +737,7 @@ mod tests {
             turbo_root.path().to_path_buf(),
             "HEAD",
             None,
+            true,
         );
 
         assert_matches!(

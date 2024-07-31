@@ -639,7 +639,9 @@ mod test {
     };
 
     use super::{FilterResolver, PackageInference, TargetSelector};
-    use crate::run::scope::{change_detector::GitChangeDetector, ResolutionError};
+    use crate::run::scope::{
+        change_detector::GitChangeDetector, target_selector::GitRange, ResolutionError,
+    };
 
     fn get_name(name: &str) -> (Option<&str>, &str) {
         if let Some(idx) = name.rfind('/') {
@@ -1121,7 +1123,7 @@ mod test {
     #[test_case(
         vec![
             TargetSelector {
-                git_range: Some(GitRange { from_ref: "HEAD~1".to_string(), to_ref: None }),
+                git_range: Some(GitRange { from_ref: "HEAD~1".to_string(), to_ref: None, ..Default::default() }),
                 ..Default::default()
             }
         ],
@@ -1131,7 +1133,7 @@ mod test {
     #[test_case(
         vec![
             TargetSelector {
-                git_range: Some(GitRange { from_ref: "HEAD~1".to_string(), to_ref: None }),
+                git_range: Some(GitRange { from_ref: "HEAD~1".to_string(), to_ref: None, ..Default::default() }),
                 parent_dir: Some(AnchoredSystemPathBuf::try_from(".").unwrap()),
                 ..Default::default()
             }
@@ -1142,7 +1144,7 @@ mod test {
     #[test_case(
         vec![
             TargetSelector {
-                git_range: Some(GitRange { from_ref: "HEAD~1".to_string(), to_ref: None }),
+                git_range: Some(GitRange { from_ref: "HEAD~1".to_string(), to_ref: None, ..Default::default() }),
                 parent_dir: Some(AnchoredSystemPathBuf::try_from("package-2").unwrap()),
                 ..Default::default()
             }
@@ -1153,7 +1155,7 @@ mod test {
     #[test_case(
         vec![
             TargetSelector {
-                git_range: Some(GitRange { from_ref: "HEAD~1".to_string(), to_ref: None }),
+                git_range: Some(GitRange { from_ref: "HEAD~1".to_string(), to_ref: None, ..Default::default() }),
                 name_pattern: "package-2*".to_string(),
                 ..Default::default()
             }
@@ -1164,7 +1166,7 @@ mod test {
     #[test_case(
         vec![
             TargetSelector {
-                git_range: Some(GitRange { from_ref: "HEAD~1".to_string(), to_ref: None }),
+                git_range: Some(GitRange { from_ref: "HEAD~1".to_string(), to_ref: None, ..Default::default() }),
                 name_pattern: "package-1".to_string(),
                 match_dependencies: true,
                 ..Default::default()
@@ -1176,7 +1178,7 @@ mod test {
     #[test_case(
         vec![
             TargetSelector {
-                git_range: Some(GitRange { from_ref: "HEAD~2".to_string(), to_ref: None }),
+                git_range: Some(GitRange { from_ref: "HEAD~2".to_string(), to_ref: None, ..Default::default() }),
                 ..Default::default()
             }
         ],
@@ -1186,7 +1188,7 @@ mod test {
     #[test_case(
         vec![
             TargetSelector {
-                git_range: Some(GitRange { from_ref: "HEAD~2".to_string(), to_ref: Some("HEAD~1".to_string()) }),
+                git_range: Some(GitRange { from_ref: "HEAD~2".to_string(), to_ref: Some("HEAD~1".to_string()), ..Default::default() }),
                 ..Default::default()
             }
         ],
@@ -1196,7 +1198,7 @@ mod test {
     #[test_case(
         vec![
             TargetSelector {
-                git_range: Some(GitRange { from_ref: "HEAD~1".to_string(), to_ref: None }),
+                git_range: Some(GitRange { from_ref: "HEAD~1".to_string(), to_ref: None, ..Default::default() }),
                 parent_dir: Some(AnchoredSystemPathBuf::try_from("package-*").unwrap()),
                 match_dependencies: true,             ..Default::default()
             }
@@ -1251,6 +1253,7 @@ mod test {
             from: &str,
             to: Option<&str>,
             _include_uncommitted: bool,
+            _allow_unknown_objects: bool,
         ) -> Result<HashSet<PackageName>, ResolutionError> {
             Ok(self
                 .0

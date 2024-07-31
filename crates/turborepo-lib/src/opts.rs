@@ -52,6 +52,10 @@ impl Opts {
             cmd.push_str(pattern);
         }
 
+        if self.scope_opts.affected_range.is_some() {
+            cmd.push_str(" --affected");
+        }
+
         if self.run_opts.parallel {
             cmd.push_str(" --parallel");
         }
@@ -398,6 +402,7 @@ mod test {
         parallel: bool,
         continue_on_error: bool,
         dry_run: Option<DryRunMode>,
+        affected: Option<(String, String)>,
     }
 
     #[test_case(TestCaseOpts {
@@ -460,6 +465,23 @@ mod test {
         },
         "turbo run build --filter=my-app --dry=json"
     )]
+    #[test_case    (
+        TestCaseOpts {
+            filter_patterns: vec!["my-app".to_string()],
+            tasks: vec!["build".to_string()],
+            affected: Some(("HEAD".to_string(), "my-branch".to_string())),
+            ..Default::default()
+        },
+        "turbo run build --filter=my-app --affected"
+    )]
+    #[test_case    (
+        TestCaseOpts {
+            tasks: vec!["build".to_string()],
+            affected: Some(("HEAD".to_string(), "my-branch".to_string())),
+            ..Default::default()
+        },
+        "turbo run build --affected"
+    )]
     fn test_synthesize_command(opts_input: TestCaseOpts, expected: &str) {
         let run_opts = RunOpts {
             tasks: opts_input.tasks,
@@ -487,6 +509,7 @@ mod test {
             pkg_inference_root: None,
             global_deps: vec![],
             filter_patterns: opts_input.filter_patterns,
+            affected_range: opts_input.affected,
         };
         let opts = Opts {
             run_opts,

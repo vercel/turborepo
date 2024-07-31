@@ -11,7 +11,7 @@ Edit and commit a file that affects `my-app`
   $ git commit -m "add foo" --quiet
 
 Validate that we only run `my-app#build`
-  $ ${TURBO} run build --affected
+  $ ${TURBO} run build --affected --log-order grouped
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -36,19 +36,19 @@ Now do some magic to change the repo to be shallow
   $ git prune-packed
 
 Now try running `--affected` again, we should run all tasks
-  $ ${TURBO} run build --affected
+  $ ${TURBO} run build --affected --log-order grouped
    WARNING  unable to detect git range, assuming all files have changed: git error: fatal: main...HEAD: no merge base
   
   \xe2\x80\xa2 Packages in scope: //, another, my-app, util (esc)
   \xe2\x80\xa2 Running build in 4 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  util:build: cache miss, executing bf1798d3e46e1b48
   my-app:build: cache hit, replaying logs 97b34acb6e848096
   my-app:build: 
   my-app:build: > build
   my-app:build: > echo building
   my-app:build: 
   my-app:build: building
+  util:build: cache miss, executing bf1798d3e46e1b48
   util:build: 
   util:build: > build
   util:build: > echo building
