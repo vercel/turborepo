@@ -1408,7 +1408,6 @@ impl VisitAstPath for Analyzer<'_> {
         let old_ident = self.cur_fn_ident;
         self.cur_fn_ident = decl.function.span.lo.0;
         decl.visit_children_with_path(self, ast_path);
-        self.end_early_return_block();
         let return_value = self.take_return_values();
 
         self.add_value(
@@ -1432,7 +1431,6 @@ impl VisitAstPath for Analyzer<'_> {
         let old_ident = self.cur_fn_ident;
         self.cur_fn_ident = expr.function.span.lo.0;
         expr.visit_children_with_path(self, ast_path);
-        self.end_early_return_block();
         let return_value = self.take_return_values();
 
         if let Some(ident) = &expr.ident {
@@ -1483,7 +1481,6 @@ impl VisitAstPath for Analyzer<'_> {
             let mut ast_path =
                 ast_path.with_guard(AstParentNodeRef::ArrowExpr(expr, ArrowExprField::Body));
             expr.body.visit_with_path(self, &mut ast_path);
-            self.end_early_return_block();
         }
 
         let return_value = match &*expr.body {
@@ -1898,28 +1895,39 @@ impl VisitAstPath for Analyzer<'_> {
         ast_path: &mut swc_core::ecma::visit::AstNodePath<'r>,
     ) {
         n.visit_children_with_path(self, ast_path);
-        if ast_path.len() < 2
-            || !matches!(
-                &ast_path[ast_path.len() - 2..],
-                [
-                    AstParentNodeRef::IfStmt(_, IfStmtField::Cons),
-                    AstParentNodeRef::Stmt(_, StmtField::Block)
-                ] | [
-                    AstParentNodeRef::IfStmt(_, IfStmtField::Alt),
-                    AstParentNodeRef::Stmt(_, StmtField::Block)
-                ] | [_, AstParentNodeRef::Function(_, FunctionField::Body)]
-                    | [
-                        AstParentNodeRef::ArrowExpr(_, ArrowExprField::Body),
-                        AstParentNodeRef::BlockStmtOrExpr(_, BlockStmtOrExprField::BlockStmt)
-                    ]
-                    | [_, AstParentNodeRef::TryStmt(_, TryStmtField::Block,)]
-                    | [
-                        AstParentNodeRef::TryStmt(_, TryStmtField::Handler),
-                        AstParentNodeRef::CatchClause(_, CatchClauseField::Body)
-                    ]
-            )
-        {
-            if self.end_early_return_block() {
+        let handle = if ast_path.len() < 2 {
+            Some(false)
+        } else if matches!(
+            &ast_path[ast_path.len() - 2..],
+            [
+                AstParentNodeRef::IfStmt(_, IfStmtField::Cons),
+                AstParentNodeRef::Stmt(_, StmtField::Block)
+            ] | [
+                AstParentNodeRef::IfStmt(_, IfStmtField::Alt),
+                AstParentNodeRef::Stmt(_, StmtField::Block)
+            ] | [_, AstParentNodeRef::TryStmt(_, TryStmtField::Block,)]
+                | [
+                    AstParentNodeRef::TryStmt(_, TryStmtField::Handler),
+                    AstParentNodeRef::CatchClause(_, CatchClauseField::Body)
+                ]
+        ) {
+            None
+        } else if matches!(
+            &ast_path[ast_path.len() - 2..],
+            [_, AstParentNodeRef::Function(_, FunctionField::Body)]
+                | [
+                    AstParentNodeRef::ArrowExpr(_, ArrowExprField::Body),
+                    AstParentNodeRef::BlockStmtOrExpr(_, BlockStmtOrExprField::BlockStmt)
+                ]
+                | [_, AstParentNodeRef::GetterProp(_, GetterPropField::Body)]
+                | [_, AstParentNodeRef::SetterProp(_, SetterPropField::Body)]
+        ) {
+            Some(true)
+        } else {
+            Some(false)
+        };
+        if let Some(func) = handle {
+            if self.end_early_return_block() && !func {
                 self.early_return_stack.push(EarlyReturn::Always {
                     prev_effects: take(&mut self.effects),
                     start_ast_path: as_parent_path(ast_path),

@@ -118,16 +118,16 @@ class K {
         "TURBOPACK unreachable";
     }
     get m() {
-        if (true) {
+        if ("TURBOPACK compile-time truthy", 1) {
             m1();
             return;
         }
-        m2();
+        "TURBOPACK unreachable";
     }
     set m(value) {
         m1();
         return m2();
-        m3();
+        "TURBOPACK unreachable";
     }
 }
 z1();
