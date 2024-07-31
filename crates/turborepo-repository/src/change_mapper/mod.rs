@@ -151,6 +151,7 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
                     changed_packages.insert(pkg);
                 }
                 PackageMapping::All => {
+                    debug!("all packages changed due to {file:?}");
                     return PackageChanges::All(AllPackageChangeReason::NonPackageFileChanged);
                 }
                 PackageMapping::None => {}
