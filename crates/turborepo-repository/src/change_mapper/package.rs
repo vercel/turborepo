@@ -174,7 +174,7 @@ mod tests {
         // therefore must be conservative about changes
         assert_eq!(
             package_changes,
-            PackageChanges::All(AllPackageChangeReason::DefaultGlobalFileChanged)
+            PackageChanges::All(AllPackageChangeReason::NonPackageFileChanged)
         );
 
         let turbo_package_detector =
