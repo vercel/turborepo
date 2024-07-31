@@ -16,13 +16,15 @@ use turbo_tasks::{RcStr, Vc};
 use turbopack_core::source::Source;
 
 use super::{ConstantNumber, ConstantValue, ImportMap, JsValue, ObjectPart, WellKnownFunctionKind};
-use crate::{analyzer::is_unresolved, utils::unparen};
+use crate::{
+    analyzer::is_unresolved,
+    utils::{unparen, AstPathRange},
+};
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct EffectsBlock {
     pub effects: Vec<Effect>,
-    /// The ast path to the block or expression.
-    pub ast_path: Vec<AstParentKind>,
+    pub range: AstPathRange,
 }
 
 impl EffectsBlock {
@@ -35,10 +37,18 @@ impl EffectsBlock {
 pub enum ConditionalKind {
     /// The blocks of an `if` statement without an `else` block.
     If { then: EffectsBlock },
-    /// The blocks of an `if ... else` statement.
+    /// The blocks of an `if ... else` or `if { ... return ... } ...` statement.
     IfElse {
         then: EffectsBlock,
         r#else: EffectsBlock,
+    },
+    /// The blocks of an `if ... else` statement.
+    Else { r#else: EffectsBlock },
+    /// The blocks of an `if { ... return ... } else { ... } ...` or `if { ... }
+    /// else { ... return ... } ...` statement.
+    IfElseMultiple {
+        then: Vec<EffectsBlock>,
+        r#else: Vec<EffectsBlock>,
     },
     /// The expressions on the right side of the `?:` operator.
     Ternary {
@@ -57,8 +67,12 @@ impl ConditionalKind {
     /// Normalizes all contained values.
     pub fn normalize(&mut self) {
         match self {
-            ConditionalKind::If { then, .. } => {
-                for effect in &mut then.effects {
+            ConditionalKind::If { then: block }
+            | ConditionalKind::Else { r#else: block }
+            | ConditionalKind::And { expr: block, .. }
+            | ConditionalKind::Or { expr: block, .. }
+            | ConditionalKind::NullishCoalescing { expr: block, .. } => {
+                for effect in &mut block.effects {
                     effect.normalize();
                 }
             }
@@ -71,11 +85,11 @@ impl ConditionalKind {
                     effect.normalize();
                 }
             }
-            ConditionalKind::And { expr, .. }
-            | ConditionalKind::Or { expr, .. }
-            | ConditionalKind::NullishCoalescing { expr, .. } => {
-                for effect in &mut expr.effects {
-                    effect.normalize();
+            ConditionalKind::IfElseMultiple { then, r#else, .. } => {
+                for block in then.iter_mut().chain(r#else.iter_mut()) {
+                    for effect in &mut block.effects {
+                        effect.normalize();
+                    }
                 }
             }
         }
@@ -172,6 +186,8 @@ pub enum Effect {
         span: Span,
         in_try: bool,
     },
+    /// Unreachable code, e.g. after a `return` statement.
+    Unreachable { start_ast_path: Vec<AstParentKind> },
 }
 
 impl Effect {
@@ -211,6 +227,7 @@ impl Effect {
             Effect::Url { input, .. } => {
                 input.normalize();
             }
+            Effect::Unreachable { .. } => {}
         }
     }
 }
@@ -246,6 +263,7 @@ pub fn create_graph(m: &Program, eval_context: &EvalContext) -> VarGraph {
             data: &mut graph,
             eval_context,
             effects: Default::default(),
+            early_return_stack: Default::default(),
             var_decl_kind: Default::default(),
             current_value: Default::default(),
             cur_fn_return_values: Default::default(),
@@ -647,10 +665,32 @@ impl EvalContext {
     }
 }
 
+enum EarlyReturn {
+    Always {
+        prev_effects: Vec<Effect>,
+        start_ast_path: Vec<AstParentKind>,
+    },
+    Conditional {
+        prev_effects: Vec<Effect>,
+        start_ast_path: Vec<AstParentKind>,
+
+        condition: JsValue,
+        then: Option<EffectsBlock>,
+        r#else: Option<EffectsBlock>,
+        /// The ast path to the condition.
+        condition_ast_path: Vec<AstParentKind>,
+        span: Span,
+        in_try: bool,
+
+        early_return_condition_value: bool,
+    },
+}
+
 struct Analyzer<'a> {
     data: &'a mut VarGraph,
 
     effects: Vec<Effect>,
+    early_return_stack: Vec<EarlyReturn>,
 
     eval_context: &'a EvalContext,
 
@@ -1008,6 +1048,80 @@ impl Analyzer<'_> {
             _ => JsValue::alternatives(values),
         })
     }
+
+    /// Ends a conditional block. All early returns are integrated into the
+    /// effects. Returns true if the whole block always early returns.
+    fn end_early_return_block(&mut self) -> bool {
+        let mut always_returns = false;
+        while let Some(early_return) = self.early_return_stack.pop() {
+            match early_return {
+                EarlyReturn::Always {
+                    prev_effects,
+                    start_ast_path,
+                } => {
+                    self.effects = prev_effects;
+                    self.effects.push(Effect::Unreachable { start_ast_path });
+                    always_returns = true;
+                }
+                EarlyReturn::Conditional {
+                    prev_effects,
+                    start_ast_path,
+                    condition,
+                    then,
+                    r#else,
+                    condition_ast_path,
+                    span,
+                    in_try,
+                    early_return_condition_value,
+                } => {
+                    let block = EffectsBlock {
+                        effects: take(&mut self.effects),
+                        range: AstPathRange::StartAfter(start_ast_path),
+                    };
+                    self.effects = prev_effects;
+                    let kind = match (then, r#else, early_return_condition_value) {
+                        (None, None, false) => ConditionalKind::If { then: block },
+                        (None, None, true) => ConditionalKind::IfElseMultiple {
+                            then: vec![block],
+                            r#else: vec![],
+                        },
+                        (Some(then), None, false) => ConditionalKind::IfElseMultiple {
+                            then: vec![then, block],
+                            r#else: vec![],
+                        },
+                        (Some(then), None, true) => ConditionalKind::IfElse {
+                            then,
+                            r#else: block,
+                        },
+                        (Some(then), Some(r#else), false) => ConditionalKind::IfElseMultiple {
+                            then: vec![then, block],
+                            r#else: vec![r#else],
+                        },
+                        (Some(then), Some(r#else), true) => ConditionalKind::IfElseMultiple {
+                            then: vec![then],
+                            r#else: vec![r#else, block],
+                        },
+                        (None, Some(r#else), false) => ConditionalKind::IfElse {
+                            then: block,
+                            r#else,
+                        },
+                        (None, Some(r#else), true) => ConditionalKind::IfElseMultiple {
+                            then: vec![],
+                            r#else: vec![r#else, block],
+                        },
+                    };
+                    self.effects.push(Effect::Conditional {
+                        condition,
+                        kind: Box::new(kind),
+                        ast_path: condition_ast_path,
+                        span,
+                        in_try,
+                    })
+                }
+            }
+        }
+        always_returns
+    }
 }
 
 impl VisitAstPath for Analyzer<'_> {
@@ -1166,7 +1280,7 @@ impl VisitAstPath for Analyzer<'_> {
                                 value,
                                 EffectsBlock {
                                     effects,
-                                    ast_path: path,
+                                    range: AstPathRange::Exact(path),
                                 },
                             )
                         } else {
@@ -1294,6 +1408,7 @@ impl VisitAstPath for Analyzer<'_> {
         let old_ident = self.cur_fn_ident;
         self.cur_fn_ident = decl.function.span.lo.0;
         decl.visit_children_with_path(self, ast_path);
+        self.end_early_return_block();
         let return_value = self.take_return_values();
 
         self.add_value(
@@ -1317,6 +1432,7 @@ impl VisitAstPath for Analyzer<'_> {
         let old_ident = self.cur_fn_ident;
         self.cur_fn_ident = expr.function.span.lo.0;
         expr.visit_children_with_path(self, ast_path);
+        self.end_early_return_block();
         let return_value = self.take_return_values();
 
         if let Some(ident) = &expr.ident {
@@ -1367,6 +1483,7 @@ impl VisitAstPath for Analyzer<'_> {
             let mut ast_path =
                 ast_path.with_guard(AstParentNodeRef::ArrowExpr(expr, ArrowExprField::Body));
             expr.body.visit_with_path(self, &mut ast_path);
+            self.end_early_return_block();
         }
 
         let return_value = match &*expr.body {
@@ -1579,6 +1696,11 @@ impl VisitAstPath for Analyzer<'_> {
 
             values.push(return_value);
         }
+
+        self.early_return_stack.push(EarlyReturn::Always {
+            prev_effects: take(&mut self.effects),
+            start_ast_path: as_parent_path(ast_path),
+        });
     }
 
     fn visit_ident<'ast: 'r, 'r>(
@@ -1664,7 +1786,7 @@ impl VisitAstPath for Analyzer<'_> {
             expr.cons.visit_with_path(self, &mut ast_path);
             EffectsBlock {
                 effects: take(&mut self.effects),
-                ast_path: as_parent_path(&ast_path),
+                range: AstPathRange::Exact(as_parent_path(&ast_path)),
             }
         };
         let r#else = {
@@ -1673,7 +1795,7 @@ impl VisitAstPath for Analyzer<'_> {
             expr.alt.visit_with_path(self, &mut ast_path);
             EffectsBlock {
                 effects: take(&mut self.effects),
-                ast_path: as_parent_path(&ast_path),
+                range: AstPathRange::Exact(as_parent_path(&ast_path)),
             }
         };
         self.effects = prev_effects;
@@ -1698,56 +1820,148 @@ impl VisitAstPath for Analyzer<'_> {
             stmt.test.visit_with_path(self, &mut ast_path);
         }
         let prev_effects = take(&mut self.effects);
+        let prev_early_return_stack = take(&mut self.early_return_stack);
+        let then_returning;
         let then = {
             let mut ast_path =
                 ast_path.with_guard(AstParentNodeRef::IfStmt(stmt, IfStmtField::Cons));
             stmt.cons.visit_with_path(self, &mut ast_path);
+            then_returning = self.end_early_return_block();
             EffectsBlock {
                 effects: take(&mut self.effects),
-                ast_path: as_parent_path(&ast_path),
+                range: AstPathRange::Exact(as_parent_path(&ast_path)),
             }
         };
-        let r#else = stmt
-            .alt
-            .as_ref()
-            .map(|alt| {
-                let mut ast_path =
-                    ast_path.with_guard(AstParentNodeRef::IfStmt(stmt, IfStmtField::Alt));
-                alt.visit_with_path(self, &mut ast_path);
-                EffectsBlock {
-                    effects: take(&mut self.effects),
-                    ast_path: as_parent_path(&ast_path),
-                }
-            })
-            .unwrap_or_default();
+        let mut else_returning = false;
+        let r#else = stmt.alt.as_ref().map(|alt| {
+            let mut ast_path =
+                ast_path.with_guard(AstParentNodeRef::IfStmt(stmt, IfStmtField::Alt));
+            alt.visit_with_path(self, &mut ast_path);
+            else_returning = self.end_early_return_block();
+            EffectsBlock {
+                effects: take(&mut self.effects),
+                range: AstPathRange::Exact(as_parent_path(&ast_path)),
+            }
+        });
+        self.early_return_stack = prev_early_return_stack;
         self.effects = prev_effects;
-        match (!then.is_empty(), !r#else.is_empty()) {
-            (true, false) => {
-                self.add_conditional_effect(
-                    &stmt.test,
-                    ast_path,
-                    AstParentKind::IfStmt(IfStmtField::Test),
-                    stmt.span(),
-                    ConditionalKind::If { then },
-                );
-            }
-            (_, true) => {
-                self.add_conditional_effect(
-                    &stmt.test,
-                    ast_path,
-                    AstParentKind::IfStmt(IfStmtField::Test),
-                    stmt.span(),
-                    ConditionalKind::IfElse { then, r#else },
-                );
-            }
-            (false, false) => {
-                // no effects, can be ignored
-            }
-        }
+        self.add_conditional_if_effect_with_early_return(
+            &stmt.test,
+            ast_path,
+            AstParentKind::IfStmt(IfStmtField::Test),
+            stmt.span(),
+            (!then.is_empty()).then(|| then),
+            r#else.and_then(|block| (!block.is_empty()).then(|| block)),
+            then_returning,
+            else_returning,
+        );
+    }
+
+    fn visit_for_stmt<'ast: 'r, 'r>(
+        &mut self,
+        n: &'ast ForStmt,
+        ast_path: &mut swc_core::ecma::visit::AstNodePath<'r>,
+    ) {
+        n.visit_children_with_path(self, ast_path);
+        self.end_early_return_block();
+    }
+
+    fn visit_while_stmt<'ast: 'r, 'r>(
+        &mut self,
+        n: &'ast WhileStmt,
+        ast_path: &mut swc_core::ecma::visit::AstNodePath<'r>,
+    ) {
+        n.visit_children_with_path(self, ast_path);
+        self.end_early_return_block();
+    }
+
+    fn visit_try_stmt<'ast: 'r, 'r>(
+        &mut self,
+        n: &'ast TryStmt,
+        ast_path: &mut swc_core::ecma::visit::AstNodePath<'r>,
+    ) {
+        n.visit_children_with_path(self, ast_path);
+        self.end_early_return_block();
     }
 }
 
 impl<'a> Analyzer<'a> {
+    fn add_conditional_if_effect_with_early_return(
+        &mut self,
+        test: &Expr,
+        ast_path: &AstNodePath<AstParentNodeRef<'_>>,
+        condition_ast_kind: AstParentKind,
+        span: Span,
+        then: Option<EffectsBlock>,
+        r#else: Option<EffectsBlock>,
+        early_return_when_true: bool,
+        early_return_when_false: bool,
+    ) {
+        if then.is_none() && r#else.is_none() && !early_return_when_false && !early_return_when_true
+        {
+            return;
+        }
+        let condition = self.eval_context.eval(test);
+        if condition.is_unknown() {
+            if let Some(mut then) = then {
+                self.effects.append(&mut then.effects);
+            }
+            if let Some(mut r#else) = r#else {
+                self.effects.append(&mut r#else.effects);
+            }
+            return;
+        }
+        match (early_return_when_true, early_return_when_false) {
+            (true, true) => {
+                self.early_return_stack.push(EarlyReturn::Always {
+                    prev_effects: take(&mut self.effects),
+                    start_ast_path: as_parent_path(ast_path),
+                });
+            }
+            (true, false) => {
+                self.early_return_stack.push(EarlyReturn::Conditional {
+                    prev_effects: take(&mut self.effects),
+                    start_ast_path: as_parent_path(ast_path),
+                    condition,
+                    then,
+                    r#else,
+                    condition_ast_path: as_parent_path_with(ast_path, condition_ast_kind),
+                    span,
+                    in_try: is_in_try(ast_path),
+                    early_return_condition_value: true,
+                });
+            }
+            (false, true) => {
+                self.early_return_stack.push(EarlyReturn::Conditional {
+                    prev_effects: take(&mut self.effects),
+                    start_ast_path: as_parent_path(ast_path),
+                    condition,
+                    then,
+                    r#else,
+                    condition_ast_path: as_parent_path_with(ast_path, condition_ast_kind),
+                    span,
+                    in_try: is_in_try(ast_path),
+                    early_return_condition_value: false,
+                });
+            }
+            (false, false) => {
+                let kind = match (then, r#else) {
+                    (Some(then), Some(r#else)) => ConditionalKind::IfElse { then, r#else },
+                    (Some(then), None) => ConditionalKind::If { then },
+                    (None, Some(r#else)) => ConditionalKind::Else { r#else },
+                    (None, None) => unreachable!(),
+                };
+                self.add_effect(Effect::Conditional {
+                    condition,
+                    kind: Box::new(kind),
+                    ast_path: as_parent_path_with(ast_path, condition_ast_kind),
+                    span,
+                    in_try: is_in_try(ast_path),
+                });
+            }
+        }
+    }
+
     fn add_conditional_effect(
         &mut self,
         test: &Expr,
@@ -1762,10 +1976,21 @@ impl<'a> Analyzer<'a> {
                 ConditionalKind::If { then } => {
                     self.effects.append(&mut then.effects);
                 }
+                ConditionalKind::Else { r#else } => {
+                    self.effects.append(&mut r#else.effects);
+                }
                 ConditionalKind::IfElse { then, r#else }
                 | ConditionalKind::Ternary { then, r#else } => {
                     self.effects.append(&mut then.effects);
                     self.effects.append(&mut r#else.effects);
+                }
+                ConditionalKind::IfElseMultiple { then, r#else } => {
+                    for block in then {
+                        self.effects.append(&mut block.effects);
+                    }
+                    for block in r#else {
+                        self.effects.append(&mut block.effects);
+                    }
                 }
                 ConditionalKind::And { expr }
                 | ConditionalKind::Or { expr }

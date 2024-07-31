@@ -1,4 +1,88 @@
 [
+    Unreachable {
+        start_ast_path: [
+            Program(
+                Script,
+            ),
+            Script(
+                Body(
+                    0,
+                ),
+            ),
+            Stmt(
+                Decl,
+            ),
+            Decl(
+                Fn,
+            ),
+            FnDecl(
+                Function,
+            ),
+            Function(
+                Body,
+            ),
+            BlockStmt(
+                Stmts(
+                    0,
+                ),
+            ),
+            Stmt(
+                Return,
+            ),
+            ReturnStmt(
+                Arg,
+            ),
+            Expr(
+                Fn,
+            ),
+            FnExpr(
+                Function,
+            ),
+            Function(
+                Body,
+            ),
+            BlockStmt(
+                Stmts(
+                    0,
+                ),
+            ),
+            Stmt(
+                Return,
+            ),
+        ],
+    },
+    Unreachable {
+        start_ast_path: [
+            Program(
+                Script,
+            ),
+            Script(
+                Body(
+                    0,
+                ),
+            ),
+            Stmt(
+                Decl,
+            ),
+            Decl(
+                Fn,
+            ),
+            FnDecl(
+                Function,
+            ),
+            Function(
+                Body,
+            ),
+            BlockStmt(
+                Stmts(
+                    0,
+                ),
+            ),
+            Stmt(
+                Return,
+            ),
+        ],
+    },
     Call {
         func: Variable(
             (
@@ -116,187 +200,8 @@
         span: 77..84#0,
         in_try: false,
     },
-    Conditional {
-        condition: Binary(
-            3,
-            Unknown {
-                original_value: None,
-                reason: "unsupported expression",
-                has_side_effects: true,
-            },
-            StrictEqual,
-            Constant(
-                Num(
-                    ConstantNumber(
-                        0.0,
-                    ),
-                ),
-            ),
-        ),
-        kind: IfElse {
-            then: EffectsBlock {
-                effects: [],
-                ast_path: [
-                    Program(
-                        Script,
-                    ),
-                    Script(
-                        Body(
-                            2,
-                        ),
-                    ),
-                    Stmt(
-                        Decl,
-                    ),
-                    Decl(
-                        Fn,
-                    ),
-                    FnDecl(
-                        Function,
-                    ),
-                    Function(
-                        Body,
-                    ),
-                    BlockStmt(
-                        Stmts(
-                            0,
-                        ),
-                    ),
-                    Stmt(
-                        If,
-                    ),
-                    IfStmt(
-                        Cons,
-                    ),
-                ],
-            },
-            else: EffectsBlock {
-                effects: [
-                    Call {
-                        func: Variable(
-                            (
-                                "r",
-                                #2,
-                            ),
-                        ),
-                        args: [
-                            Value(
-                                Add(
-                                    3,
-                                    [
-                                        Variable(
-                                            (
-                                                "a",
-                                                #6,
-                                            ),
-                                        ),
-                                        Constant(
-                                            Num(
-                                                ConstantNumber(
-                                                    1.0,
-                                                ),
-                                            ),
-                                        ),
-                                    ],
-                                ),
-                            ),
-                        ],
-                        ast_path: [
-                            Program(
-                                Script,
-                            ),
-                            Script(
-                                Body(
-                                    2,
-                                ),
-                            ),
-                            Stmt(
-                                Decl,
-                            ),
-                            Decl(
-                                Fn,
-                            ),
-                            FnDecl(
-                                Function,
-                            ),
-                            Function(
-                                Body,
-                            ),
-                            BlockStmt(
-                                Stmts(
-                                    0,
-                                ),
-                            ),
-                            Stmt(
-                                If,
-                            ),
-                            IfStmt(
-                                Alt,
-                            ),
-                            Stmt(
-                                Block,
-                            ),
-                            BlockStmt(
-                                Stmts(
-                                    0,
-                                ),
-                            ),
-                            Stmt(
-                                Return,
-                            ),
-                            ReturnStmt(
-                                Arg,
-                            ),
-                            Expr(
-                                Bin,
-                            ),
-                            BinExpr(
-                                Left,
-                            ),
-                            Expr(
-                                Call,
-                            ),
-                        ],
-                        span: 159..167#0,
-                        in_try: false,
-                    },
-                ],
-                ast_path: [
-                    Program(
-                        Script,
-                    ),
-                    Script(
-                        Body(
-                            2,
-                        ),
-                    ),
-                    Stmt(
-                        Decl,
-                    ),
-                    Decl(
-                        Fn,
-                    ),
-                    FnDecl(
-                        Function,
-                    ),
-                    Function(
-                        Body,
-                    ),
-                    BlockStmt(
-                        Stmts(
-                            0,
-                        ),
-                    ),
-                    Stmt(
-                        If,
-                    ),
-                    IfStmt(
-                        Alt,
-                    ),
-                ],
-            },
-        },
-        ast_path: [
+    Unreachable {
+        start_ast_path: [
             Program(
                 Script,
             ),
@@ -325,12 +230,7 @@
             Stmt(
                 If,
             ),
-            IfStmt(
-                Test,
-            ),
         ],
-        span: 105..176#0,
-        in_try: false,
     },
     Call {
         func: Variable(
@@ -379,6 +279,55 @@
         ],
         span: 190..194#0,
         in_try: false,
+    },
+    Unreachable {
+        start_ast_path: [
+            Program(
+                Script,
+            ),
+            Script(
+                Body(
+                    4,
+                ),
+            ),
+            Stmt(
+                Decl,
+            ),
+            Decl(
+                Fn,
+            ),
+            FnDecl(
+                Function,
+            ),
+            Function(
+                Body,
+            ),
+            BlockStmt(
+                Stmts(
+                    0,
+                ),
+            ),
+            Stmt(
+                Decl,
+            ),
+            Decl(
+                Fn,
+            ),
+            FnDecl(
+                Function,
+            ),
+            Function(
+                Body,
+            ),
+            BlockStmt(
+                Stmts(
+                    0,
+                ),
+            ),
+            Stmt(
+                Return,
+            ),
+        ],
     },
     Call {
         func: Variable(
@@ -436,6 +385,38 @@
         ],
         span: 271..281#0,
         in_try: false,
+    },
+    Unreachable {
+        start_ast_path: [
+            Program(
+                Script,
+            ),
+            Script(
+                Body(
+                    4,
+                ),
+            ),
+            Stmt(
+                Decl,
+            ),
+            Decl(
+                Fn,
+            ),
+            FnDecl(
+                Function,
+            ),
+            Function(
+                Body,
+            ),
+            BlockStmt(
+                Stmts(
+                    1,
+                ),
+            ),
+            Stmt(
+                Return,
+            ),
+        ],
     },
     Call {
         func: Variable(

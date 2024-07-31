@@ -291,6 +291,38 @@
         span: 317..328#1,
         in_try: false,
     },
+    Unreachable {
+        start_ast_path: [
+            Program(
+                Script,
+            ),
+            Script(
+                Body(
+                    3,
+                ),
+            ),
+            Stmt(
+                Decl,
+            ),
+            Decl(
+                Fn,
+            ),
+            FnDecl(
+                Function,
+            ),
+            Function(
+                Body,
+            ),
+            BlockStmt(
+                Stmts(
+                    4,
+                ),
+            ),
+            Stmt(
+                Return,
+            ),
+        ],
+    },
     Call {
         func: Variable(
             (
@@ -591,6 +623,38 @@
         ],
         span: 515..551#0,
         in_try: true,
+    },
+    Unreachable {
+        start_ast_path: [
+            Program(
+                Script,
+            ),
+            Script(
+                Body(
+                    4,
+                ),
+            ),
+            Stmt(
+                Decl,
+            ),
+            Decl(
+                Fn,
+            ),
+            FnDecl(
+                Function,
+            ),
+            Function(
+                Body,
+            ),
+            BlockStmt(
+                Stmts(
+                    3,
+                ),
+            ),
+            Stmt(
+                Return,
+            ),
+        ],
     },
     Call {
         func: Variable(

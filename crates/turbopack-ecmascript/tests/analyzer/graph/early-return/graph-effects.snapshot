@@ -1,0 +1,385 @@
+[
+    Conditional {
+        condition: Constant(
+            True,
+        ),
+        kind: IfElse {
+            then: EffectsBlock {
+                effects: [
+                    FreeVar {
+                        var: FreeVar(
+                            "a1",
+                        ),
+                        ast_path: [
+                            Program(
+                                Script,
+                            ),
+                            Script(
+                                Body(
+                                    0,
+                                ),
+                            ),
+                            Stmt(
+                                Decl,
+                            ),
+                            Decl(
+                                Fn,
+                            ),
+                            FnDecl(
+                                Function,
+                            ),
+                            Function(
+                                Body,
+                            ),
+                            BlockStmt(
+                                Stmts(
+                                    0,
+                                ),
+                            ),
+                            Stmt(
+                                If,
+                            ),
+                            IfStmt(
+                                Cons,
+                            ),
+                            Stmt(
+                                Block,
+                            ),
+                            BlockStmt(
+                                Stmts(
+                                    0,
+                                ),
+                            ),
+                            Stmt(
+                                Expr,
+                            ),
+                            ExprStmt(
+                                Expr,
+                            ),
+                            Expr(
+                                Call,
+                            ),
+                            CallExpr(
+                                Callee,
+                            ),
+                            Callee(
+                                Expr,
+                            ),
+                            Expr(
+                                Ident,
+                            ),
+                        ],
+                        span: 34..36#1,
+                        in_try: false,
+                    },
+                    Call {
+                        func: FreeVar(
+                            "a1",
+                        ),
+                        args: [],
+                        ast_path: [
+                            Program(
+                                Script,
+                            ),
+                            Script(
+                                Body(
+                                    0,
+                                ),
+                            ),
+                            Stmt(
+                                Decl,
+                            ),
+                            Decl(
+                                Fn,
+                            ),
+                            FnDecl(
+                                Function,
+                            ),
+                            Function(
+                                Body,
+                            ),
+                            BlockStmt(
+                                Stmts(
+                                    0,
+                                ),
+                            ),
+                            Stmt(
+                                If,
+                            ),
+                            IfStmt(
+                                Cons,
+                            ),
+                            Stmt(
+                                Block,
+                            ),
+                            BlockStmt(
+                                Stmts(
+                                    0,
+                                ),
+                            ),
+                            Stmt(
+                                Expr,
+                            ),
+                            ExprStmt(
+                                Expr,
+                            ),
+                            Expr(
+                                Call,
+                            ),
+                        ],
+                        span: 34..38#0,
+                        in_try: false,
+                    },
+                    Unreachable {
+                        start_ast_path: [
+                            Program(
+                                Script,
+                            ),
+                            Script(
+                                Body(
+                                    0,
+                                ),
+                            ),
+                            Stmt(
+                                Decl,
+                            ),
+                            Decl(
+                                Fn,
+                            ),
+                            FnDecl(
+                                Function,
+                            ),
+                            Function(
+                                Body,
+                            ),
+                            BlockStmt(
+                                Stmts(
+                                    0,
+                                ),
+                            ),
+                            Stmt(
+                                If,
+                            ),
+                            IfStmt(
+                                Cons,
+                            ),
+                            Stmt(
+                                Block,
+                            ),
+                            BlockStmt(
+                                Stmts(
+                                    1,
+                                ),
+                            ),
+                            Stmt(
+                                Return,
+                            ),
+                        ],
+                    },
+                ],
+                range: Exact(
+                    [
+                        Program(
+                            Script,
+                        ),
+                        Script(
+                            Body(
+                                0,
+                            ),
+                        ),
+                        Stmt(
+                            Decl,
+                        ),
+                        Decl(
+                            Fn,
+                        ),
+                        FnDecl(
+                            Function,
+                        ),
+                        Function(
+                            Body,
+                        ),
+                        BlockStmt(
+                            Stmts(
+                                0,
+                            ),
+                        ),
+                        Stmt(
+                            If,
+                        ),
+                        IfStmt(
+                            Cons,
+                        ),
+                    ],
+                ),
+            },
+            else: EffectsBlock {
+                effects: [
+                    FreeVar {
+                        var: FreeVar(
+                            "a2",
+                        ),
+                        ast_path: [
+                            Program(
+                                Script,
+                            ),
+                            Script(
+                                Body(
+                                    0,
+                                ),
+                            ),
+                            Stmt(
+                                Decl,
+                            ),
+                            Decl(
+                                Fn,
+                            ),
+                            FnDecl(
+                                Function,
+                            ),
+                            Function(
+                                Body,
+                            ),
+                            BlockStmt(
+                                Stmts(
+                                    1,
+                                ),
+                            ),
+                            Stmt(
+                                Expr,
+                            ),
+                            ExprStmt(
+                                Expr,
+                            ),
+                            Expr(
+                                Call,
+                            ),
+                            CallExpr(
+                                Callee,
+                            ),
+                            Callee(
+                                Expr,
+                            ),
+                            Expr(
+                                Ident,
+                            ),
+                        ],
+                        span: 58..60#1,
+                        in_try: false,
+                    },
+                    Call {
+                        func: FreeVar(
+                            "a2",
+                        ),
+                        args: [],
+                        ast_path: [
+                            Program(
+                                Script,
+                            ),
+                            Script(
+                                Body(
+                                    0,
+                                ),
+                            ),
+                            Stmt(
+                                Decl,
+                            ),
+                            Decl(
+                                Fn,
+                            ),
+                            FnDecl(
+                                Function,
+                            ),
+                            Function(
+                                Body,
+                            ),
+                            BlockStmt(
+                                Stmts(
+                                    1,
+                                ),
+                            ),
+                            Stmt(
+                                Expr,
+                            ),
+                            ExprStmt(
+                                Expr,
+                            ),
+                            Expr(
+                                Call,
+                            ),
+                        ],
+                        span: 58..62#0,
+                        in_try: false,
+                    },
+                ],
+                range: StartAfter(
+                    [
+                        Program(
+                            Script,
+                        ),
+                        Script(
+                            Body(
+                                0,
+                            ),
+                        ),
+                        Stmt(
+                            Decl,
+                        ),
+                        Decl(
+                            Fn,
+                        ),
+                        FnDecl(
+                            Function,
+                        ),
+                        Function(
+                            Body,
+                        ),
+                        BlockStmt(
+                            Stmts(
+                                0,
+                            ),
+                        ),
+                        Stmt(
+                            If,
+                        ),
+                    ],
+                ),
+            },
+        },
+        ast_path: [
+            Program(
+                Script,
+            ),
+            Script(
+                Body(
+                    0,
+                ),
+            ),
+            Stmt(
+                Decl,
+            ),
+            Decl(
+                Fn,
+            ),
+            FnDecl(
+                Function,
+            ),
+            Function(
+                Body,
+            ),
+            BlockStmt(
+                Stmts(
+                    0,
+                ),
+            ),
+            Stmt(
+                If,
+            ),
+            IfStmt(
+                Test,
+            ),
+        ],
+        span: 18..55#0,
+        in_try: false,
+    },
+]

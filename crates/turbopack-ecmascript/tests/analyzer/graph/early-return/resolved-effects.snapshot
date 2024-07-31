@@ -1,0 +1,19 @@
+0 -> 1 conditional = true
+
+1 -> 2 free var = FreeVar(a1)
+
+1 -> 3 call = ???*0*()
+- *0* FreeVar(a1)
+  ⚠️  unknown global
+  ⚠️  This value might have side effects
+
+1 -> 4 unreachable = ???*0*
+- *0* unreachable
+  ⚠️  This value might have side effects
+
+1 -> 5 free var = FreeVar(a2)
+
+1 -> 6 call = ???*0*()
+- *0* FreeVar(a2)
+  ⚠️  unknown global
+  ⚠️  This value might have side effects
