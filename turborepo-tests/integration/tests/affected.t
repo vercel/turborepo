@@ -32,6 +32,9 @@ Do the same thing with the `ls` command
 
     my-app apps[\/\\]my-app (re)
 
+Do the same thing with the `query` command
+  $ ${TURBO} query "query { affectedPackages { name } }"
+
 Commit the change
   $ git add .
   $ git commit -m "add foo" --quiet
