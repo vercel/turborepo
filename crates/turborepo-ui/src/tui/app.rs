@@ -32,11 +32,13 @@ pub enum LayoutSections {
 }
 
 pub struct App<W> {
-    rows: u16,
-    cols: u16,
+    term_cols: u16,
+    pane_rows: u16,
+    pane_cols: u16,
     tasks: BTreeMap<String, TerminalOutput<W>>,
     tasks_by_status: TasksByStatus,
-    input_options: InputOptions,
+    focus: LayoutSections,
+    tty_stdin: bool,
     scroll: TableState,
     selected_task_index: usize,
     has_user_scrolled: bool,
@@ -51,6 +53,15 @@ pub enum Direction {
 impl<W> App<W> {
     pub fn new(rows: u16, cols: u16, tasks: Vec<String>) -> Self {
         debug!("tasks: {tasks:?}");
+        let task_width_hint = TaskTable::width_hint(tasks.iter().map(|s| s.as_str()));
+
+        // Want to maximize pane width
+        let ratio_pane_width = (f32::from(cols) * PANE_SIZE_RATIO) as u16;
+        let full_task_width = cols.saturating_sub(task_width_hint);
+        let pane_cols = full_task_width.max(ratio_pane_width);
+
+        // We use 2 rows for pane title and for the interaction info
+        let rows = rows.saturating_sub(2).max(1);
 
         // Initializes with the planned tasks
         // and will mutate as tasks change
@@ -69,14 +80,13 @@ impl<W> App<W> {
         let selected_task_index: usize = 0;
 
         Self {
-            rows,
-            cols,
+            term_cols: cols,
+            pane_rows: rows,
+            pane_cols,
             done: false,
-            input_options: InputOptions {
-                focus: LayoutSections::TaskList,
-                // Check if stdin is a tty that we should read input from
-                tty_stdin: atty::is(atty::Stream::Stdin),
-            },
+            focus: LayoutSections::TaskList,
+            // Check if stdin is a tty that we should read input from
+            tty_stdin: atty::is(atty::Stream::Stdin),
             tasks: tasks_by_status
                 .task_names_in_displayed_order()
                 .map(|task_name| (task_name.to_owned(), TerminalOutput::new(rows, cols, None)))
@@ -89,20 +99,33 @@ impl<W> App<W> {
     }
 
     pub fn is_focusing_pane(&self) -> bool {
-        match self.input_options.focus {
+        match self.focus {
             LayoutSections::Pane => true,
             LayoutSections::TaskList => false,
         }
     }
 
-    pub fn active_task(&self) -> String {
-        self.tasks_by_status
-            .task_name(self.selected_task_index)
-            .to_string()
+    pub fn active_task(&self) -> &str {
+        self.tasks_by_status.task_name(self.selected_task_index)
+    }
+
+    fn input_options(&self) -> InputOptions {
+        let has_selection = self.get_full_task().has_selection();
+        InputOptions {
+            focus: self.focus,
+            tty_stdin: self.tty_stdin,
+            has_selection,
+        }
+    }
+
+    pub fn get_full_task(&self) -> &TerminalOutput<W> {
+        self.tasks.get(self.active_task()).unwrap()
     }
 
     pub fn get_full_task_mut(&mut self) -> &mut TerminalOutput<W> {
-        self.tasks.get_mut(&self.active_task()).unwrap()
+        // Clippy is wrong here, we need this to avoid a borrow checker error
+        #[allow(clippy::unnecessary_to_owned)]
+        self.tasks.get_mut(&self.active_task().to_owned()).unwrap()
     }
 
     #[tracing::instrument(skip(self))]
@@ -127,11 +150,7 @@ impl<W> App<W> {
 
     #[tracing::instrument(skip_all)]
     pub fn scroll_terminal_output(&mut self, direction: Direction) {
-        self.tasks
-            .get_mut(&self.active_task())
-            .unwrap()
-            .scroll(direction)
-            .unwrap_or_default();
+        self.get_full_task_mut().scroll(direction).unwrap();
     }
 
     /// Mark the given task as started.
@@ -247,8 +266,7 @@ impl<W> App<W> {
     }
 
     pub fn has_stdin(&self) -> bool {
-        let active_task = self.active_task();
-        if let Some(term) = self.tasks.get(&active_task) {
+        if let Some(term) = self.tasks.get(self.active_task()) {
             term.stdin.is_some()
         } else {
             false
@@ -256,10 +274,10 @@ impl<W> App<W> {
     }
 
     pub fn interact(&mut self) {
-        if matches!(self.input_options.focus, LayoutSections::Pane) {
-            self.input_options.focus = LayoutSections::TaskList
+        if matches!(self.focus, LayoutSections::Pane) {
+            self.focus = LayoutSections::TaskList
         } else if self.has_stdin() {
-            self.input_options.focus = LayoutSections::Pane;
+            self.focus = LayoutSections::Pane;
         }
     }
 
@@ -269,7 +287,7 @@ impl<W> App<W> {
         for task in &tasks {
             self.tasks
                 .entry(task.clone())
-                .or_insert_with(|| TerminalOutput::new(self.rows, self.cols, None));
+                .or_insert_with(|| TerminalOutput::new(self.pane_rows, self.pane_cols, None));
         }
         // Trim the terminal output to only tasks that exist in new list
         self.tasks.retain(|name, _| tasks.contains(name));
@@ -311,6 +329,36 @@ impl<W> App<W> {
         task.cache_result = Some(result);
         Ok(())
     }
+
+    pub fn handle_mouse(&mut self, mut event: crossterm::event::MouseEvent) -> Result<(), Error> {
+        let table_width = self.term_cols - self.pane_cols;
+        debug!("original mouse event: {event:?}, table_width: {table_width}");
+        // Only handle mouse event if it happens inside of pane
+        // We give a 1 cell buffer to make it easier to select the first column of a row
+        if event.row > 0 && event.column >= table_width {
+            // Subtract 1 from the y axis due to the title of the pane
+            event.row -= 1;
+            // Subtract the width of the table
+            event.column -= table_width;
+            debug!("translated mouse event: {event:?}");
+
+            let task = self.get_full_task_mut();
+            task.handle_mouse(event)?;
+        }
+
+        Ok(())
+    }
+
+    pub fn copy_selection(&self) {
+        let task = self
+            .tasks
+            .get(self.active_task())
+            .expect("active task should exist");
+        let Some(text) = task.copy_selection() else {
+            return;
+        };
+        super::copy_to_clipboard(&text);
+    }
 }
 
 impl<W: Write> App<W> {
@@ -328,11 +376,11 @@ impl<W: Write> App<W> {
 
     #[tracing::instrument(skip_all)]
     pub fn forward_input(&mut self, bytes: &[u8]) -> Result<(), Error> {
-        if matches!(self.input_options.focus, LayoutSections::Pane) {
+        if matches!(self.focus, LayoutSections::Pane) {
             let task_output = self.get_full_task_mut();
             if let Some(stdin) = &mut task_output.stdin {
                 stdin.write_all(bytes).map_err(|e| Error::Stdin {
-                    name: self.active_task(),
+                    name: self.active_task().to_owned(),
                     e,
                 })?;
             }
@@ -355,21 +403,10 @@ impl<W: Write> App<W> {
 pub fn run_app(tasks: Vec<String>, receiver: AppReceiver) -> Result<(), Error> {
     let mut terminal = startup()?;
     let size = terminal.size()?;
-    // Figure out pane width?
-    let task_width_hint = TaskTable::width_hint(tasks.iter().map(|s| s.as_str()));
-    // Want to maximize pane width
-    let ratio_pane_width = (f32::from(size.width) * PANE_SIZE_RATIO) as u16;
-    let full_task_width = size.width.saturating_sub(task_width_hint);
 
-    let mut app: App<Box<dyn io::Write + Send>> =
-        App::new(size.height, full_task_width.max(ratio_pane_width), tasks);
+    let mut app: App<Box<dyn io::Write + Send>> = App::new(size.height, size.width, tasks);
 
-    let (result, callback) = match run_app_inner(
-        &mut terminal,
-        &mut app,
-        receiver,
-        full_task_width.max(ratio_pane_width),
-    ) {
+    let (result, callback) = match run_app_inner(&mut terminal, &mut app, receiver) {
         Ok(callback) => (Ok(()), callback),
         Err(err) => (Err(err), None),
     };
@@ -385,19 +422,18 @@ fn run_app_inner<B: Backend + std::io::Write>(
     terminal: &mut Terminal<B>,
     app: &mut App<Box<dyn io::Write + Send>>,
     receiver: AppReceiver,
-    cols: u16,
 ) -> Result<Option<mpsc::SyncSender<()>>, Error> {
     // Render initial state to paint the screen
-    terminal.draw(|f| view(app, f, cols))?;
+    terminal.draw(|f| view(app, f))?;
     let mut last_render = Instant::now();
     let mut callback = None;
-    while let Some(event) = poll(app.input_options, &receiver, last_render + FRAMERATE) {
+    while let Some(event) = poll(app.input_options(), &receiver, last_render + FRAMERATE) {
         callback = update(app, event)?;
         if app.done {
             break;
         }
         if FRAMERATE <= last_render.elapsed() {
-            terminal.draw(|f| view(app, f, cols))?;
+            terminal.draw(|f| view(app, f))?;
             last_render = Instant::now();
         }
     }
@@ -534,15 +570,22 @@ fn update(
             app.update_tasks(tasks);
             // app.table.tick();
         }
+        Event::Mouse(m) => {
+            app.handle_mouse(m)?;
+        }
+        Event::CopySelection => {
+            app.copy_selection();
+        }
     }
     Ok(None)
 }
 
-fn view<W>(app: &mut App<W>, f: &mut Frame, cols: u16) {
+fn view<W>(app: &mut App<W>, f: &mut Frame) {
+    let cols = app.pane_cols;
     let horizontal = Layout::horizontal([Constraint::Fill(1), Constraint::Length(cols)]);
     let [table, pane] = horizontal.areas(f.size());
 
-    let active_task = app.active_task();
+    let active_task = app.active_task().to_string();
 
     let output_logs = app.tasks.get(&active_task).unwrap();
     let pane_to_render: TerminalPane<W> =

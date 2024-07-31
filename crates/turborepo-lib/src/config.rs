@@ -210,6 +210,7 @@ pub struct ConfigurationOptions {
     pub(crate) ui: Option<bool>,
     #[serde(rename = "dangerouslyDisablePackageManagerCheck")]
     pub(crate) allow_no_package_manager: Option<bool>,
+    pub(crate) daemon: Option<bool>,
 }
 
 #[derive(Default)]
@@ -280,6 +281,10 @@ impl ConfigurationOptions {
     pub fn allow_no_package_manager(&self) -> bool {
         self.allow_no_package_manager.unwrap_or_default()
     }
+
+    pub fn daemon(&self) -> Option<bool> {
+        self.daemon
+    }
 }
 
 // Maps Some("") to None to emulate how Go handles empty strings
@@ -314,6 +319,7 @@ impl ResolvedConfigurationOptions for RawTurboJson {
             .map(|spaces_id| spaces_id.into());
         opts.ui = self.ui.map(|ui| ui.use_tui());
         opts.allow_no_package_manager = self.allow_no_package_manager;
+        opts.daemon = self.daemon.map(|daemon| *daemon.as_inner());
         Ok(opts)
     }
 }
@@ -350,6 +356,7 @@ fn get_env_var_config(
         OsString::from("turbo_dangerously_disable_package_manager_check"),
         "allow_no_package_manager",
     );
+    turbo_mapping.insert(OsString::from("turbo_daemon"), "daemon");
     turbo_mapping.insert(OsString::from("turbo_preflight"), "preflight");
 
     // We do not enable new config sources:
@@ -441,6 +448,13 @@ fn get_env_var_config(
         .map(|s| s.as_str())
         .and_then(truth_env_var);
 
+    // Process daemon
+    let daemon = output_map.get("daemon").and_then(|val| match val.as_str() {
+        "1" | "true" => Some(true),
+        "0" | "false" => Some(false),
+        _ => None,
+    });
+
     // We currently don't pick up a Spaces ID via env var, we likely won't
     // continue using the Spaces name, we can add an env var when we have the
     // name we want to stick with.
@@ -459,6 +473,7 @@ fn get_env_var_config(
         enabled,
         ui,
         allow_no_package_manager,
+        daemon,
 
         // Processed numbers
         timeout,
@@ -519,6 +534,7 @@ fn get_override_env_var_config(
         preflight: None,
         enabled: None,
         ui,
+        daemon: None,
         timeout: None,
         upload_timeout: None,
         spaces_id: None,
@@ -663,6 +679,7 @@ impl TurborepoConfigBuilder {
         allow_no_package_manager,
         Option<bool>
     );
+    create_builder!(with_daemon, daemon, Option<bool>);
 
     pub fn build(&self) -> Result<ConfigurationOptions, Error> {
         // Priority, from least significant to most significant:
@@ -745,6 +762,9 @@ impl TurborepoConfigBuilder {
                     {
                         acc.allow_no_package_manager = Some(allow_no_package_manager);
                     }
+                    if let Some(daemon) = current_source_config.daemon {
+                        acc.daemon = Some(daemon);
+                    }
 
                     acc
                 })
@@ -806,6 +826,7 @@ mod test {
             "turbo_dangerously_disable_package_manager_check".into(),
             "true".into(),
         );
+        env.insert("turbo_daemon".into(), "true".into());
         env.insert("turbo_preflight".into(), "true".into());
 
         let config = get_env_var_config(&env).unwrap();
@@ -818,6 +839,7 @@ mod test {
         assert_eq!(turbo_remote_cache_timeout, config.timeout.unwrap());
         assert_eq!(Some(true), config.ui);
         assert_eq!(Some(true), config.allow_no_package_manager);
+        assert_eq!(Some(true), config.daemon);
     }
 
     #[test]
@@ -829,6 +851,7 @@ mod test {
         env.insert("turbo_teamid".into(), "".into());
         env.insert("turbo_token".into(), "".into());
         env.insert("turbo_ui".into(), "".into());
+        env.insert("turbo_daemon".into(), "".into());
         env.insert("turbo_preflight".into(), "".into());
 
         let config = get_env_var_config(&env).unwrap();
@@ -838,6 +861,7 @@ mod test {
         assert_eq!(config.team_id(), None);
         assert_eq!(config.token(), None);
         assert_eq!(config.ui, None);
+        assert_eq!(config.daemon, None);
         assert!(!config.preflight());
     }
 

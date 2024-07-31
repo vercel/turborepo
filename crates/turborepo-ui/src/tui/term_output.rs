@@ -112,4 +112,44 @@ impl<W> TerminalOutput<W> {
         }
         Ok(())
     }
+
+    pub fn has_selection(&self) -> bool {
+        self.parser
+            .screen()
+            .selected_text()
+            .map_or(false, |s| !s.is_empty())
+    }
+
+    pub fn handle_mouse(&mut self, event: crossterm::event::MouseEvent) -> Result<(), Error> {
+        match event.kind {
+            crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left) => {
+                // We need to update the vterm so we don't continue to render the selection
+                self.parser.screen_mut().clear_selection();
+            }
+            crossterm::event::MouseEventKind::Drag(crossterm::event::MouseButton::Left) => {
+                // Update selection of underlying parser
+                self.parser
+                    .screen_mut()
+                    .update_selection(event.row, event.column);
+            }
+            // Scrolling is handled elsewhere
+            crossterm::event::MouseEventKind::ScrollDown => (),
+            crossterm::event::MouseEventKind::ScrollUp => (),
+            // I think we can ignore this?
+            crossterm::event::MouseEventKind::Moved => (),
+            // Don't care about other mouse buttons
+            crossterm::event::MouseEventKind::Down(_) => (),
+            crossterm::event::MouseEventKind::Drag(_) => (),
+            // We don't support horizontal scroll
+            crossterm::event::MouseEventKind::ScrollLeft
+            | crossterm::event::MouseEventKind::ScrollRight => (),
+            // Cool, person stopped holding down mouse
+            crossterm::event::MouseEventKind::Up(_) => (),
+        }
+        Ok(())
+    }
+
+    pub fn copy_selection(&self) -> Option<String> {
+        self.parser.screen().selected_text()
+    }
 }

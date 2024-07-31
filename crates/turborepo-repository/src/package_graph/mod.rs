@@ -6,6 +6,7 @@ use std::{
 use itertools::Itertools;
 use petgraph::visit::{depth_first_search, Reversed};
 use serde::Serialize;
+use tracing::debug;
 use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
 };
@@ -424,9 +425,20 @@ impl PackageGraph {
         } else {
             self.packages
                 .iter()
-                .filter(|(_name, info)| {
-                    closures.get(info.package_path().to_unix().as_str())
-                        != info.transitive_dependencies.as_ref()
+                .filter(|(name, info)| {
+                    let previous_closure = closures.get(info.package_path().to_unix().as_str());
+                    let not_equal = previous_closure != info.transitive_dependencies.as_ref();
+                    if not_equal {
+                        if let (Some(prev), Some(curr)) =
+                            (previous_closure, info.transitive_dependencies.as_ref())
+                        {
+                            debug!(
+                                "package {name} has differing closure: {:?}",
+                                prev.symmetric_difference(curr)
+                            );
+                        }
+                    }
+                    not_equal
                 })
                 .map(|(name, info)| match name {
                     PackageName::Other(n) => {

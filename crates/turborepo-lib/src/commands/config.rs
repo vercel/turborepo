@@ -20,6 +20,7 @@ struct ConfigOutput<'a> {
     spaces_id: Option<&'a str>,
     ui: bool,
     package_manager: PackageManager,
+    daemon: Option<bool>,
 }
 
 pub async fn run(base: CommandBase) -> Result<(), cli::Error> {
@@ -47,6 +48,7 @@ pub async fn run(base: CommandBase) -> Result<(), cli::Error> {
             spaces_id: config.spaces_id(),
             ui: config.ui(),
             package_manager: *package_manager,
+            daemon: config.daemon,
         })?
     );
     Ok(())

@@ -60,6 +60,19 @@ impl ProcessManager {
         let use_pty = !cfg!(windows) && atty::is(atty::Stream::Stdout);
         Self::new(use_pty)
     }
+
+    /// Returns whether children will be spawned attached to a pseudoterminal
+    pub fn use_pty(&self) -> bool {
+        self.use_pty
+    }
+
+    /// Returns whether or not closing a child's stdin will result in it
+    /// immediately exiting.
+    pub fn closing_stdin_ends_process(&self) -> bool {
+        // Processes spawned hooked up to ConPTY on Windows will immediately exit
+        // if their stdin is closed. We avoid closing stdin in this case.
+        cfg!(windows) && self.use_pty
+    }
 }
 
 impl ProcessManager {

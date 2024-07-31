@@ -85,6 +85,7 @@ impl CommandBase {
                     .dangerously_disable_package_manager_check
                     .then_some(true),
             )
+            .with_daemon(self.args.run_args.as_ref().and_then(|args| args.daemon()))
             .build()
     }
 

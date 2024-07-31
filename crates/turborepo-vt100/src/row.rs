@@ -37,6 +37,12 @@ impl Row {
         self.cells.iter()
     }
 
+    pub(crate) fn cells_mut(
+        &mut self,
+    ) -> impl Iterator<Item = &mut crate::Cell> {
+        self.cells.iter_mut()
+    }
+
     pub fn get(&self, col: u16) -> Option<&crate::Cell> {
         self.cells.get(usize::from(col))
     }

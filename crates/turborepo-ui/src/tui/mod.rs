@@ -1,4 +1,5 @@
 mod app;
+mod clipboard;
 pub mod event;
 mod handle;
 mod input;
@@ -9,6 +10,7 @@ mod task;
 mod term_output;
 
 pub use app::{run_app, terminal_big_enough};
+use clipboard::copy_to_clipboard;
 use event::{Event, TaskResult};
 pub use handle::{AppReceiver, AppSender, TuiTask};
 use input::{input, InputOptions};
