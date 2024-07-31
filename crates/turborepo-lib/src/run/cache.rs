@@ -162,13 +162,6 @@ impl TaskCache {
 
     pub fn on_error(&self, terminal_output: &mut impl CacheOutput) -> Result<(), Error> {
         if self.task_output_logs == OutputLogsMode::ErrorsOnly {
-            terminal_output.status(
-                &format!(
-                    "cache miss, executing {}",
-                    color!(self.ui, GREY, "{}", self.hash)
-                ),
-                CacheResult::Miss,
-            );
             self.replay_log_file(terminal_output)?;
         }
 
@@ -205,6 +198,17 @@ impl TaskCache {
         telemetry: &PackageTaskEventBuilder,
     ) -> Result<Option<CacheHitMetadata>, Error> {
         if self.caching_disabled || self.run_cache.reads_disabled {
+            if matches!(self.task_output_logs, OutputLogsMode::ErrorsOnly) {
+                terminal_output.status(
+                    &format!(
+                        "cache bypass, force executing {} {}",
+                        color!(self.ui, GREY, "{}", self.hash),
+                        color!(self.ui, GREY, "{}", "(only logging errors)")
+                    ),
+                    CacheResult::Miss,
+                );
+            }
+
             if !matches!(
                 self.task_output_logs,
                 OutputLogsMode::None | OutputLogsMode::ErrorsOnly
@@ -256,6 +260,17 @@ impl TaskCache {
                 .await?;
 
             let Some((cache_hit_metadata, restored_files)) = cache_status else {
+                if matches!(self.task_output_logs, OutputLogsMode::ErrorsOnly) {
+                    terminal_output.status(
+                        &format!(
+                            "cache miss, executing {} {}",
+                            color!(self.ui, GREY, "{}", self.hash),
+                            color!(self.ui, GREY, "{}", "(only logging errors)")
+                        ),
+                        CacheResult::Miss,
+                    );
+                }
+
                 if !matches!(
                     self.task_output_logs,
                     OutputLogsMode::None | OutputLogsMode::ErrorsOnly
@@ -332,9 +347,19 @@ impl TaskCache {
                 );
                 self.replay_log_file(terminal_output)?;
             }
-            // Note that if we're restoring from cache, the task succeeded
-            // so we know we don't need to print anything for errors
-            OutputLogsMode::ErrorsOnly | OutputLogsMode::None => {}
+            OutputLogsMode::ErrorsOnly => {
+                debug!("log file path: {}", self.log_file_path);
+                terminal_output.status(
+                    &format!(
+                        "cache hit{}, replaying logs {} {}",
+                        more_context,
+                        color!(self.ui, GREY, "{}", self.hash),
+                        color!(self.ui, GREY, "{}", "(no errors in logs)")
+                    ),
+                    CacheResult::Hit,
+                );
+            }
+            OutputLogsMode::None => {}
         }
 
         Ok(cache_status)
