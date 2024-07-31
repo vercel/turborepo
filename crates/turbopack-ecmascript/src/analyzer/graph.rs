@@ -1765,6 +1765,7 @@ impl VisitAstPath for Analyzer<'_> {
     ) {
         self.effects = take(&mut self.data.effects);
         program.visit_children_with_path(self, ast_path);
+        self.end_early_return_block();
         self.data.effects = take(&mut self.effects);
     }
 
@@ -1857,31 +1858,74 @@ impl VisitAstPath for Analyzer<'_> {
         );
     }
 
-    fn visit_for_stmt<'ast: 'r, 'r>(
-        &mut self,
-        n: &'ast ForStmt,
-        ast_path: &mut swc_core::ecma::visit::AstNodePath<'r>,
-    ) {
-        n.visit_children_with_path(self, ast_path);
-        self.end_early_return_block();
-    }
-
-    fn visit_while_stmt<'ast: 'r, 'r>(
-        &mut self,
-        n: &'ast WhileStmt,
-        ast_path: &mut swc_core::ecma::visit::AstNodePath<'r>,
-    ) {
-        n.visit_children_with_path(self, ast_path);
-        self.end_early_return_block();
-    }
-
     fn visit_try_stmt<'ast: 'r, 'r>(
         &mut self,
-        n: &'ast TryStmt,
+        stmt: &'ast TryStmt,
+        ast_path: &mut swc_core::ecma::visit::AstNodePath<'r>,
+    ) {
+        let prev_effects = take(&mut self.effects);
+        let prev_early_return_stack = take(&mut self.early_return_stack);
+        let mut block = {
+            let mut ast_path =
+                ast_path.with_guard(AstParentNodeRef::TryStmt(stmt, TryStmtField::Block));
+            stmt.block.visit_with_path(self, &mut ast_path);
+            self.end_early_return_block();
+            take(&mut self.effects)
+        };
+        let mut handler = if let Some(handler) = stmt.handler.as_ref() {
+            let mut ast_path =
+                ast_path.with_guard(AstParentNodeRef::TryStmt(stmt, TryStmtField::Handler));
+            handler.visit_with_path(self, &mut ast_path);
+            self.end_early_return_block();
+            take(&mut self.effects)
+        } else {
+            vec![]
+        };
+        self.early_return_stack = prev_early_return_stack;
+        self.effects = prev_effects;
+        self.effects.append(&mut block);
+        self.effects.append(&mut handler);
+        if let Some(finalizer) = stmt.finalizer.as_ref() {
+            let mut ast_path =
+                ast_path.with_guard(AstParentNodeRef::TryStmt(stmt, TryStmtField::Finalizer));
+            finalizer.visit_with_path(self, &mut ast_path);
+        };
+    }
+
+    fn visit_block_stmt<'ast: 'r, 'r>(
+        &mut self,
+        n: &'ast BlockStmt,
         ast_path: &mut swc_core::ecma::visit::AstNodePath<'r>,
     ) {
         n.visit_children_with_path(self, ast_path);
-        self.end_early_return_block();
+        if ast_path.len() < 2
+            || !matches!(
+                &ast_path[ast_path.len() - 2..],
+                [
+                    AstParentNodeRef::IfStmt(_, IfStmtField::Cons),
+                    AstParentNodeRef::Stmt(_, StmtField::Block)
+                ] | [
+                    AstParentNodeRef::IfStmt(_, IfStmtField::Alt),
+                    AstParentNodeRef::Stmt(_, StmtField::Block)
+                ] | [_, AstParentNodeRef::Function(_, FunctionField::Body)]
+                    | [
+                        AstParentNodeRef::ArrowExpr(_, ArrowExprField::Body),
+                        AstParentNodeRef::BlockStmtOrExpr(_, BlockStmtOrExprField::BlockStmt)
+                    ]
+                    | [_, AstParentNodeRef::TryStmt(_, TryStmtField::Block,)]
+                    | [
+                        AstParentNodeRef::TryStmt(_, TryStmtField::Handler),
+                        AstParentNodeRef::CatchClause(_, CatchClauseField::Body)
+                    ]
+            )
+        {
+            if self.end_early_return_block() {
+                self.early_return_stack.push(EarlyReturn::Always {
+                    prev_effects: take(&mut self.effects),
+                    start_ast_path: as_parent_path(ast_path),
+                });
+            }
+        }
     }
 }
 

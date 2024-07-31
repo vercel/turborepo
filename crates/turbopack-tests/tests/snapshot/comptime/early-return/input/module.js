@@ -91,3 +91,51 @@ export function j(j) {
   }
   return i2();
 }
+
+class K {
+  constructor() {
+    try {
+      k1();
+    } catch (e) {
+      k2();
+      return;
+      k3();
+    } finally {
+      k4();
+    }
+    k5();
+  }
+
+  l() {
+    try {
+      l1();
+    } catch (e) {
+      l2();
+    } finally {
+      l3();
+      return;
+      l4();
+    }
+    l5();
+  }
+
+  get m() {
+    if (true) {
+      m1();
+      return;
+    }
+    m2();
+  }
+
+  set m(value) {
+    m1();
+    return m2();
+    m3();
+  }
+}
+
+z1();
+
+return;
+
+z2();

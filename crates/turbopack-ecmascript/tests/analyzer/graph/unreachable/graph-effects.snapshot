@@ -297,11 +297,8 @@
             ),
         ],
     },
-    FreeVar {
-        var: FreeVar(
-            "b3",
-        ),
-        ast_path: [
+    Unreachable {
+        start_ast_path: [
             Program(
                 Script,
             ),
@@ -324,74 +321,19 @@
             ),
             BlockStmt(
                 Stmts(
-                    1,
+                    0,
                 ),
             ),
             Stmt(
-                Expr,
+                While,
             ),
-            ExprStmt(
-                Expr,
-            ),
-            Expr(
-                Call,
-            ),
-            CallExpr(
-                Callee,
-            ),
-            Callee(
-                Expr,
-            ),
-            Expr(
-                Ident,
-            ),
-        ],
-        span: 116..118#1,
-        in_try: false,
-    },
-    Call {
-        func: FreeVar(
-            "b3",
-        ),
-        args: [],
-        ast_path: [
-            Program(
-                Script,
-            ),
-            Script(
-                Body(
-                    1,
-                ),
-            ),
-            Stmt(
-                Decl,
-            ),
-            Decl(
-                Fn,
-            ),
-            FnDecl(
-                Function,
-            ),
-            Function(
+            WhileStmt(
                 Body,
             ),
-            BlockStmt(
-                Stmts(
-                    1,
-                ),
-            ),
             Stmt(
-                Expr,
-            ),
-            ExprStmt(
-                Expr,
-            ),
-            Expr(
-                Call,
+                Block,
             ),
         ],
-        span: 116..120#0,
-        in_try: false,
     },
     FreeVar {
         var: FreeVar(
@@ -560,6 +502,44 @@
             ),
             Stmt(
                 Return,
+            ),
+        ],
+    },
+    Unreachable {
+        start_ast_path: [
+            Program(
+                Script,
+            ),
+            Script(
+                Body(
+                    2,
+                ),
+            ),
+            Stmt(
+                Decl,
+            ),
+            Decl(
+                Fn,
+            ),
+            FnDecl(
+                Function,
+            ),
+            Function(
+                Body,
+            ),
+            BlockStmt(
+                Stmts(
+                    0,
+                ),
+            ),
+            Stmt(
+                DoWhile,
+            ),
+            DoWhileStmt(
+                Body,
+            ),
+            Stmt(
+                Block,
             ),
         ],
     },
@@ -733,11 +713,8 @@
             ),
         ],
     },
-    FreeVar {
-        var: FreeVar(
-            "d3",
-        ),
-        ast_path: [
+    Unreachable {
+        start_ast_path: [
             Program(
                 Script,
             ),
@@ -760,74 +737,19 @@
             ),
             BlockStmt(
                 Stmts(
-                    1,
+                    0,
                 ),
             ),
             Stmt(
-                Expr,
+                For,
             ),
-            ExprStmt(
-                Expr,
-            ),
-            Expr(
-                Call,
-            ),
-            CallExpr(
-                Callee,
-            ),
-            Callee(
-                Expr,
-            ),
-            Expr(
-                Ident,
-            ),
-        ],
-        span: 275..277#1,
-        in_try: false,
-    },
-    Call {
-        func: FreeVar(
-            "d3",
-        ),
-        args: [],
-        ast_path: [
-            Program(
-                Script,
-            ),
-            Script(
-                Body(
-                    3,
-                ),
-            ),
-            Stmt(
-                Decl,
-            ),
-            Decl(
-                Fn,
-            ),
-            FnDecl(
-                Function,
-            ),
-            Function(
+            ForStmt(
                 Body,
             ),
-            BlockStmt(
-                Stmts(
-                    1,
-                ),
-            ),
             Stmt(
-                Expr,
-            ),
-            ExprStmt(
-                Expr,
-            ),
-            Expr(
-                Call,
+                Block,
             ),
         ],
-        span: 275..279#0,
-        in_try: false,
     },
     FreeVar {
         var: FreeVar(
@@ -996,6 +918,44 @@
             ),
             Stmt(
                 Return,
+            ),
+        ],
+    },
+    Unreachable {
+        start_ast_path: [
+            Program(
+                Script,
+            ),
+            Script(
+                Body(
+                    4,
+                ),
+            ),
+            Stmt(
+                Decl,
+            ),
+            Decl(
+                Fn,
+            ),
+            FnDecl(
+                Function,
+            ),
+            Function(
+                Body,
+            ),
+            BlockStmt(
+                Stmts(
+                    0,
+                ),
+            ),
+            Stmt(
+                ForIn,
+            ),
+            ForInStmt(
+                Body,
+            ),
+            Stmt(
+                Block,
             ),
         ],
     },
@@ -1169,6 +1129,44 @@
             ),
         ],
     },
+    Unreachable {
+        start_ast_path: [
+            Program(
+                Script,
+            ),
+            Script(
+                Body(
+                    5,
+                ),
+            ),
+            Stmt(
+                Decl,
+            ),
+            Decl(
+                Fn,
+            ),
+            FnDecl(
+                Function,
+            ),
+            Function(
+                Body,
+            ),
+            BlockStmt(
+                Stmts(
+                    0,
+                ),
+            ),
+            Stmt(
+                ForOf,
+            ),
+            ForOfStmt(
+                Body,
+            ),
+            Stmt(
+                Block,
+            ),
+        ],
+    },
     FreeVar {
         var: FreeVar(
             "g1",
@@ -1329,6 +1327,130 @@
                 Return,
             ),
         ],
+    },
+    FreeVar {
+        var: FreeVar(
+            "g3",
+        ),
+        ast_path: [
+            Program(
+                Script,
+            ),
+            Script(
+                Body(
+                    6,
+                ),
+            ),
+            Stmt(
+                Decl,
+            ),
+            Decl(
+                Fn,
+            ),
+            FnDecl(
+                Function,
+            ),
+            Function(
+                Body,
+            ),
+            BlockStmt(
+                Stmts(
+                    0,
+                ),
+            ),
+            Stmt(
+                Try,
+            ),
+            TryStmt(
+                Handler,
+            ),
+            CatchClause(
+                Body,
+            ),
+            BlockStmt(
+                Stmts(
+                    0,
+                ),
+            ),
+            Stmt(
+                Expr,
+            ),
+            ExprStmt(
+                Expr,
+            ),
+            Expr(
+                Call,
+            ),
+            CallExpr(
+                Callee,
+            ),
+            Callee(
+                Expr,
+            ),
+            Expr(
+                Ident,
+            ),
+        ],
+        span: 527..529#1,
+        in_try: false,
+    },
+    Call {
+        func: FreeVar(
+            "g3",
+        ),
+        args: [],
+        ast_path: [
+            Program(
+                Script,
+            ),
+            Script(
+                Body(
+                    6,
+                ),
+            ),
+            Stmt(
+                Decl,
+            ),
+            Decl(
+                Fn,
+            ),
+            FnDecl(
+                Function,
+            ),
+            Function(
+                Body,
+            ),
+            BlockStmt(
+                Stmts(
+                    0,
+                ),
+            ),
+            Stmt(
+                Try,
+            ),
+            TryStmt(
+                Handler,
+            ),
+            CatchClause(
+                Body,
+            ),
+            BlockStmt(
+                Stmts(
+                    0,
+                ),
+            ),
+            Stmt(
+                Expr,
+            ),
+            ExprStmt(
+                Expr,
+            ),
+            Expr(
+                Call,
+            ),
+        ],
+        span: 527..531#0,
+        in_try: false,
     },
     FreeVar {
         var: FreeVar(
