@@ -1889,6 +1889,21 @@ impl VisitAstPath for Analyzer<'_> {
         };
     }
 
+    fn visit_switch_case<'ast: 'r, 'r>(
+        &mut self,
+        case: &'ast SwitchCase,
+        ast_path: &mut swc_core::ecma::visit::AstNodePath<'r>,
+    ) {
+        let prev_effects = take(&mut self.effects);
+        let prev_early_return_stack = take(&mut self.early_return_stack);
+        case.visit_children_with_path(self, ast_path);
+        self.end_early_return_block();
+        let mut effects = take(&mut self.effects);
+        self.early_return_stack = prev_early_return_stack;
+        self.effects = prev_effects;
+        self.effects.append(&mut effects);
+    }
+
     fn visit_block_stmt<'ast: 'r, 'r>(
         &mut self,
         n: &'ast BlockStmt,

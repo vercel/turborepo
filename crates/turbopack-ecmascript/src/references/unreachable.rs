@@ -6,7 +6,10 @@ use swc_core::{
             ArrowExpr, BindingIdent, BlockStmt, ClassDecl, Decl, FnDecl, FnExpr, Pat, Stmt,
             VarDecl, VarDeclKind, VarDeclarator,
         },
-        visit::{fields::BlockStmtField, AstParentKind, VisitMut},
+        visit::{
+            fields::{BlockStmtField, SwitchCaseField},
+            AstParentKind, VisitMut,
+        },
     },
     quote,
 };
@@ -72,30 +75,35 @@ impl CodeGenerateable for Unreachable {
                 }
                 if !parent.is_empty() {
                     parent = &parent[0..parent.len() - 1];
-                    if let Some(AstParentKind::BlockStmt(BlockStmtField::Stmts(start_index))) =
-                        parent.last()
-                    {
-                        let start_index = *start_index;
-                        parent = &parent[0..parent.len() - 1];
+                    fn replace(stmts: &mut Vec<Stmt>, start_index: usize) {
+                        if stmts.len() > start_index + 1 {
+                            let unreachable = stmts
+                                .splice(
+                                    start_index + 1..,
+                                    [quote!("\"TURBOPACK unreachable\";" as Stmt)].into_iter(),
+                                )
+                                .collect::<Vec<_>>();
+                            for mut stmt in unreachable {
+                                ExtractDeclarations { stmts }.visit_mut_stmt(&mut stmt);
+                            }
+                        }
+                    }
+                    let (parent, [last]) = parent.split_at(parent.len() - 1) else {
+                        unreachable!();
+                    };
+                    if let &AstParentKind::BlockStmt(BlockStmtField::Stmts(start_index)) = last {
                         [
                             create_visitor!(exact parent, visit_mut_block_stmt(block: &mut BlockStmt) {
-                                // TODO(WEB-553) walk ast to find all `var` declarations and keep them
-                                // since they hoist out of the scope
-                                if block.stmts.len() > start_index + 1 {
-                                    let unreachable = block
-                                        .stmts
-                                        .splice(
-                                            start_index + 1..,
-                                            [quote!("\"TURBOPACK unreachable\";" as Stmt)].into_iter(),
-                                        )
-                                        .collect::<Vec<_>>();
-                                    for mut stmt in unreachable {
-                                        ExtractDeclarations {
-                                            stmts: &mut block.stmts,
-                                        }
-                                        .visit_mut_stmt(&mut stmt);
-                                    }
-                                }
+                                replace(&mut block.stmts, start_index);
+                            }),
+                        ]
+                        .into()
+                    } else if let &AstParentKind::SwitchCase(SwitchCaseField::Cons(start_index)) =
+                        last
+                    {
+                        [
+                            create_visitor!(exact parent, visit_mut_switch_case(case: &mut SwitchCase) {
+                                replace(&mut case.cons, start_index);
                             }),
                         ]
                         .into()

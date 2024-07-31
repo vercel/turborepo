@@ -129,6 +129,20 @@ class K {
         return m2();
         "TURBOPACK unreachable";
     }
+    n = ()=>{
+        switch(42){
+            case 1:
+                n1();
+                return;
+                "TURBOPACK unreachable";
+            case 2:
+                n3();
+                break;
+            default:
+                n4();
+        }
+        n5();
+    };
 }
 z1();
 return;

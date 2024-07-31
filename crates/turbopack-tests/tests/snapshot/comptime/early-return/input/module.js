@@ -132,6 +132,21 @@ class K {
     return m2();
     m3();
   }
+
+  n = () => {
+    switch (42) {
+      case 1:
+        n1();
+        return;
+        n2();
+      case 2:
+        n3();
+        break;
+      default:
+        n4();
+    }
+    n5();
+  };
 }
 
 z1();
