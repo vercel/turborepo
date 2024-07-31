@@ -537,7 +537,6 @@ pub fn replace_builtin(value: &mut JsValue) -> bool {
                     }
                 }
             }
-            part_properties.truncate(parts.len());
             // If we reduced the expression to a single value, we can replace it.
             if parts.len() == 1 {
                 *value = parts.pop().unwrap();
