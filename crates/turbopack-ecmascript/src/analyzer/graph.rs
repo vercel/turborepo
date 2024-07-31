@@ -1939,6 +1939,7 @@ impl VisitAstPath for Analyzer<'_> {
                 ]
                 | [_, AstParentNodeRef::GetterProp(_, GetterPropField::Body)]
                 | [_, AstParentNodeRef::SetterProp(_, SetterPropField::Body)]
+                | [_, AstParentNodeRef::Constructor(_, ConstructorField::Body)]
         ) {
             Some(true)
         } else {

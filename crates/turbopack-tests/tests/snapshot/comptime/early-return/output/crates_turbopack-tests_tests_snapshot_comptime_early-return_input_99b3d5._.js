@@ -158,6 +158,18 @@ class K {
         }
     }
 }
+function p() {
+    class C {
+        constructor(){
+            p1();
+            return;
+            "TURBOPACK unreachable";
+        }
+    }
+    p3();
+    return;
+    "TURBOPACK unreachable";
+}
 z1();
 return;
 z2();

@@ -171,6 +171,20 @@ class K {
   }
 }
 
+function p() {
+  class C {
+    constructor() {
+      p1();
+      return;
+      p2();
+    }
+  }
+
+  p3();
+  return;
+  p4();
+}
+
 z1();
 
 return;
