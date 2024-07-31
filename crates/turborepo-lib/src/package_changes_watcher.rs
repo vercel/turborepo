@@ -348,7 +348,7 @@ impl Subscriber {
                 tracing::warn!("changed_packages: {:?}", changed_packages);
 
                 match changed_packages {
-                    Ok(PackageChanges::All) => {
+                    Ok(PackageChanges::All(_)) => {
                         // We tell the client that we need to rediscover the packages, i.e.
                         // all bets are off, just re-run everything
                         let _ = self

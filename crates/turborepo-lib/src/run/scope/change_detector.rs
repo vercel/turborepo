@@ -100,8 +100,8 @@ impl<'a> GitChangeDetector for ScopeChangeDetector<'a> {
             .change_mapper
             .changed_packages(changed_files, lockfile_contents)?
         {
-            PackageChanges::All => {
-                debug!("all packages changed");
+            PackageChanges::All(reason) => {
+                debug!("all packages changed: {:?}", reason);
                 Ok(self
                     .pkg_graph
                     .packages()
