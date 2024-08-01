@@ -39,10 +39,12 @@ impl SCM {
             Self::Git(git) => {
                 match git.changed_files(turbo_root, from_commit, to_commit, include_uncommitted) {
                     Ok(files) => Ok(ChangedFiles::Some(files)),
-                    Err(e) if allow_unknown_objects => {
+                    Err(ref error @ Error::Git(ref message, _))
+                        if allow_unknown_objects && message.contains("no merge base") =>
+                    {
                         warn!(
                             "unable to detect git range, assuming all files have changed: {}",
-                            e
+                            error
                         );
                         Ok(ChangedFiles::All)
                     }
