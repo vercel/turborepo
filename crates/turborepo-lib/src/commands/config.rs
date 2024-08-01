@@ -4,7 +4,7 @@ use turborepo_repository::{
 };
 
 use crate::{
-    cli::{self, EnvMode},
+    cli::{self, EnvMode, UIMode},
     commands::CommandBase,
 };
 
@@ -21,7 +21,7 @@ struct ConfigOutput<'a> {
     upload_timeout: u64,
     enabled: bool,
     spaces_id: Option<&'a str>,
-    ui: bool,
+    ui: UIMode,
     package_manager: PackageManager,
     daemon: Option<bool>,
     env_mode: EnvMode,

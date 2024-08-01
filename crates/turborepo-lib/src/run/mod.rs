@@ -35,7 +35,7 @@ use turborepo_ui::{cprint, cprintln, tui, tui::AppSender, BOLD_GREY, GREY, UI};
 
 pub use crate::run::error::Error;
 use crate::{
-    cli::EnvMode,
+    cli::{EnvMode, UIMode},
     engine::Engine,
     opts::Opts,
     process::ProcessManager,
@@ -69,7 +69,7 @@ pub struct Run {
     task_access: TaskAccess,
     daemon: Option<DaemonClient<DaemonConnector>>,
     should_print_prelude: bool,
-    experimental_ui: bool,
+    ui_mode: UIMode,
 }
 
 impl Run {
@@ -172,12 +172,12 @@ impl Run {
         self.ui
     }
 
-    pub fn has_experimental_ui(&self) -> bool {
-        self.experimental_ui
+    pub fn has_tui(&self) -> bool {
+        self.ui_mode.use_tui()
     }
 
     pub fn should_start_ui(&self) -> Result<bool, Error> {
-        Ok(self.experimental_ui
+        Ok(self.ui_mode.use_tui()
             && self.opts.run_opts.dry_run.is_none()
             && tui::terminal_big_enough()?)
     }

@@ -6,7 +6,6 @@ use std::{
 
 use biome_deserialize_macros::Deserializable;
 use camino::Utf8Path;
-use clap::ValueEnum;
 use miette::{NamedSource, SourceSpan};
 use serde::{Deserialize, Serialize};
 use struct_iterable::Iterable;
@@ -17,7 +16,7 @@ use turborepo_repository::{package_graph::ROOT_PKG_NAME, package_json::PackageJs
 use turborepo_unescape::UnescapedString;
 
 use crate::{
-    cli::{EnvMode, OutputLogsMode},
+    cli::{EnvMode, OutputLogsMode, UIMode},
     config::{ConfigurationOptions, Error, InvalidEnvPrefixError},
     run::{
         task_access::{TaskAccessTraceFile, TASK_ACCESS_CONFIG_PATH},
@@ -125,7 +124,7 @@ pub struct RawTurboJson {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) remote_cache: Option<RawRemoteCacheOptions>,
     #[serde(skip_serializing_if = "Option::is_none", rename = "ui")]
-    pub ui: Option<UI>,
+    pub ui: Option<UIMode>,
     #[serde(
         skip_serializing_if = "Option::is_none",
         rename = "dangerouslyDisablePackageManagerCheck"
@@ -166,27 +165,6 @@ impl Deref for Pipeline {
 impl DerefMut for Pipeline {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
-    }
-}
-
-#[derive(Serialize, Debug, Copy, Clone, Deserializable, PartialEq, Eq, ValueEnum)]
-#[serde(rename_all = "camelCase")]
-pub enum UI {
-    /// Use the TUI interface
-    Tui,
-    /// Use the standard output stream
-    Stream,
-}
-
-impl Default for UI {
-    fn default() -> Self {
-        Self::Tui
-    }
-}
-
-impl UI {
-    pub fn use_tui(&self) -> bool {
-        matches!(self, Self::Tui)
     }
 }
 
@@ -749,9 +727,9 @@ mod tests {
     use turborepo_repository::package_json::PackageJson;
     use turborepo_unescape::UnescapedString;
 
-    use super::{Pipeline, RawTurboJson, Spanned, UI};
+    use super::{Pipeline, RawTurboJson, Spanned};
     use crate::{
-        cli::OutputLogsMode,
+        cli::{OutputLogsMode, UIMode},
         run::task_id::TaskName,
         task_graph::{TaskDefinition, TaskOutputs},
         turbo_json::{RawTaskDefinition, TurboJson},
@@ -1082,7 +1060,7 @@ mod tests {
     #[test_case(r#"{ "ui": "tui" }"#, Some(UI::Tui) ; "tui")]
     #[test_case(r#"{ "ui": "stream" }"#, Some(UI::Stream) ; "stream")]
     #[test_case(r#"{}"#, None ; "missing")]
-    fn test_ui(json: &str, expected: Option<UI>) {
+    fn test_ui(json: &str, expected: Option<UIMode>) {
         let json = RawTurboJson::parse(json, AnchoredSystemPath::new("").unwrap()).unwrap();
         assert_eq!(json.ui, expected);
     }

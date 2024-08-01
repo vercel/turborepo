@@ -17,7 +17,7 @@ use thiserror::Error;
 use turborepo_errors::Spanned;
 use turborepo_repository::package_graph::{PackageGraph, PackageName};
 
-use crate::{run::task_id::TaskId, task_graph::TaskDefinition};
+use crate::{cli::UIMode, run::task_id::TaskId, task_graph::TaskDefinition};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum TaskNode {
@@ -383,7 +383,7 @@ impl Engine<Built> {
         &self,
         package_graph: &PackageGraph,
         concurrency: u32,
-        experimental_ui: bool,
+        ui_mode: UIMode,
     ) -> Result<(), Vec<ValidateError>> {
         // TODO(olszewski) once this is hooked up to a real run, we should
         // see if using rayon to parallelize would provide a speedup
@@ -480,7 +480,7 @@ impl Engine<Built> {
             })
         }
 
-        validation_errors.extend(self.validate_interactive(experimental_ui));
+        validation_errors.extend(self.validate_interactive(ui_mode));
 
         match validation_errors.is_empty() {
             true => Ok(()),
@@ -489,10 +489,10 @@ impl Engine<Built> {
     }
 
     // Validates that UI is setup if any interactive tasks will be executed
-    fn validate_interactive(&self, experimental_ui: bool) -> Vec<ValidateError> {
+    fn validate_interactive(&self, ui_mode: UIMode) -> Vec<ValidateError> {
         // If experimental_ui is being used, then we don't need check for interactive
         // tasks
-        if experimental_ui {
+        if matches!(ui_mode, UIMode::Tui) {
             return Vec::new();
         }
         self.task_definitions

@@ -15,7 +15,7 @@ use turborepo_dirs::{config_dir, vercel_config_dir};
 use turborepo_errors::TURBO_SITE;
 
 pub use crate::turbo_json::RawTurboJson;
-use crate::{cli::EnvMode, commands::CommandBase, turbo_json};
+use crate::{cli, cli::EnvMode, cli::UIMode, commands::CommandBase, turbo_json};
 
 #[derive(Debug, Error, Diagnostic)]
 #[error("Environment variables should not be prefixed with \"{env_pipeline_delimiter}\"")]
@@ -207,7 +207,7 @@ pub struct ConfigurationOptions {
     pub(crate) enabled: Option<bool>,
     pub(crate) spaces_id: Option<String>,
     #[serde(rename = "ui")]
-    pub(crate) ui: Option<bool>,
+    pub(crate) ui: Option<cli::UIMode>,
     #[serde(rename = "dangerouslyDisablePackageManagerCheck")]
     pub(crate) allow_no_package_manager: Option<bool>,
     pub(crate) daemon: Option<bool>,
@@ -276,8 +276,12 @@ impl ConfigurationOptions {
         self.spaces_id.as_deref()
     }
 
-    pub fn ui(&self) -> bool {
-        self.ui.unwrap_or(false) && atty::is(atty::Stream::Stdout)
+    pub fn ui(&self) -> cli::UIMode {
+        if atty::is(atty::Stream::Stdout) {
+            return cli::UIMode::Stream;
+        }
+
+        self.ui.unwrap_or(cli::UIMode::Stream)
     }
 
     pub fn allow_no_package_manager(&self) -> bool {
@@ -323,7 +327,7 @@ impl ResolvedConfigurationOptions for RawTurboJson {
             .experimental_spaces
             .and_then(|spaces| spaces.id)
             .map(|spaces_id| spaces_id.into());
-        opts.ui = self.ui.map(|ui| ui.use_tui());
+        opts.ui = self.ui;
         opts.allow_no_package_manager = self.allow_no_package_manager;
         opts.daemon = self.daemon.map(|daemon| *daemon.as_inner());
         opts.env_mode = self.env_mode;
@@ -449,7 +453,8 @@ fn get_env_var_config(
     let ui = output_map
         .get("ui")
         .map(|s| s.as_str())
-        .and_then(truth_env_var);
+        .and_then(truth_env_var)
+        .map(|ui| if ui { UIMode::Tui } else { UIMode::Stream });
 
     let allow_no_package_manager = output_map
         .get("allow_no_package_manager")
@@ -535,7 +540,7 @@ fn get_override_env_var_config(
         .and_then(|value| {
             // If either of these are truthy, then we disable the TUI
             if value == "true" || value == "1" {
-                Some(false)
+                Some(UIMode::Stream)
             } else {
                 None
             }
@@ -692,7 +697,7 @@ impl TurborepoConfigBuilder {
     create_builder!(with_enabled, enabled, Option<bool>);
     create_builder!(with_preflight, preflight, Option<bool>);
     create_builder!(with_timeout, timeout, Option<u64>);
-    create_builder!(with_ui, ui, Option<bool>);
+    create_builder!(with_ui, ui, Option<cli::UIMode>);
     create_builder!(
         with_allow_no_package_manager,
         allow_no_package_manager,

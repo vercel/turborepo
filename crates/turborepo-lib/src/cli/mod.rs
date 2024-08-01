@@ -29,7 +29,6 @@ use crate::{
     run::watch::WatchClient,
     shim::TurboState,
     tracing::TurboSubscriber,
-    turbo_json::UI as ConfigUI,
 };
 
 mod error;
@@ -185,7 +184,7 @@ pub struct Args {
     pub heap: Option<String>,
     /// Specify whether to use the streaming UI or TUI
     #[clap(long, global = true, value_enum)]
-    pub ui: Option<ConfigUI>,
+    pub ui: Option<UIMode>,
     /// Override the login endpoint
     #[clap(long, global = true, value_parser)]
     pub login: Option<String>,
@@ -2560,5 +2559,26 @@ mod test {
             .unwrap()
             .dangerously_disable_package_manager_check
         );
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Copy, Clone, Deserializable, PartialEq, Eq, ValueEnum)]
+#[serde(rename_all = "camelCase")]
+pub enum UIMode {
+    /// Use the terminal user interface
+    Tui,
+    /// Use the standard output stream
+    Stream,
+}
+
+impl Default for UIMode {
+    fn default() -> Self {
+        Self::Tui
+    }
+}
+
+impl UIMode {
+    pub fn use_tui(&self) -> bool {
+        matches!(self, Self::Tui)
     }
 }
