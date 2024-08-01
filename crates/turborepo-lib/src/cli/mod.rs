@@ -14,11 +14,7 @@ use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::AnonAPIClient;
 use turborepo_repository::inference::{RepoMode, RepoState};
 use turborepo_telemetry::{
-    events::{
-        command::{CodePath, CommandEventBuilder},
-        generic::GenericEventBuilder,
-        EventBuilder, EventType,
-    },
+    events::{command::CommandEventBuilder, generic::GenericEventBuilder, EventBuilder, EventType},
     init_telemetry, track_usage, TelemetryHandle,
 };
 use turborepo_ui::{GREY, UI};
@@ -1257,7 +1253,6 @@ pub async fn run(
             }
 
             run_args.track(&event);
-            event.track_run_code_path(CodePath::Rust);
             let exit_code = run::run(base, event).await.inspect(|code| {
                 if *code != 0 {
                     error!("run failed: command  exited ({code})");

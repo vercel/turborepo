@@ -8,22 +8,26 @@ use super::{app::LayoutSections, event::Event, Error};
 pub struct InputOptions {
     pub focus: LayoutSections,
     pub tty_stdin: bool,
+    pub has_selection: bool,
 }
 /// Return any immediately available event
 pub fn input(options: InputOptions) -> Result<Option<Event>, Error> {
-    let InputOptions { focus, tty_stdin } = options;
     // If stdin is not a tty, then we do not attempt to read from it
-    if !tty_stdin {
+    if !options.tty_stdin {
         return Ok(None);
     }
     // poll with 0 duration will only return true if event::read won't need to wait
     // for input
     if crossterm::event::poll(Duration::from_millis(0))? {
         match crossterm::event::read()? {
-            crossterm::event::Event::Key(k) => Ok(translate_key_event(&focus, k)),
+            crossterm::event::Event::Key(k) => Ok(translate_key_event(options, k)),
             crossterm::event::Event::Mouse(m) => match m.kind {
                 crossterm::event::MouseEventKind::ScrollDown => Ok(Some(Event::ScrollDown)),
                 crossterm::event::MouseEventKind::ScrollUp => Ok(Some(Event::ScrollUp)),
+                crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left)
+                | crossterm::event::MouseEventKind::Drag(crossterm::event::MouseButton::Left) => {
+                    Ok(Some(Event::Mouse(m)))
+                }
                 _ => Ok(None),
             },
             _ => Ok(None),
@@ -34,7 +38,7 @@ pub fn input(options: InputOptions) -> Result<Option<Event>, Error> {
 }
 
 /// Converts a crossterm key event into a TUI interaction event
-fn translate_key_event(interact: &LayoutSections, key_event: KeyEvent) -> Option<Event> {
+fn translate_key_event(options: InputOptions, key_event: KeyEvent) -> Option<Event> {
     // On Windows events for releasing a key are produced
     // We skip these to avoid emitting 2 events per key press.
     // There is still a `Repeat` event for when a key is held that will pass through
@@ -46,15 +50,16 @@ fn translate_key_event(interact: &LayoutSections, key_event: KeyEvent) -> Option
         KeyCode::Char('c') if key_event.modifiers == crossterm::event::KeyModifiers::CONTROL => {
             ctrl_c()
         }
+        KeyCode::Char('c') if options.has_selection => Some(Event::CopySelection),
         // Interactive branches
         KeyCode::Char('z')
-            if matches!(interact, LayoutSections::Pane)
+            if matches!(options.focus, LayoutSections::Pane)
                 && key_event.modifiers == crossterm::event::KeyModifiers::CONTROL =>
         {
             Some(Event::ExitInteractive)
         }
         // If we're in interactive mode, convert the key event to bytes to send to stdin
-        _ if matches!(interact, LayoutSections::Pane) => Some(Event::Input {
+        _ if matches!(options.focus, LayoutSections::Pane) => Some(Event::Input {
             bytes: encode_key(key_event),
         }),
         // Fall through if we aren't in interactive mode

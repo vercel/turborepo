@@ -39,6 +39,7 @@ System environment variables are always overridden by flag values provided direc
 
 Turborepo will make the following environment variables available within your tasks while they are executing:
 
-| Variable     | Description                             |
-| ------------ | --------------------------------------- |
-| `TURBO_HASH` | The hash of the currently running task. |
+| Variable       | Description                                                                                  |
+| -------------- | -------------------------------------------------------------------------------------------- |
+| `TURBO_HASH`   | The hash of the currently running task.                                                      |
+| `TURBO_IS_TUI` | When using the [TUI](/repo/docs/reference/configuration#ui), this variable is set to `true`. |

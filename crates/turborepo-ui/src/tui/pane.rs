@@ -9,6 +9,7 @@ use super::TerminalOutput;
 
 const FOOTER_TEXT_ACTIVE: &str = "Press`Ctrl-Z` to stop interacting.";
 const FOOTER_TEXT_INACTIVE: &str = "Press `Enter` to interact.";
+const HAS_SELECTION: &str = "Press `c` to copy selection";
 
 pub struct TerminalPane<'a, W> {
     terminal_output: &'a TerminalOutput<W>,
@@ -36,15 +37,27 @@ impl<'a, W> Widget for &TerminalPane<'a, W> {
         Self: Sized,
     {
         let screen = self.terminal_output.parser.screen();
-        let mut block = Block::default()
-            .borders(Borders::LEFT)
-            .title(self.terminal_output.title(self.task_name));
-        if self.highlight {
-            block = block.title_bottom(Line::from(FOOTER_TEXT_ACTIVE).centered());
-            block = block.border_style(Style::new().fg(ratatui::style::Color::Yellow));
+        let mut help_text = if self.highlight {
+            FOOTER_TEXT_ACTIVE
         } else {
-            block = block.title_bottom(Line::from(FOOTER_TEXT_INACTIVE).centered());
+            FOOTER_TEXT_INACTIVE
         }
+        .to_owned();
+
+        if self.terminal_output.has_selection() {
+            help_text.push(' ');
+            help_text.push_str(HAS_SELECTION);
+        }
+        let block = Block::default()
+            .borders(Borders::LEFT)
+            .title(self.terminal_output.title(self.task_name))
+            .title_bottom(Line::from(help_text).centered())
+            .style(if self.highlight {
+                Style::new().fg(ratatui::style::Color::Yellow)
+            } else {
+                Style::new()
+            });
+
         let term = PseudoTerminal::new(screen).block(block);
         term.render(area, buf)
     }

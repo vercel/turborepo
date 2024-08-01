@@ -48,12 +48,6 @@ impl EventBuilder for CommandEventBuilder {
 
 // events
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum CodePath {
-    Go,
-    Rust,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, Copy)]
 pub enum LoginMethod {
     SSO,
@@ -121,19 +115,6 @@ impl CommandEventBuilder {
         self.track(Event {
             key: "tag".to_string(),
             value: tag.to_string(),
-            is_sensitive: EventType::NonSensitive,
-        });
-        self
-    }
-
-    // run
-    pub fn track_run_code_path(&self, path: CodePath) -> &Self {
-        self.track(Event {
-            key: "binary".to_string(),
-            value: match path {
-                CodePath::Go => "go".to_string(),
-                CodePath::Rust => "rust".to_string(),
-            },
             is_sensitive: EventType::NonSensitive,
         });
         self

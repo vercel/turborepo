@@ -24,7 +24,7 @@ pub const DEFAULT_OUTPUT_DIR: &str = "out";
 pub enum Error {
     #[error("io error while pruning: {0}")]
     Io(#[from] std::io::Error),
-    #[error("fs error while pruning: {0}")]
+    #[error("File system error while pruning. The error from the operating system is: {0}")]
     Fs(#[from] turborepo_fs::Error),
     #[error("json error while pruning: {0}")]
     Json(#[from] serde_json::Error),

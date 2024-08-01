@@ -131,6 +131,8 @@ pub struct RawTurboJson {
         rename = "dangerouslyDisablePackageManagerCheck"
     )]
     pub allow_no_package_manager: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub daemon: Option<Spanned<bool>>,
 
     #[deserializable(rename = "//")]
     #[serde(skip)]
@@ -1081,6 +1083,14 @@ mod tests {
     fn test_ui(json: &str, expected: Option<UI>) {
         let json = RawTurboJson::parse(json, AnchoredSystemPath::new("").unwrap()).unwrap();
         assert_eq!(json.ui, expected);
+    }
+
+    #[test_case(r#"{ "daemon": true }"#, r#"{"daemon":true}"# ; "daemon_on")]
+    #[test_case(r#"{ "daemon": false }"#, r#"{"daemon":false}"# ; "daemon_off")]
+    fn test_daemon(json: &str, expected: &str) {
+        let parsed = RawTurboJson::parse(json, AnchoredSystemPath::new("").unwrap()).unwrap();
+        let actual = serde_json::to_string(&parsed).unwrap();
+        assert_eq!(actual, expected);
     }
 
     #[test_case(r#"{ "ui": "tui" }"#, r#"{"ui":"tui"}"# ; "tui")]

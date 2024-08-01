@@ -803,7 +803,7 @@ mod tests {
             .unwrap();
         repo.branch("test-branch", &current_commit, false).unwrap();
         repo.set_head("refs/heads/test-branch").unwrap();
-        commit_all(&repo);
+        commit_all(repo);
     }
 
     #[tokio::test]

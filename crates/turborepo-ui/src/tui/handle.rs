@@ -99,8 +99,12 @@ impl TuiTask {
     }
 
     /// Mark the task as finished
-    pub fn succeeded(&self) -> Vec<u8> {
-        self.finish(TaskResult::Success)
+    pub fn succeeded(&self, is_cache_hit: bool) -> Vec<u8> {
+        if is_cache_hit {
+            self.finish(TaskResult::CacheHit)
+        } else {
+            self.finish(TaskResult::Success)
+        }
     }
 
     /// Mark the task as finished

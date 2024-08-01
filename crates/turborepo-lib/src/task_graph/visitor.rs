@@ -766,7 +766,8 @@ impl ExecContext {
         // If the task resulted in an error, do not group in order to better highlight
         // the error.
         let is_error = matches!(result, Ok(ExecOutcome::Task { .. }));
-        let logs = match output_client.finish(is_error) {
+        let is_cache_hit = matches!(result, Ok(ExecOutcome::Success(SuccessOutcome::CacheHit)));
+        let logs = match output_client.finish(is_error, is_cache_hit) {
             Ok(logs) => logs,
             Err(e) => {
                 telemetry.track_error(TrackedErrors::DaemonFailedToMarkOutputsAsCached);
@@ -911,6 +912,12 @@ impl ExecContext {
         cmd.envs(self.execution_env.iter());
         // Always last to make sure it overwrites any user configured env var.
         cmd.env("TURBO_HASH", &self.task_hash);
+
+        // Allow downstream tools to detect if the task is being ran with TUI
+        if self.experimental_ui {
+            cmd.env("TURBO_IS_TUI", "true");
+        }
+
         // enable task access tracing
 
         // set the trace file env var - frameworks that support this can use it to
@@ -955,7 +962,7 @@ impl ExecContext {
         // Even if user does not have the TUI and cannot interact with a task, we keep
         // stdin open for persistent tasks as some programs will shut down if stdin is
         // closed.
-        if !self.takes_input {
+        if !self.takes_input && !self.manager.closing_stdin_ends_process() {
             process.stdin();
         }
 
@@ -1136,11 +1143,11 @@ impl<W: Write> CacheOutput for TaskCacheOutput<W> {
 
 /// Struct for displaying information about task
 impl<W: Write> TaskOutput<W> {
-    pub fn finish(self, use_error: bool) -> std::io::Result<Option<Vec<u8>>> {
+    pub fn finish(self, use_error: bool, is_cache_hit: bool) -> std::io::Result<Option<Vec<u8>>> {
         match self {
             TaskOutput::Direct(client) => client.finish(use_error),
             TaskOutput::UI(client) if use_error => Ok(Some(client.failed())),
-            TaskOutput::UI(client) => Ok(Some(client.succeeded())),
+            TaskOutput::UI(client) => Ok(Some(client.succeeded(is_cache_hit))),
         }
     }
 

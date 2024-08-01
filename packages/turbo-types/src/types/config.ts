@@ -56,7 +56,11 @@ export interface WorkspaceSchema extends BaseSchema {
 
 export type LegacyWorkspaceSchema = WorkspaceSchema & LegacyBaseSchema;
 
-export type WorkspaceSchemaV1 = Omit<WorkspaceSchema, "tasks"> & BaseSchemaV1;
+export type WorkspaceSchemaV1 = Omit<
+  WorkspaceSchema,
+  "tasks" | "dangerouslyDisablePackageManagerCheck"
+> &
+  BaseSchemaV1;
 
 export interface RootSchema extends BaseSchema {
   /**
@@ -127,6 +131,16 @@ export interface RootSchema extends BaseSchema {
    * @defaultValue `"stream"`
    */
   ui?: UI;
+
+  /**
+   * Disable check for `packageManager` in root `package.json`
+   *
+   * This is highly discouraged as it leaves `turbo` dependent on system
+   * configuration to infer the correct package manager.
+   *
+   * Some turbo features are disabled if this is set to true.
+   */
+  dangerouslyDisablePackageManagerCheck?: boolean;
 }
 
 export type LegacyRootSchema = RootSchema & LegacyBaseSchema;

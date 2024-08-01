@@ -126,7 +126,7 @@ Compiling your library produces compiled JavaScript outputs into a directory (`d
 #### Limitations and tradeoffs
 
 - **Using the TypeScript compiler**: The majority of Compiled Packages should use `tsc`. Since the package is highly likely to be consumed by an application that is using a bundler, the application's bundler will prepare the library package for distribution in the application's final bundles, handling polyfilling, downleveling, and other concerns. A bundler should only be used if you have a specific use case that requires it, like bundling static assets into your package's outputs.
-- **More configuration**: Compiled Packages require deeper knowledge and configuration to create build outputs. There are [many configurations for the TypeScript compiler](https://www.typescriptlang.org/docs/handbook/compiler-options.html#compiler-options) that can be difficult to manage and understand. You can find some of our recommendations in [our dedicated TypeScript guide](/repo/docs/guides/tools/typescript).
+- **More configuration**: Compiled Packages require deeper knowledge and configuration to create build outputs. There are [many configurations for the TypeScript compiler](https://www.typescriptlang.org/docs/handbook/compiler-options.html#compiler-options) that can be difficult to manage and understand, and further configuration to optimize for bundlers, like [the `sideEffects` key in `package.json`](https://webpack.js.org/guides/tree-shaking/#mark-the-file-as-side-effect-free). You can find some of our recommendations in [our dedicated TypeScript guide](/repo/docs/guides/tools/typescript).
 
 ### Publishable packages
 

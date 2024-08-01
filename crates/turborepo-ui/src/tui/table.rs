@@ -16,6 +16,8 @@ pub struct TaskTable<'b> {
     spinner: SpinnerState,
 }
 
+const TASK_NAVIGATE_INSTRUCTIONS: &str = "↑ ↓ to navigate";
+
 impl<'b> TaskTable<'b> {
     /// Construct a new table with all of the planned tasks
     pub fn new(tasks_by_type: &'b TasksByStatus) -> Self {
@@ -31,9 +33,9 @@ impl<'b> TaskTable<'b> {
             .map(|task| task.len())
             .max()
             .unwrap_or_default()
-            // Task column width should be large enough to fit "↑ ↓ to select task" instructions
+            // Task column width should be large enough to fit "↑ ↓ to navigate instructions
             // and truncate tasks with more than 40 chars.
-            .clamp(13, 40) as u16;
+            .clamp(TASK_NAVIGATE_INSTRUCTIONS.len(), 40) as u16;
         // Add space for column divider and status emoji
         task_name_width + 1
     }
@@ -45,13 +47,26 @@ impl<'b> TaskTable<'b> {
 
     fn finished_rows(&self) -> impl Iterator<Item = Row> + '_ {
         self.tasks_by_type.finished.iter().map(move |task| {
+            let name = if matches!(task.result(), TaskResult::CacheHit) {
+                Cell::new(Text::styled(task.name(), Style::default().italic()))
+            } else {
+                Cell::new(task.name())
+            };
+
             Row::new(vec![
-                Cell::new(task.name()),
-                Cell::new(match task.result() {
+                name,
+                match task.result() {
                     // matches Next.js (and many other CLI tools) https://github.com/vercel/next.js/blob/1a04d94aaec943d3cce93487fea3b8c8f8898f31/packages/next/src/build/output/log.ts
-                    TaskResult::Success => Text::styled("✓", Style::default().green().bold()),
-                    TaskResult::Failure => Text::styled("⨯", Style::default().red().bold()),
-                }),
+                    TaskResult::Success => {
+                        Cell::new(Text::styled("✓", Style::default().green().bold()))
+                    }
+                    TaskResult::CacheHit => {
+                        Cell::new(Text::styled("⊙", Style::default().magenta()))
+                    }
+                    TaskResult::Failure => {
+                        Cell::new(Text::styled("⨯", Style::default().red().bold()))
+                    }
+                },
             ])
         })
     }
@@ -83,7 +98,7 @@ impl<'a> StatefulWidget for &'a TaskTable<'a> {
                 .chain(self.planned_rows())
                 .chain(self.finished_rows()),
             [
-                Constraint::Min(14),
+                Constraint::Min(15),
                 // Status takes one cell to render
                 Constraint::Length(1),
             ],
@@ -98,11 +113,14 @@ impl<'a> StatefulWidget for &'a TaskTable<'a> {
                 .height(2),
         )
         .footer(
-            vec![format!("{bar}\n↑ ↓ to navigate"), "─\n ".to_owned()]
-                .into_iter()
-                .map(Cell::from)
-                .collect::<Row>()
-                .height(2),
+            vec![
+                format!("{bar}\n{TASK_NAVIGATE_INSTRUCTIONS}"),
+                format!("─\n "),
+            ]
+            .into_iter()
+            .map(Cell::from)
+            .collect::<Row>()
+            .height(2),
         );
         StatefulWidget::render(table, area, buf, state);
     }
