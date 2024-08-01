@@ -479,7 +479,7 @@ const transform = (
         if (!result.result) return reject(new Error("No result from loaders"));
         const [source, map] = result.result;
         resolve({
-          source,
+          source: Buffer.isBuffer(source) ? source.toString("utf8") : source,
           map:
             typeof map === "string"
               ? map
