@@ -8,7 +8,7 @@ use clap::{
 };
 use clap_complete::{generate, Shell};
 pub use error::Error;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tracing::{debug, error, log::warn};
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::AnonAPIClient;
@@ -136,7 +136,9 @@ impl Display for DryRunMode {
     }
 }
 
-#[derive(Copy, Clone, Debug, Default, PartialEq, Serialize, ValueEnum)]
+#[derive(
+    Copy, Clone, Debug, Default, PartialEq, Serialize, ValueEnum, Deserialize, Eq, Deserializable,
+)]
 #[serde(rename_all = "lowercase")]
 pub enum EnvMode {
     Loose,
