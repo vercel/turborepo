@@ -186,7 +186,7 @@ For in-depth discussion and practical use cases of filtering, visit [the Running
 
 #### Advanced filtering examples
 
-You can combine multiple filters to further refine your targets. Multiple filters are combined as a **union**, meaning that the [Task Graph](/repo/docs/core-concepts/package-and-task-graph#task-graph) will include tasks that match any of the filters.
+You can combine multiple filters to further refine your targets. Multiple filters are combined as a union, with negated filters removing packages from the result of the union.
 
 ```bash title="Terminal"
 # Any packages in `apps` subdirectories that have changed since the last commit
