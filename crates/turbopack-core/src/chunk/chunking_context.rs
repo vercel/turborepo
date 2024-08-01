@@ -123,8 +123,7 @@ pub trait ChunkingContext {
         self: Vc<Self>,
         ident: Vc<AssetIdent>,
     ) -> Result<Vc<ModuleId>> {
-        let global_information = self.global_information().await?;
-        if let Some(global_information) = &*global_information {
+        if let Some(global_information) = &*self.global_information().await? {
             return Ok(global_information.get_module_id(ident).await?);
         }
         Ok(ModuleId::String(ident.to_string().await?.clone_value()).cell())

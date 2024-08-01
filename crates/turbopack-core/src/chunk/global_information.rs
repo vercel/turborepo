@@ -18,7 +18,7 @@ impl GlobalInformation {
         let ident = asset_ident.await?;
         let hashed_module_id = self.module_id_map.get(&ident);
         if let Some(hashed_module_id) = hashed_module_id {
-            dbg!("Hashed module ID found");
+            dbg!("Hashed module ID found", &ident_str, hashed_module_id);
             return Ok(hashed_module_id.clone().cell());
         }
         dbg!("Hashed module ID not found", &ident_str);
