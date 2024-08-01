@@ -74,7 +74,30 @@ Override the SCM head to be main, so nothing runs
     Time:\s*[\.0-9]+m?s  (re)
   
 
+Now add a commit to `main` so the merge base is different from `main`
+  $ git checkout main --quiet
+  $ echo "foo" >> packages/util/index.js
+  $ git add .
+  $ git commit -m "add foo" --quiet
+  $ git checkout my-branch --quiet
 
+Run the build and expect only `my-app` to be affected, since between
+`git merge-base main my-branch` and `my-branch` that is the only changed package.
+  $ ${TURBO} run build --affected --log-order grouped
+  \xe2\x80\xa2 Packages in scope: my-app (esc)
+  \xe2\x80\xa2 Running build in 1 packages (esc)
+  \xe2\x80\xa2 Remote caching disabled (esc)
+  my-app:build: cache hit, replaying logs 97b34acb6e848096
+  my-app:build: 
+  my-app:build: > build
+  my-app:build: > echo building
+  my-app:build: 
+  my-app:build: building
+  
+   Tasks:    1 successful, 1 total
+  Cached:    1 cached, 1 total
+    Time:\s*[\.0-9]+m?s >>> FULL TURBO (re)
+  
 
 
 Now do some magic to change the repo to be shallow
