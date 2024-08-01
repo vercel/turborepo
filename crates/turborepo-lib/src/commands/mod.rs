@@ -7,6 +7,7 @@ use turborepo_dirs::config_dir;
 use turborepo_ui::UI;
 
 use crate::{
+    cli::Command,
     config::{ConfigurationOptions, Error as ConfigError, TurborepoConfigBuilder},
     Args,
 };
@@ -88,9 +89,18 @@ impl CommandBase {
             .with_daemon(self.args.run_args.as_ref().and_then(|args| args.daemon()))
             .with_env_mode(
                 self.args
-                    .execution_args
+                    .command
                     .as_ref()
-                    .and_then(|args| args.env_mode),
+                    .and_then(|c| match c {
+                        Command::Run { execution_args, .. } => execution_args.env_mode,
+                        _ => None,
+                    })
+                    .or_else(|| {
+                        self.args
+                            .execution_args
+                            .as_ref()
+                            .and_then(|args| args.env_mode)
+                    }),
             )
             .build()
     }
