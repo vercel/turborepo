@@ -120,7 +120,7 @@ mod tests {
 
     use super::{DefaultPackageChangeMapper, GlobalDepsPackageChangeMapper};
     use crate::{
-        change_mapper::{ChangeMapper, PackageChanges},
+        change_mapper::{AllPackageChangeReason, ChangeMapper, PackageChanges},
         discovery,
         discovery::PackageDiscovery,
         package_graph::{PackageGraphBuilder, WorkspacePackage},
@@ -172,7 +172,10 @@ mod tests {
 
         // We should return All because we don't have global deps and
         // therefore must be conservative about changes
-        assert_eq!(package_changes, PackageChanges::All);
+        assert_eq!(
+            package_changes,
+            PackageChanges::All(AllPackageChangeReason::NonPackageFileChanged)
+        );
 
         let turbo_package_detector =
             GlobalDepsPackageChangeMapper::new(&pkg_graph, std::iter::empty::<&str>())?;

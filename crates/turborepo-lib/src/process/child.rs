@@ -161,6 +161,26 @@ impl ChildHandle {
         let controller = pair.master;
         let receiver = pair.slave;
 
+        #[cfg(unix)]
+        {
+            use nix::sys::termios;
+            if let Some((file_desc, mut termios)) = controller
+                .as_raw_fd()
+                .and_then(|fd| Some(fd).zip(termios::tcgetattr(fd).ok()))
+            {
+                // We unset ECHOCTL to disable rendering of the closing of stdin
+                // as ^D
+                termios.local_flags &= !nix::sys::termios::LocalFlags::ECHOCTL;
+                if let Err(e) = nix::sys::termios::tcsetattr(
+                    file_desc,
+                    nix::sys::termios::SetArg::TCSANOW,
+                    &termios,
+                ) {
+                    debug!("unable to unset ECHOCTL: {e}");
+                }
+            }
+        }
+
         let child = receiver
             .spawn_command(command)
             .map_err(|err| match err.downcast() {

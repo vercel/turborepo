@@ -1,7 +1,10 @@
 use serde::Serialize;
 use swc_core::{
     common::DUMMY_SP,
-    ecma::ast::{Expr, Lit, Str},
+    ecma::{
+        ast::{Expr, Lit, Str},
+        visit::AstParentKind,
+    },
 };
 use turbopack_core::{chunk::ModuleId, resolve::pattern::Pattern};
 
@@ -29,9 +32,11 @@ pub fn js_value_to_pattern(value: &JsValue) -> Pattern {
             ConstantValue::Regex(exp, flags) => format!("/{exp}/{flags}").into(),
             ConstantValue::Undefined => "undefined".into(),
         }),
-        JsValue::Alternatives(_, alts) => {
-            Pattern::Alternatives(alts.iter().map(js_value_to_pattern).collect())
-        }
+        JsValue::Alternatives {
+            total_nodes: _,
+            values,
+            logical_property: _,
+        } => Pattern::Alternatives(values.iter().map(js_value_to_pattern).collect()),
         JsValue::Concat(_, parts) => {
             Pattern::Concatenation(parts.iter().map(js_value_to_pattern).collect())
         }
@@ -124,3 +129,13 @@ format_iter!(std::fmt::Octal);
 format_iter!(std::fmt::Pointer);
 format_iter!(std::fmt::UpperExp);
 format_iter!(std::fmt::UpperHex);
+
+#[turbo_tasks::value(shared, serialization = "none")]
+#[derive(Debug, Clone)]
+pub enum AstPathRange {
+    /// The ast path to the block or expression.
+    Exact(#[turbo_tasks(trace_ignore)] Vec<AstParentKind>),
+    /// The ast path to a expression just before the range in the parent of the
+    /// specific ast path.
+    StartAfter(#[turbo_tasks(trace_ignore)] Vec<AstParentKind>),
+}

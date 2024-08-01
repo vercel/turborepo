@@ -912,6 +912,12 @@ impl ExecContext {
         cmd.envs(self.execution_env.iter());
         // Always last to make sure it overwrites any user configured env var.
         cmd.env("TURBO_HASH", &self.task_hash);
+
+        // Allow downstream tools to detect if the task is being ran with TUI
+        if self.experimental_ui {
+            cmd.env("TURBO_IS_TUI", "true");
+        }
+
         // enable task access tracing
 
         // set the trace file env var - frameworks that support this can use it to

@@ -211,7 +211,7 @@ impl Workspace {
         };
 
         let packages = match package_changes {
-            PackageChanges::All => self
+            PackageChanges::All(_) => self
                 .graph
                 .packages()
                 .map(|(name, info)| WorkspacePackage {
