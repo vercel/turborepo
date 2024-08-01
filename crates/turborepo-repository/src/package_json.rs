@@ -159,7 +159,7 @@ impl From<RawPnpmConfig> for PnpmConfig {
 
 impl PackageJson {
     pub fn load(path: &AbsoluteSystemPath) -> Result<PackageJson, Error> {
-        tracing::debug!("loading package.json from {}", path);
+        tracing::trace!("loading package.json from {}", path);
         let contents = path.read_to_string()?;
         Self::load_from_str(&contents, path.as_str())
     }

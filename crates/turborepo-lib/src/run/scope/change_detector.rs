@@ -95,7 +95,15 @@ impl<'a> GitChangeDetector for ScopeChangeDetector<'a> {
         }
 
         let lockfile_contents = self.get_lockfile_contents(from_ref, &changed_files);
-        debug!("changed_files: {changed_files:?}");
+
+        debug!(
+            "changed files: {:?}",
+            &changed_files
+                .iter()
+                .map(|x| x.to_string())
+                .collect::<Vec<String>>()
+        );
+
         match self
             .change_mapper
             .changed_packages(changed_files, lockfile_contents)?
