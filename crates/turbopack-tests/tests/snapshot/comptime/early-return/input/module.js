@@ -26,7 +26,22 @@ export function a() {
   } = {};
   function a20() {
     return;
-    a12();
+    a21();
+  }
+  ({
+    get a22() {
+      var a23;
+    },
+    set a22(value) {
+      var a24;
+    },
+    a25() {
+      var a26;
+    },
+  });
+  {
+    let a27;
+    var a28;
   }
 }
 

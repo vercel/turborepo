@@ -33,6 +33,7 @@ function a() {
         return;
         "TURBOPACK unreachable";
     }
+    var a28;
 }
 function b() {
     if ("TURBOPACK compile-time truthy", 1) {

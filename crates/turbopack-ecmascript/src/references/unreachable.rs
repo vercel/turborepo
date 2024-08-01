@@ -6,12 +6,12 @@ use swc_core::{
     ecma::{
         ast::{
             ArrayPat, ArrowExpr, AssignPat, AssignPatProp, BindingIdent, BlockStmt, ClassDecl,
-            Decl, FnDecl, FnExpr, Ident, KeyValuePatProp, ObjectPat, ObjectPatProp, Pat, RestPat,
-            Stmt, VarDecl, VarDeclKind, VarDeclarator,
+            Decl, FnDecl, Ident, KeyValuePatProp, ObjectPat, ObjectPatProp, Pat, RestPat, Stmt,
+            VarDecl, VarDeclKind, VarDeclarator,
         },
         visit::{
             fields::{BlockStmtField, SwitchCaseField},
-            AstParentKind, VisitMut,
+            AstParentKind, VisitMut, VisitMutWith,
         },
     },
     quote,
@@ -58,9 +58,10 @@ impl CodeGenerateable for Unreachable {
                         // since they hoist out of the scope
                         let mut replacement = Vec::new();
                         replacement.push(quote!("\"TURBOPACK unreachable\";" as Stmt));
-                        ExtractDeclarations {
+                        stmt.visit_mut_with(&mut ExtractDeclarations {
                             stmts: &mut replacement,
-                        }.visit_mut_stmt(stmt);
+                            in_nested_block_scope: false,
+                        });
                         *stmt = Stmt::Block(BlockStmt {
                             span: stmt.span(),
                             stmts: replacement,
@@ -87,7 +88,10 @@ impl CodeGenerateable for Unreachable {
                                 )
                                 .collect::<Vec<_>>();
                             for mut stmt in unreachable {
-                                ExtractDeclarations { stmts }.visit_mut_stmt(&mut stmt);
+                                stmt.visit_mut_with(&mut ExtractDeclarations {
+                                    stmts,
+                                    in_nested_block_scope: false,
+                                });
                             }
                         }
                     }
@@ -125,6 +129,7 @@ impl CodeGenerateable for Unreachable {
 
 struct ExtractDeclarations<'a> {
     stmts: &'a mut Vec<Stmt>,
+    in_nested_block_scope: bool,
 }
 
 impl<'a> VisitMut for ExtractDeclarations<'a> {
@@ -135,6 +140,9 @@ impl<'a> VisitMut for ExtractDeclarations<'a> {
             declare,
             decls,
         } = decl;
+        if self.in_nested_block_scope && !matches!(kind, VarDeclKind::Var) {
+            return;
+        }
         let mut idents = Vec::new();
         for decl in take(decls) {
             collect_idents(&decl.name, &mut idents);
@@ -176,8 +184,20 @@ impl<'a> VisitMut for ExtractDeclarations<'a> {
         })));
     }
 
-    fn visit_mut_fn_expr(&mut self, _: &mut FnExpr) {
-        // Do not walk into function expressions
+    fn visit_mut_constructor(&mut self, _: &mut swc_core::ecma::ast::Constructor) {
+        // Do not walk into constructors
+    }
+
+    fn visit_mut_function(&mut self, _: &mut swc_core::ecma::ast::Function) {
+        // Do not walk into functions
+    }
+
+    fn visit_mut_getter_prop(&mut self, _: &mut swc_core::ecma::ast::GetterProp) {
+        // Do not walk into getter properties
+    }
+
+    fn visit_mut_setter_prop(&mut self, _: &mut swc_core::ecma::ast::SetterProp) {
+        // Do not walk into setter properties
     }
 
     fn visit_mut_arrow_expr(&mut self, _: &mut ArrowExpr) {
@@ -200,6 +220,13 @@ impl<'a> VisitMut for ExtractDeclarations<'a> {
             }],
             kind: VarDeclKind::Let,
         }))));
+    }
+
+    fn visit_mut_block_stmt(&mut self, n: &mut BlockStmt) {
+        let old = self.in_nested_block_scope;
+        self.in_nested_block_scope = true;
+        n.visit_mut_children_with(self);
+        self.in_nested_block_scope = old;
     }
 }
 
