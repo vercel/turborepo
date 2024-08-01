@@ -219,12 +219,12 @@ impl Run {
         experimental_ui_sender: Option<AppSender>,
         is_watch: bool,
     ) -> Result<i32, Error> {
+        let skip_cache_writes = self.opts.runcache_opts.skip_writes;
         if let Some(subscriber) = self.signal_handler.subscribe() {
             let run_cache = self.run_cache.clone();
             tokio::spawn(async move {
-                // Caching is disabled for watch so we don't need to wait on shutting down the
-                // cache.
-                if is_watch {
+                // Cache writes are disabled, can skip setting up cache write listener
+                if skip_cache_writes {
                     return;
                 }
                 let _guard = subscriber.listen().await;
