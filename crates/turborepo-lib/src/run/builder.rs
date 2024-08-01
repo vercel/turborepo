@@ -37,7 +37,7 @@ use {
 };
 
 use crate::{
-    cli::{DryRunMode, UIMode},
+    cli::DryRunMode,
     commands::CommandBase,
     engine::{Engine, EngineBuilder},
     opts::Opts,
@@ -45,7 +45,7 @@ use crate::{
     run::{scope, task_access::TaskAccess, task_id::TaskName, Error, Run, RunCache},
     shim::TurboState,
     signal::{SignalHandler, SignalSubscriber},
-    turbo_json::TurboJson,
+    turbo_json::{TurboJson, UIMode},
     DaemonConnector,
 };
 

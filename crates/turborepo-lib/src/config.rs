@@ -14,8 +14,8 @@ use turborepo_auth::{TURBO_TOKEN_DIR, TURBO_TOKEN_FILE, VERCEL_TOKEN_DIR, VERCEL
 use turborepo_dirs::{config_dir, vercel_config_dir};
 use turborepo_errors::TURBO_SITE;
 
-pub use crate::turbo_json::RawTurboJson;
-use crate::{cli, cli::EnvMode, cli::UIMode, commands::CommandBase, turbo_json};
+pub use crate::turbo_json::{RawTurboJson, UIMode};
+use crate::{cli, cli::EnvMode, commands::CommandBase, turbo_json};
 
 #[derive(Debug, Error, Diagnostic)]
 #[error("Environment variables should not be prefixed with \"{env_pipeline_delimiter}\"")]
@@ -207,7 +207,7 @@ pub struct ConfigurationOptions {
     pub(crate) enabled: Option<bool>,
     pub(crate) spaces_id: Option<String>,
     #[serde(rename = "ui")]
-    pub(crate) ui: Option<cli::UIMode>,
+    pub(crate) ui: Option<UIMode>,
     #[serde(rename = "dangerouslyDisablePackageManagerCheck")]
     pub(crate) allow_no_package_manager: Option<bool>,
     pub(crate) daemon: Option<bool>,
@@ -276,12 +276,12 @@ impl ConfigurationOptions {
         self.spaces_id.as_deref()
     }
 
-    pub fn ui(&self) -> cli::UIMode {
+    pub fn ui(&self) -> UIMode {
         if atty::is(atty::Stream::Stdout) {
-            return cli::UIMode::Stream;
+            return UIMode::Stream;
         }
 
-        self.ui.unwrap_or(cli::UIMode::Stream)
+        self.ui.unwrap_or(UIMode::Stream)
     }
 
     pub fn allow_no_package_manager(&self) -> bool {
@@ -697,7 +697,7 @@ impl TurborepoConfigBuilder {
     create_builder!(with_enabled, enabled, Option<bool>);
     create_builder!(with_preflight, preflight, Option<bool>);
     create_builder!(with_timeout, timeout, Option<u64>);
-    create_builder!(with_ui, ui, Option<cli::UIMode>);
+    create_builder!(with_ui, ui, Option<UIMode>);
     create_builder!(
         with_allow_no_package_manager,
         allow_no_package_manager,
@@ -809,11 +809,11 @@ mod test {
     use turbopath::AbsoluteSystemPathBuf;
 
     use crate::{
-        cli::EnvMode,
         config::{
             get_env_var_config, get_override_env_var_config, ConfigurationOptions,
             TurborepoConfigBuilder, DEFAULT_API_URL, DEFAULT_LOGIN_URL, DEFAULT_TIMEOUT,
         },
+        turbo_json::UIMode,
     };
 
     #[test]
@@ -869,7 +869,7 @@ mod test {
         assert_eq!(turbo_teamid, config.team_id.unwrap());
         assert_eq!(turbo_token, config.token.unwrap());
         assert_eq!(turbo_remote_cache_timeout, config.timeout.unwrap());
-        assert_eq!(Some(true), config.ui);
+        assert_eq!(Some(UIMode::Tui), config.ui);
         assert_eq!(Some(true), config.allow_no_package_manager);
         assert_eq!(Some(true), config.daemon);
         assert_eq!(Some(EnvMode::Strict), config.env_mode);
@@ -920,7 +920,7 @@ mod test {
         let config = get_override_env_var_config(&env).unwrap();
         assert_eq!(vercel_artifacts_token, config.token.unwrap());
         assert_eq!(vercel_artifacts_owner, config.team_id.unwrap());
-        assert_eq!(Some(false), config.ui);
+        assert_eq!(Some(UIMode::Stream), config.ui);
     }
 
     #[test]

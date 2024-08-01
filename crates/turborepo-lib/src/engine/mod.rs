@@ -17,7 +17,7 @@ use thiserror::Error;
 use turborepo_errors::Spanned;
 use turborepo_repository::package_graph::{PackageGraph, PackageName};
 
-use crate::{cli::UIMode, run::task_id::TaskId, task_graph::TaskDefinition};
+use crate::{run::task_id::TaskId, task_graph::TaskDefinition, turbo_json::UIMode};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum TaskNode {
@@ -666,17 +666,21 @@ mod test {
         let graph = graph_builder.build().await.unwrap();
 
         // if our limit is less than, it should fail
-        engine.validate(&graph, 1, false).expect_err("not enough");
+        engine
+            .validate(&graph, 1, UIMode::Stream)
+            .expect_err("not enough");
 
         // if our limit is less than, it should fail
-        engine.validate(&graph, 2, false).expect_err("not enough");
+        engine
+            .validate(&graph, 2, UIMode::Stream)
+            .expect_err("not enough");
 
         // we have two persistent tasks, and a slot for all other tasks, so this should
         // pass
-        engine.validate(&graph, 3, false).expect("ok");
+        engine.validate(&graph, 3, UIMode::Stream).expect("ok");
 
         // if our limit is greater, then it should pass
-        engine.validate(&graph, 4, false).expect("ok");
+        engine.validate(&graph, 4, UIMode::Stream).expect("ok");
     }
 
     #[tokio::test]

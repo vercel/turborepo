@@ -8,7 +8,7 @@ use clap::{
 };
 use clap_complete::{generate, Shell};
 pub use error::Error;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use tracing::{debug, error, log::warn};
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::AnonAPIClient;
@@ -29,6 +29,7 @@ use crate::{
     run::watch::WatchClient,
     shim::TurboState,
     tracing::TurboSubscriber,
+    turbo_json::UIMode,
 };
 
 mod error;
@@ -2559,26 +2560,5 @@ mod test {
             .unwrap()
             .dangerously_disable_package_manager_check
         );
-    }
-}
-
-#[derive(Serialize, Deserialize, Debug, Copy, Clone, Deserializable, PartialEq, Eq, ValueEnum)]
-#[serde(rename_all = "camelCase")]
-pub enum UIMode {
-    /// Use the terminal user interface
-    Tui,
-    /// Use the standard output stream
-    Stream,
-}
-
-impl Default for UIMode {
-    fn default() -> Self {
-        Self::Tui
-    }
-}
-
-impl UIMode {
-    pub fn use_tui(&self) -> bool {
-        matches!(self, Self::Tui)
     }
 }

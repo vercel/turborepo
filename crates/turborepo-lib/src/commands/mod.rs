@@ -7,8 +7,9 @@ use turborepo_dirs::config_dir;
 use turborepo_ui::UI;
 
 use crate::{
-    cli::{Command, EnvMode},
+    cli::{Command, EnvMode, UIMode},
     config::{ConfigurationOptions, Error as ConfigError, TurborepoConfigBuilder},
+    turbo_json::UIMode,
     Args,
 };
 

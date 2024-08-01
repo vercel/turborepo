@@ -35,7 +35,7 @@ use turborepo_ui::{cprint, cprintln, tui, tui::AppSender, BOLD_GREY, GREY, UI};
 
 pub use crate::run::error::Error;
 use crate::{
-    cli::{EnvMode, UIMode},
+    cli::EnvMode,
     engine::Engine,
     opts::Opts,
     process::ProcessManager,
@@ -43,7 +43,7 @@ use crate::{
     signal::SignalHandler,
     task_graph::Visitor,
     task_hash::{get_external_deps_hash, get_internal_deps_hash, PackageInputsHashes},
-    turbo_json::TurboJson,
+    turbo_json::{TurboJson, UIMode},
     DaemonClient, DaemonConnector,
 };
 

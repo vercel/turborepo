@@ -3,10 +3,8 @@ use turborepo_repository::{
     package_graph::PackageGraph, package_json::PackageJson, package_manager::PackageManager,
 };
 
-use crate::{
-    cli::{self, EnvMode, UIMode},
-    commands::CommandBase,
-};
+use crate::{cli, commands::CommandBase, turbo_json::UIMode};
+use crate::cli::EnvMode;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]

@@ -6,6 +6,7 @@ use std::{
 
 use biome_deserialize_macros::Deserializable;
 use camino::Utf8Path;
+use clap::ValueEnum;
 use miette::{NamedSource, SourceSpan};
 use serde::{Deserialize, Serialize};
 use struct_iterable::Iterable;
@@ -165,6 +166,27 @@ impl Deref for Pipeline {
 impl DerefMut for Pipeline {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Copy, Clone, Deserializable, PartialEq, Eq, ValueEnum)]
+#[serde(rename_all = "camelCase")]
+pub enum UIMode {
+    /// Use the terminal user interface
+    Tui,
+    /// Use the standard output stream
+    Stream,
+}
+
+impl Default for UIMode {
+    fn default() -> Self {
+        Self::Tui
+    }
+}
+
+impl UIMode {
+    pub fn use_tui(&self) -> bool {
+        matches!(self, Self::Tui)
     }
 }
 
@@ -727,9 +749,9 @@ mod tests {
     use turborepo_repository::package_json::PackageJson;
     use turborepo_unescape::UnescapedString;
 
-    use super::{Pipeline, RawTurboJson, Spanned};
+    use super::{Pipeline, RawTurboJson, Spanned, UIMode};
     use crate::{
-        cli::{OutputLogsMode, UIMode},
+        cli::OutputLogsMode,
         run::task_id::TaskName,
         task_graph::{TaskDefinition, TaskOutputs},
         turbo_json::{RawTaskDefinition, TurboJson},
@@ -1057,8 +1079,8 @@ mod tests {
         assert_eq!(actual, expected);
     }
 
-    #[test_case(r#"{ "ui": "tui" }"#, Some(UI::Tui) ; "tui")]
-    #[test_case(r#"{ "ui": "stream" }"#, Some(UI::Stream) ; "stream")]
+    #[test_case(r#"{ "ui": "tui" }"#, Some(UIMode::Tui) ; "tui")]
+    #[test_case(r#"{ "ui": "stream" }"#, Some(UIMode::Stream) ; "stream")]
     #[test_case(r#"{}"#, None ; "missing")]
     fn test_ui(json: &str, expected: Option<UIMode>) {
         let json = RawTurboJson::parse(json, AnchoredSystemPath::new("").unwrap()).unwrap();
