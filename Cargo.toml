@@ -192,7 +192,3 @@ webbrowser = "0.8.7"
 which = "4.4.0"
 unicode-segmentation = "1.10.1"
 unsize = "1.1.0"
-
-[patch.crates-io]
-# TODO: Use upstream when https://github.com/servo/pathfinder/pull/566 lands
-pathfinder_simd = { git = "https://github.com/vercel/pathfinder", branch = "rm-stdarch_arm_crc32" }
