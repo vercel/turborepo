@@ -3,10 +3,7 @@ use turborepo_repository::{
     package_graph::PackageGraph, package_json::PackageJson, package_manager::PackageManager,
 };
 
-use crate::{
-    cli::{self, EnvMode},
-    commands::CommandBase,
-};
+use crate::{cli, cli::EnvMode, commands::CommandBase, turbo_json::UIMode};
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -21,7 +18,7 @@ struct ConfigOutput<'a> {
     upload_timeout: u64,
     enabled: bool,
     spaces_id: Option<&'a str>,
-    ui: bool,
+    ui: UIMode,
     package_manager: PackageManager,
     daemon: Option<bool>,
     env_mode: EnvMode,

@@ -150,7 +150,7 @@ impl WatchClient {
 
         let mut events = client.package_changes().await?;
 
-        if !self.run.has_experimental_ui() {
+        if !self.run.has_tui() {
             self.run.print_run_prelude();
         }
 

@@ -29,7 +29,7 @@ use crate::{
     run::watch::WatchClient,
     shim::TurboState,
     tracing::TurboSubscriber,
-    turbo_json::UI as ConfigUI,
+    turbo_json::UIMode,
 };
 
 mod error;
@@ -185,7 +185,7 @@ pub struct Args {
     pub heap: Option<String>,
     /// Specify whether to use the streaming UI or TUI
     #[clap(long, global = true, value_enum)]
-    pub ui: Option<ConfigUI>,
+    pub ui: Option<UIMode>,
     /// Override the login endpoint
     #[clap(long, global = true, value_parser)]
     pub login: Option<String>,
