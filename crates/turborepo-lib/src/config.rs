@@ -15,7 +15,7 @@ use turborepo_dirs::{config_dir, vercel_config_dir};
 use turborepo_errors::TURBO_SITE;
 
 pub use crate::turbo_json::{RawTurboJson, UIMode};
-use crate::{cli, cli::EnvMode, commands::CommandBase, turbo_json};
+use crate::{cli::EnvMode, commands::CommandBase, turbo_json};
 
 #[derive(Debug, Error, Diagnostic)]
 #[error("Environment variables should not be prefixed with \"{env_pipeline_delimiter}\"")]

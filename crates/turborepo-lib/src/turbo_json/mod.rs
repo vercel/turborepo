@@ -17,7 +17,7 @@ use turborepo_repository::{package_graph::ROOT_PKG_NAME, package_json::PackageJs
 use turborepo_unescape::UnescapedString;
 
 use crate::{
-    cli::{EnvMode, OutputLogsMode, UIMode},
+    cli::{EnvMode, OutputLogsMode},
     config::{ConfigurationOptions, Error, InvalidEnvPrefixError},
     run::{
         task_access::{TaskAccessTraceFile, TASK_ACCESS_CONFIG_PATH},

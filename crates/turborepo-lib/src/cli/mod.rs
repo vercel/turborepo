@@ -8,7 +8,7 @@ use clap::{
 };
 use clap_complete::{generate, Shell};
 pub use error::Error;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tracing::{debug, error, log::warn};
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::AnonAPIClient;
