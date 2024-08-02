@@ -163,7 +163,7 @@ Test help flag
             Specify whether to use the streaming UI or TUI
   
             Possible values:
-            - tui:    Use the TUI interface
+            - tui:    Use the terminal user interface
             - stream: Use the standard output stream
   
         --login <LOGIN>

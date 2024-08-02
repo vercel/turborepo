@@ -809,6 +809,7 @@ mod test {
     use turbopath::AbsoluteSystemPathBuf;
 
     use crate::{
+        cli::EnvMode,
         config::{
             get_env_var_config, get_override_env_var_config, ConfigurationOptions,
             TurborepoConfigBuilder, DEFAULT_API_URL, DEFAULT_LOGIN_URL, DEFAULT_TIMEOUT,
