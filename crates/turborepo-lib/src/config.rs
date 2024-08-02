@@ -15,7 +15,7 @@ use turborepo_dirs::{config_dir, vercel_config_dir};
 use turborepo_errors::TURBO_SITE;
 
 pub use crate::turbo_json::RawTurboJson;
-use crate::{commands::CommandBase, turbo_json};
+use crate::{cli::EnvMode, commands::CommandBase, turbo_json};
 
 #[derive(Debug, Error, Diagnostic)]
 #[error("Environment variables should not be prefixed with \"{env_pipeline_delimiter}\"")]
@@ -211,6 +211,8 @@ pub struct ConfigurationOptions {
     #[serde(rename = "dangerouslyDisablePackageManagerCheck")]
     pub(crate) allow_no_package_manager: Option<bool>,
     pub(crate) daemon: Option<bool>,
+    #[serde(rename = "envMode")]
+    pub(crate) env_mode: Option<EnvMode>,
 }
 
 #[derive(Default)]
@@ -285,6 +287,10 @@ impl ConfigurationOptions {
     pub fn daemon(&self) -> Option<bool> {
         self.daemon
     }
+
+    pub fn env_mode(&self) -> EnvMode {
+        self.env_mode.unwrap_or_default()
+    }
 }
 
 // Maps Some("") to None to emulate how Go handles empty strings
@@ -320,6 +326,7 @@ impl ResolvedConfigurationOptions for RawTurboJson {
         opts.ui = self.ui.map(|ui| ui.use_tui());
         opts.allow_no_package_manager = self.allow_no_package_manager;
         opts.daemon = self.daemon.map(|daemon| *daemon.as_inner());
+        opts.env_mode = self.env_mode;
         Ok(opts)
     }
 }
@@ -357,6 +364,7 @@ fn get_env_var_config(
         "allow_no_package_manager",
     );
     turbo_mapping.insert(OsString::from("turbo_daemon"), "daemon");
+    turbo_mapping.insert(OsString::from("turbo_env_mode"), "env_mode");
     turbo_mapping.insert(OsString::from("turbo_preflight"), "preflight");
 
     // We do not enable new config sources:
@@ -455,6 +463,15 @@ fn get_env_var_config(
         _ => None,
     });
 
+    let env_mode = output_map
+        .get("env_mode")
+        .map(|s| s.as_str())
+        .and_then(|s| match s {
+            "strict" => Some(EnvMode::Strict),
+            "loose" => Some(EnvMode::Loose),
+            _ => None,
+        });
+
     // We currently don't pick up a Spaces ID via env var, we likely won't
     // continue using the Spaces name, we can add an env var when we have the
     // name we want to stick with.
@@ -479,6 +496,7 @@ fn get_env_var_config(
         timeout,
         upload_timeout,
         spaces_id,
+        env_mode,
     };
 
     Ok(output)
@@ -539,6 +557,7 @@ fn get_override_env_var_config(
         upload_timeout: None,
         spaces_id: None,
         allow_no_package_manager: None,
+        env_mode: None,
     };
 
     Ok(output)
@@ -680,6 +699,7 @@ impl TurborepoConfigBuilder {
         Option<bool>
     );
     create_builder!(with_daemon, daemon, Option<bool>);
+    create_builder!(with_env_mode, env_mode, Option<EnvMode>);
 
     pub fn build(&self) -> Result<ConfigurationOptions, Error> {
         // Priority, from least significant to most significant:
@@ -765,6 +785,9 @@ impl TurborepoConfigBuilder {
                     if let Some(daemon) = current_source_config.daemon {
                         acc.daemon = Some(daemon);
                     }
+                    if let Some(env_mode) = current_source_config.env_mode {
+                        acc.env_mode = Some(env_mode);
+                    }
 
                     acc
                 })
@@ -780,9 +803,12 @@ mod test {
     use tempfile::TempDir;
     use turbopath::AbsoluteSystemPathBuf;
 
-    use crate::config::{
-        get_env_var_config, get_override_env_var_config, ConfigurationOptions,
-        TurborepoConfigBuilder, DEFAULT_API_URL, DEFAULT_LOGIN_URL, DEFAULT_TIMEOUT,
+    use crate::{
+        cli::EnvMode,
+        config::{
+            get_env_var_config, get_override_env_var_config, ConfigurationOptions,
+            TurborepoConfigBuilder, DEFAULT_API_URL, DEFAULT_LOGIN_URL, DEFAULT_TIMEOUT,
+        },
     };
 
     #[test]
@@ -828,6 +854,7 @@ mod test {
         );
         env.insert("turbo_daemon".into(), "true".into());
         env.insert("turbo_preflight".into(), "true".into());
+        env.insert("turbo_env_mode".into(), "strict".into());
 
         let config = get_env_var_config(&env).unwrap();
         assert!(config.preflight());
@@ -840,6 +867,7 @@ mod test {
         assert_eq!(Some(true), config.ui);
         assert_eq!(Some(true), config.allow_no_package_manager);
         assert_eq!(Some(true), config.daemon);
+        assert_eq!(Some(EnvMode::Strict), config.env_mode);
     }
 
     #[test]
@@ -852,6 +880,7 @@ mod test {
         env.insert("turbo_token".into(), "".into());
         env.insert("turbo_ui".into(), "".into());
         env.insert("turbo_daemon".into(), "".into());
+        env.insert("turbo_env_mode".into(), "".into());
         env.insert("turbo_preflight".into(), "".into());
 
         let config = get_env_var_config(&env).unwrap();
@@ -862,6 +891,7 @@ mod test {
         assert_eq!(config.token(), None);
         assert_eq!(config.ui, None);
         assert_eq!(config.daemon, None);
+        assert_eq!(config.env_mode, None);
         assert!(!config.preflight());
     }
 

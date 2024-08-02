@@ -158,6 +158,7 @@ impl<W> App<W> {
     /// If finished, removes from finished and starts again as new task.
     #[tracing::instrument(skip(self, output_logs))]
     pub fn start_task(&mut self, task: &str, output_logs: OutputLogs) -> Result<(), Error> {
+        debug!("starting {task}");
         // Name of currently highlighted task.
         // We will use this after the order switches.
         let highlighted_task = self
@@ -221,6 +222,7 @@ impl<W> App<W> {
     /// Errors if given task wasn't a running task
     #[tracing::instrument(skip(self, result))]
     pub fn finish_task(&mut self, task: &str, result: TaskResult) -> Result<(), Error> {
+        debug!("finishing task {task}");
         // Name of currently highlighted task.
         // We will use this after the order switches.
         let highlighted_task = self
@@ -283,6 +285,7 @@ impl<W> App<W> {
 
     #[tracing::instrument(skip(self))]
     pub fn update_tasks(&mut self, tasks: Vec<String>) {
+        debug!("updating task list: {tasks:?}");
         // Make sure all tasks have a terminal output
         for task in &tasks {
             self.tasks

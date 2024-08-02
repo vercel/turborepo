@@ -47,13 +47,18 @@ impl ChangedPackages {
 pub struct WatchClient {
     run: Run,
     watched_packages: HashSet<PackageName>,
-    persistent_tasks_handle: Option<JoinHandle<Result<i32, run::Error>>>,
+    persistent_tasks_handle: Option<PersistentRunHandle>,
     connector: DaemonConnector,
     base: CommandBase,
     telemetry: CommandEventBuilder,
     handler: SignalHandler,
     ui_sender: Option<AppSender>,
     ui_handle: Option<JoinHandle<Result<(), tui::Error>>>,
+}
+
+struct PersistentRunHandle {
+    stopper: run::RunStopper,
+    run_task: JoinHandle<Result<i32, run::Error>>,
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -304,6 +309,14 @@ impl WatchClient {
 
                 self.watched_packages = self.run.get_relevant_packages();
 
+                // Clean up currently running persistent tasks
+                if let Some(PersistentRunHandle { stopper, run_task }) =
+                    self.persistent_tasks_handle.take()
+                {
+                    // Shut down the tasks for the run
+                    stopper.stop().await;
+                    run_task.abort();
+                }
                 if let Some(sender) = &self.ui_sender {
                     let task_names = self.run.engine.tasks_with_command(&self.run.pkg_dep_graph);
                     sender
@@ -312,18 +325,20 @@ impl WatchClient {
                 }
 
                 if self.run.has_persistent_tasks() {
-                    // Abort old run
-                    if let Some(run) = self.persistent_tasks_handle.take() {
-                        run.abort();
-                    }
-
+                    debug_assert!(
+                        self.persistent_tasks_handle.is_none(),
+                        "persistent handle should be empty before creating a new one"
+                    );
                     let mut persistent_run = self.run.create_run_for_persistent_tasks();
                     let ui_sender = self.ui_sender.clone();
                     // If we have persistent tasks, we run them on a separate thread
                     // since persistent tasks don't finish
-                    self.persistent_tasks_handle = Some(tokio::spawn(async move {
-                        persistent_run.run(ui_sender, true).await
-                    }));
+                    self.persistent_tasks_handle = Some(PersistentRunHandle {
+                        stopper: persistent_run.stopper(),
+                        run_task: tokio::spawn(
+                            async move { persistent_run.run(ui_sender, true).await },
+                        ),
+                    });
 
                     // But we still run the regular tasks blocking
                     let mut non_persistent_run = self.run.create_run_without_persistent_tasks();

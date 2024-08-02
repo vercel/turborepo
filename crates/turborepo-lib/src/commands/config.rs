@@ -3,7 +3,10 @@ use turborepo_repository::{
     package_graph::PackageGraph, package_json::PackageJson, package_manager::PackageManager,
 };
 
-use crate::{cli, commands::CommandBase};
+use crate::{
+    cli::{self, EnvMode},
+    commands::CommandBase,
+};
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -21,6 +24,7 @@ struct ConfigOutput<'a> {
     ui: bool,
     package_manager: PackageManager,
     daemon: Option<bool>,
+    env_mode: EnvMode,
 }
 
 pub async fn run(base: CommandBase) -> Result<(), cli::Error> {
@@ -49,6 +53,7 @@ pub async fn run(base: CommandBase) -> Result<(), cli::Error> {
             ui: config.ui(),
             package_manager: *package_manager,
             daemon: config.daemon,
+            env_mode: config.env_mode(),
         })?
     );
     Ok(())
