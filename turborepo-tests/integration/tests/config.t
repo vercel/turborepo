@@ -16,7 +16,8 @@ Run test run
     "spacesId": null,
     "ui": false,
     "packageManager": "npm",
-    "daemon": null
+    "daemon": null,
+    "envMode": "strict"
   }
 
 Run test run with api overloaded
@@ -76,3 +77,15 @@ Add flag: `--daemon`
 Add flag: `--no-daemon`
   $ ${TURBO} --no-daemon config | jq .daemon
   false
+
+Confirm that the envMode is `strict` by default
+  $ ${TURBO} config | jq .envMode
+  "strict"
+
+Add env var: `TURBO_ENV_MODE=loose`
+  $ TURBO_ENV_MODE=loose ${TURBO} config | jq .envMode
+  "loose"
+
+Add flag: `--env-mode=loose`
+  $ ${TURBO} --env-mode=loose config | jq .envMode
+  "loose"

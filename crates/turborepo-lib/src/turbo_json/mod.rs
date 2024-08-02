@@ -17,7 +17,7 @@ use turborepo_repository::{package_graph::ROOT_PKG_NAME, package_json::PackageJs
 use turborepo_unescape::UnescapedString;
 
 use crate::{
-    cli::OutputLogsMode,
+    cli::{EnvMode, OutputLogsMode},
     config::{ConfigurationOptions, Error, InvalidEnvPrefixError},
     run::{
         task_access::{TaskAccessTraceFile, TASK_ACCESS_CONFIG_PATH},
@@ -133,6 +133,8 @@ pub struct RawTurboJson {
     pub allow_no_package_manager: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub daemon: Option<Spanned<bool>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub env_mode: Option<EnvMode>,
 
     #[deserializable(rename = "//")]
     #[serde(skip)]
