@@ -28,6 +28,7 @@ pub struct PackageTaskEventBuilder {
     package: String,
     task: String,
     parent_id: Option<String>,
+    is_ci: bool,
 }
 
 impl Identifiable for PackageTaskEventBuilder {
@@ -43,6 +44,10 @@ impl EventBuilder for PackageTaskEventBuilder {
     }
 
     fn track(&self, event: Event) {
+        if self.is_ci && !event.send_in_ci {
+            return;
+        }
+
         let val = match event.is_sensitive {
             EventType::Sensitive => TelemetryConfig::one_way_hash(&event.value),
             EventType::NonSensitive => event.value.to_string(),
@@ -84,6 +89,7 @@ impl PackageTaskEventBuilder {
             parent_id: None,
             package,
             task,
+            is_ci: turborepo_ci::is_ci(),
         }
     }
 
@@ -93,6 +99,7 @@ impl PackageTaskEventBuilder {
             key: "framework".to_string(),
             value: framework.to_string(),
             is_sensitive: EventType::NonSensitive,
+            send_in_ci: false,
         });
         self
     }
@@ -102,6 +109,7 @@ impl PackageTaskEventBuilder {
             key: "env_mode".to_string(),
             value: mode.to_string(),
             is_sensitive: EventType::NonSensitive,
+            send_in_ci: true,
         });
         self
     }
@@ -114,6 +122,7 @@ impl PackageTaskEventBuilder {
                 FileHashMethod::Manual => "manual".to_string(),
             },
             is_sensitive: EventType::NonSensitive,
+            send_in_ci: false,
         });
         self
     }
@@ -123,6 +132,7 @@ impl PackageTaskEventBuilder {
             key: "scm_mode".to_string(),
             value: method.to_string(),
             is_sensitive: EventType::NonSensitive,
+            send_in_ci: false,
         });
         self
     }
@@ -133,6 +143,7 @@ impl PackageTaskEventBuilder {
             key: "error".to_string(),
             value: error.to_string(),
             is_sensitive: EventType::NonSensitive,
+            send_in_ci: true,
         });
         self
     }
