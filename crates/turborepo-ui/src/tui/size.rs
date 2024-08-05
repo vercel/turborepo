@@ -40,6 +40,9 @@ impl SizeInfo {
         // Want to maximize pane width
         let ratio_pane_width = (f32::from(self.cols) * PANE_SIZE_RATIO) as u16;
         let full_task_width = self.cols.saturating_sub(self.task_width_hint);
-        full_task_width.max(ratio_pane_width)
+        full_task_width
+            .max(ratio_pane_width)
+            // We need to account for the left border of the pane
+            .saturating_sub(1)
     }
 }
