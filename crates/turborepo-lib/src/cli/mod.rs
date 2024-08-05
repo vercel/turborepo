@@ -1301,11 +1301,6 @@ pub async fn run(
         }
     };
 
-    if cli_result.is_err() {
-        root_telemetry.track_failure();
-    } else {
-        root_telemetry.track_success();
-    }
     root_telemetry.track_end();
     match telemetry_handle {
         Some(handle) => handle.close_with_timeout().await,
