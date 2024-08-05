@@ -277,7 +277,8 @@ impl ConfigurationOptions {
     }
 
     pub fn ui(&self) -> UIMode {
-        if atty::is(atty::Stream::Stdout) {
+        // If we aren't hooked up to a TTY, then do not use TUI
+        if !atty::is(atty::Stream::Stdout) {
             return UIMode::Stream;
         }
 
