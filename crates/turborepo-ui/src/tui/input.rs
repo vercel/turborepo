@@ -30,8 +30,7 @@ pub fn input(options: InputOptions) -> Result<Option<Event>, Error> {
                 }
                 _ => Ok(None),
             },
-            // crossterm::event::Event::Resize(cols, rows) => Ok(Some(Event::Resize { rows, cols
-            // })),
+            crossterm::event::Event::Resize(cols, rows) => Ok(Some(Event::Resize { rows, cols })),
             _ => Ok(None),
         }
     } else {

@@ -370,6 +370,15 @@ impl<W> App<W> {
         self.scroll.select(Some(0));
         self.selected_task_index = 0;
     }
+
+    pub fn resize(&mut self, rows: u16, cols: u16) {
+        self.size.resize(rows, cols);
+        let pane_rows = self.size.pane_rows();
+        let pane_cols = self.size.pane_cols();
+        self.tasks.values_mut().for_each(|term| {
+            term.resize(pane_rows, pane_cols);
+        })
+    }
 }
 
 impl<W: Write> App<W> {
@@ -439,6 +448,10 @@ fn run_app_inner<B: Backend + std::io::Write>(
     let mut last_render = Instant::now();
     let mut callback = None;
     while let Some(event) = poll(app.input_options(), &receiver, last_render + FRAMERATE) {
+        // If we got a resize event, make sure to update ratatui backend.
+        if matches!(event, Event::Resize { .. }) {
+            terminal.autoresize()?;
+        }
         callback = update(app, event)?;
         if app.done {
             break;
@@ -589,6 +602,9 @@ fn update(
         }
         Event::RestartTasks { tasks } => {
             app.update_tasks(tasks);
+        }
+        Event::Resize { rows, cols } => {
+            app.resize(rows, cols);
         }
     }
     Ok(None)
@@ -893,5 +909,35 @@ mod test {
             "b",
             "selected b"
         );
+    }
+
+    #[test]
+    fn test_resize() {
+        let mut app: App<Vec<u8>> = App::new(20, 24, vec!["a".to_string(), "b".to_string()]);
+        let pane_rows = app.size.pane_rows();
+        let pane_cols = app.size.pane_cols();
+        for (name, task) in app.tasks.iter() {
+            let (rows, cols) = task.size();
+            assert_eq!(
+                (rows, cols),
+                (pane_rows, pane_cols),
+                "size mismatch for {name}"
+            );
+        }
+
+        app.resize(20, 18);
+        let new_pane_rows = app.size.pane_rows();
+        let new_pane_cols = app.size.pane_cols();
+        assert_eq!(pane_rows, new_pane_rows);
+        assert_ne!(pane_cols, new_pane_cols);
+
+        for (name, task) in app.tasks.iter() {
+            let (rows, cols) = task.size();
+            assert_eq!(
+                (rows, cols),
+                (new_pane_rows, new_pane_cols),
+                "size mismatch for {name}"
+            );
+        }
     }
 }

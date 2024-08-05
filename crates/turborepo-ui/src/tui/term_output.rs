@@ -9,8 +9,6 @@ use super::{
 };
 
 pub struct TerminalOutput<W> {
-    rows: u16,
-    cols: u16,
     pub parser: vt100::Parser,
     pub stdin: Option<W>,
     pub status: Option<String>,
@@ -31,8 +29,6 @@ impl<W> TerminalOutput<W> {
         Self {
             parser: vt100::Parser::new(rows, cols, 1024),
             stdin,
-            rows,
-            cols,
             status: None,
             output_logs: None,
             task_result: None,
@@ -47,12 +43,14 @@ impl<W> TerminalOutput<W> {
         }
     }
 
+    pub fn size(&self) -> (u16, u16) {
+        self.parser.screen().size()
+    }
+
     pub fn resize(&mut self, rows: u16, cols: u16) {
-        if self.rows != rows || self.cols != cols {
+        if self.parser.screen().size() != (rows, cols) {
             self.parser.screen_mut().set_size(rows, cols);
         }
-        self.rows = rows;
-        self.cols = cols;
     }
 
     pub fn scroll(&mut self, direction: Direction) -> Result<(), Error> {
@@ -94,10 +92,11 @@ impl<W> TerminalOutput<W> {
         match self.persist_behavior() {
             LogBehavior::Full => {
                 let screen = self.parser.entire_screen();
+                let (_, cols) = screen.size();
                 stdout.write_all("┌".as_bytes())?;
                 stdout.write_all(title.as_bytes())?;
                 stdout.write_all(b"\r\n")?;
-                for row in screen.rows_formatted(0, self.cols) {
+                for row in screen.rows_formatted(0, cols) {
                     stdout.write_all("│ ".as_bytes())?;
                     stdout.write_all(&row)?;
                     stdout.write_all(b"\r\n")?;
