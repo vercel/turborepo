@@ -4,6 +4,7 @@ pub mod event;
 mod handle;
 mod input;
 mod pane;
+mod size;
 mod spinner;
 mod table;
 mod task;
@@ -15,6 +16,7 @@ use event::{Event, TaskResult};
 pub use handle::{AppReceiver, AppSender, TuiTask};
 use input::{input, InputOptions};
 pub use pane::TerminalPane;
+use size::SizeInfo;
 pub use table::TaskTable;
 pub use term_output::TerminalOutput;
 
