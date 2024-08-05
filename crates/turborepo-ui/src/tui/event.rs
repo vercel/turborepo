@@ -38,10 +38,10 @@ pub enum Event {
     },
     Mouse(crossterm::event::MouseEvent),
     CopySelection,
-    // Resize {
-    //     rows: u16,
-    //     cols: u16,
-    // }
+    Resize {
+        rows: u16,
+        cols: u16,
+    },
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]

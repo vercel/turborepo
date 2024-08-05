@@ -19,6 +19,11 @@ impl SizeInfo {
         }
     }
 
+    pub fn resize(&mut self, rows: u16, cols: u16) {
+        self.rows = rows;
+        self.cols = cols;
+    }
+
     pub fn pane_rows(&self) -> u16 {
         self.rows
             // Account for header and footer in layout
