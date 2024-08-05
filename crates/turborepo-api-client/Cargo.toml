@@ -10,6 +10,7 @@ native-tls = ["reqwest/native-tls"]
 rustls-tls = ["reqwest/rustls-tls-native-roots"]
 
 [dev-dependencies]
+anyhow = { workspace = true }
 http = "0.2.9"
 httpmock = { workspace = true }
 port_scanner = { workspace = true }
@@ -20,7 +21,6 @@ turborepo-vercel-api-mock = { workspace = true }
 workspace = true
 
 [dependencies]
-anyhow = { workspace = true }
 bytes.workspace = true
 chrono = { workspace = true, features = ["serde"] }
 lazy_static = { workspace = true }

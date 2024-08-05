@@ -602,7 +602,7 @@ mod tests {
 
     #[test]
     fn test_read_non_existing_to_string() -> Result<()> {
-        let test_dir = tempdir::TempDir::new("read-existing")?;
+        let test_dir = tempfile::TempDir::with_prefix("read-existing")?;
         let test_path = test_dir.path().join("foo");
         let path = AbsoluteSystemPathBuf::new(test_path.to_str().unwrap())?;
         assert_eq!(path.read_existing_to_string()?, None);
@@ -611,7 +611,7 @@ mod tests {
 
     #[test]
     fn test_read_existing_to_string() -> Result<()> {
-        let test_dir = tempdir::TempDir::new("read-existing")?;
+        let test_dir = tempfile::TempDir::with_prefix("read-existing")?;
         let test_path = test_dir.path().join("foo");
         let path = AbsoluteSystemPathBuf::new(test_path.to_str().unwrap())?;
         path.create_with_contents("hi there!")?;
@@ -642,7 +642,7 @@ mod tests {
             mode: Option<Permissions>,
             expected: Permissions,
         ) -> Result<()> {
-            let test_dir = tempdir::TempDir::new("mkdir-all")?;
+            let test_dir = tempfile::TempDir::with_prefix("mkdir-all")?;
 
             let test_path = test_dir.path().join("foo");
 

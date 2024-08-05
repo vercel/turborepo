@@ -420,7 +420,7 @@ mod test {
     use std::{collections::HashSet, str::FromStr};
 
     use itertools::Itertools;
-    use tempdir::TempDir;
+    use tempfile::TempDir;
     use test_case::test_case;
     use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 
@@ -531,8 +531,8 @@ mod test {
     }
 
     /// set up a globwalk test in a tempdir, returning the path to the tempdir
-    fn setup() -> tempdir::TempDir {
-        let tmp = tempdir::TempDir::new("globwalk").unwrap();
+    fn setup() -> tempfile::TempDir {
+        let tmp = tempfile::TempDir::with_prefix("globwalk").unwrap();
 
         let directories = ["a/b/c", "a/c", "abc", "axbxcxdxe/xxx", "axbxcxdxexxx", "b"];
 
@@ -1343,12 +1343,12 @@ mod test {
         // TODO: this test needs to be implemented...
     }
 
-    fn setup_files(files: &[&str]) -> tempdir::TempDir {
+    fn setup_files(files: &[&str]) -> tempfile::TempDir {
         setup_files_with_prefix("globwalk", files)
     }
 
-    fn setup_files_with_prefix(prefix: &str, files: &[&str]) -> tempdir::TempDir {
-        let tmp = tempdir::TempDir::new(prefix).unwrap();
+    fn setup_files_with_prefix(prefix: &str, files: &[&str]) -> tempfile::TempDir {
+        let tmp = tempfile::TempDir::with_prefix(prefix).unwrap();
         for file in files {
             let file = file.trim_start_matches('/');
             let path = tmp.path().join(file);
@@ -1493,7 +1493,7 @@ mod test {
     #[test_case("foo/", true, "foo/**" ; "dir slash")]
     #[test_case("f[o0]o", true, "f[o0]o" ; "non-literal")]
     fn test_add_double_star(glob: &str, is_dir: bool, expected: &str) {
-        let tmpdir = TempDir::new("doublestar").unwrap();
+        let tmpdir = TempDir::with_prefix("doublestar").unwrap();
         let base = AbsoluteSystemPath::new(tmpdir.path().to_str().unwrap()).unwrap();
 
         let foo = base.join_component("foo");

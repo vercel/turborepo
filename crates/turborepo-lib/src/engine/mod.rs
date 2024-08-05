@@ -557,7 +557,7 @@ mod test {
 
     use std::collections::BTreeMap;
 
-    use tempdir::TempDir;
+    use tempfile::TempDir;
     use turbopath::AbsoluteSystemPath;
     use turborepo_repository::{
         discovery::{DiscoveryResponse, PackageDiscovery, WorkspaceData},
@@ -638,7 +638,7 @@ mod test {
         // set up a workspace with three packages, two of which have a persistent build
         // task. we expect concurrency limit 1 to fail, but 2 and 3 to pass.
 
-        let tmp = tempdir::TempDir::new("issue_4291").unwrap();
+        let tmp = tempfile::TempDir::with_prefix("issue_4291").unwrap();
 
         let mut engine = Engine::new();
 
