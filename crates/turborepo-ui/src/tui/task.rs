@@ -1,8 +1,6 @@
 #![allow(dead_code)]
 use std::{collections::HashSet, mem, time::Instant};
 
-use itertools::Itertools;
-
 use super::event::TaskResult;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
@@ -155,14 +153,9 @@ impl TasksByStatus {
             .collect()
     }
 
-    pub fn restart_tasks<'a>(
-        &mut self,
-        tasks: impl Iterator<Item = &'a str>,
-        current_selection: usize,
-    ) -> usize {
+    pub fn restart_tasks<'a>(&mut self, tasks: impl Iterator<Item = &'a str>) {
         let tasks_to_restart = tasks.collect::<HashSet<_>>();
 
-        // check running & finished vecs & remove any where name matches tasks iter
         let (restarted_running, keep_running): (Vec<_>, Vec<_>) = mem::take(&mut self.running)
             .into_iter()
             .partition(|task| tasks_to_restart.contains(task.name()));
@@ -176,11 +169,8 @@ impl TasksByStatus {
             restarted_running
                 .into_iter()
                 .map(|task| task.restart())
-                .chain(restarted_finished.into_iter().map(|task| task.restart()))
-                .sorted(),
+                .chain(restarted_finished.into_iter().map(|task| task.restart())),
         );
-
-        // TODO: return new index?
-        current_selection
+        self.planned.sort_unstable();
     }
 }

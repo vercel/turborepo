@@ -296,6 +296,7 @@ impl<W> App<W> {
     #[tracing::instrument(skip(self))]
     pub fn restart_tasks(&mut self, tasks: Vec<String>) {
         debug!("tasks to reset: {tasks:?}");
+        let highlighted_task = self.active_task().to_owned();
         // Make sure all tasks have a terminal output
         for task in &tasks {
             self.tasks
@@ -303,12 +304,20 @@ impl<W> App<W> {
                 .or_insert_with(|| TerminalOutput::new(self.pane_rows, self.pane_cols, None));
         }
 
-        let new_selection_index = self
+        self.tasks_by_status
+            .restart_tasks(tasks.iter().map(|s| s.as_str()));
+
+        if !self.has_user_scrolled {
+            return;
+        }
+
+        if let Some(new_index_to_highlight) = self
             .tasks_by_status
-            .restart_tasks(tasks.iter().map(|s| s.as_str()), self.selected_task_index);
-        if self.has_user_scrolled {
-            self.selected_task_index = new_selection_index;
-            self.scroll.select(Some(new_selection_index));
+            .task_names_in_displayed_order()
+            .position(|running| running == highlighted_task.as_str())
+        {
+            self.selected_task_index = new_index_to_highlight;
+            self.scroll.select(Some(new_index_to_highlight));
         }
     }
 
