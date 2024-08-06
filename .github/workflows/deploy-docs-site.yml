@@ -29,7 +29,7 @@ jobs:
         run: npm install --global vercel@latest
 
       - name: Create preview deployment
-        run: vercel deploy --token=${{ secrets.VERCEL_TOKEN }}
+        run: vercel deploy --cwd=docs --token=${{ secrets.VERCEL_TOKEN }}
 
   deploy-production:
     runs-on: ubuntu-latest
@@ -41,4 +41,4 @@ jobs:
         run: npm install --global vercel@latest
 
       - name: Create production deployment
-        run: vercel deploy --token=${{ secrets.VERCEL_TOKEN }}
+        run: vercel deploy --cwd=docs --token=${{ secrets.VERCEL_TOKEN }}
