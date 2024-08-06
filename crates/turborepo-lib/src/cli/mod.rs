@@ -697,6 +697,11 @@ pub struct ExecutionArgs {
     #[clap(short = 'F', long, group = "scope-filter-group")]
     pub filter: Vec<String>,
 
+    /// Run only tasks that are affected by changes between
+    /// the current branch and `main`
+    #[clap(long, group = "scope-filter-group")]
+    pub affected: bool,
+
     /// Set type of process output logging. Use "full" to show
     /// all output. Use "hash-only" to show only turbo-computed
     /// task hashes. Use "new-only" to show only new output with

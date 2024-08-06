@@ -22,6 +22,8 @@ struct ConfigOutput<'a> {
     package_manager: PackageManager,
     daemon: Option<bool>,
     env_mode: EnvMode,
+    scm_base: &'a str,
+    scm_head: &'a str,
 }
 
 pub async fn run(base: CommandBase) -> Result<(), cli::Error> {
@@ -51,6 +53,8 @@ pub async fn run(base: CommandBase) -> Result<(), cli::Error> {
             package_manager: *package_manager,
             daemon: config.daemon,
             env_mode: config.env_mode(),
+            scm_base: config.scm_base(),
+            scm_head: config.scm_head(),
         })?
     );
     Ok(())

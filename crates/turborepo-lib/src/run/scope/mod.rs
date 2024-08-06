@@ -33,5 +33,5 @@ pub fn resolve_packages(
         scm,
         root_turbo_json,
     )?
-    .resolve(&opts.get_filters())
+    .resolve(&opts.affected_range, &opts.get_filters())
 }

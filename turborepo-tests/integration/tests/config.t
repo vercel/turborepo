@@ -17,7 +17,9 @@ Run test run
     "ui": "stream",
     "packageManager": "npm",
     "daemon": null,
-    "envMode": "strict"
+    "envMode": "strict",
+    "scmBase": "main",
+    "scmHead": "HEAD"
   }
 
 Run test run with api overloaded
@@ -89,3 +91,12 @@ Add env var: `TURBO_ENV_MODE=loose`
 Add flag: `--env-mode=loose`
   $ ${TURBO} --env-mode=loose config | jq .envMode
   "loose"
+
+Add env var `TURBO_SCM_BASE=HEAD`
+  $ TURBO_SCM_BASE="HEAD" ${TURBO} config | jq .scmBase
+  "HEAD"
+
+Add env var `TURBO_SCM_HEAD=my-branch`
+  $ TURBO_SCM_HEAD="my-branch" ${TURBO} config | jq .scmHead
+  "my-branch"
+
