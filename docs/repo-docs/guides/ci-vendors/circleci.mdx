@@ -35,6 +35,7 @@ And a `turbo.json`:
 ```json title="./turbo.json"
 {
   "$schema": "https://turbo.build/schema.json",
+  "globalPassThroughEnv": ["CIRCLECI", "CIRCLE_*"],
   "tasks": {
     "build": {
       "outputs": [".next/**", "!.next/cache/**"],
@@ -45,6 +46,10 @@ And a `turbo.json`:
     }
   }
 }
+
+<Callout type="info">
+Note the `globalPassThroughEnv` configuration. This allows CircleCI's environment variables into the task's runtime when using [Strict Mode](https://turbo.build/repo/docs/crafting-your-repository/using-environment-variables#strict-mode).
+</Callout>
 ```
 
 Create a file called `.circleci/config.yml` in your repository with the following contents:
