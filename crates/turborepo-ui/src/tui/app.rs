@@ -179,18 +179,6 @@ impl<W> App<W> {
             self.tasks_by_status.running.push(running);
 
             found_task = true;
-        } else if let Some(finished_idx) = self
-            .tasks_by_status
-            .finished
-            .iter()
-            .position(|finished| finished.name() == task)
-        {
-            let _finished = self.tasks_by_status.finished.remove(finished_idx);
-            self.tasks_by_status
-                .running
-                .push(Task::new(task.to_owned()).start());
-
-            found_task = true;
         }
 
         if !found_task {
@@ -303,6 +291,25 @@ impl<W> App<W> {
             running: Default::default(),
             finished: Default::default(),
         };
+    }
+
+    #[tracing::instrument(skip(self))]
+    pub fn restart_tasks(&mut self, tasks: Vec<String>) {
+        debug!("tasks to reset: {tasks:?}");
+        // Make sure all tasks have a terminal output
+        for task in &tasks {
+            self.tasks
+                .entry(task.clone())
+                .or_insert_with(|| TerminalOutput::new(self.pane_rows, self.pane_cols, None));
+        }
+
+        let new_selection_index = self
+            .tasks_by_status
+            .restart_tasks(tasks.iter().map(|s| s.as_str()), self.selected_task_index);
+        if self.has_user_scrolled {
+            self.selected_task_index = new_selection_index;
+            self.scroll.select(Some(new_selection_index));
+        }
     }
 
     /// Persist all task output to the after closing the TUI
@@ -579,6 +586,9 @@ fn update(
         Event::CopySelection => {
             app.copy_selection();
         }
+        Event::RestartTasks { tasks } => {
+            app.update_tasks(tasks);
+        }
     }
     Ok(None)
 }
@@ -692,6 +702,7 @@ mod test {
         );
 
         // Restart b
+        app.restart_tasks(vec!["b".to_string()]);
         app.start_task("b", OutputLogs::Full).unwrap();
         assert_eq!(
             (
@@ -703,6 +714,7 @@ mod test {
         );
 
         // Restart a
+        app.restart_tasks(vec!["a".to_string()]);
         app.start_task("a", OutputLogs::Full).unwrap();
         assert_eq!(
             (
@@ -821,5 +833,64 @@ mod test {
             Some("building")
         );
         assert!(app.tasks.get("b").unwrap().status.is_none());
+    }
+
+    #[test]
+    fn test_restarting_task_no_scroll() {
+        let mut app: App<()> = App::new(
+            100,
+            100,
+            vec!["a".to_string(), "b".to_string(), "c".to_string()],
+        );
+        assert_eq!(app.scroll.selected(), Some(0), "selected a");
+        assert_eq!(app.tasks_by_status.task_name(0), "a", "selected a");
+        app.start_task("a", OutputLogs::None).unwrap();
+        app.start_task("b", OutputLogs::None).unwrap();
+        app.start_task("c", OutputLogs::None).unwrap();
+        app.finish_task("b", TaskResult::Success).unwrap();
+        app.finish_task("c", TaskResult::Success).unwrap();
+        app.finish_task("a", TaskResult::Success).unwrap();
+
+        assert_eq!(app.scroll.selected(), Some(0), "selected b");
+        assert_eq!(app.tasks_by_status.task_name(0), "b", "selected b");
+
+        app.restart_tasks(vec!["c".to_string()]);
+
+        assert_eq!(
+            app.tasks_by_status
+                .task_name(app.scroll.selected().unwrap()),
+            "c",
+            "selected c"
+        );
+    }
+
+    #[test]
+    fn test_restarting_task() {
+        let mut app: App<()> = App::new(
+            100,
+            100,
+            vec!["a".to_string(), "b".to_string(), "c".to_string()],
+        );
+        app.next();
+        assert_eq!(app.scroll.selected(), Some(1), "selected b");
+        assert_eq!(app.tasks_by_status.task_name(1), "b", "selected b");
+        app.start_task("a", OutputLogs::None).unwrap();
+        app.start_task("b", OutputLogs::None).unwrap();
+        app.start_task("c", OutputLogs::None).unwrap();
+        app.finish_task("b", TaskResult::Success).unwrap();
+        app.finish_task("c", TaskResult::Success).unwrap();
+        app.finish_task("a", TaskResult::Success).unwrap();
+
+        assert_eq!(app.scroll.selected(), Some(0), "selected b");
+        assert_eq!(app.tasks_by_status.task_name(0), "b", "selected b");
+
+        app.restart_tasks(vec!["c".to_string()]);
+
+        assert_eq!(
+            app.tasks_by_status
+                .task_name(app.scroll.selected().unwrap()),
+            "b",
+            "selected b"
+        );
     }
 }
