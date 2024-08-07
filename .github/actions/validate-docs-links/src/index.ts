@@ -331,12 +331,11 @@ async function createComment(comment: string): Promise<string> {
 const formatTableRow = (
   link: string,
   errorType: ErrorType,
-  docPath: string
+  rawDocPath: string
 ) => {
-  return `| ${link} | ${errorType} | [/${docPath}](https://github.com/vercel/turbo/blob/${sha}/${docPath.replace(
-    "../../../",
-    ""
-  )}) | \n`;
+  const docPath = rawDocPath.replace("../../../", "");
+
+  return `| ${link} | ${errorType} | [/${docPath}](https://github.com/vercel/turbo/blob/${sha}/${docPath}) | \n`;
 };
 
 async function updateCheckStatus(
