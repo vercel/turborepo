@@ -20,9 +20,6 @@ jobs:
         uses: ./.github/actions/setup-node
 
       - name: "Run link checker"
-        run: |
-          cd .github/actions/validate-docs-links
-          pnpm install
-          pnpm check-links
+        run: cd docs && pnpm run check-links
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
