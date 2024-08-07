@@ -11,7 +11,7 @@ Developing applications in a monorepo unlocks powerful workflows, enabling you t
 Most development tasks are long-running tasks that watch for changes to your code. Turborepo enhances this experience with a powerful terminal UI and other capabilities like:
 
 - [Configuration for `dev` tasks](#configuring-development-tasks)
-- [Interacting with tasks](#using-the-terminal-ui)
+- [Interacting with tasks](#interacting-with-tasks)
 - [Watch Mode](#watch-mode)
 - [Running setup scripts](#running-setup-tasks-before-dev)
 - [Filtering tasks to run a subset of your packages](#running-a-specific-application)
@@ -41,6 +41,16 @@ You can now run your `dev` task to start your development scripts in parallel:
 ```bash title="Terminal"
 turbo dev
 ```
+
+### Interacting with tasks
+
+Some scripts allow you to type into them using `stdin` for interactive inputs. Using [the terminal ui](https://turbo.build/repo/docs/reference/configuration#ui), you can select a task, enter it, and use `stdin` as you typically would.
+
+<Callout type="good-to-know">
+  A task must be
+  [interactive](https://turbo.build/repo/docs/reference/configuration#interactive)
+  to enable this functionality.
+</Callout>
 
 ### Running setup tasks before `dev`
 
