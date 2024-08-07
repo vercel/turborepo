@@ -177,14 +177,15 @@ async function prepareDocumentMapEntry(
 function validateInternalLink(errors: Errors, href: string): void {
   // /docs/api/example#heading -> ["api/example", "heading""]
   const [link, hash] = href.replace(DOCS_PATH, "").split("#", 2);
-  console.log(link);
 
   let foundPage;
 
   if (link.startsWith("messages/")) {
     // check if error page exists, key is the full url path
     // e.g. `docs/messages/example`
-    foundPage = documentMap.get(DOCS_PATH.substring(1) + link);
+    const pathToSearch = DOCS_PATH.substring(1) + link;
+    console.log(pathToSearch);
+    foundPage = documentMap.get(pathToSearch);
   } else {
     // check if doc page exists, key is the url path without `/docs/`
     // e.g. `api/example`
@@ -392,8 +393,6 @@ async function validateAllInternalLinks(): Promise<void> {
     documentMap = new Map(
       await Promise.all(allMdxFilePaths.map(prepareDocumentMapEntry))
     );
-
-    console.log({ documentMap });
 
     const docProcessingPromises = allMdxFilePaths.map(async (filePath) => {
       const doc = documentMap.get(normalizePath(filePath));
