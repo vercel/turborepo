@@ -375,7 +375,6 @@ impl<W> App<W> {
         self.scroll.select(Some(0));
         self.selected_task_index = 0;
     }
-<<<<<<< HEAD
 
     pub fn resize(&mut self, rows: u16, cols: u16) {
         self.size.resize(rows, cols);
@@ -385,9 +384,6 @@ impl<W> App<W> {
             term.resize(pane_rows, pane_cols);
         })
     }
-||||||| parent of 90f8a5566b (fix(watch): display which tasks will be rerun (#8960))
-=======
->>>>>>> 90f8a5566b (fix(watch): display which tasks will be rerun (#8960))
 }
 
 impl<W: Write> App<W> {

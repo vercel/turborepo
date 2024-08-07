@@ -22,7 +22,7 @@ use turborepo_ui::{ColorConfig, GREY};
 use crate::{
     cli::error::print_potential_tasks,
     commands::{
-        bin, config, daemon, generate, link, login, logout, ls, prune, run, scan, telemetry,
+        bin, config, daemon, generate, link, login, logout, ls, prune, query, run, scan, telemetry,
         unlink, CommandBase,
     },
     get_version,
@@ -587,6 +587,9 @@ pub enum Command {
         run_args: Box<RunArgs>,
         #[clap(flatten)]
         execution_args: Box<ExecutionArgs>,
+    },
+    Query {
+        query: String,
     },
     Watch(Box<ExecutionArgs>),
     /// Unlink the current directory from your Vercel organization and disable
@@ -1301,6 +1304,16 @@ pub async fn run(
                 }
             })?;
             Ok(exit_code)
+        }
+        Command::Query { query } => {
+            let query = query.clone();
+            let event = CommandEventBuilder::new("query").with_parent(&root_telemetry);
+            event.track_call();
+            let base = CommandBase::new(cli_args, repo_root, version, ui);
+
+            let query = query::run(base, event, query).await?;
+
+            Ok(query)
         }
         Command::Watch(_) => {
             let event = CommandEventBuilder::new("watch").with_parent(&root_telemetry);
