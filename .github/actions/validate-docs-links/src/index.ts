@@ -178,19 +178,10 @@ function validateInternalLink(errors: Errors, href: string): void {
   // /docs/api/example#heading -> ["api/example", "heading""]
   const [link, hash] = href.replace(DOCS_PATH, "").split("#", 2);
 
-  let foundPage;
-
-  if (link.startsWith("messages/")) {
-    // check if error page exists, key is the full url path
-    // e.g. `docs/messages/example`
-    const pathToSearch = DOCS_PATH.substring(1) + link;
-    console.log(pathToSearch);
-    foundPage = documentMap.get(pathToSearch);
-  } else {
-    // check if doc page exists, key is the url path without `/docs/`
-    // e.g. `api/example`
-    foundPage = documentMap.get(link);
-  }
+  console.log(link);
+  // check if doc page exists, key is the url path without `/docs/`
+  // e.g. `api/example`
+  foundPage = documentMap.get(link);
 
   if (!foundPage) {
     errors.link.push(href);
