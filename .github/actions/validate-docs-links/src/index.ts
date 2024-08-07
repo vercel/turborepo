@@ -51,7 +51,7 @@ interface Comment {
   id: number;
 }
 
-const REPO_PATH = "/docs/";
+const REPO_PATH = "../../../docs/";
 const PACK_PATH = "/pack/";
 const EXCLUDED_HASHES = ["top"];
 const COMMENT_TAG = "<!-- LINK_CHECKER_COMMENT -->";
