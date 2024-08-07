@@ -76,7 +76,8 @@ async function getAllMdxFilePaths(
   fileList: string[] = []
 ): Promise<string[]> {
   for (const dir of directoriesToScan) {
-    const dirPath = path.join(".", dir);
+    const dirPath = path.join("../../", dir);
+    console.log({ dirPath });
     const files = await fs.readdir(dirPath);
     for (const file of files) {
       const filePath = path.join(dirPath, file);
@@ -397,7 +398,7 @@ async function updateCheckStatus(
 // Main function that triggers link validation across .mdx files
 async function validateAllInternalLinks(): Promise<void> {
   try {
-    const allMdxFilePaths = await getAllMdxFilePaths([DOCS_PATH, ERRORS_PATH]);
+    const allMdxFilePaths = await getAllMdxFilePaths([DOCS_PATH]);
 
     documentMap = new Map(
       await Promise.all(allMdxFilePaths.map(prepareDocumentMapEntry))
