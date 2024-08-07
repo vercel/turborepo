@@ -144,17 +144,17 @@ function normalizePath(filePath: string): string {
     // Remap repository file path to the vercel-site url path without `/docs/`
     // e.g. `docs/01-api/getting-started/index.mdx` -> `api/getting-started`
     filePath
-      // We remove `docs/` to normalize paths between regular links
-      // e.g. `/docs/api/example` and related/source links e.g `api/example`
-      // TODO:
-      //  - Fix `vercel-site` to handle full paths for related/source links
-      //  - Update doc files to use full paths for related/source links
-      //  - Remove this workaround
-      .replace(DOCS_PATH.substring(1), "")
-      // Remove prefix numbers used for ordering
-      .replace(/(\d\d-)/g, "")
-      .replace(".mdx", "")
-      .replace("/index", "")
+    // We remove `docs/` to normalize paths between regular links
+    // e.g. `/docs/api/example` and related/source links e.g `api/example`
+    // TODO:
+    //  - Fix `vercel-site` to handle full paths for related/source links
+    //  - Update doc files to use full paths for related/source links
+    //  - Remove this workaround
+    // .replace(DOCS_PATH.substring(1), "")
+    // // Remove prefix numbers used for ordering
+    // .replace(/(\d\d-)/g, "")
+    // .replace(".mdx", "")
+    // .replace("/index", "")
   );
 }
 
