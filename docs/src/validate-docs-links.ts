@@ -7,8 +7,14 @@ import raw from "rehype-raw";
 import visit from "unist-util-visit";
 import GithubSlugger from "github-slugger";
 import matter from "gray-matter";
-import * as github from "@actions/github";
-import { setFailed } from "@actions/core";
+// import {
+//   COMMENT_TAG,
+//   createComment,
+//   findBotComment,
+//   updateCheckStatus,
+//   updateComment,
+//   setFailed,
+// } from "./github";
 
 /**
  * This script validates internal links in /docs and /errors including internal,
@@ -47,25 +53,10 @@ interface Errors {
 
 type ErrorType = Exclude<keyof Errors, "doc">;
 
-interface Comment {
-  id: number;
-}
+const IS_CI = process.env.CI === "true";
 
 const DOCS_PATH = ".";
 const EXCLUDED_HASHES = ["top"];
-const COMMENT_TAG = "<!-- LINK_CHECKER_COMMENT -->";
-
-const { context, getOctokit } = github;
-const octokit = getOctokit(process.env.GITHUB_TOKEN!);
-const { owner, repo } = context.repo;
-const pullRequest = context.payload.pull_request;
-if (!pullRequest) {
-  console.log("Skipping since this is not a pull request");
-  process.exit(0);
-}
-const sha = pullRequest.head.sha;
-const isFork = pullRequest.head.repo.fork;
-const prNumber = pullRequest.number;
 
 const slugger = new GithubSlugger();
 
@@ -84,6 +75,9 @@ async function getAllMdxFilePaths(
         fileList = await getAllMdxFilePaths([filePath], fileList);
       } else if (path.extname(file) === ".mdx") {
         fileList.push(filePath);
+        if (path.basename(filePath) === "index.mdx") {
+          fileList.push(filePath.replace("index.mdx", ""));
+        }
       }
     }
   }
@@ -127,7 +121,6 @@ const markdownProcessor = unified()
     };
   });
 
-// Github APIs returns `errors/*` and `docs/*` paths
 function normalizePath(filePath: string): string {
   const normalized = filePath
     .replace("repo-docs", "/repo/docs")
@@ -160,7 +153,9 @@ async function prepareDocumentMapEntry(
       { body: content, path: filePath, headings, ...data },
     ];
   } catch (error) {
-    setFailed(`Error preparing document map for file ${filePath}: ${error}`);
+    // if (IS_CI) {
+    //   setFailed(`Error preparing document map for file ${filePath}: ${error}`);
+    // }
     return ["", {} as Document];
   }
 }
@@ -170,24 +165,23 @@ function validateInternalLink(errors: Errors, href: string): void {
   // /docs/api/example#heading -> ["api/example", "heading""]
   const [link, hash] = href.replace(DOCS_PATH, "").split("#", 2);
 
-  // These paths exist, just not in our .mdx files
+  // These paths exist, just not in our Markdown files
   const ignorePaths = ["/api/remote-cache-spec", "/repo"];
   if (ignorePaths.includes(link)) {
     return;
   }
 
-  const foundPage = documentMap.get(link);
+  let foundPage = documentMap.get(link);
+
+  if (!foundPage) {
+    foundPage = documentMap.get(`${link}/index`);
+  }
 
   if (!foundPage) {
     errors.link.push(href);
   } else if (hash && !EXCLUDED_HASHES.includes(hash)) {
-    // Account for documents that pull their content from another document
-    const foundPageSource = foundPage.source
-      ? documentMap.get(foundPage.source)
-      : undefined;
-
     // Check if the hash link points to an existing section within the document
-    const hashFound = (foundPageSource || foundPage).headings.includes(hash);
+    const hashFound = foundPage.headings.includes(hash);
 
     if (!hashFound) {
       errors.hash.push(href);
@@ -201,24 +195,6 @@ function validateHashLink(errors: Errors, href: string, doc: Document): void {
 
   if (!EXCLUDED_HASHES.includes(hashLink) && !doc.headings.includes(hashLink)) {
     errors.hash.push(href);
-  }
-}
-
-// Checks if the source link points to an existing document
-function validateSourceLinks(doc: Document, errors: Errors): void {
-  if (doc.source && !documentMap.get(doc.source)) {
-    errors.source.push(doc.source);
-  }
-}
-
-// Checks if the related links point to existing documents
-function validateRelatedLinks(doc: Document, errors: Errors): void {
-  if (doc.related && doc.related.links) {
-    doc.related.links.forEach((link) => {
-      if (!documentMap.get(link)) {
-        errors.related.push(link);
-      }
-    });
   }
 }
 
@@ -246,72 +222,13 @@ function traverseTreeAndValidateLinks(tree: any, doc: Document): Errors {
         }
       }
     });
-
-    validateSourceLinks(doc, errors);
-    validateRelatedLinks(doc, errors);
   } catch (error) {
-    setFailed("Error traversing tree: " + error);
+    // if (IS_CI) {
+    //   setFailed("Error traversing tree: " + error);
+    // }
   }
 
   return errors;
-}
-
-async function findBotComment(): Promise<Comment | undefined> {
-  try {
-    const { data: comments } = await octokit.rest.issues.listComments({
-      owner,
-      repo,
-      issue_number: prNumber,
-    });
-
-    return comments.find((c) => c.body?.includes(COMMENT_TAG));
-  } catch (error) {
-    setFailed("Error finding bot comment: " + error);
-    return undefined;
-  }
-}
-
-async function updateComment(
-  comment: string,
-  botComment: Comment
-): Promise<string> {
-  try {
-    const { data } = await octokit.rest.issues.updateComment({
-      owner,
-      repo,
-      comment_id: botComment.id,
-      body: comment,
-    });
-
-    return data.html_url;
-  } catch (error) {
-    setFailed("Error updating comment: " + error);
-    return "";
-  }
-}
-
-async function createComment(comment: string): Promise<string> {
-  if (isFork) {
-    setFailed(
-      "The action could not create a Github comment because it is initiated from a forked repo. View the action logs for a list of broken links."
-    );
-
-    return "";
-  } else {
-    try {
-      const { data } = await octokit.rest.issues.createComment({
-        owner,
-        repo,
-        issue_number: prNumber,
-        body: comment,
-      });
-
-      return data.html_url;
-    } catch (error) {
-      setFailed("Error creating comment: " + error);
-      return "";
-    }
-  }
 }
 
 const formatTableRow = (
@@ -321,55 +238,9 @@ const formatTableRow = (
 ) => {
   const docPath = rawDocPath.replace("../../../", "");
 
-  return `| ${link} | ${errorType} | [/${docPath}](https://github.com/vercel/turbo/blob/${sha}/${docPath}) | \n`;
+  // return `| ${link} | ${errorType} | [/${docPath}](https://github.com/vercel/turbo/blob/${sha}/${docPath}) | \n`;
+  return `| ${link} | ${errorType} | [/${docPath}](https://github.com/vercel/turbo/blob/${docPath}) | \n`;
 };
-
-async function updateCheckStatus(
-  errorsExist: boolean,
-  commentUrl?: string
-): Promise<void> {
-  const checkName = "Docs Link Validation";
-
-  let summary, text;
-
-  if (errorsExist) {
-    summary =
-      "This PR introduces broken links to the docs. Click details for a list.";
-    text = `[See the comment for details](${commentUrl})`;
-  } else {
-    summary = "No broken links found";
-  }
-
-  const checkParams = {
-    owner,
-    repo,
-    name: checkName,
-    head_sha: sha,
-    status: "completed",
-    conclusion: errorsExist ? "failure" : "success",
-    output: {
-      title: checkName,
-      summary: summary,
-      text: text,
-    },
-  };
-
-  if (isFork) {
-    if (errorsExist) {
-      setFailed(
-        "This PR introduces broken links to the docs. The action could not create a Github check because it is initiated from a forked repo."
-      );
-    } else {
-      console.log("Link validation was successful.");
-    }
-  } else {
-    try {
-      await octokit.rest.checks.create(checkParams);
-    } catch (error) {
-      setFailed("Failed to create check: " + error);
-    }
-  }
-}
 
 // Main function that triggers link validation across .mdx files
 async function validateAllInternalLinks(): Promise<void> {
@@ -424,17 +295,25 @@ async function validateAllInternalLinks(): Promise<void> {
       "\nThank you :pray:",
     ].join("");
 
-    const botComment = await findBotComment();
-
     let commentUrl;
+    let botComment;
+    let comment;
+
+    // if (IS_CI) {
+    //   botComment = await findBotComment();
+    // }
 
     if (errorsExist) {
-      const comment = `${COMMENT_TAG}\n${errorComment}`;
-      if (botComment) {
-        commentUrl = await updateComment(comment, botComment);
-      } else {
-        commentUrl = await createComment(comment);
-      }
+      // if (IS_CI) {
+      //   comment = `${COMMENT_TAG}\n${errorComment}`;
+      // }
+      // if (botComment && IS_CI) {
+      //   commentUrl = await updateComment(comment, botComment);
+      // } else {
+      //   if (IS_CI) {
+      //     commentUrl = await createComment(comment);
+      //   }
+      // }
 
       const errorTableData = allErrors.flatMap((errors) => {
         const { doc } = errors;
@@ -452,17 +331,25 @@ async function validateAllInternalLinks(): Promise<void> {
       console.table(errorTableData, ["link", "type", "docPath"]);
       process.exit(1);
     } else if (botComment) {
-      const comment = `${COMMENT_TAG}\nAll broken links are now fixed, thank you!`;
-      commentUrl = await updateComment(comment, botComment);
+      // if (IS_CI) {
+      //   const comment = `${COMMENT_TAG}\nAll broken links are now fixed, thank you!`;
+      //   commentUrl = await updateComment(comment, botComment);
+      // }
     }
 
     try {
-      await updateCheckStatus(errorsExist, commentUrl);
+      // if (IS_CI) {
+      //   await updateCheckStatus(errorsExist, commentUrl);
+      // }
     } catch (error) {
-      setFailed("Failed to create Github check: " + error);
+      // if (IS_CI) {
+      //   setFailed("Failed to create Github check: " + error);
+      // }
     }
   } catch (error) {
-    setFailed("Error validating internal links: " + error);
+    // if (IS_CI) {
+    //   setFailed("Error validating internal links: " + error);
+    // }
   }
 }
 

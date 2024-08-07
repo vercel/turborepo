@@ -3,9 +3,11 @@
     "noEmit": true,
     "target": "esnext",
     "moduleResolution": "node",
+    "rootDir": "src",
     "strict": true,
     "noImplicitAny": true,
-    "allowSyntheticDefaultImports": true
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true
   },
-  "include": ["validate-docs-links.ts", "types.d.ts"]
+  "include": ["src", "types.d.ts"]
 }
