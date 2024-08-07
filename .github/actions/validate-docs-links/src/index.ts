@@ -180,6 +180,9 @@ function validateInternalLink(errors: Errors, href: string): void {
 
   // check if doc page exists, key is the url path without `/docs/`
   // e.g. `api/example`
+  console.lo(link);
+  console.log(documentMap.keys());
+
   const foundPage = documentMap.get(`../../..${link}`);
 
   console.log("found page", foundPage);
