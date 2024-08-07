@@ -2,7 +2,7 @@
 
 This action ensures that internal links in `.mdx` files in the `/docs/` directory are valid. It runs on every pull request that includes changes to these files.
 
-The action is triggered by the workflow defined in `.github/workflows/validate-docs-links.yml`.
+The action is triggered by the workflow defined in `.github/workflows/docs.yml`.
 
 ## Usage
 

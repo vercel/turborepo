@@ -318,25 +318,17 @@ async function validateAllInternalLinks(): Promise<void> {
       console.table(errorTableData, ["link", "type", "docPath"]);
       process.exit(1);
     } else if (botComment) {
-      // if (IS_CI) {
-      //   const comment = `${COMMENT_TAG}\nAll broken links are now fixed, thank you!`;
-      //   commentUrl = await updateComment(comment, botComment);
-      // }
+      const comment = `${COMMENT_TAG}\nAll broken links are now fixed, thank you!`;
+      commentUrl = await updateComment(comment, botComment);
     }
 
     try {
-      // if (IS_CI) {
-      //   await updateCheckStatus(errorsExist, commentUrl);
-      // }
+      await updateCheckStatus(errorsExist, commentUrl);
     } catch (error) {
-      // if (IS_CI) {
-      //   setFailed("Failed to create Github check: " + error);
-      // }
+      setFailed("Failed to create Github check: " + error);
     }
   } catch (error) {
-    // if (IS_CI) {
-    //   setFailed("Error validating internal links: " + error);
-    // }
+    setFailed("Error validating internal links: " + error);
   }
 }
 
