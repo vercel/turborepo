@@ -1,6 +1,6 @@
-use turborepo_ui::{BOLD, CYAN, UI};
+use turborepo_ui::{ColorConfig, BOLD, CYAN};
 
-pub fn print_cli_authorized(user: &str, ui: &UI) {
+pub fn print_cli_authorized(user: &str, ui: &ColorConfig) {
     println!(
         "
 {} Turborepo CLI authorized for {}

@@ -68,7 +68,7 @@ pub async fn print_potential_tasks(
 ) -> Result<(), Error> {
     let signal = get_signal()?;
     let handler = SignalHandler::new(signal);
-    let ui = base.ui;
+    let color_config = base.color_config;
 
     let run_builder = RunBuilder::new(base)?;
     let run = run_builder.build(&handler, telemetry).await?;

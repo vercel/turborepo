@@ -86,7 +86,7 @@ mod tests {
     use tempfile::tempdir;
     use turbopath::AbsoluteSystemPathBuf;
     use turborepo_api_client::Client;
-    use turborepo_ui::UI;
+    use turborepo_ui::ColorConfig;
     use turborepo_vercel_api::{
         token::ResponseTokenMetadata, SpacesResponse, Team, TeamsResponse, UserResponse,
         VerifiedSsoUser,
@@ -171,7 +171,7 @@ mod tests {
             .expect("could not create file");
 
         let logout_options = LogoutOptions {
-            ui: UI::new(false),
+            ui: ColorConfig::new(false),
             api_client: MockApiClient {
                 succeed_delete_request: true,
             },
@@ -199,7 +199,7 @@ mod tests {
         };
 
         let options = LogoutOptions {
-            ui: UI::new(false),
+            ui: ColorConfig::new(false),
             api_client,
             path: Some(path.clone()),
             invalidate: true,

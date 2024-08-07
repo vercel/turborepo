@@ -26,7 +26,7 @@ use turborepo_telemetry::events::{
 };
 use turborepo_ui::{
     tui::{self, event::CacheResult, AppSender, TuiTask},
-    ColorSelector, OutputClient, OutputSink, OutputWriter, PrefixedUI, UI,
+    ColorConfig, ColorSelector, OutputClient, OutputSink, OutputWriter, PrefixedUI,
 };
 use which::which;
 
@@ -63,7 +63,7 @@ pub struct Visitor<'a> {
     task_access: &'a TaskAccess,
     sink: OutputSink<StdWriter>,
     task_hasher: TaskHasher<'a>,
-    ui: UI,
+    color_config: ColorConfig,
     experimental_ui_sender: Option<AppSender>,
     is_watch: bool,
 }
@@ -113,7 +113,7 @@ impl<'a> Visitor<'a> {
         env_at_execution_start: &'a EnvironmentVariableMap,
         global_hash: &'a str,
         global_env_mode: EnvMode,
-        ui: UI,
+        color_config: ColorConfig,
         manager: ProcessManager,
         repo_root: &'a AbsoluteSystemPath,
         global_env: EnvironmentVariableMap,
@@ -143,7 +143,7 @@ impl<'a> Visitor<'a> {
             task_access,
             sink,
             task_hasher,
-            ui,
+            color_config,
             global_env,
             experimental_ui_sender,
             is_watch,
@@ -360,7 +360,7 @@ impl<'a> Visitor<'a> {
     ) -> Result<(), Error> {
         let Self {
             package_graph,
-            ui,
+            color_config: ui,
             run_opts,
             repo_root,
             global_env_mode,
@@ -462,17 +462,17 @@ impl<'a> Visitor<'a> {
     }
 
     fn prefixed_ui<W: Write>(
-        ui: UI,
+        color_config: ColorConfig,
         is_github_actions: bool,
         stdout: W,
         stderr: W,
         prefix: StyledObject<String>,
     ) -> PrefixedUI<W> {
-        let mut prefixed_ui = PrefixedUI::new(ui, stdout, stderr)
+        let mut prefixed_ui = PrefixedUI::new(color_config, stdout, stderr)
             .with_output_prefix(prefix.clone())
             // TODO: we can probably come up with a more ergonomic way to achieve this
             .with_error_prefix(
-                Style::new().apply_to(format!("{}ERROR: ", ui.apply(prefix.clone()))),
+                Style::new().apply_to(format!("{}ERROR: ", color_config.apply(prefix.clone()))),
             )
             .with_warn_prefix(prefix);
         if is_github_actions {
@@ -661,7 +661,7 @@ impl<'a> ExecContextFactory<'a> {
         let pass_through_args = self.visitor.run_opts.args_for_task(&task_id);
         ExecContext {
             engine: self.engine.clone(),
-            ui: self.visitor.ui,
+            color_config: self.visitor.color_config,
             experimental_ui: self.visitor.experimental_ui_sender.is_some(),
             is_github_actions: self.visitor.run_opts.is_github_actions,
             pretty_prefix: self
@@ -700,7 +700,7 @@ impl<'a> ExecContextFactory<'a> {
 
 struct ExecContext {
     engine: Arc<Engine>,
-    ui: UI,
+    color_config: ColorConfig,
     experimental_ui: bool,
     is_github_actions: bool,
     pretty_prefix: StyledObject<String>,
@@ -845,7 +845,7 @@ impl ExecContext {
     ) -> TaskCacheOutput<OutputWriter<'a, W>> {
         match output_client {
             TaskOutput::Direct(client) => TaskCacheOutput::Direct(Visitor::prefixed_ui(
-                self.ui,
+                self.color_config,
                 self.is_github_actions,
                 client.stdout(),
                 client.stderr(),

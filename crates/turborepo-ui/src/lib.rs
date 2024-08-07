@@ -116,11 +116,11 @@ macro_rules! cwriteln {
 
 /// Helper struct to apply any necessary formatting to UI output
 #[derive(Debug, Clone, Copy)]
-pub struct UI {
+pub struct ColorConfig {
     pub should_strip_ansi: bool,
 }
 
-impl UI {
+impl ColorConfig {
     pub fn new(should_strip_ansi: bool) -> Self {
         Self { should_strip_ansi }
     }
@@ -209,16 +209,19 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_ui_strips_ansi() {
-        let ui = UI::new(true);
+    fn test_color_config_strips_ansi() {
+        let color_config = ColorConfig::new(true);
         let grey_str = GREY.apply_to("gray");
-        assert_eq!(format!("{}", ui.apply(grey_str)), "gray");
+        assert_eq!(format!("{}", color_config.apply(grey_str)), "gray");
     }
 
     #[test]
-    fn test_ui_resets_term() {
-        let ui = UI::new(false);
+    fn test_color_config_resets_term() {
+        let color_config = ColorConfig::new(false);
         let grey_str = GREY.apply_to("gray");
-        assert_eq!(format!("{}", ui.apply(grey_str)), "\u{1b}[2mgray\u{1b}[0m");
+        assert_eq!(
+            format!("{}", color_config.apply(grey_str)),
+            "\u{1b}[2mgray\u{1b}[0m"
+        );
     }
 }

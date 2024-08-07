@@ -10,12 +10,15 @@ fn log_status(config: TelemetryConfig, base: &CommandBase) {
         true => {
             println!(
                 "\nStatus: {}",
-                base.ui.apply(BOLD_GREEN.apply_to("Enabled"))
+                base.color_config.apply(BOLD_GREEN.apply_to("Enabled"))
             );
             println!("\nTurborepo telemetry is completely anonymous. Thank you for participating!");
         }
         false => {
-            println!("\nStatus: {}", base.ui.apply(BOLD_RED.apply_to("Disabled")));
+            println!(
+                "\nStatus: {}",
+                base.color_config.apply(BOLD_RED.apply_to("Disabled"))
+            );
             println!(
                 "\nYou have opted-out of Turborepo anonymous telemetry. No data will be collected \
                  from your machine."

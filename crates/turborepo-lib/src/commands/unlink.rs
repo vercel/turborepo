@@ -50,7 +50,7 @@ fn unlink_remote_caching(base: &mut CommandBase) -> Result<(), cli::Error> {
         "> No Remote Caching config found"
     };
 
-    println!("{}", base.ui.apply(GREY.apply_to(output)));
+    println!("{}", base.color_config.apply(GREY.apply_to(output)));
 
     Ok(())
 }
@@ -94,7 +94,7 @@ fn unlink_spaces(base: &mut CommandBase) -> Result<(), cli::Error> {
         (false, UnlinkSpacesResult::NoSpacesFound) => "> No Spaces config found",
     };
 
-    println!("{}", base.ui.apply(GREY.apply_to(output)));
+    println!("{}", base.color_config.apply(GREY.apply_to(output)));
 
     Ok(())
 }

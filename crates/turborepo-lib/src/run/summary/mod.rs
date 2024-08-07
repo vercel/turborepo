@@ -29,7 +29,7 @@ use turborepo_api_client::{spaces::CreateSpaceRunPayload, APIAuth, APIClient};
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_repository::package_graph::{PackageGraph, PackageName};
 use turborepo_scm::SCM;
-use turborepo_ui::{color, cprintln, cwriteln, BOLD, BOLD_CYAN, GREY, UI};
+use turborepo_ui::{color, cprintln, cwriteln, ColorConfig, BOLD, BOLD_CYAN, GREY};
 
 use self::{
     execution::TaskState, task::SinglePackageTaskSummary, task_factory::TaskSummaryFactory,
@@ -248,7 +248,7 @@ impl RunTracker {
         self,
         exit_code: i32,
         pkg_dep_graph: &PackageGraph,
-        ui: UI,
+        ui: ColorConfig,
         repo_root: &'a AbsoluteSystemPath,
         package_inference_root: Option<&AnchoredSystemPath>,
         run_opts: &'a RunOpts,
@@ -360,7 +360,7 @@ impl<'a> RunSummary<'a> {
         end_time: DateTime<Local>,
         exit_code: i32,
         pkg_dep_graph: &PackageGraph,
-        ui: UI,
+        ui: ColorConfig,
         is_watch: bool,
     ) -> Result<(), Error> {
         if matches!(self.run_type, RunType::DryJson | RunType::DryText) {
@@ -428,7 +428,11 @@ impl<'a> RunSummary<'a> {
         }
     }
 
-    fn close_dry_run(&mut self, pkg_dep_graph: &PackageGraph, ui: UI) -> Result<(), Error> {
+    fn close_dry_run(
+        &mut self,
+        pkg_dep_graph: &PackageGraph,
+        ui: ColorConfig,
+    ) -> Result<(), Error> {
         if matches!(self.run_type, RunType::DryJson) {
             let rendered = self.format_json()?;
 
@@ -439,7 +443,11 @@ impl<'a> RunSummary<'a> {
         self.format_and_print_text(pkg_dep_graph, ui)
     }
 
-    fn format_and_print_text(&mut self, pkg_dep_graph: &PackageGraph, ui: UI) -> Result<(), Error> {
+    fn format_and_print_text(
+        &mut self,
+        pkg_dep_graph: &PackageGraph,
+        ui: ColorConfig,
+    ) -> Result<(), Error> {
         self.normalize();
 
         if self.monorepo {
