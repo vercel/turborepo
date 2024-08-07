@@ -75,8 +75,9 @@ async function getAllMdxFilePaths(
   directoriesToScan: string[],
   fileList: string[] = []
 ): Promise<string[]> {
-  console.log({ directoriesToScan });
   for (const dir of directoriesToScan) {
+    console.log(process.cwd());
+    console.log(path.join("../../", dir));
     const dirPath = path.join("../../", dir);
     const files = await fs.readdir(dirPath);
     for (const file of files) {
