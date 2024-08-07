@@ -109,7 +109,7 @@ npx turbo link
 
 Now, when you run a task, Turborepo will automatically send the outputs of the task to Remote Cache. If you run the same task on a different machine that is also authenticated to your Remote Cache, it will hit cache the first time it runs the task.
 
-For information on how to connect your CI machines to Remote Cache, visit [the Constructing CI guide](/repo/docs/crafting-your-repository/constructing-ci#enable-remote-caching).
+For information on how to connect your CI machines to Remote Cache, visit [the Constructing CI guide](/repo/docs/crafting-your-repository/constructing-ci#enabling-remote-caching).
 
 <Callout type="info">
   By default, Turborepo uses [Vercel Remote
@@ -136,7 +136,7 @@ If you're running into errors with files not being available when you hit cache,
 
 Turborepo always captures the terminal outputs of your tasks, restoring those logs to your terminal from the first time that the task was ran.
 
-You can configure the verbosity of the replayed logs using [the `--output-logs` flag](/repo/docs/reference/run#--output-logs-option) or [`outputLogs` configuration option](/repo/docs/reference/configuration#outputmode).
+You can configure the verbosity of the replayed logs using [the `--output-logs` flag](/repo/docs/reference/run#--output-logs-option) or [`outputLogs` configuration option](/repo/docs/reference/configuration#outputlogs).
 
 ## Task inputs
 
