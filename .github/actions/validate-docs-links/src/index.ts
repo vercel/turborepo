@@ -177,6 +177,7 @@ async function prepareDocumentMapEntry(
 function validateInternalLink(errors: Errors, href: string): void {
   // /docs/api/example#heading -> ["api/example", "heading""]
   const [link, hash] = href.replace(DOCS_PATH, "").split("#", 2);
+  console.log(link);
 
   let foundPage;
 
@@ -391,6 +392,8 @@ async function validateAllInternalLinks(): Promise<void> {
     documentMap = new Map(
       await Promise.all(allMdxFilePaths.map(prepareDocumentMapEntry))
     );
+
+    console.log({ documentMap });
 
     const docProcessingPromises = allMdxFilePaths.map(async (filePath) => {
       const doc = documentMap.get(normalizePath(filePath));
