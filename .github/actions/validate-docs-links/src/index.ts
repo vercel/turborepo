@@ -176,7 +176,7 @@ async function prepareDocumentMapEntry(
 // Checks if the links point to existing documents
 function validateInternalLink(errors: Errors, href: string): void {
   // /docs/api/example#heading -> ["api/example", "heading""]
-  const [link, hash] = href.replace("/", "").split("#", 2);
+  const [link, hash] = href.replace(DOCS_PATH, "").split("#", 2);
 
   let foundPage;
 
