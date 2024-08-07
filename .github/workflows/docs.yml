@@ -23,6 +23,7 @@ jobs:
         run: |
           cd .github/actions/validate-docs-links
           pnpm install
+          cd ../../../docs
           pnpm check-links
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
