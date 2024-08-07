@@ -180,7 +180,7 @@ function validateInternalLink(errors: Errors, href: string): void {
 
   // check if doc page exists, key is the url path without `/docs/`
   // e.g. `api/example`
-  const foundPage = documentMap.get(link);
+  const foundPage = documentMap.get(`../../../${link}`);
 
   console.log("found page", foundPage);
 
@@ -385,7 +385,6 @@ async function validateAllInternalLinks(): Promise<void> {
     documentMap = new Map(
       await Promise.all(allMdxFilePaths.map(prepareDocumentMapEntry))
     );
-    console.log(documentMap);
 
     const docProcessingPromises = allMdxFilePaths.map(async (filePath) => {
       const doc = documentMap.get(normalizePath(filePath));
