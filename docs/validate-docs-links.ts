@@ -170,8 +170,9 @@ function validateInternalLink(errors: Errors, href: string): void {
   // /docs/api/example#heading -> ["api/example", "heading""]
   const [link, hash] = href.replace(DOCS_PATH, "").split("#", 2);
 
-  // This path exists, just not in the docs
-  if (link === "/api/remote-cache-spec") {
+  // These paths exist, just not in our .mdx files
+  const ignorePaths = ["/api/remote-cache-spec", "/repo"];
+  if (ignorePaths.includes(link)) {
     return;
   }
 
