@@ -7,14 +7,14 @@ import raw from "rehype-raw";
 import visit from "unist-util-visit";
 import GithubSlugger from "github-slugger";
 import matter from "gray-matter";
-// import {
-//   COMMENT_TAG,
-//   createComment,
-//   findBotComment,
-//   updateCheckStatus,
-//   updateComment,
-//   setFailed,
-// } from "./github";
+import {
+  COMMENT_TAG,
+  createComment,
+  findBotComment,
+  updateCheckStatus,
+  updateComment,
+  setFailed,
+} from "./github";
 
 /**
  * This script validates internal links in /docs and /errors including internal,
@@ -146,18 +146,12 @@ async function prepareDocumentMapEntry(
     const headings = getHeadingsFromMarkdownTree(tree);
     const normalizedUrlPath = normalizePath(filePath);
 
-    if (normalizedUrlPath === "/repo/docs/guides/tools/storybook") {
-      console.log(headings);
-    }
-
     return [
       normalizedUrlPath,
       { body: content, path: filePath, headings, ...data },
     ];
   } catch (error) {
-    // if (IS_CI) {
-    //   setFailed(`Error preparing document map for file ${filePath}: ${error}`);
-    // }
+    setFailed(`Error preparing document map for file ${filePath}: ${error}`);
     return ["", {} as Document];
   }
 }
@@ -225,9 +219,7 @@ function traverseTreeAndValidateLinks(tree: any, doc: Document): Errors {
       }
     });
   } catch (error) {
-    // if (IS_CI) {
-    //   setFailed("Error traversing tree: " + error);
-    // }
+    setFailed("Error traversing tree: " + error);
   }
 
   return errors;
@@ -240,8 +232,7 @@ const formatTableRow = (
 ) => {
   const docPath = rawDocPath.replace("../../../", "");
 
-  // return `| ${link} | ${errorType} | [/${docPath}](https://github.com/vercel/turbo/blob/${sha}/${docPath}) | \n`;
-  return `| ${link} | ${errorType} | [/${docPath}](https://github.com/vercel/turbo/blob/${docPath}) | \n`;
+  return `| ${link} | ${errorType} | [/${docPath}](https://github.com/vercel/turbo/blob/${sha}/${docPath}) | \n`;
 };
 
 // Main function that triggers link validation across .mdx files
@@ -301,21 +292,15 @@ async function validateAllInternalLinks(): Promise<void> {
     let botComment;
     let comment;
 
-    // if (IS_CI) {
-    //   botComment = await findBotComment();
-    // }
+    botComment = await findBotComment();
 
     if (errorsExist) {
-      // if (IS_CI) {
-      //   comment = `${COMMENT_TAG}\n${errorComment}`;
-      // }
-      // if (botComment && IS_CI) {
-      //   commentUrl = await updateComment(comment, botComment);
-      // } else {
-      //   if (IS_CI) {
-      //     commentUrl = await createComment(comment);
-      //   }
-      // }
+      comment = `${COMMENT_TAG}\n${errorComment}`;
+      if (botComment) {
+        commentUrl = await updateComment(comment, botComment);
+      } else {
+        commentUrl = await createComment(comment);
+      }
 
       const errorTableData = allErrors.flatMap((errors) => {
         const { doc } = errors;
