@@ -51,7 +51,7 @@ interface Comment {
   id: number;
 }
 
-const DOCS_PATH = ".";
+const DOCS_PATH = "../../../docs/";
 const EXCLUDED_HASHES = ["top"];
 const COMMENT_TAG = "<!-- LINK_CHECKER_COMMENT -->";
 
@@ -129,12 +129,11 @@ const markdownProcessor = unified()
 
 // Github APIs returns `errors/*` and `docs/*` paths
 function normalizePath(filePath: string): string {
-  if (filePath.startsWith(PACK_PATH.substring(1))) {
+  if (filePath.startsWith("/")) {
     return (
       filePath
         // Remap repository file path to the vercel-site url path
         // e.g. `errors/example.mdx` -> `docs/messages/example`
-        .replace(PACK_PATH.substring(1), DOCS_PATH.substring(1) + "messages/")
         .replace(".mdx", "")
     );
   }
