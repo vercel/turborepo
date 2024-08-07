@@ -11,7 +11,7 @@ use ratatui::{
     widgets::TableState,
     Frame, Terminal,
 };
-use tracing::debug;
+use tracing::{debug, trace};
 
 const PANE_SIZE_RATIO: f32 = 3.0 / 4.0;
 const FRAMERATE: Duration = Duration::from_millis(3);
@@ -190,18 +190,7 @@ impl<W> App<W> {
             .output_logs = Some(output_logs);
 
         // If user hasn't interacted, keep highlighting top-most task in list.
-        if !self.has_user_scrolled {
-            return Ok(());
-        }
-
-        if let Some(new_index_to_highlight) = self
-            .tasks_by_status
-            .task_names_in_displayed_order()
-            .position(|running| running == highlighted_task)
-        {
-            self.selected_task_index = new_index_to_highlight;
-            self.scroll.select(Some(new_index_to_highlight));
-        }
+        self.select_task(&highlighted_task)?;
 
         Ok(())
     }
@@ -223,11 +212,7 @@ impl<W> App<W> {
             .running
             .iter()
             .position(|running| running.name() == task)
-            .ok_or_else(|| {
-                debug!("could not find '{task}' to finish");
-                println!("{:#?}", highlighted_task);
-                Error::TaskNotFound { name: task.into() }
-            })?;
+            .ok_or_else(|| Error::TaskNotFound { name: task.into() })?;
 
         let running = self.tasks_by_status.running.remove(running_idx);
         self.tasks_by_status.finished.push(running.finish(result));
@@ -237,20 +222,8 @@ impl<W> App<W> {
             .ok_or_else(|| Error::TaskNotFound { name: task.into() })?
             .task_result = Some(result);
 
-        // If user hasn't interacted, keep highlighting top-most task in list.
-        if !self.has_user_scrolled {
-            return Ok(());
-        }
-
         // Find the highlighted task from before the list movement in the new list.
-        if let Some(new_index_to_highlight) = self
-            .tasks_by_status
-            .task_names_in_displayed_order()
-            .position(|running| running == highlighted_task.as_str())
-        {
-            self.selected_task_index = new_index_to_highlight;
-            self.scroll.select(Some(new_index_to_highlight));
-        }
+        self.select_task(&highlighted_task)?;
 
         Ok(())
     }
@@ -274,6 +247,7 @@ impl<W> App<W> {
     #[tracing::instrument(skip(self))]
     pub fn update_tasks(&mut self, tasks: Vec<String>) {
         debug!("updating task list: {tasks:?}");
+        let highlighted_task = self.active_task().to_owned();
         // Make sure all tasks have a terminal output
         for task in &tasks {
             self.tasks
@@ -291,6 +265,12 @@ impl<W> App<W> {
             running: Default::default(),
             finished: Default::default(),
         };
+
+        // Task that was selected may have been removed, go back to top if this happens
+        if self.select_task(&highlighted_task).is_err() {
+            trace!("{highlighted_task} was removed from list");
+            self.reset_scroll();
+        }
     }
 
     #[tracing::instrument(skip(self))]
@@ -307,18 +287,8 @@ impl<W> App<W> {
         self.tasks_by_status
             .restart_tasks(tasks.iter().map(|s| s.as_str()));
 
-        if !self.has_user_scrolled {
-            return;
-        }
-
-        if let Some(new_index_to_highlight) = self
-            .tasks_by_status
-            .task_names_in_displayed_order()
-            .position(|running| running == highlighted_task.as_str())
-        {
-            self.selected_task_index = new_index_to_highlight;
-            self.scroll.select(Some(new_index_to_highlight));
-        }
+        self.select_task(&highlighted_task)
+            .expect("should find task after restart");
     }
 
     /// Persist all task output to the after closing the TUI
@@ -377,6 +347,33 @@ impl<W> App<W> {
             return;
         };
         super::copy_to_clipboard(&text);
+    }
+
+    fn select_task(&mut self, task_name: &str) -> Result<(), Error> {
+        if !self.has_user_scrolled {
+            return Ok(());
+        }
+
+        let Some(new_index_to_highlight) = self
+            .tasks_by_status
+            .task_names_in_displayed_order()
+            .position(|task| task == task_name)
+        else {
+            return Err(Error::TaskNotFound {
+                name: task_name.to_owned(),
+            });
+        };
+        self.selected_task_index = new_index_to_highlight;
+        self.scroll.select(Some(new_index_to_highlight));
+
+        Ok(())
+    }
+
+    /// Resets scroll state
+    pub fn reset_scroll(&mut self) {
+        self.has_user_scrolled = false;
+        self.scroll.select(Some(0));
+        self.selected_task_index = 0;
     }
 }
 
