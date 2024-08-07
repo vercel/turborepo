@@ -23,7 +23,6 @@ jobs:
         run: |
           cd .github/actions/validate-docs-links
           pnpm install
-          pnpm build
-          node dist/index.js
+          pnpm check-links
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
