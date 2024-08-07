@@ -252,7 +252,7 @@ function traverseTreeAndValidateLinks(tree: any, doc: Document): Errors {
 
         if (!href) return;
 
-        if (href.startsWith("/")) {
+        if (href.startsWith("../../")) {
           validateInternalLink(errors, href);
         } else if (href.startsWith("#")) {
           validateHashLink(errors, href, doc);
