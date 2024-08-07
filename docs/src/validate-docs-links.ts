@@ -53,8 +53,6 @@ interface Errors {
 
 type ErrorType = Exclude<keyof Errors, "doc">;
 
-const IS_CI = process.env.CI === "true";
-
 const DOCS_PATH = ".";
 const EXCLUDED_HASHES = ["top"];
 
@@ -96,9 +94,9 @@ function getHeadingsFromMarkdownTree(
     let headingText = "";
     // Account for headings with inline code blocks by concatenating the
     // text values of all children of a heading node.
-    visit(node, (node: any) => {
-      if (node.value) {
-        headingText += node.value;
+    visit(node, (innerNode: any) => {
+      if (innerNode.value) {
+        headingText += innerNode.value;
       }
     });
     headings.push(slugger.slug(headingText));
@@ -147,6 +145,10 @@ async function prepareDocumentMapEntry(
     const tree = markdownProcessor.parse(content);
     const headings = getHeadingsFromMarkdownTree(tree);
     const normalizedUrlPath = normalizePath(filePath);
+
+    if (normalizedUrlPath === "/repo/docs/guides/tools/storybook") {
+      console.log(headings);
+    }
 
     return [
       normalizedUrlPath,
