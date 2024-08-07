@@ -14,6 +14,7 @@ import {
   updateCheckStatus,
   updateComment,
   setFailed,
+  sha,
 } from "./github";
 
 /**

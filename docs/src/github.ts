@@ -16,7 +16,7 @@ if (!pullRequest) {
   console.log("Skipping since this is not a pull request");
   process.exit(0);
 }
-const sha = pullRequest.head.sha;
+export const sha = pullRequest.head.sha;
 const isFork = pullRequest.head.repo.fork;
 const prNumber = pullRequest.number;
 
