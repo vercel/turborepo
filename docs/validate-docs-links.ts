@@ -55,17 +55,17 @@ const DOCS_PATH = ".";
 const EXCLUDED_HASHES = ["top"];
 const COMMENT_TAG = "<!-- LINK_CHECKER_COMMENT -->";
 
-// const { context, getOctokit } = github;
-// const octokit = getOctokit(process.env.GITHUB_TOKEN!);
-// const { owner, repo } = context.repo;
-// const pullRequest = context.payload.pull_request;
-// if (!pullRequest) {
-//   console.log("Skipping since this is not a pull request");
-//   process.exit(0);
-// }
-// const sha = pullRequest.head.sha;
-// const isFork = pullRequest.head.repo.fork;
-// const prNumber = pullRequest.number;
+const { context, getOctokit } = github;
+const octokit = getOctokit(process.env.GITHUB_TOKEN!);
+const { owner, repo } = context.repo;
+const pullRequest = context.payload.pull_request;
+if (!pullRequest) {
+  console.log("Skipping since this is not a pull request");
+  process.exit(0);
+}
+const sha = pullRequest.head.sha;
+const isFork = pullRequest.head.repo.fork;
+const prNumber = pullRequest.number;
 
 const slugger = new GithubSlugger();
 
@@ -250,63 +250,63 @@ function traverseTreeAndValidateLinks(tree: any, doc: Document): Errors {
   return errors;
 }
 
-// async function findBotComment(): Promise<Comment | undefined> {
-//   try {
-//     const { data: comments } = await octokit.rest.issues.listComments({
-//       owner,
-//       repo,
-//       issue_number: prNumber,
-//     });
-//
-//     return comments.find((c) => c.body?.includes(COMMENT_TAG));
-//   } catch (error) {
-//     setFailed("Error finding bot comment: " + error);
-//     return undefined;
-//   }
-// }
-//
-// async function updateComment(
-//   comment: string,
-//   botComment: Comment
-// ): Promise<string> {
-//   try {
-//     const { data } = await octokit.rest.issues.updateComment({
-//       owner,
-//       repo,
-//       comment_id: botComment.id,
-//       body: comment,
-//     });
-//
-//     return data.html_url;
-//   } catch (error) {
-//     setFailed("Error updating comment: " + error);
-//     return "";
-//   }
-// }
-//
-// async function createComment(comment: string): Promise<string> {
-//   if (isFork) {
-//     setFailed(
-//       "The action could not create a Github comment because it is initiated from a forked repo. View the action logs for a list of broken links."
-//     );
-//
-//     return "";
-//   } else {
-//     try {
-//       const { data } = await octokit.rest.issues.createComment({
-//         owner,
-//         repo,
-//         issue_number: prNumber,
-//         body: comment,
-//       });
-//
-//       return data.html_url;
-//     } catch (error) {
-//       setFailed("Error creating comment: " + error);
-//       return "";
-//     }
-//   }
-// }
+async function findBotComment(): Promise<Comment | undefined> {
+  try {
+    const { data: comments } = await octokit.rest.issues.listComments({
+      owner,
+      repo,
+      issue_number: prNumber,
+    });
+
+    return comments.find((c) => c.body?.includes(COMMENT_TAG));
+  } catch (error) {
+    setFailed("Error finding bot comment: " + error);
+    return undefined;
+  }
+}
+
+async function updateComment(
+  comment: string,
+  botComment: Comment
+): Promise<string> {
+  try {
+    const { data } = await octokit.rest.issues.updateComment({
+      owner,
+      repo,
+      comment_id: botComment.id,
+      body: comment,
+    });
+
+    return data.html_url;
+  } catch (error) {
+    setFailed("Error updating comment: " + error);
+    return "";
+  }
+}
+
+async function createComment(comment: string): Promise<string> {
+  if (isFork) {
+    setFailed(
+      "The action could not create a Github comment because it is initiated from a forked repo. View the action logs for a list of broken links."
+    );
+
+    return "";
+  } else {
+    try {
+      const { data } = await octokit.rest.issues.createComment({
+        owner,
+        repo,
+        issue_number: prNumber,
+        body: comment,
+      });
+
+      return data.html_url;
+    } catch (error) {
+      setFailed("Error creating comment: " + error);
+      return "";
+    }
+  }
+}
 
 const formatTableRow = (
   link: string,
@@ -315,56 +315,55 @@ const formatTableRow = (
 ) => {
   const docPath = rawDocPath.replace("../../../", "");
 
-  return `| ${link} | ${errorType} | [/${docPath}](https://github.com/vercel/turbo/blob/${docPath}) | \n`;
-  // return `| ${link} | ${errorType} | [/${docPath}](https://github.com/vercel/turbo/blob/${sha}/${docPath}) | \n`;
+  return `| ${link} | ${errorType} | [/${docPath}](https://github.com/vercel/turbo/blob/${sha}/${docPath}) | \n`;
 };
 
-// async function updateCheckStatus(
-//   errorsExist: boolean,
-//   commentUrl?: string
-// ): Promise<void> {
-//   const checkName = "Docs Link Validation";
-//
-//   let summary, text;
-//
-//   if (errorsExist) {
-//     summary =
-//       "This PR introduces broken links to the docs. Click details for a list.";
-//     text = `[See the comment for details](${commentUrl})`;
-//   } else {
-//     summary = "No broken links found";
-//   }
-//
-//   const checkParams = {
-//     owner,
-//     repo,
-//     name: checkName,
-//     head_sha: sha,
-//     status: "completed",
-//     conclusion: errorsExist ? "failure" : "success",
-//     output: {
-//       title: checkName,
-//       summary: summary,
-//       text: text,
-//     },
-//   };
-//
-//   if (isFork) {
-//     if (errorsExist) {
-//       setFailed(
-//         "This PR introduces broken links to the docs. The action could not create a Github check because it is initiated from a forked repo."
-//       );
-//     } else {
-//       console.log("Link validation was successful.");
-//     }
-//   } else {
-//     try {
-//       await octokit.rest.checks.create(checkParams);
-//     } catch (error) {
-//       setFailed("Failed to create check: " + error);
-//     }
-//   }
-// }
+async function updateCheckStatus(
+  errorsExist: boolean,
+  commentUrl?: string
+): Promise<void> {
+  const checkName = "Docs Link Validation";
+
+  let summary, text;
+
+  if (errorsExist) {
+    summary =
+      "This PR introduces broken links to the docs. Click details for a list.";
+    text = `[See the comment for details](${commentUrl})`;
+  } else {
+    summary = "No broken links found";
+  }
+
+  const checkParams = {
+    owner,
+    repo,
+    name: checkName,
+    head_sha: sha,
+    status: "completed",
+    conclusion: errorsExist ? "failure" : "success",
+    output: {
+      title: checkName,
+      summary: summary,
+      text: text,
+    },
+  };
+
+  if (isFork) {
+    if (errorsExist) {
+      setFailed(
+        "This PR introduces broken links to the docs. The action could not create a Github check because it is initiated from a forked repo."
+      );
+    } else {
+      console.log("Link validation was successful.");
+    }
+  } else {
+    try {
+      await octokit.rest.checks.create(checkParams);
+    } catch (error) {
+      setFailed("Failed to create check: " + error);
+    }
+  }
+}
 
 // Main function that triggers link validation across .mdx files
 async function validateAllInternalLinks(): Promise<void> {
@@ -419,17 +418,17 @@ async function validateAllInternalLinks(): Promise<void> {
       "\nThank you :pray:",
     ].join("");
 
-    // const botComment = await findBotComment();
+    const botComment = await findBotComment();
 
     let commentUrl;
 
     if (errorsExist) {
       const comment = `${COMMENT_TAG}\n${errorComment}`;
-      // if (botComment) {
-      // commentUrl = await updateComment(comment, botComment);
-      // } else {
-      // commentUrl = await createComment(comment);
-      // }
+      if (botComment) {
+        commentUrl = await updateComment(comment, botComment);
+      } else {
+        commentUrl = await createComment(comment);
+      }
 
       const errorTableData = allErrors.flatMap((errors) => {
         const { doc } = errors;
@@ -446,14 +445,13 @@ async function validateAllInternalLinks(): Promise<void> {
       console.log("This PR introduces broken links to the docs:");
       console.table(errorTableData, ["link", "type", "docPath"]);
       process.exit(1);
-      // } else if (botComment) {
-      //   const comment = `${COMMENT_TAG}\nAll broken links are now fixed, thank you!`;
-      //   commentUrl = await updateComment(comment, botComment);
-      // }
+    } else if (botComment) {
+      const comment = `${COMMENT_TAG}\nAll broken links are now fixed, thank you!`;
+      commentUrl = await updateComment(comment, botComment);
     }
 
     try {
-      // await updateCheckStatus(errorsExist, commentUrl);
+      await updateCheckStatus(errorsExist, commentUrl);
     } catch (error) {
       setFailed("Failed to create Github check: " + error);
     }
