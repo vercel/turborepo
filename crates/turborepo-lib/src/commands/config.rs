@@ -1,4 +1,6 @@
+use camino::Utf8Path;
 use serde::Serialize;
+use turbopath::RelativeUnixPath;
 use turborepo_repository::{
     package_graph::PackageGraph, package_json::PackageJson, package_manager::PackageManager,
 };
@@ -24,6 +26,7 @@ struct ConfigOutput<'a> {
     env_mode: EnvMode,
     scm_base: &'a str,
     scm_head: &'a str,
+    cache_dir: &'a RelativeUnixPath,
 }
 
 pub async fn run(base: CommandBase) -> Result<(), cli::Error> {
@@ -55,6 +58,7 @@ pub async fn run(base: CommandBase) -> Result<(), cli::Error> {
             env_mode: config.env_mode(),
             scm_base: config.scm_base(),
             scm_head: config.scm_head(),
+            cache_dir: RelativeUnixPath::new(config.cache_dir()).expect("cache_dir is valid utf-8"),
         })?
     );
     Ok(())

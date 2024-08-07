@@ -4,6 +4,7 @@ use std::{
     io,
 };
 
+use camino::{Utf8Path, Utf8PathBuf};
 use convert_case::{Case, Casing};
 use miette::{Diagnostic, NamedSource, SourceSpan};
 use serde::Deserialize;
@@ -215,6 +216,8 @@ pub struct ConfigurationOptions {
     pub(crate) env_mode: Option<EnvMode>,
     pub(crate) scm_base: Option<String>,
     pub(crate) scm_head: Option<String>,
+    #[serde(rename = "cacheDir")]
+    pub(crate) cache_dir: Option<Utf8PathBuf>,
 }
 
 #[derive(Default)]
@@ -306,6 +309,16 @@ impl ConfigurationOptions {
     pub fn env_mode(&self) -> EnvMode {
         self.env_mode.unwrap_or_default()
     }
+
+    pub fn cache_dir(&self) -> &Utf8Path {
+        self.cache_dir.as_deref().unwrap_or_else(|| {
+            Utf8Path::new(if cfg!(windows) {
+                ".turbo\\cache"
+            } else {
+                ".turbo/cache"
+            })
+        })
+    }
 }
 
 // Maps Some("") to None to emulate how Go handles empty strings
@@ -342,6 +355,10 @@ impl ResolvedConfigurationOptions for RawTurboJson {
         opts.allow_no_package_manager = self.allow_no_package_manager;
         opts.daemon = self.daemon.map(|daemon| *daemon.as_inner());
         opts.env_mode = self.env_mode;
+        opts.cache_dir = self
+            .cache_dir
+            .clone()
+            .map(|cache_dir| Utf8PathBuf::from(cache_dir.to_string()));
         Ok(opts)
     }
 }
@@ -380,6 +397,7 @@ fn get_env_var_config(
     );
     turbo_mapping.insert(OsString::from("turbo_daemon"), "daemon");
     turbo_mapping.insert(OsString::from("turbo_env_mode"), "env_mode");
+    turbo_mapping.insert(OsString::from("turbo_cache_dir"), "cache_dir");
     turbo_mapping.insert(OsString::from("turbo_preflight"), "preflight");
     turbo_mapping.insert(OsString::from("turbo_scm_base"), "scm_base");
     turbo_mapping.insert(OsString::from("turbo_scm_head"), "scm_head");
@@ -490,6 +508,8 @@ fn get_env_var_config(
             _ => None,
         });
 
+    let cache_dir = output_map.get("cache_dir").map(|s| s.clone().into());
+
     // We currently don't pick up a Spaces ID via env var, we likely won't
     // continue using the Spaces name, we can add an env var when we have the
     // name we want to stick with.
@@ -517,6 +537,7 @@ fn get_env_var_config(
         upload_timeout,
         spaces_id,
         env_mode,
+        cache_dir,
     };
 
     Ok(output)
@@ -580,6 +601,7 @@ fn get_override_env_var_config(
         spaces_id: None,
         allow_no_package_manager: None,
         env_mode: None,
+        cache_dir: None,
     };
 
     Ok(output)
@@ -722,6 +744,7 @@ impl TurborepoConfigBuilder {
     );
     create_builder!(with_daemon, daemon, Option<bool>);
     create_builder!(with_env_mode, env_mode, Option<EnvMode>);
+    create_builder!(with_cache_dir, cache_dir, Option<Utf8PathBuf>);
 
     pub fn build(&self) -> Result<ConfigurationOptions, Error> {
         // Priority, from least significant to most significant:
@@ -816,6 +839,9 @@ impl TurborepoConfigBuilder {
                     if let Some(scm_head) = current_source_config.scm_head {
                         acc.scm_head = Some(scm_head);
                     }
+                    if let Some(cache_dir) = current_source_config.cache_dir {
+                        acc.cache_dir = Some(cache_dir);
+                    }
 
                     acc
                 })
@@ -828,6 +854,7 @@ impl TurborepoConfigBuilder {
 mod test {
     use std::{collections::HashMap, ffi::OsString};
 
+    use camino::Utf8PathBuf;
     use tempfile::TempDir;
     use turbopath::AbsoluteSystemPathBuf;
 
@@ -865,6 +892,7 @@ mod test {
         let turbo_team = "vercel";
         let turbo_teamid = "team_nLlpyC6REAqxydlFKbrMDlud";
         let turbo_token = "abcdef1234567890abcdef";
+        let cache_dir = Utf8PathBuf::from("nebulo9");
         let turbo_remote_cache_timeout = 200;
 
         env.insert("turbo_api".into(), turbo_api.into());
@@ -884,6 +912,7 @@ mod test {
         env.insert("turbo_daemon".into(), "true".into());
         env.insert("turbo_preflight".into(), "true".into());
         env.insert("turbo_env_mode".into(), "strict".into());
+        env.insert("turbo_cache_dir".into(), cache_dir.clone().into());
 
         let config = get_env_var_config(&env).unwrap();
         assert!(config.preflight());
@@ -897,6 +926,7 @@ mod test {
         assert_eq!(Some(true), config.allow_no_package_manager);
         assert_eq!(Some(true), config.daemon);
         assert_eq!(Some(EnvMode::Strict), config.env_mode);
+        assert_eq!(cache_dir, config.cache_dir.unwrap());
     }
 
     #[test]

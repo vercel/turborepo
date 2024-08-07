@@ -19,7 +19,8 @@ Run test run
     "daemon": null,
     "envMode": "strict",
     "scmBase": "main",
-    "scmHead": "HEAD"
+    "scmHead": "HEAD",
+    "cacheDir": ".turbo/cache"
   }
 
 Run test run with api overloaded
@@ -100,3 +101,14 @@ Add env var `TURBO_SCM_HEAD=my-branch`
   $ TURBO_SCM_HEAD="my-branch" ${TURBO} config | jq .scmHead
   "my-branch"
 
+No cacheDir by default
+  $ ${TURBO} config | jq .cacheDir
+  ".turbo/cache"
+
+Add env var: `TURBO_CACHE_DIR`
+  $ TURBO_CACHE_DIR=nebulo9 ${TURBO} config | jq .cacheDir
+  "nebulo9"
+
+Add flag: `--cache-dir`
+  $ ${TURBO} --cache-dir nebulo9 config | jq .cacheDir
+  "nebulo9"
