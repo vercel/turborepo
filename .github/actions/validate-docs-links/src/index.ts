@@ -178,10 +178,11 @@ function validateInternalLink(errors: Errors, href: string): void {
   // /docs/api/example#heading -> ["api/example", "heading""]
   const [link, hash] = href.replace(DOCS_PATH, "").split("#", 2);
 
-  console.log(link);
   // check if doc page exists, key is the url path without `/docs/`
   // e.g. `api/example`
   const foundPage = documentMap.get(link);
+
+  console.log("found page", foundPage);
 
   if (!foundPage) {
     errors.link.push(href);
@@ -384,6 +385,7 @@ async function validateAllInternalLinks(): Promise<void> {
     documentMap = new Map(
       await Promise.all(allMdxFilePaths.map(prepareDocumentMapEntry))
     );
+    console.log(documentMap);
 
     const docProcessingPromises = allMdxFilePaths.map(async (filePath) => {
       const doc = documentMap.get(normalizePath(filePath));
