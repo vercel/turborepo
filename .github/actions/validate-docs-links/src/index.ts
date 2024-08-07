@@ -51,7 +51,7 @@ interface Comment {
   id: number;
 }
 
-const REPO_PATH = "/repo/";
+const REPO_PATH = "/docs/";
 const PACK_PATH = "/pack/";
 const EXCLUDED_HASHES = ["top"];
 const COMMENT_TAG = "<!-- LINK_CHECKER_COMMENT -->";
@@ -178,7 +178,7 @@ async function prepareDocumentMapEntry(
 // Checks if the links point to existing documents
 function validateInternalLink(errors: Errors, href: string): void {
   // /docs/api/example#heading -> ["api/example", "heading""]
-  const [link, hash] = href.replace(REPO_PATH, "").split("#", 2);
+  const [link, hash] = href.replace("/", "").split("#", 2);
 
   let foundPage;
 
@@ -388,7 +388,7 @@ async function updateCheckStatus(
 // Main function that triggers link validation across .mdx files
 async function validateAllInternalLinks(): Promise<void> {
   try {
-    const allMdxFilePaths = await getAllMdxFilePaths([REPO_PATH, PACK_PATH]);
+    const allMdxFilePaths = await getAllMdxFilePaths([REPO_PATH]);
 
     documentMap = new Map(
       await Promise.all(allMdxFilePaths.map(prepareDocumentMapEntry))
