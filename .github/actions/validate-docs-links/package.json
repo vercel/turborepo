@@ -6,12 +6,12 @@
     "src"
   ],
   "scripts": {
-    "build": "pnpm types && ncc build src/index.ts -m -o ./dist --license licenses.txt",
-    "types": "tsc"
+    "check-links": "tsx src/index.ts"
   },
   "devDependencies": {
     "@types/github-slugger": "^1.3.0",
     "@vercel/ncc": "0.34.0",
+    "tsx": "^4.7.2",
     "typescript": "5.1.6"
   },
   "dependencies": {
