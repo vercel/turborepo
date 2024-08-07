@@ -51,8 +51,8 @@ interface Comment {
   id: number;
 }
 
-const DOCS_PATH = "../../../docs/";
-const ERRORS_PATH = "/errors/";
+const REPO_PATH = "/repo/";
+const PACK_PATH = "/pack/";
 const EXCLUDED_HASHES = ["top"];
 const COMMENT_TAG = "<!-- LINK_CHECKER_COMMENT -->";
 
@@ -130,12 +130,12 @@ const markdownProcessor = unified()
 
 // Github APIs returns `errors/*` and `docs/*` paths
 function normalizePath(filePath: string): string {
-  if (filePath.startsWith(ERRORS_PATH.substring(1))) {
+  if (filePath.startsWith(PACK_PATH.substring(1))) {
     return (
       filePath
         // Remap repository file path to the vercel-site url path
         // e.g. `errors/example.mdx` -> `docs/messages/example`
-        .replace(ERRORS_PATH.substring(1), DOCS_PATH.substring(1) + "messages/")
+        .replace(PACK_PATH.substring(1), REPO_PATH.substring(1) + "messages/")
         .replace(".mdx", "")
     );
   }
@@ -178,14 +178,14 @@ async function prepareDocumentMapEntry(
 // Checks if the links point to existing documents
 function validateInternalLink(errors: Errors, href: string): void {
   // /docs/api/example#heading -> ["api/example", "heading""]
-  const [link, hash] = href.replace(DOCS_PATH, "").split("#", 2);
+  const [link, hash] = href.replace(REPO_PATH, "").split("#", 2);
 
   let foundPage;
 
   if (link.startsWith("messages/")) {
     // check if error page exists, key is the full url path
     // e.g. `docs/messages/example`
-    foundPage = documentMap.get(DOCS_PATH.substring(1) + link);
+    foundPage = documentMap.get(REPO_PATH.substring(1) + link);
   } else {
     // check if doc page exists, key is the url path without `/docs/`
     // e.g. `api/example`
@@ -253,7 +253,7 @@ function traverseTreeAndValidateLinks(tree: any, doc: Document): Errors {
 
         if (!href) return;
 
-        if (href.startsWith(DOCS_PATH)) {
+        if (href.startsWith(REPO_PATH)) {
           validateInternalLink(errors, href);
         } else if (href.startsWith("#")) {
           validateHashLink(errors, href, doc);
@@ -388,7 +388,7 @@ async function updateCheckStatus(
 // Main function that triggers link validation across .mdx files
 async function validateAllInternalLinks(): Promise<void> {
   try {
-    const allMdxFilePaths = await getAllMdxFilePaths([DOCS_PATH]);
+    const allMdxFilePaths = await getAllMdxFilePaths([REPO_PATH, PACK_PATH]);
 
     documentMap = new Map(
       await Promise.all(allMdxFilePaths.map(prepareDocumentMapEntry))
