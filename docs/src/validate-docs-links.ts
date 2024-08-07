@@ -73,9 +73,6 @@ async function getAllMdxFilePaths(
         fileList = await getAllMdxFilePaths([filePath], fileList);
       } else if (path.extname(file) === ".mdx") {
         fileList.push(filePath);
-        // if (path.basename(filePath) === "index.mdx") {
-        //   fileList.push(filePath.replace("index.mdx", ""));
-        // }
       }
     }
   }
