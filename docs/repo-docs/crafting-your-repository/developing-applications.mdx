@@ -73,8 +73,6 @@ turbo dev --filter=web
 
 ## Watch Mode
 
-<LinkToDocumentation href="">`watch` reference</LinkToDocumentation>
-
 Many tools have a built-in watcher, like [`tsc --watch`](https://www.typescriptlang.org/docs/handbook/compiler-options.html#compiler-options),
 that will respond to changes in your source code. However, some don't.
 
@@ -136,6 +134,8 @@ For example, using a package structure like [`create-turbo`](/repo/docs/referenc
 When you run `turbo watch dev lint`, you'll see the `lint` scripts are re-run whenever you make source code changes, despite ESLint not having a built-in watcher. `turbo watch` is also aware of internal dependencies, so a code change in `@repo/ui` will re-run the task in both `@repo/ui` and `web`.
 
 The Next.js development server in `web` and the TypeScript Compiler's built-in watcher in `@repo/ui` will continue to work as usual, since they are marked with `persistent`.
+
+For more information, [visit the `turbo watch` reference](/repo/docs/reference/watch).
 
 ## Limitations
 
