@@ -464,6 +464,7 @@ async function validateAllInternalLinks(): Promise<void> {
 
       console.log("This PR introduces broken links to the docs:");
       console.table(errorTableData, ["link", "type", "docPath"]);
+      process.exit(1);
     } else if (botComment) {
       const comment = `${COMMENT_TAG}\nAll broken links are now fixed, thank you!`;
       commentUrl = await updateComment(comment, botComment);
