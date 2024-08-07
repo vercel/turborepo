@@ -170,6 +170,11 @@ function validateInternalLink(errors: Errors, href: string): void {
   // /docs/api/example#heading -> ["api/example", "heading""]
   const [link, hash] = href.replace(DOCS_PATH, "").split("#", 2);
 
+  // This path exists, just not in the docs
+  if (link === "/api/remote-cache-spec") {
+    return;
+  }
+
   const foundPage = documentMap.get(link);
 
   if (!foundPage) {
