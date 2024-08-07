@@ -13,7 +13,7 @@ turbo watch [tasks]
 
 ## Using `turbo watch` with persistent tasks
 
-Persistent tasks are marked with [`"persistent": true`](/repo/docs/reference/configuration#persistent), meaning they won't exit. Because of this, they cannot be dependended on in your task graph.
+Persistent tasks are marked with [`"persistent": true`](/repo/docs/reference/configuration#persistent), meaning they won't exit. Because of this, they cannot be depended on in your task graph.
 
 This means that persistent tasks will be ignored when using `turbo watch`, working the same way they do with [`turbo run`](/repo/docs/reference/run), allowing persistent and non-persistent tasks to be run at the same time.
 
