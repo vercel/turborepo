@@ -43,11 +43,11 @@ impl CommandBase {
         args: Args,
         repo_root: AbsoluteSystemPathBuf,
         version: &'static str,
-        ui: ColorConfig,
+        color_config: ColorConfig,
     ) -> Self {
         Self {
             repo_root,
-            color_config: ui,
+            color_config,
             args,
             #[cfg(test)]
             global_config_path: None,

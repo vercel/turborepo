@@ -27,13 +27,13 @@ pub struct LoginOptions<'a, T: Client + TokenClient + CacheClient> {
 }
 impl<'a, T: Client + TokenClient + CacheClient> LoginOptions<'a, T> {
     pub fn new(
-        ui: &'a ColorConfig,
+        color_config: &'a ColorConfig,
         login_url: &'a str,
         api_client: &'a T,
         login_server: &'a dyn LoginServer,
     ) -> Self {
         Self {
-            color_config: ui,
+            color_config,
             login_url,
             api_client,
             login_server,
@@ -46,7 +46,7 @@ impl<'a, T: Client + TokenClient + CacheClient> LoginOptions<'a, T> {
 
 /// Options for logging out.
 pub struct LogoutOptions<T> {
-    pub ui: ColorConfig,
+    pub color_config: ColorConfig,
     pub api_client: T,
     /// If we should invalidate the token on the server.
     pub invalidate: bool,

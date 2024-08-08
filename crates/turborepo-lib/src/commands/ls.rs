@@ -25,13 +25,13 @@ pub enum Error {
 }
 
 struct RepositoryDetails<'a> {
-    ui: ColorConfig,
+    color_config: ColorConfig,
     package_manager: &'a PackageManager,
     packages: Vec<(&'a PackageName, &'a AnchoredSystemPath)>,
 }
 
 struct PackageDetails<'a> {
-    ui: ColorConfig,
+    color_config: ColorConfig,
     name: &'a str,
     tasks: Vec<(&'a str, &'a str)>,
     dependencies: Vec<&'a str>,
@@ -89,16 +89,21 @@ impl<'a> RepositoryDetails<'a> {
         packages.sort_by(|a, b| a.0.cmp(b.0));
 
         Self {
-            ui: color_config,
+            color_config,
             package_manager: package_graph.package_manager(),
             packages,
         }
     }
     fn print(&self) -> Result<(), cli::Error> {
         if self.packages.len() == 1 {
-            cprintln!(self.ui, BOLD, "{} package\n", self.packages.len());
+            cprintln!(self.color_config, BOLD, "{} package\n", self.packages.len());
         } else {
-            cprintln!(self.ui, BOLD, "{} packages\n", self.packages.len());
+            cprintln!(
+                self.color_config,
+                BOLD,
+                "{} packages\n",
+                self.packages.len()
+            );
         }
 
         for (package_name, entry) in &self.packages {
@@ -140,7 +145,7 @@ impl<'a> PackageDetails<'a> {
         package_dep_names.sort();
 
         Ok(Self {
-            ui: color_config,
+            color_config,
             name: package,
             dependencies: package_dep_names,
             tasks: package_json
@@ -152,8 +157,8 @@ impl<'a> PackageDetails<'a> {
     }
 
     fn print(&self) {
-        let name = color!(self.ui, BOLD_GREEN, "{}", self.name);
-        let depends_on = color!(self.ui, BOLD, "depends on");
+        let name = color!(self.color_config, BOLD_GREEN, "{}", self.name);
+        let depends_on = color!(self.color_config, BOLD, "depends on");
         let dependencies = if self.dependencies.is_empty() {
             "<no packages>".to_string()
         } else {
@@ -163,18 +168,22 @@ impl<'a> PackageDetails<'a> {
             "{} {}: {}",
             name,
             depends_on,
-            color!(self.ui, GREY, "{}", dependencies)
+            color!(self.color_config, GREY, "{}", dependencies)
         );
         println!();
 
-        cprint!(self.ui, BOLD, "tasks:");
+        cprint!(self.color_config, BOLD, "tasks:");
         if self.tasks.is_empty() {
             println!(" <no tasks>");
         } else {
             println!();
         }
         for (name, command) in &self.tasks {
-            println!("  {}: {}", name, color!(self.ui, GREY, "{}", command));
+            println!(
+                "  {}: {}",
+                name,
+                color!(self.color_config, GREY, "{}", command)
+            );
         }
         println!();
     }

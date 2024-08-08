@@ -54,7 +54,7 @@ pub struct RunBuilder {
     opts: Opts,
     api_auth: Option<APIAuth>,
     repo_root: AbsoluteSystemPathBuf,
-    ui: ColorConfig,
+    color_config: ColorConfig,
     version: &'static str,
     ui_mode: UIMode,
     api_client: APIClient,
@@ -96,7 +96,7 @@ impl RunBuilder {
             opts,
             api_client,
             repo_root,
-            ui,
+            color_config: ui,
             version,
             ui_mode,
             api_auth,
@@ -377,7 +377,7 @@ impl RunBuilder {
             &self.opts.runcache_opts,
             color_selector,
             daemon.clone(),
-            self.ui,
+            self.color_config,
             self.opts.run_opts.dry_run.is_some(),
         ));
 
@@ -387,7 +387,7 @@ impl RunBuilder {
 
         Ok(Run {
             version: self.version,
-            color_config: self.ui,
+            color_config: self.color_config,
             ui_mode: self.ui_mode,
             start_at,
             processes: self.processes,
