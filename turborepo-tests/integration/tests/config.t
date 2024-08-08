@@ -14,9 +14,12 @@ Run test run
     "uploadTimeout": 60,
     "enabled": true,
     "spacesId": null,
-    "ui": false,
+    "ui": "stream",
     "packageManager": "npm",
-    "daemon": null
+    "daemon": null,
+    "envMode": "strict",
+    "scmBase": "main",
+    "scmHead": "HEAD"
   }
 
 Run test run with api overloaded
@@ -76,3 +79,24 @@ Add flag: `--daemon`
 Add flag: `--no-daemon`
   $ ${TURBO} --no-daemon config | jq .daemon
   false
+
+Confirm that the envMode is `strict` by default
+  $ ${TURBO} config | jq .envMode
+  "strict"
+
+Add env var: `TURBO_ENV_MODE=loose`
+  $ TURBO_ENV_MODE=loose ${TURBO} config | jq .envMode
+  "loose"
+
+Add flag: `--env-mode=loose`
+  $ ${TURBO} --env-mode=loose config | jq .envMode
+  "loose"
+
+Add env var `TURBO_SCM_BASE=HEAD`
+  $ TURBO_SCM_BASE="HEAD" ${TURBO} config | jq .scmBase
+  "HEAD"
+
+Add env var `TURBO_SCM_HEAD=my-branch`
+  $ TURBO_SCM_HEAD="my-branch" ${TURBO} config | jq .scmHead
+  "my-branch"
+

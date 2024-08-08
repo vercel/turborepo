@@ -186,7 +186,7 @@ For in-depth discussion and practical use cases of filtering, visit [the Running
 
 #### Advanced filtering examples
 
-You can combine multiple filters to further refine your targets. Multiple filters are combined as a **union**, meaning that the [Task Graph](/repo/docs/core-concepts/package-and-task-graph#task-graph) will include tasks that match any of the filters.
+You can combine multiple filters to further refine your targets. Multiple filters are combined as a union, with negated filters removing packages from the result of the union.
 
 ```bash title="Terminal"
 # Any packages in `apps` subdirectories that have changed since the last commit
@@ -332,7 +332,7 @@ Passing `--no-daemon` instructs `turbo` to avoid using or creating the standalon
 
 Default: `full`
 
-Set type of output logging, overriding [`outputLogs`](/repo/docs/reference/configuration#outputmode) if it's defined in `turbo.json`.
+Set type of output logging, overriding [`outputLogs`](/repo/docs/reference/configuration#outputlogs) if it's defined in `turbo.json`.
 
 ```bash title="Terminal"
 turbo run build --output-logs=errors-only
@@ -481,6 +481,10 @@ The slug of the Remote Cache team. Useful for running in non-interactive shells 
 turbo run build --team=my-team
 turbo run build --team=my-team --token=xxxxxxxxxxxxxxxxx
 ```
+
+### `--ui`
+
+Specify the UI to use for output. Accepts `stream` or `tui`.
 
 This value can also be set using [the `TURBO_TEAM` system variable](/repo/docs/reference/system-environment-variables). If both are present, the flag value will override the system variable.
 

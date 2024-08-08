@@ -17,7 +17,7 @@ use turborepo_repository::{package_graph::ROOT_PKG_NAME, package_json::PackageJs
 use turborepo_unescape::UnescapedString;
 
 use crate::{
-    cli::OutputLogsMode,
+    cli::{EnvMode, OutputLogsMode},
     config::{ConfigurationOptions, Error, InvalidEnvPrefixError},
     run::{
         task_access::{TaskAccessTraceFile, TASK_ACCESS_CONFIG_PATH},
@@ -125,7 +125,7 @@ pub struct RawTurboJson {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) remote_cache: Option<RawRemoteCacheOptions>,
     #[serde(skip_serializing_if = "Option::is_none", rename = "ui")]
-    pub ui: Option<UI>,
+    pub ui: Option<UIMode>,
     #[serde(
         skip_serializing_if = "Option::is_none",
         rename = "dangerouslyDisablePackageManagerCheck"
@@ -133,6 +133,8 @@ pub struct RawTurboJson {
     pub allow_no_package_manager: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub daemon: Option<Spanned<bool>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub env_mode: Option<EnvMode>,
 
     #[deserializable(rename = "//")]
     #[serde(skip)]
@@ -167,22 +169,22 @@ impl DerefMut for Pipeline {
     }
 }
 
-#[derive(Serialize, Debug, Copy, Clone, Deserializable, PartialEq, Eq, ValueEnum)]
+#[derive(Serialize, Deserialize, Debug, Copy, Clone, Deserializable, PartialEq, Eq, ValueEnum)]
 #[serde(rename_all = "camelCase")]
-pub enum UI {
-    /// Use the TUI interface
+pub enum UIMode {
+    /// Use the terminal user interface
     Tui,
     /// Use the standard output stream
     Stream,
 }
 
-impl Default for UI {
+impl Default for UIMode {
     fn default() -> Self {
         Self::Tui
     }
 }
 
-impl UI {
+impl UIMode {
     pub fn use_tui(&self) -> bool {
         matches!(self, Self::Tui)
     }
@@ -747,7 +749,7 @@ mod tests {
     use turborepo_repository::package_json::PackageJson;
     use turborepo_unescape::UnescapedString;
 
-    use super::{Pipeline, RawTurboJson, Spanned, UI};
+    use super::{Pipeline, RawTurboJson, Spanned, UIMode};
     use crate::{
         cli::OutputLogsMode,
         run::task_id::TaskName,
@@ -1077,10 +1079,10 @@ mod tests {
         assert_eq!(actual, expected);
     }
 
-    #[test_case(r#"{ "ui": "tui" }"#, Some(UI::Tui) ; "tui")]
-    #[test_case(r#"{ "ui": "stream" }"#, Some(UI::Stream) ; "stream")]
+    #[test_case(r#"{ "ui": "tui" }"#, Some(UIMode::Tui) ; "tui")]
+    #[test_case(r#"{ "ui": "stream" }"#, Some(UIMode::Stream) ; "stream")]
     #[test_case(r#"{}"#, None ; "missing")]
-    fn test_ui(json: &str, expected: Option<UI>) {
+    fn test_ui(json: &str, expected: Option<UIMode>) {
         let json = RawTurboJson::parse(json, AnchoredSystemPath::new("").unwrap()).unwrap();
         assert_eq!(json.ui, expected);
     }

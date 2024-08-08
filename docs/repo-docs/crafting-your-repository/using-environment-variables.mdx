@@ -109,9 +109,9 @@ For these cases, add those environment variables to [`globalPassThroughEnv`](/re
 
 #### CI vendor compatibility
 
-Strict Mode will filter out environment variables that come from your CI vendors until you've accounted for them using `env` or `globalEnv`.
+Strict Mode will filter out environment variables that come from your CI vendors until you've accounted for them using [`env`](/repo/docs/reference/configuration#env), [`globalEnv`](/repo/docs/reference/configuration#globalenv), [`passThroughEnv`](/repo/docs/reference/configuration#passthroughenv), or [`globalPassThroughEnv`](/repo/docs/reference/configuration#globalpassthroughenv).
 
-If any of these variables are important to your build and aren't included by [Framework Inference](#framework-inference), make sure they are in your `turbo.json` configuration.
+If any of these variables are important to your tasks and aren't included by [Framework Inference](#framework-inference), make sure they are in your `turbo.json` configuration.
 
 ### Loose Mode
 

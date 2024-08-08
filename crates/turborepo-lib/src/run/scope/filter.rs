@@ -163,10 +163,11 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
     /// It applies the following rules:
     pub(crate) fn resolve(
         &self,
+        affected: &Option<(String, String)>,
         patterns: &[String],
     ) -> Result<(HashSet<PackageName>, bool), ResolutionError> {
         // inference is None only if we are in the root
-        let is_all_packages = patterns.is_empty() && self.inference.is_none();
+        let is_all_packages = patterns.is_empty() && self.inference.is_none() && affected.is_none();
 
         let filter_patterns = if is_all_packages {
             // return all packages in the workspace
@@ -176,7 +177,7 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
                 .map(|(name, _)| name.to_owned())
                 .collect()
         } else {
-            self.get_packages_from_patterns(patterns)?
+            self.get_packages_from_patterns(affected, patterns)?
         };
 
         Ok((filter_patterns, is_all_packages))
@@ -184,12 +185,25 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
 
     fn get_packages_from_patterns(
         &self,
+        affected: &Option<(String, String)>,
         patterns: &[String],
     ) -> Result<HashSet<PackageName>, ResolutionError> {
-        let selectors = patterns
+        let mut selectors = patterns
             .iter()
             .map(|pattern| TargetSelector::from_str(pattern))
             .collect::<Result<Vec<_>, _>>()?;
+
+        if let Some((from_ref, to_ref)) = affected {
+            selectors.push(TargetSelector {
+                git_range: Some(GitRange {
+                    from_ref: from_ref.to_string(),
+                    to_ref: Some(to_ref.to_string()),
+                    include_uncommitted: true,
+                    allow_unknown_objects: true,
+                }),
+                ..Default::default()
+            });
+        }
 
         self.get_filtered_packages(selectors)
     }
@@ -534,8 +548,12 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
         &self,
         git_range: &GitRange,
     ) -> Result<HashSet<PackageName>, ResolutionError> {
-        self.change_detector
-            .changed_packages(&git_range.from_ref, git_range.to_ref.as_deref())
+        self.change_detector.changed_packages(
+            &git_range.from_ref,
+            git_range.to_ref.as_deref(),
+            git_range.include_uncommitted,
+            git_range.allow_unknown_objects,
+        )
     }
 
     fn match_package_names_to_vertices(
@@ -1105,7 +1123,7 @@ mod test {
     #[test_case(
         vec![
             TargetSelector {
-                git_range: Some(GitRange { from_ref: "HEAD~1".to_string(), to_ref: None }),
+                git_range: Some(GitRange { from_ref: "HEAD~1".to_string(), to_ref: None, ..Default::default() }),
                 ..Default::default()
             }
         ],
@@ -1115,7 +1133,7 @@ mod test {
     #[test_case(
         vec![
             TargetSelector {
-                git_range: Some(GitRange { from_ref: "HEAD~1".to_string(), to_ref: None }),
+                git_range: Some(GitRange { from_ref: "HEAD~1".to_string(), to_ref: None, ..Default::default() }),
                 parent_dir: Some(AnchoredSystemPathBuf::try_from(".").unwrap()),
                 ..Default::default()
             }
@@ -1126,7 +1144,7 @@ mod test {
     #[test_case(
         vec![
             TargetSelector {
-                git_range: Some(GitRange { from_ref: "HEAD~1".to_string(), to_ref: None }),
+                git_range: Some(GitRange { from_ref: "HEAD~1".to_string(), to_ref: None, ..Default::default() }),
                 parent_dir: Some(AnchoredSystemPathBuf::try_from("package-2").unwrap()),
                 ..Default::default()
             }
@@ -1137,7 +1155,7 @@ mod test {
     #[test_case(
         vec![
             TargetSelector {
-                git_range: Some(GitRange { from_ref: "HEAD~1".to_string(), to_ref: None }),
+                git_range: Some(GitRange { from_ref: "HEAD~1".to_string(), to_ref: None, ..Default::default() }),
                 name_pattern: "package-2*".to_string(),
                 ..Default::default()
             }
@@ -1148,7 +1166,7 @@ mod test {
     #[test_case(
         vec![
             TargetSelector {
-                git_range: Some(GitRange { from_ref: "HEAD~1".to_string(), to_ref: None }),
+                git_range: Some(GitRange { from_ref: "HEAD~1".to_string(), to_ref: None, ..Default::default() }),
                 name_pattern: "package-1".to_string(),
                 match_dependencies: true,
                 ..Default::default()
@@ -1160,7 +1178,7 @@ mod test {
     #[test_case(
         vec![
             TargetSelector {
-                git_range: Some(GitRange { from_ref: "HEAD~2".to_string(), to_ref: None }),
+                git_range: Some(GitRange { from_ref: "HEAD~2".to_string(), to_ref: None, ..Default::default() }),
                 ..Default::default()
             }
         ],
@@ -1170,7 +1188,7 @@ mod test {
     #[test_case(
         vec![
             TargetSelector {
-                git_range: Some(GitRange { from_ref: "HEAD~2".to_string(), to_ref: Some("HEAD~1".to_string()) }),
+                git_range: Some(GitRange { from_ref: "HEAD~2".to_string(), to_ref: Some("HEAD~1".to_string()), ..Default::default() }),
                 ..Default::default()
             }
         ],
@@ -1180,7 +1198,7 @@ mod test {
     #[test_case(
         vec![
             TargetSelector {
-                git_range: Some(GitRange { from_ref: "HEAD~1".to_string(), to_ref: None }),
+                git_range: Some(GitRange { from_ref: "HEAD~1".to_string(), to_ref: None, ..Default::default() }),
                 parent_dir: Some(AnchoredSystemPathBuf::try_from("package-*").unwrap()),
                 match_dependencies: true,             ..Default::default()
             }
@@ -1234,6 +1252,8 @@ mod test {
             &self,
             from: &str,
             to: Option<&str>,
+            _include_uncommitted: bool,
+            _allow_unknown_objects: bool,
         ) -> Result<HashSet<PackageName>, ResolutionError> {
             Ok(self
                 .0

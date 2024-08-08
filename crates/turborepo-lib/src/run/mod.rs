@@ -43,7 +43,7 @@ use crate::{
     signal::SignalHandler,
     task_graph::Visitor,
     task_hash::{get_external_deps_hash, get_internal_deps_hash, PackageInputsHashes},
-    turbo_json::TurboJson,
+    turbo_json::{TurboJson, UIMode},
     DaemonClient, DaemonConnector,
 };
 
@@ -69,7 +69,7 @@ pub struct Run {
     task_access: TaskAccess,
     daemon: Option<DaemonClient<DaemonConnector>>,
     should_print_prelude: bool,
-    experimental_ui: bool,
+    ui_mode: UIMode,
 }
 
 impl Run {
@@ -172,12 +172,12 @@ impl Run {
         self.ui
     }
 
-    pub fn has_experimental_ui(&self) -> bool {
-        self.experimental_ui
+    pub fn has_tui(&self) -> bool {
+        self.ui_mode.use_tui()
     }
 
     pub fn should_start_ui(&self) -> Result<bool, Error> {
-        Ok(self.experimental_ui
+        Ok(self.ui_mode.use_tui()
             && self.opts.run_opts.dry_run.is_none()
             && tui::terminal_big_enough()?)
     }
@@ -207,14 +207,26 @@ impl Run {
         Ok(Some((sender, handle)))
     }
 
+    /// Returns a handle that can be used to stop a run
+    pub fn stopper(&self) -> RunStopper {
+        RunStopper {
+            manager: self.processes.clone(),
+        }
+    }
+
     pub async fn run(
         &mut self,
         experimental_ui_sender: Option<AppSender>,
         is_watch: bool,
     ) -> Result<i32, Error> {
+        let skip_cache_writes = self.opts.runcache_opts.skip_writes;
         if let Some(subscriber) = self.signal_handler.subscribe() {
             let run_cache = self.run_cache.clone();
             tokio::spawn(async move {
+                // Cache writes are disabled, can skip setting up cache write listener
+                if skip_cache_writes {
+                    return;
+                }
                 let _guard = subscriber.listen().await;
                 let spinner = turborepo_ui::start_spinner("...Finishing writing to cache...");
                 if let Ok((status, closed)) = run_cache.shutdown_cache().await {
@@ -437,5 +449,16 @@ impl Run {
             .await?;
 
         Ok(exit_code)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct RunStopper {
+    manager: ProcessManager,
+}
+
+impl RunStopper {
+    pub async fn stop(&self) {
+        self.manager.stop().await;
     }
 }

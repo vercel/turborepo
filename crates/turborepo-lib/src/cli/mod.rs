@@ -8,7 +8,7 @@ use clap::{
 };
 use clap_complete::{generate, Shell};
 pub use error::Error;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tracing::{debug, error, log::warn};
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::AnonAPIClient;
@@ -29,7 +29,7 @@ use crate::{
     run::watch::WatchClient,
     shim::TurboState,
     tracing::TurboSubscriber,
-    turbo_json::UI as ConfigUI,
+    turbo_json::UIMode,
 };
 
 mod error;
@@ -136,7 +136,9 @@ impl Display for DryRunMode {
     }
 }
 
-#[derive(Copy, Clone, Debug, Default, PartialEq, Serialize, ValueEnum)]
+#[derive(
+    Copy, Clone, Debug, Default, PartialEq, Serialize, ValueEnum, Deserialize, Eq, Deserializable,
+)]
 #[serde(rename_all = "lowercase")]
 pub enum EnvMode {
     Loose,
@@ -183,7 +185,7 @@ pub struct Args {
     pub heap: Option<String>,
     /// Specify whether to use the streaming UI or TUI
     #[clap(long, global = true, value_enum)]
-    pub ui: Option<ConfigUI>,
+    pub ui: Option<UIMode>,
     /// Override the login endpoint
     #[clap(long, global = true, value_parser)]
     pub login: Option<String>,
@@ -694,6 +696,11 @@ pub struct ExecutionArgs {
     /// turbo's documentation https://turbo.build/repo/docs/reference/command-line-reference/run#--filter
     #[clap(short = 'F', long, group = "scope-filter-group")]
     pub filter: Vec<String>,
+
+    /// Run only tasks that are affected by changes between
+    /// the current branch and `main`
+    #[clap(long, group = "scope-filter-group")]
+    pub affected: bool,
 
     /// Set type of process output logging. Use "full" to show
     /// all output. Use "hash-only" to show only turbo-computed
@@ -1299,11 +1306,6 @@ pub async fn run(
         }
     };
 
-    if cli_result.is_err() {
-        root_telemetry.track_failure();
-    } else {
-        root_telemetry.track_success();
-    }
     root_telemetry.track_end();
     match telemetry_handle {
         Some(handle) => handle.close_with_timeout().await,

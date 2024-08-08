@@ -63,7 +63,9 @@ mod tests {
     use tempfile::tempdir;
     use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
     use turborepo_repository::{
-        change_mapper::{ChangeMapper, DefaultPackageChangeMapper, PackageChanges},
+        change_mapper::{
+            AllPackageChangeReason, ChangeMapper, DefaultPackageChangeMapper, PackageChanges,
+        },
         discovery,
         discovery::PackageDiscovery,
         package_graph::{PackageGraphBuilder, WorkspacePackage},
@@ -117,7 +119,10 @@ mod tests {
 
         // We should return All because we don't have global deps and
         // therefore must be conservative about changes
-        assert_eq!(package_changes, PackageChanges::All);
+        assert_eq!(
+            package_changes,
+            PackageChanges::All(AllPackageChangeReason::NonPackageFileChanged)
+        );
 
         let turbo_package_detector =
             GlobalDepsPackageChangeMapper::new(&pkg_graph, std::iter::empty::<&str>())?;

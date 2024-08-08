@@ -13,7 +13,7 @@ use chrono::{DateTime, Utc};
 pub use config::{Config, ConfigError, File, FileFormat};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use tracing::{debug, error};
+use tracing::{error, trace};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_dirs::config_dir;
 use turborepo_ui::{color, BOLD, GREY, UI, UNDERLINE};
@@ -67,7 +67,7 @@ impl TelemetryConfig {
     }
 
     pub fn new(config_path: AbsoluteSystemPathBuf) -> Result<TelemetryConfig, ConfigError> {
-        debug!("Telemetry config path: {}", config_path);
+        trace!("Telemetry config path: {}", config_path);
         if !config_path.exists() {
             write_new_config(&config_path)?;
         }

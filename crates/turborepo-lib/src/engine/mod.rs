@@ -17,7 +17,7 @@ use thiserror::Error;
 use turborepo_errors::Spanned;
 use turborepo_repository::package_graph::{PackageGraph, PackageName};
 
-use crate::{run::task_id::TaskId, task_graph::TaskDefinition};
+use crate::{run::task_id::TaskId, task_graph::TaskDefinition, turbo_json::UIMode};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum TaskNode {
@@ -383,7 +383,7 @@ impl Engine<Built> {
         &self,
         package_graph: &PackageGraph,
         concurrency: u32,
-        experimental_ui: bool,
+        ui_mode: UIMode,
     ) -> Result<(), Vec<ValidateError>> {
         // TODO(olszewski) once this is hooked up to a real run, we should
         // see if using rayon to parallelize would provide a speedup
@@ -480,7 +480,7 @@ impl Engine<Built> {
             })
         }
 
-        validation_errors.extend(self.validate_interactive(experimental_ui));
+        validation_errors.extend(self.validate_interactive(ui_mode));
 
         match validation_errors.is_empty() {
             true => Ok(()),
@@ -489,10 +489,10 @@ impl Engine<Built> {
     }
 
     // Validates that UI is setup if any interactive tasks will be executed
-    fn validate_interactive(&self, experimental_ui: bool) -> Vec<ValidateError> {
+    fn validate_interactive(&self, ui_mode: UIMode) -> Vec<ValidateError> {
         // If experimental_ui is being used, then we don't need check for interactive
         // tasks
-        if experimental_ui {
+        if matches!(ui_mode, UIMode::Tui) {
             return Vec::new();
         }
         self.task_definitions
@@ -557,7 +557,7 @@ mod test {
 
     use std::collections::BTreeMap;
 
-    use tempdir::TempDir;
+    use tempfile::TempDir;
     use turbopath::AbsoluteSystemPath;
     use turborepo_repository::{
         discovery::{DiscoveryResponse, PackageDiscovery, WorkspaceData},
@@ -638,7 +638,7 @@ mod test {
         // set up a workspace with three packages, two of which have a persistent build
         // task. we expect concurrency limit 1 to fail, but 2 and 3 to pass.
 
-        let tmp = tempdir::TempDir::new("issue_4291").unwrap();
+        let tmp = tempfile::TempDir::with_prefix("issue_4291").unwrap();
 
         let mut engine = Engine::new();
 
@@ -666,17 +666,21 @@ mod test {
         let graph = graph_builder.build().await.unwrap();
 
         // if our limit is less than, it should fail
-        engine.validate(&graph, 1, false).expect_err("not enough");
+        engine
+            .validate(&graph, 1, UIMode::Stream)
+            .expect_err("not enough");
 
         // if our limit is less than, it should fail
-        engine.validate(&graph, 2, false).expect_err("not enough");
+        engine
+            .validate(&graph, 2, UIMode::Stream)
+            .expect_err("not enough");
 
         // we have two persistent tasks, and a slot for all other tasks, so this should
         // pass
-        engine.validate(&graph, 3, false).expect("ok");
+        engine.validate(&graph, 3, UIMode::Stream).expect("ok");
 
         // if our limit is greater, then it should pass
-        engine.validate(&graph, 4, false).expect("ok");
+        engine.validate(&graph, 4, UIMode::Stream).expect("ok");
     }
 
     #[tokio::test]

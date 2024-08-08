@@ -6,7 +6,7 @@ use turborepo_repository::{
     change_mapper::{ChangeMapper, DefaultPackageChangeMapper, LockfileChange, PackageChanges},
     package_graph::{PackageGraph, PackageName},
 };
-use turborepo_scm::SCM;
+use turborepo_scm::{git::ChangedFiles, SCM};
 
 use crate::{
     global_deps_package_change_mapper::{Error, GlobalDepsPackageChangeMapper},
@@ -19,6 +19,8 @@ pub trait GitChangeDetector {
         &self,
         from_ref: &str,
         to_ref: Option<&str>,
+        include_uncommitted: bool,
+        allow_unknown_objects: bool,
     ) -> Result<HashSet<PackageName>, ResolutionError>;
 }
 
@@ -88,20 +90,46 @@ impl<'a> GitChangeDetector for ScopeChangeDetector<'a> {
         &self,
         from_ref: &str,
         to_ref: Option<&str>,
+        include_uncommitted: bool,
+        allow_unknown_objects: bool,
     ) -> Result<HashSet<PackageName>, ResolutionError> {
         let mut changed_files = HashSet::new();
         if !from_ref.is_empty() {
-            changed_files = self.scm.changed_files(self.turbo_root, from_ref, to_ref)?;
+            changed_files = match self.scm.changed_files(
+                self.turbo_root,
+                from_ref,
+                to_ref,
+                include_uncommitted,
+                allow_unknown_objects,
+            )? {
+                ChangedFiles::All => {
+                    debug!("all packages changed");
+                    return Ok(self
+                        .pkg_graph
+                        .packages()
+                        .map(|(name, _)| name.to_owned())
+                        .collect());
+                }
+                ChangedFiles::Some(changed_files) => changed_files,
+            }
         }
 
         let lockfile_contents = self.get_lockfile_contents(from_ref, &changed_files);
-        debug!("changed_files: {changed_files:?}");
+
+        debug!(
+            "changed files: {:?}",
+            &changed_files
+                .iter()
+                .map(|x| x.to_string())
+                .collect::<Vec<String>>()
+        );
+
         match self
             .change_mapper
             .changed_packages(changed_files, lockfile_contents)?
         {
-            PackageChanges::All => {
-                debug!("all packages changed");
+            PackageChanges::All(reason) => {
+                debug!("all packages changed: {:?}", reason);
                 Ok(self
                     .pkg_graph
                     .packages()

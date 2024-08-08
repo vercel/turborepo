@@ -111,6 +111,7 @@ Below, the structural elements of `create-turbo` that make it a valid workspace 
 
 <Steps>
 <Step>
+
 #### Declaring directories for packages
 
 First, your package manager needs to describe the locations of your packages. We recommend starting with splitting your packages into `apps/` for applications and services and `packages/` for everything else, like libraries and tooling.
@@ -162,6 +163,7 @@ If you'd like to group packages by directory, you can do this using globs like `
 </Step>
 
 <Step>
+
 #### `package.json` in each package
 
 In the directory of the package, there must be a `package.json` to make the package discoverable to your package manager and `turbo`. The [requirements for the `package.json` of a package](#anatomy-of-a-package) are below.
@@ -332,7 +334,7 @@ Using exports this way provides three major benefits:
 </Tab>
 
 <Tab value="multiply.ts">
-```ts title="./packages/math/src/add.ts"
+```ts title="./packages/math/src/multiply.ts"
 import { add } from "#add";
 
 export const multiply = (a: number, b: number) => {

@@ -7,7 +7,9 @@ use turborepo_dirs::config_dir;
 use turborepo_ui::UI;
 
 use crate::{
+    cli::Command,
     config::{ConfigurationOptions, Error as ConfigError, TurborepoConfigBuilder},
+    turbo_json::UIMode,
     Args,
 };
 
@@ -69,10 +71,10 @@ impl CommandBase {
             .with_token(self.args.token.clone())
             .with_timeout(self.args.remote_cache_timeout)
             .with_preflight(self.args.preflight.then_some(true))
-            .with_ui(self.args.ui.map(|ui| ui.use_tui()).or_else(|| {
+            .with_ui(self.args.ui.or_else(|| {
                 self.args.execution_args.as_ref().and_then(|args| {
                     if !args.log_order.compatible_with_tui() {
-                        Some(false)
+                        Some(UIMode::Stream)
                     } else {
                         // If the argument is compatible with the TUI this does not mean we should
                         // override other configs
@@ -86,6 +88,21 @@ impl CommandBase {
                     .then_some(true),
             )
             .with_daemon(self.args.run_args.as_ref().and_then(|args| args.daemon()))
+            .with_env_mode(
+                self.args
+                    .command
+                    .as_ref()
+                    .and_then(|c| match c {
+                        Command::Run { execution_args, .. } => execution_args.env_mode,
+                        _ => None,
+                    })
+                    .or_else(|| {
+                        self.args
+                            .execution_args
+                            .as_ref()
+                            .and_then(|args| args.env_mode)
+                    }),
+            )
             .build()
     }
 
