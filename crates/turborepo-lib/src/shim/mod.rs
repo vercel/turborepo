@@ -270,7 +270,7 @@ fn try_check_for_updates(args: &ShimArgs, current_version: &str) {
         // check for updates
         let _ = display_update_check(
             "turbo",
-            "https://github.com/vercel/turbo",
+            "https://github.com/vercel/turborepo",
             Some(&footer),
             current_version,
             // use default for timeout (800ms)

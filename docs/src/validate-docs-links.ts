@@ -230,7 +230,7 @@ const formatTableRow = (
 ) => {
   const docPath = rawDocPath.replace("../../../", "");
 
-  return `| ${link} | ${errorType} | [/${docPath}](https://github.com/vercel/turbo/blob/${sha}/${docPath}) | \n`;
+  return `| ${link} | ${errorType} | [/${docPath}](https://github.com/vercel/turborepo/blob/${sha}/${docPath}) | \n`;
 };
 
 // Main function that triggers link validation across .mdx files

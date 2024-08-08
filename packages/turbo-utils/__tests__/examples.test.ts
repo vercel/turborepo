@@ -14,7 +14,7 @@ describe("examples", () => {
         .spyOn(got, "head")
         .mockReturnValue({ statusCode: 200 } as any);
 
-      const url = "https://github.com/vercel/turbo/";
+      const url = "https://github.com/vercel/turborepo/";
       const result = await isUrlOk(url);
       expect(result).toBe(true);
 
@@ -27,7 +27,7 @@ describe("examples", () => {
         .spyOn(got, "head")
         .mockReturnValue({ statusCode: 401 } as any);
 
-      const url = "https://not-github.com/vercel/turbo/";
+      const url = "https://not-github.com/vercel/turborepo/";
       const result = await isUrlOk(url);
       expect(result).toBe(false);
 
@@ -39,38 +39,38 @@ describe("examples", () => {
   describe("getRepoInfo", () => {
     test.each([
       {
-        repoUrl: "https://github.com/vercel/turbo/",
+        repoUrl: "https://github.com/vercel/turborepo/",
         examplePath: undefined,
         defaultBranch: "main",
         expectBranchLookup: true,
         expected: {
           username: "vercel",
-          name: "turbo",
+          name: "turborepo",
           branch: "main",
           filePath: "",
         },
       },
       {
         repoUrl:
-          "https://github.com/vercel/turbo/tree/canary/examples/kitchen-sink",
+          "https://github.com/vercel/turborepo/tree/canary/examples/kitchen-sink",
         examplePath: undefined,
         defaultBranch: "canary",
         expectBranchLookup: false,
         expected: {
           username: "vercel",
-          name: "turbo",
+          name: "turborepo",
           branch: "canary",
           filePath: "examples/kitchen-sink",
         },
       },
       {
-        repoUrl: "https://github.com/vercel/turbo/tree/tek/test-branch/",
+        repoUrl: "https://github.com/vercel/turborepo/tree/tek/test-branch/",
         examplePath: "examples/basic",
         defaultBranch: "canary",
         expectBranchLookup: false,
         expected: {
           username: "vercel",
-          name: "turbo",
+          name: "turborepo",
           branch: "tek/test-branch",
           filePath: "examples/basic",
         },

@@ -253,7 +253,7 @@ impl<'a> Visitor<'a> {
                     }));
                 }
                 false => {
-                    // TODO(gsoltis): if/when we fix https://github.com/vercel/turbo/issues/937
+                    // TODO(gsoltis): if/when we fix https://github.com/vercel/turborepo/issues/937
                     // the following block should never get hit. In the meantime, keep it after
                     // hashing so that downstream tasks can count on the hash existing
                     //
