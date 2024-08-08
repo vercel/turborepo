@@ -494,6 +494,10 @@ pub enum Command {
     Config,
     /// EXPERIMENTAL: List packages in your monorepo.
     Ls {
+        /// Run only tasks that are affected by changes between
+        /// the current branch and `main`
+        #[clap(long, group = "scope-filter-group")]
+        affected: bool,
         /// Use the given selector to specify package(s) to act as
         /// entry points. The syntax mirrors pnpm's syntax, and
         /// additional documentation and examples can be found in
@@ -1157,15 +1161,20 @@ pub async fn run(
             config::run(base).await?;
             Ok(0)
         }
-        Command::Ls { filter, packages } => {
+        Command::Ls {
+            affected,
+            filter,
+            packages,
+        } => {
             warn!("ls command is experimental and may change in the future");
             let event = CommandEventBuilder::new("info").with_parent(&root_telemetry);
 
             event.track_call();
+            let affected = *affected;
             let filter = filter.clone();
             let packages = packages.clone();
             let base = CommandBase::new(cli_args, repo_root, version, color_config);
-            ls::run(base, packages, event, filter).await?;
+            ls::run(base, packages, event, filter, affected).await?;
 
             Ok(0)
         }
