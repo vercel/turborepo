@@ -10,7 +10,7 @@ Many monorepos can declare a `turbo.json` in the root directory with a
 
 To accommodate this, Turborepo enables you to extend the root configuration with a `turbo.json` in any package. This flexibility enables a more diverse set of apps and packages to co-exist in a Workspace, and allows package owners to maintain specialized tasks and configuration without affecting other apps and packages of the monorepo.
 
-## How it works
+## Usage
 
 To override the configuration for any task defined in the root `turbo.json`, add
 a `turbo.json` file in any package of your monorepo with a top-level `extends`
@@ -28,14 +28,22 @@ key:
 }
 ```
 
-<Callout>
-  For now, the only valid value for the `extends` key is `["//"]`. `//` is a
-  special name used to identify the root directory of the monorepo.
-</Callout>
-
 Configuration in a package can override any of [the configurations for a
 task](/repo/docs/reference/configuration#defining-tasks). Any keys that are not included are inherited
 from the extended `turbo.json`.
+
+### Extends
+
+```jsonc title="./apps/web/turbo.json"
+{
+  "extends": ["//"]
+}
+```
+
+Extend from the root `turbo.json`.
+
+- The only valid value for `extends` is `["//"]` to inherit configuration from the root `turbo.json`.
+- If `extends` is used in the root `turbo.json`, it will be ignored.
 
 ## Examples
 

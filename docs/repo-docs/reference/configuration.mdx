@@ -17,22 +17,11 @@ Configure the behavior of `turbo` by adding a `turbo.json` file in your Workspac
   Configurations](/repo/docs/reference/package-configurations).
 </Callout>
 
-## Global options
+## Global Options
 
-### `extends`
+Impact all tasks and workspaces.
 
-```jsonc title="./apps/web/turbo.json"
-{
-  "extends": ["//"]
-}
-```
-
-Extend from the root `turbo.json` to create specific configuration for a package using [Package Configurations](/repo/docs/reference/package-configurations).
-
-- The only valid value for `extends` is `["//"]` to inherit configuration from the root `turbo.json`.
-- If `extends` is used in the root `turbo.json`, it will be ignored.
-
-### `globalDependencies`
+### Task Dependencies [#globalDependencies]
 
 ```jsonc title="./turbo.json"
 {
@@ -49,7 +38,7 @@ By default, all files in source control in the Workspace root are included in th
   repository aren't supported.
 </Callout>
 
-### `globalEnv`
+### Environment Variables [#globalEnv]
 
 ```jsonc title="./turbo.json"
 {
@@ -57,11 +46,12 @@ By default, all files in source control in the Workspace root are included in th
 }
 ```
 
-A list of environment variables that you want to impact the hash of all tasks. Any change to these environment variables will cause all tasks to miss cache.
+A list of environment variables that you want to make available.
+Any change to these environment variables will cause all tasks to miss cache.
 
 For more on wildcard and negation syntax, [see the `env` section](#env).
 
-### `globalPassThroughEnv`
+#### Pass Through Variables [#globalPassThroughEnv]
 
 ```jsonc title="./turbo.json"
 {
@@ -69,33 +59,41 @@ For more on wildcard and negation syntax, [see the `env` section](#env).
 }
 ```
 
-A list of environment variables that you want to make available to tasks. Using this key opts all tasks into [Strict Environment Variable Mode](/repo/docs/crafting-your-repository/using-environment-variables#strict-mode).
+Similar to `globalEnv` but won't impact the hash of all tasks.
+Changes to these environment variables will **not** cause the tasks to miss cache.
+
+Using this key opts all tasks into [Strict Environment Variable Mode](/repo/docs/crafting-your-repository/using-environment-variables#strict-mode).
 
 Additionally, Turborepo has a built-in set of global passthrough variables for common cases, like operating system environment variables. This includes variables like `HOME`, `PATH`, `APPDATA`, `SHELL`, `PWD`, and more. The full list can be found [in the source code](https://github.com/vercel/turbo/blob/main/crates/turborepo-lib/src/task_hash.rs).
 
-<Callout
-  type="warn"
-  title="Passthrough values do not contribute to hashes for caching"
->
-  If you want changes in these variables to cause cache misses, you will need to
-  include them in [`env`](#env) or [`globalEnv`](#globalenv).
-</Callout>
-
-### `ui`
-
-Default: `"stream"`
+### Customise Terminal UI [#ui]
 
 Select a terminal UI for the repository.
 
-`"tui"` allows for viewing each log at once and interacting with the task. `"stream"` outputs logs as they come in and is not interactive.
+#### Stream
+
+Enabled by default.
+
+The output from different tasks are streamed to your terminal.
+Outputs logs as they come in and is not interactive.
 
 ```json title="Terminal"
 {
-  "ui": "tui" | "stream"
+  "ui": "stream"
 }
 ```
 
-### `dangerouslyDisablePackageManagerCheck`
+#### TUI
+
+It allows for viewing each log at once and interacting with the task.
+
+```json title="Terminal"
+{
+  "ui": "tui"
+}
+```
+
+### Disable Package Manager Check
 
 Default: `false`
 
@@ -112,14 +110,14 @@ To help with incremental migration or in situations where you can't use the `pac
 <Callout type="info">
   You may also opt out of this check via
   [`flag`](/repo/docs/reference/run#--dangerously-disable-package-manager-check)
-  or the
-  [`TURBO_DANGEROUSLY_DISABLE_PACKAGE_MANAGER_CHECK`](https://turbo.build/repo/docs/reference/system-environment-variables)
+  or the [Environment
+  Variable](https://turbo.build/repo/docs/reference/system-environment-variables)
   environment variable.
 </Callout>
 
 ## Defining tasks
 
-### `tasks`
+### Tasks
 
 Each key in the `tasks` object is the name of a task that can be executed by [`turbo run`](/repo/docs/reference/run). Turborepo will search the packages described in your [Workspace's configuration](/repo/docs/crafting-your-repository/structuring-a-repository#specifying-packages-in-a-monorepo) for scripts in `package.json` with the name of the task.
 
@@ -147,17 +145,17 @@ In the example below, we've defined three tasks under the `tasks` key: `build`, 
 }
 ```
 
-## Task options
+## Task Options
 
 Using the options available in the tasks you define in `tasks`, you can describe how `turbo` will run your tasks.
 
-### `dependsOn`
+### Depends On [#dependsOn]
 
 A list of tasks that are required to complete before the task begins running.
 
 There are three types of `dependsOn` relationships: [dependency relationships](#dependency-relationships), [same-package relationships](#same-package-relationships), and [arbitrary task relationships](#arbitrary-task-relationships).
 
-#### Dependency relationships
+#### Dependency Relationships
 
 Prefixing a string in `dependsOn` with a `^` tells `turbo` that the task must wait for tasks in the package's dependencies to complete first. For example, in the `turbo.json` below:
 
@@ -173,7 +171,7 @@ Prefixing a string in `dependsOn` with a `^` tells `turbo` that the task must wa
 
 `turbo` starts at the "bottom" of the package graph and recursively visits each package until it finds a package with no internal dependencies. It will then run the `build` task at the end of the dependency chain first, working its way back to the "top" until all `build` tasks are completed in order.
 
-#### Same package relationships
+#### Same Package Relationships
 
 Task names without the `^` prefix describe a task that depends on a different task within the same package. For example, in the `turbo.json` below:
 
@@ -189,7 +187,7 @@ Task names without the `^` prefix describe a task that depends on a different ta
 
 The `test` task will only run after the `lint` and `build` tasks have completed **in the same package**.
 
-#### Arbitrary task relationships
+#### Arbitrary Task Relationships
 
 Specify a task dependency between specific package tasks.
 
@@ -205,18 +203,35 @@ Specify a task dependency between specific package tasks.
 
 In this `turbo.json`, the `web#lint` task will wait for the `utils#build` task to complete.
 
-### `env`
+### Environment Variables [#env]
 
 The list of environment variables a task depends on.
+Any change to these environment variables will cause the task to miss cache.
 
 ```jsonc title="./turbo.json"
 {
   "tasks": {
     "build": {
-      "env": ["DATABASE_URL"] // Impacts hash of all build tasks
+      "env": ["DATABASE_URL"]
     },
     "web#build": {
-      "env": ["API_SERVICE_KEY"] // Impacts hash of web's build task
+      "env": ["API_SERVICE_KEY"]
+    }
+  }
+}
+```
+
+#### Pass Through Variables [#passThroughEnv]
+
+Similar to `env` but won't impact the hash of the task.
+Changes to these environment variables will **not** cause the task to miss cache.
+
+```jsonc title="./turbo.json"
+{
+  "tasks": {
+    "build": {
+      // Values will available within `build` scripts
+      "passThroughEnv": ["AWS_SECRET_KEY", "GITHUB_TOKEN"]
     }
   }
 }
@@ -273,28 +288,7 @@ A leading `!` means that the entire pattern will be negated. For instance, the `
 | `"\\!FOO"` | Matches a single environment variable named `!FOO`.                            |
 | `"FOO!"`   | Matches a single environment variable named `FOO!`.                            |
 
-### `passThroughEnv`
-
-An allowlist of environment variables that should be made available to this task's runtime, even when in [Strict Environment Mode](/repo/docs/crafting-your-repository/using-environment-variables#strict-mode).
-
-```jsonc title="./turbo.json"
-{
-  "tasks": {
-    "build": {
-      // Values will available within `build` scripts
-      "passThroughEnv": ["AWS_SECRET_KEY", "GITHUB_TOKEN"]
-    }
-  }
-}
-```
-
-<Callout type="warn">
-  Values provided in `passThroughEnv` do not contribute to the cache key for the
-  task. If you'd like changes to these variables to cause cache misses, you will
-  need to include them in [`env`](#env) or [`globalEnv`](#globalenv).
-</Callout>
-
-### `outputs`
+### Outputs
 
 A list of file glob patterns relative to the package's `package.json` to cache when the task is successfully completed.
 
@@ -311,7 +305,7 @@ Omitting this key or passing an empty array tells `turbo` to cache nothing (exce
 }
 ```
 
-### `cache`
+### Cache
 
 Default: `true`
 
@@ -331,7 +325,7 @@ Defines if task outputs should be cached. Setting `cache` to false is useful for
 }
 ```
 
-### `inputs`
+### Inputs
 
 Default: `[]`, all files in the package that are checked into source control
 
@@ -355,7 +349,7 @@ Visit the [file glob specification](/repo/docs/reference/globs) for more informa
   desired or use `$TURBO_DEFAULT$` to build off of the default behavior.
 </Callout>
 
-#### `$TURBO_DEFAULT$`
+#### Inherit Default Behavior
 
 Because specifying an `inputs` key immediately opts out of the default behavior, you may use
 the special string `$TURBO_DEFAULT$` within the `inputs` array to restore `turbo`'s default behavior. This allows you to tweak the default behavior for more granularity.
@@ -371,7 +365,7 @@ the special string `$TURBO_DEFAULT$` within the `inputs` array to restore `turbo
 }
 ```
 
-### `outputLogs`
+### Customise Output Logs [#outputLogs]
 
 Default: `full`
 
@@ -395,7 +389,7 @@ Set output logging verbosity. Can be overridden by the [`--output-logs`](/repo/d
 }
 ```
 
-### `persistent`
+### Persistent
 
 Default: `false`
 
@@ -417,7 +411,7 @@ This option is most useful for development servers or other "watch" tasks.
 
 Tasks marked with `persistent` are also `interactive` by default.
 
-### `interactive`
+### Interactive
 
 Default: `false` (Defaults to `true` for tasks marked as `persistent`)
 
