@@ -10,7 +10,7 @@ use miette::{Diagnostic, NamedSource, SourceSpan};
 use serde::Deserialize;
 use struct_iterable::Iterable;
 use thiserror::Error;
-use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath};
+use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath, RelativeUnixPath};
 use turborepo_auth::{TURBO_TOKEN_DIR, TURBO_TOKEN_FILE, VERCEL_TOKEN_DIR, VERCEL_TOKEN_FILE};
 use turborepo_dirs::{config_dir, vercel_config_dir};
 use turborepo_errors::TURBO_SITE;
@@ -345,6 +345,12 @@ impl ResolvedConfigurationOptions for RawTurboJson {
         } else {
             ConfigurationOptions::default()
         };
+
+        let cache_dir = self.cache_dir.map(|cache_dir| {
+            let rup = RelativeUnixPath::new(cache_dir.to_string()).unwrap();
+            Utf8PathBuf::from(rup.to_string())
+        });
+
         // Don't allow token to be set for shared config.
         opts.token = None;
         opts.spaces_id = self
@@ -355,10 +361,7 @@ impl ResolvedConfigurationOptions for RawTurboJson {
         opts.allow_no_package_manager = self.allow_no_package_manager;
         opts.daemon = self.daemon.map(|daemon| *daemon.as_inner());
         opts.env_mode = self.env_mode;
-        opts.cache_dir = self
-            .cache_dir
-            .clone()
-            .map(|cache_dir| Utf8PathBuf::from(cache_dir.to_string()));
+        opts.cache_dir = cache_dir;
         Ok(opts)
     }
 }
