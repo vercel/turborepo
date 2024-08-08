@@ -322,7 +322,8 @@ pub enum Error {
     Globwalk(#[from] globwalk::GlobError),
     #[error(transparent)]
     Lockfile(#[from] turborepo_lockfiles::Error),
-
+    #[error("lockfile not found at {0}")]
+    LockfileMissing(AbsoluteSystemPathBuf),
     #[error("discovering workspace: {0}")]
     WorkspaceDiscovery(#[from] discovery::Error),
     #[error("missing packageManager field in package.json")]
@@ -577,7 +578,9 @@ impl PackageManager {
                     .output()?
                     .stdout
             }
-            _ => lockfile_path.read()?,
+            _ => lockfile_path
+                .read()
+                .map_err(|_| Error::LockfileMissing(lockfile_path.clone()))?,
         };
         self.parse_lockfile(root_package_json, &contents)
     }
