@@ -15,7 +15,7 @@ pub async fn logout<T: TokenClient>(options: &LogoutOptions<T>) -> Result<(), Er
         return Err(err);
     }
 
-    cprintln!(options.ui, GREY, ">>> Logged out");
+    cprintln!(options.color_config, GREY, ">>> Logged out");
     Ok(())
 }
 
@@ -171,7 +171,7 @@ mod tests {
             .expect("could not create file");
 
         let logout_options = LogoutOptions {
-            ui: ColorConfig::new(false),
+            color_config: ColorConfig::new(false),
             api_client: MockApiClient {
                 succeed_delete_request: true,
             },
@@ -199,7 +199,7 @@ mod tests {
         };
 
         let options = LogoutOptions {
-            ui: ColorConfig::new(false),
+            color_config: ColorConfig::new(false),
             api_client,
             path: Some(path.clone()),
             invalidate: true,

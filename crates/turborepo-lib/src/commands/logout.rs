@@ -9,7 +9,7 @@ pub async fn logout(
     _telemetry: CommandEventBuilder,
 ) -> Result<(), Error> {
     auth_logout(&LogoutOptions {
-        ui: base.color_config,
+        color_config: base.color_config,
         api_client: base.api_client()?,
         invalidate,
     })

@@ -226,8 +226,8 @@ impl<C: telemetry::TelemetryClient + Clone + Send + Sync + 'static> Worker<C> {
                     .unwrap_or("Error serializing event".to_string());
                 println!(
                     "\n{}\n{}\n",
-                    color!(self.ui, BOLD, "{}", "[telemetry event]"),
-                    color!(self.ui, GREY, "{}", pretty_event)
+                    color!(self.color_config, BOLD, "{}", "[telemetry event]"),
+                    color!(self.color_config, GREY, "{}", pretty_event)
                 );
             }
         }
