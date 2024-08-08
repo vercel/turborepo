@@ -10,6 +10,9 @@ Edit a file that affects `my-app`
 
 Validate that we only run `my-app#build` with change not committed
   $ ${TURBO} run build --affected --log-order grouped
+  \xe2\x80\xa2 Packages in scope: my-app (esc)
+  \xe2\x80\xa2 Running build in 1 packages (esc)
+  \xe2\x80\xa2 Remote caching disabled (esc)
   my-app:build: cache miss, executing 97b34acb6e848096
   my-app:build: 
   my-app:build: > build
@@ -35,6 +38,9 @@ Commit the change
 
 Validate that we only run `my-app#build` with change committed
   $ ${TURBO} run build --affected --log-order grouped
+  \xe2\x80\xa2 Packages in scope: my-app (esc)
+  \xe2\x80\xa2 Running build in 1 packages (esc)
+  \xe2\x80\xa2 Remote caching disabled (esc)
   my-app:build: cache hit, replaying logs 97b34acb6e848096
   my-app:build: 
   my-app:build: > build
@@ -56,6 +62,9 @@ Do the same thing with the `ls` command
 
 Override the SCM base to be HEAD, so nothing runs
   $ TURBO_SCM_BASE="HEAD" ${TURBO} run build --affected --log-order grouped
+  \xe2\x80\xa2 Packages in scope:  (esc)
+  \xe2\x80\xa2 Running build in 0 packages (esc)
+  \xe2\x80\xa2 Remote caching disabled (esc)
   
   No tasks were executed as part of this run.
   
@@ -73,6 +82,9 @@ Do the same thing with the `ls` command
 
 Override the SCM head to be main, so nothing runs
   $ TURBO_SCM_HEAD="main" ${TURBO} run build --affected --log-order grouped
+  \xe2\x80\xa2 Packages in scope:  (esc)
+  \xe2\x80\xa2 Running build in 0 packages (esc)
+  \xe2\x80\xa2 Remote caching disabled (esc)
   
   No tasks were executed as part of this run.
   
@@ -98,6 +110,9 @@ Now add a commit to `main` so the merge base is different from `main`
 Run the build and expect only `my-app` to be affected, since between
 `git merge-base main my-branch` and `my-branch` that is the only changed package.
   $ ${TURBO} run build --affected --log-order grouped
+  \xe2\x80\xa2 Packages in scope: my-app (esc)
+  \xe2\x80\xa2 Running build in 1 packages (esc)
+  \xe2\x80\xa2 Remote caching disabled (esc)
   my-app:build: cache hit, replaying logs 97b34acb6e848096
   my-app:build: 
   my-app:build: > build
@@ -127,6 +142,9 @@ Now try running `--affected` again, we should run all tasks
   $ ${TURBO} run build --affected --log-order grouped
    WARNING  unable to detect git range, assuming all files have changed: git error: fatal: main...HEAD: no merge base
   
+  \xe2\x80\xa2 Packages in scope: //, another, my-app, util (esc)
+  \xe2\x80\xa2 Running build in 4 packages (esc)
+  \xe2\x80\xa2 Remote caching disabled (esc)
   my-app:build: cache hit, replaying logs 97b34acb6e848096
   my-app:build: 
   my-app:build: > build
@@ -149,10 +167,10 @@ Do the same thing with the `ls` command
    WARNING  ls command is experimental and may change in the future
    WARNING  unable to detect git range, assuming all files have changed: git error: fatal: main...HEAD: no merge base
   
-  4 packages
+  3 packages
   
-    another packages/another
-    my-app apps/my-app
     util packages/util
+    my-app apps/my-app
+    another packages/another
 
 

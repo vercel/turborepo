@@ -84,6 +84,9 @@ impl<'a> RepositoryDetails<'a> {
                 if !filtered_pkgs.contains(package_name) {
                     return None;
                 }
+                if matches!(package_name, PackageName::Root) {
+                    return None;
+                }
 
                 Some((package_name, package_info.package_path()))
             })
@@ -109,9 +112,6 @@ impl<'a> RepositoryDetails<'a> {
         }
 
         for (package_name, entry) in &self.packages {
-            if matches!(package_name, PackageName::Root) {
-                continue;
-            }
             println!("  {} {}", package_name, GREY.apply_to(entry));
         }
 
