@@ -162,6 +162,14 @@ pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
     TurboJsonParseError(#[from] turbo_json::parser::Error),
+    #[error("found absolute path in `cacheDir`")]
+    #[diagnostic(help("if absolute paths are required, use `--cache-dir` or `TURBO_CACHE_DIR`"))]
+    AbsoluteCacheDir {
+        #[label("make `cacheDir` value a relative unix path")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource,
+    },
 }
 
 macro_rules! create_builder {
@@ -346,11 +354,19 @@ impl ResolvedConfigurationOptions for RawTurboJson {
             ConfigurationOptions::default()
         };
 
-        let cache_dir = self.cache_dir.and_then(|cache_dir| {
-            RelativeUnixPath::new(cache_dir.to_string())
-                .map(|relative_path| Utf8PathBuf::from(relative_path.to_string()))
-                .ok()
-        });
+        let cache_dir = if let Some(cache_dir) = self.cache_dir {
+            let cache_dir_str: &str = &cache_dir;
+            let cache_dir_unix = RelativeUnixPath::new(cache_dir_str).map_err(|_| {
+                let (span, text) = cache_dir.span_and_text("turbo.json");
+                Error::AbsoluteCacheDir { span, text }
+            })?;
+            // Convert the relative unix path to an anchored system path
+            // For unix/macos this is a no-op
+            let cache_dir_system = cache_dir_unix.to_anchored_system_path_buf();
+            Some(Utf8PathBuf::from(cache_dir_system.to_string()))
+        } else {
+            None
+        };
 
         // Don't allow token to be set for shared config.
         opts.token = None;
