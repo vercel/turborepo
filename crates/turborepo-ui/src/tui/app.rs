@@ -619,15 +619,10 @@ fn update(
             app.copy_selection();
         }
         Event::RestartTasks { tasks } => {
-<<<<<<< HEAD
             app.restart_tasks(tasks);
         }
         Event::Resize { rows, cols } => {
             app.resize(rows, cols);
-||||||| parent of 90f8a5566b (fix(watch): display which tasks will be rerun (#8960))
-=======
-            app.update_tasks(tasks);
->>>>>>> 90f8a5566b (fix(watch): display which tasks will be rerun (#8960))
         }
     }
     Ok(None)
@@ -933,7 +928,6 @@ mod test {
             "selected b"
         );
     }
-<<<<<<< HEAD
 
     #[test]
     fn test_resize() {
@@ -992,7 +986,4 @@ mod test {
 
         app.start_task("d", OutputLogs::Full).unwrap();
     }
-||||||| parent of 90f8a5566b (fix(watch): display which tasks will be rerun (#8960))
-=======
->>>>>>> 90f8a5566b (fix(watch): display which tasks will be rerun (#8960))
 }

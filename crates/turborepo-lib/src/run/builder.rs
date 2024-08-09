@@ -7,7 +7,7 @@ use std::{
 
 use chrono::Local;
 use tracing::debug;
-use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath};
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath};
 use turborepo_analytics::{start_analytics, AnalyticsHandle, AnalyticsSender};
 use turborepo_api_client::{APIAuth, APIClient};
 use turborepo_cache::AsyncCache;
@@ -128,6 +128,39 @@ impl RunBuilder {
     pub fn with_analytics_sender(mut self, analytics_sender: Option<AnalyticsSender>) -> Self {
         self.analytics_sender = analytics_sender;
         self
+    }
+
+    pub fn calculate_filtered_packages(
+        repo_root: &AbsoluteSystemPath,
+        opts: &Opts,
+        pkg_dep_graph: &PackageGraph,
+        scm: &SCM,
+        root_turbo_json: &TurboJson,
+    ) -> Result<HashSet<PackageName>, Error> {
+        let (mut filtered_pkgs, is_all_packages) = scope::resolve_packages(
+            &opts.scope_opts,
+            &repo_root,
+            &pkg_dep_graph,
+            &scm,
+            &root_turbo_json,
+        )?;
+
+        if is_all_packages {
+            for target in opts.run_opts.tasks.iter() {
+                let mut task_name = TaskName::from(target.as_str());
+                // If it's not a package task, we convert to a root task
+                if !task_name.is_package_task() {
+                    task_name = task_name.into_root_task()
+                }
+
+                if root_turbo_json.tasks.contains_key(&task_name) {
+                    filtered_pkgs.insert(PackageName::Root);
+                    break;
+                }
+            }
+        };
+
+        Ok(filtered_pkgs)
     }
 
     // Starts analytics and returns handle. This is not included in the main `build`
@@ -334,32 +367,13 @@ impl RunBuilder {
 
         pkg_dep_graph.validate()?;
 
-        let filtered_pkgs = {
-            let (mut filtered_pkgs, is_all_packages) = scope::resolve_packages(
-                &self.opts.scope_opts,
-                &self.repo_root,
-                &pkg_dep_graph,
-                &scm,
-                &root_turbo_json,
-            )?;
-
-            if is_all_packages {
-                for target in self.opts.run_opts.tasks.iter() {
-                    let mut task_name = TaskName::from(target.as_str());
-                    // If it's not a package task, we convert to a root task
-                    if !task_name.is_package_task() {
-                        task_name = task_name.into_root_task()
-                    }
-
-                    if root_turbo_json.tasks.contains_key(&task_name) {
-                        filtered_pkgs.insert(PackageName::Root);
-                        break;
-                    }
-                }
-            };
-
-            filtered_pkgs
-        };
+        let filtered_pkgs = Self::calculate_filtered_packages(
+            &self.repo_root,
+            &self.opts,
+            &pkg_dep_graph,
+            &scm,
+            &root_turbo_json,
+        )?;
 
         let env_at_execution_start = EnvironmentVariableMap::infer();
         let mut engine = self.build_engine(&pkg_dep_graph, &root_turbo_json, &filtered_pkgs)?;

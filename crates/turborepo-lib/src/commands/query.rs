@@ -6,6 +6,7 @@ use turborepo_telemetry::events::command::CommandEventBuilder;
 use crate::{
     cli::Command,
     commands::{run::get_signal, CommandBase},
+    query,
     query::{Error, Query},
     run::builder::RunBuilder,
     signal::SignalHandler,
@@ -53,7 +54,7 @@ impl QueryError {
 pub async fn run(
     mut base: CommandBase,
     telemetry: CommandEventBuilder,
-    query: String,
+    query: Option<String>,
 ) -> Result<i32, Error> {
     let signal = get_signal()?;
     let handler = SignalHandler::new(signal);
@@ -67,16 +68,20 @@ pub async fn run(
     let run_builder = RunBuilder::new(base)?;
     let run = run_builder.build(&handler, telemetry).await?;
 
-    let schema = Schema::new(Query::new(run), EmptyMutation, EmptySubscription);
+    if let Some(query) = query {
+        let schema = Schema::new(Query::new(run), EmptyMutation, EmptySubscription);
 
-    let result = schema.execute(&query).await;
-    if result.errors.is_empty() {
-        println!("{}", serde_json::to_string_pretty(&result)?);
-    } else {
-        for error in result.errors {
-            let error = QueryError::new(error, query.clone());
-            eprintln!("{:?}", Report::new(error));
+        let result = schema.execute(&query).await;
+        if result.errors.is_empty() {
+            println!("{}", serde_json::to_string_pretty(&result)?);
+        } else {
+            for error in result.errors {
+                let error = QueryError::new(error, query.clone());
+                eprintln!("{:?}", Report::new(error));
+            }
         }
+    } else {
+        query::run_server(run, handler).await?;
     }
 
     Ok(0)

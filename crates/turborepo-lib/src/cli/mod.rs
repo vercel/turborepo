@@ -589,7 +589,7 @@ pub enum Command {
         execution_args: Box<ExecutionArgs>,
     },
     Query {
-        query: String,
+        query: Option<String>,
     },
     Watch(Box<ExecutionArgs>),
     /// Unlink the current directory from your Vercel organization and disable
@@ -1309,7 +1309,7 @@ pub async fn run(
             let query = query.clone();
             let event = CommandEventBuilder::new("query").with_parent(&root_telemetry);
             event.track_call();
-            let base = CommandBase::new(cli_args, repo_root, version, ui);
+            let base = CommandBase::new(cli_args, repo_root, version, color_config);
 
             let query = query::run(base, event, query).await?;
 

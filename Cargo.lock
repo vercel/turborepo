@@ -479,11 +479,7 @@ dependencies = [
  "pin-project-lite",
  "rustversion",
  "serde",
- "serde_json",
- "serde_path_to_error",
- "serde_urlencoded",
  "sync_wrapper 0.1.2",
- "tokio",
  "tower",
  "tower-layer",
  "tower-service",
@@ -576,6 +572,25 @@ dependencies = [
  "http-body 0.4.5",
  "hyper 0.14.28",
  "tokio",
+ "tower-service",
+]
+
+[[package]]
+name = "axum-server"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "56bac90848f6a9393ac03c63c640925c4b7c8ca21654de40d53f55964667c7d8"
+dependencies = [
+ "bytes",
+ "futures-util",
+ "http 1.1.0",
+ "http-body 1.0.1",
+ "http-body-util",
+ "hyper 1.4.1",
+ "hyper-util",
+ "pin-project-lite",
+ "tokio",
+ "tower",
  "tower-service",
 ]
 
@@ -2098,6 +2113,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "h2"
+version = "0.4.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "524e8ac6999421f49a846c2d4411f337e53497d8ec55d67753beffa43c5d9205"
+dependencies = [
+ "atomic-waker",
+ "bytes",
+ "fnv",
+ "futures-core",
+ "futures-sink",
+ "http 1.1.0",
+ "indexmap 2.2.6",
+ "slab",
+ "tokio",
+ "tokio-util",
+ "tracing",
+]
+
+[[package]]
 name = "handlebars"
 version = "5.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2313,7 +2347,7 @@ dependencies = [
  "futures-channel",
  "futures-core",
  "futures-util",
- "h2",
+ "h2 0.3.24",
  "http 0.2.11",
  "http-body 0.4.5",
  "httparse",
@@ -2336,6 +2370,7 @@ dependencies = [
  "bytes",
  "futures-channel",
  "futures-util",
+ "h2 0.4.6",
  "http 1.1.0",
  "http-body 1.0.1",
  "httparse",
@@ -4046,7 +4081,7 @@ dependencies = [
  "encoding_rs",
  "futures-core",
  "futures-util",
- "h2",
+ "h2 0.3.24",
  "http 0.2.11",
  "http-body 0.4.5",
  "hyper 0.14.28",
@@ -5295,7 +5330,7 @@ dependencies = [
  "axum 0.6.12",
  "base64 0.21.4",
  "bytes",
- "h2",
+ "h2 0.3.24",
  "http 0.2.11",
  "http-body 0.4.5",
  "hyper 0.14.28",
@@ -5650,8 +5685,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "axum 0.6.12",
- "axum-server",
+ "axum 0.7.5",
+ "axum-server 0.7.1",
  "chrono",
  "hostname",
  "lazy_static",
@@ -5812,7 +5847,7 @@ dependencies = [
  "async-io",
  "async-stream",
  "atty",
- "axum 0.6.12",
+ "axum 0.7.5",
  "biome_deserialize",
  "biome_deserialize_macros",
  "biome_diagnostics",
@@ -6117,8 +6152,8 @@ name = "turborepo-vercel-api-mock"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "axum 0.6.12",
- "axum-server",
+ "axum 0.7.5",
+ "axum-server 0.4.7",
  "futures-util",
  "port_scanner",
  "tempfile",
