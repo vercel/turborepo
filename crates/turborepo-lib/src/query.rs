@@ -3,6 +3,7 @@ use std::{io, sync::Arc};
 use async_graphql::{http::GraphiQLSource, *};
 use async_graphql_axum::GraphQL;
 use axum::{response, response::IntoResponse, routing::get, Router};
+use itertools::Itertools;
 use miette::Diagnostic;
 use thiserror::Error;
 use tokio::{net::TcpListener, select};
@@ -258,6 +259,7 @@ impl Query {
             run: self.run.clone(),
             name: package,
         })
+        .sorted_by(|a, b| a.name.cmp(&b.name))
         .collect())
     }
     /// Gets a single package by name
@@ -280,6 +282,7 @@ impl Query {
                     run: self.run.clone(),
                     name: name.clone(),
                 })
+                .sorted_by(|a, b| a.name.cmp(&b.name))
                 .collect());
         };
 
@@ -292,6 +295,7 @@ impl Query {
                 name: name.clone(),
             })
             .filter(|pkg| filter.check(pkg))
+            .sorted_by(|a, b| a.name.cmp(&b.name))
             .collect())
     }
 }
