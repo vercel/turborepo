@@ -280,7 +280,7 @@ You can also run scripts in the `package.json` in the Workspace root using `turb
 ```json title="./package.json"
 {
   "scripts": {
-    "lint": "turbo run lint",
+    "lint": "turbo run lint lint:root",
     "lint:root": "eslint ." // [!code highlight]
   }
 }
