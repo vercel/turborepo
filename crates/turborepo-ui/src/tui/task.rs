@@ -1,5 +1,5 @@
 #![allow(dead_code)]
-use std::time::Instant;
+use std::{collections::HashSet, mem, time::Instant};
 
 use super::event::TaskResult;
 
@@ -73,6 +73,13 @@ impl Task<Running> {
     pub fn start(&self) -> Instant {
         self.state.start
     }
+
+    pub fn restart(self) -> Task<Planned> {
+        Task {
+            name: self.name,
+            state: Planned,
+        }
+    }
 }
 
 impl Task<Finished> {
@@ -86,6 +93,13 @@ impl Task<Finished> {
 
     pub fn result(&self) -> TaskResult {
         self.state.result
+    }
+
+    pub fn restart(self) -> Task<Planned> {
+        Task {
+            name: self.name,
+            state: Planned,
+        }
     }
 }
 
@@ -137,5 +151,26 @@ impl TasksByStatus {
             .chain(errors.into_iter().map(|task| task.name()))
             .map(|task| task.to_string())
             .collect()
+    }
+
+    pub fn restart_tasks<'a>(&mut self, tasks: impl Iterator<Item = &'a str>) {
+        let tasks_to_restart = tasks.collect::<HashSet<_>>();
+
+        let (restarted_running, keep_running): (Vec<_>, Vec<_>) = mem::take(&mut self.running)
+            .into_iter()
+            .partition(|task| tasks_to_restart.contains(task.name()));
+        self.running = keep_running;
+
+        let (restarted_finished, keep_finished): (Vec<_>, Vec<_>) = mem::take(&mut self.finished)
+            .into_iter()
+            .partition(|task| tasks_to_restart.contains(task.name()));
+        self.finished = keep_finished;
+        self.planned.extend(
+            restarted_running
+                .into_iter()
+                .map(|task| task.restart())
+                .chain(restarted_finished.into_iter().map(|task| task.restart())),
+        );
+        self.planned.sort_unstable();
     }
 }

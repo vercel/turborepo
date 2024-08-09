@@ -67,6 +67,11 @@ impl AppSender {
     pub fn update_tasks(&self, tasks: Vec<String>) -> Result<(), mpsc::SendError<Event>> {
         self.primary.send(Event::UpdateTasks { tasks })
     }
+
+    /// Restart the list of tasks displayed in the TUI
+    pub fn restart_tasks(&self, tasks: Vec<String>) -> Result<(), mpsc::SendError<Event>> {
+        self.primary.send(Event::RestartTasks { tasks })
+    }
 }
 
 impl AppReceiver {

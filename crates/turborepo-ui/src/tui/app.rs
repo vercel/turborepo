@@ -11,7 +11,7 @@ use ratatui::{
     widgets::TableState,
     Frame, Terminal,
 };
-use tracing::debug;
+use tracing::{debug, trace};
 
 const PANE_SIZE_RATIO: f32 = 3.0 / 4.0;
 const FRAMERATE: Duration = Duration::from_millis(3);
@@ -179,18 +179,6 @@ impl<W> App<W> {
             self.tasks_by_status.running.push(running);
 
             found_task = true;
-        } else if let Some(finished_idx) = self
-            .tasks_by_status
-            .finished
-            .iter()
-            .position(|finished| finished.name() == task)
-        {
-            let _finished = self.tasks_by_status.finished.remove(finished_idx);
-            self.tasks_by_status
-                .running
-                .push(Task::new(task.to_owned()).start());
-
-            found_task = true;
         }
 
         if !found_task {
@@ -202,18 +190,7 @@ impl<W> App<W> {
             .output_logs = Some(output_logs);
 
         // If user hasn't interacted, keep highlighting top-most task in list.
-        if !self.has_user_scrolled {
-            return Ok(());
-        }
-
-        if let Some(new_index_to_highlight) = self
-            .tasks_by_status
-            .task_names_in_displayed_order()
-            .position(|running| running == highlighted_task)
-        {
-            self.selected_task_index = new_index_to_highlight;
-            self.scroll.select(Some(new_index_to_highlight));
-        }
+        self.select_task(&highlighted_task)?;
 
         Ok(())
     }
@@ -235,11 +212,7 @@ impl<W> App<W> {
             .running
             .iter()
             .position(|running| running.name() == task)
-            .ok_or_else(|| {
-                debug!("could not find '{task}' to finish");
-                println!("{:#?}", highlighted_task);
-                Error::TaskNotFound { name: task.into() }
-            })?;
+            .ok_or_else(|| Error::TaskNotFound { name: task.into() })?;
 
         let running = self.tasks_by_status.running.remove(running_idx);
         self.tasks_by_status.finished.push(running.finish(result));
@@ -249,20 +222,8 @@ impl<W> App<W> {
             .ok_or_else(|| Error::TaskNotFound { name: task.into() })?
             .task_result = Some(result);
 
-        // If user hasn't interacted, keep highlighting top-most task in list.
-        if !self.has_user_scrolled {
-            return Ok(());
-        }
-
         // Find the highlighted task from before the list movement in the new list.
-        if let Some(new_index_to_highlight) = self
-            .tasks_by_status
-            .task_names_in_displayed_order()
-            .position(|running| running == highlighted_task.as_str())
-        {
-            self.selected_task_index = new_index_to_highlight;
-            self.scroll.select(Some(new_index_to_highlight));
-        }
+        self.select_task(&highlighted_task)?;
 
         Ok(())
     }
@@ -286,6 +247,7 @@ impl<W> App<W> {
     #[tracing::instrument(skip(self))]
     pub fn update_tasks(&mut self, tasks: Vec<String>) {
         debug!("updating task list: {tasks:?}");
+        let highlighted_task = self.active_task().to_owned();
         // Make sure all tasks have a terminal output
         for task in &tasks {
             self.tasks
@@ -303,6 +265,30 @@ impl<W> App<W> {
             running: Default::default(),
             finished: Default::default(),
         };
+
+        // Task that was selected may have been removed, go back to top if this happens
+        if self.select_task(&highlighted_task).is_err() {
+            trace!("{highlighted_task} was removed from list");
+            self.reset_scroll();
+        }
+    }
+
+    #[tracing::instrument(skip(self))]
+    pub fn restart_tasks(&mut self, tasks: Vec<String>) {
+        debug!("tasks to reset: {tasks:?}");
+        let highlighted_task = self.active_task().to_owned();
+        // Make sure all tasks have a terminal output
+        for task in &tasks {
+            self.tasks
+                .entry(task.clone())
+                .or_insert_with(|| TerminalOutput::new(self.pane_rows, self.pane_cols, None));
+        }
+
+        self.tasks_by_status
+            .restart_tasks(tasks.iter().map(|s| s.as_str()));
+
+        self.select_task(&highlighted_task)
+            .expect("should find task after restart");
     }
 
     /// Persist all task output to the after closing the TUI
@@ -361,6 +347,33 @@ impl<W> App<W> {
             return;
         };
         super::copy_to_clipboard(&text);
+    }
+
+    fn select_task(&mut self, task_name: &str) -> Result<(), Error> {
+        if !self.has_user_scrolled {
+            return Ok(());
+        }
+
+        let Some(new_index_to_highlight) = self
+            .tasks_by_status
+            .task_names_in_displayed_order()
+            .position(|task| task == task_name)
+        else {
+            return Err(Error::TaskNotFound {
+                name: task_name.to_owned(),
+            });
+        };
+        self.selected_task_index = new_index_to_highlight;
+        self.scroll.select(Some(new_index_to_highlight));
+
+        Ok(())
+    }
+
+    /// Resets scroll state
+    pub fn reset_scroll(&mut self) {
+        self.has_user_scrolled = false;
+        self.scroll.select(Some(0));
+        self.selected_task_index = 0;
     }
 }
 
@@ -579,6 +592,9 @@ fn update(
         Event::CopySelection => {
             app.copy_selection();
         }
+        Event::RestartTasks { tasks } => {
+            app.update_tasks(tasks);
+        }
     }
     Ok(None)
 }
@@ -692,6 +708,7 @@ mod test {
         );
 
         // Restart b
+        app.restart_tasks(vec!["b".to_string()]);
         app.start_task("b", OutputLogs::Full).unwrap();
         assert_eq!(
             (
@@ -703,6 +720,7 @@ mod test {
         );
 
         // Restart a
+        app.restart_tasks(vec!["a".to_string()]);
         app.start_task("a", OutputLogs::Full).unwrap();
         assert_eq!(
             (
@@ -821,5 +839,64 @@ mod test {
             Some("building")
         );
         assert!(app.tasks.get("b").unwrap().status.is_none());
+    }
+
+    #[test]
+    fn test_restarting_task_no_scroll() {
+        let mut app: App<()> = App::new(
+            100,
+            100,
+            vec!["a".to_string(), "b".to_string(), "c".to_string()],
+        );
+        assert_eq!(app.scroll.selected(), Some(0), "selected a");
+        assert_eq!(app.tasks_by_status.task_name(0), "a", "selected a");
+        app.start_task("a", OutputLogs::None).unwrap();
+        app.start_task("b", OutputLogs::None).unwrap();
+        app.start_task("c", OutputLogs::None).unwrap();
+        app.finish_task("b", TaskResult::Success).unwrap();
+        app.finish_task("c", TaskResult::Success).unwrap();
+        app.finish_task("a", TaskResult::Success).unwrap();
+
+        assert_eq!(app.scroll.selected(), Some(0), "selected b");
+        assert_eq!(app.tasks_by_status.task_name(0), "b", "selected b");
+
+        app.restart_tasks(vec!["c".to_string()]);
+
+        assert_eq!(
+            app.tasks_by_status
+                .task_name(app.scroll.selected().unwrap()),
+            "c",
+            "selected c"
+        );
+    }
+
+    #[test]
+    fn test_restarting_task() {
+        let mut app: App<()> = App::new(
+            100,
+            100,
+            vec!["a".to_string(), "b".to_string(), "c".to_string()],
+        );
+        app.next();
+        assert_eq!(app.scroll.selected(), Some(1), "selected b");
+        assert_eq!(app.tasks_by_status.task_name(1), "b", "selected b");
+        app.start_task("a", OutputLogs::None).unwrap();
+        app.start_task("b", OutputLogs::None).unwrap();
+        app.start_task("c", OutputLogs::None).unwrap();
+        app.finish_task("b", TaskResult::Success).unwrap();
+        app.finish_task("c", TaskResult::Success).unwrap();
+        app.finish_task("a", TaskResult::Success).unwrap();
+
+        assert_eq!(app.scroll.selected(), Some(0), "selected b");
+        assert_eq!(app.tasks_by_status.task_name(0), "b", "selected b");
+
+        app.restart_tasks(vec!["c".to_string()]);
+
+        assert_eq!(
+            app.tasks_by_status
+                .task_name(app.scroll.selected().unwrap()),
+            "b",
+            "selected b"
+        );
     }
 }
