@@ -375,6 +375,7 @@ impl<W> App<W> {
         self.scroll.select(Some(0));
         self.selected_task_index = 0;
     }
+<<<<<<< HEAD
 
     pub fn resize(&mut self, rows: u16, cols: u16) {
         self.size.resize(rows, cols);
@@ -384,6 +385,9 @@ impl<W> App<W> {
             term.resize(pane_rows, pane_cols);
         })
     }
+||||||| parent of 90f8a5566b (fix(watch): display which tasks will be rerun (#8960))
+=======
+>>>>>>> 90f8a5566b (fix(watch): display which tasks will be rerun (#8960))
 }
 
 impl<W: Write> App<W> {
@@ -619,10 +623,15 @@ fn update(
             app.copy_selection();
         }
         Event::RestartTasks { tasks } => {
+<<<<<<< HEAD
             app.restart_tasks(tasks);
         }
         Event::Resize { rows, cols } => {
             app.resize(rows, cols);
+||||||| parent of 90f8a5566b (fix(watch): display which tasks will be rerun (#8960))
+=======
+            app.update_tasks(tasks);
+>>>>>>> 90f8a5566b (fix(watch): display which tasks will be rerun (#8960))
         }
     }
     Ok(None)
@@ -928,6 +937,7 @@ mod test {
             "selected b"
         );
     }
+<<<<<<< HEAD
 
     #[test]
     fn test_resize() {
@@ -986,4 +996,7 @@ mod test {
 
         app.start_task("d", OutputLogs::Full).unwrap();
     }
+||||||| parent of 90f8a5566b (fix(watch): display which tasks will be rerun (#8960))
+=======
+>>>>>>> 90f8a5566b (fix(watch): display which tasks will be rerun (#8960))
 }
