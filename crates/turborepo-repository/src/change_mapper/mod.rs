@@ -140,9 +140,11 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
                 // Internal root dependency changed so global hash has changed
                 PackageMapping::Package(pkg) if root_internal_deps.contains(&pkg) => {
                     debug!(
-                        "{} changes root internal dependency: \"{}\"",
+                        "{} changes root internal dependency: \"{}\"\nshortest path from root: \
+                         {:?}",
                         file.to_string(),
-                        pkg.name
+                        pkg.name,
+                        self.pkg_graph.root_internal_dependency_explanation(&pkg),
                     );
                     return PackageChanges::All(AllPackageChangeReason::RootInternalDepChanged);
                 }
