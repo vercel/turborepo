@@ -1198,6 +1198,7 @@ pub async fn run(
             let filter = filter.clone();
             let packages = packages.clone();
             let base = CommandBase::new(cli_args, repo_root, version, color_config);
+
             ls::run(base, packages, event, filter, affected, output).await?;
 
             Ok(0)
