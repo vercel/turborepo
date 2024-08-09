@@ -346,9 +346,10 @@ impl ResolvedConfigurationOptions for RawTurboJson {
             ConfigurationOptions::default()
         };
 
-        let cache_dir = self.cache_dir.map(|cache_dir| {
-            let rup = RelativeUnixPath::new(cache_dir.to_string()).unwrap();
-            Utf8PathBuf::from(rup.to_string())
+        let cache_dir = self.cache_dir.and_then(|cache_dir| {
+            RelativeUnixPath::new(cache_dir.to_string())
+                .map(|relative_path| Utf8PathBuf::from(relative_path.to_string()))
+                .ok()
         });
 
         // Don't allow token to be set for shared config.
