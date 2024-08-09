@@ -13,7 +13,7 @@ use turborepo_cache::{http::UploadMap, AsyncCache, CacheError, CacheHitMetadata,
 use turborepo_repository::package_graph::PackageInfo;
 use turborepo_scm::SCM;
 use turborepo_telemetry::events::{task::PackageTaskEventBuilder, TrackedErrors};
-use turborepo_ui::{color, tui::event::CacheResult, ColorSelector, LogWriter, GREY, UI};
+use turborepo_ui::{color, tui::event::CacheResult, ColorConfig, ColorSelector, LogWriter, GREY};
 
 use crate::{
     cli::OutputLogsMode,
@@ -52,7 +52,7 @@ pub struct RunCache {
     repo_root: AbsoluteSystemPathBuf,
     color_selector: ColorSelector,
     daemon_client: Option<DaemonClient<DaemonConnector>>,
-    ui: UI,
+    ui: ColorConfig,
 }
 
 /// Trait used to output cache information to user
@@ -69,7 +69,7 @@ impl RunCache {
         opts: &RunCacheOpts,
         color_selector: ColorSelector,
         daemon_client: Option<DaemonClient<DaemonConnector>>,
-        ui: UI,
+        ui: ColorConfig,
         is_dry_run: bool,
     ) -> Self {
         let task_output_logs = if is_dry_run {
@@ -142,7 +142,7 @@ pub struct TaskCache {
     caching_disabled: bool,
     log_file_path: AbsoluteSystemPathBuf,
     daemon_client: Option<DaemonClient<DaemonConnector>>,
-    ui: UI,
+    ui: ColorConfig,
     task_id: TaskId<'static>,
 }
 

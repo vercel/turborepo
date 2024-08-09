@@ -263,7 +263,7 @@ impl WatchClient {
                     args,
                     self.base.repo_root.clone(),
                     get_version(),
-                    self.base.ui,
+                    self.base.color_config,
                 );
 
                 let signal_handler = self.handler.clone();
@@ -274,6 +274,13 @@ impl WatchClient {
                     .hide_prelude()
                     .build(&signal_handler, telemetry)
                     .await?;
+
+                if let Some(sender) = &self.ui_sender {
+                    let task_names = run.engine.tasks_with_command(&run.pkg_dep_graph);
+                    sender
+                        .restart_tasks(task_names)
+                        .map_err(|err| Error::UISend(err.to_string()))?;
+                }
 
                 Ok(run.run(self.ui_sender.clone(), true).await?)
             }
@@ -298,7 +305,7 @@ impl WatchClient {
                     args,
                     self.base.repo_root.clone(),
                     get_version(),
-                    self.base.ui,
+                    self.base.color_config,
                 );
 
                 // rebuild run struct

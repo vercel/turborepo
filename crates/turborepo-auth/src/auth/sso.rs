@@ -4,7 +4,7 @@ use reqwest::Url;
 use tokio::sync::OnceCell;
 use tracing::warn;
 use turborepo_api_client::{CacheClient, Client, TokenClient};
-use turborepo_ui::{start_spinner, BOLD, UI};
+use turborepo_ui::{start_spinner, ColorConfig, BOLD};
 
 use crate::{auth::extract_vercel_token, error, ui, Error, LoginOptions, Token};
 
@@ -29,7 +29,7 @@ pub async fn sso_login<'a, T: Client + TokenClient + CacheClient>(
 ) -> Result<Token, Error> {
     let LoginOptions {
         api_client,
-        ui,
+        color_config,
         login_url: login_url_configuration,
         login_server,
         sso_team,
@@ -44,12 +44,12 @@ pub async fn sso_login<'a, T: Client + TokenClient + CacheClient>(
     //
     // In the future I want to make the Token have some non-skewable information and
     // be able to get rid of this, but it works for now.
-    let valid_token_callback = |message: &str, ui: &UI| {
+    let valid_token_callback = |message: &str, color_config: &ColorConfig| {
         let message = message.to_string();
-        let ui = *ui;
+        let color_config = *color_config;
         move |user_email: &str| {
-            println!("{}", ui.apply(BOLD.apply_to(message)));
-            ui::print_cli_authorized(user_email, &ui);
+            println!("{}", color_config.apply(BOLD.apply_to(message)));
+            ui::print_cli_authorized(user_email, &color_config);
         }
     };
 
@@ -62,7 +62,7 @@ pub async fn sso_login<'a, T: Client + TokenClient + CacheClient>(
                 .is_valid_sso(
                     api_client,
                     sso_team,
-                    Some(valid_token_callback("Existing token found!", ui)),
+                    Some(valid_token_callback("Existing token found!", color_config)),
                 )
                 .await?
             {
@@ -77,7 +77,10 @@ pub async fn sso_login<'a, T: Client + TokenClient + CacheClient>(
                     .is_valid_sso(
                         api_client,
                         sso_team,
-                        Some(valid_token_callback("Existing Vercel token found!", ui)),
+                        Some(valid_token_callback(
+                            "Existing Vercel token found!",
+                            color_config,
+                        )),
                     )
                     .await?
                 {
@@ -132,7 +135,7 @@ pub async fn sso_login<'a, T: Client + TokenClient + CacheClient>(
         .await
         .map_err(Error::FailedToFetchUser)?;
 
-    ui::print_cli_authorized(&user_response.user.email, ui);
+    ui::print_cli_authorized(&user_response.user.email, color_config);
 
     Ok(Token::New(verified_user.token))
 }
@@ -379,7 +382,7 @@ mod tests {
         let port = port_scanner::request_open_port().unwrap();
         let handle = tokio::spawn(start_test_server(port));
         let url = format!("http://localhost:{port}");
-        let ui = UI::new(false);
+        let color_config = ColorConfig::new(false);
         let team = "something";
 
         let mut api_client = MockApiClient::new();
@@ -390,7 +393,7 @@ mod tests {
         };
         let mut options = LoginOptions {
             sso_team: Some(team),
-            ..LoginOptions::new(&ui, &url, &api_client, &login_server)
+            ..LoginOptions::new(&color_config, &url, &api_client, &login_server)
         };
 
         let token = sso_login(&options).await.unwrap();
