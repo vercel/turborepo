@@ -80,3 +80,27 @@ Get dependencies of `my-app`
       ]
     }
   }
+
+Write query to file
+  $ echo 'query { packages { name } }' > query.gql
+
+Run the query
+  $ ${TURBO} query query.gql
+  {
+    "data": {
+      "packages": [
+        {
+          "name": "//"
+        },
+        {
+          "name": "another"
+        },
+        {
+          "name": "my-app"
+        },
+        {
+          "name": "util"
+        }
+      ]
+    }
+  }

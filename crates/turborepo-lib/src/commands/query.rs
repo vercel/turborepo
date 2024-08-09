@@ -1,6 +1,9 @@
+use std::fs;
+
 use async_graphql::{EmptyMutation, EmptySubscription, Schema, ServerError};
 use miette::{Diagnostic, Report, SourceSpan};
 use thiserror::Error;
+use turbopath::AbsoluteSystemPathBuf;
 use turborepo_telemetry::events::command::CommandEventBuilder;
 
 use crate::{
@@ -69,6 +72,18 @@ pub async fn run(
     let run = run_builder.build(&handler, telemetry).await?;
 
     if let Some(query) = query {
+        let trimmed_query = query.trim();
+        // If the arg starts with "query" or "mutation", and ends in a bracket, it's
+        // likely a direct query If it doesn't, it's a file path, so we need to
+        // read it
+        let query = if (trimmed_query.starts_with("query") || trimmed_query.starts_with("mutation"))
+            && trimmed_query.ends_with('}')
+        {
+            query
+        } else {
+            fs::read_to_string(AbsoluteSystemPathBuf::from_unknown(run.repo_root(), query))?
+        };
+
         let schema = Schema::new(Query::new(run), EmptyMutation, EmptySubscription);
 
         let result = schema.execute(&query).await;

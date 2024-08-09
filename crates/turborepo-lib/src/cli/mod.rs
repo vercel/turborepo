@@ -588,7 +588,11 @@ pub enum Command {
         #[clap(flatten)]
         execution_args: Box<ExecutionArgs>,
     },
+    /// Query your monorepo using GraphQL. If no query is provided, spins up a
+    /// GraphQL server with GraphiQL.
+    #[clap(hide = true)]
     Query {
+        /// The query to run, either a file path or a query string
         query: Option<String>,
     },
     Watch(Box<ExecutionArgs>),

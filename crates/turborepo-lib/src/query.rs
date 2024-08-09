@@ -363,6 +363,7 @@ impl Package {
                 run: self.run.clone(),
                 name: package.as_package_name().clone(),
             })
+            .sorted_by(|a, b| a.name.cmp(&b.name))
             .collect())
     }
 
@@ -379,6 +380,7 @@ impl Package {
                 run: self.run.clone(),
                 name: package.as_package_name().clone(),
             })
+            .sorted_by(|a, b| a.name.cmp(&b.name))
             .collect())
     }
 }
