@@ -83,7 +83,7 @@ Test help flag
         --parallel
             Execute all tasks in parallel
         --cache-dir <CACHE_DIR>
-            Override the filesystem cache directory
+            Override the filesystem cache directory [env: TURBO_CACHE_DIR=]
         --concurrency <CONCURRENCY>
             Limit the concurrency of task execution. Use 1 for serial (i.e. one-at-a-time) execution
         --continue
