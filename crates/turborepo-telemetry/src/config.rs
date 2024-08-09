@@ -6,7 +6,7 @@
 /// NOTE: There is a port of this crate that is used to instrument node
 /// projects. Any changes made here should be reflected there as well.
 ///
-/// https://github.com/vercel/turbo/blob/main/packages/turbo-telemetry/src/config.ts
+/// https://github.com/vercel/turborepo/blob/main/packages/turbo-telemetry/src/config.ts
 use std::env;
 
 use chrono::{DateTime, Utc};
