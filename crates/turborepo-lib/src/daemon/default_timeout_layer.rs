@@ -85,7 +85,7 @@ mod test {
         sync::{Arc, Mutex},
     };
 
-    use axum::http::HeaderValue;
+    use reqwest::header::HeaderValue;
     use test_case::test_case;
 
     use super::*;
