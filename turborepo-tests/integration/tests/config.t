@@ -102,13 +102,13 @@ Add env var `TURBO_SCM_HEAD=my-branch`
   "my-branch"
 
 No cacheDir by default
-  $ ${TURBO} config | jq .cacheDir
-  ".turbo/cache"
+  $ ${TURBO} config | jq -r .cacheDir
+  .turbo[\\/]cache (re)
 
 Add env var: `TURBO_CACHE_DIR`
-  $ TURBO_CACHE_DIR=FifthDimension/Nebulo9 ${TURBO} config | jq .cacheDir
-  "FifthDimension/Nebulo9"
+  $ TURBO_CACHE_DIR=FifthDimension/Nebulo9 ${TURBO} config | jq -r .cacheDir
+  FifthDimension[\\/]Nebulo9 (re)
 
 Add flag: `--cache-dir`
-  $ ${TURBO} --cache-dir FifthDimension/Nebulo9 config | jq .cacheDir
-  "FifthDimension/Nebulo9"
+  $ ${TURBO} --cache-dir FifthDimension/Nebulo9 config | jq -r .cacheDir
+  FifthDimension[\\/]Nebulo9 (re)
