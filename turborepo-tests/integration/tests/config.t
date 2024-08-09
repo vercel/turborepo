@@ -106,9 +106,9 @@ No cacheDir by default
   ".turbo/cache"
 
 Add env var: `TURBO_CACHE_DIR`
-  $ TURBO_CACHE_DIR=nebulo9 ${TURBO} config | jq .cacheDir
-  "nebulo9"
+  $ TURBO_CACHE_DIR=FifthDimension/Nebulo9 ${TURBO} config | jq .cacheDir
+  "FifthDimension/Nebulo9"
 
 Add flag: `--cache-dir`
-  $ ${TURBO} --cache-dir nebulo9 config | jq .cacheDir
-  "nebulo9"
+  $ ${TURBO} --cache-dir FifthDimension/Nebulo9 config | jq .cacheDir
+  "FifthDimension/Nebulo9"
