@@ -105,10 +105,12 @@ export interface RootSchema extends BaseSchema {
   globalPassThroughEnv?: null | Array<EnvWildcard>;
 
   /**
+   * Deprecated as of Turborepo 2.0.0. Consider using `globalDependencies` instead.
+   *
+   * Documentation: https://turbo.build/repo/docs/reference/configuration#globaldependencies
+   *
    * A priority-ordered (most-significant to least-significant) array of project-anchored
    * Unix-style paths to `.env` files to include in the global hash.
-   *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#globalDotEnv
    *
    * @defaultValue null
    */
@@ -192,10 +194,12 @@ export interface Pipeline {
   passThroughEnv?: null | Array<EnvWildcard>;
 
   /**
+   * Deprecated as of Turborepo 2.0.0. Consider using `inputs` instead.
+   *
+   * Documentation: https://turbo.build/repo/docs/reference/configuration#inputs
+   *
    * A priority-ordered (most-significant to least-significant) array of workspace-anchored
    * Unix-style paths to `.env` files to include in the task hash.
-   *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#dotEnv
    *
    * @defaultValue null
    */
