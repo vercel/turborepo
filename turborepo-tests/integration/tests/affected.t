@@ -34,6 +34,15 @@ Do the same thing with the `ls` command
 
 Do the same thing with the `query` command
   $ ${TURBO} query "query { affectedPackages { name } }"
+  {
+    "data": {
+      "affectedPackages": [
+        {
+          "name": "my-app"
+        }
+      ]
+    }
+  }
 
 Commit the change
   $ git add .
