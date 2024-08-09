@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-use miette::Diagnostic;
+use miette::{Diagnostic, Report};
 use petgraph::graph::{Graph, NodeIndex};
 use tracing::{warn, Instrument};
 use turbopath::{
@@ -451,8 +451,8 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
             Err(e) => {
                 warn!(
                     "Issues occurred when constructing package graph. Turbo will function, but \
-                     some features may not be available: {}",
-                    e
+                     some features may not be available:\n {:?}",
+                    Report::new(e)
                 );
                 None
             }

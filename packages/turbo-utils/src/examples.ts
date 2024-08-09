@@ -130,7 +130,7 @@ export async function downloadAndExtractRepo(
 
 export async function downloadAndExtractExample(root: string, name: string) {
   const tempFile = await downloadTar(
-    `https://codeload.github.com/vercel/turbo/tar.gz/main`,
+    `https://codeload.github.com/vercel/turborepo/tar.gz/main`,
     `turbo-ct-example`
   );
 

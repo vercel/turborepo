@@ -213,6 +213,8 @@ pub struct ConfigurationOptions {
     pub(crate) daemon: Option<bool>,
     #[serde(rename = "envMode")]
     pub(crate) env_mode: Option<EnvMode>,
+    pub(crate) scm_base: Option<String>,
+    pub(crate) scm_head: Option<String>,
 }
 
 #[derive(Default)]
@@ -283,6 +285,14 @@ impl ConfigurationOptions {
         }
 
         self.ui.unwrap_or(UIMode::Stream)
+    }
+
+    pub fn scm_base(&self) -> &str {
+        self.scm_base.as_deref().unwrap_or("main")
+    }
+
+    pub fn scm_head(&self) -> &str {
+        self.scm_head.as_deref().unwrap_or("HEAD")
     }
 
     pub fn allow_no_package_manager(&self) -> bool {
@@ -371,6 +381,8 @@ fn get_env_var_config(
     turbo_mapping.insert(OsString::from("turbo_daemon"), "daemon");
     turbo_mapping.insert(OsString::from("turbo_env_mode"), "env_mode");
     turbo_mapping.insert(OsString::from("turbo_preflight"), "preflight");
+    turbo_mapping.insert(OsString::from("turbo_scm_base"), "scm_base");
+    turbo_mapping.insert(OsString::from("turbo_scm_head"), "scm_head");
 
     // We do not enable new config sources:
     // turbo_mapping.insert(String::from("turbo_signature"), "signature"); // new
@@ -489,6 +501,8 @@ fn get_env_var_config(
         team_slug: output_map.get("team_slug").cloned(),
         team_id: output_map.get("team_id").cloned(),
         token: output_map.get("token").cloned(),
+        scm_base: output_map.get("scm_base").cloned(),
+        scm_head: output_map.get("scm_head").cloned(),
 
         // Processed booleans
         signature,
@@ -553,6 +567,8 @@ fn get_override_env_var_config(
         team_slug: None,
         team_id: output_map.get("team_id").cloned(),
         token: output_map.get("token").cloned(),
+        scm_base: None,
+        scm_head: None,
 
         signature: None,
         preflight: None,
@@ -793,6 +809,12 @@ impl TurborepoConfigBuilder {
                     }
                     if let Some(env_mode) = current_source_config.env_mode {
                         acc.env_mode = Some(env_mode);
+                    }
+                    if let Some(scm_base) = current_source_config.scm_base {
+                        acc.scm_base = Some(scm_base);
+                    }
+                    if let Some(scm_head) = current_source_config.scm_head {
+                        acc.scm_head = Some(scm_head);
                     }
 
                     acc

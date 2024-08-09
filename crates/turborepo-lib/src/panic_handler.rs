@@ -3,7 +3,7 @@ use human_panic::report::{Method, Report};
 use crate::get_version;
 
 const OPEN_ISSUE_MESSAGE: &str =
-    "Please open an issue at https://github.com/vercel/turbo/issues/new/choose";
+    "Please open an issue at https://github.com/vercel/turborepo/issues/new/choose";
 
 pub fn panic_handler(panic_info: &std::panic::PanicInfo) {
     let cause = panic_info

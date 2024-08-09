@@ -23,7 +23,7 @@ type Config = z.infer<typeof ConfigSchema>;
  * NOTE: This package is a direct port of the telemetry config struct from the turbo-telemetry crate. Any changes
  * made here should be reflected in the turbo-telemetry crate as well.
  *
- * https://github.com/vercel/turbo/blob/main/crates/turborepo-telemetry/src/config.rs
+ * https://github.com/vercel/turborepo/blob/main/crates/turborepo-telemetry/src/config.rs
  */
 export class TelemetryConfig {
   config: Config;
