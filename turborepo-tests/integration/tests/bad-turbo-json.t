@@ -5,7 +5,9 @@ Add turbo.json with unnecessary package task syntax to a package
   $ . ${TESTDIR}/../../helpers/replace_turbo_json.sh $(pwd)/apps/my-app "package-task.json"
 
 Run build with package task in non-root turbo.json
-  $ ${TURBO} build | sed  's/\[\([^]]*\)\]/\(\1)/g'
+  $ ${TURBO} build 2> error.txt
+  [1]
+  $ sed  's/\[\([^]]*\)\]/\(\1)/g' < error.txt
     x invalid turbo json
   
   Error: unnecessary_package_task_syntax (https://turbo.build/messages/unnecessary-package-task-syntax)
@@ -32,7 +34,9 @@ Use our custom turbo config with an invalid env var
   $ . ${TESTDIR}/../../helpers/replace_turbo_json.sh $(pwd) "invalid-env-var.json"
 
 Run build with invalid env var
-  $ ${TURBO} build | sed  's/\[\([^]]*\)\]/\(\1)/g'
+  $ ${TURBO} build 2> error.txt
+  [1]
+  $ sed  's/\[\([^]]*\)\]/\(\1)/g' < error.txt
   invalid_env_prefix (https://turbo.build/messages/invalid-env-prefix)
   
     x Environment variables should not be prefixed with "$"
@@ -48,7 +52,9 @@ Run build with invalid env var
 
 
 Run in single package mode even though we have a task with package syntax
-  $ ${TURBO} build --single-package | sed  's/\[\([^]]*\)\]/\(\1)/g'
+  $ ${TURBO} build --single-package 2> error.txt
+  [1]
+  $ sed  's/\[\([^]]*\)\]/\(\1)/g' < error.txt
   package_task_in_single_package_mode (https://turbo.build/messages/package-task-in-single-package-mode)
   
     x Package tasks (<package>#<task>) are not allowed in single-package
