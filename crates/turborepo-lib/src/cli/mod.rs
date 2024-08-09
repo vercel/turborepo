@@ -665,7 +665,7 @@ fn path_non_empty(s: &str) -> Result<Utf8PathBuf, String> {
 ArgGroup::new("scope-filter-group").multiple(true).required(false),
 ])]
 pub struct ExecutionArgs {
-    /// Override the filesystem cache directory.
+    /// Override the filesystem cache directory. [env: TURBO_CACHE_DIR=]
     #[clap(long, value_parser = path_non_empty)]
     pub cache_dir: Option<Utf8PathBuf>,
     /// Limit the concurrency of task execution. Use 1 for serial (i.e.
