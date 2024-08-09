@@ -299,6 +299,9 @@ jobs:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
           node-version: "18.20.2"
 
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.3
+
       - name: Run tests
         timeout-minutes: 120
         # We explicitly unset RUSTC_WRAPPER if it is an empty string as causes build issues
