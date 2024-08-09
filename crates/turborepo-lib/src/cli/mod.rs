@@ -666,7 +666,7 @@ ArgGroup::new("scope-filter-group").multiple(true).required(false),
 ])]
 pub struct ExecutionArgs {
     /// Override the filesystem cache directory.
-    #[clap(long, value_parser = path_non_empty, env="TURBO_CACHE_DIR")]
+    #[clap(long, value_parser = path_non_empty, env = "TURBO_CACHE_DIR")]
     pub cache_dir: Option<Utf8PathBuf>,
     /// Limit the concurrency of task execution. Use 1 for serial (i.e.
     /// one-at-a-time) execution.
