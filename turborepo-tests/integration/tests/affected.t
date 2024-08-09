@@ -29,7 +29,7 @@ Do the same thing with the `ls` command
   $ ${TURBO} ls --affected
    WARNING  ls command is experimental and may change in the future
   1 package (npm)
-  
+
     my-app apps[\/\\]my-app (re)
 
 Commit the change
@@ -57,7 +57,7 @@ Do the same thing with the `ls` command
   $ ${TURBO} ls --affected
    WARNING  ls command is experimental and may change in the future
   1 package (npm)
-  
+
     my-app apps[\/\\]my-app (re)
 
 Override the SCM base to be HEAD, so nothing runs
@@ -77,7 +77,7 @@ Do the same thing with the `ls` command
   $ TURBO_SCM_BASE="HEAD" ${TURBO} ls --affected
    WARNING  ls command is experimental and may change in the future
   0 no packages (npm)
-  
+
 
 
 Override the SCM head to be main, so nothing runs
@@ -97,7 +97,7 @@ Do the same thing with the `ls` command
   $ TURBO_SCM_HEAD="main" ${TURBO} ls --affected
    WARNING  ls command is experimental and may change in the future
   0 no packages (npm)
-  
+
 
 
 Now add a commit to `main` so the merge base is different from `main`
@@ -128,7 +128,7 @@ Do the same thing with the `ls` command
   $ ${TURBO} ls --affected
    WARNING  ls command is experimental and may change in the future
   1 package (npm)
-  
+
     my-app apps[\/\\]my-app (re)
 
 Now do some magic to change the repo to be shallow
@@ -168,7 +168,7 @@ Do the same thing with the `ls` command
    WARNING  unable to detect git range, assuming all files have changed: git error: fatal: main...HEAD: no merge base
   
   3 packages (npm)
-  
+
     another packages[\/\\]another (re)
     my-app apps[\/\\]my-app (re)
     util packages[\/\\]util (re)
