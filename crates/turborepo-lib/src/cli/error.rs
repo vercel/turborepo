@@ -68,7 +68,7 @@ pub async fn print_potential_tasks(
 ) -> Result<(), Error> {
     let signal = get_signal()?;
     let handler = SignalHandler::new(signal);
-    let ui = base.ui;
+    let color_config = base.color_config;
 
     let run_builder = RunBuilder::new(base)?;
     let run = run_builder.build(&handler, telemetry).await?;
@@ -80,7 +80,7 @@ pub async fn print_potential_tasks(
         .into_iter()
         .sorted_by(|(_, a), (_, b)| b.len().cmp(&a.len()))
     {
-        let task = color!(ui, BOLD, "{}", task);
+        let task = color!(color_config, BOLD, "{}", task);
         let mut line_length = 0;
 
         let mut packages_str = String::with_capacity(MAX_CHARS_PER_TASK_LINE);
@@ -100,7 +100,7 @@ pub async fn print_potential_tasks(
             packages_str.push_str(package);
         }
 
-        let packages = color!(ui, GREY, "{}", packages_str);
+        let packages = color!(color_config, GREY, "{}", packages_str);
 
         println!("  {}\n    {}", task, packages)
     }

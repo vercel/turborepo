@@ -263,7 +263,7 @@ impl WatchClient {
                     args,
                     self.base.repo_root.clone(),
                     get_version(),
-                    self.base.ui,
+                    self.base.color_config,
                 );
 
                 let signal_handler = self.handler.clone();
@@ -298,7 +298,7 @@ impl WatchClient {
                     args,
                     self.base.repo_root.clone(),
                     get_version(),
-                    self.base.ui,
+                    self.base.color_config,
                 );
 
                 // rebuild run struct

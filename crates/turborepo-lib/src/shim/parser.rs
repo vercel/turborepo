@@ -3,7 +3,7 @@ use std::{backtrace::Backtrace, env};
 use itertools::Itertools;
 use miette::{Diagnostic, SourceSpan};
 use turbopath::AbsoluteSystemPathBuf;
-use turborepo_ui::UI;
+use turborepo_ui::ColorConfig;
 
 use super::Error;
 
@@ -225,20 +225,20 @@ impl ShimArgs {
         true
     }
 
-    pub fn ui(&self) -> UI {
+    pub fn color_config(&self) -> ColorConfig {
         if self.no_color {
-            UI::new(true)
+            ColorConfig::new(true)
         } else if self.color {
             // Do our best to enable ansi colors, but even if the terminal doesn't support
             // still emit ansi escape sequences.
             Self::supports_ansi();
-            UI::new(false)
+            ColorConfig::new(false)
         } else if Self::supports_ansi() {
             // If the terminal supports ansi colors, then we can infer if we should emit
             // colors
-            UI::infer()
+            ColorConfig::infer()
         } else {
-            UI::new(true)
+            ColorConfig::new(true)
         }
     }
 

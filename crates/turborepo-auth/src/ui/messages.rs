@@ -1,17 +1,17 @@
-use turborepo_ui::{BOLD, CYAN, UI};
+use turborepo_ui::{ColorConfig, BOLD, CYAN};
 
-pub fn print_cli_authorized(user: &str, ui: &UI) {
+pub fn print_cli_authorized(user: &str, color_config: &ColorConfig) {
     println!(
         "
 {} Turborepo CLI authorized for {}
 {}
 {}
 ",
-        ui.rainbow(">>> Success!"),
+        color_config.rainbow(">>> Success!"),
         user,
-        ui.apply(
+        color_config.apply(
             CYAN.apply_to("To connect to your Remote Cache, run the following in any turborepo:")
         ),
-        ui.apply(BOLD.apply_to("  npx turbo link"))
+        color_config.apply(BOLD.apply_to("  npx turbo link"))
     );
 }

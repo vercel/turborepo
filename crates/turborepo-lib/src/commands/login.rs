@@ -14,13 +14,18 @@ pub async fn sso_login(
 ) -> Result<(), Error> {
     telemetry.track_login_method(LoginMethod::SSO);
     let api_client: APIClient = base.api_client()?;
-    let ui = base.ui;
+    let color_config = base.color_config;
     let login_url_config = base.config()?.login_url().to_string();
     let options = LoginOptions {
         existing_token: base.config()?.token(),
         sso_team: Some(sso_team),
         force,
-        ..LoginOptions::new(&ui, &login_url_config, &api_client, &DefaultLoginServer)
+        ..LoginOptions::new(
+            &color_config,
+            &login_url_config,
+            &api_client,
+            &DefaultLoginServer,
+        )
     };
 
     let token = auth_sso_login(&options).await?;
@@ -65,12 +70,17 @@ pub async fn login(
     let mut login_telemetry = LoginTelemetry::new(&telemetry, LoginMethod::Standard);
 
     let api_client: APIClient = base.api_client()?;
-    let ui = base.ui;
+    let color_config = base.color_config;
     let login_url_config = base.config()?.login_url().to_string();
     let options = LoginOptions {
         existing_token: base.config()?.token(),
         force,
-        ..LoginOptions::new(&ui, &login_url_config, &api_client, &DefaultLoginServer)
+        ..LoginOptions::new(
+            &color_config,
+            &login_url_config,
+            &api_client,
+            &DefaultLoginServer,
+        )
     };
 
     let token = auth_login(&options).await?;

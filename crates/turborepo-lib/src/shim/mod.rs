@@ -17,7 +17,7 @@ pub use turbo_state::TurboState;
 use turbo_updater::display_update_check;
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_repository::inference::{RepoMode, RepoState};
-use turborepo_ui::UI;
+use turborepo_ui::ColorConfig;
 use which::which;
 
 use crate::{cli, get_version, spawn_child, tracing::TurboSubscriber};
@@ -72,7 +72,7 @@ fn run_correct_turbo(
     repo_state: RepoState,
     shim_args: ShimArgs,
     subscriber: &TurboSubscriber,
-    ui: UI,
+    ui: ColorConfig,
 ) -> Result<i32, Error> {
     if let Some(turbo_state) = LocalTurboState::infer(&repo_state.root) {
         try_check_for_updates(&shim_args, turbo_state.version());
@@ -282,8 +282,8 @@ fn try_check_for_updates(args: &ShimArgs, current_version: &str) {
 
 pub fn run() -> Result<i32, Error> {
     let args = ShimArgs::parse()?;
-    let ui = args.ui();
-    if ui.should_strip_ansi {
+    let color_config = args.color_config();
+    if color_config.should_strip_ansi {
         // Let's not crash just because we failed to set up the hook
         let _ = miette::set_hook(Box::new(|_| {
             Box::new(
@@ -294,7 +294,7 @@ pub fn run() -> Result<i32, Error> {
             )
         }));
     }
-    let subscriber = TurboSubscriber::new_with_verbosity(args.verbosity, &ui);
+    let subscriber = TurboSubscriber::new_with_verbosity(args.verbosity, &color_config);
 
     debug!("Global turbo version: {}", get_version());
 
@@ -302,7 +302,7 @@ pub fn run() -> Result<i32, Error> {
     // global turbo having handled the inference. We can run without any
     // concerns.
     if args.skip_infer {
-        return Ok(cli::run(None, &subscriber, ui)?);
+        return Ok(cli::run(None, &subscriber, color_config)?);
     }
 
     // If the TURBO_BINARY_PATH is set, we do inference but we do not use
@@ -311,20 +311,20 @@ pub fn run() -> Result<i32, Error> {
     if is_turbo_binary_path_set() {
         let repo_state = RepoState::infer(&args.cwd)?;
         debug!("Repository Root: {}", repo_state.root);
-        return Ok(cli::run(Some(repo_state), &subscriber, ui)?);
+        return Ok(cli::run(Some(repo_state), &subscriber, color_config)?);
     }
 
     match RepoState::infer(&args.cwd) {
         Ok(repo_state) => {
             debug!("Repository Root: {}", repo_state.root);
-            run_correct_turbo(repo_state, args, &subscriber, ui)
+            run_correct_turbo(repo_state, args, &subscriber, color_config)
         }
         Err(err) => {
             // If we cannot infer, we still run global turbo. This allows for global
             // commands like login/logout/link/unlink to still work
             debug!("Repository inference failed: {}", err);
             debug!("Running command as global turbo");
-            Ok(cli::run(None, &subscriber, ui)?)
+            Ok(cli::run(None, &subscriber, color_config)?)
         }
     }
 }

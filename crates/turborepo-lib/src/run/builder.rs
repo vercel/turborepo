@@ -25,7 +25,7 @@ use turborepo_telemetry::events::{
     repo::{RepoEventBuilder, RepoType},
     EventBuilder, TrackedErrors,
 };
-use turborepo_ui::{ColorSelector, UI};
+use turborepo_ui::{ColorConfig, ColorSelector};
 #[cfg(feature = "daemon-package-discovery")]
 use {
     crate::run::package_discovery::DaemonPackageDiscovery,
@@ -54,7 +54,7 @@ pub struct RunBuilder {
     opts: Opts,
     api_auth: Option<APIAuth>,
     repo_root: AbsoluteSystemPathBuf,
-    ui: UI,
+    color_config: ColorConfig,
     version: &'static str,
     ui_mode: UIMode,
     api_client: APIClient,
@@ -85,14 +85,18 @@ impl RunBuilder {
             // - if we're on windows, we're using the UI
             (!cfg!(windows) || matches!(ui_mode, UIMode::Tui)),
         );
-        let CommandBase { repo_root, ui, .. } = base;
+        let CommandBase {
+            repo_root,
+            color_config: ui,
+            ..
+        } = base;
 
         Ok(Self {
             processes,
             opts,
             api_client,
             repo_root,
-            ui,
+            color_config: ui,
             version,
             ui_mode,
             api_auth,
@@ -373,7 +377,7 @@ impl RunBuilder {
             &self.opts.runcache_opts,
             color_selector,
             daemon.clone(),
-            self.ui,
+            self.color_config,
             self.opts.run_opts.dry_run.is_some(),
         ));
 
@@ -383,7 +387,7 @@ impl RunBuilder {
 
         Ok(Run {
             version: self.version,
-            ui: self.ui,
+            color_config: self.color_config,
             ui_mode: self.ui_mode,
             start_at,
             processes: self.processes,

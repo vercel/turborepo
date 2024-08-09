@@ -4,7 +4,7 @@ use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_api_client::{APIAuth, APIClient};
 use turborepo_auth::{TURBO_TOKEN_DIR, TURBO_TOKEN_FILE};
 use turborepo_dirs::config_dir;
-use turborepo_ui::UI;
+use turborepo_ui::ColorConfig;
 
 use crate::{
     cli::Command,
@@ -30,7 +30,7 @@ pub(crate) mod unlink;
 #[derive(Debug, Clone)]
 pub struct CommandBase {
     pub repo_root: AbsoluteSystemPathBuf,
-    pub ui: UI,
+    pub color_config: ColorConfig,
     #[cfg(test)]
     pub global_config_path: Option<AbsoluteSystemPathBuf>,
     config: OnceCell<ConfigurationOptions>,
@@ -43,11 +43,11 @@ impl CommandBase {
         args: Args,
         repo_root: AbsoluteSystemPathBuf,
         version: &'static str,
-        ui: UI,
+        color_config: ColorConfig,
     ) -> Self {
         Self {
             repo_root,
-            ui,
+            color_config,
             args,
             #[cfg(test)]
             global_config_path: None,

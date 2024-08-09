@@ -109,8 +109,8 @@ pub async fn prune(
 
     println!(
         "Generating pruned monorepo for {} in {}",
-        base.ui.apply(BOLD.apply_to(scope.join(", "))),
-        base.ui.apply(BOLD.apply_to(&prune.out_directory)),
+        base.color_config.apply(BOLD.apply_to(scope.join(", "))),
+        base.color_config.apply(BOLD.apply_to(&prune.out_directory)),
     );
 
     if let Some(workspace_config_path) = prune
