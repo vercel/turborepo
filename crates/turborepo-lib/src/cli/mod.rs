@@ -494,7 +494,7 @@ pub enum Command {
     Config,
     /// EXPERIMENTAL: List packages in your monorepo.
     Ls {
-        /// Run only tasks that are affected by changes between
+        /// Show only packages that are affected by changes between
         /// the current branch and `main`
         #[clap(long, group = "scope-filter-group")]
         affected: bool,
