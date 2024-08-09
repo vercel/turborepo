@@ -30,7 +30,7 @@ Do the same thing with the `ls` command
    WARNING  ls command is experimental and may change in the future
   1 package
   
-    my-app apps/my-app
+    my-app apps[\/\\]my-app (re)
 
 Commit the change
   $ git add .
@@ -58,7 +58,7 @@ Do the same thing with the `ls` command
    WARNING  ls command is experimental and may change in the future
   1 package
   
-    my-app apps/my-app
+    my-app apps[\/\\]my-app (re)
 
 Override the SCM base to be HEAD, so nothing runs
   $ TURBO_SCM_BASE="HEAD" ${TURBO} run build --affected --log-order grouped
@@ -129,7 +129,7 @@ Do the same thing with the `ls` command
    WARNING  ls command is experimental and may change in the future
   1 package
   
-    my-app apps/my-app
+    my-app apps[\/\\]my-app (re)
 
 Now do some magic to change the repo to be shallow
   $ SHALLOW=$(git rev-parse --show-toplevel)/.git/shallow
@@ -169,8 +169,8 @@ Do the same thing with the `ls` command
   
   3 packages
   
-    util packages/util
-    my-app apps/my-app
-    another packages/another
+    another packages[\/\\]another (re)
+    my-app apps[\/\\]my-app (re)
+    util packages[\/\\]util (re)
 
 
