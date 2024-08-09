@@ -42,6 +42,7 @@ pub async fn run(
     packages: Vec<String>,
     telemetry: CommandEventBuilder,
     filter: Vec<String>,
+    affected: bool,
 ) -> Result<(), cli::Error> {
     let signal = get_signal()?;
     let handler = SignalHandler::new(signal);
@@ -51,6 +52,7 @@ pub async fn run(
         run_args: Box::default(),
         execution_args: Box::new(ExecutionArgs {
             filter,
+            affected,
             ..Default::default()
         }),
     });
@@ -82,6 +84,9 @@ impl<'a> RepositoryDetails<'a> {
                 if !filtered_pkgs.contains(package_name) {
                     return None;
                 }
+                if matches!(package_name, PackageName::Root) {
+                    return None;
+                }
 
                 Some((package_name, package_info.package_path()))
             })
@@ -107,9 +112,6 @@ impl<'a> RepositoryDetails<'a> {
         }
 
         for (package_name, entry) in &self.packages {
-            if matches!(package_name, PackageName::Root) {
-                continue;
-            }
             println!("  {} {}", package_name, GREY.apply_to(entry));
         }
 

@@ -25,6 +25,12 @@ Validate that we only run `my-app#build` with change not committed
     Time:\s*[\.0-9]+m?s  (re)
   
 
+Do the same thing with the `ls` command
+  $ ${TURBO} ls --affected
+   WARNING  ls command is experimental and may change in the future
+  1 package
+  
+    my-app apps[\/\\]my-app (re)
 
 Commit the change
   $ git add .
@@ -47,6 +53,12 @@ Validate that we only run `my-app#build` with change committed
     Time:\s*[\.0-9]+m?s >>> FULL TURBO (re)
   
 
+Do the same thing with the `ls` command
+  $ ${TURBO} ls --affected
+   WARNING  ls command is experimental and may change in the future
+  1 package
+  
+    my-app apps[\/\\]my-app (re)
 
 Override the SCM base to be HEAD, so nothing runs
   $ TURBO_SCM_BASE="HEAD" ${TURBO} run build --affected --log-order grouped
@@ -61,6 +73,13 @@ Override the SCM base to be HEAD, so nothing runs
     Time:\s*[\.0-9]+m?s  (re)
   
 
+Do the same thing with the `ls` command
+  $ TURBO_SCM_BASE="HEAD" ${TURBO} ls --affected
+   WARNING  ls command is experimental and may change in the future
+  0 packages
+  
+
+
 Override the SCM head to be main, so nothing runs
   $ TURBO_SCM_HEAD="main" ${TURBO} run build --affected --log-order grouped
   \xe2\x80\xa2 Packages in scope:  (esc)
@@ -73,6 +92,13 @@ Override the SCM head to be main, so nothing runs
   Cached:    0 cached, 0 total
     Time:\s*[\.0-9]+m?s  (re)
   
+
+Do the same thing with the `ls` command
+  $ TURBO_SCM_HEAD="main" ${TURBO} ls --affected
+   WARNING  ls command is experimental and may change in the future
+  0 packages
+  
+
 
 Now add a commit to `main` so the merge base is different from `main`
   $ git checkout main --quiet
@@ -98,7 +124,12 @@ Run the build and expect only `my-app` to be affected, since between
   Cached:    1 cached, 1 total
     Time:\s*[\.0-9]+m?s >>> FULL TURBO (re)
   
-
+Do the same thing with the `ls` command
+  $ ${TURBO} ls --affected
+   WARNING  ls command is experimental and may change in the future
+  1 package
+  
+    my-app apps[\/\\]my-app (re)
 
 Now do some magic to change the repo to be shallow
   $ SHALLOW=$(git rev-parse --show-toplevel)/.git/shallow
@@ -131,3 +162,15 @@ Now try running `--affected` again, we should run all tasks
   Cached:    1 cached, 2 total
     Time:\s*[\.0-9]+m?s  (re)
   
+Do the same thing with the `ls` command
+  $ ${TURBO} ls --affected
+   WARNING  ls command is experimental and may change in the future
+   WARNING  unable to detect git range, assuming all files have changed: git error: fatal: main...HEAD: no merge base
+  
+  3 packages
+  
+    another packages[\/\\]another (re)
+    my-app apps[\/\\]my-app (re)
+    util packages[\/\\]util (re)
+
+
