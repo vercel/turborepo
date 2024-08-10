@@ -1,6 +1,7 @@
 Setup
   $ . ${TESTDIR}/../../../helpers/setup.sh
   $ . ${TESTDIR}/setup.sh $(pwd) pnpm
+  $ export COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 
 Add new package with an external dependency
   $ mkdir -p apps/c

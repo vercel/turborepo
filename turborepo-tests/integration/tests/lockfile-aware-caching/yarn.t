@@ -1,6 +1,7 @@
 Setup
   $ . ${TESTDIR}/../../../helpers/setup.sh
   $ . ${TESTDIR}/setup.sh $(pwd) yarn
+  $ export COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 
 Populate cache
   $ ${TURBO} build --filter=a
