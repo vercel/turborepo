@@ -360,6 +360,12 @@ impl TaskCache {
             globwalk::WalkType::All,
         )?;
 
+        debug!("files_to_be_cached: {:?}", files_to_be_cached);
+        // Compare to 1 because the log file is always cached.
+        if files_to_be_cached.len() == 1 {
+            tracing::warn!("caching outputs: NOTHING TO CACHE");
+        }
+
         let mut relative_paths = files_to_be_cached
             .into_iter()
             .map(|path| {
