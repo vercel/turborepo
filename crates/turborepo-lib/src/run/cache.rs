@@ -362,7 +362,7 @@ impl TaskCache {
 
         debug!("files_to_be_cached: {:?}", files_to_be_cached);
         // Compare to 1 because the log file is always cached.
-        if files_to_be_cached.len() == 1 {
+        if files_to_be_cached.len() == 1 && !validated_inclusions.is_empty() {
             tracing::warn!("caching outputs: NOTHING TO CACHE");
         }
 
