@@ -815,6 +815,12 @@ pub struct RunArgs {
     #[clap(long)]
     pub no_cache: bool,
 
+    /// If outputs have been specified, but none exist - skip saving the (empty)
+    /// cache for the task. Enabling this can be a useful safety measure to
+    /// ensure proper outputs configuration.
+    #[clap(long, value_name = "BOOL", action = ArgAction::Set, default_value = "false", default_missing_value = "true", num_args = 0..=1)]
+    pub skip_empty_cache: bool,
+
     // clap does not have negation flags such as --daemon and --no-daemon
     // so we need to use a group to enforce that only one of them is set.
     // we set the long name as [no-]daemon with an alias of daemon such
@@ -860,6 +866,7 @@ impl Default for RunArgs {
             dry_run: None,
             graph: None,
             no_cache: false,
+            skip_empty_cache: false,
             daemon: false,
             no_daemon: false,
             profile: None,

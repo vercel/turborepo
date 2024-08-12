@@ -103,6 +103,18 @@ pub struct CacheHitMetadata {
     pub time_saved: u64,
 }
 
+#[derive(Debug, PartialEq)]
+pub enum OutputSaveResult {
+    /// Outputs saved successfully
+    Saved,
+    /// Outputs were empty, and were saved
+    SavedEmpty,
+    /// Outputs were empty, and the save was skipped
+    SkippedEmpty,
+    /// Outputs were not saved because the cache was disabled
+    Disabled,
+}
+
 #[derive(Debug, Default)]
 pub struct CacheOpts {
     pub override_dir: Option<Utf8PathBuf>,

@@ -15,6 +15,7 @@ use regex::Regex;
 use tokio::sync::{mpsc, oneshot};
 use tracing::{debug, error, Instrument, Span};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath};
+use turborepo_cache::OutputSaveResult;
 use turborepo_ci::{Vendor, VendorBehavior};
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_repository::{
@@ -1001,15 +1002,33 @@ impl ExecContext {
                     .can_cache(&self.task_hash, &self.task_id_for_display)
                     .unwrap_or(true)
                 {
-                    if let Err(e) = self.task_cache.save_outputs(task_duration, telemetry).await {
-                        error!("error caching output: {e}");
-                        return Err(e.into());
-                    } else {
-                        // If no errors, update hash tracker with expanded outputs
-                        self.hash_tracker.insert_expanded_outputs(
-                            self.task_id.clone(),
-                            self.task_cache.expanded_outputs().to_vec(),
-                        );
+                    let result = self.task_cache.save_outputs(task_duration, telemetry).await;
+                    match result {
+                        Ok(status) => {
+                            match status {
+                                OutputSaveResult::SavedEmpty => {
+                                    prefixed_ui.warn(format!(
+                                        "warning: no files were found that match the configured \
+                                         outputs - make sure \"outputs\" are correctly defined in \
+                                         your `turbo.json` for {}",
+                                        self.task_id
+                                    ));
+                                }
+                                OutputSaveResult::SkippedEmpty => {
+                                    prefixed_ui.warn("skipped saving cache - no files found");
+                                }
+                                _ => (),
+                            }
+                            // If no errors, update hash tracker with expanded outputs
+                            self.hash_tracker.insert_expanded_outputs(
+                                self.task_id.clone(),
+                                self.task_cache.expanded_outputs().to_vec(),
+                            );
+                        }
+                        Err(e) => {
+                            error!("error caching output: {e}");
+                            return Err(e.into());
+                        }
                     }
                 }
 

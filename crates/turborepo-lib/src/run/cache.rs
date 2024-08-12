@@ -9,7 +9,9 @@ use tracing::{debug, error};
 use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
 };
-use turborepo_cache::{http::UploadMap, AsyncCache, CacheError, CacheHitMetadata, CacheSource};
+use turborepo_cache::{
+    http::UploadMap, AsyncCache, CacheError, CacheHitMetadata, CacheSource, OutputSaveResult,
+};
 use turborepo_repository::package_graph::PackageInfo;
 use turborepo_scm::SCM;
 use turborepo_telemetry::events::{task::PackageTaskEventBuilder, TrackedErrors};
@@ -49,6 +51,7 @@ pub struct RunCache {
     cache: AsyncCache,
     reads_disabled: bool,
     writes_disabled: bool,
+    skip_empty_cache: bool,
     repo_root: AbsoluteSystemPathBuf,
     color_selector: ColorSelector,
     daemon_client: Option<DaemonClient<DaemonConnector>>,
@@ -82,6 +85,7 @@ impl RunCache {
             cache,
             reads_disabled: opts.skip_reads,
             writes_disabled: opts.skip_writes,
+            skip_empty_cache: opts.skip_empty_cache,
             repo_root: repo_root.to_owned(),
             color_selector,
             daemon_client,
@@ -344,9 +348,9 @@ impl TaskCache {
         &mut self,
         duration: Duration,
         telemetry: &PackageTaskEventBuilder,
-    ) -> Result<(), Error> {
+    ) -> Result<OutputSaveResult, Error> {
         if self.caching_disabled || self.run_cache.writes_disabled {
-            return Ok(());
+            return Ok(OutputSaveResult::Disabled);
         }
 
         debug!("caching outputs: outputs: {:?}", &self.repo_relative_globs);
@@ -359,6 +363,21 @@ impl TaskCache {
             &validated_exclusions,
             globwalk::WalkType::All,
         )?;
+
+        debug!("files to cache: {:?}", files_to_be_cached.len());
+        let mut status = OutputSaveResult::Saved;
+        // Compare to 1 because the log file is always cached.
+        if files_to_be_cached.len() == 1 {
+            // Were we expecting to cache more than just the log file?
+            if validated_inclusions.len() > 1 {
+                status = OutputSaveResult::SavedEmpty;
+                if self.run_cache.skip_empty_cache {
+                    return Ok(OutputSaveResult::SkippedEmpty);
+                }
+            } else {
+                debug!("caching log output only for {:?}", self.task_id);
+            }
+        }
 
         let mut relative_paths = files_to_be_cached
             .into_iter()
@@ -397,7 +416,7 @@ impl TaskCache {
 
         self.expanded_outputs = relative_paths;
 
-        Ok(())
+        Ok(status)
     }
 
     pub fn expanded_outputs(&self) -> &[AnchoredSystemPathBuf] {

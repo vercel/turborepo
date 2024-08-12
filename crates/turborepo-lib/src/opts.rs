@@ -130,6 +130,7 @@ struct OptsInputs<'a> {
 pub struct RunCacheOpts {
     pub(crate) skip_reads: bool,
     pub(crate) skip_writes: bool,
+    pub(crate) skip_empty_cache: bool,
     pub(crate) task_output_logs_override: Option<OutputLogsMode>,
 }
 
@@ -138,6 +139,7 @@ impl<'a> From<OptsInputs<'a>> for RunCacheOpts {
         RunCacheOpts {
             skip_reads: inputs.execution_args.force.flatten().is_some_and(|f| f),
             skip_writes: inputs.run_args.no_cache,
+            skip_empty_cache: inputs.run_args.skip_empty_cache,
             task_output_logs_override: inputs.execution_args.output_logs,
         }
     }
