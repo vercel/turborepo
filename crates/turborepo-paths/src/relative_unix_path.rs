@@ -4,11 +4,10 @@ use std::{
 };
 
 use camino::{Utf8Path, Utf8PathBuf};
-use serde::Serialize;
 
 use crate::{AnchoredSystemPathBuf, PathError, RelativeUnixPathBuf};
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(transparent)]
 pub struct RelativeUnixPath(str);
 
