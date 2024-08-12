@@ -70,6 +70,8 @@ Test help flag
             Generate a graph of the task execution and output to a file when a filename is specified (.svg, .png, .jpg, .pdf, .json, .html, .mermaid, .dot). Outputs dot graph to stdout when if no filename is provided
         --no-cache
             Avoid saving task results to the cache. Useful for development/watch tasks
+        --skip-empty-cache [<BOOL>]
+            If outputs have been specified, but none exist - skip saving the (empty) cache for the task. Enabling this can be a useful safety measure to ensure proper outputs configuration [default: false] [possible values: true, false]
         --[no-]daemon
             Force turbo to either use or not use the local daemon. If unset turbo will use the default detection logic
         --profile <PROFILE>
@@ -214,6 +216,12 @@ Test help flag
   
         --no-cache
             Avoid saving task results to the cache. Useful for development/watch tasks
+  
+        --skip-empty-cache [<BOOL>]
+            If outputs have been specified, but none exist - skip saving the (empty) cache for the task. Enabling this can be a useful safety measure to ensure proper outputs configuration
+            
+            [default: false]
+            [possible values: true, false]
   
         --[no-]daemon
             Force turbo to either use or not use the local daemon. If unset turbo will use the default detection logic

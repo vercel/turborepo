@@ -6,6 +6,7 @@ Run a build to get a local cache.
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
+  my-app:build: warning: no files were found that match the configured outputs - make sure "outputs" are correctly defined in your `turbo.json` for my-app#build
   
    Tasks:    1 successful, 1 total
   Cached:    0 cached, 1 total
@@ -28,6 +29,7 @@ Run again without env var to get cache miss
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
+  my-app:build: warning: no files were found that match the configured outputs - make sure "outputs" are correctly defined in your `turbo.json` for my-app#build
   
    Tasks:    1 successful, 1 total
   Cached:    0 cached, 1 total

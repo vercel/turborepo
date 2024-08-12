@@ -12,6 +12,7 @@ Setup
   my-app:build: > echo building
   my-app:build: 
   my-app:build: building
+  my-app:build: warning: no files were found that match the configured outputs - make sure "outputs" are correctly defined in your `turbo.json` for my-app#build
   
     Tasks:    1 successful, 1 total
    Cached:    0 cached, 1 total

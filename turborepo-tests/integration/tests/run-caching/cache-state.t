@@ -6,6 +6,7 @@ Run a build to get a local cache.
   \xe2\x80\xa2 Packages in scope: another, my-app, util (esc)
   \xe2\x80\xa2 Running build in 3 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
+  my-app:build: warning: no files were found that match the configured outputs - make sure "outputs" are correctly defined in your `turbo.json` for my-app#build
   
    Tasks:    2 successful, 2 total
   Cached:    0 cached, 2 total

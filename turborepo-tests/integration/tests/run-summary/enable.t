@@ -26,6 +26,7 @@ Setup
 # env var=true, missing flag: yes
   $ rm -rf .turbo/runs
   $ TURBO_RUN_SUMMARY=true ${TURBO} run build > /dev/null
+  my-app:build: warning: no files were found that match the configured outputs - make sure "outputs" are correctly defined in your `turbo.json` for my-app#build
   $ /bin/ls .turbo/runs/*.json | wc -l
   \s*1 (re)
 # env var=true, --flag=true: yes

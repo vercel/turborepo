@@ -11,6 +11,7 @@ Warm the cache
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   another:build: cache miss, executing 6a4c300cb14847b0
+  another:build: warning: no files were found that match the configured outputs - make sure "outputs" are correctly defined in your `turbo.json` for another#build
   
    Tasks:    1 successful, 1 total
   Cached:    0 cached, 1 total
@@ -38,6 +39,7 @@ All tasks should be a cache miss, even ones that don't depend on changed package
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   another:build: cache miss, executing 34787620f332fb95
+  another:build: warning: no files were found that match the configured outputs - make sure "outputs" are correctly defined in your `turbo.json` for another#build
   
    Tasks:    1 successful, 1 total
   Cached:    0 cached, 1 total

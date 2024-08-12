@@ -7,6 +7,7 @@ Run a build
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   my-app:build: cache miss, executing 2a57e19ce0b2cfd5
+  my-app:build: warning: no files were found that match the configured outputs - make sure "outputs" are correctly defined in your `turbo.json` for my-app#build
   
    Tasks:    1 successful, 1 total
   Cached:    0 cached, 1 total
@@ -19,6 +20,7 @@ Run a build
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   my-app:build: cache miss, executing 3883869b5e1dc9cf
+  my-app:build: warning: no files were found that match the configured outputs - make sure "outputs" are correctly defined in your `turbo.json` for my-app#build
   
    Tasks:    1 successful, 1 total
   Cached:    0 cached, 1 total
