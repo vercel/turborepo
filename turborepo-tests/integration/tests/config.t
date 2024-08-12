@@ -20,7 +20,7 @@ Run test run
     "envMode": "strict",
     "scmBase": "main",
     "scmHead": "HEAD",
-    "cacheDir": ".turbo[\\/]cache" (re)
+    "cacheDir": ".turbo[\\/]+cache" (re)
   }
 
 Run test run with api overloaded
