@@ -126,11 +126,7 @@ export async function downloadAndExtractRepo(
         const pathSegments = p.split(sep);
         rootPath = pathSegments.length ? pathSegments[0] : null;
       }
-      return p.startsWith(
-        `${rootPath}-${branch.replace(/\//g, "-")}${
-          filePath ? `/${filePath}/` : "/"
-        }`
-      );
+      return p.startsWith(`${rootPath}${filePath ? `/${filePath}/` : "/"}`);
     },
   });
 
