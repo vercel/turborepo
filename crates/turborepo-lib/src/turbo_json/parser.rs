@@ -105,6 +105,7 @@ impl WithMetadata for RawTurboJson {
         self.global_env.add_text(text.clone());
         self.global_pass_through_env.add_text(text.clone());
         self.tasks.add_text(text.clone());
+        self.cache_dir.add_text(text.clone());
         self.pipeline.add_text(text);
     }
 
@@ -115,6 +116,7 @@ impl WithMetadata for RawTurboJson {
         self.global_env.add_path(path.clone());
         self.global_pass_through_env.add_path(path.clone());
         self.tasks.add_path(path.clone());
+        self.cache_dir.add_path(path.clone());
         self.pipeline.add_path(path);
     }
 }

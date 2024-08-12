@@ -103,6 +103,21 @@ impl CommandBase {
                             .and_then(|args| args.env_mode)
                     }),
             )
+            .with_cache_dir(
+                self.args
+                    .command
+                    .as_ref()
+                    .and_then(|c| match c {
+                        Command::Run { execution_args, .. } => execution_args.cache_dir.clone(),
+                        _ => None,
+                    })
+                    .or_else(|| {
+                        self.args
+                            .execution_args
+                            .as_ref()
+                            .and_then(|args| args.cache_dir.clone())
+                    }),
+            )
             .build()
     }
 

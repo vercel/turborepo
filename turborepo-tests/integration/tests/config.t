@@ -19,7 +19,8 @@ Run test run
     "daemon": null,
     "envMode": "strict",
     "scmBase": "main",
-    "scmHead": "HEAD"
+    "scmHead": "HEAD",
+    "cacheDir": ".turbo[\\/]+cache" (re)
   }
 
 Run test run with api overloaded
@@ -100,3 +101,14 @@ Add env var `TURBO_SCM_HEAD=my-branch`
   $ TURBO_SCM_HEAD="my-branch" ${TURBO} config | jq .scmHead
   "my-branch"
 
+No cacheDir by default
+  $ ${TURBO} config | jq -r .cacheDir
+  .turbo[\\/]cache (re)
+
+Add env var: `TURBO_CACHE_DIR`
+  $ TURBO_CACHE_DIR=FifthDimension/Nebulo9 ${TURBO} config | jq -r .cacheDir
+  FifthDimension[\\/]Nebulo9 (re)
+
+Add flag: `--cache-dir`
+  $ ${TURBO} --cache-dir FifthDimension/Nebulo9 config | jq -r .cacheDir
+  FifthDimension[\\/]Nebulo9 (re)
