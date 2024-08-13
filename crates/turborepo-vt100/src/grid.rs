@@ -1,4 +1,6 @@
-use crate::term::BufWrite as _;
+use crate::{
+    row::Row, term::BufWrite as _, wrapped_row_group::WrappedRowGroup,
+};
 
 #[derive(Clone, Debug)]
 pub struct Grid {
@@ -93,20 +95,91 @@ impl Grid {
     }
 
     pub fn set_size(&mut self, size: Size) {
-        if size.cols != self.size.cols {
-            for row in &mut self.rows {
-                row.wrap(false);
+        match size.cols.cmp(&self.size.cols) {
+            std::cmp::Ordering::Less => {
+                // We're shrinking, rows might require wrapping
+                let default_cell = crate::Cell::new();
+                let mut overflow_buffer =
+                    Vec::with_capacity(usize::from(self.size.cols));
+                let mut current_row_index = 0;
+                while current_row_index < self.rows.len() {
+                    debug_assert!(
+                        overflow_buffer.is_empty(),
+                        "overflow should be empty at start of loop"
+                    );
+                    let row = &mut self.rows[current_row_index];
+                    if let Some(removed_cells) =
+                        row.resize(size.cols, default_cell.clone())
+                    {
+                        // We have text that needs wrapping
+                        overflow_buffer.extend(removed_cells);
+                    }
+
+                    // We have overflow to deal with
+                    while !overflow_buffer.is_empty() {
+                        let next_row_index =
+                            self.next_wrapped_row_index(current_row_index);
+                        let next_row = &mut self.rows[next_row_index];
+                        // Fit as much of the overflow into the next row as possible
+                        next_row
+                            .handle_overflow(size.cols, &mut overflow_buffer);
+
+                        if !overflow_buffer.is_empty() {
+                            // There are still overflow cells so this row is wrapped
+                            next_row.wrap(true);
+                        }
+
+                        // If the row isn't the desired size add empty cells until it is
+                        if next_row.cols() < size.cols {
+                            let _ = next_row
+                                .resize(size.cols, default_cell.clone());
+                        }
+
+                        // Update current index to point to the row we just processed
+                        current_row_index = next_row_index;
+                    }
+
+                    // Move to next row
+                    current_row_index += 1;
+                }
+                // TODO: lift this to resize scrollback as well
             }
+            std::cmp::Ordering::Greater => {
+                // we want to gather all rows that are wrapped from a single row
+                // and move cells to make use of the additional columns
+                let mut current_group = WrappedRowGroup::new(self.rows.len());
+                while current_group.start() > 0 {
+                    current_group.extend();
+                    let is_previous_row_wrapped = current_group
+                        .previous_start()
+                        .map_or(false, |index| self.rows[index].wrapped());
+                    // Previous row is not wrapped, we have the entire group and can process it
+                    if !is_previous_row_wrapped {
+                        current_group.flush(size.cols, &mut self.rows);
+                    }
+                }
+
+                // TODO: lift these changes to scrollback buffer
+            }
+            // No column changes, don't do anything
+            std::cmp::Ordering::Equal => (),
         }
 
         if self.scroll_bottom == self.size.rows - 1 {
             self.scroll_bottom = size.rows - 1;
         }
 
-        self.size = size;
-        for row in &mut self.rows {
-            row.resize(size.cols, crate::Cell::new());
+        match self.rows.len().cmp(&usize::from(size.rows)) {
+            // Need to draw on rows from scrollback or add new rows
+            std::cmp::Ordering::Less => todo!(),
+            // Too many rows are being shown, move extra rows to scrollback
+            std::cmp::Ordering::Equal => todo!(),
+            // No change in number of rows
+            std::cmp::Ordering::Greater => (),
         }
+
+        self.size = size;
+        // TODO: make sure we update scrollback instead of dropping rows
         self.rows.resize(usize::from(size.rows), self.new_row());
 
         if self.scroll_bottom >= size.rows {
@@ -119,6 +192,24 @@ impl Grid {
         self.row_clamp_top(false);
         self.row_clamp_bottom(false);
         self.col_clamp();
+    }
+
+    // Returns the next row index that belongs to this wrap group
+    // will allocate a new wrapped row if necessary
+    fn next_wrapped_row_index(&mut self, index: usize) -> usize {
+        let row = &mut self.rows[index];
+        let next_index = index + 1;
+        if row.wrapped() {
+            // Need to allocate new row
+            if next_index == self.rows.len() {
+                self.rows.push(self.new_row());
+            }
+        } else {
+            row.wrap(true);
+            let new_row = self.new_row();
+            self.rows.insert(next_index, new_row);
+        }
+        next_index
     }
 
     pub fn pos(&self) -> Pos {
@@ -695,7 +786,7 @@ impl Grid {
         for _ in 0..(count.min(size.cols - pos.col)) {
             row.remove(pos.col);
         }
-        row.resize(size.cols, crate::Cell::new());
+        let _ = row.resize(size.cols, crate::Cell::new());
     }
 
     pub fn erase_cells(&mut self, count: u16, attrs: crate::attrs::Attrs) {

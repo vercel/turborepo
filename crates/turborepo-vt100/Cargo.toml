@@ -18,6 +18,7 @@ default = ["tui-term"]
 tui-term = ["dep:tui-term", "dep:ratatui"]
 
 [dependencies]
+itertools = { workspace = true }
 itoa = "1.0.9"
 log = "0.4.19"
 ratatui = { workspace = true, optional = true }

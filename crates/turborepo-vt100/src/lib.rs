@@ -58,6 +58,7 @@ mod screen;
 mod term;
 #[cfg(feature = "tui-term")]
 mod tui_term;
+mod wrapped_row_group;
 
 pub use attrs::Color;
 pub use callbacks::Callbacks;
