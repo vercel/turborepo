@@ -107,6 +107,9 @@ pub struct PackageSnapshot {
     snapshot: PackageSnapshotV7,
 
     #[serde(skip_serializing_if = "Option::is_none")]
+    dev: Option<bool>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
     patched: Option<bool>,
 
     #[serde(flatten)]
@@ -198,6 +201,12 @@ impl PnpmLockfile {
         let pkgs = self.packages.as_ref()?;
         let pkg = pkgs.get(key)?;
         pkg.version.as_deref()
+    }
+
+    fn package_is_dev(&self, key: &str) -> Option<bool> {
+        let pkgs = self.packages.as_ref()?;
+        let pkg = pkgs.get(key)?;
+        pkg.dev.clone()
     }
 
     fn get_workspace(&self, workspace_path: &str) -> Result<&ProjectSnapshot, crate::Error> {
@@ -374,9 +383,16 @@ impl crate::Lockfile for PnpmLockfile {
         // Check if version is a key
         if self.has_package(version) {
             let extracted_version = self.extract_version(version)?;
+            let is_dev = self
+                .packages
+                .as_ref()
+                .map_or(None, |map| map.get(version))
+                .and_then(|entry| entry.dev)
+                .unwrap_or(false);
             return Ok(Some(crate::Package {
                 key: version.into(),
                 version: extracted_version.into(),
+                is_dev: is_dev,
             }));
         }
 
@@ -391,7 +407,12 @@ impl crate::Lockfile for PnpmLockfile {
                 .package_version(&key)
                 .unwrap_or(resolved_version)
                 .to_owned();
-            Ok(Some(crate::Package { key, version }))
+            let is_dev: bool = self.package_is_dev(&key).unwrap_or(false).to_owned();
+            Ok(Some(crate::Package {
+                key,
+                version,
+                is_dev,
+            }))
         } else if self.has_package(resolved_version) {
             let version = self.package_version(resolved_version).map_or_else(
                 || {
@@ -400,9 +421,14 @@ impl crate::Lockfile for PnpmLockfile {
                 },
                 |version| Ok(version.to_string()),
             )?;
+            let is_dev = self
+                .package_is_dev(resolved_version)
+                .unwrap_or(false)
+                .to_owned();
             Ok(Some(crate::Package {
                 key: resolved_version.to_string(),
                 version,
+                is_dev: is_dev,
             }))
         } else {
             Ok(None)
@@ -784,19 +810,33 @@ mod tests {
         Ok(Some(crate::Package {
             key: "github.com/peerigon/dashboard-icons/ce27ef933144e09cef3911025f3649040a8571b6".into(),
             version: "1.0.0".into(),
+            is_dev: false,
         }))
         ; "git package"
     )]
     #[test_case(
-        PNPM_ABSOLUTE,
-        "packages/a",
-        "child",
-        "/@scope/child/1.0.0",
+        PNPM7,
+        "apps/docs",
+        "@types/node",
+        "^17.0.12",
         Ok(Some(crate::Package {
-            key: "/@scope/child/1.0.0".into(),
-            version: "1.0.0".into(),
+            key: "/@types/node/17.0.45".into(),
+            version: "17.0.45".into(),
+            is_dev: true,
         }))
-        ; "absolute package"
+        ; "dev dependency pnpm7"
+    )]
+    #[test_case(
+        PNPM6,
+        ".",
+        "@pnpm/make-dedicated-lockfile",
+        "^0.3.19",
+        Ok(Some(crate::Package {
+            key: "/@pnpm/make-dedicated-lockfile/0.3.19".into(),
+            version: "0.3.19".into(),
+            is_dev: true,
+        }))
+        ; "dev dependency pnpm6"
     )]
     #[test_case(
         PNPM_ABSOLUTE_V6,
@@ -806,6 +846,7 @@ mod tests {
         Ok(Some(crate::Package {
             key: "/@scope/child@1.0.0".into(),
             version: "1.0.0".into(),
+            is_dev: false,
         }))
         ; "v6 absolute package"
     )]
@@ -817,6 +858,7 @@ mod tests {
         Ok(Some(crate::Package {
             key: "/next@13.0.4(react-dom@18.2.0)(react@18.2.0)".into(),
             version: "13.0.4(react-dom@18.2.0)(react@18.2.0)".into(),
+            is_dev: false,
         }))
         ; "v6 peer package"
     )]
@@ -828,6 +870,7 @@ mod tests {
         Ok(Some(crate::Package {
             key: "/ci-info/3.7.1".into(),
             version: "3.7.1".into(),
+            is_dev: false,
         }))
         ; "top level override"
     )]
@@ -839,6 +882,7 @@ mod tests {
         Ok(Some(crate::Package {
             key: "/hardhat-deploy-ethers/0.3.0-beta.13_yab2ug5tvye2kp6e24l5x3z7uy".into(),
             version: "0.3.0-beta.13_yab2ug5tvye2kp6e24l5x3z7uy".into(),
+            is_dev: false,
         }))
         ; "pnpm override"
     )]
@@ -850,6 +894,7 @@ mod tests {
         Ok(Some(crate::Package {
             key: "is-negative@https://codeload.github.com/kevva/is-negative/tar.gz/1d7e288222b53a0cab90a331f1865220ec29560c".into(),
             version: "2.1.0".into(),
+            is_dev: false,
         }))
         ; "v7 git"
     )]
@@ -861,6 +906,7 @@ mod tests {
         Ok(Some(crate::Package {
             key: "ajv-keywords@5.1.0(ajv@8.12.0)".into(),
             version: "5.1.0(ajv@8.12.0)".into(),
+            is_dev: false,
         }))
         ; "v7 peer"
     )]
@@ -872,6 +918,7 @@ mod tests {
         Ok(Some(crate::Package {
             key: "ajv-keywords@5.1.0(ajv@8.11.0)".into(),
             version: "5.1.0(ajv@8.11.0)".into(),
+            is_dev: false,
         }))
         ; "v7 peer 2"
     )]
@@ -883,6 +930,7 @@ mod tests {
         Ok(Some(crate::Package {
             key: "turbo@1.13.3-canary.1".into(),
             version: "1.13.3-canary.1".into(),
+            is_dev: false,
         }))
         ; "v9"
     )]
@@ -1102,7 +1150,8 @@ c:
             is_even,
             Package {
                 key: "is-even@1.0.0".into(),
-                version: "1.0.0".into()
+                version: "1.0.0".into(),
+                is_dev: false,
             }
         );
         let is_even_deps = lockfile.all_dependencies(&is_even.key).unwrap().unwrap();

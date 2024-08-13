@@ -67,6 +67,7 @@ impl Lockfile for Yarn1Lockfile {
                 return Ok(Some(crate::Package {
                     key,
                     version: entry.version.clone(),
+                    is_dev: false,
                 }));
             }
         }

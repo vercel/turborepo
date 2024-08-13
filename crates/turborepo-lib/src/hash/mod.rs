@@ -120,7 +120,9 @@ impl From<LockFilePackages> for Builder<HeapAllocator> {
 
         {
             let mut packages_builder = builder.reborrow().init_packages(packages.len() as u32);
-            for (i, turborepo_lockfiles::Package { key, version }) in packages.iter().enumerate() {
+            for (i, turborepo_lockfiles::Package { key, version, .. }) in
+                packages.iter().enumerate()
+            {
                 let mut package = packages_builder.reborrow().get(i as u32);
                 package.set_key(key);
                 package.set_version(version);
@@ -441,24 +443,30 @@ mod test {
     #[test_case(vec![Package {
         key: "key".to_string(),
         version: "version".to_string(),
+        is_dev: false,
     }], "1b266409f3ae154e" ; "non-empty")]
     #[test_case(vec![Package {
         key: "key".to_string(),
         version: "".to_string(),
+        is_dev: false,
     }], "bde280722f61644a" ; "empty version")]
     #[test_case(vec![Package {
         key: "key".to_string(),
         version: "version".to_string(),
+        is_dev: false,
     }, Package {
         key: "zey".to_string(),
         version: "version".to_string(),
+        is_dev: false,
     }], "6c0185544234b6dc" ; "multiple in-order")]
     #[test_case(vec![Package {
         key: "zey".to_string(),
         version: "version".to_string(),
+        is_dev: false,
     }, Package {
         key: "key".to_string(),
         version: "version".to_string(),
+        is_dev: false,
     }], "26a67c9beeb0d16f" ; "care about order")]
     fn lock_file_packages(vec: Vec<Package>, expected: &str) {
         let packages = LockFilePackages(vec);
@@ -470,6 +478,7 @@ mod test {
         let packages = (0..100).map(|i| Package {
             key: format!("key{}", i),
             version: format!("version{}", i),
+            is_dev: false,
         });
 
         lock_file_packages(packages.collect(), "4fd770c37194168e");

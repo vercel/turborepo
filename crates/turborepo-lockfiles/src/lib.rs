@@ -29,6 +29,7 @@ pub use yarn1::{yarn_subgraph, Yarn1Lockfile};
 pub struct Package {
     pub key: String,
     pub version: String,
+    pub is_dev: bool,
 }
 
 // This trait will only be used when migrating the Go lockfile implementations
@@ -156,6 +157,11 @@ impl Package {
     pub fn new(key: impl Into<String>, version: impl Into<String>) -> Self {
         let key = key.into();
         let version = version.into();
-        Self { key, version }
+        let is_dev: bool = false;
+        Self {
+            key,
+            version,
+            is_dev,
+        }
     }
 }
