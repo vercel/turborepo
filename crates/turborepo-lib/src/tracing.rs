@@ -99,10 +99,10 @@ impl TurboSubscriber {
             .boxed();
 
         // we set this layer to None to start with, effectively disabling it
-        let (logrotate, daemon_update) = reload::Layer::new(Option::<_>::None);
+        let (logrotate, daemon_update) = reload::Layer::new(None);
         let logrotate = logrotate.with_filter(env_filter(LevelFilter::INFO)).boxed();
 
-        let (chrome, chrome_update) = reload::Layer::new(Option::<DynamicLayer<_>>::None);
+        let (chrome, chrome_update) = reload::Layer::new(None);
 
         let registry = Registry::default()
             .with(stderr)
@@ -136,7 +136,7 @@ impl TurboSubscriber {
         let (file_writer, guard) = tracing_appender::non_blocking(appender);
         trace!("created non-blocking file writer");
 
-        let layer: DynamicLayer<StdErrSubscriber> = tracing_subscriber::fmt::layer()
+        let layer = tracing_subscriber::fmt::layer()
             .with_writer(file_writer)
             .with_ansi(false)
             .boxed();
@@ -164,7 +164,7 @@ impl TurboSubscriber {
             .trace_style(tracing_chrome::TraceStyle::Async)
             .build();
 
-        let layer: DynamicLayer<DaemonLogSubscriber> = layer.boxed();
+        let layer = layer.boxed();
 
         self.chrome_update.reload(Some(layer))?;
         self.chrome_guard
