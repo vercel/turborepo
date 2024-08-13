@@ -1,4 +1,4 @@
-use std::io::Write;
+use std::{io::Write, mem};
 
 use turborepo_vt100 as vt100;
 
@@ -8,7 +8,10 @@ use super::{
     Error,
 };
 
+const SCROLLBACK_LEN: usize = 1024;
+
 pub struct TerminalOutput<W> {
+    output: Vec<u8>,
     pub parser: vt100::Parser,
     pub stdin: Option<W>,
     pub status: Option<String>,
@@ -27,7 +30,8 @@ enum LogBehavior {
 impl<W> TerminalOutput<W> {
     pub fn new(rows: u16, cols: u16, stdin: Option<W>) -> Self {
         Self {
-            parser: vt100::Parser::new(rows, cols, 1024),
+            output: Vec::new(),
+            parser: vt100::Parser::new(rows, cols, SCROLLBACK_LEN),
             stdin,
             status: None,
             output_logs: None,
@@ -47,9 +51,19 @@ impl<W> TerminalOutput<W> {
         self.parser.screen().size()
     }
 
+    pub fn process(&mut self, bytes: &[u8]) {
+        self.parser.process(bytes);
+        self.output.extend_from_slice(bytes);
+    }
+
     pub fn resize(&mut self, rows: u16, cols: u16) {
         if self.parser.screen().size() != (rows, cols) {
-            self.parser.screen_mut().set_size(rows, cols);
+            let scrollback = self.parser.screen().scrollback();
+            let mut new_parser = vt100::Parser::new(rows, cols, SCROLLBACK_LEN);
+            new_parser.process(&self.output);
+            new_parser.screen_mut().set_scrollback(scrollback);
+            // Completely swap out the old vterm with a new correctly sized one
+            mem::swap(&mut self.parser, &mut new_parser);
         }
     }
 

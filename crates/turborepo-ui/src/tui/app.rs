@@ -400,7 +400,7 @@ impl<W: Write> App<W> {
     #[tracing::instrument(skip(self, output))]
     pub fn process_output(&mut self, task: &str, output: &[u8]) -> Result<(), Error> {
         let task_output = self.tasks.get_mut(task).unwrap();
-        task_output.parser.process(output);
+        task_output.process(output);
         Ok(())
     }
 }
