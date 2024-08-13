@@ -53,8 +53,16 @@ pub async fn run(base: CommandBase, telemetry: CommandEventBuilder) -> Result<i3
 
         if let (Some(handle), Some(sender)) = (handle, sender) {
             sender.stop();
-            if let Err(e) = handle.await.expect("render thread panicked") {
-                error!("error encountered rendering tui: {e}");
+            match handle.await {
+                Err(e) => {
+                    // We do our best to restore the terminal to the default state
+                    let _ = turborepo_ui::tui::restore_default_terminal();
+                    error!("render thread panicked: {e}");
+                }
+                Ok(Err(e)) => {
+                    error!("error encountered rendering tui: {e}");
+                }
+                Ok(Ok(())) => (),
             }
         }
 

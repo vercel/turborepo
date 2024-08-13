@@ -513,13 +513,29 @@ fn cleanup<B: Backend + io::Write>(
         terminal.backend_mut(),
         crossterm::event::DisableMouseCapture,
         crossterm::terminal::LeaveAlternateScreen,
+        crossterm::cursor::Show,
     )?;
     let tasks_started = app.tasks_by_status.tasks_started();
     app.persist_tasks(tasks_started)?;
     crossterm::terminal::disable_raw_mode()?;
-    terminal.show_cursor()?;
     // We can close the channel now that terminal is back restored to a normal state
     drop(callback);
+    Ok(())
+}
+
+/// Restores terminal to a "cooked" terminal mode.
+///
+/// Can be used by external callers if they have reason to believe the App did
+/// not shut down properly e.g. the rendering thread panicked
+pub fn restore_default_terminal() -> io::Result<()> {
+    let mut stdout = io::stdout();
+    crossterm::execute!(
+        stdout,
+        crossterm::event::DisableMouseCapture,
+        crossterm::terminal::LeaveAlternateScreen,
+        crossterm::cursor::Show,
+    )?;
+    crossterm::terminal::disable_raw_mode()?;
     Ok(())
 }
 

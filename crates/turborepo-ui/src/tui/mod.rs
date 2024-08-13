@@ -9,7 +9,7 @@ mod table;
 mod task;
 mod term_output;
 
-pub use app::{run_app, terminal_big_enough};
+pub use app::{restore_default_terminal, run_app, terminal_big_enough};
 use clipboard::copy_to_clipboard;
 use event::{Event, TaskResult};
 pub use handle::{AppReceiver, AppSender, TuiTask};
