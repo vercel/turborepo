@@ -14,10 +14,11 @@ use ratatui::{
 use tracing::{debug, trace};
 
 const FRAMERATE: Duration = Duration::from_millis(3);
+const RESIZE_DEBOUNCE_DELAY: Duration = Duration::from_millis(10);
 
 use super::{
     event::{CacheResult, OutputLogs, TaskResult},
-    input, AppReceiver, Error, Event, InputOptions, SizeInfo, TaskTable, TerminalPane,
+    input, AppReceiver, Debouncer, Error, Event, InputOptions, SizeInfo, TaskTable, TerminalPane,
 };
 use crate::tui::{
     task::{Task, TasksByStatus},
@@ -446,19 +447,32 @@ fn run_app_inner<B: Backend + std::io::Write>(
     // Render initial state to paint the screen
     terminal.draw(|f| view(app, f))?;
     let mut last_render = Instant::now();
+    let mut resize_debouncer = Debouncer::new(RESIZE_DEBOUNCE_DELAY);
     let mut callback = None;
     while let Some(event) = poll(app.input_options(), &receiver, last_render + FRAMERATE) {
-        // If we got a resize event, make sure to update ratatui backend.
-        if matches!(event, Event::Resize { .. }) {
+        let mut event = Some(event);
+        let mut resize_event = None;
+        if matches!(event, Some(Event::Resize { .. })) {
+            resize_event = resize_debouncer.update(
+                event
+                    .take()
+                    .expect("we just matched against a present value"),
+            );
+        }
+        if let Some(resize) = resize_event.take().or_else(|| resize_debouncer.query()) {
+            // If we got a resize event, make sure to update ratatui backend.
             terminal.autoresize()?;
+            update(app, resize)?;
         }
-        callback = update(app, event)?;
-        if app.done {
-            break;
-        }
-        if FRAMERATE <= last_render.elapsed() {
-            terminal.draw(|f| view(app, f))?;
-            last_render = Instant::now();
+        if let Some(event) = event {
+            callback = update(app, event)?;
+            if app.done {
+                break;
+            }
+            if FRAMERATE <= last_render.elapsed() {
+                terminal.draw(|f| view(app, f))?;
+                last_render = Instant::now();
+            }
         }
     }
 
