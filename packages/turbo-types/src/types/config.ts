@@ -7,7 +7,7 @@ export type LegacySchema = LegacyRootSchema | LegacyWorkspaceSchema;
 export type SchemaV1 = RootSchemaV1 | WorkspaceSchemaV1;
 
 export interface BaseSchema {
-  /** @defaultValue https://turbo.build/schema.json */
+  /** @defaultValue `https://turbo.build/schema.json` */
   $schema?: string;
   /**
    * An object representing the task dependency graph of your project. turbo interprets
@@ -49,7 +49,7 @@ export interface WorkspaceSchema extends BaseSchema {
    *
    * Currently, only the "//" value is allowed.
    *
-   * @defaultValue ["//"]
+   * @defaultValue `["//"]`
    */
   extends: Array<string>;
 }
@@ -79,7 +79,7 @@ export interface RootSchema extends BaseSchema {
    *
    * Documentation: https://turbo.build/repo/docs/reference/configuration#globaldependencies
    *
-   * @defaultValue []
+   * @defaultValue `[]`
    */
   globalDependencies?: Array<string>;
 
@@ -90,7 +90,7 @@ export interface RootSchema extends BaseSchema {
    *
    * Documentation: https://turbo.build/repo/docs/reference/configuration#globalenv
    *
-   * @defaultValue []
+   * @defaultValue `[]`
    */
   globalEnv?: Array<EnvWildcard>;
 
@@ -100,7 +100,7 @@ export interface RootSchema extends BaseSchema {
    *
    * Documentation: https://turbo.build/repo/docs/reference/configuration#globalpassthroughenv
    *
-   * @defaultValue null
+   * @defaultValue `null`
    */
   globalPassThroughEnv?: null | Array<EnvWildcard>;
 
@@ -110,7 +110,7 @@ export interface RootSchema extends BaseSchema {
    *
    * Documentation: https://turbo.build/repo/docs/reference/configuration#globalDotEnv
    *
-   * @defaultValue null
+   * @defaultValue `null`
    */
   globalDotEnv?: null | Array<AnchoredUnixPath>;
 
@@ -139,6 +139,8 @@ export interface RootSchema extends BaseSchema {
    * configuration to infer the correct package manager.
    *
    * Some turbo features are disabled if this is set to true.
+   *
+   * @defaultValue `false`
    */
   dangerouslyDisablePackageManagerCheck?: boolean;
 }
@@ -162,7 +164,7 @@ export interface Pipeline {
    *
    * Documentation: https://turbo.build/repo/docs/reference/configuration#dependson
    *
-   * @defaultValue []
+   * @defaultValue `[]`
    */
   dependsOn?: Array<string>;
 
@@ -176,7 +178,7 @@ export interface Pipeline {
    *
    * Documentation: https://turbo.build/repo/docs/reference/configuration#env
    *
-   * @defaultValue []
+   * @defaultValue `[]`
    */
   env?: Array<EnvWildcard>;
 
@@ -187,7 +189,7 @@ export interface Pipeline {
    *
    * Documentation: https://turbo.build/repo/docs/reference/configuration#passthroughenv
    *
-   * @defaultValue null
+   * @defaultValue `null`
    */
   passThroughEnv?: null | Array<EnvWildcard>;
 
@@ -197,7 +199,7 @@ export interface Pipeline {
    *
    * Documentation: https://turbo.build/repo/docs/reference/configuration#dotEnv
    *
-   * @defaultValue null
+   * @defaultValue `null`
    */
   dotEnv?: null | Array<AnchoredUnixPath>;
 
@@ -210,7 +212,7 @@ export interface Pipeline {
    *
    * Documentation: https://turbo.build/repo/docs/reference/configuration#outputs
    *
-   * @defaultValue []
+   * @defaultValue `[]`
    */
   outputs?: Array<string>;
 
@@ -221,7 +223,7 @@ export interface Pipeline {
    *
    * Documentation: https://turbo.build/repo/docs/reference/configuration#cache
    *
-   * @defaultValue true
+   * @defaultValue `true`
    */
   cache?: boolean;
 
@@ -238,7 +240,7 @@ export interface Pipeline {
    *
    * Documentation: https://turbo.build/repo/docs/reference/configuration#inputs
    *
-   * @defaultValue []
+   * @defaultValue `[]`
    */
   inputs?: Array<string>;
 
@@ -257,7 +259,7 @@ export interface Pipeline {
    *
    * Documentation: https://turbo.build/repo/docs/reference/run#--output-logs-option
    *
-   * @defaultValue full
+   * @defaultValue `"full"`
    */
   outputLogs?: OutputMode;
 
@@ -268,7 +270,7 @@ export interface Pipeline {
    *
    * Documentation: https://turbo.build/repo/docs/reference/configuration#persistent
    *
-   * @defaultValue false
+   * @defaultValue `false`
    */
   persistent?: boolean;
 
@@ -278,6 +280,8 @@ export interface Pipeline {
    * they receive from stdin can change the outcome of the task.
    *
    * Documentation: https://turbo.build/repo/docs/reference/configuration#interactive
+   *
+   * @defaultValue `false`
    */
   interactive?: boolean;
 }
@@ -289,7 +293,7 @@ export interface RemoteCache {
    * variable `TURBO_REMOTE_CACHE_SIGNATURE_KEY`. Turborepo will reject any downloaded artifacts
    * that have an invalid signature or are missing a signature.
    *
-   * @defaultValue false
+   * @defaultValue `false`
    */
   signature?: boolean;
 
@@ -299,7 +303,7 @@ export interface RemoteCache {
    * is enabled, but still requires the user to login and link their repo to a remote cache.
    * Documentation: https://turbo.build/repo/docs/core-concepts/remote-caching
    *
-   * @defaultValue true
+   * @defaultValue `true`
    */
   enabled?: boolean;
 }
@@ -310,7 +314,7 @@ export type OutputMode =
   | "new-only"
   | "errors-only"
   | "none";
-
+export type EnvMode = "strict" | "loose";
 export type UI = "tui" | "stream";
 
 export type AnchoredUnixPath = string;
