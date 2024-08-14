@@ -1,21 +1,20 @@
 use std::{
     collections::HashMap,
+    hash::{DefaultHasher, Hash, Hasher},
     sync::{Arc, OnceLock, RwLock},
+    u8,
 };
 
 use console::{Style, StyledObject};
 
-static COLORS: OnceLock<[Style; 5]> = OnceLock::new();
+static COLORS: OnceLock<[Style; u8::MAX as usize]> = OnceLock::new();
 
-pub fn get_terminal_package_colors() -> &'static [Style; 5] {
+pub fn get_terminal_package_colors() -> &'static [Style; u8::MAX as usize] {
     COLORS.get_or_init(|| {
-        [
-            Style::new().cyan(),
-            Style::new().magenta(),
-            Style::new().green(),
-            Style::new().yellow(),
-            Style::new().blue(),
-        ]
+        let colors: [Style; u8::MAX as usize] =
+            core::array::from_fn(|index| Style::new().color256(index as u8));
+
+        colors
     })
 }
 
@@ -28,7 +27,6 @@ pub struct ColorSelector {
 
 #[derive(Default)]
 struct ColorSelectorInner {
-    idx: usize,
     cache: HashMap<String, &'static Style>,
 }
 
@@ -65,13 +63,16 @@ impl ColorSelectorInner {
 
     fn insert_color(&mut self, key: String) -> &'static Style {
         let colors = get_terminal_package_colors();
-        let chosen_color = &colors[self.idx % colors.len()];
+        let color_id = (Self::get_color_id_by_key(&key) % colors.len() as u64) as usize;
+        let chosen_color = &colors[color_id];
         // A color might have been chosen by the time we get to inserting
-        self.cache.entry(key).or_insert_with(|| {
-            // If a color hasn't been chosen, then we increment the index
-            self.idx += 1;
-            chosen_color
-        })
+        self.cache.entry(key).or_insert_with(|| chosen_color)
+    }
+
+    fn get_color_id_by_key(key: &str) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        key.hash(&mut hasher);
+        hasher.finish()
     }
 }
 
@@ -110,15 +111,5 @@ mod tests {
             });
         });
         // We only inserted 2 keys so next index should be 2
-        assert_eq!(selector.inner.read().unwrap().idx, 2);
-    }
-
-    #[test]
-    fn test_color_selector_wraps_around() {
-        let selector = super::ColorSelector::default();
-        for key in &["1", "2", "3", "4", "5", "6"] {
-            selector.color_for_key(key);
-        }
-        assert_eq!(selector.color_for_key("1"), selector.color_for_key("6"));
     }
 }
