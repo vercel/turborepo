@@ -13,12 +13,12 @@ use ratatui::{
 };
 use tracing::{debug, trace};
 
-const PANE_SIZE_RATIO: f32 = 3.0 / 4.0;
 const FRAMERATE: Duration = Duration::from_millis(3);
+const RESIZE_DEBOUNCE_DELAY: Duration = Duration::from_millis(10);
 
 use super::{
     event::{CacheResult, OutputLogs, TaskResult},
-    input, AppReceiver, Error, Event, InputOptions, TaskTable, TerminalPane,
+    input, AppReceiver, Debouncer, Error, Event, InputOptions, SizeInfo, TaskTable, TerminalPane,
 };
 use crate::tui::{
     task::{Task, TasksByStatus},
@@ -32,9 +32,7 @@ pub enum LayoutSections {
 }
 
 pub struct App<W> {
-    term_cols: u16,
-    pane_rows: u16,
-    pane_cols: u16,
+    size: SizeInfo,
     tasks: BTreeMap<String, TerminalOutput<W>>,
     tasks_by_status: TasksByStatus,
     focus: LayoutSections,
@@ -53,15 +51,7 @@ pub enum Direction {
 impl<W> App<W> {
     pub fn new(rows: u16, cols: u16, tasks: Vec<String>) -> Self {
         debug!("tasks: {tasks:?}");
-        let task_width_hint = TaskTable::width_hint(tasks.iter().map(|s| s.as_str()));
-
-        // Want to maximize pane width
-        let ratio_pane_width = (f32::from(cols) * PANE_SIZE_RATIO) as u16;
-        let full_task_width = cols.saturating_sub(task_width_hint);
-        let pane_cols = full_task_width.max(ratio_pane_width);
-
-        // We use 2 rows for pane title and for the interaction info
-        let rows = rows.saturating_sub(2).max(1);
+        let size = SizeInfo::new(rows, cols, tasks.iter().map(|s| s.as_str()));
 
         // Initializes with the planned tasks
         // and will mutate as tasks change
@@ -79,17 +69,23 @@ impl<W> App<W> {
         let has_user_interacted = false;
         let selected_task_index: usize = 0;
 
+        let pane_rows = size.pane_rows();
+        let pane_cols = size.pane_cols();
+
         Self {
-            term_cols: cols,
-            pane_rows: rows,
-            pane_cols,
+            size,
             done: false,
             focus: LayoutSections::TaskList,
             // Check if stdin is a tty that we should read input from
             tty_stdin: atty::is(atty::Stream::Stdin),
             tasks: tasks_by_status
                 .task_names_in_displayed_order()
-                .map(|task_name| (task_name.to_owned(), TerminalOutput::new(rows, cols, None)))
+                .map(|task_name| {
+                    (
+                        task_name.to_owned(),
+                        TerminalOutput::new(pane_rows, pane_cols, None),
+                    )
+                })
                 .collect(),
             tasks_by_status,
             scroll: TableState::default().with_selected(selected_task_index),
@@ -250,9 +246,9 @@ impl<W> App<W> {
         let highlighted_task = self.active_task().to_owned();
         // Make sure all tasks have a terminal output
         for task in &tasks {
-            self.tasks
-                .entry(task.clone())
-                .or_insert_with(|| TerminalOutput::new(self.pane_rows, self.pane_cols, None));
+            self.tasks.entry(task.clone()).or_insert_with(|| {
+                TerminalOutput::new(self.size.pane_rows(), self.size.pane_cols(), None)
+            });
         }
         // Trim the terminal output to only tasks that exist in new list
         self.tasks.retain(|name, _| tasks.contains(name));
@@ -279,9 +275,9 @@ impl<W> App<W> {
         let highlighted_task = self.active_task().to_owned();
         // Make sure all tasks have a terminal output
         for task in &tasks {
-            self.tasks
-                .entry(task.clone())
-                .or_insert_with(|| TerminalOutput::new(self.pane_rows, self.pane_cols, None));
+            self.tasks.entry(task.clone()).or_insert_with(|| {
+                TerminalOutput::new(self.size.pane_rows(), self.size.pane_cols(), None)
+            });
         }
 
         self.tasks_by_status
@@ -320,7 +316,7 @@ impl<W> App<W> {
     }
 
     pub fn handle_mouse(&mut self, mut event: crossterm::event::MouseEvent) -> Result<(), Error> {
-        let table_width = self.term_cols - self.pane_cols;
+        let table_width = self.size.task_list_width();
         debug!("original mouse event: {event:?}, table_width: {table_width}");
         // Only handle mouse event if it happens inside of pane
         // We give a 1 cell buffer to make it easier to select the first column of a row
@@ -375,6 +371,15 @@ impl<W> App<W> {
         self.scroll.select(Some(0));
         self.selected_task_index = 0;
     }
+
+    pub fn resize(&mut self, rows: u16, cols: u16) {
+        self.size.resize(rows, cols);
+        let pane_rows = self.size.pane_rows();
+        let pane_cols = self.size.pane_cols();
+        self.tasks.values_mut().for_each(|term| {
+            term.resize(pane_rows, pane_cols);
+        })
+    }
 }
 
 impl<W: Write> App<W> {
@@ -409,7 +414,7 @@ impl<W: Write> App<W> {
     #[tracing::instrument(skip(self, output))]
     pub fn process_output(&mut self, task: &str, output: &[u8]) -> Result<(), Error> {
         let task_output = self.tasks.get_mut(task).unwrap();
-        task_output.parser.process(output);
+        task_output.process(output);
         Ok(())
     }
 }
@@ -442,15 +447,32 @@ fn run_app_inner<B: Backend + std::io::Write>(
     // Render initial state to paint the screen
     terminal.draw(|f| view(app, f))?;
     let mut last_render = Instant::now();
+    let mut resize_debouncer = Debouncer::new(RESIZE_DEBOUNCE_DELAY);
     let mut callback = None;
     while let Some(event) = poll(app.input_options(), &receiver, last_render + FRAMERATE) {
-        callback = update(app, event)?;
-        if app.done {
-            break;
+        let mut event = Some(event);
+        let mut resize_event = None;
+        if matches!(event, Some(Event::Resize { .. })) {
+            resize_event = resize_debouncer.update(
+                event
+                    .take()
+                    .expect("we just matched against a present value"),
+            );
         }
-        if FRAMERATE <= last_render.elapsed() {
-            terminal.draw(|f| view(app, f))?;
-            last_render = Instant::now();
+        if let Some(resize) = resize_event.take().or_else(|| resize_debouncer.query()) {
+            // If we got a resize event, make sure to update ratatui backend.
+            terminal.autoresize()?;
+            update(app, resize)?;
+        }
+        if let Some(event) = event {
+            callback = update(app, event)?;
+            if app.done {
+                break;
+            }
+            if FRAMERATE <= last_render.elapsed() {
+                terminal.draw(|f| view(app, f))?;
+                last_render = Instant::now();
+            }
         }
     }
 
@@ -595,12 +617,15 @@ fn update(
         Event::RestartTasks { tasks } => {
             app.update_tasks(tasks);
         }
+        Event::Resize { rows, cols } => {
+            app.resize(rows, cols);
+        }
     }
     Ok(None)
 }
 
 fn view<W>(app: &mut App<W>, f: &mut Frame) {
-    let cols = app.pane_cols;
+    let cols = app.size.pane_cols();
     let horizontal = Layout::horizontal([Constraint::Fill(1), Constraint::Length(cols)]);
     let [table, pane] = horizontal.areas(f.size());
 
@@ -898,5 +923,35 @@ mod test {
             "b",
             "selected b"
         );
+    }
+
+    #[test]
+    fn test_resize() {
+        let mut app: App<Vec<u8>> = App::new(20, 24, vec!["a".to_string(), "b".to_string()]);
+        let pane_rows = app.size.pane_rows();
+        let pane_cols = app.size.pane_cols();
+        for (name, task) in app.tasks.iter() {
+            let (rows, cols) = task.size();
+            assert_eq!(
+                (rows, cols),
+                (pane_rows, pane_cols),
+                "size mismatch for {name}"
+            );
+        }
+
+        app.resize(20, 18);
+        let new_pane_rows = app.size.pane_rows();
+        let new_pane_cols = app.size.pane_cols();
+        assert_eq!(pane_rows, new_pane_rows);
+        assert_ne!(pane_cols, new_pane_cols);
+
+        for (name, task) in app.tasks.iter() {
+            let (rows, cols) = task.size();
+            assert_eq!(
+                (rows, cols),
+                (new_pane_rows, new_pane_cols),
+                "size mismatch for {name}"
+            );
+        }
     }
 }
