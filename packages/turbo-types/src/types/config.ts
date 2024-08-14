@@ -139,6 +139,8 @@ export interface RootSchema extends BaseSchema {
    * configuration to infer the correct package manager.
    *
    * Some turbo features are disabled if this is set to true.
+   *
+   * @defaultValue `false`
    */
   dangerouslyDisablePackageManagerCheck?: boolean;
 }
@@ -278,6 +280,8 @@ export interface Pipeline {
    * they receive from stdin can change the outcome of the task.
    *
    * Documentation: https://turbo.build/repo/docs/reference/configuration#interactive
+   *
+   * @defaultValue `false`
    */
   interactive?: boolean;
 }
