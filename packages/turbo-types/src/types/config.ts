@@ -105,7 +105,7 @@ export interface RootSchema extends BaseSchema {
   globalPassThroughEnv?: null | Array<EnvWildcard>;
 
   /**
-   * Deprecated as of Turborepo 2.0.0. Consider using `globalDependencies` instead.
+   * @deprecated as of Turborepo 2.0.0. Consider using {@link RootSchema.globalDependencies} instead.
    *
    * Documentation: https://turbo.build/repo/docs/reference/configuration#globaldependencies
    *
