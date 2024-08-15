@@ -196,8 +196,6 @@ export interface Pipeline {
   /**
    * @deprecated as of Turborepo 2.0.0. Consider using {@link Pipeline.inputs} instead.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#inputs
-   *
    * A priority-ordered (most-significant to least-significant) array of workspace-anchored
    * Unix-style paths to `.env` files to include in the task hash.
    *
