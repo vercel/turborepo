@@ -194,7 +194,7 @@ export interface Pipeline {
   passThroughEnv?: null | Array<EnvWildcard>;
 
   /**
-   * Deprecated as of Turborepo 2.0.0. Consider using `inputs` instead.
+   * @deprecated as of Turborepo 2.0.0. Consider using {@link Pipeline.inputs} instead.
    *
    * Documentation: https://turbo.build/repo/docs/reference/configuration#inputs
    *
