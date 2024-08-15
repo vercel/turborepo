@@ -663,6 +663,7 @@ impl<'a> ExecContextFactory<'a> {
     ) -> ExecContext {
         let task_id_for_display = self.visitor.display_task_id(&task_id);
         let pass_through_args = self.visitor.run_opts.args_for_task(&task_id);
+        let task_id_string = &task_id.to_string();
         ExecContext {
             engine: self.engine.clone(),
             color_config: self.visitor.color_config,
@@ -671,7 +672,7 @@ impl<'a> ExecContextFactory<'a> {
             pretty_prefix: self
                 .visitor
                 .color_cache
-                .prefix_with_color(&task_hash, &self.visitor.prefix(&task_id)),
+                .prefix_with_color(task_id_string, &self.visitor.prefix(&task_id)),
             task_id,
             task_id_for_display,
             task_cache,

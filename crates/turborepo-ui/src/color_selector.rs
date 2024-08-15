@@ -1,7 +1,6 @@
 use std::{
     collections::HashMap,
     hash::{DefaultHasher, Hash, Hasher},
-    ops::Deref,
     sync::{Arc, OnceLock, RwLock},
     u8,
 };
