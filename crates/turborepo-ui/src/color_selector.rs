@@ -1,6 +1,7 @@
 use std::{
     collections::HashMap,
     hash::{DefaultHasher, Hash, Hasher},
+    ops::Deref,
     sync::{Arc, OnceLock, RwLock},
     u8,
 };
@@ -25,9 +26,20 @@ pub struct ColorSelector {
     inner: Arc<RwLock<ColorSelectorInner>>,
 }
 
-#[derive(Default)]
 struct ColorSelectorInner {
     cache: HashMap<String, &'static Style>,
+    colors_taken_state: [bool; u8::MAX as usize],
+    total_colors_taken: u8,
+}
+
+impl Default for ColorSelectorInner {
+    fn default() -> Self {
+        Self {
+            cache: Default::default(),
+            colors_taken_state: [false; u8::MAX as usize],
+            total_colors_taken: 0,
+        }
+    }
 }
 
 impl ColorSelector {
@@ -63,16 +75,40 @@ impl ColorSelectorInner {
 
     fn insert_color(&mut self, key: String) -> &'static Style {
         let colors = get_terminal_package_colors();
-        let color_id = (Self::get_color_id_by_key(&key) % colors.len() as u64) as usize;
-        let chosen_color = &colors[color_id];
+        let chosen_color = Self::get_color_id_by_key(self, &key);
         // A color might have been chosen by the time we get to inserting
-        self.cache.entry(key).or_insert_with(|| chosen_color)
+        self.cache
+            .entry(key)
+            .or_insert_with(|| &colors[chosen_color])
     }
 
-    fn get_color_id_by_key(key: &str) -> u64 {
+    pub fn get_color_hash_by_key(key: &str) -> u64 {
         let mut hasher = DefaultHasher::new();
         key.hash(&mut hasher);
         hasher.finish()
+    }
+
+    fn get_color_id_by_key(&mut self, key: &str) -> usize {
+        let colors = get_terminal_package_colors();
+
+        if self.total_colors_taken == u8::MAX {
+            self.colors_taken_state = [false; u8::MAX as usize];
+            self.total_colors_taken = 0;
+        }
+
+        let mut color_id: usize =
+            (Self::get_color_hash_by_key(&key) % colors.len() as u64) as usize;
+
+        let mut state: bool = *(self.colors_taken_state.get(color_id).unwrap());
+
+        while state {
+            color_id = (color_id + 1) % colors.len();
+            state = *(self.colors_taken_state.get(color_id).unwrap());
+        }
+
+        self.total_colors_taken += 1;
+        self.colors_taken_state[color_id] = true;
+        return color_id;
     }
 }
 
@@ -111,5 +147,67 @@ mod tests {
             });
         });
         // We only inserted 2 keys so next index should be 2
+        assert_eq!(selector.inner.read().unwrap().total_colors_taken, 2);
+    }
+
+    #[test]
+    fn test_rotation_after_all_colors_are_taken() {
+        let selector = super::ColorSelector::default();
+
+        let colors = super::get_terminal_package_colors();
+        let num_colors = colors.len();
+
+        // Exhaust all colors
+        for i in 0..num_colors {
+            let key = format!("package{}", i);
+            selector.color_for_key(&key);
+        }
+
+        // At this point, all colors should be taken
+        for state in selector
+            .inner
+            .read()
+            .expect("lock poisoned")
+            .colors_taken_state
+            .iter()
+            .take(num_colors)
+        {
+            assert_eq!(*state, true);
+        }
+
+        // The next key should start rotating from the beginning
+        let key_next = format!("package{}", num_colors + 1);
+        let next_color_id = selector.color_for_key(&key_next);
+
+        // It should be the first color in the rotation again
+        let next_key_color_id = (super::ColorSelectorInner::get_color_hash_by_key(&key_next)
+            % colors.len() as u64) as usize;
+        assert_eq!(next_color_id, &colors[next_key_color_id]);
+
+        // At this point, all colors should be not taken, expect the one taken with the
+        // latest package
+        for (index, state) in selector
+            .inner
+            .read()
+            .expect("lock poisoned")
+            .colors_taken_state
+            .iter()
+            .enumerate()
+        {
+            if index == next_key_color_id {
+                assert_eq!(*state, true);
+            } else {
+                assert_eq!(*state, false);
+            }
+        }
+
+        assert_eq!(
+            selector
+                .inner
+                .read()
+                .expect("lock poisoned")
+                .total_colors_taken,
+            1
+        );
     }
 }

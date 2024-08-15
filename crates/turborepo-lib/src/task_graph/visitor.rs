@@ -156,6 +156,10 @@ impl<'a> Visitor<'a> {
         engine: Arc<Engine>,
         telemetry: &GenericEventBuilder,
     ) -> Result<Vec<TaskError>, Error> {
+        for task in engine.tasks().sorted() {
+            self.color_cache.color_for_key(&task.to_string());
+        }
+
         let concurrency = self.run_opts.concurrency as usize;
         let (node_sender, mut node_stream) = mpsc::channel(concurrency);
 
