@@ -1,6 +1,6 @@
 import { Stream } from "node:stream";
 import { promisify } from "node:util";
-import { join, sep } from "node:path";
+import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createWriteStream, promises as fs } from "node:fs";
 import { x as extract } from "tar";
@@ -123,7 +123,7 @@ export async function downloadAndExtractRepo(
       // old repository name is used to fetch the example. The tar download will work as it is redirected automatically, but the root directory of the extracted
       // example will be the new, renamed name instead of the name used to fetch the example.
       if (rootPath === null) {
-        const pathSegments = p.split(sep);
+        const pathSegments = p.split("/");
         rootPath = pathSegments.length ? pathSegments[0] : null;
       }
       return p.startsWith(`${rootPath}${filePath ? `/${filePath}/` : "/"}`);
@@ -149,7 +149,7 @@ export async function downloadAndExtractExample(root: string, name: string) {
       // old repository name is used to fetch the example. The tar download will work as it is redirected automatically, but the root directory of the extracted
       // example will be the new, renamed name instead of the name used to fetch the example.
       if (rootPath === null) {
-        const pathSegments = p.split(sep);
+        const pathSegments = p.split("/");
         rootPath = pathSegments.length ? pathSegments[0] : null;
       }
 
