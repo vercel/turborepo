@@ -107,8 +107,6 @@ export interface RootSchema extends BaseSchema {
   /**
    * @deprecated as of Turborepo 2.0.0. Consider using {@link RootSchema.globalDependencies} instead.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#globaldependencies
-   *
    * A priority-ordered (most-significant to least-significant) array of project-anchored
    * Unix-style paths to `.env` files to include in the global hash.
    *
