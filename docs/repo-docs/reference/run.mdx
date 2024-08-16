@@ -40,6 +40,8 @@ turbo run build --cache-dir="./my-cache"
   Ensure the directory is in your `.gitignore` when changing it.
 </Callout>
 
+The same behavior can also be set via the `TURBO_CACHE_DIR=example/path` system variable.
+
 ### `--concurrency <number | percentage>`
 
 Default: `10`
@@ -136,6 +138,8 @@ Controls the available environment variables in the task's runtime.
 ```bash title="Terminal"
 turbo run build --env-mode=loose
 ```
+
+The same behavior can also be set via the `TURBO_ENV_MODE=strict` system variable.
 
 #### `strict`
 
@@ -320,13 +324,13 @@ Do not cache results of the task.
 turbo run dev --no-cache
 ```
 
-### `--no-daemon`
-
-Default: `false`
+### `--daemon` and `--no-daemon`
 
 `turbo` can run a background process to pre-calculate values used for determining work that needs to be done. This standalone process (daemon) is an optimization, and not required for proper functioning of `turbo`.
 
-Passing `--no-daemon` instructs `turbo` to avoid using or creating the standalone process.
+Passing `--daemon` instructs `turbo` to use the standalone process, while `--no-daemon` instructs `turbo` to avoid using or creating the standalone process.
+
+The same behavior can also be set via the `TURBO_DAEMON=true` system variable.
 
 ### `--output-logs <option>`
 

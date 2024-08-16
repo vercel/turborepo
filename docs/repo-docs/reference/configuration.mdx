@@ -117,6 +117,47 @@ To help with incremental migration or in situations where you can't use the `pac
   environment variable.
 </Callout>
 
+### `cacheDir`
+
+Default: `".turbo/cache"`
+
+Specify the filesystem cache directory.
+
+```jsonc title="./turbo.json"
+{
+  "cacheDir": ".turbo/cache"
+}
+```
+
+### `daemon`
+
+Default: `false`
+
+Turbo can run a background process to pre-calculate values used for determining work that needs to be done. This standalone process (daemon) is an optimization, and not required for proper functioning of turbo.
+
+```jsonc title="./turbo.json"
+{
+  "daemon": true
+}
+```
+
+### `envMode`
+
+Default: `"strict"`
+
+Turborepo's Environment Modes allow you to control which environment variables are available to a task at runtime:
+
+- `"strict"`: Filter environment variables to only those that are specified in the `env` and `globalEnv` keys in `turbo.json`.
+- `"loose"`: Allow all environment variables for the process to be available.
+
+Read more about [Environment Modes](/repo/docs/crafting-your-repository/using-environment-variables#environment-modes).
+
+```jsonc title="./turbo.json"
+{
+  "envMode": "strict"
+}
+```
+
 ## Defining tasks
 
 ### `tasks`
