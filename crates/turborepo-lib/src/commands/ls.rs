@@ -8,7 +8,7 @@ use turborepo_repository::{
     package_manager::PackageManager,
 };
 use turborepo_telemetry::events::command::CommandEventBuilder;
-use turborepo_ui::{color, cprint, cprintln, BOLD, BOLD_GREEN, GREY, UI};
+use turborepo_ui::{color, cprint, cprintln, ColorConfig, BOLD, BOLD_GREEN, GREY};
 
 use crate::{
     cli,
@@ -25,13 +25,13 @@ pub enum Error {
 }
 
 struct RepositoryDetails<'a> {
-    ui: UI,
+    color_config: ColorConfig,
     package_manager: &'a PackageManager,
     packages: Vec<(&'a PackageName, &'a AnchoredSystemPath)>,
 }
 
 struct PackageDetails<'a> {
-    ui: UI,
+    color_config: ColorConfig,
     name: &'a str,
     tasks: Vec<(&'a str, &'a str)>,
     dependencies: Vec<&'a str>,
@@ -42,6 +42,7 @@ pub async fn run(
     packages: Vec<String>,
     telemetry: CommandEventBuilder,
     filter: Vec<String>,
+    affected: bool,
 ) -> Result<(), cli::Error> {
     let signal = get_signal()?;
     let handler = SignalHandler::new(signal);
@@ -51,6 +52,7 @@ pub async fn run(
         run_args: Box::default(),
         execution_args: Box::new(ExecutionArgs {
             filter,
+            affected,
             ..Default::default()
         }),
     });
@@ -72,7 +74,7 @@ pub async fn run(
 
 impl<'a> RepositoryDetails<'a> {
     fn new(run: &'a Run) -> Self {
-        let ui = run.ui();
+        let color_config = run.color_config();
         let package_graph = run.pkg_dep_graph();
         let filtered_pkgs = run.filtered_pkgs();
 
@@ -82,6 +84,9 @@ impl<'a> RepositoryDetails<'a> {
                 if !filtered_pkgs.contains(package_name) {
                     return None;
                 }
+                if matches!(package_name, PackageName::Root) {
+                    return None;
+                }
 
                 Some((package_name, package_info.package_path()))
             })
@@ -89,22 +94,24 @@ impl<'a> RepositoryDetails<'a> {
         packages.sort_by(|a, b| a.0.cmp(b.0));
 
         Self {
-            ui,
+            color_config,
             package_manager: package_graph.package_manager(),
             packages,
         }
     }
     fn print(&self) -> Result<(), cli::Error> {
         if self.packages.len() == 1 {
-            cprintln!(self.ui, BOLD, "{} package\n", self.packages.len());
+            cprintln!(self.color_config, BOLD, "{} package\n", self.packages.len());
         } else {
-            cprintln!(self.ui, BOLD, "{} packages\n", self.packages.len());
+            cprintln!(
+                self.color_config,
+                BOLD,
+                "{} packages\n",
+                self.packages.len()
+            );
         }
 
         for (package_name, entry) in &self.packages {
-            if matches!(package_name, PackageName::Root) {
-                continue;
-            }
             println!("  {} {}", package_name, GREY.apply_to(entry));
         }
 
@@ -114,7 +121,7 @@ impl<'a> RepositoryDetails<'a> {
 
 impl<'a> PackageDetails<'a> {
     fn new(run: &'a Run, package: &'a str) -> Result<Self, Error> {
-        let ui = run.ui();
+        let color_config = run.color_config();
         let package_graph = run.pkg_dep_graph();
         let package_node = match package {
             "//" => PackageNode::Root,
@@ -140,7 +147,7 @@ impl<'a> PackageDetails<'a> {
         package_dep_names.sort();
 
         Ok(Self {
-            ui,
+            color_config,
             name: package,
             dependencies: package_dep_names,
             tasks: package_json
@@ -152,8 +159,8 @@ impl<'a> PackageDetails<'a> {
     }
 
     fn print(&self) {
-        let name = color!(self.ui, BOLD_GREEN, "{}", self.name);
-        let depends_on = color!(self.ui, BOLD, "depends on");
+        let name = color!(self.color_config, BOLD_GREEN, "{}", self.name);
+        let depends_on = color!(self.color_config, BOLD, "depends on");
         let dependencies = if self.dependencies.is_empty() {
             "<no packages>".to_string()
         } else {
@@ -163,18 +170,22 @@ impl<'a> PackageDetails<'a> {
             "{} {}: {}",
             name,
             depends_on,
-            color!(self.ui, GREY, "{}", dependencies)
+            color!(self.color_config, GREY, "{}", dependencies)
         );
         println!();
 
-        cprint!(self.ui, BOLD, "tasks:");
+        cprint!(self.color_config, BOLD, "tasks:");
         if self.tasks.is_empty() {
             println!(" <no tasks>");
         } else {
             println!();
         }
         for (name, command) in &self.tasks {
-            println!("  {}: {}", name, color!(self.ui, GREY, "{}", command));
+            println!(
+                "  {}: {}",
+                name,
+                color!(self.color_config, GREY, "{}", command)
+            );
         }
         println!();
     }

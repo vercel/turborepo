@@ -171,14 +171,14 @@ pub async fn link(
     let repo_root_with_tilde = base.repo_root.to_string().replacen(&*homedir, "~", 1);
     let api_client = base.api_client()?;
     let token = base.config()?.token().ok_or_else(|| Error::TokenNotFound {
-        command: base.ui.apply(BOLD.apply_to("`npx turbo login`")),
+        command: base.color_config.apply(BOLD.apply_to("`npx turbo login`")),
     })?;
 
     match target {
         LinkTarget::RemoteCache => {
             println!(
                 "\n{}\n\n{}\n\nFor more information, visit: {}\n",
-                base.ui.rainbow(">>> Remote Caching"),
+                base.color_config.rainbow(">>> Remote Caching"),
                 REMOTE_CACHING_INFO,
                 REMOTE_CACHING_URL
             );
@@ -264,8 +264,8 @@ pub async fn link(
 
     {}
         ",
-                base.ui.rainbow(">>> Success!"),
-                base.ui.apply(BOLD.apply_to(chosen_team_name)),
+                base.color_config.rainbow(">>> Success!"),
+                base.color_config.apply(BOLD.apply_to(chosen_team_name)),
                 GREY.apply_to("To disable Remote Caching, run `npx turbo unlink`")
             );
             Ok(())
@@ -349,9 +349,10 @@ pub async fn link(
 
     {}
         ",
-                base.ui.rainbow(">>> Success!"),
-                base.ui.apply(BOLD.apply_to(&repo_root_with_tilde)),
-                base.ui.apply(BOLD.apply_to(&space.name)),
+                base.color_config.rainbow(">>> Success!"),
+                base.color_config
+                    .apply(BOLD.apply_to(&repo_root_with_tilde)),
+                base.color_config.apply(BOLD.apply_to(&space.name)),
                 GREY.apply_to(
                     "To remove Spaces integration, run `npx turbo unlink --target spaces`"
                 )
@@ -399,10 +400,10 @@ fn select_team<'a>(base: &CommandBase, teams: &'a [Team]) -> Result<SelectedTeam
 
     let prompt = format!(
         "{}\n  {}",
-        base.ui.apply(BOLD.apply_to(
+        base.color_config.apply(BOLD.apply_to(
             "Which Vercel scope (and Remote Cache) do you want associated with this Turborepo?",
         )),
-        base.ui
+        base.color_config
             .apply(CYAN.apply_to("[Use arrows to move, type to filter]"))
     );
 
@@ -440,10 +441,10 @@ fn select_space<'a>(base: &CommandBase, spaces: &'a [Space]) -> Result<SelectedS
 
     let prompt = format!(
         "{}\n  {}",
-        base.ui.apply(
+        base.color_config.apply(
             BOLD.apply_to("Which Vercel space do you want associated with this Turborepo?",)
         ),
-        base.ui
+        base.color_config
             .apply(CYAN.apply_to("[Use arrows to move, type to filter]"))
     );
 
@@ -466,11 +467,12 @@ fn should_link_remote_cache(_: &CommandBase, _: &str) -> Result<bool, Error> {
 fn should_link_remote_cache(base: &CommandBase, location: &str) -> Result<bool, Error> {
     let prompt = format!(
         "{}{} {}{}",
-        base.ui.apply(BOLD.apply_to(GREY.apply_to("? "))),
-        base.ui
+        base.color_config.apply(BOLD.apply_to(GREY.apply_to("? "))),
+        base.color_config
             .apply(BOLD.apply_to("Enable Vercel Remote Cache for")),
-        base.ui.apply(BOLD.apply_to(CYAN.apply_to(location))),
-        base.ui.apply(BOLD.apply_to(" ?"))
+        base.color_config
+            .apply(BOLD.apply_to(CYAN.apply_to(location))),
+        base.color_config.apply(BOLD.apply_to(" ?"))
     );
 
     Confirm::new()
@@ -488,10 +490,12 @@ fn should_link_spaces(_: &CommandBase, _: &str) -> Result<bool, Error> {
 fn should_link_spaces(base: &CommandBase, location: &str) -> Result<bool, Error> {
     let prompt = format!(
         "{}{} {} {}",
-        base.ui.apply(BOLD.apply_to(GREY.apply_to("? "))),
-        base.ui.apply(BOLD.apply_to("Would you like to link")),
-        base.ui.apply(BOLD.apply_to(CYAN.apply_to(location))),
-        base.ui.apply(BOLD.apply_to("to Vercel Spaces")),
+        base.color_config.apply(BOLD.apply_to(GREY.apply_to("? "))),
+        base.color_config
+            .apply(BOLD.apply_to("Would you like to link")),
+        base.color_config
+            .apply(BOLD.apply_to(CYAN.apply_to(location))),
+        base.color_config.apply(BOLD.apply_to("to Vercel Spaces")),
     );
 
     Confirm::new()
@@ -566,7 +570,7 @@ mod test {
     use anyhow::Result;
     use tempfile::{NamedTempFile, TempDir};
     use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath};
-    use turborepo_ui::UI;
+    use turborepo_ui::ColorConfig;
     use turborepo_vercel_api_mock::start_test_server;
 
     use crate::{
@@ -609,7 +613,7 @@ mod test {
                 AbsoluteSystemPathBuf::try_from(user_config_file.path().to_path_buf()).unwrap(),
             ),
             repo_root: repo_root.clone(),
-            ui: UI::new(false),
+            color_config: ColorConfig::new(false),
             config: OnceCell::new(),
             args: Args::default(),
             version: "",
@@ -675,7 +679,7 @@ mod test {
                 AbsoluteSystemPathBuf::try_from(user_config_file.path().to_path_buf()).unwrap(),
             ),
             repo_root: repo_root.clone(),
-            ui: UI::new(false),
+            color_config: ColorConfig::new(false),
             config: OnceCell::new(),
             args: Args::default(),
             version: "",

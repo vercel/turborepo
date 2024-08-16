@@ -38,6 +38,13 @@ pub enum Event {
     },
     Mouse(crossterm::event::MouseEvent),
     CopySelection,
+    RestartTasks {
+        tasks: Vec<String>,
+    },
+    Resize {
+        rows: u16,
+        cols: u16,
+    },
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]

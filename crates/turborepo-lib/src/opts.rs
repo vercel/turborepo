@@ -1,5 +1,6 @@
 use std::{backtrace, backtrace::Backtrace};
 
+use camino::Utf8PathBuf;
 use thiserror::Error;
 use turbopath::AnchoredSystemPathBuf;
 use turborepo_api_client::APIAuth;
@@ -149,6 +150,7 @@ pub struct RunOpts {
     pub(crate) concurrency: u32,
     pub(crate) parallel: bool,
     pub(crate) env_mode: EnvMode,
+    pub(crate) cache_dir: Utf8PathBuf,
     // Whether or not to infer the framework for each workspace.
     pub(crate) framework_inference: bool,
     pub profile: Option<String>,
@@ -263,6 +265,7 @@ impl<'a> TryFrom<OptsInputs<'a>> for RunOpts {
             graph,
             dry_run: inputs.run_args.dry_run,
             env_mode: inputs.config.env_mode(),
+            cache_dir: inputs.config.cache_dir().into(),
             is_github_actions,
         })
     }
@@ -358,7 +361,7 @@ impl<'a> From<OptsInputs<'a>> for CacheOpts {
         ));
 
         CacheOpts {
-            override_dir: inputs.execution_args.cache_dir.clone(),
+            cache_dir: inputs.config.cache_dir().into(),
             skip_filesystem: inputs.execution_args.remote_only,
             remote_cache_read_only: inputs.run_args.remote_cache_read_only,
             workers: inputs.run_args.cache_workers,
@@ -488,6 +491,7 @@ mod test {
             concurrency: 10,
             parallel: opts_input.parallel,
             env_mode: crate::cli::EnvMode::Loose,
+            cache_dir: camino::Utf8PathBuf::new(),
             framework_inference: true,
             profile: None,
             continue_on_error: opts_input.continue_on_error,

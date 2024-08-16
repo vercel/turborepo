@@ -348,6 +348,7 @@ mod test {
         );
     }
 
+    #[test]
     fn test_gh_8599() {
         // TODO: this test documents existing broken behavior, when we have time we
         // should fix this and update the assertions

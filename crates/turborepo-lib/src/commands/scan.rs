@@ -30,13 +30,13 @@ const INTER_MESSAGE_DELAY: Duration = Duration::from_millis(30);
 ///       to the user, it looks like the lints are running serially.
 pub async fn run(base: CommandBase) -> bool {
     let paths = DaemonPaths::from_repo_root(&base.repo_root);
-    let ui = base.ui;
+    let color_config = base.color_config;
 
-    println!("\n{}\n", ui.rainbow(">>> TURBO SCAN"));
+    println!("\n{}\n", color_config.rainbow(">>> TURBO SCAN"));
     println!(
         "Turborepo does a lot of work behind the scenes to make your monorepo fast,
 however, there are some things you can do to make it even faster. {}\n",
-        color!(ui, BOLD_GREEN, "Let's go!")
+        color!(color_config, BOLD_GREEN, "Let's go!")
     );
 
     let mut all_events = StreamMap::new();
@@ -80,7 +80,7 @@ however, there are some things you can do to make it even faster. {}\n",
             match message {
                 Started(_) => {} // ignore duplicate start events
                 LogLine(line) => {
-                    bar.println(color!(ui, GREY, "    {}", line).to_string());
+                    bar.println(color!(color_config, GREY, "    {}", line).to_string());
                 }
                 Request(prompt, mut options, chan) => {
                     let opt = bar.suspend(|| {
@@ -106,18 +106,24 @@ however, there are some things you can do to make it even faster. {}\n",
                     handle.await.expect("panic in suspend task");
                 }
                 Done(message) => {
-                    bar.finish_with_message(color!(ui, BOLD_GREEN, "{}", message).to_string());
+                    bar.finish_with_message(
+                        color!(color_config, BOLD_GREEN, "{}", message).to_string(),
+                    );
                     complete += 1;
                 }
                 Failed(message) => {
-                    bar.finish_with_message(color!(ui, BOLD_RED, "{}", message).to_string());
+                    bar.finish_with_message(
+                        color!(color_config, BOLD_RED, "{}", message).to_string(),
+                    );
                     failed += 1;
                 }
                 NotApplicable(name) => {
-                    let n_a = color!(ui, GREY, "n/a").to_string();
+                    let n_a = color!(color_config, GREY, "n/a").to_string();
                     let style = bar.style().tick_strings(&[&n_a, &n_a]);
                     bar.set_style(style);
-                    bar.finish_with_message(color!(ui, BOLD_GREY, "{}", name).to_string());
+                    bar.finish_with_message(
+                        color!(color_config, BOLD_GREY, "{}", name).to_string(),
+                    );
                     not_applicable += 1;
                 }
             };
@@ -129,7 +135,7 @@ however, there are some things you can do to make it even faster. {}\n",
     }
 
     if complete + not_applicable == num_tasks {
-        println!("\n\n{}", ui.rainbow(">>> FULL TURBO"));
+        println!("\n\n{}", color_config.rainbow(">>> FULL TURBO"));
         true
     } else {
         false

@@ -122,7 +122,9 @@ mod tests {
     use tempfile::tempdir;
     use turbopath::AbsoluteSystemPathBuf;
 
-    use crate::{logs::replay_logs, LogWriter, PrefixedUI, PrefixedWriter, BOLD, CYAN, UI};
+    use crate::{
+        logs::replay_logs, ColorConfig, LogWriter, PrefixedUI, PrefixedWriter, BOLD, CYAN,
+    };
 
     #[test]
     fn test_log_writer() -> Result<()> {
@@ -130,11 +132,11 @@ mod tests {
         let log_file_path = AbsoluteSystemPathBuf::try_from(dir.path().join("test.txt"))?;
         let mut prefixed_writer_output = Vec::new();
         let mut log_writer = LogWriter::default();
-        let ui = UI::new(false);
+        let color_config = ColorConfig::new(false);
 
         log_writer.with_log_file(&log_file_path)?;
         log_writer.with_writer(PrefixedWriter::new(
-            ui,
+            color_config,
             CYAN.apply_to(">".to_string()),
             &mut prefixed_writer_output,
         ));
@@ -164,10 +166,10 @@ mod tests {
 
     #[test]
     fn test_replay_logs() -> Result<()> {
-        let ui = UI::new(false);
+        let color_config = ColorConfig::new(false);
         let mut output = Vec::new();
         let mut err = Vec::new();
-        let mut prefixed_ui = PrefixedUI::new(ui, &mut output, &mut err)
+        let mut prefixed_ui = PrefixedUI::new(color_config, &mut output, &mut err)
             .with_output_prefix(CYAN.apply_to(">".to_string()))
             .with_warn_prefix(BOLD.apply_to(">!".to_string()));
         let dir = tempdir()?;
@@ -186,10 +188,10 @@ mod tests {
 
     #[test]
     fn test_replay_logs_invalid_utf8() -> Result<()> {
-        let ui = UI::new(true);
+        let color_config = ColorConfig::new(true);
         let mut output = Vec::new();
         let mut err = Vec::new();
-        let mut prefixed_ui = PrefixedUI::new(ui, &mut output, &mut err)
+        let mut prefixed_ui = PrefixedUI::new(color_config, &mut output, &mut err)
             .with_output_prefix(CYAN.apply_to(">".to_string()))
             .with_warn_prefix(BOLD.apply_to(">!".to_string()));
         let dir = tempdir()?;

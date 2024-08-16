@@ -31,9 +31,3 @@ rustflags = [
   "-Clink-arg=-fuse-ld=lld",
 ]
 
-[alias]
-xtask = "run --package xtask --"
-build = "build -p turbo"
-run = "run -p turbo"
-test = "groups test turborepo"
-check = "groups check turborepo"

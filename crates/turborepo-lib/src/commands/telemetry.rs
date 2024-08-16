@@ -10,12 +10,15 @@ fn log_status(config: TelemetryConfig, base: &CommandBase) {
         true => {
             println!(
                 "\nStatus: {}",
-                base.ui.apply(BOLD_GREEN.apply_to("Enabled"))
+                base.color_config.apply(BOLD_GREEN.apply_to("Enabled"))
             );
             println!("\nTurborepo telemetry is completely anonymous. Thank you for participating!");
         }
         false => {
-            println!("\nStatus: {}", base.ui.apply(BOLD_RED.apply_to("Disabled")));
+            println!(
+                "\nStatus: {}",
+                base.color_config.apply(BOLD_RED.apply_to("Disabled"))
+            );
             println!(
                 "\nYou have opted-out of Turborepo anonymous telemetry. No data will be collected \
                  from your machine."
@@ -28,8 +31,8 @@ fn log_status(config: TelemetryConfig, base: &CommandBase) {
 fn log_error(message: &str, error: &str, base: &CommandBase) {
     println!(
         "{}: {}",
-        color!(base.ui, BOLD_RED, "{}", message),
-        color!(base.ui, BOLD_RED, "{}", error)
+        color!(base.color_config, BOLD_RED, "{}", message),
+        color!(base.color_config, BOLD_RED, "{}", error)
     );
 }
 
@@ -52,7 +55,7 @@ pub fn configure(
             let result = config.enable();
             match result {
                 Ok(_) => {
-                    println!("{}", color!(base.ui, BOLD, "{}", "Success!"));
+                    println!("{}", color!(base.color_config, BOLD, "{}", "Success!"));
                     log_status(config, base);
                     telemetry.track_telemetry_config(true);
                 }
@@ -63,7 +66,7 @@ pub fn configure(
             let result = config.disable();
             match result {
                 Ok(_) => {
-                    println!("{}", color!(base.ui, BOLD, "{}", "Success!"));
+                    println!("{}", color!(base.color_config, BOLD, "{}", "Success!"));
                     log_status(config, base);
                     telemetry.track_telemetry_config(false);
                 }
