@@ -299,7 +299,7 @@ impl ConfigurationOptions {
     }
 
     pub fn scm_base(&self) -> &str {
-        self.scm_base.as_deref().unwrap_or("main")
+        self.scm_base.as_deref().unwrap_or("master")
     }
 
     pub fn scm_head(&self) -> &str {
