@@ -10,12 +10,11 @@ const generator = createGenerator({
   path: join(__dirname, "../src/index.ts"),
   tsconfig: join(__dirname, "../tsconfig.json"),
   type: "Schema",
-  minify: true,
 });
 
-const schemaV1 = JSON.stringify(generator.createSchema("SchemaV1"));
+const schemaV1 = JSON.stringify(generator.createSchema("SchemaV1"), null, 2);
 writeFileSync("schemas/schema.v1.json", schemaV1);
 
-const schemaV2 = JSON.stringify(generator.createSchema("Schema"));
+const schemaV2 = JSON.stringify(generator.createSchema("Schema"), null, 2);
 writeFileSync("schemas/schema.v2.json", schemaV2);
 writeFileSync("schemas/schema.json", schemaV2);
