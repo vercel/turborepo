@@ -101,27 +101,35 @@ impl<W> App<W> {
         }
     }
 
-    pub fn active_task(&self) -> &str {
+    pub fn active_task(&self) -> Result<&str, Error> {
         self.tasks_by_status.task_name(self.selected_task_index)
     }
 
-    fn input_options(&self) -> InputOptions {
-        let has_selection = self.get_full_task().has_selection();
-        InputOptions {
+    fn input_options(&self) -> Result<InputOptions, Error> {
+        let has_selection = self.get_full_task()?.has_selection();
+        Ok(InputOptions {
             focus: self.focus,
             tty_stdin: self.tty_stdin,
             has_selection,
-        }
+        })
     }
 
-    pub fn get_full_task(&self) -> &TerminalOutput<W> {
-        self.tasks.get(self.active_task()).unwrap()
+    pub fn get_full_task(&self) -> Result<&TerminalOutput<W>, Error> {
+        let active_task = self.active_task()?;
+        self.tasks
+            .get(active_task)
+            .ok_or_else(|| Error::TaskNotFound {
+                name: active_task.to_owned(),
+            })
     }
 
-    pub fn get_full_task_mut(&mut self) -> &mut TerminalOutput<W> {
+    pub fn get_full_task_mut(&mut self) -> Result<&mut TerminalOutput<W>, Error> {
         // Clippy is wrong here, we need this to avoid a borrow checker error
         #[allow(clippy::unnecessary_to_owned)]
-        self.tasks.get_mut(&self.active_task().to_owned()).unwrap()
+        let active_task = self.active_task()?.to_owned();
+        self.tasks
+            .get_mut(&active_task)
+            .ok_or_else(|| Error::TaskNotFound { name: active_task })
     }
 
     #[tracing::instrument(skip(self))]
@@ -145,8 +153,9 @@ impl<W> App<W> {
     }
 
     #[tracing::instrument(skip_all)]
-    pub fn scroll_terminal_output(&mut self, direction: Direction) {
-        self.get_full_task_mut().scroll(direction).unwrap();
+    pub fn scroll_terminal_output(&mut self, direction: Direction) -> Result<(), Error> {
+        self.get_full_task_mut()?.scroll(direction)?;
+        Ok(())
     }
 
     /// Mark the given task as started.
@@ -159,7 +168,7 @@ impl<W> App<W> {
         // We will use this after the order switches.
         let highlighted_task = self
             .tasks_by_status
-            .task_name(self.selected_task_index)
+            .task_name(self.selected_task_index)?
             .to_string();
 
         let mut found_task = false;
@@ -200,7 +209,7 @@ impl<W> App<W> {
         // We will use this after the order switches.
         let highlighted_task = self
             .tasks_by_status
-            .task_name(self.selected_task_index)
+            .task_name(self.selected_task_index)?
             .to_string();
 
         let running_idx = self
@@ -224,30 +233,31 @@ impl<W> App<W> {
         Ok(())
     }
 
-    pub fn has_stdin(&self) -> bool {
-        if let Some(term) = self.tasks.get(self.active_task()) {
-            term.stdin.is_some()
+    pub fn has_stdin(&self) -> Result<bool, Error> {
+        if let Some(term) = self.tasks.get(self.active_task()?) {
+            Ok(term.stdin.is_some())
         } else {
-            false
+            Ok(false)
         }
     }
 
-    pub fn interact(&mut self) {
+    pub fn interact(&mut self) -> Result<(), Error> {
         if matches!(self.focus, LayoutSections::Pane) {
             self.focus = LayoutSections::TaskList
-        } else if self.has_stdin() {
+        } else if self.has_stdin()? {
             self.focus = LayoutSections::Pane;
         }
+        Ok(())
     }
 
     #[tracing::instrument(skip(self))]
-    pub fn update_tasks(&mut self, tasks: Vec<String>) {
+    pub fn update_tasks(&mut self, tasks: Vec<String>) -> Result<(), Error> {
         if tasks.is_empty() {
             debug!("got request to update task list to empty list, ignoring request");
-            return;
+            return Ok(());
         }
         debug!("updating task list: {tasks:?}");
-        let highlighted_task = self.active_task().to_owned();
+        let highlighted_task = self.active_task()?.to_owned();
         // Make sure all tasks have a terminal output
         for task in &tasks {
             self.tasks.entry(task.clone()).or_insert_with(|| {
@@ -271,12 +281,14 @@ impl<W> App<W> {
             trace!("{highlighted_task} was removed from list");
             self.reset_scroll();
         }
+
+        Ok(())
     }
 
     #[tracing::instrument(skip(self))]
-    pub fn restart_tasks(&mut self, tasks: Vec<String>) {
+    pub fn restart_tasks(&mut self, tasks: Vec<String>) -> Result<(), Error> {
         debug!("tasks to reset: {tasks:?}");
-        let highlighted_task = self.active_task().to_owned();
+        let highlighted_task = self.active_task()?.to_owned();
         // Make sure all tasks have a terminal output
         for task in &tasks {
             self.tasks.entry(task.clone()).or_insert_with(|| {
@@ -287,8 +299,12 @@ impl<W> App<W> {
         self.tasks_by_status
             .restart_tasks(tasks.iter().map(|s| s.as_str()));
 
-        self.select_task(&highlighted_task)
-            .expect("should find task after restart");
+        if self.select_task(&highlighted_task).is_err() {
+            debug!("was unable to find {highlighted_task} after restart");
+            self.reset_scroll();
+        }
+
+        Ok(())
     }
 
     /// Persist all task output to the after closing the TUI
@@ -331,22 +347,20 @@ impl<W> App<W> {
             event.column -= table_width;
             debug!("translated mouse event: {event:?}");
 
-            let task = self.get_full_task_mut();
+            let task = self.get_full_task_mut()?;
             task.handle_mouse(event)?;
         }
 
         Ok(())
     }
 
-    pub fn copy_selection(&self) {
-        let task = self
-            .tasks
-            .get(self.active_task())
-            .expect("active task should exist");
+    pub fn copy_selection(&self) -> Result<(), Error> {
+        let task = self.get_full_task()?;
         let Some(text) = task.copy_selection() else {
-            return;
+            return Ok(());
         };
         super::copy_to_clipboard(&text);
+        Ok(())
     }
 
     fn select_task(&mut self, task_name: &str) -> Result<(), Error> {
@@ -402,10 +416,13 @@ impl<W: Write> App<W> {
     #[tracing::instrument(skip_all)]
     pub fn forward_input(&mut self, bytes: &[u8]) -> Result<(), Error> {
         if matches!(self.focus, LayoutSections::Pane) {
-            let task_output = self.get_full_task_mut();
+            let task_output = self.get_full_task_mut()?;
             if let Some(stdin) = &mut task_output.stdin {
                 stdin.write_all(bytes).map_err(|e| Error::Stdin {
-                    name: self.active_task().to_owned(),
+                    name: self
+                        .active_task()
+                        .unwrap_or("<unable to retrieve task name>")
+                        .to_owned(),
                     e,
                 })?;
             }
@@ -417,7 +434,12 @@ impl<W: Write> App<W> {
 
     #[tracing::instrument(skip(self, output))]
     pub fn process_output(&mut self, task: &str, output: &[u8]) -> Result<(), Error> {
-        let task_output = self.tasks.get_mut(task).unwrap();
+        let task_output = self
+            .tasks
+            .get_mut(task)
+            .ok_or_else(|| Error::TaskNotFound {
+                name: task.to_owned(),
+            })?;
         task_output.process(output);
         Ok(())
     }
@@ -453,7 +475,7 @@ fn run_app_inner<B: Backend + std::io::Write>(
     let mut last_render = Instant::now();
     let mut resize_debouncer = Debouncer::new(RESIZE_DEBOUNCE_DELAY);
     let mut callback = None;
-    while let Some(event) = poll(app.input_options(), &receiver, last_render + FRAMERATE) {
+    while let Some(event) = poll(app.input_options()?, &receiver, last_render + FRAMERATE) {
         let mut event = Some(event);
         let mut resize_event = None;
         if matches!(event, Some(Event::Resize { .. })) {
@@ -588,19 +610,19 @@ fn update(
         }
         Event::ScrollUp => {
             app.has_user_scrolled = true;
-            app.scroll_terminal_output(Direction::Up)
+            app.scroll_terminal_output(Direction::Up)?;
         }
         Event::ScrollDown => {
             app.has_user_scrolled = true;
-            app.scroll_terminal_output(Direction::Down)
+            app.scroll_terminal_output(Direction::Down)?;
         }
         Event::EnterInteractive => {
             app.has_user_scrolled = true;
-            app.interact();
+            app.interact()?;
         }
         Event::ExitInteractive => {
             app.has_user_scrolled = true;
-            app.interact();
+            app.interact()?;
         }
         Event::Input { bytes } => {
             app.forward_input(&bytes)?;
@@ -609,17 +631,16 @@ fn update(
             app.insert_stdin(&task, Some(stdin))?;
         }
         Event::UpdateTasks { tasks } => {
-            app.update_tasks(tasks);
-            // app.table.tick();
+            app.update_tasks(tasks)?;
         }
         Event::Mouse(m) => {
             app.handle_mouse(m)?;
         }
         Event::CopySelection => {
-            app.copy_selection();
+            app.copy_selection()?;
         }
         Event::RestartTasks { tasks } => {
-            app.restart_tasks(tasks);
+            app.restart_tasks(tasks)?;
         }
         Event::Resize { rows, cols } => {
             app.resize(rows, cols);
@@ -633,7 +654,7 @@ fn view<W>(app: &mut App<W>, f: &mut Frame) {
     let horizontal = Layout::horizontal([Constraint::Fill(1), Constraint::Length(cols)]);
     let [table, pane] = horizontal.areas(f.size());
 
-    let active_task = app.active_task().to_string();
+    let active_task = app.active_task().unwrap().to_string();
 
     let output_logs = app.tasks.get(&active_task).unwrap();
     let pane_to_render: TerminalPane<W> =
@@ -678,7 +699,7 @@ mod test {
     }
 
     #[test]
-    fn test_selection_follows() {
+    fn test_selection_follows() -> Result<(), Error> {
         let mut app: App<bool> = App::new(
             100,
             100,
@@ -686,20 +707,21 @@ mod test {
         );
         app.next();
         assert_eq!(app.scroll.selected(), Some(1), "selected b");
-        assert_eq!(app.active_task(), "b", "selected b");
+        assert_eq!(app.active_task()?, "b", "selected b");
         app.start_task("b", OutputLogs::Full).unwrap();
         assert_eq!(app.scroll.selected(), Some(0), "b stays selected");
-        assert_eq!(app.active_task(), "b", "selected b");
+        assert_eq!(app.active_task()?, "b", "selected b");
         app.start_task("a", OutputLogs::Full).unwrap();
         assert_eq!(app.scroll.selected(), Some(0), "b stays selected");
-        assert_eq!(app.active_task(), "b", "selected b");
+        assert_eq!(app.active_task()?, "b", "selected b");
         app.finish_task("a", TaskResult::Success).unwrap();
         assert_eq!(app.scroll.selected(), Some(0), "b stays selected");
-        assert_eq!(app.active_task(), "b", "selected b");
+        assert_eq!(app.active_task()?, "b", "selected b");
+        Ok(())
     }
 
     #[test]
-    fn test_restart_task() {
+    fn test_restart_task() -> Result<(), Error> {
         let mut app: App<()> = App::new(
             100,
             100,
@@ -708,29 +730,29 @@ mod test {
         app.next();
         app.next();
         // Start all tasks
-        app.start_task("b", OutputLogs::Full).unwrap();
-        app.start_task("a", OutputLogs::Full).unwrap();
-        app.start_task("c", OutputLogs::Full).unwrap();
+        app.start_task("b", OutputLogs::Full)?;
+        app.start_task("a", OutputLogs::Full)?;
+        app.start_task("c", OutputLogs::Full)?;
         assert_eq!(
-            app.tasks_by_status.task_name(0),
+            app.tasks_by_status.task_name(0)?,
             "b",
             "b is on top (running)"
         );
-        app.finish_task("a", TaskResult::Success).unwrap();
+        app.finish_task("a", TaskResult::Success)?;
         assert_eq!(
             (
-                app.tasks_by_status.task_name(2),
-                app.tasks_by_status.task_name(0)
+                app.tasks_by_status.task_name(2)?,
+                app.tasks_by_status.task_name(0)?
             ),
             ("a", "b"),
             "a is on bottom (done), b is second (running)"
         );
 
-        app.finish_task("b", TaskResult::Success).unwrap();
+        app.finish_task("b", TaskResult::Success)?;
         assert_eq!(
             (
-                app.tasks_by_status.task_name(1),
-                app.tasks_by_status.task_name(2)
+                app.tasks_by_status.task_name(1)?,
+                app.tasks_by_status.task_name(2)?
             ),
             ("a", "b"),
             "a is second (done), b is last (done)"
@@ -738,11 +760,11 @@ mod test {
 
         // Restart b
         app.restart_tasks(vec!["b".to_string()]);
-        app.start_task("b", OutputLogs::Full).unwrap();
+        app.start_task("b", OutputLogs::Full)?;
         assert_eq!(
             (
-                app.tasks_by_status.task_name(1),
-                app.tasks_by_status.task_name(0)
+                app.tasks_by_status.task_name(1)?,
+                app.tasks_by_status.task_name(0)?
             ),
             ("b", "c"),
             "b is second (running), c is first (running)"
@@ -750,21 +772,22 @@ mod test {
 
         // Restart a
         app.restart_tasks(vec!["a".to_string()]);
-        app.start_task("a", OutputLogs::Full).unwrap();
+        app.start_task("a", OutputLogs::Full)?;
         assert_eq!(
             (
-                app.tasks_by_status.task_name(0),
-                app.tasks_by_status.task_name(1),
-                app.tasks_by_status.task_name(2)
+                app.tasks_by_status.task_name(0)?,
+                app.tasks_by_status.task_name(1)?,
+                app.tasks_by_status.task_name(2)?
             ),
             ("c", "b", "a"),
             "c is on top (running), b is second (running), a is third
         (running)"
         );
+        Ok(())
     }
 
     #[test]
-    fn test_selection_stable() {
+    fn test_selection_stable() -> Result<(), Error> {
         let mut app: App<bool> = App::new(
             100,
             100,
@@ -773,42 +796,43 @@ mod test {
         app.next();
         app.next();
         assert_eq!(app.scroll.selected(), Some(2), "selected c");
-        assert_eq!(app.tasks_by_status.task_name(2), "c", "selected c");
+        assert_eq!(app.tasks_by_status.task_name(2)?, "c", "selected c");
         // start c which moves it to "running" which is before "planned"
-        app.start_task("c", OutputLogs::Full).unwrap();
+        app.start_task("c", OutputLogs::Full)?;
         assert_eq!(app.scroll.selected(), Some(0), "selection stays on c");
-        assert_eq!(app.tasks_by_status.task_name(0), "c", "selected c");
-        app.start_task("a", OutputLogs::Full).unwrap();
+        assert_eq!(app.tasks_by_status.task_name(0)?, "c", "selected c");
+        app.start_task("a", OutputLogs::Full)?;
         assert_eq!(app.scroll.selected(), Some(0), "selection stays on c");
-        assert_eq!(app.tasks_by_status.task_name(0), "c", "selected c");
+        assert_eq!(app.tasks_by_status.task_name(0)?, "c", "selected c");
         // c
         // a
         // b <-
         app.next();
         app.next();
         assert_eq!(app.scroll.selected(), Some(2), "selected b");
-        assert_eq!(app.tasks_by_status.task_name(2), "b", "selected b");
-        app.finish_task("a", TaskResult::Success).unwrap();
+        assert_eq!(app.tasks_by_status.task_name(2)?, "b", "selected b");
+        app.finish_task("a", TaskResult::Success)?;
         assert_eq!(app.scroll.selected(), Some(1), "b stays selected");
-        assert_eq!(app.tasks_by_status.task_name(1), "b", "selected b");
+        assert_eq!(app.tasks_by_status.task_name(1)?, "b", "selected b");
         // c <-
         // b
         // a
         app.previous();
-        app.finish_task("c", TaskResult::Success).unwrap();
+        app.finish_task("c", TaskResult::Success)?;
         assert_eq!(app.scroll.selected(), Some(2), "c stays selected");
-        assert_eq!(app.tasks_by_status.task_name(2), "c", "selected c");
+        assert_eq!(app.tasks_by_status.task_name(2)?, "c", "selected c");
+        Ok(())
     }
 
     #[test]
-    fn test_forward_stdin() {
+    fn test_forward_stdin() -> Result<(), Error> {
         let mut app: App<Vec<u8>> = App::new(100, 100, vec!["a".to_string(), "b".to_string()]);
         app.next();
         assert_eq!(app.scroll.selected(), Some(1), "selected b");
-        assert_eq!(app.tasks_by_status.task_name(1), "b", "selected b");
+        assert_eq!(app.tasks_by_status.task_name(1)?, "b", "selected b");
         // start c which moves it to "running" which is before "planned"
-        app.start_task("a", OutputLogs::Full).unwrap();
-        app.start_task("b", OutputLogs::Full).unwrap();
+        app.start_task("a", OutputLogs::Full)?;
+        app.start_task("b", OutputLogs::Full)?;
         app.insert_stdin("a", Some(Vec::new())).unwrap();
         app.insert_stdin("b", Some(Vec::new())).unwrap();
 
@@ -830,18 +854,19 @@ mod test {
             app.tasks.get("a").unwrap().stdin.as_deref().unwrap(),
             b"world"
         );
+        Ok(())
     }
 
     #[test]
-    fn test_interact() {
+    fn test_interact() -> Result<(), Error> {
         let mut app: App<Vec<u8>> = App::new(100, 100, vec!["a".to_string(), "b".to_string()]);
         assert!(!app.is_focusing_pane(), "app starts focused on table");
-        app.insert_stdin("a", Some(Vec::new())).unwrap();
+        app.insert_stdin("a", Some(Vec::new()))?;
 
-        app.interact();
+        app.interact()?;
         assert!(app.is_focusing_pane(), "can focus pane when task has stdin");
 
-        app.interact();
+        app.interact()?;
         assert!(
             !app.is_focusing_pane(),
             "interact changes focus to table if focused on pane"
@@ -849,58 +874,60 @@ mod test {
 
         app.next();
         assert!(!app.is_focusing_pane(), "pane isn't focused after move");
-        app.interact();
+        app.interact()?;
         assert!(!app.is_focusing_pane(), "cannot focus task without stdin");
+        Ok(())
     }
 
     #[test]
-    fn test_task_status() {
+    fn test_task_status() -> Result<(), Error> {
         let mut app: App<Vec<u8>> = App::new(100, 100, vec!["a".to_string(), "b".to_string()]);
         app.next();
         assert_eq!(app.scroll.selected(), Some(1), "selected b");
-        assert_eq!(app.tasks_by_status.task_name(1), "b", "selected b");
+        assert_eq!(app.tasks_by_status.task_name(1)?, "b", "selected b");
         // set status for a
-        app.set_status("a".to_string(), "building".to_string(), CacheResult::Hit)
-            .unwrap();
+        app.set_status("a".to_string(), "building".to_string(), CacheResult::Hit)?;
 
         assert_eq!(
             app.tasks.get("a").unwrap().status.as_deref(),
             Some("building")
         );
         assert!(app.tasks.get("b").unwrap().status.is_none());
+        Ok(())
     }
 
     #[test]
-    fn test_restarting_task_no_scroll() {
+    fn test_restarting_task_no_scroll() -> Result<(), Error> {
         let mut app: App<()> = App::new(
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
         );
         assert_eq!(app.scroll.selected(), Some(0), "selected a");
-        assert_eq!(app.tasks_by_status.task_name(0), "a", "selected a");
-        app.start_task("a", OutputLogs::None).unwrap();
-        app.start_task("b", OutputLogs::None).unwrap();
-        app.start_task("c", OutputLogs::None).unwrap();
-        app.finish_task("b", TaskResult::Success).unwrap();
-        app.finish_task("c", TaskResult::Success).unwrap();
-        app.finish_task("a", TaskResult::Success).unwrap();
+        assert_eq!(app.tasks_by_status.task_name(0)?, "a", "selected a");
+        app.start_task("a", OutputLogs::None)?;
+        app.start_task("b", OutputLogs::None)?;
+        app.start_task("c", OutputLogs::None)?;
+        app.finish_task("b", TaskResult::Success)?;
+        app.finish_task("c", TaskResult::Success)?;
+        app.finish_task("a", TaskResult::Success)?;
 
         assert_eq!(app.scroll.selected(), Some(0), "selected b");
-        assert_eq!(app.tasks_by_status.task_name(0), "b", "selected b");
+        assert_eq!(app.tasks_by_status.task_name(0)?, "b", "selected b");
 
-        app.restart_tasks(vec!["c".to_string()]);
+        app.restart_tasks(vec!["c".to_string()])?;
 
         assert_eq!(
             app.tasks_by_status
-                .task_name(app.scroll.selected().unwrap()),
+                .task_name(app.scroll.selected().unwrap())?,
             "c",
             "selected c"
         );
+        Ok(())
     }
 
     #[test]
-    fn test_restarting_task() {
+    fn test_restarting_task() -> Result<(), Error> {
         let mut app: App<()> = App::new(
             100,
             100,
@@ -908,29 +935,30 @@ mod test {
         );
         app.next();
         assert_eq!(app.scroll.selected(), Some(1), "selected b");
-        assert_eq!(app.tasks_by_status.task_name(1), "b", "selected b");
-        app.start_task("a", OutputLogs::None).unwrap();
-        app.start_task("b", OutputLogs::None).unwrap();
-        app.start_task("c", OutputLogs::None).unwrap();
-        app.finish_task("b", TaskResult::Success).unwrap();
-        app.finish_task("c", TaskResult::Success).unwrap();
-        app.finish_task("a", TaskResult::Success).unwrap();
+        assert_eq!(app.tasks_by_status.task_name(1)?, "b", "selected b");
+        app.start_task("a", OutputLogs::None)?;
+        app.start_task("b", OutputLogs::None)?;
+        app.start_task("c", OutputLogs::None)?;
+        app.finish_task("b", TaskResult::Success)?;
+        app.finish_task("c", TaskResult::Success)?;
+        app.finish_task("a", TaskResult::Success)?;
 
         assert_eq!(app.scroll.selected(), Some(0), "selected b");
-        assert_eq!(app.tasks_by_status.task_name(0), "b", "selected b");
+        assert_eq!(app.tasks_by_status.task_name(0)?, "b", "selected b");
 
-        app.restart_tasks(vec!["c".to_string()]);
+        app.restart_tasks(vec!["c".to_string()])?;
 
         assert_eq!(
             app.tasks_by_status
-                .task_name(app.scroll.selected().unwrap()),
+                .task_name(app.scroll.selected().unwrap())?,
             "b",
             "selected b"
         );
+        Ok(())
     }
 
     #[test]
-    fn test_resize() {
+    fn test_resize() -> Result<(), Error> {
         let mut app: App<Vec<u8>> = App::new(20, 24, vec!["a".to_string(), "b".to_string()]);
         let pane_rows = app.size.pane_rows();
         let pane_cols = app.size.pane_cols();
@@ -957,33 +985,36 @@ mod test {
                 "size mismatch for {name}"
             );
         }
+        Ok(())
     }
 
     #[test]
-    fn test_update_empty_task_list() {
+    fn test_update_empty_task_list() -> Result<(), Error> {
         let mut app: App<()> = App::new(
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
         );
         app.next();
-        app.update_tasks(Vec::new());
+        app.update_tasks(Vec::new())?;
 
-        assert_eq!(app.active_task(), "b", "selected b");
+        assert_eq!(app.active_task()?, "b", "selected b");
+        Ok(())
     }
 
     #[test]
-    fn test_restart_missing_task() {
+    fn test_restart_missing_task() -> Result<(), Error> {
         let mut app: App<()> = App::new(
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
         );
         app.next();
-        app.restart_tasks(vec!["d".to_string()]);
+        app.restart_tasks(vec!["d".to_string()])?;
 
-        assert_eq!(app.active_task(), "b", "selected b");
+        assert_eq!(app.active_task()?, "b", "selected b");
 
-        app.start_task("d", OutputLogs::Full).unwrap();
+        app.start_task("d", OutputLogs::Full)?;
+        Ok(())
     }
 }

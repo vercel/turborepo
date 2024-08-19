@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 use std::{collections::HashSet, mem, time::Instant};
 
-use super::event::TaskResult;
+use super::{event::TaskResult, Error};
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct Planned;
@@ -133,8 +133,13 @@ impl TasksByStatus {
         running_names.chain(planned_names).chain(finished_names)
     }
 
-    pub fn task_name(&self, index: usize) -> &str {
-        self.task_names_in_displayed_order().nth(index).unwrap()
+    pub fn task_name(&self, index: usize) -> Result<&str, Error> {
+        self.task_names_in_displayed_order()
+            .nth(index)
+            .ok_or_else(|| Error::TaskNotFoundIndex {
+                index,
+                len: self.count_all(),
+            })
     }
 
     pub fn tasks_started(&self) -> Vec<String> {
