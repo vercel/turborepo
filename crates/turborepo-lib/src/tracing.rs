@@ -1,4 +1,4 @@
-use std::{io, marker::PhantomData, path::Path, sync::Mutex};
+use std::{fs, io, marker::PhantomData, path::Path, sync::Mutex};
 
 use chrono::Local;
 use owo_colors::{
@@ -16,7 +16,9 @@ use tracing_subscriber::{
     reload::{self, Handle},
     EnvFilter, Layer, Registry,
 };
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_ui::ColorConfig;
+use uuid::Uuid;
 
 /// Helper type definition for hiding exact type information
 /// It still leaks the underlying subscriber type that the layer targets
@@ -36,6 +38,9 @@ type DaemonLogSubscriber = DynamicLayered<StdErrSubscriber>;
 
 pub struct TurboSubscriber {
     config: TracingConfig,
+    stderr_update: Handle<DynamicLayer<Registry>, Registry>,
+    file_guard: Mutex<Option<LogFileGuard>>,
+
     daemon_update: Handle<Option<DynamicLayer<StdErrSubscriber>>, StdErrSubscriber>,
 
     /// The non-blocking file logger only continues to log while this guard is
@@ -54,6 +59,14 @@ pub struct TurboSubscriber {
 struct TracingConfig {
     level_override: Option<LevelFilter>,
     emit_ansi: bool,
+}
+
+/// Guard for writing logs to a given file
+/// Will print log file location on drop
+#[derive(Debug)]
+struct LogFileGuard {
+    log_path: AbsoluteSystemPathBuf,
+    guard: tracing_appender::non_blocking::WorkerGuard,
 }
 
 impl TurboSubscriber {
@@ -77,7 +90,13 @@ impl TurboSubscriber {
     pub fn new_with_verbosity(verbosity: usize, color_config: &ColorConfig) -> Self {
         let config = TracingConfig::new(verbosity, color_config);
 
-        let stderr = config.stderr_subscriber();
+        let (stderr, stderr_guard) = config.stderr_subscriber(None);
+        debug_assert!(
+            stderr_guard.is_none(),
+            "no guard should be created when writing to stderr"
+        );
+        let (stderr, stderr_update) = reload::Layer::new(stderr);
+        let stderr = stderr.boxed();
 
         // we set this layer to None to start with, effectively disabling it
         let (logrotate, daemon_update) = reload::Layer::new(None);
@@ -103,6 +122,8 @@ impl TurboSubscriber {
 
         Self {
             config,
+            stderr_update,
+            file_guard: Mutex::default(),
             daemon_update,
             daemon_guard: Mutex::new(None),
             chrome_update,
@@ -155,6 +176,16 @@ impl TurboSubscriber {
             .lock()
             .expect("not poisoned")
             .replace(guard);
+
+        Ok(())
+    }
+
+    pub fn redirect_logs_to_file(&self, repo_root: &AbsoluteSystemPath) -> Result<(), Error> {
+        let (log_writer_layer, log_file_guard) = self.config.stderr_subscriber(Some(repo_root));
+
+        self.stderr_update.reload(log_writer_layer)?;
+        let mut file_guard_lock = self.file_guard.lock().expect("file guard lock poisoned");
+        *file_guard_lock = log_file_guard;
 
         Ok(())
     }
@@ -234,12 +265,49 @@ impl TracingConfig {
         }
     }
 
-    pub fn stderr_subscriber(&self) -> DynamicLayer<Registry> {
-        fmt::layer()
-            .with_writer(io::stderr)
-            .event_format(TurboFormatter::new_with_ansi(self.emit_ansi))
-            .with_filter(self.env_filter(LevelFilter::WARN))
-            .boxed()
+    pub fn stderr_subscriber(
+        &self,
+        repo_root: Option<&AbsoluteSystemPath>,
+    ) -> (DynamicLayer<Registry>, Option<LogFileGuard>) {
+        let layer = fmt::layer().event_format(TurboFormatter::new_with_ansi(self.emit_ansi));
+        let filter = self.env_filter(LevelFilter::WARN);
+        if let Some((log_path, log_file)) = repo_root.and_then(|path| {
+            Self::open_log_file(path)
+                .inspect_err(|e| tracing::warn!("unable to setup log file: {e}"))
+                .ok()
+        }) {
+            let (non_blocking, guard) = tracing_appender::non_blocking(log_file);
+            (
+                layer.with_writer(non_blocking).with_filter(filter).boxed(),
+                Some(LogFileGuard { log_path, guard }),
+            )
+        } else {
+            (
+                layer.with_writer(io::stderr).with_filter(filter).boxed(),
+                None,
+            )
+        }
+    }
+
+    fn open_log_file(
+        repo_root: &AbsoluteSystemPath,
+    ) -> io::Result<(AbsoluteSystemPathBuf, fs::File)> {
+        let uuid = Uuid::new_v4().hyphenated().to_string();
+        let log_path = repo_root.join_components(&[".turbo", "logs", uuid.as_str()]);
+        log_path.ensure_dir()?;
+        let mut open_opts = fs::OpenOptions::new();
+        let file = open_opts
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(&log_path)?;
+        Ok((log_path, file))
+    }
+}
+
+impl Drop for LogFileGuard {
+    fn drop(&mut self) {
+        eprintln!("turbo logs written to {}", self.log_path);
     }
 }
 
