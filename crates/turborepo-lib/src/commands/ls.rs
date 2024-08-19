@@ -39,7 +39,7 @@ impl<'a> Serialize for RepositoryDetails<'a> {
         let mut state = serializer.serialize_struct("RepositoryDetails", 2)?;
         state.serialize_field("package_manager", &self.package_manager)?;
 
-        let packages: Vec<_> = self
+        let package_items: Vec<_> = self
             .packages
             .iter()
             .map(|(name, path)| {
@@ -49,6 +49,11 @@ impl<'a> Serialize for RepositoryDetails<'a> {
                 })
             })
             .collect();
+
+        let packages = serde_json::json!({
+            "count": self.packages.len(),
+            "items": package_items,
+        });
 
         state.serialize_field("packages", &packages)?;
         state.end()
