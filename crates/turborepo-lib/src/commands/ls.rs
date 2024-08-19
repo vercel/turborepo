@@ -87,6 +87,11 @@ struct PackageDetails<'a> {
     dependencies: Vec<&'a str>,
 }
 
+#[derive(Clone, Serialize)]
+struct PackageDetailsList<'a> {
+    packages: Vec<PackageDetails<'a>>,
+}
+
 #[derive(Serialize)]
 struct PackageDetailsDisplay<'a> {
     name: &'a str,
@@ -134,9 +139,24 @@ pub async fn run(
     if packages.is_empty() {
         RepositoryDetails::new(&run).print(output)?;
     } else {
-        for package in packages {
-            let package_details = PackageDetails::new(&run, &package)?;
-            package_details.print(output);
+        match output {
+            Some(OutputFormat::Json) => {
+                let mut package_details_list = PackageDetailsList { packages: vec![] };
+                //  collect all package details
+                for package in &packages {
+                    let package_details = PackageDetails::new(&run, package)?;
+                    package_details_list.packages.push(package_details);
+                }
+
+                let as_json = serde_json::to_string_pretty(&package_details_list)?;
+                println!("{}", as_json);
+            }
+            Some(OutputFormat::Pretty) | None => {
+                for package in packages {
+                    let package_details = PackageDetails::new(&run, &package)?;
+                    package_details.print();
+                }
+            }
         }
     }
 
@@ -191,18 +211,16 @@ impl<'a> RepositoryDetails<'a> {
         }
     }
 
-    fn json_print(&self) {
-        let as_json = serde_json::to_string_pretty(&self);
-        match as_json {
-            Ok(json) => println!("{}", json),
-            Err(err) => println!(r#"{{"error": "{}"}}"#, err),
-        }
+    fn json_print(&self) -> Result<(), cli::Error> {
+        let as_json = serde_json::to_string_pretty(&self)?;
+        println!("{}", as_json);
+        Ok(())
     }
 
     fn print(&self, output: Option<OutputFormat>) -> Result<(), cli::Error> {
         match output {
             Some(OutputFormat::Json) => {
-                self.json_print();
+                self.json_print()?;
             }
             Some(OutputFormat::Pretty) | None => {
                 self.pretty_print();
@@ -252,7 +270,7 @@ impl<'a> PackageDetails<'a> {
         })
     }
 
-    fn pretty_print(&self) {
+    fn print(&self) {
         let name = color!(self.color_config, BOLD_GREEN, "{}", self.name);
         let depends_on = color!(self.color_config, BOLD, "depends on");
         let dependencies = if self.dependencies.is_empty() {
@@ -282,24 +300,5 @@ impl<'a> PackageDetails<'a> {
             );
         }
         println!();
-    }
-
-    fn json_print(&self) {
-        let as_json = serde_json::to_string_pretty(&self);
-        match as_json {
-            Ok(json) => println!("{}", json),
-            Err(err) => println!(r#"{{"error": "{}"}}"#, err),
-        }
-    }
-
-    fn print(&self, output: Option<OutputFormat>) {
-        match output {
-            Some(OutputFormat::Json) => {
-                self.json_print();
-            }
-            Some(OutputFormat::Pretty) | None => {
-                self.pretty_print();
-            }
-        }
     }
 }

@@ -20,15 +20,15 @@ Run info with json output
       "items": [
         {
           "name": "another",
-          "path": "packages[\/\\]another" (re)
+          "path": "packages(\/|\\\\)another" (re)
         },
         {
           "name": "my-app",
-          "path": "apps[\/\\]my-app" (re)
+          "path": "apps(\/|\\\\)my-app" (re)
         },
         {
           "name": "util",
-          "path": "packages[\/\\]util" (re)
+          "path": "packages(\/|\\\\)util" (re)
         }
       ]
     }
@@ -63,21 +63,25 @@ Run info on package `my-app` with json output
   $ ${TURBO} ls my-app --output=json
    WARNING  ls command is experimental and may change in the future
   {
-    "name": "my-app",
-    "tasks": {
-      "count": 2,
-      "items": [
-        {
-          "name": "build",
-          "command": "echo building"
+    "packages": [
+      {
+        "name": "my-app",
+        "tasks": {
+          "count": 2,
+          "items": [
+            {
+              "name": "build",
+              "command": "echo building"
+            },
+            {
+              "name": "maybefails",
+              "command": "exit 4"
+            }
+          ]
         },
-        {
-          "name": "maybefails",
-          "command": "exit 4"
-        }
-      ]
-    },
-    "dependencies": [
-      "util"
+        "dependencies": [
+          "util"
+        ]
+      }
     ]
   }
