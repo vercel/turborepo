@@ -23,7 +23,7 @@ pub use cache::{CacheOutput, ConfigCache, Error as CacheError, RunCache, TaskCac
 use chrono::{DateTime, Local};
 use rayon::iter::ParallelBridge;
 use tokio::{select, task::JoinHandle};
-use tracing::debug;
+use tracing::{debug, instrument};
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::{APIAuth, APIClient};
 use turborepo_ci::Vendor;
@@ -130,6 +130,7 @@ impl Run {
 
     // Produces the transitive closure of the filtered packages,
     // i.e. the packages relevant for this run.
+    #[instrument(skip(self), ret)]
     pub fn get_relevant_packages(&self) -> HashSet<PackageName> {
         let packages: Vec<_> = self
             .filtered_pkgs
