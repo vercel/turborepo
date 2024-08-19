@@ -1,7 +1,7 @@
 //! A command for outputting info about packages and tasks in a turborepo.
 
 use miette::Diagnostic;
-use serde::{ser::SerializeStruct, Serialize, Serializer};
+use serde::Serialize;
 use thiserror::Error;
 use turbopath::AnchoredSystemPath;
 use turborepo_repository::{
@@ -25,38 +25,49 @@ pub enum Error {
     PackageNotFound { package: String },
 }
 
+#[derive(Clone, Serialize)]
+#[serde(into = "RepositoryDetailsDisplay<'a>")]
 struct RepositoryDetails<'a> {
     color_config: ColorConfig,
     package_manager: &'a PackageManager,
     packages: Vec<(&'a PackageName, &'a AnchoredSystemPath)>,
 }
 
-impl<'a> Serialize for RepositoryDetails<'a> {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let mut state = serializer.serialize_struct("RepositoryDetails", 2)?;
-        state.serialize_field("packageManager", &self.package_manager)?;
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RepositoryDetailsDisplay<'a> {
+    package_manager: &'a PackageManager,
+    packages: PackagesDisplay,
+}
 
-        let package_items: Vec<_> = self
-            .packages
-            .iter()
-            .map(|(name, path)| {
-                serde_json::json!({
-                    "name": name.to_string(),
-                    "path": path.to_string(),
-                })
-            })
-            .collect();
+#[derive(Serialize)]
+struct PackagesDisplay {
+    count: usize,
+    items: Vec<PackageDetailDisplay>,
+}
 
-        let packages = serde_json::json!({
-            "count": self.packages.len(),
-            "items": package_items,
-        });
+#[derive(Serialize)]
+struct PackageDetailDisplay {
+    name: String,
+    path: String,
+}
 
-        state.serialize_field("packages", &packages)?;
-        state.end()
+impl<'a> Into<RepositoryDetailsDisplay<'a>> for RepositoryDetails<'a> {
+    fn into(self) -> RepositoryDetailsDisplay<'a> {
+        RepositoryDetailsDisplay {
+            package_manager: self.package_manager,
+            packages: PackagesDisplay {
+                count: self.packages.len(),
+                items: self
+                    .packages
+                    .into_iter()
+                    .map(|(name, path)| PackageDetailDisplay {
+                        name: name.to_string(),
+                        path: path.to_string(),
+                    })
+                    .collect(),
+            },
+        }
     }
 }
 
