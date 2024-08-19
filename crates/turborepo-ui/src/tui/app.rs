@@ -242,6 +242,10 @@ impl<W> App<W> {
 
     #[tracing::instrument(skip(self))]
     pub fn update_tasks(&mut self, tasks: Vec<String>) {
+        if tasks.is_empty() {
+            debug!("got request to update task list to empty list, ignoring request");
+            return;
+        }
         debug!("updating task list: {tasks:?}");
         let highlighted_task = self.active_task().to_owned();
         // Make sure all tasks have a terminal output
@@ -953,5 +957,18 @@ mod test {
                 "size mismatch for {name}"
             );
         }
+    }
+
+    #[test]
+    fn test_update_empty_task_list() {
+        let mut app: App<()> = App::new(
+            100,
+            100,
+            vec!["a".to_string(), "b".to_string(), "c".to_string()],
+        );
+        app.next();
+        app.update_tasks(Vec::new());
+
+        assert_eq!(app.active_task(), "b", "selected b");
     }
 }

@@ -8,6 +8,7 @@ use tokio::{
     sync::{Mutex, Notify},
     task::JoinHandle,
 };
+use tracing::{instrument, trace};
 use turborepo_repository::package_graph::PackageName;
 use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_ui::{tui, tui::AppSender};
@@ -200,6 +201,7 @@ impl WatchClient {
         }
     }
 
+    #[instrument(skip(changed_packages))]
     async fn handle_change_event(
         changed_packages: &Mutex<RefCell<ChangedPackages>>,
         event: proto::package_change_event::Event,
@@ -233,6 +235,7 @@ impl WatchClient {
 
     async fn execute_run(&mut self, changed_packages: ChangedPackages) -> Result<i32, Error> {
         // Should we recover here?
+        trace!("handling run with changed packages: {changed_packages:?}");
         match changed_packages {
             ChangedPackages::Some(packages) => {
                 let packages = packages
