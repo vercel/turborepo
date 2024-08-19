@@ -284,6 +284,25 @@ pub enum DaemonCommand {
     Logs,
 }
 
+#[derive(Copy, Clone, Debug, Default, ValueEnum, Serialize, Eq, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum OutputFormat {
+    /// Output in a human-readable format
+    #[default]
+    Pretty,
+    /// Output in JSON format for direct parsing
+    Json,
+}
+
+impl fmt::Display for OutputFormat {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            OutputFormat::Pretty => "pretty",
+            OutputFormat::Json => "json",
+        })
+    }
+}
+
 #[derive(Subcommand, Copy, Clone, Debug, PartialEq)]
 pub enum TelemetryCommand {
     /// Enables anonymous telemetry
@@ -507,6 +526,9 @@ pub enum Command {
         /// Get insight into a specific package, such as
         /// its dependencies and tasks
         packages: Vec<String>,
+        /// Output format
+        #[clap(long, value_enum)]
+        output: Option<OutputFormat>,
     },
     /// Link your local directory to a Vercel organization and enable remote
     /// caching.
@@ -1165,6 +1187,7 @@ pub async fn run(
             affected,
             filter,
             packages,
+            output,
         } => {
             warn!("ls command is experimental and may change in the future");
             let event = CommandEventBuilder::new("info").with_parent(&root_telemetry);
@@ -1173,8 +1196,9 @@ pub async fn run(
             let affected = *affected;
             let filter = filter.clone();
             let packages = packages.clone();
+            let output = output.clone();
             let base = CommandBase::new(cli_args, repo_root, version, color_config);
-            ls::run(base, packages, event, filter, affected).await?;
+            ls::run(base, packages, event, filter, affected, output).await?;
 
             Ok(0)
         }

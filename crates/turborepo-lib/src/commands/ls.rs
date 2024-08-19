@@ -1,6 +1,7 @@
 //! A command for outputting info about packages and tasks in a turborepo.
 
 use miette::Diagnostic;
+use serde::{ser::SerializeStruct, Serialize, Serializer};
 use thiserror::Error;
 use turbopath::AnchoredSystemPath;
 use turborepo_repository::{
@@ -12,7 +13,7 @@ use turborepo_ui::{color, cprint, cprintln, ColorConfig, BOLD, BOLD_GREEN, GREY}
 
 use crate::{
     cli,
-    cli::{Command, ExecutionArgs},
+    cli::{Command, ExecutionArgs, OutputFormat},
     commands::{run::get_signal, CommandBase},
     run::{builder::RunBuilder, Run},
     signal::SignalHandler,
@@ -30,10 +31,42 @@ struct RepositoryDetails<'a> {
     packages: Vec<(&'a PackageName, &'a AnchoredSystemPath)>,
 }
 
+impl<'a> Serialize for RepositoryDetails<'a> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut state = serializer.serialize_struct("RepositoryDetails", 2)?;
+        state.serialize_field("package_manager", &self.package_manager)?;
+
+        let packages: Vec<_> = self
+            .packages
+            .iter()
+            .map(|(name, path)| {
+                serde_json::json!({
+                    "name": name.to_string(),
+                    "path": path.to_string(),
+                })
+            })
+            .collect();
+
+        state.serialize_field("packages", &packages)?;
+        state.end()
+    }
+}
+
+#[derive(Serialize)]
+struct PackageTask<'a> {
+    name: &'a str,
+    command: &'a str,
+}
+
+#[derive(Serialize)]
 struct PackageDetails<'a> {
+    #[serde(skip)]
     color_config: ColorConfig,
     name: &'a str,
-    tasks: Vec<(&'a str, &'a str)>,
+    tasks: Vec<PackageTask<'a>>,
     dependencies: Vec<&'a str>,
 }
 
@@ -43,6 +76,7 @@ pub async fn run(
     telemetry: CommandEventBuilder,
     filter: Vec<String>,
     affected: bool,
+    output: Option<OutputFormat>,
 ) -> Result<(), cli::Error> {
     let signal = get_signal()?;
     let handler = SignalHandler::new(signal);
@@ -61,11 +95,11 @@ pub async fn run(
     let run = run_builder.build(&handler, telemetry).await?;
 
     if packages.is_empty() {
-        RepositoryDetails::new(&run).print()?;
+        RepositoryDetails::new(&run).print(output)?;
     } else {
         for package in packages {
             let package_details = PackageDetails::new(&run, &package)?;
-            package_details.print();
+            package_details.print(output);
         }
     }
 
@@ -99,7 +133,7 @@ impl<'a> RepositoryDetails<'a> {
             packages,
         }
     }
-    fn print(&self) -> Result<(), cli::Error> {
+    fn pretty_print(&self) {
         if self.packages.len() == 1 {
             cprintln!(self.color_config, BOLD, "{} package\n", self.packages.len());
         } else {
@@ -113,6 +147,21 @@ impl<'a> RepositoryDetails<'a> {
 
         for (package_name, entry) in &self.packages {
             println!("  {} {}", package_name, GREY.apply_to(entry));
+        }
+    }
+
+    fn json_print(&self) {
+        println!("{}", serde_json::to_string_pretty(&self).unwrap());
+    }
+
+    fn print(&self, output: Option<OutputFormat>) -> Result<(), cli::Error> {
+        match output {
+            Some(OutputFormat::Json) => {
+                self.json_print();
+            }
+            Some(OutputFormat::Pretty) | None => {
+                self.pretty_print();
+            }
         }
 
         Ok(())
@@ -153,12 +202,12 @@ impl<'a> PackageDetails<'a> {
             tasks: package_json
                 .scripts
                 .iter()
-                .map(|(name, command)| (name.as_str(), command.as_str()))
+                .map(|(name, command)| PackageTask { name, command })
                 .collect(),
         })
     }
 
-    fn print(&self) {
+    fn pretty_print(&self) {
         let name = color!(self.color_config, BOLD_GREEN, "{}", self.name);
         let depends_on = color!(self.color_config, BOLD, "depends on");
         let dependencies = if self.dependencies.is_empty() {
@@ -180,13 +229,28 @@ impl<'a> PackageDetails<'a> {
         } else {
             println!();
         }
-        for (name, command) in &self.tasks {
+        for task in &self.tasks {
             println!(
                 "  {}: {}",
-                name,
-                color!(self.color_config, GREY, "{}", command)
+                task.name,
+                color!(self.color_config, GREY, "{}", task.command)
             );
         }
         println!();
+    }
+
+    fn json_print(&self) {
+        println!("{}", serde_json::to_string_pretty(&self).unwrap());
+    }
+
+    fn print(&self, output: Option<OutputFormat>) {
+        match output {
+            Some(OutputFormat::Json) => {
+                self.json_print();
+            }
+            Some(OutputFormat::Pretty) | None => {
+                self.pretty_print();
+            }
+        }
     }
 }
