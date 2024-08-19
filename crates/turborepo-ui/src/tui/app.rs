@@ -619,7 +619,7 @@ fn update(
             app.copy_selection();
         }
         Event::RestartTasks { tasks } => {
-            app.update_tasks(tasks);
+            app.restart_tasks(tasks);
         }
         Event::Resize { rows, cols } => {
             app.resize(rows, cols);
@@ -970,5 +970,20 @@ mod test {
         app.update_tasks(Vec::new());
 
         assert_eq!(app.active_task(), "b", "selected b");
+    }
+
+    #[test]
+    fn test_restart_missing_task() {
+        let mut app: App<()> = App::new(
+            100,
+            100,
+            vec!["a".to_string(), "b".to_string(), "c".to_string()],
+        );
+        app.next();
+        app.restart_tasks(vec!["d".to_string()]);
+
+        assert_eq!(app.active_task(), "b", "selected b");
+
+        app.start_task("d", OutputLogs::Full).unwrap();
     }
 }

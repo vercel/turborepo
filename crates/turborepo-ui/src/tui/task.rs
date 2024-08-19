@@ -154,7 +154,7 @@ impl TasksByStatus {
     }
 
     pub fn restart_tasks<'a>(&mut self, tasks: impl Iterator<Item = &'a str>) {
-        let tasks_to_restart = tasks.collect::<HashSet<_>>();
+        let mut tasks_to_restart = tasks.collect::<HashSet<_>>();
 
         let (restarted_running, keep_running): (Vec<_>, Vec<_>) = mem::take(&mut self.running)
             .into_iter()
@@ -170,6 +170,17 @@ impl TasksByStatus {
                 .into_iter()
                 .map(|task| task.restart())
                 .chain(restarted_finished.into_iter().map(|task| task.restart())),
+        );
+        // There is a chance that watch might attempt to restart a task that did not
+        // exist before.
+        for task in &self.planned {
+            tasks_to_restart.remove(task.name());
+        }
+        self.planned.extend(
+            tasks_to_restart
+                .into_iter()
+                .map(ToOwned::to_owned)
+                .map(Task::new),
         );
         self.planned.sort_unstable();
     }
