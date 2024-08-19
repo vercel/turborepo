@@ -35,6 +35,7 @@ type StdErrSubscriber = DynamicLayered<Registry>;
 type DaemonLogSubscriber = DynamicLayered<StdErrSubscriber>;
 
 pub struct TurboSubscriber {
+    level_override: Option<LevelFilter>,
     daemon_update: Handle<Option<DynamicLayer<StdErrSubscriber>>, StdErrSubscriber>,
 
     /// The non-blocking file logger only continues to log while this guard is
@@ -74,33 +75,19 @@ impl TurboSubscriber {
             _ => Some(LevelFilter::TRACE),
         };
 
-        let env_filter = |level: LevelFilter| {
-            let filter = EnvFilter::builder()
-                .with_default_directive(level.into())
-                .with_env_var("TURBO_LOG_VERBOSITY")
-                .from_env_lossy()
-                .add_directive("reqwest=error".parse().unwrap())
-                .add_directive("hyper=warn".parse().unwrap())
-                .add_directive("h2=warn".parse().unwrap());
-
-            if let Some(max_level) = level_override {
-                filter.add_directive(max_level.into())
-            } else {
-                filter
-            }
-        };
-
         let stderr = fmt::layer()
             .with_writer(io::stderr)
             .event_format(TurboFormatter::new_with_ansi(
                 !color_config.should_strip_ansi,
             ))
-            .with_filter(env_filter(LevelFilter::WARN))
+            .with_filter(Self::env_filter(LevelFilter::WARN, level_override))
             .boxed();
 
         // we set this layer to None to start with, effectively disabling it
         let (logrotate, daemon_update) = reload::Layer::new(None);
-        let logrotate = logrotate.with_filter(env_filter(LevelFilter::INFO)).boxed();
+        let logrotate = logrotate
+            .with_filter(Self::env_filter(LevelFilter::INFO, level_override))
+            .boxed();
 
         let (chrome, chrome_update) = reload::Layer::new(None);
 
@@ -119,6 +106,7 @@ impl TurboSubscriber {
         registry.init();
 
         Self {
+            level_override,
             daemon_update,
             daemon_guard: Mutex::new(None),
             chrome_update,
@@ -173,6 +161,22 @@ impl TurboSubscriber {
             .replace(guard);
 
         Ok(())
+    }
+
+    fn env_filter(level: LevelFilter, level_override: Option<LevelFilter>) -> EnvFilter {
+        let filter = EnvFilter::builder()
+            .with_default_directive(level.into())
+            .with_env_var("TURBO_LOG_VERBOSITY")
+            .from_env_lossy()
+            .add_directive("reqwest=error".parse().unwrap())
+            .add_directive("hyper=warn".parse().unwrap())
+            .add_directive("h2=warn".parse().unwrap());
+
+        if let Some(max_level) = level_override {
+            filter.add_directive(max_level.into())
+        } else {
+            filter
+        }
     }
 }
 
