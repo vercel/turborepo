@@ -29,8 +29,9 @@ Do the same thing with the `ls` command
   $ ${TURBO} ls --affected
    WARNING  ls command is experimental and may change in the future
   1 package (npm)
+  
+    my-app apps/my-app
 
-    my-app apps[\/\\]my-app (re)
 
 Do the same thing with the `query` command
   $ ${TURBO} query "query { affectedPackages { name } }"
@@ -69,8 +70,9 @@ Do the same thing with the `ls` command
   $ ${TURBO} ls --affected
    WARNING  ls command is experimental and may change in the future
   1 package (npm)
+  
+    my-app apps/my-app
 
-    my-app apps[\/\\]my-app (re)
 
 Do the same thing with the `query` command
   $ ${TURBO} query "query { affectedPackages { name } }"
@@ -101,6 +103,7 @@ Do the same thing with the `ls` command
   $ TURBO_SCM_BASE="HEAD" ${TURBO} ls --affected
    WARNING  ls command is experimental and may change in the future
   0 no packages (npm)
+  
 
 
 Do the same thing with the `query` command
@@ -128,6 +131,7 @@ Do the same thing with the `ls` command
   $ TURBO_SCM_HEAD="main" ${TURBO} ls --affected
    WARNING  ls command is experimental and may change in the future
   0 no packages (npm)
+  
 
 
 Do the same thing with the `query` command
@@ -166,8 +170,9 @@ Do the same thing with the `ls` command
   $ ${TURBO} ls --affected
    WARNING  ls command is experimental and may change in the future
   1 package (npm)
+  
+    my-app apps/my-app
 
-    my-app apps[\/\\]my-app (re)
 
 Do the same thing with the `query` command
   $ ${TURBO} query "query { affectedPackages { name } }"
@@ -218,10 +223,11 @@ Do the same thing with the `ls` command
    WARNING  unable to detect git range, assuming all files have changed: git error: fatal: main...HEAD: no merge base
   
   3 packages (npm)
-
+  
     another packages[\/\\]another (re)
     my-app apps[\/\\]my-app (re)
     util packages[\/\\]util (re)
+
 
 Do the same thing with the `query` command
   $ ${TURBO} query "query { affectedPackages { name } }"
