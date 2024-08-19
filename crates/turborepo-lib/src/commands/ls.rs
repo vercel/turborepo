@@ -37,7 +37,7 @@ impl<'a> Serialize for RepositoryDetails<'a> {
         S: Serializer,
     {
         let mut state = serializer.serialize_struct("RepositoryDetails", 2)?;
-        state.serialize_field("package_manager", &self.package_manager)?;
+        state.serialize_field("packageManager", &self.package_manager)?;
 
         let package_items: Vec<_> = self
             .packages
@@ -139,16 +139,20 @@ impl<'a> RepositoryDetails<'a> {
         }
     }
     fn pretty_print(&self) {
-        if self.packages.len() == 1 {
-            cprintln!(self.color_config, BOLD, "{} package\n", self.packages.len());
-        } else {
-            cprintln!(
-                self.color_config,
-                BOLD,
-                "{} packages\n",
-                self.packages.len()
-            );
-        }
+        let package_copy = match self.packages.len() {
+            0 => "no packages",
+            1 => "package",
+            _ => "packages",
+        };
+
+        cprint!(
+            self.color_config,
+            BOLD,
+            "{} {} ",
+            self.packages.len(),
+            package_copy
+        );
+        cprintln!(self.color_config, GREY, "({})\n", self.package_manager);
 
         for (package_name, entry) in &self.packages {
             println!("  {} {}", package_name, GREY.apply_to(entry));
@@ -156,7 +160,11 @@ impl<'a> RepositoryDetails<'a> {
     }
 
     fn json_print(&self) {
-        println!("{}", serde_json::to_string_pretty(&self).unwrap());
+        let as_json = serde_json::to_string_pretty(&self);
+        match as_json {
+            Ok(json) => println!("{}", json),
+            Err(err) => println!(r#"{{"error": "{}"}}"#, err),
+        }
     }
 
     fn print(&self, output: Option<OutputFormat>) -> Result<(), cli::Error> {
@@ -245,7 +253,11 @@ impl<'a> PackageDetails<'a> {
     }
 
     fn json_print(&self) {
-        println!("{}", serde_json::to_string_pretty(&self).unwrap());
+        let as_json = serde_json::to_string_pretty(&self);
+        match as_json {
+            Ok(json) => println!("{}", json),
+            Err(err) => println!(r#"{{"error": "{}"}}"#, err),
+        }
     }
 
     fn print(&self, output: Option<OutputFormat>) {
