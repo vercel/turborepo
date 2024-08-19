@@ -1194,9 +1194,9 @@ pub async fn run(
 
             event.track_call();
             let affected = *affected;
+            let output = *output;
             let filter = filter.clone();
             let packages = packages.clone();
-            let output = output.clone();
             let base = CommandBase::new(cli_args, repo_root, version, color_config);
             ls::run(base, packages, event, filter, affected, output).await?;
 

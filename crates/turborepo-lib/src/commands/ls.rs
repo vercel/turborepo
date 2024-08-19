@@ -25,6 +25,12 @@ pub enum Error {
     PackageNotFound { package: String },
 }
 
+#[derive(Serialize)]
+struct ItemsWithCount<T> {
+    count: usize,
+    items: Vec<T>,
+}
+
 #[derive(Clone, Serialize)]
 #[serde(into = "RepositoryDetailsDisplay<'a>")]
 struct RepositoryDetails<'a> {
@@ -37,13 +43,7 @@ struct RepositoryDetails<'a> {
 #[serde(rename_all = "camelCase")]
 struct RepositoryDetailsDisplay<'a> {
     package_manager: &'a PackageManager,
-    packages: PackagesDisplay,
-}
-
-#[derive(Serialize)]
-struct PackagesDisplay {
-    count: usize,
-    items: Vec<PackageDetailDisplay>,
+    packages: ItemsWithCount<PackageDetailDisplay>,
 }
 
 #[derive(Serialize)]
@@ -52,13 +52,13 @@ struct PackageDetailDisplay {
     path: String,
 }
 
-impl<'a> Into<RepositoryDetailsDisplay<'a>> for RepositoryDetails<'a> {
-    fn into(self) -> RepositoryDetailsDisplay<'a> {
+impl<'a> From<RepositoryDetails<'a>> for RepositoryDetailsDisplay<'a> {
+    fn from(val: RepositoryDetails<'a>) -> Self {
         RepositoryDetailsDisplay {
-            package_manager: self.package_manager,
-            packages: PackagesDisplay {
-                count: self.packages.len(),
-                items: self
+            package_manager: val.package_manager,
+            packages: ItemsWithCount {
+                count: val.packages.len(),
+                items: val
                     .packages
                     .into_iter()
                     .map(|(name, path)| PackageDetailDisplay {
@@ -71,19 +71,40 @@ impl<'a> Into<RepositoryDetailsDisplay<'a>> for RepositoryDetails<'a> {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 struct PackageTask<'a> {
     name: &'a str,
     command: &'a str,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
+#[serde(into = "PackageDetailsDisplay<'a>")]
 struct PackageDetails<'a> {
     #[serde(skip)]
     color_config: ColorConfig,
     name: &'a str,
     tasks: Vec<PackageTask<'a>>,
     dependencies: Vec<&'a str>,
+}
+
+#[derive(Serialize)]
+struct PackageDetailsDisplay<'a> {
+    name: &'a str,
+    tasks: ItemsWithCount<PackageTask<'a>>,
+    dependencies: Vec<&'a str>,
+}
+
+impl<'a> From<PackageDetails<'a>> for PackageDetailsDisplay<'a> {
+    fn from(val: PackageDetails<'a>) -> Self {
+        PackageDetailsDisplay {
+            name: val.name,
+            dependencies: val.dependencies,
+            tasks: ItemsWithCount {
+                count: val.tasks.len(),
+                items: val.tasks,
+            },
+        }
+    }
 }
 
 pub async fn run(
