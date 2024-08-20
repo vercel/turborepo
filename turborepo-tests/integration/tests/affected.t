@@ -32,6 +32,20 @@ Do the same thing with the `ls` command
   
     my-app apps[\/\\]my-app (re)
 
+
+Do the same thing with the `query` command
+  $ ${TURBO} query "query { affectedPackages { name } }"
+   WARNING  query command is experimental and may change in the future
+  {
+    "data": {
+      "affectedPackages": [
+        {
+          "name": "my-app"
+        }
+      ]
+    }
+  }
+
 Commit the change
   $ git add .
   $ git commit -m "add foo" --quiet
@@ -60,6 +74,20 @@ Do the same thing with the `ls` command
   
     my-app apps[\/\\]my-app (re)
 
+
+Do the same thing with the `query` command
+  $ ${TURBO} query "query { affectedPackages { name } }"
+   WARNING  query command is experimental and may change in the future
+  {
+    "data": {
+      "affectedPackages": [
+        {
+          "name": "my-app"
+        }
+      ]
+    }
+  }
+
 Override the SCM base to be HEAD, so nothing runs
   $ TURBO_SCM_BASE="HEAD" ${TURBO} run build --affected --log-order grouped
   \xe2\x80\xa2 Packages in scope:  (esc)
@@ -80,6 +108,15 @@ Do the same thing with the `ls` command
   
 
 
+Do the same thing with the `query` command
+  $ ${TURBO} query "query { affectedPackages(base: \"HEAD\") { name } }"
+   WARNING  query command is experimental and may change in the future
+  {
+    "data": {
+      "affectedPackages": []
+    }
+  }
+
 Override the SCM head to be main, so nothing runs
   $ TURBO_SCM_HEAD="main" ${TURBO} run build --affected --log-order grouped
   \xe2\x80\xa2 Packages in scope:  (esc)
@@ -99,6 +136,15 @@ Do the same thing with the `ls` command
   0 no packages (npm)
   
 
+
+Do the same thing with the `query` command
+  $ ${TURBO} query "query { affectedPackages(head: \"main\") { name } }"
+   WARNING  query command is experimental and may change in the future
+  {
+    "data": {
+      "affectedPackages": []
+    }
+  }
 
 Now add a commit to `main` so the merge base is different from `main`
   $ git checkout main --quiet
@@ -130,6 +176,20 @@ Do the same thing with the `ls` command
   1 package (npm)
   
     my-app apps[\/\\]my-app (re)
+
+
+Do the same thing with the `query` command
+  $ ${TURBO} query "query { affectedPackages { name } }"
+   WARNING  query command is experimental and may change in the future
+  {
+    "data": {
+      "affectedPackages": [
+        {
+          "name": "my-app"
+        }
+      ]
+    }
+  }
 
 Now do some magic to change the repo to be shallow
   $ SHALLOW=$(git rev-parse --show-toplevel)/.git/shallow
@@ -174,3 +234,26 @@ Do the same thing with the `ls` command
     util packages[\/\\]util (re)
 
 
+Do the same thing with the `query` command
+  $ ${TURBO} query "query { affectedPackages { name } }"
+   WARNING  query command is experimental and may change in the future
+   WARNING  unable to detect git range, assuming all files have changed: git error: fatal: main...HEAD: no merge base
+  
+  {
+    "data": {
+      "affectedPackages": [
+        {
+          "name": "//"
+        },
+        {
+          "name": "another"
+        },
+        {
+          "name": "my-app"
+        },
+        {
+          "name": "util"
+        }
+      ]
+    }
+  }
