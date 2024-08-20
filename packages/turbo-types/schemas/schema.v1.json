@@ -103,7 +103,7 @@
           },
           "description": "The set of glob patterns to consider as inputs to this task.\n\nChanges to files covered by these globs will cause a cache miss and the task will be rerun.\n\nIf a file has been changed that is **not** included in the set of globs, it will not cause a cache miss.\n\nIf omitted or empty, all files in the package are considered as inputs.\n\nDocumentation: https://turbo.build/repo/docs/reference/configuration#inputs"
         },
-        "outputLogs": {
+        "outputMode": {
           "$ref": "#/definitions/OutputModeV1",
           "description": "Output mode for the task.\n\n\"full\": Displays all output\n\n\"hash-only\": Show only the hashes of the tasks\n\n\"new-only\": Only show output from cache misses\n\n\"errors-only\": Only show output from task failures\n\n\"none\": Hides all task output\n\nDocumentation: https://turbo.build/repo/docs/reference/run#--output-logs-option"
         },
@@ -194,13 +194,9 @@
           "$ref": "#/definitions/RemoteCacheV1",
           "description": "Configuration options that control how turbo interfaces with the remote cache.\n\nDocumentation: https://turbo.build/repo/docs/core-concepts/remote-caching"
         },
-        "ui": {
-          "$ref": "#/definitions/UIV1",
-          "description": "Enable use of the UI for `turbo`.\n\nDocumentation: https://turbo.build/repo/docs/reference/configuration#ui"
-        },
-        "dangerouslyDisablePackageManagerCheck": {
+        "experimentalUI": {
           "type": "boolean",
-          "description": "Disable check for `packageManager` in root `package.json`\n\nThis is highly discouraged as it leaves `turbo` dependent on system configuration to infer the correct package manager.\n\nSome turbo features are disabled if this is set to true."
+          "description": "Enable use of the new UI for `turbo`\n\nDocumentation: https://turbo.build/repo/docs/reference/configuration#ui"
         }
       },
       "additionalProperties": false,
@@ -221,13 +217,6 @@
         }
       },
       "additionalProperties": false
-    },
-    "UIV1": {
-      "type": "string",
-      "enum": [
-        "tui",
-        "stream"
-      ]
     }
   }
 }
