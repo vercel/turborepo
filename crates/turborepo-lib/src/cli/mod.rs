@@ -22,7 +22,7 @@ use turborepo_ui::{ColorConfig, GREY};
 use crate::{
     cli::error::print_potential_tasks,
     commands::{
-        bin, config, daemon, generate, link, login, logout, ls, prune, run, scan, telemetry,
+        bin, config, daemon, generate, link, login, logout, ls, prune, query, run, scan, telemetry,
         unlink, CommandBase,
     },
     get_version,
@@ -587,6 +587,13 @@ pub enum Command {
         run_args: Box<RunArgs>,
         #[clap(flatten)]
         execution_args: Box<ExecutionArgs>,
+    },
+    /// Query your monorepo using GraphQL. If no query is provided, spins up a
+    /// GraphQL server with GraphiQL.
+    #[clap(hide = true)]
+    Query {
+        /// The query to run, either a file path or a query string
+        query: Option<String>,
     },
     Watch(Box<ExecutionArgs>),
     /// Unlink the current directory from your Vercel organization and disable
@@ -1198,6 +1205,7 @@ pub async fn run(
             let filter = filter.clone();
             let packages = packages.clone();
             let base = CommandBase::new(cli_args, repo_root, version, color_config);
+
             ls::run(base, packages, event, filter, affected, output).await?;
 
             Ok(0)
@@ -1300,6 +1308,17 @@ pub async fn run(
                 }
             })?;
             Ok(exit_code)
+        }
+        Command::Query { query } => {
+            warn!("query command is experimental and may change in the future");
+            let query = query.clone();
+            let event = CommandEventBuilder::new("query").with_parent(&root_telemetry);
+            event.track_call();
+            let base = CommandBase::new(cli_args, repo_root, version, color_config);
+
+            let query = query::run(base, event, query).await?;
+
+            Ok(query)
         }
         Command::Watch(_) => {
             let event = CommandEventBuilder::new("watch").with_parent(&root_telemetry);

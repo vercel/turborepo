@@ -29,6 +29,7 @@ mod opts;
 mod package_changes_watcher;
 mod panic_handler;
 mod process;
+mod query;
 mod rewrite_json;
 mod run;
 mod shim;

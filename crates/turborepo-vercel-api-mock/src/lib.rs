@@ -4,13 +4,14 @@ use std::{collections::HashMap, fs::OpenOptions, io::Write, net::SocketAddr, syn
 
 use anyhow::Result;
 use axum::{
-    extract::{BodyStream, Path},
+    body::Body,
+    extract::Path,
     http::{HeaderMap, HeaderValue, StatusCode},
     routing::{get, head, options, patch, post, put},
     Json, Router,
 };
 use futures_util::StreamExt;
-use tokio::sync::Mutex;
+use tokio::{net::TcpListener, sync::Mutex};
 use turborepo_vercel_api::{
     AnalyticsEvent, CachingStatus, CachingStatusResponse, Membership, Role, Space, SpaceRun,
     SpacesResponse, Team, TeamsResponse, User, UserResponse, VerificationResponse,
@@ -146,7 +147,7 @@ pub async fn start_test_server(port: u16) -> Result<()> {
         .route(
             "/v8/artifacts/:hash",
             put(
-                |Path(hash): Path<String>, headers: HeaderMap, mut body: BodyStream| async move {
+                |Path(hash): Path<String>, headers: HeaderMap, body: Body| async move {
                     let root_path = put_tempdir_ref.path();
                     let file_path = root_path.join(&hash);
                     let mut file = OpenOptions::new()
@@ -164,7 +165,8 @@ pub async fn start_test_server(port: u16) -> Result<()> {
                     let mut durations_map = put_durations_ref.lock().await;
                     durations_map.insert(hash.clone(), duration);
 
-                    while let Some(item) = body.next().await {
+                    let mut body_stream = body.into_data_stream();
+                    while let Some(item) = body_stream.next().await {
                         let chunk = item.unwrap();
                         file.write_all(&chunk).unwrap();
                     }
@@ -275,11 +277,10 @@ pub async fn start_test_server(port: u16) -> Result<()> {
         );
 
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
+    let listener = TcpListener::bind(addr).await?;
     // We print the port so integration tests can use it
     println!("{}", port);
-    axum_server::bind(addr)
-        .serve(app.into_make_service())
-        .await?;
+    axum::serve(listener, app).await?;
 
     Ok(())
 }
