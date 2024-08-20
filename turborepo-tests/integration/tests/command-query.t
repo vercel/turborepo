@@ -2,7 +2,8 @@ Setup
   $ . ${TESTDIR}/../../helpers/setup_integration_test.sh
 
 Query packages
-  $ ${TURBO} query "query { packages { name } }"
+  $ ${TURBO} query "query { packages { name } }" | jq
+   WARNING  query command is experimental and may change in the future
   {
     "data": {
       "packages": [
@@ -23,7 +24,8 @@ Query packages
   }
 
 Query packages with equals filter
-  $ ${TURBO} query "query { packages(filter: { equal: { field: NAME, value: \"my-app\" } }) { name } }"
+  $ ${TURBO} query "query { packages(filter: { equal: { field: NAME, value: \"my-app\" } }) { name } }" | jq
+   WARNING  query command is experimental and may change in the future
   {
     "data": {
       "packages": [
@@ -35,7 +37,8 @@ Query packages with equals filter
   }
 
 Query packages that have at least one dependent package
-  $ ${TURBO} query "query { packages(filter: { greaterThan: { field: DEPENDENT_COUNT, value: 0 } }) { name } }"
+  $ ${TURBO} query "query { packages(filter: { greaterThan: { field: DEPENDENT_COUNT, value: 0 } }) { name } }" | jq
+   WARNING  query command is experimental and may change in the future
   {
     "data": {
       "packages": [
@@ -47,7 +50,8 @@ Query packages that have at least one dependent package
   }
 
 Get dependents of `util`
-  $ ${TURBO} query "query { packages(filter: { equal: { field: NAME, value: \"util\" } }) { dependents { name } } }"
+  $ ${TURBO} query "query { packages(filter: { equal: { field: NAME, value: \"util\" } }) { dependents { name } } }" | jq
+   WARNING  query command is experimental and may change in the future
   {
     "data": {
       "packages": [
@@ -63,7 +67,8 @@ Get dependents of `util`
   }
 
 Get dependencies of `my-app`
-  $ ${TURBO} query "query { packages(filter: { equal: { field: NAME, value: \"my-app\" } }) { dependencies { name } } }"
+  $ ${TURBO} query "query { packages(filter: { equal: { field: NAME, value: \"my-app\" } }) { dependencies { name } } }" | jq
+   WARNING  query command is experimental and may change in the future
   {
     "data": {
       "packages": [
@@ -85,7 +90,8 @@ Write query to file
   $ echo 'query { packages { name } }' > query.gql
 
 Run the query
-  $ ${TURBO} query query.gql
+  $ ${TURBO} query query.gql | jq
+   WARNING  query command is experimental and may change in the future
   {
     "data": {
       "packages": [

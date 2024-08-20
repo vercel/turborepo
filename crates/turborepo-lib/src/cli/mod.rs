@@ -1310,6 +1310,7 @@ pub async fn run(
             Ok(exit_code)
         }
         Command::Query { query } => {
+            warn!("query command is experimental and may change in the future");
             let query = query.clone();
             let event = CommandEventBuilder::new("query").with_parent(&root_telemetry);
             event.track_call();

@@ -35,6 +35,7 @@ Do the same thing with the `ls` command
 
 Do the same thing with the `query` command
   $ ${TURBO} query "query { affectedPackages { name } }"
+   WARNING  query command is experimental and may change in the future
   {
     "data": {
       "affectedPackages": [
@@ -76,6 +77,7 @@ Do the same thing with the `ls` command
 
 Do the same thing with the `query` command
   $ ${TURBO} query "query { affectedPackages { name } }"
+   WARNING  query command is experimental and may change in the future
   {
     "data": {
       "affectedPackages": [
@@ -108,6 +110,7 @@ Do the same thing with the `ls` command
 
 Do the same thing with the `query` command
   $ ${TURBO} query "query { affectedPackages(base: \"HEAD\") { name } }"
+   WARNING  query command is experimental and may change in the future
   {
     "data": {
       "affectedPackages": []
@@ -136,6 +139,7 @@ Do the same thing with the `ls` command
 
 Do the same thing with the `query` command
   $ ${TURBO} query "query { affectedPackages(head: \"main\") { name } }"
+   WARNING  query command is experimental and may change in the future
   {
     "data": {
       "affectedPackages": []
@@ -176,6 +180,7 @@ Do the same thing with the `ls` command
 
 Do the same thing with the `query` command
   $ ${TURBO} query "query { affectedPackages { name } }"
+   WARNING  query command is experimental and may change in the future
   {
     "data": {
       "affectedPackages": [
@@ -231,6 +236,7 @@ Do the same thing with the `ls` command
 
 Do the same thing with the `query` command
   $ ${TURBO} query "query { affectedPackages { name } }"
+   WARNING  query command is experimental and may change in the future
    WARNING  unable to detect git range, assuming all files have changed: git error: fatal: main...HEAD: no merge base
   
   {
