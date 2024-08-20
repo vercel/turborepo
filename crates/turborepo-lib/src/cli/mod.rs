@@ -1270,7 +1270,7 @@ pub async fn run(
             }
 
             run_args.track(&event);
-            let exit_code = run::run(base, event).await.inspect(|code| {
+            let exit_code = run::run(base, event, logger).await.inspect(|code| {
                 if *code != 0 {
                     error!("run failed: command  exited ({code})");
                 }
@@ -1282,7 +1282,7 @@ pub async fn run(
             event.track_call();
             let base = CommandBase::new(cli_args, repo_root, version, color_config);
 
-            let mut client = WatchClient::new(base, event).await?;
+            let mut client = WatchClient::new(base, event, logger).await?;
             client.start().await?;
             // We only exit if we get a signal, so we return a non-zero exit code
             return Ok(1);

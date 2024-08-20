@@ -23,7 +23,7 @@ pub use cache::{CacheOutput, ConfigCache, Error as CacheError, RunCache, TaskCac
 use chrono::{DateTime, Local};
 use rayon::iter::ParallelBridge;
 use tokio::{select, task::JoinHandle};
-use tracing::debug;
+use tracing::{debug, warn};
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::{APIAuth, APIClient};
 use turborepo_ci::Vendor;
@@ -43,6 +43,7 @@ use crate::{
     signal::SignalHandler,
     task_graph::Visitor,
     task_hash::{get_external_deps_hash, get_internal_deps_hash, PackageInputsHashes},
+    tracing::TurboSubscriber,
     turbo_json::{TurboJson, UIMode},
     DaemonClient, DaemonConnector,
 };
@@ -190,6 +191,7 @@ impl Run {
     #[allow(clippy::type_complexity)]
     pub fn start_experimental_ui(
         &self,
+        logger: &TurboSubscriber,
     ) -> Result<Option<(AppSender, JoinHandle<Result<(), tui::Error>>)>, Error> {
         // Print prelude here as this needs to happen before the UI is started
         if self.should_print_prelude {
@@ -204,6 +206,11 @@ impl Run {
         // If there aren't any tasks to run, then shouldn't start the UI
         if task_names.is_empty() {
             return Ok(None);
+        }
+        // Redirect any tracing logs to a file to prevent logs from corrupting
+        // the TUI
+        if let Err(e) = logger.redirect_logs_to_file(&self.repo_root) {
+            warn!("failed to redirect logs to file: {e}");
         }
 
         let (sender, receiver) = AppSender::new();

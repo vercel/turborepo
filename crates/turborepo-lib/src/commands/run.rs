@@ -3,7 +3,12 @@ use std::future::Future;
 use tracing::error;
 use turborepo_telemetry::events::command::CommandEventBuilder;
 
-use crate::{commands::CommandBase, run, run::builder::RunBuilder, signal::SignalHandler};
+use crate::{
+    commands::CommandBase,
+    run::{self, builder::RunBuilder},
+    signal::SignalHandler,
+    tracing::TurboSubscriber,
+};
 
 #[cfg(windows)]
 pub fn get_signal() -> Result<impl Future<Output = Option<()>>, run::Error> {
@@ -31,7 +36,11 @@ pub fn get_signal() -> Result<impl Future<Output = Option<()>>, run::Error> {
     })
 }
 
-pub async fn run(base: CommandBase, telemetry: CommandEventBuilder) -> Result<i32, run::Error> {
+pub async fn run(
+    base: CommandBase,
+    telemetry: CommandEventBuilder,
+    logger: &TurboSubscriber,
+) -> Result<i32, run::Error> {
     let signal = get_signal()?;
     let handler = SignalHandler::new(signal);
 
@@ -44,7 +53,7 @@ pub async fn run(base: CommandBase, telemetry: CommandEventBuilder) -> Result<i3
             .build(&handler, telemetry)
             .await?;
 
-        let (sender, handle) = run.start_experimental_ui()?.unzip();
+        let (sender, handle) = run.start_experimental_ui(logger)?.unzip();
         let result = run.run(sender.clone(), false).await;
 
         if let Some(analytics_handle) = analytics_handle {

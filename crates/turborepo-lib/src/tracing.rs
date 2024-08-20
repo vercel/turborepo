@@ -278,7 +278,7 @@ impl TracingConfig {
         }) {
             let (non_blocking, guard) = tracing_appender::non_blocking(log_file);
             (
-                layer.with_writer(non_blocking).with_filter(filter).boxed(),
+                layer.with_writer(non_blocking).boxed(),
                 Some(LogFileGuard { log_path, guard }),
             )
         } else {

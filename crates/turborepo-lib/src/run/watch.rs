@@ -14,12 +14,12 @@ use turborepo_ui::{tui, tui::AppSender};
 
 use crate::{
     cli::{Command, RunArgs},
-    commands,
-    commands::CommandBase,
+    commands::{self, CommandBase},
     daemon::{proto, DaemonConnectorError, DaemonError},
-    get_version, opts, run,
-    run::{builder::RunBuilder, scope::target_selector::InvalidSelectorError, Run},
+    get_version, opts,
+    run::{self, builder::RunBuilder, scope::target_selector::InvalidSelectorError, Run},
     signal::SignalHandler,
+    tracing::TurboSubscriber,
     DaemonConnector, DaemonPaths,
 };
 
@@ -103,7 +103,11 @@ pub enum Error {
 }
 
 impl WatchClient {
-    pub async fn new(base: CommandBase, telemetry: CommandEventBuilder) -> Result<Self, Error> {
+    pub async fn new(
+        base: CommandBase,
+        telemetry: CommandEventBuilder,
+        logger: &TurboSubscriber,
+    ) -> Result<Self, Error> {
         let signal = commands::run::get_signal()?;
         let handler = SignalHandler::new(signal);
 
@@ -123,7 +127,7 @@ impl WatchClient {
 
         let watched_packages = run.get_relevant_packages();
 
-        let (sender, handle) = run.start_experimental_ui()?.unzip();
+        let (sender, handle) = run.start_experimental_ui(logger)?.unzip();
 
         let connector = DaemonConnector {
             can_start_server: true,
