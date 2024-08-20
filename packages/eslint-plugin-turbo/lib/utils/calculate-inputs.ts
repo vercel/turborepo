@@ -3,8 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type { WorkspaceConfig } from "@turbo/utils";
 import { getWorkspaceConfigs } from "@turbo/utils";
-import type { Pipeline } from "@turbo/types";
-import type { RootSchema, RootSchemaV1 } from "@turbo/types/src/types/config";
+import type { PipelineV1, RootSchemaV1 } from "@turbo/types";
 import { forEachTaskDef } from "@turbo/utils/src/getTurboConfigs";
 import { dotEnv } from "./dotenv-processing";
 import { wildcardTests } from "./wildcard-processing";
@@ -132,17 +131,20 @@ function processDotEnv(
 
 function processGlobal(
   workspacePath: string,
-  rootTurboJson: RootSchema | RootSchemaV1
+  schemaV1: RootSchemaV1
 ): EnvironmentConfig {
   return {
-    legacyConfig: processLegacyConfig(rootTurboJson.globalDependencies),
-    env: processEnv(rootTurboJson.globalEnv),
-    passThroughEnv: processPassThroughEnv(rootTurboJson.globalPassThroughEnv),
-    dotEnv: processDotEnv(workspacePath, rootTurboJson.globalDotEnv),
+    legacyConfig: processLegacyConfig(schemaV1.globalDependencies),
+    env: processEnv(schemaV1.globalEnv),
+    passThroughEnv: processPassThroughEnv(schemaV1.globalPassThroughEnv),
+    dotEnv: processDotEnv(workspacePath, schemaV1.globalDotEnv),
   };
 }
 
-function processTask(workspacePath: string, task: Pipeline): EnvironmentConfig {
+function processTask(
+  workspacePath: string,
+  task: PipelineV1
+): EnvironmentConfig {
   return {
     legacyConfig: processLegacyConfig(task.dependsOn),
     env: processEnv(task.env),
