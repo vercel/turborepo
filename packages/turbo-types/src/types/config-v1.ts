@@ -5,8 +5,6 @@ export type OutputModeV1 =
   | "errors-only"
   | "none";
 
-export type UIV1 = "tui" | "stream";
-
 /**
  * This is a relative Unix-style path (e.g. `./src/index.ts` or `src/index.ts`).  Absolute paths (e.g. `/tmp/foo`) are not valid.
  */
@@ -270,13 +268,13 @@ export interface RootSchemaV1 extends BaseSchemaV1 {
   remoteCache?: RemoteCacheV1;
 
   /**
-   * Enable use of the UI for `turbo`.
+   * Enable use of the new UI for `turbo`
    *
    * Documentation: https://turbo.build/repo/docs/reference/configuration#ui
    *
-   * @defaultValue `"stream"`
+   * @defaultValue `false`
    */
-  ui?: UIV1;
+  experimentalUI?: boolean;
 
   /**
    * Disable check for `packageManager` in root `package.json`
