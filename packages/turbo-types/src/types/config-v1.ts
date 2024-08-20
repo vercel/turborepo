@@ -122,7 +122,7 @@ export interface PipelineV1 {
    *
    * @defaultValue `"full"`
    */
-  outputLogs?: OutputModeV1;
+  outputMode?: OutputModeV1;
 
   /**
    * Indicates whether the task exits or not. Setting `persistent` to `true` tells

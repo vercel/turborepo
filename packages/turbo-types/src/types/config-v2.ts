@@ -1,4 +1,4 @@
-export type OutputMode =
+export type OutputLogs =
   | "full"
   | "hash-only"
   | "new-only"
@@ -259,7 +259,7 @@ export interface Pipeline {
    *
    * @defaultValue `"full"`
    */
-  outputLogs?: OutputMode;
+  outputLogs?: OutputLogs;
 
   /**
    * Indicates whether the task exits or not. Setting `persistent` to `true` tells
