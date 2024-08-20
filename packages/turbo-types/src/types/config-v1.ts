@@ -275,18 +275,6 @@ export interface RootSchemaV1 extends BaseSchemaV1 {
    * @defaultValue `false`
    */
   experimentalUI?: boolean;
-
-  /**
-   * Disable check for `packageManager` in root `package.json`
-   *
-   * This is highly discouraged as it leaves `turbo` dependent on system
-   * configuration to infer the correct package manager.
-   *
-   * Some turbo features are disabled if this is set to true.
-   *
-   * @defaultValue `false`
-   */
-  dangerouslyDisablePackageManagerCheck?: boolean;
 }
 
 export const isRootSchemaV1 = (schema: SchemaV1): schema is RootSchemaV1 =>
