@@ -3,15 +3,16 @@ import path from "node:path";
 import yaml from "js-yaml";
 import { sync } from "fast-glob";
 import JSON5 from "json5";
-import * as logger from "./logger";
-import { getTurboRoot } from "./getTurboRoot";
-import type { PackageJson, PNPMWorkspaceConfig } from "./types";
-import {
+import type {
   BaseSchemaV1,
   PipelineV1,
   SchemaV1,
-} from "@turbo/types/src/types/config-v1";
-import { BaseSchemaV2, PipelineV2 } from "@turbo/types";
+  BaseSchemaV2,
+  PipelineV2,
+} from "@turbo/types";
+import * as logger from "./logger";
+import { getTurboRoot } from "./getTurboRoot";
+import type { PackageJson, PNPMWorkspaceConfig } from "./types";
 
 const ROOT_GLOB = "turbo.json";
 const ROOT_WORKSPACE_GLOB = "package.json";
