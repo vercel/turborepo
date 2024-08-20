@@ -30,7 +30,7 @@ Do the same thing with the `ls` command
    WARNING  ls command is experimental and may change in the future
   1 package (npm)
   
-    my-app apps/my-app
+    my-app apps[\/\\]my-app (re)
 
 
 Do the same thing with the `query` command
@@ -72,7 +72,7 @@ Do the same thing with the `ls` command
    WARNING  ls command is experimental and may change in the future
   1 package (npm)
   
-    my-app apps/my-app
+    my-app apps[\/\\]my-app (re)
 
 
 Do the same thing with the `query` command
@@ -175,7 +175,7 @@ Do the same thing with the `ls` command
    WARNING  ls command is experimental and may change in the future
   1 package (npm)
   
-    my-app apps/my-app
+    my-app apps[\/\\]my-app (re)
 
 
 Do the same thing with the `query` command

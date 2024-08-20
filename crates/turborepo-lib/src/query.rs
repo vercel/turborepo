@@ -248,11 +248,11 @@ impl Query {
         opts.scope_opts.affected_range = Some((base, head));
 
         Ok(RunBuilder::calculate_filtered_packages(
-            &self.run.repo_root(),
+            self.run.repo_root(),
             &opts,
-            &self.run.pkg_dep_graph(),
-            &self.run.scm(),
-            &self.run.root_turbo_json(),
+            self.run.pkg_dep_graph(),
+            self.run.scm(),
+            self.run.root_turbo_json(),
         )?
         .into_iter()
         .map(|package| Package {

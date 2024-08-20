@@ -139,10 +139,10 @@ impl RunBuilder {
     ) -> Result<HashSet<PackageName>, Error> {
         let (mut filtered_pkgs, is_all_packages) = scope::resolve_packages(
             &opts.scope_opts,
-            &repo_root,
-            &pkg_dep_graph,
-            &scm,
-            &root_turbo_json,
+            repo_root,
+            pkg_dep_graph,
+            scm,
+            root_turbo_json,
         )?;
 
         if is_all_packages {
