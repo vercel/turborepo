@@ -29,7 +29,6 @@ export {
   type RemoteCacheV1,
   type RootSchemaV1,
   type SchemaV1,
-  type UIV1,
   type WorkspaceSchemaV1,
   isRootSchemaV1,
   isWorkspaceSchemaV1,
