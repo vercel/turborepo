@@ -136,7 +136,7 @@ export interface RootSchema extends BaseSchema {
   cacheDir?: RelativeUnixPath;
 
   /**
-   * Turbo can run a background process to pre-calculate values used for determining work that needs to be done. This standalone process (daemon) is an optimization, and not required for proper functioning of turbo.
+   * Turborepo runs a background process to pre-calculate some expensive operations. This standalone process (daemon) is a performance optimization, and not required for proper functioning of `turbo`.
    *
    * Documentation: https://turbo.build/repo/docs/reference/configuration#daemon
    *
