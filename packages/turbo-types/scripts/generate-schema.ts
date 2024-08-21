@@ -1,6 +1,4 @@
 #!/usr/bin/env node
-/* eslint-disable @typescript-eslint/no-unsafe-assignment -- we're messing with TypeScript internals here */
-/* eslint-disable @typescript-eslint/no-unsafe-call -- we're messing with TypeScript internals here */
 
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -35,6 +33,7 @@ const replaceJSDoc = (
           jsDoc.tags.forEach((tag) => {
             if (tag.tagName.text === "defaultValue") {
               // @ts-expect-error TypeScript doesn't want us to be able to assign to a readonly value here
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call -- we're messing with TypeScript's internals here
               tag.tagName.escapedText = tag.tagName.escapedText.replace(
                 "defaultValue",
                 "default"
