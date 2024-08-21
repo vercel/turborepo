@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type { WorkspaceConfig } from "@turbo/utils";
 import { getWorkspaceConfigs } from "@turbo/utils";
-import type { PipelineV1, RootSchemaV1 } from "@turbo/types";
+import type { PipelineV1, RootSchemaV1, RootSchemaV2 } from "@turbo/types";
 import { forEachTaskDef } from "@turbo/utils/src/getTurboConfigs";
 import { dotEnv } from "./dotenv-processing";
 import { wildcardTests } from "./wildcard-processing";
@@ -131,13 +131,16 @@ function processDotEnv(
 
 function processGlobal(
   workspacePath: string,
-  schemaV1: RootSchemaV1
+  schema: RootSchemaV1 | RootSchemaV2
 ): EnvironmentConfig {
   return {
-    legacyConfig: processLegacyConfig(schemaV1.globalDependencies),
-    env: processEnv(schemaV1.globalEnv),
-    passThroughEnv: processPassThroughEnv(schemaV1.globalPassThroughEnv),
-    dotEnv: processDotEnv(workspacePath, schemaV1.globalDotEnv),
+    legacyConfig: processLegacyConfig(schema.globalDependencies),
+    env: processEnv(schema.globalEnv),
+    passThroughEnv: processPassThroughEnv(schema.globalPassThroughEnv),
+    dotEnv: processDotEnv(
+      workspacePath,
+      "globalDotEnv" in schema ? schema.globalDotEnv : undefined
+    ),
   };
 }
 
