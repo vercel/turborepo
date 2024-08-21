@@ -131,7 +131,7 @@ export interface RootSchema extends BaseSchema {
    *
    * Documentation: https://turbo.build/repo/docs/reference/configuration#cachedir
    *
-   * @defaultValue `"".turbo/cache"`
+   * @defaultValue `".turbo/cache"`
    */
   cacheDir?: RelativeUnixPath;
 
