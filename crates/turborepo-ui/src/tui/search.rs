@@ -59,6 +59,11 @@ impl SearchResults {
     pub fn has_matches(&self) -> bool {
         !self.matches.is_empty()
     }
+
+    /// Returns query
+    pub fn query(&self) -> &str {
+        &self.query
+    }
 }
 
 #[cfg(test)]
