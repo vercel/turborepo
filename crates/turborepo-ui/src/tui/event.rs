@@ -45,6 +45,20 @@ pub enum Event {
         rows: u16,
         cols: u16,
     },
+    SearchEnter,
+    SearchExit {
+        restore_scroll: bool,
+    },
+    SearchScroll {
+        direction: Direction,
+    },
+    SearchEnterChar(char),
+    SearchBackspace,
+}
+
+pub enum Direction {
+    Up,
+    Down,
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
