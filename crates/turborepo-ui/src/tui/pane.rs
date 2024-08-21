@@ -29,15 +29,13 @@ impl<'a, W> TerminalPane<'a, W> {
             task_name,
         }
     }
-}
 
-impl<'a, W> Widget for &TerminalPane<'a, W> {
-    fn render(self, area: ratatui::prelude::Rect, buf: &mut ratatui::prelude::Buffer)
-    where
-        Self: Sized,
-    {
-        let screen = self.terminal_output.parser.screen();
-        let mut help_text = if self.highlight {
+    fn highlight(&self) -> bool {
+        self.highlight
+    }
+
+    fn footer(&self) -> Line {
+        let mut help_text = if self.highlight() {
             FOOTER_TEXT_ACTIVE
         } else {
             FOOTER_TEXT_INACTIVE
@@ -48,10 +46,20 @@ impl<'a, W> Widget for &TerminalPane<'a, W> {
             help_text.push(' ');
             help_text.push_str(HAS_SELECTION);
         }
+        Line::from(help_text).centered()
+    }
+}
+
+impl<'a, W> Widget for &TerminalPane<'a, W> {
+    fn render(self, area: ratatui::prelude::Rect, buf: &mut ratatui::prelude::Buffer)
+    where
+        Self: Sized,
+    {
+        let screen = self.terminal_output.parser.screen();
         let block = Block::default()
             .borders(Borders::LEFT)
             .title(self.terminal_output.title(self.task_name))
-            .title_bottom(Line::from(help_text).centered())
+            .title_bottom(self.footer())
             .style(if self.highlight {
                 Style::new().fg(ratatui::style::Color::Yellow)
             } else {
