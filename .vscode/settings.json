@@ -18,5 +18,11 @@
     "files.insertFinalNewline": false,
     "files.trimTrailingWhitespace": false
   },
-  "typescript.tsdk": "node_modules/typescript/lib"
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "json.schemas": [
+    {
+      "fileMatch": ["turbo.json"],
+      "url": "./packages/turbo-types/schemas/schema.json"
+    }
+  ]
 }

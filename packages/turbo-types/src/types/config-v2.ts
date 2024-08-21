@@ -1,13 +1,20 @@
-/* This file generates the `schema.json` file. */
-export type Schema = RootSchema | WorkspaceSchema;
+export type OutputLogs =
+  | "full"
+  | "hash-only"
+  | "new-only"
+  | "errors-only"
+  | "none";
+export type EnvMode = "strict" | "loose";
+export type UI = "tui" | "stream";
 
-/* Used to support codemods that target turbo 1 */
-export type LegacySchema = LegacyRootSchema | LegacyWorkspaceSchema;
-
-export type SchemaV1 = RootSchemaV1 | WorkspaceSchemaV1;
+/**
+ * This is a relative Unix-style path (e.g. `./src/index.ts` or `src/index.ts`).  Absolute paths (e.g. `/tmp/foo`) are not valid.
+ */
+export type RelativeUnixPath = string;
+export type EnvWildcard = string;
 
 export interface BaseSchema {
-  /** @defaultValue `https://turbo.build/schema.json` */
+  /** @defaultValue `https://turbo.build/schema.v2.json` */
   $schema?: string;
   /**
    * An object representing the task dependency graph of your project. turbo interprets
@@ -18,6 +25,7 @@ export interface BaseSchema {
    *
    * @defaultValue `{}`
    */
+
   // eslint-disable-next-line @typescript-eslint/consistent-indexed-object-style -- it's more readable to specify a name for the key
   tasks: {
     /**
@@ -29,15 +37,7 @@ export interface BaseSchema {
   };
 }
 
-export interface BaseSchemaV1 {
-  // eslint-disable-next-line @typescript-eslint/consistent-indexed-object-style -- it's more readable to specify a name for the key
-  pipeline: {
-    [script: string]: Pipeline;
-  };
-}
-
-export type LegacyBaseSchema = BaseSchema | BaseSchemaV1;
-
+/** A `turbo.json` file in a package in the monorepo (not the root) */
 export interface WorkspaceSchema extends BaseSchema {
   /**
    * This key is only available in Workspace Configs
@@ -53,14 +53,6 @@ export interface WorkspaceSchema extends BaseSchema {
    */
   extends: Array<string>;
 }
-
-export type LegacyWorkspaceSchema = WorkspaceSchema & LegacyBaseSchema;
-
-export type WorkspaceSchemaV1 = Omit<
-  WorkspaceSchema,
-  "tasks" | "dangerouslyDisablePackageManagerCheck"
-> &
-  BaseSchemaV1;
 
 export interface RootSchema extends BaseSchema {
   /**
@@ -103,16 +95,6 @@ export interface RootSchema extends BaseSchema {
    * @defaultValue `null`
    */
   globalPassThroughEnv?: null | Array<EnvWildcard>;
-
-  /**
-   * @deprecated as of Turborepo 2.0.0. Consider using {@link RootSchema.globalDependencies} instead.
-   *
-   * A priority-ordered (most-significant to least-significant) array of project-anchored
-   * Unix-style paths to `.env` files to include in the global hash.
-   *
-   * @defaultValue `null`
-   */
-  globalDotEnv?: null | Array<AnchoredUnixPath>;
 
   /**
    * Configuration options that control how turbo interfaces with the remote cache.
@@ -175,10 +157,6 @@ export interface RootSchema extends BaseSchema {
   envMode?: EnvMode;
 }
 
-export type LegacyRootSchema = RootSchema & LegacyBaseSchema;
-
-export type RootSchemaV1 = Omit<RootSchema, "tasks"> & BaseSchemaV1;
-
 export interface Pipeline {
   /**
    * The list of tasks that this task depends on.
@@ -222,16 +200,6 @@ export interface Pipeline {
    * @defaultValue `null`
    */
   passThroughEnv?: null | Array<EnvWildcard>;
-
-  /**
-   * @deprecated as of Turborepo 2.0.0. Consider using {@link Pipeline.inputs} instead.
-   *
-   * A priority-ordered (most-significant to least-significant) array of workspace-anchored
-   * Unix-style paths to `.env` files to include in the task hash.
-   *
-   * @defaultValue `null`
-   */
-  dotEnv?: null | Array<AnchoredUnixPath>;
 
   /**
    * The set of glob patterns indicating a task's cacheable filesystem outputs.
@@ -291,7 +259,7 @@ export interface Pipeline {
    *
    * @defaultValue `"full"`
    */
-  outputLogs?: OutputMode;
+  outputLogs?: OutputLogs;
 
   /**
    * Indicates whether the task exits or not. Setting `persistent` to `true` tells
@@ -338,18 +306,11 @@ export interface RemoteCache {
   enabled?: boolean;
 }
 
-export type OutputMode =
-  | "full"
-  | "hash-only"
-  | "new-only"
-  | "errors-only"
-  | "none";
-export type EnvMode = "strict" | "loose";
-export type UI = "tui" | "stream";
+export const isRootSchemaV2 = (schema: Schema): schema is RootSchema =>
+  !("extends" in schema);
 
-/**
- * This is a relative Unix-style path (e.g. `./src/index.ts` or `src/index.ts`).  Absolute paths (e.g. `/tmp/foo`) are not valid.
- */
-export type RelativeUnixPath = string;
-export type AnchoredUnixPath = string;
-export type EnvWildcard = string;
+export const isWorkspaceSchemaV2 = (
+  schema: Schema
+): schema is WorkspaceSchema => !isRootSchemaV2(schema);
+
+export type Schema = RootSchema | WorkspaceSchema;

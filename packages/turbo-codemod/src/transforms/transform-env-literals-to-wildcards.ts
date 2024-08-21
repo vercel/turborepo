@@ -1,8 +1,7 @@
 import path from "node:path";
 import { readJsonSync, existsSync } from "fs-extra";
 import { type PackageJson, getTurboConfigs } from "@turbo/utils";
-import type { EnvWildcard } from "@turbo/types";
-import type { RootSchemaV1, SchemaV1 } from "@turbo/types/src/types/config";
+import type { RootSchemaV1, SchemaV1, EnvWildcard } from "@turbo/types";
 import type { Transformer, TransformerArgs } from "../types";
 import { getTransformerHelpers } from "../utils/getTransformerHelpers";
 import type { TransformerResults } from "../runner";
