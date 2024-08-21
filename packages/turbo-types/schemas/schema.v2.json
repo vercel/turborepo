@@ -68,7 +68,7 @@
         },
         "cacheDir": {
           "$ref": "#/definitions/RelativeUnixPath",
-          "description": "Specify the filesystem cache directory.\n\nDocumentation: https://turbo.build/repo/docs/reference/configuration#tasks"
+          "description": "Specify the filesystem cache directory.\n\nDocumentation: https://turbo.build/repo/docs/reference/configuration#cachedir"
         },
         "daemon": {
           "type": "boolean",
@@ -76,7 +76,7 @@
         },
         "envMode": {
           "$ref": "#/definitions/EnvMode",
-          "description": "Turborepo's Environment Modes allow you to control which environment variables are available to a task at runtime:\n\n- **Strict Mode**: Filter environment variables to only those that are specified in the `env` and `globalEnv` keys in `turbo.json`.\n- **Loose Mode**: Allow all environment variables for the process to be available.\n\nDocumentation: https://turbo.build/repo/docs/crafting-your-repository/using-environment-variables#environment-modes"
+          "description": "Turborepo's Environment Modes allow you to control which environment variables are available to a task at runtime:\n\n- `\"strict\"`: Filter environment variables to only those that are specified in the `env` and `globalEnv` keys in `turbo.json`.\n- `\"loose\"`: Allow all environment variables for the process to be available.\n\nDocumentation: https://turbo.build/repo/docs/reference/configuration#envmode"
         }
       },
       "additionalProperties": false,
