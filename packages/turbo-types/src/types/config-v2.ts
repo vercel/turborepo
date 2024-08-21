@@ -129,14 +129,14 @@ export interface RootSchema extends BaseSchema {
   /**
    * Specify the filesystem cache directory.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#tasks
+   * Documentation: https://turbo.build/repo/docs/reference/configuration#cachedir
    *
-   * @defaultValue `"".turbo/cache"`
+   * @defaultValue `".turbo/cache"`
    */
   cacheDir?: RelativeUnixPath;
 
   /**
-   * Turbo can run a background process to pre-calculate values used for determining work that needs to be done. This standalone process (daemon) is an optimization, and not required for proper functioning of turbo.
+   * Turborepo runs a background process to pre-calculate some expensive operations. This standalone process (daemon) is a performance optimization, and not required for proper functioning of `turbo`.
    *
    * Documentation: https://turbo.build/repo/docs/reference/configuration#daemon
    *
@@ -147,10 +147,10 @@ export interface RootSchema extends BaseSchema {
   /**
    * Turborepo's Environment Modes allow you to control which environment variables are available to a task at runtime:
    *
-   * - **Strict Mode**: Filter environment variables to only those that are specified in the `env` and `globalEnv` keys in `turbo.json`.
-   * - **Loose Mode**: Allow all environment variables for the process to be available.
+   * - `"strict"`: Filter environment variables to only those that are specified in the `env` and `globalEnv` keys in `turbo.json`.
+   * - `"loose"`: Allow all environment variables for the process to be available.
    *
-   * Documentation: https://turbo.build/repo/docs/crafting-your-repository/using-environment-variables#environment-modes
+   * Documentation: https://turbo.build/repo/docs/reference/configuration#envmode
    *
    * @defaultValue `"strict"`
    */
