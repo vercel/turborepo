@@ -1026,7 +1026,7 @@ mod test {
             TestChangeDetector::new(&[]),
         );
 
-        let packages = resolver.get_filtered_packages(selectors).unwrap();
+        let packages = resolver.get_filtered_packages(None, selectors).unwrap();
 
         assert_eq!(
             packages,
@@ -1043,10 +1043,13 @@ mod test {
             TestChangeDetector::new(&[]),
         );
         let packages = resolver
-            .get_filtered_packages(vec![TargetSelector {
-                name_pattern: "bar".to_string(),
-                ..Default::default()
-            }])
+            .get_filtered_packages(
+                None,
+                vec![TargetSelector {
+                    name_pattern: "bar".to_string(),
+                    ..Default::default()
+                }],
+            )
             .unwrap();
 
         assert_eq!(
@@ -1065,18 +1068,24 @@ mod test {
             None,
             TestChangeDetector::new(&[]),
         );
-        let packages = resolver.get_filtered_packages(vec![TargetSelector {
-            name_pattern: "bar".to_string(),
-            ..Default::default()
-        }]);
+        let packages = resolver.get_filtered_packages(
+            None,
+            vec![TargetSelector {
+                name_pattern: "bar".to_string(),
+                ..Default::default()
+            }],
+        );
 
         assert!(packages.is_err(), "non existing package name should error",);
 
         let packages = resolver
-            .get_filtered_packages(vec![TargetSelector {
-                name_pattern: "@foo/bar".to_string(),
-                ..Default::default()
-            }])
+            .get_filtered_packages(
+                None,
+                vec![TargetSelector {
+                    name_pattern: "@foo/bar".to_string(),
+                    ..Default::default()
+                }],
+            )
             .unwrap();
         assert_eq!(
             packages,
@@ -1092,18 +1101,24 @@ mod test {
             None,
             TestChangeDetector::new(&[]),
         );
-        let packages = resolver.get_filtered_packages(vec![TargetSelector {
-            name_pattern: "bar".to_string(),
-            ..Default::default()
-        }]);
+        let packages = resolver.get_filtered_packages(
+            None,
+            vec![TargetSelector {
+                name_pattern: "bar".to_string(),
+                ..Default::default()
+            }],
+        );
 
         assert!(packages.is_err(), "non existing package name should error",);
 
         let packages = resolver
-            .get_filtered_packages(vec![TargetSelector {
-                name_pattern: "baz*".to_string(),
-                ..Default::default()
-            }])
+            .get_filtered_packages(
+                None,
+                vec![TargetSelector {
+                    name_pattern: "baz*".to_string(),
+                    ..Default::default()
+                }],
+            )
             .unwrap();
         assert!(
             packages.is_empty(),
@@ -1120,10 +1135,13 @@ mod test {
             None,
             TestChangeDetector::new(&[]),
         );
-        let packages = resolver.get_filtered_packages(vec![TargetSelector {
-            parent_dir: Some(AnchoredSystemPathBuf::try_from("pakcages/*").unwrap()),
-            ..Default::default()
-        }]);
+        let packages = resolver.get_filtered_packages(
+            None,
+            vec![TargetSelector {
+                parent_dir: Some(AnchoredSystemPathBuf::try_from("pakcages/*").unwrap()),
+                ..Default::default()
+            }],
+        );
 
         assert!(packages.is_err(), "non existing dir should error",);
     }
@@ -1232,7 +1250,7 @@ mod test {
             scm_resolver,
         );
 
-        let packages = resolver.get_filtered_packages(selectors).unwrap();
+        let packages = resolver.get_filtered_packages(None, selectors).unwrap();
         assert_eq!(
             packages,
             expected.iter().map(|s| PackageName::from(*s)).collect()
