@@ -64,7 +64,7 @@ pub enum Error {
     #[error(transparent)]
     Walk(#[from] globwalk::WalkError),
     #[error("unable to resolve base branch, please set with TURBO_SCM_BASE")]
-    UnableToResolveRef(),
+    UnableToResolveRef,
 }
 
 impl From<wax::BuildError> for Error {
