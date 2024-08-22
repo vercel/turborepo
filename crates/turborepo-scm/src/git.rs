@@ -1,6 +1,6 @@
 use std::{backtrace::Backtrace, collections::HashSet, path::PathBuf, process::Command};
 
-use tracing::log::warn;
+use tracing::warn;
 use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeUnixPath,
 };
@@ -238,17 +238,24 @@ mod tests {
         process::Command,
     };
 
-    use git2::{Oid, Repository};
+    use git2::{Oid, Repository, RepositoryInitOptions};
     use tempfile::TempDir;
+    use test_case::test_case;
     use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError};
     use which::which;
 
     use super::{previous_content, ChangedFiles};
-    use crate::{Error, SCM};
+    use crate::{Error, Git, SCM};
 
-    fn setup_repository() -> Result<(TempDir, Repository), Error> {
+    fn setup_repository(
+        init_opts: Option<&RepositoryInitOptions>,
+    ) -> Result<(TempDir, Repository), Error> {
         let repo_root = tempfile::tempdir()?;
-        let repo = Repository::init(repo_root.path()).unwrap();
+        let repo = Repository::init_opts(
+            repo_root.path(),
+            init_opts.unwrap_or(&RepositoryInitOptions::new()),
+        )
+        .unwrap();
         let mut config = repo.config().unwrap();
         config.set_str("user.name", "test").unwrap();
         config.set_str("user.email", "test@example.com").unwrap();
@@ -368,7 +375,7 @@ mod tests {
 
     #[test]
     fn test_deleted_files() -> Result<(), Error> {
-        let (repo_root, repo) = setup_repository()?;
+        let (repo_root, repo) = setup_repository(None)?;
 
         let file = repo_root.path().join("foo.js");
         let file_path = Path::new("foo.js");
@@ -396,7 +403,7 @@ mod tests {
 
     #[test]
     fn test_merge_base() -> Result<(), Error> {
-        let (repo_root, repo) = setup_repository()?;
+        let (repo_root, repo) = setup_repository(None)?;
         let first_file = repo_root.path().join("foo.js");
         fs::write(first_file, "let z = 0;")?;
         // Create a base commit. This will *not* be the merge base
@@ -444,7 +451,7 @@ mod tests {
 
     #[test]
     fn test_changed_files() -> Result<(), Error> {
-        let (repo_root, repo) = setup_repository()?;
+        let (repo_root, repo) = setup_repository(None)?;
         let mut index = repo.index().unwrap();
         let turbo_root = repo_root.path();
         let file = repo_root.path().join("foo.js");
@@ -544,7 +551,7 @@ mod tests {
 
     #[test]
     fn test_changed_files_with_root_as_relative() -> Result<(), Error> {
-        let (repo_root, repo) = setup_repository()?;
+        let (repo_root, repo) = setup_repository(None)?;
         let file = repo_root.path().join("foo.js");
         fs::write(file, "let z = 0;")?;
 
@@ -573,7 +580,7 @@ mod tests {
     // (occurs when the monorepo is nested inside a subdirectory of git repository)
     #[test]
     fn test_changed_files_with_subdir_as_turbo_root() -> Result<(), Error> {
-        let (repo_root, repo) = setup_repository()?;
+        let (repo_root, repo) = setup_repository(None)?;
 
         fs::create_dir(repo_root.path().join("subdir"))?;
         // Create additional nested directory to test that we return a system path
@@ -638,7 +645,7 @@ mod tests {
 
     #[test]
     fn test_previous_content() -> Result<(), Error> {
-        let (repo_root, repo) = setup_repository()?;
+        let (repo_root, repo) = setup_repository(None)?;
 
         let root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
         let file = root.join_component("foo.js");
@@ -675,7 +682,7 @@ mod tests {
 
     #[test]
     fn test_revparse() -> Result<(), Error> {
-        let (repo_root, repo) = setup_repository()?;
+        let (repo_root, repo) = setup_repository(None)?;
         let root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
 
         let file = root.join_component("foo.js");
@@ -724,53 +731,47 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn test_base_resolution() -> Result<(), Error> {
-        let (repo_root, repo) = setup_repository()?;
+    #[test_case(vec!["main"],                      None,            Some("main"))]
+    #[test_case(vec!["master"],                    None,            Some("master"))]
+    #[test_case(vec!["ziltoid"],                   None,            None)]
+    #[test_case(vec!["ziltoid", "main"],           Some("ziltoid"), Some("ziltoid"))]
+    #[test_case(vec!["ziltoid", "main"],           Some("main"),    Some("main"))]
+    #[test_case(vec!["ziltoid", "main"],           None,            Some("main"))]
+    #[test_case(vec!["ziltoid", "master"],         Some("ziltoid"), Some("ziltoid"))]
+    #[test_case(vec!["ziltoid", "master"],         Some("master"),  Some("master"))]
+    #[test_case(vec!["ziltoid", "master"],         None,            Some("master"))]
+    #[test_case(vec!["ziltoid", "master", "main"], Some("ziltoid"), Some("ziltoid"))]
+    #[test_case(vec!["ziltoid", "master", "main"], Some("master"),  Some("master"))]
+    #[test_case(vec!["ziltoid", "master", "main"], Some("main"),    Some("main"))]
+    #[test_case(vec!["ziltoid", "master", "main"], None,            Some("main"))]
+    fn test_base_resolution(
+        branches_to_create: Vec<&str>,
+        target_branch: Option<&str>,
+        expected: Option<&str>,
+    ) -> Result<(), Error> {
+        let mut repo_opts = RepositoryInitOptions::new();
+
+        let (first_branch, remaining_branches) = branches_to_create.split_first().unwrap();
+
+        let repo_init = repo_opts.initial_head(first_branch);
+        let (repo_root, repo) = setup_repository(Some(repo_init))?;
         let root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
 
-        let file = root.join_component("foo.js");
-        file.create_with_contents("let z = 0;")?;
+        // WARNING:
+        // if you do not make a commit, git will show you that you have no branches.
+        let file = root.join_component("todo.txt");
+        file.create_with_contents("1. make async Rust good")?;
+        let first_commit = commit_file(&repo, Path::new("todo.txt"), None);
+        let commit = repo.find_commit(first_commit).unwrap();
 
-        let first_commit_oid = commit_file(&repo, Path::new("foo.js"), None);
-        fs::write(&file, "let z = 1;")?;
-        let second_commit_oid = commit_file(&repo, Path::new("foo.js"), Some(first_commit_oid));
+        remaining_branches.iter().for_each(|branch| {
+            repo.branch(branch, &commit, true).unwrap();
+        });
 
-        let revparsed_head = repo.revparse_single("HEAD").unwrap();
-        assert_eq!(revparsed_head.id(), second_commit_oid);
-        let revparsed_head_minus_1 = repo.revparse_single("HEAD~1").unwrap();
-        assert_eq!(revparsed_head_minus_1.id(), first_commit_oid);
+        let thing = Git::find(&root).unwrap();
+        let actual = thing.resolve_base(target_branch).ok();
 
-        let files = changed_files(
-            repo_root.path().to_path_buf(),
-            repo_root.path().to_path_buf(),
-            Some("HEAD^"),
-            Some("HEAD"),
-            false,
-        )?;
-        assert_eq!(files, HashSet::from(["foo.js".to_string()]));
-
-        let content = previous_content(
-            repo_root.path().to_path_buf(),
-            Some("HEAD^"),
-            file.to_string(),
-        )?;
-        assert_eq!(content, b"let z = 0;");
-
-        let new_file = repo_root.path().join("bar.js");
-        fs::write(new_file, "let y = 0;")?;
-        let third_commit_oid = commit_file(&repo, Path::new("bar.js"), Some(second_commit_oid));
-        let third_commit = repo.find_commit(third_commit_oid).unwrap();
-        repo.branch("release-1", &third_commit, false).unwrap();
-
-        let files = changed_files(
-            repo_root.path().to_path_buf(),
-            repo_root.path().to_path_buf(),
-            Some("HEAD~1"),
-            Some("release-1"),
-            false,
-        )?;
-        assert_eq!(files, HashSet::from(["bar.js".to_string()]));
+        assert_eq!(actual, expected);
 
         Ok(())
     }
@@ -788,7 +789,7 @@ mod tests {
 
         assert_matches!(repo_does_not_exist, Err(Error::GitRequired(_)));
 
-        let (repo_root, _repo) = setup_repository()?;
+        let (repo_root, _repo) = setup_repository(None)?;
         let root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
 
         let commit_does_not_exist = changed_files(
