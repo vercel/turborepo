@@ -732,7 +732,7 @@ pub struct ExecutionArgs {
 
     /// Run only tasks that are affected by changes between
     /// the current branch and `main`
-    #[clap(long, group = "scope-filter-group")]
+    #[clap(long, group = "scope-filter-group", conflicts_with = "filter")]
     pub affected: bool,
 
     /// Set type of process output logging. Use "full" to show
@@ -2613,5 +2613,16 @@ mod test {
             .unwrap()
             .dangerously_disable_package_manager_check
         );
+    }
+
+    #[test]
+    fn test_prevent_affected_and_filter() {
+        assert!(
+            Args::try_parse_from(["turbo", "run", "build", "--affected", "--filter", "foo"])
+                .is_err(),
+        );
+        assert!(Args::try_parse_from(["turbo", "build", "--affected", "--filter", "foo"]).is_err(),);
+        assert!(Args::try_parse_from(["turbo", "build", "--filter", "foo", "--affected"]).is_err(),);
+        assert!(Args::try_parse_from(["turbo", "ls", "--filter", "foo", "--affected"]).is_err(),);
     }
 }
