@@ -245,7 +245,7 @@ impl Query {
         let base = base.map(|s| s.to_owned());
         let head = head.unwrap_or_else(|| "HEAD".to_string());
         let mut opts = self.run.opts().clone();
-        opts.scope_opts.affected_range = Some((Some(base), head));
+        opts.scope_opts.affected_range = Some((base, head));
 
         Ok(RunBuilder::calculate_filtered_packages(
             self.run.repo_root(),
