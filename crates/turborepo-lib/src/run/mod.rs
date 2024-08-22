@@ -23,8 +23,8 @@ pub use cache::{CacheOutput, ConfigCache, Error as CacheError, RunCache, TaskCac
 use chrono::{DateTime, Local};
 use rayon::iter::ParallelBridge;
 use tokio::{select, task::JoinHandle};
-use tracing::debug;
-use turbopath::AbsoluteSystemPathBuf;
+use tracing::{debug, instrument};
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_api_client::{APIAuth, APIClient};
 use turborepo_ci::Vendor;
 use turborepo_env::EnvironmentVariableMap;
@@ -112,6 +112,22 @@ impl Run {
         }
     }
 
+    pub fn opts(&self) -> &Opts {
+        &self.opts
+    }
+
+    pub fn repo_root(&self) -> &AbsoluteSystemPath {
+        &self.repo_root
+    }
+
+    pub fn scm(&self) -> &SCM {
+        &self.scm
+    }
+
+    pub fn root_turbo_json(&self) -> &TurboJson {
+        &self.root_turbo_json
+    }
+
     pub fn create_run_for_persistent_tasks(&self) -> Self {
         let mut new_run = self.clone();
         let new_engine = new_run.engine.create_engine_for_persistent_tasks();
@@ -130,6 +146,7 @@ impl Run {
 
     // Produces the transitive closure of the filtered packages,
     // i.e. the packages relevant for this run.
+    #[instrument(skip(self), ret)]
     pub fn get_relevant_packages(&self) -> HashSet<PackageName> {
         let packages: Vec<_> = self
             .filtered_pkgs

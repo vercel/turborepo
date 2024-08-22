@@ -1,6 +1,5 @@
 import merge from "deepmerge";
-import type { Schema } from "@turbo/types";
-import type { SchemaV1 } from "@turbo/types/src/types/config";
+import type { SchemaV1, SchemaV2 } from "@turbo/types";
 import { setupTestFixtures } from "@turbo/test-utils";
 import {
   hasLegacyEnvVarDependencies,
@@ -34,7 +33,7 @@ const getTestTurboConfig = (
   };
 
   return merge(config, override, {
-    arrayMerge: (_, sourceArray) => sourceArray,
+    arrayMerge: (_: unknown, sourceArray: Array<unknown>) => sourceArray,
   });
 };
 
@@ -589,7 +588,7 @@ describe("migrate-env-var-dependencies", () => {
         fixture: "env-dependencies",
       });
 
-      const turboJson = JSON.parse(read("turbo.json") || "{}") as Schema;
+      const turboJson = JSON.parse(read("turbo.json") || "{}") as SchemaV2;
 
       // run the transformer
       const result = transformer({
@@ -668,7 +667,7 @@ describe("migrate-env-var-dependencies", () => {
         fixture: "env-dependencies",
       });
 
-      const turboJson = JSON.parse(read("turbo.json") || "{}") as Schema;
+      const turboJson = JSON.parse(read("turbo.json") || "{}") as SchemaV2;
 
       // run the transformer
       const result = transformer({
@@ -697,7 +696,7 @@ describe("migrate-env-var-dependencies", () => {
         fixture: "migrated-env-dependencies",
       });
 
-      const turboJson = JSON.parse(read("turbo.json") || "{}") as Schema;
+      const turboJson = JSON.parse(read("turbo.json") || "{}") as SchemaV2;
 
       // run the transformer
       const result = transformer({

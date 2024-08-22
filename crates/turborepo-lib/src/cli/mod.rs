@@ -22,7 +22,7 @@ use turborepo_ui::{ColorConfig, GREY};
 use crate::{
     cli::error::print_potential_tasks,
     commands::{
-        bin, config, daemon, generate, link, login, logout, ls, prune, run, scan, telemetry,
+        bin, config, daemon, generate, link, login, logout, ls, prune, query, run, scan, telemetry,
         unlink, CommandBase,
     },
     get_version,
@@ -284,6 +284,25 @@ pub enum DaemonCommand {
     Logs,
 }
 
+#[derive(Copy, Clone, Debug, Default, ValueEnum, Serialize, Eq, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum OutputFormat {
+    /// Output in a human-readable format
+    #[default]
+    Pretty,
+    /// Output in JSON format for direct parsing
+    Json,
+}
+
+impl fmt::Display for OutputFormat {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            OutputFormat::Pretty => "pretty",
+            OutputFormat::Json => "json",
+        })
+    }
+}
+
 #[derive(Subcommand, Copy, Clone, Debug, PartialEq)]
 pub enum TelemetryCommand {
     /// Enables anonymous telemetry
@@ -507,6 +526,9 @@ pub enum Command {
         /// Get insight into a specific package, such as
         /// its dependencies and tasks
         packages: Vec<String>,
+        /// Output format
+        #[clap(long, value_enum)]
+        output: Option<OutputFormat>,
     },
     /// Link your local directory to a Vercel organization and enable remote
     /// caching.
@@ -565,6 +587,13 @@ pub enum Command {
         run_args: Box<RunArgs>,
         #[clap(flatten)]
         execution_args: Box<ExecutionArgs>,
+    },
+    /// Query your monorepo using GraphQL. If no query is provided, spins up a
+    /// GraphQL server with GraphiQL.
+    #[clap(hide = true)]
+    Query {
+        /// The query to run, either a file path or a query string
+        query: Option<String>,
     },
     Watch(Box<ExecutionArgs>),
     /// Unlink the current directory from your Vercel organization and disable
@@ -1165,16 +1194,19 @@ pub async fn run(
             affected,
             filter,
             packages,
+            output,
         } => {
             warn!("ls command is experimental and may change in the future");
             let event = CommandEventBuilder::new("info").with_parent(&root_telemetry);
 
             event.track_call();
             let affected = *affected;
+            let output = *output;
             let filter = filter.clone();
             let packages = packages.clone();
             let base = CommandBase::new(cli_args, repo_root, version, color_config);
-            ls::run(base, packages, event, filter, affected).await?;
+
+            ls::run(base, packages, event, filter, affected, output).await?;
 
             Ok(0)
         }
@@ -1276,6 +1308,17 @@ pub async fn run(
                 }
             })?;
             Ok(exit_code)
+        }
+        Command::Query { query } => {
+            warn!("query command is experimental and may change in the future");
+            let query = query.clone();
+            let event = CommandEventBuilder::new("query").with_parent(&root_telemetry);
+            event.track_call();
+            let base = CommandBase::new(cli_args, repo_root, version, color_config);
+
+            let query = query::run(base, event, query).await?;
+
+            Ok(query)
         }
         Command::Watch(_) => {
             let event = CommandEventBuilder::new("watch").with_parent(&root_telemetry);

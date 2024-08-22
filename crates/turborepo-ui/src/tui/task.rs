@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 use std::{collections::HashSet, mem, time::Instant};
 
-use super::event::TaskResult;
+use super::{event::TaskResult, Error};
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct Planned;
@@ -109,7 +109,7 @@ pub struct TaskNamesByStatus {
     pub finished: Vec<String>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, Default)]
 pub struct TasksByStatus {
     pub running: Vec<Task<Running>>,
     pub planned: Vec<Task<Planned>>,
@@ -125,7 +125,7 @@ impl TasksByStatus {
         self.task_names_in_displayed_order().count()
     }
 
-    pub fn task_names_in_displayed_order(&self) -> impl Iterator<Item = &str> + '_ {
+    pub fn task_names_in_displayed_order(&self) -> impl DoubleEndedIterator<Item = &str> + '_ {
         let running_names = self.running.iter().map(|task| task.name());
         let planned_names = self.planned.iter().map(|task| task.name());
         let finished_names = self.finished.iter().map(|task| task.name());
@@ -133,8 +133,13 @@ impl TasksByStatus {
         running_names.chain(planned_names).chain(finished_names)
     }
 
-    pub fn task_name(&self, index: usize) -> &str {
-        self.task_names_in_displayed_order().nth(index).unwrap()
+    pub fn task_name(&self, index: usize) -> Result<&str, Error> {
+        self.task_names_in_displayed_order()
+            .nth(index)
+            .ok_or_else(|| Error::TaskNotFoundIndex {
+                index,
+                len: self.count_all(),
+            })
     }
 
     pub fn tasks_started(&self) -> Vec<String> {
@@ -154,7 +159,7 @@ impl TasksByStatus {
     }
 
     pub fn restart_tasks<'a>(&mut self, tasks: impl Iterator<Item = &'a str>) {
-        let tasks_to_restart = tasks.collect::<HashSet<_>>();
+        let mut tasks_to_restart = tasks.collect::<HashSet<_>>();
 
         let (restarted_running, keep_running): (Vec<_>, Vec<_>) = mem::take(&mut self.running)
             .into_iter()
@@ -170,6 +175,17 @@ impl TasksByStatus {
                 .into_iter()
                 .map(|task| task.restart())
                 .chain(restarted_finished.into_iter().map(|task| task.restart())),
+        );
+        // There is a chance that watch might attempt to restart a task that did not
+        // exist before.
+        for task in &self.planned {
+            tasks_to_restart.remove(task.name());
+        }
+        self.planned.extend(
+            tasks_to_restart
+                .into_iter()
+                .map(ToOwned::to_owned)
+                .map(Task::new),
         );
         self.planned.sort_unstable();
     }

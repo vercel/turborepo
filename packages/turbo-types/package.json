@@ -1,6 +1,6 @@
 {
   "name": "@turbo/types",
-  "version": "2.0.14",
+  "version": "2.0.15-canary.2",
   "description": "Turborepo types",
   "homepage": "https://turbo.build/repo",
   "license": "MIT",
@@ -14,22 +14,20 @@
   },
   "main": "src/index.ts",
   "types": "src/index.ts",
-  "bin": {
-    "turbo-types-generate": "./src/scripts/codegen.js"
-  },
   "scripts": {
+    "build": "tsc && pnpm generate-schema",
     "lint": "eslint src/",
-    "lint:prettier": "prettier -c . --cache"
-  },
-  "dependencies": {
-    "ts-json-schema-generator": "1.1.2"
+    "lint:prettier": "prettier -c . --cache",
+    "generate-schema": "node scripts/generate-schema.mjs"
   },
   "devDependencies": {
     "@turbo/eslint-config": "workspace:*",
-    "@turbo/tsconfig": "workspace:*"
+    "@turbo/tsconfig": "workspace:*",
+    "ts-json-schema-generator": "2.3.0"
   },
   "files": [
-    "src"
+    "src",
+    "schemas"
   ],
   "publishConfig": {
     "access": "public"

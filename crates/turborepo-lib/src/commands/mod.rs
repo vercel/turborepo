@@ -22,6 +22,7 @@ pub(crate) mod login;
 pub(crate) mod logout;
 pub(crate) mod ls;
 pub(crate) mod prune;
+pub(crate) mod query;
 pub(crate) mod run;
 pub(crate) mod scan;
 pub(crate) mod telemetry;

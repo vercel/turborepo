@@ -5,6 +5,7 @@ pub mod event;
 mod handle;
 mod input;
 mod pane;
+mod search;
 mod size;
 mod spinner;
 mod table;
@@ -26,6 +27,8 @@ pub use term_output::TerminalOutput;
 pub enum Error {
     #[error("No task found with name '{name}'")]
     TaskNotFound { name: String },
+    #[error("No task at index {index} (only {len} tasks) ")]
+    TaskNotFoundIndex { index: usize, len: usize },
     #[error("Unable to write to stdin for '{name}': {e}")]
     Stdin { name: String, e: std::io::Error },
     #[error(transparent)]

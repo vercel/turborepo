@@ -2,14 +2,19 @@ use std::time::Duration;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
-use super::{app::LayoutSections, event::Event, Error};
+use super::{
+    app::LayoutSections,
+    event::{Direction, Event},
+    Error,
+};
 
 #[derive(Debug, Clone, Copy)]
-pub struct InputOptions {
-    pub focus: LayoutSections,
+pub struct InputOptions<'a> {
+    pub focus: &'a LayoutSections,
     pub tty_stdin: bool,
     pub has_selection: bool,
 }
+
 /// Return any immediately available event
 pub fn input(options: InputOptions) -> Result<Option<Event>, Error> {
     // If stdin is not a tty, then we do not attempt to read from it
@@ -63,6 +68,36 @@ fn translate_key_event(options: InputOptions, key_event: KeyEvent) -> Option<Eve
         _ if matches!(options.focus, LayoutSections::Pane) => Some(Event::Input {
             bytes: encode_key(key_event),
         }),
+        // If we're on the list and user presses `/` enter search mode
+        KeyCode::Char('/') if matches!(options.focus, LayoutSections::TaskList) => {
+            Some(Event::SearchEnter)
+        }
+        KeyCode::Esc if matches!(options.focus, LayoutSections::Search { .. }) => {
+            Some(Event::SearchExit {
+                restore_scroll: true,
+            })
+        }
+        KeyCode::Enter if matches!(options.focus, LayoutSections::Search { .. }) => {
+            Some(Event::SearchExit {
+                restore_scroll: false,
+            })
+        }
+        KeyCode::Up if matches!(options.focus, LayoutSections::Search { .. }) => {
+            Some(Event::SearchScroll {
+                direction: Direction::Up,
+            })
+        }
+        KeyCode::Down if matches!(options.focus, LayoutSections::Search { .. }) => {
+            Some(Event::SearchScroll {
+                direction: Direction::Down,
+            })
+        }
+        KeyCode::Backspace if matches!(options.focus, LayoutSections::Search { .. }) => {
+            Some(Event::SearchBackspace)
+        }
+        KeyCode::Char(c) if matches!(options.focus, LayoutSections::Search { .. }) => {
+            Some(Event::SearchEnterChar(c))
+        }
         // Fall through if we aren't in interactive mode
         KeyCode::Char('p') if key_event.modifiers == KeyModifiers::CONTROL => Some(Event::ScrollUp),
         KeyCode::Char('n') if key_event.modifiers == KeyModifiers::CONTROL => {

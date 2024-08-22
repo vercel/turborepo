@@ -1,6 +1,6 @@
 import path from "node:path";
 import { existsSync } from "fs-extra";
-import type { RootSchema } from "@turbo/types/src/types/config";
+import type { RootSchema } from "@turbo/types";
 import type { Transformer, TransformerArgs } from "../types";
 import { getTransformerHelpers } from "../utils/getTransformerHelpers";
 import type { TransformerResults } from "../runner";
