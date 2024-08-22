@@ -93,23 +93,26 @@ impl<'a> GitChangeDetector for ScopeChangeDetector<'a> {
         include_uncommitted: bool,
         allow_unknown_objects: bool,
     ) -> Result<HashSet<PackageName>, ResolutionError> {
-        let changed_files = match self.scm.changed_files(
-            self.turbo_root,
-            from_ref,
-            to_ref,
-            include_uncommitted,
-            allow_unknown_objects,
-        )? {
-            ChangedFiles::All => {
-                debug!("all packages changed");
-                return Ok(self
-                    .pkg_graph
-                    .packages()
-                    .map(|(name, _)| name.to_owned())
-                    .collect());
+        let mut changed_files = HashSet::new();
+        if !from_ref.map_or(false, |s| s.is_empty()) {
+            changed_files = match self.scm.changed_files(
+                self.turbo_root,
+                from_ref,
+                to_ref,
+                include_uncommitted,
+                allow_unknown_objects,
+            )? {
+                ChangedFiles::All => {
+                    debug!("all packages changed");
+                    return Ok(self
+                        .pkg_graph
+                        .packages()
+                        .map(|(name, _)| name.to_owned())
+                        .collect());
+                }
+                ChangedFiles::Some(changed_files) => changed_files,
             }
-            ChangedFiles::Some(changed_files) => changed_files,
-        };
+        }
 
         let lockfile_contents = self.get_lockfile_contents(from_ref, &changed_files);
 
