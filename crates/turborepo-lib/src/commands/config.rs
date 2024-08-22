@@ -23,7 +23,7 @@ struct ConfigOutput<'a> {
     package_manager: PackageManager,
     daemon: Option<bool>,
     env_mode: EnvMode,
-    scm_base: &'a str,
+    scm_base: Option<&'a str>,
     scm_head: &'a str,
     cache_dir: &'a Utf8Path,
 }

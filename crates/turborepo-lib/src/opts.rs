@@ -307,7 +307,7 @@ pub struct ScopeOpts {
     pub pkg_inference_root: Option<AnchoredSystemPathBuf>,
     pub global_deps: Vec<String>,
     pub filter_patterns: Vec<String>,
-    pub affected_range: Option<(String, String)>,
+    pub affected_range: Option<(Option<String>, String)>,
 }
 
 impl<'a> TryFrom<OptsInputs<'a>> for ScopeOpts {
@@ -324,7 +324,7 @@ impl<'a> TryFrom<OptsInputs<'a>> for ScopeOpts {
         let affected_range = inputs.execution_args.affected.then(|| {
             let scm_base = inputs.config.scm_base();
             let scm_head = inputs.config.scm_head();
-            (scm_base.to_string(), scm_head.to_string())
+            (scm_base.map(|b| b.to_owned()), scm_head.to_string())
         });
 
         Ok(Self {

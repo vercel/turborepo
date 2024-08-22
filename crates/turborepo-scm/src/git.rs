@@ -30,7 +30,7 @@ impl SCM {
     pub fn changed_files(
         &self,
         turbo_root: &AbsoluteSystemPath,
-        from_commit: &str,
+        from_commit: Option<&str>,
         to_commit: Option<&str>,
         include_uncommitted: bool,
         allow_unknown_objects: bool,
@@ -57,7 +57,7 @@ impl SCM {
 
     pub fn previous_content(
         &self,
-        from_commit: &str,
+        from_commit: Option<&str>,
         file_path: &AbsoluteSystemPath,
     ) -> Result<Vec<u8>, Error> {
         match self {
@@ -80,10 +80,27 @@ impl Git {
         Ok(output.trim().to_owned())
     }
 
+    fn resolve_base<'a>(&self, base_override: Option<&'a str>) -> Result<&'a str, Error> {
+        if let Some(valid_from) = base_override {
+            return Ok(valid_from);
+        }
+
+        let main_result = self.execute_git_command(&["rev-parse", "main"], "");
+        if main_result.is_ok() {
+            return Ok("main");
+        }
+
+        let master_result = self.execute_git_command(&["rev-parse", "master"], "");
+        if master_result.is_ok() {
+            return Ok("master");
+        }
+        Err(Error::UnableToResolveRef())
+    }
+
     fn changed_files(
         &self,
         turbo_root: &AbsoluteSystemPath,
-        from_commit: &str,
+        from_commit: Option<&str>,
         to_commit: Option<&str>,
         include_uncommitted: bool,
     ) -> Result<HashSet<AnchoredSystemPathBuf>, Error> {
@@ -92,12 +109,14 @@ impl Git {
 
         let mut files = HashSet::new();
 
+        let valid_from = self.resolve_base(from_commit)?;
+
         if let Some(to_commit) = to_commit {
             let output = self.execute_git_command(
                 &[
                     "diff",
                     "--name-only",
-                    &format!("{}...{}", from_commit, to_commit),
+                    &format!("{}...{}", valid_from, to_commit),
                 ],
                 pathspec,
             )?;
@@ -105,7 +124,7 @@ impl Git {
             self.add_files_from_stdout(&mut files, turbo_root, output);
         } else {
             let output =
-                self.execute_git_command(&["diff", "--name-only", from_commit], pathspec)?;
+                self.execute_git_command(&["diff", "--name-only", valid_from], pathspec)?;
 
             self.add_files_from_stdout(&mut files, turbo_root, output);
         }
@@ -170,11 +189,12 @@ impl Git {
 
     fn previous_content(
         &self,
-        from_commit: &str,
+        from_commit: Option<&str>,
         file_path: &AbsoluteSystemPath,
     ) -> Result<Vec<u8>, Error> {
         let anchored_file_path = self.root.anchor(file_path)?;
-        let arg = format!("{}:{}", from_commit, anchored_file_path.as_str());
+        let valid_from = self.resolve_base(from_commit)?;
+        let arg = format!("{}:{}", valid_from, anchored_file_path.as_str());
 
         self.execute_git_command(&["show", &arg], "")
     }
@@ -192,7 +212,7 @@ impl Git {
 /// returns: Result<String, Error>
 pub fn previous_content(
     git_root: PathBuf,
-    from_commit: &str,
+    from_commit: Option<&str>,
     file_path: String,
 ) -> Result<Vec<u8>, Error> {
     // If git root is not absolute, we error.
@@ -239,7 +259,7 @@ mod tests {
     fn changed_files(
         git_root: PathBuf,
         turbo_root: PathBuf,
-        from_commit: &str,
+        from_commit: Option<&str>,
         to_commit: Option<&str>,
         include_uncommitted: bool,
     ) -> Result<HashSet<String>, Error> {
@@ -328,7 +348,7 @@ mod tests {
         assert!(changed_files(
             tmp_dir.path().to_owned(),
             tmp_dir.path().to_owned(),
-            "HEAD~1",
+            Some("HEAD~1"),
             Some("HEAD"),
             false,
         )
@@ -337,7 +357,7 @@ mod tests {
         assert!(changed_files(
             tmp_dir.path().to_owned(),
             tmp_dir.path().to_owned(),
-            "HEAD",
+            Some("HEAD"),
             None,
             true,
         )
@@ -365,7 +385,7 @@ mod tests {
         let files = changed_files(
             git_root,
             turborepo_root,
-            &first_commit_sha,
+            Some(&first_commit_sha),
             Some("HEAD"),
             false,
         )?;
@@ -409,7 +429,7 @@ mod tests {
         let files = changed_files(
             repo_root.path().to_path_buf(),
             repo_root.path().to_path_buf(),
-            &third_commit_oid.to_string(),
+            Some(&third_commit_oid.to_string()),
             Some(&fourth_commit_oid.to_string()),
             false,
         )?;
@@ -441,7 +461,7 @@ mod tests {
         let files = changed_files(
             repo_root.path().to_path_buf(),
             turbo_root.to_path_buf(),
-            "HEAD",
+            Some("HEAD"),
             None,
             true,
         )?;
@@ -455,7 +475,7 @@ mod tests {
         let files = changed_files(
             repo_root.path().to_path_buf(),
             turbo_root.to_path_buf(),
-            "HEAD",
+            Some("HEAD"),
             None,
             true,
         )?;
@@ -468,7 +488,7 @@ mod tests {
         let files = changed_files(
             repo_root.path().to_path_buf(),
             turbo_root.to_path_buf(),
-            first_commit_oid.to_string().as_str(),
+            Some(first_commit_oid.to_string().as_str()),
             Some(second_commit_oid.to_string().as_str()),
             false,
         )?;
@@ -483,7 +503,7 @@ mod tests {
         let files = changed_files(
             repo_root.path().to_path_buf(),
             repo_root.path().to_path_buf(),
-            first_commit_oid.to_string().as_str(),
+            Some(first_commit_oid.to_string().as_str()),
             Some(second_commit_oid.to_string().as_str()),
             false,
         )?;
@@ -493,7 +513,7 @@ mod tests {
         let files = changed_files(
             repo_root.path().to_path_buf(),
             repo_root.path().to_path_buf(),
-            second_commit_oid.to_string().as_str(),
+            Some(second_commit_oid.to_string().as_str()),
             None,
             true,
         )?;
@@ -513,7 +533,7 @@ mod tests {
         let files = changed_files(
             repo_root.path().to_path_buf(),
             repo_root.path().join("subdir"),
-            first_commit_oid.to_string().as_str(),
+            Some(first_commit_oid.to_string().as_str()),
             Some(third_commit_oid.to_string().as_str()),
             false,
         )?;
@@ -540,7 +560,7 @@ mod tests {
         let files = changed_files(
             repo_root.path().to_path_buf(),
             repo_root.path().to_path_buf(),
-            "HEAD",
+            Some("HEAD"),
             None,
             true,
         )?;
@@ -570,7 +590,7 @@ mod tests {
         let files = changed_files(
             repo_root.path().to_path_buf(),
             repo_root.path().join("subdir"),
-            "HEAD",
+            Some("HEAD"),
             None,
             true,
         )?;
@@ -590,7 +610,7 @@ mod tests {
         let files = changed_files(
             repo_root.path().to_path_buf(),
             repo_root.path().join("subdir"),
-            first_commit.to_string().as_str(),
+            Some(first_commit.to_string().as_str()),
             Some(
                 repo.head()
                     .unwrap()
@@ -630,7 +650,7 @@ mod tests {
 
         let content = previous_content(
             repo_root.path().to_path_buf(),
-            first_commit_oid.to_string().as_str(),
+            Some(first_commit_oid.to_string().as_str()),
             file.to_string(),
         )?;
 
@@ -638,14 +658,14 @@ mod tests {
 
         let content = previous_content(
             repo_root.path().to_path_buf(),
-            second_commit_oid.to_string().as_str(),
+            Some(second_commit_oid.to_string().as_str()),
             file.to_string(),
         )?;
         assert_eq!(content, b"let z = 1;");
 
         let content = previous_content(
             repo_root.path().to_path_buf(),
-            second_commit_oid.to_string().as_str(),
+            Some(second_commit_oid.to_string().as_str()),
             "foo.js".to_string(),
         )?;
         assert_eq!(content, b"let z = 1;");
@@ -673,13 +693,17 @@ mod tests {
         let files = changed_files(
             repo_root.path().to_path_buf(),
             repo_root.path().to_path_buf(),
-            "HEAD^",
+            Some("HEAD^"),
             Some("HEAD"),
             false,
         )?;
         assert_eq!(files, HashSet::from(["foo.js".to_string()]));
 
-        let content = previous_content(repo_root.path().to_path_buf(), "HEAD^", file.to_string())?;
+        let content = previous_content(
+            repo_root.path().to_path_buf(),
+            Some("HEAD^"),
+            file.to_string(),
+        )?;
         assert_eq!(content, b"let z = 0;");
 
         let new_file = repo_root.path().join("bar.js");
@@ -691,7 +715,58 @@ mod tests {
         let files = changed_files(
             repo_root.path().to_path_buf(),
             repo_root.path().to_path_buf(),
-            "HEAD~1",
+            Some("HEAD~1"),
+            Some("release-1"),
+            false,
+        )?;
+        assert_eq!(files, HashSet::from(["bar.js".to_string()]));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_base_resolution() -> Result<(), Error> {
+        let (repo_root, repo) = setup_repository()?;
+        let root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+
+        let file = root.join_component("foo.js");
+        file.create_with_contents("let z = 0;")?;
+
+        let first_commit_oid = commit_file(&repo, Path::new("foo.js"), None);
+        fs::write(&file, "let z = 1;")?;
+        let second_commit_oid = commit_file(&repo, Path::new("foo.js"), Some(first_commit_oid));
+
+        let revparsed_head = repo.revparse_single("HEAD").unwrap();
+        assert_eq!(revparsed_head.id(), second_commit_oid);
+        let revparsed_head_minus_1 = repo.revparse_single("HEAD~1").unwrap();
+        assert_eq!(revparsed_head_minus_1.id(), first_commit_oid);
+
+        let files = changed_files(
+            repo_root.path().to_path_buf(),
+            repo_root.path().to_path_buf(),
+            Some("HEAD^"),
+            Some("HEAD"),
+            false,
+        )?;
+        assert_eq!(files, HashSet::from(["foo.js".to_string()]));
+
+        let content = previous_content(
+            repo_root.path().to_path_buf(),
+            Some("HEAD^"),
+            file.to_string(),
+        )?;
+        assert_eq!(content, b"let z = 0;");
+
+        let new_file = repo_root.path().join("bar.js");
+        fs::write(new_file, "let y = 0;")?;
+        let third_commit_oid = commit_file(&repo, Path::new("bar.js"), Some(second_commit_oid));
+        let third_commit = repo.find_commit(third_commit_oid).unwrap();
+        repo.branch("release-1", &third_commit, false).unwrap();
+
+        let files = changed_files(
+            repo_root.path().to_path_buf(),
+            repo_root.path().to_path_buf(),
+            Some("HEAD~1"),
             Some("release-1"),
             false,
         )?;
@@ -706,7 +781,7 @@ mod tests {
         let repo_does_not_exist = changed_files(
             repo_dir.path().to_path_buf(),
             repo_dir.path().to_path_buf(),
-            "HEAD",
+            Some("HEAD"),
             None,
             true,
         );
@@ -719,7 +794,7 @@ mod tests {
         let commit_does_not_exist = changed_files(
             repo_root.path().to_path_buf(),
             repo_root.path().to_path_buf(),
-            "does-not-exist",
+            Some("does-not-exist"),
             None,
             true,
         );
@@ -728,7 +803,7 @@ mod tests {
 
         let file_does_not_exist = previous_content(
             repo_root.path().to_path_buf(),
-            "HEAD",
+            Some("HEAD"),
             root.join_component("does-not-exist").to_string(),
         );
         assert_matches!(file_does_not_exist, Err(Error::Git(_, _)));
@@ -737,7 +812,7 @@ mod tests {
         let turbo_root_is_not_subdir_of_git_root = changed_files(
             repo_root.path().to_path_buf(),
             turbo_root.path().to_path_buf(),
-            "HEAD",
+            Some("HEAD"),
             None,
             true,
         );
