@@ -1257,6 +1257,54 @@ mod test {
         );
     }
 
+    #[test]
+    fn test_affected_with_filter() {
+        let scm_resolver = TestChangeDetector::new(&[
+            ("HEAD~1", None, &["package-1", "package-2", ROOT_PKG_NAME]),
+            ("HEAD~2", Some("HEAD~1"), &["package-3"]),
+            (
+                "HEAD~2",
+                None,
+                &["package-1", "package-2", "package-3", ROOT_PKG_NAME],
+            ),
+        ]);
+
+        // We have both an affected selector, i.e. a git range, and a regular selector
+        // Normally, we do a union, i.e. we take the packages selected from both and
+        // combine But here we expect an intersection.
+        let affected_selector = TargetSelector {
+            git_range: Some(GitRange {
+                from_ref: "HEAD~1".to_string(),
+                to_ref: None,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        let selectors = vec![TargetSelector {
+            name_pattern: "package-1".to_string(),
+            ..Default::default()
+        }];
+
+        let (_tempdir, resolver) = make_project(
+            &[("package-3", "package-20")],
+            &["package-1", "package-2"],
+            None,
+            scm_resolver,
+        );
+
+        let packages = resolver
+            .get_filtered_packages(Some(affected_selector), selectors)
+            .unwrap();
+
+        assert_eq!(
+            packages,
+            [PackageName::Other("package-1".to_string())]
+                .into_iter()
+                .collect()
+        );
+    }
+
     struct TestChangeDetector<'a>(HashMap<(&'a str, Option<&'a str>), HashSet<PackageName>>);
 
     impl<'a> TestChangeDetector<'a> {
