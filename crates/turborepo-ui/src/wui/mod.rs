@@ -9,10 +9,11 @@ use async_graphql::{
 };
 use async_graphql_axum::{GraphQL, GraphQLSubscription};
 use async_stream::stream;
-use axum::{response, response::IntoResponse, routing::get, Router};
+use axum::{http::Method, response, response::IntoResponse, routing::get, Router};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::{net::TcpListener, sync::Mutex};
+use tower_http::cors::{Any, CorsLayer};
 use tracing::log::warn;
 
 use crate::{
@@ -362,6 +363,13 @@ pub async fn start_server(
     let subscriber = Subscriber::new(rx);
     subscriber.watch();
 
+    let cors = CorsLayer::new()
+        // allow `GET` and `POST` when accessing the resource
+        .allow_methods([Method::GET, Method::POST])
+        .allow_headers(Any)
+        // allow requests from any origin
+        .allow_origin(Any);
+
     let schema = Schema::new(
         Query {
             app_state: subscriber.clone(),
@@ -374,7 +382,8 @@ pub async fn start_server(
             "/",
             get(graphiql).post_service(GraphQL::new(schema.clone())),
         )
-        .route_service("/subscriptions", GraphQLSubscription::new(schema));
+        .route_service("/subscriptions", GraphQLSubscription::new(schema))
+        .layer(cors);
 
     axum::serve(
         TcpListener::bind("127.0.0.1:8000")
