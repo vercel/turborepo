@@ -94,7 +94,7 @@ impl<'a> GitChangeDetector for ScopeChangeDetector<'a> {
         allow_unknown_objects: bool,
     ) -> Result<HashSet<PackageName>, ResolutionError> {
         let mut changed_files = HashSet::new();
-        if !from_ref.map_or(true, |s| s.is_empty()) {
+        if !from_ref.map_or(false, |s| s.is_empty()) {
             changed_files = match self.scm.changed_files(
                 self.turbo_root,
                 from_ref,

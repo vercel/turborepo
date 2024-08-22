@@ -94,7 +94,7 @@ impl Git {
         if master_result.is_ok() {
             return Ok("master");
         }
-        Err(Error::UnableToResolveRef())
+        Err(Error::UnableToResolveRef)
     }
 
     fn changed_files(
