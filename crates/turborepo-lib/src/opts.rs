@@ -513,7 +513,7 @@ mod test {
             pkg_inference_root: None,
             global_deps: vec![],
             filter_patterns: opts_input.filter_patterns,
-            affected_range: opts_input.affected,
+            affected_range: opts_input.affected.map(|(base, head)| (Some(base), head)),
         };
         let opts = Opts {
             run_opts,
