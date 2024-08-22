@@ -298,8 +298,8 @@ impl ConfigurationOptions {
         self.ui.unwrap_or(UIMode::Stream)
     }
 
-    pub fn scm_base(&self) -> &str {
-        self.scm_base.as_deref().unwrap_or("main")
+    pub fn scm_base(&self) -> Option<&str> {
+        self.scm_base.as_deref()
     }
 
     pub fn scm_head(&self) -> &str {

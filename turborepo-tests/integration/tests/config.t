@@ -18,7 +18,7 @@ Run test run
     "packageManager": "npm",
     "daemon": null,
     "envMode": "strict",
-    "scmBase": "main",
+    "scmBase": null,
     "scmHead": "HEAD",
     "cacheDir": ".turbo[\\/]+cache" (re)
   }

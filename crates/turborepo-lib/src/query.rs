@@ -242,7 +242,7 @@ impl Query {
         base: Option<String>,
         head: Option<String>,
     ) -> Result<Vec<Package>, Error> {
-        let base = base.unwrap_or_else(|| "main".to_string());
+        let base = base.map(|s| s.to_owned());
         let head = head.unwrap_or_else(|| "HEAD".to_string());
         let mut opts = self.run.opts().clone();
         opts.scope_opts.affected_range = Some((base, head));

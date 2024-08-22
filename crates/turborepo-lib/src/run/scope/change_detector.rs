@@ -17,7 +17,7 @@ use crate::{
 pub trait GitChangeDetector {
     fn changed_packages(
         &self,
-        from_ref: &str,
+        from_ref: Option<&str>,
         to_ref: Option<&str>,
         include_uncommitted: bool,
         allow_unknown_objects: bool,
@@ -55,7 +55,7 @@ impl<'a> ScopeChangeDetector<'a> {
     /// returns an empty lockfile change
     fn get_lockfile_contents(
         &self,
-        from_ref: &str,
+        from_ref: Option<&str>,
         changed_files: &HashSet<AnchoredSystemPathBuf>,
     ) -> Option<LockfileChange> {
         let lockfile_path = self
@@ -88,13 +88,13 @@ impl<'a> ScopeChangeDetector<'a> {
 impl<'a> GitChangeDetector for ScopeChangeDetector<'a> {
     fn changed_packages(
         &self,
-        from_ref: &str,
+        from_ref: Option<&str>,
         to_ref: Option<&str>,
         include_uncommitted: bool,
         allow_unknown_objects: bool,
     ) -> Result<HashSet<PackageName>, ResolutionError> {
         let mut changed_files = HashSet::new();
-        if !from_ref.is_empty() {
+        if !from_ref.map_or(false, |s| s.is_empty()) {
             changed_files = match self.scm.changed_files(
                 self.turbo_root,
                 from_ref,
