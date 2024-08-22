@@ -1,6 +1,7 @@
 use std::{
     collections::BTreeMap,
     io::{self, Stdout, Write},
+    mem,
     sync::mpsc,
     time::{Duration, Instant},
 };
@@ -17,18 +18,24 @@ const FRAMERATE: Duration = Duration::from_millis(3);
 const RESIZE_DEBOUNCE_DELAY: Duration = Duration::from_millis(10);
 
 use super::{
-    event::{CacheResult, OutputLogs, TaskResult},
-    input, AppReceiver, Debouncer, Error, Event, InputOptions, SizeInfo, TaskTable, TerminalPane,
+    event::{CacheResult, Direction, OutputLogs, TaskResult},
+    input,
+    search::SearchResults,
+    AppReceiver, Debouncer, Error, Event, InputOptions, SizeInfo, TaskTable, TerminalPane,
 };
 use crate::tui::{
     task::{Task, TasksByStatus},
     term_output::TerminalOutput,
 };
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum LayoutSections {
     Pane,
     TaskList,
+    Search {
+        previous_selection: String,
+        results: SearchResults,
+    },
 }
 
 pub struct App<W> {
@@ -41,11 +48,6 @@ pub struct App<W> {
     selected_task_index: usize,
     has_user_scrolled: bool,
     done: bool,
-}
-
-pub enum Direction {
-    Up,
-    Down,
 }
 
 impl<W> App<W> {
@@ -94,10 +96,11 @@ impl<W> App<W> {
         }
     }
 
-    pub fn is_focusing_pane(&self) -> bool {
+    #[cfg(test)]
+    fn is_focusing_pane(&self) -> bool {
         match self.focus {
             LayoutSections::Pane => true,
-            LayoutSections::TaskList => false,
+            LayoutSections::TaskList | LayoutSections::Search { .. } => false,
         }
     }
 
@@ -108,7 +111,7 @@ impl<W> App<W> {
     fn input_options(&self) -> Result<InputOptions, Error> {
         let has_selection = self.get_full_task()?.has_selection();
         Ok(InputOptions {
-            focus: self.focus,
+            focus: &self.focus,
             tty_stdin: self.tty_stdin,
             has_selection,
         })
@@ -156,6 +159,105 @@ impl<W> App<W> {
     pub fn scroll_terminal_output(&mut self, direction: Direction) -> Result<(), Error> {
         self.get_full_task_mut()?.scroll(direction)?;
         Ok(())
+    }
+
+    pub fn enter_search(&mut self) -> Result<(), Error> {
+        self.focus = LayoutSections::Search {
+            previous_selection: self.active_task()?.to_string(),
+            results: SearchResults::new(&self.tasks_by_status),
+        };
+        // We set scroll as we want to keep the current selection
+        self.has_user_scrolled = true;
+        Ok(())
+    }
+
+    pub fn exit_search(&mut self, restore_scroll: bool) {
+        let mut prev_focus = LayoutSections::TaskList;
+        mem::swap(&mut self.focus, &mut prev_focus);
+        if let LayoutSections::Search {
+            previous_selection, ..
+        } = prev_focus
+        {
+            if restore_scroll && self.select_task(&previous_selection).is_err() {
+                // If the task that was selected is no longer in the task list we reset
+                // scrolling.
+                self.reset_scroll();
+            }
+        }
+    }
+
+    pub fn search_scroll(&mut self, direction: Direction) -> Result<(), Error> {
+        let LayoutSections::Search { results, .. } = &self.focus else {
+            debug!("scrolling search while not searching");
+            return Ok(());
+        };
+        let new_selection = match direction {
+            Direction::Up => results.first_match(
+                self.tasks_by_status
+                    .task_names_in_displayed_order()
+                    .rev()
+                    // We skip all of the tasks that are at or after the current selection
+                    .skip(self.tasks_by_status.count_all() - self.selected_task_index),
+            ),
+            Direction::Down => results.first_match(
+                self.tasks_by_status
+                    .task_names_in_displayed_order()
+                    .skip(self.selected_task_index + 1),
+            ),
+        };
+        if let Some(new_selection) = new_selection {
+            let new_selection = new_selection.to_owned();
+            self.select_task(&new_selection)?;
+        }
+        Ok(())
+    }
+
+    pub fn search_enter_char(&mut self, c: char) -> Result<(), Error> {
+        let LayoutSections::Search { results, .. } = &mut self.focus else {
+            debug!("modifying search query while not searching");
+            return Ok(());
+        };
+        results.modify_query(|s| s.push(c));
+        self.update_search_results();
+        Ok(())
+    }
+
+    pub fn search_remove_char(&mut self) -> Result<(), Error> {
+        let LayoutSections::Search { results, .. } = &mut self.focus else {
+            debug!("modified search query while not searching");
+            return Ok(());
+        };
+        let mut query_was_empty = false;
+        results.modify_query(|s| {
+            query_was_empty = s.pop().is_none();
+        });
+        if query_was_empty {
+            self.exit_search(true);
+        } else {
+            self.update_search_results();
+        }
+        Ok(())
+    }
+
+    fn update_search_results(&mut self) {
+        let LayoutSections::Search { results, .. } = &self.focus else {
+            return;
+        };
+
+        // if currently selected task is in results stay on it
+        // if not we go forward looking for a task in results
+        if let Some(result) = results
+            .first_match(
+                self.tasks_by_status
+                    .task_names_in_displayed_order()
+                    .skip(self.selected_task_index),
+            )
+            .or_else(|| results.first_match(self.tasks_by_status.task_names_in_displayed_order()))
+        {
+            let new_selection = result.to_owned();
+            self.has_user_scrolled = true;
+            self.select_task(&new_selection).expect("todo");
+        }
     }
 
     /// Mark the given task as started.
@@ -282,6 +384,11 @@ impl<W> App<W> {
             self.reset_scroll();
         }
 
+        if let LayoutSections::Search { results, .. } = &mut self.focus {
+            results.update_tasks(&self.tasks_by_status);
+        }
+        self.update_search_results();
+
         Ok(())
     }
 
@@ -298,6 +405,10 @@ impl<W> App<W> {
 
         self.tasks_by_status
             .restart_tasks(tasks.iter().map(|s| s.as_str()));
+
+        if let LayoutSections::Search { results, .. } = &mut self.focus {
+            results.update_tasks(&self.tasks_by_status);
+        }
 
         if self.select_task(&highlighted_task).is_err() {
             debug!("was unable to find {highlighted_task} after restart");
@@ -645,6 +756,21 @@ fn update(
         Event::Resize { rows, cols } => {
             app.resize(rows, cols);
         }
+        Event::SearchEnter => {
+            app.enter_search()?;
+        }
+        Event::SearchExit { restore_scroll } => {
+            app.exit_search(restore_scroll);
+        }
+        Event::SearchScroll { direction } => {
+            app.search_scroll(direction)?;
+        }
+        Event::SearchEnterChar(c) => {
+            app.search_enter_char(c)?;
+        }
+        Event::SearchBackspace => {
+            app.search_remove_char()?;
+        }
     }
     Ok(None)
 }
@@ -657,8 +783,7 @@ fn view<W>(app: &mut App<W>, f: &mut Frame) {
     let active_task = app.active_task().unwrap().to_string();
 
     let output_logs = app.tasks.get(&active_task).unwrap();
-    let pane_to_render: TerminalPane<W> =
-        TerminalPane::new(output_logs, &active_task, app.is_focusing_pane());
+    let pane_to_render: TerminalPane<W> = TerminalPane::new(output_logs, &active_task, &app.focus);
 
     let table_to_render = TaskTable::new(&app.tasks_by_status);
 
@@ -1015,6 +1140,149 @@ mod test {
         assert_eq!(app.active_task()?, "b", "selected b");
 
         app.start_task("d", OutputLogs::Full)?;
+        Ok(())
+    }
+
+    #[test]
+    fn test_search_backspace_exits_search() -> Result<(), Error> {
+        let mut app: App<()> = App::new(
+            100,
+            100,
+            vec!["a".to_string(), "b".to_string(), "c".to_string()],
+        );
+        app.enter_search()?;
+        assert!(matches!(app.focus, LayoutSections::Search { .. }));
+        app.search_remove_char()?;
+        assert!(matches!(app.focus, LayoutSections::TaskList));
+        app.enter_search()?;
+        app.search_enter_char('a')?;
+        assert!(matches!(app.focus, LayoutSections::Search { .. }));
+        app.search_remove_char()?;
+        assert!(matches!(app.focus, LayoutSections::Search { .. }));
+        app.search_remove_char()?;
+        assert!(matches!(app.focus, LayoutSections::TaskList));
+        Ok(())
+    }
+
+    #[test]
+    fn test_search_moves_with_typing() -> Result<(), Error> {
+        let mut app: App<()> = App::new(
+            100,
+            100,
+            vec!["a".to_string(), "ab".to_string(), "abc".to_string()],
+        );
+        app.enter_search()?;
+        app.search_enter_char('a')?;
+        assert_eq!(app.active_task()?, "a");
+        app.search_enter_char('b')?;
+        assert_eq!(app.active_task()?, "ab");
+        app.search_enter_char('c')?;
+        assert_eq!(app.active_task()?, "abc");
+        app.search_remove_char()?;
+        assert_eq!(
+            app.active_task()?,
+            "abc",
+            "should not move off of a search result if still a match"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_search_scroll() -> Result<(), Error> {
+        let mut app: App<()> = App::new(
+            100,
+            100,
+            vec!["a".to_string(), "ab".to_string(), "abc".to_string()],
+        );
+        app.enter_search()?;
+        app.search_enter_char('b')?;
+        assert_eq!(app.active_task()?, "ab");
+        app.start_task("ab", OutputLogs::Full)?;
+        assert_eq!(
+            app.active_task()?,
+            "ab",
+            "starting the selected task keeps selection"
+        );
+        app.search_scroll(Direction::Down)?;
+        assert_eq!(app.active_task()?, "abc");
+        app.search_scroll(Direction::Down)?;
+        assert_eq!(app.active_task()?, "abc");
+        app.search_scroll(Direction::Up)?;
+        assert_eq!(app.active_task()?, "ab");
+        app.search_scroll(Direction::Up)?;
+        assert_eq!(app.active_task()?, "ab");
+        Ok(())
+    }
+
+    #[test]
+    fn test_exit_search_restore_selection() -> Result<(), Error> {
+        let mut app: App<()> = App::new(
+            100,
+            100,
+            vec!["a".to_string(), "abc".to_string(), "b".to_string()],
+        );
+        app.next();
+        assert_eq!(app.active_task()?, "abc");
+        app.enter_search()?;
+        app.search_enter_char('b')?;
+        assert_eq!(app.active_task()?, "abc");
+        app.search_scroll(Direction::Down)?;
+        assert_eq!(app.active_task()?, "b");
+        app.exit_search(true);
+        assert_eq!(app.active_task()?, "abc");
+        Ok(())
+    }
+
+    #[test]
+    fn test_exit_search_keep_selection() -> Result<(), Error> {
+        let mut app: App<()> = App::new(
+            100,
+            100,
+            vec!["a".to_string(), "abc".to_string(), "b".to_string()],
+        );
+        app.next();
+        assert_eq!(app.active_task()?, "abc");
+        app.enter_search()?;
+        app.search_enter_char('b')?;
+        assert_eq!(app.active_task()?, "abc");
+        app.search_scroll(Direction::Down)?;
+        assert_eq!(app.active_task()?, "b");
+        app.exit_search(false);
+        assert_eq!(app.active_task()?, "b");
+        Ok(())
+    }
+
+    #[test]
+    fn test_select_update_task_removes_task() -> Result<(), Error> {
+        let mut app: App<()> = App::new(
+            100,
+            100,
+            vec!["a".to_string(), "ab".to_string(), "abc".to_string()],
+        );
+        app.enter_search()?;
+        app.search_enter_char('b')?;
+        assert_eq!(app.active_task()?, "ab");
+        // Remove selected task ab
+        app.update_tasks(vec!["a".into(), "abc".into()])?;
+        assert_eq!(app.active_task()?, "abc");
+        Ok(())
+    }
+
+    #[test]
+    fn test_select_restart_tasks_reorders_tasks() -> Result<(), Error> {
+        let mut app: App<()> = App::new(
+            100,
+            100,
+            vec!["a".to_string(), "ab".to_string(), "abc".to_string()],
+        );
+        app.enter_search()?;
+        app.search_enter_char('b')?;
+        assert_eq!(app.active_task()?, "ab");
+        app.start_task("ab", OutputLogs::Full)?;
+        assert_eq!(app.active_task()?, "ab");
+        // Restart ab
+        app.restart_tasks(vec!["ab".into()])?;
+        assert_eq!(app.active_task()?, "ab");
         Ok(())
     }
 }

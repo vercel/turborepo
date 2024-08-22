@@ -5,7 +5,7 @@ use ratatui::{
 };
 use tui_term::widget::PseudoTerminal;
 
-use super::TerminalOutput;
+use super::{app::LayoutSections, TerminalOutput};
 
 const FOOTER_TEXT_ACTIVE: &str = "Press`Ctrl-Z` to stop interacting.";
 const FOOTER_TEXT_INACTIVE: &str = "Press `Enter` to interact.";
@@ -14,19 +14,39 @@ const HAS_SELECTION: &str = "Press `c` to copy selection";
 pub struct TerminalPane<'a, W> {
     terminal_output: &'a TerminalOutput<W>,
     task_name: &'a str,
-    highlight: bool,
+    section: &'a LayoutSections,
 }
 
 impl<'a, W> TerminalPane<'a, W> {
     pub fn new(
         terminal_output: &'a TerminalOutput<W>,
         task_name: &'a str,
-        highlight: bool,
+        section: &'a LayoutSections,
     ) -> Self {
         Self {
             terminal_output,
-            highlight,
+            section,
             task_name,
+        }
+    }
+
+    fn highlight(&self) -> bool {
+        matches!(self.section, LayoutSections::Pane)
+    }
+
+    fn footer(&self) -> Line {
+        match self.section {
+            LayoutSections::Pane if self.terminal_output.has_selection() => {
+                Line::from(format!("{FOOTER_TEXT_ACTIVE} {HAS_SELECTION}")).centered()
+            }
+            LayoutSections::Pane => Line::from(FOOTER_TEXT_ACTIVE.to_owned()).centered(),
+            LayoutSections::TaskList if self.terminal_output.has_selection() => {
+                Line::from(format!("{FOOTER_TEXT_INACTIVE} {HAS_SELECTION}")).centered()
+            }
+            LayoutSections::TaskList => Line::from(FOOTER_TEXT_INACTIVE.to_owned()).centered(),
+            LayoutSections::Search { results, .. } => {
+                Line::from(format!("/ {}", results.query())).left_aligned()
+            }
         }
     }
 }
@@ -37,22 +57,11 @@ impl<'a, W> Widget for &TerminalPane<'a, W> {
         Self: Sized,
     {
         let screen = self.terminal_output.parser.screen();
-        let mut help_text = if self.highlight {
-            FOOTER_TEXT_ACTIVE
-        } else {
-            FOOTER_TEXT_INACTIVE
-        }
-        .to_owned();
-
-        if self.terminal_output.has_selection() {
-            help_text.push(' ');
-            help_text.push_str(HAS_SELECTION);
-        }
         let block = Block::default()
             .borders(Borders::LEFT)
             .title(self.terminal_output.title(self.task_name))
-            .title_bottom(Line::from(help_text).centered())
-            .style(if self.highlight {
+            .title_bottom(self.footer())
+            .style(if self.highlight() {
                 Style::new().fg(ratatui::style::Color::Yellow)
             } else {
                 Style::new()

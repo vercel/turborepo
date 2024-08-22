@@ -109,7 +109,7 @@ pub struct TaskNamesByStatus {
     pub finished: Vec<String>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, Default)]
 pub struct TasksByStatus {
     pub running: Vec<Task<Running>>,
     pub planned: Vec<Task<Planned>>,
@@ -125,7 +125,7 @@ impl TasksByStatus {
         self.task_names_in_displayed_order().count()
     }
 
-    pub fn task_names_in_displayed_order(&self) -> impl Iterator<Item = &str> + '_ {
+    pub fn task_names_in_displayed_order(&self) -> impl DoubleEndedIterator<Item = &str> + '_ {
         let running_names = self.running.iter().map(|task| task.name());
         let planned_names = self.planned.iter().map(|task| task.name());
         let finished_names = self.finished.iter().map(|task| task.name());

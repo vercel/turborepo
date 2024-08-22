@@ -3,8 +3,7 @@ use std::{io::Write, mem};
 use turborepo_vt100 as vt100;
 
 use super::{
-    app::Direction,
-    event::{CacheResult, OutputLogs, TaskResult},
+    event::{CacheResult, Direction, OutputLogs, TaskResult},
     Error,
 };
 
