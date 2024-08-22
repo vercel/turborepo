@@ -24,6 +24,17 @@ Validate that we only run `my-app#build` with change not committed
   Cached:    0 cached, 1 total
     Time:\s*[\.0-9]+m?s  (re)
   
+Validate that with a filter, we do an *intersection* with `--affected` and not a union
+  $ ${TURBO} run build --affected --filter util
+  \xe2\x80\xa2 Packages in scope:  (esc)
+  \xe2\x80\xa2 Running build in 0 packages (esc)
+  \xe2\x80\xa2 Remote caching disabled (esc)
+
+  No tasks were executed as part of this run.
+
+    Tasks:    0 successful, 0 total
+    Cached:    0 cached, 0 total
+    Time:    44ms
 
 Do the same thing with the `ls` command
   $ ${TURBO} ls --affected

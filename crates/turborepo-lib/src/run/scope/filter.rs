@@ -188,28 +188,27 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
         affected: &Option<(String, String)>,
         patterns: &[String],
     ) -> Result<HashSet<PackageName>, ResolutionError> {
-        let mut selectors = patterns
+        let selectors = patterns
             .iter()
             .map(|pattern| TargetSelector::from_str(pattern))
             .collect::<Result<Vec<_>, _>>()?;
 
-        if let Some((from_ref, to_ref)) = affected {
-            selectors.push(TargetSelector {
-                git_range: Some(GitRange {
-                    from_ref: from_ref.to_string(),
-                    to_ref: Some(to_ref.to_string()),
-                    include_uncommitted: true,
-                    allow_unknown_objects: true,
-                }),
-                ..Default::default()
-            });
-        }
+        let affected_selector = affected.as_ref().map(|(from_ref, to_ref)| TargetSelector {
+            git_range: Some(GitRange {
+                from_ref: from_ref.to_string(),
+                to_ref: Some(to_ref.to_string()),
+                include_uncommitted: true,
+                allow_unknown_objects: true,
+            }),
+            ..Default::default()
+        });
 
-        self.get_filtered_packages(selectors)
+        self.get_filtered_packages(affected_selector, selectors)
     }
 
     fn get_filtered_packages(
         &self,
+        affected_selector: Option<TargetSelector>,
         selectors: Vec<TargetSelector>,
     ) -> Result<HashSet<PackageName>, ResolutionError> {
         let (_prod_selectors, all_selectors) = self
@@ -218,7 +217,7 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
             .partition::<Vec<_>, _>(|t| t.follow_prod_deps_only);
 
         if !all_selectors.is_empty() {
-            self.filter_graph(all_selectors)
+            self.filter_graph(affected_selector, all_selectors)
         } else {
             Ok(Default::default())
         }
@@ -246,6 +245,7 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
 
     fn filter_graph(
         &self,
+        affected_selector: Option<TargetSelector>,
         selectors: Vec<TargetSelector>,
     ) -> Result<HashSet<PackageName>, ResolutionError> {
         let (include_selectors, exclude_selectors) =
@@ -263,9 +263,17 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
                 .collect()
         };
 
+        let affected_pkgs = if let Some(affected_selector) = affected_selector {
+            Some(self.filter_graph_with_selector(&affected_selector)?)
+        } else {
+            None
+        };
+
         let exclude = self.filter_graph_with_selectors(exclude_selectors)?;
 
-        include.retain(|i| !exclude.contains(i));
+        include.retain(|i| {
+            !exclude.contains(i) && affected_pkgs.as_ref().map_or(true, |pkgs| pkgs.contains(i))
+        });
 
         Ok(include)
     }
