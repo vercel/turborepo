@@ -961,6 +961,8 @@ mod test {
         env.insert("turbo_daemon".into(), "".into());
         env.insert("turbo_env_mode".into(), "".into());
         env.insert("turbo_preflight".into(), "".into());
+        env.insert("turbo_scm_head".into(), "".into());
+        env.insert("turbo_scm_base".into(), "".into());
 
         let config = get_env_var_config(&env).unwrap();
         assert_eq!(config.api_url(), DEFAULT_API_URL);
@@ -972,6 +974,8 @@ mod test {
         assert_eq!(config.daemon, None);
         assert_eq!(config.env_mode, None);
         assert!(!config.preflight());
+        assert_eq!(config.scm_base(), None);
+        assert_eq!(config.scm_head(), "HEAD");
     }
 
     #[test]
