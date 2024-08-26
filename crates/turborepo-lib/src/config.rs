@@ -1050,4 +1050,50 @@ mod test {
         assert_eq!(config.token().unwrap(), vercel_artifacts_token);
         assert_eq!(config.spaces_id().unwrap(), "my-spaces-id");
     }
+
+    #[test]
+    fn test_turbo_json_remote_cache() {
+        let tmp_dir = TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
+
+        let api_url = "url1";
+        let login_url = "url2";
+        let team_slug = "my-slug";
+        let team_id = "an-id";
+        let turbo_json_contents = serde_json::to_string_pretty(&serde_json::json!({
+            "remoteCache": {
+                "enabled": true,
+                "apiUrl": api_url,
+                "loginUrl": login_url,
+                "teamSlug": team_slug,
+                "teamId": team_id,
+                "signature": true,
+                "preflight": false,
+                "timeout": 123
+            }
+        }))
+        .unwrap();
+        repo_root
+            .join_component("turbo.json")
+            .create_with_contents(&turbo_json_contents)
+            .unwrap();
+
+        let builder = TurborepoConfigBuilder {
+            repo_root,
+            override_config: ConfigurationOptions::default(),
+            global_config_path: None,
+            environment: HashMap::default(),
+        };
+
+        let config = builder.build().unwrap();
+        // Directly accessing field to make sure we're not getting the default value
+        assert_eq!(config.enabled, Some(true));
+        assert_eq!(config.api_url(), api_url);
+        assert_eq!(config.login_url(), login_url);
+        assert_eq!(config.team_slug(), Some(team_slug));
+        assert_eq!(config.team_id(), Some(team_id));
+        assert!(config.signature());
+        assert!(!config.preflight());
+        assert_eq!(config.timeout(), 123);
+    }
 }
