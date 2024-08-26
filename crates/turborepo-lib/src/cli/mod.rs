@@ -1293,7 +1293,7 @@ pub async fn run(
 
             if execution_args.tasks.is_empty() {
                 print_potential_tasks(base, event).await?;
-                process::exit(1);
+                return Ok(1);
             }
 
             if let Some((file_path, include_args)) = run_args.profile_file_and_include_args() {
