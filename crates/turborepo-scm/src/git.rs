@@ -7,6 +7,7 @@ use turbopath::{
 
 use crate::{Error, Git, SCM};
 
+#[derive(Debug)]
 pub enum ChangedFiles {
     All,
     Some(HashSet<AnchoredSystemPathBuf>),
@@ -35,6 +36,13 @@ impl SCM {
         include_uncommitted: bool,
         allow_unknown_objects: bool,
     ) -> Result<ChangedFiles, Error> {
+        fn unable_to_detect_range(error: impl std::error::Error) -> Result<ChangedFiles, Error> {
+            warn!(
+                "unable to detect git range, assuming all files have changed: {}",
+                error
+            );
+            Ok(ChangedFiles::All)
+        }
         match self {
             Self::Git(git) => {
                 match git.changed_files(turbo_root, from_commit, to_commit, include_uncommitted) {
@@ -42,11 +50,10 @@ impl SCM {
                     Err(ref error @ Error::Git(ref message, _))
                         if allow_unknown_objects && message.contains("no merge base") =>
                     {
-                        warn!(
-                            "unable to detect git range, assuming all files have changed: {}",
-                            error
-                        );
-                        Ok(ChangedFiles::All)
+                        unable_to_detect_range(error)
+                    }
+                    Err(Error::UnableToResolveRef) => {
+                        unable_to_detect_range(Error::UnableToResolveRef)
                     }
                     Err(e) => Err(e),
                 }
@@ -822,6 +829,30 @@ mod tests {
             turbo_root_is_not_subdir_of_git_root,
             Err(Error::Path(PathError::NotParent(_, _), _))
         );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_changed_files_no_base() -> Result<(), Error> {
+        let mut repo_opts = RepositoryInitOptions::new();
+
+        let repo_init = repo_opts.initial_head("my-main");
+        let (repo_root, repo) = setup_repository(Some(repo_init))?;
+        let root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+
+        // WARNING:
+        // if you do not make a commit, git will show you that you have no branches.
+        let file = root.join_component("todo.txt");
+        file.create_with_contents("1. explain why async Rust is good")?;
+        let _first_commit = commit_file(&repo, Path::new("todo.txt"), None);
+
+        let scm = SCM::new(&root);
+        let actual = scm
+            .changed_files(&root, None, Some("HEAD"), true, true)
+            .unwrap();
+
+        assert_matches!(actual, ChangedFiles::All);
 
         Ok(())
     }
