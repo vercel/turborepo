@@ -1029,7 +1029,8 @@ pub async fn run(
     }
 
     let should_print_version = env::var("TURBO_PRINT_VERSION_DISABLED")
-        .map_or(true, |disable| !matches!(disable.as_str(), "1" | "true"));
+        .map_or(true, |disable| !matches!(disable.as_str(), "1" | "true"))
+        && !turborepo_ci::is_ci();
 
     if should_print_version {
         eprintln!("{}\n", GREY.apply_to(format!("turbo {}", get_version())));
