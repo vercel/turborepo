@@ -175,7 +175,7 @@ Setting up `exports` this way has several advantages:
 
 - Using the `types` field allows `tsserver` to use the code in `src` as the source of truth for your code's types. Your editor will always be up-to-date with the latest interfaces from your code.
 - You can quickly add new entrypoints to your package without creating [dangerous barrel files](https://vercel.com/blog/how-we-optimized-package-imports-in-next-js#what's-the-problem-with-barrel-files).
-- You'll receive auto-importing suggestions for your imports across package boundaries in your editor. For more information about why you may not want to wildcard the entrypoints, see the [limitations section](/repo/docs/guides/tools/typescript#package-entrypoint-wildcards).
+- You'll receive auto-importing suggestions for your imports across package boundaries in your editor. For more information about why you may not want to wildcard the entrypoints, see the [limitations section](#package-entrypoint-wildcards).
 
 <Callout type="warn">
   If you're publishing the package, you cannot use references to source code in
