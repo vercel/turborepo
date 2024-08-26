@@ -36,6 +36,13 @@ impl SCM {
         include_uncommitted: bool,
         allow_unknown_objects: bool,
     ) -> Result<ChangedFiles, Error> {
+        fn unable_to_detect_range(error: impl std::error::Error) -> Result<ChangedFiles, Error> {
+            warn!(
+                "unable to detect git range, assuming all files have changed: {}",
+                error
+            );
+            Ok(ChangedFiles::All)
+        }
         match self {
             Self::Git(git) => {
                 match git.changed_files(turbo_root, from_commit, to_commit, include_uncommitted) {
@@ -43,11 +50,10 @@ impl SCM {
                     Err(ref error @ Error::Git(ref message, _))
                         if allow_unknown_objects && message.contains("no merge base") =>
                     {
-                        warn!(
-                            "unable to detect git range, assuming all files have changed: {}",
-                            error
-                        );
-                        Ok(ChangedFiles::All)
+                        unable_to_detect_range(error)
+                    }
+                    Err(Error::UnableToResolveRef) => {
+                        unable_to_detect_range(Error::UnableToResolveRef)
                     }
                     Err(e) => Err(e),
                 }
