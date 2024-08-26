@@ -315,40 +315,7 @@ Using exports this way provides three major benefits:
 
 #### `imports` (optional)
 
-[The `imports` field](https://nodejs.org/api/packages.html#imports) gives you a way to create subpaths to other modules within your package. You can think of these like "shortcuts" to get to other modules within your package.
-
-<Tabs items={["package.json", "add.ts", "multiply.ts"]}>
-<Tab value="package.json">
-```json title="./packages/ui/package.json"
-{
-  "imports": {
-    "#*": "./*"
-  }
-}
-```
-</Tab>
-<Tab value="add.ts">
-```ts title="./packages/math/src/add.ts"
- export const add = (a: number, b: number) => a + b;
-```
-</Tab>
-
-<Tab value="multiply.ts">
-```ts title="./packages/math/src/multiply.ts"
-import { add } from "#add";
-
-export const multiply = (a: number, b: number) => {
-    let result = 0;
-    for (let i = 0; i < b; i++) {
-        result = add(result, a);
-    }
-    return result;
-}
-```
-</Tab>
-</Tabs>
-
-This can be useful for concisely importing other modules within the package and can make refactors easier to manage.
+[The `imports` field](https://nodejs.org/api/packages.html#imports) gives you a way to create subpaths to other modules within your package. You can think of these like "shortcuts" to write simpler import paths that are more resilient to refactors that move files. To learn how, visit [the TypeScript page](/repo/docs/guides/tools/typescript#use-nodejs-subpath-imports-instead-of-typescript-compiler-paths).
 
 <Callout type="info">
 You may be more familiar with TypeScript's `compilerOptions#paths` option, which accomplishes a similar goal. As of Typescript 5.4, TypeScript can infer subpaths from `imports`, making it a better option since you'll be working with Node.js conventions. For more information, visit [our Typescript guide](/repo/docs/guides/tools/typescript#use-nodejs-subpath-imports-instead-of-typescript-compiler-paths).
