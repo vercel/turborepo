@@ -884,7 +884,7 @@ mod test {
         );
 
         // Restart b
-        app.restart_tasks(vec!["b".to_string()]);
+        app.restart_tasks(vec!["b".to_string()])?;
         app.start_task("b", OutputLogs::Full)?;
         assert_eq!(
             (
@@ -896,7 +896,7 @@ mod test {
         );
 
         // Restart a
-        app.restart_tasks(vec!["a".to_string()]);
+        app.restart_tasks(vec!["a".to_string()])?;
         app.start_task("a", OutputLogs::Full)?;
         assert_eq!(
             (
@@ -962,13 +962,13 @@ mod test {
         app.insert_stdin("b", Some(Vec::new())).unwrap();
 
         // Interact and type "hello"
-        app.interact();
+        app.interact()?;
         app.forward_input(b"hello!").unwrap();
 
         // Exit interaction and move up
-        app.interact();
+        app.interact()?;
         app.previous();
-        app.interact();
+        app.interact()?;
         app.forward_input(b"world").unwrap();
 
         assert_eq!(
