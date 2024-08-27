@@ -26,6 +26,25 @@ turbo run [tasks] [options] [-- [args passed to tasks]]
 
 ## Options
 
+### `--affected`
+
+Automatically filter to only packages that are affected by changes on the current branch.
+
+By default the changes considered are those between `main` and `HEAD`.
+
+- You can override `main` as the default base by setting `TURBO_SCM_BASE`.
+- You can override `HEAD` as the default head by setting `TURBO_SCM_HEAD`.
+
+```bash title="Terminal"
+TURBO_SCM_BASE=development turbo run build --affected
+```
+
+<Callout type="warn">
+  Performing this comparison requires everything between base and head to exist in
+  the checkout. If the checkout is too shallow, then all packages will be
+  considered changed.
+</Callout>
+
 ### `--cache-dir <path>`
 
 Default: `.turbo/cache`
