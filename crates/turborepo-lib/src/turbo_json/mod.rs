@@ -401,11 +401,16 @@ impl TryFrom<RawTaskDefinition> for TaskDefinition {
 impl RawTurboJson {
     pub(crate) fn read(
         repo_root: &AbsoluteSystemPath,
-        path: &AnchoredSystemPath,
+        path: &AbsoluteSystemPath,
     ) -> Result<RawTurboJson, Error> {
-        let absolute_path = repo_root.resolve(path);
-        let contents = absolute_path.read_to_string()?;
-        let raw_turbo_json = RawTurboJson::parse(&contents, path.as_str())?;
+        let contents = path.read_to_string()?;
+        // Anchoring the path can fail if paths reside on different drives.
+        // Just display absolute path in that case.
+        let root_relative_path = repo_root.anchor(path).map_or_else(
+            |_| path.as_str().to_owned(),
+            |relative| relative.to_string(),
+        );
+        let raw_turbo_json = RawTurboJson::parse(&contents, &root_relative_path)?;
 
         Ok(raw_turbo_json)
     }
@@ -544,9 +549,14 @@ impl TurboJson {
         root_package_json: &PackageJson,
         include_synthesized_from_root_package_json: bool,
     ) -> Result<TurboJson, Error> {
-        let turbo_from_files = Self::read(repo_root, &dir.join_component(CONFIG_FILE));
-        let turbo_from_trace =
-            Self::read(repo_root, &dir.join_components(&TASK_ACCESS_CONFIG_PATH));
+        let turbo_json_path = repo_root.resolve(dir).join_component(CONFIG_FILE);
+        let turbo_from_files = Self::read(repo_root, &turbo_json_path);
+        let turbo_from_trace = Self::read(
+            repo_root,
+            &repo_root
+                .resolve(dir)
+                .join_components(&TASK_ACCESS_CONFIG_PATH),
+        );
 
         // check the zero config case (turbo trace file, but no turbo.json file)
         if let Ok(turbo_from_trace) = turbo_from_trace {
@@ -630,7 +640,7 @@ impl TurboJson {
     /// and then converts it into `TurboJson`
     pub(crate) fn read(
         repo_root: &AbsoluteSystemPath,
-        path: &AnchoredSystemPath,
+        path: &AbsoluteSystemPath,
     ) -> Result<TurboJson, Error> {
         let raw_turbo_json = RawTurboJson::read(repo_root, path)?;
         raw_turbo_json.try_into()

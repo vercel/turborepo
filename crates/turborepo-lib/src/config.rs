@@ -10,7 +10,7 @@ use miette::{Diagnostic, NamedSource, SourceSpan};
 use serde::Deserialize;
 use struct_iterable::Iterable;
 use thiserror::Error;
-use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath, RelativeUnixPath};
+use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPath};
 use turborepo_auth::{TURBO_TOKEN_DIR, TURBO_TOKEN_FILE, VERCEL_TOKEN_DIR, VERCEL_TOKEN_FILE};
 use turborepo_dirs::{config_dir, vercel_config_dir};
 use turborepo_errors::TURBO_SITE;
@@ -777,7 +777,7 @@ impl TurborepoConfigBuilder {
 
         let turbo_json = RawTurboJson::read(
             &self.repo_root,
-            AnchoredSystemPath::new("turbo.json").unwrap(),
+            &self.repo_root.join_component("turbo.json"),
         )
         .or_else(|e| {
             if let Error::Io(e) = &e {
