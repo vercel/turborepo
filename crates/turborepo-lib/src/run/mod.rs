@@ -449,7 +449,9 @@ impl Run {
             self.version,
             Vendor::get_user(),
             &self.scm,
-        );
+            &self.opts.cache_opts.cache_dir,
+        )
+        .await;
 
         let mut visitor = Visitor::new(
             self.pkg_dep_graph.clone(),
