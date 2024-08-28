@@ -304,6 +304,38 @@ export interface RemoteCache {
    * @defaultValue `true`
    */
   enabled?: boolean;
+
+  /**
+   * When enabled, any HTTP request will be preceded by an OPTIONS request to
+   * determine if the request is supported by the endpoint.
+   *
+   * Documentation: https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS#preflighted_requests
+   *
+   * @defaultValue `false`
+   */
+  preflight?: boolean;
+  /**
+   * Set endpoint for API calls to the remote cache.
+   * Documentation: https://turbo.build/repo/docs/core-concepts/remote-caching#self-hosting
+   *
+   * @defaultValue `"https://vercel.com/api"`
+   */
+  apiUrl?: string;
+  /**
+   * Set endpoint for requesting tokens during `turbo login`.
+   * Documentation: https://turbo.build/repo/docs/core-concepts/remote-caching#self-hosting
+   *
+   * @defaultValue `"https://vercel.com"`
+   */
+  loginUrl?: string;
+  /**
+   * Sets a timeout for remote cache operations. Value is given in seconds and
+   * only whole values are accepted. If `0` is passed, then there is no timeout
+   * for any cache operations.
+   *
+   * @defaultValue `30`
+   */
+  timeout?: number;
 }
 
 export const isRootSchemaV2 = (schema: Schema): schema is RootSchema =>
