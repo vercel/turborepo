@@ -11,7 +11,7 @@ use miette::{NamedSource, SourceSpan};
 use serde::{Deserialize, Serialize};
 use struct_iterable::Iterable;
 use tracing::debug;
-use turbopath::{AbsoluteSystemPath, AnchoredSystemPath};
+use turbopath::AbsoluteSystemPath;
 use turborepo_errors::Spanned;
 use turborepo_repository::{package_graph::ROOT_PKG_NAME, package_json::PackageJson};
 use turborepo_unescape::UnescapedString;
@@ -249,7 +249,7 @@ impl RawTaskDefinition {
     }
 }
 
-const CONFIG_FILE: &str = "turbo.json";
+pub const CONFIG_FILE: &str = "turbo.json";
 const ENV_PIPELINE_DELIMITER: &str = "$";
 const TOPOLOGICAL_PIPELINE_DELIMITER: &str = "^";
 
@@ -545,17 +545,14 @@ impl TurboJson {
     /// with synthesized information from the provided package.json
     pub fn load(
         repo_root: &AbsoluteSystemPath,
-        dir: &AnchoredSystemPath,
+        turbo_json_path: &AbsoluteSystemPath,
         root_package_json: &PackageJson,
         include_synthesized_from_root_package_json: bool,
     ) -> Result<TurboJson, Error> {
-        let turbo_json_path = repo_root.resolve(dir).join_component(CONFIG_FILE);
-        let turbo_from_files = Self::read(repo_root, &turbo_json_path);
+        let turbo_from_files = Self::read(repo_root, turbo_json_path);
         let turbo_from_trace = Self::read(
             repo_root,
-            &repo_root
-                .resolve(dir)
-                .join_components(&TASK_ACCESS_CONFIG_PATH),
+            &repo_root.join_components(&TASK_ACCESS_CONFIG_PATH),
         );
 
         // check the zero config case (turbo trace file, but no turbo.json file)
@@ -766,7 +763,7 @@ mod tests {
         cli::OutputLogsMode,
         run::task_id::TaskName,
         task_graph::{TaskDefinition, TaskOutputs},
-        turbo_json::{RawTaskDefinition, TurboJson},
+        turbo_json::{RawTaskDefinition, TurboJson, CONFIG_FILE},
     };
 
     #[test_case(r"{}", TurboJson::default() ; "empty")]
@@ -795,7 +792,7 @@ mod tests {
 
         let mut turbo_json = TurboJson::load(
             repo_root,
-            AnchoredSystemPath::empty(),
+            &repo_root.join_component(CONFIG_FILE),
             &root_package_json,
             false,
         )?;
@@ -869,7 +866,7 @@ mod tests {
 
         let mut turbo_json = TurboJson::load(
             repo_root,
-            AnchoredSystemPath::empty(),
+            &repo_root.join_component(CONFIG_FILE),
             &root_package_json,
             true,
         )?;

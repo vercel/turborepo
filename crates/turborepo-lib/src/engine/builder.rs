@@ -13,7 +13,10 @@ use crate::{
     config,
     run::task_id::{TaskId, TaskName},
     task_graph::TaskDefinition,
-    turbo_json::{validate_extends, validate_no_package_task_syntax, RawTaskDefinition, TurboJson},
+    turbo_json::{
+        validate_extends, validate_no_package_task_syntax, RawTaskDefinition, TurboJson,
+        CONFIG_FILE,
+    },
 };
 
 #[derive(Debug, thiserror::Error, Diagnostic)]
@@ -491,9 +494,13 @@ impl<'a> EngineBuilder<'a> {
                 .ok_or_else(|| Error::MissingPackageJson {
                     workspace: workspace.clone(),
                 })?;
+        let workspace_turbo_json = self
+            .repo_root
+            .resolve(workspace_dir)
+            .join_component(CONFIG_FILE);
         Ok(TurboJson::load(
             self.repo_root,
-            workspace_dir,
+            &workspace_turbo_json,
             package_json,
             self.is_single,
         )?)

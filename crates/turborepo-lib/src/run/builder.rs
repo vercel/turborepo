@@ -7,7 +7,7 @@ use std::{
 
 use chrono::Local;
 use tracing::debug;
-use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath};
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_analytics::{start_analytics, AnalyticsHandle, AnalyticsSender};
 use turborepo_api_client::{APIAuth, APIClient};
 use turborepo_cache::AsyncCache;
@@ -45,7 +45,7 @@ use crate::{
     run::{scope, task_access::TaskAccess, task_id::TaskName, Error, Run, RunCache},
     shim::TurboState,
     signal::{SignalHandler, SignalSubscriber},
-    turbo_json::{TurboJson, UIMode},
+    turbo_json::{TurboJson, UIMode, CONFIG_FILE},
     DaemonConnector,
 };
 
@@ -360,7 +360,7 @@ impl RunBuilder {
 
         let root_turbo_json = TurboJson::load(
             &self.repo_root,
-            AnchoredSystemPath::empty(),
+            &self.repo_root.join_component(CONFIG_FILE),
             &root_package_json,
             is_single_package,
         )?;
