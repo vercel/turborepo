@@ -70,6 +70,7 @@ You'll want to use this flag in situations like:
 - You’re _not_ using a Remote Cache, but still want to do as little work as possible in CI.
 - You _are_ using a Remote Cache, and you’re in a large repository. By minimizing the amount of tasks that will be restored from cache, there will be less data to send across the network, resulting in faster cache restoration.
 - You’re already using [advanced filtering techniques](/repo/docs/reference/run#advanced-filtering-examples) or [`turbo-ignore`](/repo/docs/reference/turbo-ignore) to create the same or similar behavior as `--affected`. You likely have the opportunity to simplify your scripting using this new flag.
+  - `--affected` will can handle shallow clons more gracefully than bespoke filtering because it falls back to running all tasks.
 
 ### Using `turbo-ignore`
 
