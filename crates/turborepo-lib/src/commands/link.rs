@@ -569,7 +569,7 @@ mod test {
 
     use anyhow::Result;
     use tempfile::{NamedTempFile, TempDir};
-    use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath};
+    use turbopath::AbsoluteSystemPathBuf;
     use turborepo_ui::ColorConfig;
     use turborepo_vercel_api_mock::start_test_server;
 
@@ -712,11 +712,7 @@ mod test {
 
         // verify space id is added to turbo.json
         let turbo_json_contents = fs::read_to_string(&turbo_json_file).unwrap();
-        let turbo_json = RawTurboJson::parse(
-            &turbo_json_contents,
-            AnchoredSystemPath::new("turbo.json").unwrap(),
-        )
-        .unwrap();
+        let turbo_json = RawTurboJson::parse(&turbo_json_contents, "turbo.json").unwrap();
         assert_eq!(
             turbo_json.experimental_spaces.unwrap().id.unwrap(),
             turborepo_vercel_api_mock::EXPECTED_SPACE_ID.into()

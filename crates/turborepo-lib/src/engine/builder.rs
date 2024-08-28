@@ -534,7 +534,7 @@ mod test {
     use serde_json::json;
     use tempfile::TempDir;
     use test_case::test_case;
-    use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath};
+    use turbopath::AbsoluteSystemPathBuf;
     use turborepo_lockfiles::Lockfile;
     use turborepo_repository::{
         discovery::PackageDiscovery, package_json::PackageJson, package_manager::PackageManager,
@@ -680,7 +680,7 @@ mod test {
 
     fn turbo_json(value: serde_json::Value) -> TurboJson {
         let json_text = serde_json::to_string(&value).unwrap();
-        let raw = RawTurboJson::parse(&json_text, AnchoredSystemPath::new("").unwrap()).unwrap();
+        let raw = RawTurboJson::parse(&json_text, "").unwrap();
         TurboJson::try_from(raw).unwrap()
     }
 

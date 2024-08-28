@@ -405,7 +405,7 @@ impl RawTurboJson {
     ) -> Result<RawTurboJson, Error> {
         let absolute_path = repo_root.resolve(path);
         let contents = absolute_path.read_to_string()?;
-        let raw_turbo_json = RawTurboJson::parse(&contents, path)?;
+        let raw_turbo_json = RawTurboJson::parse(&contents, path.as_str())?;
 
         Ok(raw_turbo_json)
     }
@@ -1085,14 +1085,14 @@ mod tests {
     #[test_case(r#"{ "ui": "stream" }"#, Some(UIMode::Stream) ; "stream")]
     #[test_case(r#"{}"#, None ; "missing")]
     fn test_ui(json: &str, expected: Option<UIMode>) {
-        let json = RawTurboJson::parse(json, AnchoredSystemPath::new("").unwrap()).unwrap();
+        let json = RawTurboJson::parse(json, "").unwrap();
         assert_eq!(json.ui, expected);
     }
 
     #[test_case(r#"{ "daemon": true }"#, r#"{"daemon":true}"# ; "daemon_on")]
     #[test_case(r#"{ "daemon": false }"#, r#"{"daemon":false}"# ; "daemon_off")]
     fn test_daemon(json: &str, expected: &str) {
-        let parsed = RawTurboJson::parse(json, AnchoredSystemPath::new("").unwrap()).unwrap();
+        let parsed = RawTurboJson::parse(json, "").unwrap();
         let actual = serde_json::to_string(&parsed).unwrap();
         assert_eq!(actual, expected);
     }
@@ -1100,7 +1100,7 @@ mod tests {
     #[test_case(r#"{ "ui": "tui" }"#, r#"{"ui":"tui"}"# ; "tui")]
     #[test_case(r#"{ "ui": "stream" }"#, r#"{"ui":"stream"}"# ; "stream")]
     fn test_ui_serialization(input: &str, expected: &str) {
-        let parsed = RawTurboJson::parse(input, AnchoredSystemPath::new("").unwrap()).unwrap();
+        let parsed = RawTurboJson::parse(input, "").unwrap();
         let actual = serde_json::to_string(&parsed).unwrap();
         assert_eq!(actual, expected);
     }
@@ -1109,7 +1109,7 @@ mod tests {
     #[test_case(r#"{"dangerouslyDisablePackageManagerCheck":false}"#, Some(false) ; "f")]
     #[test_case(r#"{}"#, None ; "missing")]
     fn test_allow_no_package_manager_serde(json_str: &str, expected: Option<bool>) {
-        let json = RawTurboJson::parse(json_str, AnchoredSystemPath::new("").unwrap()).unwrap();
+        let json = RawTurboJson::parse(json_str, "").unwrap();
         assert_eq!(json.allow_no_package_manager, expected);
         let serialized = serde_json::to_string(&json).unwrap();
         assert_eq!(serialized, json_str);
