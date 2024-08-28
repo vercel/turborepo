@@ -46,6 +46,8 @@ You can filter your tasks using [the `--filter` flag](/repo/docs/reference/run#-
   available.
 </Callout>
 
+You can also use [the `--affected` flag](#running-only-affected-tasks) to only run tasks in packages that have changes.
+
 ## Docker
 
 Docker is an important part of many deployment pipelines. [Turborepo's `prune` subcommand](/repo/docs/reference/prune) helps you ship lightweight images by removing unnecessary dependencies and code from your images.
@@ -54,7 +56,23 @@ For more on how to deploy from a Turborepo with Docker, visit [the dedicated Doc
 
 ## Skipping tasks and other unnecessary work
 
-Using Turborepo's built-in caching is a great way to speed up your CI. We encourage you to start by relying on Turborepo's caching and parallelization when you're starting out with Turborepo.
+### Running only affected tasks
+
+You can use the `--affected` flag to only run tasks that have changes.
+
+```bash title="Terminal
+turbo run build --affected
+```
+
+You'll want to use this flag in situations like:
+
+- You're running many tasks across packages in your monorepo, and only want to run those tasks in packages with code changes.
+- You’re _not_ using a Remote Cache, but still want to do as little work as possible in CI.
+- You _are_ using a Remote Cache, and you’re in a large repository. By minimizing the amount of tasks that will be restored from cache, there will be less data to send across the network, resulting in faster cache restoration.
+- You’re already using [advanced filtering techniques](/repo/docs/reference/run#advanced-filtering-examples) or [`turbo-ignore`](/repo/docs/reference/turbo-ignore) to create the same or similar behavior as `--affected`. You likely have the opportunity to simplify your scripting using this new flag.
+  - `--affected` will can handle shallow clons more gracefully than bespoke filtering because it falls back to running all tasks.
+
+### Using `turbo-ignore`
 
 As your codebase and CI grow, you may start to look for more ways to get even faster. While hitting cache is useful, you also may be able to skip work entirely. Using `turbo-ignore`, you can skip lengthy container preparation steps like dependency installation that will end up resulting in a cache hit, anyway.
 
