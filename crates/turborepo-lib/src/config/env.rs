@@ -6,57 +6,36 @@ use std::{
 use super::{ConfigurationOptions, Error, ResolvedConfigurationOptions};
 use crate::{cli::EnvMode, turbo_json::UIMode};
 
+const TURBO_MAPPING: &[(&str, &str)] = [
+    ("turbo_api", "api_url"),
+    ("turbo_login", "login_url"),
+    ("turbo_team", "team_slug"),
+    ("turbo_teamid", "team_id"),
+    ("turbo_token", "token"),
+    ("turbo_remote_cache_timeout", "timeout"),
+    ("turbo_remote_cache_upload_timeout", "upload_timeout"),
+    ("turbo_ui", "ui"),
+    (
+        "turbo_dangerously_disable_package_manager_check",
+        "allow_no_package_manager",
+    ),
+    ("turbo_daemon", "daemon"),
+    ("turbo_env_mode", "env_mode"),
+    ("turbo_cache_dir", "cache_dir"),
+    ("turbo_preflight", "preflight"),
+    ("turbo_scm_base", "scm_base"),
+    ("turbo_scm_head", "scm_head"),
+]
+.as_slice();
+
 pub struct EnvVars {
     output_map: HashMap<&'static str, String>,
 }
 
 impl EnvVars {
     pub fn new(environment: &HashMap<OsString, OsString>) -> Result<Self, Error> {
-        let mut turbo_mapping = HashMap::new();
-        turbo_mapping.insert(OsString::from("turbo_api"), "api_url");
-        turbo_mapping.insert(OsString::from("turbo_login"), "login_url");
-        turbo_mapping.insert(OsString::from("turbo_team"), "team_slug");
-        turbo_mapping.insert(OsString::from("turbo_teamid"), "team_id");
-        turbo_mapping.insert(OsString::from("turbo_token"), "token");
-        turbo_mapping.insert(OsString::from("turbo_remote_cache_timeout"), "timeout");
-        turbo_mapping.insert(
-            OsString::from("turbo_remote_cache_upload_timeout"),
-            "upload_timeout",
-        );
-        turbo_mapping.insert(OsString::from("turbo_ui"), "ui");
-        turbo_mapping.insert(
-            OsString::from("turbo_dangerously_disable_package_manager_check"),
-            "allow_no_package_manager",
-        );
-        turbo_mapping.insert(OsString::from("turbo_daemon"), "daemon");
-        turbo_mapping.insert(OsString::from("turbo_env_mode"), "env_mode");
-        turbo_mapping.insert(OsString::from("turbo_cache_dir"), "cache_dir");
-        turbo_mapping.insert(OsString::from("turbo_preflight"), "preflight");
-        turbo_mapping.insert(OsString::from("turbo_scm_base"), "scm_base");
-        turbo_mapping.insert(OsString::from("turbo_scm_head"), "scm_head");
-
-        // We do not enable new config sources:
-        // turbo_mapping.insert(String::from("turbo_signature"), "signature"); // new
-        // turbo_mapping.insert(String::from("turbo_remote_cache_enabled"), "enabled");
-
-        let mut output_map = HashMap::new();
-
-        turbo_mapping.into_iter().try_for_each(
-            |(mapping_key, mapped_property)| -> Result<(), Error> {
-                if let Some(value) = environment.get(&mapping_key) {
-                    let converted = value.to_str().ok_or_else(|| {
-                        Error::Encoding(
-                            // CORRECTNESS: the mapping_key is hardcoded above.
-                            mapping_key.to_ascii_uppercase().into_string().unwrap(),
-                        )
-                    })?;
-                    output_map.insert(mapped_property, converted.to_owned());
-                    Ok(())
-                } else {
-                    Ok(())
-                }
-            },
-        )?;
+        let turbo_mapping: HashMap<_, _> = TURBO_MAPPING.iter().copied().collect();
+        let output_map = map_environment(turbo_mapping, environment)?;
         Ok(Self { output_map })
     }
 }
@@ -187,6 +166,12 @@ impl ResolvedConfigurationOptions for EnvVars {
     }
 }
 
+const VERCEL_ARTIFACTS_MAPPING: &[(&str, &str)] = [
+    ("vercel_artifacts_token", "token"),
+    ("vercel_artifacts_owner", "team_id"),
+]
+.as_slice();
+
 pub struct OverrideEnvVars<'a> {
     environment: &'a HashMap<OsString, OsString>,
     output_map: HashMap<&'static str, String>,
@@ -194,29 +179,10 @@ pub struct OverrideEnvVars<'a> {
 
 impl<'a> OverrideEnvVars<'a> {
     pub fn new(environment: &'a HashMap<OsString, OsString>) -> Result<Self, Error> {
-        let mut vercel_artifacts_mapping = HashMap::new();
-        vercel_artifacts_mapping.insert(OsString::from("vercel_artifacts_token"), "token");
-        vercel_artifacts_mapping.insert(OsString::from("vercel_artifacts_owner"), "team_id");
+        let vercel_artifacts_mapping: HashMap<_, _> =
+            VERCEL_ARTIFACTS_MAPPING.iter().copied().collect();
 
-        let mut output_map = HashMap::new();
-
-        // Process the VERCEL_ARTIFACTS_* next.
-        vercel_artifacts_mapping.into_iter().try_for_each(
-            |(mapping_key, mapped_property)| -> Result<(), Error> {
-                if let Some(value) = environment.get(&mapping_key) {
-                    let converted = value.to_str().ok_or_else(|| {
-                        Error::Encoding(
-                            // CORRECTNESS: the mapping_key is hardcoded above.
-                            mapping_key.to_ascii_uppercase().into_string().unwrap(),
-                        )
-                    })?;
-                    output_map.insert(mapped_property, converted.to_owned());
-                    Ok(())
-                } else {
-                    Ok(())
-                }
-            },
-        )?;
+        let output_map = map_environment(vercel_artifacts_mapping, environment)?;
         Ok(Self {
             environment,
             output_map,
@@ -271,6 +237,25 @@ fn truth_env_var(s: &str) -> Option<bool> {
         "false" | "0" => Some(false),
         _ => None,
     }
+}
+
+fn map_environment<'a>(
+    mapping: HashMap<&str, &'a str>,
+    environment: &HashMap<OsString, OsString>,
+) -> Result<HashMap<&'a str, String>, Error> {
+    let mut output_map = HashMap::new();
+    mapping
+        .into_iter()
+        .try_for_each(|(mapping_key, mapped_property)| -> Result<(), Error> {
+            if let Some(value) = environment.get(OsStr::new(mapping_key)) {
+                let converted = value
+                    .to_str()
+                    .ok_or_else(|| Error::Encoding(mapping_key.to_ascii_uppercase()))?;
+                output_map.insert(mapped_property, converted.to_owned());
+            }
+            Ok(())
+        })?;
+    Ok(output_map)
 }
 
 #[cfg(test)]
