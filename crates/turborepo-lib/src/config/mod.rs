@@ -6,12 +6,13 @@ use std::{collections::HashMap, ffi::OsString, io};
 
 use camino::{Utf8Path, Utf8PathBuf};
 use convert_case::{Case, Casing};
-use env::{get_env_var_config, get_override_env_var_config};
-use file::{get_global_auth, get_global_config, get_local_config};
+use env::{EnvVars, OverrideEnvVars};
+use file::{AuthFile, ConfigFile};
 use miette::{Diagnostic, NamedSource, SourceSpan};
 use serde::Deserialize;
 use struct_iterable::Iterable;
 use thiserror::Error;
+use turbo_json::TurboJsonReader;
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_errors::TURBO_SITE;
 
@@ -435,25 +436,13 @@ impl TurborepoConfigBuilder {
         // - CLI arguments
         // - builder pattern overrides.
 
-        let turbo_json = RawTurboJson::read(
-            &self.repo_root,
-            &self.repo_root.join_component("turbo.json"),
-        )
-        .or_else(|e| {
-            if let Error::Io(e) = &e {
-                if matches!(e.kind(), std::io::ErrorKind::NotFound) {
-                    return Ok(Default::default());
-                }
-            }
-
-            Err(e)
-        })?;
-        let global_config = get_global_config(self.global_config_path.clone())?;
-        let global_auth = get_global_auth(self.global_config_path.clone())?;
-        let local_config = get_local_config(&self.repo_root)?;
+        let turbo_json = TurboJsonReader::new(&self.repo_root);
+        let global_config = ConfigFile::global_config(self.global_config_path.clone())?;
+        let global_auth = AuthFile::global_auth(self.global_config_path.clone())?;
+        let local_config = ConfigFile::local_config(&self.repo_root);
         let env_vars = self.get_environment();
-        let env_var_config = get_env_var_config(&env_vars)?;
-        let override_env_var_config = get_override_env_var_config(&env_vars)?;
+        let env_var_config = EnvVars::new(&env_vars)?;
+        let override_env_var_config = OverrideEnvVars::new(&env_vars)?;
 
         // These are ordered from highest to lowest priority
         let sources = [
@@ -500,17 +489,12 @@ impl TurborepoConfigBuilder {
 mod test {
     use std::{collections::HashMap, ffi::OsString};
 
-    use camino::Utf8PathBuf;
     use tempfile::TempDir;
     use turbopath::AbsoluteSystemPathBuf;
 
-    use crate::{
-        cli::EnvMode,
-        config::{
-            get_env_var_config, get_override_env_var_config, ConfigurationOptions,
-            TurborepoConfigBuilder, DEFAULT_API_URL, DEFAULT_LOGIN_URL, DEFAULT_TIMEOUT,
-        },
-        turbo_json::UIMode,
+    use crate::config::{
+        ConfigurationOptions, TurborepoConfigBuilder, DEFAULT_API_URL, DEFAULT_LOGIN_URL,
+        DEFAULT_TIMEOUT,
     };
 
     #[test]
@@ -527,104 +511,6 @@ mod test {
         assert_eq!(defaults.timeout(), DEFAULT_TIMEOUT);
         assert_eq!(defaults.spaces_id(), None);
         assert!(!defaults.allow_no_package_manager());
-    }
-
-    #[test]
-    fn test_env_setting() {
-        let mut env: HashMap<OsString, OsString> = HashMap::new();
-
-        let turbo_api = "https://example.com/api";
-        let turbo_login = "https://example.com/login";
-        let turbo_team = "vercel";
-        let turbo_teamid = "team_nLlpyC6REAqxydlFKbrMDlud";
-        let turbo_token = "abcdef1234567890abcdef";
-        let cache_dir = Utf8PathBuf::from("nebulo9");
-        let turbo_remote_cache_timeout = 200;
-
-        env.insert("turbo_api".into(), turbo_api.into());
-        env.insert("turbo_login".into(), turbo_login.into());
-        env.insert("turbo_team".into(), turbo_team.into());
-        env.insert("turbo_teamid".into(), turbo_teamid.into());
-        env.insert("turbo_token".into(), turbo_token.into());
-        env.insert(
-            "turbo_remote_cache_timeout".into(),
-            turbo_remote_cache_timeout.to_string().into(),
-        );
-        env.insert("turbo_ui".into(), "true".into());
-        env.insert(
-            "turbo_dangerously_disable_package_manager_check".into(),
-            "true".into(),
-        );
-        env.insert("turbo_daemon".into(), "true".into());
-        env.insert("turbo_preflight".into(), "true".into());
-        env.insert("turbo_env_mode".into(), "strict".into());
-        env.insert("turbo_cache_dir".into(), cache_dir.clone().into());
-
-        let config = get_env_var_config(&env).unwrap();
-        assert!(config.preflight());
-        assert_eq!(turbo_api, config.api_url.unwrap());
-        assert_eq!(turbo_login, config.login_url.unwrap());
-        assert_eq!(turbo_team, config.team_slug.unwrap());
-        assert_eq!(turbo_teamid, config.team_id.unwrap());
-        assert_eq!(turbo_token, config.token.unwrap());
-        assert_eq!(turbo_remote_cache_timeout, config.timeout.unwrap());
-        assert_eq!(Some(UIMode::Tui), config.ui);
-        assert_eq!(Some(true), config.allow_no_package_manager);
-        assert_eq!(Some(true), config.daemon);
-        assert_eq!(Some(EnvMode::Strict), config.env_mode);
-        assert_eq!(cache_dir, config.cache_dir.unwrap());
-    }
-
-    #[test]
-    fn test_empty_env_setting() {
-        let mut env: HashMap<OsString, OsString> = HashMap::new();
-        env.insert("turbo_api".into(), "".into());
-        env.insert("turbo_login".into(), "".into());
-        env.insert("turbo_team".into(), "".into());
-        env.insert("turbo_teamid".into(), "".into());
-        env.insert("turbo_token".into(), "".into());
-        env.insert("turbo_ui".into(), "".into());
-        env.insert("turbo_daemon".into(), "".into());
-        env.insert("turbo_env_mode".into(), "".into());
-        env.insert("turbo_preflight".into(), "".into());
-        env.insert("turbo_scm_head".into(), "".into());
-        env.insert("turbo_scm_base".into(), "".into());
-
-        let config = get_env_var_config(&env).unwrap();
-        assert_eq!(config.api_url(), DEFAULT_API_URL);
-        assert_eq!(config.login_url(), DEFAULT_LOGIN_URL);
-        assert_eq!(config.team_slug(), None);
-        assert_eq!(config.team_id(), None);
-        assert_eq!(config.token(), None);
-        assert_eq!(config.ui, None);
-        assert_eq!(config.daemon, None);
-        assert_eq!(config.env_mode, None);
-        assert!(!config.preflight());
-        assert_eq!(config.scm_base(), None);
-        assert_eq!(config.scm_head(), "HEAD");
-    }
-
-    #[test]
-    fn test_override_env_setting() {
-        let mut env: HashMap<OsString, OsString> = HashMap::new();
-
-        let vercel_artifacts_token = "correct-horse-battery-staple";
-        let vercel_artifacts_owner = "bobby_tables";
-
-        env.insert(
-            "vercel_artifacts_token".into(),
-            vercel_artifacts_token.into(),
-        );
-        env.insert(
-            "vercel_artifacts_owner".into(),
-            vercel_artifacts_owner.into(),
-        );
-        env.insert("ci".into(), "1".into());
-
-        let config = get_override_env_var_config(&env).unwrap();
-        assert_eq!(vercel_artifacts_token, config.token.unwrap());
-        assert_eq!(vercel_artifacts_owner, config.team_id.unwrap());
-        assert_eq!(Some(UIMode::Stream), config.ui);
     }
 
     #[test]
