@@ -358,12 +358,21 @@ impl RunBuilder {
         let task_access = TaskAccess::new(self.repo_root.clone(), async_cache.clone(), &scm);
         task_access.restore_config().await;
 
-        let root_turbo_json = TurboJson::load(
-            &self.repo_root,
-            &self.repo_root.join_component(CONFIG_FILE),
-            &root_package_json,
-            is_single_package,
-        )?;
+        let root_turbo_json_path = self.repo_root.join_component(CONFIG_FILE);
+
+        let root_turbo_json = task_access
+            .load_turbo_json(&root_turbo_json_path)
+            .map_or_else(
+                || {
+                    TurboJson::load(
+                        &self.repo_root,
+                        &root_turbo_json_path,
+                        &root_package_json,
+                        is_single_package,
+                    )
+                },
+                Result::Ok,
+            )?;
 
         pkg_dep_graph.validate()?;
 

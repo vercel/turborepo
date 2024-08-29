@@ -10,7 +10,6 @@ use clap::ValueEnum;
 use miette::{NamedSource, SourceSpan};
 use serde::{Deserialize, Serialize};
 use struct_iterable::Iterable;
-use tracing::debug;
 use turbopath::AbsoluteSystemPath;
 use turborepo_errors::Spanned;
 use turborepo_repository::{package_graph::ROOT_PKG_NAME, package_json::PackageJson};
@@ -20,7 +19,7 @@ use crate::{
     cli::{EnvMode, OutputLogsMode},
     config::{ConfigurationOptions, Error, InvalidEnvPrefixError},
     run::{
-        task_access::{TaskAccessTraceFile, TASK_ACCESS_CONFIG_PATH},
+        task_access::TaskAccessTraceFile,
         task_id::{TaskId, TaskName},
     },
     task_graph::{TaskDefinition, TaskOutputs},
@@ -550,18 +549,6 @@ impl TurboJson {
         include_synthesized_from_root_package_json: bool,
     ) -> Result<TurboJson, Error> {
         let turbo_from_files = Self::read(repo_root, turbo_json_path);
-        let turbo_from_trace = Self::read(
-            repo_root,
-            &repo_root.join_components(&TASK_ACCESS_CONFIG_PATH),
-        );
-
-        // check the zero config case (turbo trace file, but no turbo.json file)
-        if let Ok(turbo_from_trace) = turbo_from_trace {
-            if turbo_from_files.is_err() {
-                debug!("Using turbo.json synthesized from trace file");
-                return Ok(turbo_from_trace);
-            }
-        }
 
         let mut turbo_json = match (include_synthesized_from_root_package_json, turbo_from_files) {
             // If the file didn't exist, throw a custom error here instead of propagating
@@ -754,7 +741,7 @@ mod tests {
     use serde_json::json;
     use tempfile::tempdir;
     use test_case::test_case;
-    use turbopath::{AbsoluteSystemPath, AnchoredSystemPath};
+    use turbopath::AbsoluteSystemPath;
     use turborepo_repository::package_json::PackageJson;
     use turborepo_unescape::UnescapedString;
 
