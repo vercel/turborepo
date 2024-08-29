@@ -25,7 +25,9 @@ jobs:
 
       - name: "Build docs"
         run: |
-          curl -X POST ${{secrets.DOCS_DEPLOY_HOOK_URL}}
+          pnpm install --global vercel
+          job_id=$(curl -X POST ${{secrets.DOCS_DEPLOY_HOOK_URL}} | jq -r '.job.id')
+          vc inspect $job_id --wait
   validate-docs-links:
     runs-on: ubuntu-latest
     steps:
