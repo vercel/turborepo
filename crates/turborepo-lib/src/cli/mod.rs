@@ -851,7 +851,7 @@ pub struct RunArgs {
     // -----------------------
     /// Force turbo to either use or not use the local daemon. If unset
     /// turbo will use the default detection logic.
-    #[clap(long = "[no-]daemon", alias = "daemon", group = "daemon-group")]
+    #[clap(long = "(no-)daemon", alias = "daemon", group = "daemon-group")]
     pub daemon: bool,
 
     #[clap(long, group = "daemon-group", hide = true)]
