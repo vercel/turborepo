@@ -609,7 +609,7 @@ mod test {
         let port = port_scanner::request_open_port().unwrap();
         let handle = tokio::spawn(start_test_server(port));
         let mut base = CommandBase {
-            global_config_path: Some(
+            override_global_config_path: Some(
                 AbsoluteSystemPathBuf::try_from(user_config_file.path().to_path_buf()).unwrap(),
             ),
             repo_root: repo_root.clone(),
@@ -675,7 +675,7 @@ mod test {
         let port = port_scanner::request_open_port().unwrap();
         let handle = tokio::spawn(start_test_server(port));
         let mut base = CommandBase {
-            global_config_path: Some(
+            override_global_config_path: Some(
                 AbsoluteSystemPathBuf::try_from(user_config_file.path().to_path_buf()).unwrap(),
             ),
             repo_root: repo_root.clone(),

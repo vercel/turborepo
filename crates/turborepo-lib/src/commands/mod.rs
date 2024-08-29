@@ -32,8 +32,7 @@ pub(crate) mod unlink;
 pub struct CommandBase {
     pub repo_root: AbsoluteSystemPathBuf,
     pub color_config: ColorConfig,
-    #[cfg(test)]
-    pub global_config_path: Option<AbsoluteSystemPathBuf>,
+    pub override_global_config_path: Option<AbsoluteSystemPathBuf>,
     config: OnceCell<ConfigurationOptions>,
     args: Args,
     version: &'static str,
@@ -50,16 +49,14 @@ impl CommandBase {
             repo_root,
             color_config,
             args,
-            #[cfg(test)]
-            global_config_path: None,
+            override_global_config_path: None,
             config: OnceCell::new(),
             version,
         }
     }
 
-    #[cfg(test)]
-    pub fn with_global_config_path(mut self, path: AbsoluteSystemPathBuf) -> Self {
-        self.global_config_path = Some(path);
+    pub fn with_override_global_config_path(mut self, path: AbsoluteSystemPathBuf) -> Self {
+        self.override_global_config_path = Some(path);
         self
     }
 
@@ -129,7 +126,7 @@ impl CommandBase {
     // Getting all of the paths.
     fn global_config_path(&self) -> Result<AbsoluteSystemPathBuf, ConfigError> {
         #[cfg(test)]
-        if let Some(global_config_path) = self.global_config_path.clone() {
+        if let Some(global_config_path) = self.override_global_config_path.clone() {
             return Ok(global_config_path);
         }
 

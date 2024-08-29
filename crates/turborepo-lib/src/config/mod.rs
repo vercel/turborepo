@@ -233,8 +233,7 @@ pub struct TurborepoConfigBuilder {
     repo_root: AbsoluteSystemPathBuf,
     override_config: ConfigurationOptions,
     global_config_path: Option<AbsoluteSystemPathBuf>,
-    #[cfg(test)]
-    environment: HashMap<OsString, OsString>,
+    environment: Option<HashMap<OsString, OsString>>,
 }
 
 // Getters
@@ -387,12 +386,8 @@ impl TurborepoConfigBuilder {
         Self {
             repo_root: base.repo_root.to_owned(),
             override_config: Default::default(),
-            #[cfg(not(test))]
-            global_config_path: None,
-            #[cfg(test)]
-            global_config_path: base.global_config_path.clone(),
-            #[cfg(test)]
-            environment: Default::default(),
+            global_config_path: base.override_global_config_path.clone(),
+            environment: None,
         }
     }
 
@@ -406,14 +401,10 @@ impl TurborepoConfigBuilder {
         self.repo_root.join_component("turbo.json")
     }
 
-    #[cfg(test)]
     fn get_environment(&self) -> HashMap<OsString, OsString> {
-        self.environment.clone()
-    }
-
-    #[cfg(not(test))]
-    fn get_environment(&self) -> HashMap<OsString, OsString> {
-        get_lowercased_env_vars()
+        self.environment
+            .clone()
+            .unwrap_or_else(get_lowercased_env_vars)
     }
 
     create_builder!(with_api_url, api_url, Option<String>);
@@ -677,7 +668,7 @@ mod test {
             repo_root,
             override_config,
             global_config_path: Some(global_config_path),
-            environment: env,
+            environment: Some(env),
         };
 
         let config = builder.build().unwrap();
@@ -717,7 +708,7 @@ mod test {
             repo_root,
             override_config: ConfigurationOptions::default(),
             global_config_path: None,
-            environment: HashMap::default(),
+            environment: Some(HashMap::default()),
         };
 
         let config = builder.build().unwrap();
