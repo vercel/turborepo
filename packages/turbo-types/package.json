@@ -18,12 +18,14 @@
     "build": "tsc && pnpm generate-schema",
     "lint": "eslint src/",
     "lint:prettier": "prettier -c . --cache",
-    "generate-schema": "node scripts/generate-schema.mjs"
+    "generate-schema": "tsx scripts/generate-schema.ts"
   },
   "devDependencies": {
     "@turbo/eslint-config": "workspace:*",
     "@turbo/tsconfig": "workspace:*",
-    "ts-json-schema-generator": "2.3.0"
+    "@types/node": "^20",
+    "ts-json-schema-generator": "2.3.0",
+    "tsx": "^4.19.0"
   },
   "files": [
     "src",
