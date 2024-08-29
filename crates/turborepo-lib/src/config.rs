@@ -329,6 +329,39 @@ impl ConfigurationOptions {
     }
 }
 
+macro_rules! create_set_if_empty {
+    ($func_name:ident, $property_name:ident, $type:ty) => {
+        fn $func_name(&mut self, value: &mut Option<$type>) {
+            if self.$property_name.is_none() {
+                if let Some(value) = value.take() {
+                    self.$property_name = Some(value);
+                }
+            }
+        }
+    };
+}
+
+// Private setters used only for construction
+impl ConfigurationOptions {
+    create_set_if_empty!(set_api_url, api_url, String);
+    create_set_if_empty!(set_login_url, login_url, String);
+    create_set_if_empty!(set_team_slug, team_slug, String);
+    create_set_if_empty!(set_team_id, team_id, String);
+    create_set_if_empty!(set_token, token, String);
+    create_set_if_empty!(set_signature, signature, bool);
+    create_set_if_empty!(set_enabled, enabled, bool);
+    create_set_if_empty!(set_preflight, preflight, bool);
+    create_set_if_empty!(set_timeout, timeout, u64);
+    create_set_if_empty!(set_ui, ui, UIMode);
+    create_set_if_empty!(set_allow_no_package_manager, allow_no_package_manager, bool);
+    create_set_if_empty!(set_daemon, daemon, bool);
+    create_set_if_empty!(set_env_mode, env_mode, EnvMode);
+    create_set_if_empty!(set_cache_dir, cache_dir, Utf8PathBuf);
+    create_set_if_empty!(set_scm_base, scm_base, String);
+    create_set_if_empty!(set_scm_head, scm_head, String);
+    create_set_if_empty!(set_spaces_id, spaces_id, String);
+}
+
 // Maps Some("") to None to emulate how Go handles empty strings
 fn non_empty_str(s: Option<&str>) -> Option<&str> {
     s.filter(|s| !s.is_empty())
@@ -795,74 +828,40 @@ impl TurborepoConfigBuilder {
         let env_var_config = get_env_var_config(&env_vars)?;
         let override_env_var_config = get_override_env_var_config(&env_vars)?;
 
+        // These are ordered from highest to lowest priority
         let sources = [
-            turbo_json.get_configuration_options(),
-            global_config.get_configuration_options(),
-            global_auth.get_configuration_options(),
-            local_config.get_configuration_options(),
-            env_var_config.get_configuration_options(),
-            Ok(self.override_config.clone()),
             override_env_var_config.get_configuration_options(),
+            Ok(self.override_config.clone()),
+            env_var_config.get_configuration_options(),
+            local_config.get_configuration_options(),
+            global_auth.get_configuration_options(),
+            global_config.get_configuration_options(),
+            turbo_json.get_configuration_options(),
         ];
 
         sources.into_iter().try_fold(
             ConfigurationOptions::default(),
             |mut acc, current_source| {
-                current_source.map(|current_source_config| {
-                    if let Some(api_url) = current_source_config.api_url.clone() {
-                        acc.api_url = Some(api_url);
-                    }
-                    if let Some(login_url) = current_source_config.login_url.clone() {
-                        acc.login_url = Some(login_url);
-                    }
-                    if let Some(team_slug) = current_source_config.team_slug.clone() {
-                        acc.team_slug = Some(team_slug);
-                    }
-                    if let Some(team_id) = current_source_config.team_id.clone() {
-                        acc.team_id = Some(team_id);
-                    }
-                    if let Some(token) = current_source_config.token.clone() {
-                        acc.token = Some(token);
-                    }
-                    if let Some(signature) = current_source_config.signature {
-                        acc.signature = Some(signature);
-                    }
-                    if let Some(enabled) = current_source_config.enabled {
-                        acc.enabled = Some(enabled);
-                    }
-                    if let Some(preflight) = current_source_config.preflight {
-                        acc.preflight = Some(preflight);
-                    }
-                    if let Some(timeout) = current_source_config.timeout {
-                        acc.timeout = Some(timeout);
-                    }
-                    if let Some(spaces_id) = current_source_config.spaces_id {
-                        acc.spaces_id = Some(spaces_id);
-                    }
-                    if let Some(ui) = current_source_config.ui {
-                        acc.ui = Some(ui);
-                    }
-                    if let Some(allow_no_package_manager) =
-                        current_source_config.allow_no_package_manager
-                    {
-                        acc.allow_no_package_manager = Some(allow_no_package_manager);
-                    }
-                    if let Some(daemon) = current_source_config.daemon {
-                        acc.daemon = Some(daemon);
-                    }
-                    if let Some(env_mode) = current_source_config.env_mode {
-                        acc.env_mode = Some(env_mode);
-                    }
-                    if let Some(scm_base) = current_source_config.scm_base {
-                        acc.scm_base = Some(scm_base);
-                    }
-                    if let Some(scm_head) = current_source_config.scm_head {
-                        acc.scm_head = Some(scm_head);
-                    }
-                    if let Some(cache_dir) = current_source_config.cache_dir {
-                        acc.cache_dir = Some(cache_dir);
-                    }
-
+                current_source.map(|mut current_source_config| {
+                    acc.set_api_url(&mut current_source_config.api_url);
+                    acc.set_login_url(&mut current_source_config.login_url);
+                    acc.set_team_slug(&mut current_source_config.team_slug);
+                    acc.set_team_id(&mut current_source_config.team_id);
+                    acc.set_token(&mut current_source_config.token);
+                    acc.set_signature(&mut current_source_config.signature);
+                    acc.set_enabled(&mut current_source_config.enabled);
+                    acc.set_preflight(&mut current_source_config.preflight);
+                    acc.set_timeout(&mut current_source_config.timeout);
+                    acc.set_spaces_id(&mut current_source_config.spaces_id);
+                    acc.set_ui(&mut current_source_config.ui);
+                    acc.set_allow_no_package_manager(
+                        &mut current_source_config.allow_no_package_manager,
+                    );
+                    acc.set_daemon(&mut current_source_config.daemon);
+                    acc.set_env_mode(&mut current_source_config.env_mode);
+                    acc.set_scm_base(&mut current_source_config.scm_base);
+                    acc.set_scm_head(&mut current_source_config.scm_head);
+                    acc.set_cache_dir(&mut current_source_config.cache_dir);
                     acc
                 })
             },
