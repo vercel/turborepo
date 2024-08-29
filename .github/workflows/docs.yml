@@ -7,7 +7,7 @@ on:
   pull_request:
     paths:
       - "docs/**"
-      - ".github/actions/validate-docs-links/**"
+      - ".github/actions/docs.yml"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
