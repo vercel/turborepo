@@ -366,13 +366,13 @@ fn non_empty_str(s: Option<&str>) -> Option<&str> {
 }
 
 trait ResolvedConfigurationOptions {
-    fn get_configuration_options(self) -> Result<ConfigurationOptions, Error>;
+    fn get_configuration_options(&self) -> Result<ConfigurationOptions, Error>;
 }
 
 // Used for global config and local config.
-impl ResolvedConfigurationOptions for ConfigurationOptions {
-    fn get_configuration_options(self) -> Result<ConfigurationOptions, Error> {
-        Ok(self)
+impl<'a> ResolvedConfigurationOptions for &'a ConfigurationOptions {
+    fn get_configuration_options(&self) -> Result<ConfigurationOptions, Error> {
+        Ok((*self).clone())
     }
 }
 
@@ -445,43 +445,50 @@ impl TurborepoConfigBuilder {
         let override_env_var_config = OverrideEnvVars::new(&env_vars)?;
 
         // These are ordered from highest to lowest priority
-        let sources = [
-            override_env_var_config.get_configuration_options(),
-            Ok(self.override_config.clone()),
-            env_var_config.get_configuration_options(),
-            local_config.get_configuration_options(),
-            global_auth.get_configuration_options(),
-            global_config.get_configuration_options(),
-            turbo_json.get_configuration_options(),
+        let sources: [Box<dyn ResolvedConfigurationOptions>; 7] = [
+            Box::new(override_env_var_config),
+            Box::new(&self.override_config),
+            Box::new(env_var_config),
+            Box::new(local_config),
+            Box::new(global_auth),
+            Box::new(global_config),
+            Box::new(turbo_json),
         ];
 
-        sources.into_iter().try_fold(
+        let config = sources.into_iter().try_fold(
             ConfigurationOptions::default(),
             |mut acc, current_source| {
-                current_source.map(|mut current_source_config| {
-                    acc.set_api_url(&mut current_source_config.api_url);
-                    acc.set_login_url(&mut current_source_config.login_url);
-                    acc.set_team_slug(&mut current_source_config.team_slug);
-                    acc.set_team_id(&mut current_source_config.team_id);
-                    acc.set_token(&mut current_source_config.token);
-                    acc.set_signature(&mut current_source_config.signature);
-                    acc.set_enabled(&mut current_source_config.enabled);
-                    acc.set_preflight(&mut current_source_config.preflight);
-                    acc.set_timeout(&mut current_source_config.timeout);
-                    acc.set_spaces_id(&mut current_source_config.spaces_id);
-                    acc.set_ui(&mut current_source_config.ui);
-                    acc.set_allow_no_package_manager(
-                        &mut current_source_config.allow_no_package_manager,
-                    );
-                    acc.set_daemon(&mut current_source_config.daemon);
-                    acc.set_env_mode(&mut current_source_config.env_mode);
-                    acc.set_scm_base(&mut current_source_config.scm_base);
-                    acc.set_scm_head(&mut current_source_config.scm_head);
-                    acc.set_cache_dir(&mut current_source_config.cache_dir);
-                    acc
-                })
+                current_source
+                    .get_configuration_options()
+                    .map(|mut current_source_config| {
+                        acc.set_api_url(&mut current_source_config.api_url);
+                        acc.set_login_url(&mut current_source_config.login_url);
+                        acc.set_team_slug(&mut current_source_config.team_slug);
+                        acc.set_team_id(&mut current_source_config.team_id);
+                        acc.set_token(&mut current_source_config.token);
+                        acc.set_signature(&mut current_source_config.signature);
+                        acc.set_enabled(&mut current_source_config.enabled);
+                        acc.set_preflight(&mut current_source_config.preflight);
+                        acc.set_timeout(&mut current_source_config.timeout);
+                        acc.set_spaces_id(&mut current_source_config.spaces_id);
+                        acc.set_ui(&mut current_source_config.ui);
+                        acc.set_allow_no_package_manager(
+                            &mut current_source_config.allow_no_package_manager,
+                        );
+                        acc.set_daemon(&mut current_source_config.daemon);
+                        acc.set_env_mode(&mut current_source_config.env_mode);
+                        acc.set_scm_base(&mut current_source_config.scm_base);
+                        acc.set_scm_head(&mut current_source_config.scm_head);
+                        acc.set_cache_dir(&mut current_source_config.cache_dir);
+                        acc
+                    })
             },
-        )
+        );
+
+        // We explicitly do a let and return to help the Rust compiler see that there
+        // are no references still held by the folding.
+        #[allow(clippy::let_and_return)]
+        config
     }
 }
 

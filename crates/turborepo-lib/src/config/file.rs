@@ -21,7 +21,7 @@ impl ConfigFile {
 }
 
 impl ResolvedConfigurationOptions for ConfigFile {
-    fn get_configuration_options(self) -> Result<ConfigurationOptions, Error> {
+    fn get_configuration_options(&self) -> Result<ConfigurationOptions, Error> {
         let mut contents = self
             .path
             .read_existing_to_string_or(Ok("{}"))
@@ -49,7 +49,7 @@ impl AuthFile {
 }
 
 impl ResolvedConfigurationOptions for AuthFile {
-    fn get_configuration_options(self) -> Result<ConfigurationOptions, Error> {
+    fn get_configuration_options(&self) -> Result<ConfigurationOptions, Error> {
         let token = match turborepo_auth::Token::from_file(&self.path) {
             Ok(token) => token,
             // Multiple ways this can go wrong. Don't error out if we can't find the token - it

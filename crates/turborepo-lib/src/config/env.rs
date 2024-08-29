@@ -62,7 +62,7 @@ impl EnvVars {
 }
 
 impl ResolvedConfigurationOptions for EnvVars {
-    fn get_configuration_options(self) -> Result<ConfigurationOptions, Error> {
+    fn get_configuration_options(&self) -> Result<ConfigurationOptions, Error> {
         // Process signature
         let signature = if let Some(signature) = self.output_map.get("signature") {
             match signature.as_str() {
@@ -225,7 +225,7 @@ impl<'a> OverrideEnvVars<'a> {
 }
 
 impl<'a> ResolvedConfigurationOptions for OverrideEnvVars<'a> {
-    fn get_configuration_options(self) -> Result<ConfigurationOptions, Error> {
+    fn get_configuration_options(&self) -> Result<ConfigurationOptions, Error> {
         let ui = self
             .environment
             .get(OsStr::new("ci"))

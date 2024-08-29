@@ -15,7 +15,7 @@ impl<'a> TurboJsonReader<'a> {
 }
 
 impl<'a> ResolvedConfigurationOptions for TurboJsonReader<'a> {
-    fn get_configuration_options(self) -> Result<ConfigurationOptions, Error> {
+    fn get_configuration_options(&self) -> Result<ConfigurationOptions, Error> {
         let turbo_json =
             RawTurboJson::read(self.repo_root, &self.repo_root.join_component("turbo.json"))
                 .or_else(|e| {
