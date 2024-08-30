@@ -223,7 +223,9 @@ pub struct Args {
     #[clap(long, global = true)]
     pub dangerously_disable_package_manager_check: bool,
     #[clap(flatten, next_help_heading = "Run Arguments")]
-    pub run_args: Option<RunArgs>,
+    // DO NOT MAKE THIS VISIBLE
+    // This is explicitly set to None in `run`
+    run_args: Option<RunArgs>,
     // This should be inside `RunArgs` but clap currently has a bug
     // around nested flattened optional args: https://github.com/clap-rs/clap/issues/4697
     #[clap(flatten)]
@@ -457,6 +459,15 @@ impl Args {
                 verbosity,
                 turborepo_telemetry::events::EventType::NonSensitive,
             );
+        }
+    }
+
+    /// Fetch the run args supplied to the command
+    pub fn run_args(&self) -> Option<&RunArgs> {
+        if let Some(Command::Run { run_args, .. }) = &self.command {
+            Some(run_args)
+        } else {
+            self.run_args.as_ref()
         }
     }
 }
@@ -1041,7 +1052,7 @@ pub async fn run(
     let mut command = if let Some(command) = mem::take(&mut cli_args.command) {
         command
     } else {
-        let run_args = cli_args.run_args.take().unwrap_or_default();
+        let run_args = cli_args.run_args.clone().unwrap_or_default();
         let execution_args = cli_args
             .execution_args
             // We clone instead of take as take would leave the command base a copy of cli_args
