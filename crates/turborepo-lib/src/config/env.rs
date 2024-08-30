@@ -3,6 +3,8 @@ use std::{
     ffi::{OsStr, OsString},
 };
 
+use turbopath::AbsoluteSystemPathBuf;
+
 use super::{ConfigurationOptions, Error, ResolvedConfigurationOptions};
 use crate::{cli::EnvMode, turbo_json::UIMode};
 
@@ -25,6 +27,7 @@ const TURBO_MAPPING: &[(&str, &str)] = [
     ("turbo_preflight", "preflight"),
     ("turbo_scm_base", "scm_base"),
     ("turbo_scm_head", "scm_head"),
+    ("turbo_root_turbo_json", "root_turbo_json_path"),
 ]
 .as_slice();
 
@@ -136,6 +139,13 @@ impl ResolvedConfigurationOptions for EnvVars {
 
         let cache_dir = self.output_map.get("cache_dir").map(|s| s.clone().into());
 
+        let root_turbo_json_path = self
+            .output_map
+            .get("root_turbo_json_path")
+            .filter(|s| !s.is_empty())
+            .map(AbsoluteSystemPathBuf::from_cwd)
+            .transpose()?;
+
         // We currently don't pick up a Spaces ID via env var, we likely won't
         // continue using the Spaces name, we can add an env var when we have the
         // name we want to stick with.
@@ -163,6 +173,7 @@ impl ResolvedConfigurationOptions for EnvVars {
             spaces_id,
             env_mode,
             cache_dir,
+            root_turbo_json_path,
         };
 
         Ok(output)
@@ -231,6 +242,7 @@ impl<'a> ResolvedConfigurationOptions for OverrideEnvVars<'a> {
             allow_no_package_manager: None,
             env_mode: None,
             cache_dir: None,
+            root_turbo_json_path: None,
         };
 
         Ok(output)
@@ -282,6 +294,11 @@ mod test {
         let turbo_token = "abcdef1234567890abcdef";
         let cache_dir = Utf8PathBuf::from("nebulo9");
         let turbo_remote_cache_timeout = 200;
+        let root_turbo_json = if cfg!(windows) {
+            "C:\\some\\dir\\yolo.json"
+        } else {
+            "/some/dir/yolo.json"
+        };
 
         env.insert("turbo_api".into(), turbo_api.into());
         env.insert("turbo_login".into(), turbo_login.into());
@@ -301,6 +318,7 @@ mod test {
         env.insert("turbo_preflight".into(), "true".into());
         env.insert("turbo_env_mode".into(), "strict".into());
         env.insert("turbo_cache_dir".into(), cache_dir.clone().into());
+        env.insert("turbo_root_turbo_json".into(), root_turbo_json.into());
 
         let config = EnvVars::new(&env)
             .unwrap()
@@ -318,6 +336,10 @@ mod test {
         assert_eq!(Some(true), config.daemon);
         assert_eq!(Some(EnvMode::Strict), config.env_mode);
         assert_eq!(cache_dir, config.cache_dir.unwrap());
+        assert_eq!(
+            config.root_turbo_json_path,
+            Some(AbsoluteSystemPathBuf::new(root_turbo_json).unwrap())
+        );
     }
 
     #[test]
@@ -334,6 +356,7 @@ mod test {
         env.insert("turbo_preflight".into(), "".into());
         env.insert("turbo_scm_head".into(), "".into());
         env.insert("turbo_scm_base".into(), "".into());
+        env.insert("turbo_root_turbo_json".into(), "".into());
 
         let config = EnvVars::new(&env)
             .unwrap()
@@ -350,6 +373,7 @@ mod test {
         assert!(!config.preflight());
         assert_eq!(config.scm_base(), None);
         assert_eq!(config.scm_head(), "HEAD");
+        assert_eq!(config.root_turbo_json_path, None);
     }
 
     #[test]

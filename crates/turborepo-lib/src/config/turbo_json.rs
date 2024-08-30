@@ -17,19 +17,18 @@ impl<'a> TurboJsonReader<'a> {
 impl<'a> ResolvedConfigurationOptions for TurboJsonReader<'a> {
     fn get_configuration_options(
         &self,
-        _existing_config: &ConfigurationOptions,
+        existing_config: &ConfigurationOptions,
     ) -> Result<ConfigurationOptions, Error> {
-        let turbo_json =
-            RawTurboJson::read(self.repo_root, &self.repo_root.join_component("turbo.json"))
-                .or_else(|e| {
-                    if let Error::Io(e) = &e {
-                        if matches!(e.kind(), std::io::ErrorKind::NotFound) {
-                            return Ok(Default::default());
-                        }
-                    }
+        let turbo_json_path = existing_config.root_turbo_json_path(self.repo_root);
+        let turbo_json = RawTurboJson::read(self.repo_root, &turbo_json_path).or_else(|e| {
+            if let Error::Io(e) = &e {
+                if matches!(e.kind(), std::io::ErrorKind::NotFound) {
+                    return Ok(Default::default());
+                }
+            }
 
-                    Err(e)
-                })?;
+            Err(e)
+        })?;
         let mut opts = if let Some(remote_cache_options) = &turbo_json.remote_cache {
             remote_cache_options.into()
         } else {
@@ -62,5 +61,66 @@ impl<'a> ResolvedConfigurationOptions for TurboJsonReader<'a> {
         opts.env_mode = turbo_json.env_mode;
         opts.cache_dir = cache_dir;
         Ok(opts)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use tempfile::tempdir;
+
+    use super::*;
+
+    #[test]
+    fn test_reads_from_default() {
+        let tmpdir = tempdir().unwrap();
+        let repo_root = AbsoluteSystemPath::new(tmpdir.path().to_str().unwrap()).unwrap();
+
+        let existing_config = ConfigurationOptions {
+            ..Default::default()
+        };
+        repo_root
+            .join_component("turbo.json")
+            .create_with_contents(
+                serde_json::to_string_pretty(&serde_json::json!({
+                    "daemon": false
+                }))
+                .unwrap(),
+            )
+            .unwrap();
+
+        let reader = TurboJsonReader::new(repo_root);
+        let config = reader.get_configuration_options(&existing_config).unwrap();
+        // Make sure we read the default turbo.json
+        assert_eq!(config.daemon(), Some(false));
+    }
+
+    #[test]
+    fn test_respects_root_turbo_json_config() {
+        let tmpdir = tempdir().unwrap();
+        let tmpdir_path = AbsoluteSystemPath::new(tmpdir.path().to_str().unwrap()).unwrap();
+        let root_turbo_json_path = tmpdir_path.join_component("yolo.json");
+        let repo_root = AbsoluteSystemPath::new(if cfg!(windows) {
+            "C:\\my\\repo"
+        } else {
+            "/my/repo"
+        })
+        .unwrap();
+        let existing_config = ConfigurationOptions {
+            root_turbo_json_path: Some(root_turbo_json_path.to_owned()),
+            ..Default::default()
+        };
+        root_turbo_json_path
+            .create_with_contents(
+                serde_json::to_string_pretty(&serde_json::json!({
+                    "daemon": false
+                }))
+                .unwrap(),
+            )
+            .unwrap();
+
+        let reader = TurboJsonReader::new(repo_root);
+        let config = reader.get_configuration_options(&existing_config).unwrap();
+        // Make sure we read the correct turbo.json
+        assert_eq!(config.daemon(), Some(false));
     }
 }

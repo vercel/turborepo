@@ -116,6 +116,13 @@ impl CommandBase {
                             .and_then(|args| args.cache_dir.clone())
                     }),
             )
+            .with_root_turbo_json_path(
+                self.args
+                    .root_turbo_json
+                    .clone()
+                    .map(AbsoluteSystemPathBuf::from_cwd)
+                    .transpose()?,
+            )
             .build()
     }
 

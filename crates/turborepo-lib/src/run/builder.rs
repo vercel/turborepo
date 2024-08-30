@@ -45,7 +45,7 @@ use crate::{
     run::{scope, task_access::TaskAccess, task_id::TaskName, Error, Run, RunCache},
     shim::TurboState,
     signal::{SignalHandler, SignalSubscriber},
-    turbo_json::{TurboJson, UIMode, CONFIG_FILE},
+    turbo_json::{TurboJson, UIMode},
     DaemonConnector,
 };
 
@@ -54,6 +54,7 @@ pub struct RunBuilder {
     opts: Opts,
     api_auth: Option<APIAuth>,
     repo_root: AbsoluteSystemPathBuf,
+    root_turbo_json_path: AbsoluteSystemPathBuf,
     color_config: ColorConfig,
     version: &'static str,
     ui_mode: UIMode,
@@ -85,6 +86,8 @@ impl RunBuilder {
             // - if we're on windows, we're using the UI
             (!cfg!(windows) || matches!(ui_mode, UIMode::Tui)),
         );
+        let root_turbo_json_path = config.root_turbo_json_path(&base.repo_root);
+
         let CommandBase {
             repo_root,
             color_config: ui,
@@ -104,6 +107,7 @@ impl RunBuilder {
             entrypoint_packages: None,
             should_print_prelude_override: None,
             allow_missing_package_manager,
+            root_turbo_json_path,
         })
     }
 
@@ -358,15 +362,13 @@ impl RunBuilder {
         let task_access = TaskAccess::new(self.repo_root.clone(), async_cache.clone(), &scm);
         task_access.restore_config().await;
 
-        let root_turbo_json_path = self.repo_root.join_component(CONFIG_FILE);
-
         let root_turbo_json = task_access
-            .load_turbo_json(&root_turbo_json_path)
+            .load_turbo_json(&self.root_turbo_json_path)
             .map_or_else(
                 || {
                     TurboJson::load(
                         &self.repo_root,
-                        &root_turbo_json_path,
+                        &self.root_turbo_json_path,
                         &root_package_json,
                         is_single_package,
                     )

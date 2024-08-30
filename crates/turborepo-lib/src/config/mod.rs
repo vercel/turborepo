@@ -13,11 +13,11 @@ use serde::Deserialize;
 use struct_iterable::Iterable;
 use thiserror::Error;
 use turbo_json::TurboJsonReader;
-use turbopath::AbsoluteSystemPathBuf;
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_errors::TURBO_SITE;
 
 pub use crate::turbo_json::{RawTurboJson, UIMode};
-use crate::{cli::EnvMode, commands::CommandBase};
+use crate::{cli::EnvMode, commands::CommandBase, turbo_json::CONFIG_FILE};
 
 #[derive(Debug, Error, Diagnostic)]
 #[error("Environment variables should not be prefixed with \"{env_pipeline_delimiter}\"")]
@@ -227,6 +227,9 @@ pub struct ConfigurationOptions {
     pub(crate) scm_head: Option<String>,
     #[serde(rename = "cacheDir")]
     pub(crate) cache_dir: Option<Utf8PathBuf>,
+    // This is skipped as we never want this to be stored in a file
+    #[serde(skip)]
+    pub(crate) root_turbo_json_path: Option<AbsoluteSystemPathBuf>,
 }
 
 #[derive(Default)]
@@ -325,6 +328,12 @@ impl ConfigurationOptions {
             })
         })
     }
+
+    pub fn root_turbo_json_path(&self, repo_root: &AbsoluteSystemPath) -> AbsoluteSystemPathBuf {
+        self.root_turbo_json_path
+            .clone()
+            .unwrap_or_else(|| repo_root.join_component(CONFIG_FILE))
+    }
 }
 
 macro_rules! create_set_if_empty {
@@ -358,6 +367,11 @@ impl ConfigurationOptions {
     create_set_if_empty!(set_scm_base, scm_base, String);
     create_set_if_empty!(set_scm_head, scm_head, String);
     create_set_if_empty!(set_spaces_id, spaces_id, String);
+    create_set_if_empty!(
+        set_root_turbo_json_path,
+        root_turbo_json_path,
+        AbsoluteSystemPathBuf
+    );
 }
 
 // Maps Some("") to None to emulate how Go handles empty strings
@@ -432,6 +446,11 @@ impl TurborepoConfigBuilder {
     create_builder!(with_daemon, daemon, Option<bool>);
     create_builder!(with_env_mode, env_mode, Option<EnvMode>);
     create_builder!(with_cache_dir, cache_dir, Option<Utf8PathBuf>);
+    create_builder!(
+        with_root_turbo_json_path,
+        root_turbo_json_path,
+        Option<AbsoluteSystemPathBuf>
+    );
 
     pub fn build(&self) -> Result<ConfigurationOptions, Error> {
         // Priority, from least significant to most significant:
@@ -486,6 +505,9 @@ impl TurborepoConfigBuilder {
                         acc.set_scm_base(&mut current_source_config.scm_base);
                         acc.set_scm_head(&mut current_source_config.scm_head);
                         acc.set_cache_dir(&mut current_source_config.cache_dir);
+                        acc.set_root_turbo_json_path(
+                            &mut current_source_config.root_turbo_json_path,
+                        );
                         acc
                     })
             },
@@ -503,7 +525,7 @@ mod test {
     use std::{collections::HashMap, ffi::OsString};
 
     use tempfile::TempDir;
-    use turbopath::AbsoluteSystemPathBuf;
+    use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 
     use crate::config::{
         ConfigurationOptions, TurborepoConfigBuilder, DEFAULT_API_URL, DEFAULT_LOGIN_URL,
@@ -524,6 +546,16 @@ mod test {
         assert_eq!(defaults.timeout(), DEFAULT_TIMEOUT);
         assert_eq!(defaults.spaces_id(), None);
         assert!(!defaults.allow_no_package_manager());
+        let repo_root = AbsoluteSystemPath::new(if cfg!(windows) {
+            "C:\\fake\\repo"
+        } else {
+            "/fake/repo"
+        })
+        .unwrap();
+        assert_eq!(
+            defaults.root_turbo_json_path(repo_root),
+            repo_root.join_component("turbo.json")
+        )
     }
 
     #[test]

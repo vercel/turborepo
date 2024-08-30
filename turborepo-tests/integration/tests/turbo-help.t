@@ -58,6 +58,8 @@ Test help flag
             Verbosity level
         --dangerously-disable-package-manager-check
             Allow for missing `packageManager` in `package.json`
+        --root-turbo-json <ROOT_TURBO_JSON>
+            Use the `turbo.json` located at the provided path instead of one at the root of the repository
     -h, --help
             Print help (see more with '--help')
   
@@ -196,6 +198,9 @@ Test help flag
             Allow for missing `packageManager` in `package.json`.
             
             `turbo` will use hints from codebase to guess which package manager should be used.
+  
+        --root-turbo-json <ROOT_TURBO_JSON>
+            Use the `turbo.json` located at the provided path instead of one at the root of the repository
   
     -h, --help
             Print help (see a summary with '-h')
@@ -353,6 +358,8 @@ Test help flag for link command
             Verbosity level
         --dangerously-disable-package-manager-check
             Allow for missing `packageManager` in `package.json`
+        --root-turbo-json <ROOT_TURBO_JSON>
+            Use the `turbo.json` located at the provided path instead of one at the root of the repository
     -h, --help
             Print help (see more with '--help')
 
@@ -399,6 +406,8 @@ Test help flag for unlink command
             Verbosity level
         --dangerously-disable-package-manager-check
             Allow for missing `packageManager` in `package.json`
+        --root-turbo-json <ROOT_TURBO_JSON>
+            Use the `turbo.json` located at the provided path instead of one at the root of the repository
     -h, --help
             Print help (see more with '--help')
 
@@ -447,6 +456,8 @@ Test help flag for login command
             Verbosity level
         --dangerously-disable-package-manager-check
             Allow for missing `packageManager` in `package.json`
+        --root-turbo-json <ROOT_TURBO_JSON>
+            Use the `turbo.json` located at the provided path instead of one at the root of the repository
     -h, --help
             Print help (see more with '--help')
 
@@ -493,5 +504,7 @@ Test help flag for logout command
             Verbosity level
         --dangerously-disable-package-manager-check
             Allow for missing `packageManager` in `package.json`
+        --root-turbo-json <ROOT_TURBO_JSON>
+            Use the `turbo.json` located at the provided path instead of one at the root of the repository
     -h, --help
             Print help (see more with '--help')

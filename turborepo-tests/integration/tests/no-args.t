@@ -58,6 +58,8 @@ Make sure exit code is 2 when no args are passed
             Verbosity level
         --dangerously-disable-package-manager-check
             Allow for missing `packageManager` in `package.json`
+        --root-turbo-json <ROOT_TURBO_JSON>
+            Use the `turbo.json` located at the provided path instead of one at the root of the repository
     -h, --help
             Print help (see more with '--help')
   
