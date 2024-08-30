@@ -4,12 +4,21 @@
   "private": true,
   "license": "MIT",
   "sideEffects": false,
-  "main": "./dist/index.js",
-  "module": "./dist/index.mjs",
-  "types": "./dist/index.d.ts",
   "files": [
     "dist/**"
   ],
+  "exports": {
+    "./counter-button": {
+      "require": "./dist/counter-button/index.js",
+      "import": "./dist/counter-button/index.mjs",
+      "types": "./src/counter-button/index.tsx"
+    },
+    "./link": {
+      "require": "./dist/link/index.js",
+      "import": "./dist/link/index.mjs",
+      "types": "./src/link/index.tsx"
+    }
+  },
   "scripts": {
     "build": "tsup",
     "clean": "rm -rf dist",
