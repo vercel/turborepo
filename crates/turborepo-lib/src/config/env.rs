@@ -41,7 +41,10 @@ impl EnvVars {
 }
 
 impl ResolvedConfigurationOptions for EnvVars {
-    fn get_configuration_options(&self) -> Result<ConfigurationOptions, Error> {
+    fn get_configuration_options(
+        &self,
+        _existing_config: &ConfigurationOptions,
+    ) -> Result<ConfigurationOptions, Error> {
         // Process signature
         let signature = if let Some(signature) = self.output_map.get("signature") {
             match signature.as_str() {
@@ -191,7 +194,10 @@ impl<'a> OverrideEnvVars<'a> {
 }
 
 impl<'a> ResolvedConfigurationOptions for OverrideEnvVars<'a> {
-    fn get_configuration_options(&self) -> Result<ConfigurationOptions, Error> {
+    fn get_configuration_options(
+        &self,
+        _existing_config: &ConfigurationOptions,
+    ) -> Result<ConfigurationOptions, Error> {
         let ui = self
             .environment
             .get(OsStr::new("ci"))
@@ -298,7 +304,7 @@ mod test {
 
         let config = EnvVars::new(&env)
             .unwrap()
-            .get_configuration_options()
+            .get_configuration_options(&ConfigurationOptions::default())
             .unwrap();
         assert!(config.preflight());
         assert_eq!(turbo_api, config.api_url.unwrap());
@@ -331,7 +337,7 @@ mod test {
 
         let config = EnvVars::new(&env)
             .unwrap()
-            .get_configuration_options()
+            .get_configuration_options(&ConfigurationOptions::default())
             .unwrap();
         assert_eq!(config.api_url(), DEFAULT_API_URL);
         assert_eq!(config.login_url(), DEFAULT_LOGIN_URL);
@@ -365,7 +371,7 @@ mod test {
 
         let config = OverrideEnvVars::new(&env)
             .unwrap()
-            .get_configuration_options()
+            .get_configuration_options(&ConfigurationOptions::default())
             .unwrap();
         assert_eq!(vercel_artifacts_token, config.token.unwrap());
         assert_eq!(vercel_artifacts_owner, config.team_id.unwrap());

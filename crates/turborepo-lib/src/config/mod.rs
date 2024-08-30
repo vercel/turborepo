@@ -366,12 +366,18 @@ fn non_empty_str(s: Option<&str>) -> Option<&str> {
 }
 
 trait ResolvedConfigurationOptions {
-    fn get_configuration_options(&self) -> Result<ConfigurationOptions, Error>;
+    fn get_configuration_options(
+        &self,
+        existing_config: &ConfigurationOptions,
+    ) -> Result<ConfigurationOptions, Error>;
 }
 
 // Used for global config and local config.
 impl<'a> ResolvedConfigurationOptions for &'a ConfigurationOptions {
-    fn get_configuration_options(&self) -> Result<ConfigurationOptions, Error> {
+    fn get_configuration_options(
+        &self,
+        _existing_config: &ConfigurationOptions,
+    ) -> Result<ConfigurationOptions, Error> {
         Ok((*self).clone())
     }
 }
@@ -459,7 +465,7 @@ impl TurborepoConfigBuilder {
             ConfigurationOptions::default(),
             |mut acc, current_source| {
                 current_source
-                    .get_configuration_options()
+                    .get_configuration_options(&acc)
                     .map(|mut current_source_config| {
                         acc.set_api_url(&mut current_source_config.api_url);
                         acc.set_login_url(&mut current_source_config.login_url);
