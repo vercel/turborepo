@@ -857,15 +857,15 @@ pub struct RunArgs {
 
     // clap does not have negation flags such as --daemon and --no-daemon
     // so we need to use a group to enforce that only one of them is set.
-    // we set the long name as [no-]daemon with an alias of daemon such
-    // that we can merge the help text together for both flags
     // -----------------------
-    /// Force turbo to either use or not use the local daemon. If unset
+    /// Force turbo to use the local daemon. If unset
     /// turbo will use the default detection logic.
-    #[clap(long = "(no-)daemon", alias = "daemon", group = "daemon-group")]
+    #[clap(long, group = "daemon-group")]
     pub daemon: bool,
 
-    #[clap(long, group = "daemon-group", hide = true)]
+    /// Force turbo to not use the local daemon. If unset
+    /// turbo will use the default detection logic.
+    #[clap(long, group = "daemon-group")]
     pub no_daemon: bool,
 
     /// File to write turbo's performance profile output into.

@@ -70,8 +70,10 @@ Make sure exit code is 2 when no args are passed
             Generate a graph of the task execution and output to a file when a filename is specified (.svg, .png, .jpg, .pdf, .json, .html, .mermaid, .dot). Outputs dot graph to stdout when if no filename is provided
         --no-cache
             Avoid saving task results to the cache. Useful for development/watch tasks
-        --(no-)daemon
-            Force turbo to either use or not use the local daemon. If unset turbo will use the default detection logic
+        --daemon
+            Force turbo to use the local daemon. If unset turbo will use the default detection logic
+        --no-daemon
+            Force turbo to not use the local daemon. If unset turbo will use the default detection logic
         --profile <PROFILE>
             File to write turbo's performance profile output into. You can load the file up in chrome://tracing to see which parts of your build were slow
         --anon-profile <ANON_PROFILE>
