@@ -46,9 +46,7 @@ export default function Home() {
             Read our docs
           </a>
         </div>
-        <Button>
-          Open alert
-        </Button>
+        <Button>Open alert</Button>
       </main>
       <footer className={styles.footer}>
         <a
