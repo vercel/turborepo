@@ -1,6 +1,6 @@
 import Image from "next/image";
-import { Button } from "@repo/ui/button";
-import styles from "./page.module.css";
+import { Button } from "@repo/shadcn/components/ui/button";
+import styles from "@/app/page.module.css";
 
 export default function Home() {
   return (
@@ -46,7 +46,7 @@ export default function Home() {
             Read our docs
           </a>
         </div>
-        <Button appName="web" className={styles.secondary}>
+        <Button>
           Open alert
         </Button>
       </main>
