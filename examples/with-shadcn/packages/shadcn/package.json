@@ -2,6 +2,23 @@
   "name": "@repo/shadcn",
   "version": "0.0.0",
   "private": true,
+  "exports": {
+    "./globals.css": "./globals.css",
+    "./postcss.config": "./postcss.config.mjs",
+    "./tailwind.config": "./tailwind.config.ts",
+    "./components/*": [
+      "./components/*.tsx",
+      "./components/*.ts"
+    ],
+    "./hooks/*": [
+      "./hooks/*.tsx",
+      "./hooks/*.ts"
+    ],
+    "./lib/*": [
+      "./lib/*.tsx",
+      "./lib/*.ts"
+    ]
+  },
   "dependencies": {
     "@radix-ui/react-icons": "^1.3.0",
     "@radix-ui/react-slot": "^1.1.0",
