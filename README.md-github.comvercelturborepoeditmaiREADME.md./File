@@ -1,0 +1,464 @@
+<p align="center">
+  <a href="https://turbo.build">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://user-images.githubusercontent.com/4060187/196936123-f6e1db90-784d-4174-b774-92502b718836.png">
+      <img src="https://user-images.githubusercontent.com/4060187/196936104-5797972c-ab10-4834-bd61-0d1e5f442c9c.png" height="128">
+    </picture>
+    <h1 align="center">Turborepo</h1>
+  </a>
+</p>
+
+<p align="center">
+  <a aria-label="Vercel logo" href="https://vercel.com/"><img src="https://img.shields.io/badge/MADE%20BY%20Vercel-000000.svg?style=for-the-badge&logo=Vercel&labelColor=000"></a>
+  <a aria-label="NPM version" href="https://www.npmjs.com/package/turbo"><img alt="" src="https://img.shields.io/npm/v/turbo.svg?style=for-the-badge&labelColor=000000"></a>
+  <a aria-label="License" href="https://github.com/vercel/turborepo/blob/main/LICENSE"><img alt="" src="https://img.shields.io/npm/l/turbo.svg?style=for-the-badge&labelColor=000000&color="></a>
+  <a aria-label="Join the community on GitHub" href="https://github.com/vercel/turborepo/discussions"><img alt="" src="https://img.shields.io/badge/Join%20the%20community-blueviolet.svg?style=for-the-badge&logo=turborepo&labelColor=000000&logoWidth=20&logoColor=white"></a>
+</p>
+
+Turborepo is a high-performance build system for JavaScript and TypeScript codebases, written in Rust.
+
+diff --git "a/\".turbo/cache\"./Turbo/Fonksiyon-d\303\266n\303\274\305\237t\303\274rme./Dosya" "b/\".turbo/cache\"./Turbo/Fonksiyon-d\303\266n\303\274\305\237t\303\274rme./Dosya"
+yeni dosya modu 100644
+dizin 0000000000000..f9cffcf0b3f2c
+--- /dev/null
++++ "b/\".turbo/cache\"./Turbo/Fonksiyon-d\303\266n\303\274\305\237t\303\274rme./Dosya"
+@@ -0,0 +1.439 @@
++
++Kodlama
++
++JavaScript ile Slot Makinesi (Vanilla JS)
++Kamil TOPALOĞLU
++4 Eylül 2022
++HTML/CSS, Javascript
++Slot makinesi
++Merhaba, bu seferki konumuz oldukça ilgi çekici, bilinen gibi javascript ile birçok oyun kodlanabilmekte ve internette onlarca örnekte bulunabilir, bu oyunlar içerisinde çok basit olanlardan tutunda çok karmaşık yapıda olanlara kadar bir çok örnek bulunabilir. Bizim bu gün üzerine değineceğimiz oyun ise aslında çok öğrenebileceğiniz slot makinesi olacak.
++
++Sizinde bildiğiniz gibi eğer iş için kodluyorsanız bu bağlama ihtiyacına göre yapılır, canım istedi, sıkıldım gidip bir oyun oyun yazayımdan ziyade bir harcama gidermeye yönelik çalışmalar sürdürürsünüz. Bu örnekte aynı durum geçerlidir aslında, böyle bir oyunlaştırma kurgusuna ihtiyacınız vardı, internette onlarca örnek bulundu, ancak neredeyse herkesin kendi makinesini aynı çalışmayı, aynı denklemleri kullanarak oluşturmuş, elbette farklı olanlarda var ama bunların çalışma sistemleri de çok karmaşık.
++
++Bu yapının bir görünüme ulaşamayacağımı ve zaman kaybetmemek için kişisel hazırladığımı, ama ayırma zaten zaman kaybettiğimi farkettim ve bu sayede bölüm sonunda çok basit bir şekilde bir araya gelmeyle yazılmış bu oyun çıktı, bende aynı durumda düşüp zaman kaybetmeyin diye ayrıntılı bir şekilde bir araya gelmek istedim. Lafı daha fazla uzatmadan anlatıma geçiyorum.
++
++Yazı İçeriği
++Slot makinesi nedir/nasıl çalışır?
++HTML Kodlarının Yazılması
++Javascript Kodlarının Yazılması
++Kazanma Kontrolü
++Fonksiyonların Çağırılması
++Slot makinesi nedir/nasıl çalışır?
++Muhtemelen herkes slot makinesinin ne kadar bilgilidir ama biz yinede kısaca bahsediyorum.
++
++Slot makinesi ya da diğer adıyla meyve makinesi, popüler bir kumar makinesidir. Makinenin üç ya da daha fazla sayıda makarası bulunur. Makaralar geri döndükten sonra ekrandaki hizada duran sembollere göre yapılan ödeme yapılır.
++
++Nasıl çalışır?
++Slot makinesi nasıl çalışır ve birden fazla hizmet sunar, ancak en yaygın olan makaralar rastgele bir yerde duracak şekilde döndürülür ve istenilen hizada bulunan görsellere göre kazanılıp kazanılmadığı kontrol edilir.
++
++Peki bizim hazırlayacağımız slot makinesi nasıl çalışıyor?
++Biz slot makinesine sadece görselleri değil, bu görsellerin denk gelme oranlarınıda iletiyoruz. Bu ne demek;
++Örneğin elma görselimiz var ve makaralar geri döndükten sonra 3'ünde elma gelişinin % kaç aralığında olduğunu belirtiyoruz.
++
++Öyleyse hadi temizleyicileri maddelerle özetleyerek ilerleyelim.
++
++Kol çekilir.
++Makaraların duracakları konumlar belirlenir.
++Makaralar döner.
++Makaralar durdurulduktan sonra kazanma/kaybeme kontrolü yapılır.
++Oyuncuya kazanıldı/kaybetti bilgisi verilir.
++Eğer kaybedildiyse ve tekrar oynama hakkı varsa yeniden başlatılır.
++Eğer kazanılırsa oyun ısırılır ve oyuncuya ödülü verilir.
++Oyunumuzun akışı tam olarak bundan oluşur. Diğer detayları oyun oluşturma sürecini sizlerle paylaşacağım.
++
++HTML Kodlarının Yazılması
++Temel HTML
++<div class="makine">
++ <div class="slotlar">
++ <ul class="slot-makinesi1"></ul>
++ <ul class="slot-makinesi2"></ul>
++ <ul class="slot-makinesi3"></ul>
++ </div>
++
++</div>
++Temelde kayıtlı olan html kodlarından oluşuyor, ancak görsel açıdan daha iyi ve işlevsel olarak operasyonel olarak yarayabilecek bazı eklemelerde yapmak istiyorum, klinik birlikte html dosyamız şu şekilde bürünmüş oluyor.
++
++indeks.html
++ <div class="wis-container">
++ <div class="makine">
++ <div class="wis-header">
++ <div class="wis-h-main">
++ <div class="wis-blink-border">
++ <div class="wis-h-text">Kodlayiruk</div>
++ </div>
++ </div>
++ <div class="wis-h-rleg"></div>
++ <div class="wis-h-lleg"></div>
++ </div>
++ <div class="slotlar">
++ <ul class="slot-makinesi1"></ul>
++ <ul class="slot-makinesi2"></ul>
++ <ul class="slot-makinesi3"></ul>
++ </div>
++  
++ <div class="winner-modal"></div>
++ <div class="kaybeden-modal"></div>
++ <div id="makine-kolu">
++ <div class="kaldıraç-tabanı">	  
++ <div id="kol-çubuk" class="wis-brr"></div>
++ <div id="kol-topu" class="wis-bll"></div>
++ <div class="koltuk-sandalye"></div>
++ <div class="koltuk-sandalye2"></div>
++ </div>
++ </div>
++ </div>
++ <p class="wis-txt"><span class="wis-starter-txt">başlatmak için kolu çekin</span></p>
++ </div>
++Çok fazla html bölümünü geliştiriyorum ama bunların hepsini kullanacağız. Bu kısımlar içerisinde bizim oyun merkezimizi oluşturacak bölüm ise slot div'i ve içindeki listelerdir. Bu bölümlerin dışında ise kaldıraç tabanı ve içindeki öğeler aslında oyunumuzun başlatma düğmesi olacaklar. Bu elementler dışındaki elementler için ayrıntılara değinmeyeceğim çünkü tamamı yalnızca tasarım öğesi.
++
++Javascript Kodlarının Yazılması
++Öncelikle oluşturduğumuz javascript dosyalarını hmtl dosyalarımıza ekleyelim:
++
++<script type="text/javascript" src="./game.js" ></script>
++Ardından slotMachine'de bir fonksiyon oluşturacağız ve bundan sonra yazacağımız tüm kodları bu içerisine fonksiyon yazacağız… ve kullanacağımız değişkenlerin bir kısmını tanımlayarak işe başlıyoruz.
++
++fonksiyon slotMachine(){  
++
++ /*Tüm kodlarımızı bu alana yazacağız*/
++
++}
++slotMakinesi();
++ /*Değişkenler Başla*/
++ var makine = belge.querySelector('.makine');
++ var slotMac1 = document.querySelector('.slot-machine1');
++ var slotMac2 = document.querySelector('.slot-machine2');
++ var slotMac3 = document.querySelector('.slot-machine3');
++ var leverBall = document.querySelector('#lever-ball');  
++ var leverBar = document.querySelector('#lever-bar');  
++ var wisText = document.querySelector('.wis-txt');
++ var oyunSayısı = 3;
++ var öğeler = [],
++ kazanmaOranları = [],
++ toplamYazmaOranları = 0;
++  
++ var derece1 = '36derece',
++ derece2 = '72 derece',
++ derece3 = '108 derece';
++  
++ var root = document.querySelector(':root');
++ var paneSize = 150;
++ var xAngle1,
++ xAçı2,
++ xAçı3;
++
++ /*Öğeler Başlıyor*/
++ var oc5 ='https://raw.githubusercontent.com/ktoqaloglu/Slot-Makinesi/master/200x200.png,10,https://raw.githubusercontent.com/ktoqaloglu/Slot-Makinesi/master/200x200.png,5,https://raw.githubusercontent.com/ktoqaloglu/Slot-Makinesi/master/200x200.png,10,https://raw.githubusercontent.com/ktoqaloglu/Slot-Makinesi/master/200x200.png,20';
++ toplamObj = oc5.split(','),
++ bölücüC = 0;
++ /*Öğeler BİTTİ*/
++
++ /* Değişenler SON*/
++Gelin boyutu Javascript selector'ler dışında kalan değişkenlerimizin neler olduğu
++
++GameCount: Oyunumuzun kaç kez oynanabileceğinin verisinin tutulduğu değişkendir.
++items: Oyunumuzun item'larını tutacağımız dizidir.
++winRates: Her bir öğe için kaydedilen winrate değerleri bu dizi muhafaza içerisinde sunulmaktadır.
++totalWRates: Toplamda kazanç sağlayan değişkendir.
++derece1, derece2 ve derece3: Çarkların minimum tur miktarının büyüklüğü bölümdür. 36 ve katlarında bir sayı olmalıdır.
++paneSize: 1 item'ın yüksekliği değeridir.
++Bu değişkenleri oluşturduğumuzdan sonra bir çok yerde kullanacağımız 2 fonksiyonumuzu yazalım, bunların ilki Javascript Dinamik if Koşulu Oluşturma sağlanan ayrıntılı parçalarım dinamik bir şekilde if sorguları oluşturmamıza yardımcı olan bir fonksiyon ve bir diğeri ise sayılarımız aralıklı rastgele sayı üretmemizi sağlayan başka bir fonksiyondur.
++
++karşılaştır(), randomInt()
++ fonksiyon karşılaştırma(değer1, operatör, değer2) {
++ anahtar (operatör) {
++ case '>': return value1 > value2;
++ case '<': return value1 < value2;
++ case '>=': return value1 >= value2;
++ case '<=': return value1 <= value2;
++ case '==': return value1 == value2;
++ case '!=': return value1 != value2;
++ case '===': return value1 === value2;
++ case '!==': return value1 !== value2;
++ }
++ }
++  
++ fonksiyon randomInt(min, max) {
++ Math.floor(Math.random() * (maks - min + 1) + min) döndür
++ }
++Bu iki fonksiyonun oluşmasından sonra ilk rastgele değerimizi oluşturalım.
++
++var rnd = randomInt(0,100);
++Ardından oyunumuzun temellerini oluşturacak init() fonksiyonumuzu yazmaya geçebiliriz.
++
++başlat()
++ fonksiyon init(){
++  
++  
++ (indeks = 0; indeks < toplamObj.length; indeks++) için {
++ eğer(indeks %2 == 0){
++ items[spliterC] = totalObj[indeks];
++ }başka{
++ winRates[spliterC] = toplamObj[indeks];
++ bölücüC++;
++ toplamWRates += parseInt(toplamObj[indeks]);
++ }
++ }
++  
++ (let indeks = 0; indeks < winRates.length; indeks++) için {
++ eğer(indeks == 0){
++ winRates[indeks] =parseInt(winRates[indeks]);  
++ }başka{
++ winRates[indeks] = parseInt(winRates[indeks-1]) + parseInt(winRates[indeks]);
++ }
++ }
++  
++ (let dizin = 0; dizin < öğeler.length; dizin++) için {
++ slotMac1.insertAdjacentHTML('sondan önce',`
++ <li class="slot1_item"><img class="image_item" src='`+öğeler[indeks]+`'/><span class='item_span'">`+indeks+`</span></li>
++ `);
++ slotMac2.insertAdjacentHTML('sondan önce',`
++ <li class="slot2_item"><img class="image_item" src='`+öğeler[indeks]+`'/><span class='item_span'">`+indeks+`</span></li>
++ `);
++ slotMac3.insertAdjacentHTML('sondan önce',`
++ <li class="slot3_item"><img class="image_item" src='`+öğeler[indeks]+`'/><span class='item_span'">`+indeks+`</span></li>
++ `);
++ }
++ }
++Bu fonksiyon içerisinde oc5 değişkeninden dağıtılarak parçalanmış değerler öğe ve kazanma oranı olarak parçalanıp uygun dizilere dağıtıyoruz ve herbir slot için bantlar oluşturuyoruz.
++
++Her yuva için bir spin fonksiyonu oluşturmamız gerekmiyor
++
++slot1Spin(), slot2Spin()
++fonksiyon slot1Spin(){
++ root.style.setProperty('--slot1Döndür',derece1);
++ var panes1 = document.querySelectorAll(".slot1_item"),
++ zDepth1 = bölmeBoyutu / (2 * Math.tan(Math.PI/panes1.length));
++  
++ (let dizin = 0; dizin < paneller1.length; dizin++) için {
++ xAngle1 = 360 / panes1.length * dizin;
++ panes1[index].style.transform= "rotateX("+ xAngle1 +"derece) translateZ("+ zDepth1 +"px)";
++ }
++  
++ slotMac1.addEventListener('animasyon sonu',fonksiyon(){
++ slotMac1.style.transform = 'rotateX('+derece1+')';
++ slotMac1.classList.remove('animasyon1');
++ });
++ };
++  
++  
++ fonksiyon slot2Spin(){
++ root.style.setProperty('--slot2Rotate',derece2);
++ var panes2 = document.querySelectorAll('.slot2_item'),
++ zDepth2 = bölmeBoyutu / (2*Math.tan(Math.PI/panes2.length));
++  
++ (let i =0;i<panes2.length;i++) için{
++ xAngle2 = 360 / panes2.length * i;
++ panes2[i].style.transform = "rotateX("+xAçı2+"derece) translateZ("+zDerinlik2+"px)";
++ }
++ slotMac2.addEventListener('animasyon sonu',fonksiyon(){
++ slotMac2.style.transform = 'rotateX('+derece2+')';
++ slotMac2.classList.remove('animasyon2');
++ });
++  
++ }
++  
++1. ve 2. slotlar için semboller neredeyse birbirinin aynısıdır, bu değerlerin tamamı 3.slot içinde gerekmekte ancak ekstra olarak 3.slot'a ait animasyonun sona erdiği durumda bir sonraki aşamanın çalışması için bazı kodlar yazmamız gerekiyor.
++
++slot3Döndürme()
++ fonksiyon slot3Spin(){
++ root.style.setProperty('--slot3Döndür',derece3);
++ var panes3 = document.querySelectorAll('.slot3_item'),
++ zDepth3 = bölmeBoyutu / (2*Math.tan(Math.PI/panes3.length));
++  
++ j =0;j<panes3.length;j++) için
++ xAngle3 = 360 / panes3.length * j;
++ panes3[j].style.transform = "rotateX("+xAçı3+"derece) translateZ("+zDerinlik3+"px)";
++ }
++ slotMac3.addEventListener('animasyon sonu',fonksiyon(){
++ slotMac3.style.transform = 'rotateX('+derece3+')';
++ leverBall.classList.remove('aşağıTop');
++ leverBar.classList.remove ('aşağıÇubuk');
++ slotMac3.classList.remove('animasyon3');
++ checkWinner();
++ });
++ }
++slot3 e ait olan fonksiyonda görebileceğiniz gibi alt bölümde bir eventListener bulunur ve buradaki kodlar, dönme animasyonumuz sona erdiğinde tetikleniyor.
++Peki tetiklenen kodlar ne yapıyorsa, slot makinemizin sağ tarafında bulunan kolun hareketini sıfırlıyor ve oyun oynandığı için oyuncunun kazanmasını kontrol etmeyi sağlayan checkWinner() işlevi çağırıyor.
++
++checkWinner fonksiyonlarının dağılımını yapmadan önce slotlarımızın dönüşünü sağlayan spin() fonksiyonumuzu yazalım.
++
++döndür()
++fonksiyon spin(){
++ /*Öğe Başına Derece*/
++ var perByItem = 360 / items.length;
++ var winnerVal = 0;
++  
++ eğer(toplamYazmaOranları < 100){
++ var loserRate = toplamWRates + (100 - toplamWRates);
++ }
++  
++ for(let dizin = 0;indeks<öğeler.uzunluk;indeks++){
++ eğer(indeks == 0){
++ if(karşılaştır(rnd,'<=',winRates[indeks]) ){
++ winnerVal = perByItem * dizin;
++ derece1 = (360 + kazananDeğeri)+'derece';
++ derece2 = (720 + kazananDeğeri) +'derece';
++ derece3 = (1080 + kazananDeğeri)+'derece';
++ }
++ }başka{
++ if(karşılaştır(rnd,'>',winRates[indeks-1]) && karşılaştır(rnd,'<=',winRates[indeks]) ){
++ winnerVal = perByItem * dizin;
++ derece1 = (360 + kazananDeğeri)+'derece';
++ derece2 = (720 + kazananDeğeri) +'derece';
++ derece3 = (1080 + kazananDeğeri)+'derece';
++ }
++ }
++ }
++ if(karşılaştır(rnd,'>',winRates[öğeler.length-1]) && karşılaştır(rnd,'<=',100)){
++ kazananVal = rnd;
++ derece1 = (360 + (perByItem * randomInt(1,5))) + 'derece';
++ derece2 = (360 + (perByItem * randomInt(1,5)))+ 'derece';
++ derece3 = (360 + (perByItem * randomInt(5,6))) + 'derece';
++ }
++  
++ slot1Spin();
++ slot2Spin();
++ slot3Spin();
++ }
++Sırasıyla yukarıdan aşağıya bu fonksiyonlarımızın neler olduğuna birlikte bakalım;
++
++perByItem değeri bize her bir item'a düşen açıyı veriyor bu açıları kullanarak daha aşağıdaki fiyatlar gerekli eğer sorgularınıda kullanarak derece1, derece2, ve derece3 değerlerine programlamaların son doğru değerleri aktarır ve bu değerler üzerinden çarklar dönmeyi durdurduğunda tam olarak bizim gösterilen öğe üzerinde durur.
++
++Son olarak slot1Spin(), slot2Spin() ve slot3Spin() işlevlerini çağırarak animasyonu belirlenen değerlerle başlatır.
++Not: 6-8 satırlarında ise ihtiyacı halinde kaybı yüzdesini koruyoruz.(Bu versiyonda aktif olarak kullanmıyorum.)
++
++Kazanma Kontrolü
++checkWinner()
++ fonksiyon checkWinner(){
++  
++ var firstSlot = slotMac1.getBoundingClientRect(),
++ ikinciSlot = slotMac2.getBoundingClientRect(),
++ lastSlot = slotMac3.getBoundingClientRect(),
++ loserModal = document.querySelector('.loser-modal'),
++ winnerModal = document.querySelector('.winner-modal'),
++  
++ r1 = document.elementFromPoint(ilkYuva.x+(ilkYuva.genişlik/2),ilkYuva.y+(ilkYuva.yükseklik/2+10)),
++ r2 = document.elementFromPoint(ikinciYuva.x+(ikinciYuva.genişlik/2),ikinciYuva.y+(ikinciYuva.yükseklik/2+10)),
++ r3 = document.elementFromPoint(sonYuva.x+(sonYuva.genişlik/2),sonYuva.y+(sonYuva.yükseklik/2+10));
++    
++ Zamanaşımı(() => {
++ if (r1.parentElement.textContent == r2.parentElement.textContent && r1.parentElement.textContent == r3.parentElement.textContent && rnd <= toplamWRates) {
++ winnerModal.innerHTML = `
++ <div class="modal-title" >Tebrikler</div>
++ <div class="modal-subtitle">%20 indirim kazandınız.</div>
++ <div class="wis-code">F53DWE</div>
++ `;
++ winnerModal.style.display = 'esnek';
++ } değilse {
++ loserModal.innerHTML = `
++ <div class="modal-title" >Üzgünüm Kazanamadı</div>
++ <button class="try-again-btn">Yeniden Deneyin</button>
++ `;
++ loserModal.style.display = 'esnek';
++ var againBtn = document.querySelector('.tekrar-dene-btn');
++ eğer(oyunSayısı > 0){
++ oyunSayısı--;
++ againBtn.addEventListener('tıkla', fonksiyon () {
++ rnd = randomInt(0, 100);
++  
++ loserModal.style.display = 'hiçbiri';
++  
++ slotMac1.style = '';
++ slotMac2.style = '';
++ slotMac3.style = '';
++ slotMac1.style = '';
++ slotMac2.style = '';
++ slotMac3.style = '';
++ döndür();
++ wisText.innerHTML = "<span class='wis-starter-txt'> "+gameCount+" daha fazla kez çevirebilirsin.</span>"
++ });
++ }başka{
++ tekrarBtn.textContent = 'Tüm Hakların Bitti';
++ againBtn.disabled = true;
++ }
++ }
++ }, 400);
++ }
++Bu bölümde ise slotlarımız dönme sürecinden sonra çalıştırılır. Bu fonksiyon yazımızın önceki bölümünde oluşturulmuşuz slot3Spin() fonksiyonu içerisinde çağırmıştık.
++
++Fonksiyonların Çağırılması
++ başlat();
++ döndür();
++ /*Döndürmeyi Başlat*/
++ leverBall.addEventListener('tıklama',fonksiyon(){
++ leverBall.classList.add('aşağıTop');
++ kaldıraçBar.classList.add ('downBar');
++ slotMac1.classList.add('animasyon1');
++ slotMac2.classList.add('animasyon2');
++ slotMac3.classList.add('animasyon3');
++ });
++Projenin bütün halindeki dosyalarına katılmak için bu bilgileri ziyaret edebilirsiniz.
++
++Önizleme:
++
++Bu bölümle birlikte slot makinemiz artık kullanılabilir halde, buraya kadar okuduğunuz için teşekkür ederim.
++
++CSS
++Javascript
++slot makinesi
++vanilya
++vanilya.js
++vanilyajlar
++
++Ara
++Ara...
++
++Popüler Etiketler
++android(2)
++CSS(3)
++veri bağlama(1)
++Kimliğe GöreGörüntüle(1)
++fonksiyon(1)
++iOS(3)
++Javascript(3)
++kotlin(2)
++React.js(2)
++yönlendirme(1)
++slot makinesi(1)
++Hızlı(3)
++vanilya(1)
++vanilya.js(1)
++vanilyajlar(1)
++
++Yazarlar
++
++Elif BARUTÇU
++
++Ön Uç Geliştirici
++
++
++Kamil TOPALOĞLU
++
++Ön Uç Geliştirici
++
++
++Eda BARUTÇU
++
++IOS Geliştiricisi
++
++
++Ogün Can KAYA
++
++Android Geliştirici
++
++
++Eray ÖKSÜZ
++
++Arka Uç Geliştirici
++
++© Kodlayiruk 2024. Tüm Hakları Saklıdır.
++
++Kodlama
++
++Ön Uç Geliştirme.
++Arka Uç Geliştirme.
++Android Geliştirici.
++IOS Geliştirme
++Diğer Diller
++Arşiv
++İletişim
