@@ -1,0 +1,439 @@
+
+Kodlayiruk
+
+JavaScript ile Slot Makinesi (Vanilla JS)
+Kamil TOPALOĞLU
+4 Eylül 2022
+HTML/CSS, Javascript
+Slot makinesi
+Merhaba, bu seferki konumuz oldukça ilgi çekici, bildiğiniz gibi javascript ile birçok oyun kodlanabilmekte ve internette onlarca örneğini bulabilirsiniz, bu oyunlar içerisinde çok basit olanlardan tutunda çok karmaşık yapıda olanlara kadar bir çok örnek bulunabilir. Bizim bu gün üzerine değineceğimiz oyun ise aslında çok aşina olduğunuz slot makinesi olacak.
+
+Sizinde bildiğiniz gibi eğer iş için kodluyorsanız bu kodlama ihtiyaca göre yapılır, canım istedi, sıkıldım gidipte bir oyun oyun yazayımdan ziyade bir ihtiyacı gidermeye yönelik çalışmalar sürdürürsünüz. Bu örnekte’de aynı durum geçerli aslında, böyle bir oyunlaştırma kurgusuna ihtiyacım vardı, internet üzerinde onlarca örnek buldum, fakat neredeyse herkes kendi makinesini aynı algoritmayı, aynı denklemleri kullanarak oluşturmuş, elbette farklı olanlarda var fakat onların çalışma sistemleri de çok karmaşık.
+
+Bu noktada arayarak bir sonuca ulaşamayacağımı anladım ve zaman kaybetmemek için kendim hazırlamadığımı, ama ararken zaten zaman kaybettiğimi farkettim ve böylece işin sonunda çok basit bir algoritmayla yazılmış bu oyun çıktı, bende aynı duruma düşüp sizde vakit kaybetmeyin diye detaylı bir şekilde anlatarak sizlerle paylaşmak istedim. Lafı daha fazla uzatmadan anlatıma geçiyorum.
+
+Yazı İçeriği
+Slot makinesi nedir/nasıl çalışır?
+HTML Kodlarının Yazılması
+Javascript Kodlarının Yazılması
+Kazanma Kontrolü
+Fonksiyonların Çağırılması
+Slot makinesi nedir/nasıl çalışır?
+Muhtemelen herkes slot makinesinin ne olduğuna aşinadır fakat biz yinede kısaca bahsedelim.
+
+Slot makinesi ya da diğer adıyla meyve makinesi, popüler bir kumar makinesidir. Makinenin ekranında üç ya da daha fazla sayıda makara bulunur. Makaralar döndükten sonra ekrandaki hizada duran sembollere göre müşteriye ödeme yapılır.
+
+Nasıl çalışır?
+Slot makinesi nasıl çalışır sorusunun birden fazla cevabı bulunmakta ama en yaygın olanı ise makaralar rastgele bir noktada duracak şekilde çevrilir ve istenilen hizada bulunan görsellere göre kazanılıp kazanılmadığı kontrol edilir.
+
+Peki bizim hazırlayacağımız slot makinesi nasıl çalışıyor?
+Biz slot makinesine sadece görselleri değil, bu görsellerin denk gelme oranlarınıda iletiyoruz. Bu ne demek;
+Örneğin elma görselimiz var ve makaralar döndükten sonra 3 ‘ünde de elma gelmesinin % kaç ihtimalle olacağını belirtiyoruz.
+
+Öyleyse hadi algoritmayı maddelerle özetleyerek ilerleyelim.
+
+Kol çekilir.
+Makaraların duracakları konumlar belirlenir.
+Makaralar döner.
+Makaralar durduktan sonra kazanma/kaybeme kontrolü yapılır.
+Oyuncuya kazandı/kaybetti bilgisi verilir.
+Eğer kaybedildi ve tekrar oynama hakkı varsa yeniden başlanır.
+Eğer kazanıldı ise oyun biter ve oyuncuya ödülü verilir.
+Oyunumuzun akış tam olarak bundan ibaret. Diğer detayları oyunu oluşturma sürecinde sizlerle paylaşacağım.
+
+HTML Kodlarının Yazılması
+Temel HTML
+<div class="machine">
+    <div class="slots">
+        <ul class="slot-machine1"></ul>
+        <ul class="slot-machine2"></ul>
+        <ul class="slot-machine3"></ul>
+     </div>
+
+</div>
+Temelde ihtiyacımız olan html kodları bunlardan ibaret, fakat görsel açıdan daha iyi ve işlevsel olarakda işimize yarayabilecek bazı eklemelerde yapmak istiyorum, bunlarla birlikte html dosyamız şu haline bürünmüş oluyor.
+
+index.html
+    <div class="wis-container">
+      <div class="machine">
+        <div class="wis-header">
+          <div class="wis-h-main">
+            <div class="wis-blink-border">
+              <div class="wis-h-text">Kodlayiruk</div>
+            </div>
+          </div>
+          <div class="wis-h-rleg"></div>
+          <div class="wis-h-lleg"></div>
+        </div>
+        <div class="slots">
+          <ul class="slot-machine1"></ul>
+          <ul class="slot-machine2"></ul>
+          <ul class="slot-machine3"></ul>
+        </div>
+  
+        <div class="winner-modal"></div>
+        <div class="loser-modal"></div>
+        <div id="machine-lever">
+          <div class="lever-base">	  
+            <div id="lever-bar" class="wis-brr"></div>
+            <div id="lever-ball" class="wis-bll"></div>
+            <div class="lever-chair"></div>
+            <div class="lever-chair2"></div>
+          </div>
+        </div>
+      </div>
+      <p class="wis-txt"><span class="wis-starter-txt">pull the lever for start</span></p>
+    </div>
+Çok fazla html bölümü olduğunun farkındayım fakat inanın hepsini kullanacağız. Bu kısımlar içerisinde bizim oyunumuzun merkezini oluşturacak bölüm ise slots div’i ve içerisindeki listelerdir. Bu bölümler haricinde ise lever-base ve içerisindeki elementler aslında oyunumuzun başlat butonu olacaklar. Bu elementler dışındaki elementler için detaylara değinmeyeceğim çünkü tamamı yalnızca tasarım unsuru.
+
+Javascript Kodlarının Yazılması
+Öncelikle oluşturduğumuz javascript dosyasını hmtl dosyamıza ekleyelim:
+
+<script type="text/javascript" src="./game.js" ></script>
+Ardından slotMachine adında bir fonksiyon oluşturacağız ve bundan sonra yazacağımız tüm kodları bu fonksiyon içerisine yazacağız… ve kullanacağımız değişkenlerin bir kısmını tanımlayarak işe başlayalım.
+
+function slotMachine(){  
+
+    /*Tüm kodlarımızı bu alana yazacağız*/
+
+}
+slotMachine();
+    /*Değişkenler Start*/
+  var machine = document.querySelector('.machine');
+  var slotMac1 = document.querySelector('.slot-machine1');
+  var slotMac2 = document.querySelector('.slot-machine2');
+  var slotMac3 = document.querySelector('.slot-machine3');
+  var leverBall = document.querySelector('#lever-ball');  
+  var leverBar = document.querySelector('#lever-bar');  
+  var wisText = document.querySelector('.wis-txt');
+  var gameCount = 3;
+  var items = [],
+      winRates = [],
+      totalWRates = 0;
+  
+  var degree1 = '36deg',
+      degree2 = '72deg',
+      degree3 = '108deg';
+  
+    var root = document.querySelector(':root');
+    var paneSize = 150;
+    var xAngle1,
+        xAngle2,
+        xAngle3;
+
+      /*Items Start*/
+    var oc5 ='https://raw.githubusercontent.com/ktoqaloglu/Slot-Machine/master/200x200.png,10,https://raw.githubusercontent.com/ktoqaloglu/Slot-Machine/master/200x200.png,5,https://raw.githubusercontent.com/ktoqaloglu/Slot-Machine/master/200x200.png,10,https://raw.githubusercontent.com/ktoqaloglu/Slot-Machine/master/200x200.png,20';
+        totalObj = oc5.split(','),
+        spliterC = 0;
+     /*Items END*/
+
+    /*Değişkenler END*/ 
+Gelin size Javascript selector’ler dışında kalan değişkenlerimizin neler olduğundan
+
+GameCount: Oyunumuzun kaç kez oynanabileceğinin verisinin tutulduğu değişkendir.
+items: Oyunumuzun item’larını tutacağımız dizidir.
+winRates: Her bir item için belirlenen winrate değerlerini bu dizi içerisinde muhafaza edeceğiz.
+totalWRates: Toplam kazanma oranını tutan değişkendir.
+degree1, degree2 ve degree3: Çarkların minimum tur miktarını belirlediğimiz bölümdür. 36 ve katlarında bir sayı olmalıdır.
+paneSize: 1 item’ın yükseklik değeridir.
+Bu değişkenleri oluşturduktan sonra bir çok yerde kullanacağımız 2 fonksiyonumuzu yazalım, bunlardan ilki Javascript Dinamik if Koşulu Oluşturma konumda detaylıca anlattığım dinamik bir şekilde if sorguları oluşturmamıza yardımcı olan bir fonksiyon ve bir diğeri ise belirlediğimiz sayılar aralığında rastgele sayı üretmemizi sağlayan başka bir fonksiyondur.
+
+compare(), randomInt()
+  function compare(value1, operator, value2) {
+  switch (operator) {
+      case '>':   return value1 > value2;
+      case '<':   return value1 < value2;
+      case '>=':  return value1 >= value2;
+      case '<=':  return value1 <= value2;
+      case '==':  return value1 == value2;
+      case '!=':  return value1 != value2;
+      case '===': return value1 === value2;
+      case '!==': return value1 !== value2;
+  }
+  }
+  
+  function randomInt(min, max) {
+  return Math.floor(Math.random() * (max - min + 1) + min)
+  }
+Bu iki fonksiyonu oluşturduktan sonra ilk random değerimizi oluşturalım.
+
+var rnd = randomInt(0,100);
+Ardından oyunumuzun temellerini oluşturacak init() fonksiyonumuzu yazmaya geçebiliriz.
+
+init()
+  function init(){
+  
+  
+    for (let index = 0; index < totalObj.length; index++) {
+      if(index %2 == 0){
+        items[spliterC] = totalObj[index];
+      }else{
+              winRates[spliterC] = totalObj[index];
+              spliterC++;
+              totalWRates += parseInt(totalObj[index]);
+      }
+    }
+  
+    for (let index = 0; index < winRates.length; index++) {
+          if(index == 0){
+        winRates[index] =parseInt(winRates[index]);  
+      }else{
+          winRates[index] = parseInt(winRates[index-1]) + parseInt(winRates[index]);
+      }
+      }
+  
+    for (let index = 0; index < items.length; index++) {
+      slotMac1.insertAdjacentHTML('beforeend',`
+      <li class="slot1_item"><img class="image_item" src='`+items[index]+`'/><span class='item_span'">`+index+`</span></li>
+      `);
+      slotMac2.insertAdjacentHTML('beforeend',`
+      <li class="slot2_item"><img class="image_item" src='`+items[index]+`'/><span class='item_span'">`+index+`</span></li>
+      `);
+      slotMac3.insertAdjacentHTML('beforeend',`
+      <li class="slot3_item"><img class="image_item" src='`+items[index]+`'/><span class='item_span'">`+index+`</span></li>
+      `);
+    }
+  }
+Bu fonksiyon içerisinde oc5 değişkeninden alıp parçaladığımız değerleri item ve winrate olarak parçalayıp uygun dizilere dağıtıyoruz ve herbir slot için bantları oluşturuyoruz.
+
+Her bir slot için bir spin fonksiyonu oluşturmamız gerekmekte
+
+slot1Spin(), slot2Spin()
+function slot1Spin(){
+    root.style.setProperty('--slot1Rotate',degree1);
+    var panes1 = document.querySelectorAll(".slot1_item"),
+        zDepth1 = paneSize / (2 * Math.tan(Math.PI/panes1.length));
+  
+  for (let index = 0; index < panes1.length; index++) {
+        xAngle1 = 360 / panes1.length * index;
+      panes1[index].style.transform= "rotateX("+ xAngle1 +"deg) translateZ("+ zDepth1 +"px)";
+    }
+  
+  slotMac1.addEventListener('animationend',function(){
+    slotMac1.style.transform = 'rotateX('+degree1+')';
+    slotMac1.classList.remove('animation1');
+  });
+  };
+  
+  
+  function slot2Spin(){
+    root.style.setProperty('--slot2Rotate',degree2);
+    var panes2 = document.querySelectorAll('.slot2_item'),
+        zDepth2 = paneSize / (2*Math.tan(Math.PI/panes2.length));
+  
+        for (let i =0;i<panes2.length;i++){
+          xAngle2 = 360 / panes2.length * i;
+          panes2[i].style.transform = "rotateX("+xAngle2+"deg) translateZ("+zDepth2+"px)";
+        }
+  slotMac2.addEventListener('animationend',function(){
+    slotMac2.style.transform = 'rotateX('+degree2+')';
+    slotMac2.classList.remove('animation2');
+  });
+  
+  }
+  
+1. ve 2. slotlar için fonksiyonlar neredeyse birbirinin aynısıdır, bu değerlerin tamamı 3.slot içinde gerekmekte fakat ekstra olarak 3.slot’a ait animasyonun sona erdiği durumda bir sonraki aşamanın çalışması gerektiği için bazı kodlar yazmamız gerekiyor.
+
+slot3Spin()
+  function slot3Spin(){
+    root.style.setProperty('--slot3Rotate',degree3);
+    var panes3 = document.querySelectorAll('.slot3_item'),
+        zDepth3 = paneSize / (2*Math.tan(Math.PI/panes3.length));
+  
+        for (let j =0;j<panes3.length;j++){
+          xAngle3 = 360 / panes3.length * j;
+          panes3[j].style.transform = "rotateX("+xAngle3+"deg) translateZ("+zDepth3+"px)";
+        }
+  slotMac3.addEventListener('animationend',function(){
+    slotMac3.style.transform = 'rotateX('+degree3+')';
+    leverBall.classList.remove('downBall');
+    leverBar.classList.remove ('downBar');
+    slotMac3.classList.remove('animation3');
+    checkWinner();
+  });
+  }
+slot3 e ait olan fonksiyonda görebileceğiniz gibi alt bölümde bir eventListener bulunmakta ve buradaki kodlar, dönme animasyonumuz sona erdiğinde tetikleniyor.
+Peki tetiklenen kodlar ne yapıyor diyecek olursanız, slot makinemizin sağ tarafında bulunan kolun animasyonunu sıfırlıyor ve oyun oynandığı için oyuncunun kazanıp kazanmadığını kontrol etmemizi sağlayan checkWinner() fonksiyonunu çağırıyor.
+
+checkWinner fonksiyonunu anlatmaya geçmeden önce slotlarımızın dönmesini sağlayan spin() fonksiyonumuzu yazalım.
+
+spin()
+function  spin(){
+  /*Degree Per By Item*/
+  var perByItem = 360 / items.length;
+  var winnerVal = 0;
+  
+  if(totalWRates < 100){
+    var loserRate = totalWRates + (100 - totalWRates);
+  }
+  
+  for(let index = 0;index<items.length;index++){
+    if(index == 0){
+          if(compare(rnd,'<=',winRates[index]) ){
+              winnerVal = perByItem * index;
+        degree1 = (360 + winnerVal)+'deg';
+        degree2 = (720 + winnerVal) +'deg';
+        degree3 = (1080 + winnerVal)+'deg';
+          }
+      }else{
+          if(compare(rnd,'>',winRates[index-1]) && compare(rnd,'<=',winRates[index]) ){
+              winnerVal = perByItem * index;
+        degree1 = (360 + winnerVal)+'deg';
+        degree2 = (720 + winnerVal) +'deg';
+        degree3 = (1080 + winnerVal)+'deg';
+          }
+      }
+  }
+  if(compare(rnd,'>',winRates[items.length-1]) &&  compare(rnd,'<=',100)){
+    winnerVal = rnd;
+    degree1 =  (360 + (perByItem * randomInt(1,5))) + 'deg';
+    degree2 =  (360 + (perByItem * randomInt(1,5)))+ 'deg';
+    degree3 =  (360 + (perByItem * randomInt(5,6))) + 'deg';
+  }
+  
+  slot1Spin();
+  slot2Spin();
+  slot3Spin();
+  }
+Sırasıyla yukarıdan aşağıya bu fonksiyonumuzun neler yaptığına birlikte bakalım;
+
+perByItem değeri bize her bir item’a düşen açıyı veriyor bu açıları kullanarak daha aşağıdaki bölümlerde gerekli if sorgularınıda kullanarak degree1, degree2, ve degree3 değerlerine hesaplamaların sonucunda doğru değerleri aktarır ve bu değerler yardımıyla çarklar dönmeyi durdurduğunda tam olarak bizim istediğimiz item üzerinde durur.
+
+Son olarak ise slot1Spin(), slot2Spin(), ve slot3Spin() fonksiyonlarını çağırarak animasyonu belirlenmiş değerlerle başlatır.
+Not: 6-8 satırlarında ise ihtiyacınız olması halinde kaybetme yüzdesini tutuyoruz.(Bu versiyonda aktif olarak kullanmıyorum.)
+
+Kazanma Kontrolü
+checkWinner()
+  function checkWinner(){
+  
+    var firstSlot = slotMac1.getBoundingClientRect(),
+        secondSlot = slotMac2.getBoundingClientRect(),
+        lastSlot = slotMac3.getBoundingClientRect(),
+        loserModal = document.querySelector('.loser-modal'),
+        winnerModal = document.querySelector('.winner-modal'),
+  
+      r1 = document.elementFromPoint(firstSlot.x+(firstSlot.width/2),firstSlot.y+(firstSlot.height/2+10)),
+      r2 = document.elementFromPoint(secondSlot.x+(secondSlot.width/2),secondSlot.y+(secondSlot.height/2+10)),
+      r3 = document.elementFromPoint(lastSlot.x+(lastSlot.width/2),lastSlot.y+(lastSlot.height/2+10));
+    
+    setTimeout(() => {
+      if (r1.parentElement.textContent == r2.parentElement.textContent && r1.parentElement.textContent == r3.parentElement.textContent && rnd <= totalWRates) {
+        winnerModal.innerHTML = `
+        <div class="modal-title" >Tebrikler</div>
+        <div class="modal-subtitle">%20 indirim kazandınız.</div>
+        <div class="wis-code">F53DWE</div>
+      `;
+        winnerModal.style.display = 'flex';
+      } else {
+        loserModal.innerHTML = `
+        <div class="modal-title" >Üzgünüm Kazanamadın</div>
+        <button class="try-again-btn">Yeniden Dene</button>
+      `;
+        loserModal.style.display = 'flex';
+        var againBtn = document.querySelector('.try-again-btn');
+        if(gameCount > 0){
+          gameCount--;
+          againBtn.addEventListener('click', function () {
+            rnd = randomInt(0, 100);
+  
+            loserModal.style.display = 'none';
+  
+            slotMac1.style = '';
+            slotMac2.style = '';
+            slotMac3.style = '';
+            slotMac1.style = '';
+            slotMac2.style = '';
+            slotMac3.style = '';
+            spin();
+            wisText.innerHTML = "<span class='wis-starter-txt'> You can spin "+gameCount+" more times.</span>"
+          });
+        }else{
+          againBtn.textContent = 'Tüm Hakların Bitti';
+          againBtn.disabled = true;
+        }
+      }
+    }, 400);
+  }
+Bu bölümde ise slotlarımız dönme işlemini tamamladıktan sonra çalışacak kısımdır. Bu fonksiyonu yazımızın önceki kısmında oluşturduğumuz slot3Spin() fonksiyonu içerisinde çağırmıştık.
+
+Fonksiyonların Çağırılması
+  init();
+  spin();
+    /*Start Spin*/
+    leverBall.addEventListener('click',function(){
+    leverBall.classList.add('downBall');
+    leverBar.classList.add ('downBar');
+    slotMac1.classList.add('animation1');
+    slotMac2.classList.add('animation2');
+    slotMac3.classList.add('animation3');
+  });
+Projenin bütün haldeki dosyalarına erişmek için bu bağlantıyı ziyaret edebilirsiniz.
+
+Preview:
+
+Bu bölümle birlikte slot makinemiz artık kullanılabilir halde, buraya kadar okuduğunuz için teşekkür ederim.
+
+CSS
+Javascript
+slot makinesi
+vanilla
+vanilla.js
+vanillajs
+
+Ara
+Ara...
+
+Popüler Taglar
+android(2)
+CSS(3)
+data binding(1)
+findViewById(1)
+function(1)
+ios(3)
+Javascript(3)
+kotlin(2)
+React.js(2)
+routing(1)
+slot makinesi(1)
+Swift(3)
+vanilla(1)
+vanilla.js(1)
+vanillajs(1)
+
+Yazarlar
+
+Elif BARUTÇU
+
+Frontend Developer
+
+
+Kamil TOPALOĞLU
+
+Frontend Developer
+
+
+Eda BARUTÇU
+
+IOS Developer
+
+
+Ogün Can KAYA
+
+Android Developer
+
+
+Eray ÖKSÜZ
+
+Backend Developer
+
+© Kodlayiruk 2024. All Rights Reserved.
+
+Kodlayiruk
+
+Frontend Dev.
+Backend Dev.
+Android Dev.
+IOS Dev.
+Diğer Diller
+Arşiv
+İletişim
