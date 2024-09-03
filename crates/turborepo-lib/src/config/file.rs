@@ -25,17 +25,18 @@ impl ResolvedConfigurationOptions for ConfigFile {
         &self,
         _existing_config: &ConfigurationOptions,
     ) -> Result<ConfigurationOptions, Error> {
-        let mut contents = self
+        let contents = self
             .path
-            .read_existing_to_string_or(Ok("{}"))
+            .read_existing_to_string()
             .map_err(|error| Error::FailedToReadConfig {
                 config_path: self.path.clone(),
                 error,
-            })?;
-        if contents.is_empty() {
-            contents = String::from("{}");
-        }
-        let global_config: ConfigurationOptions = serde_json::from_str(&contents)?;
+            })?
+            .filter(|s| !s.is_empty());
+
+        let global_config = contents
+            .as_deref()
+            .map_or_else(|| Ok(ConfigurationOptions::default()), serde_json::from_str)?;
         Ok(global_config)
     }
 }

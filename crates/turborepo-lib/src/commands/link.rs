@@ -215,11 +215,12 @@ pub async fn link(
 
             let local_config_path = base.local_config_path();
             let before = local_config_path
-                .read_existing_to_string_or(Ok("{}"))
+                .read_existing_to_string()
                 .map_err(|e| config::Error::FailedToReadConfig {
                     config_path: local_config_path.clone(),
                     error: e,
-                })?;
+                })?
+                .unwrap_or_else(|| String::from("{}"));
 
             let no_preexisting_id = unset_path(&before, &["teamid"], false)?.unwrap_or(before);
             let no_preexisting_slug =
@@ -314,11 +315,12 @@ pub async fn link(
 
             let local_config_path = base.local_config_path();
             let before = local_config_path
-                .read_existing_to_string_or(Ok("{}"))
+                .read_existing_to_string()
                 .map_err(|error| config::Error::FailedToReadConfig {
                     config_path: local_config_path.clone(),
                     error,
-                })?;
+                })?
+                .unwrap_or_else(|| String::from("{}"));
 
             let no_preexisting_id = unset_path(&before, &["teamid"], false)?.unwrap_or(before);
             let no_preexisting_slug =
@@ -541,11 +543,12 @@ fn add_turbo_to_gitignore(base: &CommandBase) -> Result<(), io::Error> {
 fn add_space_id_to_turbo_json(base: &CommandBase, space_id: &str) -> Result<(), Error> {
     let turbo_json_path = base.repo_root.join_component("turbo.json");
     let turbo_json = turbo_json_path
-        .read_existing_to_string_or(Ok("{}"))
+        .read_existing_to_string()
         .map_err(|error| config::Error::FailedToReadConfig {
             config_path: turbo_json_path.clone(),
             error,
-        })?;
+        })?
+        .unwrap_or_else(|| String::from("{}"));
 
     let space_id_json_value = format!("\"{}\"", space_id);
 
