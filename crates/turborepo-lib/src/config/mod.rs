@@ -483,33 +483,28 @@ impl TurborepoConfigBuilder {
         let config = sources.into_iter().try_fold(
             ConfigurationOptions::default(),
             |mut acc, current_source| {
-                current_source
-                    .get_configuration_options(&acc)
-                    .map(|mut current_source_config| {
-                        acc.set_api_url(&mut current_source_config.api_url);
-                        acc.set_login_url(&mut current_source_config.login_url);
-                        acc.set_team_slug(&mut current_source_config.team_slug);
-                        acc.set_team_id(&mut current_source_config.team_id);
-                        acc.set_token(&mut current_source_config.token);
-                        acc.set_signature(&mut current_source_config.signature);
-                        acc.set_enabled(&mut current_source_config.enabled);
-                        acc.set_preflight(&mut current_source_config.preflight);
-                        acc.set_timeout(&mut current_source_config.timeout);
-                        acc.set_spaces_id(&mut current_source_config.spaces_id);
-                        acc.set_ui(&mut current_source_config.ui);
-                        acc.set_allow_no_package_manager(
-                            &mut current_source_config.allow_no_package_manager,
-                        );
-                        acc.set_daemon(&mut current_source_config.daemon);
-                        acc.set_env_mode(&mut current_source_config.env_mode);
-                        acc.set_scm_base(&mut current_source_config.scm_base);
-                        acc.set_scm_head(&mut current_source_config.scm_head);
-                        acc.set_cache_dir(&mut current_source_config.cache_dir);
-                        acc.set_root_turbo_json_path(
-                            &mut current_source_config.root_turbo_json_path,
-                        );
-                        acc
-                    })
+                let mut current_source_config = current_source.get_configuration_options(&acc)?;
+                acc.set_api_url(&mut current_source_config.api_url);
+                acc.set_login_url(&mut current_source_config.login_url);
+                acc.set_team_slug(&mut current_source_config.team_slug);
+                acc.set_team_id(&mut current_source_config.team_id);
+                acc.set_token(&mut current_source_config.token);
+                acc.set_signature(&mut current_source_config.signature);
+                acc.set_enabled(&mut current_source_config.enabled);
+                acc.set_preflight(&mut current_source_config.preflight);
+                acc.set_timeout(&mut current_source_config.timeout);
+                acc.set_spaces_id(&mut current_source_config.spaces_id);
+                acc.set_ui(&mut current_source_config.ui);
+                acc.set_allow_no_package_manager(
+                    &mut current_source_config.allow_no_package_manager,
+                );
+                acc.set_daemon(&mut current_source_config.daemon);
+                acc.set_env_mode(&mut current_source_config.env_mode);
+                acc.set_scm_base(&mut current_source_config.scm_base);
+                acc.set_scm_head(&mut current_source_config.scm_head);
+                acc.set_cache_dir(&mut current_source_config.cache_dir);
+                acc.set_root_turbo_json_path(&mut current_source_config.root_turbo_json_path);
+                Ok(acc)
             },
         );
 
