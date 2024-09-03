@@ -392,7 +392,7 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
 
         // if we have a filter, use it to filter the entry packages
         let filtered_entry_packages = if !selector.name_pattern.is_empty() {
-            match_package_names(&selector.name_pattern, entry_packages)?
+            match_package_names(&selector.name_pattern, &self.all_packages(), entry_packages)?
         } else {
             entry_packages
         };
@@ -520,17 +520,12 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
 
         if !selector.name_pattern.is_empty() {
             if !selector_valid {
-                entry_packages = self.match_package_names_to_vertices(
-                    &selector.name_pattern,
-                    self.pkg_graph
-                        .packages()
-                        .map(|(name, _)| name.to_owned())
-                        .collect(),
-                )?;
+                entry_packages = self.all_packages();
                 selector_valid = true;
-            } else {
-                entry_packages = match_package_names(&selector.name_pattern, entry_packages)?;
             }
+            let all_packages = self.all_packages();
+            entry_packages =
+                match_package_names(&selector.name_pattern, &all_packages, entry_packages)?;
         }
 
         // if neither a name pattern, parent dir, or from ref is provided, then
@@ -556,15 +551,14 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
         )
     }
 
-    fn match_package_names_to_vertices(
-        &self,
-        name_pattern: &str,
-        mut entry_packages: HashSet<PackageName>,
-    ) -> Result<HashSet<PackageName>, ResolutionError> {
-        // add the root package to the entry packages
-        entry_packages.insert(PackageName::Root);
-
-        match_package_names(name_pattern, entry_packages)
+    fn all_packages(&self) -> HashSet<PackageName> {
+        let mut packages = self
+            .pkg_graph
+            .packages()
+            .map(|(name, _)| name.to_owned())
+            .collect::<HashSet<_>>();
+        packages.insert(PackageName::Root);
+        packages
     }
 }
 
@@ -574,21 +568,26 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
 /// the pattern is normalized, replacing `\*` with `.*`
 fn match_package_names(
     name_pattern: &str,
-    mut entry_packages: HashSet<PackageName>,
+    all_packages: &HashSet<PackageName>,
+    mut packages: HashSet<PackageName>,
 ) -> Result<HashSet<PackageName>, ResolutionError> {
     let matcher = SimpleGlob::new(name_pattern)?;
-    let matched_packages = entry_packages
-        .extract_if(|e| matcher.is_match(e.as_ref()))
+    let matched_packages = all_packages
+        .iter()
+        .filter(|e| matcher.is_match(e.as_ref()))
+        .cloned()
         .collect::<HashSet<_>>();
 
     // If the pattern was an exact name and it matched no packages, then error
     if matcher.is_exact() && matched_packages.is_empty() {
-        Err(ResolutionError::NoPackagesMatchedWithName(
+        return Err(ResolutionError::NoPackagesMatchedWithName(
             name_pattern.to_owned(),
-        ))
-    } else {
-        Ok(matched_packages)
+        ));
     }
+
+    packages.retain(|pkg| matched_packages.contains(pkg));
+
+    Ok(packages)
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -628,6 +627,7 @@ pub enum ResolutionError {
 mod test {
     use std::collections::{HashMap, HashSet};
 
+    use pretty_assertions::assert_eq;
     use tempfile::TempDir;
     use test_case::test_case;
     use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeUnixPathBuf};
