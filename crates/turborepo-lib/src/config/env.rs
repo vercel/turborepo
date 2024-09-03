@@ -41,6 +41,12 @@ impl EnvVars {
         let output_map = map_environment(turbo_mapping, environment)?;
         Ok(Self { output_map })
     }
+
+    fn truthy_value(&self, key: &str) -> Option<Option<bool>> {
+        Some(truth_env_var(
+            self.output_map.get(key).filter(|s| !s.is_empty())?,
+        ))
+    }
 }
 
 impl ResolvedConfigurationOptions for EnvVars {
@@ -49,38 +55,22 @@ impl ResolvedConfigurationOptions for EnvVars {
         _existing_config: &ConfigurationOptions,
     ) -> Result<ConfigurationOptions, Error> {
         // Process signature
-        let signature = if let Some(signature) = self.output_map.get("signature") {
-            match signature.as_str() {
-                "0" => Some(false),
-                "1" => Some(true),
-                _ => return Err(Error::InvalidSignature),
-            }
-        } else {
-            None
-        };
+        let signature = self
+            .truthy_value("signature")
+            .map(|value| value.ok_or_else(|| Error::InvalidSignature))
+            .transpose()?;
 
         // Process preflight
-        let preflight = if let Some(preflight) = self.output_map.get("preflight") {
-            match preflight.as_str() {
-                "0" | "false" => Some(false),
-                "1" | "true" => Some(true),
-                "" => None,
-                _ => return Err(Error::InvalidPreflight),
-            }
-        } else {
-            None
-        };
+        let preflight = self
+            .truthy_value("preflight")
+            .map(|value| value.ok_or_else(|| Error::InvalidPreflight))
+            .transpose()?;
 
         // Process enabled
-        let enabled = if let Some(enabled) = self.output_map.get("enabled") {
-            match enabled.as_str() {
-                "0" => Some(false),
-                "1" => Some(true),
-                _ => return Err(Error::InvalidRemoteCacheEnabled),
-            }
-        } else {
-            None
-        };
+        let enabled = self
+            .truthy_value("enabled")
+            .map(|value| value.ok_or_else(|| Error::InvalidRemoteCacheEnabled))
+            .transpose()?;
 
         // Process timeout
         let timeout = if let Some(timeout) = self.output_map.get("timeout") {
@@ -104,28 +94,15 @@ impl ResolvedConfigurationOptions for EnvVars {
         };
 
         // Process experimentalUI
-        let ui = self
-            .output_map
-            .get("ui")
-            .map(|s| s.as_str())
-            .and_then(truth_env_var)
-            .map(|ui| if ui { UIMode::Tui } else { UIMode::Stream });
+        let ui =
+            self.truthy_value("ui")
+                .flatten()
+                .map(|ui| if ui { UIMode::Tui } else { UIMode::Stream });
 
-        let allow_no_package_manager = self
-            .output_map
-            .get("allow_no_package_manager")
-            .map(|s| s.as_str())
-            .and_then(truth_env_var);
+        let allow_no_package_manager = self.truthy_value("allow_no_package_manager").flatten();
 
         // Process daemon
-        let daemon = self
-            .output_map
-            .get("daemon")
-            .and_then(|val| match val.as_str() {
-                "1" | "true" => Some(true),
-                "0" | "false" => Some(false),
-                _ => None,
-            });
+        let daemon = self.truthy_value("daemon").flatten();
 
         let env_mode = self
             .output_map
