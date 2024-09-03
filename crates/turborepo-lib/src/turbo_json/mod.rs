@@ -403,7 +403,7 @@ impl RawTurboJson {
         path: &AbsoluteSystemPath,
     ) -> Result<RawTurboJson, Error> {
         let contents = path.read_to_string()?;
-        // Anchoring the path can fail if paths reside on different drives.
+        // Anchoring the path can fail if the path resides outside of the repository
         // Just display absolute path in that case.
         let root_relative_path = repo_root.anchor(path).map_or_else(
             |_| path.as_str().to_owned(),
