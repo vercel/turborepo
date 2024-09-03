@@ -223,26 +223,11 @@ impl<'a> ResolvedConfigurationOptions for OverrideEnvVars<'a> {
             });
 
         let output = ConfigurationOptions {
-            api_url: None,
-            login_url: None,
-            team_slug: None,
             team_id: self.output_map.get("team_id").cloned(),
             token: self.output_map.get("token").cloned(),
-            scm_base: None,
-            scm_head: None,
-
-            signature: None,
-            preflight: None,
-            enabled: None,
+            api_url: None,
             ui,
-            daemon: None,
-            timeout: None,
-            upload_timeout: None,
-            spaces_id: None,
-            allow_no_package_manager: None,
-            env_mode: None,
-            cache_dir: None,
-            root_turbo_json_path: None,
+            ..Default::default()
         };
 
         Ok(output)
