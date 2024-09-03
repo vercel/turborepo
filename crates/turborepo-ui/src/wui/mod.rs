@@ -1,12 +1,7 @@
 //! Web UI for Turborepo. Creates a WebSocket server that can be subscribed to
 //! by a web client to display the status of tasks.
 
-use std::{
-    cell::RefCell,
-    collections::{BTreeMap, HashMap},
-    io::Write,
-    sync::Arc,
-};
+use std::{cell::RefCell, collections::BTreeMap, io::Write, sync::Arc};
 
 use async_graphql::{
     http::GraphiQLSource, EmptyMutation, EmptySubscription, Object, Schema, SimpleObject,
@@ -146,7 +141,7 @@ struct TaskState {
     cache_result: Option<CacheResult>,
 }
 
-#[derive(Debug, Default, Clone, Serialize, SimpleObject)]
+#[derive(Debug, Default, Clone, Serialize)]
 struct WebUIState {
     tasks: BTreeMap<String, TaskState>,
 }
@@ -267,9 +262,15 @@ struct Query {
     subscriber: Subscriber,
 }
 
+#[derive(Debug, Clone, Serialize, SimpleObject)]
+struct Task {
+    name: String,
+    state: TaskState,
+}
+
 #[Object]
 impl Query {
-    async fn tasks(&self) -> HashMap<String, TaskState> {
+    async fn tasks(&self) -> Vec<Task> {
         self.subscriber
             .state
             .lock()
@@ -277,7 +278,10 @@ impl Query {
             .borrow()
             .tasks
             .iter()
-            .map(|(task, state)| (task.clone(), state.clone()))
+            .map(|(task, state)| Task {
+                name: task.clone(),
+                state: state.clone(),
+            })
             .collect()
     }
 }
