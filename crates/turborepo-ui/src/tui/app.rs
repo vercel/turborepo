@@ -18,7 +18,7 @@ const FRAMERATE: Duration = Duration::from_millis(3);
 const RESIZE_DEBOUNCE_DELAY: Duration = Duration::from_millis(10);
 
 use super::{
-    event::{CacheResult, Direction, OutputLogs, TaskResult},
+    event::{CacheResult, Direction, OutputLogs, PaneSize, TaskResult},
     input,
     search::SearchResults,
     AppReceiver, Debouncer, Error, Event, InputOptions, SizeInfo, TaskTable, TerminalPane,
@@ -770,6 +770,15 @@ fn update(
         }
         Event::SearchBackspace => {
             app.search_remove_char()?;
+        }
+        Event::PaneSizeQuery(callback) => {
+            // If caller has already hung up do nothing
+            callback
+                .send(PaneSize {
+                    rows: app.size.pane_rows(),
+                    cols: app.size.pane_cols(),
+                })
+                .ok();
         }
     }
     Ok(None)

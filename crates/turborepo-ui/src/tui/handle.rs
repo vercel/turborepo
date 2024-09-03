@@ -4,7 +4,7 @@ use std::{
 };
 
 use super::{
-    event::{CacheResult, OutputLogs},
+    event::{CacheResult, OutputLogs, PaneSize},
     Event, TaskResult,
 };
 
@@ -71,6 +71,15 @@ impl AppSender {
     /// Restart the list of tasks displayed in the TUI
     pub fn restart_tasks(&self, tasks: Vec<String>) -> Result<(), mpsc::SendError<Event>> {
         self.primary.send(Event::RestartTasks { tasks })
+    }
+
+    /// Fetches the size of the terminal pane
+    pub fn pane_size(&self) -> Option<PaneSize> {
+        let (callback_tx, callback_rx) = mpsc::sync_channel(1);
+        // Send query, if no receiver to handle the request return None
+        self.primary.send(Event::PaneSizeQuery(callback_tx)).ok()?;
+        // Wait for callback to be sent
+        callback_rx.recv().ok()
     }
 }
 
