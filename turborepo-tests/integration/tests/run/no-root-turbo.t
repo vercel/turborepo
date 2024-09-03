@@ -26,7 +26,7 @@ Run with --root-turbo-json should use specified config
     Time:\s*[\.0-9]+m?s  (re)
   
 
-Run with --root-turbo-json should use specified config
+Run with TURBO_ROOT_TURBO_JSON should use specified config
   $ TURBO_ROOT_TURBO_JSON=turborepo.json ${TURBO} build --filter=my-app
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
