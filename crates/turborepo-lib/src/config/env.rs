@@ -202,6 +202,17 @@ impl<'a> OverrideEnvVars<'a> {
             output_map,
         })
     }
+
+    fn ui(&self) -> Option<UIMode> {
+        let value = self
+            .environment
+            .get(OsStr::new("ci"))
+            .or_else(|| self.environment.get(OsStr::new("no_color")))?;
+        match truth_env_var(value.to_str()?)? {
+            true => Some(UIMode::Stream),
+            false => None,
+        }
+    }
 }
 
 impl<'a> ResolvedConfigurationOptions for OverrideEnvVars<'a> {
@@ -209,19 +220,7 @@ impl<'a> ResolvedConfigurationOptions for OverrideEnvVars<'a> {
         &self,
         _existing_config: &ConfigurationOptions,
     ) -> Result<ConfigurationOptions, Error> {
-        let ui = self
-            .environment
-            .get(OsStr::new("ci"))
-            .or_else(|| self.environment.get(OsStr::new("no_color")))
-            .and_then(|value| {
-                // If either of these are truthy, then we disable the TUI
-                if value == "true" || value == "1" {
-                    Some(UIMode::Stream)
-                } else {
-                    None
-                }
-            });
-
+        let ui = self.ui();
         let output = ConfigurationOptions {
             team_id: self.output_map.get("team_id").cloned(),
             token: self.output_map.get("token").cloned(),
