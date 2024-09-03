@@ -9,13 +9,11 @@ use std::{
 };
 
 use async_graphql::{
-    futures_util::Stream, http::GraphiQLSource, EmptyMutation, Object, Schema, SimpleObject,
-    Subscription, Union,
+    http::GraphiQLSource, EmptyMutation, EmptySubscription, Object, Schema, SimpleObject,
 };
-use async_graphql_axum::{GraphQL, GraphQLSubscription};
-use async_stream::stream;
+use async_graphql_axum::GraphQL;
 use axum::{http::Method, response, response::IntoResponse, routing::get, Router};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use thiserror::Error;
 use tokio::{net::TcpListener, sync::Mutex};
 use tower_http::cors::{Any, CorsLayer};
@@ -48,30 +46,28 @@ pub struct WebUISender {
 impl WebUISender {
     pub fn start_task(&self, task: String, output_logs: OutputLogs) {
         self.tx
-            .send(WebUIEvent::StartTask(StartTask { task, output_logs }))
+            .send(WebUIEvent::StartTask { task, output_logs })
             .ok();
     }
 
     pub fn restart_tasks(&self, tasks: Vec<String>) -> Result<(), crate::Error> {
         self.tx
-            .send(WebUIEvent::RestartTasks(RestartTasks { tasks }))
+            .send(WebUIEvent::RestartTasks { tasks })
             .map_err(Error::Broadcast)?;
         Ok(())
     }
 
     pub fn end_task(&self, task: String, result: TaskResult) {
-        self.tx
-            .send(WebUIEvent::EndTask(EndTask { task, result }))
-            .ok();
+        self.tx.send(WebUIEvent::EndTask { task, result }).ok();
     }
 
     pub fn status(&self, task: String, status: String, result: CacheResult) {
         self.tx
-            .send(WebUIEvent::Status(Status {
+            .send(WebUIEvent::Status {
                 task,
                 status,
                 result,
-            }))
+            })
             .ok();
     }
 
@@ -88,12 +84,12 @@ impl WebUISender {
     }
 
     pub fn stop(&self) {
-        self.tx.send(WebUIEvent::Stop(Stop { _stop: true })).ok();
+        self.tx.send(WebUIEvent::Stop).ok();
     }
 
     pub fn update_tasks(&self, tasks: Vec<String>) -> Result<(), crate::Error> {
         self.tx
-            .send(WebUIEvent::UpdateTasks(UpdateTasks { tasks }))
+            .send(WebUIEvent::UpdateTasks { tasks })
             .map_err(Error::Broadcast)?;
 
         Ok(())
@@ -101,59 +97,11 @@ impl WebUISender {
 
     pub fn output(&self, task: String, output: Vec<u8>) -> Result<(), crate::Error> {
         self.tx
-            .send(WebUIEvent::TaskOutput(TaskOutput { task, output }))
+            .send(WebUIEvent::TaskOutput { task, output })
             .map_err(Error::Broadcast)?;
 
         Ok(())
     }
-}
-
-#[derive(Debug, Clone, SimpleObject, Serialize)]
-pub struct StartTask {
-    task: String,
-    output_logs: OutputLogs,
-}
-
-#[derive(Debug, Clone, SimpleObject, Serialize)]
-pub struct TaskOutput {
-    task: String,
-    output: Vec<u8>,
-}
-
-#[derive(Debug, Clone, SimpleObject, Serialize)]
-pub struct EndTask {
-    task: String,
-    result: TaskResult,
-}
-
-#[derive(Debug, Clone, SimpleObject, Serialize)]
-pub struct Status {
-    task: String,
-    status: String,
-    result: CacheResult,
-}
-
-#[derive(Debug, Clone, SimpleObject, Serialize)]
-pub struct UpdateTasks {
-    tasks: Vec<String>,
-}
-
-#[derive(Debug, Clone, SimpleObject, Serialize)]
-pub struct RestartTasks {
-    tasks: Vec<String>,
-}
-
-#[derive(Debug, Clone, SimpleObject, Serialize)]
-pub struct Stop {
-    // This doesn't actually do anything, but we need a field for GraphQL
-    _stop: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Union)]
-enum SubscriptionMessage {
-    InitialState(WebUIState),
-    #[graphql(flatten)]
-    Event(WebUIEvent),
 }
 
 // Specific events that the GraphQL server can send to the client,
@@ -161,33 +109,33 @@ enum SubscriptionMessage {
 //
 // We have to put each variant in a new struct because async graphql doesn't
 // allow enums with fields for union types
-#[derive(Debug, Clone, Serialize, Union)]
+#[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", content = "payload")]
 pub enum WebUIEvent {
-    StartTask(StartTask),
-    TaskOutput(TaskOutput),
-    EndTask(EndTask),
-    Status(Status),
-    UpdateTasks(UpdateTasks),
-    RestartTasks(RestartTasks),
-    Stop(Stop),
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct ServerMessage<'a> {
-    pub id: u32,
-    #[serde(flatten)]
-    pub payload: &'a WebUIEvent,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type", content = "payload")]
-pub enum ClientMessage {
-    /// Acknowledges the receipt of a message.
-    /// If we don't receive an ack, we will resend the message
-    Ack { id: u32 },
-    /// Asks for all messages from the given id onwards
-    CatchUp { start_id: u32 },
+    StartTask {
+        task: String,
+        output_logs: OutputLogs,
+    },
+    TaskOutput {
+        task: String,
+        output: Vec<u8>,
+    },
+    EndTask {
+        task: String,
+        result: TaskResult,
+    },
+    Status {
+        task: String,
+        status: String,
+        result: CacheResult,
+    },
+    UpdateTasks {
+        tasks: Vec<String>,
+    },
+    RestartTasks {
+        tasks: Vec<String>,
+    },
+    Stop,
 }
 
 #[derive(Debug, Clone, Serialize, SimpleObject)]
@@ -203,6 +151,7 @@ struct WebUIState {
     tasks: BTreeMap<String, TaskState>,
 }
 
+/// Subscribes to the Web UI events and updates the state
 struct Subscriber {
     rx: tokio::sync::broadcast::Receiver<WebUIEvent>,
     // We use a tokio::sync::Mutex here because we want this future to be Send.
@@ -232,10 +181,10 @@ impl Subscriber {
         let state = state.lock().await;
 
         match event {
-            WebUIEvent::StartTask(StartTask {
+            WebUIEvent::StartTask {
                 task,
                 output_logs: _,
-            }) => {
+            } => {
                 state.borrow_mut().tasks.insert(
                     task,
                     TaskState {
@@ -246,7 +195,7 @@ impl Subscriber {
                     },
                 );
             }
-            WebUIEvent::TaskOutput(TaskOutput { task, output }) => {
+            WebUIEvent::TaskOutput { task, output } => {
                 state
                     .borrow_mut()
                     .tasks
@@ -255,10 +204,10 @@ impl Subscriber {
                     .output
                     .extend(output);
             }
-            WebUIEvent::EndTask(EndTask { task, result }) => {
+            WebUIEvent::EndTask { task, result } => {
                 state.borrow_mut().tasks.get_mut(&task).unwrap().result = Some(result);
             }
-            WebUIEvent::Status(Status { task, result, .. }) => {
+            WebUIEvent::Status { task, result, .. } => {
                 state
                     .borrow_mut()
                     .tasks
@@ -266,10 +215,10 @@ impl Subscriber {
                     .unwrap()
                     .cache_result = Some(result);
             }
-            WebUIEvent::Stop(_) => {
+            WebUIEvent::Stop => {
                 // TODO: stop watching
             }
-            WebUIEvent::UpdateTasks(UpdateTasks { tasks }) => {
+            WebUIEvent::UpdateTasks { tasks } => {
                 state.borrow_mut().tasks = tasks
                     .into_iter()
                     .map(|task| {
@@ -285,7 +234,7 @@ impl Subscriber {
                     })
                     .collect();
             }
-            WebUIEvent::RestartTasks(RestartTasks { tasks }) => {
+            WebUIEvent::RestartTasks { tasks } => {
                 state.borrow_mut().tasks = tasks
                     .into_iter()
                     .map(|task| {
@@ -314,34 +263,14 @@ impl Clone for Subscriber {
     }
 }
 
-#[Subscription]
-impl Subscriber {
-    async fn events<'a>(&'a self) -> impl Stream<Item = SubscriptionMessage> + 'a {
-        let mut rx = self.rx.resubscribe();
-        let state = self.state.clone();
-
-        stream! {
-            // There's a race condition where the channel receiver can be out of sync with the state.
-            {
-                let message = SubscriptionMessage::InitialState(state.lock().await.borrow().clone());
-                yield message;
-            }
-
-            while let Ok(event) = rx.recv().await {
-                yield SubscriptionMessage::Event(event);
-            }
-        }
-    }
-}
-
 struct Query {
-    app_state: Subscriber,
+    subscriber: Subscriber,
 }
 
 #[Object]
 impl Query {
     async fn tasks(&self) -> HashMap<String, TaskState> {
-        self.app_state
+        self.subscriber
             .state
             .lock()
             .await
@@ -375,19 +304,9 @@ pub async fn start_server(
         // allow requests from any origin
         .allow_origin(Any);
 
-    let schema = Schema::new(
-        Query {
-            app_state: subscriber.clone(),
-        },
-        EmptyMutation,
-        subscriber,
-    );
+    let schema = Schema::new(Query { subscriber }, EmptyMutation, EmptySubscription);
     let app = Router::new()
-        .route(
-            "/",
-            get(graphiql).post_service(GraphQL::new(schema.clone())),
-        )
-        .route_service("/subscriptions", GraphQLSubscription::new(schema))
+        .route("/", get(graphiql).post_service(GraphQL::new(schema)))
         .layer(cors);
 
     axum::serve(
