@@ -449,7 +449,7 @@ impl<'a> Prune<'a> {
             Err(e) => return Err(e.into()),
         };
 
-        let turbo_json = RawTurboJson::parse(&turbo_json_contents, anchored_turbo_path)?;
+        let turbo_json = RawTurboJson::parse(&turbo_json_contents, anchored_turbo_path.as_str())?;
 
         let pruned_turbo_json = turbo_json.prune_tasks(workspaces);
         new_turbo_path.create_with_contents(serde_json::to_string_pretty(&pruned_turbo_json)?)?;

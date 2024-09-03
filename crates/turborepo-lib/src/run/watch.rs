@@ -15,12 +15,12 @@ use turborepo_ui::{tui, tui::AppSender};
 
 use crate::{
     cli::{Command, RunArgs},
-    commands,
-    commands::CommandBase,
+    commands::{self, CommandBase},
     daemon::{proto, DaemonConnectorError, DaemonError},
-    get_version, opts, run,
-    run::{builder::RunBuilder, scope::target_selector::InvalidSelectorError, Run},
+    get_version, opts,
+    run::{self, builder::RunBuilder, scope::target_selector::InvalidSelectorError, Run},
     signal::SignalHandler,
+    turbo_json::CONFIG_FILE,
     DaemonConnector, DaemonPaths,
 };
 
@@ -101,12 +101,22 @@ pub enum Error {
     PackageChange(#[from] tonic::Status),
     #[error("could not connect to UI thread")]
     UISend(String),
+    #[error("cannot use root turbo.json at {0} with watch mode")]
+    NonStandardTurboJsonPath(String),
+    #[error("invalid config: {0}")]
+    Config(#[from] crate::config::Error),
 }
 
 impl WatchClient {
     pub async fn new(base: CommandBase, telemetry: CommandEventBuilder) -> Result<Self, Error> {
         let signal = commands::run::get_signal()?;
         let handler = SignalHandler::new(signal);
+        let root_turbo_json_path = base.config()?.root_turbo_json_path(&base.repo_root);
+        if root_turbo_json_path != base.repo_root.join_component(CONFIG_FILE) {
+            return Err(Error::NonStandardTurboJsonPath(
+                root_turbo_json_path.to_string(),
+            ));
+        }
 
         let Some(Command::Watch(execution_args)) = &base.args().command else {
             unreachable!()

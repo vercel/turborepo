@@ -11,7 +11,6 @@ use convert_case::{Case, Casing};
 use miette::Diagnostic;
 use struct_iterable::Iterable;
 use thiserror::Error;
-use turbopath::AnchoredSystemPath;
 use turborepo_errors::{ParseDiagnostic, WithMetadata};
 use turborepo_unescape::UnescapedString;
 
@@ -172,7 +171,7 @@ impl RawTurboJson {
     #[cfg(test)]
     pub fn parse_from_serde(value: serde_json::Value) -> Result<RawTurboJson, Error> {
         let json_string = serde_json::to_string(&value).expect("should be able to serialize");
-        Self::parse(&json_string, AnchoredSystemPath::new("turbo.json").unwrap())
+        Self::parse(&json_string, "turbo.json")
     }
     /// Parses a turbo.json file into the raw representation with span info
     /// attached.
@@ -184,11 +183,11 @@ impl RawTurboJson {
     ///   display, so doesn't need to actually be a correct path.
     ///
     /// returns: Result<RawTurboJson, Error>
-    pub fn parse(text: &str, file_path: &AnchoredSystemPath) -> Result<RawTurboJson, Error> {
+    pub fn parse(text: &str, file_path: &str) -> Result<RawTurboJson, Error> {
         let result = deserialize_from_json_str::<RawTurboJson>(
             text,
             JsonParserOptions::default().with_allow_comments(),
-            file_path.as_str(),
+            file_path,
         );
 
         if !result.diagnostics().is_empty() {
@@ -197,7 +196,7 @@ impl RawTurboJson {
                 .into_iter()
                 .map(|d| {
                     d.with_file_source_code(text)
-                        .with_file_path(file_path.as_str())
+                        .with_file_path(file_path)
                         .into()
                 })
                 .collect();
@@ -216,7 +215,7 @@ impl RawTurboJson {
         })?;
 
         turbo_json.add_text(Arc::from(text));
-        turbo_json.add_path(Arc::from(file_path.as_str()));
+        turbo_json.add_path(Arc::from(file_path));
 
         Ok(turbo_json)
     }

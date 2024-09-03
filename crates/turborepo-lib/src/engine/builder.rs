@@ -13,7 +13,10 @@ use crate::{
     config,
     run::task_id::{TaskId, TaskName},
     task_graph::TaskDefinition,
-    turbo_json::{validate_extends, validate_no_package_task_syntax, RawTaskDefinition, TurboJson},
+    turbo_json::{
+        validate_extends, validate_no_package_task_syntax, RawTaskDefinition, TurboJson,
+        CONFIG_FILE,
+    },
 };
 
 #[derive(Debug, thiserror::Error, Diagnostic)]
@@ -491,9 +494,13 @@ impl<'a> EngineBuilder<'a> {
                 .ok_or_else(|| Error::MissingPackageJson {
                     workspace: workspace.clone(),
                 })?;
+        let workspace_turbo_json = self
+            .repo_root
+            .resolve(workspace_dir)
+            .join_component(CONFIG_FILE);
         Ok(TurboJson::load(
             self.repo_root,
-            workspace_dir,
+            &workspace_turbo_json,
             package_json,
             self.is_single,
         )?)
@@ -534,7 +541,7 @@ mod test {
     use serde_json::json;
     use tempfile::TempDir;
     use test_case::test_case;
-    use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath};
+    use turbopath::AbsoluteSystemPathBuf;
     use turborepo_lockfiles::Lockfile;
     use turborepo_repository::{
         discovery::PackageDiscovery, package_json::PackageJson, package_manager::PackageManager,
@@ -680,7 +687,7 @@ mod test {
 
     fn turbo_json(value: serde_json::Value) -> TurboJson {
         let json_text = serde_json::to_string(&value).unwrap();
-        let raw = RawTurboJson::parse(&json_text, AnchoredSystemPath::new("").unwrap()).unwrap();
+        let raw = RawTurboJson::parse(&json_text, "").unwrap();
         TurboJson::try_from(raw).unwrap()
     }
 

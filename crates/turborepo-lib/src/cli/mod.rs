@@ -222,6 +222,10 @@ pub struct Args {
     /// should be used.
     #[clap(long, global = true)]
     pub dangerously_disable_package_manager_check: bool,
+    /// Use the `turbo.json` located at the provided path instead of one at the
+    /// root of the repository.
+    #[clap(long, global = true)]
+    pub root_turbo_json: Option<Utf8PathBuf>,
     #[clap(flatten, next_help_heading = "Run Arguments")]
     // DO NOT MAKE THIS VISIBLE
     // This is explicitly set to None in `run`

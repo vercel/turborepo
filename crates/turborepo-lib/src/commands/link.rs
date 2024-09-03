@@ -569,7 +569,7 @@ mod test {
 
     use anyhow::Result;
     use tempfile::{NamedTempFile, TempDir};
-    use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath};
+    use turbopath::AbsoluteSystemPathBuf;
     use turborepo_ui::ColorConfig;
     use turborepo_vercel_api_mock::start_test_server;
 
@@ -609,7 +609,7 @@ mod test {
         let port = port_scanner::request_open_port().unwrap();
         let handle = tokio::spawn(start_test_server(port));
         let mut base = CommandBase {
-            global_config_path: Some(
+            override_global_config_path: Some(
                 AbsoluteSystemPathBuf::try_from(user_config_file.path().to_path_buf()).unwrap(),
             ),
             repo_root: repo_root.clone(),
@@ -675,7 +675,7 @@ mod test {
         let port = port_scanner::request_open_port().unwrap();
         let handle = tokio::spawn(start_test_server(port));
         let mut base = CommandBase {
-            global_config_path: Some(
+            override_global_config_path: Some(
                 AbsoluteSystemPathBuf::try_from(user_config_file.path().to_path_buf()).unwrap(),
             ),
             repo_root: repo_root.clone(),
@@ -712,11 +712,7 @@ mod test {
 
         // verify space id is added to turbo.json
         let turbo_json_contents = fs::read_to_string(&turbo_json_file).unwrap();
-        let turbo_json = RawTurboJson::parse(
-            &turbo_json_contents,
-            AnchoredSystemPath::new("turbo.json").unwrap(),
-        )
-        .unwrap();
+        let turbo_json = RawTurboJson::parse(&turbo_json_contents, "turbo.json").unwrap();
         assert_eq!(
             turbo_json.experimental_spaces.unwrap().id.unwrap(),
             turborepo_vercel_api_mock::EXPECTED_SPACE_ID.into()

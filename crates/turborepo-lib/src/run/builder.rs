@@ -7,7 +7,7 @@ use std::{
 
 use chrono::Local;
 use tracing::debug;
-use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath};
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_analytics::{start_analytics, AnalyticsHandle, AnalyticsSender};
 use turborepo_api_client::{APIAuth, APIClient};
 use turborepo_cache::AsyncCache;
@@ -54,6 +54,7 @@ pub struct RunBuilder {
     opts: Opts,
     api_auth: Option<APIAuth>,
     repo_root: AbsoluteSystemPathBuf,
+    root_turbo_json_path: AbsoluteSystemPathBuf,
     color_config: ColorConfig,
     version: &'static str,
     ui_mode: UIMode,
@@ -85,6 +86,8 @@ impl RunBuilder {
             // - if we're on windows, we're using the UI
             (!cfg!(windows) || matches!(ui_mode, UIMode::Tui)),
         );
+        let root_turbo_json_path = config.root_turbo_json_path(&base.repo_root);
+
         let CommandBase {
             repo_root,
             color_config: ui,
@@ -104,6 +107,7 @@ impl RunBuilder {
             entrypoint_packages: None,
             should_print_prelude_override: None,
             allow_missing_package_manager,
+            root_turbo_json_path,
         })
     }
 
@@ -358,12 +362,19 @@ impl RunBuilder {
         let task_access = TaskAccess::new(self.repo_root.clone(), async_cache.clone(), &scm);
         task_access.restore_config().await;
 
-        let root_turbo_json = TurboJson::load(
-            &self.repo_root,
-            AnchoredSystemPath::empty(),
-            &root_package_json,
-            is_single_package,
-        )?;
+        let root_turbo_json = task_access
+            .load_turbo_json(&self.root_turbo_json_path)
+            .map_or_else(
+                || {
+                    TurboJson::load(
+                        &self.repo_root,
+                        &self.root_turbo_json_path,
+                        &root_package_json,
+                        is_single_package,
+                    )
+                },
+                Result::Ok,
+            )?;
 
         pkg_dep_graph.validate()?;
 
