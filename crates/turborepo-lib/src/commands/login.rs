@@ -37,11 +37,12 @@ pub async fn sso_login(
 
     let global_config_path = base.global_config_path()?;
     let before = global_config_path
-        .read_existing_to_string_or(Ok("{}"))
+        .read_existing_to_string()
         .map_err(|e| config::Error::FailedToReadConfig {
             config_path: global_config_path.clone(),
             error: e,
-        })?;
+        })?
+        .unwrap_or_else(|| String::from("{}"));
 
     let after = set_path(&before, &["token"], &format!("\"{}\"", token.into_inner()))?;
 
@@ -92,11 +93,12 @@ pub async fn login(
 
     let global_config_path = base.global_config_path()?;
     let before = global_config_path
-        .read_existing_to_string_or(Ok("{}"))
+        .read_existing_to_string()
         .map_err(|e| config::Error::FailedToReadConfig {
             config_path: global_config_path.clone(),
             error: e,
-        })?;
+        })?
+        .unwrap_or_else(|| String::from("{}"));
     let after = set_path(&before, &["token"], &format!("\"{}\"", token.into_inner()))?;
 
     global_config_path
