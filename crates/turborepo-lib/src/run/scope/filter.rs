@@ -1206,6 +1206,17 @@ mod test {
         &["package-1", "package-2"] ;
         "match dependency subtree"
     )]
+    #[test_case(
+        vec![
+            TargetSelector {
+                name_pattern: "package-3".to_string(),
+                git_range: Some(GitRange { from_ref: Some("HEAD~1".to_string()), to_ref: None, ..Default::default() }),
+                ..Default::default()
+            }
+        ],
+        &[] ;
+        "gh 9096"
+    )]
     fn scm(selectors: Vec<TargetSelector>, expected: &[&str]) {
         let scm_resolver = TestChangeDetector::new(&[
             ("HEAD~1", None, &["package-1", "package-2", ROOT_PKG_NAME]),

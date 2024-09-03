@@ -234,6 +234,7 @@ pub fn is_selector_by_location(
 mod test {
     use std::str::FromStr;
 
+    use pretty_assertions::assert_eq;
     use test_case::test_case;
     use turbopath::AnchoredSystemPathBuf;
 
@@ -263,6 +264,7 @@ mod test {
     #[test_case("foo...[master]", TargetSelector { raw: "foo...[master]".to_string(), git_range: Some(GitRange { from_ref: Some("master".to_string()), to_ref: None, include_uncommitted: true, ..Default::default() }), name_pattern: "foo".to_string(), match_dependencies: true, ..Default::default() }; "foo...[master]")]
     #[test_case("foo...[master]...", TargetSelector { raw: "foo...[master]...".to_string(), git_range: Some(GitRange { from_ref: Some("master".to_string()), to_ref: None, include_uncommitted: true, ..Default::default() }), name_pattern: "foo".to_string(), match_dependencies: true, include_dependencies: true, ..Default::default() }; "foo...[master] dot dot dot")]
     #[test_case("{foo}...[master]", TargetSelector { raw: "{foo}...[master]".to_string(), git_range: Some(GitRange { from_ref: Some("master".to_string()), to_ref: None, include_uncommitted: true, ..Default::default() }), parent_dir: Some(AnchoredSystemPathBuf::try_from("foo").unwrap()), match_dependencies: true, ..Default::default() }; " curly brackets foo...[master]")]
+    #[test_case("...@repo/pkg[master]", TargetSelector { raw: "...@repo/pkg[master]".to_string(), git_range: Some(GitRange { from_ref: Some("master".to_string()), to_ref: None, include_uncommitted: true, ..Default::default() }), name_pattern: "@repo/pkg".to_string(), include_dependents: true, ..Default::default() }; "gh 9096")]
     fn parse_target_selector(raw_selector: &str, want: TargetSelector) {
         let result = TargetSelector::from_str(raw_selector);
 
