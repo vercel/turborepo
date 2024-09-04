@@ -220,7 +220,7 @@ impl<'a> TryFrom<OptsInputs<'a>> for RunOpts {
             f => GraphOpts::File(f.to_string()),
         });
 
-        let (is_github_actions, log_order, log_prefix) = match inputs.execution_args.log_order {
+        let (is_github_actions, log_order, log_prefix) = match inputs.config.log_order() {
             LogOrder::Auto if turborepo_ci::Vendor::get_constant() == Some("GITHUB_ACTIONS") => (
                 true,
                 ResolvedLogOrder::Grouped,

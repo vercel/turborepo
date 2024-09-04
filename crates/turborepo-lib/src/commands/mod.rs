@@ -8,7 +8,6 @@ use turborepo_ui::ColorConfig;
 
 use crate::{
     config::{ConfigurationOptions, Error as ConfigError, TurborepoConfigBuilder},
-    turbo_json::UIMode,
     Args,
 };
 
@@ -68,17 +67,7 @@ impl CommandBase {
             .with_token(self.args.token.clone())
             .with_timeout(self.args.remote_cache_timeout)
             .with_preflight(self.args.preflight.then_some(true))
-            .with_ui(self.args.ui.or_else(|| {
-                self.args.execution_args().and_then(|args| {
-                    if !args.log_order.compatible_with_tui() {
-                        Some(UIMode::Stream)
-                    } else {
-                        // If the argument is compatible with the TUI this does not mean we should
-                        // override other configs
-                        None
-                    }
-                })
-            }))
+            .with_ui(self.args.ui)
             .with_allow_no_package_manager(
                 self.args
                     .dangerously_disable_package_manager_check
@@ -107,6 +96,7 @@ impl CommandBase {
                     .execution_args()
                     .and_then(|args| args.force.map(|value| value.unwrap_or(true))),
             )
+            .with_log_order(self.args.execution_args().and_then(|args| args.log_order))
             .build()
     }
 

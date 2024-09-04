@@ -3,10 +3,15 @@ use std::{
     ffi::{OsStr, OsString},
 };
 
+use clap::ValueEnum;
+use itertools::Itertools;
 use turbopath::AbsoluteSystemPathBuf;
 
 use super::{ConfigurationOptions, Error, ResolvedConfigurationOptions};
-use crate::{cli::EnvMode, turbo_json::UIMode};
+use crate::{
+    cli::{EnvMode, LogOrder},
+    turbo_json::UIMode,
+};
 
 const TURBO_MAPPING: &[(&str, &str)] = [
     ("turbo_api", "api_url"),
@@ -29,6 +34,7 @@ const TURBO_MAPPING: &[(&str, &str)] = [
     ("turbo_scm_head", "scm_head"),
     ("turbo_root_turbo_json", "root_turbo_json_path"),
     ("turbo_force", "force"),
+    ("turbo_log_order", "log_order"),
 ]
 .as_slice();
 
@@ -120,6 +126,21 @@ impl ResolvedConfigurationOptions for EnvVars {
             .map(AbsoluteSystemPathBuf::from_cwd)
             .transpose()?;
 
+        let log_order = self
+            .output_map
+            .get("log_order")
+            .filter(|s| !s.is_empty())
+            .map(|s| LogOrder::from_str(s, true))
+            .transpose()
+            .map_err(|_| {
+                Error::InvalidLogOrder(
+                    LogOrder::value_variants()
+                        .iter()
+                        .map(|v| v.to_string())
+                        .join(", "),
+                )
+            })?;
+
         // We currently don't pick up a Spaces ID via env var, we likely won't
         // continue using the Spaces name, we can add an env var when we have the
         // name we want to stick with.
@@ -149,6 +170,7 @@ impl ResolvedConfigurationOptions for EnvVars {
             env_mode,
             cache_dir,
             root_turbo_json_path,
+            log_order,
         };
 
         Ok(output)
@@ -240,7 +262,10 @@ mod test {
     use camino::Utf8PathBuf;
 
     use super::*;
-    use crate::config::{DEFAULT_API_URL, DEFAULT_LOGIN_URL};
+    use crate::{
+        cli::LogOrder,
+        config::{DEFAULT_API_URL, DEFAULT_LOGIN_URL},
+    };
 
     #[test]
     fn test_env_setting() {
@@ -279,6 +304,7 @@ mod test {
         env.insert("turbo_cache_dir".into(), cache_dir.clone().into());
         env.insert("turbo_root_turbo_json".into(), root_turbo_json.into());
         env.insert("turbo_force".into(), "1".into());
+        env.insert("turbo_log_order".into(), "grouped".into());
 
         let config = EnvVars::new(&env)
             .unwrap()
@@ -286,6 +312,7 @@ mod test {
             .unwrap();
         assert!(config.preflight());
         assert!(config.force());
+        assert_eq!(config.log_order(), LogOrder::Grouped);
         assert_eq!(turbo_api, config.api_url.unwrap());
         assert_eq!(turbo_login, config.login_url.unwrap());
         assert_eq!(turbo_team, config.team_slug.unwrap());
@@ -319,6 +346,7 @@ mod test {
         env.insert("turbo_scm_base".into(), "".into());
         env.insert("turbo_root_turbo_json".into(), "".into());
         env.insert("turbo_force".into(), "".into());
+        env.insert("turbo_log_order".into(), "".into());
 
         let config = EnvVars::new(&env)
             .unwrap()
@@ -336,7 +364,8 @@ mod test {
         assert_eq!(config.scm_base(), None);
         assert_eq!(config.scm_head(), "HEAD");
         assert_eq!(config.root_turbo_json_path, None);
-        assert_eq!(config.force(), false);
+        assert!(!config.force());
+        assert_eq!(config.log_order(), LogOrder::Auto);
     }
 
     #[test]

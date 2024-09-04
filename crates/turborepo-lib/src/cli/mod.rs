@@ -87,7 +87,7 @@ impl From<OutputLogsMode> for turborepo_ui::tui::event::OutputLogs {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Serialize, ValueEnum)]
+#[derive(Copy, Clone, Debug, PartialEq, Serialize, ValueEnum, Deserialize, Eq)]
 pub enum LogOrder {
     #[serde(rename = "auto")]
     Auto,
@@ -772,8 +772,8 @@ pub struct ExecutionArgs {
     /// output as soon as it is available. Use "grouped" to
     /// show output when a command has finished execution. Use "auto" to let
     /// turbo decide based on its own heuristics. (default auto)
-    #[clap(long, env = "TURBO_LOG_ORDER", value_enum, default_value_t = LogOrder::Auto)]
-    pub log_order: LogOrder,
+    #[clap(long, value_enum)]
+    pub log_order: Option<LogOrder>,
     /// Only executes the tasks specified, does not execute parent tasks.
     #[clap(long)]
     pub only: bool,
@@ -833,8 +833,8 @@ impl ExecutionArgs {
             telemetry.track_arg_value("output-logs", output_logs, EventType::NonSensitive);
         }
 
-        if self.log_order != LogOrder::default() {
-            telemetry.track_arg_value("log-order", self.log_order, EventType::NonSensitive);
+        if let Some(log_order) = self.log_order {
+            telemetry.track_arg_value("log-order", log_order, EventType::NonSensitive);
         }
 
         if self.log_prefix != LogPrefix::default() {
@@ -1934,7 +1934,7 @@ mod test {
             command: Some(Command::Run {
                 execution_args: Box::new(ExecutionArgs {
                     tasks: vec!["build".to_string()],
-                    log_order: LogOrder::Stream,
+                    log_order: Some(LogOrder::Stream),
                     ..get_default_execution_args()
                 }),
                 run_args: Box::new(get_default_run_args())
@@ -1949,7 +1949,7 @@ mod test {
             command: Some(Command::Run {
                 execution_args: Box::new(ExecutionArgs {
                     tasks: vec!["build".to_string()],
-                    log_order: LogOrder::Grouped,
+                    log_order: Some(LogOrder::Grouped),
                     ..get_default_execution_args()
                 }),
                 run_args: Box::new(get_default_run_args())
@@ -2009,7 +2009,6 @@ mod test {
             command: Some(Command::Run {
                 execution_args: Box::new(ExecutionArgs {
                     tasks: vec!["build".to_string()],
-                    log_order: LogOrder::Auto,
                     ..get_default_execution_args()
                 }),
                 run_args: Box::new(get_default_run_args())
