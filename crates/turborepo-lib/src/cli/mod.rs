@@ -735,7 +735,7 @@ pub struct ExecutionArgs {
     #[clap(long)]
     pub single_package: bool,
     /// Ignore the existing cache (to force execution)
-    #[clap(long, env = "TURBO_FORCE", default_missing_value = "true")]
+    #[clap(long, default_missing_value = "true")]
     pub force: Option<Option<bool>>,
     /// Specify whether or not to do framework inference for tasks
     #[clap(long, value_name = "BOOL", action = ArgAction::Set, default_value = "true", default_missing_value = "true", num_args = 0..=1)]

@@ -28,6 +28,7 @@ const TURBO_MAPPING: &[(&str, &str)] = [
     ("turbo_scm_base", "scm_base"),
     ("turbo_scm_head", "scm_head"),
     ("turbo_root_turbo_json", "root_turbo_json_path"),
+    ("turbo_force", "force"),
 ]
 .as_slice();
 
@@ -71,6 +72,8 @@ impl ResolvedConfigurationOptions for EnvVars {
             .truthy_value("enabled")
             .map(|value| value.ok_or_else(|| Error::InvalidRemoteCacheEnabled))
             .transpose()?;
+
+        let force = self.truthy_value("force").flatten();
 
         // Process timeout
         let timeout = self
@@ -137,6 +140,7 @@ impl ResolvedConfigurationOptions for EnvVars {
             ui,
             allow_no_package_manager,
             daemon,
+            force,
 
             // Processed numbers
             timeout,
@@ -274,12 +278,14 @@ mod test {
         env.insert("turbo_env_mode".into(), "strict".into());
         env.insert("turbo_cache_dir".into(), cache_dir.clone().into());
         env.insert("turbo_root_turbo_json".into(), root_turbo_json.into());
+        env.insert("turbo_force".into(), "1".into());
 
         let config = EnvVars::new(&env)
             .unwrap()
             .get_configuration_options(&ConfigurationOptions::default())
             .unwrap();
         assert!(config.preflight());
+        assert!(config.force());
         assert_eq!(turbo_api, config.api_url.unwrap());
         assert_eq!(turbo_login, config.login_url.unwrap());
         assert_eq!(turbo_team, config.team_slug.unwrap());
@@ -312,6 +318,7 @@ mod test {
         env.insert("turbo_scm_head".into(), "".into());
         env.insert("turbo_scm_base".into(), "".into());
         env.insert("turbo_root_turbo_json".into(), "".into());
+        env.insert("turbo_force".into(), "".into());
 
         let config = EnvVars::new(&env)
             .unwrap()
@@ -329,6 +336,7 @@ mod test {
         assert_eq!(config.scm_base(), None);
         assert_eq!(config.scm_head(), "HEAD");
         assert_eq!(config.root_turbo_json_path, None);
+        assert_eq!(config.force(), false);
     }
 
     #[test]

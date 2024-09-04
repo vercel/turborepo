@@ -102,6 +102,11 @@ impl CommandBase {
                     .map(AbsoluteSystemPathBuf::from_cwd)
                     .transpose()?,
             )
+            .with_force(
+                self.args
+                    .execution_args()
+                    .and_then(|args| args.force.map(|value| value.unwrap_or(true))),
+            )
             .build()
     }
 

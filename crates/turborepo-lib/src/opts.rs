@@ -137,7 +137,7 @@ pub struct RunCacheOpts {
 impl<'a> From<OptsInputs<'a>> for RunCacheOpts {
     fn from(inputs: OptsInputs<'a>) -> Self {
         RunCacheOpts {
-            skip_reads: inputs.execution_args.force.flatten().is_some_and(|f| f),
+            skip_reads: inputs.config.force(),
             skip_writes: inputs.run_args.no_cache,
             task_output_logs_override: inputs.execution_args.output_logs,
         }

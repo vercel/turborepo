@@ -228,6 +228,7 @@ pub struct ConfigurationOptions {
     // This is skipped as we never want this to be stored in a file
     #[serde(skip)]
     pub(crate) root_turbo_json_path: Option<AbsoluteSystemPathBuf>,
+    pub(crate) force: Option<bool>,
 }
 
 #[derive(Default)]
@@ -325,6 +326,10 @@ impl ConfigurationOptions {
                 ".turbo/cache"
             })
         })
+    }
+
+    pub fn force(&self) -> bool {
+        self.force.unwrap_or_default()
     }
 
     pub fn root_turbo_json_path(&self, repo_root: &AbsoluteSystemPath) -> AbsoluteSystemPathBuf {
