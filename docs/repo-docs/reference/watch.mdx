@@ -29,6 +29,10 @@ Instead, you should make the task non-persistent and have `turbo watch` restart 
 
 ## Limitations
 
+### Caching
+
+All cache operations are disabled when executing tasks with `turbo watch`.
+
 ### Task outputs
 
 If you have tasks that write to files checked into source control, there is a possibility that Watch Mode will run in an infinite loop. This is because Watch Mode watches your

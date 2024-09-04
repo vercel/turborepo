@@ -441,22 +441,6 @@ impl AbsoluteSystemPath {
         fs::read_to_string(&self.0)
     }
 
-    /// Attempts to read a file, and:
-    /// If the file does not exist it returns the default value.
-    /// For all other scenarios passes through the `read_to_string` results.
-    pub fn read_existing_to_string_or<I>(
-        &self,
-        default_value: Result<I, io::Error>,
-    ) -> Result<String, io::Error>
-    where
-        I: Into<String>,
-    {
-        match self.read_existing_to_string()? {
-            Some(contents) => Ok(contents),
-            None => default_value.map(|value| value.into()),
-        }
-    }
-
     /// Attempts to read a file returning None if the file does not exist
     /// For all other scenarios passes through the `read_to_string` results.
     pub fn read_existing_to_string(&self) -> Result<Option<String>, io::Error> {
