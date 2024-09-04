@@ -233,7 +233,9 @@ pub struct Args {
     // This should be inside `RunArgs` but clap currently has a bug
     // around nested flattened optional args: https://github.com/clap-rs/clap/issues/4697
     #[clap(flatten)]
-    pub execution_args: Option<ExecutionArgs>,
+    // DO NOT MAKE THIS VISIBLE
+    // Instead use the getter method execution_args()
+    execution_args: Option<ExecutionArgs>,
     #[clap(subcommand)]
     pub command: Option<Command>,
 }
@@ -472,6 +474,15 @@ impl Args {
             Some(run_args)
         } else {
             self.run_args.as_ref()
+        }
+    }
+
+    /// Fetch the execution args supplied to the command
+    pub fn execution_args(&self) -> Option<&ExecutionArgs> {
+        if let Some(Command::Run { execution_args, .. }) = &self.command {
+            Some(execution_args)
+        } else {
+            self.execution_args.as_ref()
         }
     }
 }

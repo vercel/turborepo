@@ -7,7 +7,6 @@ use turborepo_dirs::config_dir;
 use turborepo_ui::ColorConfig;
 
 use crate::{
-    cli::Command,
     config::{ConfigurationOptions, Error as ConfigError, TurborepoConfigBuilder},
     turbo_json::UIMode,
     Args,
@@ -70,7 +69,7 @@ impl CommandBase {
             .with_timeout(self.args.remote_cache_timeout)
             .with_preflight(self.args.preflight.then_some(true))
             .with_ui(self.args.ui.or_else(|| {
-                self.args.execution_args.as_ref().and_then(|args| {
+                self.args.execution_args().and_then(|args| {
                     if !args.log_order.compatible_with_tui() {
                         Some(UIMode::Stream)
                     } else {
@@ -88,33 +87,13 @@ impl CommandBase {
             .with_daemon(self.args.run_args().and_then(|args| args.daemon()))
             .with_env_mode(
                 self.args
-                    .command
-                    .as_ref()
-                    .and_then(|c| match c {
-                        Command::Run { execution_args, .. } => execution_args.env_mode,
-                        _ => None,
-                    })
-                    .or_else(|| {
-                        self.args
-                            .execution_args
-                            .as_ref()
-                            .and_then(|args| args.env_mode)
-                    }),
+                    .execution_args()
+                    .and_then(|execution_args| execution_args.env_mode),
             )
             .with_cache_dir(
                 self.args
-                    .command
-                    .as_ref()
-                    .and_then(|c| match c {
-                        Command::Run { execution_args, .. } => execution_args.cache_dir.clone(),
-                        _ => None,
-                    })
-                    .or_else(|| {
-                        self.args
-                            .execution_args
-                            .as_ref()
-                            .and_then(|args| args.cache_dir.clone())
-                    }),
+                    .execution_args()
+                    .and_then(|execution_args| execution_args.cache_dir.clone()),
             )
             .with_root_turbo_json_path(
                 self.args
