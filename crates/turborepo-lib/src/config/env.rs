@@ -73,25 +73,19 @@ impl ResolvedConfigurationOptions for EnvVars {
             .transpose()?;
 
         // Process timeout
-        let timeout = if let Some(timeout) = self.output_map.get("timeout") {
-            Some(
-                timeout
-                    .parse::<u64>()
-                    .map_err(Error::InvalidRemoteCacheTimeout)?,
-            )
-        } else {
-            None
-        };
+        let timeout = self
+            .output_map
+            .get("timeout")
+            .map(|s| s.parse())
+            .transpose()
+            .map_err(Error::InvalidRemoteCacheTimeout)?;
 
-        let upload_timeout = if let Some(upload_timeout) = self.output_map.get("upload_timeout") {
-            Some(
-                upload_timeout
-                    .parse::<u64>()
-                    .map_err(Error::InvalidUploadTimeout)?,
-            )
-        } else {
-            None
-        };
+        let upload_timeout = self
+            .output_map
+            .get("upload_timeout")
+            .map(|s| s.parse())
+            .transpose()
+            .map_err(Error::InvalidUploadTimeout)?;
 
         // Process experimentalUI
         let ui =
