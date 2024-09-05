@@ -70,7 +70,7 @@ Turborepo automatically adds prefix wildcards to your [`env`](/repo/docs/referen
     {frameworks.map(({ name, envWildcards }) => (
       <tr key={name}>
         <td>{name}</td>
-        <td>{envWildcards.join(', ')}</td>
+        <td>{envWildcards.map((w) => <code>{w}</code>).join(', ')}</td>
       </tr>
     ))}
   </tbody>
