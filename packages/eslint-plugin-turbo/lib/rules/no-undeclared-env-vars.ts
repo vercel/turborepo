@@ -1,10 +1,18 @@
 import path from "node:path";
+import { existsSync, readFileSync } from "node:fs";
 import type { Rule } from "eslint";
 import type { Node, MemberExpression } from "estree";
 import { logger } from "@turbo/utils";
 import { RULES } from "../constants";
 import { Project, getWorkspaceFromFilePath } from "../utils/calculate-inputs";
-import FRAMEWORKS_JSON from "../../../../crates/turborepo-lib/src/frameworks.json"; // TODO: figure out the best way to export this from the crate and then ingest it here
+
+/** set this to true if debugging this rule */
+const debugging = "".length === 0;
+const debug = debugging
+  ? logger.info
+  : (_: string) => {
+      /* noop */
+    };
 
 interface Framework {
   slug: string;
@@ -21,6 +29,28 @@ export interface RuleContextWithOptions extends Rule.RuleContext {
     allowList?: Array<string>;
   }>;
 }
+
+/** recursively find the closest package.json from the given directory */
+const findClosestPackageJson = (currentDir: string): string | null => {
+  debug(`searching for package.json in ${currentDir}`);
+  const packageJsonPath = path.join(currentDir, "package.json");
+
+  // Check if package.json exists in the current directory
+  if (existsSync(packageJsonPath)) {
+    return packageJsonPath;
+  }
+
+  // Get the parent directory
+  const parentDir = path.dirname(currentDir);
+
+  // If we've reached the root directory, stop searching
+  if (parentDir === currentDir) {
+    return null;
+  }
+
+  // Recursively search in the parent directory
+  return findClosestPackageJson(parentDir);
+};
 
 const meta: Rule.RuleMetaData = {
   type: "problem",
@@ -79,7 +109,7 @@ function normalizeCwd(
 
 const packageJsonDependencies = (filePath: string): Set<string> => {
   // get the contents of the package.json
-  const packageJsonString = path.resolve(filePath);
+  const packageJsonString = readFileSync(filePath, "utf-8");
   const packageJson = JSON.parse(packageJsonString) as Record<
     string,
     Record<string, string>
@@ -97,10 +127,28 @@ const packageJsonDependencies = (filePath: string): Set<string> => {
   );
 };
 
-const frameworks = FRAMEWORKS_JSON as Array<Framework>;
+const frameworksJsonString = readFileSync(
+  "../../../../crates/turborepo-lib/src/frameworks.json",
+  "utf-8"
+);
+const frameworks = JSON.parse(frameworksJsonString) as Array<Framework>;
 
+/**
+ * Turborepo does some nice framework detection based on the dependencies in the package.json.  This function ports that logic to the eslint rule.
+ *
+ * So, essentially, imagine you have a Vue app.  That means you have Vue in your dependencies.  This function will return a list of regular expressions that match the environment variables that Vue uses, which is information encoded into the `frameworks.json` file.  In Vue's case, it would return a regex that matches `VUE_APP_*` if you have `@vue/cli-service` in your dependencies.
+ */
 const matchesFramework = (filePath: string): Array<RegExp> => {
-  const dependencies = packageJsonDependencies(path.resolve(filePath));
+  const directory = path.dirname(filePath);
+  const packageJsonPath = findClosestPackageJson(directory);
+  if (!packageJsonPath) {
+    logger.error(`No package.json found connected to ${filePath}`);
+    return [];
+  }
+  debug(`found package.json: ${packageJsonPath}`);
+
+  const dependencies = packageJsonDependencies(packageJsonPath);
+  debug(`dependencies for ${filePath}: ${Array.from(dependencies).join(",")}`);
   const matches = frameworks.reduce((acc, framework) => {
     const dependenciesMatch = framework.dependencyMatch.dependencies.some(
       (dependency) => dependencies.has(dependency)
@@ -119,7 +167,7 @@ function create(context: RuleContextWithOptions): Rule.RuleListener {
   const { options } = context;
 
   const allowList: Array<string> = options[0]?.allowList || [];
-  const regexAllowList: Array<RegExp> = [];
+  let regexAllowList: Array<RegExp> = [];
   allowList.forEach((allowed) => {
     try {
       regexAllowList.push(new RegExp(allowed));
@@ -129,8 +177,15 @@ function create(context: RuleContextWithOptions): Rule.RuleListener {
     }
   });
 
-  regexAllowList.concat(
-    matchesFramework("TODO GET PACKAGE.JSON FILENAME SOMEHOW")
+  const filename = context.getFilename();
+  debug(`Checking file: ${filename}`);
+
+  const matches = matchesFramework(filename);
+  regexAllowList = [...regexAllowList, ...matches];
+  debug(
+    `Allow list: ${regexAllowList.map((r) => r.source).join(",")}, ${
+      regexAllowList.length
+    }`
   );
 
   const cwd = normalizeCwd(
