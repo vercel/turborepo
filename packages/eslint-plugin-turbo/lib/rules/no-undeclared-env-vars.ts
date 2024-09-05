@@ -4,6 +4,16 @@ import type { Node, MemberExpression } from "estree";
 import { logger } from "@turbo/utils";
 import { RULES } from "../constants";
 import { Project, getWorkspaceFromFilePath } from "../utils/calculate-inputs";
+import FRAMEWORKS_JSON from "../../../../crates/turborepo-lib/src/frameworks.json"; // TODO: figure out the best way to export this from the crate and then ingest it here
+
+interface Framework {
+  slug: string;
+  envWildcards: Array<string>;
+  dependencyMatch: {
+    strategy: "all" | "some";
+    dependencies: Array<string>;
+  };
+}
 
 export interface RuleContextWithOptions extends Rule.RuleContext {
   options: Array<{
@@ -67,6 +77,44 @@ function normalizeCwd(
   return undefined;
 }
 
+const packageJsonDependencies = (filePath: string): Set<string> => {
+  // get the contents of the package.json
+  const packageJsonString = path.resolve(filePath);
+  const packageJson = JSON.parse(packageJsonString) as Record<
+    string,
+    Record<string, string>
+  >;
+  return ["dependencies", "devDependencies", "peerDependencies"].reduce(
+    (acc, key) => {
+      if (key in packageJson) {
+        Object.keys(packageJson[key]).forEach((dependency) => {
+          acc.add(dependency);
+        });
+      }
+      return acc;
+    },
+    new Set<string>()
+  );
+};
+
+const frameworks = FRAMEWORKS_JSON as Array<Framework>;
+
+const matchesFramework = (filePath: string): Array<RegExp> => {
+  const dependencies = packageJsonDependencies(path.resolve(filePath));
+  const matches = frameworks.reduce((acc, framework) => {
+    const dependenciesMatch = framework.dependencyMatch.dependencies.some(
+      (dependency) => dependencies.has(dependency)
+    );
+    if (dependenciesMatch) {
+      framework.envWildcards.forEach((wildcard) =>
+        acc.add(new RegExp(wildcard))
+      );
+    }
+    return acc;
+  }, new Set<RegExp>());
+  return Array.from(matches);
+};
+
 function create(context: RuleContextWithOptions): Rule.RuleListener {
   const { options } = context;
 
@@ -80,6 +128,10 @@ function create(context: RuleContextWithOptions): Rule.RuleListener {
       logger.error(`Unable to convert "${allowed}" to regex`);
     }
   });
+
+  regexAllowList.concat(
+    matchesFramework("TODO GET PACKAGE.JSON FILENAME SOMEHOW")
+  );
 
   const cwd = normalizeCwd(
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- needed to support older eslint versions
@@ -115,18 +167,18 @@ function create(context: RuleContextWithOptions): Rule.RuleListener {
     if (configured) {
       return {};
     }
-    let message = `{{ envKey }} is not listed as a dependency in ${
+    let message = `1 {{ envKey }} is not listed as a dependency in ${
       hasWorkspaceConfigs ? "root turbo.json" : "turbo.json"
     }`;
     if (workspaceConfig?.turboConfig) {
       if (cwd) {
         // if we have a cwd, we can provide a relative path to the workspace config
-        message = `{{ envKey }} is not listed as a dependency in the root turbo.json or workspace (${path.relative(
+        message = `2 {{ envKey }} is not listed as a dependency in the root turbo.json or workspace (${path.relative(
           cwd,
           workspaceConfig.workspacePath
         )}) turbo.json`;
       } else {
-        message = `{{ envKey }} is not listed as a dependency in the root turbo.json or workspace turbo.json`;
+        message = `3 {{ envKey }} is not listed as a dependency in the root turbo.json or workspace turbo.json`;
       }
     }
 
