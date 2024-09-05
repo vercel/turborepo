@@ -132,10 +132,7 @@ impl<'a> Visitor<'a> {
         let sink = Self::sink(run_opts);
         let color_cache = ColorSelector::default();
         // Set up correct size for underlying pty
-        if let Some(pane_size) = experimental_ui_sender
-            .as_ref()
-            .and_then(|sender| sender.pane_size())
-        {
+        if let Some(pane_size) = ui_sender.as_ref().and_then(|sender| sender.pane_size()) {
             manager.set_pty_size(pane_size.rows, pane_size.cols);
         }
 

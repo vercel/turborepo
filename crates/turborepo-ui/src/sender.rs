@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::{
     tui,
-    tui::event::{CacheResult, OutputLogs, TaskResult},
+    tui::event::{CacheResult, OutputLogs, PaneSize, TaskResult},
     wui::sender,
 };
 
@@ -72,6 +72,14 @@ impl UISender {
         match self {
             UISender::Tui(sender) => sender.update_tasks(tasks),
             UISender::Wui(sender) => sender.update_tasks(tasks),
+        }
+    }
+
+    pub fn pane_size(&self) -> Option<PaneSize> {
+        match self {
+            UISender::Tui(sender) => sender.pane_size(),
+            // Not applicable to the web UI
+            UISender::Wui(_) => None,
         }
     }
 }
