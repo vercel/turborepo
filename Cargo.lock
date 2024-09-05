@@ -1534,6 +1534,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "derive_setters"
+version = "0.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4e8ef033054e131169b8f0f9a7af8f5533a9436fadf3c500ed547f730f07090d"
+dependencies = [
+ "darling",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.58",
+]
+
+[[package]]
 name = "dialoguer"
 version = "0.10.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5887,6 +5899,7 @@ dependencies = [
  "convert_case 0.6.0",
  "crossterm 0.26.1",
  "ctrlc",
+ "derive_setters",
  "dialoguer",
  "dirs-next",
  "dunce",

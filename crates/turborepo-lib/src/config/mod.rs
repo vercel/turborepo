@@ -6,6 +6,7 @@ use std::{collections::HashMap, ffi::OsString, io};
 
 use camino::{Utf8Path, Utf8PathBuf};
 use convert_case::{Case, Casing};
+use derive_setters::Setters;
 use env::{EnvVars, OverrideEnvVars};
 use file::{AuthFile, ConfigFile};
 use merge::Merge;
@@ -174,15 +175,6 @@ pub enum Error {
     },
 }
 
-macro_rules! create_builder {
-    ($func_name:ident, $property_name:ident, $type:ty) => {
-        pub fn $func_name(mut self, value: $type) -> Self {
-            self.override_config.$property_name = value;
-            self
-        }
-    };
-}
-
 const DEFAULT_API_URL: &str = "https://vercel.com/api";
 const DEFAULT_LOGIN_URL: &str = "https://vercel.com";
 const DEFAULT_TIMEOUT: u64 = 30;
@@ -191,8 +183,13 @@ const DEFAULT_UPLOAD_TIMEOUT: u64 = 60;
 // We intentionally don't derive Serialize so that different parts
 // of the code that want to display the config can tune how they
 // want to display and what fields they want to include.
-#[derive(Deserialize, Default, Debug, PartialEq, Eq, Clone, Iterable, Merge)]
+#[derive(Deserialize, Default, Debug, PartialEq, Eq, Clone, Iterable, Merge, Setters)]
 #[serde(rename_all = "camelCase")]
+// Generate setters for the builder type the set these values on it's override_config field
+#[setters(
+    prefix = "with_",
+    generate_delegates(ty = "TurborepoConfigBuilder", field = "override_config")
+)]
 pub struct ConfigurationOptions {
     #[serde(alias = "apiurl")]
     #[serde(alias = "ApiUrl")]
@@ -390,30 +387,6 @@ impl TurborepoConfigBuilder {
             .clone()
             .unwrap_or_else(get_lowercased_env_vars)
     }
-
-    create_builder!(with_api_url, api_url, Option<String>);
-    create_builder!(with_login_url, login_url, Option<String>);
-    create_builder!(with_team_slug, team_slug, Option<String>);
-    create_builder!(with_team_id, team_id, Option<String>);
-    create_builder!(with_token, token, Option<String>);
-    create_builder!(with_signature, signature, Option<bool>);
-    create_builder!(with_enabled, enabled, Option<bool>);
-    create_builder!(with_preflight, preflight, Option<bool>);
-    create_builder!(with_timeout, timeout, Option<u64>);
-    create_builder!(with_ui, ui, Option<UIMode>);
-    create_builder!(
-        with_allow_no_package_manager,
-        allow_no_package_manager,
-        Option<bool>
-    );
-    create_builder!(with_daemon, daemon, Option<bool>);
-    create_builder!(with_env_mode, env_mode, Option<EnvMode>);
-    create_builder!(with_cache_dir, cache_dir, Option<Utf8PathBuf>);
-    create_builder!(
-        with_root_turbo_json_path,
-        root_turbo_json_path,
-        Option<AbsoluteSystemPathBuf>
-    );
 
     pub fn build(&self) -> Result<ConfigurationOptions, Error> {
         // Priority, from least significant to most significant:
