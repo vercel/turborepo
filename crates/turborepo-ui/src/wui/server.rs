@@ -42,8 +42,14 @@ impl<'a> CurrentRun<'a> {
     }
 }
 
-struct Query {
+pub struct Query {
     state: Arc<Mutex<RefCell<WebUIState>>>,
+}
+
+impl Query {
+    pub fn new(state: Arc<Mutex<RefCell<WebUIState>>>) -> Self {
+        Self { state }
+    }
 }
 
 #[Object]
@@ -67,8 +73,14 @@ pub async fn start_server(
 ) -> Result<(), crate::Error> {
     let state = Arc::new(Mutex::new(RefCell::new(WebUIState::default())));
     let subscriber = Subscriber::new(rx);
-    subscriber.watch(state.clone());
+    tokio::spawn(subscriber.watch(state.clone()));
 
+    run_server(state.clone()).await?;
+
+    Ok(())
+}
+
+pub(crate) async fn run_server(state: Arc<Mutex<RefCell<WebUIState>>>) -> Result<(), crate::Error> {
     let cors = CorsLayer::new()
         // allow `GET` and `POST` when accessing the resource
         .allow_methods([Method::GET, Method::POST])

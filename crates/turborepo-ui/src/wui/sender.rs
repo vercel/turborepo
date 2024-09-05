@@ -14,6 +14,9 @@ pub struct WebUISender {
 }
 
 impl WebUISender {
+    pub fn new(tx: tokio::sync::mpsc::UnboundedSender<WebUIEvent>) -> Self {
+        Self { tx }
+    }
     pub fn start_task(&self, task: String, output_logs: OutputLogs) {
         self.tx
             .send(WebUIEvent::StartTask { task, output_logs })
