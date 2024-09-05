@@ -97,6 +97,11 @@ impl CommandBase {
                     .and_then(|args| args.force.map(|value| value.unwrap_or(true))),
             )
             .with_log_order(self.args.execution_args().and_then(|args| args.log_order))
+            .with_remote_only(
+                self.args
+                    .execution_args()
+                    .and_then(|args| args.remote_only()),
+            )
             .build()
     }
 

@@ -781,8 +781,8 @@ pub struct ExecutionArgs {
     pub pkg_inference_root: Option<String>,
     /// Ignore the local filesystem cache for all tasks. Only
     /// allow reading and caching artifacts using the remote cache.
-    #[clap(long, env = "TURBO_REMOTE_ONLY", value_name = "BOOL", action = ArgAction::Set, default_value = "false", default_missing_value = "true", num_args = 0..=1)]
-    pub remote_only: bool,
+    #[clap(long, default_missing_value = "true")]
+    pub remote_only: Option<Option<bool>>,
     /// Use "none" to remove prefixes from task logs. Use "task" to get task id
     /// prefixing. Use "auto" to let turbo decide how to prefix the logs
     /// based on the execution environment. In most cases this will be the same
@@ -801,6 +801,11 @@ pub struct ExecutionArgs {
 }
 
 impl ExecutionArgs {
+    pub fn remote_only(&self) -> Option<bool> {
+        let remote_only = self.remote_only?;
+        Some(remote_only.unwrap_or(true))
+    }
+
     fn track(&self, telemetry: &CommandEventBuilder) {
         // default to false
         track_usage!(telemetry, self.framework_inference, |val: bool| !val);
@@ -808,7 +813,7 @@ impl ExecutionArgs {
         track_usage!(telemetry, self.continue_execution, |val| val);
         track_usage!(telemetry, self.single_package, |val| val);
         track_usage!(telemetry, self.only, |val| val);
-        track_usage!(telemetry, self.remote_only, |val| val);
+        track_usage!(telemetry, self.remote_only().unwrap_or_default(), |val| val);
         track_usage!(telemetry, &self.cache_dir, Option::is_some);
         track_usage!(telemetry, &self.force, Option::is_some);
         track_usage!(telemetry, &self.pkg_inference_root, Option::is_some);
@@ -1423,7 +1428,7 @@ mod test {
     fn get_default_execution_args() -> ExecutionArgs {
         ExecutionArgs {
             output_logs: None,
-            remote_only: false,
+            remote_only: None,
             framework_inference: true,
             ..ExecutionArgs::default()
         }
@@ -2058,7 +2063,7 @@ mod test {
             command: Some(Command::Run {
                 execution_args: Box::new(ExecutionArgs {
                     tasks: vec!["build".to_string()],
-                    remote_only: false,
+                    remote_only: None,
                     ..get_default_execution_args()
                 }),
                 run_args: Box::new(get_default_run_args())
@@ -2073,7 +2078,7 @@ mod test {
             command: Some(Command::Run {
                 execution_args: Box::new(ExecutionArgs {
                     tasks: vec!["build".to_string()],
-                    remote_only: true,
+                    remote_only: Some(Some(true)),
                     ..get_default_execution_args()
                 }),
                 run_args: Box::new(get_default_run_args())
@@ -2088,7 +2093,7 @@ mod test {
             command: Some(Command::Run {
                 execution_args: Box::new(ExecutionArgs {
                     tasks: vec!["build".to_string()],
-                    remote_only: true,
+                    remote_only: Some(Some(true)),
                     ..get_default_execution_args()
                 }),
                 run_args: Box::new(get_default_run_args())
@@ -2103,7 +2108,7 @@ mod test {
             command: Some(Command::Run {
                 execution_args: Box::new(ExecutionArgs {
                     tasks: vec!["build".to_string()],
-                    remote_only: false,
+                    remote_only: Some(Some(false)),
                     ..get_default_execution_args()
                 }),
                 run_args: Box::new(get_default_run_args())
