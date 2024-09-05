@@ -6,7 +6,7 @@ description: Learn how to handle environments for your applications.
 import { Callout } from '#/components/callout';
 import { Tabs, Tab } from '#/components/tabs';
 import { Accordion, Accordions } from '#/components/accordion';
-import frameworks from '../../../crates/turborepo-lib/src/frameworks.json';
+import { metadata } from 'eslint-plugin-turbo';
 
 Environment variable inputs are a vital part of your applications that you'll need to account for in your Turborepo configuration.
 
@@ -67,7 +67,7 @@ Turborepo automatically adds prefix wildcards to your [`env`](/repo/docs/referen
     </tr>
   </thead>
   <tbody>
-    {frameworks.map(({ name, envWildcards }) => (
+    {metadata.frameworks.map(({ name, envWildcards }) => (
       <tr key={name}>
         <td>{name}</td>
         <td>{envWildcards.map((w) => <code>{w}</code>).join(', ')}</td>

@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import type { Rule } from "eslint";
 import type { Node, MemberExpression } from "estree";
 import { logger } from "@turbo/utils";
+import { frameworks } from "@turbo/types";
 import { RULES } from "../constants";
 import { Project, getWorkspaceFromFilePath } from "../utils/calculate-inputs";
 
@@ -13,15 +14,6 @@ const debug = debugging
   : (_: string) => {
       /* noop */
     };
-
-interface Framework {
-  slug: string;
-  envWildcards: Array<string>;
-  dependencyMatch: {
-    strategy: "all" | "some";
-    dependencies: Array<string>;
-  };
-}
 
 export interface RuleContextWithOptions extends Rule.RuleContext {
   options: Array<{
@@ -125,12 +117,6 @@ const packageJsonDependencies = (filePath: string): Set<string> => {
     .flatMap((key) => Object.keys(packageJson[key] ?? {}))
     .reduce((acc, dependency) => acc.add(dependency), new Set<string>());
 };
-
-const frameworksJsonString = readFileSync(
-  "../../../../crates/turborepo-lib/src/frameworks.json",
-  "utf-8"
-);
-const frameworks = JSON.parse(frameworksJsonString) as Array<Framework>;
 
 /**
  * Turborepo does some nice framework detection based on the dependencies in the package.json.  This function ports that logic to this ESLint rule.

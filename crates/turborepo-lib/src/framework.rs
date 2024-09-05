@@ -37,7 +37,8 @@ impl Framework {
 
 static FRAMEWORKS: OnceLock<Vec<Framework>> = OnceLock::new();
 
-const FRAMEWORKS_JSON: &str = include_str!("frameworks.json");
+const FRAMEWORKS_JSON: &str =
+    include_str!("../../../packages/turbo-types/src/json/frameworks.json");
 
 fn get_frameworks() -> &'static Vec<Framework> {
     FRAMEWORKS.get_or_init(|| {
