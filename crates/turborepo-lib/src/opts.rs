@@ -163,7 +163,7 @@ pub struct RunOpts {
     pub(crate) single_package: bool,
     pub log_prefix: ResolvedLogPrefix,
     pub log_order: ResolvedLogOrder,
-    pub summarize: Option<Option<bool>>,
+    pub summarize: bool,
     pub(crate) experimental_space_id: Option<String>,
     pub is_github_actions: bool,
 }
@@ -247,7 +247,7 @@ impl<'a> TryFrom<OptsInputs<'a>> for RunOpts {
             tasks: inputs.execution_args.tasks.clone(),
             log_prefix,
             log_order,
-            summarize: inputs.run_args.summarize,
+            summarize: inputs.config.run_summary(),
             experimental_space_id: inputs
                 .run_args
                 .experimental_space_id
@@ -502,7 +502,7 @@ mod test {
             single_package: false,
             log_prefix: crate::opts::ResolvedLogPrefix::Task,
             log_order: crate::opts::ResolvedLogOrder::Stream,
-            summarize: None,
+            summarize: false,
             experimental_space_id: None,
             is_github_actions: false,
             daemon: None,

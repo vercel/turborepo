@@ -107,6 +107,7 @@ impl CommandBase {
                     .run_args()
                     .and_then(|args| args.remote_cache_read_only()),
             )
+            .with_run_summary(self.args.run_args().and_then(|args| args.summarize()))
             .build()
     }
 

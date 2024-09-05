@@ -901,7 +901,7 @@ pub struct RunArgs {
     #[clap(long, default_missing_value = "true")]
     pub remote_cache_read_only: Option<Option<bool>>,
     /// Generate a summary of the turbo run
-    #[clap(long, env = "TURBO_RUN_SUMMARY", default_missing_value = "true")]
+    #[clap(long, default_missing_value = "true")]
     pub summarize: Option<Option<bool>>,
 
     // Pass a string to enable posting Run Summaries to Vercel
@@ -957,6 +957,11 @@ impl RunArgs {
     pub fn remote_cache_read_only(&self) -> Option<bool> {
         let remote_cache_read_only = self.remote_cache_read_only?;
         Some(remote_cache_read_only.unwrap_or(true))
+    }
+
+    pub fn summarize(&self) -> Option<bool> {
+        let summarize = self.summarize?;
+        Some(summarize.unwrap_or(true))
     }
 
     pub fn track(&self, telemetry: &CommandEventBuilder) {
