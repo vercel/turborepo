@@ -1,146 +1,47 @@
 use std::sync::OnceLock;
 
+use serde::Deserialize;
 use turborepo_repository::package_graph::PackageInfo;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
 enum Strategy {
     All,
     Some,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct Matcher {
     strategy: Strategy,
-    dependencies: Vec<&'static str>,
+    dependencies: Vec<String>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Framework {
-    slug: &'static str,
-    env_wildcards: Vec<&'static str>,
+    slug: String,
+    env_wildcards: Vec<String>,
     dependency_match: Matcher,
 }
 
 impl Framework {
-    pub fn slug(&self) -> &'static str {
-        self.slug
+    pub fn slug(&self) -> String {
+        self.slug.clone()
     }
 
-    pub fn env_wildcards(&self) -> &[&'static str] {
+    pub fn env_wildcards(&self) -> &[String] {
         &self.env_wildcards
     }
 }
 
-static FRAMEWORKS: OnceLock<[Framework; 13]> = OnceLock::new();
+static FRAMEWORKS: OnceLock<Vec<Framework>> = OnceLock::new();
 
-fn get_frameworks() -> &'static [Framework] {
+const FRAMEWORKS_JSON: &str = include_str!("frameworks.json");
+
+fn get_frameworks() -> &'static Vec<Framework> {
     FRAMEWORKS.get_or_init(|| {
-        [
-            Framework {
-                slug: "blitzjs",
-                env_wildcards: vec!["NEXT_PUBLIC_*"],
-                dependency_match: Matcher {
-                    strategy: Strategy::All,
-                    dependencies: vec!["blitz"],
-                },
-            },
-            Framework {
-                slug: "nextjs",
-                env_wildcards: vec!["NEXT_PUBLIC_*"],
-                dependency_match: Matcher {
-                    strategy: Strategy::All,
-                    dependencies: vec!["next"],
-                },
-            },
-            Framework {
-                slug: "gatsby",
-                env_wildcards: vec!["GATSBY_*"],
-                dependency_match: Matcher {
-                    strategy: Strategy::All,
-                    dependencies: vec!["gatsby"],
-                },
-            },
-            Framework {
-                slug: "astro",
-                env_wildcards: vec!["PUBLIC_*"],
-                dependency_match: Matcher {
-                    strategy: Strategy::All,
-                    dependencies: vec!["astro"],
-                },
-            },
-            Framework {
-                slug: "solidstart",
-                env_wildcards: vec!["VITE_*"],
-                dependency_match: Matcher {
-                    strategy: Strategy::All,
-                    dependencies: vec!["solid-js", "solid-start"],
-                },
-            },
-            Framework {
-                slug: "vue",
-                env_wildcards: vec!["VUE_APP_*"],
-                dependency_match: Matcher {
-                    strategy: Strategy::All,
-                    dependencies: vec!["@vue/cli-service"],
-                },
-            },
-            Framework {
-                slug: "sveltekit",
-                env_wildcards: vec!["VITE_*", "PUBLIC_*"],
-                dependency_match: Matcher {
-                    strategy: Strategy::All,
-                    dependencies: vec!["@sveltejs/kit"],
-                },
-            },
-            Framework {
-                slug: "create-react-app",
-                env_wildcards: vec!["REACT_APP_*"],
-                dependency_match: Matcher {
-                    strategy: Strategy::Some,
-                    dependencies: vec!["react-scripts", "react-dev-utils"],
-                },
-            },
-            Framework {
-                slug: "nitro",
-                env_wildcards: vec!["NITRO_*"],
-                dependency_match: Matcher {
-                    strategy: Strategy::Some,
-                    dependencies: vec!["nitropack", "nitropack-nightly"],
-                },
-            },
-            Framework {
-                slug: "nuxtjs",
-                env_wildcards: vec!["NUXT_*", "NITRO_*"],
-                dependency_match: Matcher {
-                    strategy: Strategy::Some,
-                    dependencies: vec!["nuxt", "nuxt-edge", "nuxt3", "nuxt3-edge"],
-                },
-            },
-            Framework {
-                slug: "redwoodjs",
-                env_wildcards: vec!["REDWOOD_ENV_*"],
-                dependency_match: Matcher {
-                    strategy: Strategy::All,
-                    dependencies: vec!["@redwoodjs/core"],
-                },
-            },
-            Framework {
-                slug: "vite",
-                env_wildcards: vec!["VITE_*"],
-                dependency_match: Matcher {
-                    strategy: Strategy::All,
-                    dependencies: vec!["vite"],
-                },
-            },
-            Framework {
-                slug: "sanity",
-                env_wildcards: vec!["SANITY_STUDIO_*"],
-                dependency_match: Matcher {
-                    strategy: Strategy::All,
-                    dependencies: vec!["@sanity/cli"],
-                },
-            },
-        ]
+        serde_json::from_str(FRAMEWORKS_JSON).expect("Unable to parse embedded JSON")
     })
 }
 
@@ -159,16 +60,16 @@ impl Matcher {
             Strategy::All => self
                 .dependencies
                 .iter()
-                .all(|dep| deps.map_or(false, |deps| deps.contains_key(*dep))),
+                .all(|dep| deps.map_or(false, |deps| deps.contains_key(dep))),
             Strategy::Some => self
                 .dependencies
                 .iter()
-                .any(|dep| deps.map_or(false, |deps| deps.contains_key(*dep))),
+                .any(|dep| deps.map_or(false, |deps| deps.contains_key(dep))),
         }
     }
 }
 
-pub fn infer_framework(workspace: &PackageInfo, is_monorepo: bool) -> Option<&'static Framework> {
+pub fn infer_framework(workspace: &PackageInfo, is_monorepo: bool) -> Option<&Framework> {
     let frameworks = get_frameworks();
 
     frameworks
@@ -183,7 +84,7 @@ mod tests {
 
     use crate::framework::{get_frameworks, infer_framework, Framework};
 
-    fn get_framework_by_slug(slug: &str) -> &'static Framework {
+    fn get_framework_by_slug(slug: &str) -> &Framework {
         get_frameworks()
             .iter()
             .find(|framework| framework.slug == slug)
@@ -291,7 +192,7 @@ mod tests {
     )]
     fn test_infer_framework(
         workspace_info: PackageInfo,
-        expected: Option<&'static Framework>,
+        expected: Option<&Framework>,
         is_monorepo: bool,
     ) {
         let framework = infer_framework(&workspace_info, is_monorepo);

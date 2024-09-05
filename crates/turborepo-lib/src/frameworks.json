@@ -1,0 +1,106 @@
+[
+  {
+    "slug": "blitzjs",
+    "envWildcards": ["NEXT_PUBLIC_*"],
+    "dependencyMatch": {
+      "strategy": "all",
+      "dependencies": ["blitz"]
+    }
+  },
+  {
+    "slug": "nextjs",
+    "envWildcards": ["NEXT_PUBLIC_*"],
+    "dependencyMatch": {
+      "strategy": "all",
+      "dependencies": ["next"]
+    }
+  },
+  {
+    "slug": "gatsby",
+    "envWildcards": ["GATSBY_*"],
+    "dependencyMatch": {
+      "strategy": "all",
+      "dependencies": ["gatsby"]
+    }
+  },
+  {
+    "slug": "astro",
+    "envWildcards": ["PUBLIC_*"],
+    "dependencyMatch": {
+      "strategy": "all",
+      "dependencies": ["astro"]
+    }
+  },
+  {
+    "slug": "solidstart",
+    "envWildcards": ["VITE_*"],
+    "dependencyMatch": {
+      "strategy": "all",
+      "dependencies": ["solid-js", "solid-start"]
+    }
+  },
+  {
+    "slug": "vue",
+    "envWildcards": ["VUE_APP_*"],
+    "dependencyMatch": {
+      "strategy": "all",
+      "dependencies": ["@vue/cli-service"]
+    }
+  },
+  {
+    "slug": "sveltekit",
+    "envWildcards": ["VITE_*", "PUBLIC_*"],
+    "dependencyMatch": {
+      "strategy": "all",
+      "dependencies": ["@sveltejs/kit"]
+    }
+  },
+  {
+    "slug": "create-react-app",
+    "envWildcards": ["REACT_APP_*"],
+    "dependencyMatch": {
+      "strategy": "all",
+      "dependencies": ["react-scripts", "react-dev-utils"]
+    }
+  },
+  {
+    "slug": "nitro",
+    "envWildcards": ["NITRO_*"],
+    "dependencyMatch": {
+      "strategy": "all",
+      "dependencies": ["nitropack", "nitropack-nightly"]
+    }
+  },
+  {
+    "slug": "nuxtjs",
+    "envWildcards": ["NUXT_*", "NITRO_*"],
+    "dependencyMatch": {
+      "strategy": "all",
+      "dependencies": ["nuxt", "nuxt-edge", "nuxt3", "nuxt3-edge"]
+    }
+  },
+  {
+    "slug": "redwoodjs",
+    "envWildcards": ["REDWOOD_ENV_*"],
+    "dependencyMatch": {
+      "strategy": "all",
+      "dependencies": ["@redwoodjs/core"]
+    }
+  },
+  {
+    "slug": "vite",
+    "envWildcards": ["VITE_*"],
+    "dependencyMatch": {
+      "strategy": "all",
+      "dependencies": ["vite"]
+    }
+  },
+  {
+    "slug": "sanity",
+    "envWildcards": ["SANITY_STUDIO_*"],
+    "dependencyMatch": {
+      "strategy": "all",
+      "dependencies": ["@sanity/cli"]
+    }
+  }
+]
