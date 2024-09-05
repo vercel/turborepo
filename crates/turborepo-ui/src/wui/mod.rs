@@ -4,7 +4,7 @@
 use std::{cell::RefCell, collections::BTreeMap, io::Write, sync::Arc};
 
 use async_graphql::{
-    http::GraphiQLSource, EmptyMutation, EmptySubscription, Object, Schema, SimpleObject,
+    http::GraphiQLSource, EmptyMutation, EmptySubscription, Enum, Object, Schema, SimpleObject,
 };
 use async_graphql_axum::GraphQL;
 use axum::{http::Method, response, response::IntoResponse, routing::get, Router};
@@ -56,11 +56,11 @@ impl WebUISender {
         self.tx.send(WebUIEvent::EndTask { task, result }).ok();
     }
 
-    pub fn status(&self, task: String, status: String, result: CacheResult) {
+    pub fn status(&self, task: String, message: String, result: CacheResult) {
         self.tx
-            .send(WebUIEvent::Status {
+            .send(WebUIEvent::CacheStatus {
                 task,
-                status,
+                message,
                 result,
             })
             .ok();
@@ -119,9 +119,9 @@ pub enum WebUIEvent {
         task: String,
         result: TaskResult,
     },
-    Status {
+    CacheStatus {
         task: String,
-        status: String,
+        message: String,
         result: CacheResult,
     },
     UpdateTasks {
@@ -133,12 +133,32 @@ pub enum WebUIEvent {
     Stop,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq, Enum)]
+enum TaskStatus {
+    Pending,
+    Running,
+    Cached,
+    Failed,
+    Success,
+}
+
+impl From<TaskResult> for TaskStatus {
+    fn from(result: TaskResult) -> Self {
+        match result {
+            TaskResult::Success => Self::Success,
+            TaskResult::CacheHit => Self::Cached,
+            TaskResult::Failure => Self::Failed,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, SimpleObject)]
 struct TaskState {
     output: Vec<u8>,
-    status: Option<String>,
-    result: Option<TaskResult>,
+    status: TaskStatus,
     cache_result: Option<CacheResult>,
+    /// The message for the cache status, i.e. `cache hit, replaying logs`
+    cache_message: Option<String>,
 }
 
 #[derive(Debug, Default, Clone, Serialize)]
@@ -184,9 +204,9 @@ impl Subscriber {
                     task,
                     TaskState {
                         output: Vec::new(),
-                        status: None,
-                        result: None,
+                        status: TaskStatus::Running,
                         cache_result: None,
+                        cache_message: None,
                     },
                 );
             }
@@ -200,15 +220,18 @@ impl Subscriber {
                     .extend(output);
             }
             WebUIEvent::EndTask { task, result } => {
-                state.borrow_mut().tasks.get_mut(&task).unwrap().result = Some(result);
+                state.borrow_mut().tasks.get_mut(&task).unwrap().status = TaskStatus::from(result);
             }
-            WebUIEvent::Status { task, result, .. } => {
-                state
-                    .borrow_mut()
-                    .tasks
-                    .get_mut(&task)
-                    .unwrap()
-                    .cache_result = Some(result);
+            WebUIEvent::CacheStatus {
+                task,
+                result,
+                message,
+            } => {
+                let mut state_ref = state.borrow_mut();
+
+                state_ref.tasks.get_mut(&task).unwrap().cache_result = Some(result);
+
+                state_ref.tasks.get_mut(&task).unwrap().cache_message = Some(message);
             }
             WebUIEvent::Stop => {
                 // TODO: stop watching
@@ -221,9 +244,9 @@ impl Subscriber {
                             task,
                             TaskState {
                                 output: Vec::new(),
-                                status: None,
-                                result: None,
+                                status: TaskStatus::Pending,
                                 cache_result: None,
+                                cache_message: None,
                             },
                         )
                     })
@@ -237,9 +260,9 @@ impl Subscriber {
                             task,
                             TaskState {
                                 output: Vec::new(),
-                                status: None,
-                                result: None,
+                                status: TaskStatus::Running,
                                 cache_result: None,
+                                cache_message: None,
                             },
                         )
                     })
@@ -268,8 +291,12 @@ struct Task {
     state: TaskState,
 }
 
+struct CurrentRun<'a> {
+    subscriber: &'a Subscriber,
+}
+
 #[Object]
-impl Query {
+impl<'a> CurrentRun<'a> {
     async fn tasks(&self) -> Vec<Task> {
         self.subscriber
             .state
@@ -283,6 +310,15 @@ impl Query {
                 state: state.clone(),
             })
             .collect()
+    }
+}
+
+#[Object]
+impl Query {
+    async fn current_run(&self) -> CurrentRun {
+        CurrentRun {
+            subscriber: &self.subscriber,
+        }
     }
 }
 
