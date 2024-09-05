@@ -59,7 +59,7 @@
     "slug": "create-react-app",
     "envWildcards": ["REACT_APP_*"],
     "dependencyMatch": {
-      "strategy": "all",
+      "strategy": "some",
       "dependencies": ["react-scripts", "react-dev-utils"]
     }
   },
@@ -67,7 +67,7 @@
     "slug": "nitro",
     "envWildcards": ["NITRO_*"],
     "dependencyMatch": {
-      "strategy": "all",
+      "strategy": "some",
       "dependencies": ["nitropack", "nitropack-nightly"]
     }
   },
@@ -75,7 +75,7 @@
     "slug": "nuxtjs",
     "envWildcards": ["NUXT_*", "NITRO_*"],
     "dependencyMatch": {
-      "strategy": "all",
+      "strategy": "some",
       "dependencies": ["nuxt", "nuxt-edge", "nuxt3", "nuxt3-edge"]
     }
   },
