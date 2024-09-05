@@ -3,14 +3,14 @@ use std::sync::{Arc, Mutex};
 use crate::{
     tui,
     tui::event::{CacheResult, OutputLogs, TaskResult},
-    wui,
+    wui::sender,
 };
 
 /// Enum to abstract over sending events to either the Tui or the Web UI
 #[derive(Debug, Clone)]
 pub enum UISender {
     Tui(tui::TuiSender),
-    Wui(wui::WebUISender),
+    Wui(sender::WebUISender),
 }
 
 impl UISender {

@@ -32,7 +32,7 @@ use turborepo_repository::package_graph::{PackageGraph, PackageName, PackageNode
 use turborepo_scm::SCM;
 use turborepo_telemetry::events::generic::GenericEventBuilder;
 use turborepo_ui::{
-    cprint, cprintln, sender::UISender, tui, tui::TuiSender, wui::WebUISender, ColorConfig,
+    cprint, cprintln, sender::UISender, tui, tui::TuiSender, wui::sender::WebUISender, ColorConfig,
     BOLD_GREY, GREY,
 };
 
@@ -224,7 +224,7 @@ impl Run {
     pub fn start_web_ui(&self) -> WuiResult {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
 
-        let handle = tokio::spawn(turborepo_ui::wui::start_server(rx));
+        let handle = tokio::spawn(turborepo_ui::wui::server::start_server(rx));
 
         Ok(Some((WebUISender { tx }, handle)))
     }
