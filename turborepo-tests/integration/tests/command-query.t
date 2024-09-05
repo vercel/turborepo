@@ -83,14 +83,14 @@ Get dependencies of `my-app`
     }
   }
 
-Get transitive dependencies of `my-app`
-  $ ${TURBO} query "query { packages(filter: { equal: { field: NAME, value: \"my-app\" } }) { transitiveDependencies { name } } }" | jq
+Get the indirect dependencies of `my-app`
+  $ ${TURBO} query "query { packages(filter: { equal: { field: NAME, value: \"my-app\" } }) { indirectDependencies { name } } }" | jq
    WARNING  query command is experimental and may change in the future
   {
     "data": {
       "packages": [
         {
-          "transitiveDependencies": [
+          "indirectDependencies": [
             {
               "name": "//"
             },

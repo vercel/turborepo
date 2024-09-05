@@ -350,8 +350,8 @@ impl Package {
             .collect())
     }
 
-    /// The downstream packages that depend on this package, transitively
-    async fn transitive_dependents(&self) -> Result<Vec<Package>, Error> {
+    /// The downstream packages that depend on this package, indirectly
+    async fn indirect_dependents(&self) -> Result<Vec<Package>, Error> {
         let node: PackageNode = PackageNode::Workspace(self.name.clone());
 
         Ok(self
@@ -367,8 +367,8 @@ impl Package {
             .collect())
     }
 
-    /// The upstream packages that this package depends on, transitively
-    async fn transitive_dependencies(&self) -> Result<Vec<Package>, Error> {
+    /// The upstream packages that this package depends on, indirectly
+    async fn indirect_dependencies(&self) -> Result<Vec<Package>, Error> {
         let node: PackageNode = PackageNode::Workspace(self.name.clone());
 
         Ok(self
