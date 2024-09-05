@@ -898,8 +898,8 @@ pub struct RunArgs {
     #[clap(long, value_parser=NonEmptyStringValueParser::new(), conflicts_with = "profile")]
     pub anon_profile: Option<String>,
     /// Treat remote cache as read only
-    #[clap(long, env = "TURBO_REMOTE_CACHE_READ_ONLY", value_name = "BOOL", action = ArgAction::Set, default_value = "false", default_missing_value = "true", num_args = 0..=1)]
-    pub remote_cache_read_only: bool,
+    #[clap(long, default_missing_value = "true")]
+    pub remote_cache_read_only: Option<Option<bool>>,
     /// Generate a summary of the turbo run
     #[clap(long, env = "TURBO_RUN_SUMMARY", default_missing_value = "true")]
     pub summarize: Option<Option<bool>>,
@@ -924,7 +924,7 @@ impl Default for RunArgs {
             no_daemon: false,
             profile: None,
             anon_profile: None,
-            remote_cache_read_only: false,
+            remote_cache_read_only: None,
             summarize: None,
             experimental_space_id: None,
             parallel: false,
@@ -954,13 +954,22 @@ impl RunArgs {
         }
     }
 
+    pub fn remote_cache_read_only(&self) -> Option<bool> {
+        let remote_cache_read_only = self.remote_cache_read_only?;
+        Some(remote_cache_read_only.unwrap_or(true))
+    }
+
     pub fn track(&self, telemetry: &CommandEventBuilder) {
         // default to true
         track_usage!(telemetry, self.no_cache, |val| val);
         track_usage!(telemetry, self.daemon, |val| val);
         track_usage!(telemetry, self.no_daemon, |val| val);
         track_usage!(telemetry, self.parallel, |val| val);
-        track_usage!(telemetry, self.remote_cache_read_only, |val| val);
+        track_usage!(
+            telemetry,
+            self.remote_cache_read_only().unwrap_or_default(),
+            |val| val
+        );
 
         // default to None
         track_usage!(telemetry, &self.profile, Option::is_some);

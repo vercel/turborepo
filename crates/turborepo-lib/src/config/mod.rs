@@ -237,6 +237,7 @@ pub struct ConfigurationOptions {
     pub(crate) force: Option<bool>,
     pub(crate) log_order: Option<LogOrder>,
     pub(crate) remote_only: Option<bool>,
+    pub(crate) remote_cache_read_only: Option<bool>,
 }
 
 #[derive(Default)]
@@ -350,6 +351,10 @@ impl ConfigurationOptions {
 
     pub fn remote_only(&self) -> bool {
         self.remote_only.unwrap_or_default()
+    }
+
+    pub fn remote_cache_read_only(&self) -> bool {
+        self.remote_cache_read_only.unwrap_or_default()
     }
 
     pub fn root_turbo_json_path(&self, repo_root: &AbsoluteSystemPath) -> AbsoluteSystemPathBuf {

@@ -102,6 +102,11 @@ impl CommandBase {
                     .execution_args()
                     .and_then(|args| args.remote_only()),
             )
+            .with_remote_cache_read_only(
+                self.args
+                    .run_args()
+                    .and_then(|args| args.remote_cache_read_only()),
+            )
             .build()
     }
 

@@ -36,6 +36,7 @@ const TURBO_MAPPING: &[(&str, &str)] = [
     ("turbo_force", "force"),
     ("turbo_log_order", "log_order"),
     ("turbo_remote_only", "remote_only"),
+    ("turbo_remote_cache_read_only", "remote_cache_read_only"),
 ]
 .as_slice();
 
@@ -82,6 +83,7 @@ impl ResolvedConfigurationOptions for EnvVars {
 
         let force = self.truthy_value("force").flatten();
         let remote_only = self.truthy_value("remote_only").flatten();
+        let remote_cache_read_only = self.truthy_value("remote_cache_read_only").flatten();
 
         // Process timeout
         let timeout = self
@@ -165,6 +167,7 @@ impl ResolvedConfigurationOptions for EnvVars {
             daemon,
             force,
             remote_only,
+            remote_cache_read_only,
 
             // Processed numbers
             timeout,
@@ -309,6 +312,7 @@ mod test {
         env.insert("turbo_force".into(), "1".into());
         env.insert("turbo_log_order".into(), "grouped".into());
         env.insert("turbo_remote_only".into(), "1".into());
+        env.insert("turbo_remote_cache_read_only".into(), "1".into());
 
         let config = EnvVars::new(&env)
             .unwrap()
@@ -318,6 +322,7 @@ mod test {
         assert!(config.force());
         assert_eq!(config.log_order(), LogOrder::Grouped);
         assert!(config.remote_only());
+        assert!(config.remote_cache_read_only());
         assert_eq!(turbo_api, config.api_url.unwrap());
         assert_eq!(turbo_login, config.login_url.unwrap());
         assert_eq!(turbo_team, config.team_slug.unwrap());
@@ -353,6 +358,7 @@ mod test {
         env.insert("turbo_force".into(), "".into());
         env.insert("turbo_log_order".into(), "".into());
         env.insert("turbo_remote_only".into(), "".into());
+        env.insert("turbo_remote_cache_read_only".into(), "".into());
 
         let config = EnvVars::new(&env)
             .unwrap()
@@ -373,6 +379,7 @@ mod test {
         assert!(!config.force());
         assert_eq!(config.log_order(), LogOrder::Auto);
         assert!(!config.remote_only());
+        assert!(!config.remote_cache_read_only());
     }
 
     #[test]

@@ -363,7 +363,7 @@ impl<'a> From<OptsInputs<'a>> for CacheOpts {
         CacheOpts {
             cache_dir: inputs.config.cache_dir().into(),
             skip_filesystem: inputs.config.remote_only(),
-            remote_cache_read_only: inputs.run_args.remote_cache_read_only,
+            remote_cache_read_only: inputs.config.remote_cache_read_only(),
             workers: inputs.run_args.cache_workers,
             skip_remote,
             remote_cache_opts,
