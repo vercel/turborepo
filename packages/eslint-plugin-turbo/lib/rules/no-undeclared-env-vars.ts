@@ -107,24 +107,23 @@ function normalizeCwd(
   return undefined;
 }
 
+/** for a given `package.json` file path, this will compile a Set of that package's listed dependencies */
 const packageJsonDependencies = (filePath: string): Set<string> => {
   // get the contents of the package.json
   const packageJsonString = readFileSync(filePath, "utf-8");
   const packageJson = JSON.parse(packageJsonString) as Record<
     string,
-    Record<string, string>
+    undefined | Record<string, string>
   >;
-  return ["dependencies", "devDependencies", "peerDependencies"].reduce(
-    (acc, key) => {
-      if (key in packageJson) {
-        Object.keys(packageJson[key]).forEach((dependency) => {
-          acc.add(dependency);
-        });
-      }
-      return acc;
-    },
-    new Set<string>()
-  );
+
+  return [
+    "dependencies",
+    "devDependencies",
+    "peerDependencies",
+    // intentionally not including `optionalDependencies` or `bundleDependencies` because at the time of writing they are not used for any of the frameworks we support
+  ]
+    .flatMap((key) => Object.keys(packageJson[key] ?? {}))
+    .reduce((acc, dependency) => acc.add(dependency), new Set<string>());
 };
 
 const frameworksJsonString = readFileSync(
@@ -134,33 +133,43 @@ const frameworksJsonString = readFileSync(
 const frameworks = JSON.parse(frameworksJsonString) as Array<Framework>;
 
 /**
- * Turborepo does some nice framework detection based on the dependencies in the package.json.  This function ports that logic to the eslint rule.
+ * Turborepo does some nice framework detection based on the dependencies in the package.json.  This function ports that logic to this ESLint rule.
  *
- * So, essentially, imagine you have a Vue app.  That means you have Vue in your dependencies.  This function will return a list of regular expressions that match the environment variables that Vue uses, which is information encoded into the `frameworks.json` file.  In Vue's case, it would return a regex that matches `VUE_APP_*` if you have `@vue/cli-service` in your dependencies.
+ * Imagine you have a Vue app.  That means you have Vue in your `package.json` dependencies.  This function will return a list of regular expressions that match the environment variables that Vue depends on, which is information encoded into the `frameworks.json` file.  In Vue's case, it would return the regex `VUE_APP_*` since you have `@vue/cli-service` in your dependencies.
  */
-const matchesFramework = (filePath: string): Array<RegExp> => {
+const frameworkEnvMatches = (filePath: string): Set<RegExp> => {
   const directory = path.dirname(filePath);
   const packageJsonPath = findClosestPackageJson(directory);
   if (!packageJsonPath) {
     logger.error(`No package.json found connected to ${filePath}`);
-    return [];
+    return new Set<RegExp>();
   }
   debug(`found package.json: ${packageJsonPath}`);
 
   const dependencies = packageJsonDependencies(packageJsonPath);
+  const hasDependency = (dep: string) => dependencies.has(dep);
   debug(`dependencies for ${filePath}: ${Array.from(dependencies).join(",")}`);
-  const matches = frameworks.reduce((acc, framework) => {
-    const dependenciesMatch = framework.dependencyMatch.dependencies.some(
-      (dependency) => dependencies.has(dependency)
-    );
-    if (dependenciesMatch) {
-      framework.envWildcards.forEach((wildcard) =>
-        acc.add(new RegExp(wildcard))
-      );
-    }
-    return acc;
-  }, new Set<RegExp>());
-  return Array.from(matches);
+
+  return frameworks.reduce(
+    (
+      acc,
+      {
+        dependencyMatch: { dependencies: searchDependencies, strategy },
+        envWildcards,
+      }
+    ) => {
+      const hasMatch =
+        strategy === "all"
+          ? searchDependencies.every(hasDependency)
+          : searchDependencies.some(hasDependency);
+
+      if (hasMatch) {
+        return new Set([...acc, ...envWildcards.map(RegExp)]);
+      }
+      return acc;
+    },
+    new Set<RegExp>()
+  );
 };
 
 function create(context: RuleContextWithOptions): Rule.RuleListener {
@@ -180,7 +189,7 @@ function create(context: RuleContextWithOptions): Rule.RuleListener {
   const filename = context.getFilename();
   debug(`Checking file: ${filename}`);
 
-  const matches = matchesFramework(filename);
+  const matches = frameworkEnvMatches(filename);
   regexAllowList = [...regexAllowList, ...matches];
   debug(
     `Allow list: ${regexAllowList.map((r) => r.source).join(",")}, ${
@@ -222,18 +231,18 @@ function create(context: RuleContextWithOptions): Rule.RuleListener {
     if (configured) {
       return {};
     }
-    let message = `1 {{ envKey }} is not listed as a dependency in ${
+    let message = `{{ envKey }} is not listed as a dependency in ${
       hasWorkspaceConfigs ? "root turbo.json" : "turbo.json"
     }`;
     if (workspaceConfig?.turboConfig) {
       if (cwd) {
         // if we have a cwd, we can provide a relative path to the workspace config
-        message = `2 {{ envKey }} is not listed as a dependency in the root turbo.json or workspace (${path.relative(
+        message = `{{ envKey }} is not listed as a dependency in the root turbo.json or workspace (${path.relative(
           cwd,
           workspaceConfig.workspacePath
         )}) turbo.json`;
       } else {
-        message = `3 {{ envKey }} is not listed as a dependency in the root turbo.json or workspace turbo.json`;
+        message = `{{ envKey }} is not listed as a dependency in the root turbo.json or workspace turbo.json`;
       }
     }
 
