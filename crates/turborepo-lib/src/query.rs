@@ -319,7 +319,7 @@ impl Package {
     }
 
     /// The upstream packages that have this package as a direct dependency
-    async fn immediate_dependents(&self) -> Result<Vec<Package>, Error> {
+    async fn dependents(&self) -> Result<Vec<Package>, Error> {
         let node: PackageNode = PackageNode::Workspace(self.name.clone());
         Ok(self
             .run
@@ -335,7 +335,7 @@ impl Package {
     }
 
     /// The downstream packages that directly depend on this package
-    async fn immediate_dependencies(&self) -> Result<Vec<Package>, Error> {
+    async fn dependencies(&self) -> Result<Vec<Package>, Error> {
         let node: PackageNode = PackageNode::Workspace(self.name.clone());
         Ok(self
             .run
@@ -351,7 +351,7 @@ impl Package {
     }
 
     /// The downstream packages that depend on this package, transitively
-    async fn dependents(&self) -> Result<Vec<Package>, Error> {
+    async fn transitive_dependents(&self) -> Result<Vec<Package>, Error> {
         let node: PackageNode = PackageNode::Workspace(self.name.clone());
 
         Ok(self
@@ -368,7 +368,7 @@ impl Package {
     }
 
     /// The upstream packages that this package depends on, transitively
-    async fn dependencies(&self) -> Result<Vec<Package>, Error> {
+    async fn transitive_dependencies(&self) -> Result<Vec<Package>, Error> {
         let node: PackageNode = PackageNode::Workspace(self.name.clone());
 
         Ok(self
