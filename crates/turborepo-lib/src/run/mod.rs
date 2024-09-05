@@ -222,7 +222,7 @@ impl Run {
         }
     }
     pub fn start_web_ui(&self) -> WuiResult {
-        let (tx, rx) = tokio::sync::broadcast::channel(100);
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
 
         let handle = tokio::spawn(turborepo_ui::wui::start_server(rx));
 

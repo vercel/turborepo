@@ -30,12 +30,12 @@ pub enum Error {
     #[error("failed to send message")]
     Send(#[from] axum::Error),
     #[error("failed to send message through channel")]
-    Broadcast(#[from] tokio::sync::broadcast::error::SendError<WebUIEvent>),
+    Broadcast(#[from] tokio::sync::mpsc::error::SendError<WebUIEvent>),
 }
 
 #[derive(Debug, Clone)]
 pub struct WebUISender {
-    pub tx: tokio::sync::broadcast::Sender<WebUIEvent>,
+    pub tx: tokio::sync::mpsc::UnboundedSender<WebUIEvent>,
 }
 
 impl WebUISender {
@@ -168,25 +168,22 @@ struct WebUIState {
 
 /// Subscribes to the Web UI events and updates the state
 struct Subscriber {
-    rx: tokio::sync::broadcast::Receiver<WebUIEvent>,
-    // We use a tokio::sync::Mutex here because we want this future to be Send.
-    #[allow(clippy::type_complexity)]
-    state: Arc<Mutex<RefCell<WebUIState>>>,
+    rx: tokio::sync::mpsc::UnboundedReceiver<WebUIEvent>,
 }
 
 impl Subscriber {
-    fn new(rx: tokio::sync::broadcast::Receiver<WebUIEvent>) -> Self {
-        Self {
-            rx,
-            state: Default::default(),
-        }
+    fn new(rx: tokio::sync::mpsc::UnboundedReceiver<WebUIEvent>) -> Self {
+        Self { rx }
     }
 
-    fn watch(&self) {
-        let mut rx = self.rx.resubscribe();
-        let state = self.state.clone();
+    fn watch(
+        self,
+        // We use a tokio::sync::Mutex here because we want this future to be Send.
+        #[allow(clippy::type_complexity)] state: Arc<Mutex<RefCell<WebUIState>>>,
+    ) {
         tokio::spawn(async move {
-            while let Ok(event) = rx.recv().await {
+            let mut rx = self.rx;
+            while let Some(event) = rx.recv().await {
                 Self::add_message(&state, event).await;
             }
         });
@@ -272,17 +269,8 @@ impl Subscriber {
     }
 }
 
-impl Clone for Subscriber {
-    fn clone(&self) -> Self {
-        Self {
-            rx: self.rx.resubscribe(),
-            state: self.state.clone(),
-        }
-    }
-}
-
 struct Query {
-    subscriber: Subscriber,
+    state: Arc<Mutex<RefCell<WebUIState>>>,
 }
 
 #[derive(Debug, Clone, Serialize, SimpleObject)]
@@ -292,14 +280,13 @@ struct Task {
 }
 
 struct CurrentRun<'a> {
-    subscriber: &'a Subscriber,
+    state: &'a Arc<Mutex<RefCell<WebUIState>>>,
 }
 
 #[Object]
 impl<'a> CurrentRun<'a> {
     async fn tasks(&self) -> Vec<Task> {
-        self.subscriber
-            .state
+        self.state
             .lock()
             .await
             .borrow()
@@ -316,9 +303,7 @@ impl<'a> CurrentRun<'a> {
 #[Object]
 impl Query {
     async fn current_run(&self) -> CurrentRun {
-        CurrentRun {
-            subscriber: &self.subscriber,
-        }
+        CurrentRun { state: &self.state }
     }
 }
 
@@ -332,10 +317,11 @@ async fn graphiql() -> impl IntoResponse {
 }
 
 pub async fn start_server(
-    rx: tokio::sync::broadcast::Receiver<WebUIEvent>,
+    rx: tokio::sync::mpsc::UnboundedReceiver<WebUIEvent>,
 ) -> Result<(), crate::Error> {
+    let state = Arc::new(Mutex::new(RefCell::new(WebUIState::default())));
     let subscriber = Subscriber::new(rx);
-    subscriber.watch();
+    subscriber.watch(state.clone());
 
     let cors = CorsLayer::new()
         // allow `GET` and `POST` when accessing the resource
@@ -344,7 +330,7 @@ pub async fn start_server(
         // allow requests from any origin
         .allow_origin(Any);
 
-    let schema = Schema::new(Query { subscriber }, EmptyMutation, EmptySubscription);
+    let schema = Schema::new(Query { state }, EmptyMutation, EmptySubscription);
     let app = Router::new()
         .route("/", get(graphiql).post_service(GraphQL::new(schema)))
         .layer(cors);
