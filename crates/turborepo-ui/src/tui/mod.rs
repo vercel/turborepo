@@ -17,7 +17,7 @@ use clipboard::copy_to_clipboard;
 use debouncer::Debouncer;
 use event::{Event, TaskResult};
 pub use handle::{AppReceiver, TuiSender};
-use input::{input, InputOptions};
+use input::InputOptions;
 pub use pane::TerminalPane;
 use size::SizeInfo;
 pub use table::TaskTable;
