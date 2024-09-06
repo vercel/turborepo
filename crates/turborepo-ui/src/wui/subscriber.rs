@@ -281,7 +281,7 @@ mod test {
             state_handle.tasks().get("task").unwrap().status,
             TaskStatus::Running
         );
-        assert_eq!(state_handle.tasks().get("task").unwrap().output, vec![]);
+        assert!(state_handle.tasks().get("task").unwrap().output.is_empty());
 
         Ok(())
     }
