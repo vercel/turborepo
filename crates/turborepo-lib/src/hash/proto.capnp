@@ -1,9 +1,4 @@
-using Go = import "/go.capnp";
-
 @0xe1dde60149aeb063;
-
-$Go.package("capnp");
-$Go.import("capnp");
 
 struct TaskHashable {
     globalHash @0 :Text;
