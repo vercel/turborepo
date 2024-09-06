@@ -106,7 +106,7 @@ impl<'a> Visitor<'a> {
     // Once we have the full picture we will go about grouping these pieces of data
     // together
     #[allow(clippy::too_many_arguments)]
-    pub fn new(
+    pub async fn new(
         package_graph: Arc<PackageGraph>,
         run_cache: Arc<RunCache>,
         run_tracker: RunTracker,
@@ -133,8 +133,11 @@ impl<'a> Visitor<'a> {
         let sink = Self::sink(run_opts);
         let color_cache = ColorSelector::default();
         // Set up correct size for underlying pty
-        if let Some(pane_size) = ui_sender.as_ref().and_then(|sender| sender.pane_size()) {
-            manager.set_pty_size(pane_size.rows, pane_size.cols);
+
+        if let Some(app) = ui_sender.as_ref() {
+            if let Some(pane_size) = app.pane_size().await {
+                manager.set_pty_size(pane_size.rows, pane_size.cols);
+            }
         }
 
         Self {
@@ -330,7 +333,7 @@ impl<'a> Visitor<'a> {
 
         if !self.is_watch {
             if let Some(handle) = &self.ui_sender {
-                handle.stop();
+                handle.stop().await;
             }
         }
 

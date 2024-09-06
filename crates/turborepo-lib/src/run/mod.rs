@@ -253,7 +253,8 @@ impl Run {
         }
 
         let (sender, receiver) = TuiSender::new();
-        let handle = tokio::task::spawn_blocking(move || Ok(tui::run_app(task_names, receiver)?));
+        let handle =
+            tokio::task::spawn(async move { Ok(tui::run_app(task_names, receiver).await?) });
 
         Ok(Some((sender, handle)))
     }
@@ -454,7 +455,8 @@ impl Run {
             global_env,
             ui_sender,
             is_watch,
-        );
+        )
+        .await;
 
         if self.opts.run_opts.dry_run.is_some() {
             visitor.dry_run();
