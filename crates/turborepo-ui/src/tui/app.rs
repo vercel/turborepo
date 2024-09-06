@@ -586,7 +586,13 @@ fn run_app_inner<B: Backend + std::io::Write>(
     let mut last_render = Instant::now();
     let mut resize_debouncer = Debouncer::new(RESIZE_DEBOUNCE_DELAY);
     let mut callback = None;
+    let mut needs_rerender = true;
     while let Some(event) = poll(app.input_options()?, &receiver, last_render + FRAMERATE) {
+        // If we only receive ticks, then there's been no state change so no update
+        // needed
+        if !matches!(event, Event::Tick) {
+            needs_rerender = true;
+        }
         let mut event = Some(event);
         let mut resize_event = None;
         if matches!(event, Some(Event::Resize { .. })) {
@@ -606,9 +612,10 @@ fn run_app_inner<B: Backend + std::io::Write>(
             if app.done {
                 break;
             }
-            if FRAMERATE <= last_render.elapsed() {
+            if FRAMERATE <= last_render.elapsed() && needs_rerender {
                 terminal.draw(|f| view(app, f))?;
                 last_render = Instant::now();
+                needs_rerender = false;
             }
         }
     }
