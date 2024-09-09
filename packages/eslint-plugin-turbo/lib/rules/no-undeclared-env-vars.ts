@@ -1,8 +1,8 @@
 import path from "node:path";
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import type { Rule } from "eslint";
 import type { Node, MemberExpression } from "estree";
-import { logger } from "@turbo/utils";
+import { logger, searchUp } from "@turbo/utils";
 import { frameworks } from "@turbo/types";
 import { RULES } from "../constants";
 import { Project, getWorkspaceFromFilePath } from "../utils/calculate-inputs";
@@ -21,28 +21,6 @@ export interface RuleContextWithOptions extends Rule.RuleContext {
     allowList?: Array<string>;
   }>;
 }
-
-/** recursively find the closest package.json from the given directory */
-const findClosestPackageJson = (currentDir: string): string | null => {
-  debug(`searching for package.json in ${currentDir}`);
-  const packageJsonPath = path.join(currentDir, "package.json");
-
-  // Check if package.json exists in the current directory
-  if (existsSync(packageJsonPath)) {
-    return packageJsonPath;
-  }
-
-  // Get the parent directory
-  const parentDir = path.dirname(currentDir);
-
-  // If we've reached the root directory, stop searching
-  if (parentDir === currentDir) {
-    return null;
-  }
-
-  // Recursively search in the parent directory
-  return findClosestPackageJson(parentDir);
-};
 
 const meta: Rule.RuleMetaData = {
   type: "problem",
@@ -125,14 +103,16 @@ const packageJsonDependencies = (filePath: string): Set<string> => {
  */
 const frameworkEnvMatches = (filePath: string): Set<RegExp> => {
   const directory = path.dirname(filePath);
-  const packageJsonPath = findClosestPackageJson(directory);
-  if (!packageJsonPath) {
+  const packageJsonDir = searchUp({ cwd: directory, target: "package.json" });
+  if (!packageJsonDir) {
     logger.error(`No package.json found connected to ${filePath}`);
     return new Set<RegExp>();
   }
-  debug(`found package.json: ${packageJsonPath}`);
+  debug(`found package.json in: ${packageJsonDir}`);
 
-  const dependencies = packageJsonDependencies(packageJsonPath);
+  const dependencies = packageJsonDependencies(
+    `${packageJsonDir}/package.json`
+  );
   const hasDependency = (dep: string) => dependencies.has(dep);
   debug(`dependencies for ${filePath}: ${Array.from(dependencies).join(",")}`);
 
