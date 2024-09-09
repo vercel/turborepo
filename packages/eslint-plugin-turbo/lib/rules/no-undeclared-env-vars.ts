@@ -105,7 +105,7 @@ const frameworkEnvMatches = (filePath: string): Set<RegExp> => {
   const directory = path.dirname(filePath);
   const packageJsonDir = searchUp({ cwd: directory, target: "package.json" });
   if (!packageJsonDir) {
-    logger.error(`No package.json found connected to ${filePath}`);
+    logger.error(`Could not determine package for ${filePath}`);
     return new Set<RegExp>();
   }
   debug(`found package.json in: ${packageJsonDir}`);
