@@ -2,7 +2,7 @@ import path from "node:path";
 import { readFileSync } from "node:fs";
 import type { Rule } from "eslint";
 import type { Node, MemberExpression } from "estree";
-import { logger, searchUp } from "@turbo/utils";
+import { type PackageJson, logger, searchUp } from "@turbo/utils";
 import { frameworks } from "@turbo/types";
 import { RULES } from "../constants";
 import { Project, getWorkspaceFromFilePath } from "../utils/calculate-inputs";
@@ -80,18 +80,31 @@ function normalizeCwd(
 /** for a given `package.json` file path, this will compile a Set of that package's listed dependencies */
 const packageJsonDependencies = (filePath: string): Set<string> => {
   // get the contents of the package.json
-  const packageJsonString = readFileSync(filePath, "utf-8");
-  const packageJson = JSON.parse(packageJsonString) as Record<
-    string,
-    undefined | Record<string, string>
-  >;
+  let packageJsonString;
 
-  return [
-    "dependencies",
-    "devDependencies",
-    "peerDependencies",
-    // intentionally not including `optionalDependencies` or `bundleDependencies` because at the time of writing they are not used for any of the frameworks we support
-  ]
+  try {
+    packageJsonString = readFileSync(filePath, "utf-8");
+  } catch (e) {
+    logger.error(`Could not read package.json at ${filePath}`);
+    return new Set();
+  }
+
+  let packageJson: PackageJson;
+  try {
+    packageJson = JSON.parse(packageJsonString) as PackageJson;
+  } catch (e) {
+    logger.error(`Could not parse package.json at ${filePath}`);
+    return new Set();
+  }
+
+  return (
+    [
+      "dependencies",
+      "devDependencies",
+      "peerDependencies",
+      // intentionally not including `optionalDependencies` or `bundleDependencies` because at the time of writing they are not used for any of the frameworks we support
+    ] as const
+  )
     .flatMap((key) => Object.keys(packageJson[key] ?? {}))
     .reduce((acc, dependency) => acc.add(dependency), new Set<string>());
 };
