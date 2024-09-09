@@ -13,6 +13,7 @@ const cwd = path.join(
 );
 const nextJsFilename = path.join(cwd, "/apps/nextjs/index.js");
 const viteFilename = path.join(cwd, "/apps/vite/index.js");
+const kitchenSinkFilename = path.join(cwd, "/apps/kitchen-sink/index.js");
 const options = (extra: Record<string, unknown> = {}) => ({
   options: [
     {
@@ -34,6 +35,11 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
       ...options(),
       filename: viteFilename,
     },
+    {
+      code: `const { NEXT_PUBLIC_ZILTOID, GATSBY_THE, NITRO_OMNISCIENT } = process.env;`,
+      ...options(),
+      filename: kitchenSinkFilename,
+    },
   ],
   invalid: [
     {
@@ -51,6 +57,16 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
       code: `const { VITE_THINGS } = process.env;`,
       ...options(),
       filename: nextJsFilename,
+      errors: [
+        {
+          message: "VITE_THINGS is not listed as a dependency in turbo.json",
+        },
+      ],
+    },
+    {
+      code: `const { VITE_THINGS } = process.env;`,
+      ...options(),
+      filename: kitchenSinkFilename,
       errors: [
         {
           message: "VITE_THINGS is not listed as a dependency in turbo.json",
