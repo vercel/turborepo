@@ -150,7 +150,10 @@ const frameworkEnvMatches = (filePath: string): Set<RegExp> => {
           : searchDependencies.some(hasDependency);
 
       if (hasMatch) {
-        return new Set([...acc, ...envWildcards.map(RegExp)]);
+        return new Set([
+          ...acc,
+          ...envWildcards.map((envWildcard) => RegExp(envWildcard)),
+        ]);
       }
       return acc;
     },
