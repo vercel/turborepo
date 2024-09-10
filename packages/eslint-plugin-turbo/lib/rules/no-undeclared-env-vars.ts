@@ -7,9 +7,7 @@ import { frameworks } from "@turbo/types";
 import { RULES } from "../constants";
 import { Project, getWorkspaceFromFilePath } from "../utils/calculate-inputs";
 
-/** set this to true if debugging this rule */
-const debugging = "".length === 0;
-const debug = debugging
+const debug = process.env.RUNNER_DEBUG
   ? logger.info
   : (_: string) => {
       /* noop */
