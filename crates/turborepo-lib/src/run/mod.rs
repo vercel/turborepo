@@ -74,9 +74,10 @@ pub struct Run {
     should_print_prelude: bool,
 }
 
-type UIResult = Result<Option<(UISender, JoinHandle<Result<(), turborepo_ui::Error>>)>, Error>;
-type WuiResult = Result<Option<(WebUISender, JoinHandle<Result<(), turborepo_ui::Error>>)>, Error>;
-type TuiResult = Result<Option<(TuiSender, JoinHandle<Result<(), turborepo_ui::Error>>)>, Error>;
+type UIResult<T> = Result<Option<(T, JoinHandle<Result<(), turborepo_ui::Error>>)>, Error>;
+
+type WuiResult = UIResult<WebUISender>;
+type TuiResult = UIResult<TuiSender>;
 
 impl Run {
     fn has_persistent_tasks(&self) -> bool {
@@ -210,7 +211,7 @@ impl Run {
             && tui::terminal_big_enough()?)
     }
 
-    pub fn start_ui(&self) -> UIResult {
+    pub fn start_ui(&self) -> UIResult<UISender> {
         match self.opts.run_opts.ui_mode {
             UIMode::Tui => self
                 .start_terminal_ui()

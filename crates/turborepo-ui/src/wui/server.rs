@@ -22,7 +22,7 @@ struct Task {
 }
 
 struct CurrentRun<'a> {
-    state: &'a Arc<Mutex<RefCell<WebUIState>>>,
+    state: &'a SharedState,
 }
 
 #[Object]
@@ -42,12 +42,17 @@ impl<'a> CurrentRun<'a> {
     }
 }
 
+/// We keep the state in a `Arc<Mutex<RefCell<T>>>` so both `Subscriber` and
+/// `Query` can access it, with `Subscriber` mutating it and `Query` only
+/// reading it.
+type SharedState = Arc<Mutex<RefCell<WebUIState>>>;
+
 pub struct Query {
-    state: Arc<Mutex<RefCell<WebUIState>>>,
+    state: SharedState,
 }
 
 impl Query {
-    pub fn new(state: Arc<Mutex<RefCell<WebUIState>>>) -> Self {
+    pub fn new(state: SharedState) -> Self {
         Self { state }
     }
 }
@@ -80,7 +85,7 @@ pub async fn start_server(
     Ok(())
 }
 
-pub(crate) async fn run_server(state: Arc<Mutex<RefCell<WebUIState>>>) -> Result<(), crate::Error> {
+pub(crate) async fn run_server(state: SharedState) -> Result<(), crate::Error> {
     let cors = CorsLayer::new()
         // allow `GET` and `POST` when accessing the resource
         .allow_methods([Method::GET, Method::POST])
