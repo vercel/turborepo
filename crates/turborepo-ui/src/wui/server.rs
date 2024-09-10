@@ -1,4 +1,4 @@
-use std::{cell::RefCell, sync::Arc};
+use std::sync::Arc;
 
 use async_graphql::{
     http::GraphiQLSource, EmptyMutation, EmptySubscription, Object, Schema, SimpleObject,
@@ -31,7 +31,6 @@ impl<'a> CurrentRun<'a> {
         self.state
             .lock()
             .await
-            .borrow()
             .tasks()
             .iter()
             .map(|(task, state)| Task {
@@ -45,7 +44,7 @@ impl<'a> CurrentRun<'a> {
 /// We keep the state in a `Arc<Mutex<RefCell<T>>>` so both `Subscriber` and
 /// `Query` can access it, with `Subscriber` mutating it and `Query` only
 /// reading it.
-type SharedState = Arc<Mutex<RefCell<WebUIState>>>;
+pub(crate) type SharedState = Arc<Mutex<WebUIState>>;
 
 pub struct Query {
     state: SharedState,
@@ -76,7 +75,7 @@ async fn graphiql() -> impl IntoResponse {
 pub async fn start_server(
     rx: tokio::sync::mpsc::UnboundedReceiver<WebUIEvent>,
 ) -> Result<(), crate::Error> {
-    let state = Arc::new(Mutex::new(RefCell::new(WebUIState::default())));
+    let state = Arc::new(Mutex::new(WebUIState::default()));
     let subscriber = Subscriber::new(rx);
     tokio::spawn(subscriber.watch(state.clone()));
 
