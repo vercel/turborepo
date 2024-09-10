@@ -17,7 +17,7 @@ use tokio::{
 };
 use tracing::{debug, trace};
 
-const FRAMERATE: Duration = Duration::from_millis(3);
+pub const FRAMERATE: Duration = Duration::from_millis(3);
 const RESIZE_DEBOUNCE_DELAY: Duration = Duration::from_millis(10);
 
 use super::{
@@ -590,14 +590,7 @@ async fn run_app_inner<B: Backend + std::io::Write>(
     let mut resize_debouncer = Debouncer::new(RESIZE_DEBOUNCE_DELAY);
     let mut callback = None;
     let mut needs_rerender = true;
-    while let Some(event) = poll(
-        app.input_options()?,
-        &mut receiver,
-        &mut crossterm_rx,
-        last_render + FRAMERATE,
-    )
-    .await
-    {
+    while let Some(event) = poll(app.input_options()?, &mut receiver, &mut crossterm_rx).await {
         // If we only receive ticks, then there's been no state change so no update
         // needed
         if !matches!(event, Event::Tick) {
@@ -639,7 +632,6 @@ async fn poll<'a>(
     input_options: InputOptions<'a>,
     receiver: &mut AppReceiver,
     crossterm_rx: &mut mpsc::Receiver<crossterm::event::Event>,
-    deadline: Instant,
 ) -> Option<Event> {
     let input_closed = crossterm_rx.is_closed();
     let input_fut = async {
@@ -660,11 +652,7 @@ async fn poll<'a>(
         }
     };
 
-    match tokio::time::timeout_at(deadline, event_fut).await {
-        Ok(Some(e)) => Some(e),
-        Err(_timeout) => Some(Event::Tick),
-        Ok(None) => None,
-    }
+    event_fut.await
 }
 
 const MIN_HEIGHT: u16 = 10;

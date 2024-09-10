@@ -1,6 +1,7 @@
 use tokio::sync::{mpsc, oneshot};
 
 use super::{
+    app::FRAMERATE,
     event::{CacheResult, OutputLogs, PaneSize},
     Error, Event, TaskResult,
 };
@@ -24,6 +25,16 @@ impl TuiSender {
     /// AppReceiver should be passed to `crate::tui::run_app`
     pub fn new() -> (Self, AppReceiver) {
         let (primary_tx, primary_rx) = mpsc::unbounded_channel();
+        let tick_sender = primary_tx.clone();
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(FRAMERATE);
+            loop {
+                interval.tick().await;
+                if tick_sender.send(Event::Tick).is_err() {
+                    break;
+                }
+            }
+        });
         (
             Self {
                 primary: primary_tx,
