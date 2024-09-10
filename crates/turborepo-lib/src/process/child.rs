@@ -33,7 +33,7 @@ use tokio::{
 };
 use tracing::{debug, trace};
 
-use super::Command;
+use super::{Command, PtySize};
 
 #[derive(Debug)]
 pub enum ChildState {
@@ -135,22 +135,17 @@ impl ChildHandle {
     }
 
     #[tracing::instrument(skip(command))]
-    pub fn spawn_pty(command: Command) -> io::Result<SpawnResult> {
-        use portable_pty::PtySize;
-
+    pub fn spawn_pty(command: Command, size: PtySize) -> io::Result<SpawnResult> {
         let keep_stdin_open = command.will_open_stdin();
 
         let command = portable_pty::CommandBuilder::from(command);
         let pty_system = native_pty_system();
-        let size =
-            console::Term::stdout()
-                .size_checked()
-                .map_or_else(PtySize::default, |(rows, cols)| PtySize {
-                    rows,
-                    cols,
-                    pixel_width: 0,
-                    pixel_height: 0,
-                });
+        let size = portable_pty::PtySize {
+            rows: size.rows,
+            cols: size.cols,
+            pixel_width: 0,
+            pixel_height: 0,
+        };
         let pair = pty_system
             .openpty(size)
             .map_err(|err| match err.downcast() {
@@ -438,15 +433,15 @@ impl Child {
     pub fn spawn(
         command: Command,
         shutdown_style: ShutdownStyle,
-        use_pty: bool,
+        pty_size: Option<PtySize>,
     ) -> io::Result<Self> {
         let label = command.label();
         let SpawnResult {
             handle: mut child,
             io: ChildIO { stdin, output },
             controller,
-        } = if use_pty {
-            ChildHandle::spawn_pty(command)
+        } = if let Some(size) = pty_size {
+            ChildHandle::spawn_pty(command, size)
         } else {
             ChildHandle::spawn_normal(command)
         }?;
@@ -832,7 +827,10 @@ mod test {
     use turbopath::AbsoluteSystemPathBuf;
 
     use super::{Child, ChildInput, ChildOutput, ChildState, Command};
-    use crate::process::child::{ChildExit, ShutdownStyle};
+    use crate::process::{
+        child::{ChildExit, ShutdownStyle},
+        PtySize,
+    };
 
     const STARTUP_DELAY: Duration = Duration::from_millis(500);
     // We skip testing PTY usage on Windows
@@ -855,7 +853,8 @@ mod test {
         let script = find_script_dir().join_component("hello_world.js");
         let mut cmd = Command::new("node");
         cmd.args([script.as_std_path()]);
-        let mut child = Child::spawn(cmd, ShutdownStyle::Kill, use_pty).unwrap();
+        let mut child =
+            Child::spawn(cmd, ShutdownStyle::Kill, use_pty.then(PtySize::default)).unwrap();
 
         assert_matches!(child.pid(), Some(_));
         child.stop().await;
@@ -872,7 +871,8 @@ mod test {
         let script = find_script_dir().join_component("hello_world.js");
         let mut cmd = Command::new("node");
         cmd.args([script.as_std_path()]);
-        let mut child = Child::spawn(cmd, ShutdownStyle::Kill, use_pty).unwrap();
+        let mut child =
+            Child::spawn(cmd, ShutdownStyle::Kill, use_pty.then(PtySize::default)).unwrap();
 
         let exit1 = child.wait().await;
         let exit2 = child.wait().await;
@@ -892,7 +892,8 @@ mod test {
             cmd
         };
 
-        let mut child = Child::spawn(cmd, ShutdownStyle::Kill, use_pty).unwrap();
+        let mut child =
+            Child::spawn(cmd, ShutdownStyle::Kill, use_pty.then(PtySize::default)).unwrap();
 
         {
             let state = child.state.read().await;
@@ -917,7 +918,8 @@ mod test {
         let mut cmd = Command::new("node");
         cmd.args([script.as_std_path()]);
         cmd.open_stdin();
-        let mut child = Child::spawn(cmd, ShutdownStyle::Kill, use_pty).unwrap();
+        let mut child =
+            Child::spawn(cmd, ShutdownStyle::Kill, use_pty.then(PtySize::default)).unwrap();
 
         tokio::time::sleep(STARTUP_DELAY).await;
 
@@ -959,7 +961,8 @@ mod test {
         let mut cmd = Command::new("node");
         cmd.args([script.as_std_path()]);
         cmd.open_stdin();
-        let mut child = Child::spawn(cmd, ShutdownStyle::Kill, use_pty).unwrap();
+        let mut child =
+            Child::spawn(cmd, ShutdownStyle::Kill, use_pty.then(PtySize::default)).unwrap();
 
         tokio::time::sleep(STARTUP_DELAY).await;
 
@@ -1006,7 +1009,7 @@ mod test {
         let mut child = Child::spawn(
             cmd,
             ShutdownStyle::Graceful(Duration::from_millis(500)),
-            use_pty,
+            use_pty.then(PtySize::default),
         )
         .unwrap();
 
@@ -1043,7 +1046,7 @@ mod test {
         let mut child = Child::spawn(
             cmd,
             ShutdownStyle::Graceful(Duration::from_millis(500)),
-            use_pty,
+            use_pty.then(PtySize::default),
         )
         .unwrap();
 
@@ -1073,7 +1076,7 @@ mod test {
         let mut child = Child::spawn(
             cmd,
             ShutdownStyle::Graceful(Duration::from_millis(500)),
-            use_pty,
+            use_pty.then(PtySize::default),
         )
         .unwrap();
 
@@ -1122,7 +1125,8 @@ mod test {
         let mut cmd = Command::new("node");
         cmd.args([script.as_std_path()]);
         cmd.open_stdin();
-        let mut child = Child::spawn(cmd, ShutdownStyle::Kill, use_pty).unwrap();
+        let mut child =
+            Child::spawn(cmd, ShutdownStyle::Kill, use_pty.then(PtySize::default)).unwrap();
 
         let mut out = Vec::new();
 
@@ -1144,7 +1148,8 @@ mod test {
         let mut cmd = Command::new("node");
         cmd.args([script.as_std_path()]);
         cmd.open_stdin();
-        let mut child = Child::spawn(cmd, ShutdownStyle::Kill, use_pty).unwrap();
+        let mut child =
+            Child::spawn(cmd, ShutdownStyle::Kill, use_pty.then(PtySize::default)).unwrap();
 
         let mut buffer = Vec::new();
 
@@ -1168,7 +1173,8 @@ mod test {
         let mut cmd = Command::new("node");
         cmd.args([script.as_std_path()]);
         cmd.open_stdin();
-        let mut child = Child::spawn(cmd, ShutdownStyle::Kill, use_pty).unwrap();
+        let mut child =
+            Child::spawn(cmd, ShutdownStyle::Kill, use_pty.then(PtySize::default)).unwrap();
 
         let mut out = Vec::new();
 
@@ -1189,7 +1195,8 @@ mod test {
         let mut cmd = Command::new("node");
         cmd.args([script.as_std_path()]);
         cmd.open_stdin();
-        let mut child = Child::spawn(cmd, ShutdownStyle::Kill, use_pty).unwrap();
+        let mut child =
+            Child::spawn(cmd, ShutdownStyle::Kill, use_pty.then(PtySize::default)).unwrap();
 
         let mut out = Vec::new();
 
@@ -1217,7 +1224,7 @@ mod test {
         let mut child = Child::spawn(
             cmd,
             ShutdownStyle::Graceful(Duration::from_millis(100)),
-            use_pty,
+            use_pty.then(PtySize::default),
         )
         .unwrap();
 
@@ -1233,7 +1240,7 @@ mod test {
     async fn test_orphan_process() {
         let mut cmd = Command::new("sh");
         cmd.args(["-c", "echo hello; sleep 120; echo done"]);
-        let mut child = Child::spawn(cmd, ShutdownStyle::Kill, false).unwrap();
+        let mut child = Child::spawn(cmd, ShutdownStyle::Kill, None).unwrap();
 
         tokio::time::sleep(STARTUP_DELAY).await;
 
@@ -1267,7 +1274,7 @@ mod test {
         let script = find_script_dir().join_component("hello_world.js");
         let mut cmd = Command::new("node");
         cmd.args([script.as_std_path()]);
-        let child = Child::spawn(cmd, ShutdownStyle::Kill, use_pty).unwrap();
+        let child = Child::spawn(cmd, ShutdownStyle::Kill, use_pty.then(PtySize::default)).unwrap();
 
         let mut stops = FuturesUnordered::new();
         for _ in 1..10 {

@@ -16,6 +16,7 @@ pub enum Event {
         status: String,
         result: CacheResult,
     },
+    PaneSizeQuery(std::sync::mpsc::SyncSender<PaneSize>),
     Stop(std::sync::mpsc::SyncSender<()>),
     // Stop initiated by the TUI itself
     InternalStop,
@@ -86,6 +87,12 @@ pub enum OutputLogs {
     NewOnly,
     // Output is only persisted if the task failed
     ErrorsOnly,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PaneSize {
+    pub rows: u16,
+    pub cols: u16,
 }
 
 #[cfg(test)]
