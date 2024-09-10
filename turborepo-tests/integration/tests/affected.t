@@ -5,15 +5,68 @@ Create a new branch
   $ git checkout -b my-branch
   Switched to a new branch 'my-branch'
 
-Edit a file that affects `my-app`
-  $ echo "foo" >> apps/my-app/index.js
+Ensure that nothing is affected
+  $ ${TURBO} ls --affected
+   WARNING  ls command is experimental and may change in the future
+  0 no packages (npm)
+  
+
+Create a new file that affects `my-app`
+  $ echo "foo" > apps/my-app/new.js
 
 Validate that we only run `my-app#build` with change not committed
   $ ${TURBO} run build --affected --log-order grouped
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  my-app:build: cache miss, executing 97b34acb6e848096
+  my-app:build: cache miss, executing 1b83c3b24476ec9c
+  my-app:build: 
+  my-app:build: > build
+  my-app:build: > echo building
+  my-app:build: 
+  my-app:build: building
+  
+   Tasks:    1 successful, 1 total
+  Cached:    0 cached, 1 total
+    Time:\s*[\.0-9]+m?s  (re)
+  
+
+
+Do the same thing with the `ls` command
+  $ ${TURBO} ls --affected
+   WARNING  ls command is experimental and may change in the future
+  1 package (npm)
+  
+    my-app apps[\/\\]my-app (re)
+
+
+
+Do the same thing with the `query` command
+  $ ${TURBO} query "query { affectedPackages { name } }"
+   WARNING  query command is experimental and may change in the future
+  {
+    "data": {
+      "affectedPackages": [
+        {
+          "name": "my-app"
+        }
+      ]
+    }
+  }
+
+
+Remove the new file
+  $ rm apps/my-app/new.js
+
+Add field to `apps/my-app/package.json`
+  $ jq '. += {"description": "foo"}' apps/my-app/package.json > apps/my-app/package.json.new
+
+Validate that we only run `my-app#build` with change not committed
+  $ ${TURBO} run build --affected --log-order grouped
+  \xe2\x80\xa2 Packages in scope: my-app (esc)
+  \xe2\x80\xa2 Running build in 1 packages (esc)
+  \xe2\x80\xa2 Remote caching disabled (esc)
+  my-app:build: cache miss, executing 3e9d077cf0ab92e5
   my-app:build: 
   my-app:build: > build
   my-app:build: > echo building
@@ -55,7 +108,7 @@ Validate that we only run `my-app#build` with change committed
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  my-app:build: cache hit, replaying logs 97b34acb6e848096
+  my-app:build: cache hit, replaying logs 3e9d077cf0ab92e5
   my-app:build: 
   my-app:build: > build
   my-app:build: > echo building
@@ -159,7 +212,7 @@ Run the build and expect only `my-app` to be affected, since between
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  my-app:build: cache hit, replaying logs 97b34acb6e848096
+  my-app:build: cache hit, replaying logs 3e9d077cf0ab92e5
   my-app:build: 
   my-app:build: > build
   my-app:build: > echo building
@@ -205,7 +258,7 @@ Now try running `--affected` again, we should run all tasks
   \xe2\x80\xa2 Packages in scope: //, another, my-app, util (esc)
   \xe2\x80\xa2 Running build in 4 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  my-app:build: cache hit, replaying logs 97b34acb6e848096
+  my-app:build: cache hit, replaying logs 3e9d077cf0ab92e5
   my-app:build: 
   my-app:build: > build
   my-app:build: > echo building
