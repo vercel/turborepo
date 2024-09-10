@@ -212,6 +212,11 @@ impl Run {
     }
 
     pub fn start_ui(&self) -> UIResult<UISender> {
+        // Print prelude here as this needs to happen before the UI is started
+        if self.should_print_prelude {
+            self.print_run_prelude();
+        }
+
         match self.opts.run_opts.ui_mode {
             UIMode::Tui => self
                 .start_terminal_ui()
@@ -222,7 +227,7 @@ impl Run {
                 .map(|res| res.map(|(sender, handle)| (UISender::Wui(sender), handle))),
         }
     }
-    pub fn start_web_ui(&self) -> WuiResult {
+    fn start_web_ui(&self) -> WuiResult {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
 
         let handle = tokio::spawn(turborepo_ui::wui::server::start_server(rx));
@@ -231,12 +236,7 @@ impl Run {
     }
 
     #[allow(clippy::type_complexity)]
-    pub fn start_terminal_ui(&self) -> TuiResult {
-        // Print prelude here as this needs to happen before the UI is started
-        if self.should_print_prelude {
-            self.print_run_prelude();
-        }
-
+    fn start_terminal_ui(&self) -> TuiResult {
         if !self.should_start_ui()? {
             return Ok(None);
         }
