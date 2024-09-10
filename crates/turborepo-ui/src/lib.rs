@@ -9,7 +9,9 @@ mod line;
 mod logs;
 mod output;
 mod prefixed;
+pub mod sender;
 pub mod tui;
+pub mod wui;
 
 use std::{borrow::Cow, env, f64::consts::PI, time::Duration};
 
@@ -29,6 +31,10 @@ pub use crate::{
 
 #[derive(Debug, Error)]
 pub enum Error {
+    #[error(transparent)]
+    Tui(#[from] tui::Error),
+    #[error(transparent)]
+    Wui(#[from] wui::Error),
     #[error("cannot read logs: {0}")]
     CannotReadLogs(#[source] std::io::Error),
     #[error("cannot write logs: {0}")]

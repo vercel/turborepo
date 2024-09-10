@@ -31,7 +31,10 @@ use turborepo_env::EnvironmentVariableMap;
 use turborepo_repository::package_graph::{PackageGraph, PackageName, PackageNode};
 use turborepo_scm::SCM;
 use turborepo_telemetry::events::generic::GenericEventBuilder;
-use turborepo_ui::{cprint, cprintln, tui, tui::AppSender, ColorConfig, BOLD_GREY, GREY};
+use turborepo_ui::{
+    cprint, cprintln, sender::UISender, tui, tui::TuiSender, wui::sender::WebUISender, ColorConfig,
+    BOLD_GREY, GREY,
+};
 
 pub use crate::run::error::Error;
 use crate::{
@@ -69,8 +72,12 @@ pub struct Run {
     task_access: TaskAccess,
     daemon: Option<DaemonClient<DaemonConnector>>,
     should_print_prelude: bool,
-    ui_mode: UIMode,
 }
+
+type UIResult<T> = Result<Option<(T, JoinHandle<Result<(), turborepo_ui::Error>>)>, Error>;
+
+type WuiResult = UIResult<WebUISender>;
+type TuiResult = UIResult<TuiSender>;
 
 impl Run {
     fn has_persistent_tasks(&self) -> bool {
@@ -195,24 +202,41 @@ impl Run {
     }
 
     pub fn has_tui(&self) -> bool {
-        self.ui_mode.use_tui()
+        self.opts.run_opts.ui_mode.use_tui()
     }
 
     pub fn should_start_ui(&self) -> Result<bool, Error> {
-        Ok(self.ui_mode.use_tui()
+        Ok(self.opts.run_opts.ui_mode.use_tui()
             && self.opts.run_opts.dry_run.is_none()
             && tui::terminal_big_enough()?)
     }
 
-    #[allow(clippy::type_complexity)]
-    pub fn start_experimental_ui(
-        &self,
-    ) -> Result<Option<(AppSender, JoinHandle<Result<(), tui::Error>>)>, Error> {
+    pub fn start_ui(&self) -> UIResult<UISender> {
         // Print prelude here as this needs to happen before the UI is started
         if self.should_print_prelude {
             self.print_run_prelude();
         }
 
+        match self.opts.run_opts.ui_mode {
+            UIMode::Tui => self
+                .start_terminal_ui()
+                .map(|res| res.map(|(sender, handle)| (UISender::Tui(sender), handle))),
+            UIMode::Stream => Ok(None),
+            UIMode::Web => self
+                .start_web_ui()
+                .map(|res| res.map(|(sender, handle)| (UISender::Wui(sender), handle))),
+        }
+    }
+    fn start_web_ui(&self) -> WuiResult {
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+
+        let handle = tokio::spawn(turborepo_ui::wui::server::start_server(rx));
+
+        Ok(Some((WebUISender { tx }, handle)))
+    }
+
+    #[allow(clippy::type_complexity)]
+    fn start_terminal_ui(&self) -> TuiResult {
         if !self.should_start_ui()? {
             return Ok(None);
         }
@@ -223,8 +247,8 @@ impl Run {
             return Ok(None);
         }
 
-        let (sender, receiver) = AppSender::new();
-        let handle = tokio::task::spawn_blocking(move || tui::run_app(task_names, receiver));
+        let (sender, receiver) = TuiSender::new();
+        let handle = tokio::task::spawn_blocking(move || Ok(tui::run_app(task_names, receiver)?));
 
         Ok(Some((sender, handle)))
     }
@@ -236,11 +260,7 @@ impl Run {
         }
     }
 
-    pub async fn run(
-        &mut self,
-        experimental_ui_sender: Option<AppSender>,
-        is_watch: bool,
-    ) -> Result<i32, Error> {
+    pub async fn run(&mut self, ui_sender: Option<UISender>, is_watch: bool) -> Result<i32, Error> {
         let skip_cache_writes = self.opts.runcache_opts.skip_writes;
         if let Some(subscriber) = self.signal_handler.subscribe() {
             let run_cache = self.run_cache.clone();
@@ -427,7 +447,7 @@ impl Run {
             self.processes.clone(),
             &self.repo_root,
             global_env,
-            experimental_ui_sender,
+            ui_sender,
             is_watch,
         );
 

@@ -13,6 +13,7 @@ use crate::{
     commands::CommandBase,
     config::ConfigurationOptions,
     run::task_id::TaskId,
+    turbo_json::UIMode,
 };
 
 #[derive(Debug, Error)]
@@ -166,6 +167,7 @@ pub struct RunOpts {
     pub summarize: Option<Option<bool>>,
     pub(crate) experimental_space_id: Option<String>,
     pub is_github_actions: bool,
+    pub ui_mode: UIMode,
 }
 
 impl RunOpts {
@@ -267,6 +269,7 @@ impl<'a> TryFrom<OptsInputs<'a>> for RunOpts {
             env_mode: inputs.config.env_mode(),
             cache_dir: inputs.config.cache_dir().into(),
             is_github_actions,
+            ui_mode: inputs.config.ui(),
         })
     }
 }
@@ -394,6 +397,7 @@ mod test {
     use crate::{
         cli::DryRunMode,
         opts::{Opts, RunCacheOpts, ScopeOpts},
+        turbo_json::UIMode,
     };
 
     #[derive(Default)]
@@ -499,6 +503,7 @@ mod test {
             only: opts_input.only,
             dry_run: opts_input.dry_run,
             graph: None,
+            ui_mode: UIMode::Stream,
             single_package: false,
             log_prefix: crate::opts::ResolvedLogPrefix::Task,
             log_order: crate::opts::ResolvedLogOrder::Stream,
