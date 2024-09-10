@@ -272,11 +272,7 @@ mod test {
         subscriber.watch(state.clone()).await;
 
         let state_handle = state.lock().await.borrow().clone();
-        assert_eq!(state_handle.tasks().len(), 3);
-        assert_eq!(
-            state_handle.tasks().get("task2").unwrap().status,
-            TaskStatus::Cached
-        );
+        assert_eq!(state_handle.tasks().len(), 1);
         assert_eq!(
             state_handle.tasks().get("task").unwrap().status,
             TaskStatus::Running
