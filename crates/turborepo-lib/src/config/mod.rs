@@ -191,7 +191,7 @@ const DEFAULT_UPLOAD_TIMEOUT: u64 = 60;
 // want to display and what fields they want to include.
 #[derive(Deserialize, Default, Debug, PartialEq, Eq, Clone, Iterable, Merge, Setters)]
 #[serde(rename_all = "camelCase")]
-// Generate setters for the builder type the set these values on it's override_config field
+// Generate setters for the builder type that set these values on its override_config field
 #[setters(
     prefix = "with_",
     generate_delegates(ty = "TurborepoConfigBuilder", field = "override_config")

@@ -1,3 +1,6 @@
+use async_graphql::Enum;
+use serde::Serialize;
+
 pub enum Event {
     StartTask {
         task: String,
@@ -16,6 +19,7 @@ pub enum Event {
         status: String,
         result: CacheResult,
     },
+    PaneSizeQuery(std::sync::mpsc::SyncSender<PaneSize>),
     Stop(std::sync::mpsc::SyncSender<()>),
     // Stop initiated by the TUI itself
     InternalStop,
@@ -61,20 +65,20 @@ pub enum Direction {
     Down,
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Serialize, Enum)]
 pub enum TaskResult {
     Success,
     Failure,
     CacheHit,
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Serialize, Enum)]
 pub enum CacheResult {
     Hit,
     Miss,
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Serialize, Enum)]
 pub enum OutputLogs {
     // Entire task output is persisted after run
     Full,
@@ -86,6 +90,12 @@ pub enum OutputLogs {
     NewOnly,
     // Output is only persisted if the task failed
     ErrorsOnly,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PaneSize {
+    pub rows: u16,
+    pub cols: u16,
 }
 
 #[cfg(test)]

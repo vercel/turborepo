@@ -39,7 +39,7 @@ Make sure exit code is 2 when no args are passed
         --heap <HEAP>
             Specify a file to save a pprof heap profile
         --ui <UI>
-            Specify whether to use the streaming UI or TUI [possible values: tui, stream]
+            Specify whether to use the streaming UI or TUI [possible values: tui, stream, web]
         --login <LOGIN>
             Override the login endpoint
         --no-color
