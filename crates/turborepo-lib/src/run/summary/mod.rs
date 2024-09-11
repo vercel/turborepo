@@ -188,7 +188,7 @@ impl RunTracker {
         task_factory: TaskSummaryFactory<'a>,
     ) -> Result<RunSummary<'a>, Error> {
         let single_package = run_opts.single_package;
-        let should_save = run_opts.summarize.flatten().is_some_and(|s| s);
+        let should_save = run_opts.summarize;
 
         let run_type = match run_opts.dry_run {
             None => RunType::Real,

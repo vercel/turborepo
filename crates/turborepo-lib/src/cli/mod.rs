@@ -87,7 +87,7 @@ impl From<OutputLogsMode> for turborepo_ui::tui::event::OutputLogs {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Serialize, ValueEnum)]
+#[derive(Copy, Clone, Debug, PartialEq, Serialize, ValueEnum, Deserialize, Eq)]
 pub enum LogOrder {
     #[serde(rename = "auto")]
     Auto,
@@ -233,7 +233,9 @@ pub struct Args {
     // This should be inside `RunArgs` but clap currently has a bug
     // around nested flattened optional args: https://github.com/clap-rs/clap/issues/4697
     #[clap(flatten)]
-    pub execution_args: Option<ExecutionArgs>,
+    // DO NOT MAKE THIS VISIBLE
+    // Instead use the getter method execution_args()
+    execution_args: Option<ExecutionArgs>,
     #[clap(subcommand)]
     pub command: Option<Command>,
 }
@@ -474,6 +476,15 @@ impl Args {
             self.run_args.as_ref()
         }
     }
+
+    /// Fetch the execution args supplied to the command
+    pub fn execution_args(&self) -> Option<&ExecutionArgs> {
+        if let Some(Command::Run { execution_args, .. }) = &self.command {
+            Some(execution_args)
+        } else {
+            self.execution_args.as_ref()
+        }
+    }
 }
 
 /// Defines the subcommands for CLI. NOTE: If we change the commands in Go,
@@ -710,7 +721,7 @@ ArgGroup::new("scope-filter-group").multiple(true).required(false),
 ])]
 pub struct ExecutionArgs {
     /// Override the filesystem cache directory.
-    #[clap(long, value_parser = path_non_empty, env = "TURBO_CACHE_DIR")]
+    #[clap(long, value_parser = path_non_empty)]
     pub cache_dir: Option<Utf8PathBuf>,
     /// Limit the concurrency of task execution. Use 1 for serial (i.e.
     /// one-at-a-time) execution.
@@ -724,7 +735,7 @@ pub struct ExecutionArgs {
     #[clap(long)]
     pub single_package: bool,
     /// Ignore the existing cache (to force execution)
-    #[clap(long, env = "TURBO_FORCE", default_missing_value = "true")]
+    #[clap(long, default_missing_value = "true")]
     pub force: Option<Option<bool>>,
     /// Specify whether or not to do framework inference for tasks
     #[clap(long, value_name = "BOOL", action = ArgAction::Set, default_value = "true", default_missing_value = "true", num_args = 0..=1)]
@@ -761,8 +772,8 @@ pub struct ExecutionArgs {
     /// output as soon as it is available. Use "grouped" to
     /// show output when a command has finished execution. Use "auto" to let
     /// turbo decide based on its own heuristics. (default auto)
-    #[clap(long, env = "TURBO_LOG_ORDER", value_enum, default_value_t = LogOrder::Auto)]
-    pub log_order: LogOrder,
+    #[clap(long, value_enum)]
+    pub log_order: Option<LogOrder>,
     /// Only executes the tasks specified, does not execute parent tasks.
     #[clap(long)]
     pub only: bool,
@@ -770,8 +781,8 @@ pub struct ExecutionArgs {
     pub pkg_inference_root: Option<String>,
     /// Ignore the local filesystem cache for all tasks. Only
     /// allow reading and caching artifacts using the remote cache.
-    #[clap(long, env = "TURBO_REMOTE_ONLY", value_name = "BOOL", action = ArgAction::Set, default_value = "false", default_missing_value = "true", num_args = 0..=1)]
-    pub remote_only: bool,
+    #[clap(long, default_missing_value = "true")]
+    pub remote_only: Option<Option<bool>>,
     /// Use "none" to remove prefixes from task logs. Use "task" to get task id
     /// prefixing. Use "auto" to let turbo decide how to prefix the logs
     /// based on the execution environment. In most cases this will be the same
@@ -790,6 +801,11 @@ pub struct ExecutionArgs {
 }
 
 impl ExecutionArgs {
+    pub fn remote_only(&self) -> Option<bool> {
+        let remote_only = self.remote_only?;
+        Some(remote_only.unwrap_or(true))
+    }
+
     fn track(&self, telemetry: &CommandEventBuilder) {
         // default to false
         track_usage!(telemetry, self.framework_inference, |val: bool| !val);
@@ -797,7 +813,7 @@ impl ExecutionArgs {
         track_usage!(telemetry, self.continue_execution, |val| val);
         track_usage!(telemetry, self.single_package, |val| val);
         track_usage!(telemetry, self.only, |val| val);
-        track_usage!(telemetry, self.remote_only, |val| val);
+        track_usage!(telemetry, self.remote_only().unwrap_or_default(), |val| val);
         track_usage!(telemetry, &self.cache_dir, Option::is_some);
         track_usage!(telemetry, &self.force, Option::is_some);
         track_usage!(telemetry, &self.pkg_inference_root, Option::is_some);
@@ -822,8 +838,8 @@ impl ExecutionArgs {
             telemetry.track_arg_value("output-logs", output_logs, EventType::NonSensitive);
         }
 
-        if self.log_order != LogOrder::default() {
-            telemetry.track_arg_value("log-order", self.log_order, EventType::NonSensitive);
+        if let Some(log_order) = self.log_order {
+            telemetry.track_arg_value("log-order", log_order, EventType::NonSensitive);
         }
 
         if self.log_prefix != LogPrefix::default() {
@@ -882,10 +898,10 @@ pub struct RunArgs {
     #[clap(long, value_parser=NonEmptyStringValueParser::new(), conflicts_with = "profile")]
     pub anon_profile: Option<String>,
     /// Treat remote cache as read only
-    #[clap(long, env = "TURBO_REMOTE_CACHE_READ_ONLY", value_name = "BOOL", action = ArgAction::Set, default_value = "false", default_missing_value = "true", num_args = 0..=1)]
-    pub remote_cache_read_only: bool,
+    #[clap(long, default_missing_value = "true")]
+    pub remote_cache_read_only: Option<Option<bool>>,
     /// Generate a summary of the turbo run
-    #[clap(long, env = "TURBO_RUN_SUMMARY", default_missing_value = "true")]
+    #[clap(long, default_missing_value = "true")]
     pub summarize: Option<Option<bool>>,
 
     // Pass a string to enable posting Run Summaries to Vercel
@@ -908,7 +924,7 @@ impl Default for RunArgs {
             no_daemon: false,
             profile: None,
             anon_profile: None,
-            remote_cache_read_only: false,
+            remote_cache_read_only: None,
             summarize: None,
             experimental_space_id: None,
             parallel: false,
@@ -938,13 +954,27 @@ impl RunArgs {
         }
     }
 
+    pub fn remote_cache_read_only(&self) -> Option<bool> {
+        let remote_cache_read_only = self.remote_cache_read_only?;
+        Some(remote_cache_read_only.unwrap_or(true))
+    }
+
+    pub fn summarize(&self) -> Option<bool> {
+        let summarize = self.summarize?;
+        Some(summarize.unwrap_or(true))
+    }
+
     pub fn track(&self, telemetry: &CommandEventBuilder) {
         // default to true
         track_usage!(telemetry, self.no_cache, |val| val);
         track_usage!(telemetry, self.daemon, |val| val);
         track_usage!(telemetry, self.no_daemon, |val| val);
         track_usage!(telemetry, self.parallel, |val| val);
-        track_usage!(telemetry, self.remote_cache_read_only, |val| val);
+        track_usage!(
+            telemetry,
+            self.remote_cache_read_only().unwrap_or_default(),
+            |val| val
+        );
 
         // default to None
         track_usage!(telemetry, &self.profile, Option::is_some);
@@ -1412,7 +1442,7 @@ mod test {
     fn get_default_execution_args() -> ExecutionArgs {
         ExecutionArgs {
             output_logs: None,
-            remote_only: false,
+            remote_only: None,
             framework_inference: true,
             ..ExecutionArgs::default()
         }
@@ -1923,7 +1953,7 @@ mod test {
             command: Some(Command::Run {
                 execution_args: Box::new(ExecutionArgs {
                     tasks: vec!["build".to_string()],
-                    log_order: LogOrder::Stream,
+                    log_order: Some(LogOrder::Stream),
                     ..get_default_execution_args()
                 }),
                 run_args: Box::new(get_default_run_args())
@@ -1938,7 +1968,7 @@ mod test {
             command: Some(Command::Run {
                 execution_args: Box::new(ExecutionArgs {
                     tasks: vec!["build".to_string()],
-                    log_order: LogOrder::Grouped,
+                    log_order: Some(LogOrder::Grouped),
                     ..get_default_execution_args()
                 }),
                 run_args: Box::new(get_default_run_args())
@@ -1998,7 +2028,6 @@ mod test {
             command: Some(Command::Run {
                 execution_args: Box::new(ExecutionArgs {
                     tasks: vec!["build".to_string()],
-                    log_order: LogOrder::Auto,
                     ..get_default_execution_args()
                 }),
                 run_args: Box::new(get_default_run_args())
@@ -2048,7 +2077,7 @@ mod test {
             command: Some(Command::Run {
                 execution_args: Box::new(ExecutionArgs {
                     tasks: vec!["build".to_string()],
-                    remote_only: false,
+                    remote_only: None,
                     ..get_default_execution_args()
                 }),
                 run_args: Box::new(get_default_run_args())
@@ -2063,7 +2092,7 @@ mod test {
             command: Some(Command::Run {
                 execution_args: Box::new(ExecutionArgs {
                     tasks: vec!["build".to_string()],
-                    remote_only: true,
+                    remote_only: Some(Some(true)),
                     ..get_default_execution_args()
                 }),
                 run_args: Box::new(get_default_run_args())
@@ -2078,7 +2107,7 @@ mod test {
             command: Some(Command::Run {
                 execution_args: Box::new(ExecutionArgs {
                     tasks: vec!["build".to_string()],
-                    remote_only: true,
+                    remote_only: Some(Some(true)),
                     ..get_default_execution_args()
                 }),
                 run_args: Box::new(get_default_run_args())
@@ -2093,7 +2122,7 @@ mod test {
             command: Some(Command::Run {
                 execution_args: Box::new(ExecutionArgs {
                     tasks: vec!["build".to_string()],
-                    remote_only: false,
+                    remote_only: Some(Some(false)),
                     ..get_default_execution_args()
                 }),
                 run_args: Box::new(get_default_run_args())

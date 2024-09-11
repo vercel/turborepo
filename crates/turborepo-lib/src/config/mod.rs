@@ -19,7 +19,11 @@ use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_errors::TURBO_SITE;
 
 pub use crate::turbo_json::{RawTurboJson, UIMode};
-use crate::{cli::EnvMode, commands::CommandBase, turbo_json::CONFIG_FILE};
+use crate::{
+    cli::{EnvMode, LogOrder},
+    commands::CommandBase,
+    turbo_json::CONFIG_FILE,
+};
 
 #[derive(Debug, Error, Diagnostic)]
 #[error("Environment variables should not be prefixed with \"{env_pipeline_delimiter}\"")]
@@ -162,6 +166,8 @@ pub enum Error {
     InvalidUploadTimeout(#[source] std::num::ParseIntError),
     #[error("TURBO_PREFLIGHT should be either 1 or 0.")]
     InvalidPreflight,
+    #[error("TURBO_LOG_ORDER should be one of: {0}")]
+    InvalidLogOrder(String),
     #[error(transparent)]
     #[diagnostic(transparent)]
     TurboJsonParseError(#[from] crate::turbo_json::parser::Error),
@@ -228,6 +234,11 @@ pub struct ConfigurationOptions {
     // This is skipped as we never want this to be stored in a file
     #[serde(skip)]
     pub(crate) root_turbo_json_path: Option<AbsoluteSystemPathBuf>,
+    pub(crate) force: Option<bool>,
+    pub(crate) log_order: Option<LogOrder>,
+    pub(crate) remote_only: Option<bool>,
+    pub(crate) remote_cache_read_only: Option<bool>,
+    pub(crate) run_summary: Option<bool>,
 }
 
 #[derive(Default)]
@@ -294,7 +305,11 @@ impl ConfigurationOptions {
             return UIMode::Stream;
         }
 
-        self.ui.unwrap_or(UIMode::Stream)
+        self.log_order()
+            .compatible_with_tui()
+            .then_some(self.ui)
+            .flatten()
+            .unwrap_or(UIMode::Stream)
     }
 
     pub fn scm_base(&self) -> Option<&str> {
@@ -325,6 +340,26 @@ impl ConfigurationOptions {
                 ".turbo/cache"
             })
         })
+    }
+
+    pub fn force(&self) -> bool {
+        self.force.unwrap_or_default()
+    }
+
+    pub fn log_order(&self) -> LogOrder {
+        self.log_order.unwrap_or_default()
+    }
+
+    pub fn remote_only(&self) -> bool {
+        self.remote_only.unwrap_or_default()
+    }
+
+    pub fn remote_cache_read_only(&self) -> bool {
+        self.remote_cache_read_only.unwrap_or_default()
+    }
+
+    pub fn run_summary(&self) -> bool {
+        self.run_summary.unwrap_or_default()
     }
 
     pub fn root_turbo_json_path(&self, repo_root: &AbsoluteSystemPath) -> AbsoluteSystemPathBuf {

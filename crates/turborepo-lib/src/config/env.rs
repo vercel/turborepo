@@ -3,10 +3,15 @@ use std::{
     ffi::{OsStr, OsString},
 };
 
+use clap::ValueEnum;
+use itertools::Itertools;
 use turbopath::AbsoluteSystemPathBuf;
 
 use super::{ConfigurationOptions, Error, ResolvedConfigurationOptions};
-use crate::{cli::EnvMode, turbo_json::UIMode};
+use crate::{
+    cli::{EnvMode, LogOrder},
+    turbo_json::UIMode,
+};
 
 const TURBO_MAPPING: &[(&str, &str)] = [
     ("turbo_api", "api_url"),
@@ -28,6 +33,11 @@ const TURBO_MAPPING: &[(&str, &str)] = [
     ("turbo_scm_base", "scm_base"),
     ("turbo_scm_head", "scm_head"),
     ("turbo_root_turbo_json", "root_turbo_json_path"),
+    ("turbo_force", "force"),
+    ("turbo_log_order", "log_order"),
+    ("turbo_remote_only", "remote_only"),
+    ("turbo_remote_cache_read_only", "remote_cache_read_only"),
+    ("turbo_run_summary", "run_summary"),
 ]
 .as_slice();
 
@@ -41,6 +51,12 @@ impl EnvVars {
         let output_map = map_environment(turbo_mapping, environment)?;
         Ok(Self { output_map })
     }
+
+    fn truthy_value(&self, key: &str) -> Option<Option<bool>> {
+        Some(truth_env_var(
+            self.output_map.get(key).filter(|s| !s.is_empty())?,
+        ))
+    }
 }
 
 impl ResolvedConfigurationOptions for EnvVars {
@@ -49,83 +65,53 @@ impl ResolvedConfigurationOptions for EnvVars {
         _existing_config: &ConfigurationOptions,
     ) -> Result<ConfigurationOptions, Error> {
         // Process signature
-        let signature = if let Some(signature) = self.output_map.get("signature") {
-            match signature.as_str() {
-                "0" => Some(false),
-                "1" => Some(true),
-                _ => return Err(Error::InvalidSignature),
-            }
-        } else {
-            None
-        };
+        let signature = self
+            .truthy_value("signature")
+            .map(|value| value.ok_or_else(|| Error::InvalidSignature))
+            .transpose()?;
 
         // Process preflight
-        let preflight = if let Some(preflight) = self.output_map.get("preflight") {
-            match preflight.as_str() {
-                "0" | "false" => Some(false),
-                "1" | "true" => Some(true),
-                "" => None,
-                _ => return Err(Error::InvalidPreflight),
-            }
-        } else {
-            None
-        };
+        let preflight = self
+            .truthy_value("preflight")
+            .map(|value| value.ok_or_else(|| Error::InvalidPreflight))
+            .transpose()?;
 
         // Process enabled
-        let enabled = if let Some(enabled) = self.output_map.get("enabled") {
-            match enabled.as_str() {
-                "0" => Some(false),
-                "1" => Some(true),
-                _ => return Err(Error::InvalidRemoteCacheEnabled),
-            }
-        } else {
-            None
-        };
+        let enabled = self
+            .truthy_value("enabled")
+            .map(|value| value.ok_or_else(|| Error::InvalidRemoteCacheEnabled))
+            .transpose()?;
+
+        let force = self.truthy_value("force").flatten();
+        let remote_only = self.truthy_value("remote_only").flatten();
+        let remote_cache_read_only = self.truthy_value("remote_cache_read_only").flatten();
+        let run_summary = self.truthy_value("run_summary").flatten();
 
         // Process timeout
-        let timeout = if let Some(timeout) = self.output_map.get("timeout") {
-            Some(
-                timeout
-                    .parse::<u64>()
-                    .map_err(Error::InvalidRemoteCacheTimeout)?,
-            )
-        } else {
-            None
-        };
+        let timeout = self
+            .output_map
+            .get("timeout")
+            .map(|s| s.parse())
+            .transpose()
+            .map_err(Error::InvalidRemoteCacheTimeout)?;
 
-        let upload_timeout = if let Some(upload_timeout) = self.output_map.get("upload_timeout") {
-            Some(
-                upload_timeout
-                    .parse::<u64>()
-                    .map_err(Error::InvalidUploadTimeout)?,
-            )
-        } else {
-            None
-        };
+        let upload_timeout = self
+            .output_map
+            .get("upload_timeout")
+            .map(|s| s.parse())
+            .transpose()
+            .map_err(Error::InvalidUploadTimeout)?;
 
         // Process experimentalUI
-        let ui = self
-            .output_map
-            .get("ui")
-            .map(|s| s.as_str())
-            .and_then(truth_env_var)
-            .map(|ui| if ui { UIMode::Tui } else { UIMode::Stream });
+        let ui =
+            self.truthy_value("ui")
+                .flatten()
+                .map(|ui| if ui { UIMode::Tui } else { UIMode::Stream });
 
-        let allow_no_package_manager = self
-            .output_map
-            .get("allow_no_package_manager")
-            .map(|s| s.as_str())
-            .and_then(truth_env_var);
+        let allow_no_package_manager = self.truthy_value("allow_no_package_manager").flatten();
 
         // Process daemon
-        let daemon = self
-            .output_map
-            .get("daemon")
-            .and_then(|val| match val.as_str() {
-                "1" | "true" => Some(true),
-                "0" | "false" => Some(false),
-                _ => None,
-            });
+        let daemon = self.truthy_value("daemon").flatten();
 
         let env_mode = self
             .output_map
@@ -145,6 +131,21 @@ impl ResolvedConfigurationOptions for EnvVars {
             .filter(|s| !s.is_empty())
             .map(AbsoluteSystemPathBuf::from_cwd)
             .transpose()?;
+
+        let log_order = self
+            .output_map
+            .get("log_order")
+            .filter(|s| !s.is_empty())
+            .map(|s| LogOrder::from_str(s, true))
+            .transpose()
+            .map_err(|_| {
+                Error::InvalidLogOrder(
+                    LogOrder::value_variants()
+                        .iter()
+                        .map(|v| v.to_string())
+                        .join(", "),
+                )
+            })?;
 
         // We currently don't pick up a Spaces ID via env var, we likely won't
         // continue using the Spaces name, we can add an env var when we have the
@@ -166,6 +167,10 @@ impl ResolvedConfigurationOptions for EnvVars {
             ui,
             allow_no_package_manager,
             daemon,
+            force,
+            remote_only,
+            remote_cache_read_only,
+            run_summary,
 
             // Processed numbers
             timeout,
@@ -174,6 +179,7 @@ impl ResolvedConfigurationOptions for EnvVars {
             env_mode,
             cache_dir,
             root_turbo_json_path,
+            log_order,
         };
 
         Ok(output)
@@ -202,6 +208,17 @@ impl<'a> OverrideEnvVars<'a> {
             output_map,
         })
     }
+
+    fn ui(&self) -> Option<UIMode> {
+        let value = self
+            .environment
+            .get(OsStr::new("ci"))
+            .or_else(|| self.environment.get(OsStr::new("no_color")))?;
+        match truth_env_var(value.to_str()?)? {
+            true => Some(UIMode::Stream),
+            false => None,
+        }
+    }
 }
 
 impl<'a> ResolvedConfigurationOptions for OverrideEnvVars<'a> {
@@ -209,40 +226,13 @@ impl<'a> ResolvedConfigurationOptions for OverrideEnvVars<'a> {
         &self,
         _existing_config: &ConfigurationOptions,
     ) -> Result<ConfigurationOptions, Error> {
-        let ui = self
-            .environment
-            .get(OsStr::new("ci"))
-            .or_else(|| self.environment.get(OsStr::new("no_color")))
-            .and_then(|value| {
-                // If either of these are truthy, then we disable the TUI
-                if value == "true" || value == "1" {
-                    Some(UIMode::Stream)
-                } else {
-                    None
-                }
-            });
-
+        let ui = self.ui();
         let output = ConfigurationOptions {
-            api_url: None,
-            login_url: None,
-            team_slug: None,
             team_id: self.output_map.get("team_id").cloned(),
             token: self.output_map.get("token").cloned(),
-            scm_base: None,
-            scm_head: None,
-
-            signature: None,
-            preflight: None,
-            enabled: None,
+            api_url: None,
             ui,
-            daemon: None,
-            timeout: None,
-            upload_timeout: None,
-            spaces_id: None,
-            allow_no_package_manager: None,
-            env_mode: None,
-            cache_dir: None,
-            root_turbo_json_path: None,
+            ..Default::default()
         };
 
         Ok(output)
@@ -281,7 +271,10 @@ mod test {
     use camino::Utf8PathBuf;
 
     use super::*;
-    use crate::config::{DEFAULT_API_URL, DEFAULT_LOGIN_URL};
+    use crate::{
+        cli::LogOrder,
+        config::{DEFAULT_API_URL, DEFAULT_LOGIN_URL},
+    };
 
     #[test]
     fn test_env_setting() {
@@ -319,12 +312,22 @@ mod test {
         env.insert("turbo_env_mode".into(), "strict".into());
         env.insert("turbo_cache_dir".into(), cache_dir.clone().into());
         env.insert("turbo_root_turbo_json".into(), root_turbo_json.into());
+        env.insert("turbo_force".into(), "1".into());
+        env.insert("turbo_log_order".into(), "grouped".into());
+        env.insert("turbo_remote_only".into(), "1".into());
+        env.insert("turbo_remote_cache_read_only".into(), "1".into());
+        env.insert("turbo_run_summary".into(), "true".into());
 
         let config = EnvVars::new(&env)
             .unwrap()
             .get_configuration_options(&ConfigurationOptions::default())
             .unwrap();
         assert!(config.preflight());
+        assert!(config.force());
+        assert_eq!(config.log_order(), LogOrder::Grouped);
+        assert!(config.remote_only());
+        assert!(config.remote_cache_read_only());
+        assert!(config.run_summary());
         assert_eq!(turbo_api, config.api_url.unwrap());
         assert_eq!(turbo_login, config.login_url.unwrap());
         assert_eq!(turbo_team, config.team_slug.unwrap());
@@ -357,6 +360,11 @@ mod test {
         env.insert("turbo_scm_head".into(), "".into());
         env.insert("turbo_scm_base".into(), "".into());
         env.insert("turbo_root_turbo_json".into(), "".into());
+        env.insert("turbo_force".into(), "".into());
+        env.insert("turbo_log_order".into(), "".into());
+        env.insert("turbo_remote_only".into(), "".into());
+        env.insert("turbo_remote_cache_read_only".into(), "".into());
+        env.insert("turbo_run_summary".into(), "".into());
 
         let config = EnvVars::new(&env)
             .unwrap()
@@ -374,6 +382,11 @@ mod test {
         assert_eq!(config.scm_base(), None);
         assert_eq!(config.scm_head(), "HEAD");
         assert_eq!(config.root_turbo_json_path, None);
+        assert!(!config.force());
+        assert_eq!(config.log_order(), LogOrder::Auto);
+        assert!(!config.remote_only());
+        assert!(!config.remote_cache_read_only());
+        assert!(!config.run_summary());
     }
 
     #[test]
