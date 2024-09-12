@@ -21,7 +21,7 @@ use turborepo_repository::{
 };
 use turborepo_scm::package_deps::GitHashes;
 
-use crate::turbo_json::{TurboJson, CONFIG_FILE};
+use crate::turbo_json::{TurboJson, TurboJsonLoader, CONFIG_FILE};
 
 #[derive(Clone)]
 pub enum PackageChangeEvent {
@@ -162,8 +162,9 @@ impl Subscriber {
             return None;
         };
 
-        let root_turbo_json =
-            TurboJson::load(&self.repo_root, &self.repo_root.join_component(CONFIG_FILE)).ok();
+        let root_turbo_json = TurboJsonLoader::workspace(self.repo_root.clone())
+            .load(&self.repo_root.join_component(CONFIG_FILE))
+            .ok();
 
         let gitignore_path = self.repo_root.join_component(".gitignore");
         let (root_gitignore, _) = Gitignore::new(&gitignore_path);

@@ -45,7 +45,7 @@ use crate::{
     run::{scope, task_access::TaskAccess, task_id::TaskName, Error, Run, RunCache},
     shim::TurboState,
     signal::{SignalHandler, SignalSubscriber},
-    turbo_json::{TurboJson, UIMode},
+    turbo_json::{TurboJson, TurboJsonLoader, UIMode},
     DaemonConnector,
 };
 
@@ -359,20 +359,15 @@ impl RunBuilder {
         let task_access = TaskAccess::new(self.repo_root.clone(), async_cache.clone(), &scm);
         task_access.restore_config().await;
 
+        let turbo_json_loader = if is_single_package {
+            TurboJsonLoader::single_package(self.repo_root.clone(), root_package_json.clone())
+        } else {
+            TurboJsonLoader::workspace(self.repo_root.clone())
+        };
         let root_turbo_json = task_access
             .load_turbo_json(&self.root_turbo_json_path)
             .map_or_else(
-                || {
-                    if is_single_package {
-                        TurboJson::from_root_package_json(
-                            &self.repo_root,
-                            &self.root_turbo_json_path,
-                            &root_package_json,
-                        )
-                    } else {
-                        TurboJson::load(&self.repo_root, &self.root_turbo_json_path)
-                    }
-                },
+                || turbo_json_loader.load(&self.root_turbo_json_path),
                 Result::Ok,
             )?;
 
@@ -387,11 +382,21 @@ impl RunBuilder {
         )?;
 
         let env_at_execution_start = EnvironmentVariableMap::infer();
-        let mut engine = self.build_engine(&pkg_dep_graph, &root_turbo_json, &filtered_pkgs)?;
+        let mut engine = self.build_engine(
+            &pkg_dep_graph,
+            &root_turbo_json,
+            &filtered_pkgs,
+            turbo_json_loader.clone(),
+        )?;
 
         if self.opts.run_opts.parallel {
             pkg_dep_graph.remove_package_dependencies();
-            engine = self.build_engine(&pkg_dep_graph, &root_turbo_json, &filtered_pkgs)?;
+            engine = self.build_engine(
+                &pkg_dep_graph,
+                &root_turbo_json,
+                &filtered_pkgs,
+                turbo_json_loader,
+            )?;
         }
 
         let color_selector = ColorSelector::default();
@@ -439,10 +444,12 @@ impl RunBuilder {
         pkg_dep_graph: &PackageGraph,
         root_turbo_json: &TurboJson,
         filtered_pkgs: &HashSet<PackageName>,
+        turbo_json_loader: TurboJsonLoader,
     ) -> Result<Engine, Error> {
         let mut engine = EngineBuilder::new(
             &self.repo_root,
             pkg_dep_graph,
+            turbo_json_loader,
             self.opts.run_opts.single_package,
         )
         .with_root_tasks(root_turbo_json.tasks.keys().cloned())
