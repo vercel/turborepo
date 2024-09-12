@@ -483,11 +483,6 @@ impl<'a> EngineBuilder<'a> {
     }
 
     fn load_turbo_json(&self, workspace: &PackageName) -> Result<TurboJson, Error> {
-        let package_json = self.package_graph.package_json(workspace).ok_or_else(|| {
-            Error::MissingPackageJson {
-                workspace: workspace.clone(),
-            }
-        })?;
         let workspace_dir =
             self.package_graph
                 .package_dir(workspace)
@@ -498,12 +493,7 @@ impl<'a> EngineBuilder<'a> {
             .repo_root
             .resolve(workspace_dir)
             .join_component(CONFIG_FILE);
-        Ok(TurboJson::load(
-            self.repo_root,
-            &workspace_turbo_json,
-            package_json,
-            self.is_single,
-        )?)
+        Ok(TurboJson::load(self.repo_root, &workspace_turbo_json)?)
     }
 }
 

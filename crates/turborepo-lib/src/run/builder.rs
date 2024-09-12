@@ -363,12 +363,15 @@ impl RunBuilder {
             .load_turbo_json(&self.root_turbo_json_path)
             .map_or_else(
                 || {
-                    TurboJson::load(
-                        &self.repo_root,
-                        &self.root_turbo_json_path,
-                        &root_package_json,
-                        is_single_package,
-                    )
+                    if is_single_package {
+                        TurboJson::from_root_package_json(
+                            &self.repo_root,
+                            &self.root_turbo_json_path,
+                            &root_package_json,
+                        )
+                    } else {
+                        TurboJson::load(&self.repo_root, &self.root_turbo_json_path)
+                    }
                 },
                 Result::Ok,
             )?;

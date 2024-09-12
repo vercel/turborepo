@@ -162,13 +162,8 @@ impl Subscriber {
             return None;
         };
 
-        let root_turbo_json = TurboJson::load(
-            &self.repo_root,
-            &self.repo_root.join_component(CONFIG_FILE),
-            &root_package_json,
-            false,
-        )
-        .ok();
+        let root_turbo_json =
+            TurboJson::load(&self.repo_root, &self.repo_root.join_component(CONFIG_FILE)).ok();
 
         let gitignore_path = self.repo_root.join_component(".gitignore");
         let (root_gitignore, _) = Gitignore::new(&gitignore_path);

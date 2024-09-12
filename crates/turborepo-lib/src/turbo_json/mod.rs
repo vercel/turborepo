@@ -548,35 +548,37 @@ impl TryFrom<RawTurboJson> for TurboJson {
 }
 
 impl TurboJson {
-    /// Loads turbo.json by reading the file at `dir` and optionally combining
-    /// with synthesized information from the provided package.json
+    /// Loads turbo.json by reading the file at `turbo_json_path`
     pub fn load(
         repo_root: &AbsoluteSystemPath,
         turbo_json_path: &AbsoluteSystemPath,
-        root_package_json: &PackageJson,
-        include_synthesized_from_root_package_json: bool,
     ) -> Result<TurboJson, Error> {
-        let turbo_from_files = Self::read(repo_root, turbo_json_path);
-
-        let mut turbo_json = match (include_synthesized_from_root_package_json, turbo_from_files) {
+        match Self::read(repo_root, turbo_json_path) {
             // If the file didn't exist, throw a custom error here instead of propagating
-            (false, Err(Error::Io(_))) => return Err(Error::NoTurboJSON),
+            Err(Error::Io(_)) => Err(Error::NoTurboJSON),
             // There was an error, and we don't have any chance of recovering
             // because we aren't synthesizing anything
-            (false, Err(e)) => return Err(e),
+            Err(e) => Err(e),
             // We're not synthesizing anything and there was no error, we're done
-            (false, Ok(turbo)) => return Ok(turbo),
-            // turbo.json doesn't exist, but we're going try to synthesize something
-            (true, Err(Error::Io(_))) => TurboJson::default(),
-            // some other happened, we can't recover
-            (true, Err(e)) => return Err(e),
+            Ok(turbo) => Ok(turbo),
+        }
+    }
+
+    /// Loads turbo.json by reading the file at `turbo_json_path` and combining
+    /// with synthesized task definitions from the provided package.json
+    pub fn from_root_package_json(
+        repo_root: &AbsoluteSystemPath,
+        turbo_json_path: &AbsoluteSystemPath,
+        root_package_json: &PackageJson,
+    ) -> Result<TurboJson, Error> {
+        let mut turbo_json = match Self::read(repo_root, turbo_json_path) {
             // we're synthesizing, but we have a starting point
             // Note: this will have to change to support task inference in a monorepo
             // for now, we're going to error on any "root" tasks and turn non-root tasks into root
             // tasks
-            (true, Ok(mut turbo_from_files)) => {
+            Ok(mut turbo_json) => {
                 let mut pipeline = Pipeline::default();
-                for (task_name, task_definition) in turbo_from_files.tasks {
+                for (task_name, task_definition) in turbo_json.tasks {
                     if task_name.is_package_task() {
                         let (span, text) = task_definition.span_and_text("turbo.json");
 
@@ -590,9 +592,15 @@ impl TurboJson {
                     pipeline.insert(task_name.into_root_task(), task_definition);
                 }
 
-                turbo_from_files.tasks = pipeline;
+                turbo_json.tasks = pipeline;
 
-                turbo_from_files
+                turbo_json
+            }
+            // turbo.json doesn't exist, but we're going try to synthesize something
+            Err(Error::Io(_)) => TurboJson::default(),
+            // some other happened, we can't recover
+            Err(e) => {
+                return Err(e);
             }
         };
 
@@ -781,16 +789,10 @@ mod tests {
         expected_turbo_json: TurboJson,
     ) -> Result<()> {
         let root_dir = tempdir()?;
-        let root_package_json = PackageJson::default();
         let repo_root = AbsoluteSystemPath::from_std_path(root_dir.path())?;
         fs::write(repo_root.join_component("turbo.json"), turbo_json_content)?;
 
-        let mut turbo_json = TurboJson::load(
-            repo_root,
-            &repo_root.join_component(CONFIG_FILE),
-            &root_package_json,
-            false,
-        )?;
+        let mut turbo_json = TurboJson::load(repo_root, &repo_root.join_component(CONFIG_FILE))?;
 
         turbo_json.text = None;
         turbo_json.path = None;
@@ -859,11 +861,10 @@ mod tests {
             fs::write(repo_root.join_component("turbo.json"), content)?;
         }
 
-        let mut turbo_json = TurboJson::load(
+        let mut turbo_json = TurboJson::from_root_package_json(
             repo_root,
             &repo_root.join_component(CONFIG_FILE),
             &root_package_json,
-            true,
         )?;
         turbo_json.text = None;
         turbo_json.path = None;
