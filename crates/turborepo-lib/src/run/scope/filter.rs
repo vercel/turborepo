@@ -201,6 +201,7 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
                     include_uncommitted: true,
                     allow_unknown_objects: true,
                 }),
+                include_dependents: true,
                 ..Default::default()
             });
         }
