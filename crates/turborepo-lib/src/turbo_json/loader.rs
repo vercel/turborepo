@@ -1,9 +1,14 @@
+use std::collections::HashMap;
+
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_errors::Spanned;
-use turborepo_repository::package_json::PackageJson;
+use turborepo_repository::{
+    package_graph::{PackageInfo, PackageName},
+    package_json::PackageJson,
+};
 
-use super::{Pipeline, RawTaskDefinition, TurboJson};
+use super::{Pipeline, RawTaskDefinition, TurboJson, CONFIG_FILE};
 use crate::{
     config::Error,
     run::{task_access::TASK_ACCESS_CONFIG_PATH, task_id::TaskName},
@@ -20,49 +25,120 @@ pub struct TurboJsonLoader {
 
 #[derive(Debug, Clone)]
 enum Strategy {
-    SinglePackage { package_json: PackageJson },
-    Workspace,
-    TaskAccess { package_json: PackageJson },
+    SinglePackage {
+        root_turbo_json: AbsoluteSystemPathBuf,
+        package_json: PackageJson,
+    },
+    Workspace {
+        // Map of package names to their package specific turbo.json
+        packages: HashMap<PackageName, AbsoluteSystemPathBuf>,
+    },
+    TaskAccess {
+        root_turbo_json: AbsoluteSystemPathBuf,
+        package_json: PackageJson,
+    },
 }
 
 impl TurboJsonLoader {
     /// Create a loader that will load turbo.json files throughout the workspace
-    pub fn workspace(repo_root: AbsoluteSystemPathBuf) -> Self {
+    pub fn workspace(
+        repo_root: AbsoluteSystemPathBuf,
+        packages: HashMap<PackageName, AbsoluteSystemPathBuf>,
+    ) -> Self {
         Self {
             repo_root,
-            strategy: Strategy::Workspace,
+            strategy: Strategy::Workspace { packages },
         }
     }
 
     /// Create a loader that will load a root turbo.json or synthesize one if
     /// the file doesn't exist
-    pub fn single_package(repo_root: AbsoluteSystemPathBuf, package_json: PackageJson) -> Self {
+    pub fn single_package(
+        repo_root: AbsoluteSystemPathBuf,
+        root_turbo_json: AbsoluteSystemPathBuf,
+        package_json: PackageJson,
+    ) -> Self {
         Self {
             repo_root,
-            strategy: Strategy::SinglePackage { package_json },
+            strategy: Strategy::SinglePackage {
+                root_turbo_json,
+                package_json,
+            },
         }
     }
 
     /// Create a loader that will load a root turbo.json or synthesize one if
     /// the file doesn't exist
-    pub fn task_access(repo_root: AbsoluteSystemPathBuf, package_json: PackageJson) -> Self {
+    pub fn task_access(
+        repo_root: AbsoluteSystemPathBuf,
+        root_turbo_json: AbsoluteSystemPathBuf,
+        package_json: PackageJson,
+    ) -> Self {
         Self {
             repo_root,
-            strategy: Strategy::TaskAccess { package_json },
+            strategy: Strategy::TaskAccess {
+                root_turbo_json,
+                package_json,
+            },
         }
     }
 
-    pub fn load(&self, path: &AbsoluteSystemPath) -> Result<TurboJson, Error> {
+    /// Load a turbo.json for a given package
+    pub fn load(&self, package: &PackageName) -> Result<TurboJson, Error> {
         match &self.strategy {
-            Strategy::SinglePackage { package_json } => {
-                load_from_root_package_json(&self.repo_root, path, package_json)
+            Strategy::SinglePackage {
+                package_json,
+                root_turbo_json,
+            } => {
+                if !matches!(package, PackageName::Root) {
+                    Err(Error::InvalidTurboJsonLoad(package.clone()))
+                } else {
+                    load_from_root_package_json(&self.repo_root, root_turbo_json, package_json)
+                }
             }
-            Strategy::Workspace => load_from_file(&self.repo_root, path),
-            Strategy::TaskAccess { package_json } => {
-                load_task_access_trace_turbo_json(&self.repo_root, path, package_json)
+            Strategy::Workspace { packages } => {
+                let path = packages.get(package).ok_or_else(|| Error::NoTurboJSON)?;
+                load_from_file(&self.repo_root, path)
+            }
+            Strategy::TaskAccess {
+                package_json,
+                root_turbo_json,
+            } => {
+                if !matches!(package, PackageName::Root) {
+                    Err(Error::InvalidTurboJsonLoad(package.clone()))
+                } else {
+                    load_task_access_trace_turbo_json(
+                        &self.repo_root,
+                        root_turbo_json,
+                        package_json,
+                    )
+                }
             }
         }
     }
+}
+
+/// Map all packages in the package graph to their turbo.json path
+pub fn package_turbo_jsons<'a>(
+    repo_root: &AbsoluteSystemPath,
+    root_turbo_json_path: AbsoluteSystemPathBuf,
+    packages: impl Iterator<Item = (&'a PackageName, &'a PackageInfo)>,
+) -> HashMap<PackageName, AbsoluteSystemPathBuf> {
+    let mut package_turbo_jsons = HashMap::new();
+    package_turbo_jsons.insert(PackageName::Root, root_turbo_json_path);
+    package_turbo_jsons.extend(packages.filter_map(|(pkg, info)| {
+        if pkg == &PackageName::Root {
+            None
+        } else {
+            Some((
+                pkg.clone(),
+                repo_root
+                    .resolve(info.package_path())
+                    .join_component(CONFIG_FILE),
+            ))
+        }
+    }));
+    package_turbo_jsons
 }
 
 fn load_from_file(
@@ -189,10 +265,16 @@ mod test {
     ) -> Result<()> {
         let root_dir = tempdir()?;
         let repo_root = AbsoluteSystemPath::from_std_path(root_dir.path())?;
-        fs::write(repo_root.join_component("turbo.json"), turbo_json_content)?;
-        let loader = TurboJsonLoader::workspace(repo_root.to_owned());
+        let root_turbo_json = repo_root.join_component("turbo.json");
+        fs::write(&root_turbo_json, turbo_json_content)?;
+        let loader = TurboJsonLoader::workspace(
+            repo_root.to_owned(),
+            vec![(PackageName::Root, root_turbo_json)]
+                .into_iter()
+                .collect(),
+        );
 
-        let mut turbo_json = loader.load(&repo_root.join_component(CONFIG_FILE))?;
+        let mut turbo_json = loader.load(&PackageName::Root)?;
 
         turbo_json.text = None;
         turbo_json.path = None;
@@ -256,13 +338,18 @@ mod test {
     ) -> Result<()> {
         let root_dir = tempdir()?;
         let repo_root = AbsoluteSystemPath::from_std_path(root_dir.path())?;
+        let root_turbo_json = repo_root.join_component(CONFIG_FILE);
 
         if let Some(content) = turbo_json_content {
-            fs::write(repo_root.join_component("turbo.json"), content)?;
+            fs::write(&root_turbo_json, content)?;
         }
 
-        let loader = TurboJsonLoader::single_package(repo_root.to_owned(), root_package_json);
-        let mut turbo_json = loader.load(&repo_root.join_component(CONFIG_FILE))?;
+        let loader = TurboJsonLoader::single_package(
+            repo_root.to_owned(),
+            root_turbo_json,
+            root_package_json,
+        );
+        let mut turbo_json = loader.load(&PackageName::Root)?;
         turbo_json.text = None;
         turbo_json.path = None;
         for (_, task_definition) in turbo_json.tasks.iter_mut() {
@@ -301,11 +388,10 @@ mod test {
     ) -> Result<()> {
         let root_dir = tempdir()?;
         let repo_root = AbsoluteSystemPath::from_std_path(root_dir.path())?;
+        let root_turbo_json = repo_root.join_component(CONFIG_FILE);
 
         if let Some(content) = turbo_json_content {
-            repo_root
-                .join_component(CONFIG_FILE)
-                .create_with_contents(content.as_bytes())?;
+            root_turbo_json.create_with_contents(content.as_bytes())?;
         }
         if let Some(content) = trace_contents {
             let trace_path = repo_root.join_components(&TASK_ACCESS_CONFIG_PATH);
@@ -320,8 +406,9 @@ mod test {
             ..Default::default()
         };
 
-        let loader = TurboJsonLoader::task_access(repo_root.to_owned(), root_package_json);
-        let turbo_json = loader.load(&repo_root.join_component(CONFIG_FILE))?;
+        let loader =
+            TurboJsonLoader::task_access(repo_root.to_owned(), root_turbo_json, root_package_json);
+        let turbo_json = loader.load(&PackageName::Root)?;
         let root_build = turbo_json
             .tasks
             .get(&TaskName::from("//#build"))
@@ -334,5 +421,61 @@ mod test {
         );
 
         Ok(())
+    }
+
+    #[test]
+    fn test_single_package_loading_non_root() {
+        let junk_path = AbsoluteSystemPath::new(if cfg!(windows) {
+            "C:\\never\\loaded"
+        } else {
+            "/never/loaded"
+        })
+        .unwrap();
+        let non_root = PackageName::from("some-pkg");
+        let single_loader = TurboJsonLoader::single_package(
+            junk_path.to_owned(),
+            junk_path.to_owned(),
+            PackageJson::default(),
+        );
+        let task_access_loader = TurboJsonLoader::task_access(
+            junk_path.to_owned(),
+            junk_path.to_owned(),
+            PackageJson::default(),
+        );
+
+        for loader in [single_loader, task_access_loader] {
+            let result = loader.load(&non_root);
+            assert!(result.is_err());
+            let err = result.unwrap_err();
+            assert!(
+                matches!(err, Error::InvalidTurboJsonLoad(_)),
+                "expected {err} to be no turbo json"
+            );
+        }
+    }
+
+    #[test]
+    fn test_workspace_turbo_json_loading() {
+        let root_dir = tempdir().unwrap();
+        let repo_root = AbsoluteSystemPath::from_std_path(root_dir.path()).unwrap();
+        let a_turbo_json = repo_root.join_components(&["packages", "a", "turbo.json"]);
+        a_turbo_json.ensure_dir().unwrap();
+        let turbo_jsons = vec![(PackageName::from("a"), a_turbo_json.clone())]
+            .into_iter()
+            .collect();
+
+        let loader = TurboJsonLoader::workspace(repo_root.to_owned(), turbo_jsons);
+        let result = loader.load(&PackageName::from("a"));
+        assert!(
+            matches!(result.unwrap_err(), Error::NoTurboJSON),
+            "expected parsing to fail with missing turbo.json"
+        );
+
+        a_turbo_json
+            .create_with_contents(r#"{"tasks": {"build": {}}}"#)
+            .unwrap();
+
+        let turbo_json = loader.load(&PackageName::from("a")).unwrap();
+        assert_eq!(turbo_json.tasks.len(), 1);
     }
 }

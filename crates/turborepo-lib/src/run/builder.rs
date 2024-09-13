@@ -45,7 +45,7 @@ use crate::{
     run::{scope, task_access::TaskAccess, task_id::TaskName, Error, Run, RunCache},
     shim::TurboState,
     signal::{SignalHandler, SignalSubscriber},
-    turbo_json::{TurboJson, TurboJsonLoader, UIMode},
+    turbo_json::{package_turbo_jsons, TurboJson, TurboJsonLoader, UIMode},
     DaemonConnector,
 };
 
@@ -360,14 +360,27 @@ impl RunBuilder {
         task_access.restore_config().await;
 
         let turbo_json_loader = if task_access.is_enabled() {
-            TurboJsonLoader::task_access(self.repo_root.clone(), root_package_json.clone())
+            TurboJsonLoader::task_access(
+                self.repo_root.clone(),
+                self.root_turbo_json_path.clone(),
+                root_package_json.clone(),
+            )
         } else if is_single_package {
-            TurboJsonLoader::single_package(self.repo_root.clone(), root_package_json.clone())
+            TurboJsonLoader::single_package(
+                self.repo_root.clone(),
+                self.root_turbo_json_path.clone(),
+                root_package_json.clone(),
+            )
         } else {
-            TurboJsonLoader::workspace(self.repo_root.clone())
+            let package_turbo_jsons = package_turbo_jsons(
+                &self.repo_root,
+                self.root_turbo_json_path.clone(),
+                pkg_dep_graph.packages(),
+            );
+            TurboJsonLoader::workspace(self.repo_root.clone(), package_turbo_jsons)
         };
 
-        let root_turbo_json = turbo_json_loader.load(&self.root_turbo_json_path)?;
+        let root_turbo_json = turbo_json_loader.load(&PackageName::Root)?;
 
         pkg_dep_graph.validate()?;
 

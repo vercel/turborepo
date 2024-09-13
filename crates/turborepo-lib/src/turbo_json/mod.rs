@@ -28,7 +28,7 @@ use crate::{
 mod loader;
 pub mod parser;
 
-pub use loader::TurboJsonLoader;
+pub use loader::{package_turbo_jsons, TurboJsonLoader};
 
 #[derive(Serialize, Deserialize, Debug, Default, PartialEq, Clone, Deserializable)]
 #[serde(rename_all = "camelCase")]
