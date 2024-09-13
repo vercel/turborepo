@@ -142,12 +142,11 @@ impl PackageInputsHashes {
                                     )
                                     .await
                                 })
-                                .map_err(|e| {
+                                .inspect_err(|_| {
                                     tracing::debug!(
                                         "daemon file hashing timed out for {}",
                                         package_path
                                     );
-                                    e
                                 })
                                 .ok() // If we timed out, we don't need to
                                       // error,

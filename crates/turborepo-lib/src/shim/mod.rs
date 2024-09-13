@@ -161,7 +161,7 @@ fn spawn_npx_turbo(
 
     let mut command = process::Command::new(npx_path);
     command.arg("-y");
-    command.arg(&format!("turbo@{turbo_version}"));
+    command.arg(format!("turbo@{turbo_version}"));
 
     // rather than passing an argument that local turbo might not understand, set
     // an environment variable that can be optionally used

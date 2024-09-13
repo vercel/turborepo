@@ -72,7 +72,7 @@ fn nom_parse_ls_tree(i: &[u8]) -> nom::IResult<&[u8], LsTreeEntry<'_>> {
     let (i, _) = nom::bytes::complete::take(1usize)(i)?;
     let (i, filename) = nom::bytes::complete::is_not("\0")(i)?;
     // We explicitly support a missing terminator
-    let (i, _) = nom::combinator::opt(nom::bytes::complete::tag(&[b'\0']))(i)?;
+    let (i, _) = nom::combinator::opt(nom::bytes::complete::tag(b"\0"))(i)?;
     Ok((i, LsTreeEntry { filename, hash }))
 }
 
