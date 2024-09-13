@@ -4,7 +4,6 @@
 #![feature(hash_extract_if)]
 #![feature(option_get_or_insert_default)]
 #![feature(once_cell_try)]
-#![feature(panic_info_message)]
 #![feature(try_blocks)]
 #![feature(impl_trait_in_assoc_type)]
 #![deny(clippy::all)]

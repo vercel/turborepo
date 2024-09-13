@@ -193,7 +193,7 @@ impl AbsoluteSystemPath {
 
     pub fn try_exists(&self) -> Result<bool, PathError> {
         // try_exists is an experimental API and not yet in fs_err
-        Ok(std::fs::try_exists(&self.0)?)
+        Ok(std::fs::exists(&self.0)?)
     }
 
     pub fn extension(&self) -> Option<&str> {

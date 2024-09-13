@@ -1294,7 +1294,7 @@ impl Screen {
 
     // CSI h
     #[allow(clippy::unused_self)]
-    pub(crate) fn sm(&mut self, params: &vte::Params) {
+    pub(crate) fn sm(&self, params: &vte::Params) {
         // nothing, i think?
         if log::log_enabled!(log::Level::Debug) {
             log::debug!(
@@ -1353,7 +1353,7 @@ impl Screen {
 
     // CSI l
     #[allow(clippy::unused_self)]
-    pub(crate) fn rm(&mut self, params: &vte::Params) {
+    pub(crate) fn rm(&self, params: &vte::Params) {
         // nothing, i think?
         if log::log_enabled!(log::Level::Debug) {
             log::debug!(

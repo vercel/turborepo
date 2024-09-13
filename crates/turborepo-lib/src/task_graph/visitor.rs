@@ -980,9 +980,8 @@ impl ExecContext {
         let mut stdout_writer = self
             .task_cache
             .output_writer(prefixed_ui.task_writer())
-            .map_err(|e| {
+            .inspect_err(|_| {
                 telemetry.track_error(TrackedErrors::FailedToCaptureOutputs);
-                e
             })?;
 
         let exit_status = match process.wait_with_piped_outputs(&mut stdout_writer).await {
