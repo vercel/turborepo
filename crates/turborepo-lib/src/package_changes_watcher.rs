@@ -177,7 +177,8 @@ impl Subscriber {
         let root_turbo_json =
             TurboJsonLoader::workspace(self.repo_root.clone(), package_turbo_jsons)
                 .load(&PackageName::Root)
-                .ok();
+                .ok()
+                .cloned();
 
         let gitignore_path = self.repo_root.join_component(".gitignore");
         let (root_gitignore, _) = Gitignore::new(&gitignore_path);

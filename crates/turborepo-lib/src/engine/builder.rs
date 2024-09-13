@@ -14,8 +14,7 @@ use crate::{
     run::task_id::{TaskId, TaskName},
     task_graph::TaskDefinition,
     turbo_json::{
-        validate_extends, validate_no_package_task_syntax, RawTaskDefinition, TurboJson,
-        TurboJsonLoader,
+        validate_extends, validate_no_package_task_syntax, RawTaskDefinition, TurboJsonLoader,
     },
 };
 
@@ -95,9 +94,8 @@ pub enum Error {
 pub struct EngineBuilder<'a> {
     repo_root: &'a AbsoluteSystemPath,
     package_graph: &'a PackageGraph,
-    turbo_json_loader: TurboJsonLoader,
+    turbo_json_loader: Option<TurboJsonLoader>,
     is_single: bool,
-    turbo_jsons: Option<HashMap<PackageName, TurboJson>>,
     workspaces: Vec<PackageName>,
     tasks: Vec<Spanned<TaskName<'static>>>,
     root_enabled_tasks: HashSet<TaskName<'static>>,
@@ -114,22 +112,13 @@ impl<'a> EngineBuilder<'a> {
         Self {
             repo_root,
             package_graph,
-            turbo_json_loader,
+            turbo_json_loader: Some(turbo_json_loader),
             is_single,
-            turbo_jsons: None,
             workspaces: Vec::new(),
             tasks: Vec::new(),
             root_enabled_tasks: HashSet::new(),
             tasks_only: false,
         }
-    }
-
-    pub fn with_turbo_jsons(
-        mut self,
-        turbo_jsons: Option<HashMap<PackageName, TurboJson>>,
-    ) -> Self {
-        self.turbo_jsons = turbo_jsons;
-        self
     }
 
     pub fn with_tasks_only(mut self, tasks_only: bool) -> Self {
@@ -189,7 +178,10 @@ impl<'a> EngineBuilder<'a> {
             return Ok(Engine::default().seal());
         }
 
-        let mut turbo_jsons = self.turbo_jsons.take().unwrap_or_default();
+        let mut turbo_json_loader = self
+            .turbo_json_loader
+            .take()
+            .expect("engine builder cannot be constructed without TurboJsonLoader");
         let mut missing_tasks: HashMap<&TaskName<'_>, Spanned<()>> =
             HashMap::from_iter(self.tasks.iter().map(|spanned| spanned.as_ref().split()));
         let mut traversal_queue = VecDeque::with_capacity(1);
@@ -198,7 +190,7 @@ impl<'a> EngineBuilder<'a> {
                 .task_id()
                 .unwrap_or_else(|| TaskId::new(workspace.as_ref(), task.task()));
 
-            if self.has_task_definition(&mut turbo_jsons, workspace, task, &task_id)? {
+            if Self::has_task_definition(&mut turbo_json_loader, workspace, task, &task_id)? {
                 missing_tasks.remove(task.as_inner());
 
                 // Even if a task definition was found, we _only_ want to add it as an entry
@@ -279,7 +271,7 @@ impl<'a> EngineBuilder<'a> {
             }
 
             let task_definition = self.task_definition(
-                &mut turbo_jsons,
+                &mut turbo_json_loader,
                 &task_id,
                 &task_id.as_non_workspace_task_name(),
             )?;
@@ -372,25 +364,29 @@ impl<'a> EngineBuilder<'a> {
     // Helper methods used when building the engine
 
     fn has_task_definition(
-        &self,
-        turbo_jsons: &mut HashMap<PackageName, TurboJson>,
+        loader: &mut TurboJsonLoader,
         workspace: &PackageName,
         task_name: &TaskName<'static>,
         task_id: &TaskId,
     ) -> Result<bool, Error> {
-        let turbo_json = self
-            .turbo_json(turbo_jsons, workspace)
+        let turbo_json = loader
+            .load(workspace)
             // If there was no turbo.json in the workspace, fallback to the root turbo.json
-            .or_else(|e| {
-                if e.is_missing_turbo_json() && !matches!(workspace, PackageName::Root) {
-                    Ok(None)
-                } else {
-                    Err(e)
-                }
-            })?;
+            .map_or_else(
+                |e| {
+                    if matches!(e, config::Error::NoTurboJSON)
+                        && !matches!(workspace, PackageName::Root)
+                    {
+                        Ok(None)
+                    } else {
+                        Err(e)
+                    }
+                },
+                |v| Ok(Some(v)),
+            )?;
 
         let Some(turbo_json) = turbo_json else {
-            return self.has_task_definition(turbo_jsons, &PackageName::Root, task_name, task_id);
+            return Self::has_task_definition(loader, &PackageName::Root, task_name, task_id);
         };
 
         let task_id_as_name = task_id.as_task_name();
@@ -399,7 +395,7 @@ impl<'a> EngineBuilder<'a> {
         {
             Ok(true)
         } else if !matches!(workspace, PackageName::Root) {
-            self.has_task_definition(turbo_jsons, &PackageName::Root, task_name, task_id)
+            Self::has_task_definition(loader, &PackageName::Root, task_name, task_id)
         } else {
             Ok(false)
         }
@@ -407,12 +403,12 @@ impl<'a> EngineBuilder<'a> {
 
     fn task_definition(
         &self,
-        turbo_jsons: &mut HashMap<PackageName, TurboJson>,
+        turbo_json_loader: &mut TurboJsonLoader,
         task_id: &Spanned<TaskId>,
         task_name: &TaskName,
     ) -> Result<TaskDefinition, Error> {
         let raw_task_definition = RawTaskDefinition::from_iter(self.task_definition_chain(
-            turbo_jsons,
+            turbo_json_loader,
             task_id,
             task_name,
         )?);
@@ -422,15 +418,13 @@ impl<'a> EngineBuilder<'a> {
 
     fn task_definition_chain(
         &self,
-        turbo_jsons: &mut HashMap<PackageName, TurboJson>,
+        turbo_json_loader: &mut TurboJsonLoader,
         task_id: &Spanned<TaskId>,
         task_name: &TaskName,
     ) -> Result<Vec<RawTaskDefinition>, Error> {
         let mut task_definitions = Vec::new();
 
-        let root_turbo_json = self
-            .turbo_json(turbo_jsons, &PackageName::Root)?
-            .ok_or(Error::Config(crate::config::Error::NoTurboJSON))?;
+        let root_turbo_json = turbo_json_loader.load(&PackageName::Root)?;
 
         if let Some(root_definition) = root_turbo_json.task(task_id, task_name) {
             task_definitions.push(root_definition)
@@ -451,8 +445,8 @@ impl<'a> EngineBuilder<'a> {
         }
 
         if task_id.package() != ROOT_PKG_NAME {
-            match self.turbo_json(turbo_jsons, &PackageName::from(task_id.package())) {
-                Ok(Some(workspace_json)) => {
+            match turbo_json_loader.load(&PackageName::from(task_id.package())) {
+                Ok(workspace_json) => {
                     let validation_errors = workspace_json
                         .validate(&[validate_no_package_task_syntax, validate_extends]);
                     if !validation_errors.is_empty() {
@@ -465,11 +459,9 @@ impl<'a> EngineBuilder<'a> {
                         task_definitions.push(workspace_def.value.clone());
                     }
                 }
-                Ok(None) => (),
-                // swallow the error where the config file doesn't exist, but bubble up other things
-                Err(e) if e.is_missing_turbo_json() => (),
+                Err(config::Error::NoTurboJSON) => (),
                 Err(e) => {
-                    return Err(e);
+                    return Err(e.into());
                 }
             }
         }
@@ -485,18 +477,6 @@ impl<'a> EngineBuilder<'a> {
         }
 
         Ok(task_definitions)
-    }
-
-    fn turbo_json<'b>(
-        &self,
-        turbo_jsons: &'b mut HashMap<PackageName, TurboJson>,
-        workspace: &PackageName,
-    ) -> Result<Option<&'b TurboJson>, Error> {
-        if turbo_jsons.get(workspace).is_none() {
-            let json = self.turbo_json_loader.load(workspace)?;
-            turbo_jsons.insert(workspace.clone(), json);
-        }
-        Ok(turbo_jsons.get(workspace))
     }
 }
 
@@ -543,7 +523,7 @@ mod test {
     use super::*;
     use crate::{
         engine::TaskNode,
-        turbo_json::{package_turbo_jsons, RawTurboJson},
+        turbo_json::{RawTurboJson, TurboJson},
     };
 
     // Only used to prevent package graph construction from attempting to read
@@ -663,18 +643,7 @@ mod test {
         task_id: &'static str,
         expected: bool,
     ) {
-        let repo_root_dir = TempDir::with_prefix("repo").unwrap();
-        let repo_root = AbsoluteSystemPathBuf::new(repo_root_dir.path().to_str().unwrap()).unwrap();
-        let package_graph = mock_package_graph(
-            &repo_root,
-            package_jsons! {
-                repo_root,
-                "a" => [],
-                "b" => [],
-                "c" => ["a", "b"]
-            },
-        );
-        let mut turbo_jsons = vec![
+        let turbo_jsons = vec![
             (
                 PackageName::Root,
                 turbo_json(json!({
@@ -696,19 +665,13 @@ mod test {
         ]
         .into_iter()
         .collect();
-        let package_turbo_jsons = package_turbo_jsons(
-            &repo_root,
-            repo_root.join_component("turbo.json"),
-            package_graph.packages(),
-        );
-        let loader = TurboJsonLoader::workspace(repo_root.clone(), package_turbo_jsons);
-        let engine_builder = EngineBuilder::new(&repo_root, &package_graph, loader, false);
+        let mut loader = TurboJsonLoader::noop(turbo_jsons);
         let task_name = TaskName::from(task_name);
         let task_id = TaskId::try_from(task_id).unwrap();
 
-        let has_def = engine_builder
-            .has_task_definition(&mut turbo_jsons, &workspace, &task_name, &task_id)
-            .unwrap();
+        let has_def =
+            EngineBuilder::has_task_definition(&mut loader, &workspace, &task_name, &task_id)
+                .unwrap();
         assert_eq!(has_def, expected);
     }
 
@@ -772,14 +735,8 @@ mod test {
         )]
         .into_iter()
         .collect();
-        let package_turbo_jsons = package_turbo_jsons(
-            &repo_root,
-            repo_root.join_component("turbo.json"),
-            package_graph.packages(),
-        );
-        let loader = TurboJsonLoader::workspace(repo_root.clone(), package_turbo_jsons);
+        let loader = TurboJsonLoader::noop(turbo_jsons);
         let engine = EngineBuilder::new(&repo_root, &package_graph, loader, false)
-            .with_turbo_jsons(Some(turbo_jsons))
             .with_tasks(Some(Spanned::new(TaskName::from("test"))))
             .with_workspaces(vec![
                 PackageName::from("a"),
@@ -835,14 +792,8 @@ mod test {
         )]
         .into_iter()
         .collect();
-        let package_turbo_jsons = package_turbo_jsons(
-            &repo_root,
-            repo_root.join_component("turbo.json"),
-            package_graph.packages(),
-        );
-        let loader = TurboJsonLoader::workspace(repo_root.clone(), package_turbo_jsons);
+        let loader = TurboJsonLoader::noop(turbo_jsons);
         let engine = EngineBuilder::new(&repo_root, &package_graph, loader, false)
-            .with_turbo_jsons(Some(turbo_jsons))
             .with_tasks(Some(Spanned::new(TaskName::from("test"))))
             .with_workspaces(vec![PackageName::from("app2")])
             .build()
@@ -880,14 +831,8 @@ mod test {
         )]
         .into_iter()
         .collect();
-        let package_turbo_jsons = package_turbo_jsons(
-            &repo_root,
-            repo_root.join_component("turbo.json"),
-            package_graph.packages(),
-        );
-        let loader = TurboJsonLoader::workspace(repo_root.clone(), package_turbo_jsons);
+        let loader = TurboJsonLoader::noop(turbo_jsons);
         let engine = EngineBuilder::new(&repo_root, &package_graph, loader, false)
-            .with_turbo_jsons(Some(turbo_jsons))
             .with_tasks(Some(Spanned::new(TaskName::from("special"))))
             .with_workspaces(vec![PackageName::from("app1"), PackageName::from("libA")])
             .build()
@@ -924,14 +869,8 @@ mod test {
         )]
         .into_iter()
         .collect();
-        let package_turbo_jsons = package_turbo_jsons(
-            &repo_root,
-            repo_root.join_component("turbo.json"),
-            package_graph.packages(),
-        );
-        let loader = TurboJsonLoader::workspace(repo_root.clone(), package_turbo_jsons);
+        let loader = TurboJsonLoader::noop(turbo_jsons);
         let engine = EngineBuilder::new(&repo_root, &package_graph, loader, false)
-            .with_turbo_jsons(Some(turbo_jsons))
             .with_tasks(vec![
                 Spanned::new(TaskName::from("build")),
                 Spanned::new(TaskName::from("test")),
@@ -983,14 +922,8 @@ mod test {
         )]
         .into_iter()
         .collect();
-        let package_turbo_jsons = package_turbo_jsons(
-            &repo_root,
-            repo_root.join_component("turbo.json"),
-            package_graph.packages(),
-        );
-        let loader = TurboJsonLoader::workspace(repo_root.clone(), package_turbo_jsons);
+        let loader = TurboJsonLoader::noop(turbo_jsons);
         let engine = EngineBuilder::new(&repo_root, &package_graph, loader, false)
-            .with_turbo_jsons(Some(turbo_jsons))
             .with_tasks(Some(Spanned::new(TaskName::from("build"))))
             .with_workspaces(vec![PackageName::from("app1")])
             .with_root_tasks(vec![
@@ -1032,14 +965,8 @@ mod test {
         )]
         .into_iter()
         .collect();
-        let package_turbo_jsons = package_turbo_jsons(
-            &repo_root,
-            repo_root.join_component("turbo.json"),
-            package_graph.packages(),
-        );
-        let loader = TurboJsonLoader::workspace(repo_root.clone(), package_turbo_jsons);
+        let loader = TurboJsonLoader::noop(turbo_jsons);
         let engine = EngineBuilder::new(&repo_root, &package_graph, loader, false)
-            .with_turbo_jsons(Some(turbo_jsons))
             .with_tasks(Some(Spanned::new(TaskName::from("build"))))
             .with_workspaces(vec![PackageName::from("app1")])
             .with_root_tasks(vec![TaskName::from("libA#build"), TaskName::from("build")])
@@ -1073,14 +1000,8 @@ mod test {
         )]
         .into_iter()
         .collect();
-        let package_turbo_jsons = package_turbo_jsons(
-            &repo_root,
-            repo_root.join_component("turbo.json"),
-            package_graph.packages(),
-        );
-        let loader = TurboJsonLoader::workspace(repo_root.clone(), package_turbo_jsons);
+        let loader = TurboJsonLoader::noop(turbo_jsons);
         let engine = EngineBuilder::new(&repo_root, &package_graph, loader, false)
-            .with_turbo_jsons(Some(turbo_jsons))
             .with_tasks(Some(Spanned::new(TaskName::from("build"))))
             .with_workspaces(vec![PackageName::from("app1")])
             .with_root_tasks(vec![
@@ -1124,14 +1045,8 @@ mod test {
         )]
         .into_iter()
         .collect();
-        let package_turbo_jsons = package_turbo_jsons(
-            &repo_root,
-            repo_root.join_component("turbo.json"),
-            package_graph.packages(),
-        );
-        let loader = TurboJsonLoader::workspace(repo_root.clone(), package_turbo_jsons);
+        let loader = TurboJsonLoader::noop(turbo_jsons);
         let engine = EngineBuilder::new(&repo_root, &package_graph, loader, false)
-            .with_turbo_jsons(Some(turbo_jsons))
             .with_tasks(Some(Spanned::new(TaskName::from("build"))))
             .with_workspaces(vec![PackageName::from("app1")])
             .with_root_tasks(vec![
@@ -1169,14 +1084,8 @@ mod test {
         )]
         .into_iter()
         .collect();
-        let package_turbo_jsons = package_turbo_jsons(
-            &repo_root,
-            repo_root.join_component("turbo.json"),
-            package_graph.packages(),
-        );
-        let loader = TurboJsonLoader::workspace(repo_root.clone(), package_turbo_jsons);
+        let loader = TurboJsonLoader::noop(turbo_jsons);
         let engine = EngineBuilder::new(&repo_root, &package_graph, loader, false)
-            .with_turbo_jsons(Some(turbo_jsons))
             .with_tasks_only(true)
             .with_tasks(Some(Spanned::new(TaskName::from("test"))))
             .with_workspaces(vec![
@@ -1222,14 +1131,8 @@ mod test {
         )]
         .into_iter()
         .collect();
-        let package_turbo_jsons = package_turbo_jsons(
-            &repo_root,
-            repo_root.join_component("turbo.json"),
-            package_graph.packages(),
-        );
-        let loader = TurboJsonLoader::workspace(repo_root.clone(), package_turbo_jsons);
+        let loader = TurboJsonLoader::noop(turbo_jsons);
         let engine = EngineBuilder::new(&repo_root, &package_graph, loader, false)
-            .with_turbo_jsons(Some(turbo_jsons))
             .with_tasks_only(true)
             .with_tasks(Some(Spanned::new(TaskName::from("build"))))
             .with_workspaces(vec![PackageName::from("b")])
@@ -1267,14 +1170,8 @@ mod test {
         )]
         .into_iter()
         .collect();
-        let package_turbo_jsons = package_turbo_jsons(
-            &repo_root,
-            repo_root.join_component("turbo.json"),
-            package_graph.packages(),
-        );
-        let loader = TurboJsonLoader::workspace(repo_root.clone(), package_turbo_jsons);
+        let loader = TurboJsonLoader::noop(turbo_jsons);
         let engine = EngineBuilder::new(&repo_root, &package_graph, loader, false)
-            .with_turbo_jsons(Some(turbo_jsons))
             .with_tasks_only(true)
             .with_tasks(Some(Spanned::new(TaskName::from("build"))))
             .with_workspaces(vec![PackageName::from("b")])

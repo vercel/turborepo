@@ -20,6 +20,7 @@ use crate::{
 #[derive(Debug, Clone)]
 pub struct TurboJsonLoader {
     repo_root: AbsoluteSystemPathBuf,
+    cache: HashMap<PackageName, TurboJson>,
     strategy: Strategy,
 }
 
@@ -37,6 +38,7 @@ enum Strategy {
         root_turbo_json: AbsoluteSystemPathBuf,
         package_json: PackageJson,
     },
+    Noop,
 }
 
 impl TurboJsonLoader {
@@ -47,6 +49,7 @@ impl TurboJsonLoader {
     ) -> Self {
         Self {
             repo_root,
+            cache: HashMap::new(),
             strategy: Strategy::Workspace { packages },
         }
     }
@@ -60,6 +63,7 @@ impl TurboJsonLoader {
     ) -> Self {
         Self {
             repo_root,
+            cache: HashMap::new(),
             strategy: Strategy::SinglePackage {
                 root_turbo_json,
                 package_json,
@@ -76,6 +80,7 @@ impl TurboJsonLoader {
     ) -> Self {
         Self {
             repo_root,
+            cache: HashMap::new(),
             strategy: Strategy::TaskAccess {
                 root_turbo_json,
                 package_json,
@@ -83,8 +88,33 @@ impl TurboJsonLoader {
         }
     }
 
+    /// Create a loader that will only return provided turbo.jsons and will
+    /// never hit the file system.
+    /// Primarily intended for testing
+    pub fn noop(turbo_jsons: HashMap<PackageName, TurboJson>) -> Self {
+        Self {
+            // This never gets read from so we populate it with
+            repo_root: AbsoluteSystemPath::new(if cfg!(windows) { "C:\\" } else { "/" })
+                .expect("wasn't able to create absolute system path")
+                .to_owned(),
+            cache: turbo_jsons,
+            strategy: Strategy::Noop,
+        }
+    }
+
     /// Load a turbo.json for a given package
-    pub fn load(&self, package: &PackageName) -> Result<TurboJson, Error> {
+    pub fn load<'a>(&'a mut self, package: &PackageName) -> Result<&'a TurboJson, Error> {
+        if !self.cache.contains_key(package) {
+            let turbo_json = self.uncached_load(package)?;
+            self.cache.insert(package.clone(), turbo_json);
+        }
+        Ok(self
+            .cache
+            .get(package)
+            .expect("just inserted value for this key"))
+    }
+
+    fn uncached_load(&self, package: &PackageName) -> Result<TurboJson, Error> {
         match &self.strategy {
             Strategy::SinglePackage {
                 package_json,
@@ -114,6 +144,7 @@ impl TurboJsonLoader {
                     )
                 }
             }
+            Strategy::Noop => Err(Error::NoTurboJSON),
         }
     }
 }
@@ -267,14 +298,14 @@ mod test {
         let repo_root = AbsoluteSystemPath::from_std_path(root_dir.path())?;
         let root_turbo_json = repo_root.join_component("turbo.json");
         fs::write(&root_turbo_json, turbo_json_content)?;
-        let loader = TurboJsonLoader::workspace(
+        let mut loader = TurboJsonLoader::workspace(
             repo_root.to_owned(),
             vec![(PackageName::Root, root_turbo_json)]
                 .into_iter()
                 .collect(),
         );
 
-        let mut turbo_json = loader.load(&PackageName::Root)?;
+        let mut turbo_json = loader.load(&PackageName::Root)?.clone();
 
         turbo_json.text = None;
         turbo_json.path = None;
@@ -344,12 +375,12 @@ mod test {
             fs::write(&root_turbo_json, content)?;
         }
 
-        let loader = TurboJsonLoader::single_package(
+        let mut loader = TurboJsonLoader::single_package(
             repo_root.to_owned(),
             root_turbo_json,
             root_package_json,
         );
-        let mut turbo_json = loader.load(&PackageName::Root)?;
+        let mut turbo_json = loader.load(&PackageName::Root)?.clone();
         turbo_json.text = None;
         turbo_json.path = None;
         for (_, task_definition) in turbo_json.tasks.iter_mut() {
@@ -406,7 +437,7 @@ mod test {
             ..Default::default()
         };
 
-        let loader =
+        let mut loader =
             TurboJsonLoader::task_access(repo_root.to_owned(), root_turbo_json, root_package_json);
         let turbo_json = loader.load(&PackageName::Root)?;
         let root_build = turbo_json
@@ -443,7 +474,7 @@ mod test {
             PackageJson::default(),
         );
 
-        for loader in [single_loader, task_access_loader] {
+        for mut loader in [single_loader, task_access_loader] {
             let result = loader.load(&non_root);
             assert!(result.is_err());
             let err = result.unwrap_err();
@@ -464,7 +495,7 @@ mod test {
             .into_iter()
             .collect();
 
-        let loader = TurboJsonLoader::workspace(repo_root.to_owned(), turbo_jsons);
+        let mut loader = TurboJsonLoader::workspace(repo_root.to_owned(), turbo_jsons);
         let result = loader.load(&PackageName::from("a"));
         assert!(
             matches!(result.unwrap_err(), Error::NoTurboJSON),
@@ -477,5 +508,26 @@ mod test {
 
         let turbo_json = loader.load(&PackageName::from("a")).unwrap();
         assert_eq!(turbo_json.tasks.len(), 1);
+    }
+
+    #[test]
+    fn test_turbo_json_caching() {
+        let root_dir = tempdir().unwrap();
+        let repo_root = AbsoluteSystemPath::from_std_path(root_dir.path()).unwrap();
+        let a_turbo_json = repo_root.join_components(&["packages", "a", "turbo.json"]);
+        a_turbo_json.ensure_dir().unwrap();
+        let turbo_jsons = vec![(PackageName::from("a"), a_turbo_json.clone())]
+            .into_iter()
+            .collect();
+
+        let mut loader = TurboJsonLoader::workspace(repo_root.to_owned(), turbo_jsons);
+        a_turbo_json
+            .create_with_contents(r#"{"tasks": {"build": {}}}"#)
+            .unwrap();
+
+        let turbo_json = loader.load(&PackageName::from("a")).unwrap();
+        assert_eq!(turbo_json.tasks.len(), 1);
+        a_turbo_json.remove().unwrap();
+        assert!(loader.load(&PackageName::from("a")).is_ok());
     }
 }

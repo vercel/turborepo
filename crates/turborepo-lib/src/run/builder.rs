@@ -359,7 +359,7 @@ impl RunBuilder {
         let task_access = TaskAccess::new(self.repo_root.clone(), async_cache.clone(), &scm);
         task_access.restore_config().await;
 
-        let turbo_json_loader = if task_access.is_enabled() {
+        let mut turbo_json_loader = if task_access.is_enabled() {
             TurboJsonLoader::task_access(
                 self.repo_root.clone(),
                 self.root_turbo_json_path.clone(),
@@ -380,7 +380,7 @@ impl RunBuilder {
             TurboJsonLoader::workspace(self.repo_root.clone(), package_turbo_jsons)
         };
 
-        let root_turbo_json = turbo_json_loader.load(&PackageName::Root)?;
+        let root_turbo_json = turbo_json_loader.load(&PackageName::Root)?.clone();
 
         pkg_dep_graph.validate()?;
 
@@ -464,11 +464,6 @@ impl RunBuilder {
             self.opts.run_opts.single_package,
         )
         .with_root_tasks(root_turbo_json.tasks.keys().cloned())
-        .with_turbo_jsons(Some(
-            Some((PackageName::Root, root_turbo_json.clone()))
-                .into_iter()
-                .collect(),
-        ))
         .with_tasks_only(self.opts.run_opts.only)
         .with_workspaces(filtered_pkgs.clone().into_iter().collect())
         .with_tasks(self.opts.run_opts.tasks.iter().map(|task| {
