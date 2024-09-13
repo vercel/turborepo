@@ -5,11 +5,8 @@ use crate::get_version;
 const OPEN_ISSUE_MESSAGE: &str =
     "Please open an issue at https://github.com/vercel/turborepo/issues/new/choose";
 
-pub fn panic_handler(panic_info: &std::panic::PanicInfo) {
-    let cause = panic_info
-        .message()
-        .map(ToString::to_string)
-        .unwrap_or_else(|| "Unknown".to_string());
+pub fn panic_handler(panic_info: &std::panic::PanicHookInfo) {
+    let cause = panic_info.to_string();
 
     let explanation = match panic_info.location() {
         Some(location) => format!("file '{}' at line {}\n", location.file(), location.line()),
