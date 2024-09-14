@@ -24,7 +24,7 @@ struct ConfigOutput<'a> {
     daemon: Option<bool>,
     env_mode: EnvMode,
     scm_base: Option<&'a str>,
-    scm_head: &'a str,
+    scm_head: Option<&'a str>,
     cache_dir: &'a Utf8Path,
 }
 

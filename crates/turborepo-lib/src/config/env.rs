@@ -380,7 +380,7 @@ mod test {
         assert_eq!(config.env_mode, None);
         assert!(!config.preflight());
         assert_eq!(config.scm_base(), None);
-        assert_eq!(config.scm_head(), "HEAD");
+        assert_eq!(config.scm_head(), None);
         assert_eq!(config.root_turbo_json_path, None);
         assert!(!config.force());
         assert_eq!(config.log_order(), LogOrder::Auto);

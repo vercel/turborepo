@@ -136,15 +136,11 @@ impl Git {
         }
 
         // We only care about non-tracked files if we haven't specified both ends up the
-        // comparison or if we are using `--affected`
+        // comparison
         if include_uncommitted {
             // Add untracked files, i.e. files that are not in git at all
             let output = self
                 .execute_git_command(&["ls-files", "--others", "--exclude-standard"], pathspec)?;
-            self.add_files_from_stdout(&mut files, turbo_root, output);
-
-            // Then add files that are in git, but have been modified (but not committed)
-            let output = self.execute_git_command(&["diff", "--name-only", "HEAD"], pathspec)?;
             self.add_files_from_stdout(&mut files, turbo_root, output);
         }
 

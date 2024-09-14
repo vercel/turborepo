@@ -316,8 +316,8 @@ impl ConfigurationOptions {
         non_empty_str(self.scm_base.as_deref())
     }
 
-    pub fn scm_head(&self) -> &str {
-        non_empty_str(self.scm_head.as_deref()).unwrap_or("HEAD")
+    pub fn scm_head(&self) -> Option<&str> {
+        non_empty_str(self.scm_head.as_deref())
     }
 
     pub fn allow_no_package_manager(&self) -> bool {
