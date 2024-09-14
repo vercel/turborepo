@@ -13,6 +13,9 @@ pub struct GitRange {
     // this is useful for shallow clones where objects may not exist.
     // When this happens, we assume that everything has changed.
     pub allow_unknown_objects: bool,
+    // Calculate diff between merge base of the two refs and the second ref
+    // (this is usually what you want for detecting changes)
+    pub merge_base: bool,
 }
 
 #[derive(Debug, Default, PartialEq)]
@@ -159,6 +162,7 @@ impl FromStr for TargetSelector {
                     to_ref: Some(b.to_string()),
                     include_uncommitted: false,
                     allow_unknown_objects: false,
+                    merge_base: true,
                 }
             } else {
                 // If only the start of the range is specified, we assume that
@@ -168,6 +172,7 @@ impl FromStr for TargetSelector {
                     to_ref: None,
                     include_uncommitted: true,
                     allow_unknown_objects: false,
+                    merge_base: false,
                 }
             };
             Some(git_range)

@@ -200,6 +200,7 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
                     to_ref: to_ref.clone(),
                     include_uncommitted: true,
                     allow_unknown_objects: true,
+                    merge_base: true,
                 }),
                 include_dependents: true,
                 ..Default::default()
@@ -549,6 +550,7 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
             git_range.to_ref.as_deref(),
             git_range.include_uncommitted,
             git_range.allow_unknown_objects,
+            git_range.merge_base,
         )
     }
 

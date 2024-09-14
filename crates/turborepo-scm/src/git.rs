@@ -35,6 +35,7 @@ impl SCM {
         to_commit: Option<&str>,
         include_uncommitted: bool,
         allow_unknown_objects: bool,
+        merge_base: bool,
     ) -> Result<ChangedFiles, Error> {
         fn unable_to_detect_range(error: impl std::error::Error) -> Result<ChangedFiles, Error> {
             warn!(
@@ -45,7 +46,13 @@ impl SCM {
         }
         match self {
             Self::Git(git) => {
-                match git.changed_files(turbo_root, from_commit, to_commit, include_uncommitted) {
+                match git.changed_files(
+                    turbo_root,
+                    from_commit,
+                    to_commit,
+                    include_uncommitted,
+                    merge_base,
+                ) {
                     Ok(files) => Ok(ChangedFiles::Some(files)),
                     Err(ref error @ Error::Git(ref message, _))
                         if allow_unknown_objects && message.contains("no merge base") =>
@@ -110,6 +117,7 @@ impl Git {
         from_commit: Option<&str>,
         to_commit: Option<&str>,
         include_uncommitted: bool,
+        merge_base: bool,
     ) -> Result<HashSet<AnchoredSystemPathBuf>, Error> {
         let turbo_root_relative_to_git_root = self.root.anchor(turbo_root)?;
         let pathspec = turbo_root_relative_to_git_root.as_str();
@@ -118,22 +126,18 @@ impl Git {
 
         let valid_from = self.resolve_base(from_commit)?;
 
-        if let Some(to_commit) = to_commit {
-            let output = self.execute_git_command(
-                &[
-                    "diff",
-                    "--name-only",
-                    &format!("{}...{}", valid_from, to_commit),
-                ],
-                pathspec,
-            )?;
-
-            self.add_files_from_stdout(&mut files, turbo_root, output);
+        let mut args = if let Some(to_commit) = to_commit {
+            vec!["diff", "--name-only", valid_from, to_commit]
         } else {
-            let output =
-                self.execute_git_command(&["diff", "--name-only", valid_from], pathspec)?;
-            self.add_files_from_stdout(&mut files, turbo_root, output);
+            vec!["diff", "--name-only", valid_from]
+        };
+
+        if merge_base {
+            args.push("--merge-base");
         }
+
+        let output = self.execute_git_command(&args, pathspec)?;
+        self.add_files_from_stdout(&mut files, turbo_root, output);
 
         // We only care about non-tracked files if we haven't specified both ends up the
         // comparison
@@ -849,7 +853,7 @@ mod tests {
 
         let scm = SCM::new(&root);
         let actual = scm
-            .changed_files(&root, None, Some("HEAD"), true, true)
+            .changed_files(&root, None, Some("HEAD"), true, true, false)
             .unwrap();
 
         assert_matches!(actual, ChangedFiles::All);
