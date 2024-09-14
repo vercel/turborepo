@@ -60,6 +60,7 @@ Remove the new file
 
 Add field to `apps/my-app/package.json`
   $ jq '. += {"description": "foo"}' apps/my-app/package.json > apps/my-app/package.json.new
+  $ mv apps/my-app/package.json.new apps/my-app/package.json
 
 Validate that we only run `my-app#build` with change not committed
   $ ${TURBO} run build --affected --log-order grouped
