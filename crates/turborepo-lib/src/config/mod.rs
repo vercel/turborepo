@@ -242,6 +242,7 @@ pub struct ConfigurationOptions {
     pub(crate) remote_only: Option<bool>,
     pub(crate) remote_cache_read_only: Option<bool>,
     pub(crate) run_summary: Option<bool>,
+    pub(crate) allow_no_turbo_json: Option<bool>,
 }
 
 #[derive(Default)]
@@ -369,6 +370,10 @@ impl ConfigurationOptions {
         self.root_turbo_json_path
             .clone()
             .unwrap_or_else(|| repo_root.join_component(CONFIG_FILE))
+    }
+
+    pub fn allow_no_turbo_json(&self) -> bool {
+        self.allow_no_turbo_json.unwrap_or_default()
     }
 }
 

@@ -37,7 +37,7 @@ use {
 };
 
 use crate::{
-    cli::DryRunMode,
+    cli::{DryRunMode, EnvMode},
     commands::CommandBase,
     engine::{Engine, EngineBuilder},
     opts::Opts,
@@ -45,7 +45,9 @@ use crate::{
     run::{scope, task_access::TaskAccess, task_id::TaskName, Error, Run, RunCache},
     shim::TurboState,
     signal::{SignalHandler, SignalSubscriber},
-    turbo_json::{package_turbo_jsons, TurboJson, TurboJsonLoader, UIMode},
+    turbo_json::{
+        package_turbo_jsons, workspace_package_scripts, TurboJson, TurboJsonLoader, UIMode,
+    },
     DaemonConnector,
 };
 
@@ -65,6 +67,7 @@ pub struct RunBuilder {
     entrypoint_packages: Option<HashSet<PackageName>>,
     should_print_prelude_override: Option<bool>,
     allow_missing_package_manager: bool,
+    allow_no_turbo_json: bool,
 }
 
 impl RunBuilder {
@@ -85,6 +88,7 @@ impl RunBuilder {
             (!cfg!(windows) || matches!(opts.run_opts.ui_mode, UIMode::Tui)),
         );
         let root_turbo_json_path = config.root_turbo_json_path(&base.repo_root);
+        let allow_no_turbo_json = config.allow_no_turbo_json();
 
         let CommandBase {
             repo_root,
@@ -105,6 +109,7 @@ impl RunBuilder {
             should_print_prelude_override: None,
             allow_missing_package_manager,
             root_turbo_json_path,
+            allow_no_turbo_json,
         })
     }
 
@@ -371,6 +376,12 @@ impl RunBuilder {
                 self.root_turbo_json_path.clone(),
                 root_package_json.clone(),
             )
+        } else if self.allow_no_turbo_json && !self.root_turbo_json_path.exists() {
+            let package_scripts = workspace_package_scripts(pkg_dep_graph.packages());
+            // We explicitly set env mode to loose as otherwise no env vars will be passed
+            // to tasks.
+            self.opts.run_opts.env_mode = EnvMode::Loose;
+            TurboJsonLoader::workspace_no_turbo_json(self.repo_root.clone(), package_scripts)
         } else {
             let package_turbo_jsons = package_turbo_jsons(
                 &self.repo_root,
