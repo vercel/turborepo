@@ -1,4 +1,4 @@
-import chalk from "chalk";
+import { yellow } from "picocolors";
 import isGitClean from "is-git-clean";
 import { logger } from "@turbo/utils";
 
@@ -24,12 +24,12 @@ export function checkGitStatus({
   if (!clean) {
     if (force) {
       logger.log(
-        `${chalk.yellow("WARNING")}: ${errorMessage}. Forcibly continuing...`
+        `${yellow("WARNING")}: ${errorMessage}. Forcibly continuing...`
       );
     } else {
       logger.log("Thank you for using @turbo/codemod!");
       logger.log(
-        chalk.yellow(
+        yellow(
           "\nBut before we continue, please stash or commit your git changes."
         )
       );

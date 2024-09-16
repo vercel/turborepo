@@ -200,6 +200,12 @@ impl Token {
                 turborepo_api_client::Error::UnknownStatus { code, .. } if code == "forbidden" => {
                     Ok(false)
                 }
+                // If the entire request fails with 403 also return false
+                turborepo_api_client::Error::ReqwestError(e)
+                    if e.status() == Some(reqwest::StatusCode::FORBIDDEN) =>
+                {
+                    Ok(false)
+                }
                 _ => Err(e.into()),
             },
         }

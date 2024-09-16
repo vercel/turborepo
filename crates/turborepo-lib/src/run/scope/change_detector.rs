@@ -6,7 +6,7 @@ use turborepo_repository::{
     change_mapper::{ChangeMapper, DefaultPackageChangeMapper, LockfileChange, PackageChanges},
     package_graph::{PackageGraph, PackageName},
 };
-use turborepo_scm::SCM;
+use turborepo_scm::{git::ChangedFiles, SCM};
 
 use crate::{
     global_deps_package_change_mapper::{Error, GlobalDepsPackageChangeMapper},
@@ -17,8 +17,10 @@ use crate::{
 pub trait GitChangeDetector {
     fn changed_packages(
         &self,
-        from_ref: &str,
+        from_ref: Option<&str>,
         to_ref: Option<&str>,
+        include_uncommitted: bool,
+        allow_unknown_objects: bool,
     ) -> Result<HashSet<PackageName>, ResolutionError>;
 }
 
@@ -53,7 +55,7 @@ impl<'a> ScopeChangeDetector<'a> {
     /// returns an empty lockfile change
     fn get_lockfile_contents(
         &self,
-        from_ref: &str,
+        from_ref: Option<&str>,
         changed_files: &HashSet<AnchoredSystemPathBuf>,
     ) -> Option<LockfileChange> {
         let lockfile_path = self
@@ -66,6 +68,7 @@ impl<'a> ScopeChangeDetector<'a> {
             changed_files,
             &lockfile_path,
         ) {
+            debug!("lockfile did not change");
             return None;
         }
 
@@ -85,29 +88,66 @@ impl<'a> ScopeChangeDetector<'a> {
 impl<'a> GitChangeDetector for ScopeChangeDetector<'a> {
     fn changed_packages(
         &self,
-        from_ref: &str,
+        from_ref: Option<&str>,
         to_ref: Option<&str>,
+        include_uncommitted: bool,
+        allow_unknown_objects: bool,
     ) -> Result<HashSet<PackageName>, ResolutionError> {
-        let mut changed_files = HashSet::new();
-        if !from_ref.is_empty() {
-            changed_files = self.scm.changed_files(self.turbo_root, from_ref, to_ref)?;
-        }
+        let changed_files = match self.scm.changed_files(
+            self.turbo_root,
+            from_ref,
+            to_ref,
+            include_uncommitted,
+            allow_unknown_objects,
+        )? {
+            ChangedFiles::All => {
+                debug!("all packages changed");
+                return Ok(self
+                    .pkg_graph
+                    .packages()
+                    .map(|(name, _)| name.to_owned())
+                    .collect());
+            }
+            ChangedFiles::Some(changed_files) => changed_files,
+        };
 
         let lockfile_contents = self.get_lockfile_contents(from_ref, &changed_files);
-        debug!("changed_files: {changed_files:?}");
+
+        debug!(
+            "changed files: {:?}",
+            &changed_files
+                .iter()
+                .map(|x| x.to_string())
+                .collect::<Vec<String>>()
+        );
+
         match self
             .change_mapper
             .changed_packages(changed_files, lockfile_contents)?
         {
-            PackageChanges::All => Ok(self
-                .pkg_graph
-                .packages()
-                .map(|(name, _)| name.to_owned())
-                .collect()),
-            PackageChanges::Some(packages) => Ok(packages
-                .iter()
-                .map(|package| package.name.to_owned())
-                .collect()),
+            PackageChanges::All(reason) => {
+                debug!("all packages changed: {:?}", reason);
+                Ok(self
+                    .pkg_graph
+                    .packages()
+                    .map(|(name, _)| name.to_owned())
+                    .collect())
+            }
+            PackageChanges::Some(packages) => {
+                debug!(
+                    "{} packages changed: {:?}",
+                    packages.len(),
+                    &packages
+                        .iter()
+                        .map(|x| x.name.to_string())
+                        .collect::<Vec<String>>()
+                );
+
+                Ok(packages
+                    .iter()
+                    .map(|package| package.name.to_owned())
+                    .collect())
+            }
         }
     }
 }

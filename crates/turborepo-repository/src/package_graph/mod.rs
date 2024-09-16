@@ -6,6 +6,7 @@ use std::{
 use itertools::Itertools;
 use petgraph::visit::{depth_first_search, Reversed};
 use serde::Serialize;
+use tracing::debug;
 use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
 };
@@ -320,6 +321,40 @@ impl PackageGraph {
             .collect()
     }
 
+    /// Provides a path from the root package to package
+    ///
+    /// Currently only provides the shortest path as calculating all paths can
+    /// be O(n!)
+    pub fn root_internal_dependency_explanation(
+        &self,
+        package: &WorkspacePackage,
+    ) -> Option<String> {
+        let from = *self
+            .node_lookup
+            .get(&PackageNode::Workspace(PackageName::Root))
+            .expect("all graphs should have a root");
+        let to = *self
+            .node_lookup
+            .get(&PackageNode::Workspace(package.name.clone()))?;
+        let (_cost, path) =
+            petgraph::algo::astar(&self.graph, from, |node| node == to, |_| 1, |_| 1)?;
+        Some(
+            self.path_display(&path)
+                .expect("path should only contain valid node indices"),
+        )
+    }
+
+    fn path_display(&self, path: &[petgraph::graph::NodeIndex]) -> Option<String> {
+        let mut package_names = Vec::with_capacity(path.len());
+        for index in path {
+            let node = self.graph.node_weight(*index)?;
+            let name = node.as_package_name().to_string();
+            package_names.push(name);
+        }
+
+        Some(package_names.join(" -> "))
+    }
+
     fn root_internal_dependencies(&self) -> HashSet<&PackageNode> {
         // We cannot call self.dependencies(&PackageNode::Workspace(PackageName::Root))
         // as it will infinitely recurse.
@@ -424,9 +459,20 @@ impl PackageGraph {
         } else {
             self.packages
                 .iter()
-                .filter(|(_name, info)| {
-                    closures.get(info.package_path().to_unix().as_str())
-                        != info.transitive_dependencies.as_ref()
+                .filter(|(name, info)| {
+                    let previous_closure = closures.get(info.package_path().to_unix().as_str());
+                    let not_equal = previous_closure != info.transitive_dependencies.as_ref();
+                    if not_equal {
+                        if let (Some(prev), Some(curr)) =
+                            (previous_closure, info.transitive_dependencies.as_ref())
+                        {
+                            debug!(
+                                "package {name} has differing closure: {:?}",
+                                prev.symmetric_difference(curr)
+                            );
+                        }
+                    }
+                    not_equal
                 })
                 .map(|(name, info)| match name {
                     PackageName::Other(n) => {

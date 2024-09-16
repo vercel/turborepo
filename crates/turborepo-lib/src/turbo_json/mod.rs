@@ -6,20 +6,20 @@ use std::{
 
 use biome_deserialize_macros::Deserializable;
 use camino::Utf8Path;
+use clap::ValueEnum;
 use miette::{NamedSource, SourceSpan};
 use serde::{Deserialize, Serialize};
 use struct_iterable::Iterable;
-use tracing::debug;
-use turbopath::{AbsoluteSystemPath, AnchoredSystemPath};
+use turbopath::AbsoluteSystemPath;
 use turborepo_errors::Spanned;
 use turborepo_repository::{package_graph::ROOT_PKG_NAME, package_json::PackageJson};
 use turborepo_unescape::UnescapedString;
 
 use crate::{
-    cli::OutputLogsMode,
+    cli::{EnvMode, OutputLogsMode},
     config::{ConfigurationOptions, Error, InvalidEnvPrefixError},
     run::{
-        task_access::{TaskAccessTraceFile, TASK_ACCESS_CONFIG_PATH},
+        task_access::TaskAccessTraceFile,
         task_id::{TaskId, TaskName},
     },
     task_graph::{TaskDefinition, TaskOutputs},
@@ -124,7 +124,18 @@ pub struct RawTurboJson {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) remote_cache: Option<RawRemoteCacheOptions>,
     #[serde(skip_serializing_if = "Option::is_none", rename = "ui")]
-    pub ui: Option<UI>,
+    pub ui: Option<UIMode>,
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        rename = "dangerouslyDisablePackageManagerCheck"
+    )]
+    pub allow_no_package_manager: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub daemon: Option<Spanned<bool>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub env_mode: Option<EnvMode>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cache_dir: Option<Spanned<UnescapedString>>,
 
     #[deserializable(rename = "//")]
     #[serde(skip)]
@@ -159,22 +170,32 @@ impl DerefMut for Pipeline {
     }
 }
 
-#[derive(Serialize, Debug, Copy, Clone, Deserializable, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Copy, Clone, Deserializable, PartialEq, Eq, ValueEnum)]
 #[serde(rename_all = "camelCase")]
-pub enum UI {
+pub enum UIMode {
+    /// Use the terminal user interface
     Tui,
+    /// Use the standard output stream
     Stream,
+    /// Use the web user interface (experimental)
+    Web,
 }
 
-impl Default for UI {
+impl Default for UIMode {
     fn default() -> Self {
         Self::Tui
     }
 }
 
-impl UI {
+impl UIMode {
     pub fn use_tui(&self) -> bool {
         matches!(self, Self::Tui)
+    }
+
+    /// Returns true if the UI mode has a sender,
+    /// i.e. web or tui but not stream
+    pub fn has_sender(&self) -> bool {
+        matches!(self, Self::Tui | Self::Web)
     }
 }
 
@@ -235,7 +256,7 @@ impl RawTaskDefinition {
     }
 }
 
-const CONFIG_FILE: &str = "turbo.json";
+pub const CONFIG_FILE: &str = "turbo.json";
 const ENV_PIPELINE_DELIMITER: &str = "$";
 const TOPOLOGICAL_PIPELINE_DELIMITER: &str = "^";
 
@@ -387,11 +408,16 @@ impl TryFrom<RawTaskDefinition> for TaskDefinition {
 impl RawTurboJson {
     pub(crate) fn read(
         repo_root: &AbsoluteSystemPath,
-        path: &AnchoredSystemPath,
+        path: &AbsoluteSystemPath,
     ) -> Result<RawTurboJson, Error> {
-        let absolute_path = repo_root.resolve(path);
-        let contents = absolute_path.read_to_string()?;
-        let raw_turbo_json = RawTurboJson::parse(&contents, path)?;
+        let contents = path.read_to_string()?;
+        // Anchoring the path can fail if the path resides outside of the repository
+        // Just display absolute path in that case.
+        let root_relative_path = repo_root.anchor(path).map_or_else(
+            |_| path.as_str().to_owned(),
+            |relative| relative.to_string(),
+        );
+        let raw_turbo_json = RawTurboJson::parse(&contents, &root_relative_path)?;
 
         Ok(raw_turbo_json)
     }
@@ -526,21 +552,11 @@ impl TurboJson {
     /// with synthesized information from the provided package.json
     pub fn load(
         repo_root: &AbsoluteSystemPath,
-        dir: &AnchoredSystemPath,
+        turbo_json_path: &AbsoluteSystemPath,
         root_package_json: &PackageJson,
         include_synthesized_from_root_package_json: bool,
     ) -> Result<TurboJson, Error> {
-        let turbo_from_files = Self::read(repo_root, &dir.join_component(CONFIG_FILE));
-        let turbo_from_trace =
-            Self::read(repo_root, &dir.join_components(&TASK_ACCESS_CONFIG_PATH));
-
-        // check the zero config case (turbo trace file, but no turbo.json file)
-        if let Ok(turbo_from_trace) = turbo_from_trace {
-            if turbo_from_files.is_err() {
-                debug!("Using turbo.json synthesized from trace file");
-                return Ok(turbo_from_trace);
-            }
-        }
+        let turbo_from_files = Self::read(repo_root, turbo_json_path);
 
         let mut turbo_json = match (include_synthesized_from_root_package_json, turbo_from_files) {
             // If the file didn't exist, throw a custom error here instead of propagating
@@ -616,7 +632,7 @@ impl TurboJson {
     /// and then converts it into `TurboJson`
     pub(crate) fn read(
         repo_root: &AbsoluteSystemPath,
-        path: &AnchoredSystemPath,
+        path: &AbsoluteSystemPath,
     ) -> Result<TurboJson, Error> {
         let raw_turbo_json = RawTurboJson::read(repo_root, path)?;
         raw_turbo_json.try_into()
@@ -733,16 +749,16 @@ mod tests {
     use serde_json::json;
     use tempfile::tempdir;
     use test_case::test_case;
-    use turbopath::{AbsoluteSystemPath, AnchoredSystemPath};
+    use turbopath::AbsoluteSystemPath;
     use turborepo_repository::package_json::PackageJson;
     use turborepo_unescape::UnescapedString;
 
-    use super::{Pipeline, RawTurboJson, Spanned, UI};
+    use super::{Pipeline, RawTurboJson, Spanned, UIMode};
     use crate::{
         cli::OutputLogsMode,
         run::task_id::TaskName,
         task_graph::{TaskDefinition, TaskOutputs},
-        turbo_json::{RawTaskDefinition, TurboJson},
+        turbo_json::{RawTaskDefinition, TurboJson, CONFIG_FILE},
     };
 
     #[test_case(r"{}", TurboJson::default() ; "empty")]
@@ -771,7 +787,7 @@ mod tests {
 
         let mut turbo_json = TurboJson::load(
             repo_root,
-            AnchoredSystemPath::empty(),
+            &repo_root.join_component(CONFIG_FILE),
             &root_package_json,
             false,
         )?;
@@ -786,7 +802,7 @@ mod tests {
     #[test_case(
         None,
         PackageJson {
-             scripts: [("build".to_string(), "echo build".to_string())].into_iter().collect(),
+             scripts: [("build".to_string(), Spanned::new("echo build".to_string()))].into_iter().collect(),
              ..PackageJson::default()
         },
         TurboJson {
@@ -810,7 +826,7 @@ mod tests {
             }
         }"#),
         PackageJson {
-             scripts: [("test".to_string(), "echo test".to_string())].into_iter().collect(),
+             scripts: [("test".to_string(), Spanned::new("echo test".to_string()))].into_iter().collect(),
              ..PackageJson::default()
         },
         TurboJson {
@@ -845,7 +861,7 @@ mod tests {
 
         let mut turbo_json = TurboJson::load(
             repo_root,
-            AnchoredSystemPath::empty(),
+            &repo_root.join_component(CONFIG_FILE),
             &root_package_json,
             true,
         )?;
@@ -1067,19 +1083,37 @@ mod tests {
         assert_eq!(actual, expected);
     }
 
-    #[test_case(r#"{ "ui": "tui" }"#, Some(UI::Tui) ; "tui")]
-    #[test_case(r#"{ "ui": "stream" }"#, Some(UI::Stream) ; "stream")]
+    #[test_case(r#"{ "ui": "tui" }"#, Some(UIMode::Tui) ; "tui")]
+    #[test_case(r#"{ "ui": "stream" }"#, Some(UIMode::Stream) ; "stream")]
     #[test_case(r#"{}"#, None ; "missing")]
-    fn test_ui(json: &str, expected: Option<UI>) {
-        let json = RawTurboJson::parse(json, AnchoredSystemPath::new("").unwrap()).unwrap();
+    fn test_ui(json: &str, expected: Option<UIMode>) {
+        let json = RawTurboJson::parse(json, "").unwrap();
         assert_eq!(json.ui, expected);
+    }
+
+    #[test_case(r#"{ "daemon": true }"#, r#"{"daemon":true}"# ; "daemon_on")]
+    #[test_case(r#"{ "daemon": false }"#, r#"{"daemon":false}"# ; "daemon_off")]
+    fn test_daemon(json: &str, expected: &str) {
+        let parsed = RawTurboJson::parse(json, "").unwrap();
+        let actual = serde_json::to_string(&parsed).unwrap();
+        assert_eq!(actual, expected);
     }
 
     #[test_case(r#"{ "ui": "tui" }"#, r#"{"ui":"tui"}"# ; "tui")]
     #[test_case(r#"{ "ui": "stream" }"#, r#"{"ui":"stream"}"# ; "stream")]
     fn test_ui_serialization(input: &str, expected: &str) {
-        let parsed = RawTurboJson::parse(input, AnchoredSystemPath::new("").unwrap()).unwrap();
+        let parsed = RawTurboJson::parse(input, "").unwrap();
         let actual = serde_json::to_string(&parsed).unwrap();
         assert_eq!(actual, expected);
+    }
+
+    #[test_case(r#"{"dangerouslyDisablePackageManagerCheck":true}"#, Some(true) ; "t")]
+    #[test_case(r#"{"dangerouslyDisablePackageManagerCheck":false}"#, Some(false) ; "f")]
+    #[test_case(r#"{}"#, None ; "missing")]
+    fn test_allow_no_package_manager_serde(json_str: &str, expected: Option<bool>) {
+        let json = RawTurboJson::parse(json_str, "").unwrap();
+        assert_eq!(json.allow_no_package_manager, expected);
+        let serialized = serde_json::to_string(&json).unwrap();
+        assert_eq!(serialized, json_str);
     }
 }

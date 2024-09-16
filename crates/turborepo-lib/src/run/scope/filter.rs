@@ -163,10 +163,11 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
     /// It applies the following rules:
     pub(crate) fn resolve(
         &self,
+        affected: &Option<(Option<String>, String)>,
         patterns: &[String],
     ) -> Result<(HashSet<PackageName>, bool), ResolutionError> {
         // inference is None only if we are in the root
-        let is_all_packages = patterns.is_empty() && self.inference.is_none();
+        let is_all_packages = patterns.is_empty() && self.inference.is_none() && affected.is_none();
 
         let filter_patterns = if is_all_packages {
             // return all packages in the workspace
@@ -176,7 +177,7 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
                 .map(|(name, _)| name.to_owned())
                 .collect()
         } else {
-            self.get_packages_from_patterns(patterns)?
+            self.get_packages_from_patterns(affected, patterns)?
         };
 
         Ok((filter_patterns, is_all_packages))
@@ -184,12 +185,26 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
 
     fn get_packages_from_patterns(
         &self,
+        affected: &Option<(Option<String>, String)>,
         patterns: &[String],
     ) -> Result<HashSet<PackageName>, ResolutionError> {
-        let selectors = patterns
+        let mut selectors = patterns
             .iter()
             .map(|pattern| TargetSelector::from_str(pattern))
             .collect::<Result<Vec<_>, _>>()?;
+
+        if let Some((from_ref, to_ref)) = affected {
+            selectors.push(TargetSelector {
+                git_range: Some(GitRange {
+                    from_ref: from_ref.clone(),
+                    to_ref: Some(to_ref.to_string()),
+                    include_uncommitted: true,
+                    allow_unknown_objects: true,
+                }),
+                include_dependents: true,
+                ..Default::default()
+            });
+        }
 
         self.get_filtered_packages(selectors)
     }
@@ -378,7 +393,7 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
 
         // if we have a filter, use it to filter the entry packages
         let filtered_entry_packages = if !selector.name_pattern.is_empty() {
-            match_package_names(&selector.name_pattern, entry_packages)?
+            match_package_names(&selector.name_pattern, &self.all_packages(), entry_packages)?
         } else {
             entry_packages
         };
@@ -506,17 +521,12 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
 
         if !selector.name_pattern.is_empty() {
             if !selector_valid {
-                entry_packages = self.match_package_names_to_vertices(
-                    &selector.name_pattern,
-                    self.pkg_graph
-                        .packages()
-                        .map(|(name, _)| name.to_owned())
-                        .collect(),
-                )?;
+                entry_packages = self.all_packages();
                 selector_valid = true;
-            } else {
-                entry_packages = match_package_names(&selector.name_pattern, entry_packages)?;
             }
+            let all_packages = self.all_packages();
+            entry_packages =
+                match_package_names(&selector.name_pattern, &all_packages, entry_packages)?;
         }
 
         // if neither a name pattern, parent dir, or from ref is provided, then
@@ -534,19 +544,22 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
         &self,
         git_range: &GitRange,
     ) -> Result<HashSet<PackageName>, ResolutionError> {
-        self.change_detector
-            .changed_packages(&git_range.from_ref, git_range.to_ref.as_deref())
+        self.change_detector.changed_packages(
+            git_range.from_ref.as_deref(),
+            git_range.to_ref.as_deref(),
+            git_range.include_uncommitted,
+            git_range.allow_unknown_objects,
+        )
     }
 
-    fn match_package_names_to_vertices(
-        &self,
-        name_pattern: &str,
-        mut entry_packages: HashSet<PackageName>,
-    ) -> Result<HashSet<PackageName>, ResolutionError> {
-        // add the root package to the entry packages
-        entry_packages.insert(PackageName::Root);
-
-        match_package_names(name_pattern, entry_packages)
+    fn all_packages(&self) -> HashSet<PackageName> {
+        let mut packages = self
+            .pkg_graph
+            .packages()
+            .map(|(name, _)| name.to_owned())
+            .collect::<HashSet<_>>();
+        packages.insert(PackageName::Root);
+        packages
     }
 }
 
@@ -556,21 +569,26 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
 /// the pattern is normalized, replacing `\*` with `.*`
 fn match_package_names(
     name_pattern: &str,
-    mut entry_packages: HashSet<PackageName>,
+    all_packages: &HashSet<PackageName>,
+    mut packages: HashSet<PackageName>,
 ) -> Result<HashSet<PackageName>, ResolutionError> {
     let matcher = SimpleGlob::new(name_pattern)?;
-    let matched_packages = entry_packages
-        .extract_if(|e| matcher.is_match(e.as_ref()))
+    let matched_packages = all_packages
+        .iter()
+        .filter(|e| matcher.is_match(e.as_ref()))
+        .cloned()
         .collect::<HashSet<_>>();
 
     // If the pattern was an exact name and it matched no packages, then error
     if matcher.is_exact() && matched_packages.is_empty() {
-        Err(ResolutionError::NoPackagesMatchedWithName(
+        return Err(ResolutionError::NoPackagesMatchedWithName(
             name_pattern.to_owned(),
-        ))
-    } else {
-        Ok(matched_packages)
+        ));
     }
+
+    packages.retain(|pkg| matched_packages.contains(pkg));
+
+    Ok(packages)
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -610,6 +628,7 @@ pub enum ResolutionError {
 mod test {
     use std::collections::{HashMap, HashSet};
 
+    use pretty_assertions::assert_eq;
     use tempfile::TempDir;
     use test_case::test_case;
     use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeUnixPathBuf};
@@ -1105,7 +1124,7 @@ mod test {
     #[test_case(
         vec![
             TargetSelector {
-                git_range: Some(GitRange { from_ref: "HEAD~1".to_string(), to_ref: None }),
+                git_range: Some(GitRange { from_ref: Some("HEAD~1".to_string()), to_ref: None, ..Default::default() }),
                 ..Default::default()
             }
         ],
@@ -1115,7 +1134,7 @@ mod test {
     #[test_case(
         vec![
             TargetSelector {
-                git_range: Some(GitRange { from_ref: "HEAD~1".to_string(), to_ref: None }),
+                git_range: Some(GitRange { from_ref: Some("HEAD~1".to_string()), to_ref: None, ..Default::default() }),
                 parent_dir: Some(AnchoredSystemPathBuf::try_from(".").unwrap()),
                 ..Default::default()
             }
@@ -1126,7 +1145,7 @@ mod test {
     #[test_case(
         vec![
             TargetSelector {
-                git_range: Some(GitRange { from_ref: "HEAD~1".to_string(), to_ref: None }),
+                git_range: Some(GitRange { from_ref: Some("HEAD~1".to_string()), to_ref: None, ..Default::default() }),
                 parent_dir: Some(AnchoredSystemPathBuf::try_from("package-2").unwrap()),
                 ..Default::default()
             }
@@ -1137,7 +1156,7 @@ mod test {
     #[test_case(
         vec![
             TargetSelector {
-                git_range: Some(GitRange { from_ref: "HEAD~1".to_string(), to_ref: None }),
+                git_range: Some(GitRange { from_ref: Some("HEAD~1".to_string()), to_ref: None, ..Default::default() }),
                 name_pattern: "package-2*".to_string(),
                 ..Default::default()
             }
@@ -1148,7 +1167,7 @@ mod test {
     #[test_case(
         vec![
             TargetSelector {
-                git_range: Some(GitRange { from_ref: "HEAD~1".to_string(), to_ref: None }),
+                git_range: Some(GitRange { from_ref: Some("HEAD~1".to_string()), to_ref: None, ..Default::default() }),
                 name_pattern: "package-1".to_string(),
                 match_dependencies: true,
                 ..Default::default()
@@ -1160,7 +1179,7 @@ mod test {
     #[test_case(
         vec![
             TargetSelector {
-                git_range: Some(GitRange { from_ref: "HEAD~2".to_string(), to_ref: None }),
+                git_range: Some(GitRange { from_ref: Some("HEAD~2".to_string()), to_ref: None, ..Default::default() }),
                 ..Default::default()
             }
         ],
@@ -1170,7 +1189,7 @@ mod test {
     #[test_case(
         vec![
             TargetSelector {
-                git_range: Some(GitRange { from_ref: "HEAD~2".to_string(), to_ref: Some("HEAD~1".to_string()) }),
+                git_range: Some(GitRange { from_ref: Some("HEAD~2".to_string()), to_ref: Some("HEAD~1".to_string()), ..Default::default() }),
                 ..Default::default()
             }
         ],
@@ -1180,13 +1199,24 @@ mod test {
     #[test_case(
         vec![
             TargetSelector {
-                git_range: Some(GitRange { from_ref: "HEAD~1".to_string(), to_ref: None }),
+                git_range: Some(GitRange { from_ref: Some("HEAD~1".to_string()), to_ref: None, ..Default::default() }),
                 parent_dir: Some(AnchoredSystemPathBuf::try_from("package-*").unwrap()),
                 match_dependencies: true,             ..Default::default()
             }
         ],
         &["package-1", "package-2"] ;
         "match dependency subtree"
+    )]
+    #[test_case(
+        vec![
+            TargetSelector {
+                name_pattern: "package-3".to_string(),
+                git_range: Some(GitRange { from_ref: Some("HEAD~1".to_string()), to_ref: None, ..Default::default() }),
+                ..Default::default()
+            }
+        ],
+        &[] ;
+        "gh 9096"
     )]
     fn scm(selectors: Vec<TargetSelector>, expected: &[&str]) {
         let scm_resolver = TestChangeDetector::new(&[
@@ -1232,12 +1262,14 @@ mod test {
     impl<'a> GitChangeDetector for TestChangeDetector<'a> {
         fn changed_packages(
             &self,
-            from: &str,
+            from: Option<&str>,
             to: Option<&str>,
+            _include_uncommitted: bool,
+            _allow_unknown_objects: bool,
         ) -> Result<HashSet<PackageName>, ResolutionError> {
             Ok(self
                 .0
-                .get(&(from, to))
+                .get(&(from.expect("expected base branch"), to))
                 .map(|h| h.to_owned())
                 .expect("unsupported range"))
         }

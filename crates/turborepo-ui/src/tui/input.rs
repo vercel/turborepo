@@ -2,30 +2,40 @@ use std::time::Duration;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
-use super::{app::LayoutSections, event::Event, Error};
+use super::{
+    app::LayoutSections,
+    event::{Direction, Event},
+    Error,
+};
 
 #[derive(Debug, Clone, Copy)]
-pub struct InputOptions {
-    pub focus: LayoutSections,
+pub struct InputOptions<'a> {
+    pub focus: &'a LayoutSections,
     pub tty_stdin: bool,
+    pub has_selection: bool,
 }
+
 /// Return any immediately available event
 pub fn input(options: InputOptions) -> Result<Option<Event>, Error> {
-    let InputOptions { focus, tty_stdin } = options;
     // If stdin is not a tty, then we do not attempt to read from it
-    if !tty_stdin {
+    if !options.tty_stdin {
         return Ok(None);
     }
     // poll with 0 duration will only return true if event::read won't need to wait
     // for input
     if crossterm::event::poll(Duration::from_millis(0))? {
         match crossterm::event::read()? {
-            crossterm::event::Event::Key(k) => Ok(translate_key_event(&focus, k)),
+            crossterm::event::Event::Key(k) => Ok(translate_key_event(options, k)),
             crossterm::event::Event::Mouse(m) => match m.kind {
                 crossterm::event::MouseEventKind::ScrollDown => Ok(Some(Event::ScrollDown)),
                 crossterm::event::MouseEventKind::ScrollUp => Ok(Some(Event::ScrollUp)),
+                crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left)
+                | crossterm::event::MouseEventKind::Drag(crossterm::event::MouseButton::Left) => {
+                    Ok(Some(Event::Mouse(m)))
+                }
                 _ => Ok(None),
             },
+            crossterm::event::Event::Resize(cols, rows) => Ok(Some(Event::Resize { rows, cols })),
             _ => Ok(None),
         }
     } else {
@@ -34,7 +44,7 @@ pub fn input(options: InputOptions) -> Result<Option<Event>, Error> {
 }
 
 /// Converts a crossterm key event into a TUI interaction event
-fn translate_key_event(interact: &LayoutSections, key_event: KeyEvent) -> Option<Event> {
+fn translate_key_event(options: InputOptions, key_event: KeyEvent) -> Option<Event> {
     // On Windows events for releasing a key are produced
     // We skip these to avoid emitting 2 events per key press.
     // There is still a `Repeat` event for when a key is held that will pass through
@@ -46,17 +56,48 @@ fn translate_key_event(interact: &LayoutSections, key_event: KeyEvent) -> Option
         KeyCode::Char('c') if key_event.modifiers == crossterm::event::KeyModifiers::CONTROL => {
             ctrl_c()
         }
+        KeyCode::Char('c') if options.has_selection => Some(Event::CopySelection),
         // Interactive branches
         KeyCode::Char('z')
-            if matches!(interact, LayoutSections::Pane)
+            if matches!(options.focus, LayoutSections::Pane)
                 && key_event.modifiers == crossterm::event::KeyModifiers::CONTROL =>
         {
             Some(Event::ExitInteractive)
         }
         // If we're in interactive mode, convert the key event to bytes to send to stdin
-        _ if matches!(interact, LayoutSections::Pane) => Some(Event::Input {
+        _ if matches!(options.focus, LayoutSections::Pane) => Some(Event::Input {
             bytes: encode_key(key_event),
         }),
+        // If we're on the list and user presses `/` enter search mode
+        KeyCode::Char('/') if matches!(options.focus, LayoutSections::TaskList) => {
+            Some(Event::SearchEnter)
+        }
+        KeyCode::Esc if matches!(options.focus, LayoutSections::Search { .. }) => {
+            Some(Event::SearchExit {
+                restore_scroll: true,
+            })
+        }
+        KeyCode::Enter if matches!(options.focus, LayoutSections::Search { .. }) => {
+            Some(Event::SearchExit {
+                restore_scroll: false,
+            })
+        }
+        KeyCode::Up if matches!(options.focus, LayoutSections::Search { .. }) => {
+            Some(Event::SearchScroll {
+                direction: Direction::Up,
+            })
+        }
+        KeyCode::Down if matches!(options.focus, LayoutSections::Search { .. }) => {
+            Some(Event::SearchScroll {
+                direction: Direction::Down,
+            })
+        }
+        KeyCode::Backspace if matches!(options.focus, LayoutSections::Search { .. }) => {
+            Some(Event::SearchBackspace)
+        }
+        KeyCode::Char(c) if matches!(options.focus, LayoutSections::Search { .. }) => {
+            Some(Event::SearchEnterChar(c))
+        }
         // Fall through if we aren't in interactive mode
         KeyCode::Char('p') if key_event.modifiers == KeyModifiers::CONTROL => Some(Event::ScrollUp),
         KeyCode::Char('n') if key_event.modifiers == KeyModifiers::CONTROL => {

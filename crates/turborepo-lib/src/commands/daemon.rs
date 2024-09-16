@@ -50,19 +50,28 @@ pub async fn daemon_client(command: &DaemonCommand, base: &CommandBase) -> Resul
                 let _ = connector.connect().await?;
             }
 
-            println!("{} restarted daemon", color!(base.ui, BOLD_GREEN, "✓"));
+            println!(
+                "{} restarted daemon",
+                color!(base.color_config, BOLD_GREEN, "✓")
+            );
         }
         DaemonCommand::Start => {
             // We don't care about the client, but we do care that we can connect
             // which ensures that daemon is started if it wasn't already.
             let _ = connector.connect().await?;
-            println!("{} daemon is running", color!(base.ui, BOLD_GREEN, "✓"));
+            println!(
+                "{} daemon is running",
+                color!(base.color_config, BOLD_GREEN, "✓")
+            );
         }
         DaemonCommand::Stop => {
             let client = match connector.connect().await {
                 Ok(client) => client,
                 Err(DaemonConnectorError::NotRunning) => {
-                    println!("{} stopped daemon", color!(base.ui, BOLD_GREEN, "✓"));
+                    println!(
+                        "{} stopped daemon",
+                        color!(base.color_config, BOLD_GREEN, "✓")
+                    );
                     return Ok(());
                 }
                 Err(e) => {
@@ -70,7 +79,10 @@ pub async fn daemon_client(command: &DaemonCommand, base: &CommandBase) -> Resul
                 }
             };
             client.stop().await?;
-            println!("{} stopped daemon", color!(base.ui, BOLD_GREEN, "✓"));
+            println!(
+                "{} stopped daemon",
+                color!(base.color_config, BOLD_GREEN, "✓")
+            );
         }
         DaemonCommand::Status { json } => {
             let mut client = match connector.connect().await {
@@ -82,7 +94,7 @@ pub async fn daemon_client(command: &DaemonCommand, base: &CommandBase) -> Resul
                 Err(DaemonConnectorError::NotRunning) => {
                     println!(
                         "{} {}",
-                        color!(base.ui, BOLD_RED, "x"),
+                        color!(base.color_config, BOLD_RED, "x"),
                         DAEMON_NOT_RUNNING_MESSAGE
                     );
                     return Ok(());
@@ -104,21 +116,30 @@ pub async fn daemon_client(command: &DaemonCommand, base: &CommandBase) -> Resul
             if *json {
                 println!("{}", serde_json::to_string_pretty(&status)?);
             } else {
-                println!("{} daemon is running", color!(base.ui, BOLD_GREEN, "✓"));
-                println!("log file: {}", color!(base.ui, GREY, "{}", status.log_file));
+                println!(
+                    "{} daemon is running",
+                    color!(base.color_config, BOLD_GREEN, "✓")
+                );
+                println!(
+                    "log file: {}",
+                    color!(base.color_config, GREY, "{}", status.log_file)
+                );
                 println!(
                     "uptime: {}",
                     color!(
-                        base.ui,
+                        base.color_config,
                         GREY,
                         "{}s",
                         humantime::format_duration(Duration::from_millis(status.uptime_ms))
                     )
                 );
-                println!("pid file: {}", color!(base.ui, GREY, "{}", status.pid_file));
+                println!(
+                    "pid file: {}",
+                    color!(base.color_config, GREY, "{}", status.pid_file)
+                );
                 println!(
                     "socket file: {}",
-                    color!(base.ui, GREY, "{}", status.sock_file)
+                    color!(base.color_config, GREY, "{}", status.sock_file)
                 );
             }
         }

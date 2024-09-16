@@ -1,0 +1,25 @@
+name: Docs checks
+
+on:
+  pull_request:
+    paths:
+      - "docs/**"
+      - ".github/actions/validate-docs-links/**"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  validate-docs-links:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: "Setup Node"
+        uses: ./.github/actions/setup-node
+
+      - name: "Run link checker"
+        run: cd docs && pnpm run check-links
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

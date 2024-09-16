@@ -31,15 +31,3 @@ rustflags = [
   "-Clink-arg=-fuse-ld=lld",
 ]
 
-[alias]
-xtask = "run --package xtask --"
-tr-build = "build -p turbo"
-tr-run = "run -p turbo"
-tr-test = "groups test turborepo"
-tr-check = "groups check turborepo"
-# Builds all test code to check for compiler errors before running
-tp-pre-test = "nextest run --no-run --workspace --release --exclude turbo --exclude turborepo-* --exclude turbopath --exclude wax --exclude globwalk --exclude globwatch --exclude pidlock"
-tp-test = "nextest run --workspace --release --no-fail-fast --exclude turbo --exclude turborepo-* --exclude turbopath --exclude wax --exclude globwalk --exclude globwatch --exclude pidlock"
-tp-bench-test = "test --benches --workspace --release --no-fail-fast --exclude turbopack-bench --exclude turbo --exclude turborepo-* --exclude turbopath --exclude wax --exclude globwalk --exclude globwatch --exclude pidlock"
-tp-check = "check --workspace --exclude turbo --exclude turborepo-* --exclude turbopath --exclude wax --exclude globwalk --exclude globwatch --exclude pidlock"
-tp-clippy = "clippy --workspace --exclude turbo --exclude turborepo-* --exclude turbopath --exclude wax --exclude globwalk --exclude globwatch --exclude pidlock"

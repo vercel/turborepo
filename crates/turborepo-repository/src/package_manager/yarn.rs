@@ -1,5 +1,9 @@
+use std::process::Command;
+
+use miette::NamedSource;
 use node_semver::{Range, Version};
-use turbopath::RelativeUnixPath;
+use turbopath::{AbsoluteSystemPath, RelativeUnixPath};
+use which::which;
 
 use crate::{
     package_json::PackageJson,
@@ -8,11 +12,39 @@ use crate::{
 
 pub const LOCKFILE: &str = "yarn.lock";
 
-pub struct YarnDetector;
+pub struct YarnDetector<'a> {
+    repo_root: &'a AbsoluteSystemPath,
+    found: bool,
+}
 
-impl YarnDetector {
+impl<'a> YarnDetector<'a> {
+    pub fn new(repo_root: &'a AbsoluteSystemPath) -> Self {
+        Self {
+            repo_root,
+            found: false,
+        }
+    }
+
+    fn get_yarn_version(&self) -> Result<Version, Error> {
+        let binary = "yarn";
+        let yarn_binary = which(binary).map_err(|e| Error::Which(e, binary.to_string()))?;
+        let output = Command::new(yarn_binary)
+            .arg("--version")
+            .current_dir(self.repo_root)
+            .output()?;
+        let yarn_version_output = String::from_utf8(output.stdout)?;
+        yarn_version_output
+            .trim()
+            .parse()
+            .map_err(|err| Error::InvalidVersion {
+                explanation: format!("{} {}", yarn_version_output, err),
+                span: None,
+                text: NamedSource::new("yarn --version", yarn_version_output),
+            })
+    }
+
     pub fn detect_berry_or_yarn(version: &Version) -> Result<PackageManager, Error> {
-        let berry_constraint: Range = ">=2.0.0-0".parse()?;
+        let berry_constraint: Range = ">=2.0.0-0".parse().expect("valid version");
         if berry_constraint.satisfies(version) {
             Ok(PackageManager::Berry)
         } else {
@@ -41,6 +73,28 @@ pub(crate) fn prune_patches<R: AsRef<RelativeUnixPath>>(
     }
 
     pruned_json
+}
+
+impl<'a> Iterator for YarnDetector<'a> {
+    type Item = Result<PackageManager, Error>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.found {
+            return None;
+        }
+        self.found = true;
+
+        let yarn_lockfile = self.repo_root.join_component(LOCKFILE);
+
+        if yarn_lockfile.exists() {
+            Some(
+                self.get_yarn_version()
+                    .and_then(|version| Self::detect_berry_or_yarn(&version)),
+            )
+        } else {
+            None
+        }
+    }
 }
 
 #[cfg(test)]

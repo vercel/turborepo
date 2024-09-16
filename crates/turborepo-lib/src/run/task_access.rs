@@ -7,13 +7,13 @@ use std::{
 
 use serde::Deserialize;
 use tracing::{debug, error, warn};
-use turbopath::{AbsoluteSystemPathBuf, PathRelation};
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathRelation};
 use turborepo_cache::AsyncCache;
 use turborepo_scm::SCM;
 use turborepo_unescape::UnescapedString;
 
 use super::ConfigCache;
-use crate::{config::RawTurboJson, gitignore::ensure_turbo_is_gitignored};
+use crate::{config::RawTurboJson, gitignore::ensure_turbo_is_gitignored, turbo_json::TurboJson};
 
 // Environment variable key that will be used to enable, and set the expected
 // trace location
@@ -138,7 +138,7 @@ impl TaskAccessTraceFile {
 
 #[derive(Clone)]
 pub struct TaskAccess {
-    pub repo_root: AbsoluteSystemPathBuf,
+    repo_root: AbsoluteSystemPathBuf,
     trace_by_task: Arc<Mutex<HashMap<String, TaskAccessTraceFile>>>,
     config_cache: Option<ConfigCache>,
     enabled: bool,
@@ -243,6 +243,25 @@ impl TaskAccess {
         } else {
             Some(false)
         }
+    }
+
+    /// Attempt to load a task traced turbo.json
+    pub fn load_turbo_json(&self, root_turbo_json_path: &AbsoluteSystemPath) -> Option<TurboJson> {
+        if !self.enabled {
+            return None;
+        }
+        let trace_json_path = self.repo_root.join_components(&TASK_ACCESS_CONFIG_PATH);
+        let turbo_from_trace = TurboJson::read(&self.repo_root, &trace_json_path);
+
+        // check the zero config case (turbo trace file, but no turbo.json file)
+        if let Ok(turbo_from_trace) = turbo_from_trace {
+            if !root_turbo_json_path.exists() {
+                debug!("Using turbo.json synthesized from trace file");
+                return Some(turbo_from_trace);
+            }
+        }
+
+        None
     }
 
     async fn to_file(&self) -> Result<(), ToFileError> {

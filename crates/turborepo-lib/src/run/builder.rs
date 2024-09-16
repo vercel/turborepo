@@ -7,10 +7,10 @@ use std::{
 
 use chrono::Local;
 use tracing::debug;
-use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath};
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_analytics::{start_analytics, AnalyticsHandle, AnalyticsSender};
 use turborepo_api_client::{APIAuth, APIClient};
-use turborepo_cache::{AsyncCache, RemoteCacheOpts};
+use turborepo_cache::AsyncCache;
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_errors::Spanned;
 use turborepo_repository::{
@@ -25,7 +25,7 @@ use turborepo_telemetry::events::{
     repo::{RepoEventBuilder, RepoType},
     EventBuilder, TrackedErrors,
 };
-use turborepo_ui::{ColorSelector, UI};
+use turborepo_ui::{ColorConfig, ColorSelector};
 #[cfg(feature = "daemon-package-discovery")]
 use {
     crate::run::package_discovery::DaemonPackageDiscovery,
@@ -45,7 +45,7 @@ use crate::{
     run::{scope, task_access::TaskAccess, task_id::TaskName, Error, Run, RunCache},
     shim::TurboState,
     signal::{SignalHandler, SignalSubscriber},
-    turbo_json::TurboJson,
+    turbo_json::{TurboJson, UIMode},
     DaemonConnector,
 };
 
@@ -54,9 +54,9 @@ pub struct RunBuilder {
     opts: Opts,
     api_auth: Option<APIAuth>,
     repo_root: AbsoluteSystemPathBuf,
-    ui: UI,
+    root_turbo_json_path: AbsoluteSystemPathBuf,
+    color_config: ColorConfig,
     version: &'static str,
-    experimental_ui: bool,
     api_client: APIClient,
     analytics_sender: Option<AnalyticsSender>,
     // In watch mode, we can have a changed package that we want to serve as an entrypoint.
@@ -64,58 +64,47 @@ pub struct RunBuilder {
     // this package.
     entrypoint_packages: Option<HashSet<PackageName>>,
     should_print_prelude_override: Option<bool>,
+    allow_missing_package_manager: bool,
 }
 
 impl RunBuilder {
     pub fn new(base: CommandBase) -> Result<Self, Error> {
-        let api_auth = base.api_auth()?;
         let api_client = base.api_client()?;
 
-        let mut opts: Opts = base.args().try_into()?;
+        let opts = Opts::new(&base)?;
+        let api_auth = base.api_auth()?;
         let config = base.config()?;
-        let is_linked = turborepo_api_client::is_linked(&api_auth);
-        if !is_linked {
-            opts.cache_opts.skip_remote = true;
-        } else if let Some(enabled) = config.enabled {
-            // We're linked, but if the user has explicitly enabled or disabled, use that
-            // value
-            opts.cache_opts.skip_remote = !enabled;
-        }
-        // Note that we don't currently use the team_id value here. In the future, we
-        // should probably verify that we only use the signature value when the
-        // configured team_id matches the final resolved team_id.
-        let unused_remote_cache_opts_team_id = config.team_id().map(|team_id| team_id.to_string());
-        let signature = config.signature();
-        opts.cache_opts.remote_cache_opts = Some(RemoteCacheOpts::new(
-            unused_remote_cache_opts_team_id,
-            signature,
-        ));
-        if opts.run_opts.experimental_space_id.is_none() {
-            opts.run_opts.experimental_space_id = config.spaces_id().map(|s| s.to_owned());
-        }
+        let allow_missing_package_manager = config.allow_no_package_manager();
+
         let version = base.version();
-        let experimental_ui = config.ui();
         let processes = ProcessManager::new(
             // We currently only use a pty if the following are met:
             // - we're attached to a tty
             atty::is(atty::Stream::Stdout) &&
             // - if we're on windows, we're using the UI
-            (!cfg!(windows) || experimental_ui),
+            (!cfg!(windows) || matches!(opts.run_opts.ui_mode, UIMode::Tui)),
         );
-        let CommandBase { repo_root, ui, .. } = base;
+        let root_turbo_json_path = config.root_turbo_json_path(&base.repo_root);
+
+        let CommandBase {
+            repo_root,
+            color_config: ui,
+            ..
+        } = base;
 
         Ok(Self {
             processes,
             opts,
             api_client,
-            api_auth,
             repo_root,
-            ui,
+            color_config: ui,
             version,
-            experimental_ui,
+            api_auth,
             analytics_sender: None,
             entrypoint_packages: None,
             should_print_prelude_override: None,
+            allow_missing_package_manager,
+            root_turbo_json_path,
         })
     }
 
@@ -140,6 +129,39 @@ impl RunBuilder {
     pub fn with_analytics_sender(mut self, analytics_sender: Option<AnalyticsSender>) -> Self {
         self.analytics_sender = analytics_sender;
         self
+    }
+
+    pub fn calculate_filtered_packages(
+        repo_root: &AbsoluteSystemPath,
+        opts: &Opts,
+        pkg_dep_graph: &PackageGraph,
+        scm: &SCM,
+        root_turbo_json: &TurboJson,
+    ) -> Result<HashSet<PackageName>, Error> {
+        let (mut filtered_pkgs, is_all_packages) = scope::resolve_packages(
+            &opts.scope_opts,
+            repo_root,
+            pkg_dep_graph,
+            scm,
+            root_turbo_json,
+        )?;
+
+        if is_all_packages {
+            for target in opts.run_opts.tasks.iter() {
+                let mut task_name = TaskName::from(target.as_str());
+                // If it's not a package task, we convert to a root task
+                if !task_name.is_package_task() {
+                    task_name = task_name.into_root_task()
+                }
+
+                if root_turbo_json.tasks.contains_key(&task_name) {
+                    filtered_pkgs.insert(PackageName::Root);
+                    break;
+                }
+            }
+        };
+
+        Ok(filtered_pkgs)
     }
 
     // Starts analytics and returns handle. This is not included in the main `build`
@@ -187,6 +209,10 @@ impl RunBuilder {
         // Pulled from initAnalyticsClient in run.go
         let is_linked = turborepo_api_client::is_linked(&self.api_auth);
         run_telemetry.track_is_linked(is_linked);
+        run_telemetry.track_arg_usage(
+            "dangerously_allow_missing_package_manager",
+            self.allow_missing_package_manager,
+        );
         // we only track the remote cache if we're linked because this defaults to
         // Vercel
         if is_linked {
@@ -206,8 +232,7 @@ impl RunBuilder {
         run_telemetry.track_ci(turborepo_ci::Vendor::get_name());
 
         // Remove allow when daemon is flagged back on
-        #[allow(unused_mut)]
-        let mut daemon = match (is_ci_or_not_tty, self.opts.run_opts.daemon) {
+        let daemon = match (is_ci_or_not_tty, self.opts.run_opts.daemon) {
             (true, None) => {
                 run_telemetry.track_daemon_init(DaemonInitStatus::Skipped);
                 debug!("skipping turbod since we appear to be in a non-interactive context");
@@ -246,10 +271,13 @@ impl RunBuilder {
 
         let mut pkg_dep_graph = {
             let builder = PackageGraph::builder(&self.repo_root, root_package_json.clone())
-                .with_single_package_mode(self.opts.run_opts.single_package);
+                .with_single_package_mode(self.opts.run_opts.single_package)
+                .with_allow_no_package_manager(self.allow_missing_package_manager);
 
-            #[cfg(feature = "daemon-package-discovery")]
-            let graph = {
+            // Daemon package discovery depends on packageManager existing in package.json
+            let graph = if cfg!(feature = "daemon-package-discovery")
+                && !self.allow_missing_package_manager
+            {
                 match (&daemon, self.opts.run_opts.daemon) {
                     (None, Some(true)) => {
                         // We've asked for the daemon, but it's not available. This is an error
@@ -291,9 +319,9 @@ impl RunBuilder {
                             .await
                     }
                 }
+            } else {
+                builder.build().await
             };
-            #[cfg(not(feature = "daemon-package-discovery"))]
-            let graph = builder.build().await;
 
             match graph {
                 Ok(graph) => graph,
@@ -331,41 +359,29 @@ impl RunBuilder {
         let task_access = TaskAccess::new(self.repo_root.clone(), async_cache.clone(), &scm);
         task_access.restore_config().await;
 
-        let root_turbo_json = TurboJson::load(
-            &self.repo_root,
-            AnchoredSystemPath::empty(),
-            &root_package_json,
-            is_single_package,
-        )?;
+        let root_turbo_json = task_access
+            .load_turbo_json(&self.root_turbo_json_path)
+            .map_or_else(
+                || {
+                    TurboJson::load(
+                        &self.repo_root,
+                        &self.root_turbo_json_path,
+                        &root_package_json,
+                        is_single_package,
+                    )
+                },
+                Result::Ok,
+            )?;
 
         pkg_dep_graph.validate()?;
 
-        let filtered_pkgs = {
-            let (mut filtered_pkgs, is_all_packages) = scope::resolve_packages(
-                &self.opts.scope_opts,
-                &self.repo_root,
-                &pkg_dep_graph,
-                &scm,
-                &root_turbo_json,
-            )?;
-
-            if is_all_packages {
-                for target in self.opts.run_opts.tasks.iter() {
-                    let mut task_name = TaskName::from(target.as_str());
-                    // If it's not a package task, we convert to a root task
-                    if !task_name.is_package_task() {
-                        task_name = task_name.into_root_task()
-                    }
-
-                    if root_turbo_json.tasks.contains_key(&task_name) {
-                        filtered_pkgs.insert(PackageName::Root);
-                        break;
-                    }
-                }
-            };
-
-            filtered_pkgs
-        };
+        let filtered_pkgs = Self::calculate_filtered_packages(
+            &self.repo_root,
+            &self.opts,
+            &pkg_dep_graph,
+            &scm,
+            &root_turbo_json,
+        )?;
 
         let env_at_execution_start = EnvironmentVariableMap::infer();
         let mut engine = self.build_engine(&pkg_dep_graph, &root_turbo_json, &filtered_pkgs)?;
@@ -383,7 +399,7 @@ impl RunBuilder {
             &self.opts.runcache_opts,
             color_selector,
             daemon.clone(),
-            self.ui,
+            self.color_config,
             self.opts.run_opts.dry_run.is_some(),
         ));
 
@@ -393,8 +409,7 @@ impl RunBuilder {
 
         Ok(Run {
             version: self.version,
-            ui: self.ui,
-            experimental_ui: self.experimental_ui,
+            color_config: self.color_config,
             start_at,
             processes: self.processes,
             run_telemetry,
@@ -452,7 +467,7 @@ impl RunBuilder {
                 .validate(
                     pkg_dep_graph,
                     self.opts.run_opts.concurrency,
-                    self.experimental_ui,
+                    self.opts.run_opts.ui_mode,
                 )
                 .map_err(Error::EngineValidation)?;
         }

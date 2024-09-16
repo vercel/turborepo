@@ -1,6 +1,6 @@
 import path from "node:path";
 import inquirer from "inquirer";
-import chalk from "chalk";
+import { bold, dim, italic, underline } from "picocolors";
 import { Logger } from "../../logger";
 import { directoryInfo } from "../../utils";
 import { getWorkspaceDetails } from "../../getWorkspaceDetails";
@@ -24,7 +24,7 @@ export async function summaryCommand(directory: SummaryCommandArgument) {
       if (exists) {
         return true;
       }
-      return `Directory ${chalk.dim(`(${absolute})`)} does not exist`;
+      return `Directory ${dim(`(${absolute})`)} does not exist`;
     },
     filter: (d: string) => d.trim(),
   });
@@ -34,7 +34,7 @@ export async function summaryCommand(directory: SummaryCommandArgument) {
     directory: selectedDirectory,
   });
   if (!exists) {
-    logger.error(`Directory ${chalk.dim(`(${root})`)} does not exist`);
+    logger.error(`Directory ${dim(`(${root})`)} does not exist`);
     return process.exit(1);
   }
 
@@ -54,9 +54,7 @@ export async function summaryCommand(directory: SummaryCommandArgument) {
   });
 
   const renderWorkspace = (w: Workspace) => {
-    return `${w.name} (${chalk.italic(
-      `./${path.relative(root, w.paths.root)}`
-    )})`;
+    return `${w.name} (${italic(`./${path.relative(root, w.paths.root)}`)})`;
   };
 
   const renderDirectory = ({
@@ -68,7 +66,7 @@ export async function summaryCommand(directory: SummaryCommandArgument) {
     dir: string;
     workspaces: Array<Workspace>;
   }) => {
-    logger.indented(2, `${number}. ${chalk.bold(dir)}`);
+    logger.indented(2, `${number}. ${bold(dir)}`);
     workspaces.forEach((workspace, idx) => {
       logger.indented(3, `${idx + 1}. ${renderWorkspace(workspace)}`);
     });
@@ -76,15 +74,15 @@ export async function summaryCommand(directory: SummaryCommandArgument) {
 
   // repo header
   logger.header(`Repository Summary`);
-  logger.indented(1, `${chalk.underline(project.name)}:`);
+  logger.indented(1, `${underline(project.name)}:`);
   // workspace manager header
   logger.indented(
     1,
-    `Package Manager: ${chalk.bold(chalk.italic(project.packageManager))}`
+    `Package Manager: ${bold(italic(project.packageManager))}`
   );
   if (hasWorkspaces) {
     // workspaces header
-    logger.indented(1, `Workspaces (${chalk.bold(numWorkspaces.toString())}):`);
+    logger.indented(1, `Workspaces (${bold(numWorkspaces.toString())}):`);
     Object.keys(workspacesByDirectory).forEach((dir, idx) => {
       renderDirectory({
         number: idx + 1,

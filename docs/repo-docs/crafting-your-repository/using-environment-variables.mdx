@@ -30,7 +30,7 @@ There are three important questions when working with environment variables in T
 
 ## Adding environment variables to task hashes
 
-Turborepo needs to be aware your environment variables to account for changes in application behavior. To do this, use the `env` and `globalEnv` keys in your `turbo.json` file.
+Turborepo needs to be aware of your environment variables to account for changes in application behavior. To do this, use the `env` and `globalEnv` keys in your `turbo.json` file.
 
 ```json title="./turbo.json"
 {
@@ -56,20 +56,21 @@ Turborepo needs to be aware your environment variables to account for changes in
 
 Turborepo automatically adds prefix wildcards to your [`env`](/repo/docs/reference/configuration#env) key for common frameworks. If you're using one of the frameworks below in a package, you don't need to specify environment variables with these prefixes:
 
-| Framework        | `env` wildcard    |
-| ---------------- | ----------------- |
-| Astro            | `PUBLIC_*`        |
-| Blitz            | `NEXT_PUBLIC_*`   |
-| Create React App | `REACT_APP_*`     |
-| Gatsby           | `GATSBY_*`        |
-| Next.js          | `NEXT_PUBLIC_*`   |
-| Nuxt.js          | `NUXT_*`      |
-| RedwoodJS        | `REDWOOD_ENV_*`   |
-| Sanity Studio    | `SANITY_STUDIO_*` |
-| Solid            | `VITE_*`          |
-| SvelteKit        | `VITE_*`          |
-| Vite             | `VITE_*`          |
-| Vue              | `VUE_APP_*`       |
+| Framework        | `env` wildcard      |
+| ---------------- | ------------------- |
+| Astro            | `PUBLIC_*`          |
+| Blitz            | `NEXT_PUBLIC_*`     |
+| Create React App | `REACT_APP_*`       |
+| Gatsby           | `GATSBY_*`          |
+| Next.js          | `NEXT_PUBLIC_*`     |
+| Nitro            | `NITRO_*`           |
+| Nuxt.js          | `NUXT_*`, `NITRO_*` |
+| RedwoodJS        | `REDWOOD_ENV_*`     |
+| Sanity Studio    | `SANITY_STUDIO_*`   |
+| Solid            | `VITE_*`            |
+| SvelteKit        | `VITE_*`            |
+| Vite             | `VITE_*`            |
+| Vue              | `VUE_APP_*`         |
 
 <Callout type="good-to-know">Framework inference is per-package.</Callout>
 
@@ -108,9 +109,9 @@ For these cases, add those environment variables to [`globalPassThroughEnv`](/re
 
 #### CI vendor compatibility
 
-Strict Mode will filter out environment variables that come from your CI vendors until you've accounted for them using `env` or `globalEnv`.
+Strict Mode will filter out environment variables that come from your CI vendors until you've accounted for them using [`env`](/repo/docs/reference/configuration#env), [`globalEnv`](/repo/docs/reference/configuration#globalenv), [`passThroughEnv`](/repo/docs/reference/configuration#passthroughenv), or [`globalPassThroughEnv`](/repo/docs/reference/configuration#globalpassthroughenv).
 
-If any of these variables are important to your build and aren't included by [Framework Inference](#framework-inference), make sure they are in your `turbo.json` configuration.
+If any of these variables are important to your tasks and aren't included by [Framework Inference](#framework-inference), make sure they are in your `turbo.json` configuration.
 
 ### Loose Mode
 
@@ -168,6 +169,12 @@ To do this, add the files to the [`inputs`](/repo/docs/reference/configuration#i
 Using a `.env` file at the root of the repository is not recommended. Instead, we recommend placing your `.env` files into the packages where they're used.
 
 This practice more closely models the runtime behavior of your applications since environment variables exist in each application's runtime individually. Additionally, as your monorepo scales, this practice makes it easier to manage each application's environment, preventing environment variable leakage across applications.
+
+<Callout type="good-to-know">
+  You may find it easier to use a root `.env` file when incrementally migrating
+  to a monorepo. Tools like [dotenv](https://www.npmjs.com/package/dotenv) can
+  load `.env` files from different locations.
+</Callout>
 
 ### Use `eslint-config-turbo`
 

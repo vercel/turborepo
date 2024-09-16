@@ -1,14 +1,14 @@
 name: Turborepo Bug Report
 description: Create a bug report for the Turborepo core team
-labels: ["kind: bug", "owned-by: turborepo", "needs: triage"]
+labels: ["kind: bug", "needs: triage"]
 body:
   - type: markdown
     attributes:
       value: |
-        This template is to report Turborepo bugs. Before opening a new issue, please do a [search](https://github.com/vercel/turbo/issues) of existing issues and :+1: upvote the existing issue instead. This will result in a quicker resolution.
+        This template is to report Turborepo bugs. Before opening a new issue, please do a [search](https://github.com/vercel/turborepo/issues) of existing issues and :+1: upvote the existing issue instead. This will result in a quicker resolution.
 
         If you need help with your own project, you can:
-        - Start a discussion in the ["Help" section](https://github.com/vercel/turbo/discussions/categories/help).
+        - Start a discussion in the ["Help" section](https://github.com/vercel/turborepo/discussions/categories/help).
         - Ask a question in [the Turbo Discord server](https://turbo.build/discord).
 
   - type: checkboxes
@@ -23,7 +23,7 @@ body:
     attributes:
       label: Link to code that reproduces this issue
       description: |
-        A link to a **public** GitHub repository with a minimal reproduction. Ideally, minimal reproductions should be created using [`npx create-turbo@canary -e with-shell-commands`](https://github.com/vercel/turbo/tree/main/examples/with-shell-commands) and should include only changes that contribute to the issue. You may also use [`npx create-turbo@canary -e <example-name>`](https://github.com/vercel/turbo/tree/main/examples) to create a reproduction that includes frameworks if you believe your bug requires a framework to reproduce.
+        A link to a **public** GitHub repository with a minimal reproduction. Ideally, minimal reproductions should be created using [`npx create-turbo@canary -e with-shell-commands`](https://github.com/vercel/turborepo/tree/main/examples/with-shell-commands) and should include only changes that contribute to the issue. You may also use [`npx create-turbo@canary -e <example-name>`](https://github.com/vercel/turborepo/tree/main/examples) to create a reproduction that includes frameworks if you believe your bug requires a framework to reproduce.
     validations:
       required: true
 
@@ -89,7 +89,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Another way you can help the maintainers is to pinpoint the `canary` version of `turbo` that introduced the issue. Check out our [releases](https://github.com/vercel/turbo/releases), and try to find the first `canary` release that introduced the issue. This will help us narrow down the scope of the issue, and possibly point to the PR/code change that introduced it. You can install a specific version of `turbo` by running `npm install turbo@<version>`.
+        Another way you can help the maintainers is to pinpoint the `canary` version of `turbo` that introduced the issue. Check out our [releases](https://github.com/vercel/turborepo/releases), and try to find the first `canary` release that introduced the issue. This will help us narrow down the scope of the issue, and possibly point to the PR/code change that introduced it. You can install a specific version of `turbo` by running `npm install turbo@<version>`.
   - type: textarea
     attributes:
       label: Additional context

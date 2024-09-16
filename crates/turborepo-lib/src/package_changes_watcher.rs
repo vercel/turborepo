@@ -21,7 +21,7 @@ use turborepo_repository::{
 };
 use turborepo_scm::package_deps::GitHashes;
 
-use crate::turbo_json::TurboJson;
+use crate::turbo_json::{TurboJson, CONFIG_FILE};
 
 #[derive(Clone)]
 pub enum PackageChangeEvent {
@@ -164,7 +164,7 @@ impl Subscriber {
 
         let root_turbo_json = TurboJson::load(
             &self.repo_root,
-            &AnchoredSystemPathBuf::default(),
+            &self.repo_root.join_component(CONFIG_FILE),
             &root_package_json,
             false,
         )
@@ -348,7 +348,7 @@ impl Subscriber {
                 tracing::warn!("changed_packages: {:?}", changed_packages);
 
                 match changed_packages {
-                    Ok(PackageChanges::All) => {
+                    Ok(PackageChanges::All(_)) => {
                         // We tell the client that we need to rediscover the packages, i.e.
                         // all bets are off, just re-run everything
                         let _ = self

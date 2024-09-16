@@ -22,7 +22,6 @@ async-stream = "0.3.4"
 itertools = { workspace = true }
 port_scanner = { workspace = true }
 pretty_assertions = { workspace = true }
-tempdir = "0.3.7"
 tempfile = { workspace = true }
 test-case = { workspace = true }
 tracing-test = { version = "0.2.4", features = ["no-env-filter"] }
@@ -33,6 +32,8 @@ turborepo-vercel-api-mock = { workspace = true }
 workspace = true
 
 [dependencies]
+async-graphql = { workspace = true }
+async-graphql-axum = { workspace = true }
 atty = { workspace = true }
 axum = { workspace = true }
 biome_deserialize = { workspace = true }
@@ -51,6 +52,7 @@ const_format = "0.2.30"
 convert_case = "0.6.0"
 crossterm = "0.26"
 ctrlc = { version = "3.4.0", features = ["termination"] }
+derive_setters = { workspace = true }
 dialoguer = { workspace = true, features = ["fuzzy-select"] }
 dirs-next = "2.0.0"
 dunce = { workspace = true }
@@ -69,6 +71,7 @@ itertools = { workspace = true }
 jsonc-parser = { version = "0.21.0" }
 lazy_static = { workspace = true }
 libc = "0.2.140"
+merge = { workspace = true }
 miette = { workspace = true, features = ["fancy"] }
 nix = "0.26.2"
 notify = { workspace = true }

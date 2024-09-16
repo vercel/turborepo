@@ -66,6 +66,8 @@ runs:
 
     - name: "Install cargo-sweep"
       uses: taiki-e/install-action@v2
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
       with:
         tool: cargo-sweep@0.6.2,cargo-groups@0.1.9
 

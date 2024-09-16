@@ -160,6 +160,7 @@ pnpm install @repo/ui --filter=storybook
 </Step>
 
 <Step>
+
 ### Set up a story for your Button component
 
 Delete the stories and components found in `src/stories` that were created by the Storybook scaffolding tool. You will be making your own.
@@ -334,7 +335,7 @@ Additionally, create a [Package Configuration](/repo/docs/reference/package-conf
 ```json title="./apps/storybook/turbo.json"
 {
   "extends": ["//"],
-  "pipeline": {
+  "tasks": {
     "build:storybook": {
       "dependsOn": ["^build:storybook"],
       "outputs": ["storybook-static/**"]
