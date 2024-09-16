@@ -59,7 +59,7 @@ Remove the new file
   $ rm apps/my-app/new.js
 
 Add field to `apps/my-app/package.json`
-  $ jq '. += {"description": "foo"}' apps/my-app/package.json > apps/my-app/package.json.new
+  $ jq '. += {"description": "foo"}' apps/my-app/package.json | tr -d '\r' > apps/my-app/package.json.new
   $ mv apps/my-app/package.json.new apps/my-app/package.json
 
 Validate that we only run `my-app#build` with change not committed
