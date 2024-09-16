@@ -1268,6 +1268,7 @@ mod test {
             to: Option<&str>,
             _include_uncommitted: bool,
             _allow_unknown_objects: bool,
+            _merge_base: bool,
         ) -> Result<HashSet<PackageName>, ResolutionError> {
             Ok(self
                 .0

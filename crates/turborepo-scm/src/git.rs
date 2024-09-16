@@ -285,12 +285,16 @@ mod tests {
         let scm = SCM::new(git_root);
 
         let turbo_root = AbsoluteSystemPathBuf::try_from(turbo_root.as_path())?;
+        // Replicating the `--filter` behavior where we only do a merge base
+        // if both ends of the git range are specified.
+        let merge_base = to_commit.is_some();
         let ChangedFiles::Some(files) = scm.changed_files(
             &turbo_root,
             from_commit,
             to_commit,
             include_uncommitted,
             false,
+            merge_base,
         )?
         else {
             unreachable!("changed_files should always return Some");
