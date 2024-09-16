@@ -472,6 +472,7 @@ impl<'a> TaskHasher<'a> {
                         "PWD",
                         "CI",
                         "NODE_OPTIONS",
+                        "COREPACK_HOME",
                         "LD_LIBRARY_PATH",
                         "DYLD_FALLBACK_LIBRARY_PATH",
                         "LIBPATH",
