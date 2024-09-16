@@ -37,7 +37,7 @@ Query packages with equals filter
   }
 
 Query packages that have at least one dependent package
-  $ ${TURBO} query "query { packages(filter: { greaterThan: { field: DEPENDENT_COUNT, value: 0 } }) { name } }" | jq
+  $ ${TURBO} query "query { packages(filter: { greaterThan: { field: DIRECT_DEPENDENT_COUNT, value: 0 } }) { name } }" | jq
    WARNING  query command is experimental and may change in the future
   {
     "data": {
@@ -50,13 +50,13 @@ Query packages that have at least one dependent package
   }
 
 Get dependents of `util`
-  $ ${TURBO} query "query { packages(filter: { equal: { field: NAME, value: \"util\" } }) { dependents { name } } }" | jq
+  $ ${TURBO} query "query { packages(filter: { equal: { field: NAME, value: \"util\" } }) { directDependents { name } } }" | jq
    WARNING  query command is experimental and may change in the future
   {
     "data": {
       "packages": [
         {
-          "dependents": [
+          "directDependents": [
             {
               "name": "my-app"
             }
@@ -67,13 +67,47 @@ Get dependents of `util`
   }
 
 Get dependencies of `my-app`
-  $ ${TURBO} query "query { packages(filter: { equal: { field: NAME, value: \"my-app\" } }) { dependencies { name } } }" | jq
+  $ ${TURBO} query "query { packages(filter: { equal: { field: NAME, value: \"my-app\" } }) { directDependencies { name } } }" | jq
    WARNING  query command is experimental and may change in the future
   {
     "data": {
       "packages": [
         {
-          "dependencies": [
+          "directDependencies": [
+            {
+              "name": "util"
+            }
+          ]
+        }
+      ]
+    }
+  }
+
+Get the indirect dependencies of `my-app`
+  $ ${TURBO} query "query { packages(filter: { equal: { field: NAME, value: \"my-app\" } }) { indirectDependencies { name } } }" | jq
+   WARNING  query command is experimental and may change in the future
+  {
+    "data": {
+      "packages": [
+        {
+          "indirectDependencies": [
+            {
+              "name": "//"
+            }
+          ]
+        }
+      ]
+    }
+  }
+
+Get all dependencies of `my-app`
+  $ ${TURBO} query "query { packages(filter: { equal: { field: NAME, value: \"my-app\" } }) { allDependencies { name } } }" | jq
+   WARNING  query command is experimental and may change in the future
+  {
+    "data": {
+      "packages": [
+        {
+          "allDependencies": [
             {
               "name": "//"
             },

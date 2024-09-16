@@ -44,40 +44,56 @@ struct Package {
 }
 
 impl Package {
-    fn immediate_dependents_count(&self) -> usize {
+    fn direct_dependents_count(&self) -> usize {
         self.run
             .pkg_dep_graph()
             .immediate_ancestors(&PackageNode::Workspace(self.name.clone()))
             .map_or(0, |pkgs| pkgs.len())
     }
 
-    fn immediate_dependencies_count(&self) -> usize {
+    fn direct_dependencies_count(&self) -> usize {
         self.run
             .pkg_dep_graph()
             .immediate_dependencies(&PackageNode::Workspace(self.name.clone()))
             .map_or(0, |pkgs| pkgs.len())
     }
 
-    fn dependent_count(&self) -> usize {
+    fn indirect_dependents_count(&self) -> usize {
         let node: PackageNode = PackageNode::Workspace(self.name.clone());
 
-        self.run.pkg_dep_graph().ancestors(&node).len()
+        self.run.pkg_dep_graph().ancestors(&node).len() - self.direct_dependents_count()
     }
 
-    fn dependency_count(&self) -> usize {
+    fn indirect_dependencies_count(&self) -> usize {
         let node: PackageNode = PackageNode::Workspace(self.name.clone());
 
-        self.run.pkg_dep_graph().dependencies(&node).len()
+        self.run.pkg_dep_graph().dependencies(&node).len() - self.direct_dependencies_count()
+    }
+
+    fn all_dependents_count(&self) -> usize {
+        self.run
+            .pkg_dep_graph()
+            .ancestors(&PackageNode::Workspace(self.name.clone()))
+            .len()
+    }
+
+    fn all_dependencies_count(&self) -> usize {
+        self.run
+            .pkg_dep_graph()
+            .dependencies(&PackageNode::Workspace(self.name.clone()))
+            .len()
     }
 }
 
 #[derive(Enum, Copy, Clone, Eq, PartialEq, Debug)]
 enum PackageFields {
     Name,
-    DependencyCount,
-    DependentCount,
-    ImmediateDependentCount,
-    ImmediateDependencyCount,
+    DirectDependencyCount,
+    DirectDependentCount,
+    IndirectDependentCount,
+    IndirectDependencyCount,
+    AllDependentCount,
+    AllDependencyCount,
 }
 
 #[derive(InputObject)]
@@ -107,29 +123,41 @@ impl PackagePredicate {
     fn check_equals(pkg: &Package, field: &PackageFields, value: &Any) -> bool {
         match (field, &value.0) {
             (PackageFields::Name, Value::String(name)) => pkg.name.as_ref() == name,
-            (PackageFields::DependencyCount, Value::Number(n)) => {
+            (PackageFields::DirectDependencyCount, Value::Number(n)) => {
                 let Some(n) = n.as_u64() else {
                     return false;
                 };
-                pkg.dependency_count() == n as usize
+                pkg.direct_dependencies_count() == n as usize
             }
-            (PackageFields::DependentCount, Value::Number(n)) => {
+            (PackageFields::DirectDependentCount, Value::Number(n)) => {
                 let Some(n) = n.as_u64() else {
                     return false;
                 };
-                pkg.dependent_count() == n as usize
+                pkg.direct_dependents_count() == n as usize
             }
-            (PackageFields::ImmediateDependentCount, Value::Number(n)) => {
+            (PackageFields::IndirectDependentCount, Value::Number(n)) => {
                 let Some(n) = n.as_u64() else {
                     return false;
                 };
-                pkg.immediate_dependents_count() == n as usize
+                pkg.indirect_dependents_count() == n as usize
             }
-            (PackageFields::ImmediateDependencyCount, Value::Number(n)) => {
+            (PackageFields::IndirectDependencyCount, Value::Number(n)) => {
                 let Some(n) = n.as_u64() else {
                     return false;
                 };
-                pkg.immediate_dependencies_count() == n as usize
+                pkg.indirect_dependencies_count() == n as usize
+            }
+            (PackageFields::AllDependentCount, Value::Number(n)) => {
+                let Some(n) = n.as_u64() else {
+                    return false;
+                };
+                pkg.all_dependents_count() == n as usize
+            }
+            (PackageFields::AllDependencyCount, Value::Number(n)) => {
+                let Some(n) = n.as_u64() else {
+                    return false;
+                };
+                pkg.all_dependencies_count() == n as usize
             }
             _ => false,
         }
@@ -137,29 +165,41 @@ impl PackagePredicate {
 
     fn check_greater_than(pkg: &Package, field: &PackageFields, value: &Any) -> bool {
         match (field, &value.0) {
-            (PackageFields::DependencyCount, Value::Number(n)) => {
+            (PackageFields::DirectDependencyCount, Value::Number(n)) => {
                 let Some(n) = n.as_u64() else {
                     return false;
                 };
-                pkg.dependency_count() > n as usize
+                pkg.direct_dependencies_count() > n as usize
             }
-            (PackageFields::DependentCount, Value::Number(n)) => {
+            (PackageFields::DirectDependentCount, Value::Number(n)) => {
                 let Some(n) = n.as_u64() else {
                     return false;
                 };
-                pkg.dependent_count() > n as usize
+                pkg.direct_dependents_count() > n as usize
             }
-            (PackageFields::ImmediateDependentCount, Value::Number(n)) => {
+            (PackageFields::IndirectDependentCount, Value::Number(n)) => {
                 let Some(n) = n.as_u64() else {
                     return false;
                 };
-                pkg.immediate_dependents_count() > n as usize
+                pkg.indirect_dependents_count() > n as usize
             }
-            (PackageFields::ImmediateDependencyCount, Value::Number(n)) => {
+            (PackageFields::IndirectDependencyCount, Value::Number(n)) => {
                 let Some(n) = n.as_u64() else {
                     return false;
                 };
-                pkg.immediate_dependencies_count() > n as usize
+                pkg.indirect_dependencies_count() > n as usize
+            }
+            (PackageFields::AllDependentCount, Value::Number(n)) => {
+                let Some(n) = n.as_u64() else {
+                    return false;
+                };
+                pkg.all_dependents_count() > n as usize
+            }
+            (PackageFields::AllDependencyCount, Value::Number(n)) => {
+                let Some(n) = n.as_u64() else {
+                    return false;
+                };
+                pkg.all_dependencies_count() > n as usize
             }
             _ => false,
         }
@@ -167,29 +207,41 @@ impl PackagePredicate {
 
     fn check_less_than(pkg: &Package, field: &PackageFields, value: &Any) -> bool {
         match (field, &value.0) {
-            (PackageFields::DependencyCount, Value::Number(n)) => {
+            (PackageFields::DirectDependencyCount, Value::Number(n)) => {
                 let Some(n) = n.as_u64() else {
                     return false;
                 };
-                pkg.dependency_count() < n as usize
+                pkg.direct_dependencies_count() < n as usize
             }
-            (PackageFields::DependentCount, Value::Number(n)) => {
+            (PackageFields::DirectDependentCount, Value::Number(n)) => {
                 let Some(n) = n.as_u64() else {
                     return false;
                 };
-                pkg.dependent_count() < n as usize
+                pkg.direct_dependents_count() < n as usize
             }
-            (PackageFields::ImmediateDependentCount, Value::Number(n)) => {
+            (PackageFields::IndirectDependentCount, Value::Number(n)) => {
                 let Some(n) = n.as_u64() else {
                     return false;
                 };
-                pkg.immediate_dependents_count() < n as usize
+                pkg.indirect_dependents_count() < n as usize
             }
-            (PackageFields::ImmediateDependencyCount, Value::Number(n)) => {
+            (PackageFields::IndirectDependencyCount, Value::Number(n)) => {
                 let Some(n) = n.as_u64() else {
                     return false;
                 };
-                pkg.immediate_dependencies_count() < n as usize
+                pkg.indirect_dependencies_count() < n as usize
+            }
+            (PackageFields::AllDependentCount, Value::Number(n)) => {
+                let Some(n) = n.as_u64() else {
+                    return false;
+                };
+                pkg.all_dependents_count() < n as usize
+            }
+            (PackageFields::AllDependencyCount, Value::Number(n)) => {
+                let Some(n) = n.as_u64() else {
+                    return false;
+                };
+                pkg.all_dependencies_count() < n as usize
             }
             _ => false,
         }
@@ -317,7 +369,7 @@ impl Package {
     }
 
     /// The upstream packages that have this package as a direct dependency
-    async fn immediate_dependents(&self) -> Result<Vec<Package>, Error> {
+    async fn direct_dependents(&self) -> Result<Vec<Package>, Error> {
         let node: PackageNode = PackageNode::Workspace(self.name.clone());
         Ok(self
             .run
@@ -329,11 +381,12 @@ impl Package {
                 run: self.run.clone(),
                 name: package.as_package_name().clone(),
             })
+            .sorted_by(|a, b| a.name.cmp(&b.name))
             .collect())
     }
 
     /// The downstream packages that directly depend on this package
-    async fn immediate_dependencies(&self) -> Result<Vec<Package>, Error> {
+    async fn direct_dependencies(&self) -> Result<Vec<Package>, Error> {
         let node: PackageNode = PackageNode::Workspace(self.name.clone());
         Ok(self
             .run
@@ -345,13 +398,12 @@ impl Package {
                 run: self.run.clone(),
                 name: package.as_package_name().clone(),
             })
+            .sorted_by(|a, b| a.name.cmp(&b.name))
             .collect())
     }
 
-    /// The downstream packages that depend on this package, transitively
-    async fn dependents(&self) -> Result<Vec<Package>, Error> {
+    async fn all_dependents(&self) -> Result<Vec<Package>, Error> {
         let node: PackageNode = PackageNode::Workspace(self.name.clone());
-
         Ok(self
             .run
             .pkg_dep_graph()
@@ -365,15 +417,59 @@ impl Package {
             .collect())
     }
 
-    /// The upstream packages that this package depends on, transitively
-    async fn dependencies(&self) -> Result<Vec<Package>, Error> {
+    async fn all_dependencies(&self) -> Result<Vec<Package>, Error> {
         let node: PackageNode = PackageNode::Workspace(self.name.clone());
+        Ok(self
+            .run
+            .pkg_dep_graph()
+            .dependencies(&node)
+            .iter()
+            .map(|package| Package {
+                run: self.run.clone(),
+                name: package.as_package_name().clone(),
+            })
+            .sorted_by(|a, b| a.name.cmp(&b.name))
+            .collect())
+    }
+
+    /// The downstream packages that depend on this package, indirectly
+    async fn indirect_dependents(&self) -> Result<Vec<Package>, Error> {
+        let node: PackageNode = PackageNode::Workspace(self.name.clone());
+        let immediate_dependents = self
+            .run
+            .pkg_dep_graph()
+            .immediate_ancestors(&node)
+            .ok_or_else(|| Error::PackageNotFound(self.name.clone()))?;
+
+        Ok(self
+            .run
+            .pkg_dep_graph()
+            .ancestors(&node)
+            .iter()
+            .filter(|package| !immediate_dependents.contains(*package))
+            .map(|package| Package {
+                run: self.run.clone(),
+                name: package.as_package_name().clone(),
+            })
+            .sorted_by(|a, b| a.name.cmp(&b.name))
+            .collect())
+    }
+
+    /// The upstream packages that this package depends on, indirectly
+    async fn indirect_dependencies(&self) -> Result<Vec<Package>, Error> {
+        let node: PackageNode = PackageNode::Workspace(self.name.clone());
+        let immediate_dependencies = self
+            .run
+            .pkg_dep_graph()
+            .immediate_dependencies(&node)
+            .ok_or_else(|| Error::PackageNotFound(self.name.clone()))?;
 
         Ok(self
             .run
             .pkg_dep_graph()
             .dependencies(&node)
             .iter()
+            .filter(|package| !immediate_dependencies.contains(*package))
             .map(|package| Package {
                 run: self.run.clone(),
                 name: package.as_package_name().clone(),
