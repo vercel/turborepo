@@ -10,9 +10,16 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
   valid: [
     {
       code: `
+        const { TZ } = process.env;
+      `,
+      options: [{ cwd: "/some/random/path" }],
+    },
+    {
+      code: `
           const { ENV_1 } = process.env;
         `,
       options: [{ cwd: "/some/random/path" }],
     },
   ],
+  invalid: [],
 });
