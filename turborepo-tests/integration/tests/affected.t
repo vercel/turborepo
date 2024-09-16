@@ -231,7 +231,7 @@ Do the same thing with the `ls` command
    WARNING  ls command is experimental and may change in the future
   1 package (npm)
   
-    my-app apps/my-app
+    my-app apps[\/\\]my-app (re)
 
 
 Do the same thing with the `query` command
@@ -271,9 +271,9 @@ Do the same thing with the `ls` command
   
   3 packages (npm)
   
-    another packages/another
-    my-app apps/my-app
-    util packages/util
+    another packages[\/\\]another (re)
+    my-app apps[\/\\]my-app (re)
+    util packages[\/\\]util (re)
 
 
 Do the same thing with the `query` command
@@ -324,9 +324,9 @@ Do the same thing with the `ls` command
   
   3 packages (npm)
   
-    another packages/another
-    my-app apps/my-app
-    util packages/util
+    another packages[\/\\]another (re)
+    my-app apps[\/\\]my-app (re)
+    util packages[\/\\]util (re)
 
 
 Do the same thing with the `query` command
