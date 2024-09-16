@@ -337,7 +337,9 @@ impl WatchClient {
                 {
                     // Shut down the tasks for the run
                     stopper.stop().await;
-                    run_task.abort();
+                    // Run should exit shortly after we stop all child tasks, wait for it to finish
+                    // to ensure all messages are flushed.
+                    let _ = run_task.await;
                 }
                 if let Some(sender) = &self.ui_sender {
                     let task_names = self.run.engine.tasks_with_command(&self.run.pkg_dep_graph);
