@@ -222,8 +222,10 @@ Run the build and expect only `my-app` to be affected, since between
   
    Tasks:    1 successful, 1 total
   Cached:    1 cached, 1 total
-    Time:    101ms >>> FULL TURBO
+    Time:\s*[\.0-9]+m?s >>> FULL TURBO (re)
   
+
+
 Do the same thing with the `ls` command
   $ ${TURBO} ls --affected
    WARNING  ls command is experimental and may change in the future
@@ -253,29 +255,15 @@ Now do some magic to change the repo to be shallow
   $ git prune-packed
 
 Now try running `--affected` again, we should run all tasks
-  $ ${TURBO} run build --affected --log-order grouped
+  $ ${TURBO} run build --affected --dry-run json | jq '.tasks | map(.taskId)| sort'
    WARNING  unable to detect git range, assuming all files have changed: git error: fatal: no merge base found
   
-  \xe2\x80\xa2 Packages in scope: //, another, my-app, util (esc)
-  \xe2\x80\xa2 Running build in 4 packages (esc)
-  \xe2\x80\xa2 Remote caching disabled (esc)
-  my-app:build: cache hit, replaying logs c1189254892f813f
-  my-app:build: 
-  my-app:build: > build
-  my-app:build: > echo building
-  my-app:build: 
-  my-app:build: building
-  util:build: cache miss, executing bf1798d3e46e1b48
-  util:build: 
-  util:build: > build
-  util:build: > echo building
-  util:build: 
-  util:build: building
-  
-   Tasks:    2 successful, 2 total
-  Cached:    1 cached, 2 total
-    Time:    267ms 
-  
+  [
+    "another#build",
+    "my-app#build",
+    "util#build"
+  ]
+
 Do the same thing with the `ls` command
   $ ${TURBO} ls --affected
    WARNING  ls command is experimental and may change in the future
@@ -320,29 +308,15 @@ Now do some magic to change the repo to be shallow
   $ git prune-packed
 
 Now try running `--affected` again, we should run all tasks
-  $ ${TURBO} run build --affected --log-order grouped
+  $ ${TURBO} run build --affected --dry-run json | jq '.tasks | map(.taskId)| sort'
    WARNING  unable to detect git range, assuming all files have changed: git error: fatal: no merge base found
   
-  \xe2\x80\xa2 Packages in scope: //, another, my-app, util (esc)
-  \xe2\x80\xa2 Running build in 4 packages (esc)
-  \xe2\x80\xa2 Remote caching disabled (esc)
-  my-app:build: cache hit, replaying logs c1189254892f813f
-  my-app:build: 
-  my-app:build: > build
-  my-app:build: > echo building
-  my-app:build: 
-  my-app:build: building
-  util:build: cache hit, replaying logs bf1798d3e46e1b48
-  util:build: 
-  util:build: > build
-  util:build: > echo building
-  util:build: 
-  util:build: building
-  
-   Tasks:    2 successful, 2 total
-  Cached:    2 cached, 2 total
-    Time:    112ms >>> FULL TURBO
-  
+  [
+    "another#build",
+    "my-app#build",
+    "util#build"
+  ]
+
 Do the same thing with the `ls` command
   $ ${TURBO} ls --affected
    WARNING  ls command is experimental and may change in the future
