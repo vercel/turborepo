@@ -34,6 +34,10 @@ enum Strategy {
         // Map of package names to their package specific turbo.json
         packages: HashMap<PackageName, AbsoluteSystemPathBuf>,
     },
+    WorkspaceNoTurboJson {
+        // Map of package names to their scripts
+        packages: HashMap<PackageName, Vec<String>>,
+    },
     TaskAccess {
         root_turbo_json: AbsoluteSystemPathBuf,
         package_json: PackageJson,
@@ -51,6 +55,19 @@ impl TurboJsonLoader {
             repo_root,
             cache: HashMap::new(),
             strategy: Strategy::Workspace { packages },
+        }
+    }
+
+    /// Create a loader that will construct turbo.json structures based on
+    /// workspace `package.json`s.
+    pub fn workspace_no_turbo_json(
+        repo_root: AbsoluteSystemPathBuf,
+        packages: HashMap<PackageName, Vec<String>>,
+    ) -> Self {
+        Self {
+            repo_root,
+            cache: HashMap::new(),
+            strategy: Strategy::WorkspaceNoTurboJson { packages },
         }
     }
 
@@ -130,6 +147,14 @@ impl TurboJsonLoader {
                 let path = packages.get(package).ok_or_else(|| Error::NoTurboJSON)?;
                 load_from_file(&self.repo_root, path)
             }
+            Strategy::WorkspaceNoTurboJson { packages } => {
+                let script_names = packages.get(package).ok_or(Error::NoTurboJSON)?;
+                if matches!(package, PackageName::Root) {
+                    root_turbo_json_from_scripts(script_names)
+                } else {
+                    workspace_turbo_json_from_scripts(script_names)
+                }
+            }
             Strategy::TaskAccess {
                 package_json,
                 root_turbo_json,
@@ -170,6 +195,20 @@ pub fn package_turbo_jsons<'a>(
         }
     }));
     package_turbo_jsons
+}
+
+/// Map all packages in the package graph to their scripts
+pub fn workspace_package_scripts<'a>(
+    packages: impl Iterator<Item = (&'a PackageName, &'a PackageInfo)>,
+) -> HashMap<PackageName, Vec<String>> {
+    packages
+        .map(|(pkg, info)| {
+            (
+                pkg.clone(),
+                info.package_json.scripts.keys().cloned().collect(),
+            )
+        })
+        .collect()
 }
 
 fn load_from_file(
@@ -243,6 +282,41 @@ fn load_from_root_package_json(
         }
     }
 
+    Ok(turbo_json)
+}
+
+fn root_turbo_json_from_scripts(scripts: &[String]) -> Result<TurboJson, Error> {
+    let mut turbo_json = TurboJson {
+        ..Default::default()
+    };
+    for script in scripts {
+        let task_name = TaskName::from(script.as_str()).into_root_task();
+        turbo_json.tasks.insert(
+            task_name,
+            Spanned::new(RawTaskDefinition {
+                cache: Some(Spanned::new(false)),
+                ..Default::default()
+            }),
+        );
+    }
+    Ok(turbo_json)
+}
+
+fn workspace_turbo_json_from_scripts(scripts: &[String]) -> Result<TurboJson, Error> {
+    let mut turbo_json = TurboJson {
+        extends: Spanned::new(vec!["//".to_owned()]),
+        ..Default::default()
+    };
+    for script in scripts {
+        let task_name = TaskName::from(script.clone());
+        turbo_json.tasks.insert(
+            task_name,
+            Spanned::new(RawTaskDefinition {
+                cache: Some(Spanned::new(false)),
+                ..Default::default()
+            }),
+        );
+    }
     Ok(turbo_json)
 }
 
@@ -529,5 +603,58 @@ mod test {
         assert_eq!(turbo_json.tasks.len(), 1);
         a_turbo_json.remove().unwrap();
         assert!(loader.load(&PackageName::from("a")).is_ok());
+    }
+
+    #[test]
+    fn test_no_turbo_json() {
+        let root_dir = tempdir().unwrap();
+        let repo_root = AbsoluteSystemPath::from_std_path(root_dir.path()).unwrap();
+
+        let mut loader = TurboJsonLoader::workspace_no_turbo_json(
+            repo_root.to_owned(),
+            vec![
+                (
+                    PackageName::Root,
+                    vec!["build".to_owned(), "lint".to_owned(), "test".to_owned()],
+                ),
+                (
+                    PackageName::from("pkg-a"),
+                    vec!["build".to_owned(), "lint".to_owned(), "special".to_owned()],
+                ),
+            ]
+            .into_iter()
+            .collect(),
+        );
+
+        {
+            let root_json = loader.load(&PackageName::Root).unwrap();
+            for task_name in ["//#build", "//#lint", "//#test"] {
+                if let Some(def) = root_json.tasks.get(&TaskName::from(task_name)) {
+                    assert_eq!(
+                        def.cache.as_ref().map(|cache| *cache.as_inner()),
+                        Some(false)
+                    );
+                } else {
+                    panic!("didn't find {task_name}");
+                }
+            }
+        }
+
+        {
+            let pkg_a_json = loader.load(&PackageName::from("pkg-a")).unwrap();
+            for task_name in ["build", "lint", "special"] {
+                if let Some(def) = pkg_a_json.tasks.get(&TaskName::from(task_name)) {
+                    assert_eq!(
+                        def.cache.as_ref().map(|cache| *cache.as_inner()),
+                        Some(false)
+                    );
+                } else {
+                    panic!("didn't find {task_name}");
+                }
+            }
+        }
+        // Should get no turbo.json error if package wasn't declared
+        let goose_err = loader.load(&PackageName::from("goose")).unwrap_err();
+        assert!(matches!(goose_err, Error::NoTurboJSON));
     }
 }
