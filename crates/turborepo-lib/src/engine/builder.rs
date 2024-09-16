@@ -369,23 +369,21 @@ impl<'a> EngineBuilder<'a> {
         task_name: &TaskName<'static>,
         task_id: &TaskId,
     ) -> Result<bool, Error> {
-        let turbo_json = loader
-            .load(workspace)
-            // If there was no turbo.json in the workspace, fallback to the root turbo.json
-            .map_or_else(
-                |e| {
-                    if matches!(e, config::Error::NoTurboJSON)
-                        && !matches!(workspace, PackageName::Root)
-                    {
-                        Ok(None)
-                    } else {
-                        Err(e)
-                    }
-                },
-                |v| Ok(Some(v)),
-            )?;
+        let turbo_json = loader.load(workspace).map_or_else(
+            |err| {
+                if matches!(err, config::Error::NoTurboJSON)
+                    && !matches!(workspace, PackageName::Root)
+                {
+                    Ok(None)
+                } else {
+                    Err(err)
+                }
+            },
+            |turbo_json| Ok(Some(turbo_json)),
+        )?;
 
         let Some(turbo_json) = turbo_json else {
+            // If there was no turbo.json in the workspace, fallback to the root turbo.json
             return Self::has_task_definition(loader, &PackageName::Root, task_name, task_id);
         };
 
