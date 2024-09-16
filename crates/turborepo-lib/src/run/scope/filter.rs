@@ -163,7 +163,7 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
     /// It applies the following rules:
     pub(crate) fn resolve(
         &self,
-        affected: &Option<(Option<String>, String)>,
+        affected: &Option<(Option<String>, Option<String>)>,
         patterns: &[String],
     ) -> Result<(HashSet<PackageName>, bool), ResolutionError> {
         // inference is None only if we are in the root
@@ -185,7 +185,7 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
 
     fn get_packages_from_patterns(
         &self,
-        affected: &Option<(Option<String>, String)>,
+        affected: &Option<(Option<String>, Option<String>)>,
         patterns: &[String],
     ) -> Result<HashSet<PackageName>, ResolutionError> {
         let mut selectors = patterns
@@ -197,9 +197,10 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
             selectors.push(TargetSelector {
                 git_range: Some(GitRange {
                     from_ref: from_ref.clone(),
-                    to_ref: Some(to_ref.to_string()),
+                    to_ref: to_ref.clone(),
                     include_uncommitted: true,
                     allow_unknown_objects: true,
+                    merge_base: true,
                 }),
                 include_dependents: true,
                 ..Default::default()
@@ -549,6 +550,7 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
             git_range.to_ref.as_deref(),
             git_range.include_uncommitted,
             git_range.allow_unknown_objects,
+            git_range.merge_base,
         )
     }
 
@@ -1266,6 +1268,7 @@ mod test {
             to: Option<&str>,
             _include_uncommitted: bool,
             _allow_unknown_objects: bool,
+            _merge_base: bool,
         ) -> Result<HashSet<PackageName>, ResolutionError> {
             Ok(self
                 .0

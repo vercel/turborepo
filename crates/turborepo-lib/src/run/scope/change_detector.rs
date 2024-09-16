@@ -21,6 +21,7 @@ pub trait GitChangeDetector {
         to_ref: Option<&str>,
         include_uncommitted: bool,
         allow_unknown_objects: bool,
+        merge_base: bool,
     ) -> Result<HashSet<PackageName>, ResolutionError>;
 }
 
@@ -92,6 +93,7 @@ impl<'a> GitChangeDetector for ScopeChangeDetector<'a> {
         to_ref: Option<&str>,
         include_uncommitted: bool,
         allow_unknown_objects: bool,
+        merge_base: bool,
     ) -> Result<HashSet<PackageName>, ResolutionError> {
         let changed_files = match self.scm.changed_files(
             self.turbo_root,
@@ -99,6 +101,7 @@ impl<'a> GitChangeDetector for ScopeChangeDetector<'a> {
             to_ref,
             include_uncommitted,
             allow_unknown_objects,
+            merge_base,
         )? {
             ChangedFiles::All => {
                 debug!("all packages changed");

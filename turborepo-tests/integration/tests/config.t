@@ -19,7 +19,7 @@ Run test run
     "daemon": null,
     "envMode": "strict",
     "scmBase": null,
-    "scmHead": "HEAD",
+    "scmHead": null,
     "cacheDir": ".turbo[\\/]+cache" (re)
   }
 
