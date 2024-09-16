@@ -15,6 +15,11 @@ struct Tracer {
     seen: HashSet<AbsoluteSystemPathBuf>,
 }
 
+struct TraceResult {
+    errors: Vec<String>,
+    files: HashSet<AbsoluteSystemPathBuf>,
+}
+
 #[derive(Debug, Error)]
 enum Error {
     #[error(transparent)]
@@ -25,12 +30,12 @@ impl Tracer {
     fn new(entry: Utf8PathBuf) -> Result<Self, Error> {
         let cwd = AbsoluteSystemPathBuf::cwd()?;
         let absolute_entry = AbsoluteSystemPathBuf::from_unknown(&cwd, entry);
-        let mut files = vec![absolute_entry];
-        let mut seen = HashSet::new();
+        let files = vec![absolute_entry];
+        let seen = HashSet::new();
 
         Ok(Self { cwd, files, seen })
     }
-    fn trace(mut self) -> Vec<String> {
+    fn trace(mut self) -> TraceResult {
         let options = ResolveOptions::default().with_builtin_modules(true);
         let resolver = Resolver::new(options);
         let mut errors = vec![];
@@ -39,7 +44,6 @@ impl Tracer {
             if matches!(file_path.extension(), Some("json") | Some("css")) {
                 continue;
             }
-            println!("{}", file_path);
 
             if self.seen.contains(&file_path) {
                 continue;
@@ -119,7 +123,10 @@ impl Tracer {
             }
         }
 
-        errors
+        TraceResult {
+            files: self.seen,
+            errors,
+        }
     }
 }
 
@@ -179,13 +186,17 @@ fn main() -> Result<(), Error> {
     let file_path = &args[2];
     let tracer = Tracer::new(file_path.into())?;
 
-    let errors = tracer.trace();
+    let result = tracer.trace();
 
-    if !errors.is_empty() {
-        for error in errors {
-            eprintln!("{}", error);
+    if !result.errors.is_empty() {
+        for error in &result.errors {
+            eprintln!("error: {}", error);
         }
         std::process::exit(1);
+    } else {
+        for file in &result.files {
+            println!("{}", file);
+        }
     }
 
     Ok(())
