@@ -1,7 +1,7 @@
 use std::{collections::HashSet, fs, sync::Arc};
 
 use camino::Utf8PathBuf;
-use miette::{miette, LabeledSpan, NamedSource};
+use miette::{Diagnostic, NamedSource, SourceSpan};
 use oxc_resolver::{
     EnforceExtension, ResolveError, ResolveOptions, Resolver, TsconfigOptions, TsconfigReferences,
 };
@@ -9,9 +9,10 @@ use swc_common::{comments::SingleThreadedComments, input::StringInput, FileName,
 use swc_ecma_ast::EsVersion;
 use swc_ecma_parser::{lexer::Lexer, Capturing, EsSyntax, Parser, Syntax, TsSyntax};
 use swc_ecma_visit::VisitWith;
-use turbopath::AbsoluteSystemPathBuf;
+use thiserror::Error;
+use turbopath::{AbsoluteSystemPathBuf, PathError};
 
-use crate::{import_finder::ImportFinder, Error};
+use crate::import_finder::ImportFinder;
 
 pub struct Tracer {
     cwd: AbsoluteSystemPathBuf,
@@ -21,35 +22,39 @@ pub struct Tracer {
     source_map: Arc<SourceMap>,
 }
 
+#[derive(Debug, Error, Diagnostic)]
+pub enum TraceError {
+    #[error("failed to read file: {0}")]
+    FileNotFound(AbsoluteSystemPathBuf),
+    #[error(transparent)]
+    PathEncoding(PathError),
+    #[error("failed to resolve import")]
+    Resolve {
+        #[label("import here")]
+        span: SourceSpan,
+        #[source_code]
+        text: NamedSource,
+    },
+}
+
 pub struct TraceResult {
-    pub errors: Vec<String>,
+    pub errors: Vec<TraceError>,
     pub files: HashSet<AbsoluteSystemPathBuf>,
 }
 
 impl Tracer {
     pub fn new(
-        files: Vec<Utf8PathBuf>,
-        cwd: Option<Utf8PathBuf>,
+        files: Vec<AbsoluteSystemPathBuf>,
+        cwd: AbsoluteSystemPathBuf,
         ts_config: Option<Utf8PathBuf>,
-    ) -> Result<Self, Error> {
-        let abs_cwd = if let Some(cwd) = cwd {
-            AbsoluteSystemPathBuf::from_cwd(cwd)?
-        } else {
-            AbsoluteSystemPathBuf::cwd()?
-        };
-
-        let files = files
-            .into_iter()
-            .map(|f| AbsoluteSystemPathBuf::from_unknown(&abs_cwd, f))
-            .collect();
-
+    ) -> Result<Self, PathError> {
         let ts_config =
-            ts_config.map(|ts_config| AbsoluteSystemPathBuf::from_unknown(&abs_cwd, ts_config));
+            ts_config.map(|ts_config| AbsoluteSystemPathBuf::from_unknown(&cwd, ts_config));
 
         let seen = HashSet::new();
 
         Ok(Self {
-            cwd: abs_cwd,
+            cwd,
             files,
             seen,
             ts_config,
@@ -83,12 +88,9 @@ impl Tracer {
             self.seen.insert(file_path.clone());
 
             // Read the file content
-            let file_content = match fs::read_to_string(&file_path) {
-                Ok(content) => content,
-                Err(err) => {
-                    errors.push(format!("failed to read file {}: {}", file_path, err));
-                    continue;
-                }
+            let Ok(file_content) = fs::read_to_string(&file_path) else {
+                errors.push(TraceError::FileNotFound(file_path.clone()));
+                continue;
             };
 
             let comments = SingleThreadedComments::default();
@@ -122,12 +124,9 @@ impl Tracer {
             let mut parser = Parser::new_from(Capturing::new(lexer));
 
             // Parse the file as a module
-            let module = match parser.parse_module() {
-                Ok(module) => module,
-                Err(err) => {
-                    errors.push(format!("failed to parse module {}: {:?}", file_path, err));
-                    continue;
-                }
+            let Ok(module) = parser.parse_module() else {
+                errors.push(TraceError::FileNotFound(file_path.to_owned()));
+                continue;
             };
 
             // Visit the AST and find imports
@@ -142,28 +141,17 @@ impl Tracer {
                     Ok(resolved) => match resolved.into_path_buf().try_into() {
                         Ok(path) => self.files.push(path),
                         Err(err) => {
-                            errors.push(err.to_string());
+                            errors.push(TraceError::PathEncoding(err));
                         }
                     },
                     Err(ResolveError::Builtin(_)) => {}
-                    Err(err) => {
+                    Err(_) => {
                         let (start, end) = self.source_map.span_to_char_offset(&source_file, *span);
 
-                        let report = miette!(
-                            labels = [LabeledSpan::at(
-                                (start as usize)..(end as usize),
-                                "import here"
-                            )],
-                            "failed to resolve import",
-                        )
-                        .with_source_code(NamedSource::new(
-                            file_path.to_string(),
-                            file_content.clone(),
-                        ));
-
-                        println!("{:?}", report);
-
-                        errors.push(err.to_string());
+                        errors.push(TraceError::Resolve {
+                            span: (start as usize, end as usize).into(),
+                            text: NamedSource::new(file_path.to_string(), file_content.clone()),
+                        });
                     }
                 }
             }

@@ -5,12 +5,8 @@ use camino::Utf8PathBuf;
 use clap::Parser;
 use thiserror::Error;
 use tracer::Tracer;
-
-#[derive(Debug, Error)]
-enum Error {
-    #[error(transparent)]
-    Path(#[from] turbopath::PathError),
-}
+use turbo_trace::Error;
+use turbopath::AbsoluteSystemPathBuf;
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -24,7 +20,19 @@ struct Args {
 fn main() -> Result<(), Error> {
     let args = Args::parse();
 
-    let tracer = Tracer::new(args.files, args.cwd, args.ts_config)?;
+    let abs_cwd = if let Some(cwd) = args.cwd {
+        AbsoluteSystemPathBuf::from_cwd(cwd)?
+    } else {
+        AbsoluteSystemPathBuf::cwd()?
+    };
+
+    let files = args
+        .files
+        .into_iter()
+        .map(|f| AbsoluteSystemPathBuf::from_unknown(&abs_cwd, f))
+        .collect();
+
+    let tracer = Tracer::new(files, abs_cwd, args.ts_config)?;
 
     let result = tracer.trace();
 
