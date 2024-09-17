@@ -5,6 +5,8 @@ edition = "2021"
 
 [dependencies]
 camino.workspace = true
+clap = { version = "4.5.17", features = ["derive"] }
+miette = { workspace = true, features = ["fancy"] }
 oxc_resolver = "1.11.0"
 swc_common = "0.37.5"
 swc_ecma_ast = "0.118.2"
