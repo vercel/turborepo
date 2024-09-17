@@ -38,6 +38,20 @@ impl Query {
     }
 }
 
+#[derive(Debug, SimpleObject)]
+struct Array<T: OutputType> {
+    items: Vec<T>,
+    length: usize,
+}
+
+impl<T: OutputType> FromIterator<T> for Array<T> {
+    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
+        let items: Vec<_> = iter.into_iter().collect();
+        let length = items.len();
+        Self { items, length }
+    }
+}
+
 struct Package {
     run: Arc<Run>,
     name: PackageName,
@@ -293,7 +307,7 @@ impl Query {
         &self,
         base: Option<String>,
         head: Option<String>,
-    ) -> Result<Vec<Package>, Error> {
+    ) -> Result<Array<Package>, Error> {
         let mut opts = self.run.opts().clone();
         opts.scope_opts.affected_range = Some((base, head));
 
@@ -322,7 +336,7 @@ impl Query {
     }
 
     /// Gets a list of packages that match the given filter
-    async fn packages(&self, filter: Option<PackagePredicate>) -> Result<Vec<Package>, Error> {
+    async fn packages(&self, filter: Option<PackagePredicate>) -> Result<Array<Package>, Error> {
         let Some(filter) = filter else {
             return Ok(self
                 .run
@@ -369,7 +383,7 @@ impl Package {
     }
 
     /// The upstream packages that have this package as a direct dependency
-    async fn direct_dependents(&self) -> Result<Vec<Package>, Error> {
+    async fn direct_dependents(&self) -> Result<Array<Package>, Error> {
         let node: PackageNode = PackageNode::Workspace(self.name.clone());
         Ok(self
             .run
@@ -386,7 +400,7 @@ impl Package {
     }
 
     /// The downstream packages that directly depend on this package
-    async fn direct_dependencies(&self) -> Result<Vec<Package>, Error> {
+    async fn direct_dependencies(&self) -> Result<Array<Package>, Error> {
         let node: PackageNode = PackageNode::Workspace(self.name.clone());
         Ok(self
             .run
@@ -402,7 +416,8 @@ impl Package {
             .collect())
     }
 
-    async fn all_dependents(&self) -> Result<Vec<Package>, Error> {
+    /// The downstream packages that depend on this package, transitively
+    async fn all_dependents(&self) -> Result<Array<Package>, Error> {
         let node: PackageNode = PackageNode::Workspace(self.name.clone());
         Ok(self
             .run
@@ -417,7 +432,8 @@ impl Package {
             .collect())
     }
 
-    async fn all_dependencies(&self) -> Result<Vec<Package>, Error> {
+    /// The upstream packages that this package depends on, transitively
+    async fn all_dependencies(&self) -> Result<Array<Package>, Error> {
         let node: PackageNode = PackageNode::Workspace(self.name.clone());
         Ok(self
             .run
@@ -433,7 +449,7 @@ impl Package {
     }
 
     /// The downstream packages that depend on this package, indirectly
-    async fn indirect_dependents(&self) -> Result<Vec<Package>, Error> {
+    async fn indirect_dependents(&self) -> Result<Array<Package>, Error> {
         let node: PackageNode = PackageNode::Workspace(self.name.clone());
         let immediate_dependents = self
             .run
@@ -456,7 +472,7 @@ impl Package {
     }
 
     /// The upstream packages that this package depends on, indirectly
-    async fn indirect_dependencies(&self) -> Result<Vec<Package>, Error> {
+    async fn indirect_dependencies(&self) -> Result<Array<Package>, Error> {
         let node: PackageNode = PackageNode::Workspace(self.name.clone());
         let immediate_dependencies = self
             .run

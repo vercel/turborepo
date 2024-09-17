@@ -2,145 +2,169 @@ Setup
   $ . ${TESTDIR}/../../helpers/setup_integration_test.sh
 
 Query packages
-  $ ${TURBO} query "query { packages { name } }" | jq
+  $ ${TURBO} query "query { packages { items { name } } }" | jq
    WARNING  query command is experimental and may change in the future
   {
     "data": {
-      "packages": [
-        {
-          "name": "//"
-        },
-        {
-          "name": "another"
-        },
-        {
-          "name": "my-app"
-        },
-        {
-          "name": "util"
-        }
-      ]
+      "packages": {
+        "items": [
+          {
+            "name": "//"
+          },
+          {
+            "name": "another"
+          },
+          {
+            "name": "my-app"
+          },
+          {
+            "name": "util"
+          }
+        ]
+      }
     }
   }
 
 Query packages with equals filter
-  $ ${TURBO} query "query { packages(filter: { equal: { field: NAME, value: \"my-app\" } }) { name } }" | jq
+  $ ${TURBO} query "query { packages(filter: { equal: { field: NAME, value: \"my-app\" } }) { items { name } } }" | jq
    WARNING  query command is experimental and may change in the future
   {
     "data": {
-      "packages": [
-        {
-          "name": "my-app"
-        }
-      ]
+      "packages": {
+        "items": [
+          {
+            "name": "my-app"
+          }
+        ]
+      }
     }
   }
 
 Query packages that have at least one dependent package
-  $ ${TURBO} query "query { packages(filter: { greaterThan: { field: DIRECT_DEPENDENT_COUNT, value: 0 } }) { name } }" | jq
+  $ ${TURBO} query "query { packages(filter: { greaterThan: { field: DIRECT_DEPENDENT_COUNT, value: 0 } }) { items { name } } }" | jq
    WARNING  query command is experimental and may change in the future
   {
     "data": {
-      "packages": [
-        {
-          "name": "util"
-        }
-      ]
+      "packages": {
+        "items": [
+          {
+            "name": "util"
+          }
+        ]
+      }
     }
   }
 
 Get dependents of `util`
-  $ ${TURBO} query "query { packages(filter: { equal: { field: NAME, value: \"util\" } }) { directDependents { name } } }" | jq
+  $ ${TURBO} query "query { packages(filter: { equal: { field: NAME, value: \"util\" } }) { items { directDependents { items { name } } } } }" | jq
    WARNING  query command is experimental and may change in the future
   {
     "data": {
-      "packages": [
-        {
-          "directDependents": [
-            {
-              "name": "my-app"
+      "packages": {
+        "items": [
+          {
+            "directDependents": {
+              "items": [
+                {
+                  "name": "my-app"
+                }
+              ]
             }
-          ]
-        }
-      ]
+          }
+        ]
+      }
     }
   }
 
 Get dependencies of `my-app`
-  $ ${TURBO} query "query { packages(filter: { equal: { field: NAME, value: \"my-app\" } }) { directDependencies { name } } }" | jq
+  $ ${TURBO} query "query { packages(filter: { equal: { field: NAME, value: \"my-app\" } }) { items { directDependencies { items { name } } } } }" | jq
    WARNING  query command is experimental and may change in the future
   {
     "data": {
-      "packages": [
-        {
-          "directDependencies": [
-            {
-              "name": "util"
+      "packages": {
+        "items": [
+          {
+            "directDependencies": {
+              "items": [
+                {
+                  "name": "util"
+                }
+              ]
             }
-          ]
-        }
-      ]
+          }
+        ]
+      }
     }
   }
 
 Get the indirect dependencies of `my-app`
-  $ ${TURBO} query "query { packages(filter: { equal: { field: NAME, value: \"my-app\" } }) { indirectDependencies { name } } }" | jq
+  $ ${TURBO} query "query { packages(filter: { equal: { field: NAME, value: \"my-app\" } }) { items { indirectDependencies { items { name } } } } }" | jq
    WARNING  query command is experimental and may change in the future
   {
     "data": {
-      "packages": [
-        {
-          "indirectDependencies": [
-            {
-              "name": "//"
+      "packages": {
+        "items": [
+          {
+            "indirectDependencies": {
+              "items": [
+                {
+                  "name": "//"
+                }
+              ]
             }
-          ]
-        }
-      ]
+          }
+        ]
+      }
     }
   }
 
 Get all dependencies of `my-app`
-  $ ${TURBO} query "query { packages(filter: { equal: { field: NAME, value: \"my-app\" } }) { allDependencies { name } } }" | jq
+  $ ${TURBO} query "query { packages(filter: { equal: { field: NAME, value: \"my-app\" } }) { items { allDependencies { items { name } } } } }" | jq
    WARNING  query command is experimental and may change in the future
   {
     "data": {
-      "packages": [
-        {
-          "allDependencies": [
-            {
-              "name": "//"
-            },
-            {
-              "name": "util"
+      "packages": {
+        "items": [
+          {
+            "allDependencies": {
+              "items": [
+                {
+                  "name": "//"
+                },
+                {
+                  "name": "util"
+                }
+              ]
             }
-          ]
-        }
-      ]
+          }
+        ]
+      }
     }
   }
 
 Write query to file
-  $ echo 'query { packages { name } }' > query.gql
+  $ echo 'query { packages { items { name } } }' > query.gql
 
 Run the query
   $ ${TURBO} query query.gql | jq
    WARNING  query command is experimental and may change in the future
   {
     "data": {
-      "packages": [
-        {
-          "name": "//"
-        },
-        {
-          "name": "another"
-        },
-        {
-          "name": "my-app"
-        },
-        {
-          "name": "util"
-        }
-      ]
+      "packages": {
+        "items": [
+          {
+            "name": "//"
+          },
+          {
+            "name": "another"
+          },
+          {
+            "name": "my-app"
+          },
+          {
+            "name": "util"
+          }
+        ]
+      }
     }
   }
