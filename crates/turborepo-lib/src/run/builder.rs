@@ -45,9 +45,7 @@ use crate::{
     run::{scope, task_access::TaskAccess, task_id::TaskName, Error, Run, RunCache},
     shim::TurboState,
     signal::{SignalHandler, SignalSubscriber},
-    turbo_json::{
-        package_turbo_jsons, workspace_package_scripts, TurboJson, TurboJsonLoader, UIMode,
-    },
+    turbo_json::{TurboJson, TurboJsonLoader, UIMode},
     DaemonConnector,
 };
 
@@ -377,18 +375,19 @@ impl RunBuilder {
                 root_package_json.clone(),
             )
         } else if self.allow_no_turbo_json && !self.root_turbo_json_path.exists() {
-            let package_scripts = workspace_package_scripts(pkg_dep_graph.packages());
             // We explicitly set env mode to loose as otherwise no env vars will be passed
             // to tasks.
             self.opts.run_opts.env_mode = EnvMode::Loose;
-            TurboJsonLoader::workspace_no_turbo_json(self.repo_root.clone(), package_scripts)
+            TurboJsonLoader::workspace_no_turbo_json(
+                self.repo_root.clone(),
+                pkg_dep_graph.packages(),
+            )
         } else {
-            let package_turbo_jsons = package_turbo_jsons(
-                &self.repo_root,
+            TurboJsonLoader::workspace(
+                self.repo_root.clone(),
                 self.root_turbo_json_path.clone(),
                 pkg_dep_graph.packages(),
-            );
-            TurboJsonLoader::workspace(self.repo_root.clone(), package_turbo_jsons)
+            )
         };
 
         let root_turbo_json = turbo_json_loader.load(&PackageName::Root)?.clone();

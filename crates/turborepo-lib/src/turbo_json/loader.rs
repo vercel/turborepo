@@ -47,10 +47,12 @@ enum Strategy {
 
 impl TurboJsonLoader {
     /// Create a loader that will load turbo.json files throughout the workspace
-    pub fn workspace(
+    pub fn workspace<'a>(
         repo_root: AbsoluteSystemPathBuf,
-        packages: HashMap<PackageName, AbsoluteSystemPathBuf>,
+        root_turbo_json_path: AbsoluteSystemPathBuf,
+        packages: impl Iterator<Item = (&'a PackageName, &'a PackageInfo)>,
     ) -> Self {
+        let packages = package_turbo_jsons(&repo_root, root_turbo_json_path, packages);
         Self {
             repo_root,
             cache: HashMap::new(),
@@ -60,10 +62,11 @@ impl TurboJsonLoader {
 
     /// Create a loader that will construct turbo.json structures based on
     /// workspace `package.json`s.
-    pub fn workspace_no_turbo_json(
+    pub fn workspace_no_turbo_json<'a>(
         repo_root: AbsoluteSystemPathBuf,
-        packages: HashMap<PackageName, Vec<String>>,
+        packages: impl Iterator<Item = (&'a PackageName, &'a PackageInfo)>,
     ) -> Self {
+        let packages = workspace_package_scripts(packages);
         Self {
             repo_root,
             cache: HashMap::new(),
@@ -175,7 +178,7 @@ impl TurboJsonLoader {
 }
 
 /// Map all packages in the package graph to their turbo.json path
-pub fn package_turbo_jsons<'a>(
+fn package_turbo_jsons<'a>(
     repo_root: &AbsoluteSystemPath,
     root_turbo_json_path: AbsoluteSystemPathBuf,
     packages: impl Iterator<Item = (&'a PackageName, &'a PackageInfo)>,
@@ -198,7 +201,7 @@ pub fn package_turbo_jsons<'a>(
 }
 
 /// Map all packages in the package graph to their scripts
-pub fn workspace_package_scripts<'a>(
+fn workspace_package_scripts<'a>(
     packages: impl Iterator<Item = (&'a PackageName, &'a PackageInfo)>,
 ) -> HashMap<PackageName, Vec<String>> {
     packages
@@ -372,12 +375,15 @@ mod test {
         let repo_root = AbsoluteSystemPath::from_std_path(root_dir.path())?;
         let root_turbo_json = repo_root.join_component("turbo.json");
         fs::write(&root_turbo_json, turbo_json_content)?;
-        let mut loader = TurboJsonLoader::workspace(
-            repo_root.to_owned(),
-            vec![(PackageName::Root, root_turbo_json)]
-                .into_iter()
-                .collect(),
-        );
+        let mut loader = TurboJsonLoader {
+            repo_root: repo_root.to_owned(),
+            cache: HashMap::new(),
+            strategy: Strategy::Workspace {
+                packages: vec![(PackageName::Root, root_turbo_json)]
+                    .into_iter()
+                    .collect(),
+            },
+        };
 
         let mut turbo_json = loader.load(&PackageName::Root)?.clone();
 
@@ -565,11 +571,15 @@ mod test {
         let repo_root = AbsoluteSystemPath::from_std_path(root_dir.path()).unwrap();
         let a_turbo_json = repo_root.join_components(&["packages", "a", "turbo.json"]);
         a_turbo_json.ensure_dir().unwrap();
-        let turbo_jsons = vec![(PackageName::from("a"), a_turbo_json.clone())]
+        let packages = vec![(PackageName::from("a"), a_turbo_json.clone())]
             .into_iter()
             .collect();
 
-        let mut loader = TurboJsonLoader::workspace(repo_root.to_owned(), turbo_jsons);
+        let mut loader = TurboJsonLoader {
+            repo_root: repo_root.to_owned(),
+            cache: HashMap::new(),
+            strategy: Strategy::Workspace { packages },
+        };
         let result = loader.load(&PackageName::from("a"));
         assert!(
             matches!(result.unwrap_err(), Error::NoTurboJSON),
@@ -590,11 +600,15 @@ mod test {
         let repo_root = AbsoluteSystemPath::from_std_path(root_dir.path()).unwrap();
         let a_turbo_json = repo_root.join_components(&["packages", "a", "turbo.json"]);
         a_turbo_json.ensure_dir().unwrap();
-        let turbo_jsons = vec![(PackageName::from("a"), a_turbo_json.clone())]
+        let packages = vec![(PackageName::from("a"), a_turbo_json.clone())]
             .into_iter()
             .collect();
 
-        let mut loader = TurboJsonLoader::workspace(repo_root.to_owned(), turbo_jsons);
+        let mut loader = TurboJsonLoader {
+            repo_root: repo_root.to_owned(),
+            cache: HashMap::new(),
+            strategy: Strategy::Workspace { packages },
+        };
         a_turbo_json
             .create_with_contents(r#"{"tasks": {"build": {}}}"#)
             .unwrap();
@@ -609,22 +623,24 @@ mod test {
     fn test_no_turbo_json() {
         let root_dir = tempdir().unwrap();
         let repo_root = AbsoluteSystemPath::from_std_path(root_dir.path()).unwrap();
+        let packages = vec![
+            (
+                PackageName::Root,
+                vec!["build".to_owned(), "lint".to_owned(), "test".to_owned()],
+            ),
+            (
+                PackageName::from("pkg-a"),
+                vec!["build".to_owned(), "lint".to_owned(), "special".to_owned()],
+            ),
+        ]
+        .into_iter()
+        .collect();
 
-        let mut loader = TurboJsonLoader::workspace_no_turbo_json(
-            repo_root.to_owned(),
-            vec![
-                (
-                    PackageName::Root,
-                    vec!["build".to_owned(), "lint".to_owned(), "test".to_owned()],
-                ),
-                (
-                    PackageName::from("pkg-a"),
-                    vec!["build".to_owned(), "lint".to_owned(), "special".to_owned()],
-                ),
-            ]
-            .into_iter()
-            .collect(),
-        );
+        let mut loader = TurboJsonLoader {
+            repo_root: repo_root.to_owned(),
+            cache: HashMap::new(),
+            strategy: Strategy::WorkspaceNoTurboJson { packages },
+        };
 
         {
             let root_json = loader.load(&PackageName::Root).unwrap();
