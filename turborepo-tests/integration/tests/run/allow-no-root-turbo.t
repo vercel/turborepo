@@ -12,7 +12,7 @@ Runs test tasks
   \xe2\x80\xa2 Packages in scope: another, my-app, util (esc)
   \xe2\x80\xa2 Running test in 3 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  my-app:test: cache bypass, force executing ac1233e4c102becc
+  my-app:test: cache bypass, force executing d80016a1a60c4c0a
   my-app:test: 
   my-app:test: > test
   my-app:test: > echo $MY_VAR
@@ -30,7 +30,7 @@ Ensure caching is disabled
   \xe2\x80\xa2 Packages in scope: another, my-app, util (esc)
   \xe2\x80\xa2 Running test in 3 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  my-app:test: cache bypass, force executing ac1233e4c102becc
+  my-app:test: cache bypass, force executing d80016a1a60c4c0a
   my-app:test: 
   my-app:test: > test
   my-app:test: > echo $MY_VAR
