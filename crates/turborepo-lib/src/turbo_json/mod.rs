@@ -224,6 +224,10 @@ pub struct RawTaskDefinition {
     output_logs: Option<Spanned<OutputLogsMode>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     interactive: Option<Spanned<bool>>,
+    // TODO: Remove this once we have the ability to load task definitions directly
+    // instead of deriving them from a TurboJson
+    #[serde(skip)]
+    env_mode: Option<EnvMode>,
 }
 
 macro_rules! set_field {
@@ -256,6 +260,7 @@ impl RawTaskDefinition {
         set_field!(self, other, env);
         set_field!(self, other, pass_through_env);
         set_field!(self, other, interactive);
+        set_field!(self, other, env_mode);
     }
 }
 
@@ -404,6 +409,7 @@ impl TryFrom<RawTaskDefinition> for TaskDefinition {
             output_logs: *raw_task.output_logs.unwrap_or_default(),
             persistent: *raw_task.persistent.unwrap_or_default(),
             interactive,
+            env_mode: raw_task.env_mode,
         })
     }
 }
@@ -726,6 +732,7 @@ mod tests {
             output_logs: Some(Spanned::new(OutputLogsMode::Full).with_range(246..252)),
             persistent: Some(Spanned::new(true).with_range(278..282)),
             interactive: Some(Spanned::new(true).with_range(309..313)),
+            env_mode: None,
         },
         TaskDefinition {
           env: vec!["OS".to_string()],
@@ -741,6 +748,7 @@ mod tests {
           topological_dependencies: vec![],
           persistent: true,
           interactive: true,
+          env_mode: None,
         }
       ; "full"
     )]
@@ -765,6 +773,7 @@ mod tests {
             output_logs: Some(Spanned::new(OutputLogsMode::Full).with_range(279..285)),
             persistent: Some(Spanned::new(true).with_range(315..319)),
             interactive: None,
+            env_mode: None,
         },
         TaskDefinition {
             env: vec!["OS".to_string()],
@@ -780,6 +789,7 @@ mod tests {
             topological_dependencies: vec![],
             persistent: true,
             interactive: false,
+            env_mode: None,
         }
       ; "full (windows)"
     )]

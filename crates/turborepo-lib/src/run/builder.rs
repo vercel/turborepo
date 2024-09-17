@@ -37,7 +37,7 @@ use {
 };
 
 use crate::{
-    cli::{DryRunMode, EnvMode},
+    cli::DryRunMode,
     commands::CommandBase,
     engine::{Engine, EngineBuilder},
     opts::Opts,
@@ -375,9 +375,6 @@ impl RunBuilder {
                 root_package_json.clone(),
             )
         } else if self.allow_no_turbo_json && !self.root_turbo_json_path.exists() {
-            // We explicitly set env mode to loose as otherwise no env vars will be passed
-            // to tasks.
-            self.opts.run_opts.env_mode = EnvMode::Loose;
             TurboJsonLoader::workspace_no_turbo_json(
                 self.repo_root.clone(),
                 pkg_dep_graph.packages(),
