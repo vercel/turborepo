@@ -104,6 +104,8 @@ pub struct TaskSummaryTaskDefinition {
     env: Vec<String>,
     pass_through_env: Option<Vec<String>>,
     interactive: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    env_mode: Option<EnvMode>,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -279,6 +281,7 @@ impl From<TaskDefinition> for TaskSummaryTaskDefinition {
             output_logs,
             persistent,
             interactive,
+            env_mode,
         } = value;
 
         let mut outputs = inclusions;
@@ -313,6 +316,7 @@ impl From<TaskDefinition> for TaskSummaryTaskDefinition {
             interactive,
             env,
             pass_through_env,
+            env_mode,
         }
     }
 }

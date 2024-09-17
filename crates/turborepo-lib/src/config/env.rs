@@ -38,6 +38,7 @@ const TURBO_MAPPING: &[(&str, &str)] = [
     ("turbo_remote_only", "remote_only"),
     ("turbo_remote_cache_read_only", "remote_cache_read_only"),
     ("turbo_run_summary", "run_summary"),
+    ("turbo_allow_no_turbo_json", "allow_no_turbo_json"),
 ]
 .as_slice();
 
@@ -86,6 +87,7 @@ impl ResolvedConfigurationOptions for EnvVars {
         let remote_only = self.truthy_value("remote_only").flatten();
         let remote_cache_read_only = self.truthy_value("remote_cache_read_only").flatten();
         let run_summary = self.truthy_value("run_summary").flatten();
+        let allow_no_turbo_json = self.truthy_value("allow_no_turbo_json").flatten();
 
         // Process timeout
         let timeout = self
@@ -171,6 +173,7 @@ impl ResolvedConfigurationOptions for EnvVars {
             remote_only,
             remote_cache_read_only,
             run_summary,
+            allow_no_turbo_json,
 
             // Processed numbers
             timeout,
@@ -317,6 +320,7 @@ mod test {
         env.insert("turbo_remote_only".into(), "1".into());
         env.insert("turbo_remote_cache_read_only".into(), "1".into());
         env.insert("turbo_run_summary".into(), "true".into());
+        env.insert("turbo_allow_no_turbo_json".into(), "true".into());
 
         let config = EnvVars::new(&env)
             .unwrap()
@@ -328,6 +332,7 @@ mod test {
         assert!(config.remote_only());
         assert!(config.remote_cache_read_only());
         assert!(config.run_summary());
+        assert!(config.allow_no_turbo_json());
         assert_eq!(turbo_api, config.api_url.unwrap());
         assert_eq!(turbo_login, config.login_url.unwrap());
         assert_eq!(turbo_team, config.team_slug.unwrap());
@@ -365,6 +370,7 @@ mod test {
         env.insert("turbo_remote_only".into(), "".into());
         env.insert("turbo_remote_cache_read_only".into(), "".into());
         env.insert("turbo_run_summary".into(), "".into());
+        env.insert("turbo_allow_no_turbo_json".into(), "".into());
 
         let config = EnvVars::new(&env)
             .unwrap()
@@ -387,6 +393,7 @@ mod test {
         assert!(!config.remote_only());
         assert!(!config.remote_cache_read_only());
         assert!(!config.run_summary());
+        assert!(!config.allow_no_turbo_json());
     }
 
     #[test]

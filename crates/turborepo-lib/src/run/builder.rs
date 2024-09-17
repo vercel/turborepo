@@ -45,7 +45,7 @@ use crate::{
     run::{scope, task_access::TaskAccess, task_id::TaskName, Error, Run, RunCache},
     shim::TurboState,
     signal::{SignalHandler, SignalSubscriber},
-    turbo_json::{TurboJson, UIMode},
+    turbo_json::{TurboJson, TurboJsonLoader, UIMode},
     DaemonConnector,
 };
 
@@ -65,6 +65,7 @@ pub struct RunBuilder {
     entrypoint_packages: Option<HashSet<PackageName>>,
     should_print_prelude_override: Option<bool>,
     allow_missing_package_manager: bool,
+    allow_no_turbo_json: bool,
 }
 
 impl RunBuilder {
@@ -85,6 +86,7 @@ impl RunBuilder {
             (!cfg!(windows) || matches!(opts.run_opts.ui_mode, UIMode::Tui)),
         );
         let root_turbo_json_path = config.root_turbo_json_path(&base.repo_root);
+        let allow_no_turbo_json = config.allow_no_turbo_json();
 
         let CommandBase {
             repo_root,
@@ -105,6 +107,7 @@ impl RunBuilder {
             should_print_prelude_override: None,
             allow_missing_package_manager,
             root_turbo_json_path,
+            allow_no_turbo_json,
         })
     }
 
@@ -359,19 +362,32 @@ impl RunBuilder {
         let task_access = TaskAccess::new(self.repo_root.clone(), async_cache.clone(), &scm);
         task_access.restore_config().await;
 
-        let root_turbo_json = task_access
-            .load_turbo_json(&self.root_turbo_json_path)
-            .map_or_else(
-                || {
-                    TurboJson::load(
-                        &self.repo_root,
-                        &self.root_turbo_json_path,
-                        &root_package_json,
-                        is_single_package,
-                    )
-                },
-                Result::Ok,
-            )?;
+        let mut turbo_json_loader = if task_access.is_enabled() {
+            TurboJsonLoader::task_access(
+                self.repo_root.clone(),
+                self.root_turbo_json_path.clone(),
+                root_package_json.clone(),
+            )
+        } else if is_single_package {
+            TurboJsonLoader::single_package(
+                self.repo_root.clone(),
+                self.root_turbo_json_path.clone(),
+                root_package_json.clone(),
+            )
+        } else if self.allow_no_turbo_json && !self.root_turbo_json_path.exists() {
+            TurboJsonLoader::workspace_no_turbo_json(
+                self.repo_root.clone(),
+                pkg_dep_graph.packages(),
+            )
+        } else {
+            TurboJsonLoader::workspace(
+                self.repo_root.clone(),
+                self.root_turbo_json_path.clone(),
+                pkg_dep_graph.packages(),
+            )
+        };
+
+        let root_turbo_json = turbo_json_loader.load(&PackageName::Root)?.clone();
 
         pkg_dep_graph.validate()?;
 
@@ -384,11 +400,21 @@ impl RunBuilder {
         )?;
 
         let env_at_execution_start = EnvironmentVariableMap::infer();
-        let mut engine = self.build_engine(&pkg_dep_graph, &root_turbo_json, &filtered_pkgs)?;
+        let mut engine = self.build_engine(
+            &pkg_dep_graph,
+            &root_turbo_json,
+            &filtered_pkgs,
+            turbo_json_loader.clone(),
+        )?;
 
         if self.opts.run_opts.parallel {
             pkg_dep_graph.remove_package_dependencies();
-            engine = self.build_engine(&pkg_dep_graph, &root_turbo_json, &filtered_pkgs)?;
+            engine = self.build_engine(
+                &pkg_dep_graph,
+                &root_turbo_json,
+                &filtered_pkgs,
+                turbo_json_loader,
+            )?;
         }
 
         let color_selector = ColorSelector::default();
@@ -436,18 +462,15 @@ impl RunBuilder {
         pkg_dep_graph: &PackageGraph,
         root_turbo_json: &TurboJson,
         filtered_pkgs: &HashSet<PackageName>,
+        turbo_json_loader: TurboJsonLoader,
     ) -> Result<Engine, Error> {
         let mut engine = EngineBuilder::new(
             &self.repo_root,
             pkg_dep_graph,
+            turbo_json_loader,
             self.opts.run_opts.single_package,
         )
         .with_root_tasks(root_turbo_json.tasks.keys().cloned())
-        .with_turbo_jsons(Some(
-            Some((PackageName::Root, root_turbo_json.clone()))
-                .into_iter()
-                .collect(),
-        ))
         .with_tasks_only(self.opts.run_opts.only)
         .with_workspaces(filtered_pkgs.clone().into_iter().collect())
         .with_tasks(self.opts.run_opts.tasks.iter().map(|task| {

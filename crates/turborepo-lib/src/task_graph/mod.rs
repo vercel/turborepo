@@ -9,7 +9,7 @@ use turborepo_errors::Spanned;
 pub use visitor::{Error as VisitorError, Visitor};
 
 use crate::{
-    cli::OutputLogsMode,
+    cli::{EnvMode, OutputLogsMode},
     run::task_id::{TaskId, TaskName},
     turbo_json::RawTaskDefinition,
 };
@@ -76,6 +76,9 @@ pub struct TaskDefinition {
     // Tasks that take stdin input cannot be cached as their outputs may depend on the
     // input.
     pub interactive: bool,
+
+    // Override for global env mode setting
+    pub env_mode: Option<EnvMode>,
 }
 
 impl Default for TaskDefinition {
@@ -91,6 +94,7 @@ impl Default for TaskDefinition {
             output_logs: Default::default(),
             persistent: Default::default(),
             interactive: Default::default(),
+            env_mode: Default::default(),
         }
     }
 }

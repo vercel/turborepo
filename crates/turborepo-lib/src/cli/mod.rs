@@ -222,6 +222,8 @@ pub struct Args {
     /// should be used.
     #[clap(long, global = true)]
     pub dangerously_disable_package_manager_check: bool,
+    #[clap(long = "experimental-allow-no-turbo-json", hide = true, global = true)]
+    pub allow_no_turbo_json: bool,
     /// Use the `turbo.json` located at the provided path instead of one at the
     /// root of the repository.
     #[clap(long, global = true)]

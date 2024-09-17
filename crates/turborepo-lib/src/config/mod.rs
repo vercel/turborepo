@@ -17,6 +17,7 @@ use thiserror::Error;
 use turbo_json::TurboJsonReader;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_errors::TURBO_SITE;
+use turborepo_repository::package_graph::PackageName;
 
 pub use crate::turbo_json::{RawTurboJson, UIMode};
 use crate::{
@@ -179,6 +180,8 @@ pub enum Error {
         #[source_code]
         text: NamedSource,
     },
+    #[error("Cannot load turbo.json for in {0} single package mode")]
+    InvalidTurboJsonLoad(PackageName),
 }
 
 const DEFAULT_API_URL: &str = "https://vercel.com/api";
@@ -239,6 +242,7 @@ pub struct ConfigurationOptions {
     pub(crate) remote_only: Option<bool>,
     pub(crate) remote_cache_read_only: Option<bool>,
     pub(crate) run_summary: Option<bool>,
+    pub(crate) allow_no_turbo_json: Option<bool>,
 }
 
 #[derive(Default)]
@@ -366,6 +370,10 @@ impl ConfigurationOptions {
         self.root_turbo_json_path
             .clone()
             .unwrap_or_else(|| repo_root.join_component(CONFIG_FILE))
+    }
+
+    pub fn allow_no_turbo_json(&self) -> bool {
+        self.allow_no_turbo_json.unwrap_or_default()
     }
 }
 
