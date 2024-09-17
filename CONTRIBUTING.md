@@ -39,7 +39,7 @@ Dependencies
 
 Building
 
-- Building `turbo` CLI: `cargo build -p turbo`
+- Building `turbo` CLI: `cargo build --package turbo`
 - Using `turbo` to build `turbo` CLI: `./turbow.js`
 
 ### TLS Implementation

@@ -94,10 +94,10 @@ impl PackageTaskEventBuilder {
     }
 
     // event methods
-    pub fn track_framework(&self, framework: &str) -> &Self {
+    pub fn track_framework(&self, framework: String) -> &Self {
         self.track(Event {
             key: "framework".to_string(),
-            value: framework.to_string(),
+            value: framework,
             is_sensitive: EventType::NonSensitive,
             send_in_ci: false,
         });
