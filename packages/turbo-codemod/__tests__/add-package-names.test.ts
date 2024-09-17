@@ -22,13 +22,13 @@ describe("add-package-names", () => {
     // result should be correct
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toMatchInlineSnapshot(`
-      Object {
-        "packages/ui/package.json": Object {
+      {
+        "packages/ui/package.json": {
           "action": "modified",
           "additions": 1,
           "deletions": 0,
         },
-        "packages/utils/package.json": Object {
+        "packages/utils/package.json": {
           "action": "modified",
           "additions": 1,
           "deletions": 0,
@@ -64,8 +64,8 @@ describe("add-package-names", () => {
     // result should be correct
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toMatchInlineSnapshot(`
-      Object {
-        "packages/utils/package.json": Object {
+      {
+        "packages/utils/package.json": {
           "action": "modified",
           "additions": 1,
           "deletions": 1,
@@ -100,7 +100,7 @@ describe("add-package-names", () => {
 
     // result should be correct
     expect(result.fatalError).toBeUndefined();
-    expect(result.changes).toMatchInlineSnapshot(`Object {}`);
+    expect(result.changes).toMatchInlineSnapshot(`{}`);
 
     // validate unique names
     const names = new Set();
@@ -129,7 +129,7 @@ describe("add-package-names", () => {
 
     // result should be correct
     expect(result.fatalError).toBeUndefined();
-    expect(result.changes).toMatchInlineSnapshot(`Object {}`);
+    expect(result.changes).toMatchInlineSnapshot(`{}`);
 
     // validate unique names
     const names = new Set();

@@ -30,13 +30,13 @@ describe("create-turbo-config", () => {
     // result should be correct
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toMatchInlineSnapshot(`
-      Object {
-        "package.json": Object {
+      {
+        "package.json": {
           "action": "modified",
           "additions": 0,
           "deletions": 1,
         },
-        "turbo.json": Object {
+        "turbo.json": {
           "action": "modified",
           "additions": 1,
           "deletions": 0,
@@ -67,13 +67,13 @@ describe("create-turbo-config", () => {
     // result should be correct
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toMatchInlineSnapshot(`
-      Object {
-        "package.json": Object {
+      {
+        "package.json": {
           "action": "modified",
           "additions": 0,
           "deletions": 1,
         },
-        "turbo.json": Object {
+        "turbo.json": {
           "action": "modified",
           "additions": 1,
           "deletions": 0,
@@ -89,13 +89,13 @@ describe("create-turbo-config", () => {
     // result should be correct
     expect(repeatResult.fatalError).toBeUndefined();
     expect(repeatResult.changes).toMatchInlineSnapshot(`
-      Object {
-        "package.json": Object {
+      {
+        "package.json": {
           "action": "unchanged",
           "additions": 0,
           "deletions": 0,
         },
-        "turbo.json": Object {
+        "turbo.json": {
           "action": "unchanged",
           "additions": 0,
           "deletions": 0,
@@ -126,13 +126,13 @@ describe("create-turbo-config", () => {
     // result should be correct
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toMatchInlineSnapshot(`
-      Object {
-        "package.json": Object {
+      {
+        "package.json": {
           "action": "skipped",
           "additions": 0,
           "deletions": 1,
         },
-        "turbo.json": Object {
+        "turbo.json": {
           "action": "skipped",
           "additions": 1,
           "deletions": 0,
@@ -163,13 +163,13 @@ describe("create-turbo-config", () => {
     // result should be correct
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toMatchInlineSnapshot(`
-      Object {
-        "package.json": Object {
+      {
+        "package.json": {
           "action": "modified",
           "additions": 0,
           "deletions": 1,
         },
-        "turbo.json": Object {
+        "turbo.json": {
           "action": "modified",
           "additions": 1,
           "deletions": 0,
@@ -200,13 +200,13 @@ describe("create-turbo-config", () => {
     // result should be correct
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toMatchInlineSnapshot(`
-      Object {
-        "package.json": Object {
+      {
+        "package.json": {
           "action": "skipped",
           "additions": 0,
           "deletions": 1,
         },
-        "turbo.json": Object {
+        "turbo.json": {
           "action": "skipped",
           "additions": 1,
           "deletions": 0,
@@ -241,13 +241,13 @@ describe("create-turbo-config", () => {
     // result should be correct
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toMatchInlineSnapshot(`
-      Object {
-        "package.json": Object {
+      {
+        "package.json": {
           "action": "unchanged",
           "additions": 0,
           "deletions": 0,
         },
-        "turbo.json": Object {
+        "turbo.json": {
           "action": "unchanged",
           "additions": 0,
           "deletions": 0,
@@ -305,13 +305,13 @@ describe("create-turbo-config", () => {
     // result should be correct
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toMatchInlineSnapshot(`
-      Object {
-        "package.json": Object {
+      {
+        "package.json": {
           "action": "unchanged",
           "additions": 0,
           "deletions": 0,
         },
-        "turbo.json": Object {
+        "turbo.json": {
           "action": "unchanged",
           "additions": 0,
           "deletions": 0,
@@ -348,13 +348,13 @@ describe("create-turbo-config", () => {
     // result should be correct
     expect(result.fatalError?.message).toBeUndefined();
     expect(result.changes).toMatchInlineSnapshot(`
-      Object {
-        "package.json": Object {
+      {
+        "package.json": {
           "action": "unchanged",
           "additions": 0,
           "deletions": 0,
         },
-        "turbo.json": Object {
+        "turbo.json": {
           "action": "unchanged",
           "additions": 0,
           "deletions": 0,
@@ -395,14 +395,14 @@ describe("create-turbo-config", () => {
       "Encountered an error while transforming files"
     );
     expect(result.changes).toMatchInlineSnapshot(`
-      Object {
-        "package.json": Object {
+      {
+        "package.json": {
           "action": "error",
           "additions": 0,
           "deletions": 1,
           "error": [Error: could not write file],
         },
-        "turbo.json": Object {
+        "turbo.json": {
           "action": "error",
           "additions": 1,
           "deletions": 0,

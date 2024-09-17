@@ -44,12 +44,12 @@ describe("migrate-env-var-dependencies", () => {
       const { hasKeys, envVars } = hasLegacyEnvVarDependencies(config);
       expect(hasKeys).toEqual(true);
       expect(envVars).toMatchInlineSnapshot(`
-              Array [
-                "$GLOBAL_ENV_KEY",
-                "$TASK_ENV_KEY",
-                "$ANOTHER_ENV_KEY",
-              ]
-          `);
+        [
+          "$GLOBAL_ENV_KEY",
+          "$TASK_ENV_KEY",
+          "$ANOTHER_ENV_KEY",
+        ]
+      `);
     });
 
     it("finds env keys in legacy turbo.json - multiple pipeline keys", () => {
@@ -59,13 +59,13 @@ describe("migrate-env-var-dependencies", () => {
       const { hasKeys, envVars } = hasLegacyEnvVarDependencies(config);
       expect(hasKeys).toEqual(true);
       expect(envVars).toMatchInlineSnapshot(`
-              Array [
-                "$GLOBAL_ENV_KEY",
-                "$MY_ENV",
-                "$TASK_ENV_KEY",
-                "$ANOTHER_ENV_KEY",
-              ]
-          `);
+        [
+          "$GLOBAL_ENV_KEY",
+          "$MY_ENV",
+          "$TASK_ENV_KEY",
+          "$ANOTHER_ENV_KEY",
+        ]
+      `);
     });
 
     it("finds env keys in legacy turbo.json - no keys", () => {
@@ -76,7 +76,7 @@ describe("migrate-env-var-dependencies", () => {
       });
       const { hasKeys, envVars } = hasLegacyEnvVarDependencies(config);
       expect(hasKeys).toEqual(false);
-      expect(envVars).toMatchInlineSnapshot(`Array []`);
+      expect(envVars).toMatchInlineSnapshot(`[]`);
     });
 
     it("finds env keys in turbo.json - no global", () => {
@@ -85,7 +85,7 @@ describe("migrate-env-var-dependencies", () => {
       });
       expect(hasKeys).toEqual(true);
       expect(envVars).toMatchInlineSnapshot(`
-        Array [
+        [
           "$cool",
         ]
       `);
@@ -99,13 +99,13 @@ describe("migrate-env-var-dependencies", () => {
       const pipeline = migratePipeline(build);
       expect(pipeline).toHaveProperty("env");
       expect(pipeline.env).toMatchInlineSnapshot(`
-        Array [
+        [
           "TASK_ENV_KEY",
           "ANOTHER_ENV_KEY",
         ]
       `);
       expect(pipeline.dependsOn).toMatchInlineSnapshot(`
-        Array [
+        [
           "^build",
         ]
       `);
@@ -117,7 +117,7 @@ describe("migrate-env-var-dependencies", () => {
       const pipeline = migratePipeline(test);
       expect(pipeline.env).toBeUndefined();
       expect(pipeline.dependsOn).toMatchInlineSnapshot(`
-        Array [
+        [
           "^build",
         ]
       `);
@@ -131,12 +131,12 @@ describe("migrate-env-var-dependencies", () => {
       const pipeline = migratePipeline(test);
       expect(pipeline).toHaveProperty("env");
       expect(pipeline.env).toMatchInlineSnapshot(`
-        Array [
+        [
           "$MY_ENV",
         ]
       `);
       expect(pipeline.dependsOn).toMatchInlineSnapshot(`
-        Array [
+        [
           "^build",
         ]
       `);
@@ -152,13 +152,13 @@ describe("migrate-env-var-dependencies", () => {
       const pipeline = migratePipeline(test);
       expect(pipeline).toHaveProperty("env");
       expect(pipeline.env).toMatchInlineSnapshot(`
-        Array [
+        [
           "$MY_ENV",
           "SUPER_COOL",
         ]
       `);
       expect(pipeline.dependsOn).toMatchInlineSnapshot(`
-        Array [
+        [
           "^build",
         ]
       `);
@@ -174,13 +174,13 @@ describe("migrate-env-var-dependencies", () => {
       const pipeline = migratePipeline(test);
       expect(pipeline).toHaveProperty("env");
       expect(pipeline.env).toMatchInlineSnapshot(`
-        Array [
+        [
           "$MY_ENV",
           "MY_ENV",
         ]
       `);
       expect(pipeline.dependsOn).toMatchInlineSnapshot(`
-        Array [
+        [
           "^build",
         ]
       `);
@@ -192,37 +192,37 @@ describe("migrate-env-var-dependencies", () => {
       const config = getTestTurboConfig();
       const pipeline = migrateConfig(config);
       expect(pipeline).toMatchInlineSnapshot(`
-        Object {
+        {
           "$schema": "./docs/public/schema.json",
-          "globalEnv": Array [
+          "globalEnv": [
             "GLOBAL_ENV_KEY",
           ],
-          "pipeline": Object {
-            "build": Object {
-              "dependsOn": Array [
+          "pipeline": {
+            "build": {
+              "dependsOn": [
                 "^build",
               ],
-              "env": Array [
+              "env": [
                 "TASK_ENV_KEY",
                 "ANOTHER_ENV_KEY",
               ],
-              "outputs": Array [
+              "outputs": [
                 "dist/**/*",
                 ".next/**/*",
                 "!.next/cache/**",
               ],
             },
-            "dev": Object {
+            "dev": {
               "cache": false,
             },
-            "lint": Object {
-              "outputs": Array [],
+            "lint": {
+              "outputs": [],
             },
-            "test": Object {
-              "dependsOn": Array [
+            "test": {
+              "dependsOn": [
                 "^build",
               ],
-              "outputs": Array [
+              "outputs": [
                 "coverage/**/*",
               ],
             },
@@ -240,30 +240,30 @@ describe("migrate-env-var-dependencies", () => {
       });
       const pipeline = migrateConfig(config);
       expect(pipeline).toMatchInlineSnapshot(`
-        Object {
+        {
           "$schema": "./docs/public/schema.json",
-          "pipeline": Object {
-            "build": Object {
-              "dependsOn": Array [
+          "pipeline": {
+            "build": {
+              "dependsOn": [
                 "^build",
               ],
-              "outputs": Array [
+              "outputs": [
                 "dist/**/*",
                 ".next/**/*",
                 "!.next/cache/**",
               ],
             },
-            "dev": Object {
+            "dev": {
               "cache": false,
             },
-            "lint": Object {
-              "outputs": Array [],
+            "lint": {
+              "outputs": [],
             },
-            "test": Object {
-              "dependsOn": Array [
+            "test": {
+              "dependsOn": [
                 "^build",
               ],
-              "outputs": Array [
+              "outputs": [
                 "coverage/**/*",
               ],
             },
@@ -280,41 +280,41 @@ describe("migrate-env-var-dependencies", () => {
       });
       const pipeline = migrateConfig(config);
       expect(pipeline).toMatchInlineSnapshot(`
-        Object {
+        {
           "$schema": "./docs/public/schema.json",
-          "globalEnv": Array [
+          "globalEnv": [
             "GLOBAL_ENV_KEY",
           ],
-          "pipeline": Object {
-            "build": Object {
-              "dependsOn": Array [
+          "pipeline": {
+            "build": {
+              "dependsOn": [
                 "^build",
               ],
-              "env": Array [
+              "env": [
                 "TASK_ENV_KEY",
                 "ANOTHER_ENV_KEY",
               ],
-              "outputs": Array [
+              "outputs": [
                 "dist/**/*",
                 ".next/**/*",
                 "!.next/cache/**",
               ],
             },
-            "dev": Object {
+            "dev": {
               "cache": false,
             },
-            "lint": Object {
-              "outputs": Array [],
+            "lint": {
+              "outputs": [],
             },
-            "test": Object {
-              "dependsOn": Array [
+            "test": {
+              "dependsOn": [
                 "^build",
               ],
-              "env": Array [
+              "env": [
                 "$MY_ENV",
                 "SUPER_COOL",
               ],
-              "outputs": Array [
+              "outputs": [
                 "coverage/**/*",
               ],
             },
@@ -331,41 +331,41 @@ describe("migrate-env-var-dependencies", () => {
       });
       const pipeline = migrateConfig(config);
       expect(pipeline).toMatchInlineSnapshot(`
-        Object {
+        {
           "$schema": "./docs/public/schema.json",
-          "globalEnv": Array [
+          "globalEnv": [
             "GLOBAL_ENV_KEY",
           ],
-          "pipeline": Object {
-            "build": Object {
-              "dependsOn": Array [
+          "pipeline": {
+            "build": {
+              "dependsOn": [
                 "^build",
               ],
-              "env": Array [
+              "env": [
                 "TASK_ENV_KEY",
                 "ANOTHER_ENV_KEY",
               ],
-              "outputs": Array [
+              "outputs": [
                 "dist/**/*",
                 ".next/**/*",
                 "!.next/cache/**",
               ],
             },
-            "dev": Object {
+            "dev": {
               "cache": false,
             },
-            "lint": Object {
-              "outputs": Array [],
+            "lint": {
+              "outputs": [],
             },
-            "test": Object {
-              "dependsOn": Array [
+            "test": {
+              "dependsOn": [
                 "^build",
               ],
-              "env": Array [
+              "env": [
                 "$MY_ENV",
                 "MY_ENV",
               ],
-              "outputs": Array [
+              "outputs": [
                 "coverage/**/*",
               ],
             },
@@ -421,8 +421,8 @@ describe("migrate-env-var-dependencies", () => {
 
       expect(result.fatalError).toBeUndefined();
       expect(result.changes).toMatchInlineSnapshot(`
-        Object {
-          "turbo.json": Object {
+        {
+          "turbo.json": {
             "action": "modified",
             "additions": 4,
             "deletions": 4,
@@ -495,18 +495,18 @@ describe("migrate-env-var-dependencies", () => {
 
       expect(result.fatalError).toBeUndefined();
       expect(result.changes).toMatchInlineSnapshot(`
-        Object {
-          "apps/web/turbo.json": Object {
+        {
+          "apps/web/turbo.json": {
             "action": "modified",
             "additions": 1,
             "deletions": 0,
           },
-          "packages/ui/turbo.json": Object {
+          "packages/ui/turbo.json": {
             "action": "modified",
             "additions": 1,
             "deletions": 1,
           },
-          "turbo.json": Object {
+          "turbo.json": {
             "action": "modified",
             "additions": 4,
             "deletions": 4,
@@ -555,8 +555,8 @@ describe("migrate-env-var-dependencies", () => {
 
       expect(result.fatalError).toBeUndefined();
       expect(result.changes).toMatchInlineSnapshot(`
-        Object {
-          "turbo.json": Object {
+        {
+          "turbo.json": {
             "action": "modified",
             "additions": 4,
             "deletions": 4,
@@ -572,8 +572,8 @@ describe("migrate-env-var-dependencies", () => {
 
       expect(repeatResult.fatalError).toBeUndefined();
       expect(repeatResult.changes).toMatchInlineSnapshot(`
-        Object {
-          "turbo.json": Object {
+        {
+          "turbo.json": {
             "action": "unchanged",
             "additions": 0,
             "deletions": 0,
@@ -601,8 +601,8 @@ describe("migrate-env-var-dependencies", () => {
 
       expect(result.fatalError).toBeUndefined();
       expect(result.changes).toMatchInlineSnapshot(`
-        Object {
-          "turbo.json": Object {
+        {
+          "turbo.json": {
             "action": "skipped",
             "additions": 4,
             "deletions": 4,
@@ -651,8 +651,8 @@ describe("migrate-env-var-dependencies", () => {
 
       expect(result.fatalError).toBeUndefined();
       expect(result.changes).toMatchInlineSnapshot(`
-        Object {
-          "turbo.json": Object {
+        {
+          "turbo.json": {
             "action": "modified",
             "additions": 4,
             "deletions": 4,
@@ -680,8 +680,8 @@ describe("migrate-env-var-dependencies", () => {
 
       expect(result.fatalError).toBeUndefined();
       expect(result.changes).toMatchInlineSnapshot(`
-        Object {
-          "turbo.json": Object {
+        {
+          "turbo.json": {
             "action": "skipped",
             "additions": 4,
             "deletions": 4,
@@ -708,8 +708,8 @@ describe("migrate-env-var-dependencies", () => {
 
       expect(result.fatalError).toBeUndefined();
       expect(result.changes).toMatchInlineSnapshot(`
-        Object {
-          "turbo.json": Object {
+        {
+          "turbo.json": {
             "action": "unchanged",
             "additions": 0,
             "deletions": 0,

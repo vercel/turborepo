@@ -31,8 +31,8 @@ describe("rename-pipeline", () => {
 
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toMatchInlineSnapshot(`
-      Object {
-        "turbo.json": Object {
+      {
+        "turbo.json": {
           "action": "modified",
           "additions": 1,
           "deletions": 1,
@@ -94,23 +94,23 @@ describe("rename-pipeline", () => {
 
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toMatchInlineSnapshot(`
-      Object {
-        "apps/docs/turbo.json": Object {
+      {
+        "apps/docs/turbo.json": {
           "action": "modified",
           "additions": 1,
           "deletions": 1,
         },
-        "apps/web/turbo.json": Object {
+        "apps/web/turbo.json": {
           "action": "modified",
           "additions": 1,
           "deletions": 1,
         },
-        "packages/ui/turbo.json": Object {
+        "packages/ui/turbo.json": {
           "action": "modified",
           "additions": 1,
           "deletions": 1,
         },
-        "turbo.json": Object {
+        "turbo.json": {
           "action": "modified",
           "additions": 1,
           "deletions": 1,
