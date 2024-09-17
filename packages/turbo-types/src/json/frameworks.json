@@ -1,7 +1,16 @@
 [
   {
+    "slug": "astro",
+    "name": "Astro",
+    "envWildcards": ["PUBLIC_*"],
+    "dependencyMatch": {
+      "strategy": "all",
+      "dependencies": ["astro"]
+    }
+  },
+  {
     "slug": "blitzjs",
-    "name": "Blitz.js",
+    "name": "Blitz",
     "envWildcards": ["NEXT_PUBLIC_*"],
     "dependencyMatch": {
       "strategy": "all",
@@ -9,12 +18,12 @@
     }
   },
   {
-    "slug": "nextjs",
-    "name": "Next.js",
-    "envWildcards": ["NEXT_PUBLIC_*"],
+    "slug": "create-react-app",
+    "name": "Create React App",
+    "envWildcards": ["REACT_APP_*"],
     "dependencyMatch": {
-      "strategy": "all",
-      "dependencies": ["next"]
+      "strategy": "some",
+      "dependencies": ["react-scripts", "react-dev-utils"]
     }
   },
   {
@@ -27,48 +36,12 @@
     }
   },
   {
-    "slug": "astro",
-    "name": "Astro",
-    "envWildcards": ["PUBLIC_*"],
+    "slug": "nextjs",
+    "name": "Next.js",
+    "envWildcards": ["NEXT_PUBLIC_*"],
     "dependencyMatch": {
       "strategy": "all",
-      "dependencies": ["astro"]
-    }
-  },
-  {
-    "slug": "solidstart",
-    "name": "SolidStart",
-    "envWildcards": ["VITE_*"],
-    "dependencyMatch": {
-      "strategy": "all",
-      "dependencies": ["solid-js", "solid-start"]
-    }
-  },
-  {
-    "slug": "vue",
-    "name": "Vue",
-    "envWildcards": ["VUE_APP_*"],
-    "dependencyMatch": {
-      "strategy": "all",
-      "dependencies": ["@vue/cli-service"]
-    }
-  },
-  {
-    "slug": "sveltekit",
-    "name": "SvelteKit",
-    "envWildcards": ["VITE_*", "PUBLIC_*"],
-    "dependencyMatch": {
-      "strategy": "all",
-      "dependencies": ["@sveltejs/kit"]
-    }
-  },
-  {
-    "slug": "create-react-app",
-    "name": "Create React App",
-    "envWildcards": ["REACT_APP_*"],
-    "dependencyMatch": {
-      "strategy": "some",
-      "dependencies": ["react-scripts", "react-dev-utils"]
+      "dependencies": ["next"]
     }
   },
   {
@@ -91,11 +64,38 @@
   },
   {
     "slug": "redwoodjs",
-    "name": "Redwood.js",
+    "name": "RedwoodJS",
     "envWildcards": ["REDWOOD_ENV_*"],
     "dependencyMatch": {
       "strategy": "all",
       "dependencies": ["@redwoodjs/core"]
+    }
+  },
+  {
+    "slug": "sanity",
+    "name": "Sanity Studio",
+    "envWildcards": ["SANITY_STUDIO_*"],
+    "dependencyMatch": {
+      "strategy": "all",
+      "dependencies": ["@sanity/cli"]
+    }
+  },
+  {
+    "slug": "solidstart",
+    "name": "Solid",
+    "envWildcards": ["VITE_*"],
+    "dependencyMatch": {
+      "strategy": "all",
+      "dependencies": ["solid-js", "solid-start"]
+    }
+  },
+  {
+    "slug": "sveltekit",
+    "name": "SvelteKit",
+    "envWildcards": ["VITE_*", "PUBLIC_*"],
+    "dependencyMatch": {
+      "strategy": "all",
+      "dependencies": ["@sveltejs/kit"]
     }
   },
   {
@@ -108,12 +108,12 @@
     }
   },
   {
-    "slug": "sanity",
-    "name": "Sanity",
-    "envWildcards": ["SANITY_STUDIO_*"],
+    "slug": "vue",
+    "name": "Vue",
+    "envWildcards": ["VUE_APP_*"],
     "dependencyMatch": {
       "strategy": "all",
-      "dependencies": ["@sanity/cli"]
+      "dependencies": ["@vue/cli-service"]
     }
   }
 ]
