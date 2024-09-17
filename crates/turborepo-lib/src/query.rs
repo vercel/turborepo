@@ -44,9 +44,6 @@ struct Array<T: OutputType> {
     length: usize,
 }
 
-unsafe impl<T: Send + OutputType> Send for Array<T> {}
-unsafe impl<T: Sync + OutputType> Sync for Array<T> {}
-
 impl<T: OutputType> FromIterator<T> for Array<T> {
     fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
         let items: Vec<_> = iter.into_iter().collect();
