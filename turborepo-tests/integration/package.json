@@ -2,7 +2,7 @@
   "name": "turborepo-tests-integration",
   "scripts": {
     "test": "prysk tests",
-    "test:interactive": "prysk --interactive tests",
+    "test:interactive": "PRYSK_INTERACTIVE=true prysk tests",
     "test:parallel": ".cram_env/bin/pytest -n auto tests --prysk-shell=`which bash`",
     "pretest:parallel": ".cram_env/bin/pip3 install --quiet pytest \"prysk[pytest-plugin]\" pytest-xdist"
   },

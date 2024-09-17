@@ -42,15 +42,17 @@ Do the same thing with the `ls` command
 
 
 Do the same thing with the `query` command
-  $ ${TURBO} query "query { affectedPackages { name } }"
+  $ ${TURBO} query "query { affectedPackages { items { name } } }"
    WARNING  query command is experimental and may change in the future
   {
     "data": {
-      "affectedPackages": [
-        {
-          "name": "my-app"
-        }
-      ]
+      "affectedPackages": {
+        "items": [
+          {
+            "name": "my-app"
+          }
+        ]
+      }
     }
   }
 
@@ -88,15 +90,17 @@ Do the same thing with the `ls` command
 
 
 Do the same thing with the `query` command
-  $ ${TURBO} query "query { affectedPackages { name } }"
+  $ ${TURBO} query "query { affectedPackages { items { name } } }"
    WARNING  query command is experimental and may change in the future
   {
     "data": {
-      "affectedPackages": [
-        {
-          "name": "my-app"
-        }
-      ]
+      "affectedPackages": {
+        "items": [
+          {
+            "name": "my-app"
+          }
+        ]
+      }
     }
   }
 
@@ -130,15 +134,17 @@ Do the same thing with the `ls` command
 
 
 Do the same thing with the `query` command
-  $ ${TURBO} query "query { affectedPackages { name } }"
+  $ ${TURBO} query "query { affectedPackages { items { name } } }"
    WARNING  query command is experimental and may change in the future
   {
     "data": {
-      "affectedPackages": [
-        {
-          "name": "my-app"
-        }
-      ]
+      "affectedPackages": {
+        "items": [
+          {
+            "name": "my-app"
+          }
+        ]
+      }
     }
   }
 
@@ -163,11 +169,13 @@ Do the same thing with the `ls` command
 
 
 Do the same thing with the `query` command
-  $ ${TURBO} query "query { affectedPackages(base: \"HEAD\") { name } }"
+  $ ${TURBO} query "query { affectedPackages(base: \"HEAD\") { items { name } } }"
    WARNING  query command is experimental and may change in the future
   {
     "data": {
-      "affectedPackages": []
+      "affectedPackages": {
+        "items": []
+      }
     }
   }
 
@@ -192,11 +200,13 @@ Do the same thing with the `ls` command
 
 
 Do the same thing with the `query` command
-  $ ${TURBO} query "query { affectedPackages(head: \"main\") { name } }"
+  $ ${TURBO} query "query { affectedPackages(head: \"main\") { items { name } } }"
    WARNING  query command is experimental and may change in the future
   {
     "data": {
-      "affectedPackages": []
+      "affectedPackages": {
+        "items": []
+      }
     }
   }
 
@@ -235,15 +245,17 @@ Do the same thing with the `ls` command
 
 
 Do the same thing with the `query` command
-  $ ${TURBO} query "query { affectedPackages { name } }"
+  $ ${TURBO} query "query { affectedPackages { items { name } } }"
    WARNING  query command is experimental and may change in the future
   {
     "data": {
-      "affectedPackages": [
-        {
-          "name": "my-app"
-        }
-      ]
+      "affectedPackages": {
+        "items": [
+          {
+            "name": "my-app"
+          }
+        ]
+      }
     }
   }
 
@@ -277,26 +289,28 @@ Do the same thing with the `ls` command
 
 
 Do the same thing with the `query` command
-  $ ${TURBO} query "query { affectedPackages { name } }"
+  $ ${TURBO} query "query { affectedPackages { items { name } } }"
    WARNING  query command is experimental and may change in the future
    WARNING  unable to detect git range, assuming all files have changed: git error: fatal: no merge base found
   
   {
     "data": {
-      "affectedPackages": [
-        {
-          "name": "//"
-        },
-        {
-          "name": "another"
-        },
-        {
-          "name": "my-app"
-        },
-        {
-          "name": "util"
-        }
-      ]
+      "affectedPackages": {
+        "items": [
+          {
+            "name": "//"
+          },
+          {
+            "name": "another"
+          },
+          {
+            "name": "my-app"
+          },
+          {
+            "name": "util"
+          }
+        ]
+      }
     }
   }
 
@@ -330,25 +344,27 @@ Do the same thing with the `ls` command
 
 
 Do the same thing with the `query` command
-  $ ${TURBO} query "query { affectedPackages { name } }"
+  $ ${TURBO} query "query { affectedPackages { items { name } } }"
    WARNING  query command is experimental and may change in the future
    WARNING  unable to detect git range, assuming all files have changed: git error: fatal: no merge base found
   
   {
     "data": {
-      "affectedPackages": [
-        {
-          "name": "//"
-        },
-        {
-          "name": "another"
-        },
-        {
-          "name": "my-app"
-        },
-        {
-          "name": "util"
-        }
-      ]
+      "affectedPackages": {
+        "items": [
+          {
+            "name": "//"
+          },
+          {
+            "name": "another"
+          },
+          {
+            "name": "my-app"
+          },
+          {
+            "name": "util"
+          }
+        ]
+      }
     }
   }

@@ -452,7 +452,7 @@ impl Package {
     }
 
     /// The downstream packages that depend on this package, indirectly
-    async fn indirect_dependents(&self) -> Result<Vec<Package>, Error> {
+    async fn indirect_dependents(&self) -> Result<Array<Package>, Error> {
         let node: PackageNode = PackageNode::Workspace(self.name.clone());
         let immediate_dependents = self
             .run
@@ -475,7 +475,7 @@ impl Package {
     }
 
     /// The upstream packages that this package depends on, indirectly
-    async fn indirect_dependencies(&self) -> Result<Vec<Package>, Error> {
+    async fn indirect_dependencies(&self) -> Result<Array<Package>, Error> {
         let node: PackageNode = PackageNode::Workspace(self.name.clone());
         let immediate_dependencies = self
             .run
