@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use async_graphql::Object;
+use itertools::Itertools;
 use turbo_trace::Tracer;
 use turbopath::AbsoluteSystemPathBuf;
 
@@ -51,6 +52,7 @@ impl File {
             .files
             .into_iter()
             .map(|path| File::new(self.run.clone(), path))
+            .sorted_by(|a, b| a.path.cmp(&b.path))
             .collect())
     }
 }
