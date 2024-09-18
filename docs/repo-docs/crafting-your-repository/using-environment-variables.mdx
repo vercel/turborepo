@@ -3,9 +3,11 @@ title: Using environment variables
 description: Learn how to handle environments for your applications.
 ---
 
+import { Fragment } from 'react';
 import { Callout } from '#/components/callout';
 import { Tabs, Tab } from '#/components/tabs';
 import { Accordion, Accordions } from '#/components/accordion';
+import frameworks from '@turbo/types/src/json/frameworks.json';
 
 Environment variable inputs are a vital part of your applications that you'll need to account for in your Turborepo configuration.
 
@@ -56,21 +58,33 @@ Turborepo needs to be aware of your environment variables to account for changes
 
 Turborepo automatically adds prefix wildcards to your [`env`](/repo/docs/reference/configuration#env) key for common frameworks. If you're using one of the frameworks below in a package, you don't need to specify environment variables with these prefixes:
 
-| Framework        | `env` wildcard      |
-| ---------------- | ------------------- |
-| Astro            | `PUBLIC_*`          |
-| Blitz            | `NEXT_PUBLIC_*`     |
-| Create React App | `REACT_APP_*`       |
-| Gatsby           | `GATSBY_*`          |
-| Next.js          | `NEXT_PUBLIC_*`     |
-| Nitro            | `NITRO_*`           |
-| Nuxt.js          | `NUXT_*`, `NITRO_*` |
-| RedwoodJS        | `REDWOOD_ENV_*`     |
-| Sanity Studio    | `SANITY_STUDIO_*`   |
-| Solid            | `VITE_*`            |
-| SvelteKit        | `VITE_*`            |
-| Vite             | `VITE_*`            |
-| Vue              | `VUE_APP_*`         |
+<table>
+  <thead>
+    <tr>
+      <th>Framework</th>
+      <th>
+        <span>
+          <code>env</code> wildcards
+        </span>
+      </th>
+    </tr>
+  </thead>
+  <tbody>
+    {frameworks.map(({ name, envWildcards }) => (
+      <tr key={name}>
+        <td>{name}</td>
+        <td>
+          {envWildcards.map((envWildcard, index) => (
+            <Fragment key={envWildcard}>
+              {index !== 0 ? <span>, </span> : null}
+              <code>{envWildcard}</code>
+            </Fragment>
+          ))}
+        </td>
+      </tr>
+    ))}
+  </tbody>
+</table>
 
 <Callout type="good-to-know">Framework inference is per-package.</Callout>
 
