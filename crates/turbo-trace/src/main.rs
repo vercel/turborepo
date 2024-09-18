@@ -3,10 +3,8 @@ mod tracer;
 
 use camino::Utf8PathBuf;
 use clap::Parser;
-use thiserror::Error;
 use tracer::Tracer;
-use turbo_trace::Error;
-use turbopath::AbsoluteSystemPathBuf;
+use turbopath::{AbsoluteSystemPathBuf, PathError};
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -17,7 +15,7 @@ struct Args {
     files: Vec<Utf8PathBuf>,
 }
 
-fn main() -> Result<(), Error> {
+fn main() -> Result<(), PathError> {
     let args = Args::parse();
 
     let abs_cwd = if let Some(cwd) = args.cwd {
