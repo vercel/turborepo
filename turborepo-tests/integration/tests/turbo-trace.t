@@ -25,7 +25,7 @@ Setup
             "path": "foo.js"
           },
           {
-            "path": "node_modules/repeat-string/index.js"
+            "path": "node_modules(\/|\\\\)repeat-string(\/|\\\\)index.js" (re)
           }
         ]
       }
