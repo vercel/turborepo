@@ -61,11 +61,13 @@ impl Tracer {
             source_map: Arc::new(SourceMap::default()),
         })
     }
+
     pub fn trace(mut self) -> TraceResult {
         let mut options = ResolveOptions::default()
             .with_builtin_modules(true)
             .with_force_extension(EnforceExtension::Disabled)
-            .with_extension(".ts");
+            .with_extension(".ts")
+            .with_extension(".tsx");
         if let Some(ts_config) = self.ts_config.take() {
             options.tsconfig = Some(TsconfigOptions {
                 config_file: ts_config.into(),

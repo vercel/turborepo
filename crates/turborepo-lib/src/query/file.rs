@@ -43,6 +43,7 @@ impl File {
             self.run.repo_root().to_owned(),
             None,
         )?;
+
         let result = tracer.trace();
         if !result.errors.is_empty() {
             return Err(Error::Trace(result.errors));
@@ -51,6 +52,8 @@ impl File {
         Ok(result
             .files
             .into_iter()
+            // Filter out the file we're looking at
+            .filter(|file| file != &self.path)
             .map(|path| File::new(self.run.clone(), path))
             .sorted_by(|a, b| a.path.cmp(&b.path))
             .collect())
