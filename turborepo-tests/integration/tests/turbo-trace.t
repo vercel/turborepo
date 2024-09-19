@@ -23,6 +23,9 @@ Setup
           },
           {
             "path": "foo.js"
+          },
+          {
+            "path": "node_modules/repeat-string/index.js"
           }
         ]
       }
@@ -41,5 +44,17 @@ Setup
   }
 
   $ ${TURBO} query "query { file(path: \"circular.ts\") { path, dependencies { path } } }"
+   WARNING  query command is experimental and may change in the future
+  {
+    "data": {
+      "file": {
+        "path": "circular.ts",
+        "dependencies": [
+          {
+            "path": "circular2.ts"
+          }
+        ]
+      }
+    }
+  }
 
-  $ ${TURBO} query "query { file(path: \"main.ts\") { path, dependencies(traceNodeModules: false) { path } } }"
