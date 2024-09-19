@@ -117,13 +117,13 @@ impl Git {
             return Some(pr);
         }
 
-        // we must be in a push event of a PR
+        // we must be in a push event
         // try reading from the GITHUB_EVENT_PATH file
         if let Ok(event_path) = env::var("GITHUB_EVENT_PATH") {
             // Try to open the event file and read the contents
             let mut file = File::open(event_path).ok()?;
             let mut data = String::new();
-            file.read_to_string(&mut data).ok?;
+            file.read_to_string(&mut data).ok()?;
 
             // Parse the JSON data from the file
             let json: Value = serde_json::from_str(&data).ok()?;
@@ -147,7 +147,7 @@ impl Git {
         }
 
         if let Some(github_base_ref) = Self::get_github_base_ref() {
-            return Ok(github_base_ref.as_str());
+            return Ok(Box::leak(github_base_ref.into_boxed_str()));
         }
 
         let main_result = self.execute_git_command(&["rev-parse", "main"], "");
