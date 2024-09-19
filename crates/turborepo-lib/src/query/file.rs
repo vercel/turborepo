@@ -39,8 +39,8 @@ impl File {
 
     async fn dependencies(&self) -> Result<Vec<File>, Error> {
         let tracer = Tracer::new(
-            vec![self.path.clone()],
             self.run.repo_root().to_owned(),
+            vec![self.path.clone()],
             None,
         )?;
 

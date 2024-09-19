@@ -15,7 +15,6 @@ use turbopath::{AbsoluteSystemPathBuf, PathError};
 use crate::import_finder::ImportFinder;
 
 pub struct Tracer {
-    cwd: AbsoluteSystemPathBuf,
     files: Vec<AbsoluteSystemPathBuf>,
     seen: HashSet<AbsoluteSystemPathBuf>,
     ts_config: Option<AbsoluteSystemPathBuf>,
@@ -28,6 +27,8 @@ pub enum TraceError {
     FileNotFound(AbsoluteSystemPathBuf),
     #[error(transparent)]
     PathEncoding(PathError),
+    #[error("tracing a root file `{0}`, no parent found")]
+    RootFile(AbsoluteSystemPathBuf),
     #[error("failed to resolve import")]
     Resolve {
         #[label("import here")]
@@ -44,8 +45,8 @@ pub struct TraceResult {
 
 impl Tracer {
     pub fn new(
-        files: Vec<AbsoluteSystemPathBuf>,
         cwd: AbsoluteSystemPathBuf,
+        files: Vec<AbsoluteSystemPathBuf>,
         ts_config: Option<Utf8PathBuf>,
     ) -> Result<Self, PathError> {
         let ts_config =
@@ -54,7 +55,6 @@ impl Tracer {
         let seen = HashSet::new();
 
         Ok(Self {
-            cwd,
             files,
             seen,
             ts_config,
@@ -138,7 +138,10 @@ impl Tracer {
             // Convert found imports/requires to absolute paths and add them to files to
             // visit
             for (import, span) in finder.imports() {
-                let file_dir = file_path.parent().unwrap_or(&self.cwd);
+                let Some(file_dir) = file_path.parent() else {
+                    errors.push(TraceError::RootFile(file_path.to_owned()));
+                    continue;
+                };
                 match resolver.resolve(&file_dir, &import) {
                     Ok(resolved) => match resolved.into_path_buf().try_into() {
                         Ok(path) => self.files.push(path),
