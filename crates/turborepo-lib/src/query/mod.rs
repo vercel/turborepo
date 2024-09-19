@@ -301,7 +301,7 @@ impl Query {
     }
 
     async fn file(&self, path: String) -> Result<File, Error> {
-        let abs_path = AbsoluteSystemPathBuf::from_unknown(&self.run.repo_root(), path);
+        let abs_path = AbsoluteSystemPathBuf::from_unknown(self.run.repo_root(), path);
 
         if !abs_path.exists() {
             return Err(Error::FileNotFound(abs_path.to_string()));

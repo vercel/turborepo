@@ -1,4 +1,4 @@
-use std::{collections::HashSet, fs, sync::Arc};
+use std::{collections::HashSet, fs, rc::Rc};
 
 use camino::Utf8PathBuf;
 use miette::{Diagnostic, NamedSource, SourceSpan};
@@ -18,7 +18,7 @@ pub struct Tracer {
     files: Vec<AbsoluteSystemPathBuf>,
     seen: HashSet<AbsoluteSystemPathBuf>,
     ts_config: Option<AbsoluteSystemPathBuf>,
-    source_map: Arc<SourceMap>,
+    source_map: Rc<SourceMap>,
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -58,7 +58,7 @@ impl Tracer {
             files,
             seen,
             ts_config,
-            source_map: Arc::new(SourceMap::default()),
+            source_map: Rc::new(SourceMap::default()),
         })
     }
 
@@ -142,7 +142,7 @@ impl Tracer {
                     errors.push(TraceError::RootFile(file_path.to_owned()));
                     continue;
                 };
-                match resolver.resolve(&file_dir, &import) {
+                match resolver.resolve(file_dir, import) {
                     Ok(resolved) => match resolved.into_path_buf().try_into() {
                         Ok(path) => self.files.push(path),
                         Err(err) => {
