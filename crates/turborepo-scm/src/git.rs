@@ -1,5 +1,9 @@
-use std::{backtrace::Backtrace, collections::HashSet, path::PathBuf, process::Command};
+use std::{
+    backtrace::Backtrace, collections::HashSet, env, fs::File, io::Read, path::PathBuf,
+    process::Command,
+};
 
+use serde_json::Value;
 use tracing::warn;
 use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeUnixPath,
@@ -94,9 +98,56 @@ impl Git {
         Ok(output.trim().to_owned())
     }
 
+    /// for GitHub Actions environment variables, see: https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/store-information-in-variables#default-environment-variables
+    fn get_github_base_ref() -> Option<String> {
+        // make sure we're running in a CI environment
+        env::var("CI").ok()?;
+
+        // make sure we're running in a GitHub Action
+        env::var("GITHUB_ACTIONS").ok()?;
+
+        /* The name of the base ref or target branch the pull request in a workflow
+         * run. This is only set when the event that triggers a workflow run
+         * is either `pull_request` or `pull_request_target`. For example,
+         * `main`
+         *
+         * So this is not set in a regular commit
+         */
+        if let Ok(pr) = env::var("GITHUB_BASE_REF") {
+            return Some(pr);
+        }
+
+        // we must be in a push event of a PR
+        // try reading from the GITHUB_EVENT_PATH file
+        if let Ok(event_path) = env::var("GITHUB_EVENT_PATH") {
+            // Try to open the event file and read the contents
+            let mut file = File::open(event_path).ok()?;
+            let mut data = String::new();
+            file.read_to_string(&mut data).ok?;
+
+            // Parse the JSON data from the file
+            let json: Value = serde_json::from_str(&data).ok()?;
+
+            // Extract the base ref from the pull request event if available
+            if let Some(base_ref) = json
+                .get("pull_request")
+                .and_then(|pr| pr.get("base"))
+                .and_then(|base| base.get("ref"))
+                .and_then(|r| r.as_str())
+            {
+                return Some(base_ref.to_string());
+            }
+        }
+        None
+    }
+
     fn resolve_base<'a>(&self, base_override: Option<&'a str>) -> Result<&'a str, Error> {
         if let Some(valid_from) = base_override {
             return Ok(valid_from);
+        }
+
+        if let Some(github_base_ref) = Self::get_github_base_ref() {
+            return Ok(github_base_ref.as_str());
         }
 
         let main_result = self.execute_git_command(&["rev-parse", "main"], "");
