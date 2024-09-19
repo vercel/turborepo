@@ -85,6 +85,8 @@ impl SCM {
     }
 }
 
+const UNKNOWN_SHA: &str = "0000000000000000000000000000000000000000";
+
 impl Git {
     fn get_current_branch(&self) -> Result<String, Error> {
         let output = self.execute_git_command(&["branch", "--show-current"], "")?;
@@ -101,20 +103,29 @@ impl Git {
     /// for GitHub Actions environment variables, see: https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/store-information-in-variables#default-environment-variables
     fn get_github_base_ref() -> Option<String> {
         // make sure we're running in a CI environment
-        env::var("CI").ok()?;
+        if env::var("CI").ok()?.as_str() != "true" {
+            return None;
+        }
 
         // make sure we're running in a GitHub Action
-        env::var("GITHUB_ACTIONS").ok()?;
+        if env::var("GITHUB_ACTIONS").ok()?.as_str() != "true" {
+            return None;
+        }
 
-        /* The name of the base ref or target branch the pull request in a workflow
-         * run. This is only set when the event that triggers a workflow run
-         * is either `pull_request` or `pull_request_target`. For example,
-         * `main`
+        /*
+         * The name of the base ref or target branch of the pull request in a
+         * workflow run.
          *
-         * So this is not set in a regular commit
+         * This variable only has a value when the event that triggers a workflow run
+         * is either `pull_request` or `pull_request_target`.
+         * For example, `main`
+         *
+         * So environment variable is empty in a regular commit
          */
         if let Ok(pr) = env::var("GITHUB_BASE_REF") {
-            return Some(pr);
+            if !pr.is_empty() {
+                return Some(pr);
+            }
         }
 
         // we must be in a push event
@@ -129,12 +140,33 @@ impl Git {
             let json: Value = serde_json::from_str(&data).ok()?;
 
             // Extract the base ref from the pull request event if available
-            if let Some(base_ref) = json
-                .get("pull_request")
-                .and_then(|pr| pr.get("base"))
-                .and_then(|base| base.get("ref"))
-                .and_then(|r| r.as_str())
-            {
+            if let Some(base_ref) = json.get("before") {
+                // the base_ref will be UNKNOWN_SHA on first push to a new branch and force
+                // pushes
+                if base_ref == UNKNOWN_SHA {
+                    if let Some(maybe_commits) = json.get("commits") {
+                        let commits = maybe_commits.as_array()?;
+                        if commits.is_empty() {
+                            // commits can be empty when you push a branch with no commits
+                            return None;
+                        }
+                        if commits.len() > 2048 {
+                            // GitHub API limit for number of commits shown in this field
+                            return None;
+                        }
+
+                        // Extract the base ref from the push event
+                        if let Some(first_commit) = commits.first() {
+                            if let Some(id) = first_commit.get("id") {
+                                return Some(format!("{id}^"));
+                            }
+                        }
+                    }
+
+                    // we don't have enough information to determine the base ref
+                    return None;
+                }
+
                 return Some(base_ref.to_string());
             }
         }
