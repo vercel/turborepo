@@ -228,7 +228,7 @@ impl File {
     }
 
     // This is `Option` because the file may not be in the repo
-    async fn repo_relative_path(&self) -> Option<String> {
+    async fn path(&self) -> Option<String> {
         self.run
             .repo_root()
             .anchor(&self.path)
@@ -247,17 +247,17 @@ impl File {
     /// Gets the affected packages for the file, i.e. all packages that depend
     /// on the file.
     async fn affected_packages(&self) -> Result<Array<Package>, Error> {
-        // This is technically doable with the `package` field, but this is a nice bit
-        // of syntactic sugar
         match self.get_package() {
             Ok(Some(PackageMapping::All(_))) => {
-                let packages: Result<Vec<_>, _> = self
+                let mut packages: Vec<_> = self
                     .run
                     .pkg_dep_graph()
                     .packages()
                     .map(|(name, _)| Package::new(self.run.clone(), name.clone()))
-                    .collect();
-                Ok(Array::from(packages?))
+                    .collect::<Result<Vec<_>, Error>>()?;
+                
+                packages.sort_by(|a, b| a.get_name().cmp(b.get_name()));
+                Ok(Array::from(packages))
             },
             Ok(Some(PackageMapping::Package(package))) => {
                 let node: PackageNode = PackageNode::Workspace(package.get_name().clone());
@@ -269,11 +269,13 @@ impl File {
                     .map(|package| {
                         Package::new(self.run.clone(), package.as_package_name().clone())
                     })
-                    .collect::<Result<Array<_>, _>>()?;
+                    // Add the package itself to the list
+                    .chain(std::iter::once(Ok(package.clone())))
+                    .collect::<Result<Vec<_>, Error>>()?;
 
                 ancestors.sort_by(|a, b| a.get_name().cmp(b.get_name()));
 
-                Ok(ancestors)
+                Ok(Array::from(ancestors))
             }
             Ok(None) => Ok(Array::default()),
             Err(e) => Err(e),

@@ -7,6 +7,7 @@ mod server;
 mod task;
 
 use std::{
+    borrow::Cow,
     io,
     ops::{Deref, DerefMut},
     sync::Arc,
@@ -65,6 +66,8 @@ pub enum Error {
     SignalListener(#[from] turborepo_signals::listeners::Error),
     #[error(transparent)]
     ChangeMapper(#[from] turborepo_repository::change_mapper::Error),
+    #[error(transparent)]
+    Scm(#[from] turborepo_scm::Error),
 }
 
 pub struct RepositoryQuery {
@@ -211,6 +214,12 @@ impl<T: OutputType> Array<T> {
         F: FnMut(&T, &T) -> std::cmp::Ordering,
     {
         self.items.sort_by(f);
+    }
+}
+
+impl<T: OutputType> TypeName for Array<T> {
+    fn type_name() -> Cow<'static, str> {
+        Cow::Owned(format!("Array<{}>", T::type_name()))
     }
 }
 
@@ -657,6 +666,49 @@ impl RepositoryQuery {
         }
 
         File::new(self.run.clone(), abs_path)
+    }
+
+    /// Get the files that have changed between the `base` and `head` commits.
+    ///
+    /// # Arguments
+    ///
+    /// * `base`: Defaults to `main` or `master`
+    /// * `head`: Defaults to `HEAD`
+    /// * `include_uncommitted`: Defaults to `true` if `head` is not provided
+    /// * `allow_unknown_objects`: Defaults to `false`
+    /// * `merge_base`: Defaults to `true`
+    ///
+    /// returns: Result<Array<File>, Error>
+    async fn affected_files(
+        &self,
+        base: Option<String>,
+        head: Option<String>,
+        include_uncommitted: Option<bool>,
+        merge_base: Option<bool>,
+    ) -> Result<Array<File>, Error> {
+        let base = base.as_deref();
+        let head = head.as_deref();
+        let include_uncommitted = include_uncommitted.unwrap_or_else(|| head.is_none());
+        let merge_base = merge_base.unwrap_or(true);
+
+        let repo_root = self.run.repo_root();
+        let change_result = self
+            .run
+            .scm()
+            .changed_files(
+                repo_root,
+                base,
+                head,
+                include_uncommitted,
+                false,
+                merge_base,
+            )?
+            .expect("set allow unknown objects to false");
+
+        Ok(change_result
+            .into_iter()
+            .map(|file| File::new(self.run.clone(), self.run.repo_root().resolve(&file)))
+            .collect())
     }
 
     /// Gets a list of packages that match the given filter
