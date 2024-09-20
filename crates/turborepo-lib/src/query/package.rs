@@ -149,32 +149,29 @@ impl Package {
 
     async fn all_dependents(&self) -> Result<Array<Package>, Error> {
         let node: PackageNode = PackageNode::Workspace(self.name.clone());
-        Ok(self
+        let mut dependents: Array<Package> = self
             .run
             .pkg_dep_graph()
             .ancestors(&node)
             .iter()
-            .map(|package| Package {
-                run: self.run.clone(),
-                name: package.as_package_name().clone(),
-            })
-            .sorted_by(|a, b| a.name.cmp(&b.name))
-            .collect())
+            .map(|package| Package::new(self.run.clone(), package.as_package_name().clone()))
+            .collect::<Result<Array<_>, _>>()?;
+        dependents.sort_by(|a, b| a.get_name().cmp(b.get_name()));
+        Ok(dependents)
     }
 
     async fn all_dependencies(&self) -> Result<Array<Package>, Error> {
         let node: PackageNode = PackageNode::Workspace(self.name.clone());
-        Ok(self
+        let mut dependencies: Array<Package> = self
             .run
             .pkg_dep_graph()
             .dependencies(&node)
             .iter()
-            .map(|package| Package {
-                run: self.run.clone(),
-                name: package.as_package_name().clone(),
-            })
-            .sorted_by(|a, b| a.name.cmp(&b.name))
-            .collect())
+            .map(|package| Package::new(self.run.clone(), package.as_package_name().clone()))
+            .collect::<Result<Array<_>, _>>()?;
+
+        dependencies.sort_by(|a, b| a.get_name().cmp(b.get_name()));
+        Ok(dependencies)
     }
 
     /// The downstream packages that depend on this package, indirectly

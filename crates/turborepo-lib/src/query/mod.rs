@@ -63,6 +63,8 @@ pub enum Error {
     Parse(swc_ecma_parser::error::Error),
     #[error(transparent)]
     SignalListener(#[from] turborepo_signals::listeners::Error),
+    #[error(transparent)]
+    ChangeMapper(#[from] turborepo_repository::change_mapper::Error),
 }
 
 pub struct RepositoryQuery {
@@ -164,6 +166,15 @@ pub struct Array<T: OutputType> {
     length: usize,
 }
 
+impl<T: OutputType> Default for Array<T> {
+    fn default() -> Self {
+        Self {
+            items: Vec::new(),
+            length: 0,
+        }
+    }
+}
+
 impl<T: ObjectType> From<Vec<T>> for Array<T> {
     fn from(value: Vec<T>) -> Self {
         Self {
@@ -193,6 +204,16 @@ impl<T: OutputType> FromIterator<T> for Array<T> {
         Self { items, length }
     }
 }
+
+impl<T: OutputType> Array<T> {
+    pub fn sort_by<F>(&mut self, f: F)
+    where
+        F: FnMut(&T, &T) -> std::cmp::Ordering,
+    {
+        self.items.sort_by(f);
+    }
+}
+
 #[derive(Enum, Copy, Clone, Eq, PartialEq, Debug)]
 enum PackageFields {
     Name,
@@ -513,6 +534,44 @@ enum PackageChangeReason {
     DependentChanged(DependentChanged),
     FileChanged(FileChanged),
     InFilteredDirectory(InFilteredDirectory),
+}
+
+impl From<AllPackageChangeReason> for PackageChangeReason {
+    fn from(reason: AllPackageChangeReason) -> Self {
+        match reason {
+            AllPackageChangeReason::GlobalDepsChanged { file } => {
+                PackageChangeReason::GlobalDepsChanged(GlobalDepsChanged {
+                    file_path: file.to_string(),
+                })
+            }
+            AllPackageChangeReason::DefaultGlobalFileChanged { file } => {
+                PackageChangeReason::DefaultGlobalFileChanged(DefaultGlobalFileChanged {
+                    file_path: file.to_string(),
+                })
+            }
+
+            AllPackageChangeReason::LockfileChangeDetectionFailed => {
+                PackageChangeReason::LockfileChangeDetectionFailed(LockfileChangeDetectionFailed {
+                    empty: false,
+                })
+            }
+
+            AllPackageChangeReason::GitRefNotFound { from_ref, to_ref } => {
+                PackageChangeReason::GitRefNotFound(GitRefNotFound { from_ref, to_ref })
+            }
+
+            AllPackageChangeReason::LockfileChangedWithoutDetails => {
+                PackageChangeReason::LockfileChangedWithoutDetails(LockfileChangedWithoutDetails {
+                    empty: false,
+                })
+            }
+            AllPackageChangeReason::RootInternalDepChanged { root_internal_dep } => {
+                PackageChangeReason::RootInternalDepChanged(RootInternalDepChanged {
+                    root_internal_dep: root_internal_dep.to_string(),
+                })
+            }
+        }
+    }
 }
 
 #[derive(SimpleObject)]

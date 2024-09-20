@@ -106,7 +106,6 @@ pub enum PackageChanges {
 
 pub struct ChangeMapper<'a, PD> {
     pkg_graph: &'a PackageGraph,
-
     ignore_patterns: Vec<String>,
     package_detector: PD,
 }
@@ -130,6 +129,10 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
         changed_files
             .iter()
             .find(|f| DEFAULT_GLOBAL_DEPS.iter().any(|dep| *dep == f.as_str()))
+    }
+
+    pub fn package_detector(&self) -> &dyn PackageChangeMapper {
+        &self.package_detector
     }
 
     pub fn changed_packages(
