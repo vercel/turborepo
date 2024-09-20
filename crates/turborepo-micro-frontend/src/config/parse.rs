@@ -1,24 +1,41 @@
 use std::collections::BTreeMap;
 
-use serde::{Deserialize, Serialize};
+use biome_deserialize_macros::Deserializable;
+use biome_json_parser::JsonParserOptions;
+use serde::Serialize;
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserializable, Default)]
 pub struct Config {
     pub version: String,
     #[serde(rename = "$schema")]
     pub schema: Option<String>,
-    // TODO: only one application can be marked as default
     pub applications: BTreeMap<String, Application>,
     pub options: Option<Options>,
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+impl Config {
+    pub fn from_str(input: &str, source: &str) -> Result<Self, Vec<biome_diagnostics::Error>> {
+        let (config, errs) = biome_deserialize::json::deserialize_from_json_str(
+            input,
+            JsonParserOptions::default().with_allow_comments(),
+            source,
+        )
+        .consume();
+        if let Some(config) = config {
+            Ok(config)
+        } else {
+            Err(errs)
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Serialize, Deserializable, Default)]
 pub struct Options {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub vercel: Option<VercelOptions>,
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserializable, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct VercelOptions {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -27,7 +44,7 @@ pub struct VercelOptions {
     pub bypass_deployment_protection_in_production: Option<bool>,
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserializable, Default)]
 pub struct Application {
     // default = true -> no routing
     // default = false -> requires routing
@@ -40,7 +57,7 @@ pub struct Application {
     pub vercel: Option<Vercel>,
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserializable, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Vercel {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -51,7 +68,7 @@ pub struct Vercel {
     pub deployment_protection_env_key: Option<String>,
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserializable, Default)]
 pub struct Federation {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub exposes: Vec<Module>,
@@ -59,13 +76,13 @@ pub struct Federation {
     pub uses: Vec<String>,
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserializable, Default)]
 pub struct Module {
     pub name: String,
     pub path: String,
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserializable, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ZoneRouting {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -73,7 +90,7 @@ pub struct ZoneRouting {
     pub matches: Vec<PathGroup>,
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserializable, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct PathGroup {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -83,7 +100,7 @@ pub struct PathGroup {
     pub paths: Vec<String>,
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserializable, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct PathConfigurationOptions {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -92,7 +109,7 @@ pub struct PathConfigurationOptions {
     pub route_to_default_application: Option<bool>,
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserializable, Default)]
 pub struct Development {
     pub local: Host,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -101,7 +118,7 @@ pub struct Development {
     pub task: Option<String>,
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserializable, Default)]
 pub struct Host {
     pub protocol: Protocol,
     pub host: String,
@@ -109,27 +126,33 @@ pub struct Host {
     pub port: Option<u16>,
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserializable, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum Protocol {
+    #[default]
     Http,
     Https,
 }
 
 #[cfg(test)]
 mod test {
+    use biome_deserialize::{json::deserialize_from_json_str, Deserializable};
     use pretty_assertions::assert_eq;
 
     use super::*;
 
-    // todo: make sure comments are allowed
-
     fn assert_round_trip<T>(input: &str) -> Result<(), serde_json::Error>
     where
-        for<'a> T: Serialize + Deserialize<'a>,
+        for<'a> T: Serialize + Deserializable,
     {
-        let value: T = serde_json::from_str(input)?;
-        let output = serde_json::to_string(&value)?;
+        let (value, errs): (Option<T>, _) = deserialize_from_json_str(
+            input,
+            JsonParserOptions::default().with_allow_comments(),
+            "test.json",
+        )
+        .consume();
+        assert!(errs.is_empty());
+        let output = serde_json::to_string(&value.unwrap())?;
         assert_eq!(
             input,
             output,
