@@ -1,3 +1,4 @@
+use core::fmt;
 use std::collections::BTreeMap;
 
 use biome_deserialize_macros::Deserializable;
@@ -126,12 +127,34 @@ pub struct Host {
     pub port: Option<u16>,
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserializable, Default)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserializable, Default, Clone, Copy)]
 #[serde(rename_all = "lowercase")]
 pub enum Protocol {
     #[default]
     Http,
     Https,
+}
+
+impl Protocol {
+    pub fn default_port(&self) -> u16 {
+        match self {
+            Protocol::Http => 80,
+            Protocol::Https => 443,
+        }
+    }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Protocol::Http => "http",
+            Protocol::Https => "https",
+        }
+    }
+}
+
+impl fmt::Display for Protocol {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
 }
 
 #[cfg(test)]
@@ -140,6 +163,13 @@ mod test {
     use pretty_assertions::assert_eq;
 
     use super::*;
+
+    #[test]
+    fn test_example_parses() {
+        let input = include_str!("../../fixtures/micro-frontend.jsonc");
+        let example_config = Config::from_str(input, "something.json");
+        assert!(example_config.is_ok());
+    }
 
     fn assert_round_trip<T>(input: &str) -> Result<(), serde_json::Error>
     where
