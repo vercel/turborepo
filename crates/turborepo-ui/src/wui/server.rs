@@ -1,19 +1,10 @@
 use std::sync::Arc;
 
-use async_graphql::{
-    http::GraphiQLSource, EmptyMutation, EmptySubscription, Object, Schema, SimpleObject,
-};
-use async_graphql_axum::GraphQL;
-use axum::{http::Method, response, response::IntoResponse, routing::get, Router};
+use async_graphql::{Object, SimpleObject};
 use serde::Serialize;
-use tokio::{net::TcpListener, sync::Mutex};
-use tower_http::cors::{Any, CorsLayer};
+use tokio::sync::Mutex;
 
-use crate::wui::{
-    event::WebUIEvent,
-    subscriber::{Subscriber, TaskState, WebUIState},
-    Error,
-};
+use crate::wui::subscriber::{TaskState, WebUIState};
 
 #[derive(Debug, Clone, Serialize, SimpleObject)]
 struct Task {
@@ -44,67 +35,23 @@ impl<'a> CurrentRun<'a> {
 /// We keep the state in a `Arc<Mutex<RefCell<T>>>` so both `Subscriber` and
 /// `Query` can access it, with `Subscriber` mutating it and `Query` only
 /// reading it.
-pub(crate) type SharedState = Arc<Mutex<WebUIState>>;
+pub type SharedState = Arc<Mutex<WebUIState>>;
 
-pub struct Query {
+/// The query for actively running tasks (as opposed to the query for general
+/// repository state `RepositoryQuery` in `turborepo_lib::query`)
+pub struct RunQuery {
     state: SharedState,
 }
 
-impl Query {
+impl RunQuery {
     pub fn new(state: SharedState) -> Self {
         Self { state }
     }
 }
 
 #[Object]
-impl Query {
+impl RunQuery {
     async fn current_run(&self) -> CurrentRun {
         CurrentRun { state: &self.state }
     }
-}
-
-async fn graphiql() -> impl IntoResponse {
-    response::Html(
-        GraphiQLSource::build()
-            .endpoint("/")
-            .subscription_endpoint("/subscriptions")
-            .finish(),
-    )
-}
-
-pub async fn start_server(
-    rx: tokio::sync::mpsc::UnboundedReceiver<WebUIEvent>,
-) -> Result<(), crate::Error> {
-    let state = Arc::new(Mutex::new(WebUIState::default()));
-    let subscriber = Subscriber::new(rx);
-    tokio::spawn(subscriber.watch(state.clone()));
-
-    run_server(state.clone()).await?;
-
-    Ok(())
-}
-
-pub(crate) async fn run_server(state: SharedState) -> Result<(), crate::Error> {
-    let cors = CorsLayer::new()
-        // allow `GET` and `POST` when accessing the resource
-        .allow_methods([Method::GET, Method::POST])
-        .allow_headers(Any)
-        // allow requests from any origin
-        .allow_origin(Any);
-
-    let schema = Schema::new(Query { state }, EmptyMutation, EmptySubscription);
-    let app = Router::new()
-        .route("/", get(graphiql).post_service(GraphQL::new(schema)))
-        .layer(cors);
-
-    axum::serve(
-        TcpListener::bind("127.0.0.1:8000")
-            .await
-            .map_err(Error::Server)?,
-        app,
-    )
-    .await
-    .map_err(Error::Server)?;
-
-    Ok(())
 }

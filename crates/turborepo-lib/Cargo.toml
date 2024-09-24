@@ -109,6 +109,7 @@ tokio-stream = { version = "0.1.12", features = ["net"] }
 tokio-util = { version = "0.7.7", features = ["compat"] }
 tonic = { version = "0.11.0", features = ["transport"] }
 tower = "0.4.13"
+tower-http = { version = "0.5.2", features = ["cors"] }
 tracing-appender = "0.2.2"
 tracing-chrome = "0.7.1"
 tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }

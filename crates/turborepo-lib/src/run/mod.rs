@@ -10,6 +10,7 @@ mod scope;
 pub(crate) mod summary;
 pub mod task_access;
 pub mod task_id;
+mod ui;
 pub mod watch;
 
 use std::{
@@ -230,7 +231,7 @@ impl Run {
     fn start_web_ui(self: &Arc<Self>) -> WuiResult {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
 
-        let handle = tokio::spawn(turborepo_ui::wui::server::start_server(rx, self.clone()));
+        let handle = tokio::spawn(ui::start_web_ui_server(rx, self.clone()));
 
         Ok(Some((WebUISender { tx }, handle)))
     }
