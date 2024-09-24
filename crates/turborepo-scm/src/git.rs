@@ -362,6 +362,7 @@ mod tests {
 
     use super::{previous_content, ChangedFiles};
     use crate::{
+        freeze_env::FreezeEnv,
         git::{GitHubCommit, GitHubEvent},
         Error, Git, SCM,
     };
@@ -1143,6 +1144,8 @@ mod tests {
         ; "first commit has a parent"
     )]
     fn test_get_github_base_ref(test_case: TestCase, expected: Option<&str>) -> Result<(), Error> {
+        let _frozen_vars = FreezeEnv::capture();
+
         let _lock = TEST_PARALLELISM_LOCK
             .get_or_init(Mutex::default)
             .lock()
