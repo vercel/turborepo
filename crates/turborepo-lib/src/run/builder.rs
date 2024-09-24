@@ -79,11 +79,13 @@ impl RunBuilder {
 
         let version = base.version();
         let processes = ProcessManager::new(
-            // We currently only use a pty if the following are met:
+            // If output is piped to web, always start with PTY
+            matches!(config.ui(), UIMode::Web) ||
+            // Otherwise only use a pty if the following are met:
             // - we're attached to a tty
-            atty::is(atty::Stream::Stdout) &&
+            (atty::is(atty::Stream::Stdout) &&
             // - if we're on windows, we're using the UI
-            (!cfg!(windows) || matches!(opts.run_opts.ui_mode, UIMode::Tui)),
+            (!cfg!(windows) || matches!(opts.run_opts.ui_mode, UIMode::Tui))),
         );
         let root_turbo_json_path = config.root_turbo_json_path(&base.repo_root);
         let allow_no_turbo_json = config.allow_no_turbo_json();
