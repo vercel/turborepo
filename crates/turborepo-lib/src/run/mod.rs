@@ -260,7 +260,7 @@ impl Run {
         }
     }
 
-    pub async fn run(&mut self, ui_sender: Option<UISender>, is_watch: bool) -> Result<i32, Error> {
+    pub async fn run(&self, ui_sender: Option<UISender>, is_watch: bool) -> Result<i32, Error> {
         let skip_cache_writes = self.opts.runcache_opts.skip_writes;
         if let Some(subscriber) = self.signal_handler.subscribe() {
             let run_cache = self.run_cache.clone();
@@ -356,7 +356,7 @@ impl Run {
             self.engine.task_definitions(),
             &self.repo_root,
             &self.run_telemetry,
-            &mut self.daemon,
+            &self.daemon,
         )?;
 
         let root_workspace = self
