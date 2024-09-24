@@ -101,7 +101,7 @@ impl Git {
     }
 
     /// for GitHub Actions environment variables, see: https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/store-information-in-variables#default-environment-variables
-    fn get_github_base_ref() -> Option<String> {
+    pub fn get_github_base_ref() -> Option<String> {
         // make sure we're running in a CI environment
         if env::var("CI").ok()?.as_str() != "true" {
             return None;
@@ -327,13 +327,13 @@ mod tests {
     use std::{
         assert_matches::assert_matches,
         collections::HashSet,
-        fs,
+        env, fs,
         path::{Path, PathBuf},
         process::Command,
     };
 
     use git2::{Oid, Repository, RepositoryInitOptions};
-    use tempfile::TempDir;
+    use tempfile::{NamedTempFile, TempDir};
     use test_case::test_case;
     use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError};
     use which::which;
@@ -944,6 +944,218 @@ mod tests {
             .unwrap();
 
         assert_matches!(actual, ChangedFiles::All);
+
+        Ok(())
+    }
+
+    #[allow(non_snake_case)]
+    #[derive(Default)]
+    struct TestCase {
+        CI: Option<&'static str>,
+        GITHUB_ACTIONS: Option<&'static str>,
+        GITHUB_BASE_REF: Option<&'static str>,
+        GITHUB_EVENT_PATH: Option<&'static str>,
+        event_json: &'static str,
+    }
+
+    #[test_case(
+        TestCase{
+            CI: None,
+            GITHUB_ACTIONS: None,
+            GITHUB_BASE_REF: None,
+            GITHUB_EVENT_PATH: None,
+            event_json: r#""#
+        },
+        None
+        ; "not running on CI"
+    )]
+    #[test_case(
+        TestCase{
+            CI: Some("some other value"),
+            GITHUB_ACTIONS: None,
+            GITHUB_BASE_REF: None,
+            GITHUB_EVENT_PATH: None,
+            event_json: r#""#,
+        },
+        None
+        ; "CI is set, but not to true"
+    )]
+    #[test_case(
+        TestCase{
+            CI: Some("true"),
+            GITHUB_ACTIONS: None,
+            GITHUB_BASE_REF: None,
+            GITHUB_EVENT_PATH: None,
+            event_json: r#""#,
+        },
+        None
+        ; "GITHUB_ACTIONS is not set"
+    )]
+    #[test_case(
+        TestCase{
+            CI: Some("true"),
+            GITHUB_ACTIONS: Some("some other value"),
+            GITHUB_BASE_REF: None,
+            GITHUB_EVENT_PATH: None,
+            event_json: r#""#,
+        },
+        None
+        ; "GITHUB_ACTIONS is set, but not to true"
+    )]
+    #[test_case(
+        TestCase{
+            CI: Some("true"),
+            GITHUB_ACTIONS: Some("true"),
+            GITHUB_BASE_REF: None,
+            GITHUB_EVENT_PATH: None,
+            event_json: r#""#,
+        },
+        None
+        ; "GITHUB_BASE_REF and GITHUB_EVENT_PATH are not set"
+    )]
+    #[test_case(
+        TestCase{
+            CI: Some("true"),
+            GITHUB_ACTIONS: Some("true"),
+            GITHUB_BASE_REF: Some(""),
+            GITHUB_EVENT_PATH: None,
+            event_json: r#""#,
+        },
+        None
+        ; "GITHUB_BASE_REF is set to an empty string"
+    )]
+    #[test_case(
+        TestCase{
+            CI: Some("true"),
+            GITHUB_ACTIONS: Some("true"),
+            GITHUB_BASE_REF: Some("The choice is yours, and yours alone"),
+            GITHUB_EVENT_PATH: None,
+            event_json: r#""#,
+        },
+        Some("The choice is yours, and yours alone")
+        ; "GITHUB_BASE_REF is set to a non-empty string"
+    )]
+    #[test_case(
+        TestCase{
+            CI: Some("true"),
+            GITHUB_ACTIONS: Some("true"),
+            GITHUB_BASE_REF: None,
+            GITHUB_EVENT_PATH: Some("Olmec refused to give up the location of the Shrine of the Silver Monkey"),
+            event_json: r#""#,
+        },
+        None
+        ; "GITHUB_EVENT_PATH is set, but the file fails to open"
+    )]
+    #[test_case(
+        TestCase{
+            CI: Some("true"),
+            GITHUB_ACTIONS: Some("true"),
+            GITHUB_BASE_REF: None,
+            GITHUB_EVENT_PATH: Some("the_room_of_the_three_gargoyles.json"),
+            event_json: r#"first you must pass the temple guards!"#,
+        },
+        None
+        ; "GITHUB_EVENT_PATH is set, is not valid JSON"
+    )]
+    #[test_case(
+        TestCase{
+            CI: Some("true"),
+            GITHUB_ACTIONS: Some("true"),
+            GITHUB_BASE_REF: None,
+            GITHUB_EVENT_PATH: Some("olmecs_temple.json"),
+            event_json: r#"{}"#,
+        },
+        None
+        ; "no 'before' key in the JSON"
+    )]
+    #[test_case(
+        TestCase{
+            CI: Some("true"),
+            GITHUB_ACTIONS: Some("true"),
+            GITHUB_BASE_REF: None,
+            GITHUB_EVENT_PATH: Some("shrine_of_the_silver_monkey.json"),
+            event_json: r#"{"before":"e83c5163316f89bfbde7d9ab23ca2e25604af290"}"#,
+        },
+        Some("e83c5163316f89bfbde7d9ab23ca2e25604af290")
+        ; "found a valid 'before' key in the JSON"
+    )]
+    #[test_case(
+        TestCase{
+            CI: Some("true"),
+            GITHUB_ACTIONS: Some("true"),
+            GITHUB_BASE_REF: None,
+            GITHUB_EVENT_PATH: Some("shrine_of_the_silver_monkey.json"),
+            event_json: r#"{"before":"0000000000000000000000000000000000000000"}"#,
+        },
+        None
+        ; "UNKNOWN_SHA but no commits found"
+    )]
+    #[test_case(
+        TestCase{
+            CI: Some("true"),
+            GITHUB_ACTIONS: Some("true"),
+            GITHUB_BASE_REF: None,
+            GITHUB_EVENT_PATH: Some("shrine_of_the_silver_monkey.json"),
+            event_json: r#"{"before":"0000000000000000000000000000000000000000","commits":[]}"#,
+        },
+        None
+        ; "empty commits"
+    )]
+    #[test_case(
+        TestCase{
+            CI: Some("true"),
+            GITHUB_ACTIONS: Some("true"),
+            GITHUB_BASE_REF: None,
+            GITHUB_EVENT_PATH: Some("shrine_of_the_silver_monkey.json"),
+            event_json: r#"{"before":"0000000000000000000000000000000000000000","commits":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}"#,
+        },
+        None
+        ; "2049 commits"
+    )]
+    #[test_case(
+        TestCase{
+            CI: Some("true"),
+            GITHUB_ACTIONS: Some("true"),
+            GITHUB_BASE_REF: None,
+            GITHUB_EVENT_PATH: Some("shrine_of_the_silver_monkey.json"),
+            event_json: r#"{"before":"0000000000000000000000000000000000000000","commits":[{"id":"yep"}]}"#,
+        },
+        Some("yep^")
+        ; "first commit has a parent"
+    )]
+    #[test_case(
+        TestCase{
+            CI: Some("true"),
+            GITHUB_ACTIONS: Some("true"),
+            GITHUB_BASE_REF: None,
+            GITHUB_EVENT_PATH: Some("shrine_of_the_silver_monkey.json"),
+            event_json: r#"{"before":"0000000000000000000000000000000000000000","commits":[{}]}"#,
+        },
+        None
+        ; "first commit is missing an id"
+    )]
+    fn test_get_github_base_ref(test_case: TestCase, expected: Option<&str>) -> Result<(), Error> {
+        // insert any Some values into the environment
+        for (key, value) in [
+            ("CI", test_case.CI),
+            ("GITHUB_ACTIONS", test_case.GITHUB_ACTIONS),
+            ("GITHUB_BASE_REF", test_case.GITHUB_BASE_REF),
+        ] {
+            if let Some(v) = value {
+                env::set_var(key, v);
+            }
+        }
+
+        if test_case.GITHUB_EVENT_PATH.is_some() {
+            let temp_file = NamedTempFile::new().expect("Failed to create temporary file");
+            fs::write(temp_file.path(), test_case.event_json)
+                .expect("Failed to write to temporary file");
+
+            env::set_var("GITHUB_EVENT_PATH", temp_file.path());
+        }
+
+        let actual = Git::get_github_base_ref();
+        assert_eq!(actual, expected.map(|s| s.to_string()));
 
         Ok(())
     }
