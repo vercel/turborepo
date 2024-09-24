@@ -23,7 +23,7 @@ pub async fn start_web_ui_server(
 }
 
 #[derive(MergedObject)]
-struct Query(turborepo_ui::wui::RunQuery, query::Query);
+struct Query(turborepo_ui::wui::RunQuery, query::RepositoryQuery);
 
 async fn run_server(state: SharedState, run: Arc<Run>) -> Result<(), turborepo_ui::Error> {
     let cors = CorsLayer::new()
@@ -34,7 +34,7 @@ async fn run_server(state: SharedState, run: Arc<Run>) -> Result<(), turborepo_u
         .allow_origin(Any);
 
     let web_ui_query = turborepo_ui::wui::RunQuery::new(state.clone());
-    let turbo_query = query::Query::new(run);
+    let turbo_query = query::RepositoryQuery::new(run);
     let combined_query = Query(web_ui_query, turbo_query);
 
     let schema = Schema::new(combined_query, EmptyMutation, EmptySubscription);

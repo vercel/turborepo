@@ -10,7 +10,7 @@ use crate::{
     cli::Command,
     commands::{run::get_signal, CommandBase},
     query,
-    query::{Error, Query},
+    query::{Error, RepositoryQuery},
     run::builder::RunBuilder,
     signal::SignalHandler,
 };
@@ -84,7 +84,11 @@ pub async fn run(
             fs::read_to_string(AbsoluteSystemPathBuf::from_unknown(run.repo_root(), query))?
         };
 
-        let schema = Schema::new(Query::new(Arc::new(run)), EmptyMutation, EmptySubscription);
+        let schema = Schema::new(
+            RepositoryQuery::new(Arc::new(run)),
+            EmptyMutation,
+            EmptySubscription,
+        );
 
         let result = schema.execute(&query).await;
         if result.errors.is_empty() {

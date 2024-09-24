@@ -41,11 +41,11 @@ pub enum Error {
     Path(#[from] turbopath::PathError),
 }
 
-pub struct Query {
+pub struct RepositoryQuery {
     run: Arc<Run>,
 }
 
-impl Query {
+impl RepositoryQuery {
     pub fn new(run: Arc<Run>) -> Self {
         Self { run }
     }
@@ -267,7 +267,7 @@ impl PackagePredicate {
 }
 
 #[Object]
-impl Query {
+impl RepositoryQuery {
     async fn affected_packages(
         &self,
         base: Option<String>,
@@ -344,7 +344,11 @@ pub async fn graphiql() -> impl IntoResponse {
 }
 
 pub async fn run_server(run: Run, signal: SignalHandler) -> Result<(), Error> {
-    let schema = Schema::new(Query::new(Arc::new(run)), EmptyMutation, EmptySubscription);
+    let schema = Schema::new(
+        RepositoryQuery::new(Arc::new(run)),
+        EmptyMutation,
+        EmptySubscription,
+    );
     let app = Router::new().route("/", get(graphiql).post_service(GraphQL::new(schema)));
 
     let subscriber = signal.subscribe().ok_or(Error::NoSignalHandler)?;
