@@ -18,7 +18,6 @@ use thiserror::Error;
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError, RelativeUnixPathBuf};
 
-mod freeze_env;
 pub mod git;
 mod hash_object;
 mod ls_tree;

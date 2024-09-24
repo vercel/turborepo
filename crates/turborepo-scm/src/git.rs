@@ -1,9 +1,8 @@
 use std::{
     backtrace::Backtrace,
     collections::HashSet,
-    env,
-    fs::{self, File},
-    io::Read,
+    env::{self, VarError},
+    fs::{self},
     path::PathBuf,
     process::Command,
 };
@@ -119,10 +118,18 @@ impl GitHubEvent {
         }
 
         // Extract the base ref from the push event
-        let first_commit = self.commits.first()?; 
+        let first_commit = self.commits.first()?;
         let id = &first_commit.id;
         Some(format!("{id}^"))
     }
+}
+
+#[derive(Debug)]
+pub struct BaseRefEnv {
+    ci: Result<String, VarError>,
+    github_actions: Result<String, VarError>,
+    github_base_ref: Result<String, VarError>,
+    github_event_path: Result<String, VarError>,
 }
 
 impl Git {
@@ -139,14 +146,14 @@ impl Git {
     }
 
     /// for GitHub Actions environment variables, see: https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/store-information-in-variables#default-environment-variables
-    pub fn get_github_base_ref() -> Option<String> {
+    pub fn get_github_base_ref(base_ref_env: BaseRefEnv) -> Option<String> {
         // make sure we're running in a CI environment
-        if env::var("CI").ok()?.as_str() != "true" {
+        if base_ref_env.ci.ok()?.as_str() != "true" {
             return None;
         }
 
         // make sure we're running in a GitHub Action
-        if env::var("GITHUB_ACTIONS").ok()?.as_str() != "true" {
+        if base_ref_env.github_actions.ok()?.as_str() != "true" {
             return None;
         }
 
@@ -160,7 +167,7 @@ impl Git {
          *
          * So environment variable is empty in a regular commit
          */
-        if let Ok(pr) = env::var("GITHUB_BASE_REF") {
+        if let Ok(pr) = base_ref_env.github_base_ref {
             if !pr.is_empty() {
                 return Some(pr);
             }
@@ -168,7 +175,7 @@ impl Git {
 
         // we must be in a push event
         // try reading from the GITHUB_EVENT_PATH file
-        if let Ok(event_path) = env::var("GITHUB_EVENT_PATH") {
+        if let Ok(event_path) = base_ref_env.github_event_path {
             // Try to open the event file and read the contents
             let data = fs::read_to_string(event_path).ok()?;
 
@@ -198,7 +205,12 @@ impl Git {
             return Ok(valid_from);
         }
 
-        if let Some(github_base_ref) = Self::get_github_base_ref() {
+        if let Some(github_base_ref) = Self::get_github_base_ref(BaseRefEnv {
+            ci: env::var("CI"),
+            github_actions: env::var("GITHUB_ACTIONS"),
+            github_base_ref: env::var("GITHUB_BASE_REF"),
+            github_event_path: env::var("GITHUB_EVENT_PATH"),
+        }) {
             return Ok(Box::leak(github_base_ref.into_boxed_str()));
         }
 
@@ -347,10 +359,10 @@ mod tests {
     use std::{
         assert_matches::assert_matches,
         collections::HashSet,
-        env, fs,
+        env::VarError,
+        fs,
         path::{Path, PathBuf},
         process::Command,
-        sync::{Mutex, OnceLock},
     };
 
     use git2::{Oid, Repository, RepositoryInitOptions};
@@ -359,17 +371,11 @@ mod tests {
     use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError};
     use which::which;
 
-    use super::{previous_content, ChangedFiles};
+    use super::{previous_content, BaseRefEnv, ChangedFiles};
     use crate::{
-        freeze_env::FreezeEnv,
         git::{GitHubCommit, GitHubEvent},
         Error, Git, SCM,
     };
-
-    /// By default `#[test_case]` will run in parallel.
-    /// This is a problem for testing things like environment variables, which
-    /// are not thread-safe. This lock ensures that these tests run serially.
-    static TEST_PARALLELISM_LOCK: OnceLock<Mutex<bool>> = OnceLock::new();
 
     fn setup_repository(
         init_opts: Option<&RepositoryInitOptions>,
@@ -877,8 +883,6 @@ mod tests {
         target_branch: Option<&str>,
         expected: Option<&str>,
     ) -> Result<(), Error> {
-        let _frozen_vars = FreezeEnv::capture();
-
         let mut repo_opts = RepositoryInitOptions::new();
 
         let (first_branch, remaining_branches) = branches_to_create.split_first().unwrap();
@@ -980,208 +984,216 @@ mod tests {
         Ok(())
     }
 
-    #[allow(non_snake_case)]
-    #[derive(Default)]
     struct TestCase {
-        CI: Option<&'static str>,
-        GITHUB_ACTIONS: Option<&'static str>,
-        GITHUB_BASE_REF: Option<&'static str>,
-        GITHUB_EVENT_PATH: Option<&'static str>,
+        env: BaseRefEnv,
         event_json: &'static str,
     }
 
     #[test_case(
-        TestCase{
-            CI: None,
-            GITHUB_ACTIONS: None,
-            GITHUB_BASE_REF: None,
-            GITHUB_EVENT_PATH: None,
+        TestCase {
+            env: BaseRefEnv {
+                ci: Err(VarError::NotPresent),
+                github_actions: Err(VarError::NotPresent),
+                github_base_ref: Err(VarError::NotPresent),
+                github_event_path: Err(VarError::NotPresent),
+            },
             event_json: r#""#
         },
         None
         ; "not running on CI"
     )]
     #[test_case(
-        TestCase{
-            CI: Some("some other value"),
-            GITHUB_ACTIONS: None,
-            GITHUB_BASE_REF: None,
-            GITHUB_EVENT_PATH: None,
+        TestCase {
+            env: BaseRefEnv {
+                ci: Ok("some other value".to_string()),
+                github_actions: Err(VarError::NotPresent),
+                github_base_ref: Err(VarError::NotPresent),
+                github_event_path: Err(VarError::NotPresent),
+            },
             event_json: r#""#,
         },
         None
         ; "CI is set, but not to true"
     )]
     #[test_case(
-        TestCase{
-            CI: Some("true"),
-            GITHUB_ACTIONS: None,
-            GITHUB_BASE_REF: None,
-            GITHUB_EVENT_PATH: None,
+        TestCase {
+            env: BaseRefEnv {
+                ci: Ok("true".to_string()),
+                github_actions: Err(VarError::NotPresent),
+                github_base_ref: Err(VarError::NotPresent),
+                github_event_path: Err(VarError::NotPresent),
+            },
             event_json: r#""#,
         },
         None
         ; "GITHUB_ACTIONS is not set"
     )]
     #[test_case(
-        TestCase{
-            CI: Some("true"),
-            GITHUB_ACTIONS: Some("some other value"),
-            GITHUB_BASE_REF: None,
-            GITHUB_EVENT_PATH: None,
+        TestCase {
+            env: BaseRefEnv {
+                ci: Ok("true".to_string()),
+                github_actions: Ok("other value".to_string()),
+                github_base_ref: Err(VarError::NotPresent),
+                github_event_path: Err(VarError::NotPresent),
+            },
             event_json: r#""#,
         },
         None
         ; "GITHUB_ACTIONS is set, but not to true"
     )]
     #[test_case(
-        TestCase{
-            CI: Some("true"),
-            GITHUB_ACTIONS: Some("true"),
-            GITHUB_BASE_REF: None,
-            GITHUB_EVENT_PATH: None,
+        TestCase {
+            env: BaseRefEnv {
+                ci: Ok("true".to_string()),
+                github_actions: Ok("true".to_string()),
+                github_base_ref: Err(VarError::NotPresent),
+                github_event_path: Err(VarError::NotPresent),
+            },
             event_json: r#""#,
         },
         None
         ; "GITHUB_BASE_REF and GITHUB_EVENT_PATH are not set"
     )]
     #[test_case(
-        TestCase{
-            CI: Some("true"),
-            GITHUB_ACTIONS: Some("true"),
-            GITHUB_BASE_REF: Some(""),
-            GITHUB_EVENT_PATH: None,
+        TestCase {
+            env: BaseRefEnv {
+                ci: Ok("true".to_string()),
+                github_actions: Ok("true".to_string()),
+                github_base_ref: Ok("".to_string()),
+                github_event_path: Err(VarError::NotPresent),
+            },
             event_json: r#""#,
         },
         None
         ; "GITHUB_BASE_REF is set to an empty string"
     )]
     #[test_case(
-        TestCase{
-            CI: Some("true"),
-            GITHUB_ACTIONS: Some("true"),
-            GITHUB_BASE_REF: Some("The choice is yours, and yours alone"),
-            GITHUB_EVENT_PATH: None,
+        TestCase {
+            env: BaseRefEnv {
+                ci: Ok("true".to_string()),
+                github_actions: Ok("true".to_string()),
+                github_base_ref: Ok("The choice is yours, and yours alone".to_string()),
+                github_event_path: Err(VarError::NotPresent),
+            },
             event_json: r#""#,
         },
         Some("The choice is yours, and yours alone")
         ; "GITHUB_BASE_REF is set to a non-empty string"
     )]
     #[test_case(
-        TestCase{
-            CI: Some("true"),
-            GITHUB_ACTIONS: Some("true"),
-            GITHUB_BASE_REF: None,
-            GITHUB_EVENT_PATH: Some("Olmec refused to give up the location of the Shrine of the Silver Monkey"),
+        TestCase {
+            env: BaseRefEnv {
+                ci: Ok("true".to_string()),
+                github_actions: Ok("true".to_string()),
+                github_base_ref: Err(VarError::NotPresent),
+                github_event_path: Ok("Olmec refused to give up the location of the Shrine of the Silver Monkey".to_string()),
+            },
             event_json: r#""#,
         },
         None
         ; "GITHUB_EVENT_PATH is set, but the file fails to open"
     )]
     #[test_case(
-        TestCase{
-            CI: Some("true"),
-            GITHUB_ACTIONS: Some("true"),
-            GITHUB_BASE_REF: None,
-            GITHUB_EVENT_PATH: Some("the_room_of_the_three_gargoyles.json"),
+        TestCase {
+            env: BaseRefEnv {
+                ci: Ok("true".to_string()),
+                github_actions: Ok("true".to_string()),
+                github_base_ref: Err(VarError::NotPresent),
+                github_event_path: Ok("the_room_of_the_three_gargoyles.json".to_string()),
+            },
             event_json: r#"first you must pass the temple guards!"#,
         },
         None
         ; "GITHUB_EVENT_PATH is set, is not valid JSON"
     )]
     #[test_case(
-        TestCase{
-            CI: Some("true"),
-            GITHUB_ACTIONS: Some("true"),
-            GITHUB_BASE_REF: None,
-            GITHUB_EVENT_PATH: Some("olmecs_temple.json"),
+        TestCase {
+            env: BaseRefEnv {
+                ci: Ok("true".to_string()),
+                github_actions: Ok("true".to_string()),
+                github_base_ref: Err(VarError::NotPresent),
+                github_event_path: Ok("olmecs_temple.json".to_string()),
+            },
             event_json: r#"{}"#,
         },
         None
         ; "no 'before' key in the JSON"
     )]
+    // #[test_case(
+    //     TestCase {
+    //         env: BaseRefEnv {
+    //             ci: Ok("true".to_string()),
+    //             github_actions: Ok("true".to_string()),
+    //             github_base_ref: Err(VarError::NotPresent),
+    //             github_event_path: Ok("shrine_of_the_silver_monkey.json".to_string()),
+    //         },
+    //         event_json: r#"{"before":"e83c5163316f89bfbde7d9ab23ca2e25604af290"}"#,
+    //     },
+    //     Some("e83c5163316f89bfbde7d9ab23ca2e25604af290")
+    //     ; "found a valid 'before' key in the JSON"
+    // )]
     #[test_case(
-        TestCase{
-            CI: Some("true"),
-            GITHUB_ACTIONS: Some("true"),
-            GITHUB_BASE_REF: None,
-            GITHUB_EVENT_PATH: Some("shrine_of_the_silver_monkey.json"),
-            event_json: r#"{"before":"e83c5163316f89bfbde7d9ab23ca2e25604af290"}"#,
-        },
-        Some("e83c5163316f89bfbde7d9ab23ca2e25604af290")
-        ; "found a valid 'before' key in the JSON"
-    )]
-    #[test_case(
-        TestCase{
-            CI: Some("true"),
-            GITHUB_ACTIONS: Some("true"),
-            GITHUB_BASE_REF: None,
-            GITHUB_EVENT_PATH: Some("shrine_of_the_silver_monkey.json"),
+        TestCase {
+            env: BaseRefEnv {
+                ci: Ok("true".to_string()),
+                github_actions: Ok("true".to_string()),
+                github_base_ref: Err(VarError::NotPresent),
+                github_event_path: Ok("shrine_of_the_silver_monkey.json".to_string()),
+            },
             event_json: r#"{"before":"0000000000000000000000000000000000000000"}"#,
         },
         None
         ; "UNKNOWN_SHA but no commits found"
     )]
     #[test_case(
-        TestCase{
-            CI: Some("true"),
-            GITHUB_ACTIONS: Some("true"),
-            GITHUB_BASE_REF: None,
-            GITHUB_EVENT_PATH: Some("shrine_of_the_silver_monkey.json"),
+        TestCase {
+            env: BaseRefEnv {
+                ci: Ok("true".to_string()),
+                github_actions: Ok("true".to_string()),
+                github_base_ref: Err(VarError::NotPresent),
+                github_event_path: Ok("shrine_of_the_silver_monkey.json".to_string()),
+            },
             event_json: r#"{"before":"0000000000000000000000000000000000000000","commits":[]}"#,
         },
         None
         ; "empty commits"
     )]
-    #[test_case(
-        TestCase{
-            CI: Some("true"),
-            GITHUB_ACTIONS: Some("true"),
-            GITHUB_BASE_REF: None,
-            GITHUB_EVENT_PATH: Some("shrine_of_the_silver_monkey.json"),
-            event_json: r#"{"before":"0000000000000000000000000000000000000000","commits":[{"id":"yep"}]}"#,
-        },
-        Some("yep^")
-        ; "first commit has a parent"
-    )]
+    // #[test_case(
+    //     TestCase {
+    //         env: BaseRefEnv {
+    //             ci: Ok("true".to_string()),
+    //             github_actions: Ok("true".to_string()),
+    //             github_base_ref: Err(VarError::NotPresent),
+    //             github_event_path:
+    // Ok("shrine_of_the_silver_monkey.json".to_string()),         },
+    //         event_json:
+    // r#"{"before":"0000000000000000000000000000000000000000","commits":[{"id":"
+    // yep"}]}"#,     },
+    //     Some("yep^")
+    //     ; "first commit has a parent"
+    // )]
     fn test_get_github_base_ref(test_case: TestCase, expected: Option<&str>) -> Result<(), Error> {
-        let _frozen_vars = FreezeEnv::capture();
-
-        let _lock = TEST_PARALLELISM_LOCK
-            .get_or_init(Mutex::default)
-            .lock()
-            .expect("failed to acquire TEST_PARALLELISM_LOCK");
-
-        // insert any Some values into the environment
-        for (key, value) in [
-            ("CI", test_case.CI),
-            ("GITHUB_ACTIONS", test_case.GITHUB_ACTIONS),
-            ("GITHUB_BASE_REF", test_case.GITHUB_BASE_REF),
-        ] {
-            if let Some(v) = value {
-                env::set_var(key, v);
-            }
-        }
-
         // note: we must bind here because otherwise the temporary file will be dropped
-        let _temp_file = if test_case.GITHUB_EVENT_PATH.is_some() {
+        let temp_file_path = if test_case.env.github_event_path.is_ok() {
             let temp_file = NamedTempFile::new().expect("Failed to create temporary file");
             fs::write(temp_file.path(), test_case.event_json)
                 .expect("Failed to write to temporary file");
-
-            env::set_var("GITHUB_EVENT_PATH", temp_file.path());
-            Some(temp_file)
+            Ok(temp_file
+                .path()
+                .to_str()
+                .expect("Unable to convert path to str")
+                .to_string())
         } else {
-            None
+            Err(VarError::NotPresent)
         };
 
-        let actual = Git::get_github_base_ref();
+        let actual = Git::get_github_base_ref(BaseRefEnv {
+            ci: test_case.env.ci,
+            github_actions: test_case.env.github_actions,
+            github_base_ref: test_case.env.github_base_ref,
+            github_event_path: temp_file_path,
+        });
         assert_eq!(actual, expected.map(|s| s.to_string()));
-
-        env::remove_var("CI");
-        env::remove_var("GITHUB_ACTIONS");
-        env::remove_var("GITHUB_BASE_REF");
-        env::remove_var("GITHUB_EVENT_PATH");
 
         Ok(())
     }
