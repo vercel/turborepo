@@ -3,7 +3,7 @@ use std::{
     process::Command,
 };
 
-use serde_json::Value;
+use serde::Deserialize;
 use tracing::warn;
 use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeUnixPath,
@@ -87,6 +87,43 @@ impl SCM {
 
 const UNKNOWN_SHA: &str = "0000000000000000000000000000000000000000";
 
+#[derive(Debug, Deserialize, Clone)]
+struct GitHubCommit {
+    id: String,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct GitHubEvent {
+    #[serde(default)]
+    before: String,
+
+    #[serde(default)]
+    commits: Vec<GitHubCommit>,
+}
+
+impl GitHubEvent {
+    fn get_first_commit_id(&self) -> Option<String> {
+        if self.commits.is_empty() {
+            // commits can be empty when you push a branch with no commits
+            return None;
+        }
+
+        if self.commits.len() > 2048 {
+            // GitHub API limit for number of commits shown in this field
+            return None;
+        }
+
+        // Extract the base ref from the push event
+        if let Some(first_commit) = self.commits.first() {
+            let id = &first_commit.id;
+            return Some(format!("{id}^"));
+        }
+
+        // we don't have enough information to determine the base ref
+        None
+    }
+}
+
 impl Git {
     fn get_current_branch(&self) -> Result<String, Error> {
         let output = self.execute_git_command(&["branch", "--show-current"], "")?;
@@ -137,38 +174,22 @@ impl Git {
             file.read_to_string(&mut data).ok()?;
 
             // Parse the JSON data from the file
-            let json: Value = serde_json::from_str(&data).ok()?;
+            let json: GitHubEvent = serde_json::from_str(&data).ok()?;
 
             // Extract the base ref from the pull request event if available
-            if let Some(base_ref) = json.get("before") {
-                // the base_ref will be UNKNOWN_SHA on first push to a new branch and force
-                // pushes
-                if base_ref == UNKNOWN_SHA {
-                    if let Some(maybe_commits) = json.get("commits") {
-                        let commits = maybe_commits.as_array()?;
-                        if commits.is_empty() {
-                            // commits can be empty when you push a branch with no commits
-                            return None;
-                        }
-                        if commits.len() > 2048 {
-                            // GitHub API limit for number of commits shown in this field
-                            return None;
-                        }
+            let base_ref = &json.before;
 
-                        // Extract the base ref from the push event
-                        if let Some(first_commit) = commits.first() {
-                            if let Some(id) = first_commit.get("id") {
-                                return Some(format!("{id}^"));
-                            }
-                        }
-                    }
-
-                    // we don't have enough information to determine the base ref
-                    return None;
-                }
-
-                return Some(base_ref.to_string());
+            // the base_ref will be UNKNOWN_SHA on first push to a new branch and force
+            // pushes
+            if base_ref == UNKNOWN_SHA {
+                return json.get_first_commit_id();
             }
+
+            if base_ref.is_empty() {
+                return None;
+            }
+
+            return Some(base_ref.to_string());
         }
         None
     }
@@ -330,6 +351,7 @@ mod tests {
         env, fs,
         path::{Path, PathBuf},
         process::Command,
+        sync::{Mutex, OnceLock},
     };
 
     use git2::{Oid, Repository, RepositoryInitOptions};
@@ -339,7 +361,14 @@ mod tests {
     use which::which;
 
     use super::{previous_content, ChangedFiles};
-    use crate::{Error, Git, SCM};
+    use crate::{
+        git::{GitHubCommit, GitHubEvent},
+        Error, Git, SCM,
+    };
+
+    /// By default `#[test_case]` will run in parallel.
+    /// This is a problem for testing things TODO
+    static TEST_PARALLELISM_LOCK: OnceLock<Mutex<bool>> = OnceLock::new();
 
     fn setup_repository(
         init_opts: Option<&RepositoryInitOptions>,
@@ -1107,34 +1136,17 @@ mod tests {
             GITHUB_ACTIONS: Some("true"),
             GITHUB_BASE_REF: None,
             GITHUB_EVENT_PATH: Some("shrine_of_the_silver_monkey.json"),
-            event_json: r#"{"before":"0000000000000000000000000000000000000000","commits":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}"#,
-        },
-        None
-        ; "2049 commits"
-    )]
-    #[test_case(
-        TestCase{
-            CI: Some("true"),
-            GITHUB_ACTIONS: Some("true"),
-            GITHUB_BASE_REF: None,
-            GITHUB_EVENT_PATH: Some("shrine_of_the_silver_monkey.json"),
             event_json: r#"{"before":"0000000000000000000000000000000000000000","commits":[{"id":"yep"}]}"#,
         },
         Some("yep^")
         ; "first commit has a parent"
     )]
-    #[test_case(
-        TestCase{
-            CI: Some("true"),
-            GITHUB_ACTIONS: Some("true"),
-            GITHUB_BASE_REF: None,
-            GITHUB_EVENT_PATH: Some("shrine_of_the_silver_monkey.json"),
-            event_json: r#"{"before":"0000000000000000000000000000000000000000","commits":[{}]}"#,
-        },
-        None
-        ; "first commit is missing an id"
-    )]
     fn test_get_github_base_ref(test_case: TestCase, expected: Option<&str>) -> Result<(), Error> {
+        let _lock = TEST_PARALLELISM_LOCK
+            .get_or_init(Mutex::default)
+            .lock()
+            .unwrap();
+
         // insert any Some values into the environment
         for (key, value) in [
             ("CI", test_case.CI),
@@ -1146,17 +1158,43 @@ mod tests {
             }
         }
 
-        if test_case.GITHUB_EVENT_PATH.is_some() {
+        let _temp_file = if test_case.GITHUB_EVENT_PATH.is_some() {
             let temp_file = NamedTempFile::new().expect("Failed to create temporary file");
             fs::write(temp_file.path(), test_case.event_json)
                 .expect("Failed to write to temporary file");
 
             env::set_var("GITHUB_EVENT_PATH", temp_file.path());
-        }
+            Some(temp_file)
+        } else {
+            None
+        };
 
         let actual = Git::get_github_base_ref();
         assert_eq!(actual, expected.map(|s| s.to_string()));
 
+        env::remove_var("CI");
+        env::remove_var("GITHUB_ACTIONS");
+        env::remove_var("GITHUB_BASE_REF");
+        env::remove_var("GITHUB_EVENT_PATH");
+
         Ok(())
+    }
+
+    #[test]
+    fn test_thousands_of_commits() {
+        let commits = vec![
+            GitHubCommit {
+                id: "insert-famous-sha-here".to_string(),
+            };
+            2049 // 2049 is one over the limit
+        ];
+
+        let github_event = GitHubEvent {
+            before: "".to_string(),
+            commits,
+        };
+        let actual = github_event.get_first_commit_id();
+
+        assert_eq!(None, actual);
     }
 }
