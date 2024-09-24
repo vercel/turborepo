@@ -119,13 +119,9 @@ impl GitHubEvent {
         }
 
         // Extract the base ref from the push event
-        if let Some(first_commit) = self.commits.first() {
-            let id = &first_commit.id;
-            return Some(format!("{id}^"));
-        }
-
-        // we don't have enough information to determine the base ref
-        None
+        let first_commit = self.commits.first()?; 
+        let id = &first_commit.id;
+        Some(format!("{id}^"))
     }
 }
 
