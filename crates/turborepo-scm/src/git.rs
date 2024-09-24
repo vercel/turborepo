@@ -367,7 +367,8 @@ mod tests {
     };
 
     /// By default `#[test_case]` will run in parallel.
-    /// This is a problem for testing things TODO
+    /// This is a problem for testing things like environment variables, which
+    /// are not thread-safe. This lock ensures that these tests run serially.
     static TEST_PARALLELISM_LOCK: OnceLock<Mutex<bool>> = OnceLock::new();
 
     fn setup_repository(
@@ -1145,7 +1146,7 @@ mod tests {
         let _lock = TEST_PARALLELISM_LOCK
             .get_or_init(Mutex::default)
             .lock()
-            .unwrap();
+            .expect("failed to acquire TEST_PARALLELISM_LOCK");
 
         // insert any Some values into the environment
         for (key, value) in [
@@ -1158,6 +1159,7 @@ mod tests {
             }
         }
 
+        // note: we must bind here because otherwise the temporary file will be dropped
         let _temp_file = if test_case.GITHUB_EVENT_PATH.is_some() {
             let temp_file = NamedTempFile::new().expect("Failed to create temporary file");
             fs::write(temp_file.path(), test_case.event_json)
