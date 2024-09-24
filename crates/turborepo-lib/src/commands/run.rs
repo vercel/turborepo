@@ -1,4 +1,4 @@
-use std::future::Future;
+use std::{future::Future, sync::Arc};
 
 use tracing::error;
 use turborepo_telemetry::events::command::CommandEventBuilder;
@@ -40,10 +40,12 @@ pub async fn run(base: CommandBase, telemetry: CommandEventBuilder) -> Result<i3
 
     let run_fut = async {
         let (analytics_sender, analytics_handle) = run_builder.start_analytics();
-        let run = run_builder
-            .with_analytics_sender(analytics_sender)
-            .build(&handler, telemetry)
-            .await?;
+        let run = Arc::new(
+            run_builder
+                .with_analytics_sender(analytics_sender)
+                .build(&handler, telemetry)
+                .await?,
+        );
 
         let (sender, handle) = run.start_ui()?.unzip();
 

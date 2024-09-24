@@ -46,8 +46,8 @@ pub struct Query {
 }
 
 impl Query {
-    pub fn new(run: Run) -> Self {
-        Self { run: Arc::new(run) }
+    pub fn new(run: Arc<Run>) -> Self {
+        Self { run }
     }
 }
 
@@ -339,12 +339,12 @@ impl Query {
     }
 }
 
-async fn graphiql() -> impl IntoResponse {
+pub async fn graphiql() -> impl IntoResponse {
     response::Html(GraphiQLSource::build().endpoint("/").finish())
 }
 
 pub async fn run_server(run: Run, signal: SignalHandler) -> Result<(), Error> {
-    let schema = Schema::new(Query::new(run), EmptyMutation, EmptySubscription);
+    let schema = Schema::new(Query::new(Arc::new(run)), EmptyMutation, EmptySubscription);
     let app = Router::new().route("/", get(graphiql).post_service(GraphQL::new(schema)));
 
     let subscriber = signal.subscribe().ok_or(Error::NoSignalHandler)?;

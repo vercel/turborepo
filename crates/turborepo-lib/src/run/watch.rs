@@ -46,7 +46,7 @@ impl ChangedPackages {
 }
 
 pub struct WatchClient {
-    run: Run,
+    run: Arc<Run>,
     watched_packages: HashSet<PackageName>,
     persistent_tasks_handle: Option<PersistentRunHandle>,
     connector: DaemonConnector,
@@ -130,9 +130,11 @@ impl WatchClient {
             execution_args: execution_args.clone(),
         });
 
-        let run = RunBuilder::new(new_base)?
-            .build(&handler, telemetry.clone())
-            .await?;
+        let run = Arc::new(
+            RunBuilder::new(new_base)?
+                .build(&handler, telemetry.clone())
+                .await?,
+        );
 
         let watched_packages = run.get_relevant_packages();
 
@@ -331,7 +333,8 @@ impl WatchClient {
                 self.run = RunBuilder::new(base.clone())?
                     .hide_prelude()
                     .build(&self.handler, self.telemetry.clone())
-                    .await?;
+                    .await?
+                    .into();
 
                 self.watched_packages = self.run.get_relevant_packages();
 

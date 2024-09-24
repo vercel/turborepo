@@ -211,7 +211,7 @@ impl Run {
             && tui::terminal_big_enough()?)
     }
 
-    pub fn start_ui(&self) -> UIResult<UISender> {
+    pub fn start_ui(self: &Arc<Self>) -> UIResult<UISender> {
         // Print prelude here as this needs to happen before the UI is started
         if self.should_print_prelude {
             self.print_run_prelude();
@@ -227,10 +227,10 @@ impl Run {
                 .map(|res| res.map(|(sender, handle)| (UISender::Wui(sender), handle))),
         }
     }
-    fn start_web_ui(&self) -> WuiResult {
+    fn start_web_ui(self: &Arc<Self>) -> WuiResult {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
 
-        let handle = tokio::spawn(turborepo_ui::wui::server::start_server(rx));
+        let handle = tokio::spawn(turborepo_ui::wui::server::start_server(rx, self.clone()));
 
         Ok(Some((WebUISender { tx }, handle)))
     }

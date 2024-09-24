@@ -1,4 +1,4 @@
-use std::fs;
+use std::{fs, sync::Arc};
 
 use async_graphql::{EmptyMutation, EmptySubscription, Schema, ServerError};
 use miette::{Diagnostic, Report, SourceSpan};
@@ -84,7 +84,7 @@ pub async fn run(
             fs::read_to_string(AbsoluteSystemPathBuf::from_unknown(run.repo_root(), query))?
         };
 
-        let schema = Schema::new(Query::new(run), EmptyMutation, EmptySubscription);
+        let schema = Schema::new(Query::new(Arc::new(run)), EmptyMutation, EmptySubscription);
 
         let result = schema.execute(&query).await;
         if result.errors.is_empty() {
