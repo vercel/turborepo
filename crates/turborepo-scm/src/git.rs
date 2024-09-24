@@ -108,7 +108,7 @@ impl GitHubEvent {
             return None;
         }
 
-        if self.commits.len() > 2048 {
+        if self.commits.len() >= 2048 {
             // GitHub API limit for number of commits shown in this field
             return None;
         }
