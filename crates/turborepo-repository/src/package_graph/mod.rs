@@ -4,6 +4,11 @@ use std::{
 };
 
 use itertools::Itertools;
+
+use petgraph::{
+    graph::{Edge, NodeIndex},
+    visit::{depth_first_search, Reversed},
+};
 use serde::Serialize;
 use tracing::debug;
 use turbopath::{
@@ -217,6 +222,14 @@ impl PackageGraph {
 
     pub fn package_info(&self, package: &PackageName) -> Option<&PackageInfo> {
         self.packages.get(package)
+    }
+
+    pub fn node_indices(&self) -> impl Iterator<Item = NodeIndex> {
+        self.graph.node_indices()
+    }
+
+    pub fn edges(&self) -> &[Edge<()>] {
+        self.graph.raw_edges()
     }
 
     pub fn packages(&self) -> impl Iterator<Item = (&PackageName, &PackageInfo)> {
