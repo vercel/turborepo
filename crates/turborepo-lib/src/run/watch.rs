@@ -46,7 +46,7 @@ impl ChangedPackages {
 }
 
 pub struct WatchClient {
-    run: Run,
+    run: Arc<Run>,
     watched_packages: HashSet<PackageName>,
     persistent_tasks_handle: Option<PersistentRunHandle>,
     connector: DaemonConnector,
@@ -130,9 +130,11 @@ impl WatchClient {
             execution_args: execution_args.clone(),
         });
 
-        let run = RunBuilder::new(new_base)?
-            .build(&handler, telemetry.clone())
-            .await?;
+        let run = Arc::new(
+            RunBuilder::new(new_base)?
+                .build(&handler, telemetry.clone())
+                .await?,
+        );
 
         let watched_packages = run.get_relevant_packages();
 
@@ -288,7 +290,7 @@ impl WatchClient {
                 let signal_handler = self.handler.clone();
                 let telemetry = self.telemetry.clone();
 
-                let mut run = RunBuilder::new(new_base)?
+                let run = RunBuilder::new(new_base)?
                     .with_entrypoint_packages(packages)
                     .hide_prelude()
                     .build(&signal_handler, telemetry)
@@ -331,7 +333,8 @@ impl WatchClient {
                 self.run = RunBuilder::new(base.clone())?
                     .hide_prelude()
                     .build(&self.handler, self.telemetry.clone())
-                    .await?;
+                    .await?
+                    .into();
 
                 self.watched_packages = self.run.get_relevant_packages();
 
@@ -357,7 +360,7 @@ impl WatchClient {
                         self.persistent_tasks_handle.is_none(),
                         "persistent handle should be empty before creating a new one"
                     );
-                    let mut persistent_run = self.run.create_run_for_persistent_tasks();
+                    let persistent_run = self.run.create_run_for_persistent_tasks();
                     let ui_sender = self.ui_sender.clone();
                     // If we have persistent tasks, we run them on a separate thread
                     // since persistent tasks don't finish
@@ -369,7 +372,7 @@ impl WatchClient {
                     });
 
                     // But we still run the regular tasks blocking
-                    let mut non_persistent_run = self.run.create_run_without_persistent_tasks();
+                    let non_persistent_run = self.run.create_run_without_persistent_tasks();
                     Ok(non_persistent_run.run(self.ui_sender.clone(), true).await?)
                 } else {
                     Ok(self.run.run(self.ui_sender.clone(), true).await?)

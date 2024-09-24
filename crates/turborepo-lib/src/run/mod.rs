@@ -10,6 +10,7 @@ mod scope;
 pub(crate) mod summary;
 pub mod task_access;
 pub mod task_id;
+mod ui;
 pub mod watch;
 
 use std::{
@@ -211,7 +212,7 @@ impl Run {
             && tui::terminal_big_enough()?)
     }
 
-    pub fn start_ui(&self) -> UIResult<UISender> {
+    pub fn start_ui(self: &Arc<Self>) -> UIResult<UISender> {
         // Print prelude here as this needs to happen before the UI is started
         if self.should_print_prelude {
             self.print_run_prelude();
@@ -227,10 +228,10 @@ impl Run {
                 .map(|res| res.map(|(sender, handle)| (UISender::Wui(sender), handle))),
         }
     }
-    fn start_web_ui(&self) -> WuiResult {
+    fn start_web_ui(self: &Arc<Self>) -> WuiResult {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
 
-        let handle = tokio::spawn(turborepo_ui::wui::server::start_server(rx));
+        let handle = tokio::spawn(ui::start_web_ui_server(rx, self.clone()));
 
         Ok(Some((WebUISender { tx }, handle)))
     }
@@ -260,7 +261,7 @@ impl Run {
         }
     }
 
-    pub async fn run(&mut self, ui_sender: Option<UISender>, is_watch: bool) -> Result<i32, Error> {
+    pub async fn run(&self, ui_sender: Option<UISender>, is_watch: bool) -> Result<i32, Error> {
         let skip_cache_writes = self.opts.runcache_opts.skip_writes;
         if let Some(subscriber) = self.signal_handler.subscribe() {
             let run_cache = self.run_cache.clone();
@@ -356,7 +357,7 @@ impl Run {
             self.engine.task_definitions(),
             &self.repo_root,
             &self.run_telemetry,
-            &mut self.daemon,
+            &self.daemon,
         )?;
 
         let root_workspace = self
