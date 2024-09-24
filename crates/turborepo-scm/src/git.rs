@@ -1,5 +1,10 @@
 use std::{
-    backtrace::Backtrace, collections::HashSet, env, fs::File, io::Read, path::PathBuf,
+    backtrace::Backtrace,
+    collections::HashSet,
+    env,
+    fs::{self, File},
+    io::Read,
+    path::PathBuf,
     process::Command,
 };
 
@@ -169,9 +174,7 @@ impl Git {
         // try reading from the GITHUB_EVENT_PATH file
         if let Ok(event_path) = env::var("GITHUB_EVENT_PATH") {
             // Try to open the event file and read the contents
-            let mut file = File::open(event_path).ok()?;
-            let mut data = String::new();
-            file.read_to_string(&mut data).ok()?;
+            let data = fs::read_to_string(event_path).ok()?;
 
             // Parse the JSON data from the file
             let json: GitHubEvent = serde_json::from_str(&data).ok()?;
@@ -878,6 +881,8 @@ mod tests {
         target_branch: Option<&str>,
         expected: Option<&str>,
     ) -> Result<(), Error> {
+        let _frozen_vars = FreezeEnv::capture();
+
         let mut repo_opts = RepositoryInitOptions::new();
 
         let (first_branch, remaining_branches) = branches_to_create.split_first().unwrap();
