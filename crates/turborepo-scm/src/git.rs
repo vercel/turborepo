@@ -107,7 +107,7 @@ struct GitHubEvent {
 }
 
 impl GitHubEvent {
-    fn get_first_commit_id(&self) -> Option<String> {
+    fn get_parent_ref_of_first_commit(&self) -> Option<String> {
         if self.commits.is_empty() {
             // commits can be empty when you push a branch with no commits
             return None;
@@ -206,7 +206,7 @@ impl Git {
             // the base_ref will be UNKNOWN_SHA on first push to a new branch and force
             // pushes
             if base_ref == UNKNOWN_SHA {
-                return json.get_first_commit_id();
+                return json.get_parent_ref_of_first_commit();
             }
 
             if base_ref.is_empty() {
@@ -1170,7 +1170,7 @@ mod tests {
             before: "".to_string(),
             commits,
         };
-        let actual = github_event.get_first_commit_id();
+        let actual = github_event.get_parent_ref_of_first_commit();
 
         assert_eq!(None, actual);
     }
