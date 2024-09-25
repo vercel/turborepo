@@ -104,6 +104,9 @@ struct GitHubEvent {
 
     #[serde(default)]
     commits: Vec<GitHubCommit>,
+
+    #[serde(default)]
+    forced: bool,
 }
 
 impl GitHubEvent {
@@ -203,9 +206,9 @@ impl Git {
             // Extract the base ref from the pull request event if available
             let base_ref = &json.before;
 
-            // the base_ref will be UNKNOWN_SHA on first push to a new branch and force
-            // pushes
-            if base_ref == UNKNOWN_SHA {
+            // the base_ref will be UNKNOWN_SHA on first push
+            // we also use this behavior in force pushes
+            if base_ref == UNKNOWN_SHA || json.forced {
                 return json.get_parent_ref_of_first_commit();
             }
 
@@ -1090,6 +1093,18 @@ mod tests {
             env: CIEnv {
                 is_github_actions: true,
                 github_base_ref: Err(VarError::NotPresent),
+                github_event_path: Ok("olmecs_temple.json".to_string()),
+            },
+            event_json: r#"{"forced":true}"#,
+        },
+        None
+        ; "force push"
+    )]
+    #[test_case(
+        TestCase {
+            env: CIEnv {
+                is_github_actions: true,
+                github_base_ref: Err(VarError::NotPresent),
                 github_event_path: Ok("shrine_of_the_silver_monkey.json".to_string()),
             },
             event_json: r#"{"before":"e83c5163316f89bfbde7d9ab23ca2e25604af290"}"#,
@@ -1169,6 +1184,7 @@ mod tests {
         let github_event = GitHubEvent {
             before: "".to_string(),
             commits,
+            forced: false,
         };
         let actual = github_event.get_parent_ref_of_first_commit();
 
