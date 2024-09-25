@@ -200,9 +200,9 @@ impl Git {
         None
     }
 
-    fn resolve_base<'a>(&self, base_override: Option<&'a str>) -> Result<&'a str, Error> {
+    fn resolve_base(&self, base_override: Option<&str>) -> Result<String, Error> {
         if let Some(valid_from) = base_override {
-            return Ok(valid_from);
+            return Ok(valid_from.to_string());
         }
 
         if let Some(github_base_ref) = Self::get_github_base_ref(BaseRefEnv {
@@ -211,17 +211,17 @@ impl Git {
             github_base_ref: env::var("GITHUB_BASE_REF"),
             github_event_path: env::var("GITHUB_EVENT_PATH"),
         }) {
-            return Ok(Box::leak(github_base_ref.into_boxed_str()));
+            return Ok(github_base_ref);
         }
 
         let main_result = self.execute_git_command(&["rev-parse", "main"], "");
         if main_result.is_ok() {
-            return Ok("main");
+            return Ok("main".to_string());
         }
 
         let master_result = self.execute_git_command(&["rev-parse", "master"], "");
         if master_result.is_ok() {
-            return Ok("master");
+            return Ok("master".to_string());
         }
         Err(Error::UnableToResolveRef)
     }
@@ -242,9 +242,9 @@ impl Git {
         let valid_from = self.resolve_base(from_commit)?;
 
         let mut args = if let Some(to_commit) = to_commit {
-            vec!["diff", "--name-only", valid_from, to_commit]
+            vec!["diff", "--name-only", &valid_from, to_commit]
         } else {
-            vec!["diff", "--name-only", valid_from]
+            vec!["diff", "--name-only", &valid_from]
         };
 
         if merge_base {
@@ -905,7 +905,7 @@ mod tests {
         let thing = Git::find(&root).unwrap();
         let actual = thing.resolve_base(target_branch).ok();
 
-        assert_eq!(actual, expected);
+        assert_eq!(actual.as_deref(), expected);
 
         Ok(())
     }
