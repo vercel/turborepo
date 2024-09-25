@@ -235,8 +235,10 @@ impl Git {
                 .execute_git_command(&["rev-parse", &github_base_ref], "")
                 .is_ok()
             {
+                println!("Resolved base ref from GitHub Actions event: {github_base_ref}");
                 Ok(github_base_ref)
             } else {
+                println!("Failed to resolve base ref from GitHub Actions event");
                 Err(Error::UnableToResolveRef)
             };
         }
