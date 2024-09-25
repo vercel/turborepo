@@ -231,7 +231,18 @@ impl Git {
         }
 
         if let Some(github_base_ref) = Self::get_github_base_ref(env) {
-            return Ok(github_base_ref);
+            // we don't fall through to checking against main or master
+            // because at this point we know we're in a GITHUB CI environment
+            // and we should really know by now what the base ref is
+            // so it's better to just error if something went wrong
+            return if self
+                .execute_git_command(&["rev-parse", &github_base_ref], "")
+                .is_ok()
+            {
+                Ok(github_base_ref)
+            } else {
+                Err(Error::UnableToResolveRef)
+            };
         }
 
         let main_result = self.execute_git_command(&["rev-parse", "main"], "");
@@ -1141,7 +1152,7 @@ mod tests {
     )]
     // #[test_case(
     //     TestCase {
-    //         env: BaseRefEnv {
+    //         env: CIEnv {
     //             ci: Ok("true".to_string()),
     //             github_actions: Ok("true".to_string()),
     //             github_base_ref: Err(VarError::NotPresent),
@@ -1180,7 +1191,7 @@ mod tests {
     )]
     // #[test_case(
     //     TestCase {
-    //         env: BaseRefEnv {
+    //         env: CIEnv {
     //             ci: Ok("true".to_string()),
     //             github_actions: Ok("true".to_string()),
     //             github_base_ref: Err(VarError::NotPresent),
