@@ -77,12 +77,6 @@ impl ResolvedConfigurationOptions for EnvVars {
             .map(|value| value.ok_or_else(|| Error::InvalidPreflight))
             .transpose()?;
 
-        // Process enabled
-        let enabled = self
-            .truthy_value("enabled")
-            .map(|value| value.ok_or_else(|| Error::InvalidRemoteCacheEnabled))
-            .transpose()?;
-
         let force = self.truthy_value("force").flatten();
         let remote_only = self.truthy_value("remote_only").flatten();
         let remote_cache_read_only = self.truthy_value("remote_cache_read_only").flatten();
@@ -162,10 +156,15 @@ impl ResolvedConfigurationOptions for EnvVars {
             token: self.output_map.get("token").cloned(),
             scm_base: self.output_map.get("scm_base").cloned(),
             scm_head: self.output_map.get("scm_head").cloned(),
+            cache: self
+                .output_map
+                .get("cache")
+                .map(|c| c.parse())
+                .transpose()?,
             // Processed booleans
             signature,
             preflight,
-            enabled,
+            enabled: None,
             ui,
             allow_no_package_manager,
             daemon,

@@ -100,16 +100,16 @@ impl Opts {
             return Err(Error::ExpectedRun(Backtrace::capture()));
         };
 
-        let run_and_execution_args = OptsInputs {
+        let inputs = OptsInputs {
             run_args: run_args.as_ref(),
             execution_args: execution_args.as_ref(),
             config,
             api_auth: &api_auth,
         };
-        let run_opts = RunOpts::try_from(run_and_execution_args)?;
-        let cache_opts = CacheOpts::from(run_and_execution_args);
-        let scope_opts = ScopeOpts::try_from(run_and_execution_args)?;
-        let runcache_opts = RunCacheOpts::from(run_and_execution_args);
+        let run_opts = RunOpts::try_from(inputs)?;
+        let cache_opts = CacheOpts::from(inputs);
+        let scope_opts = ScopeOpts::try_from(inputs)?;
+        let runcache_opts = RunCacheOpts::from(inputs);
 
         Ok(Self {
             run_opts,
@@ -128,18 +128,14 @@ struct OptsInputs<'a> {
     api_auth: &'a Option<APIAuth>,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct RunCacheOpts {
-    pub(crate) skip_reads: bool,
-    pub(crate) skip_writes: bool,
     pub(crate) task_output_logs_override: Option<OutputLogsMode>,
 }
 
 impl<'a> From<OptsInputs<'a>> for RunCacheOpts {
     fn from(inputs: OptsInputs<'a>) -> Self {
         RunCacheOpts {
-            skip_reads: inputs.config.force(),
-            skip_writes: inputs.run_args.no_cache,
             task_output_logs_override: inputs.execution_args.output_logs,
         }
     }
@@ -362,15 +358,39 @@ impl<'a> TryFrom<OptsInputs<'a>> for ScopeOpts {
 impl<'a> From<OptsInputs<'a>> for CacheOpts {
     fn from(inputs: OptsInputs<'a>) -> Self {
         let is_linked = turborepo_api_client::is_linked(inputs.api_auth);
-        let skip_remote = if !is_linked {
-            true
+        let mut cache = inputs.config.cache();
+
+        if !is_linked {
+            cache.remote.read = false;
+            cache.remote.write = false;
         } else if let Some(enabled) = inputs.config.enabled {
             // We're linked, but if the user has explicitly enabled or disabled, use that
             // value
-            !enabled
+            cache.remote.read = enabled;
+            cache.remote.write = enabled;
         } else {
-            false
+            cache.remote.read = false;
+            cache.remote.write = false;
         };
+
+        if inputs.config.remote_cache_read_only() {
+            cache.remote.write = false;
+        }
+
+        if inputs.config.remote_only() {
+            cache.fs.read = false;
+            cache.fs.write = false;
+        }
+
+        if inputs.config.force() {
+            cache.fs.read = false;
+            cache.remote.read = false;
+        }
+
+        if inputs.run_args.no_cache {
+            cache.fs.write = false;
+            cache.remote.write = false;
+        }
 
         // Note that we don't currently use the team_id value here. In the future, we
         // should probably verify that we only use the signature value when the
@@ -385,10 +405,8 @@ impl<'a> From<OptsInputs<'a>> for CacheOpts {
 
         CacheOpts {
             cache_dir: inputs.config.cache_dir().into(),
-            skip_filesystem: inputs.config.remote_only(),
-            remote_cache_read_only: inputs.config.remote_cache_read_only(),
+            cache,
             workers: inputs.run_args.cache_workers,
-            skip_remote,
             remote_cache_opts,
         }
     }

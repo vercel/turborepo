@@ -10,7 +10,9 @@ use tracing::{debug, error, log::warn};
 use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
 };
-use turborepo_cache::{http::UploadMap, AsyncCache, CacheError, CacheHitMetadata, CacheSource};
+use turborepo_cache::{
+    http::UploadMap, AsyncCache, CacheError, CacheHitMetadata, CacheOpts, CacheSource,
+};
 use turborepo_repository::package_graph::PackageInfo;
 use turborepo_scm::SCM;
 use turborepo_telemetry::events::{task::PackageTaskEventBuilder, TrackedErrors};
@@ -68,7 +70,8 @@ impl RunCache {
     pub fn new(
         cache: AsyncCache,
         repo_root: &AbsoluteSystemPath,
-        opts: &RunCacheOpts,
+        run_cache_opts: RunCacheOpts,
+        cache_opts: &CacheOpts,
         color_selector: ColorSelector,
         daemon_client: Option<DaemonClient<DaemonConnector>>,
         ui: ColorConfig,
@@ -77,14 +80,14 @@ impl RunCache {
         let task_output_logs = if is_dry_run {
             Some(OutputLogsMode::None)
         } else {
-            opts.task_output_logs_override
+            run_cache_opts.task_output_logs_override
         };
         RunCache {
             task_output_logs,
             cache,
             warnings: Default::default(),
-            reads_disabled: opts.skip_reads,
-            writes_disabled: opts.skip_writes,
+            reads_disabled: !cache_opts.cache.remote.read && !cache_opts.cache.fs.read,
+            writes_disabled: !cache_opts.cache.remote.write && !cache_opts.cache.fs.write,
             repo_root: repo_root.to_owned(),
             color_selector,
             daemon_client,

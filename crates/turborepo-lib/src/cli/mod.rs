@@ -33,7 +33,6 @@ use crate::{
 };
 
 mod error;
-
 // Global turbo sets this environment variable to its cwd so that local
 // turbo can use it for package inference.
 pub const INVOCATION_DIR_ENV_VAR: &str = "TURBO_INVOCATION_DIR";
@@ -709,7 +708,15 @@ fn path_non_empty(s: &str) -> Result<Utf8PathBuf, String> {
 #[command(groups = [
 ArgGroup::new("scope-filter-group").multiple(true).required(false),
 ])]
+#[command(groups = [
+    ArgGroup::new("cache-group").multiple(false).required(false),
+])]
 pub struct ExecutionArgs {
+    /// Set the cache behavior for this run. Pass a list of comma-separated key,
+    /// value pairs to enable reading and writing to either the local or
+    /// remote cache.
+    #[clap(long, group = "cache-group")]
+    pub cache: Option<String>,
     /// Override the filesystem cache directory.
     #[clap(long, value_parser = path_non_empty)]
     pub cache_dir: Option<Utf8PathBuf>,
@@ -771,7 +778,7 @@ pub struct ExecutionArgs {
     pub pkg_inference_root: Option<String>,
     /// Ignore the local filesystem cache for all tasks. Only
     /// allow reading and caching artifacts using the remote cache.
-    #[clap(long, default_missing_value = "true")]
+    #[clap(long, default_missing_value = "true", group = "cache-group")]
     pub remote_only: Option<Option<bool>>,
     /// Use "none" to remove prefixes from task logs. Use "task" to get task id
     /// prefixing. Use "auto" to let turbo decide how to prefix the logs

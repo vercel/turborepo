@@ -114,7 +114,7 @@ impl Run {
             );
         }
 
-        let use_http_cache = !self.opts.cache_opts.skip_remote;
+        let use_http_cache = self.opts.cache_opts.cache.remote.should_use();
         if use_http_cache {
             cprintln!(self.color_config, GREY, "• Remote caching enabled");
         } else {
@@ -277,7 +277,7 @@ impl Run {
     }
 
     pub async fn run(&self, ui_sender: Option<UISender>, is_watch: bool) -> Result<i32, Error> {
-        let skip_cache_writes = self.opts.runcache_opts.skip_writes;
+        let skip_cache_writes = self.opts.cache_opts.cache.skip_writes();
         if let Some(subscriber) = self.signal_handler.subscribe() {
             let run_cache = self.run_cache.clone();
             tokio::spawn(async move {

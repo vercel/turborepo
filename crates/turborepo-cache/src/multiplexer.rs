@@ -37,8 +37,8 @@ impl CacheMultiplexer {
         api_auth: Option<APIAuth>,
         analytics_recorder: Option<AnalyticsSender>,
     ) -> Result<Self, CacheError> {
-        let use_fs_cache = !opts.skip_filesystem;
-        let use_http_cache = !opts.skip_remote;
+        let use_fs_cache = opts.cache.fs.should_use();
+        let use_http_cache = opts.cache.remote.should_use();
 
         // Since the above two flags are not mutually exclusive it is possible to
         // configure yourself out of having a cache. We should tell you about it
@@ -67,7 +67,7 @@ impl CacheMultiplexer {
         Ok(CacheMultiplexer {
             should_print_skipping_remote_put: AtomicBool::new(true),
             should_use_http_cache: AtomicBool::new(http_cache.is_some()),
-            remote_cache_read_only: opts.remote_cache_read_only,
+            remote_cache_read_only: opts.cache.remote.read && !opts.cache.remote.write,
             fs: fs_cache,
             http: http_cache,
         })
