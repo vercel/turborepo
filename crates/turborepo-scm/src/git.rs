@@ -12,6 +12,7 @@ use tracing::warn;
 use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeUnixPath,
 };
+use turborepo_ci::Vendor;
 
 use crate::{Error, Git, SCM};
 
@@ -126,8 +127,7 @@ impl GitHubEvent {
 
 #[derive(Debug)]
 pub struct CIEnv {
-    ci: Result<String, VarError>,
-    github_actions: Result<String, VarError>,
+    is_github_actions: bool,
     github_base_ref: Result<String, VarError>,
     github_event_path: Result<String, VarError>,
 }
@@ -141,16 +141,14 @@ impl Default for CIEnv {
 impl CIEnv {
     pub fn new() -> Self {
         Self {
-            ci: env::var("CI"),
-            github_actions: env::var("GITHUB_ACTIONS"),
+            is_github_actions: Vendor::is("GitHub Actions"),
             github_base_ref: env::var("GITHUB_BASE_REF"),
             github_event_path: env::var("GITHUB_EVENT_PATH"),
         }
     }
     pub fn none() -> Self {
         Self {
-            ci: Err(VarError::NotPresent),
-            github_actions: Err(VarError::NotPresent),
+            is_github_actions: false,
             github_base_ref: Err(VarError::NotPresent),
             github_event_path: Err(VarError::NotPresent),
         }
@@ -173,12 +171,7 @@ impl Git {
     /// for GitHub Actions environment variables, see: https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/store-information-in-variables#default-environment-variables
     pub fn get_github_base_ref(base_ref_env: CIEnv) -> Option<String> {
         // make sure we're running in a CI environment
-        if base_ref_env.ci.ok()?.as_str() != "true" {
-            return None;
-        }
-
-        // make sure we're running in a GitHub Action
-        if base_ref_env.github_actions.ok()?.as_str() != "true" {
+        if !base_ref_env.is_github_actions {
             return None;
         }
 
@@ -1023,60 +1016,7 @@ mod tests {
     #[test_case(
         TestCase {
             env: CIEnv {
-                ci: Err(VarError::NotPresent),
-                github_actions: Err(VarError::NotPresent),
-                github_base_ref: Err(VarError::NotPresent),
-                github_event_path: Err(VarError::NotPresent),
-            },
-            event_json: r#""#
-        },
-        None
-        ; "not running on CI"
-    )]
-    #[test_case(
-        TestCase {
-            env: CIEnv {
-                ci: Ok("some other value".to_string()),
-                github_actions: Err(VarError::NotPresent),
-                github_base_ref: Err(VarError::NotPresent),
-                github_event_path: Err(VarError::NotPresent),
-            },
-            event_json: r#""#,
-        },
-        None
-        ; "CI is set, but not to true"
-    )]
-    #[test_case(
-        TestCase {
-            env: CIEnv {
-                ci: Ok("true".to_string()),
-                github_actions: Err(VarError::NotPresent),
-                github_base_ref: Err(VarError::NotPresent),
-                github_event_path: Err(VarError::NotPresent),
-            },
-            event_json: r#""#,
-        },
-        None
-        ; "GITHUB_ACTIONS is not set"
-    )]
-    #[test_case(
-        TestCase {
-            env: CIEnv {
-                ci: Ok("true".to_string()),
-                github_actions: Ok("other value".to_string()),
-                github_base_ref: Err(VarError::NotPresent),
-                github_event_path: Err(VarError::NotPresent),
-            },
-            event_json: r#""#,
-        },
-        None
-        ; "GITHUB_ACTIONS is set, but not to true"
-    )]
-    #[test_case(
-        TestCase {
-            env: CIEnv {
-                ci: Ok("true".to_string()),
-                github_actions: Ok("true".to_string()),
+                is_github_actions: true,
                 github_base_ref: Err(VarError::NotPresent),
                 github_event_path: Err(VarError::NotPresent),
             },
@@ -1088,8 +1028,7 @@ mod tests {
     #[test_case(
         TestCase {
             env: CIEnv {
-                ci: Ok("true".to_string()),
-                github_actions: Ok("true".to_string()),
+                is_github_actions: true,
                 github_base_ref: Ok("".to_string()),
                 github_event_path: Err(VarError::NotPresent),
             },
@@ -1101,8 +1040,7 @@ mod tests {
     #[test_case(
         TestCase {
             env: CIEnv {
-                ci: Ok("true".to_string()),
-                github_actions: Ok("true".to_string()),
+                is_github_actions: true,
                 github_base_ref: Ok("The choice is yours, and yours alone".to_string()),
                 github_event_path: Err(VarError::NotPresent),
             },
@@ -1114,8 +1052,7 @@ mod tests {
     #[test_case(
         TestCase {
             env: CIEnv {
-                ci: Ok("true".to_string()),
-                github_actions: Ok("true".to_string()),
+                is_github_actions: true,
                 github_base_ref: Err(VarError::NotPresent),
                 github_event_path: Ok("Olmec refused to give up the location of the Shrine of the Silver Monkey".to_string()),
             },
@@ -1127,8 +1064,7 @@ mod tests {
     #[test_case(
         TestCase {
             env: CIEnv {
-                ci: Ok("true".to_string()),
-                github_actions: Ok("true".to_string()),
+                is_github_actions: true,
                 github_base_ref: Err(VarError::NotPresent),
                 github_event_path: Ok("the_room_of_the_three_gargoyles.json".to_string()),
             },
@@ -1140,8 +1076,7 @@ mod tests {
     #[test_case(
         TestCase {
             env: CIEnv {
-                ci: Ok("true".to_string()),
-                github_actions: Ok("true".to_string()),
+                is_github_actions: true,
                 github_base_ref: Err(VarError::NotPresent),
                 github_event_path: Ok("olmecs_temple.json".to_string()),
             },
@@ -1153,8 +1088,7 @@ mod tests {
     #[test_case(
         TestCase {
             env: CIEnv {
-                ci: Ok("true".to_string()),
-                github_actions: Ok("true".to_string()),
+                is_github_actions: true,
                 github_base_ref: Err(VarError::NotPresent),
                 github_event_path: Ok("shrine_of_the_silver_monkey.json".to_string()),
             },
@@ -1166,8 +1100,7 @@ mod tests {
     #[test_case(
         TestCase {
             env: CIEnv {
-                ci: Ok("true".to_string()),
-                github_actions: Ok("true".to_string()),
+                is_github_actions: true,
                 github_base_ref: Err(VarError::NotPresent),
                 github_event_path: Ok("shrine_of_the_silver_monkey.json".to_string()),
             },
@@ -1179,8 +1112,7 @@ mod tests {
     #[test_case(
         TestCase {
             env: CIEnv {
-                ci: Ok("true".to_string()),
-                github_actions: Ok("true".to_string()),
+                is_github_actions: true,
                 github_base_ref: Err(VarError::NotPresent),
                 github_event_path: Ok("shrine_of_the_silver_monkey.json".to_string()),
             },
@@ -1192,8 +1124,7 @@ mod tests {
     #[test_case(
         TestCase {
             env: CIEnv {
-                ci: Ok("true".to_string()),
-                github_actions: Ok("true".to_string()),
+                is_github_actions: true,
                 github_base_ref: Err(VarError::NotPresent),
                 github_event_path: Ok("shrine_of_the_silver_monkey.json".to_string()),
             },
@@ -1214,8 +1145,7 @@ mod tests {
         };
 
         let actual = Git::get_github_base_ref(CIEnv {
-            ci: test_case.env.ci,
-            github_actions: test_case.env.github_actions,
+            is_github_actions: test_case.env.is_github_actions,
             github_base_ref: test_case.env.github_base_ref,
             github_event_path: temp_file
                 .as_ref()
