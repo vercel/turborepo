@@ -125,11 +125,36 @@ impl GitHubEvent {
 }
 
 #[derive(Debug)]
-pub struct BaseRefEnv {
+pub struct CIEnv {
     ci: Result<String, VarError>,
     github_actions: Result<String, VarError>,
     github_base_ref: Result<String, VarError>,
     github_event_path: Result<String, VarError>,
+}
+
+impl Default for CIEnv {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl CIEnv {
+    pub fn new() -> Self {
+        Self {
+            ci: env::var("CI"),
+            github_actions: env::var("GITHUB_ACTIONS"),
+            github_base_ref: env::var("GITHUB_BASE_REF"),
+            github_event_path: env::var("GITHUB_EVENT_PATH"),
+        }
+    }
+    pub fn none() -> Self {
+        Self {
+            ci: Err(VarError::NotPresent),
+            github_actions: Err(VarError::NotPresent),
+            github_base_ref: Err(VarError::NotPresent),
+            github_event_path: Err(VarError::NotPresent),
+        }
+    }
 }
 
 impl Git {
@@ -146,7 +171,7 @@ impl Git {
     }
 
     /// for GitHub Actions environment variables, see: https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/store-information-in-variables#default-environment-variables
-    pub fn get_github_base_ref(base_ref_env: BaseRefEnv) -> Option<String> {
+    pub fn get_github_base_ref(base_ref_env: CIEnv) -> Option<String> {
         // make sure we're running in a CI environment
         if base_ref_env.ci.ok()?.as_str() != "true" {
             return None;
@@ -200,17 +225,12 @@ impl Git {
         None
     }
 
-    fn resolve_base(&self, base_override: Option<&str>) -> Result<String, Error> {
+    fn resolve_base(&self, base_override: Option<&str>, env: CIEnv) -> Result<String, Error> {
         if let Some(valid_from) = base_override {
             return Ok(valid_from.to_string());
         }
 
-        if let Some(github_base_ref) = Self::get_github_base_ref(BaseRefEnv {
-            ci: env::var("CI"),
-            github_actions: env::var("GITHUB_ACTIONS"),
-            github_base_ref: env::var("GITHUB_BASE_REF"),
-            github_event_path: env::var("GITHUB_EVENT_PATH"),
-        }) {
+        if let Some(github_base_ref) = Self::get_github_base_ref(env) {
             return Ok(github_base_ref);
         }
 
@@ -239,7 +259,7 @@ impl Git {
 
         let mut files = HashSet::new();
 
-        let valid_from = self.resolve_base(from_commit)?;
+        let valid_from = self.resolve_base(from_commit, CIEnv::new())?;
 
         let mut args = if let Some(to_commit) = to_commit {
             vec!["diff", "--name-only", &valid_from, to_commit]
@@ -319,7 +339,7 @@ impl Git {
         file_path: &AbsoluteSystemPath,
     ) -> Result<Vec<u8>, Error> {
         let anchored_file_path = self.root.anchor(file_path)?;
-        let valid_from = self.resolve_base(from_commit)?;
+        let valid_from = self.resolve_base(from_commit, CIEnv::new())?;
         let arg = format!("{}:{}", valid_from, anchored_file_path.as_str());
 
         self.execute_git_command(&["show", &arg], "")
@@ -371,7 +391,7 @@ mod tests {
     use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError};
     use which::which;
 
-    use super::{previous_content, BaseRefEnv, ChangedFiles};
+    use super::{previous_content, CIEnv, ChangedFiles};
     use crate::{
         git::{GitHubCommit, GitHubEvent},
         Error, Git, SCM,
@@ -903,7 +923,7 @@ mod tests {
         });
 
         let thing = Git::find(&root).unwrap();
-        let actual = thing.resolve_base(target_branch).ok();
+        let actual = thing.resolve_base(target_branch, CIEnv::none()).ok();
 
         assert_eq!(actual.as_deref(), expected);
 
@@ -985,13 +1005,13 @@ mod tests {
     }
 
     struct TestCase {
-        env: BaseRefEnv,
+        env: CIEnv,
         event_json: &'static str,
     }
 
     #[test_case(
         TestCase {
-            env: BaseRefEnv {
+            env: CIEnv {
                 ci: Err(VarError::NotPresent),
                 github_actions: Err(VarError::NotPresent),
                 github_base_ref: Err(VarError::NotPresent),
@@ -1004,7 +1024,7 @@ mod tests {
     )]
     #[test_case(
         TestCase {
-            env: BaseRefEnv {
+            env: CIEnv {
                 ci: Ok("some other value".to_string()),
                 github_actions: Err(VarError::NotPresent),
                 github_base_ref: Err(VarError::NotPresent),
@@ -1017,7 +1037,7 @@ mod tests {
     )]
     #[test_case(
         TestCase {
-            env: BaseRefEnv {
+            env: CIEnv {
                 ci: Ok("true".to_string()),
                 github_actions: Err(VarError::NotPresent),
                 github_base_ref: Err(VarError::NotPresent),
@@ -1030,7 +1050,7 @@ mod tests {
     )]
     #[test_case(
         TestCase {
-            env: BaseRefEnv {
+            env: CIEnv {
                 ci: Ok("true".to_string()),
                 github_actions: Ok("other value".to_string()),
                 github_base_ref: Err(VarError::NotPresent),
@@ -1043,7 +1063,7 @@ mod tests {
     )]
     #[test_case(
         TestCase {
-            env: BaseRefEnv {
+            env: CIEnv {
                 ci: Ok("true".to_string()),
                 github_actions: Ok("true".to_string()),
                 github_base_ref: Err(VarError::NotPresent),
@@ -1056,7 +1076,7 @@ mod tests {
     )]
     #[test_case(
         TestCase {
-            env: BaseRefEnv {
+            env: CIEnv {
                 ci: Ok("true".to_string()),
                 github_actions: Ok("true".to_string()),
                 github_base_ref: Ok("".to_string()),
@@ -1069,7 +1089,7 @@ mod tests {
     )]
     #[test_case(
         TestCase {
-            env: BaseRefEnv {
+            env: CIEnv {
                 ci: Ok("true".to_string()),
                 github_actions: Ok("true".to_string()),
                 github_base_ref: Ok("The choice is yours, and yours alone".to_string()),
@@ -1082,7 +1102,7 @@ mod tests {
     )]
     #[test_case(
         TestCase {
-            env: BaseRefEnv {
+            env: CIEnv {
                 ci: Ok("true".to_string()),
                 github_actions: Ok("true".to_string()),
                 github_base_ref: Err(VarError::NotPresent),
@@ -1095,7 +1115,7 @@ mod tests {
     )]
     #[test_case(
         TestCase {
-            env: BaseRefEnv {
+            env: CIEnv {
                 ci: Ok("true".to_string()),
                 github_actions: Ok("true".to_string()),
                 github_base_ref: Err(VarError::NotPresent),
@@ -1108,7 +1128,7 @@ mod tests {
     )]
     #[test_case(
         TestCase {
-            env: BaseRefEnv {
+            env: CIEnv {
                 ci: Ok("true".to_string()),
                 github_actions: Ok("true".to_string()),
                 github_base_ref: Err(VarError::NotPresent),
@@ -1134,7 +1154,7 @@ mod tests {
     // )]
     #[test_case(
         TestCase {
-            env: BaseRefEnv {
+            env: CIEnv {
                 ci: Ok("true".to_string()),
                 github_actions: Ok("true".to_string()),
                 github_base_ref: Err(VarError::NotPresent),
@@ -1147,7 +1167,7 @@ mod tests {
     )]
     #[test_case(
         TestCase {
-            env: BaseRefEnv {
+            env: CIEnv {
                 ci: Ok("true".to_string()),
                 github_actions: Ok("true".to_string()),
                 github_base_ref: Err(VarError::NotPresent),
@@ -1187,7 +1207,7 @@ mod tests {
             Err(VarError::NotPresent)
         };
 
-        let actual = Git::get_github_base_ref(BaseRefEnv {
+        let actual = Git::get_github_base_ref(CIEnv {
             ci: test_case.env.ci,
             github_actions: test_case.env.github_actions,
             github_base_ref: test_case.env.github_base_ref,
