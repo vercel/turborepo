@@ -1150,19 +1150,19 @@ mod tests {
         None
         ; "no 'before' key in the JSON"
     )]
-    // #[test_case(
-    //     TestCase {
-    //         env: CIEnv {
-    //             ci: Ok("true".to_string()),
-    //             github_actions: Ok("true".to_string()),
-    //             github_base_ref: Err(VarError::NotPresent),
-    //             github_event_path: Ok("shrine_of_the_silver_monkey.json".to_string()),
-    //         },
-    //         event_json: r#"{"before":"e83c5163316f89bfbde7d9ab23ca2e25604af290"}"#,
-    //     },
-    //     Some("e83c5163316f89bfbde7d9ab23ca2e25604af290")
-    //     ; "found a valid 'before' key in the JSON"
-    // )]
+    #[test_case(
+        TestCase {
+            env: CIEnv {
+                ci: Ok("true".to_string()),
+                github_actions: Ok("true".to_string()),
+                github_base_ref: Err(VarError::NotPresent),
+                github_event_path: Ok("shrine_of_the_silver_monkey.json".to_string()),
+            },
+            event_json: r#"{"before":"e83c5163316f89bfbde7d9ab23ca2e25604af290"}"#,
+        },
+        Some("e83c5163316f89bfbde7d9ab23ca2e25604af290")
+        ; "found a valid 'before' key in the JSON"
+    )]
     #[test_case(
         TestCase {
             env: CIEnv {
@@ -1189,31 +1189,26 @@ mod tests {
         None
         ; "empty commits"
     )]
-    // #[test_case(
-    //     TestCase {
-    //         env: CIEnv {
-    //             ci: Ok("true".to_string()),
-    //             github_actions: Ok("true".to_string()),
-    //             github_base_ref: Err(VarError::NotPresent),
-    //             github_event_path:
-    // Ok("shrine_of_the_silver_monkey.json".to_string()),         },
-    //         event_json:
-    // r#"{"before":"0000000000000000000000000000000000000000","commits":[{"id":"
-    // yep"}]}"#,     },
-    //     Some("yep^")
-    //     ; "first commit has a parent"
-    // )]
+    #[test_case(
+        TestCase {
+            env: CIEnv {
+                ci: Ok("true".to_string()),
+                github_actions: Ok("true".to_string()),
+                github_base_ref: Err(VarError::NotPresent),
+                github_event_path: Ok("shrine_of_the_silver_monkey.json".to_string()),
+            },
+            event_json: r#"{"before":"0000000000000000000000000000000000000000","commits":[{"id":"yep"}]}"#,
+        },
+        Some("yep^")
+        ; "first commit has a parent"
+    )]
     fn test_get_github_base_ref(test_case: TestCase, expected: Option<&str>) -> Result<(), Error> {
         // note: we must bind here because otherwise the temporary file will be dropped
-        let temp_file_path = if test_case.env.github_event_path.is_ok() {
+        let temp_file = if test_case.env.github_event_path.is_ok() {
             let temp_file = NamedTempFile::new().expect("Failed to create temporary file");
             fs::write(temp_file.path(), test_case.event_json)
                 .expect("Failed to write to temporary file");
-            Ok(temp_file
-                .path()
-                .to_str()
-                .expect("Unable to convert path to str")
-                .to_string())
+            Ok(temp_file)
         } else {
             Err(VarError::NotPresent)
         };
@@ -1222,7 +1217,10 @@ mod tests {
             ci: test_case.env.ci,
             github_actions: test_case.env.github_actions,
             github_base_ref: test_case.env.github_base_ref,
-            github_event_path: temp_file_path,
+            github_event_path: temp_file
+                .as_ref()
+                .map(|p| p.path().to_str().unwrap().to_string())
+                .map_err(|e| e.clone()),
         });
         assert_eq!(actual, expected.map(|s| s.to_string()));
 
