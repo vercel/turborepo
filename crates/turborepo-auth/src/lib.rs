@@ -431,6 +431,7 @@ mod tests {
                 > + Send
                 + Sync
                 + 'static,
+            _body_len: usize,
             _duration: u64,
             _tag: Option<&str>,
             _token: &str,
