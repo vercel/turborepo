@@ -4,6 +4,7 @@ use turbopath::AbsoluteSystemPath;
 
 mod config;
 pub mod error;
+mod path_match;
 
 pub const MICROFRONTEND_CONFIG_DEFAULT_FILE_PATH: &str = "micro-fontends.config.json";
 
@@ -26,6 +27,14 @@ impl MicroFrontendConfig {
         if !path.starts_with('/') {
             return Err(Error::NonRelative);
         }
-        todo!()
+        for zone in self.config.zones() {
+            // provide paths
+            for zone_path_pattern in zone.paths() {
+                if path_match::path_matches(zone_path_pattern, path) {
+                    return Ok(zone.application().name());
+                }
+            }
+        }
+        Ok(self.config.default_application().name())
     }
 }

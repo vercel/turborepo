@@ -171,6 +171,14 @@ impl ApplicationWithRouting {
     pub fn application(&self) -> &Application {
         &self.app
     }
+
+    pub fn paths(&self) -> impl Iterator<Item = &str> {
+        self.routing
+            .matches
+            .iter()
+            .flat_map(|path_group| path_group.paths.iter())
+            .map(|path| path.as_str())
+    }
 }
 
 impl Host {
