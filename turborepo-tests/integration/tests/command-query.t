@@ -81,6 +81,9 @@ Query packages that have a task named `build` or `dev`
       "packages": {
         "items": [
           {
+            "name": "another"
+          },
+          {
             "name": "my-app"
           },
           {

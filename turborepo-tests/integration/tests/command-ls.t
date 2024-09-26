@@ -47,7 +47,8 @@ Run info on package `another`
    WARNING  ls command is experimental and may change in the future
   another depends on: <no packages>
   
-  tasks: <no tasks>
+  tasks:
+    dev: echo building
   
 
 Run info on package `my-app`
