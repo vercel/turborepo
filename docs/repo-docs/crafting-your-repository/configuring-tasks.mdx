@@ -172,7 +172,7 @@ Some tasks may not have any dependencies. For example, a task for finding typos 
   tasks are properly configured first.
 </Callout>
 
-The `outputs` key tells Turborepo **files and directories** it should cache when the task has successfully completed. **Without this key defined, Turborepo will not cache any files. Hitting cache on subsequent runs will not restore any file outputs.**
+The `outputs` key tells Turborepo **files and directories** it should cache when the task has successfully completed.
 
 Below are a few examples of outputs for common tools:
 
@@ -214,6 +214,8 @@ Below are a few examples of outputs for common tools:
 </Tabs>
 
 For more on building globbing patterns for the `outputs` key, see [the globbing specification](/repo/docs/reference/globs).
+
+The `outputs` key is optional, see [the API reference](/repo/docs/reference/configuration#outputs) for how Turborepo behaves in this case.
 
 ### Specifying `inputs`
 

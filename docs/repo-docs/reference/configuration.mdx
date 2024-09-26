@@ -339,14 +339,25 @@ An allowlist of environment variables that should be made available to this task
 
 A list of file glob patterns relative to the package's `package.json` to cache when the task is successfully completed.
 
-Omitting this key or passing an empty array tells `turbo` to cache nothing (except logs, which are always cached when caching is enabled).
-
 ```jsonc title="./turbo.json"
 {
   "tasks": {
     "build": {
       // Cache all files emitted to the packages's `dist` directory
       "outputs": ["dist/**"]
+    }
+  }
+}
+```
+
+Omitting this key or passing an empty array tells `turbo` to cache nothing (except logs, which are always cached when caching is enabled).
+
+```jsonc title="./turbo.json"
+{
+  "tasks": {
+    "lint": {
+      // Typically, linters don't generate a file, so there are none to cache.
+      "outputs": [] // or could be omitted
     }
   }
 }
