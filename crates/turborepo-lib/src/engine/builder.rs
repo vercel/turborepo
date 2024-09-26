@@ -195,12 +195,20 @@ impl<'a> EngineBuilder<'a> {
             HashMap::from_iter(self.tasks.iter().map(|spanned| spanned.as_ref().split()));
         let mut traversal_queue = VecDeque::with_capacity(1);
         let tasks: Vec<Spanned<TaskName<'static>>> = if self.add_all_tasks {
-            self.workspaces
-                .iter()
-                .flat_map(|workspace| self.package_graph.package_json(workspace))
-                .flat_map(|json| json.scripts.keys())
-                .map(|task| Spanned::new(TaskName::from(task.clone())))
-                .collect()
+            let mut tasks = Vec::new();
+            for workspace in self.workspaces.iter() {
+                let Ok(turbo_json) = turbo_json_loader.load(workspace) else {
+                    continue;
+                };
+                tasks.extend(
+                    turbo_json
+                        .tasks
+                        .keys()
+                        .map(|task| Spanned::new(TaskName::from(task.clone()))),
+                );
+            }
+
+            tasks
         } else {
             self.tasks.clone()
         };
