@@ -148,7 +148,7 @@ within a component (**never path separators**). Zero-or-more wildcards cannot be
 adjacent to other zero-or-more wildcards. The `*` wildcard is eager and will
 match the longest possible text while the `$` wildcard is lazy and will match
 the shortest possible text. When followed by a literal, `*` stops at the last
-occurrence of that literal while `$` stops at the first occurence.
+occurrence of that literal while `$` stops at the first occurrence.
 
 The exactly-one wildcard `?` matches any single character within a component
 (**never path separators**). Exactly-one wildcards do not group automatically,
@@ -449,7 +449,7 @@ Globs are strictly nominal and do not support any non-nominal constraints. It is
 not possible to directly filter or otherwise select paths or files based on
 additional metadata (such as a modification timestamp) in a glob expression.
 However, it is possible for user code to query any such metadata for a matching
-path or effeciently apply such filtering when matching directory trees using
+path or efficiently apply such filtering when matching directory trees using
 `FileIterator::filter_tree`.
 
 For such additional features, including metadata filters and transformations
