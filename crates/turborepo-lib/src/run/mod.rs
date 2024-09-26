@@ -194,6 +194,10 @@ impl Run {
         &self.pkg_dep_graph
     }
 
+    pub fn engine(&self) -> &Engine {
+        &self.engine
+    }
+
     pub fn filtered_pkgs(&self) -> &HashSet<PackageName> {
         &self.filtered_pkgs
     }

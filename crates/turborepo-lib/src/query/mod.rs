@@ -1,6 +1,7 @@
 mod file;
 mod package;
 mod server;
+mod task;
 
 use std::{io, sync::Arc};
 
@@ -18,7 +19,7 @@ use turborepo_repository::package_graph::PackageName;
 
 use crate::{
     get_version,
-    query::file::File,
+    query::{file::File, task::Task},
     run::{builder::RunBuilder, Run},
     signal::SignalHandler,
 };
@@ -56,6 +57,8 @@ impl RepositoryQuery {
 }
 
 #[derive(Debug, SimpleObject)]
+#[graphql(concrete(name = "Tasks", params(Task)))]
+#[graphql(concrete(name = "Packages", params(Package)))]
 pub struct Array<T: OutputType> {
     items: Vec<T>,
     length: usize,
@@ -235,7 +238,7 @@ impl PackagePredicate {
     fn check_has(pkg: &Package, field: &PackageFields, value: &Any) -> bool {
         match (field, &value.0) {
             (PackageFields::Name, Value::String(name)) => pkg.name.as_ref() == name,
-            (PackageFields::TaskName, Value::String(name)) => pkg.task_names().contains(name),
+            (PackageFields::TaskName, Value::String(name)) => pkg.get_tasks().contains_key(name),
             _ => false,
         }
     }
