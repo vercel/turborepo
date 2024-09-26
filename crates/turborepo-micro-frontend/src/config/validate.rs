@@ -1,5 +1,7 @@
 use std::collections::BTreeMap;
 
+use biome_deserialize::json::deserialize_from_json_str;
+use turbopath::AbsoluteSystemPath;
 use url::Url;
 
 use super::parse::{
@@ -36,7 +38,7 @@ pub struct Development {
 }
 
 #[derive(Debug)]
-struct Host {
+pub struct Host {
     url: Url,
     protocol: Protocol,
     host: String,
@@ -50,6 +52,17 @@ pub struct ApplicationWithRouting {
 }
 
 impl Config {
+    /// Reads config from given path.
+    /// Retruns `Ok(None)` if the file does not exist
+    pub fn load(config_path: &AbsoluteSystemPath) -> Result<Option<Self>, Error> {
+        let Some(contents) = config_path.read_existing_to_string()? else {
+            return Ok(None);
+        };
+        let raw_config =
+            RawConfig::from_str(&contents, config_path.as_str()).map_err(Error::biome_error)?;
+        Ok(Some(Config::try_from(raw_config)?))
+    }
+
     pub fn default_application(&self) -> &Application {
         &self.default_application
     }
@@ -278,13 +291,29 @@ mod test {
     use pretty_assertions::assert_eq;
 
     use super::*;
+    const EXAMPLE_CONFIG: &str = include_str!("../../fixtures/micro-frontend.jsonc");
 
     #[test]
     fn test_example_parses() {
-        let input = include_str!("../../fixtures/micro-frontend.jsonc");
+        let input = EXAMPLE_CONFIG;
         let example_config =
             Config::try_from(RawConfig::from_str(input, "something.json").unwrap());
         assert!(example_config.is_ok(), "{}", example_config.unwrap_err());
+    }
+
+    #[test]
+    fn test_load_config() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let dir = AbsoluteSystemPath::new(tempdir.path().to_str().unwrap()).unwrap();
+        let config_path = dir.join_component("micro-frontend.jsonc");
+        config_path
+            .create_with_contents(EXAMPLE_CONFIG.as_bytes())
+            .unwrap();
+        let config = Config::load(&config_path).unwrap();
+        assert!(config.is_some());
+        let config = config.unwrap();
+        assert_eq!(config.default_application().name(), "main-site");
+        assert!(config.zone("docs").is_ok());
     }
 
     #[test]
