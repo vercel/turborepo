@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
 use async_graphql::Object;
 use itertools::Itertools;
@@ -15,6 +15,14 @@ pub struct Package {
 }
 
 impl Package {
+    pub fn task_names(&self) -> HashSet<String> {
+        self.run
+            .pkg_dep_graph()
+            .package_json(&self.name)
+            .map(|json| json.scripts.keys().cloned().collect())
+            .unwrap_or_default()
+    }
+
     pub fn direct_dependents_count(&self) -> usize {
         self.run
             .pkg_dep_graph()

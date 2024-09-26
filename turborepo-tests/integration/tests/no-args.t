@@ -126,6 +126,8 @@ Run without any tasks, get a list of potential tasks to run
       my-app, util
     maybefails
       my-app, util
+    dev
+      another
   [1]
 
 Run again with a filter and get only the packages that match
@@ -176,6 +178,8 @@ Initialize a new monorepo
       cross-workspace
     cross-workspace-underlying-task
       blank-pkg
+    dev
+      another
     missing-workspace-config-task
       missing-workspace-config
     missing-workspace-config-task-with-deps

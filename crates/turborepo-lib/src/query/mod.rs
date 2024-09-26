@@ -67,6 +67,7 @@ impl<T: OutputType> FromIterator<T> for Array<T> {
 #[derive(Enum, Copy, Clone, Eq, PartialEq, Debug)]
 enum PackageFields {
     Name,
+    TaskName,
     DirectDependencyCount,
     DirectDependentCount,
     IndirectDependentCount,
@@ -96,6 +97,7 @@ struct PackagePredicate {
     greater_than: Option<FieldValuePair>,
     less_than: Option<FieldValuePair>,
     not: Option<Box<PackagePredicate>>,
+    has: Option<FieldValuePair>,
 }
 
 impl PackagePredicate {
@@ -226,6 +228,14 @@ impl PackagePredicate {
         }
     }
 
+    fn check_has(pkg: &Package, field: &PackageFields, value: &Any) -> bool {
+        match (field, &value.0) {
+            (PackageFields::Name, Value::String(name)) => pkg.name.as_ref() == name,
+            (PackageFields::TaskName, Value::String(name)) => pkg.task_names().contains(name),
+            _ => false,
+        }
+    }
+
     fn check(&self, pkg: &Package) -> bool {
         let and = self
             .and
@@ -254,6 +264,10 @@ impl PackagePredicate {
             .as_ref()
             .map(|pair| Self::check_greater_than(pkg, &pair.field, &pair.value));
         let not = self.not.as_ref().map(|predicate| !predicate.check(pkg));
+        let has = self
+            .has
+            .as_ref()
+            .map(|pair| Self::check_has(pkg, &pair.field, &pair.value));
 
         and.into_iter()
             .chain(or)
@@ -262,6 +276,7 @@ impl PackagePredicate {
             .chain(greater_than)
             .chain(less_than)
             .chain(not)
+            .chain(has)
             .all(|p| p)
     }
 }
