@@ -352,17 +352,6 @@ A list of file glob patterns relative to the package's `package.json` to cache w
 
 Omitting this key or passing an empty array tells `turbo` to cache nothing (except logs, which are always cached when caching is enabled).
 
-```jsonc title="./turbo.json"
-{
-  "tasks": {
-    "lint": {
-      // Typically, linters don't generate a file, so there are none to cache.
-      "outputs": [] // or could be omitted
-    }
-  }
-}
-```
-
 ### `cache`
 
 Default: `true`

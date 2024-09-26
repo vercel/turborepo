@@ -127,6 +127,8 @@ Turborepo caches two types of outputs: Task outputs and Logs.
 
 Turborepo caches the file outputs of a task that are defined in [the `outputs` key](/repo/docs/reference/configuration#outputs) of `turbo.json`. When there's a cache hit, Turborepo will restore the files from the cache.
 
+The `outputs` key is optional, see [the API reference](/repo/docs/reference/configuration#outputs) for how Turborepo behaves in this case.
+
 <Callout type="warn" title="Providing file outputs">
 If you do not declare file outputs for a task, Turborepo will not cache them. This might be okay for some tasks (like linters) - but many tasks produce files that you will want to be cached.
 
