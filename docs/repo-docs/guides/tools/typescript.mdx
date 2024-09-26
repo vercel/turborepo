@@ -56,7 +56,7 @@ pnpm dlx create-turbo@latest
 
 ### Use a base `tsconfig` file
 
-Inside `packages/tsconfig`, we have a few `json` files which represent different ways you might want to configure TypeScript in various packages. The `base.json` file is extended by every other `package.json` in the workspace and looks like this:
+Inside `packages/tsconfig`, we have a few `json` files which represent different ways you might want to configure TypeScript in various packages. The `base.json` file is extended by every other `tsconfig.json` in the workspace and looks like this:
 
 ```json title="./packages/tsconfig/base.json"
 "compilerOptions": {
