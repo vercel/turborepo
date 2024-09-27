@@ -39,19 +39,22 @@ pub type SharedState = Arc<Mutex<WebUIState>>;
 
 /// The query for actively running tasks (as opposed to the query for general
 /// repository state `RepositoryQuery` in `turborepo_lib::query`)
+/// This is `None` when we're not actually running a task (e.g. `turbo query`)
 pub struct RunQuery {
-    state: SharedState,
+    state: Option<SharedState>,
 }
 
 impl RunQuery {
-    pub fn new(state: SharedState) -> Self {
+    pub fn new(state: Option<SharedState>) -> Self {
         Self { state }
     }
 }
 
 #[Object]
 impl RunQuery {
-    async fn current_run(&self) -> CurrentRun {
-        CurrentRun { state: &self.state }
+    async fn current_run(&self) -> Option<CurrentRun> {
+        Some(CurrentRun {
+            state: self.state.as_ref()?,
+        })
     }
 }
