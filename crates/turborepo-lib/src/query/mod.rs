@@ -16,6 +16,7 @@ use turbopath::AbsoluteSystemPathBuf;
 use turborepo_repository::package_graph::PackageName;
 
 use crate::{
+    get_version,
     query::file::File,
     run::{builder::RunBuilder, Run},
     signal::SignalHandler,
@@ -313,6 +314,10 @@ impl RepositoryQuery {
             run: self.run.clone(),
             name,
         })
+    }
+
+    async fn version(&self) -> &'static str {
+        get_version()
     }
 
     async fn file(&self, path: String) -> Result<File, Error> {
