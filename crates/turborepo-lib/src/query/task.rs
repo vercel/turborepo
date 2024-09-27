@@ -55,6 +55,7 @@ impl Task {
 
     async fn direct_dependencies(&self) -> Array<Task> {
         let task_id = TaskId::new(self.package.name.as_ref(), &self.name);
+
         self.package
             .run
             .engine()

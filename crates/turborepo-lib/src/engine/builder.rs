@@ -196,10 +196,20 @@ impl<'a> EngineBuilder<'a> {
         let mut traversal_queue = VecDeque::with_capacity(1);
         let tasks: Vec<Spanned<TaskName<'static>>> = if self.add_all_tasks {
             let mut tasks = Vec::new();
+            if let Ok(turbo_json) = turbo_json_loader.load(&PackageName::Root) {
+                tasks.extend(
+                    turbo_json
+                        .tasks
+                        .keys()
+                        .map(|task| Spanned::new(TaskName::from(task.clone()))),
+                );
+            }
+
             for workspace in self.workspaces.iter() {
                 let Ok(turbo_json) = turbo_json_loader.load(workspace) else {
                     continue;
                 };
+
                 tasks.extend(
                     turbo_json
                         .tasks

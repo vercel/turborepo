@@ -17,7 +17,7 @@ Setup
     }
   }
 
-  $ ${TURBO} query "query { package(name: \"my-app\") { tasks { items { name directDependencies { items { name } } } } } }" | jq
+  $ ${TURBO} query "query { package(name: \"my-app\") { tasks { items { name directDependencies { items { name package { name } } } } } } }" | jq
    WARNING  query command is experimental and may change in the future
   {
     "data": {
@@ -27,7 +27,40 @@ Setup
             {
               "name": "build",
               "directDependencies": {
-                "items": []
+                "items": [
+                  {
+                    "name": "build",
+                    "package": {
+                      "name": "util"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+
+  $ ${TURBO} query "query { package(name: \"util\") { tasks { items { name directDependents { items { name package { name } } } } } } }" | jq
+   WARNING  query command is experimental and may change in the future
+  {
+    "data": {
+      "package": {
+        "tasks": {
+          "items": [
+            {
+              "name": "build",
+              "directDependents": {
+                "items": [
+                  {
+                    "name": "build",
+                    "package": {
+                      "name": "my-app"
+                    }
+                  }
+                ]
               }
             }
           ]
