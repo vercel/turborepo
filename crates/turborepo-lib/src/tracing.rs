@@ -93,7 +93,7 @@ impl TurboSubscriber {
     /// - If the `TURBO_LOG_VERBOSITY` env var is set, it will be used to set
     ///   the verbosity level. Otherwise, the default is `WARN`. See the
     ///   documentation on the RUST_LOG env var for syntax.
-    /// - If the verbosity argument (usually detemined by a flag) is provided,
+    /// - If the verbosity argument (usually determined by a flag) is provided,
     ///   it overrides the default global log level. This means it overrides the
     ///   `TURBO_LOG_VERBOSITY` global setting, but not per-module settings.
     ///
