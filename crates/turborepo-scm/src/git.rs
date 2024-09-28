@@ -1,9 +1,18 @@
-use std::{backtrace::Backtrace, collections::HashSet, path::PathBuf, process::Command};
+use std::{
+    backtrace::Backtrace,
+    collections::HashSet,
+    env::{self, VarError},
+    fs::{self},
+    path::PathBuf,
+    process::Command,
+};
 
+use serde::Deserialize;
 use tracing::warn;
 use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeUnixPath,
 };
+use turborepo_ci::Vendor;
 
 use crate::{Error, Git, SCM};
 
@@ -81,6 +90,74 @@ impl SCM {
     }
 }
 
+const UNKNOWN_SHA: &str = "0000000000000000000000000000000000000000";
+
+#[derive(Debug, Deserialize, Clone)]
+struct GitHubCommit {
+    id: String,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct GitHubEvent {
+    #[serde(default)]
+    before: String,
+
+    #[serde(default)]
+    commits: Vec<GitHubCommit>,
+
+    #[serde(default)]
+    forced: bool,
+}
+
+impl GitHubEvent {
+    fn get_parent_ref_of_first_commit(&self) -> Option<String> {
+        if self.commits.is_empty() {
+            // commits can be empty when you push a branch with no commits
+            return None;
+        }
+
+        if self.commits.len() >= 2048 {
+            // GitHub API limit for number of commits shown in this field
+            return None;
+        }
+
+        // Extract the base ref from the push event
+        let first_commit = self.commits.first()?;
+        let id = &first_commit.id;
+        Some(format!("{id}^"))
+    }
+}
+
+#[derive(Debug)]
+pub struct CIEnv {
+    is_github_actions: bool,
+    github_base_ref: Result<String, VarError>,
+    github_event_path: Result<String, VarError>,
+}
+
+impl Default for CIEnv {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl CIEnv {
+    pub fn new() -> Self {
+        Self {
+            is_github_actions: Vendor::is("GitHub Actions"),
+            github_base_ref: env::var("GITHUB_BASE_REF"),
+            github_event_path: env::var("GITHUB_EVENT_PATH"),
+        }
+    }
+    pub fn none() -> Self {
+        Self {
+            is_github_actions: false,
+            github_base_ref: Err(VarError::NotPresent),
+            github_event_path: Err(VarError::NotPresent),
+        }
+    }
+}
+
 impl Git {
     fn get_current_branch(&self) -> Result<String, Error> {
         let output = self.execute_git_command(&["branch", "--show-current"], "")?;
@@ -94,19 +171,86 @@ impl Git {
         Ok(output.trim().to_owned())
     }
 
-    fn resolve_base<'a>(&self, base_override: Option<&'a str>) -> Result<&'a str, Error> {
+    /// for GitHub Actions environment variables, see: https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/store-information-in-variables#default-environment-variables
+    pub fn get_github_base_ref(base_ref_env: CIEnv) -> Option<String> {
+        // make sure we're running in a CI environment
+        if !base_ref_env.is_github_actions {
+            return None;
+        }
+
+        /*
+         * The name of the base ref or target branch of the pull request in a
+         * workflow run.
+         *
+         * This variable only has a value when the event that triggers a workflow run
+         * is either `pull_request` or `pull_request_target`.
+         * For example, `main`
+         *
+         * So environment variable is empty in a regular commit
+         */
+        if let Ok(pr) = base_ref_env.github_base_ref {
+            if !pr.is_empty() {
+                return Some(pr);
+            }
+        }
+
+        // we must be in a push event
+        // try reading from the GITHUB_EVENT_PATH file
+        if let Ok(event_path) = base_ref_env.github_event_path {
+            // Try to open the event file and read the contents
+            let data = fs::read_to_string(event_path).ok()?;
+
+            // Parse the JSON data from the file
+            let json: GitHubEvent = serde_json::from_str(&data).ok()?;
+
+            // Extract the base ref from the pull request event if available
+            let base_ref = &json.before;
+
+            // the base_ref will be UNKNOWN_SHA on first push
+            // we also use this behavior in force pushes
+            if base_ref == UNKNOWN_SHA || json.forced {
+                return json.get_parent_ref_of_first_commit();
+            }
+
+            if base_ref.is_empty() {
+                return None;
+            }
+
+            return Some(base_ref.to_string());
+        }
+        None
+    }
+
+    fn resolve_base(&self, base_override: Option<&str>, env: CIEnv) -> Result<String, Error> {
         if let Some(valid_from) = base_override {
-            return Ok(valid_from);
+            return Ok(valid_from.to_string());
+        }
+
+        if let Some(github_base_ref) = Self::get_github_base_ref(env) {
+            // we don't fall through to checking against main or master
+            // because at this point we know we're in a GITHUB CI environment
+            // and we should really know by now what the base ref is
+            // so it's better to just error if something went wrong
+            return if self
+                .execute_git_command(&["rev-parse", &github_base_ref], "")
+                .is_ok()
+            {
+                println!("Resolved base ref from GitHub Actions event: {github_base_ref}");
+                Ok(github_base_ref)
+            } else {
+                println!("Failed to resolve base ref from GitHub Actions event");
+                Err(Error::UnableToResolveRef)
+            };
         }
 
         let main_result = self.execute_git_command(&["rev-parse", "main"], "");
         if main_result.is_ok() {
-            return Ok("main");
+            return Ok("main".to_string());
         }
 
         let master_result = self.execute_git_command(&["rev-parse", "master"], "");
         if master_result.is_ok() {
-            return Ok("master");
+            return Ok("master".to_string());
         }
         Err(Error::UnableToResolveRef)
     }
@@ -124,12 +268,12 @@ impl Git {
 
         let mut files = HashSet::new();
 
-        let valid_from = self.resolve_base(from_commit)?;
+        let valid_from = self.resolve_base(from_commit, CIEnv::new())?;
 
         let mut args = if let Some(to_commit) = to_commit {
-            vec!["diff", "--name-only", valid_from, to_commit]
+            vec!["diff", "--name-only", &valid_from, to_commit]
         } else {
-            vec!["diff", "--name-only", valid_from]
+            vec!["diff", "--name-only", &valid_from]
         };
 
         if merge_base {
@@ -204,7 +348,7 @@ impl Git {
         file_path: &AbsoluteSystemPath,
     ) -> Result<Vec<u8>, Error> {
         let anchored_file_path = self.root.anchor(file_path)?;
-        let valid_from = self.resolve_base(from_commit)?;
+        let valid_from = self.resolve_base(from_commit, CIEnv::new())?;
         let arg = format!("{}:{}", valid_from, anchored_file_path.as_str());
 
         self.execute_git_command(&["show", &arg], "")
@@ -244,19 +388,23 @@ mod tests {
     use std::{
         assert_matches::assert_matches,
         collections::HashSet,
+        env::VarError,
         fs,
         path::{Path, PathBuf},
         process::Command,
     };
 
     use git2::{Oid, Repository, RepositoryInitOptions};
-    use tempfile::TempDir;
+    use tempfile::{NamedTempFile, TempDir};
     use test_case::test_case;
     use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError};
     use which::which;
 
-    use super::{previous_content, ChangedFiles};
-    use crate::{Error, Git, SCM};
+    use super::{previous_content, CIEnv, ChangedFiles};
+    use crate::{
+        git::{GitHubCommit, GitHubEvent},
+        Error, Git, SCM,
+    };
 
     fn setup_repository(
         init_opts: Option<&RepositoryInitOptions>,
@@ -784,9 +932,9 @@ mod tests {
         });
 
         let thing = Git::find(&root).unwrap();
-        let actual = thing.resolve_base(target_branch).ok();
+        let actual = thing.resolve_base(target_branch, CIEnv::none()).ok();
 
-        assert_eq!(actual, expected);
+        assert_eq!(actual.as_deref(), expected);
 
         Ok(())
     }
@@ -863,5 +1011,185 @@ mod tests {
         assert_matches!(actual, ChangedFiles::All);
 
         Ok(())
+    }
+
+    struct TestCase {
+        env: CIEnv,
+        event_json: &'static str,
+    }
+
+    #[test_case(
+        TestCase {
+            env: CIEnv {
+                is_github_actions: true,
+                github_base_ref: Err(VarError::NotPresent),
+                github_event_path: Err(VarError::NotPresent),
+            },
+            event_json: r#""#,
+        },
+        None
+        ; "GITHUB_BASE_REF and GITHUB_EVENT_PATH are not set"
+    )]
+    #[test_case(
+        TestCase {
+            env: CIEnv {
+                is_github_actions: true,
+                github_base_ref: Ok("".to_string()),
+                github_event_path: Err(VarError::NotPresent),
+            },
+            event_json: r#""#,
+        },
+        None
+        ; "GITHUB_BASE_REF is set to an empty string"
+    )]
+    #[test_case(
+        TestCase {
+            env: CIEnv {
+                is_github_actions: true,
+                github_base_ref: Ok("The choice is yours, and yours alone".to_string()),
+                github_event_path: Err(VarError::NotPresent),
+            },
+            event_json: r#""#,
+        },
+        Some("The choice is yours, and yours alone")
+        ; "GITHUB_BASE_REF is set to a non-empty string"
+    )]
+    #[test_case(
+        TestCase {
+            env: CIEnv {
+                is_github_actions: true,
+                github_base_ref: Err(VarError::NotPresent),
+                github_event_path: Ok("Olmec refused to give up the location of the Shrine of the Silver Monkey".to_string()),
+            },
+            event_json: r#""#,
+        },
+        None
+        ; "GITHUB_EVENT_PATH is set, but the file fails to open"
+    )]
+    #[test_case(
+        TestCase {
+            env: CIEnv {
+                is_github_actions: true,
+                github_base_ref: Err(VarError::NotPresent),
+                github_event_path: Ok("the_room_of_the_three_gargoyles.json".to_string()),
+            },
+            event_json: r#"first you must pass the temple guards!"#,
+        },
+        None
+        ; "GITHUB_EVENT_PATH is set, is not valid JSON"
+    )]
+    #[test_case(
+        TestCase {
+            env: CIEnv {
+                is_github_actions: true,
+                github_base_ref: Err(VarError::NotPresent),
+                github_event_path: Ok("olmecs_temple.json".to_string()),
+            },
+            event_json: r#"{}"#,
+        },
+        None
+        ; "no 'before' key in the JSON"
+    )]
+    #[test_case(
+        TestCase {
+            env: CIEnv {
+                is_github_actions: true,
+                github_base_ref: Err(VarError::NotPresent),
+                github_event_path: Ok("olmecs_temple.json".to_string()),
+            },
+            event_json: r#"{"forced":true}"#,
+        },
+        None
+        ; "force push"
+    )]
+    #[test_case(
+        TestCase {
+            env: CIEnv {
+                is_github_actions: true,
+                github_base_ref: Err(VarError::NotPresent),
+                github_event_path: Ok("shrine_of_the_silver_monkey.json".to_string()),
+            },
+            event_json: r#"{"before":"e83c5163316f89bfbde7d9ab23ca2e25604af290"}"#,
+        },
+        Some("e83c5163316f89bfbde7d9ab23ca2e25604af290")
+        ; "found a valid 'before' key in the JSON"
+    )]
+    #[test_case(
+        TestCase {
+            env: CIEnv {
+                is_github_actions: true,
+                github_base_ref: Err(VarError::NotPresent),
+                github_event_path: Ok("shrine_of_the_silver_monkey.json".to_string()),
+            },
+            event_json: r#"{"before":"0000000000000000000000000000000000000000"}"#,
+        },
+        None
+        ; "UNKNOWN_SHA but no commits found"
+    )]
+    #[test_case(
+        TestCase {
+            env: CIEnv {
+                is_github_actions: true,
+                github_base_ref: Err(VarError::NotPresent),
+                github_event_path: Ok("shrine_of_the_silver_monkey.json".to_string()),
+            },
+            event_json: r#"{"before":"0000000000000000000000000000000000000000","commits":[]}"#,
+        },
+        None
+        ; "empty commits"
+    )]
+    #[test_case(
+        TestCase {
+            env: CIEnv {
+                is_github_actions: true,
+                github_base_ref: Err(VarError::NotPresent),
+                github_event_path: Ok("shrine_of_the_silver_monkey.json".to_string()),
+            },
+            event_json: r#"{"before":"0000000000000000000000000000000000000000","commits":[{"id":"yep"}]}"#,
+        },
+        Some("yep^")
+        ; "first commit has a parent"
+    )]
+    fn test_get_github_base_ref(test_case: TestCase, expected: Option<&str>) -> Result<(), Error> {
+        // note: we must bind here because otherwise the temporary file will be dropped
+        let temp_file = if test_case.env.github_event_path.is_ok() {
+            let temp_file = NamedTempFile::new().expect("Failed to create temporary file");
+            fs::write(temp_file.path(), test_case.event_json)
+                .expect("Failed to write to temporary file");
+            Ok(temp_file)
+        } else {
+            Err(VarError::NotPresent)
+        };
+
+        let actual = Git::get_github_base_ref(CIEnv {
+            is_github_actions: test_case.env.is_github_actions,
+            github_base_ref: test_case.env.github_base_ref,
+            github_event_path: temp_file
+                .as_ref()
+                .map(|p| p.path().to_str().unwrap().to_string())
+                .map_err(|e| e.clone()),
+        });
+        assert_eq!(actual, expected.map(|s| s.to_string()));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_thousands_of_commits() {
+        let commits = vec![
+            GitHubCommit {
+                id: "insert-famous-sha-here".to_string(),
+            };
+            2049 // 2049 is one over the limit
+        ];
+
+        let github_event = GitHubEvent {
+            before: "".to_string(),
+            commits,
+            forced: false,
+        };
+        let actual = github_event.get_parent_ref_of_first_commit();
+
+        assert_eq!(None, actual);
     }
 }
