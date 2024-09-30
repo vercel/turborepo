@@ -200,7 +200,7 @@ mod test {
         );
 
         // Now let's check with the GraphQL API
-        let schema = Schema::new(RunQuery::new(state), EmptyMutation, EmptySubscription);
+        let schema = Schema::new(RunQuery::new(Some(state)), EmptyMutation, EmptySubscription);
         let result = schema
             .execute("query { currentRun { tasks { name state { status } } } }")
             .await;
