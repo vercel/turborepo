@@ -373,7 +373,7 @@ Use a filter with `affectedPackages`
   $ ${TURBO} query "query { affectedPackages(filter: { equal: { field: NAME, value: \"my-app\" } }) { items { name } } }"
    WARNING  query command is experimental and may change in the future
    WARNING  unable to detect git range, assuming all files have changed: git error: fatal: no merge base found
-
+  
   {
     "data": {
       "affectedPackages": {
@@ -385,3 +385,4 @@ Use a filter with `affectedPackages`
       }
     }
   }
+
