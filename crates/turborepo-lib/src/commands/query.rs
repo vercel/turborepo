@@ -100,7 +100,7 @@ pub async fn run(
             }
         }
     } else {
-        query::run_server(run, handler).await?;
+        query::run_query_server(run, handler).await?;
     }
 
     Ok(0)
