@@ -1,21 +1,30 @@
 use std::sync::Arc;
 
 use async_graphql::{Object, SimpleObject};
+use itertools::Itertools;
 use petgraph::graph::NodeIndex;
 use turborepo_repository::package_graph::{PackageName, PackageNode};
 
-use crate::{query::Array, run::Run};
+use crate::{
+    query::{package::Package, Array, PackagePredicate},
+    run::Run,
+};
 
 pub struct PackageGraph {
     run: Arc<Run>,
-    center: PackageNode,
+    center: Option<PackageNode>,
+    filter: Option<PackagePredicate>,
 }
 
 impl PackageGraph {
-    pub fn new(run: Arc<Run>, center: String) -> Self {
-        let center = PackageNode::Workspace(PackageName::from(center));
+    pub fn new(run: Arc<Run>, center: Option<String>, filter: Option<PackagePredicate>) -> Self {
+        let center = center.map(|center| PackageNode::Workspace(PackageName::from(center)));
 
-        Self { run, center }
+        Self {
+            run,
+            center,
+            filter,
+        }
     }
 }
 
@@ -25,60 +34,59 @@ pub(crate) struct Node {
     run: Arc<Run>,
 }
 
-#[Object]
-impl Node {
-    async fn name(&self) -> Option<String> {
-        self.run
-            .pkg_dep_graph()
-            .get_package_by_index(self.idx)
-            .map(|pkg| pkg.to_string())
-    }
-
-    async fn idx(&self) -> usize {
-        self.idx.index()
-    }
-}
-
-#[derive(Debug, Clone, SimpleObject)]
+#[derive(Debug, Clone, SimpleObject, Hash, PartialEq, Eq)]
 pub(crate) struct Edge {
-    source: usize,
-    target: usize,
+    source: String,
+    target: String,
 }
 
 #[Object]
 impl PackageGraph {
-    async fn nodes(&self) -> Array<Node> {
+    async fn nodes(&self) -> Array<Package> {
         let transitive_closure = self
-            .run
-            .pkg_dep_graph()
-            .transitive_closure(Some(&self.center));
+            .center
+            .as_ref()
+            .map(|center| self.run.pkg_dep_graph().transitive_closure(Some(center)));
         self.run
             .pkg_dep_graph()
             .node_indices()
             .filter_map(|idx| {
                 let package_node = self.run.pkg_dep_graph().get_package_by_index(idx)?;
-                if !transitive_closure.contains(package_node) {
-                    return None;
+                if let Some(closure) = transitive_closure.as_ref() {
+                    if !closure.contains(package_node) {
+                        return None;
+                    }
                 }
 
-                Some(Node {
-                    idx: idx,
+                let package = Package {
                     run: self.run.clone(),
-                })
+                    name: package_node.as_package_name().clone(),
+                };
+
+                if let Some(filter) = &self.filter {
+                    if !filter.check(&package) {
+                        return None;
+                    }
+                }
+
+                Some(package)
             })
             .collect()
     }
 
     async fn edges(&self) -> Array<Edge> {
         let transitive_closure = self
-            .run
-            .pkg_dep_graph()
-            .transitive_closure(Some(&self.center));
+            .center
+            .as_ref()
+            .map(|center| self.run.pkg_dep_graph().transitive_closure(Some(center)));
         self.run
             .pkg_dep_graph()
             .edges()
             .iter()
             .filter_map(|edge| {
+                if edge.source() == edge.target() {
+                    return None;
+                }
                 let source_node = self
                     .run
                     .pkg_dep_graph()
@@ -88,17 +96,18 @@ impl PackageGraph {
                     .pkg_dep_graph()
                     .get_package_by_index(edge.target())?;
 
-                if !transitive_closure.contains(source_node)
-                    || !transitive_closure.contains(target_node)
-                {
-                    return None;
+                if let Some(closure) = transitive_closure.as_ref() {
+                    if !closure.contains(source_node) || !closure.contains(target_node) {
+                        return None;
+                    }
                 }
 
                 Some(Edge {
-                    source: edge.source().index(),
-                    target: edge.target().index(),
+                    source: source_node.as_package_name().to_string(),
+                    target: target_node.as_package_name().to_string(),
                 })
             })
+            .dedup()
             .collect()
     }
 }
