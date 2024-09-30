@@ -43,22 +43,31 @@ pub(crate) struct Edge {
 #[Object]
 impl PackageGraph {
     async fn nodes(&self) -> Array<Package> {
-        let transitive_closure = self
+        let direct_dependencies = self
             .center
             .as_ref()
-            .map(|center| self.run.pkg_dep_graph().transitive_closure(Some(center)));
+            .and_then(|center| self.run.pkg_dep_graph().immediate_dependencies(center));
         self.run
             .pkg_dep_graph()
             .node_indices()
             .filter_map(|idx| {
                 let package_node = self.run.pkg_dep_graph().get_package_by_index(idx)?;
+                if let Some(center) = &self.center {
+                    if center == package_node {
+                        return Some(Package {
+                            run: self.run.clone(),
+                            name: package_node.as_package_name().clone(),
+                        });
+                    }
+                }
+
                 if matches!(package_node, PackageNode::Root)
                     || matches!(package_node, PackageNode::Workspace(PackageName::Root))
                 {
                     return None;
                 }
-                if let Some(closure) = transitive_closure.as_ref() {
-                    if !closure.contains(package_node) {
+                if let Some(dependencies) = direct_dependencies.as_ref() {
+                    if !dependencies.contains(package_node) {
                         return None;
                     }
                 }
@@ -80,10 +89,10 @@ impl PackageGraph {
     }
 
     async fn edges(&self) -> Array<Edge> {
-        let transitive_closure = self
+        let direct_dependencies = self
             .center
             .as_ref()
-            .map(|center| self.run.pkg_dep_graph().transitive_closure(Some(center)));
+            .and_then(|center| self.run.pkg_dep_graph().immediate_dependencies(center));
         self.run
             .pkg_dep_graph()
             .edges()
@@ -111,8 +120,16 @@ impl PackageGraph {
                     return None;
                 }
 
-                if let Some(closure) = transitive_closure.as_ref() {
-                    if !closure.contains(source_node) || !closure.contains(target_node) {
+                if let Some(center) = &self.center {
+                    if center == source_node || center == target_node {
+                        return Some(Edge {
+                            source: source_node.as_package_name().to_string(),
+                            target: target_node.as_package_name().to_string(),
+                        });
+                    }
+                }
+                if let Some(dependencies) = direct_dependencies.as_ref() {
+                    if !dependencies.contains(source_node) || !dependencies.contains(target_node) {
                         return None;
                     }
                 }
