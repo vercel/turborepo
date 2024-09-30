@@ -288,6 +288,7 @@ impl RepositoryQuery {
         &self,
         base: Option<String>,
         head: Option<String>,
+        filter: Option<PackagePredicate>,
     ) -> Result<Array<Package>, Error> {
         let mut opts = self.run.opts().clone();
         opts.scope_opts.affected_range = Some((base, head));
@@ -304,6 +305,7 @@ impl RepositoryQuery {
             run: self.run.clone(),
             name: package,
         })
+        .filter(|package| filter.as_ref().map_or(true, |f| f.check(package)))
         .sorted_by(|a, b| a.name.cmp(&b.name))
         .collect())
     }
