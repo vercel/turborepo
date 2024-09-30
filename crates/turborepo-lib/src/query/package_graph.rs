@@ -52,6 +52,11 @@ impl PackageGraph {
             .node_indices()
             .filter_map(|idx| {
                 let package_node = self.run.pkg_dep_graph().get_package_by_index(idx)?;
+                if matches!(package_node, PackageNode::Root)
+                    || matches!(package_node, PackageNode::Workspace(PackageName::Root))
+                {
+                    return None;
+                }
                 if let Some(closure) = transitive_closure.as_ref() {
                     if !closure.contains(package_node) {
                         return None;
@@ -95,6 +100,16 @@ impl PackageGraph {
                     .run
                     .pkg_dep_graph()
                     .get_package_by_index(edge.target())?;
+
+                if matches!(
+                    source_node,
+                    PackageNode::Root | PackageNode::Workspace(PackageName::Root)
+                ) || matches!(
+                    target_node,
+                    PackageNode::Root | PackageNode::Workspace(PackageName::Root)
+                ) {
+                    return None;
+                }
 
                 if let Some(closure) = transitive_closure.as_ref() {
                     if !closure.contains(source_node) || !closure.contains(target_node) {
