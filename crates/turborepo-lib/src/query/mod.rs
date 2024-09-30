@@ -575,8 +575,8 @@ impl RepositoryQuery {
         }
     }
 
-    async fn package_graph(&self) -> PackageGraph {
-        PackageGraph::new(self.run.clone())
+    async fn package_graph(&self, center: String) -> PackageGraph {
+        PackageGraph::new(self.run.clone(), center)
     }
 
     async fn file(&self, path: String) -> Result<File, Error> {
