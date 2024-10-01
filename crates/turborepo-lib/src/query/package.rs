@@ -202,6 +202,7 @@ impl Package {
     async fn tasks(&self) -> Array<RepositoryTask> {
         self.get_tasks()
             .into_iter()
+            .sorted_by(|a, b| a.0.cmp(&b.0))
             .map(|(name, script)| RepositoryTask {
                 name,
                 package: self.clone(),
