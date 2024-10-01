@@ -31,6 +31,23 @@ impl From<TaskId<'static>> for TaskNode {
     }
 }
 
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error("expected a task node, got root")]
+    Root,
+}
+
+impl TryFrom<TaskNode> for TaskId<'static> {
+    type Error = Error;
+
+    fn try_from(node: TaskNode) -> Result<Self, Self::Error> {
+        match node {
+            TaskNode::Root => Err(Error::Root),
+            TaskNode::Task(id) => Ok(id),
+        }
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct Building;
 #[derive(Debug, Default)]
@@ -330,6 +347,24 @@ impl Engine<Built> {
 
     pub fn dependents(&self, task_id: &TaskId) -> Option<HashSet<&TaskNode>> {
         self.neighbors(task_id, petgraph::Direction::Incoming)
+    }
+
+    pub fn transitive_dependents(&self, task_id: &TaskId<'static>) -> HashSet<&TaskNode> {
+        turborepo_graph_utils::transitive_closure(
+            &self.task_graph,
+            &self.task_lookup,
+            Some(&TaskNode::Task(task_id.clone())),
+            petgraph::Direction::Incoming,
+        )
+    }
+
+    pub fn transitive_dependencies(&self, task_id: &TaskId<'static>) -> HashSet<&TaskNode> {
+        turborepo_graph_utils::transitive_closure(
+            &self.task_graph,
+            &self.task_lookup,
+            Some(&TaskNode::Task(task_id.clone())),
+            petgraph::Direction::Outgoing,
+        )
     }
 
     fn neighbors(

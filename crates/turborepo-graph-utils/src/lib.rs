@@ -21,15 +21,21 @@ pub enum Error {
     SelfDependency(String),
 }
 
-pub fn transitive_closure<'a, 'b, N: Hash + Eq + PartialEq + 'b, I: IntoIterator<Item = &'b N>>(
+pub fn transitive_closure<
+    'a,
+    'b,
+    N: Hash + Eq + PartialEq + Clone + 'b,
+    M: TryFrom<N> + Hash + Eq + PartialEq,
+    I: IntoIterator<Item = &'b N>,
+>(
     graph: &'a Graph<N, ()>,
-    node_lookup: &'a HashMap<N, petgraph::graph::NodeIndex>,
+    node_lookup: &'a HashMap<M, petgraph::graph::NodeIndex>,
     nodes: I,
     direction: petgraph::Direction,
 ) -> HashSet<&'a N> {
     let indices = nodes
         .into_iter()
-        .filter_map(|node| node_lookup.get(node))
+        .filter_map(|node| node_lookup.get(&node.to_owned().try_into().ok()?))
         .copied();
 
     let mut visited = HashSet::new();
