@@ -150,7 +150,7 @@ impl<'a> EngineBuilder<'a> {
         self
     }
 
-    /// If set, we will run all tasks in the graph, even if they are not
+    /// If set, we will include all tasks in the graph, even if they are not
     /// specified
     pub fn add_all_tasks(mut self) -> Self {
         self.add_all_tasks = true;

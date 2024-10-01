@@ -66,7 +66,7 @@ pub struct RunBuilder {
     should_print_prelude_override: Option<bool>,
     allow_missing_package_manager: bool,
     allow_no_turbo_json: bool,
-    // If true, we will run all tasks in the graph, even if they are not specified
+    // If true, we will add all tasks to the graph, even if they are not specified
     add_all_tasks: bool,
 }
 
