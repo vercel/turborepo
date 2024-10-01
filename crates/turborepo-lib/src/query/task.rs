@@ -1,16 +1,38 @@
+use std::sync::Arc;
+
 use async_graphql::Object;
+use itertools::Itertools;
 use turborepo_errors::Spanned;
 
 use crate::{
     engine::TaskNode,
     query::{package::Package, Array},
-    run::task_id::TaskId,
+    run::{task_id::TaskId, Run},
 };
 
 pub struct RepositoryTask {
     pub name: String,
     pub package: Package,
     pub script: Option<Spanned<String>>,
+}
+
+impl Task {
+    pub fn new(task_id: &TaskId, run: &Arc<Run>) -> Self {
+        let package = Package {
+            name: task_id.package().into(),
+            run: run.clone(),
+        };
+        let script = package
+            .get_tasks()
+            .get(task_id.task())
+            .map(|script| script.clone());
+
+        Task {
+            name: task_id.task().to_string(),
+            package,
+            script,
+        }
+    }
 }
 
 #[Object]
