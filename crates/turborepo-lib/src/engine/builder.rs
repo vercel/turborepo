@@ -201,7 +201,7 @@ impl<'a> EngineBuilder<'a> {
                     turbo_json
                         .tasks
                         .keys()
-                        .map(|task| Spanned::new(TaskName::from(task.clone()))),
+                        .map(|task| Spanned::new(task.clone())),
                 );
             }
 
@@ -214,7 +214,7 @@ impl<'a> EngineBuilder<'a> {
                     turbo_json
                         .tasks
                         .keys()
-                        .map(|task| Spanned::new(TaskName::from(task.clone()))),
+                        .map(|task| Spanned::new(task.clone())),
                 );
             }
 

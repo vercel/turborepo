@@ -43,11 +43,7 @@ impl Task {
                         run: self.package.run.clone(),
                         name: task.package().to_string().into(),
                     },
-                    script: self
-                        .package
-                        .get_tasks()
-                        .get(task.task())
-                        .map(|script| script.clone()),
+                    script: self.package.get_tasks().get(task.task()).cloned(),
                 }),
             })
             .collect()
@@ -70,11 +66,7 @@ impl Task {
                         run: self.package.run.clone(),
                         name: task.package().to_string().into(),
                     },
-                    script: self
-                        .package
-                        .get_tasks()
-                        .get(task.task())
-                        .map(|script| script.clone()),
+                    script: self.package.get_tasks().get(task.task()).cloned(),
                 }),
             })
             .collect()
