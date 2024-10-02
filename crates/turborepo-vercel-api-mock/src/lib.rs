@@ -6,7 +6,7 @@ use anyhow::Result;
 use axum::{
     body::Body,
     extract::Path,
-    http::{HeaderMap, HeaderValue, StatusCode},
+    http::{header::CONTENT_LENGTH, HeaderMap, HeaderValue, StatusCode},
     routing::{get, head, options, patch, post, put},
     Json, Router,
 };
@@ -161,6 +161,11 @@ pub async fn start_test_server(port: u16) -> Result<()> {
                         .and_then(|header_value| header_value.to_str().ok())
                         .and_then(|duration| duration.parse::<u32>().ok())
                         .expect("x-artifact-duration header is missing");
+
+                    assert!(
+                        headers.get(CONTENT_LENGTH).is_some(),
+                        "expected to get content-length"
+                    );
 
                     let mut durations_map = put_durations_ref.lock().await;
                     durations_map.insert(hash.clone(), duration);
