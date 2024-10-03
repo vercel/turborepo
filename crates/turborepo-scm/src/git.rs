@@ -64,7 +64,9 @@ impl SCM {
                 ) {
                     Ok(files) => Ok(ChangedFiles::Some(files)),
                     Err(ref error @ Error::Git(ref message, _))
-                        if allow_unknown_objects && message.contains("no merge base") =>
+                        if allow_unknown_objects
+                            && (message.contains("no merge base")
+                                || message.contains("bad object")) =>
                     {
                         unable_to_detect_range(error)
                     }
