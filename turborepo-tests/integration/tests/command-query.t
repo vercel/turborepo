@@ -208,10 +208,7 @@ Run the query
     }
   }
 
-  $ ${TURBO} query "query { version }"
+  $ ${TURBO} query "query { version }" | jq ".data.version" > QUERY_VERSION
    WARNING  query command is experimental and may change in the future
-  {
-    "data": {
-      "version": "2.1.3-canary.2"
-    }
-  }
+  $ VERSION=${MONOREPO_ROOT_DIR}/version.txt
+  $ diff --strip-trailing-cr <(head -n 1 ${VERSION}) <(${TURBO} --version)
