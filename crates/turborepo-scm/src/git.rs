@@ -64,7 +64,9 @@ impl SCM {
                 ) {
                     Ok(files) => Ok(ChangedFiles::Some(files)),
                     Err(ref error @ Error::Git(ref message, _))
-                        if allow_unknown_objects && message.contains("no merge base") =>
+                        if allow_unknown_objects
+                            && (message.contains("no merge base")
+                                || message.contains("bad object")) =>
                     {
                         unable_to_detect_range(error)
                     }
@@ -235,10 +237,10 @@ impl Git {
                 .execute_git_command(&["rev-parse", &github_base_ref], "")
                 .is_ok()
             {
-                println!("Resolved base ref from GitHub Actions event: {github_base_ref}");
+                eprintln!("Resolved base ref from GitHub Actions event: {github_base_ref}");
                 Ok(github_base_ref)
             } else {
-                println!("Failed to resolve base ref from GitHub Actions event");
+                eprintln!("Failed to resolve base ref from GitHub Actions event");
                 Err(Error::UnableToResolveRef)
             };
         }
