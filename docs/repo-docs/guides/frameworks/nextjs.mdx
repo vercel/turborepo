@@ -132,7 +132,9 @@ These bindings may make your package incompatible with other frameworks or packa
     "./image": "./dist/image.js"
     "./next-js/link": "./dist/link.js"
     "./next-js/image": "./dist/image.js"
-    }
+  },
+  "peerDependencies": {
+    "next": "*" // You may want to specify a version range, according to your package's needs and constraints
   }
 }
 ```
