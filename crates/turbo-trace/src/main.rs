@@ -13,14 +13,12 @@ struct Args {
     cwd: Option<Utf8PathBuf>,
     #[clap(long)]
     ts_config: Option<Utf8PathBuf>,
+    #[clap(long)]
+    node_modules: Option<Utf8PathBuf>,
     files: Vec<Utf8PathBuf>,
     #[clap(long)]
-<<<<<<< HEAD
     depth: Option<usize>,
-||||||| parent of d057b6922b (First try at reverse tracing)
-=======
     reverse: bool,
->>>>>>> d057b6922b (First try at reverse tracing)
 }
 
 fn main() -> Result<(), PathError> {
