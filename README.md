@@ -39,7 +39,7 @@ Turborepo is used by the world's leading companies. Check out the [Turborepo Sho
 
 ## Updates
 
-Follow [@turborepo](https://x.com/turborepo) on X and for project updates.
+Follow [@turborepo](https://x.com/turborepo) on X for project updates.
 
 ## Authors
 
