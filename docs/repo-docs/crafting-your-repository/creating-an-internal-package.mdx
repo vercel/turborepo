@@ -263,7 +263,6 @@ Add the artifacts for the new `@repo/math` library to the `outputs` for the `bui
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "inputs": ["$TURBO_DEFAULT$", ".env*"],
       "outputs": [".next/**", "!.next/cache/**", "dist/**"]
     }
   }
