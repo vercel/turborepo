@@ -5,7 +5,7 @@ import markdown from "remark-parse";
 import remarkToRehype from "remark-rehype";
 import raw from "rehype-raw";
 import visit from "unist-util-visit";
-import GithubSlugger from "github-slugger";
+import GitHubSlugger from "github-slugger";
 import matter from "gray-matter";
 import {
   COMMENT_TAG,
@@ -57,7 +57,7 @@ type ErrorType = Exclude<keyof Errors, "doc">;
 const DOCS_PATH = ".";
 const EXCLUDED_HASHES = ["top"];
 
-const slugger = new GithubSlugger();
+const slugger = new GitHubSlugger();
 
 // Collect the paths of all .mdx files in the passed directories
 async function getAllMdxFilePaths(
@@ -323,7 +323,7 @@ async function validateAllInternalLinks(): Promise<void> {
     try {
       await updateCheckStatus(errorsExist, commentUrl);
     } catch (error) {
-      setFailed("Failed to create Github check: " + error);
+      setFailed("Failed to create GitHub check: " + error);
     }
   } catch (error) {
     setFailed("Error validating internal links: " + error);
