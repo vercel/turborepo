@@ -1,6 +1,8 @@
 use std::{fs, sync::Arc};
 
-use async_graphql::{EmptyMutation, EmptySubscription, Schema, ServerError};
+use async_graphql::{
+    EmptyMutation, EmptySubscription, Name, Request, Schema, ServerError, Variables,
+};
 use miette::{Diagnostic, Report, SourceSpan};
 use thiserror::Error;
 use turbopath::AbsoluteSystemPathBuf;
@@ -54,10 +56,23 @@ impl QueryError {
     }
 }
 
+pub fn parse_variables(var_strings: &[String]) -> Result<Variables, Error> {
+    let mut variables = Variables::default();
+    for s in var_strings {
+        let (key, value) = s
+            .split_once('=')
+            .ok_or_else(|| Error::InvalidVariables(s.to_owned()))?;
+        variables.insert(Name::new(key), serde_json::from_str(value)?);
+    }
+
+    Ok(variables)
+}
+
 pub async fn run(
     mut base: CommandBase,
     telemetry: CommandEventBuilder,
     query: Option<String>,
+    variables: Variables,
 ) -> Result<i32, Error> {
     let signal = get_signal()?;
     let handler = SignalHandler::new(signal);
@@ -90,7 +105,9 @@ pub async fn run(
             EmptySubscription,
         );
 
-        let result = schema.execute(&query).await;
+        let request = Request::new(&query).variables(variables);
+
+        let result = schema.execute(request).await;
         if result.errors.is_empty() {
             println!("{}", serde_json::to_string_pretty(&result)?);
         } else {

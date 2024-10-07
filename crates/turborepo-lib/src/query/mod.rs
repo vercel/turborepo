@@ -49,6 +49,8 @@ pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Resolution(#[from] crate::run::scope::filter::ResolutionError),
+    #[error("invalid variable string: {0}")]
+    InvalidVariables(String),
 }
 
 pub struct RepositoryQuery {

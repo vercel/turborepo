@@ -357,7 +357,7 @@ impl Args {
             })
             .map(|(_, input_token)| input_token);
 
-        let mut clap_args = match Args::try_parse_from(single_package_free) {
+        let mut clap_args = match Args::tmory_parse_from(single_package_free) {
             Ok(mut args) => {
                 // And then only add them back in when we're in `run`.
                 // The value can appear in two places in the struct.
@@ -606,6 +606,9 @@ pub enum Command {
     /// GraphQL server with GraphiQL.
     #[clap(hide = true)]
     Query {
+        /// Pass a variable to the query
+        #[clap(short = 'V', long)]
+        variable: Vec<String>,
         /// The query to run, either a file path or a query string
         query: Option<String>,
     },
@@ -1343,14 +1346,16 @@ pub async fn run(
             })?;
             Ok(exit_code)
         }
-        Command::Query { query } => {
+        Command::Query { query, variable } => {
             warn!("query command is experimental and may change in the future");
             let query = query.clone();
             let event = CommandEventBuilder::new("query").with_parent(&root_telemetry);
             event.track_call();
+            let variables = query::parse_variables(variable)?;
+
             let base = CommandBase::new(cli_args, repo_root, version, color_config);
 
-            let query = query::run(base, event, query).await?;
+            let query = query::run(base, event, query, variables).await?;
 
             Ok(query)
         }
