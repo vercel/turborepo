@@ -375,6 +375,7 @@ mod test {
             "inputs": [],
             "outputLogs": "full",
             "persistent": false,
+            "interruptible": false,
             "interactive": false,
             "env": [],
             "passThroughEnv": null,

@@ -87,6 +87,7 @@ Setup
       ],
       "outputLogs": "full",
       "persistent": false,
+      "interruptible": false,
       "env": [],
       "passThroughEnv": null,
       "interactive": false
@@ -137,6 +138,7 @@ Setup
       "inputs": [],
       "outputLogs": "full",
       "persistent": false,
+      "interruptible": false,
       "env": [
         "NODE_ENV"
       ],
