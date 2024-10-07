@@ -5,7 +5,7 @@ use std::{
 };
 
 use tokio::sync::oneshot;
-use tracing::{debug, error};
+use tracing::{debug, error, log::warn};
 use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
 };
@@ -359,6 +359,16 @@ impl TaskCache {
             &validated_exclusions,
             globwalk::WalkType::All,
         )?;
+
+        // If we're only caching the log output, *and* output globs are not empty,
+        // we should warn the user
+        if files_to_be_cached.len() == 1 && !self.repo_relative_globs.is_empty() {
+            warn!(
+                "no output files found for task {}. Please check your `outputs` key in \
+                 `turbo.json`",
+                self.task_id
+            );
+        }
 
         let mut relative_paths = files_to_be_cached
             .into_iter()
