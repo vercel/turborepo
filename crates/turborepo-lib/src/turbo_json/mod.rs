@@ -219,6 +219,8 @@ pub struct RawTaskDefinition {
     #[serde(skip_serializing_if = "Option::is_none")]
     persistent: Option<Spanned<bool>>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    interruptible: Option<Spanned<bool>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     outputs: Option<Vec<Spanned<UnescapedString>>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     output_logs: Option<Spanned<OutputLogsMode>>,
@@ -257,6 +259,7 @@ impl RawTaskDefinition {
         set_field!(self, other, inputs);
         set_field!(self, other, output_logs);
         set_field!(self, other, persistent);
+        set_field!(self, other, interruptible);
         set_field!(self, other, env);
         set_field!(self, other, pass_through_env);
         set_field!(self, other, interactive);
@@ -408,6 +411,7 @@ impl TryFrom<RawTaskDefinition> for TaskDefinition {
             pass_through_env,
             output_logs: *raw_task.output_logs.unwrap_or_default(),
             persistent: *raw_task.persistent.unwrap_or_default(),
+            interruptible: *raw_task.interruptible.unwrap_or_default(),
             interactive,
             env_mode: raw_task.env_mode,
         })
