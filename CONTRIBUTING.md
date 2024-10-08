@@ -52,7 +52,8 @@ Turborepo uses `reqwest`, a Rust HTTP client, to make requests to the Turbo API.
 implementations: `rustls` and `native-tls`. `rustls` is a pure Rust implementation of TLS, while `native-tls`
 is a wrapper around OpenSSL. Turborepo allows users to select which implementation they want with the `native-tls`
 and `rustls-tls` features. By default, the `rustls-tls` feature is selected---this is done so that `cargo build` works
-out of the box. If you wish to select `native-tls`, you may do so by passing `--no-default-features --features native-tls`
+out of the box. If you wish to select `native-tls`, you may do so by passing
+`--no-default-features --features native-tls`
 to the build command.
 
 ### Running Turborepo Tests
@@ -100,17 +101,14 @@ Then from the root directory, you can run:
 
   ```
   turbo run build --filter=cli
-  bun --filter turborepo-tests-integration test:interactive
+  pnpm --filter turborepo-tests-integration test:interactive
   ```
 
   You can pass a test name to run a single test, or a directory to run all tests in that directory.
 
   ```
-  bun --filter turborepo-tests-integration test:interactive -- tests/turbo-help.t
+  pnpm --filter turborepo-tests-integration test:interactive tests/turbo-help.t
   ```
-
-  Note that this seems to only work with `bun` and not `pnpm` due to how `pnpm`
-  passes extra arguments to the script
 
 - Example tests
   ```bash
@@ -120,7 +118,8 @@ Then from the root directory, you can run:
 ## Debugging Turborepo
 
 1. Install `go install github.com/go-delve/delve/cmd/dlv@latest`
-1. In VS Code's "Run and Debug" tab, select `Build Basic` to start debugging the initial launch of `turbo` against the `build` target of the Basic Example. This task is configured in [launch.json](./.vscode/launch.json).
+1. In VS Code's "Run and Debug" tab, select `Build Basic` to start debugging the initial launch of `turbo` against the
+   `build` target of the Basic Example. This task is configured in [launch.json](./.vscode/launch.json).
 
 ## Benchmarking Turborepo
 
@@ -128,7 +127,8 @@ Follow the instructions in the [`benchmark/README.md`](./benchmark/README.md).
 
 ## Updating `turbo`
 
-You might need to update `packages/turbo` in order to support a new platform. When you do that you will need to link the module in order to be able to continue working. As an example, with `npm link`:
+You might need to update `packages/turbo` in order to support a new platform. When you do that you will need to link the
+module in order to be able to continue working. As an example, with `npm link`:
 
 ```sh
 cd ~/repos/vercel/turbo/packages/turbo
@@ -162,8 +162,10 @@ Here's a checklist of testing strategies to cover:
 There are also multiple installation scenarios worth testing:
 
 - Global-only. `turbo` is installed as global binary, no local `turbo` in repository.
-- Local-only. `turbo` is installed as local binary, no global `turbo` in PATH. turbo` is invoked via a root package script.
-- Global + local. `turbo` is installed as global binary, and local `turbo` in repository. Global `turbo` delegates to local `turbo`
+- Local-only. `turbo` is installed as local binary, no global `turbo` in PATH. turbo` is invoked via a root package
+  script.
+- Global + local. `turbo` is installed as global binary, and local `turbo` in repository. Global `turbo` delegates to
+  local `turbo`
 
 Here are a few repositories that you can test on:
 
@@ -180,7 +182,8 @@ See [the publishing guide](./release.md#release-turborepo).
 
 ## Creating a new release blog post
 
-Creating a new release post can be done via a turborepo generator. Run the following command from anywhere within the repo:
+Creating a new release post can be done via a turborepo generator. Run the following command from anywhere within the
+repo:
 
 ```bash
 turbo generate run "blog - release post"
@@ -188,7 +191,9 @@ turbo generate run "blog - release post"
 
 This will walk you through creating a new blog post from start to finish.
 
-NOTE: If you would like to update the stats (github stars / npm downloads / time saved) for an existing blog post that has yet to be published (useful if time has passed since the blog post was created, and up to date stats are required before publishing) - run:
+NOTE: If you would like to update the stats (github stars / npm downloads / time saved) for an existing blog post that
+has yet to be published (useful if time has passed since the blog post was created, and up to date stats are required
+before publishing) - run:
 
 ```bash
 turbo generate run "blog - "blog - update release post stats"
