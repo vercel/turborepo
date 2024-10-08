@@ -33,5 +33,11 @@ else
   COREPACK_INSTALL_DIR_CMD="--install-directory=${COREPACK_INSTALL_DIR}"
 fi
 
+# If the pkgManager is npm, enable it specially, because `corepack enable` does not enable
+# npm by default.
+if [[ "$pkgManager" =~ ^npm ]]; then
+  coorepack enable npm
+fi
+
 # Enable corepack so that the packageManager setting in package.json is respected.
 corepack enable "${COREPACK_INSTALL_DIR_CMD}"
