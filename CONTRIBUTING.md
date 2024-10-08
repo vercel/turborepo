@@ -191,7 +191,7 @@ turbo generate run "blog - release post"
 
 This will walk you through creating a new blog post from start to finish.
 
-NOTE: If you would like to update the stats (github stars / npm downloads / time saved) for an existing blog post that
+NOTE: If you would like to update the stats (GitHub stars / npm downloads / time saved) for an existing blog post that
 has yet to be published (useful if time has passed since the blog post was created, and up to date stats are required
 before publishing) - run:
 
