@@ -49,3 +49,10 @@ environment variable. With this, you can set different log levels per module.
 For syntax, see the [Env Filter Syntax][1]
 
 [1][https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html]
+
+## Failing integration tests due to hash changes
+
+If a lot of integration tests are failing with changes in the hash for `package-lock.json`,
+you might be using an old version of `npm`. We try to set it in the test (`setup_package_manager.sh` and
+`setup_integration_test.sh`), but if your version is too old, it might not work.
+In which case, upgrade it to whatever the GitHub Actions runner uses.

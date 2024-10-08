@@ -22,6 +22,10 @@ Thanks for your interest in contributing to Turbo!
 
 - [Rust](https://www.rust-lang.org/tools/install)
 - [cargo-groups](https://github.com/nicholaslyang/cargo-groups)
+- NodeJS v18
+- npm v10.5.0 (note: this is determined by the GitHub Actions CI, when in doubt, look at what the runner is using)
+- capnproto
+- protoc
 
 ### Linux Dependencies
 
@@ -71,10 +75,6 @@ Then from the root directory, you can run:
   ```bash
   pnpm test -- --filter=cli
   ```
-- A single Go unit test (see more [in the Go docs](https://pkg.go.dev/cmd/go#hdr-Test_packages))
-  ```bash
-  cd cli && go test ./[path/to/package/]
-  ```
 - Rust unit tests ([install `nextest` first](https://nexte.st/book/pre-built-binaries.html))
   ```bash
   cargo nextest run -p turborepo-lib --features rustls-tls
@@ -95,6 +95,19 @@ Then from the root directory, you can run:
   ```
 
   Note: this is not through turbo, so you'll have to build turbo yourself first.
+
+- Updating Integration Tests
+
+  ```
+  pnpm -- turbo run build --filter=cli
+  pnpm test:interactive -F turborepo-tests-integration
+  ```
+
+  You can pass a test name to run a single test, or a directory to run all tests in that directory.
+
+  ```
+  pnpm test:interactive -F turborepo-tests-integration -- run-summary.t
+  ```
 
 - Example tests
   ```bash
