@@ -1,7 +1,7 @@
 # Setup
   $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh ordered
 
-# Build as if we are in Github Actions
+# Build as if we are in GitHub Actions
 Note that we need to use (re) for lines that start with '> '
 because otherwise prysk interprets them as multiline commands
   $ GITHUB_ACTIONS=1 ${TURBO} run build --force
@@ -31,7 +31,7 @@ because otherwise prysk interprets them as multiline commands
   Cached:    0 cached, 2 total
     Time:\s*[\.0-9]+m?s  (re)
   
-# Build as if we are in Github Actions with a task log prefix.
+# Build as if we are in GitHub Actions with a task log prefix.
   $ GITHUB_ACTIONS=1 ${TURBO} run build --force --log-prefix="task" --filter=util
   \xe2\x80\xa2 Packages in scope: util (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
