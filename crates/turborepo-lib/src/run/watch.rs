@@ -266,6 +266,7 @@ impl WatchClient {
     /// 1. The persistent tasks that are not allowed to be interrupted
     /// 2. The non-persistent tasks and the persistent tasks that are allowed to
     ///    be interrupted
+    ///
     /// Returns a handle to the task running (2)
     async fn execute_run(&mut self, changed_packages: ChangedPackages) -> Result<RunHandle, Error> {
         // Should we recover here?
@@ -322,7 +323,7 @@ impl WatchClient {
                 let ui_sender = self.ui_sender.clone();
                 Ok(RunHandle {
                     stopper: run.stopper(),
-                    run_task: tokio::spawn(async move { Ok(run.run(ui_sender, true).await?) }),
+                    run_task: tokio::spawn(async move { run.run(ui_sender, true).await }),
                 })
             }
             ChangedPackages::All => {
@@ -395,7 +396,7 @@ impl WatchClient {
                     Ok(RunHandle {
                         stopper: non_persistent_run.stopper(),
                         run_task: tokio::spawn(async move {
-                            Ok(non_persistent_run.run(ui_sender, true).await?)
+                            non_persistent_run.run(ui_sender, true).await
                         }),
                     })
                 } else {
@@ -403,7 +404,7 @@ impl WatchClient {
                     let run = self.run.clone();
                     Ok(RunHandle {
                         stopper: run.stopper(),
-                        run_task: tokio::spawn(async move { Ok(run.run(ui_sender, true).await?) }),
+                        run_task: tokio::spawn(async move { run.run(ui_sender, true).await }),
                     })
                 }
             }
