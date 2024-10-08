@@ -30,6 +30,7 @@ Validate that we only run `my-app#build` with change not committed
   Cached:    0 cached, 1 total
     Time:\s*[\.0-9]+m?s  (re)
   
+   WARNING  no output files found for task my-app#build. Please check your `outputs` key in `turbo.json`
 
 
 Do the same thing with the `ls` command
@@ -80,6 +81,7 @@ Validate that we only run `my-app#build` with change not committed
   Cached:    0 cached, 1 total
     Time:\s*[\.0-9]+m?s  (re)
   
+   WARNING  no output files found for task my-app#build. Please check your `outputs` key in `turbo.json`
 
 Do the same thing with the `ls` command
   $ ${TURBO} ls --affected
