@@ -329,6 +329,11 @@ impl ConfigurationOptions {
     }
 
     pub fn daemon(&self) -> Option<bool> {
+        // hardcode to off in CI
+        if turborepo_ci::is_ci() {
+            return Some(false);
+        }
+
         self.daemon
     }
 
