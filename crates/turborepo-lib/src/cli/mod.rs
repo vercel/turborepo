@@ -417,20 +417,6 @@ impl Args {
         clap_args
     }
 
-    pub fn get_tasks(&self) -> &[String] {
-        match &self.command {
-            Some(Command::Run {
-                run_args: _,
-                execution_args: box ExecutionArgs { tasks, .. },
-            }) => tasks,
-            _ => self
-                .execution_args
-                .as_ref()
-                .map(|execution_args| execution_args.tasks.as_slice())
-                .unwrap_or(&[]),
-        }
-    }
-
     pub fn track(&self, tel: &GenericEventBuilder) {
         // track usage only
         track_usage!(tel, self.skip_infer, |val| val);
