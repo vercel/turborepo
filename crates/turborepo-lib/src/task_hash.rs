@@ -466,6 +466,7 @@ impl<'a> TaskHasher<'a> {
                 let default_env_var_pass_through_map =
                     self.env_at_execution_start.from_wildcards(&[
                         "HOME",
+                        "USER",
                         "TZ",
                         "LANG",
                         "SHELL",
