@@ -99,15 +99,18 @@ Then from the root directory, you can run:
 - Updating Integration Tests
 
   ```
-  pnpm -- turbo run build --filter=cli
-  pnpm test:interactive -F turborepo-tests-integration
+  turbo run build --filter=cli
+  bun --filter turborepo-tests-integration test:interactive
   ```
 
   You can pass a test name to run a single test, or a directory to run all tests in that directory.
 
   ```
-  pnpm test:interactive -F turborepo-tests-integration -- run-summary.t
+  bun --filter turborepo-tests-integration test:interactive -- tests/turbo-help.t
   ```
+
+  Note that this seems to only work with `bun` and not `pnpm` due to how `pnpm`
+  passes extra arguments to the script
 
 - Example tests
   ```bash
