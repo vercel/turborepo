@@ -46,6 +46,9 @@ pub enum PackageChangeReason {
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum AllPackageChangeReason {
+    GlobalDepsChanged {
+        file: AnchoredSystemPathBuf,
+    },
     DefaultGlobalFileChanged {
         file: AnchoredSystemPathBuf,
     },
@@ -116,7 +119,10 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
         // get filtered files and add the packages that contain them
         let filtered_changed_files = self.filter_ignored_files(changed_files.iter())?;
 
-        match self.get_changed_packages(filtered_changed_files.into_iter()) {
+        match self.get_changed_packages(
+            filtered_changed_files.into_iter(),
+            lockfile_change.is_some(),
+        ) {
             PackageChanges::All(reason) => Ok(PackageChanges::All(reason)),
 
             PackageChanges::Some(mut changed_pkgs) => {
@@ -181,11 +187,12 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
     fn get_changed_packages<'b>(
         &self,
         files: impl Iterator<Item = &'b AnchoredSystemPathBuf>,
+        has_lockfile: bool,
     ) -> PackageChanges {
         let root_internal_deps = self.pkg_graph.root_internal_package_dependencies();
         let mut changed_packages = HashSet::new();
         for file in files {
-            match self.package_detector.detect_package(file) {
+            match self.package_detector.detect_package(file, has_lockfile) {
                 // Internal root dependency changed so global hash has changed
                 PackageMapping::Package(pkg) if root_internal_deps.contains(&pkg) => {
                     debug!(
@@ -208,11 +215,9 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
                         },
                     ));
                 }
-                PackageMapping::All => {
+                PackageMapping::All(reason) => {
                     debug!("all packages changed due to {file:?}");
-                    return PackageChanges::All(AllPackageChangeReason::NonPackageFileChanged {
-                        file: file.to_owned(),
-                    });
+                    return PackageChanges::All(reason);
                 }
                 PackageMapping::None => {}
             }

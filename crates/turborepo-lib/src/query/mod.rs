@@ -296,6 +296,11 @@ impl PackagePredicate {
 
 // why write few types when many work?
 #[derive(SimpleObject)]
+struct GlobalDepsChanged {
+    file: String,
+}
+
+#[derive(SimpleObject)]
 struct DefaultGlobalFileChanged {
     file: String,
 }
@@ -363,6 +368,7 @@ struct InFilteredDirectory {
 
 #[derive(Union)]
 enum PackageChangeReason {
+    GlobalDepsChanged(GlobalDepsChanged),
     DefaultGlobalFileChanged(DefaultGlobalFileChanged),
     LockfileChangeDetectionFailed(LockfileChangeDetectionFailed),
     LockfileChangedWithoutDetails(LockfileChangedWithoutDetails),
@@ -381,6 +387,11 @@ enum PackageChangeReason {
 impl From<turborepo_repository::change_mapper::PackageChangeReason> for PackageChangeReason {
     fn from(value: turborepo_repository::change_mapper::PackageChangeReason) -> Self {
         match value {
+            turborepo_repository::change_mapper::PackageChangeReason::All(
+                AllPackageChangeReason::GlobalDepsChanged { file },
+            ) => PackageChangeReason::GlobalDepsChanged(GlobalDepsChanged {
+                file: file.to_string(),
+            }),
             turborepo_repository::change_mapper::PackageChangeReason::All(
                 AllPackageChangeReason::DefaultGlobalFileChanged { file },
             ) => PackageChangeReason::DefaultGlobalFileChanged(DefaultGlobalFileChanged {

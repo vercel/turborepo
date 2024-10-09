@@ -2,11 +2,14 @@ use thiserror::Error;
 use turbopath::AnchoredSystemPath;
 use wax::{BuildError, Program};
 
-use crate::package_graph::{PackageGraph, PackageName, WorkspacePackage};
+use crate::{
+    change_mapper::AllPackageChangeReason,
+    package_graph::{PackageGraph, PackageName, WorkspacePackage},
+};
 
 pub enum PackageMapping {
     /// We've hit a global file, so all packages have changed
-    All,
+    All(AllPackageChangeReason),
     /// This change is meaningless, no packages have changed
     None,
     /// This change has affected one package
@@ -17,7 +20,7 @@ pub enum PackageMapping {
 /// package (`Package`), none of the packages (`None`), or all of the packages
 /// (`All`).
 pub trait PackageChangeMapper {
-    fn detect_package(&self, file: &AnchoredSystemPath) -> PackageMapping;
+    fn detect_package(&self, file: &AnchoredSystemPath, has_lockfile: bool) -> PackageMapping;
 }
 
 /// Detects package by checking if the file is inside the package.
@@ -42,7 +45,16 @@ impl<'a> DefaultPackageChangeMapper<'a> {
 }
 
 impl<'a> PackageChangeMapper for DefaultPackageChangeMapper<'a> {
-    fn detect_package(&self, file: &AnchoredSystemPath) -> PackageMapping {
+    fn detect_package(&self, file: &AnchoredSystemPath, has_lockfile_data: bool) -> PackageMapping {
+        // If we have a lockfile, we don't consider these as global changes, since we'll
+        // do lockfile analysis later
+        if matches!(
+            file.as_str(),
+            "package.json" | "pnpm-lock.yaml" | "yarn.lock"
+        ) && has_lockfile_data
+        {
+            return PackageMapping::None;
+        }
         for (name, entry) in self.pkg_dep_graph.packages() {
             if name == &PackageName::Root {
                 continue;
@@ -57,7 +69,9 @@ impl<'a> PackageChangeMapper for DefaultPackageChangeMapper<'a> {
             }
         }
 
-        PackageMapping::All
+        PackageMapping::All(AllPackageChangeReason::GlobalDepsChanged {
+            file: file.to_owned(),
+        })
     }
 }
 
@@ -93,17 +107,20 @@ impl<'a> GlobalDepsPackageChangeMapper<'a> {
 }
 
 impl<'a> PackageChangeMapper for GlobalDepsPackageChangeMapper<'a> {
-    fn detect_package(&self, path: &AnchoredSystemPath) -> PackageMapping {
-        match DefaultPackageChangeMapper::new(self.pkg_dep_graph).detect_package(path) {
+    fn detect_package(&self, path: &AnchoredSystemPath, has_lockfile: bool) -> PackageMapping {
+        match DefaultPackageChangeMapper::new(self.pkg_dep_graph).detect_package(path, has_lockfile)
+        {
             // Since `DefaultPackageChangeMapper` is overly conservative, we can check here if
             // the path is actually in globalDeps and if not, return it as
             // PackageDetection::Package(WorkspacePackage::root()).
-            PackageMapping::All => {
+            PackageMapping::All(_) => {
                 let cleaned_path = path.clean();
                 let in_global_deps = self.global_deps_matcher.is_match(cleaned_path.as_str());
 
                 if in_global_deps {
-                    PackageMapping::All
+                    PackageMapping::All(AllPackageChangeReason::GlobalDepsChanged {
+                        file: path.to_owned(),
+                    })
                 } else {
                     PackageMapping::Package(WorkspacePackage::root())
                 }
