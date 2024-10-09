@@ -14,6 +14,7 @@ use turborepo_cache::AsyncCache;
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_errors::Spanned;
 use turborepo_repository::{
+    change_mapper::PackageChangeReason,
     package_graph::{PackageGraph, PackageName},
     package_json,
     package_json::PackageJson,
@@ -42,7 +43,10 @@ use crate::{
     engine::{Engine, EngineBuilder},
     opts::Opts,
     process::ProcessManager,
-    run::{scope, task_access::TaskAccess, task_id::TaskName, Error, Run, RunCache},
+    run::{
+        scope, scope::PackageChange, task_access::TaskAccess, task_id::TaskName, Error, Run,
+        RunCache,
+    },
     shim::TurboState,
     signal::{SignalHandler, SignalSubscriber},
     turbo_json::{TurboJson, TurboJsonLoader, UIMode},
@@ -148,7 +152,7 @@ impl RunBuilder {
         pkg_dep_graph: &PackageGraph,
         scm: &SCM,
         root_turbo_json: &TurboJson,
-    ) -> Result<HashSet<PackageName>, Error> {
+    ) -> Result<HashSet<PackageChange>, Error> {
         let (mut filtered_pkgs, is_all_packages) = scope::resolve_packages(
             &opts.scope_opts,
             repo_root,
@@ -166,7 +170,12 @@ impl RunBuilder {
                 }
 
                 if root_turbo_json.tasks.contains_key(&task_name) {
-                    filtered_pkgs.insert(PackageName::Root);
+                    filtered_pkgs.insert(PackageChange {
+                        name: PackageName::Root,
+                        reason: PackageChangeReason::RootTask {
+                            task: task_name.to_string(),
+                        },
+                    });
                     break;
                 }
             }
@@ -453,7 +462,7 @@ impl RunBuilder {
             api_client: self.api_client,
             api_auth: self.api_auth,
             env_at_execution_start,
-            filtered_pkgs,
+            filtered_pkgs: filtered_pkgs.into_iter().map(|p| p.name).collect(),
             pkg_dep_graph: Arc::new(pkg_dep_graph),
             root_turbo_json,
             scm,
@@ -469,7 +478,7 @@ impl RunBuilder {
         &self,
         pkg_dep_graph: &PackageGraph,
         root_turbo_json: &TurboJson,
-        filtered_pkgs: &HashSet<PackageName>,
+        filtered_pkgs: &HashSet<PackageChange>,
         turbo_json_loader: TurboJsonLoader,
     ) -> Result<Engine, Error> {
         let mut builder = EngineBuilder::new(
@@ -480,7 +489,7 @@ impl RunBuilder {
         )
         .with_root_tasks(root_turbo_json.tasks.keys().cloned())
         .with_tasks_only(self.opts.run_opts.only)
-        .with_workspaces(filtered_pkgs.clone().into_iter().collect())
+        .with_workspaces(filtered_pkgs.clone().into_iter().map(|p| p.name).collect())
         .with_tasks(self.opts.run_opts.tasks.iter().map(|task| {
             // TODO: Pull span info from command
             Spanned::new(TaskName::from(task.as_str()).into_owned())

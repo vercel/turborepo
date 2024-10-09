@@ -3,14 +3,17 @@ use std::collections::HashSet;
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 use turborepo_repository::{
-    change_mapper::{ChangeMapper, DefaultPackageChangeMapper, LockfileChange, PackageChanges},
-    package_graph::{PackageGraph, PackageName},
+    change_mapper::{
+        AllPackageChangeReason, ChangeMapper, DefaultPackageChangeMapper, LockfileChange,
+        PackageChangeReason, PackageChanges,
+    },
+    package_graph::PackageGraph,
 };
-use turborepo_scm::{git::ChangedFiles, SCM};
+use turborepo_scm::{git::ChangedFilesResult, SCM};
 
 use crate::{
     global_deps_package_change_mapper::{Error, GlobalDepsPackageChangeMapper},
-    run::scope::ResolutionError,
+    run::scope::{PackageChange, ResolutionError},
 };
 
 /// Given two git refs, determine which packages have changed between them.
@@ -22,7 +25,7 @@ pub trait GitChangeDetector {
         include_uncommitted: bool,
         allow_unknown_objects: bool,
         merge_base: bool,
-    ) -> Result<HashSet<PackageName>, ResolutionError>;
+    ) -> Result<HashSet<PackageChange>, ResolutionError>;
 }
 
 pub struct ScopeChangeDetector<'a> {
@@ -94,7 +97,7 @@ impl<'a> GitChangeDetector for ScopeChangeDetector<'a> {
         include_uncommitted: bool,
         allow_unknown_objects: bool,
         merge_base: bool,
-    ) -> Result<HashSet<PackageName>, ResolutionError> {
+    ) -> Result<HashSet<PackageChange>, ResolutionError> {
         let changed_files = match self.scm.changed_files(
             self.turbo_root,
             from_ref,
@@ -103,15 +106,21 @@ impl<'a> GitChangeDetector for ScopeChangeDetector<'a> {
             allow_unknown_objects,
             merge_base,
         )? {
-            ChangedFiles::All => {
+            ChangedFilesResult::Err { from_ref, to_ref } => {
                 debug!("all packages changed");
                 return Ok(self
                     .pkg_graph
                     .packages()
-                    .map(|(name, _)| name.to_owned())
+                    .map(|(name, _)| PackageChange {
+                        name: name.to_owned(),
+                        reason: PackageChangeReason::All(AllPackageChangeReason::GitRefNotFound {
+                            from_ref: from_ref.clone(),
+                            to_ref: to_ref.clone(),
+                        }),
+                    })
                     .collect());
             }
-            ChangedFiles::Some(changed_files) => changed_files,
+            ChangedFilesResult::Ok(changed_files) => changed_files,
         };
 
         let lockfile_contents = self.get_lockfile_contents(from_ref, &changed_files);
@@ -133,7 +142,10 @@ impl<'a> GitChangeDetector for ScopeChangeDetector<'a> {
                 Ok(self
                     .pkg_graph
                     .packages()
-                    .map(|(name, _)| name.to_owned())
+                    .map(|(name, _)| PackageChange {
+                        name: name.to_owned(),
+                        reason: PackageChangeReason::All(reason.clone()),
+                    })
                     .collect())
             }
             PackageChanges::Some(packages) => {
@@ -142,13 +154,16 @@ impl<'a> GitChangeDetector for ScopeChangeDetector<'a> {
                     packages.len(),
                     &packages
                         .iter()
-                        .map(|x| x.name.to_string())
+                        .map(|(x, _)| x.name.to_string())
                         .collect::<Vec<String>>()
                 );
 
                 Ok(packages
                     .iter()
-                    .map(|package| package.name.to_owned())
+                    .map(|(package, reason)| PackageChange {
+                        name: package.name.to_owned(),
+                        reason: reason.clone(),
+                    })
                     .collect())
             }
         }

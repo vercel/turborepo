@@ -370,7 +370,9 @@ impl Subscriber {
                             }
                         }
                     }
-                    Ok(PackageChanges::Some(mut filtered_pkgs)) => {
+                    Ok(PackageChanges::Some(filtered_pkgs)) => {
+                        let mut filtered_pkgs: HashSet<WorkspacePackage> =
+                            filtered_pkgs.into_iter().map(|(pkg, _)| pkg).collect();
                         // If the root package has changed, we only send it if we have root
                         // tasks. Otherwise it's not worth sending as it will only
                         // pollute up the output logs

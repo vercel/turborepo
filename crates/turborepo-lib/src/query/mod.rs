@@ -15,7 +15,7 @@ use thiserror::Error;
 use tokio::select;
 use turbo_trace::TraceError;
 use turbopath::AbsoluteSystemPathBuf;
-use turborepo_repository::package_graph::PackageName;
+use turborepo_repository::{change_mapper::AllPackageChangeReason, package_graph::PackageName};
 
 use crate::{
     get_version,

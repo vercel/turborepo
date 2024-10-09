@@ -17,9 +17,12 @@ use turborepo_ci::Vendor;
 use crate::{Error, Git, SCM};
 
 #[derive(Debug)]
-pub enum ChangedFiles {
-    All,
-    Some(HashSet<AnchoredSystemPathBuf>),
+pub enum ChangedFilesResult {
+    Ok(HashSet<AnchoredSystemPathBuf>),
+    Err {
+        from_ref: Option<String>,
+        to_ref: Option<String>,
+    },
 }
 
 impl SCM {
@@ -45,13 +48,17 @@ impl SCM {
         include_uncommitted: bool,
         allow_unknown_objects: bool,
         merge_base: bool,
-    ) -> Result<ChangedFiles, Error> {
-        fn unable_to_detect_range(error: impl std::error::Error) -> Result<ChangedFiles, Error> {
+    ) -> Result<ChangedFilesResult, Error> {
+        fn unable_to_detect_range(
+            error: impl std::error::Error,
+            from_ref: Option<String>,
+            to_ref: Option<String>,
+        ) -> Result<ChangedFilesResult, Error> {
             warn!(
                 "unable to detect git range, assuming all files have changed: {}",
                 error
             );
-            Ok(ChangedFiles::All)
+            Ok(ChangedFilesResult::Err { from_ref, to_ref })
         }
         match self {
             Self::Git(git) => {
@@ -62,17 +69,23 @@ impl SCM {
                     include_uncommitted,
                     merge_base,
                 ) {
-                    Ok(files) => Ok(ChangedFiles::Some(files)),
+                    Ok(files) => Ok(ChangedFilesResult::Ok(files)),
                     Err(ref error @ Error::Git(ref message, _))
                         if allow_unknown_objects
                             && (message.contains("no merge base")
                                 || message.contains("bad object")) =>
                     {
-                        unable_to_detect_range(error)
+                        unable_to_detect_range(
+                            error,
+                            from_commit.map(|c| c.to_string()),
+                            to_commit.map(|c| c.to_string()),
+                        )
                     }
-                    Err(Error::UnableToResolveRef) => {
-                        unable_to_detect_range(Error::UnableToResolveRef)
-                    }
+                    Err(Error::UnableToResolveRef) => unable_to_detect_range(
+                        Error::UnableToResolveRef,
+                        from_commit.map(|c| c.to_string()),
+                        to_commit.map(|c| c.to_string()),
+                    ),
                     Err(e) => Err(e),
                 }
             }
@@ -402,7 +415,7 @@ mod tests {
     use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError};
     use which::which;
 
-    use super::{previous_content, CIEnv, ChangedFiles};
+    use super::{previous_content, CIEnv, ChangedFilesResult};
     use crate::{
         git::{GitHubCommit, GitHubEvent},
         Error, Git, SCM,
@@ -438,7 +451,7 @@ mod tests {
         // Replicating the `--filter` behavior where we only do a merge base
         // if both ends of the git range are specified.
         let merge_base = to_commit.is_some();
-        let ChangedFiles::Some(files) = scm.changed_files(
+        let ChangedFilesResult::Ok(files) = scm.changed_files(
             &turbo_root,
             from_commit,
             to_commit,
@@ -1010,7 +1023,7 @@ mod tests {
             .changed_files(&root, None, Some("HEAD"), true, true, false)
             .unwrap();
 
-        assert_matches!(actual, ChangedFiles::All);
+        assert_matches!(actual, ChangedFilesResult::Err);
 
         Ok(())
     }
