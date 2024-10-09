@@ -29,8 +29,11 @@ pub enum PackageChangeReason {
     All(AllPackageChangeReason),
     /// Root task was run
     RootTask { task: String },
+    /// We conservatively assume that the root package is changed because
+    /// the lockfile changed.
+    ConservativeRootLockfileChanged,
     /// The lockfile changed and caused this package to be invalidated
-    LockfileChanged { previous_lockfile: String },
+    LockfileChanged,
     /// A transitive dependency of this package changed
     DependencyChanged { dependency: PackageName },
     /// A transitive dependent of this package changed
@@ -144,15 +147,11 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
                             "found {} packages changed by lockfile",
                             lockfile_changes.len()
                         );
-                        changed_pkgs.extend(lockfile_changes.into_iter().map(|pkg| {
-                            (
-                                pkg,
-                                PackageChangeReason::LockfileChanged {
-                                    previous_lockfile: String::from_utf8_lossy(&content)
-                                        .to_string(),
-                                },
-                            )
-                        }));
+                        changed_pkgs.extend(
+                            lockfile_changes
+                                .into_iter()
+                                .map(|pkg| (pkg, PackageChangeReason::LockfileChanged)),
+                        );
 
                         Ok(PackageChanges::Some(changed_pkgs))
                     }
@@ -191,7 +190,7 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
         for file in files {
             match self.package_detector.detect_package(file, has_lockfile) {
                 // Internal root dependency changed so global hash has changed
-                PackageMapping::Package(pkg) if root_internal_deps.contains(&pkg) => {
+                PackageMapping::Package((pkg, _)) if root_internal_deps.contains(&pkg) => {
                     debug!(
                         "{} changes root internal dependency: \"{}\"\nshortest path from root: \
                          {:?}",
@@ -203,14 +202,9 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
                         root_internal_dep: pkg.name.clone(),
                     });
                 }
-                PackageMapping::Package(pkg) => {
+                PackageMapping::Package((pkg, reason)) => {
                     debug!("{} changes \"{}\"", file.to_string(), pkg.name);
-                    changed_packages.insert((
-                        pkg,
-                        PackageChangeReason::FileChanged {
-                            file: file.to_owned(),
-                        },
-                    ));
+                    changed_packages.insert((pkg, reason));
                 }
                 PackageMapping::All(reason) => {
                     debug!("all packages changed due to {file:?}");

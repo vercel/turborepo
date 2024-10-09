@@ -3,7 +3,7 @@ use turbopath::AnchoredSystemPath;
 use wax::{BuildError, Program};
 
 use crate::{
-    change_mapper::AllPackageChangeReason,
+    change_mapper::{AllPackageChangeReason, PackageChangeReason},
     package_graph::{PackageGraph, PackageName, WorkspacePackage},
 };
 
@@ -13,7 +13,7 @@ pub enum PackageMapping {
     /// This change is meaningless, no packages have changed
     None,
     /// This change has affected one package
-    Package(WorkspacePackage),
+    Package((WorkspacePackage, PackageChangeReason)),
 }
 
 /// Maps a single file change to affected packages. This can be a single
@@ -45,26 +45,22 @@ impl<'a> DefaultPackageChangeMapper<'a> {
 }
 
 impl<'a> PackageChangeMapper for DefaultPackageChangeMapper<'a> {
-    fn detect_package(&self, file: &AnchoredSystemPath, has_lockfile_data: bool) -> PackageMapping {
-        // If we have a lockfile, we don't consider these as global changes, since we'll
-        // do lockfile analysis later
-        if matches!(
-            file.as_str(),
-            "package.json" | "pnpm-lock.yaml" | "yarn.lock"
-        ) && has_lockfile_data
-        {
-            return PackageMapping::None;
-        }
+    fn detect_package(&self, file: &AnchoredSystemPath, _: bool) -> PackageMapping {
         for (name, entry) in self.pkg_dep_graph.packages() {
             if name == &PackageName::Root {
                 continue;
             }
             if let Some(package_path) = entry.package_json_path.parent() {
                 if Self::is_file_in_package(file, package_path) {
-                    return PackageMapping::Package(WorkspacePackage {
-                        name: name.clone(),
-                        path: package_path.to_owned(),
-                    });
+                    return PackageMapping::Package((
+                        WorkspacePackage {
+                            name: name.clone(),
+                            path: package_path.to_owned(),
+                        },
+                        PackageChangeReason::FileChanged {
+                            file: file.to_owned(),
+                        },
+                    ));
                 }
             }
         }
@@ -122,7 +118,12 @@ impl<'a> PackageChangeMapper for GlobalDepsPackageChangeMapper<'a> {
                         file: path.to_owned(),
                     })
                 } else {
-                    PackageMapping::Package(WorkspacePackage::root())
+                    PackageMapping::Package((
+                        WorkspacePackage::root(),
+                        PackageChangeReason::FileChanged {
+                            file: path.to_owned(),
+                        },
+                    ))
                 }
             }
             result => result,

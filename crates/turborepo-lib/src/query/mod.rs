@@ -342,8 +342,15 @@ struct RootTask {
 }
 
 #[derive(SimpleObject)]
+struct ConservativeRootLockfileChanged {
+    /// This is a nothing field
+    empty: bool,
+}
+
+#[derive(SimpleObject)]
 struct LockfileChanged {
-    previous_lockfile: String,
+    /// This is a nothing field
+    empty: bool,
 }
 
 #[derive(SimpleObject)]
@@ -377,6 +384,7 @@ enum PackageChangeReason {
     GitRefNotFound(GitRefNotFound),
     IncludedByFilter(IncludedByFilter),
     RootTask(RootTask),
+    ConservativeRootLockfileChanged(ConservativeRootLockfileChanged),
     LockfileChanged(LockfileChanged),
     DependencyChanged(DependencyChanged),
     DependentChanged(DependentChanged),
@@ -424,11 +432,12 @@ impl From<turborepo_repository::change_mapper::PackageChangeReason> for PackageC
                     task: task.to_string(),
                 })
             }
-            turborepo_repository::change_mapper::PackageChangeReason::LockfileChanged {
-                previous_lockfile,
-            } => PackageChangeReason::LockfileChanged(LockfileChanged {
-                previous_lockfile: previous_lockfile.to_string(),
-            }),
+            turborepo_repository::change_mapper::PackageChangeReason::ConservativeRootLockfileChanged => {
+                PackageChangeReason::ConservativeRootLockfileChanged(ConservativeRootLockfileChanged { empty: false })
+            }
+            turborepo_repository::change_mapper::PackageChangeReason::LockfileChanged => {
+                PackageChangeReason::LockfileChanged(LockfileChanged { empty: false })
+            }
             turborepo_repository::change_mapper::PackageChangeReason::DependencyChanged {
                 dependency,
             } => PackageChangeReason::DependencyChanged(DependencyChanged {

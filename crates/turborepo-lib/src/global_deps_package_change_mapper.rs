@@ -1,10 +1,11 @@
 use thiserror::Error;
-use turbopath::AnchoredSystemPath;
+use turbopath::{AnchoredSystemPath, AnchoredSystemPathBuf};
 use turborepo_repository::{
     change_mapper::{
-        AllPackageChangeReason, DefaultPackageChangeMapper, PackageChangeMapper, PackageMapping,
+        AllPackageChangeReason, DefaultPackageChangeMapper, PackageChangeMapper,
+        PackageChangeReason, PackageMapping,
     },
-    package_graph::{PackageGraph, WorkspacePackage},
+    package_graph::{PackageGraph, PackageName, WorkspacePackage},
 };
 use wax::{BuildError, Program};
 
@@ -41,6 +42,26 @@ impl<'a> GlobalDepsPackageChangeMapper<'a> {
 
 impl<'a> PackageChangeMapper for GlobalDepsPackageChangeMapper<'a> {
     fn detect_package(&self, path: &AnchoredSystemPath, has_lockfile: bool) -> PackageMapping {
+        // If we have a lockfile change, we consider this as a root package change,
+        // since there's a chance that the root package uses a workspace package
+        // dependency (this is cursed behavior but sadly possible). There's a chance
+        // that we can make this more accurate by checking which package
+        // manager, since not all package managers may permit root pulling from
+        // workspace package dependencies
+        if matches!(
+            path.as_str(),
+            "package.json" | "pnpm-lock.yaml" | "yarn.lock"
+        ) && has_lockfile
+        {
+            return PackageMapping::Package((
+                WorkspacePackage {
+                    name: PackageName::Root,
+                    path: AnchoredSystemPathBuf::from_raw("").unwrap(),
+                },
+                PackageChangeReason::ConservativeRootLockfileChanged,
+            ));
+        }
+
         match DefaultPackageChangeMapper::new(self.pkg_dep_graph).detect_package(path, has_lockfile)
         {
             // Since `DefaultPackageChangeMapper` is overly conservative, we can check here if
@@ -55,7 +76,12 @@ impl<'a> PackageChangeMapper for GlobalDepsPackageChangeMapper<'a> {
                         file: path.to_owned(),
                     })
                 } else {
-                    PackageMapping::Package(WorkspacePackage::root())
+                    PackageMapping::Package((
+                        WorkspacePackage::root(),
+                        PackageChangeReason::FileChanged {
+                            file: path.to_owned(),
+                        },
+                    ))
                 }
             }
             result => result,
