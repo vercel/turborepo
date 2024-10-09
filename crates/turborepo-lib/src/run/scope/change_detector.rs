@@ -4,17 +4,14 @@ use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 use turborepo_repository::{
     change_mapper::{
-        AllPackageChangeReason, ChangeMapper, DefaultPackageChangeMapper, LockfileChange,
-        PackageChangeReason, PackageChanges,
+        AllPackageChangeReason, ChangeMapper, DefaultPackageChangeMapper, Error,
+        GlobalDepsPackageChangeMapper, LockfileChange, PackageChangeReason, PackageChanges,
     },
     package_graph::{PackageGraph, PackageName},
 };
 use turborepo_scm::{git::ChangedFilesResult, SCM};
 
-use crate::{
-    global_deps_package_change_mapper::{Error, GlobalDepsPackageChangeMapper},
-    run::scope::ResolutionError,
-};
+use crate::run::scope::ResolutionError;
 
 /// Given two git refs, determine which packages have changed between them.
 pub trait GitChangeDetector {

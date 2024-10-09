@@ -19,10 +19,7 @@ use super::{
     simple_glob::{Match, SimpleGlob},
     target_selector::{GitRange, InvalidSelectorError, TargetSelector},
 };
-use crate::{
-    global_deps_package_change_mapper, run::scope::change_detector::ScopeChangeDetector,
-    turbo_json::TurboJson,
-};
+use crate::{run::scope::change_detector::ScopeChangeDetector, turbo_json::TurboJson};
 
 pub struct PackageInference {
     package_name: Option<String>,
@@ -702,7 +699,7 @@ pub enum ResolutionError {
     #[error("Directory '{0}' specified in filter does not exist")]
     DirectoryDoesNotExist(AbsoluteSystemPathBuf),
     #[error("failed to construct glob for globalDependencies")]
-    GlobalDependenciesGlob(#[from] global_deps_package_change_mapper::Error),
+    GlobalDependenciesGlob(#[from] turborepo_repository::change_mapper::Error),
 }
 
 #[cfg(test)]

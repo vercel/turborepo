@@ -1,5 +1,5 @@
 use thiserror::Error;
-use turbopath::AnchoredSystemPath;
+use turbopath::{AnchoredSystemPath, AnchoredSystemPathBuf};
 use wax::{BuildError, Program};
 
 use crate::{
@@ -20,7 +20,7 @@ pub enum PackageMapping {
 /// package (`Package`), none of the packages (`None`), or all of the packages
 /// (`All`).
 pub trait PackageChangeMapper {
-    fn detect_package(&self, file: &AnchoredSystemPath, has_lockfile: bool) -> PackageMapping;
+    fn detect_package(&self, file: &AnchoredSystemPath) -> PackageMapping;
 }
 
 /// Detects package by checking if the file is inside the package.
@@ -45,7 +45,7 @@ impl<'a> DefaultPackageChangeMapper<'a> {
 }
 
 impl<'a> PackageChangeMapper for DefaultPackageChangeMapper<'a> {
-    fn detect_package(&self, file: &AnchoredSystemPath, _: bool) -> PackageMapping {
+    fn detect_package(&self, file: &AnchoredSystemPath) -> PackageMapping {
         for (name, entry) in self.pkg_dep_graph.packages() {
             if name == &PackageName::Root {
                 continue;
@@ -103,9 +103,26 @@ impl<'a> GlobalDepsPackageChangeMapper<'a> {
 }
 
 impl<'a> PackageChangeMapper for GlobalDepsPackageChangeMapper<'a> {
-    fn detect_package(&self, path: &AnchoredSystemPath, has_lockfile: bool) -> PackageMapping {
-        match DefaultPackageChangeMapper::new(self.pkg_dep_graph).detect_package(path, has_lockfile)
-        {
+    fn detect_package(&self, path: &AnchoredSystemPath) -> PackageMapping {
+        // If we have a lockfile change, we consider this as a root package change,
+        // since there's a chance that the root package uses a workspace package
+        // dependency (this is cursed behavior but sadly possible). There's a chance
+        // that we can make this more accurate by checking which package
+        // manager, since not all package managers may permit root pulling from
+        // workspace package dependencies
+        if matches!(
+            path.as_str(),
+            "package.json" | "pnpm-lock.yaml" | "yarn.lock"
+        ) {
+            return PackageMapping::Package((
+                WorkspacePackage {
+                    name: PackageName::Root,
+                    path: AnchoredSystemPathBuf::from_raw("").unwrap(),
+                },
+                PackageChangeReason::LockfileChanged,
+            ));
+        }
+        match DefaultPackageChangeMapper::new(self.pkg_dep_graph).detect_package(path) {
             // Since `DefaultPackageChangeMapper` is overly conservative, we can check here if
             // the path is actually in globalDeps and if not, return it as
             // PackageDetection::Package(WorkspacePackage::root()).

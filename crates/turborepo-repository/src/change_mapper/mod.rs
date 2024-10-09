@@ -4,7 +4,8 @@
 use std::collections::HashSet;
 
 pub use package::{
-    DefaultPackageChangeMapper, GlobalDepsPackageChangeMapper, PackageChangeMapper, PackageMapping,
+    DefaultPackageChangeMapper, Error, GlobalDepsPackageChangeMapper, PackageChangeMapper,
+    PackageMapping,
 };
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
@@ -119,10 +120,7 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
         // get filtered files and add the packages that contain them
         let filtered_changed_files = self.filter_ignored_files(changed_files.iter())?;
 
-        match self.get_changed_packages(
-            filtered_changed_files.into_iter(),
-            lockfile_change.is_some(),
-        ) {
+        match self.get_changed_packages(filtered_changed_files.into_iter()) {
             PackageChanges::All(reason) => Ok(PackageChanges::All(reason)),
 
             PackageChanges::Some(mut changed_pkgs) => {
@@ -183,12 +181,11 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
     fn get_changed_packages<'b>(
         &self,
         files: impl Iterator<Item = &'b AnchoredSystemPathBuf>,
-        has_lockfile: bool,
     ) -> PackageChanges {
         let root_internal_deps = self.pkg_graph.root_internal_package_dependencies();
         let mut changed_packages = HashSet::new();
         for file in files {
-            match self.package_detector.detect_package(file, has_lockfile) {
+            match self.package_detector.detect_package(file) {
                 // Internal root dependency changed so global hash has changed
                 PackageMapping::Package((pkg, _)) if root_internal_deps.contains(&pkg) => {
                     debug!(
