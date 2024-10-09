@@ -141,6 +141,12 @@ Turborepo runs a background process to pre-calculate some expensive operations. 
 }
 ```
 
+<Callout type="good-to-know">
+  Note that when running in a CI environment the daemon is disabled, even if you
+  set this value to `true`. This is because the daemon is not useful in a CI
+  environment and can cause timing out on deploys.
+</Callout>
+
 ### `envMode`
 
 Default: `"strict"`
