@@ -19,7 +19,7 @@ use turborepo_repository::{change_mapper::AllPackageChangeReason, package_graph:
 
 use crate::{
     get_version,
-    query::{file::File, task::Task},
+    query::{file::File, task::RepositoryTask},
     run::{builder::RunBuilder, Run},
     signal::SignalHandler,
 };
@@ -62,7 +62,7 @@ impl RepositoryQuery {
 }
 
 #[derive(Debug, SimpleObject)]
-#[graphql(concrete(name = "Tasks", params(Task)))]
+#[graphql(concrete(name = "RepositoryTasks", params(RepositoryTask)))]
 #[graphql(concrete(name = "Packages", params(Package)))]
 #[graphql(concrete(name = "ChangedPackages", params(ChangedPackage)))]
 pub struct Array<T: OutputType> {
