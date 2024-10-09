@@ -3,7 +3,7 @@ pub mod filter;
 mod simple_glob;
 pub mod target_selector;
 
-use std::collections::HashSet;
+use std::collections::HashMap;
 
 use filter::{FilterResolver, PackageInference};
 use turbopath::AbsoluteSystemPath;
@@ -16,12 +16,6 @@ use turborepo_scm::SCM;
 pub use crate::run::scope::filter::ResolutionError;
 use crate::{opts::ScopeOpts, turbo_json::TurboJson};
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
-pub struct PackageChange {
-    pub name: PackageName,
-    pub reason: PackageChangeReason,
-}
-
 #[tracing::instrument(skip(opts, pkg_graph, scm))]
 pub fn resolve_packages(
     opts: &ScopeOpts,
@@ -29,7 +23,7 @@ pub fn resolve_packages(
     pkg_graph: &PackageGraph,
     scm: &SCM,
     root_turbo_json: &TurboJson,
-) -> Result<(HashSet<PackageChange>, bool), ResolutionError> {
+) -> Result<(HashMap<PackageName, PackageChangeReason>, bool), ResolutionError> {
     let pkg_inference = opts.pkg_inference_root.as_ref().map(|pkg_inference_path| {
         PackageInference::calculate(turbo_root, pkg_inference_path, pkg_graph)
     });

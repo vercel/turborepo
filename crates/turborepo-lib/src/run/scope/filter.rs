@@ -18,7 +18,6 @@ use super::{
     change_detector::GitChangeDetector,
     simple_glob::{Match, SimpleGlob},
     target_selector::{GitRange, InvalidSelectorError, TargetSelector},
-    PackageChange,
 };
 use crate::{
     global_deps_package_change_mapper, run::scope::change_detector::ScopeChangeDetector,
@@ -167,7 +166,7 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
         &self,
         affected: &Option<(Option<String>, Option<String>)>,
         patterns: &[String],
-    ) -> Result<(HashSet<PackageChange>, bool), ResolutionError> {
+    ) -> Result<(HashMap<PackageName, PackageChangeReason>, bool), ResolutionError> {
         // inference is None only if we are in the root
         let is_all_packages = patterns.is_empty() && self.inference.is_none() && affected.is_none();
 
@@ -176,11 +175,13 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
             self.pkg_graph
                 .packages()
                 .filter(|(name, _)| matches!(name, PackageName::Other(_)))
-                .map(|(name, _)| PackageChange {
-                    name: name.to_owned(),
-                    reason: PackageChangeReason::IncludedByFilter {
-                        filters: patterns.to_vec(),
-                    },
+                .map(|(name, _)| {
+                    (
+                        name.to_owned(),
+                        PackageChangeReason::IncludedByFilter {
+                            filters: patterns.to_vec(),
+                        },
+                    )
                 })
                 .collect()
         } else {
@@ -194,7 +195,7 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
         &self,
         affected: &Option<(Option<String>, Option<String>)>,
         patterns: &[String],
-    ) -> Result<HashSet<PackageChange>, ResolutionError> {
+    ) -> Result<HashMap<PackageName, PackageChangeReason>, ResolutionError> {
         let mut selectors = patterns
             .iter()
             .map(|pattern| TargetSelector::from_str(pattern))
@@ -220,7 +221,7 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
     fn get_filtered_packages(
         &self,
         selectors: Vec<TargetSelector>,
-    ) -> Result<HashSet<PackageChange>, ResolutionError> {
+    ) -> Result<HashMap<PackageName, PackageChangeReason>, ResolutionError> {
         let (_prod_selectors, all_selectors) = self
             .apply_inference(selectors)
             .into_iter()
@@ -256,7 +257,7 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
     fn filter_graph(
         &self,
         selectors: Vec<TargetSelector>,
-    ) -> Result<HashSet<PackageChange>, ResolutionError> {
+    ) -> Result<HashMap<PackageName, PackageChangeReason>, ResolutionError> {
         let (include_selectors, exclude_selectors) =
             selectors.into_iter().partition::<Vec<_>, _>(|t| !t.exclude);
 
@@ -268,14 +269,16 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
                 .packages()
                 // todo: a type-level way of dealing with non-root packages
                 .filter(|(name, _)| !PackageName::Root.eq(name)) // the root package has to be explicitly included
-                .map(|(name, _)| PackageChange {
-                    name: name.to_owned(),
-                    reason: PackageChangeReason::IncludedByFilter {
-                        filters: exclude_selectors
-                            .iter()
-                            .map(|s| s.raw.to_string())
-                            .collect(),
-                    },
+                .map(|(name, _)| {
+                    (
+                        name.to_owned(),
+                        PackageChangeReason::IncludedByFilter {
+                            filters: exclude_selectors
+                                .iter()
+                                .map(|s| s.raw.to_string())
+                                .collect(),
+                        },
+                    )
                 })
                 .collect()
         };
@@ -285,10 +288,10 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
         let exclude: HashSet<PackageName> = self
             .filter_graph_with_selectors(exclude_selectors)?
             .into_iter()
-            .map(|p| p.name)
+            .map(|(p, _)| p)
             .collect();
 
-        include.retain(|i| !exclude.contains(&i.name));
+        include.retain(|i, _| !exclude.contains(&i));
 
         Ok(include)
     }
@@ -296,12 +299,12 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
     fn filter_graph_with_selectors(
         &self,
         selectors: Vec<TargetSelector>,
-    ) -> Result<HashSet<PackageChange>, ResolutionError> {
+    ) -> Result<HashMap<PackageName, PackageChangeReason>, ResolutionError> {
         let mut unmatched_selectors = Vec::new();
-        let mut walked_dependencies = HashSet::new();
-        let mut walked_dependents = HashSet::new();
-        let mut walked_dependent_dependencies = HashSet::new();
-        let mut cherry_picked_packages = HashSet::new();
+        let mut walked_dependencies = HashMap::new();
+        let mut walked_dependents = HashMap::new();
+        let mut walked_dependent_dependencies = HashMap::new();
+        let mut cherry_picked_packages = HashMap::new();
 
         for selector in selectors {
             let selector_packages = self.filter_graph_with_selector(&selector)?;
@@ -311,22 +314,24 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
                 continue;
             }
 
-            for package in selector_packages {
-                let node = package_graph::PackageNode::Workspace(package.name.clone());
+            for (package, reason) in selector_packages {
+                let node = package_graph::PackageNode::Workspace(package.clone());
 
                 if selector.include_dependencies {
                     let dependencies = self.pkg_graph.dependencies(&node);
                     let dependencies = dependencies
                         .iter()
                         .filter(|node| !matches!(node, package_graph::PackageNode::Root))
-                        .map(|i| PackageChange {
-                            name: i.as_package_name().to_owned(),
-                            // While we're adding dependencies, from their
-                            // perspective, they were changed because
-                            // of a *dependent*
-                            reason: PackageChangeReason::DependentChanged {
-                                dependent: package.name.to_owned(),
-                            },
+                        .map(|i| {
+                            (
+                                i.as_package_name().to_owned(),
+                                // While we're adding dependencies, from their
+                                // perspective, they were changed because
+                                // of a *dependent*
+                                PackageChangeReason::DependentChanged {
+                                    dependent: package.to_owned(),
+                                },
+                            )
                         })
                         .collect::<Vec<_>>();
 
@@ -337,15 +342,15 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
                 if selector.include_dependents {
                     let dependents = self.pkg_graph.ancestors(&node);
                     for dependent in dependents.iter().map(|i| i.as_package_name()) {
-                        walked_dependents.insert(PackageChange {
-                            name: dependent.clone(),
+                        walked_dependents.insert(
+                            dependent.clone(),
                             // While we're adding dependents, from their
                             // perspective, they were changed because
                             // of a *dependency*
-                            reason: PackageChangeReason::DependencyChanged {
-                                dependency: package.name.to_owned(),
+                            PackageChangeReason::DependencyChanged {
+                                dependency: package.to_owned(),
                             },
-                        });
+                        );
 
                         // get the dependent's dependencies
                         if selector.include_dependencies {
@@ -358,11 +363,13 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
                             let dependent_dependencies = dependent_dependencies
                                 .iter()
                                 .filter(|node| !matches!(node, package_graph::PackageNode::Root))
-                                .map(|i| PackageChange {
-                                    name: i.as_package_name().to_owned(),
-                                    reason: PackageChangeReason::DependencyChanged {
-                                        dependency: package.name.to_owned(),
-                                    },
+                                .map(|i| {
+                                    (
+                                        i.as_package_name().to_owned(),
+                                        PackageChangeReason::DependencyChanged {
+                                            dependency: package.to_owned(),
+                                        },
+                                    )
                                 })
                                 .collect::<HashSet<_>>();
 
@@ -376,16 +383,16 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
                 {
                     // if we are including dependents or dependencies, and we are not excluding
                     // ourselves, then we should add ourselves to the list of packages
-                    walked_dependencies.insert(package);
+                    walked_dependencies.insert(package, reason);
                 } else if !selector.include_dependencies && !selector.include_dependents {
                     // if we are neither including dependents or dependencies, then
                     // add  to the list of cherry picked packages
-                    cherry_picked_packages.insert(package);
+                    cherry_picked_packages.insert(package, reason);
                 }
             }
         }
 
-        let mut all_packages = HashSet::new();
+        let mut all_packages = HashMap::new();
         all_packages.extend(walked_dependencies);
         all_packages.extend(walked_dependents);
         all_packages.extend(walked_dependent_dependencies);
@@ -397,7 +404,7 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
     fn filter_graph_with_selector(
         &self,
         selector: &TargetSelector,
-    ) -> Result<HashSet<PackageChange>, ResolutionError> {
+    ) -> Result<HashMap<PackageName, PackageChangeReason>, ResolutionError> {
         if selector.match_dependencies {
             self.filter_subtrees_with_selector(selector)
         } else {
@@ -417,8 +424,8 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
     fn filter_subtrees_with_selector(
         &self,
         selector: &TargetSelector,
-    ) -> Result<HashSet<PackageChange>, ResolutionError> {
-        let mut entry_packages = HashSet::new();
+    ) -> Result<HashMap<PackageName, PackageChangeReason>, ResolutionError> {
+        let mut entry_packages = HashMap::new();
 
         for (name, info) in self.pkg_graph.packages() {
             if let Some(parent_dir) = selector.parent_dir.as_deref() {
@@ -427,20 +434,20 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
                 let matches = parent_dir_matcher.is_match(info.package_path().as_path());
 
                 if matches {
-                    entry_packages.insert(PackageChange {
-                        name: name.to_owned(),
-                        reason: PackageChangeReason::InFilteredDirectory {
+                    entry_packages.insert(
+                        name.to_owned(),
+                        PackageChangeReason::InFilteredDirectory {
                             directory: parent_dir.to_owned(),
                         },
-                    });
+                    );
                 }
             } else {
-                entry_packages.insert(PackageChange {
-                    name: name.to_owned(),
-                    reason: PackageChangeReason::IncludedByFilter {
+                entry_packages.insert(
+                    name.to_owned(),
+                    PackageChangeReason::IncludedByFilter {
                         filters: vec![selector.raw.to_string()],
                     },
-                });
+                );
             }
         }
 
@@ -451,34 +458,34 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
             entry_packages
         };
 
-        let mut roots = HashSet::new();
+        let mut roots = HashMap::new();
         let mut matched = HashSet::new();
         let changed_packages = if let Some(git_range) = selector.git_range.as_ref() {
             self.packages_changed_in_range(git_range)?
         } else {
-            HashSet::default()
+            HashMap::default()
         };
 
-        for package in filtered_entry_packages {
+        for (package, reason) in filtered_entry_packages {
             if matched.contains(&package) {
-                roots.insert(package);
+                roots.insert(package, reason);
                 continue;
             }
 
-            let workspace_node = package_graph::PackageNode::Workspace(package.name.clone());
+            let workspace_node = package_graph::PackageNode::Workspace(package.clone());
             let dependencies = self.pkg_graph.dependencies(&workspace_node);
 
-            for changed_package in &changed_packages {
+            for (changed_package, _) in &changed_packages {
                 if !selector.exclude_self && package.eq(changed_package) {
-                    roots.insert(package);
+                    roots.insert(package, reason);
                     break;
                 }
 
                 let changed_node =
-                    package_graph::PackageNode::Workspace(changed_package.name.to_owned());
+                    package_graph::PackageNode::Workspace(changed_package.to_owned());
 
                 if dependencies.contains(&changed_node) {
-                    roots.insert(package.clone());
+                    roots.insert(package.clone(), reason);
                     matched.insert(package);
                     break;
                 }
@@ -491,8 +498,8 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
     fn filter_nodes_with_selector(
         &self,
         selector: &TargetSelector,
-    ) -> Result<HashSet<PackageChange>, ResolutionError> {
-        let mut entry_packages = HashSet::new();
+    ) -> Result<HashMap<PackageName, PackageChangeReason>, ResolutionError> {
+        let mut entry_packages = HashMap::new();
         let mut selector_valid = false;
 
         let parent_dir_unix = selector.parent_dir.as_deref().map(|path| path.to_unix());
@@ -532,25 +539,25 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
                 .map(|(name, entry)| (name, entry.package_path()))
                 .collect::<HashMap<_, _>>();
 
-            for package in changed_packages {
+            for (package, reason) in changed_packages {
                 if let Some(parent_dir_globber) = parent_dir_globber.as_ref() {
-                    if package.name == PackageName::Root {
+                    if package == PackageName::Root {
                         // The root package changed, only add it if
                         // the parentDir is equivalent to the root
                         if parent_dir_globber.matched(&Path::new(".").into()).is_some() {
-                            entry_packages.insert(package);
+                            entry_packages.insert(package, reason);
                         }
                     } else {
-                        let path = package_path_lookup.get(&package.name).ok_or(
-                            ResolutionError::MissingPackageInfo(package.name.to_string()),
-                        )?;
+                        let path = package_path_lookup
+                            .get(&package)
+                            .ok_or(ResolutionError::MissingPackageInfo(package.to_string()))?;
 
                         if parent_dir_globber.is_match(path.as_path()) {
-                            entry_packages.insert(package);
+                            entry_packages.insert(package, reason);
                         }
                     }
                 } else {
-                    entry_packages.insert(package);
+                    entry_packages.insert(package, reason);
                 }
             }
         } else if let Some((parent_dir, parent_dir_globber)) = selector
@@ -560,24 +567,24 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
         {
             selector_valid = true;
             if parent_dir == &*AnchoredSystemPathBuf::from_raw(".").expect("valid anchored") {
-                entry_packages.insert(PackageChange {
-                    name: PackageName::Root,
-                    reason: PackageChangeReason::InFilteredDirectory {
+                entry_packages.insert(
+                    PackageName::Root,
+                    PackageChangeReason::InFilteredDirectory {
                         directory: parent_dir.to_owned(),
                     },
-                });
+                );
             } else {
                 let packages = self.pkg_graph.packages();
                 for (name, _) in packages.filter(|(_name, info)| {
                     let path = info.package_path().as_path();
                     parent_dir_globber.is_match(path)
                 }) {
-                    entry_packages.insert(PackageChange {
-                        name: name.to_owned(),
-                        reason: PackageChangeReason::InFilteredDirectory {
+                    entry_packages.insert(
+                        name.to_owned(),
+                        PackageChangeReason::InFilteredDirectory {
                             directory: parent_dir.to_owned(),
                         },
-                    });
+                    );
                 }
             }
         }
@@ -587,11 +594,13 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
                 entry_packages = self
                     .all_packages()
                     .into_iter()
-                    .map(|name| PackageChange {
-                        name,
-                        reason: PackageChangeReason::IncludedByFilter {
-                            filters: vec![selector.raw.to_string()],
-                        },
+                    .map(|name| {
+                        (
+                            name,
+                            PackageChangeReason::IncludedByFilter {
+                                filters: vec![selector.raw.to_string()],
+                            },
+                        )
                     })
                     .collect();
                 selector_valid = true;
@@ -615,7 +624,7 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
     pub fn packages_changed_in_range(
         &self,
         git_range: &GitRange,
-    ) -> Result<HashSet<PackageChange>, ResolutionError> {
+    ) -> Result<HashMap<PackageName, PackageChangeReason>, ResolutionError> {
         self.change_detector.changed_packages(
             git_range.from_ref.as_deref(),
             git_range.to_ref.as_deref(),
@@ -643,8 +652,8 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
 fn match_package_names(
     name_pattern: &str,
     all_packages: &HashSet<PackageName>,
-    mut packages: HashSet<PackageChange>,
-) -> Result<HashSet<PackageChange>, ResolutionError> {
+    mut packages: HashMap<PackageName, PackageChangeReason>,
+) -> Result<HashMap<PackageName, PackageChangeReason>, ResolutionError> {
     let matcher = SimpleGlob::new(name_pattern)?;
     let matched_packages = all_packages
         .iter()
@@ -659,7 +668,7 @@ fn match_package_names(
         ));
     }
 
-    packages.retain(|pkg| matched_packages.contains(&pkg.name));
+    packages.retain(|pkg, _| matched_packages.contains(&pkg));
 
     Ok(packages)
 }

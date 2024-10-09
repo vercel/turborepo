@@ -1,7 +1,9 @@
 use thiserror::Error;
 use turbopath::AnchoredSystemPath;
 use turborepo_repository::{
-    change_mapper::{DefaultPackageChangeMapper, PackageChangeMapper, PackageMapping},
+    change_mapper::{
+        AllPackageChangeReason, DefaultPackageChangeMapper, PackageChangeMapper, PackageMapping,
+    },
     package_graph::{PackageGraph, WorkspacePackage},
 };
 use wax::{BuildError, Program};

@@ -476,12 +476,12 @@ impl RepositoryQuery {
             self.run.root_turbo_json(),
         )?
         .into_iter()
-        .map(|package| ChangedPackage {
+        .map(|(package, reason)| ChangedPackage {
             package: Package {
                 run: self.run.clone(),
-                name: package.name,
+                name: package,
             },
-            reason: package.reason.into(),
+            reason: reason.into(),
         })
         .filter(|package| filter.as_ref().map_or(true, |f| f.check(&package.package)))
         .sorted_by(|a, b| a.package.name.cmp(&b.package.name))
