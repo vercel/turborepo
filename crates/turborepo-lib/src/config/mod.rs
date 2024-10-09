@@ -14,6 +14,7 @@ use miette::{Diagnostic, NamedSource, SourceSpan};
 use serde::Deserialize;
 use struct_iterable::Iterable;
 use thiserror::Error;
+use tracing::warn;
 use turbo_json::TurboJsonReader;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_errors::TURBO_SITE;
@@ -331,6 +332,10 @@ impl ConfigurationOptions {
     pub fn daemon(&self) -> Option<bool> {
         // hardcode to off in CI
         if turborepo_ci::is_ci() {
+            if Some(true) == self.daemon {
+                warn!("Ignoring daemon setting and disabling the daemon because we're in CI");
+            }
+
             return Some(false);
         }
 
