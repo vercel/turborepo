@@ -287,11 +287,10 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
         // inclusion we don't need to check the reason
         let exclude: HashSet<PackageName> = self
             .filter_graph_with_selectors(exclude_selectors)?
-            .into_iter()
-            .map(|(p, _)| p)
+            .into_keys()
             .collect();
 
-        include.retain(|i, _| !exclude.contains(&i));
+        include.retain(|i, _| !exclude.contains(i));
 
         Ok(include)
     }
@@ -475,7 +474,7 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
             let workspace_node = package_graph::PackageNode::Workspace(package.clone());
             let dependencies = self.pkg_graph.dependencies(&workspace_node);
 
-            for (changed_package, _) in &changed_packages {
+            for changed_package in changed_packages.keys() {
                 if !selector.exclude_self && package.eq(changed_package) {
                     roots.insert(package, reason);
                     break;
@@ -668,7 +667,7 @@ fn match_package_names(
         ));
     }
 
-    packages.retain(|pkg, _| matched_packages.contains(&pkg));
+    packages.retain(|pkg, _| matched_packages.contains(pkg));
 
     Ok(packages)
 }
