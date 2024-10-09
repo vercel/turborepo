@@ -59,9 +59,6 @@ pub enum AllPackageChangeReason {
     RootInternalDepChanged {
         root_internal_dep: PackageName,
     },
-    NonPackageFileChanged {
-        file: AnchoredSystemPathBuf,
-    },
     GitRefNotFound {
         from_ref: Option<String>,
         to_ref: Option<String>,

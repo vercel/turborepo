@@ -137,7 +137,9 @@ mod tests {
 
     use super::{DefaultPackageChangeMapper, GlobalDepsPackageChangeMapper};
     use crate::{
-        change_mapper::{AllPackageChangeReason, ChangeMapper, PackageChanges},
+        change_mapper::{
+            AllPackageChangeReason, ChangeMapper, PackageChangeReason, PackageChanges,
+        },
         discovery,
         discovery::PackageDiscovery,
         package_graph::{PackageGraphBuilder, WorkspacePackage},
@@ -191,7 +193,9 @@ mod tests {
         // therefore must be conservative about changes
         assert_eq!(
             package_changes,
-            PackageChanges::All(AllPackageChangeReason::NonPackageFileChanged)
+            PackageChanges::All(AllPackageChangeReason::GlobalDepsChanged {
+                file: AnchoredSystemPathBuf::from_raw("README.md")?,
+            })
         );
 
         let turbo_package_detector =
@@ -209,7 +213,16 @@ mod tests {
         // README.md is not one of them
         assert_eq!(
             package_changes,
-            PackageChanges::Some([WorkspacePackage::root()].into_iter().collect())
+            PackageChanges::Some(
+                [(
+                    WorkspacePackage::root(),
+                    PackageChangeReason::FileChanged {
+                        file: AnchoredSystemPathBuf::from_raw("README.md")?,
+                    }
+                )]
+                .into_iter()
+                .collect()
+            )
         );
 
         Ok(())

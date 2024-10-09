@@ -419,11 +419,6 @@ impl From<turborepo_repository::change_mapper::PackageChangeReason> for PackageC
             ) => PackageChangeReason::RootInternalDepChanged(RootInternalDepChanged {
                 root_internal_dep: root_internal_dep.to_string(),
             }),
-            turborepo_repository::change_mapper::PackageChangeReason::All(
-                AllPackageChangeReason::NonPackageFileChanged { file },
-            ) => PackageChangeReason::NonPackageFileChanged(NonPackageFileChanged {
-                file: file.to_string(),
-            }),
             turborepo_repository::change_mapper::PackageChangeReason::RootTask { task } => {
                 PackageChangeReason::RootTask(RootTask {
                     task: task.to_string(),

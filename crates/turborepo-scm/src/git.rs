@@ -16,7 +16,7 @@ use turborepo_ci::Vendor;
 
 use crate::{Error, Git, SCM};
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum ChangedFilesResult {
     Ok(HashSet<AnchoredSystemPathBuf>),
     Err {
@@ -1023,7 +1023,13 @@ mod tests {
             .changed_files(&root, None, Some("HEAD"), true, true, false)
             .unwrap();
 
-        assert_matches!(actual, ChangedFilesResult::Err);
+        assert_eq!(
+            actual,
+            ChangedFilesResult::Err {
+                from_ref: None,
+                to_ref: Some("HEAD".to_string()),
+            }
+        );
 
         Ok(())
     }

@@ -714,6 +714,7 @@ mod test {
     use test_case::test_case;
     use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeUnixPathBuf};
     use turborepo_repository::{
+        change_mapper::PackageChangeReason,
         discovery::PackageDiscovery,
         package_graph::{PackageGraph, PackageName, ROOT_PKG_NAME},
         package_json::PackageJson,
@@ -721,7 +722,9 @@ mod test {
     };
 
     use super::{FilterResolver, PackageInference, TargetSelector};
-    use crate::run::scope::{change_detector::GitChangeDetector, ResolutionError};
+    use crate::run::scope::{
+        change_detector::GitChangeDetector, target_selector::GitRange, ResolutionError,
+    };
 
     fn get_name(name: &str) -> (Option<&str>, &str) {
         if let Some(idx) = name.rfind('/') {
@@ -1101,7 +1104,10 @@ mod test {
         let packages = resolver.get_filtered_packages(selectors).unwrap();
 
         assert_eq!(
-            packages,
+            packages
+                .into_iter()
+                .map(|(name, _)| name)
+                .collect::<HashSet<_>>(),
             expected.iter().map(|s| PackageName::from(*s)).collect()
         );
     }
@@ -1117,15 +1123,21 @@ mod test {
         let packages = resolver
             .get_filtered_packages(vec![TargetSelector {
                 name_pattern: "bar".to_string(),
+                raw: "bar".to_string(),
                 ..Default::default()
             }])
             .unwrap();
 
         assert_eq!(
             packages,
-            vec![PackageName::Other("bar".to_string())]
-                .into_iter()
-                .collect()
+            vec![(
+                PackageName::Other("bar".to_string()),
+                PackageChangeReason::IncludedByFilter {
+                    filters: vec!["bar".to_string()]
+                }
+            )]
+            .into_iter()
+            .collect()
         );
     }
 
@@ -1139,6 +1151,7 @@ mod test {
         );
         let packages = resolver.get_filtered_packages(vec![TargetSelector {
             name_pattern: "bar".to_string(),
+            raw: "bar".to_string(),
             ..Default::default()
         }]);
 
@@ -1147,12 +1160,21 @@ mod test {
         let packages = resolver
             .get_filtered_packages(vec![TargetSelector {
                 name_pattern: "@foo/bar".to_string(),
+                raw: "@foo/bar".to_string(),
                 ..Default::default()
             }])
             .unwrap();
+
         assert_eq!(
             packages,
-            vec![PackageName::from("@foo/bar")].into_iter().collect()
+            vec![(
+                PackageName::from("@foo/bar"),
+                PackageChangeReason::IncludedByFilter {
+                    filters: vec!["@foo/bar".to_string()]
+                }
+            )]
+            .into_iter()
+            .collect()
         );
     }
 
@@ -1317,12 +1339,17 @@ mod test {
 
         let packages = resolver.get_filtered_packages(selectors).unwrap();
         assert_eq!(
-            packages,
+            packages
+                .into_iter()
+                .map(|(name, _)| name)
+                .collect::<HashSet<_>>(),
             expected.iter().map(|s| PackageName::from(*s)).collect()
         );
     }
 
-    struct TestChangeDetector<'a>(HashMap<(&'a str, Option<&'a str>), HashSet<PackageName>>);
+    struct TestChangeDetector<'a>(
+        HashMap<(&'a str, Option<&'a str>), HashMap<PackageName, PackageChangeReason>>,
+    );
 
     impl<'a> TestChangeDetector<'a> {
         fn new(pairs: &[(&'a str, Option<&'a str>, &[&'a str])]) -> Self {
@@ -1330,7 +1357,16 @@ mod test {
             for (from, to, changed) in pairs {
                 map.insert(
                     (*from, *to),
-                    changed.iter().map(|s| PackageName::from(*s)).collect(),
+                    changed
+                        .iter()
+                        .map(|s| {
+                            (
+                                PackageName::from(*s),
+                                // This is just a random reason,
+                                PackageChangeReason::IncludedByFilter { filters: vec![] },
+                            )
+                        })
+                        .collect(),
                 );
             }
 
@@ -1346,7 +1382,7 @@ mod test {
             _include_uncommitted: bool,
             _allow_unknown_objects: bool,
             _merge_base: bool,
-        ) -> Result<HashSet<PackageName>, ResolutionError> {
+        ) -> Result<HashMap<PackageName, PackageChangeReason>, ResolutionError> {
             Ok(self
                 .0
                 .get(&(from.expect("expected base branch"), to))
