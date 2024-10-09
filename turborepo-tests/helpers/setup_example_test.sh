@@ -74,7 +74,7 @@ $turbo_command >./tmp/run-2.txt
 
 # Make sure the user hits FULL TURBO on the second go
 if ! grep -q ">>> FULL TURBO" ./tmp/run-2.txt; then
-  echo "[ERROR] No 'FULL TURBO' was found.  That shows that the cache was not fully hit on the second run, which was expected behavior."
+  echo "[ERROR] No 'FULL TURBO' was found.  This indicateds that at least one 'cache miss' occurred on the second run when all tasks were expected to be 'cache hit'."
   echo "Dumping logs:"
   echo ""
   cat ./tmp/run-2.txt >&2
