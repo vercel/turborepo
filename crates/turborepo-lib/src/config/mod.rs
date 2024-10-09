@@ -575,8 +575,8 @@ mod test {
         };
 
         let config = builder.build().unwrap();
-        assert_eq!(config.team_id().unwrap(), vercel_artifacts_owner);
-        assert_eq!(config.token().unwrap(), vercel_artifacts_token);
+        assert_eq!(config.team_id().unwrap(), turbo_teamid);
+        assert_eq!(config.token().unwrap(), turbo_token);
         assert_eq!(config.spaces_id().unwrap(), "my-spaces-id");
     }
 

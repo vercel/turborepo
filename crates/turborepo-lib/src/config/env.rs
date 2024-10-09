@@ -202,8 +202,21 @@ pub struct OverrideEnvVars<'a> {
 
 impl<'a> OverrideEnvVars<'a> {
     pub fn new(environment: &'a HashMap<OsString, OsString>) -> Result<Self, Error> {
-        let vercel_artifacts_mapping: HashMap<_, _> =
-            VERCEL_ARTIFACTS_MAPPING.iter().copied().collect();
+        let vercel_artifacts_mapping: HashMap<_, _> = VERCEL_ARTIFACTS_MAPPING
+            .iter()
+            .filter(|(_, value)| {
+                let corresponding_original_config = TURBO_MAPPING
+                    .iter()
+                    .find(|(_, mapped_property)| mapped_property == value)
+                    .map(|(_, original_config)| original_config);
+
+                if let Some(original) = corresponding_original_config {
+                    return environment.contains_key(OsStr::new(original));
+                }
+                true
+            })
+            .copied()
+            .collect();
 
         let output_map = map_environment(vercel_artifacts_mapping, environment)?;
         Ok(Self {
@@ -420,5 +433,28 @@ mod test {
         assert_eq!(vercel_artifacts_token, config.token.unwrap());
         assert_eq!(vercel_artifacts_owner, config.team_id.unwrap());
         assert_eq!(Some(UIMode::Stream), config.ui);
+    }
+
+    #[test]
+    fn test_vercel_deployment() {
+        let original = ConfigurationOptions {
+            token: Some("should_be_ignored".to_string()),
+            team_id: Some("should_also_be_ignored".to_string()),
+            ..Default::default()
+        };
+
+        let mut env: HashMap<OsString, OsString> = HashMap::new();
+        let turbo_token = "use_this_token";
+        env.insert("turbo_token".into(), turbo_token.into());
+        let turbo_team = "this_team_too";
+        env.insert("turbo_teamid".into(), turbo_team.into());
+
+        let config = OverrideEnvVars::new(&env)
+            .unwrap()
+            .get_configuration_options(&original)
+            .unwrap();
+
+        assert_eq!(turbo_token, config.token.unwrap());
+        assert_eq!(turbo_team, config.team_id.unwrap());
     }
 }
