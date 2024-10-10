@@ -22,6 +22,7 @@ Setup
   Cached:    0 cached, 1 total
     Time:\s*[\.0-9]+m?s  (re)
   
+   WARNING  no output files found for task override-values#override-values-task-with-deps. Please check your `outputs` key in `turbo.json`
 
 # This is the same test as above, but with --dry and testing the resolvedTaskDefinition has the same value for dependsOn
   $ ${TURBO} run override-values-task-with-deps --filter=override-values --dry=json | jq '.tasks | map(select(.taskId == "override-values#override-values-task-with-deps")) | .[0].resolvedTaskDefinition'
