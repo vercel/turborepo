@@ -185,6 +185,29 @@ impl File {
         TraceResult::new(result, self.run.clone())
     }
 
+    async fn dependents(&self, ts_config: Option<String>) -> TraceResult {
+        let ts_config = match ts_config {
+            Some(ts_config) => Some(Utf8PathBuf::from(ts_config)),
+            None => self
+                .path
+                .ancestors()
+                .skip(1)
+                .find(|p| p.join_component("tsconfig.json").exists())
+                .map(|p| p.as_path().to_owned()),
+        };
+
+        let tracer = Tracer::new(
+            self.run.repo_root().to_owned(),
+            vec![self.path.clone()],
+            ts_config,
+        );
+
+        let mut result = tracer.reverse_trace();
+        // Remove the file itself from the result
+        result.files.remove(&self.path);
+        TraceResult::new(result, self.run.clone())
+    }
+
     async fn ast(&self) -> Option<serde_json::Value> {
         if let Some(ast) = &self.ast {
             serde_json::to_value(ast).ok()
