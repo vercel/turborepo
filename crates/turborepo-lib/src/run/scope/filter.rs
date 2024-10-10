@@ -104,9 +104,7 @@ fn merge_changed_packages(
     new_changes: impl IntoIterator<Item = (PackageName, PackageChangeReason)>,
 ) {
     for (package, reason) in new_changes {
-        if !changed_packages.contains_key(&package) {
-            changed_packages.insert(package, reason);
-        }
+        changed_packages.entry(package).or_insert(reason);
     }
 }
 

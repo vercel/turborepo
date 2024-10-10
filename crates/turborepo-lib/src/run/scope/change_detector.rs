@@ -148,9 +148,9 @@ impl<'a> GitChangeDetector for ScopeChangeDetector<'a> {
                 debug!(
                     "{} packages changed: {:?}",
                     packages.len(),
-                    &packages
-                        .iter()
-                        .map(|(x, _)| x.name.to_string())
+                    packages
+                        .keys()
+                        .map(|x| x.name.to_string())
                         .collect::<Vec<String>>()
                 );
 
