@@ -8,7 +8,7 @@ use miette::Diagnostic;
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 use turborepo_repository::{
-    change_mapper::{ChangeMapError, PackageChangeReason},
+    change_mapper::{merge_changed_packages, ChangeMapError, PackageChangeReason},
     package_graph::{self, PackageGraph, PackageName},
 };
 use turborepo_scm::SCM;
@@ -96,15 +96,6 @@ impl PackageInference {
             parent_dir.push("**");
             selector.parent_dir = Some(parent_dir);
         }
-    }
-}
-
-fn merge_changed_packages(
-    changed_packages: &mut HashMap<PackageName, PackageChangeReason>,
-    new_changes: impl IntoIterator<Item = (PackageName, PackageChangeReason)>,
-) {
-    for (package, reason) in new_changes {
-        changed_packages.entry(package).or_insert(reason);
     }
 }
 

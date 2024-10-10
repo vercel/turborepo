@@ -119,7 +119,7 @@ impl<'a> PackageChangeMapper for GlobalDepsPackageChangeMapper<'a> {
                     name: PackageName::Root,
                     path: AnchoredSystemPathBuf::from_raw("").unwrap(),
                 },
-                PackageChangeReason::LockfileChanged,
+                PackageChangeReason::ConservativeRootLockfileChanged,
             ));
         }
         match DefaultPackageChangeMapper::new(self.pkg_dep_graph).detect_package(path) {

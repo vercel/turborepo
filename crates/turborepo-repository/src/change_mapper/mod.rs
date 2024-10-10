@@ -1,7 +1,10 @@
 //! Maps changed files to changed packages in a repository.
 //! Used for both `--filter` and for isolated builds.
 
-use std::collections::HashSet;
+use std::{
+    collections::{HashMap, HashSet},
+    hash::Hash,
+};
 
 pub use package::{
     DefaultPackageChangeMapper, Error, GlobalDepsPackageChangeMapper, PackageChangeMapper,
@@ -69,10 +72,19 @@ pub enum AllPackageChangeReason {
     },
 }
 
+pub fn merge_changed_packages<T: Hash + Eq>(
+    changed_packages: &mut HashMap<T, PackageChangeReason>,
+    new_changes: impl IntoIterator<Item = (T, PackageChangeReason)>,
+) {
+    for (package, reason) in new_changes {
+        changed_packages.entry(package).or_insert(reason);
+    }
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum PackageChanges {
     All(AllPackageChangeReason),
-    Some(HashSet<(WorkspacePackage, PackageChangeReason)>),
+    Some(HashMap<WorkspacePackage, PackageChangeReason>),
 }
 
 pub struct ChangeMapper<'a, PD> {
@@ -145,7 +157,8 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
                             "found {} packages changed by lockfile",
                             lockfile_changes.len()
                         );
-                        changed_pkgs.extend(
+                        merge_changed_packages(
+                            &mut changed_pkgs,
                             lockfile_changes
                                 .into_iter()
                                 .map(|pkg| (pkg, PackageChangeReason::LockfileChanged)),
@@ -183,7 +196,7 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
         files: impl Iterator<Item = &'b AnchoredSystemPathBuf>,
     ) -> PackageChanges {
         let root_internal_deps = self.pkg_graph.root_internal_package_dependencies();
-        let mut changed_packages = HashSet::new();
+        let mut changed_packages = HashMap::new();
         for file in files {
             match self.package_detector.detect_package(file) {
                 // Internal root dependency changed so global hash has changed
@@ -201,7 +214,7 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
                 }
                 PackageMapping::Package((pkg, reason)) => {
                     debug!("{} changes \"{}\"", file.to_string(), pkg.name);
-                    changed_packages.insert((pkg, reason));
+                    changed_packages.insert(pkg, reason);
                 }
                 PackageMapping::All(reason) => {
                     debug!("all packages changed due to {file:?}");
