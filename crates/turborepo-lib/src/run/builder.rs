@@ -1,5 +1,5 @@
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     io::{ErrorKind, IsTerminal},
     sync::Arc,
     time::SystemTime,
@@ -14,6 +14,7 @@ use turborepo_cache::AsyncCache;
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_errors::Spanned;
 use turborepo_repository::{
+    change_mapper::PackageInclusionReason,
     package_graph::{PackageGraph, PackageName},
     package_json,
     package_json::PackageJson,
@@ -148,7 +149,7 @@ impl RunBuilder {
         pkg_dep_graph: &PackageGraph,
         scm: &SCM,
         root_turbo_json: &TurboJson,
-    ) -> Result<HashSet<PackageName>, Error> {
+    ) -> Result<HashMap<PackageName, PackageInclusionReason>, Error> {
         let (mut filtered_pkgs, is_all_packages) = scope::resolve_packages(
             &opts.scope_opts,
             repo_root,
@@ -166,7 +167,12 @@ impl RunBuilder {
                 }
 
                 if root_turbo_json.tasks.contains_key(&task_name) {
-                    filtered_pkgs.insert(PackageName::Root);
+                    filtered_pkgs.insert(
+                        PackageName::Root,
+                        PackageInclusionReason::RootTask {
+                            task: task_name.to_string(),
+                        },
+                    );
                     break;
                 }
             }
@@ -411,7 +417,7 @@ impl RunBuilder {
         let mut engine = self.build_engine(
             &pkg_dep_graph,
             &root_turbo_json,
-            &filtered_pkgs,
+            filtered_pkgs.keys(),
             turbo_json_loader.clone(),
         )?;
 
@@ -420,7 +426,7 @@ impl RunBuilder {
             engine = self.build_engine(
                 &pkg_dep_graph,
                 &root_turbo_json,
-                &filtered_pkgs,
+                filtered_pkgs.keys(),
                 turbo_json_loader,
             )?;
         }
@@ -453,7 +459,7 @@ impl RunBuilder {
             api_client: self.api_client,
             api_auth: self.api_auth,
             env_at_execution_start,
-            filtered_pkgs,
+            filtered_pkgs: filtered_pkgs.keys().cloned().collect(),
             pkg_dep_graph: Arc::new(pkg_dep_graph),
             root_turbo_json,
             scm,
@@ -465,11 +471,11 @@ impl RunBuilder {
         })
     }
 
-    fn build_engine(
+    fn build_engine<'a>(
         &self,
         pkg_dep_graph: &PackageGraph,
         root_turbo_json: &TurboJson,
-        filtered_pkgs: &HashSet<PackageName>,
+        filtered_pkgs: impl Iterator<Item = &'a PackageName>,
         turbo_json_loader: TurboJsonLoader,
     ) -> Result<Engine, Error> {
         let mut builder = EngineBuilder::new(
@@ -480,7 +486,7 @@ impl RunBuilder {
         )
         .with_root_tasks(root_turbo_json.tasks.keys().cloned())
         .with_tasks_only(self.opts.run_opts.only)
-        .with_workspaces(filtered_pkgs.clone().into_iter().collect())
+        .with_workspaces(filtered_pkgs.cloned().collect())
         .with_tasks(self.opts.run_opts.tasks.iter().map(|task| {
             // TODO: Pull span info from command
             Spanned::new(TaskName::from(task.as_str()).into_owned())
