@@ -7,14 +7,14 @@ use crate::{
     run::task_id::TaskId,
 };
 
-pub struct Task {
+pub struct RepositoryTask {
     pub name: String,
     pub package: Package,
     pub script: Option<Spanned<String>>,
 }
 
 #[Object]
-impl Task {
+impl RepositoryTask {
     async fn name(&self) -> String {
         self.name.clone()
     }
@@ -27,7 +27,7 @@ impl Task {
         self.script.as_ref().map(|script| script.value.to_string())
     }
 
-    async fn direct_dependents(&self) -> Array<Task> {
+    async fn direct_dependents(&self) -> Array<RepositoryTask> {
         let task_id = TaskId::from_static(self.package.name.to_string(), self.name.clone());
         self.package
             .run
@@ -37,7 +37,7 @@ impl Task {
             .flatten()
             .filter_map(|task| match task {
                 TaskNode::Root => None,
-                TaskNode::Task(task) => Some(Task {
+                TaskNode::Task(task) => Some(RepositoryTask {
                     name: task.task().to_string(),
                     package: Package {
                         run: self.package.run.clone(),
@@ -49,7 +49,7 @@ impl Task {
             .collect()
     }
 
-    async fn direct_dependencies(&self) -> Array<Task> {
+    async fn direct_dependencies(&self) -> Array<RepositoryTask> {
         let task_id = TaskId::new(self.package.name.as_ref(), &self.name);
 
         self.package
@@ -60,7 +60,7 @@ impl Task {
             .flatten()
             .filter_map(|task| match task {
                 TaskNode::Root => None,
-                TaskNode::Task(task) => Some(Task {
+                TaskNode::Task(task) => Some(RepositoryTask {
                     name: task.task().to_string(),
                     package: Package {
                         run: self.package.run.clone(),
