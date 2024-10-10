@@ -99,6 +99,17 @@ impl PackageInference {
     }
 }
 
+fn merge_changed_packages(
+    changed_packages: &mut HashMap<PackageName, PackageChangeReason>,
+    new_changes: impl IntoIterator<Item = (PackageName, PackageChangeReason)>,
+) {
+    for (package, reason) in new_changes {
+        if !changed_packages.contains_key(&package) {
+            changed_packages.insert(package, reason);
+        }
+    }
+}
+
 pub struct FilterResolver<'a, T: GitChangeDetector> {
     pkg_graph: &'a PackageGraph,
     turbo_root: &'a AbsoluteSystemPath,
@@ -332,7 +343,7 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
                         .collect::<Vec<_>>();
 
                     // flatmap through the option, the set, and then the optional package name
-                    walked_dependencies.extend(dependencies);
+                    merge_changed_packages(&mut walked_dependencies, dependencies);
                 }
 
                 if selector.include_dependents {
@@ -369,7 +380,10 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
                                 })
                                 .collect::<HashSet<_>>();
 
-                            walked_dependent_dependencies.extend(dependent_dependencies);
+                            merge_changed_packages(
+                                &mut walked_dependent_dependencies,
+                                dependent_dependencies,
+                            );
                         }
                     }
                 }
@@ -389,10 +403,10 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
         }
 
         let mut all_packages = HashMap::new();
-        all_packages.extend(walked_dependencies);
-        all_packages.extend(walked_dependents);
-        all_packages.extend(walked_dependent_dependencies);
-        all_packages.extend(cherry_picked_packages);
+        merge_changed_packages(&mut all_packages, walked_dependencies);
+        merge_changed_packages(&mut all_packages, walked_dependents);
+        merge_changed_packages(&mut all_packages, walked_dependent_dependencies);
+        merge_changed_packages(&mut all_packages, cherry_picked_packages);
 
         Ok(all_packages)
     }

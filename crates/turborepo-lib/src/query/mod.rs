@@ -297,12 +297,14 @@ impl PackagePredicate {
 // why write few types when many work?
 #[derive(SimpleObject)]
 struct GlobalDepsChanged {
-    file: String,
+    // we're using slightly awkward names so we can reserve the nicer name for the "correct"
+    // GraphQL type, e.g. a `file` field for the `File` type
+    file_path: String,
 }
 
 #[derive(SimpleObject)]
 struct DefaultGlobalFileChanged {
-    file: String,
+    file_path: String,
 }
 
 #[derive(SimpleObject)]
@@ -312,6 +314,7 @@ struct LockfileChangeDetectionFailed {
 
 #[derive(SimpleObject)]
 struct LockfileChangedWithoutDetails {
+    /// This is a nothing field
     empty: bool,
 }
 
@@ -338,7 +341,7 @@ struct IncludedByFilter {
 
 #[derive(SimpleObject)]
 struct RootTask {
-    task: String,
+    task_name: String,
 }
 
 #[derive(SimpleObject)]
@@ -355,22 +358,22 @@ struct LockfileChanged {
 
 #[derive(SimpleObject)]
 struct DependencyChanged {
-    dependency: String,
+    dependency_name: String,
 }
 
 #[derive(SimpleObject)]
 struct DependentChanged {
-    dependent: String,
+    dependent_name: String,
 }
 
 #[derive(SimpleObject)]
 struct FileChanged {
-    file: String,
+    file_path: String,
 }
 
 #[derive(SimpleObject)]
 struct InFilteredDirectory {
-    directory: String,
+    directory_path: String,
 }
 
 #[derive(Union)]
@@ -398,12 +401,12 @@ impl From<turborepo_repository::change_mapper::PackageChangeReason> for PackageC
             turborepo_repository::change_mapper::PackageChangeReason::All(
                 AllPackageChangeReason::GlobalDepsChanged { file },
             ) => PackageChangeReason::GlobalDepsChanged(GlobalDepsChanged {
-                file: file.to_string(),
+                file_path: file.to_string(),
             }),
             turborepo_repository::change_mapper::PackageChangeReason::All(
                 AllPackageChangeReason::DefaultGlobalFileChanged { file },
             ) => PackageChangeReason::DefaultGlobalFileChanged(DefaultGlobalFileChanged {
-                file: file.to_string(),
+                file_path: file.to_string(),
             }),
             turborepo_repository::change_mapper::PackageChangeReason::All(
                 AllPackageChangeReason::LockfileChangeDetectionFailed { previous_lockfile },
@@ -429,7 +432,7 @@ impl From<turborepo_repository::change_mapper::PackageChangeReason> for PackageC
             }),
             turborepo_repository::change_mapper::PackageChangeReason::RootTask { task } => {
                 PackageChangeReason::RootTask(RootTask {
-                    task: task.to_string(),
+                    task_name: task.to_string(),
                 })
             }
             turborepo_repository::change_mapper::PackageChangeReason::ConservativeRootLockfileChanged => {
@@ -441,22 +444,22 @@ impl From<turborepo_repository::change_mapper::PackageChangeReason> for PackageC
             turborepo_repository::change_mapper::PackageChangeReason::DependencyChanged {
                 dependency,
             } => PackageChangeReason::DependencyChanged(DependencyChanged {
-                dependency: dependency.to_string(),
+                dependency_name: dependency.to_string(),
             }),
             turborepo_repository::change_mapper::PackageChangeReason::DependentChanged {
                 dependent,
             } => PackageChangeReason::DependentChanged(DependentChanged {
-                dependent: dependent.to_string(),
+                dependent_name: dependent.to_string(),
             }),
             turborepo_repository::change_mapper::PackageChangeReason::FileChanged { file } => {
                 PackageChangeReason::FileChanged(FileChanged {
-                    file: file.to_string(),
+                    file_path: file.to_string(),
                 })
             }
             turborepo_repository::change_mapper::PackageChangeReason::InFilteredDirectory {
                 directory,
             } => PackageChangeReason::InFilteredDirectory(InFilteredDirectory {
-                directory: directory.to_string(),
+                directory_path: directory.to_string(),
             }),
             turborepo_repository::change_mapper::PackageChangeReason::IncludedByFilter {
                 filters,
