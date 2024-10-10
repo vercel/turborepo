@@ -20,10 +20,15 @@ impl File {
     }
 }
 
+#[derive(SimpleObject, Debug)]
+pub struct TraceError {
+    message: String,
+}
+
 #[derive(SimpleObject)]
 struct TraceResult {
     files: Array<File>,
-    errors: Array<String>,
+    errors: Array<TraceError>,
 }
 
 impl TraceResult {
@@ -34,7 +39,13 @@ impl TraceResult {
                 .into_iter()
                 .map(|path| File::new(run.clone(), path))
                 .collect(),
-            errors: result.errors.into_iter().map(|e| e.to_string()).collect(),
+            errors: result
+                .errors
+                .into_iter()
+                .map(|e| TraceError {
+                    message: e.to_string(),
+                })
+                .collect(),
         }
     }
 }

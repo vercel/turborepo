@@ -66,7 +66,7 @@ impl RepositoryQuery {
 #[graphql(concrete(name = "Packages", params(Package)))]
 #[graphql(concrete(name = "ChangedPackages", params(ChangedPackage)))]
 #[graphql(concrete(name = "Files", params(File)))]
-#[graphql(concrete(name = "Errors", params(String)))]
+#[graphql(concrete(name = "TraceErrors", params(file::TraceError)))]
 pub struct Array<T: OutputType> {
     items: Vec<T>,
     length: usize,

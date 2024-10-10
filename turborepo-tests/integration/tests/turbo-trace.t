@@ -11,7 +11,7 @@ Setup
     }
   }
 
-  $ ${TURBO} query "query { file(path: \"main.ts\") { path, dependencies { path } } }"
+  $ ${TURBO} query "query { file(path: \"main.ts\") { path, dependencies { files { items { path } } } } }"
    WARNING  query command is experimental and may change in the future
   {
     "data": {
@@ -32,7 +32,7 @@ Setup
     }
   }
 
-  $ ${TURBO} query "query { file(path: \"button.tsx\") { path, dependencies { path } } }"
+  $ ${TURBO} query "query { file(path: \"button.tsx\") { path, dependencies { files { items { path } } } } }"
    WARNING  query command is experimental and may change in the future
   {
     "data": {
@@ -43,7 +43,7 @@ Setup
     }
   }
 
-  $ ${TURBO} query "query { file(path: \"circular.ts\") { path, dependencies { path } } }"
+  $ ${TURBO} query "query { file(path: \"circular.ts\") { path dependencies { files { items { path } } } } }"
    WARNING  query command is experimental and may change in the future
   {
     "data": {
@@ -57,4 +57,7 @@ Setup
       }
     }
   }
+
+Trace file with invalid import
+  $ ${TURBO} query "query { file(path: \"invalid.ts\") { path dependencies { files { items { path } } errors { items { error } } } }"
 
