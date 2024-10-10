@@ -6,7 +6,7 @@ use turborepo_errors::Spanned;
 use turborepo_repository::package_graph::{PackageName, PackageNode};
 
 use crate::{
-    query::{task::Task, Array, Error},
+    query::{task::RepositoryTask, Array, Error},
     run::Run,
 };
 
@@ -199,10 +199,10 @@ impl Package {
             .collect())
     }
 
-    async fn tasks(&self) -> Array<Task> {
+    async fn tasks(&self) -> Array<RepositoryTask> {
         self.get_tasks()
             .into_iter()
-            .map(|(name, script)| Task {
+            .map(|(name, script)| RepositoryTask {
                 name,
                 package: self.clone(),
                 script: Some(script),

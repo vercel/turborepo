@@ -19,7 +19,7 @@ use turborepo_repository::package_graph::PackageName;
 
 use crate::{
     get_version,
-    query::{file::File, task::Task},
+    query::{file::File, task::RepositoryTask},
     run::{builder::RunBuilder, Run},
     signal::SignalHandler,
 };
@@ -59,7 +59,7 @@ impl RepositoryQuery {
 }
 
 #[derive(Debug, SimpleObject)]
-#[graphql(concrete(name = "Tasks", params(Task)))]
+#[graphql(concrete(name = "RepositoryTasks", params(RepositoryTask)))]
 #[graphql(concrete(name = "Packages", params(Package)))]
 pub struct Array<T: OutputType> {
     items: Vec<T>,
