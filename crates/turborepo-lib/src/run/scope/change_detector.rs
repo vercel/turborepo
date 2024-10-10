@@ -5,11 +5,11 @@ use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 use turborepo_repository::{
     change_mapper::{
         AllPackageChangeReason, ChangeMapper, DefaultPackageChangeMapper, Error,
-        GlobalDepsPackageChangeMapper, LockfileChange, PackageChangeReason, PackageChanges,
+        GlobalDepsPackageChangeMapper, LockfileChange, PackageChanges, PackageInclusionReason,
     },
     package_graph::{PackageGraph, PackageName},
 };
-use turborepo_scm::{git::ChangedFilesResult, SCM};
+use turborepo_scm::{git::InvalidRange, SCM};
 
 use crate::run::scope::ResolutionError;
 
@@ -22,7 +22,7 @@ pub trait GitChangeDetector {
         include_uncommitted: bool,
         allow_unknown_objects: bool,
         merge_base: bool,
-    ) -> Result<HashMap<PackageName, PackageChangeReason>, ResolutionError>;
+    ) -> Result<HashMap<PackageName, PackageInclusionReason>, ResolutionError>;
 }
 
 pub struct ScopeChangeDetector<'a> {
@@ -94,7 +94,7 @@ impl<'a> GitChangeDetector for ScopeChangeDetector<'a> {
         include_uncommitted: bool,
         allow_unknown_objects: bool,
         merge_base: bool,
-    ) -> Result<HashMap<PackageName, PackageChangeReason>, ResolutionError> {
+    ) -> Result<HashMap<PackageName, PackageInclusionReason>, ResolutionError> {
         let changed_files = match self.scm.changed_files(
             self.turbo_root,
             from_ref,
@@ -103,7 +103,7 @@ impl<'a> GitChangeDetector for ScopeChangeDetector<'a> {
             allow_unknown_objects,
             merge_base,
         )? {
-            ChangedFilesResult::Err { from_ref, to_ref } => {
+            Err(InvalidRange { from_ref, to_ref }) => {
                 debug!("all packages changed");
                 return Ok(self
                     .pkg_graph
@@ -111,7 +111,7 @@ impl<'a> GitChangeDetector for ScopeChangeDetector<'a> {
                     .map(|(name, _)| {
                         (
                             name.to_owned(),
-                            PackageChangeReason::All(AllPackageChangeReason::GitRefNotFound {
+                            PackageInclusionReason::All(AllPackageChangeReason::GitRefNotFound {
                                 from_ref: from_ref.clone(),
                                 to_ref: to_ref.clone(),
                             }),
@@ -119,7 +119,7 @@ impl<'a> GitChangeDetector for ScopeChangeDetector<'a> {
                     })
                     .collect());
             }
-            ChangedFilesResult::Ok(changed_files) => changed_files,
+            Ok(changed_files) => changed_files,
         };
 
         let lockfile_contents = self.get_lockfile_contents(from_ref, &changed_files);
@@ -141,7 +141,7 @@ impl<'a> GitChangeDetector for ScopeChangeDetector<'a> {
                 Ok(self
                     .pkg_graph
                     .packages()
-                    .map(|(name, _)| (name.to_owned(), PackageChangeReason::All(reason.clone())))
+                    .map(|(name, _)| (name.to_owned(), PackageInclusionReason::All(reason.clone())))
                     .collect())
             }
             PackageChanges::Some(packages) => {

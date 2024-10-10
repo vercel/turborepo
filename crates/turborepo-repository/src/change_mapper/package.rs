@@ -3,7 +3,7 @@ use turbopath::{AnchoredSystemPath, AnchoredSystemPathBuf};
 use wax::{BuildError, Program};
 
 use crate::{
-    change_mapper::{AllPackageChangeReason, PackageChangeReason},
+    change_mapper::{AllPackageChangeReason, PackageInclusionReason},
     package_graph::{PackageGraph, PackageName, WorkspacePackage},
 };
 
@@ -13,7 +13,7 @@ pub enum PackageMapping {
     /// This change is meaningless, no packages have changed
     None,
     /// This change has affected one package
-    Package((WorkspacePackage, PackageChangeReason)),
+    Package((WorkspacePackage, PackageInclusionReason)),
 }
 
 /// Maps a single file change to affected packages. This can be a single
@@ -57,7 +57,7 @@ impl<'a> PackageChangeMapper for DefaultPackageChangeMapper<'a> {
                             name: name.clone(),
                             path: package_path.to_owned(),
                         },
-                        PackageChangeReason::FileChanged {
+                        PackageInclusionReason::FileChanged {
                             file: file.to_owned(),
                         },
                     ));
@@ -119,7 +119,7 @@ impl<'a> PackageChangeMapper for GlobalDepsPackageChangeMapper<'a> {
                     name: PackageName::Root,
                     path: AnchoredSystemPathBuf::from_raw("").unwrap(),
                 },
-                PackageChangeReason::ConservativeRootLockfileChanged,
+                PackageInclusionReason::ConservativeRootLockfileChanged,
             ));
         }
         match DefaultPackageChangeMapper::new(self.pkg_dep_graph).detect_package(path) {
@@ -137,7 +137,7 @@ impl<'a> PackageChangeMapper for GlobalDepsPackageChangeMapper<'a> {
                 } else {
                     PackageMapping::Package((
                         WorkspacePackage::root(),
-                        PackageChangeReason::FileChanged {
+                        PackageInclusionReason::FileChanged {
                             file: path.to_owned(),
                         },
                     ))
@@ -156,7 +156,7 @@ mod tests {
     use super::{DefaultPackageChangeMapper, GlobalDepsPackageChangeMapper};
     use crate::{
         change_mapper::{
-            AllPackageChangeReason, ChangeMapper, PackageChangeReason, PackageChanges,
+            AllPackageChangeReason, ChangeMapper, PackageChanges, PackageInclusionReason,
         },
         discovery,
         discovery::PackageDiscovery,
@@ -212,7 +212,7 @@ mod tests {
         assert_eq!(
             package_changes,
             PackageChanges::All(AllPackageChangeReason::GlobalDepsChanged {
-                file: AnchoredSystemPathBuf::from_raw("README.md")?,
+                files: vec![AnchoredSystemPathBuf::from_raw("README.md")?],
             })
         );
 
@@ -234,7 +234,7 @@ mod tests {
             PackageChanges::Some(
                 [(
                     WorkspacePackage::root(),
-                    PackageChangeReason::FileChanged {
+                    PackageInclusionReason::FileChanged {
                         file: AnchoredSystemPathBuf::from_raw("README.md")?,
                     }
                 )]

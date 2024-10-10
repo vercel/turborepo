@@ -28,7 +28,7 @@ pub enum LockfileChange {
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
-pub enum PackageChangeReason {
+pub enum PackageInclusionReason {
     /// All the packages are invalidated
     All(AllPackageChangeReason),
     /// Root task was run
@@ -56,12 +56,11 @@ pub enum AllPackageChangeReason {
     GlobalDepsChanged {
         file: AnchoredSystemPathBuf,
     },
+    /// A file like `package.json` or `turbo.json` changed
     DefaultGlobalFileChanged {
         file: AnchoredSystemPathBuf,
     },
-    LockfileChangeDetectionFailed {
-        previous_lockfile: String,
-    },
+    LockfileChangeDetectionFailed,
     LockfileChangedWithoutDetails,
     RootInternalDepChanged {
         root_internal_dep: PackageName,
@@ -73,8 +72,8 @@ pub enum AllPackageChangeReason {
 }
 
 pub fn merge_changed_packages<T: Hash + Eq>(
-    changed_packages: &mut HashMap<T, PackageChangeReason>,
-    new_changes: impl IntoIterator<Item = (T, PackageChangeReason)>,
+    changed_packages: &mut HashMap<T, PackageInclusionReason>,
+    new_changes: impl IntoIterator<Item = (T, PackageInclusionReason)>,
 ) {
     for (package, reason) in new_changes {
         changed_packages.entry(package).or_insert(reason);
@@ -84,7 +83,7 @@ pub fn merge_changed_packages<T: Hash + Eq>(
 #[derive(Debug, PartialEq, Eq)]
 pub enum PackageChanges {
     All(AllPackageChangeReason),
-    Some(HashMap<WorkspacePackage, PackageChangeReason>),
+    Some(HashMap<WorkspacePackage, PackageInclusionReason>),
 }
 
 pub struct ChangeMapper<'a, PD> {
@@ -147,10 +146,7 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
                                  changed"
                             );
                             return Ok(PackageChanges::All(
-                                AllPackageChangeReason::LockfileChangeDetectionFailed {
-                                    previous_lockfile: String::from_utf8_lossy(&content)
-                                        .to_string(),
-                                },
+                                AllPackageChangeReason::LockfileChangeDetectionFailed,
                             ));
                         };
                         debug!(
@@ -161,7 +157,7 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
                             &mut changed_pkgs,
                             lockfile_changes
                                 .into_iter()
-                                .map(|pkg| (pkg, PackageChangeReason::LockfileChanged)),
+                                .map(|pkg| (pkg, PackageInclusionReason::LockfileChanged)),
                         );
 
                         Ok(PackageChanges::Some(changed_pkgs))

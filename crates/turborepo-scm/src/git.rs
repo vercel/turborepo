@@ -17,12 +17,9 @@ use turborepo_ci::Vendor;
 use crate::{Error, Git, SCM};
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum ChangedFilesResult {
-    Ok(HashSet<AnchoredSystemPathBuf>),
-    Err {
-        from_ref: Option<String>,
-        to_ref: Option<String>,
-    },
+pub struct InvalidRange {
+    pub from_ref: Option<String>,
+    pub to_ref: Option<String>,
 }
 
 impl SCM {
@@ -48,17 +45,17 @@ impl SCM {
         include_uncommitted: bool,
         allow_unknown_objects: bool,
         merge_base: bool,
-    ) -> Result<ChangedFilesResult, Error> {
+    ) -> Result<Result<HashSet<AnchoredSystemPathBuf>, InvalidRange>, Error> {
         fn unable_to_detect_range(
             error: impl std::error::Error,
             from_ref: Option<String>,
             to_ref: Option<String>,
-        ) -> Result<ChangedFilesResult, Error> {
+        ) -> Result<Result<HashSet<AnchoredSystemPathBuf>, InvalidRange>, Error> {
             warn!(
                 "unable to detect git range, assuming all files have changed: {}",
                 error
             );
-            Ok(ChangedFilesResult::Err { from_ref, to_ref })
+            Ok(Err(InvalidRange { from_ref, to_ref }))
         }
         match self {
             Self::Git(git) => {
@@ -69,7 +66,7 @@ impl SCM {
                     include_uncommitted,
                     merge_base,
                 ) {
-                    Ok(files) => Ok(ChangedFilesResult::Ok(files)),
+                    Ok(files) => Ok(Ok(files)),
                     Err(ref error @ Error::Git(ref message, _))
                         if allow_unknown_objects
                             && (message.contains("no merge base")
@@ -415,7 +412,7 @@ mod tests {
     use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError};
     use which::which;
 
-    use super::{previous_content, CIEnv, ChangedFilesResult};
+    use super::{previous_content, CIEnv, InvalidRange};
     use crate::{
         git::{GitHubCommit, GitHubEvent},
         Error, Git, SCM,
@@ -451,7 +448,7 @@ mod tests {
         // Replicating the `--filter` behavior where we only do a merge base
         // if both ends of the git range are specified.
         let merge_base = to_commit.is_some();
-        let ChangedFilesResult::Ok(files) = scm.changed_files(
+        let Ok(files) = scm.changed_files(
             &turbo_root,
             from_commit,
             to_commit,
@@ -1025,10 +1022,10 @@ mod tests {
 
         assert_eq!(
             actual,
-            ChangedFilesResult::Err {
+            Err(InvalidRange {
                 from_ref: None,
                 to_ref: Some("HEAD".to_string()),
-            }
+            })
         );
 
         Ok(())

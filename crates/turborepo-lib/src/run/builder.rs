@@ -14,7 +14,7 @@ use turborepo_cache::AsyncCache;
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_errors::Spanned;
 use turborepo_repository::{
-    change_mapper::PackageChangeReason,
+    change_mapper::PackageInclusionReason,
     package_graph::{PackageGraph, PackageName},
     package_json,
     package_json::PackageJson,
@@ -149,7 +149,7 @@ impl RunBuilder {
         pkg_dep_graph: &PackageGraph,
         scm: &SCM,
         root_turbo_json: &TurboJson,
-    ) -> Result<HashMap<PackageName, PackageChangeReason>, Error> {
+    ) -> Result<HashMap<PackageName, PackageInclusionReason>, Error> {
         let (mut filtered_pkgs, is_all_packages) = scope::resolve_packages(
             &opts.scope_opts,
             repo_root,
@@ -169,7 +169,7 @@ impl RunBuilder {
                 if root_turbo_json.tasks.contains_key(&task_name) {
                     filtered_pkgs.insert(
                         PackageName::Root,
-                        PackageChangeReason::RootTask {
+                        PackageInclusionReason::RootTask {
                             task: task_name.to_string(),
                         },
                     );

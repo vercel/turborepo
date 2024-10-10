@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use filter::{FilterResolver, PackageInference};
 use turbopath::AbsoluteSystemPath;
 use turborepo_repository::{
-    change_mapper::PackageChangeReason,
+    change_mapper::PackageInclusionReason,
     package_graph::{PackageGraph, PackageName},
 };
 use turborepo_scm::SCM;
@@ -23,7 +23,7 @@ pub fn resolve_packages(
     pkg_graph: &PackageGraph,
     scm: &SCM,
     root_turbo_json: &TurboJson,
-) -> Result<(HashMap<PackageName, PackageChangeReason>, bool), ResolutionError> {
+) -> Result<(HashMap<PackageName, PackageInclusionReason>, bool), ResolutionError> {
     let pkg_inference = opts.pkg_inference_root.as_ref().map(|pkg_inference_path| {
         PackageInference::calculate(turbo_root, pkg_inference_path, pkg_graph)
     });
