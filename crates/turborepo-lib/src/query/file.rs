@@ -23,6 +23,41 @@ impl File {
 #[derive(SimpleObject, Debug)]
 pub struct TraceError {
     message: String,
+    path: Option<String>,
+    start: Option<usize>,
+    end: Option<usize>,
+}
+
+impl From<turbo_trace::TraceError> for TraceError {
+    fn from(error: turbo_trace::TraceError) -> Self {
+        let message = error.to_string();
+        match error {
+            turbo_trace::TraceError::FileNotFound(file) => TraceError {
+                message,
+                path: Some(file.to_string()),
+                start: None,
+                end: None,
+            },
+            turbo_trace::TraceError::PathEncoding(_) => TraceError {
+                message,
+                path: None,
+                start: None,
+                end: None,
+            },
+            turbo_trace::TraceError::RootFile(path) => TraceError {
+                message,
+                path: Some(path.to_string()),
+                start: None,
+                end: None,
+            },
+            turbo_trace::TraceError::Resolve { span, text } => TraceError {
+                message,
+                path: Some(text.name().to_string()),
+                start: Some(span.offset()),
+                end: Some(span.offset() + span.len()),
+            },
+        }
+    }
 }
 
 #[derive(SimpleObject)]
@@ -39,13 +74,7 @@ impl TraceResult {
                 .into_iter()
                 .map(|path| File::new(run.clone(), path))
                 .collect(),
-            errors: result
-                .errors
-                .into_iter()
-                .map(|e| TraceError {
-                    message: e.to_string(),
-                })
-                .collect(),
+            errors: result.errors.into_iter().map(|e| e.into()).collect(),
         }
     }
 }
@@ -76,7 +105,9 @@ impl File {
             None,
         );
 
-        let result = tracer.trace();
+        let mut result = tracer.trace();
+        // Remove the file itself from the result
+        result.files.remove(&self.path);
         TraceResult::new(result, self.run.clone())
     }
 }

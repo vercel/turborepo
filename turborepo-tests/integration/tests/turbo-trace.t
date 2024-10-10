@@ -17,17 +17,21 @@ Setup
     "data": {
       "file": {
         "path": "main.ts",
-        "dependencies": [
-          {
-            "path": "button.tsx"
-          },
-          {
-            "path": "foo.js"
-          },
-          {
-            "path": "node_modules(\/|\\\\)repeat-string(\/|\\\\)index.js" (re)
+        "dependencies": {
+          "files": {
+            "items": [
+              {
+                "path": "node_modules/repeat-string/index.js"
+              },
+              {
+                "path": "button.tsx"
+              },
+              {
+                "path": "foo.js"
+              }
+            ]
           }
-        ]
+        }
       }
     }
   }
@@ -38,7 +42,11 @@ Setup
     "data": {
       "file": {
         "path": "button.tsx",
-        "dependencies": []
+        "dependencies": {
+          "files": {
+            "items": []
+          }
+        }
       }
     }
   }
@@ -49,15 +57,43 @@ Setup
     "data": {
       "file": {
         "path": "circular.ts",
-        "dependencies": [
-          {
-            "path": "circular2.ts"
+        "dependencies": {
+          "files": {
+            "items": [
+              {
+                "path": "circular2.ts"
+              }
+            ]
           }
-        ]
+        }
       }
     }
   }
 
 Trace file with invalid import
-  $ ${TURBO} query "query { file(path: \"invalid.ts\") { path dependencies { files { items { path } } errors { items { error } } } }"
+  $ ${TURBO} query "query { file(path: \"invalid.ts\") { path dependencies { files { items { path } } errors { items { message } } } } }"
+   WARNING  query command is experimental and may change in the future
+  {
+    "data": {
+      "file": {
+        "path": "invalid.ts",
+        "dependencies": {
+          "files": {
+            "items": [
+              {
+                "path": "button.tsx"
+              }
+            ]
+          },
+          "errors": {
+            "items": [
+              {
+                "message": "failed to resolve import"
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
 
