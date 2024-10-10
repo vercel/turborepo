@@ -70,7 +70,7 @@ The flag wins over the env var
   .* (re)
   .* (re)
   .* (re)
-  my-app:build: 
+  (my-app|util):build: (re)
   my-app:build: building
   util:build: building
   my-app:build: done
