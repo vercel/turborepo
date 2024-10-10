@@ -212,7 +212,7 @@ mod tests {
         assert_eq!(
             package_changes,
             PackageChanges::All(AllPackageChangeReason::GlobalDepsChanged {
-                files: vec![AnchoredSystemPathBuf::from_raw("README.md")?],
+                file: AnchoredSystemPathBuf::from_raw("README.md")?,
             })
         );
 
