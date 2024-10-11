@@ -23,7 +23,7 @@ impl ConfigFile {
 impl ResolvedConfigurationOptions for ConfigFile {
     fn get_configuration_options(
         &self,
-        _existing_config: &ConfigurationOptions,
+        _existing_config: Option<&ConfigurationOptions>,
     ) -> Result<ConfigurationOptions, Error> {
         let contents = self
             .path
@@ -55,7 +55,7 @@ impl AuthFile {
 impl ResolvedConfigurationOptions for AuthFile {
     fn get_configuration_options(
         &self,
-        _existing_config: &ConfigurationOptions,
+        _existing_config: Option<&ConfigurationOptions>,
     ) -> Result<ConfigurationOptions, Error> {
         let token = match turborepo_auth::Token::from_file(&self.path) {
             Ok(token) => token,

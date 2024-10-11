@@ -219,11 +219,14 @@ pub struct ConfigurationOptions {
     #[serde(alias = "teamslug")]
     #[serde(alias = "TeamSlug")]
     #[serde(alias = "TEAMSLUG")]
+    /// corresponds to env var TURBO_TEAM
     pub(crate) team_slug: Option<String>,
     #[serde(alias = "teamid")]
     #[serde(alias = "TeamId")]
     #[serde(alias = "TEAMID")]
+    /// corresponds to env var TURBO_TEAMID
     pub(crate) team_id: Option<String>,
+    /// corresponds to env var TURBO_TOKEN
     pub(crate) token: Option<String>,
     pub(crate) signature: Option<bool>,
     pub(crate) preflight: Option<bool>,
@@ -402,7 +405,7 @@ fn non_empty_str(s: Option<&str>) -> Option<&str> {
 trait ResolvedConfigurationOptions {
     fn get_configuration_options(
         &self,
-        existing_config: &ConfigurationOptions,
+        existing_config: Option<&ConfigurationOptions>,
     ) -> Result<ConfigurationOptions, Error>;
 }
 
@@ -410,7 +413,7 @@ trait ResolvedConfigurationOptions {
 impl<'a> ResolvedConfigurationOptions for &'a ConfigurationOptions {
     fn get_configuration_options(
         &self,
-        _existing_config: &ConfigurationOptions,
+        _existing_config: Option<&ConfigurationOptions>,
     ) -> Result<ConfigurationOptions, Error> {
         Ok((*self).clone())
     }
@@ -467,9 +470,9 @@ impl TurborepoConfigBuilder {
 
         // These are ordered from highest to lowest priority
         let sources: [Box<dyn ResolvedConfigurationOptions>; 7] = [
-            Box::new(override_env_var_config),
             Box::new(&self.override_config),
             Box::new(env_var_config),
+            Box::new(override_env_var_config),
             Box::new(local_config),
             Box::new(global_auth),
             Box::new(global_config),
@@ -479,7 +482,7 @@ impl TurborepoConfigBuilder {
         let config = sources.into_iter().try_fold(
             ConfigurationOptions::default(),
             |mut acc, current_source| {
-                let current_source_config = current_source.get_configuration_options(&acc)?;
+                let current_source_config = current_source.get_configuration_options(Some(&acc))?;
                 acc.merge(current_source_config);
                 Ok(acc)
             },
