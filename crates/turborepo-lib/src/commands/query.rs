@@ -68,7 +68,7 @@ pub async fn run(
         execution_args: Box::default(),
     });
 
-    let run_builder = RunBuilder::new(base)?;
+    let run_builder = RunBuilder::new(base)?.add_all_tasks();
     let run = run_builder.build(&handler, telemetry).await?;
 
     if let Some(query) = query {

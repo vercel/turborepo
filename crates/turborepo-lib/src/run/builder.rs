@@ -1,5 +1,5 @@
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     io::{ErrorKind, IsTerminal},
     sync::Arc,
     time::SystemTime,
@@ -14,6 +14,7 @@ use turborepo_cache::AsyncCache;
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_errors::Spanned;
 use turborepo_repository::{
+    change_mapper::PackageInclusionReason,
     package_graph::{PackageGraph, PackageName},
     package_json,
     package_json::PackageJson,
@@ -66,6 +67,8 @@ pub struct RunBuilder {
     should_print_prelude_override: Option<bool>,
     allow_missing_package_manager: bool,
     allow_no_turbo_json: bool,
+    // If true, we will add all tasks to the graph, even if they are not specified
+    add_all_tasks: bool,
 }
 
 impl RunBuilder {
@@ -108,6 +111,7 @@ impl RunBuilder {
             allow_missing_package_manager,
             root_turbo_json_path,
             allow_no_turbo_json,
+            add_all_tasks: false,
         })
     }
 
@@ -118,6 +122,11 @@ impl RunBuilder {
 
     pub fn hide_prelude(mut self) -> Self {
         self.should_print_prelude_override = Some(false);
+        self
+    }
+
+    pub fn add_all_tasks(mut self) -> Self {
+        self.add_all_tasks = true;
         self
     }
 
@@ -140,7 +149,7 @@ impl RunBuilder {
         pkg_dep_graph: &PackageGraph,
         scm: &SCM,
         root_turbo_json: &TurboJson,
-    ) -> Result<HashSet<PackageName>, Error> {
+    ) -> Result<HashMap<PackageName, PackageInclusionReason>, Error> {
         let (mut filtered_pkgs, is_all_packages) = scope::resolve_packages(
             &opts.scope_opts,
             repo_root,
@@ -158,7 +167,12 @@ impl RunBuilder {
                 }
 
                 if root_turbo_json.tasks.contains_key(&task_name) {
-                    filtered_pkgs.insert(PackageName::Root);
+                    filtered_pkgs.insert(
+                        PackageName::Root,
+                        PackageInclusionReason::RootTask {
+                            task: task_name.to_string(),
+                        },
+                    );
                     break;
                 }
             }
@@ -403,7 +417,7 @@ impl RunBuilder {
         let mut engine = self.build_engine(
             &pkg_dep_graph,
             &root_turbo_json,
-            &filtered_pkgs,
+            filtered_pkgs.keys(),
             turbo_json_loader.clone(),
         )?;
 
@@ -412,7 +426,7 @@ impl RunBuilder {
             engine = self.build_engine(
                 &pkg_dep_graph,
                 &root_turbo_json,
-                &filtered_pkgs,
+                filtered_pkgs.keys(),
                 turbo_json_loader,
             )?;
         }
@@ -445,7 +459,7 @@ impl RunBuilder {
             api_client: self.api_client,
             api_auth: self.api_auth,
             env_at_execution_start,
-            filtered_pkgs,
+            filtered_pkgs: filtered_pkgs.keys().cloned().collect(),
             pkg_dep_graph: Arc::new(pkg_dep_graph),
             root_turbo_json,
             scm,
@@ -457,14 +471,14 @@ impl RunBuilder {
         })
     }
 
-    fn build_engine(
+    fn build_engine<'a>(
         &self,
         pkg_dep_graph: &PackageGraph,
         root_turbo_json: &TurboJson,
-        filtered_pkgs: &HashSet<PackageName>,
+        filtered_pkgs: impl Iterator<Item = &'a PackageName>,
         turbo_json_loader: TurboJsonLoader,
     ) -> Result<Engine, Error> {
-        let mut engine = EngineBuilder::new(
+        let mut builder = EngineBuilder::new(
             &self.repo_root,
             pkg_dep_graph,
             turbo_json_loader,
@@ -472,12 +486,17 @@ impl RunBuilder {
         )
         .with_root_tasks(root_turbo_json.tasks.keys().cloned())
         .with_tasks_only(self.opts.run_opts.only)
-        .with_workspaces(filtered_pkgs.clone().into_iter().collect())
+        .with_workspaces(filtered_pkgs.cloned().collect())
         .with_tasks(self.opts.run_opts.tasks.iter().map(|task| {
             // TODO: Pull span info from command
             Spanned::new(TaskName::from(task.as_str()).into_owned())
-        }))
-        .build()?;
+        }));
+
+        if self.add_all_tasks {
+            builder = builder.add_all_tasks();
+        }
+
+        let mut engine = builder.build()?;
 
         // If we have an initial task, we prune out the engine to only
         // tasks that are reachable from that initial task.

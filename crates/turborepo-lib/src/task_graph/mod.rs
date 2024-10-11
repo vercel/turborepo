@@ -23,6 +23,9 @@ pub struct TaskOutputs {
 }
 
 impl TaskOutputs {
+    pub fn is_empty(&self) -> bool {
+        self.inclusions.is_empty() && self.exclusions.is_empty()
+    }
     pub fn validated_inclusions(&self) -> Result<Vec<ValidatedGlob>, GlobError> {
         self.inclusions
             .iter()

@@ -6,7 +6,7 @@ mod error;
 pub(crate) mod global_hash;
 mod graph_visualizer;
 pub(crate) mod package_discovery;
-mod scope;
+pub(crate) mod scope;
 pub(crate) mod summary;
 pub mod task_access;
 pub mod task_id;
@@ -192,6 +192,10 @@ impl Run {
 
     pub fn pkg_dep_graph(&self) -> &PackageGraph {
         &self.pkg_dep_graph
+    }
+
+    pub fn engine(&self) -> &Engine {
+        &self.engine
     }
 
     pub fn filtered_pkgs(&self) -> &HashSet<PackageName> {
