@@ -615,13 +615,13 @@ mod test {
             // ------------------------------
             TestCase::new().reason("no env vars set"),
             TestCase::new()
-                .reason("we don't mix-and-match, TURBO_TEAM, VERCEL_ARTIFACTS_TOKEN")
-                .TURBO_TEAM()
-                .VERCEL_ARTIFACTS_TOKEN(),
-            TestCase::new()
                 .reason("just VERCEL_ARTIFACTS_TOKEN")
                 .VERCEL_ARTIFACTS_TOKEN(),
             TestCase::new().reason("just TURBO_TOKEN").TURBO_TOKEN(),
+            TestCase::new()
+                .reason("we don't mix-and-match, TURBO_TEAM, VERCEL_ARTIFACTS_TOKEN")
+                .TURBO_TEAM()
+                .VERCEL_ARTIFACTS_TOKEN(),
             //
             // Just get a team_id
             // ------------------------------
@@ -633,11 +633,6 @@ mod test {
                 .reason("just TURBO_TEAMID")
                 .TURBO_TEAMID()
                 .team_id(TURBO_TEAMID.clone()),
-            TestCase::new()
-                .reason("if we just have VERCEL_ARTIFACTS_OWNER and TURBO_TEAM, vercel wins")
-                .TURBO_TEAM()
-                .VERCEL_ARTIFACTS_OWNER()
-                .team_id(VERCEL_ARTIFACTS_OWNER.clone()),
             TestCase::new()
                 .reason("if it's just between VERCEL_ARTIFACTS_OWNER and TURBO_TEAMID, Vercel wins")
                 .TURBO_TEAMID()
@@ -661,10 +656,25 @@ mod test {
                 .TURBO_TEAM()
                 .team_slug(TURBO_TEAM.clone()),
             //
+            // just team_slug and team_id
+            // ------------------------------
+            TestCase::new()
+                .reason("if we just have VERCEL_ARTIFACTS_OWNER and TURBO_TEAM, vercel wins")
+                .TURBO_TEAM()
+                .TURBO_TEAMID()
+                .team_slug(TURBO_TEAM.clone())
+                .team_id(TURBO_TEAMID.clone()),
+            TestCase::new()
+                .reason("if we just have VERCEL_ARTIFACTS_OWNER and TURBO_TEAM, vercel wins")
+                .TURBO_TEAM()
+                .VERCEL_ARTIFACTS_OWNER()
+                .team_slug(VERCEL_ARTIFACTS_OWNER.clone())
+                .team_id(VERCEL_ARTIFACTS_OWNER.clone()),
+            //
             // When 3rd Party Wins with team_slug
             // ------------------------------
             TestCase::new()
-                .reason("happy path for non-vercel")
+                .reason("golden path for 3rd party, not deployed on Vercel")
                 .TURBO_TEAM()
                 .TURBO_TOKEN()
                 .team_slug(TURBO_TEAM.clone())
@@ -676,6 +686,14 @@ mod test {
                 )
                 .TURBO_TEAM()
                 .TURBO_TOKEN()
+                .VERCEL_ARTIFACTS_TOKEN() // disregarded
+                .team_slug(TURBO_TEAM.clone())
+                .token(TURBO_TOKEN.clone()),
+            TestCase::new()
+                .reason("golden path for 3rd party, deployed on Vercel")
+                .TURBO_TEAM()
+                .TURBO_TOKEN()
+                .VERCEL_ARTIFACTS_OWNER() // normally this would map to team_id, but not with a complete 3rd party pair
                 .VERCEL_ARTIFACTS_TOKEN()
                 .team_slug(TURBO_TEAM.clone())
                 .token(TURBO_TOKEN.clone()),
@@ -687,14 +705,6 @@ mod test {
                 .TURBO_TEAMID()
                 .TURBO_TOKEN()
                 .team_id(TURBO_TEAMID.clone())
-                .token(TURBO_TOKEN.clone()),
-            TestCase::new()
-                .reason("this is the main 3rd party happy path: a complete 3rd party pair wins")
-                .TURBO_TEAM()
-                .TURBO_TOKEN()
-                .VERCEL_ARTIFACTS_OWNER()
-                .VERCEL_ARTIFACTS_TOKEN()
-                .team_id(TURBO_TEAM.clone()) // TODO: is this wrong? should it set team_slug instead?
                 .token(TURBO_TOKEN.clone()),
             TestCase::new()
                 .reason("a TURBO_TEAMID+TURBO_TOKEN pair will also win against a Vercel pair")
@@ -800,56 +810,6 @@ mod test {
                 .VERCEL_ARTIFACTS_TOKEN()
                 .team_id(VERCEL_ARTIFACTS_OWNER.clone())
                 .token(VERCEL_ARTIFACTS_TOKEN.clone()),
-            //
-            // TODO: these all seem wrong
-            // ------------------------------
-            TestCase::new()
-                .reason("TODO: this seems wrong: we shouldn't use this token")
-                .TURBO_TEAM()
-                .TURBO_TEAMID()
-                .VERCEL_ARTIFACTS_TOKEN()
-                .team_id(TURBO_TEAMID.clone())
-                .team_slug(TURBO_TEAM.clone())
-                .token(VERCEL_ARTIFACTS_TOKEN.clone()),
-            TestCase::new()
-                .reason("TODO: this seems wrong, we shouldn't mix-and-match")
-                .TURBO_TEAMID()
-                .VERCEL_ARTIFACTS_TOKEN()
-                .team_id(TURBO_TEAMID.clone())
-                .token(VERCEL_ARTIFACTS_TOKEN.clone()),
-            TestCase::new()
-                .reason("TODO: shouldn't 3rd party get a trifecta here?")
-                .TURBO_TEAM()
-                .TURBO_TEAMID()
-                .TURBO_TOKEN()
-                .VERCEL_ARTIFACTS_OWNER()
-                .team_id(VERCEL_ARTIFACTS_OWNER.clone()),
-            TestCase::new()
-                .reason(
-                    "TODO: is this correct? we disregard a TURBO_TOKEN if there's nothing to \
-                     match it to",
-                )
-                .TURBO_TOKEN()
-                .VERCEL_ARTIFACTS_OWNER()
-                .team_id(VERCEL_ARTIFACTS_OWNER.clone()),
-            TestCase::new()
-                .reason(
-                    "TODO: shouldn't 3rd party win here? the presence of a VERCEL_ARTIFACTS_OWNER \
-                     will override a TURBO_TEAM+TURBO_TOKEN",
-                )
-                .TURBO_TEAM()
-                .TURBO_TOKEN()
-                .VERCEL_ARTIFACTS_OWNER()
-                .team_id(VERCEL_ARTIFACTS_OWNER.clone()),
-            TestCase::new()
-                .reason(
-                    "TODO: shouldn't 3rd party win here? the presence of a VERCEL_ARTIFACTS_OWNER \
-                     will override a TURBO_TEAMID+TURBO_TOKEN",
-                )
-                .TURBO_TEAMID()
-                .TURBO_TOKEN()
-                .VERCEL_ARTIFACTS_OWNER()
-                .team_id(VERCEL_ARTIFACTS_OWNER.clone()),
         ];
 
         for case in cases {
