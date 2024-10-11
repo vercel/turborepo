@@ -7,6 +7,12 @@ pub struct PlatformEnv {
     env_keys: Vec<String>,
 }
 
+impl Default for PlatformEnv {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 const TURBO_PLATFORM_ENV_KEY: &str = "TURBO_PLATFORM_ENV";
 const TURBO_PLATFORM_ENV_DISABLED_KEY: &str = "TURBO_PLATFORM_ENV_DISABLED";
 
