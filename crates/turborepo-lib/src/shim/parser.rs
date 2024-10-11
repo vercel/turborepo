@@ -41,7 +41,7 @@ pub struct MultipleCwd {
     flag4: Option<SourceSpan>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct ShimArgs {
     pub cwd: AbsoluteSystemPathBuf,
     pub invocation_dir: AbsoluteSystemPathBuf,
@@ -56,6 +56,14 @@ pub struct ShimArgs {
 
 impl ShimArgs {
     pub fn parse() -> Result<Self, Error> {
+        let invocation_dir = AbsoluteSystemPathBuf::cwd()?;
+        Self::parse_from_iter(invocation_dir, std::env::args())
+    }
+
+    fn parse_from_iter(
+        invocation_dir: AbsoluteSystemPathBuf,
+        args: impl Iterator<Item = String>,
+    ) -> Result<Self, Error> {
         let mut cwd_flag_idx = None;
         let mut cwds = Vec::new();
         let mut skip_infer = false;
@@ -68,7 +76,7 @@ impl ShimArgs {
         let mut color = false;
         let mut no_color = false;
 
-        let args = env::args().skip(1);
+        let args = args.skip(1);
         for (idx, arg) in args.enumerate() {
             // We've seen a `--` and therefore we do no parsing
             if is_forwarded_args {
@@ -100,7 +108,10 @@ impl ShimArgs {
             } else if cwd_flag_idx.is_some() {
                 // We've seen a `--cwd` and therefore add this to the cwds list along with
                 // the index of the `--cwd` (*not* the value)
-                cwds.push((AbsoluteSystemPathBuf::from_cwd(arg)?, idx - 1));
+                cwds.push((
+                    AbsoluteSystemPathBuf::from_unknown(&invocation_dir, arg),
+                    idx - 1,
+                ));
                 cwd_flag_idx = None;
             } else if arg == "--cwd" {
                 // If we see a `--cwd` we expect the next arg to be a path.
@@ -108,7 +119,10 @@ impl ShimArgs {
             } else if let Some(cwd_arg) = arg.strip_prefix("--cwd=") {
                 // In the case where `--cwd` is passed as `--cwd=./path/to/foo`, that
                 // entire chunk is a single arg, so we need to split it up.
-                cwds.push((AbsoluteSystemPathBuf::from_cwd(cwd_arg)?, idx));
+                cwds.push((
+                    AbsoluteSystemPathBuf::from_unknown(&invocation_dir, cwd_arg),
+                    idx,
+                ));
             } else if arg == "--color" {
                 color = true;
             } else if arg == "--no-color" {
@@ -146,7 +160,6 @@ impl ShimArgs {
             })));
         }
 
-        let invocation_dir = AbsoluteSystemPathBuf::cwd()?;
         let cwd = cwds
             .pop()
             .map(|(cwd, _)| cwd)
