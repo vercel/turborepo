@@ -271,7 +271,9 @@ impl ShimArgs {
 #[cfg(test)]
 mod test {
     use miette::SourceSpan;
+    use pretty_assertions::assert_eq;
     use test_case::test_case;
+    use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 
     use super::ShimArgs;
 
@@ -287,5 +289,187 @@ mod test {
         let (indices_in_args_string, _) =
             ShimArgs::get_spans_in_args_string(arg_indices, args.into_iter());
         assert_eq!(indices_in_args_string, expected_indices_in_arg_string);
+    }
+
+    #[derive(Default)]
+    struct ExpectedArgs {
+        pub skip_infer: bool,
+        pub verbosity: usize,
+        pub force_update_check: bool,
+        pub remaining_turbo_args: &'static [&'static str],
+        pub forwarded_args: &'static [&'static str],
+        pub color: bool,
+        pub no_color: bool,
+        pub relative_cwd: Option<&'static [&'static str]>,
+    }
+
+    impl ExpectedArgs {
+        fn build(self, invocation_dir: &AbsoluteSystemPath) -> ShimArgs {
+            let Self {
+                skip_infer,
+                verbosity,
+                force_update_check,
+                remaining_turbo_args,
+                forwarded_args,
+                color,
+                no_color,
+                relative_cwd,
+            } = self;
+            ShimArgs {
+                cwd: relative_cwd.map_or_else(
+                    || invocation_dir.to_owned(),
+                    |components| invocation_dir.join_components(components),
+                ),
+                invocation_dir: invocation_dir.to_owned(),
+                remaining_turbo_args: remaining_turbo_args
+                    .iter()
+                    .map(|arg| arg.to_string())
+                    .collect(),
+                forwarded_args: forwarded_args.iter().map(|arg| arg.to_string()).collect(),
+                skip_infer,
+                verbosity,
+                force_update_check,
+                color,
+                no_color,
+            }
+        }
+    }
+
+    #[test_case(
+        &["turbo"],
+        ExpectedArgs {
+            ..Default::default()
+        }
+        ; "no args"
+    )]
+    #[test_case(
+        &["turbo", "-v"],
+        ExpectedArgs {
+            verbosity: 1,
+            remaining_turbo_args: &["-v"],
+            ..Default::default()
+        }
+        ; "verbosity count 1"
+    )]
+    #[test_case(
+        &["turbo", "-vv"],
+        ExpectedArgs {
+            verbosity: 2,
+            remaining_turbo_args: &["-vv"],
+            ..Default::default()
+        }
+        ; "verbosity count 2"
+    )]
+    #[test_case(
+        &["turbo", "--verbosity", "3"],
+        ExpectedArgs {
+            verbosity: 3,
+            remaining_turbo_args: &["--verbosity", "3"],
+            ..Default::default()
+        }
+        ; "verbosity flag 3"
+    )]
+    #[test_case(
+        &["turbo", "--verbosity=3"],
+        ExpectedArgs {
+            verbosity: 3,
+            remaining_turbo_args: &["--verbosity=3"],
+            ..Default::default()
+        }
+        ; "verbosity equals 3"
+    )]
+    #[test_case(
+        &["turbo", "--verbosity=3", "-vv"],
+        ExpectedArgs {
+            verbosity: 2,
+            remaining_turbo_args: &["--verbosity=3", "-vv"],
+            ..Default::default()
+        }
+        ; "multi verbosity"
+    )]
+    #[test_case(
+        &["turbo", "--color"],
+        ExpectedArgs {
+            color: true,
+            ..Default::default()
+        }
+        ; "color"
+    )]
+    #[test_case(
+        &["turbo", "--no-color"],
+        ExpectedArgs {
+            no_color: true,
+            ..Default::default()
+        }
+        ; "no color"
+    )]
+    #[test_case(
+        &["turbo", "--no-color", "--color"],
+        ExpectedArgs {
+            color: true,
+            no_color: true,
+            ..Default::default()
+        }
+        ; "confused color"
+    )]
+    #[test_case(
+        &["turbo", "--skip-infer"],
+        ExpectedArgs {
+            skip_infer: true,
+            ..Default::default()
+        }
+        ; "skip infer"
+    )]
+    #[test_case(
+        &["turbo", "--", "another", "--skip-infer"],
+        ExpectedArgs {
+            forwarded_args: &["another", "--skip-infer"],
+            ..Default::default()
+        }
+        ; "forwarded args"
+    )]
+    #[test_case(
+        &["turbo", "--check-for-update"],
+        ExpectedArgs {
+            force_update_check: true,
+            ..Default::default()
+        }
+        ; "check for update"
+    )]
+    #[test_case(
+        &["turbo", "--check-for-update=true"],
+        ExpectedArgs {
+            force_update_check: false,
+            remaining_turbo_args: &["--check-for-update=true"],
+            ..Default::default()
+        }
+        ; "check for update value"
+    )]
+    #[test_case(
+        &["turbo", "--cwd", "another-dir"],
+        ExpectedArgs {
+            relative_cwd: Some(&["another-dir"]),
+            ..Default::default()
+        }
+        ; "cwd value"
+    )]
+    #[test_case(
+        &["turbo", "--cwd=another-dir"],
+        ExpectedArgs {
+            relative_cwd: Some(&["another-dir"]),
+            ..Default::default()
+        }
+        ; "cwd equals"
+    )]
+    fn test_shim_parsing(args: &[&str], expected: ExpectedArgs) {
+        let cwd = AbsoluteSystemPathBuf::new(if cfg!(windows) {
+            "Z:\\some\\dir"
+        } else {
+            "/some/dir"
+        })
+        .unwrap();
+        let expected = expected.build(&cwd);
+        let actual = ShimArgs::parse_from_iter(cwd, args.iter().map(|s| s.to_string())).unwrap();
+        assert_eq!(expected, actual);
     }
 }
