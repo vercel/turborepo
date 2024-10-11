@@ -352,8 +352,7 @@ impl Engine<Built> {
     pub fn transitive_dependents(&self, task_id: &TaskId<'static>) -> HashSet<&TaskNode> {
         turborepo_graph_utils::transitive_closure(
             &self.task_graph,
-            &self.task_lookup,
-            Some(&TaskNode::Task(task_id.clone())),
+            self.task_lookup.get(task_id).cloned(),
             petgraph::Direction::Incoming,
         )
     }
@@ -361,8 +360,7 @@ impl Engine<Built> {
     pub fn transitive_dependencies(&self, task_id: &TaskId<'static>) -> HashSet<&TaskNode> {
         turborepo_graph_utils::transitive_closure(
             &self.task_graph,
-            &self.task_lookup,
-            Some(&TaskNode::Task(task_id.clone())),
+            self.task_lookup.get(task_id).cloned(),
             petgraph::Direction::Outgoing,
         )
     }

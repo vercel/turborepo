@@ -260,8 +260,7 @@ impl PackageGraph {
     pub fn dependencies<'a>(&'a self, node: &PackageNode) -> HashSet<&'a PackageNode> {
         let mut dependencies = turborepo_graph_utils::transitive_closure(
             &self.graph,
-            &self.node_lookup,
-            Some(node),
+            self.node_lookup.get(node).cloned(),
             petgraph::Direction::Outgoing,
         );
         // Add in all root dependencies as they're implied dependencies for every
@@ -286,8 +285,7 @@ impl PackageGraph {
         } else {
             turborepo_graph_utils::transitive_closure(
                 &self.graph,
-                &self.node_lookup,
-                Some(node),
+                self.node_lookup.get(node).cloned(),
                 petgraph::Direction::Incoming,
             )
         };
@@ -368,8 +366,9 @@ impl PackageGraph {
         // as it will infinitely recurse.
         let mut dependencies = turborepo_graph_utils::transitive_closure(
             &self.graph,
-            &self.node_lookup,
-            Some(&PackageNode::Workspace(PackageName::Root)),
+            self.node_lookup
+                .get(&PackageNode::Workspace(PackageName::Root))
+                .cloned(),
             petgraph::Direction::Outgoing,
         );
         dependencies.remove(&PackageNode::Workspace(PackageName::Root));
@@ -387,8 +386,9 @@ impl PackageGraph {
     ) -> HashSet<&'a PackageNode> {
         turborepo_graph_utils::transitive_closure(
             &self.graph,
-            &self.node_lookup,
-            nodes,
+            nodes
+                .into_iter()
+                .flat_map(|node| self.node_lookup.get(node).cloned()),
             petgraph::Direction::Outgoing,
         )
     }

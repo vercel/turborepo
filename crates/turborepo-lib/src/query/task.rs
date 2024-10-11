@@ -22,10 +22,7 @@ impl RepositoryTask {
             name: task_id.package().into(),
             run: run.clone(),
         };
-        let script = package
-            .get_tasks()
-            .get(task_id.task())
-            .map(|script| script.clone());
+        let script = package.get_tasks().get(task_id.task()).cloned();
 
         RepositoryTask {
             name: task_id.task().to_string(),

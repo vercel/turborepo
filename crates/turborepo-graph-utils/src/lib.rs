@@ -1,10 +1,6 @@
 mod walker;
 
-use std::{
-    collections::{HashMap, HashSet},
-    fmt::Display,
-    hash::Hash,
-};
+use std::{collections::HashSet, fmt::Display, hash::Hash};
 
 use itertools::Itertools;
 use petgraph::{
@@ -21,23 +17,11 @@ pub enum Error {
     SelfDependency(String),
 }
 
-pub fn transitive_closure<
-    'a,
-    'b,
-    N: Hash + Eq + PartialEq + Clone + 'b,
-    M: TryFrom<N> + Hash + Eq + PartialEq,
-    I: IntoIterator<Item = &'b N>,
->(
-    graph: &'a Graph<N, ()>,
-    node_lookup: &'a HashMap<M, petgraph::graph::NodeIndex>,
-    nodes: I,
+pub fn transitive_closure<N: Hash + Eq + PartialEq, I: IntoIterator<Item = NodeIndex>>(
+    graph: &Graph<N, ()>,
+    indices: I,
     direction: petgraph::Direction,
-) -> HashSet<&'a N> {
-    let indices = nodes
-        .into_iter()
-        .filter_map(|node| node_lookup.get(&node.to_owned().try_into().ok()?))
-        .copied();
-
+) -> HashSet<&N> {
     let mut visited = HashSet::new();
 
     let visitor = |event| {
