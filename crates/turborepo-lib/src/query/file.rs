@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use async_graphql::{Object, SimpleObject};
+use itertools::Itertools;
 use turbo_trace::Tracer;
 use turbopath::AbsoluteSystemPathBuf;
 
@@ -72,6 +73,7 @@ impl TraceResult {
             files: result
                 .files
                 .into_iter()
+                .sorted()
                 .map(|path| File::new(run.clone(), path))
                 .collect(),
             errors: result.errors.into_iter().map(|e| e.into()).collect(),

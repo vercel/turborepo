@@ -21,13 +21,13 @@ Setup
           "files": {
             "items": [
               {
-                "path": "node_modules/repeat-string/index.js"
-              },
-              {
                 "path": "button.tsx"
               },
               {
                 "path": "foo.js"
+              },
+              {
+                "path": "node_modules(\/|\\\\)repeat-string(\/|\\\\)index.js" (re)
               }
             ]
           }
