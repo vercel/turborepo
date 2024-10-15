@@ -1104,10 +1104,7 @@ mod test {
         let packages = resolver.get_filtered_packages(selectors).unwrap();
 
         assert_eq!(
-            packages
-                .into_iter()
-                .map(|(name, _)| name)
-                .collect::<HashSet<_>>(),
+            packages.into_keys().collect::<HashSet<_>>(),
             expected.iter().map(|s| PackageName::from(*s)).collect()
         );
     }
@@ -1339,10 +1336,7 @@ mod test {
 
         let packages = resolver.get_filtered_packages(selectors).unwrap();
         assert_eq!(
-            packages
-                .into_iter()
-                .map(|(name, _)| name)
-                .collect::<HashSet<_>>(),
+            packages.into_keys().collect::<HashSet<_>>(),
             expected.iter().map(|s| PackageName::from(*s)).collect()
         );
     }
