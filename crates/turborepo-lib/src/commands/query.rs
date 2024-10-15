@@ -95,10 +95,6 @@ pub async fn run(
             fs::read_to_string(AbsoluteSystemPathBuf::from_unknown(run.repo_root(), query))?
         };
 
-        // Replace the hash character with the dollar sign because dollar signs are
-        // escaped via the terminal, so we offer hash as an alternative
-        let query = query.replace('#', "$");
-
         let schema = Schema::new(
             RepositoryQuery::new(Arc::new(run)),
             EmptyMutation,
