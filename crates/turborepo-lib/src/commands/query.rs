@@ -1,8 +1,7 @@
 use std::{fs, sync::Arc};
 
-use async_graphql::{
-    EmptyMutation, EmptySubscription, Name, Request, Schema, ServerError, Variables,
-};
+use async_graphql::{EmptyMutation, EmptySubscription, Request, Schema, ServerError, Variables};
+use camino::Utf8Path;
 use miette::{Diagnostic, Report, SourceSpan};
 use thiserror::Error;
 use turbopath::AbsoluteSystemPathBuf;
@@ -56,26 +55,23 @@ impl QueryError {
     }
 }
 
-pub fn parse_variables(var_strings: &[String]) -> Result<Variables, Error> {
-    let mut variables = Variables::default();
-    for s in var_strings {
-        let (key, value) = s
-            .split_once('=')
-            .ok_or_else(|| Error::InvalidVariables(s.to_owned()))?;
-        variables.insert(Name::new(key), serde_json::from_str(value)?);
-    }
-
-    Ok(variables)
-}
-
 pub async fn run(
     mut base: CommandBase,
     telemetry: CommandEventBuilder,
     query: Option<String>,
-    variables: Variables,
+    variables_path: Option<&Utf8Path>,
 ) -> Result<i32, Error> {
     let signal = get_signal()?;
     let handler = SignalHandler::new(signal);
+
+    let variables: Variables = variables_path
+        .map(|path| AbsoluteSystemPathBuf::from_cwd(path))
+        .transpose()?
+        .map(|path| path.read_to_string())
+        .transpose()?
+        .map(|content| serde_json::from_str(&content))
+        .transpose()?
+        .unwrap_or_default();
 
     // We fake a run command, so we can construct a `Run` type
     base.args_mut().command = Some(Command::Run {
@@ -98,6 +94,10 @@ pub async fn run(
         } else {
             fs::read_to_string(AbsoluteSystemPathBuf::from_unknown(run.repo_root(), query))?
         };
+
+        // Replace the hash character with the dollar sign because dollar signs are
+        // escaped via the terminal, so we offer hash as an alternative
+        let query = query.replace('#', "$");
 
         let schema = Schema::new(
             RepositoryQuery::new(Arc::new(run)),
