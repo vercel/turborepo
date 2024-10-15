@@ -268,6 +268,46 @@ impl ExecContext {
         }
     }
 
+    fn command(&self) -> Result<Command, InternalError> {
+        let package_manager_binary = which(self.package_manager.command())?;
+        let mut cmd = Command::new(package_manager_binary);
+        let mut args = vec!["run".to_string(), self.task_id.task().to_string()];
+        if let Some(pass_through_args) = &self.pass_through_args {
+            args.extend(
+                self.package_manager
+                    .arg_separator(pass_through_args.as_slice())
+                    .map(|s| s.to_string()),
+            );
+            args.extend(pass_through_args.iter().cloned());
+        }
+        cmd.args(args);
+        cmd.current_dir(self.workspace_directory.clone());
+
+        // We clear the env before populating it with variables we expect
+        cmd.env_clear();
+        cmd.envs(self.execution_env.iter());
+        // Always last to make sure it overwrites any user configured env var.
+        cmd.env("TURBO_HASH", &self.task_hash);
+
+        // Allow downstream tools to detect if the task is being ran with TUI
+        if self.ui_mode.use_tui() {
+            cmd.env("TURBO_IS_TUI", "true");
+        }
+
+        // enable task access tracing
+
+        // set the trace file env var - frameworks that support this can use it to
+        // write out a trace file that we will use to automatically cache the task
+        if self.task_access.is_enabled() {
+            let (task_access_trace_key, trace_file) = self.task_access.get_env_var(&self.task_hash);
+            cmd.env(task_access_trace_key, trace_file.to_string());
+        }
+
+        cmd.open_stdin();
+
+        Ok(cmd)
+    }
+
     async fn execute_inner(
         &mut self,
         output_client: &TaskOutput<impl Write>,
@@ -316,42 +356,7 @@ impl ExecContext {
             }
         }
 
-        let package_manager_binary = which(self.package_manager.command())?;
-
-        let mut cmd = Command::new(package_manager_binary);
-        let mut args = vec!["run".to_string(), self.task_id.task().to_string()];
-        if let Some(pass_through_args) = &self.pass_through_args {
-            args.extend(
-                self.package_manager
-                    .arg_separator(pass_through_args.as_slice())
-                    .map(|s| s.to_string()),
-            );
-            args.extend(pass_through_args.iter().cloned());
-        }
-        cmd.args(args);
-        cmd.current_dir(self.workspace_directory.clone());
-
-        // We clear the env before populating it with variables we expect
-        cmd.env_clear();
-        cmd.envs(self.execution_env.iter());
-        // Always last to make sure it overwrites any user configured env var.
-        cmd.env("TURBO_HASH", &self.task_hash);
-
-        // Allow downstream tools to detect if the task is being ran with TUI
-        if self.ui_mode.use_tui() {
-            cmd.env("TURBO_IS_TUI", "true");
-        }
-
-        // enable task access tracing
-
-        // set the trace file env var - frameworks that support this can use it to
-        // write out a trace file that we will use to automatically cache the task
-        if self.task_access.is_enabled() {
-            let (task_access_trace_key, trace_file) = self.task_access.get_env_var(&self.task_hash);
-            cmd.env(task_access_trace_key, trace_file.to_string());
-        }
-
-        cmd.open_stdin();
+        let cmd = self.command()?;
 
         let mut process = match self.manager.spawn(cmd, Duration::from_millis(500)) {
             Some(Ok(child)) => child,
