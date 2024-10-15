@@ -1,0 +1,32 @@
+---
+title: query
+description: API reference for the `turbo query` command
+---
+
+import { ExperimentalBadge } from '#/components/experimental-badge';
+
+<ExperimentalBadge />
+
+Run a GraphQL query on your repository
+
+```bash title="Terminal"
+turbo query [query] [flags]
+```
+
+When passed a query string, the command will run the query and output the results.
+
+```bash title="Terminal"
+turbo query "query { packages { items { name } } }"
+```
+
+When passed a file path, the command will read the file and run the query.
+
+```bash title="Terminal"
+turbo query query.gql
+```
+
+When no arguments are passed, the command will open a GraphiQL playground to run queries.
+
+```bash title="Terminal"
+turbo query
+```
