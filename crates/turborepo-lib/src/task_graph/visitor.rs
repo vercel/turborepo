@@ -387,9 +387,9 @@ impl<'a> Visitor<'a> {
         // output any warnings that we collected while running tasks
         if let Ok(warnings) = self.warnings.lock() {
             if !warnings.is_empty() {
-                println!();
+                eprintln!();
                 warn!("finished with warnings");
-                println!();
+                eprintln!();
 
                 let has_missing_platform_env: bool = warnings
                     .iter()

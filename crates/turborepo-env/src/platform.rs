@@ -1,5 +1,5 @@
 use turborepo_ci::Vendor;
-use turborepo_ui::{color, cprint, cprintln, ColorConfig, BOLD, GREY, UNDERLINE, YELLOW};
+use turborepo_ui::{ceprint, ceprintln, color, ColorConfig, BOLD, GREY, UNDERLINE, YELLOW};
 
 use crate::EnvironmentVariableMap;
 
@@ -63,7 +63,7 @@ impl PlatformEnv {
 
         match ci {
             "VERCEL" => {
-                cprintln!(
+                ceprintln!(
                     color_config,
                     BOLD,
                     "The following environment variables are set on your Vercel project, but \
@@ -72,7 +72,7 @@ impl PlatformEnv {
                 );
             }
             _ => {
-                cprintln!(
+                ceprintln!(
                     color_config,
                     BOLD,
                     "The following environment variables are missing from \"turbo.json\". {}",
@@ -86,7 +86,7 @@ impl PlatformEnv {
             UNDERLINE,
             "https://turbo.build/repo/docs/platform-environment-variables"
         );
-        cprintln!(color_config, GREY, "Learn more at {docs}\n");
+        ceprintln!(color_config, GREY, "Learn more at {docs}\n");
     }
 
     pub fn output_for_task(
@@ -94,11 +94,11 @@ impl PlatformEnv {
         task_id_for_display: &str,
         color_config: ColorConfig,
     ) {
-        cprintln!(color_config, YELLOW, "{}", task_id_for_display);
+        ceprintln!(color_config, YELLOW, "{}", task_id_for_display);
         for key in missing {
-            cprint!(color_config, GREY, "  - ");
-            cprint!(color_config, GREY, "{}\n", key);
+            ceprint!(color_config, GREY, "  - ");
+            ceprint!(color_config, GREY, "{}\n", key);
         }
-        println!();
+        eprintln!();
     }
 }
