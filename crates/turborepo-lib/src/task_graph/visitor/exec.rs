@@ -284,14 +284,12 @@ impl ExecContext {
 
         if !self.task_cache.is_caching_disabled() {
             let missing_platform_env = self.platform_env.validate(&self.execution_env);
-            if !missing_platform_env.is_empty() {
+            if let Some(warning) = TaskWarning::new(&self.task_id_for_display, missing_platform_env)
+            {
                 self.warnings
                     .lock()
                     .expect("warnings lock poisoned")
-                    .push(TaskWarning {
-                        task_id: self.task_id_for_display.clone(),
-                        missing_platform_env,
-                    });
+                    .push(warning);
             }
         }
 

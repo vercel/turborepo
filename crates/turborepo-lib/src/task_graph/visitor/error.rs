@@ -1,8 +1,8 @@
 // Warning that comes from the execution of the task
 #[derive(Debug, Clone)]
 pub struct TaskWarning {
-    pub task_id: String,
-    pub missing_platform_env: Vec<String>,
+    task_id: String,
+    missing_platform_env: Vec<String>,
 }
 
 // Error that comes from the execution of the task
@@ -22,6 +22,30 @@ pub enum TaskErrorCause {
     Exit { command: String, exit_code: i32 },
     #[error("turbo has internal error processing task")]
     Internal,
+}
+
+impl TaskWarning {
+    /// Construct a new warning for a given task with the
+    /// Returns `None` if there are no missing platform environment variables
+    pub fn new(task_id: &str, missing_platform_env: Vec<String>) -> Option<Self> {
+        if missing_platform_env.is_empty() {
+            return None;
+        }
+        Some(Self {
+            task_id: task_id.to_owned(),
+            missing_platform_env,
+        })
+    }
+
+    pub fn task_id(&self) -> &str {
+        &self.task_id
+    }
+
+    /// All missing platform environment variables.
+    /// Guaranteed to have at least length 1 due to constructor validation.
+    pub fn missing_platform_env(&self) -> &[String] {
+        &self.missing_platform_env
+    }
 }
 
 impl TaskError {
@@ -62,5 +86,25 @@ impl TaskErrorCause {
 
     pub fn from_execution(command: String, exit_code: i32) -> Self {
         TaskErrorCause::Exit { command, exit_code }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_warning_no_vars() {
+        let no_warning = TaskWarning::new("a-task", vec![]);
+        assert!(no_warning.is_none());
+    }
+
+    #[test]
+    fn test_warning_some_var() {
+        let warning = TaskWarning::new("a-task", vec!["MY_VAR".into()]);
+        assert!(warning.is_some());
+        let warning = warning.unwrap();
+        assert_eq!(warning.task_id(), "a-task");
+        assert_eq!(warning.missing_platform_env(), &["MY_VAR".to_owned()]);
     }
 }
