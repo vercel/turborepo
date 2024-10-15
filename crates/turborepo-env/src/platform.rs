@@ -80,6 +80,12 @@ impl PlatformEnv {
                 );
             }
         }
+
+        cprintln!(
+            color_config,
+            GREY,
+            "Learn more at https://turbo.build/repo/docs/platform-environment-variables"
+        );
     }
 
     pub fn output_for_task(
