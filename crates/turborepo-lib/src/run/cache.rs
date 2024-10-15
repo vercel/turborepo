@@ -161,6 +161,10 @@ impl TaskCache {
         self.task_output_logs
     }
 
+    pub fn is_caching_disabled(&self) -> bool {
+        self.caching_disabled
+    }
+
     /// Will read log file and write to output a line at a time
     pub fn replay_log_file(&self, output: &mut impl CacheOutput) -> Result<(), Error> {
         if self.log_file_path.exists() {
