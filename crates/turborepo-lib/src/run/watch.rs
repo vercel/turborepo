@@ -48,7 +48,7 @@ impl ChangedPackages {
 pub struct WatchClient {
     run: Arc<Run>,
     watched_packages: HashSet<PackageName>,
-    persistent_tasks_handle: Option<PersistentRunHandle>,
+    persistent_tasks_handle: Option<RunHandle>,
     connector: DaemonConnector,
     base: CommandBase,
     telemetry: CommandEventBuilder,
@@ -57,7 +57,7 @@ pub struct WatchClient {
     ui_handle: Option<JoinHandle<Result<(), turborepo_ui::Error>>>,
 }
 
-struct PersistentRunHandle {
+struct RunHandle {
     stopper: run::RunStopper,
     run_task: JoinHandle<Result<i32, run::Error>>,
 }
@@ -189,6 +189,7 @@ impl WatchClient {
         };
 
         let run_fut = async {
+            let mut run_handle: Option<RunHandle> = None;
             loop {
                 notify_run.notified().await;
                 let some_changed_packages = {
@@ -197,8 +198,17 @@ impl WatchClient {
                     (!changed_packages_guard.is_empty())
                         .then(|| std::mem::take(changed_packages_guard.deref_mut()))
                 };
+
                 if let Some(changed_packages) = some_changed_packages {
-                    self.execute_run(changed_packages).await?;
+                    // Clean up currently running tasks
+                    if let Some(RunHandle { stopper, run_task }) = run_handle.take() {
+                        // Shut down the tasks for the run
+                        stopper.stop().await;
+                        // Run should exit shortly after we stop all child tasks, wait for it to
+                        // finish to ensure all messages are flushed.
+                        let _ = run_task.await;
+                    }
+                    run_handle = Some(self.execute_run(changed_packages).await?);
                 }
             }
         };
@@ -251,7 +261,14 @@ impl WatchClient {
         Ok(())
     }
 
-    async fn execute_run(&mut self, changed_packages: ChangedPackages) -> Result<i32, Error> {
+    /// Executes a run with the given changed packages. Splits the run into two
+    /// parts:
+    /// 1. The persistent tasks that are not allowed to be interrupted
+    /// 2. The non-persistent tasks and the persistent tasks that are allowed to
+    ///    be interrupted
+    ///
+    /// Returns a handle to the task running (2)
+    async fn execute_run(&mut self, changed_packages: ChangedPackages) -> Result<RunHandle, Error> {
         // Should we recover here?
         trace!("handling run with changed packages: {changed_packages:?}");
         match changed_packages {
@@ -303,7 +320,11 @@ impl WatchClient {
                         .map_err(|err| Error::UISend(err.to_string()))?;
                 }
 
-                Ok(run.run(self.ui_sender.clone(), true).await?)
+                let ui_sender = self.ui_sender.clone();
+                Ok(RunHandle {
+                    stopper: run.stopper(),
+                    run_task: tokio::spawn(async move { run.run(ui_sender, true).await }),
+                })
             }
             ChangedPackages::All => {
                 let mut args = self.base.args().clone();
@@ -339,9 +360,7 @@ impl WatchClient {
                 self.watched_packages = self.run.get_relevant_packages();
 
                 // Clean up currently running persistent tasks
-                if let Some(PersistentRunHandle { stopper, run_task }) =
-                    self.persistent_tasks_handle.take()
-                {
+                if let Some(RunHandle { stopper, run_task }) = self.persistent_tasks_handle.take() {
                     // Shut down the tasks for the run
                     stopper.stop().await;
                     // Run should exit shortly after we stop all child tasks, wait for it to finish
@@ -355,16 +374,16 @@ impl WatchClient {
                         .map_err(|err| Error::UISend(err.to_string()))?;
                 }
 
-                if self.run.has_persistent_tasks() {
+                if self.run.has_non_interruptible_tasks() {
                     debug_assert!(
                         self.persistent_tasks_handle.is_none(),
                         "persistent handle should be empty before creating a new one"
                     );
-                    let persistent_run = self.run.create_run_for_persistent_tasks();
+                    let persistent_run = self.run.create_run_for_non_interruptible_tasks();
                     let ui_sender = self.ui_sender.clone();
                     // If we have persistent tasks, we run them on a separate thread
                     // since persistent tasks don't finish
-                    self.persistent_tasks_handle = Some(PersistentRunHandle {
+                    self.persistent_tasks_handle = Some(RunHandle {
                         stopper: persistent_run.stopper(),
                         run_task: tokio::spawn(
                             async move { persistent_run.run(ui_sender, true).await },
@@ -372,10 +391,21 @@ impl WatchClient {
                     });
 
                     // But we still run the regular tasks blocking
-                    let non_persistent_run = self.run.create_run_without_persistent_tasks();
-                    Ok(non_persistent_run.run(self.ui_sender.clone(), true).await?)
+                    let non_persistent_run = self.run.create_run_for_interruptible_tasks();
+                    let ui_sender = self.ui_sender.clone();
+                    Ok(RunHandle {
+                        stopper: non_persistent_run.stopper(),
+                        run_task: tokio::spawn(async move {
+                            non_persistent_run.run(ui_sender, true).await
+                        }),
+                    })
                 } else {
-                    Ok(self.run.run(self.ui_sender.clone(), true).await?)
+                    let ui_sender = self.ui_sender.clone();
+                    let run = self.run.clone();
+                    Ok(RunHandle {
+                        stopper: run.stopper(),
+                        run_task: tokio::spawn(async move { run.run(ui_sender, true).await }),
+                    })
                 }
             }
         }

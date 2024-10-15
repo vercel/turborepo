@@ -91,6 +91,13 @@ pub enum Error {
         #[label("package task found here")]
         span: Option<SourceSpan>,
     },
+    #[error("interruptible tasks must be persistent")]
+    InterruptibleButNotPersistent {
+        #[source_code]
+        text: NamedSource,
+        #[label("`interruptible` set here")]
+        span: Option<SourceSpan>,
+    },
     #[error(transparent)]
     #[diagnostic(transparent)]
     InvalidEnvPrefix(Box<InvalidEnvPrefixError>),
