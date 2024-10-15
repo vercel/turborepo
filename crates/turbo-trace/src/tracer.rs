@@ -185,6 +185,7 @@ impl Tracer {
             });
         }
 
+        println!("Resolver options: {:?}", options);
         Resolver::new(options)
     }
 
