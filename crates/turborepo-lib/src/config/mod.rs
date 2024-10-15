@@ -1,5 +1,6 @@
 mod env;
 mod file;
+mod override_env;
 mod turbo_json;
 
 use std::{collections::HashMap, ffi::OsString, io};
@@ -7,10 +8,11 @@ use std::{collections::HashMap, ffi::OsString, io};
 use camino::{Utf8Path, Utf8PathBuf};
 use convert_case::{Case, Casing};
 use derive_setters::Setters;
-use env::{EnvVars, OverrideEnvVars};
+use env::EnvVars;
 use file::{AuthFile, ConfigFile};
 use merge::Merge;
 use miette::{Diagnostic, NamedSource, SourceSpan};
+use override_env::OverrideEnvVars;
 use serde::Deserialize;
 use struct_iterable::Iterable;
 use thiserror::Error;
@@ -564,15 +566,9 @@ mod test {
             vercel_artifacts_owner.into(),
         );
 
-        let override_config = ConfigurationOptions {
-            token: Some("unseen".into()),
-            team_id: Some("unseen".into()),
-            ..Default::default()
-        };
-
         let builder = TurborepoConfigBuilder {
             repo_root,
-            override_config,
+            override_config: Default::default(),
             global_config_path: Some(global_config_path),
             environment: Some(env),
         };
