@@ -16,7 +16,8 @@ use which::which;
 
 use super::{
     error::{TaskError, TaskErrorCause, TaskWarning},
-    TaskCacheOutput, TaskOutput, Visitor,
+    output::TaskCacheOutput,
+    TaskOutput, Visitor,
 };
 use crate::{
     config::UIMode,
