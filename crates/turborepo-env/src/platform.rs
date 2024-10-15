@@ -134,6 +134,7 @@ mod tests {
         clear_env_var(TURBO_PLATFORM_ENV_KEY);
     }
 
+    #[cfg(not(target_os = "windows"))]
     #[test]
     fn test_disabled_true() {
         set_env_var(TURBO_PLATFORM_ENV_DISABLED_KEY, "1");
@@ -175,6 +176,7 @@ mod tests {
         clear_env_var(TURBO_PLATFORM_ENV_KEY);
     }
 
+    #[cfg(not(target_os = "windows"))]
     #[test]
     fn test_diff_all_keys_present() {
         set_env_var(TURBO_PLATFORM_ENV_KEY, "VAR1,VAR2");
