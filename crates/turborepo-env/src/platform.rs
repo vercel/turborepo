@@ -1,5 +1,5 @@
 use turborepo_ci::Vendor;
-use turborepo_ui::{cprint, cprintln, ColorConfig, BOLD, GREY, YELLOW};
+use turborepo_ui::{color, cprint, cprintln, ColorConfig, BOLD, GREY, UNDERLINE, YELLOW};
 
 use crate::EnvironmentVariableMap;
 
@@ -81,11 +81,12 @@ impl PlatformEnv {
             }
         }
 
-        cprintln!(
+        let docs = color!(
             color_config,
-            GREY,
-            "Learn more at https://turbo.build/repo/docs/platform-environment-variables"
+            UNDERLINE,
+            "https://turbo.build/repo/docs/platform-environment-variables"
         );
+        cprintln!(color_config, GREY, "Learn more at {docs}\n");
     }
 
     pub fn output_for_task(
@@ -114,6 +115,7 @@ mod tests {
 
     fn clear_env_var(key: &str) {
         std::env::remove_var(key);
+        assert!(std::env::var(key).is_err());
     }
 
     #[test]
