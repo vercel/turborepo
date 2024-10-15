@@ -390,24 +390,14 @@ impl<'a> Visitor<'a> {
                 warn!("finished with warnings");
                 eprintln!();
 
-                let has_missing_platform_env: bool = warnings
-                    .iter()
-                    .any(|warning| !warning.missing_platform_env.is_empty());
-                if has_missing_platform_env {
-                    PlatformEnv::output_header(
-                        global_env_mode == EnvMode::Strict,
-                        self.color_config,
-                    );
+                PlatformEnv::output_header(global_env_mode == EnvMode::Strict, self.color_config);
 
-                    for warning in warnings.iter() {
-                        if !warning.missing_platform_env.is_empty() {
-                            PlatformEnv::output_for_task(
-                                warning.missing_platform_env.clone(),
-                                &warning.task_id,
-                                self.color_config,
-                            )
-                        }
-                    }
+                for warning in warnings.iter() {
+                    PlatformEnv::output_for_task(
+                        warning.missing_platform_env().to_owned(),
+                        warning.task_id(),
+                        self.color_config,
+                    )
                 }
             }
         }
