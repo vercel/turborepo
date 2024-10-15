@@ -14,7 +14,10 @@ use turborepo_telemetry::events::{task::PackageTaskEventBuilder, TrackedErrors};
 use turborepo_ui::{ColorConfig, OutputWriter};
 use which::which;
 
-use super::{TaskCacheOutput, TaskOutput, Visitor};
+use super::{
+    error::{TaskError, TaskErrorCause, TaskWarning},
+    TaskCacheOutput, TaskOutput, Visitor,
+};
 use crate::{
     config::UIMode,
     engine::{Engine, StopExecution},
@@ -33,25 +36,6 @@ pub struct ExecContextFactory<'a> {
     errors: Arc<Mutex<Vec<TaskError>>>,
     manager: ProcessManager,
     engine: &'a Arc<Engine>,
-}
-
-// Error that comes from the execution of the task
-#[derive(Debug, thiserror::Error, Clone)]
-#[error("{task_id}: {cause}")]
-pub struct TaskError {
-    task_id: String,
-    cause: TaskErrorCause,
-}
-
-#[derive(Debug, thiserror::Error, Clone)]
-enum TaskErrorCause {
-    #[error("unable to spawn child process: {msg}")]
-    // We eagerly serialize this in order to allow us to implement clone
-    Spawn { msg: String },
-    #[error("command {command} exited ({exit_code})")]
-    Exit { command: String, exit_code: i32 },
-    #[error("turbo has internal error processing task")]
-    Internal,
 }
 
 impl<'a> ExecContextFactory<'a> {
@@ -471,10 +455,10 @@ impl ExecContext {
                 } else {
                     prefixed_ui.error(&format!("command finished with error: {error}"));
                 }
-                self.errors.lock().expect("lock poisoned").push(TaskError {
-                    task_id: self.task_id_for_display.clone(),
-                    cause: error,
-                });
+                self.errors
+                    .lock()
+                    .expect("lock poisoned")
+                    .push(TaskError::new(self.task_id_for_display.clone(), error));
                 Ok(ExecOutcome::Task {
                     exit_code: Some(code),
                     message,
@@ -539,49 +523,5 @@ impl DryRunExecContext {
         }
         tracker.dry_run().await;
         Ok(())
-    }
-}
-
-// Warning that comes from the execution of the task
-#[derive(Debug, Clone)]
-pub struct TaskWarning {
-    pub task_id: String,
-    pub missing_platform_env: Vec<String>,
-}
-
-impl TaskError {
-    pub fn exit_code(&self) -> Option<i32> {
-        match self.cause {
-            TaskErrorCause::Exit { exit_code, .. } => Some(exit_code),
-            _ => None,
-        }
-    }
-
-    fn from_spawn(task_id: String, err: std::io::Error) -> Self {
-        Self {
-            task_id,
-            cause: TaskErrorCause::Spawn {
-                msg: err.to_string(),
-            },
-        }
-    }
-
-    fn from_execution(task_id: String, command: String, exit_code: i32) -> Self {
-        Self {
-            task_id,
-            cause: TaskErrorCause::Exit { command, exit_code },
-        }
-    }
-}
-
-impl TaskErrorCause {
-    fn from_spawn(err: std::io::Error) -> Self {
-        TaskErrorCause::Spawn {
-            msg: err.to_string(),
-        }
-    }
-
-    fn from_execution(command: String, exit_code: i32) -> Self {
-        TaskErrorCause::Exit { command, exit_code }
     }
 }

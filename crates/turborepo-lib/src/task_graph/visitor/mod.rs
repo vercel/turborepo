@@ -1,3 +1,4 @@
+mod error;
 mod exec;
 
 use std::{
@@ -9,7 +10,8 @@ use std::{
 
 use console::{Style, StyledObject};
 use either::Either;
-use exec::{ExecContextFactory, TaskError, TaskWarning};
+use error::{TaskError, TaskWarning};
+use exec::ExecContextFactory;
 use futures::{stream::FuturesUnordered, StreamExt};
 use itertools::Itertools;
 use miette::{Diagnostic, NamedSource, SourceSpan};
