@@ -61,14 +61,20 @@ impl PlatformEnv {
              cache hits."
         };
 
+        let docs_message = color!(
+            color_config,
+            UNDERLINE,
+            "https://turbo.build/repo/docs/platform-environment-variables"
+        );
+
         match ci {
             "VERCEL" => {
                 ceprintln!(
                     color_config,
                     BOLD,
                     "Warning - the following environment variables are set on your Vercel \
-                     project, but missing from \"turbo.json\". {}",
-                    strict_message
+                     project, but missing from \"turbo.json\". {strict_message} Learn more at \
+                     {docs_message}\n"
                 );
             }
             _ => {
@@ -76,18 +82,10 @@ impl PlatformEnv {
                     color_config,
                     BOLD,
                     "Warning - the following environment variables are missing from \
-                     \"turbo.json\". {}",
-                    strict_message
+                     \"turbo.json\". {strict_message} Learn more at {docs_message}\n"
                 );
             }
         }
-
-        let docs = color!(
-            color_config,
-            UNDERLINE,
-            "https://turbo.build/repo/docs/platform-environment-variables"
-        );
-        ceprintln!(color_config, GREY, "Learn more at {docs}\n");
     }
 
     pub fn output_for_task(
