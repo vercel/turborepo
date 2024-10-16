@@ -133,11 +133,6 @@ impl From<Input> for Output {
 
         // handle "only" cases
         // ------------------------------------------------
-        if input.TURBO_TEAM.is_some() {
-            output.team_slug = input.TURBO_TEAM;
-            return output;
-        }
-
         if input.TURBO_TEAMID.is_some() {
             output.team_id = input.TURBO_TEAMID;
             return output;
