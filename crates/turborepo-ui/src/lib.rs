@@ -120,6 +120,28 @@ macro_rules! cwriteln {
     }};
 }
 
+#[macro_export]
+macro_rules! ceprintln {
+    ($ui:expr, $color:expr, $format_string:expr $(, $arg:expr)*) => {{
+        let formatted_str = format!($format_string $(, $arg)*);
+
+        let colored_str = $color.apply_to(formatted_str);
+
+        eprintln!("{}", $ui.apply(colored_str))
+    }};
+}
+
+#[macro_export]
+macro_rules! ceprint {
+    ($ui:expr, $color:expr, $format_string:expr $(, $arg:expr)*) => {{
+        let formatted_str = format!($format_string $(, $arg)*);
+
+        let colored_str = $color.apply_to(formatted_str);
+
+        eprint!("{}", $ui.apply(colored_str))
+    }};
+}
+
 /// Helper struct to apply any necessary formatting to UI output
 #[derive(Debug, Clone, Copy)]
 pub struct ColorConfig {

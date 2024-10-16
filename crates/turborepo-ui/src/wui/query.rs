@@ -7,7 +7,7 @@ use tokio::sync::Mutex;
 use crate::wui::subscriber::{TaskState, WebUIState};
 
 #[derive(Debug, Clone, Serialize, SimpleObject)]
-struct Task {
+struct RunTask {
     name: String,
     state: TaskState,
 }
@@ -18,13 +18,13 @@ struct CurrentRun<'a> {
 
 #[Object]
 impl<'a> CurrentRun<'a> {
-    async fn tasks(&self) -> Vec<Task> {
+    async fn tasks(&self) -> Vec<RunTask> {
         self.state
             .lock()
             .await
             .tasks()
             .iter()
-            .map(|(task, state)| Task {
+            .map(|(task, state)| RunTask {
                 name: task.clone(),
                 state: state.clone(),
             })

@@ -14,6 +14,7 @@ use miette::{Diagnostic, NamedSource, SourceSpan};
 use serde::Deserialize;
 use struct_iterable::Iterable;
 use thiserror::Error;
+use tracing::debug;
 use turbo_json::TurboJsonReader;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_errors::TURBO_SITE;
@@ -88,6 +89,13 @@ pub enum Error {
         #[source_code]
         text: NamedSource,
         #[label("package task found here")]
+        span: Option<SourceSpan>,
+    },
+    #[error("interruptible tasks must be persistent")]
+    InterruptibleButNotPersistent {
+        #[source_code]
+        text: NamedSource,
+        #[label("`interruptible` set here")]
         span: Option<SourceSpan>,
     },
     #[error(transparent)]
@@ -329,6 +337,15 @@ impl ConfigurationOptions {
     }
 
     pub fn daemon(&self) -> Option<bool> {
+        // hardcode to off in CI
+        if turborepo_ci::is_ci() {
+            if Some(true) == self.daemon {
+                debug!("Ignoring daemon setting and disabling the daemon because we're in CI");
+            }
+
+            return Some(false);
+        }
+
         self.daemon
     }
 

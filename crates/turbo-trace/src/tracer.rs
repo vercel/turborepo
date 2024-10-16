@@ -48,18 +48,18 @@ impl Tracer {
         cwd: AbsoluteSystemPathBuf,
         files: Vec<AbsoluteSystemPathBuf>,
         ts_config: Option<Utf8PathBuf>,
-    ) -> Result<Self, PathError> {
+    ) -> Self {
         let ts_config =
             ts_config.map(|ts_config| AbsoluteSystemPathBuf::from_unknown(&cwd, ts_config));
 
         let seen = HashSet::new();
 
-        Ok(Self {
+        Self {
             files,
             seen,
             ts_config,
             source_map: Rc::new(SourceMap::default()),
-        })
+        }
     }
 
     pub fn trace(mut self) -> TraceResult {

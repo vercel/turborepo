@@ -68,7 +68,21 @@ Run in single package mode even though we have a task with package syntax
       `----
   
 
+Use our custom turbo config which has interruptible: true
+  $ . ${TESTDIR}/../../helpers/replace_turbo_json.sh $(pwd) "interruptible-but-not-persistent.json"
 
+Build should fail
+  $ ${TURBO} run build
+    x interruptible tasks must be persistent
+      ,-[turbo.json:14:1]
+   14 |       ],
+   15 |       "interruptible": true,
+      :                        ^^|^
+      :                          `-- `interruptible` set here
+   16 |       "outputs": []
+      `----
+  
+  [1]
 
 Use our custom turbo config with syntax errors
   $ . ${TESTDIR}/../../helpers/replace_turbo_json.sh $(pwd) "syntax-error.json"

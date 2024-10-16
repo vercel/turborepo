@@ -6,7 +6,7 @@ mod error;
 pub(crate) mod global_hash;
 mod graph_visualizer;
 pub(crate) mod package_discovery;
-mod scope;
+pub(crate) mod scope;
 pub(crate) mod summary;
 pub mod task_access;
 pub mod task_id;
@@ -81,8 +81,8 @@ type WuiResult = UIResult<WebUISender>;
 type TuiResult = UIResult<TuiSender>;
 
 impl Run {
-    fn has_persistent_tasks(&self) -> bool {
-        self.engine.has_persistent_tasks
+    fn has_non_interruptible_tasks(&self) -> bool {
+        self.engine.has_non_interruptible_tasks
     }
     fn print_run_prelude(&self) {
         let targets_list = self.opts.run_opts.tasks.join(", ");
@@ -136,17 +136,17 @@ impl Run {
         &self.root_turbo_json
     }
 
-    pub fn create_run_for_persistent_tasks(&self) -> Self {
+    pub fn create_run_for_non_interruptible_tasks(&self) -> Self {
         let mut new_run = self.clone();
-        let new_engine = new_run.engine.create_engine_for_persistent_tasks();
+        let new_engine = new_run.engine.create_engine_for_non_interruptible_tasks();
         new_run.engine = Arc::new(new_engine);
 
         new_run
     }
 
-    pub fn create_run_without_persistent_tasks(&self) -> Self {
+    pub fn create_run_for_interruptible_tasks(&self) -> Self {
         let mut new_run = self.clone();
-        let new_engine = new_run.engine.create_engine_without_persistent_tasks();
+        let new_engine = new_run.engine.create_engine_for_interruptible_tasks();
         new_run.engine = Arc::new(new_engine);
 
         new_run
@@ -192,6 +192,10 @@ impl Run {
 
     pub fn pkg_dep_graph(&self) -> &PackageGraph {
         &self.pkg_dep_graph
+    }
+
+    pub fn engine(&self) -> &Engine {
+        &self.engine
     }
 
     pub fn filtered_pkgs(&self) -> &HashSet<PackageName> {
