@@ -1,3 +1,4 @@
+mod command;
 mod error;
 mod exec;
 mod output;
@@ -94,6 +95,8 @@ pub enum Error {
     RunSummary(#[from] summary::Error),
     #[error("internal errors encountered: {0}")]
     InternalErrors(String),
+    #[error("unable to find package manager binary: {0}")]
+    Which(#[from] which::Error),
 }
 
 impl<'a> Visitor<'a> {
@@ -177,7 +180,7 @@ impl<'a> Visitor<'a> {
         let errors = Arc::new(Mutex::new(Vec::new()));
         let span = Span::current();
 
-        let factory = ExecContextFactory::new(self, errors.clone(), self.manager.clone(), &engine);
+        let factory = ExecContextFactory::new(self, errors.clone(), self.manager.clone(), &engine)?;
 
         while let Some(message) = node_stream.recv().await {
             let span = tracing::debug_span!(parent: &span, "queue_task", task = %message.info);
@@ -263,19 +266,10 @@ impl<'a> Visitor<'a> {
                     }));
                 }
                 false => {
-                    // TODO(gsoltis): if/when we fix https://github.com/vercel/turborepo/issues/937
-                    // the following block should never get hit. In the meantime, keep it after
-                    // hashing so that downstream tasks can count on the hash existing
-                    //
-                    // bail if the script doesn't exist or is empty
-                    if command.map_or(true, |s| s.is_empty()) {
-                        continue;
-                    }
-
                     let workspace_directory = self.repo_root.resolve(workspace_info.package_path());
 
                     let takes_input = task_definition.interactive || task_definition.persistent;
-                    let mut exec_context = factory.exec_context(
+                    let Some(mut exec_context) = factory.exec_context(
                         info.clone(),
                         task_hash,
                         task_cache,
@@ -283,7 +277,15 @@ impl<'a> Visitor<'a> {
                         execution_env,
                         takes_input,
                         self.task_access.clone(),
-                    );
+                    )?
+                    else {
+                        // TODO(gsoltis): if/when we fix https://github.com/vercel/turborepo/issues/937
+                        // the following block should never get hit. In the meantime, keep it after
+                        // hashing so that downstream tasks can count on the hash existing
+                        //
+                        // bail if the script doesn't exist or is empty
+                        continue;
+                    };
 
                     let vendor_behavior =
                         Vendor::infer().and_then(|vendor| vendor.behavior.as_ref());
