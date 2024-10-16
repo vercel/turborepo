@@ -31,3 +31,14 @@ Run the query
 
 Make sure we can't pass variables without a query
   $ ${TURBO} query --variables vars.json
+   ERROR  the following required arguments were not provided:
+    <QUERY>
+  
+  Usage: turbo query --variables <VARIABLES> <QUERY>
+  
+  For more information, try '--help'.
+  
+  [1]
+
+
+
