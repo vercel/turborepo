@@ -61,13 +61,14 @@ impl<'a> ExecContextFactory<'a> {
         task_hash: String,
         task_cache: TaskCache,
         workspace_directory: AbsoluteSystemPathBuf,
-        execution_env: EnvironmentVariableMap,
+        mut execution_env: EnvironmentVariableMap,
         takes_input: bool,
         task_access: TaskAccess,
     ) -> ExecContext {
         let task_id_for_display = self.visitor.display_task_id(&task_id);
         let pass_through_args = self.visitor.run_opts.args_for_task(&task_id);
         let task_id_string = &task_id.to_string();
+        self.populate_env(&mut execution_env, &task_hash, &task_access);
         ExecContext {
             engine: self.engine.clone(),
             ui_mode: self.visitor.run_opts.ui_mode,
@@ -105,6 +106,30 @@ impl<'a> ExecContextFactory<'a> {
             task_id,
             task_cache,
             hash_tracker: self.visitor.task_hasher.task_hash_tracker(),
+        }
+    }
+
+    // Add any env vars that `turbo` provides to the task environment
+    fn populate_env(
+        &self,
+        execution_env: &mut EnvironmentVariableMap,
+        task_hash: &str,
+        task_access: &TaskAccess,
+    ) {
+        // Always last to make sure it overwrites any user configured env var.
+        execution_env.insert("TURBO_HASH".to_owned(), task_hash.to_owned());
+
+        // Allow downstream tools to detect if the task is being ran with TUI
+        if self.visitor.run_opts.ui_mode.use_tui() {
+            execution_env.insert("TURBO_IS_TUI".to_owned(), "true".to_owned());
+        }
+
+        // enable task access tracing
+        // set the trace file env var - frameworks that support this can use it to
+        // write out a trace file that we will use to automatically cache the task
+        if task_access.is_enabled() {
+            let (task_access_trace_key, trace_file) = task_access.get_env_var(task_hash);
+            execution_env.insert(task_access_trace_key, trace_file.to_string());
         }
     }
 }
@@ -286,22 +311,6 @@ impl ExecContext {
         // We clear the env before populating it with variables we expect
         cmd.env_clear();
         cmd.envs(self.execution_env.iter());
-        // Always last to make sure it overwrites any user configured env var.
-        cmd.env("TURBO_HASH", &self.task_hash);
-
-        // Allow downstream tools to detect if the task is being ran with TUI
-        if self.ui_mode.use_tui() {
-            cmd.env("TURBO_IS_TUI", "true");
-        }
-
-        // enable task access tracing
-
-        // set the trace file env var - frameworks that support this can use it to
-        // write out a trace file that we will use to automatically cache the task
-        if self.task_access.is_enabled() {
-            let (task_access_trace_key, trace_file) = self.task_access.get_env_var(&self.task_hash);
-            cmd.env(task_access_trace_key, trace_file.to_string());
-        }
 
         cmd.open_stdin();
 
