@@ -65,7 +65,7 @@ pub async fn run(
     let handler = SignalHandler::new(signal);
 
     let variables: Variables = variables_path
-        .map(|path| AbsoluteSystemPathBuf::from_cwd(path))
+        .map(AbsoluteSystemPathBuf::from_cwd)
         .transpose()?
         .map(|path| path.read_to_string())
         .transpose()?
