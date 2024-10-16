@@ -266,14 +266,11 @@ impl<'a> Visitor<'a> {
                     }));
                 }
                 false => {
-                    let workspace_directory = self.repo_root.resolve(workspace_info.package_path());
-
                     let takes_input = task_definition.interactive || task_definition.persistent;
                     let Some(mut exec_context) = factory.exec_context(
                         info.clone(),
                         task_hash,
                         task_cache,
-                        workspace_directory,
                         execution_env,
                         takes_input,
                         self.task_access.clone(),
