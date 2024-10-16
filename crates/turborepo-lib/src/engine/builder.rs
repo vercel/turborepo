@@ -101,6 +101,7 @@ pub struct EngineBuilder<'a> {
     root_enabled_tasks: HashSet<TaskName<'static>>,
     tasks_only: bool,
     add_all_tasks: bool,
+    should_validate_engine: bool,
 }
 
 impl<'a> EngineBuilder<'a> {
@@ -120,6 +121,7 @@ impl<'a> EngineBuilder<'a> {
             root_enabled_tasks: HashSet::new(),
             tasks_only: false,
             add_all_tasks: false,
+            should_validate_engine: true,
         }
     }
 
@@ -154,6 +156,11 @@ impl<'a> EngineBuilder<'a> {
     /// specified
     pub fn add_all_tasks(mut self) -> Self {
         self.add_all_tasks = true;
+        self
+    }
+
+    pub fn do_not_validate_engine(mut self) -> Self {
+        self.should_validate_engine = false;
         self
     }
 
@@ -502,7 +509,7 @@ impl<'a> EngineBuilder<'a> {
             }
         }
 
-        if task_definitions.is_empty() {
+        if task_definitions.is_empty() && self.should_validate_engine {
             let (span, text) = task_id.span_and_text("turbo.json");
             return Err(Error::MissingPackageTask {
                 span,
