@@ -12,9 +12,9 @@ use turborepo_env::{platform::PlatformEnv, EnvironmentVariableMap};
 use turborepo_repository::package_manager::PackageManager;
 use turborepo_telemetry::events::{task::PackageTaskEventBuilder, TrackedErrors};
 use turborepo_ui::{ColorConfig, OutputWriter};
-use which::which;
 
 use super::{
+    command::CommandFactory,
     error::{TaskError, TaskErrorCause, TaskWarning},
     output::TaskCacheOutput,
     TaskOutput, Visitor,
@@ -37,6 +37,7 @@ pub struct ExecContextFactory<'a> {
     errors: Arc<Mutex<Vec<TaskError>>>,
     manager: ProcessManager,
     engine: &'a Arc<Engine>,
+    command_factory: CommandFactory<'a>,
 }
 
 impl<'a> ExecContextFactory<'a> {
@@ -45,13 +46,16 @@ impl<'a> ExecContextFactory<'a> {
         errors: Arc<Mutex<Vec<TaskError>>>,
         manager: ProcessManager,
         engine: &'a Arc<Engine>,
-    ) -> Self {
-        Self {
+    ) -> Result<Self, super::Error> {
+        let command_factory =
+            CommandFactory::new(visitor.repo_root, &visitor.package_graph, visitor.run_opts);
+        Ok(Self {
             visitor,
             errors,
             manager,
             engine,
-        }
+            command_factory,
+        })
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -64,12 +68,18 @@ impl<'a> ExecContextFactory<'a> {
         mut execution_env: EnvironmentVariableMap,
         takes_input: bool,
         task_access: TaskAccess,
-    ) -> ExecContext {
+    ) -> Result<Option<ExecContext>, super::Error> {
         let task_id_for_display = self.visitor.display_task_id(&task_id);
         let pass_through_args = self.visitor.run_opts.args_for_task(&task_id);
         let task_id_string = &task_id.to_string();
         self.populate_env(&mut execution_env, &task_hash, &task_access);
-        ExecContext {
+        let cmd = self
+            .command_factory
+            .command(&task_id, execution_env.clone())?;
+        if cmd.is_none() {
+            return Ok(None);
+        }
+        Ok(Some(ExecContext {
             engine: self.engine.clone(),
             ui_mode: self.visitor.run_opts.ui_mode,
             color_config: self.visitor.color_config,
@@ -93,8 +103,9 @@ impl<'a> ExecContextFactory<'a> {
             warnings: self.visitor.warnings.clone(),
             takes_input,
             task_access,
+            cmd,
             platform_env: PlatformEnv::new(),
-        }
+        }))
     }
 
     pub fn dry_run_exec_context(
@@ -155,6 +166,7 @@ pub struct ExecContext {
     warnings: Arc<Mutex<Vec<TaskWarning>>>,
     takes_input: bool,
     task_access: TaskAccess,
+    cmd: Option<Command>,
     platform_env: PlatformEnv,
 }
 
@@ -293,30 +305,6 @@ impl ExecContext {
         }
     }
 
-    fn command(&self) -> Result<Command, InternalError> {
-        let package_manager_binary = which(self.package_manager.command())?;
-        let mut cmd = Command::new(package_manager_binary);
-        let mut args = vec!["run".to_string(), self.task_id.task().to_string()];
-        if let Some(pass_through_args) = &self.pass_through_args {
-            args.extend(
-                self.package_manager
-                    .arg_separator(pass_through_args.as_slice())
-                    .map(|s| s.to_string()),
-            );
-            args.extend(pass_through_args.iter().cloned());
-        }
-        cmd.args(args);
-        cmd.current_dir(self.workspace_directory.clone());
-
-        // We clear the env before populating it with variables we expect
-        cmd.env_clear();
-        cmd.envs(self.execution_env.iter());
-
-        cmd.open_stdin();
-
-        Ok(cmd)
-    }
-
     async fn execute_inner(
         &mut self,
         output_client: &TaskOutput<impl Write>,
@@ -365,7 +353,7 @@ impl ExecContext {
             }
         }
 
-        let cmd = self.command()?;
+        let cmd = self.cmd.take().expect("should be present");
 
         let mut process = match self.manager.spawn(cmd, Duration::from_millis(500)) {
             Some(Ok(child)) => child,
