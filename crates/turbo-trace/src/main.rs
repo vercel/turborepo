@@ -30,7 +30,7 @@ fn main() -> Result<(), PathError> {
         .map(|f| AbsoluteSystemPathBuf::from_unknown(&abs_cwd, f))
         .collect();
 
-    let tracer = Tracer::new(abs_cwd, files, args.ts_config)?;
+    let tracer = Tracer::new(abs_cwd, files, args.ts_config);
 
     let result = tracer.trace();
 
