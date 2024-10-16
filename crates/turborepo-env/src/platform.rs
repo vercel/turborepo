@@ -66,8 +66,8 @@ impl PlatformEnv {
                 ceprintln!(
                     color_config,
                     BOLD,
-                    "The following environment variables are set on your Vercel project, but \
-                     missing from \"turbo.json\". {}",
+                    "Warning - the following environment variables are set on your Vercel \
+                     project, but missing from \"turbo.json\". {}",
                     strict_message
                 );
             }
@@ -75,7 +75,8 @@ impl PlatformEnv {
                 ceprintln!(
                     color_config,
                     BOLD,
-                    "The following environment variables are missing from \"turbo.json\". {}",
+                    "Warning - the following environment variables are missing from \
+                     \"turbo.json\". {}",
                     strict_message
                 );
             }
@@ -94,11 +95,21 @@ impl PlatformEnv {
         task_id_for_display: &str,
         color_config: ColorConfig,
     ) {
-        ceprintln!(color_config, YELLOW, "{}", task_id_for_display);
+        let ci = Vendor::get_constant().unwrap_or("unknown");
+        let log_prefix = match ci {
+            "VERCEL" => "[warn]",
+            _ => "",
+        };
+        ceprintln!(
+            color_config,
+            YELLOW,
+            "{} {}",
+            log_prefix,
+            task_id_for_display
+        );
         for key in missing {
-            ceprint!(color_config, GREY, "  - ");
-            ceprint!(color_config, GREY, "{}\n", key);
+            ceprint!(color_config, GREY, "{}   - ", log_prefix);
+            ceprint!(color_config, GREY, "{} \n", key);
         }
-        eprintln!();
     }
 }
