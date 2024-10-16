@@ -309,7 +309,7 @@ jobs:
           if [ -z "${RUSTC_WRAPPER}" ]; then
             unset RUSTC_WRAPPER
           fi          
-          cargo nextest run --workspace
+          cargo test --workspace
         shell: bash
         env:
           SCCACHE_BUCKET: turborepo-sccache
