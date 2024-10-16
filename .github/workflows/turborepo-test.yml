@@ -229,7 +229,7 @@ jobs:
 
       - name: Run cargo clippy
         run: |
-          cargo groups clippy turborepo-libraries --features rustls-tls -- --deny clippy::all
+          cargo clippy --workspace --features rustls-tls -- --deny clippy::all
 
       - name: Run ast-grep lints
         run: |
@@ -260,7 +260,7 @@ jobs:
 
       - name: Run cargo check
         run: |
-          cargo groups check turborepo-libraries
+          cargo check --workspace
 
   rust_test:
     needs: [rust_check]
@@ -309,7 +309,7 @@ jobs:
           if [ -z "${RUSTC_WRAPPER}" ]; then
             unset RUSTC_WRAPPER
           fi          
-          cargo groups test turborepo-libraries
+          cargo nextest run --workspace
         shell: bash
         env:
           SCCACHE_BUCKET: turborepo-sccache
