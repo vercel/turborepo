@@ -7,7 +7,6 @@ use std::{
 use console::StyledObject;
 use tokio::sync::oneshot;
 use tracing::{error, Instrument};
-use turbopath::AbsoluteSystemPathBuf;
 use turborepo_env::{platform::PlatformEnv, EnvironmentVariableMap};
 use turborepo_repository::package_manager::PackageManager;
 use turborepo_telemetry::events::{task::PackageTaskEventBuilder, TrackedErrors};
@@ -64,13 +63,11 @@ impl<'a> ExecContextFactory<'a> {
         task_id: TaskId<'static>,
         task_hash: String,
         task_cache: TaskCache,
-        workspace_directory: AbsoluteSystemPathBuf,
         mut execution_env: EnvironmentVariableMap,
         takes_input: bool,
         task_access: TaskAccess,
     ) -> Result<Option<ExecContext>, super::Error> {
         let task_id_for_display = self.visitor.display_task_id(&task_id);
-        let pass_through_args = self.visitor.run_opts.args_for_task(&task_id);
         let task_id_string = &task_id.to_string();
         self.populate_env(&mut execution_env, &task_hash, &task_access);
         let cmd = self
@@ -93,12 +90,10 @@ impl<'a> ExecContextFactory<'a> {
             task_cache,
             hash_tracker: self.visitor.task_hasher.task_hash_tracker(),
             package_manager: *self.visitor.package_graph.package_manager(),
-            workspace_directory,
             manager: self.manager.clone(),
             task_hash,
             execution_env,
             continue_on_error: self.visitor.run_opts.continue_on_error,
-            pass_through_args,
             errors: self.errors.clone(),
             warnings: self.visitor.warnings.clone(),
             takes_input,
@@ -156,12 +151,10 @@ pub struct ExecContext {
     task_cache: TaskCache,
     hash_tracker: TaskHashTracker,
     package_manager: PackageManager,
-    workspace_directory: AbsoluteSystemPathBuf,
     manager: ProcessManager,
     task_hash: String,
     execution_env: EnvironmentVariableMap,
     continue_on_error: bool,
-    pass_through_args: Option<Vec<String>>,
     errors: Arc<Mutex<Vec<TaskError>>>,
     warnings: Arc<Mutex<Vec<TaskWarning>>>,
     takes_input: bool,
