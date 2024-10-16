@@ -34,7 +34,7 @@ Make sure we can't pass variables without a query
    ERROR  the following required arguments were not provided:
     <QUERY>
   
-  Usage: turbo query(.exe)? --variables <VARIABLES> <QUERY> (re)
+  Usage: turbo(.exe)? query --variables <VARIABLES> <QUERY> (re)
   
   For more information, try '--help'.
   
