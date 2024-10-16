@@ -219,7 +219,7 @@ impl Workspace {
                     path: info.package_path().to_owned(),
                 })
                 .collect::<Vec<WorkspacePackage>>(),
-            PackageChanges::Some(packages) => packages.into_iter().map(|(p, _)| p).collect(),
+            PackageChanges::Some(packages) => packages.into_keys().collect(),
         };
 
         let mut serializable_packages: Vec<Package> = packages
