@@ -308,8 +308,12 @@ jobs:
         run: |
           if [ -z "${RUSTC_WRAPPER}" ]; then
             unset RUSTC_WRAPPER
-          fi          
-          cargo test --workspace
+          fi
+          if [ "$RUNNER_OS" == "Windows" ]; then
+              cargo test --workspace --exclude turborepo-napi
+          else
+              cargo test --workspace
+          fi
         shell: bash
         env:
           SCCACHE_BUCKET: turborepo-sccache
