@@ -170,15 +170,32 @@ pub struct RunOpts {
     pub ui_mode: UIMode,
 }
 
+/// Projection of `RunOpts` that only includes information necessary to compute
+/// pass through args.
+#[derive(Debug)]
+pub struct TaskArgs<'a> {
+    pass_through_args: &'a [String],
+    tasks: &'a [String],
+}
+
 impl RunOpts {
-    pub fn args_for_task(&self, task_id: &TaskId) -> Option<Vec<String>> {
+    pub fn task_args(&self) -> TaskArgs {
+        TaskArgs {
+            pass_through_args: &self.pass_through_args,
+            tasks: &self.tasks,
+        }
+    }
+}
+
+impl<'a> TaskArgs<'a> {
+    pub fn args_for_task(&self, task_id: &TaskId) -> Option<&'a [String]> {
         if !self.pass_through_args.is_empty()
             && self
                 .tasks
                 .iter()
                 .any(|task| task.as_str() == task_id.task())
         {
-            Some(self.pass_through_args.clone())
+            Some(self.pass_through_args)
         } else {
             None
         }

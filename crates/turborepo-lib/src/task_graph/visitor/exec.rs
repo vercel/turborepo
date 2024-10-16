@@ -46,8 +46,11 @@ impl<'a> ExecContextFactory<'a> {
         manager: ProcessManager,
         engine: &'a Arc<Engine>,
     ) -> Result<Self, super::Error> {
-        let command_factory =
-            CommandFactory::new(visitor.repo_root, &visitor.package_graph, visitor.run_opts);
+        let command_factory = CommandFactory::new(
+            visitor.repo_root,
+            &visitor.package_graph,
+            visitor.run_opts.task_args(),
+        );
         Ok(Self {
             visitor,
             errors,
