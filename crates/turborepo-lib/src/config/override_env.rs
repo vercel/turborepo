@@ -20,7 +20,7 @@ Hi! If you're new here:
 /// these correspond directly to the environment variables that this module
 /// needs to do it's work
 #[allow(non_snake_case)]
-#[derive(Default)]
+#[derive(Default, Debug, PartialEq)]
 struct Input {
     TURBO_TEAM: Option<String>,
     TURBO_TEAMID: Option<String>,
@@ -467,6 +467,9 @@ mod test {
             if let Some(value) = &case.input.VERCEL_ARTIFACTS_TOKEN {
                 env.insert("vercel_artifacts_token".into(), value.into());
             }
+
+            let actual_input = Input::from(&env);
+            assert_eq!(case.input, actual_input);
 
             let config = OverrideEnvVars::new(&env).unwrap();
             let reason = case.reason;
