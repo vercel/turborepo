@@ -189,7 +189,7 @@ impl<'a> OverrideEnvVars<'a> {
 impl<'a> ResolvedConfigurationOptions for OverrideEnvVars<'a> {
     fn get_configuration_options(
         &self,
-        _existing_config: Option<&ConfigurationOptions>,
+        _existing_config: &ConfigurationOptions,
     ) -> Result<ConfigurationOptions, Error> {
         let output = ConfigurationOptions {
             team_id: self.output.team_id.clone(),

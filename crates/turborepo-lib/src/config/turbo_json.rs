@@ -17,11 +17,9 @@ impl<'a> TurboJsonReader<'a> {
 impl<'a> ResolvedConfigurationOptions for TurboJsonReader<'a> {
     fn get_configuration_options(
         &self,
-        existing_config: Option<&ConfigurationOptions>,
+        existing_config: &ConfigurationOptions,
     ) -> Result<ConfigurationOptions, Error> {
-        let turbo_json_path = existing_config
-            .unwrap_or(&ConfigurationOptions::default())
-            .root_turbo_json_path(self.repo_root);
+        let turbo_json_path = existing_config.root_turbo_json_path(self.repo_root);
         let turbo_json = RawTurboJson::read(self.repo_root, &turbo_json_path).or_else(|e| {
             if let Error::Io(e) = &e {
                 if matches!(e.kind(), std::io::ErrorKind::NotFound) {
@@ -91,9 +89,7 @@ mod test {
             .unwrap();
 
         let reader = TurboJsonReader::new(repo_root);
-        let config = reader
-            .get_configuration_options(Some(&existing_config))
-            .unwrap();
+        let config = reader.get_configuration_options(&existing_config).unwrap();
         // Make sure we read the default turbo.json
         assert_eq!(config.daemon(), Some(false));
     }
@@ -123,9 +119,7 @@ mod test {
             .unwrap();
 
         let reader = TurboJsonReader::new(repo_root);
-        let config = reader
-            .get_configuration_options(Some(&existing_config))
-            .unwrap();
+        let config = reader.get_configuration_options(&existing_config).unwrap();
         // Make sure we read the correct turbo.json
         assert_eq!(config.daemon(), Some(false));
     }

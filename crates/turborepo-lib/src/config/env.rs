@@ -63,7 +63,7 @@ impl EnvVars {
 impl ResolvedConfigurationOptions for EnvVars {
     fn get_configuration_options(
         &self,
-        _existing_config: Option<&ConfigurationOptions>,
+        _existing_config: &ConfigurationOptions,
     ) -> Result<ConfigurationOptions, Error> {
         // Process signature
         let signature = self
@@ -277,7 +277,7 @@ mod test {
 
         let config = EnvVars::new(&env)
             .unwrap()
-            .get_configuration_options(None)
+            .get_configuration_options(&ConfigurationOptions::default())
             .unwrap();
         assert!(config.preflight());
         assert!(config.force());
@@ -327,7 +327,7 @@ mod test {
 
         let config = EnvVars::new(&env)
             .unwrap()
-            .get_configuration_options(None)
+            .get_configuration_options(&ConfigurationOptions::default())
             .unwrap();
         assert_eq!(config.api_url(), DEFAULT_API_URL);
         assert_eq!(config.login_url(), DEFAULT_LOGIN_URL);

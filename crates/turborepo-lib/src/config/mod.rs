@@ -407,7 +407,7 @@ fn non_empty_str(s: Option<&str>) -> Option<&str> {
 trait ResolvedConfigurationOptions {
     fn get_configuration_options(
         &self,
-        existing_config: Option<&ConfigurationOptions>,
+        existing_config: &ConfigurationOptions,
     ) -> Result<ConfigurationOptions, Error>;
 }
 
@@ -415,7 +415,7 @@ trait ResolvedConfigurationOptions {
 impl<'a> ResolvedConfigurationOptions for &'a ConfigurationOptions {
     fn get_configuration_options(
         &self,
-        _existing_config: Option<&ConfigurationOptions>,
+        _existing_config: &ConfigurationOptions,
     ) -> Result<ConfigurationOptions, Error> {
         Ok((*self).clone())
     }
@@ -484,7 +484,7 @@ impl TurborepoConfigBuilder {
         let config = sources.into_iter().try_fold(
             ConfigurationOptions::default(),
             |mut acc, current_source| {
-                let current_source_config = current_source.get_configuration_options(Some(&acc))?;
+                let current_source_config = current_source.get_configuration_options(&acc)?;
                 acc.merge(current_source_config);
                 Ok(acc)
             },
