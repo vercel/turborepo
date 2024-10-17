@@ -173,10 +173,7 @@ impl<'a> OverrideEnvVars<'a> {
             .environment
             .get(OsStr::new("ci"))
             .or_else(|| self.environment.get(OsStr::new("no_color")))?;
-        match truth_env_var(value.to_str()?)? {
-            true => Some(UIMode::Stream),
-            false => None,
-        }
+        truth_env_var(value.to_str()?)?.then_some(UIMode::Stream)
     }
 }
 
