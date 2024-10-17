@@ -64,13 +64,13 @@ impl<'a> From<&'a HashMap<OsString, OsString>> for Input {
 
 // this is an internal structure (that's a partial of ConfigurationOptions) that
 // we use to store
-pub struct Output {
+struct Output {
     /// maps to ConfigurationOptions.team_id
-    pub team_id: Option<String>,
+    team_id: Option<String>,
     // maps to ConfigurationOptions.team_slug
-    pub team_slug: Option<String>,
+    team_slug: Option<String>,
     // maps to ConfigurationOptions.token
-    pub token: Option<String>,
+    token: Option<String>,
 }
 
 impl Output {
