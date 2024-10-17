@@ -253,18 +253,18 @@ mod test {
             self
         }
 
-        fn team_id(mut self, value: String) -> Self {
-            self.output.team_id = Some(value);
+        fn team_id(mut self, value: &str) -> Self {
+            self.output.team_id = Some(value.into());
             self
         }
 
-        fn team_slug(mut self, value: String) -> Self {
-            self.output.team_slug = Some(value);
+        fn team_slug(mut self, value: &str) -> Self {
+            self.output.team_slug = Some(value.into());
             self
         }
 
-        fn token(mut self, value: String) -> Self {
-            self.output.token = Some(value);
+        fn token(mut self, value: &str) -> Self {
+            self.output.token = Some(value.into());
             self
         }
     }
@@ -288,9 +288,9 @@ mod test {
                 .TURBO_TEAM()
                 .TURBO_TEAMID()
                 .TURBO_TOKEN()
-                .team_id(TURBO_TEAMID.into())
-                .team_slug(TURBO_TEAM.into())
-                .token(TURBO_TOKEN.into()),
+                .team_id(TURBO_TEAMID)
+                .team_slug(TURBO_TEAM)
+                .token(TURBO_TOKEN),
             TestCase::new()
                 .reason("if we have a 3rd party trifecta, that wins, even against a Vercel Pair")
                 .TURBO_TEAM()
@@ -298,27 +298,27 @@ mod test {
                 .TURBO_TOKEN()
                 .VERCEL_ARTIFACTS_OWNER()
                 .VERCEL_ARTIFACTS_TOKEN()
-                .team_id(TURBO_TEAMID.into())
-                .team_slug(TURBO_TEAM.into())
-                .token(TURBO_TOKEN.into()),
+                .team_id(TURBO_TEAMID)
+                .team_slug(TURBO_TEAM)
+                .token(TURBO_TOKEN),
             TestCase::new()
                 .reason("a 3rd party trifecta wins against a partial Vercel (just artifacts token)")
                 .TURBO_TEAM()
                 .TURBO_TEAMID()
                 .TURBO_TOKEN()
                 .VERCEL_ARTIFACTS_TOKEN()
-                .team_id(TURBO_TEAMID.into())
-                .team_slug(TURBO_TEAM.into())
-                .token(TURBO_TOKEN.into()),
+                .team_id(TURBO_TEAMID)
+                .team_slug(TURBO_TEAM)
+                .token(TURBO_TOKEN),
             TestCase::new()
                 .reason("a 3rd party trifecta wins against a partial Vercel (just artifacts owner)")
                 .TURBO_TEAM()
                 .TURBO_TEAMID()
                 .TURBO_TOKEN()
                 .VERCEL_ARTIFACTS_OWNER()
-                .team_id(TURBO_TEAMID.into())
-                .team_slug(TURBO_TEAM.into())
-                .token(TURBO_TOKEN.into()),
+                .team_id(TURBO_TEAMID)
+                .team_slug(TURBO_TEAM)
+                .token(TURBO_TOKEN),
             //
             // When 3rd Party Wins with team_slug
             // ------------------------------
@@ -326,8 +326,8 @@ mod test {
                 .reason("golden path for 3rd party, not deployed on Vercel")
                 .TURBO_TEAM()
                 .TURBO_TOKEN()
-                .team_slug(TURBO_TEAM.into())
-                .token(TURBO_TOKEN.into()),
+                .team_slug(TURBO_TEAM)
+                .token(TURBO_TOKEN),
             TestCase::new()
                 .reason(
                     "a TURBO_TEAM+TURBO_TOKEN pair wins against an incomplete Vercel (just \
@@ -336,16 +336,16 @@ mod test {
                 .TURBO_TEAM()
                 .TURBO_TOKEN()
                 .VERCEL_ARTIFACTS_TOKEN() // disregarded
-                .team_slug(TURBO_TEAM.into())
-                .token(TURBO_TOKEN.into()),
+                .team_slug(TURBO_TEAM)
+                .token(TURBO_TOKEN),
             TestCase::new()
                 .reason("golden path for 3rd party, deployed on Vercel")
                 .TURBO_TEAM()
                 .TURBO_TOKEN()
                 .VERCEL_ARTIFACTS_OWNER() // normally this would map to team_id, but not with a complete 3rd party pair
                 .VERCEL_ARTIFACTS_TOKEN()
-                .team_slug(TURBO_TEAM.into())
-                .token(TURBO_TOKEN.into()),
+                .team_slug(TURBO_TEAM)
+                .token(TURBO_TOKEN),
             //
             // When 3rd Party Wins with team_id
             // ------------------------------
@@ -353,16 +353,16 @@ mod test {
                 .reason("if they pass a TURBO_TEAMID and a TURBO_TOKEN, we use them")
                 .TURBO_TEAMID()
                 .TURBO_TOKEN()
-                .team_id(TURBO_TEAMID.into())
-                .token(TURBO_TOKEN.into()),
+                .team_id(TURBO_TEAMID)
+                .token(TURBO_TOKEN),
             TestCase::new()
                 .reason("a TURBO_TEAMID+TURBO_TOKEN pair will also win against a Vercel pair")
                 .TURBO_TEAMID()
                 .TURBO_TOKEN()
                 .VERCEL_ARTIFACTS_OWNER()
                 .VERCEL_ARTIFACTS_TOKEN()
-                .team_id(TURBO_TEAMID.into())
-                .token(TURBO_TOKEN.into()),
+                .team_id(TURBO_TEAMID)
+                .token(TURBO_TOKEN),
             TestCase::new()
                 .reason(
                     "a TURBO_TEAMID+TURBO_TOKEN pair wins against an incomplete Vercel (just \
@@ -371,8 +371,8 @@ mod test {
                 .TURBO_TEAMID()
                 .TURBO_TOKEN()
                 .VERCEL_ARTIFACTS_TOKEN()
-                .team_id(TURBO_TEAMID.into())
-                .token(TURBO_TOKEN.into()),
+                .team_id(TURBO_TEAMID)
+                .token(TURBO_TOKEN),
             //
             // When Vercel Wins
             // ------------------------------
@@ -380,55 +380,55 @@ mod test {
                 .reason("golden path on Vercel zero config")
                 .VERCEL_ARTIFACTS_OWNER()
                 .VERCEL_ARTIFACTS_TOKEN()
-                .team_id(VERCEL_ARTIFACTS_OWNER.into())
-                .token(VERCEL_ARTIFACTS_TOKEN.into()),
+                .team_id(VERCEL_ARTIFACTS_OWNER)
+                .token(VERCEL_ARTIFACTS_TOKEN),
             TestCase::new()
                 .reason("Vercel wins: disregard just TURBO_TOKEN")
                 .TURBO_TOKEN()
                 .VERCEL_ARTIFACTS_OWNER()
                 .VERCEL_ARTIFACTS_TOKEN()
-                .team_id(VERCEL_ARTIFACTS_OWNER.into())
-                .token(VERCEL_ARTIFACTS_TOKEN.into()),
+                .team_id(VERCEL_ARTIFACTS_OWNER)
+                .token(VERCEL_ARTIFACTS_TOKEN),
             TestCase::new()
                 .reason("Vercel wins: disregard just TURBO_TEAM")
                 .TURBO_TEAM()
                 .VERCEL_ARTIFACTS_OWNER()
                 .VERCEL_ARTIFACTS_TOKEN()
-                .team_id(VERCEL_ARTIFACTS_OWNER.into())
-                .token(VERCEL_ARTIFACTS_TOKEN.into()),
+                .team_id(VERCEL_ARTIFACTS_OWNER)
+                .token(VERCEL_ARTIFACTS_TOKEN),
             TestCase::new()
                 .reason("Vercel wins: disregard just TURBO_TEAMID")
                 .TURBO_TEAMID()
                 .VERCEL_ARTIFACTS_OWNER()
                 .VERCEL_ARTIFACTS_TOKEN()
-                .team_id(VERCEL_ARTIFACTS_OWNER.into())
-                .token(VERCEL_ARTIFACTS_TOKEN.into()),
+                .team_id(VERCEL_ARTIFACTS_OWNER)
+                .token(VERCEL_ARTIFACTS_TOKEN),
             TestCase::new()
                 .reason("Vercel wins if TURBO_TOKEN is missing")
                 .TURBO_TEAM()
                 .TURBO_TEAMID()
                 .VERCEL_ARTIFACTS_OWNER()
                 .VERCEL_ARTIFACTS_TOKEN()
-                .team_id(VERCEL_ARTIFACTS_OWNER.into())
-                .token(VERCEL_ARTIFACTS_TOKEN.into()),
+                .team_id(VERCEL_ARTIFACTS_OWNER)
+                .token(VERCEL_ARTIFACTS_TOKEN),
             //
             // Just get a team_id
             // ------------------------------
             TestCase::new()
                 .reason("just VERCEL_ARTIFACTS_OWNER")
                 .VERCEL_ARTIFACTS_OWNER()
-                .team_id(VERCEL_ARTIFACTS_OWNER.into()),
+                .team_id(VERCEL_ARTIFACTS_OWNER),
             TestCase::new()
                 .reason("just TURBO_TEAMID")
                 .TURBO_TEAMID()
-                .team_id(TURBO_TEAMID.into()),
+                .team_id(TURBO_TEAMID),
             //
             // Just get a team_slug
             // ------------------------------
             TestCase::new()
                 .reason("just TURBO_TEAM")
                 .TURBO_TEAM()
-                .team_slug(TURBO_TEAM.into()),
+                .team_slug(TURBO_TEAM),
             //
             // just team_slug and team_id
             // ------------------------------
@@ -436,8 +436,8 @@ mod test {
                 .reason("if we just have TURBO_TEAM+TURBO_TEAMID, that's ok")
                 .TURBO_TEAM()
                 .TURBO_TEAMID()
-                .team_slug(TURBO_TEAM.into())
-                .team_id(TURBO_TEAMID.into()),
+                .team_slug(TURBO_TEAM)
+                .team_id(TURBO_TEAMID),
             //
             // just set team_id and team_slug
             // ------------------------------
@@ -445,8 +445,8 @@ mod test {
                 .reason("if we just have a TURBO_TEAM and TURBO_TEAMID we can use them both")
                 .TURBO_TEAM()
                 .TURBO_TEAMID()
-                .team_id(TURBO_TEAMID.into())
-                .team_slug(TURBO_TEAM.into()),
+                .team_id(TURBO_TEAMID)
+                .team_slug(TURBO_TEAM),
         ];
 
         for case in cases {
