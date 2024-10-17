@@ -1,6 +1,7 @@
 use std::{fs, sync::Arc};
 
-use async_graphql::{EmptyMutation, EmptySubscription, Schema, ServerError};
+use async_graphql::{EmptyMutation, EmptySubscription, Request, Schema, ServerError, Variables};
+use camino::Utf8Path;
 use miette::{Diagnostic, Report, SourceSpan};
 use thiserror::Error;
 use turbopath::AbsoluteSystemPathBuf;
@@ -58,6 +59,7 @@ pub async fn run(
     mut base: CommandBase,
     telemetry: CommandEventBuilder,
     query: Option<String>,
+    variables_path: Option<&Utf8Path>,
 ) -> Result<i32, Error> {
     let signal = get_signal()?;
     let handler = SignalHandler::new(signal);
@@ -92,7 +94,18 @@ pub async fn run(
             EmptySubscription,
         );
 
-        let result = schema.execute(&query).await;
+        let variables: Variables = variables_path
+            .map(AbsoluteSystemPathBuf::from_cwd)
+            .transpose()?
+            .map(|path| path.read_to_string())
+            .transpose()?
+            .map(|content| serde_json::from_str(&content))
+            .transpose()?
+            .unwrap_or_default();
+
+        let request = Request::new(&query).variables(variables);
+
+        let result = schema.execute(request).await;
         if result.errors.is_empty() {
             println!("{}", serde_json::to_string_pretty(&result)?);
         } else {
