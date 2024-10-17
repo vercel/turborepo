@@ -5,12 +5,26 @@ on:
     paths:
       - "docs/**"
       - ".github/actions/validate-docs-links/**"
+      - ".github/workflows/docs.yml"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  validate-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: "Setup Node"
+        uses: ./.github/actions/setup-node
+
+      - name: "Build docs"
+        run: |
+          pnpm install --global vercel
+          job_id=$(curl -X POST ${{ secrets.DOCS_DEPLOY_HOOK_URL }} | jq -r '.job.id')
+          vc inspect $job_id --wait --token=${{ secrets.VERCEL_TOKEN }} --scope=vercel
   validate-docs-links:
     runs-on: ubuntu-latest
     steps:
