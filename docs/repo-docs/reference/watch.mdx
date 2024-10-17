@@ -23,9 +23,9 @@ When your script has a built-in watcher (like `next dev`) capable of detecting c
 
 ### Persistent tasks without dependency awareness
 
-Some tools aren't monorepo-friendly, and do not hot-reload modules in dependencies. While you may be tempted to use `turbo watch` with these tasks, they still won't be able to pick up on changes to dependencies.
-
-Instead, you should make the task non-persistent and have `turbo watch` restart the task when changes to dependencies are detected.
+Some tools aren't monorepo-friendly, and do not hot-reload modules in dependencies. In those cases, you should
+mark the task as [`interruptible: true`](/repo/docs/reference/configuration#interruptible) to have `turbo watch`
+restart the task when relevant changes are detected.
 
 ## Limitations
 

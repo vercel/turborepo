@@ -142,7 +142,8 @@ Turborepo runs a background process to pre-calculate some expensive operations. 
 ```
 
 <Callout type="good-to-know">
-  When running in a CI environment the daemon is always disabled regardless of this setting.
+  When running in a CI environment the daemon is always disabled regardless of
+  this setting.
 </Callout>
 
 ### `envMode`
@@ -480,6 +481,16 @@ This task is most useful for scripts that can be manipulated while they are runn
   }
 }
 ```
+
+### `interruptible`
+
+Default: `false`
+
+Label a `persistent` task as `interruptible` to allow it to be restarted by `turbo watch`.
+
+`turbo watch` watches for changes to your packages and automatically restarts tasks
+that are affected. However, if a task is persistent, it will not be restarted by default.
+To enable restarting persistent tasks, set `interruptible` to `true`.
 
 ## Remote caching
 
