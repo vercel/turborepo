@@ -63,7 +63,9 @@ Turborepo automatically adds prefix wildcards to your [`env`](/repo/docs/referen
     <tr>
       <th>Framework</th>
       <th>
-        <span><code>env</code> wildcards</span>
+        <span>
+          <code>env</code> wildcards
+        </span>
       </th>
     </tr>
   </thead>
@@ -146,6 +148,13 @@ const data = fetch(`${process.env.MY_API_URL}/resource/1`);
 You then build your application using a value for `MY_API_URL` that targets your preview environment. When you're ready to ship your application, you build for production and see a cache hit - even though the value of the `MY_API_URL` variable has changed! `MY_API_URL` changed - but Turborepo restored a version of your application from cache that uses the preview environment's `MY_API_URL` rather than production's.
 
 When you're using Loose Mode, `MY_API_URL` is available in the task runtime **even though it isn't accounted for in the task hash**. To make this task more likely to fail and protect you from this misconfiguration, we encourage you to opt for [Strict Mode](#strict-mode).
+
+### Platform Environment Variables
+
+When deploying your application to [Vercel](https://vercel.com/new?ref=turborepo), you likely already have [environment variables](https://vercel.com/docs/projects/environment-variables) configured on your project. Turborepo will automatically check these variables against your `turbo.json` configuration to ensure that you've [accounted for them](/repo/docs/crafting-your-repository/using-environment-variables#adding-environment-variables-to-task-hashes),
+and will warn you about any missing variables.
+
+This functionality can be disabled by setting `TURBO_PLATFORM_ENV_DISABLED=false`
 
 ## Handling `.env` files
 
