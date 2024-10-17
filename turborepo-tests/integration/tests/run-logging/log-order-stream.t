@@ -35,6 +35,7 @@ it just guarantees setting this env var won't crash.
   \xe2\x80\xa2 Running build in 2 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   (my-app|util):build: cache bypass, force executing [0-9a-f]+ (re)
+  (my-app|util):build: cache bypass, force executing [0-9a-f]+ (re)
   .* (re)
   .* (re)
   .* (re)
@@ -44,7 +45,6 @@ it just guarantees setting this env var won't crash.
   .* (re)
   .* (re)
   .* (re)
-  my-app:build: building
   util:build: building
   my-app:build: done
   util:build: completed
@@ -61,6 +61,8 @@ The flag wins over the env var
   \xe2\x80\xa2 Packages in scope: my-app, util (esc)
   \xe2\x80\xa2 Running build in 2 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
+  (my-app|util):build: cache bypass, force executing [0-9a-f]+ (re)
+  (my-app|util):build: cache bypass, force executing [0-9a-f]+ (re)
   .* (re)
   .* (re)
   .* (re)
@@ -70,8 +72,6 @@ The flag wins over the env var
   .* (re)
   .* (re)
   .* (re)
-  (my-app|util):build:  (re)
-  (my-app:build): building (re)
   util:build: building
   my-app:build: done
   util:build: completed
