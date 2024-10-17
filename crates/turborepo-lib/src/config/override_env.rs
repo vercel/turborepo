@@ -20,6 +20,7 @@ Hi! If you're new here:
 /// these correspond directly to the environment variables that this module
 /// needs to do it's work
 #[allow(non_snake_case)]
+#[derive(Default)]
 struct Input {
     TURBO_TEAM: Option<String>,
     TURBO_TEAMID: Option<String>,
@@ -30,13 +31,7 @@ struct Input {
 
 impl Input {
     fn new() -> Self {
-        Self {
-            TURBO_TEAM: None,
-            TURBO_TEAMID: None,
-            TURBO_TOKEN: None,
-            VERCEL_ARTIFACTS_OWNER: None,
-            VERCEL_ARTIFACTS_TOKEN: None,
-        }
+        Self::default()
     }
 }
 
