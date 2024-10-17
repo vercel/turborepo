@@ -67,6 +67,8 @@ pub struct RunBuilder {
     should_print_prelude_override: Option<bool>,
     allow_missing_package_manager: bool,
     allow_no_turbo_json: bool,
+    // In query, we don't want to validate the engine. Defaults to `true`
+    should_validate_engine: bool,
     // If true, we will add all tasks to the graph, even if they are not specified
     add_all_tasks: bool,
 }
@@ -111,6 +113,7 @@ impl RunBuilder {
             allow_missing_package_manager,
             root_turbo_json_path,
             allow_no_turbo_json,
+            should_validate_engine: true,
             add_all_tasks: false,
         })
     }
@@ -127,6 +130,11 @@ impl RunBuilder {
 
     pub fn add_all_tasks(mut self) -> Self {
         self.add_all_tasks = true;
+        self
+    }
+
+    pub fn do_not_validate_engine(mut self) -> Self {
+        self.should_validate_engine = false;
         self
     }
 
@@ -496,6 +504,10 @@ impl RunBuilder {
             builder = builder.add_all_tasks();
         }
 
+        if !self.should_validate_engine {
+            builder = builder.do_not_validate_engine();
+        }
+
         let mut engine = builder.build()?;
 
         // If we have an initial task, we prune out the engine to only
@@ -504,7 +516,7 @@ impl RunBuilder {
             engine = engine.create_engine_for_subgraph(entrypoint_packages);
         }
 
-        if !self.opts.run_opts.parallel {
+        if !self.opts.run_opts.parallel && self.should_validate_engine {
             engine
                 .validate(
                     pkg_dep_graph,

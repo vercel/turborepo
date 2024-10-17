@@ -243,15 +243,18 @@ impl Git {
             // because at this point we know we're in a GITHUB CI environment
             // and we should really know by now what the base ref is
             // so it's better to just error if something went wrong
-            return if self
-                .execute_git_command(&["rev-parse", &github_base_ref], "")
-                .is_ok()
-            {
-                eprintln!("Resolved base ref from GitHub Actions event: {github_base_ref}");
-                Ok(github_base_ref)
-            } else {
-                eprintln!("Failed to resolve base ref from GitHub Actions event");
-                Err(Error::UnableToResolveRef)
+            return match self.execute_git_command(&["rev-parse", &github_base_ref], "") {
+                Ok(_) => {
+                    eprintln!("Resolved base ref from GitHub Actions event: {github_base_ref}");
+                    Ok(github_base_ref)
+                }
+                Err(e) => {
+                    eprintln!(
+                        "Failed to resolve base ref '{github_base_ref}' from GitHub Actions \
+                         event: {e}"
+                    );
+                    Err(Error::UnableToResolveRef)
+                }
             };
         }
 
