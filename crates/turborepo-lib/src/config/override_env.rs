@@ -95,7 +95,8 @@ impl From<Input> for Output {
         else if input.VERCEL_ARTIFACTS_TOKEN.is_some() && input.VERCEL_ARTIFACTS_OWNER.is_some() {
             Output {
                 team_id: input.VERCEL_ARTIFACTS_OWNER,
-                team_slug: None,
+                team_slug: input.TURBO_TEAM, /* this may or may not be Some, but if it is we can
+                                              * pass it along too */
                 token: input.VERCEL_ARTIFACTS_TOKEN,
             }
         }
@@ -351,11 +352,12 @@ mod test {
                 .team_id(VERCEL_ARTIFACTS_OWNER)
                 .token(VERCEL_ARTIFACTS_TOKEN),
             TestCase::new()
-                .reason("Vercel wins: disregard just TURBO_TEAM")
+                .reason("Vercel wins: TURBO_TEAM can join in the fun if it wants")
                 .TURBO_TEAM()
                 .VERCEL_ARTIFACTS_OWNER()
                 .VERCEL_ARTIFACTS_TOKEN()
                 .team_id(VERCEL_ARTIFACTS_OWNER)
+                .team_slug(TURBO_TEAM)
                 .token(VERCEL_ARTIFACTS_TOKEN),
             TestCase::new()
                 .reason("Vercel wins: disregard just TURBO_TEAMID")
@@ -371,6 +373,7 @@ mod test {
                 .VERCEL_ARTIFACTS_OWNER()
                 .VERCEL_ARTIFACTS_TOKEN()
                 .team_id(VERCEL_ARTIFACTS_OWNER)
+                .team_slug(TURBO_TEAM)
                 .token(VERCEL_ARTIFACTS_TOKEN),
             //
             // Just get a team_id
