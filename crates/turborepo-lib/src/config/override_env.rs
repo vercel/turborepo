@@ -12,7 +12,7 @@ Hi! If you're new here:
   - ConfigurationOptions.token corresponds to TURBO_TOKEN or VERCEL_ARTIFACTS_TOKEN
   - ConfigurationOptions.team_id corresponds to TURBO_TEAMID or VERCEL_ARTIFACTS_OWNER
   - ConfigurationOptions.team_slug corresponds to TURBO_TEAM
-1. We're ultimately poking around the env vars looking for _paris_ that make sense.
+1. We're ultimately poking around the env vars looking for _pairs_ that make sense.
    Since we presume that users are the only ones sending TURBO_* and Vercel is the only one sending VERCEL_*, we can make some assumptions.  Namely, we assume that if we have one of VERCEL_ARTIFACTS_OWNER or VERCEL_ARTIFACTS_TOKEN we will always have both.
 1. Watch out for mixing up `TURBO_TEAM` and `TURBO_TEAMID`.  Same for ConfigurationOptions.team_id and ConfigurationOptions.team_slug.
 */
