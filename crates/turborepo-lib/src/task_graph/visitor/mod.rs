@@ -113,7 +113,6 @@ impl<'a> Visitor<'a> {
         package_inputs_hashes: PackageInputsHashes,
         env_at_execution_start: &'a EnvironmentVariableMap,
         global_hash: &'a str,
-        global_env_mode: EnvMode,
         color_config: ColorConfig,
         manager: ProcessManager,
         repo_root: &'a AbsoluteSystemPath,
@@ -141,7 +140,7 @@ impl<'a> Visitor<'a> {
         Self {
             color_cache,
             dry: false,
-            global_env_mode,
+            global_env_mode: run_opts.env_mode,
             manager,
             run_opts,
             package_graph,

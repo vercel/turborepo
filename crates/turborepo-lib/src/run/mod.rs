@@ -448,7 +448,6 @@ impl Run {
             package_inputs_hashes,
             &self.env_at_execution_start,
             &global_hash,
-            self.opts.run_opts.env_mode,
             self.color_config,
             self.processes.clone(),
             &self.repo_root,
