@@ -72,6 +72,14 @@ You'll want to use this flag in situations like:
 - You’re already using [advanced filtering techniques](/repo/docs/reference/run#advanced-filtering-examples) or [`turbo-ignore`](/repo/docs/reference/turbo-ignore) to create the same or similar behavior as `--affected`. You likely have the opportunity to simplify your scripting using this new flag.
   - `--affected` will can handle shallow clones more gracefully than bespoke filtering because it falls back to running all tasks.
 
+#### Using `--affected` in GitHub Actions
+
+CI/CD pipelines are a perfect place to use `--affected`. With `--affected`, Turborepo can automatically detect that you're running in GitHub Actions by inspecting environment variables set by GitHub, like `GITHUB_BASE_REF`.
+
+In the context of a PR, this means that Turborepo can determine which packages have changed between the PR's base branch and the PR's head branch. This allows you to run only the tasks that are affected by the changes in the PR.
+
+While `GITHUB_BASE_REF` works well in `pull_request` and `pull_request_target` events, it is not available during regular push events. In those cases, we use `GITHUB_EVENT_PATH` to determine the base branch to compare your commit to. In force pushes and pushing branch with no additionals commits, we compare to the parent of the first commit on the branch.
+
 ### Using `turbo-ignore`
 
 As your codebase and CI grow, you may start to look for more ways to get even faster. While hitting cache is useful, you also may be able to skip work entirely. Using `turbo-ignore`, you can skip lengthy container preparation steps like dependency installation that will end up resulting in a cache hit, anyway.
