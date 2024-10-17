@@ -169,7 +169,6 @@ impl<'a> OverrideEnvVars<'a> {
     }
 
     fn ui(&self) -> Option<UIMode> {
-        // TODO double check on what's going on here
         let value = self
             .environment
             .get(OsStr::new("ci"))
