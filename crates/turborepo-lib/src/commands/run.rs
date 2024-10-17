@@ -57,7 +57,7 @@ pub async fn run(base: CommandBase, telemetry: CommandEventBuilder) -> Result<i3
 
         // We only stop if it's the TUI, for the web UI we don't need to stop
         if let Some(UISender::Tui(sender)) = sender {
-            sender.stop();
+            sender.stop().await;
         }
 
         if let Some(handle) = handle {

@@ -62,9 +62,9 @@ impl UISender {
             UISender::Wui(sender) => sender.task(task),
         }
     }
-    pub fn stop(&self) {
+    pub async fn stop(&self) {
         match self {
-            UISender::Tui(sender) => sender.stop(),
+            UISender::Tui(sender) => sender.stop().await,
             UISender::Wui(sender) => sender.stop(),
         }
     }
@@ -75,9 +75,9 @@ impl UISender {
         }
     }
 
-    pub fn pane_size(&self) -> Option<PaneSize> {
+    pub async fn pane_size(&self) -> Option<PaneSize> {
         match self {
-            UISender::Tui(sender) => sender.pane_size(),
+            UISender::Tui(sender) => sender.pane_size().await,
             // Not applicable to the web UI
             UISender::Wui(_) => None,
         }

@@ -2,8 +2,7 @@ use std::{
     collections::BTreeMap,
     io::{self, Stdout, Write},
     mem,
-    sync::mpsc,
-    time::{Duration, Instant},
+    time::Duration,
 };
 
 use ratatui::{
@@ -12,9 +11,13 @@ use ratatui::{
     widgets::TableState,
     Frame, Terminal,
 };
+use tokio::{
+    sync::{mpsc, oneshot},
+    time::Instant,
+};
 use tracing::{debug, trace};
 
-const FRAMERATE: Duration = Duration::from_millis(3);
+pub const FRAMERATE: Duration = Duration::from_millis(3);
 const RESIZE_DEBOUNCE_DELAY: Duration = Duration::from_millis(10);
 
 use super::{
@@ -43,7 +46,6 @@ pub struct App<W> {
     tasks: BTreeMap<String, TerminalOutput<W>>,
     tasks_by_status: TasksByStatus,
     focus: LayoutSections,
-    tty_stdin: bool,
     scroll: TableState,
     selected_task_index: usize,
     has_user_scrolled: bool,
@@ -78,8 +80,6 @@ impl<W> App<W> {
             size,
             done: false,
             focus: LayoutSections::TaskList,
-            // Check if stdin is a tty that we should read input from
-            tty_stdin: atty::is(atty::Stream::Stdin),
             tasks: tasks_by_status
                 .task_names_in_displayed_order()
                 .map(|task_name| {
@@ -112,7 +112,6 @@ impl<W> App<W> {
         let has_selection = self.get_full_task()?.has_selection();
         Ok(InputOptions {
             focus: &self.focus,
-            tty_stdin: self.tty_stdin,
             has_selection,
         })
     }
@@ -558,16 +557,19 @@ impl<W: Write> App<W> {
 
 /// Handle the rendering of the `App` widget based on events received by
 /// `receiver`
-pub fn run_app(tasks: Vec<String>, receiver: AppReceiver) -> Result<(), Error> {
+pub async fn run_app(tasks: Vec<String>, receiver: AppReceiver) -> Result<(), Error> {
     let mut terminal = startup()?;
     let size = terminal.size()?;
 
     let mut app: App<Box<dyn io::Write + Send>> = App::new(size.height, size.width, tasks);
+    let (crossterm_tx, crossterm_rx) = mpsc::channel(1024);
+    input::start_crossterm_stream(crossterm_tx);
 
-    let (result, callback) = match run_app_inner(&mut terminal, &mut app, receiver) {
-        Ok(callback) => (Ok(()), callback),
-        Err(err) => (Err(err), None),
-    };
+    let (result, callback) =
+        match run_app_inner(&mut terminal, &mut app, receiver, crossterm_rx).await {
+            Ok(callback) => (Ok(()), callback),
+            Err(err) => (Err(err), None),
+        };
 
     cleanup(terminal, app, callback)?;
 
@@ -576,18 +578,19 @@ pub fn run_app(tasks: Vec<String>, receiver: AppReceiver) -> Result<(), Error> {
 
 // Break out inner loop so we can use `?` without worrying about cleaning up the
 // terminal.
-fn run_app_inner<B: Backend + std::io::Write>(
+async fn run_app_inner<B: Backend + std::io::Write>(
     terminal: &mut Terminal<B>,
     app: &mut App<Box<dyn io::Write + Send>>,
-    receiver: AppReceiver,
-) -> Result<Option<mpsc::SyncSender<()>>, Error> {
+    mut receiver: AppReceiver,
+    mut crossterm_rx: mpsc::Receiver<crossterm::event::Event>,
+) -> Result<Option<oneshot::Sender<()>>, Error> {
     // Render initial state to paint the screen
     terminal.draw(|f| view(app, f))?;
     let mut last_render = Instant::now();
     let mut resize_debouncer = Debouncer::new(RESIZE_DEBOUNCE_DELAY);
     let mut callback = None;
     let mut needs_rerender = true;
-    while let Some(event) = poll(app.input_options()?, &receiver, last_render + FRAMERATE) {
+    while let Some(event) = poll(app.input_options()?, &mut receiver, &mut crossterm_rx).await {
         // If we only receive ticks, then there's been no state change so no update
         // needed
         if !matches!(event, Event::Tick) {
@@ -625,13 +628,31 @@ fn run_app_inner<B: Backend + std::io::Write>(
 
 /// Blocking poll for events, will only return None if app handle has been
 /// dropped
-fn poll(input_options: InputOptions, receiver: &AppReceiver, deadline: Instant) -> Option<Event> {
-    match input(input_options) {
-        Ok(Some(event)) => Some(event),
-        Ok(None) => receiver.recv(deadline).ok(),
-        // Unable to read from stdin, shut down and attempt to clean up
-        Err(_) => Some(Event::InternalStop),
-    }
+async fn poll<'a>(
+    input_options: InputOptions<'a>,
+    receiver: &mut AppReceiver,
+    crossterm_rx: &mut mpsc::Receiver<crossterm::event::Event>,
+) -> Option<Event> {
+    let input_closed = crossterm_rx.is_closed();
+    let input_fut = async {
+        crossterm_rx
+            .recv()
+            .await
+            .and_then(|event| input_options.handle_crossterm_event(event))
+    };
+    let receiver_fut = async { receiver.recv().await };
+    let event_fut = async move {
+        if input_closed {
+            receiver_fut.await
+        } else {
+            tokio::select! {
+                e = input_fut => e,
+                e = receiver_fut => e,
+            }
+        }
+    };
+
+    event_fut.await
 }
 
 const MIN_HEIGHT: u16 = 10;
@@ -672,7 +693,7 @@ fn startup() -> io::Result<Terminal<CrosstermBackend<Stdout>>> {
 fn cleanup<B: Backend + io::Write>(
     mut terminal: Terminal<B>,
     mut app: App<Box<dyn io::Write + Send>>,
-    callback: Option<mpsc::SyncSender<()>>,
+    callback: Option<oneshot::Sender<()>>,
 ) -> io::Result<()> {
     terminal.clear()?;
     crossterm::execute!(
@@ -692,7 +713,7 @@ fn cleanup<B: Backend + io::Write>(
 fn update(
     app: &mut App<Box<dyn io::Write + Send>>,
     event: Event,
-) -> Result<Option<mpsc::SyncSender<()>>, Error> {
+) -> Result<Option<oneshot::Sender<()>>, Error> {
     match event {
         Event::StartTask { task, output_logs } => {
             app.start_task(&task, output_logs)?;
