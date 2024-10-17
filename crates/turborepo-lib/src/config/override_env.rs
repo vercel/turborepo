@@ -191,7 +191,6 @@ impl<'a> ResolvedConfigurationOptions for OverrideEnvVars<'a> {
             token: self.output.token.clone(),
             team_slug: self.output.team_slug.clone(),
             ui: self.ui(),
-            api_url: None,
             ..Default::default()
         };
         Ok(output)
