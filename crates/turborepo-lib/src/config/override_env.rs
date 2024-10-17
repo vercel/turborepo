@@ -79,77 +79,37 @@ impl Output {
     }
 }
 
-// get Output from Input
 impl From<Input> for Output {
     fn from(input: Input) -> Self {
-        let mut output = Output::new();
-
-        // TURBO_TEAMID+TURBO_TOKEN
-        if input.TURBO_TEAMID.is_some() && input.TURBO_TOKEN.is_some() {
-            output.team_id = input.TURBO_TEAMID;
-            output.token = input.TURBO_TOKEN;
-
-            if input.TURBO_TEAM.is_some() {
-                // there can also be a TURBO_TEAM, so we'll use that as well
-                output.team_slug = input.TURBO_TEAM;
+        // TURBO_TEAMID+TURBO_TOKEN or TURBO_TEAM+TURBO_TOKEN
+        if input.TURBO_TOKEN.is_some()
+            && (input.TURBO_TEAMID.is_some() || input.TURBO_TEAM.is_some())
+        {
+            Output {
+                team_id: input.TURBO_TEAMID,
+                team_slug: input.TURBO_TEAM,
+                token: input.TURBO_TOKEN,
             }
-
-            return output;
         }
-
-        // TURBO_TEAM+TURBO_TOKEN
-        if input.TURBO_TEAM.is_some() && input.TURBO_TOKEN.is_some() {
-            output.team_slug = input.TURBO_TEAM;
-            output.token = input.TURBO_TOKEN;
-
-            if input.TURBO_TEAMID.is_some() {
-                // there can also be a TURBO_TEAMID, so we'll use that as well
-                output.team_id = input.TURBO_TEAMID;
-            }
-
-            return output;
-        }
-
         // if there's both Vercel items, we use those next
-        if input.VERCEL_ARTIFACTS_OWNER.is_some() && input.VERCEL_ARTIFACTS_TOKEN.is_some() {
-            output.team_id = input.VERCEL_ARTIFACTS_OWNER;
-            output.token = input.VERCEL_ARTIFACTS_TOKEN;
-            return output;
+        else if input.VERCEL_ARTIFACTS_TOKEN.is_some() && input.VERCEL_ARTIFACTS_OWNER.is_some() {
+            Output {
+                team_id: input.VERCEL_ARTIFACTS_OWNER,
+                team_slug: None,
+                token: input.VERCEL_ARTIFACTS_TOKEN,
+            }
         }
-
         // from this point below, there's no token we can do anything with
         // ------------------------------------------------
-
-        // if there's no token, this is also permissible
-        if input.TURBO_TEAMID.is_some() && input.TURBO_TEAM.is_some() {
-            output.team_id = input.TURBO_TEAMID;
-            output.team_slug = input.TURBO_TEAM;
-            return output;
-        }
-
-        // handle "only" cases
-        // ------------------------------------------------
-        if input.TURBO_TEAMID.is_some() {
-            output.team_id = input.TURBO_TEAMID;
-            return output;
-        }
-
-        if input.TURBO_TEAM.is_some() {
-            output.team_slug = input.TURBO_TEAM;
-
-            if input.VERCEL_ARTIFACTS_OWNER.is_some() {
-                output.team_id = input.VERCEL_ARTIFACTS_OWNER;
+        else {
+            Output {
+                // prefer TURBO_TEAMID to VERCEL_ARTIFACTS_OWNER
+                team_id: input.TURBO_TEAMID.or(input.VERCEL_ARTIFACTS_OWNER),
+                // No alternative source for team_slug so always use TURBO_TEAM
+                team_slug: input.TURBO_TEAM,
+                token: None,
             }
-
-            return output;
         }
-
-        if input.VERCEL_ARTIFACTS_OWNER.is_some() {
-            output.team_id = input.VERCEL_ARTIFACTS_OWNER;
-            return output;
-        }
-
-        Output::new()
     }
 }
 
