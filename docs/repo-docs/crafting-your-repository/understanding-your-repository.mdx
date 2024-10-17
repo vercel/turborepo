@@ -88,7 +88,7 @@ and is imported throughout your codebase.
 To do this, we can run a query to find packages that are directly imported more than 10 times in your monorepo:
 
 ```bash title="Terminal"
-> turbo query "query { packages(filter: { greaterThan: { field: DIRECT_DEPENDENT_COUNT, value: 10 }}) { items { name } } }"
+> turbo query "query { packages(filter: { greaterThan: { field: DIRECT_DEPENDENT_COUNT, value: 10 } }) { items { name } } }"
 {
   "data": {
     "packages": {
