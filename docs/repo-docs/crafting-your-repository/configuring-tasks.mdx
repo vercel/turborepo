@@ -326,12 +326,12 @@ Some tasks should always be ran no matter what, like a deployment script after a
 
 Some tasks can be ran in parallel despite being dependent on other packages. An example of tasks that fit this description are linters, since a linter doesn't need to wait for outputs in dependencies to run successfully.
 
-Because of this, you may be tempted to define your `check-types` task like this:
+Because of this, you may be tempted to define your `lint` task like this:
 
 ```json title="./turbo.json"
 {
   "tasks": {
-    "check-types": {} // Incorrect! // [!code highlight]
+    "lint": {} // Incorrect! // [!code highlight]
   }
 }
 ```
@@ -339,17 +339,17 @@ Because of this, you may be tempted to define your `check-types` task like this:
 This runs your tasks in parallel - but doesn't account for source code changes in dependencies. This means you can:
 
 1. Make a breaking change to the interface of your `ui` package.
-2. Run `turbo check-types`, hitting cache in an application package that depends on `ui`.
+2. Run `turbo lint`, hitting cache in an application package that depends on `ui`.
 
 This is incorrect, since the application package will show a successful cache hit, despite not being updated to use the new interface. Checking for TypeScript errors in your application package manually in your editor is likely to reveal errors.
 
-Because of this, you make a small change to your `check-types` task definition:
+Because of this, you make a small change to your `lint` task definition:
 
 ```json title="./turbo.json"
 {
   "tasks": {
-    "check-types": {
-      "dependsOn": ["^check-types"] // This works...but could be faster! // [!code highlight]
+    "lint": {
+      "dependsOn": ["^lint"] // This works...but could be faster! // [!code highlight]
     }
   }
 }
@@ -365,10 +365,10 @@ To meet both requirements (correctness and parallelism), you can introduce [Tran
     "transit": {
       "dependsOn": ["^transit"]
     },
-    "check-types": {
+    "lint": {
       "dependsOn": ["transit"]
-    },
-  },
+    }
+  }
 }
 ```
 
