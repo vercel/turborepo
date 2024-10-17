@@ -33,5 +33,10 @@ else
   COREPACK_INSTALL_DIR_CMD="--install-directory=${COREPACK_INSTALL_DIR}"
 fi
 
+# get just the packageManager name, without the version
+# We pass the name to corepack enable so that it will work for npm also.
+# `corepack enable` with no specified packageManager does not work for npm.
+pkgManagerName="${pkgManager%%@*}"
+
 # Enable corepack so that the packageManager setting in package.json is respected.
-corepack enable "${COREPACK_INSTALL_DIR_CMD}"
+corepack enable $pkgManagerName "${COREPACK_INSTALL_DIR_CMD}"
