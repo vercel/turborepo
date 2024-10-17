@@ -64,15 +64,6 @@ pub async fn run(
     let signal = get_signal()?;
     let handler = SignalHandler::new(signal);
 
-    let variables: Variables = variables_path
-        .map(AbsoluteSystemPathBuf::from_cwd)
-        .transpose()?
-        .map(|path| path.read_to_string())
-        .transpose()?
-        .map(|content| serde_json::from_str(&content))
-        .transpose()?
-        .unwrap_or_default();
-
     // We fake a run command, so we can construct a `Run` type
     base.args_mut().command = Some(Command::Run {
         run_args: Box::default(),
@@ -100,6 +91,15 @@ pub async fn run(
             EmptyMutation,
             EmptySubscription,
         );
+
+        let variables: Variables = variables_path
+            .map(AbsoluteSystemPathBuf::from_cwd)
+            .transpose()?
+            .map(|path| path.read_to_string())
+            .transpose()?
+            .map(|content| serde_json::from_str(&content))
+            .transpose()?
+            .unwrap_or_default();
 
         let request = Request::new(&query).variables(variables);
 
