@@ -35,25 +35,26 @@ impl Input {
     }
 }
 
-impl<'a> From<&'a HashMap<OsString, OsString>> for Input {
-    fn from(environment: &'a HashMap<OsString, OsString>) -> Self {
-        Self {
-            TURBO_TEAM: environment
-                .get(OsStr::new("turbo_team"))
-                .map(|s| s.to_str().unwrap().to_string()),
-            TURBO_TEAMID: environment
-                .get(OsStr::new("turbo_teamid"))
-                .map(|s| s.to_str().unwrap().to_string()),
-            TURBO_TOKEN: environment
-                .get(OsStr::new("turbo_token"))
-                .map(|s| s.to_str().unwrap().to_string()),
-            VERCEL_ARTIFACTS_OWNER: environment
-                .get(OsStr::new("vercel_artifacts_owner"))
-                .map(|s| s.to_str().unwrap().to_string()),
-            VERCEL_ARTIFACTS_TOKEN: environment
-                .get(OsStr::new("vercel_artifacts_token"))
-                .map(|s| s.to_str().unwrap().to_string()),
-        }
+impl<'a> TryFrom<&'a HashMap<OsString, OsString>> for Input {
+    type Error = Error;
+
+    fn try_from(environment: &'a HashMap<OsString, OsString>) -> Result<Self, Self::Error> {
+        let get_value = |key: &str| -> Result<Option<String>, Error> {
+            let Some(value) = environment.get(OsStr::new(key)) else {
+                return Ok(None);
+            };
+            let value = value
+                .to_str()
+                .ok_or_else(|| Error::Encoding(key.to_ascii_uppercase()))?;
+            Ok(Some(value.to_string()))
+        };
+        Ok(Self {
+            TURBO_TEAM: get_value("turbo_team")?,
+            TURBO_TEAMID: get_value("turbo_teamid")?,
+            TURBO_TOKEN: get_value("turbo_token")?,
+            VERCEL_ARTIFACTS_OWNER: get_value("vercel_artifacts_owner")?,
+            VERCEL_ARTIFACTS_TOKEN: get_value("vercel_artifacts_token")?,
+        })
     }
 }
 
@@ -159,7 +160,7 @@ pub struct OverrideEnvVars<'a> {
 
 impl<'a> OverrideEnvVars<'a> {
     pub fn new(environment: &'a HashMap<OsString, OsString>) -> Result<Self, Error> {
-        let input = Input::from(environment);
+        let input = Input::try_from(environment)?;
         let output = Output::from(input);
 
         Ok(Self {
@@ -468,7 +469,7 @@ mod test {
                 env.insert("vercel_artifacts_token".into(), value.into());
             }
 
-            let actual_input = Input::from(&env);
+            let actual_input = Input::try_from(&env).unwrap();
             assert_eq!(case.input, actual_input);
 
             let config = OverrideEnvVars::new(&env).unwrap();
