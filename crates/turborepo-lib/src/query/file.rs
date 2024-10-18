@@ -13,11 +13,22 @@ use crate::{
 pub struct File {
     run: Arc<Run>,
     path: AbsoluteSystemPathBuf,
+    ast: Option<swc_ecma_ast::Module>,
 }
 
 impl File {
     pub fn new(run: Arc<Run>, path: AbsoluteSystemPathBuf) -> Self {
-        Self { run, path }
+        Self {
+            run,
+            path,
+            ast: None,
+        }
+    }
+
+    pub fn with_ast(mut self, ast: Option<swc_ecma_ast::Module>) -> Self {
+        self.ast = ast;
+
+        self
     }
 }
 
@@ -73,8 +84,8 @@ impl TraceResult {
             files: result
                 .files
                 .into_iter()
-                .sorted()
-                .map(|path| File::new(run.clone(), path))
+                .sorted_by(|a, b| a.0.cmp(&b.0))
+                .map(|(path, file)| File::new(run.clone(), path).with_ast(file.ast))
                 .collect(),
             errors: result.errors.into_iter().map(|e| e.into()).collect(),
         }
@@ -100,16 +111,21 @@ impl File {
         Ok(self.path.to_string())
     }
 
-    async fn dependencies(&self) -> TraceResult {
+    async fn dependencies(&self, depth: Option<usize>) -> TraceResult {
         let tracer = Tracer::new(
             self.run.repo_root().to_owned(),
             vec![self.path.clone()],
             None,
         );
 
-        let mut result = tracer.trace();
+        let mut result = tracer.trace(depth);
         // Remove the file itself from the result
         result.files.remove(&self.path);
         TraceResult::new(result, self.run.clone())
+    }
+
+    async fn ast(&self) -> Option<serde_json::Value> {
+        let ast = serde_json::to_value(&self.ast).ok()?;
+        Some(ast)
     }
 }

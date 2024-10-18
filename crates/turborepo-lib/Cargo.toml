@@ -99,6 +99,8 @@ sha2 = { workspace = true }
 shared_child = "1.0.0"
 struct_iterable = "0.1.1"
 svix-ksuid = { version = "0.7.0", features = ["serde"] }
+swc_ecma_ast = { workspace = true, features = ["serde-impl"] }
+swc_ecma_parser = { workspace = true }
 sysinfo = "0.27.7"
 tabwriter = "1.3.0"
 thiserror = "1.0.38"

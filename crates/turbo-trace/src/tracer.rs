@@ -1,4 +1,4 @@
-use std::{collections::HashSet, fs, rc::Rc};
+use std::{collections::HashMap, fs, rc::Rc};
 
 use camino::Utf8PathBuf;
 use miette::{Diagnostic, NamedSource, SourceSpan};
@@ -14,9 +14,13 @@ use turbopath::{AbsoluteSystemPathBuf, PathError};
 
 use crate::import_finder::ImportFinder;
 
+#[derive(Default)]
+pub struct SeenFile {
+    pub ast: Option<swc_ecma_ast::Module>,
+}
+
 pub struct Tracer {
-    files: Vec<AbsoluteSystemPathBuf>,
-    seen: HashSet<AbsoluteSystemPathBuf>,
+    files: Vec<(AbsoluteSystemPathBuf, usize)>,
     ts_config: Option<AbsoluteSystemPathBuf>,
     source_map: Rc<SourceMap>,
 }
@@ -40,7 +44,7 @@ pub enum TraceError {
 
 pub struct TraceResult {
     pub errors: Vec<TraceError>,
-    pub files: HashSet<AbsoluteSystemPathBuf>,
+    pub files: HashMap<AbsoluteSystemPathBuf, SeenFile>,
 }
 
 impl Tracer {
@@ -52,22 +56,22 @@ impl Tracer {
         let ts_config =
             ts_config.map(|ts_config| AbsoluteSystemPathBuf::from_unknown(&cwd, ts_config));
 
-        let seen = HashSet::new();
+        let files = files.into_iter().map(|file| (file, 0)).collect::<Vec<_>>();
 
         Self {
             files,
-            seen,
             ts_config,
             source_map: Rc::new(SourceMap::default()),
         }
     }
 
-    pub fn trace(mut self) -> TraceResult {
+    pub fn trace(mut self, depth: Option<usize>) -> TraceResult {
         let mut options = ResolveOptions::default()
             .with_builtin_modules(true)
             .with_force_extension(EnforceExtension::Disabled)
             .with_extension(".ts")
             .with_extension(".tsx");
+
         if let Some(ts_config) = self.ts_config.take() {
             options.tsconfig = Some(TsconfigOptions {
                 config_file: ts_config.into(),
@@ -77,17 +81,24 @@ impl Tracer {
 
         let resolver = Resolver::new(options);
         let mut errors = vec![];
+        let mut seen: HashMap<AbsoluteSystemPathBuf, SeenFile> = HashMap::new();
 
-        while let Some(file_path) = self.files.pop() {
+        while let Some((file_path, file_depth)) = self.files.pop() {
             if matches!(file_path.extension(), Some("json") | Some("css")) {
                 continue;
             }
 
-            if self.seen.contains(&file_path) {
+            if seen.contains_key(&file_path) {
                 continue;
             }
 
-            self.seen.insert(file_path.clone());
+            if let Some(depth) = depth {
+                if file_depth > depth {
+                    continue;
+                }
+            }
+
+            let entry = seen.entry(file_path.clone()).or_default();
 
             // Read the file content
             let Ok(file_content) = fs::read_to_string(&file_path) else {
@@ -135,6 +146,8 @@ impl Tracer {
             let mut finder = ImportFinder::default();
             module.visit_with(&mut finder);
 
+            entry.ast = Some(module);
+
             // Convert found imports/requires to absolute paths and add them to files to
             // visit
             for (import, span) in finder.imports() {
@@ -144,7 +157,7 @@ impl Tracer {
                 };
                 match resolver.resolve(file_dir, import) {
                     Ok(resolved) => match resolved.into_path_buf().try_into() {
-                        Ok(path) => self.files.push(path),
+                        Ok(path) => self.files.push((path, file_depth + 1)),
                         Err(err) => {
                             errors.push(TraceError::PathEncoding(err));
                         }
@@ -163,7 +176,7 @@ impl Tracer {
         }
 
         TraceResult {
-            files: self.seen,
+            files: seen,
             errors,
         }
     }
