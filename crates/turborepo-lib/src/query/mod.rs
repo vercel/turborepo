@@ -49,6 +49,8 @@ pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Resolution(#[from] crate::run::scope::filter::ResolutionError),
+    #[error("failed to parse file: {0:?}")]
+    ParseError(swc_ecma_parser::error::Error),
 }
 
 pub struct RepositoryQuery {

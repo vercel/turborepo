@@ -2,6 +2,8 @@ use std::sync::Arc;
 
 use async_graphql::{Object, SimpleObject};
 use itertools::Itertools;
+use swc_ecma_ast::EsVersion;
+use swc_ecma_parser::{EsSyntax, Syntax, TsSyntax};
 use turbo_trace::Tracer;
 use turbopath::AbsoluteSystemPathBuf;
 
@@ -29,6 +31,40 @@ impl File {
         self.ast = ast;
 
         self
+    }
+
+    fn parse_file(&self) -> Result<swc_ecma_ast::Module, Error> {
+        let contents = self.path.read_to_string()?;
+        let source_map = swc_common::SourceMap::default();
+        let file = source_map.new_source_file(
+            swc_common::FileName::Custom(self.path.to_string()).into(),
+            contents.clone(),
+        );
+        let syntax = if self.path.extension() == Some("ts") || self.path.extension() == Some("tsx")
+        {
+            Syntax::Typescript(TsSyntax {
+                tsx: self.path.extension() == Some("tsx"),
+                decorators: true,
+                ..Default::default()
+            })
+        } else {
+            Syntax::Es(EsSyntax {
+                jsx: self.path.ends_with(".jsx"),
+                ..Default::default()
+            })
+        };
+        let comments = swc_common::comments::SingleThreadedComments::default();
+        let mut errors = Vec::new();
+        let module = swc_ecma_parser::parse_file_as_module(
+            &file,
+            syntax,
+            EsVersion::EsNext,
+            Some(&comments),
+            &mut errors,
+        )
+        .map_err(Error::ParseError)?;
+
+        Ok(module)
     }
 }
 
@@ -125,7 +161,10 @@ impl File {
     }
 
     async fn ast(&self) -> Option<serde_json::Value> {
-        let ast = serde_json::to_value(&self.ast).ok()?;
-        Some(ast)
+        if let Some(ast) = &self.ast {
+            serde_json::to_value(&ast).ok()
+        } else {
+            serde_json::to_value(&self.parse_file().ok()?).ok()
+        }
     }
 }
