@@ -13,6 +13,8 @@ struct Args {
     #[clap(long)]
     ts_config: Option<Utf8PathBuf>,
     files: Vec<Utf8PathBuf>,
+    #[clap(long)]
+    depth: Option<usize>,
 }
 
 fn main() -> Result<(), PathError> {
@@ -32,7 +34,7 @@ fn main() -> Result<(), PathError> {
 
     let tracer = Tracer::new(abs_cwd, files, args.ts_config);
 
-    let result = tracer.trace();
+    let result = tracer.trace(args.depth);
 
     if !result.errors.is_empty() {
         for error in &result.errors {
@@ -40,7 +42,7 @@ fn main() -> Result<(), PathError> {
         }
         std::process::exit(1);
     } else {
-        for file in &result.files {
+        for (file, _) in &result.files {
             println!("{}", file);
         }
     }
