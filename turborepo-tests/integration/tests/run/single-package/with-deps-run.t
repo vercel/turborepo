@@ -57,6 +57,8 @@ Run with --output-logs=errors-only
   $ ${TURBO} run test --output-logs=errors-only
   \xe2\x80\xa2 Running test (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
+  build: cache hit, replaying logs 7ece7b62aad25615 (no errors in logs)
+  test: cache hit, replaying logs cb5839f7284aa5f3 (no errors in logs)
   
    Tasks:    2 successful, 2 total
   Cached:    2 cached, 2 total

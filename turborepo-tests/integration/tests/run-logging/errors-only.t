@@ -8,6 +8,7 @@ Setup
   \xe2\x80\xa2 Packages in scope: app-a (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
+  app-a:build: cache miss, executing 612027951a2848ce (only logging errors)
   
    Tasks:    1 successful, 1 total
   Cached:    0 cached, 1 total
@@ -24,6 +25,7 @@ Setup
   \xe2\x80\xa2 Packages in scope: app-a (esc)
   \xe2\x80\xa2 Running buildsuccess in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
+  app-a:buildsuccess: cache miss, executing 7ac84282f5a5b151 (only logging errors)
   
    Tasks:    1 successful, 1 total
   Cached:    0 cached, 1 total
@@ -39,7 +41,7 @@ Setup
   \xe2\x80\xa2 Packages in scope: app-a (esc)
   \xe2\x80\xa2 Running builderror in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  app-a:builderror: cache miss, executing 7e337a3261100818
+  app-a:builderror: cache miss, executing 7e337a3261100818 (only logging errors)
   app-a:builderror: 
   app-a:builderror: > builderror
   app-a:builderror: > echo error-builderror-app-a && exit 1
@@ -69,7 +71,7 @@ Setup
   \xe2\x80\xa2 Packages in scope: app-a (esc)
   \xe2\x80\xa2 Running builderror2 in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  app-a:builderror2: cache miss, executing 3731518fa339b920
+  app-a:builderror2: cache miss, executing 3731518fa339b920 (only logging errors)
   app-a:builderror2: 
   app-a:builderror2: > builderror2
   app-a:builderror2: > echo error-builderror2-app-a && exit 1
