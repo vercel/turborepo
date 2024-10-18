@@ -50,6 +50,19 @@ function getLocalUpgradeCommand({
     case "yarn":
       // yarn 2.x and 3.x (berry)
       if (gte(packageManagerVersion, "2.0.0")) {
+        if (isUsingWorkspaces) {
+          return renderCommand([
+            "yarn",
+            "workspaces",
+            "foreach",
+            "--all",
+            "--include .",
+            "add",
+            `turbo@${to}`,
+            installType === "devDependencies" && "--dev",
+          ]);
+        }
+
         return renderCommand([
           "yarn",
           "add",
