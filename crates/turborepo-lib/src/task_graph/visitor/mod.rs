@@ -197,14 +197,10 @@ impl<'a> Visitor<'a> {
 
             let package_task_event =
                 PackageTaskEventBuilder::new(info.package(), info.task()).with_parent(telemetry);
-            let command = workspace_info
-                .package_json
-                .scripts
-                .get(info.task())
-                .cloned();
+            let command = workspace_info.package_json.scripts.get(info.task());
 
             match command {
-                Some(cmd) if info.package() == ROOT_PKG_NAME && turbo_regex().is_match(&cmd) => {
+                Some(cmd) if info.package() == ROOT_PKG_NAME && turbo_regex().is_match(cmd) => {
                     package_task_event.track_error(TrackedErrors::RecursiveError);
                     let (span, text) = cmd.span_and_text("package.json");
                     return Err(Error::RecursiveTurbo {
