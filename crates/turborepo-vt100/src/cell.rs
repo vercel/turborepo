@@ -1,11 +1,15 @@
 use unicode_width::UnicodeWidthChar as _;
 
 const CODEPOINTS_IN_CELL: usize = 6;
+const BYTES_IN_CHAR: usize = 4;
 
 /// Represents a single terminal cell.
 #[derive(Clone, Debug, Eq)]
 pub struct Cell {
-    contents: [char; CODEPOINTS_IN_CELL],
+    contents: [u8; CODEPOINTS_IN_CELL * BYTES_IN_CHAR],
+    // Number of bytes needed to represent all characters
+    num_bytes: u8,
+    // Length of characters
     len: u8,
     attrs: crate::attrs::Attrs,
     selected: bool,
@@ -13,15 +17,15 @@ pub struct Cell {
 
 impl PartialEq<Self> for Cell {
     fn eq(&self, other: &Self) -> bool {
-        if self.len != other.len {
+        if self.len != other.len || self.num_bytes != other.num_bytes {
             return false;
         }
         if self.attrs != other.attrs {
             return false;
         }
-        let len = self.len();
+        let num_bytes = self.num_bytes();
         // self.len() always returns a valid value
-        self.contents[..len] == other.contents[..len]
+        self.contents[..num_bytes] == other.contents[..num_bytes]
     }
 }
 
@@ -29,6 +33,7 @@ impl Cell {
     pub(crate) fn new() -> Self {
         Self {
             contents: Default::default(),
+            num_bytes: 0,
             len: 0,
             attrs: crate::attrs::Attrs::default(),
             selected: false,
@@ -40,9 +45,15 @@ impl Cell {
         usize::from(self.len & 0x0f)
     }
 
+    #[inline]
+    fn num_bytes(&self) -> usize {
+        usize::from(self.num_bytes & 0x0f)
+    }
+
     pub(crate) fn set(&mut self, c: char, a: crate::attrs::Attrs) {
-        self.contents[0] = c;
-        self.len = 1;
+        self.num_bytes = 0;
+        self.len = 0;
+        self.append_char(0, c);
         // strings in this context should always be an arbitrary character
         // followed by zero or more zero-width characters, so we should only
         // have to look at the first character
@@ -52,23 +63,44 @@ impl Cell {
 
     pub(crate) fn append(&mut self, c: char) {
         let len = self.len();
+        // This implies that len is at most 5 meaning num_bytes is at most 20
+        // with still enough room for a 4 byte char.
         if len >= CODEPOINTS_IN_CELL {
             return;
         }
         if len == 0 {
             // 0 is always less than 6
-            self.contents[0] = ' ';
+            self.contents[0] = b' ';
+            self.num_bytes += 1;
             self.len += 1;
         }
 
-        let len = self.len();
+        let num_bytes = self.num_bytes();
         // we already checked that len < CODEPOINTS_IN_CELL
-        self.contents[len] = c;
+        self.append_char(num_bytes, c);
+    }
+
+    #[allow(clippy::cast_possible_truncation, clippy::as_conversions)]
+    #[inline]
+    // Writes bytes representing c at start
+    // Requires caller to verify start <= CODEPOINTS_IN_CELL * 4
+    fn append_char(&mut self, start: usize, c: char) {
+        match c.len_utf8() {
+            1 => {
+                self.contents[start] = c as u8;
+                self.num_bytes += 1;
+            }
+            n => {
+                c.encode_utf8(&mut self.contents[start..]);
+                self.num_bytes += n as u8;
+            }
+        }
         self.len += 1;
     }
 
     pub(crate) fn clear(&mut self, attrs: crate::attrs::Attrs) {
         self.len = 0;
+        self.num_bytes = 0;
         self.attrs = attrs;
         self.selected = false;
     }
@@ -87,12 +119,10 @@ impl Cell {
     /// used, but will contain at most one character with a non-zero character
     /// width.
     #[must_use]
-    pub fn contents(&self) -> String {
-        let mut s = String::with_capacity(CODEPOINTS_IN_CELL * 4);
-        for c in self.contents.iter().take(self.len()) {
-            s.push(*c);
-        }
-        s
+    pub fn contents(&self) -> &str {
+        let num_bytes = self.num_bytes();
+        // Since contents has been constructed by appending chars encoded as UTF-8 it will be valid UTF-8
+        unsafe { std::str::from_utf8_unchecked(&self.contents[..num_bytes]) }
     }
 
     /// Returns whether the cell contains any text data.
