@@ -163,14 +163,19 @@ function expandWorkspaces({
   if (!workspaceGlobs) {
     return [];
   }
+  const ignoredGlobs = workspaceGlobs
+    .filter((glob) => glob.startsWith("!"))
+    .map((glob) => glob.slice(1));
+
   return workspaceGlobs
+    .filter((glob) => !glob.startsWith("!"))
     .flatMap((workspaceGlob) => {
       const workspacePackageJsonGlob = [`${workspaceGlob}/package.json`];
       return globSync(workspacePackageJsonGlob, {
         onlyFiles: true,
         absolute: true,
         cwd: workspaceRoot,
-        ignore: ["**/node_modules/**"],
+        ignore: ["**/node_modules/**", ...ignoredGlobs],
       });
     })
     .map((workspacePackageJson) => {

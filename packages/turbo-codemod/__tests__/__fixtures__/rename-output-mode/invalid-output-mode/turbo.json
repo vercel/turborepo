@@ -1,0 +1,36 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "pipeline": {
+    "build-one": {
+      "outputMode": "errors-only"
+    },
+    "build-two": {
+      "outputMode": []
+    },
+    "build-three": {},
+    "garbage-in-numeric-0": {
+      "outputMode": 0
+    },
+    "garbage-in-numeric": {
+      "outputMode": 42
+    },
+    "garbage-in-string": {
+      "outputMode": "string"
+    },
+    "garbage-in-empty-string": {
+      "outputMode": ""
+    },
+    "garbage-in-null": {
+      "outputMode": null
+    },
+    "garbage-in-false": {
+      "outputMode": false
+    },
+    "garbage-in-true": {
+      "outputMode": true
+    },
+    "garbage-in-object": {
+      "outputMode": {}
+    }
+  }
+}

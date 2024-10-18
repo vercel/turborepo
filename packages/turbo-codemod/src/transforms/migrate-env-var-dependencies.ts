@@ -1,10 +1,11 @@
 import path from "node:path";
 import { readJsonSync, existsSync } from "fs-extra";
 import { type PackageJson, getTurboConfigs } from "@turbo/utils";
-import type { Schema as TurboJsonSchema, Pipeline } from "@turbo/types";
+import type { Pipeline, SchemaV1 } from "@turbo/types";
 import { getTransformerHelpers } from "../utils/getTransformerHelpers";
 import type { TransformerResults } from "../runner";
-import type { TransformerArgs } from "../types";
+import type { Transformer, TransformerArgs } from "../types";
+import { loadTurboJson } from "../utils/loadTurboJson";
 
 // transformer details
 const TRANSFORMER = "migrate-env-var-dependencies";
@@ -12,7 +13,7 @@ const DESCRIPTION =
   'Migrate environment variable dependencies from "dependsOn" to "env" in `turbo.json`';
 const INTRODUCED_IN = "1.5.0";
 
-export function hasLegacyEnvVarDependencies(config: TurboJsonSchema) {
+export function hasLegacyEnvVarDependencies(config: SchemaV1) {
   const dependsOn = [
     "extends" in config ? [] : config.globalDependencies,
     Object.values(config.pipeline).flatMap(
@@ -68,7 +69,7 @@ export function migratePipeline(pipeline: Pipeline) {
   return migratedPipeline;
 }
 
-export function migrateGlobal(config: TurboJsonSchema) {
+export function migrateGlobal(config: SchemaV1) {
   if ("extends" in config) {
     return config;
   }
@@ -91,7 +92,7 @@ export function migrateGlobal(config: TurboJsonSchema) {
   return migratedConfig;
 }
 
-export function migrateConfig(config: TurboJsonSchema) {
+export function migrateConfig(config: SchemaV1) {
   const migratedConfig = migrateGlobal(config);
   Object.keys(config.pipeline).forEach((pipelineKey) => {
     config.pipeline;
@@ -144,7 +145,7 @@ export function transformer({
     });
   }
 
-  let turboJson = readJsonSync(turboConfigPath) as TurboJsonSchema;
+  let turboJson: SchemaV1 = loadTurboJson(turboConfigPath);
   if (hasLegacyEnvVarDependencies(turboJson).hasKeys) {
     turboJson = migrateConfig(turboJson);
   }
@@ -158,7 +159,7 @@ export function transformer({
   const workspaceConfigs = getTurboConfigs(root);
   workspaceConfigs.forEach((workspaceConfig) => {
     const { config, turboConfigPath: filePath } = workspaceConfig;
-    if (hasLegacyEnvVarDependencies(config).hasKeys) {
+    if ("pipeline" in config && hasLegacyEnvVarDependencies(config).hasKeys) {
       runner.modifyFile({
         filePath,
         after: migrateConfig(config),
@@ -169,7 +170,7 @@ export function transformer({
   return runner.finish();
 }
 
-const transformerMeta = {
+const transformerMeta: Transformer = {
   name: TRANSFORMER,
   description: DESCRIPTION,
   introducedIn: INTRODUCED_IN,

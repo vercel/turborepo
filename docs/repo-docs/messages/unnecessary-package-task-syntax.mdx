@@ -1,0 +1,40 @@
+---
+title: Unnecessary package task syntax error
+description: Learn more about errors with unnecessary package task syntax in Turborepo.
+---
+
+## Why this error occurred
+
+Turborepo supports adding additional `turbo.json` files in a package directory
+to override the `turbo.json` file declared at the repository root, a feature called [Workspace Configurations](/repo/docs/crafting-your-repository/structuring-a-repository#specifying-packages-in-a-monorepo).
+In those additional `turbo.json` files, you can only configure tasks for that specific
+package. Therefore, only the task name should be included in the task,
+not the package and task name (`package#task`).
+
+`turbo.json` file in `apps/web` directory:
+
+```json title="./turbo.json"
+{
+  "tasks": {
+    "web#build": {
+      "dependsOn": ["lint"]
+    }
+  }
+}
+```
+
+Since this `turbo.json` file is inside a package directory, the `web` prefix is unnecessary.
+
+## Solution
+
+Remove the package prefix from the task name:
+
+```json title="./turbo.json"
+{
+  "tasks": {
+    "build": {
+      "dependsOn": ["lint"]
+    }
+  }
+}
+```

@@ -78,6 +78,7 @@ pub trait CacheClient {
         &self,
         hash: &str,
         artifact_body: impl tokio_stream::Stream<Item = Result<bytes::Bytes>> + Send + Sync + 'static,
+        body_len: usize,
         duration: u64,
         tag: Option<&str>,
         token: &str,
@@ -121,6 +122,16 @@ pub struct APIAuth {
     pub team_id: Option<String>,
     pub token: String,
     pub team_slug: Option<String>,
+}
+
+impl std::fmt::Debug for APIAuth {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("APIAuth")
+            .field("team_id", &self.team_id)
+            .field("token", &"***")
+            .field("team_slug", &self.team_slug)
+            .finish()
+    }
 }
 
 pub fn is_linked(api_auth: &Option<APIAuth>) -> bool {
@@ -362,6 +373,7 @@ impl CacheClient for APIClient {
         &self,
         hash: &str,
         artifact_body: impl tokio_stream::Stream<Item = Result<bytes::Bytes>> + Send + Sync + 'static,
+        body_length: usize,
         duration: u64,
         tag: Option<&str>,
         token: &str,
@@ -393,6 +405,7 @@ impl CacheClient for APIClient {
             .header("Content-Type", "application/octet-stream")
             .header("x-artifact-duration", duration.to_string())
             .header("User-Agent", self.user_agent.clone())
+            .header("Content-Length", body_length)
             .body(stream);
 
         if allow_auth {
@@ -795,10 +808,11 @@ mod test {
     use std::time::Duration;
 
     use anyhow::Result;
+    use bytes::Bytes;
     use turborepo_vercel_api_mock::start_test_server;
     use url::Url;
 
-    use crate::{APIClient, Client};
+    use crate::{APIClient, CacheClient, Client};
 
     #[tokio::test]
     async fn test_do_preflight() -> Result<()> {
@@ -887,5 +901,40 @@ mod test {
         );
         let err = APIClient::handle_403(response).await;
         assert_eq!(err.to_string(), "unknown status forbidden: Not authorized");
+    }
+
+    #[tokio::test]
+    async fn test_content_length() -> Result<()> {
+        let port = port_scanner::request_open_port().unwrap();
+        let handle = tokio::spawn(start_test_server(port));
+        let base_url = format!("http://localhost:{}", port);
+
+        let client = APIClient::new(
+            &base_url,
+            Some(Duration::from_secs(200)),
+            None,
+            "2.0.0",
+            true,
+        )?;
+        let body = b"hello world!";
+        let artifact_body = tokio_stream::once(Ok(Bytes::copy_from_slice(body)));
+
+        client
+            .put_artifact(
+                "eggs",
+                artifact_body,
+                body.len(),
+                123,
+                None,
+                "token",
+                None,
+                None,
+            )
+            .await?;
+
+        handle.abort();
+        let _ = handle.await;
+
+        Ok(())
     }
 }

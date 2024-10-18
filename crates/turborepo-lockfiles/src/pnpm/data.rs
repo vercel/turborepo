@@ -102,7 +102,7 @@ pub struct PackageSnapshot {
     version: Option<String>,
 
     // In lockfile v7, this portion of package is stored in the top level
-    // `shapshots` map as opposed to being stored inline.
+    // `snapshots` map as opposed to being stored inline.
     #[serde(flatten)]
     snapshot: PackageSnapshotV7,
 
@@ -514,6 +514,16 @@ impl crate::Lockfile for PnpmLockfile {
             true
         }
     }
+
+    fn turbo_version(&self) -> Option<String> {
+        let turbo_version = self
+            .importers
+            .values()
+            // Look through all of the workspace packages for a turbo dependency
+            // grab the first one we find.
+            .find_map(|project| project.dependencies.turbo_version())?;
+        Some(turbo_version.to_owned())
+    }
 }
 
 impl DependencyInfo {
@@ -546,6 +556,11 @@ impl DependencyInfo {
 
     fn get_resolution<'a, V>(maybe_map: &'a Option<Map<String, V>>, key: &str) -> Option<&'a V> {
         maybe_map.as_ref().and_then(|maybe_map| maybe_map.get(key))
+    }
+
+    fn turbo_version(&self) -> Option<&str> {
+        let (_specifier, version) = self.find_resolution("turbo")?;
+        Some(version)
     }
 }
 
@@ -605,6 +620,8 @@ mod tests {
     const PNPM_V7_PEER: &[u8] = include_bytes!("../../fixtures/pnpm-v7-peer.yaml").as_slice();
     const PNPM_V7_PATCH: &[u8] = include_bytes!("../../fixtures/pnpm-v7-patch.yaml").as_slice();
     const PNPM_V9: &[u8] = include_bytes!("../../fixtures/pnpm-v9.yaml").as_slice();
+    const PNPM6_TURBO: &[u8] = include_bytes!("../../fixtures/pnpm6turbo.yaml").as_slice();
+    const PNPM8_TURBO: &[u8] = include_bytes!("../../fixtures/pnpm8turbo.yaml").as_slice();
 
     use super::*;
     use crate::{Lockfile, Package};
@@ -1241,5 +1258,14 @@ c:
             patches.contains_key("ajv-keywords@5.1.0"),
             "contains patched dependency"
         );
+    }
+
+    #[test_case(PNPM6, None ; "v6 missing")]
+    #[test_case(PNPM6_TURBO, Some("2.0.3") ; "v6")]
+    #[test_case(PNPM8_TURBO, Some("2.0.3") ; "v8")]
+    #[test_case(PNPM_V9, Some("1.13.3-canary.1") ; "v9")]
+    fn test_turbo_version(lockfile: &[u8], expected: Option<&str>) {
+        let lockfile = PnpmLockfile::from_bytes(lockfile).unwrap();
+        assert_eq!(lockfile.turbo_version().as_deref(), expected);
     }
 }

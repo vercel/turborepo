@@ -1,0 +1,48 @@
+---
+title: Editor integration
+description: Making the most of Turborepo
+---
+
+import { Callout } from '#/components/callout';
+
+To get the best experience with `turbo`, Turborepo provides a few utilities for integrating with your editor.
+
+## JSON Schema for `turbo.json`
+
+Turborepo uses [JSON Schema](https://json-schema.org/) to give you auto-complete in your
+`turbo.json` file. By including the `$schema` key in your `turbo.json`, your editor is able to
+provide full documentation and linting in case you have invalid shapes or missing keys.
+
+```json title="./turbo.json"
+{
+  "$schema": "https://turbo.build/schema.json"
+}
+```
+
+### Older versions
+
+If you are using Turborepo v1, use `schema.v1.json`.
+
+```json title="./turbo.json"
+{
+  "$schema": "https://turbo.build/schema.v1.json"
+}
+```
+
+Handling environment variables is an important part of building applications in a Turborepo.
+
+[The `eslint-config-turbo` package](/repo/docs/reference/eslint-config-turbo) extends your ESLint setup to help you make sure you've taken care of all of your environment variables.
+
+## Turborepo LSP
+
+Enable even more auto-complete and linting than provided by JSON Schema, with in-editor hinting for invalid globs, references to non-existent tasks or packages, and
+extra repository visibility tools.
+
+Visit the [VSCode Extension Marketplace](https://marketplace.visualstudio.com/items?itemName=Vercel.turbo-vsc) to install.
+
+<Callout type="info" title="Not using Visual Studio Code?">
+  The language server can be used on any editors that support the [Language
+  Server Protocol](https://microsoft.github.io/language-server-protocol/). Log a
+  request in our [issue tracker](https://github.com/vercel/turborepo/issues) to
+  express your interest.
+</Callout>

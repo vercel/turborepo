@@ -11,7 +11,7 @@ use std::{
 };
 
 use de::Entry;
-use identifiers::{Descriptor, Locator};
+use identifiers::{Descriptor, Ident, Locator};
 use protocol_resolver::DescriptorResolver;
 use serde::Deserialize;
 use thiserror::Error;
@@ -519,6 +519,16 @@ impl Lockfile for BerryLockfile {
         } else {
             true
         }
+    }
+
+    fn turbo_version(&self) -> Option<String> {
+        let turbo_ident = Ident::try_from("turbo").expect("'turbo' is valid identifier");
+        let key = self
+            .locator_package
+            .keys()
+            .find(|key| turbo_ident == key.ident)?;
+        let entry = self.locator_package.get(key)?;
+        Some(entry.version.clone())
     }
 }
 
@@ -1147,5 +1157,12 @@ mod test {
                 "small-yarn4@workspace:.".to_string(),
             ]
         );
+    }
+
+    #[test]
+    fn test_turbo_version() {
+        let data = LockfileData::from_bytes(include_bytes!("../../fixtures/berry.lock")).unwrap();
+        let lockfile = BerryLockfile::new(data, None).unwrap();
+        assert_eq!(lockfile.turbo_version().as_deref(), Some("1.4.6"));
     }
 }

@@ -2,7 +2,7 @@
 name = "turborepo-ci"
 version = "0.1.0"
 edition = "2021"
-license = "MPL-2.0"
+license = "MIT"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -10,7 +10,8 @@ license = "MPL-2.0"
 workspace = true
 
 [dependencies]
-tracing = { workspace = true }
+chrono = { workspace = true }
 
 [dev-dependencies]
 test-case = "3.1.0"
+tracing = { workspace = true }

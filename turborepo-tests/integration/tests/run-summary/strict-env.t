@@ -12,10 +12,11 @@ Set the env vars
 Run as `infer`
   $ rm -rf .turbo/runs
   $ ${TURBO} run build --summarize > /dev/null
+   WARNING  no output files found for task my-app#build. Please check your `outputs` key in `turbo.json`
   $ cat .turbo/runs/*.json | jq -r '.envMode'
-  infer
+  strict
   $ cat .turbo/runs/*.json | jq -r '.tasks[0].envMode'
-  loose
+  strict
   $ cat .turbo/runs/*.json | jq -r '.tasks[0].environmentVariables | {passthrough, globalPassthrough}'
   {
     "passthrough": null,
@@ -38,6 +39,7 @@ Run as `strict`
 Run as `loose`
   $ rm -rf .turbo/runs
   $ ${TURBO} run build --env-mode=loose --summarize > /dev/null
+   WARNING  no output files found for task my-app#build. Please check your `outputs` key in `turbo.json`
   $ cat .turbo/runs/*.json | jq -r '.envMode'
   loose
   $ cat .turbo/runs/*.json | jq -r '.tasks[0].envMode'
@@ -52,6 +54,7 @@ All specified + infer
   $ rm -rf .turbo/runs
   $ ${TESTDIR}/../../../helpers/replace_turbo_json.sh $(pwd) "strict_env_vars/all.json"
   $ ${TURBO} run build --summarize > /dev/null
+   WARNING  no output files found for task my-app#build. Please check your `outputs` key in `turbo.json`
   $ cat .turbo/runs/*.json | jq -r '.envMode'
   strict
   $ cat .turbo/runs/*.json | jq -r '.tasks[0].envMode'
@@ -68,6 +71,7 @@ All specified + loose
   $ rm -rf .turbo/runs
   $ ${TESTDIR}/../../../helpers/replace_turbo_json.sh $(pwd) "strict_env_vars/all.json"
   $ ${TURBO} run build --env-mode=loose --summarize > /dev/null
+   WARNING  no output files found for task my-app#build. Please check your `outputs` key in `turbo.json`
   $ cat .turbo/runs/*.json | jq -r '.envMode'
   loose
   $ cat .turbo/runs/*.json | jq -r '.tasks[0].envMode'
@@ -98,6 +102,7 @@ Global passthrough specified value + infer
   $ rm -rf .turbo/runs
   $ ${TESTDIR}/../../../helpers/replace_turbo_json.sh $(pwd) "strict_env_vars/global_pt.json"
   $ ${TURBO} run build --summarize > /dev/null
+   WARNING  no output files found for task my-app#build. Please check your `outputs` key in `turbo.json`
   $ cat .turbo/runs/*.json | jq -r '.envMode'
   strict
   $ cat .turbo/runs/*.json | jq -r '.tasks[0].envMode'
@@ -141,7 +146,7 @@ Task passthrough specified empty array + infer
   $ ${TESTDIR}/../../../helpers/replace_turbo_json.sh $(pwd) "strict_env_vars/task_pt-empty.json"
   $ ${TURBO} run build --summarize > /dev/null
   $ cat .turbo/runs/*.json | jq -r '.envMode'
-  infer
+  strict
   $ cat .turbo/runs/*.json | jq -r '.tasks[0].envMode'
   strict
   $ cat .turbo/runs/*.json | jq -r '.tasks[0].environmentVariables | {passthrough, globalPassthrough}'
@@ -154,8 +159,9 @@ Task passthrough specified value + infer
   $ rm -rf .turbo/runs
   $ ${TESTDIR}/../../../helpers/replace_turbo_json.sh $(pwd) "strict_env_vars/task_pt.json"
   $ ${TURBO} run build --summarize > /dev/null
+   WARNING  no output files found for task my-app#build. Please check your `outputs` key in `turbo.json`
   $ cat .turbo/runs/*.json | jq -r '.envMode'
-  infer
+  strict
   $ cat .turbo/runs/*.json | jq -r '.tasks[0].envMode'
   strict
   $ cat .turbo/runs/*.json | jq -r '.tasks[0].environmentVariables | {passthrough, globalPassthrough}'

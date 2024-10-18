@@ -1,0 +1,46 @@
+---
+title: eslint-config-turbo
+description: Learn more about eslint-config-turbo.
+---
+
+import { PackageManagerTabs, Tab } from '#/components/tabs';
+
+[The `eslint-config-turbo` package](https://www.npmjs.com/package/eslint-config-turbo) helps you find environment variables that are used in your code that are not a part of Turborepo's hashing. Environment variables used in your source code that are not accounted for in `turbo.json` will be highlighted in your editor and errors will show as ESLint output.
+
+## Installation
+
+Install `eslint-config-turbo` into the location where your ESLint configuration is held:
+
+<PackageManagerTabs>
+  <Tab>
+
+    ```bash title="Terminal"
+    npm i --save-dev eslint-config-turbo -w @acme/eslint-config
+    ```
+
+  </Tab>
+  <Tab>
+
+    ```bash title="Terminal"
+    yarn workspace @acme/eslint-config add eslint-config-turbo --dev
+    ```
+
+  </Tab>
+  <Tab>
+
+    ```bash title="Terminal"
+    pnpm add eslint-config-turbo --filter=@repo/eslint-config
+    ```
+
+  </Tab>
+</PackageManagerTabs>
+
+## Usage
+
+In your ESLint configuration file, add the package:
+
+```json title="./packages/config-eslint/index.js"
+{
+  "extends": ["turbo"]
+}
+```

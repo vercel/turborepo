@@ -1,0 +1,185 @@
+---
+title: Jest
+description: Learn how to use Jest in a Turborepo.
+---
+
+import { Callout } from '#/components/callout';
+import { File, Folder, Files } from '#/components/files';
+import { PackageManagerTabs, Tabs, Tab } from '#/components/tabs';
+import { CreateTurboCallout } from './create-turbo-callout.tsx';
+
+[Jest](https://jestjs.io/) is a common test runner with a vast ecosystem. Integrating with Turborepo will lead to enormous speed-ups.
+
+<CreateTurboCallout />
+
+## Setting up
+
+Let's say we have a monorepo that looks like this:
+
+<Files>
+  <Folder name="apps" defaultOpen>
+    <Folder name="web" defaultOpen>
+      <File name="package.json" />
+    </Folder>
+  </Folder>
+  <Folder name="packages" defaultOpen>
+    <Folder name="ui" defaultOpen>
+      <File name="package.json" />
+    </Folder>
+  </Folder>
+</Files>
+
+Install `jest` into the packages where you plan on having test suites. For this example, we will have tests in `web` and `@repo/ui`:
+
+<PackageManagerTabs>
+<Tab>
+
+```bash title="Terminal"
+npm install jest --workspace=web --workspace=@repo/ui --save-dev
+```
+
+</Tab>
+
+<Tab>
+
+```bash title="Terminal"
+yarn workspace web add jest --dev
+yarn workspace @repo/ui add jest --dev
+```
+
+</Tab>
+
+<Tab>
+
+```bash title="Terminal"
+pnpm install jest --save-dev --filter=@repo/ui --filter=web
+```
+
+</Tab>
+</PackageManagerTabs>
+
+Both the `apps/web` and `packages/ui` have their own test suites, so we'll add a `test` script to their `package.json`:
+
+<Tabs items={["web", "@repo/ui"]}>
+<Tab value="web">
+```json title="./apps/web/package.json"
+{
+  "name": "web"
+  "scripts": {
+    "test": "jest"
+  },
+  "devDependencies": {
+    "jest": "latest"
+  }
+}
+```
+</Tab>
+<Tab value="@repo/ui">
+```json title="./packages/ui/package.json"
+{
+  "name": "@repo/ui"
+  "scripts": {
+    "test": "jest"
+  },
+  "devDependencies": {
+    "jest": "latest"
+  }
+}
+```
+</Tab>
+</Tabs>
+
+Inside the root `turbo.json`, create a `test` task:
+
+```json title="./turbo.json"
+{
+  "tasks": {
+    "test": {}
+  }
+}
+```
+
+Now, `turbo test` can parallelize and cache all of the test suites from each package, only testing code that has changed.
+
+## Running tests in watch mode
+
+When you run your test suite normally, it completes and outputs to `stdout`. This means you can [cache it](/repo/docs/crafting-your-repository/caching) with Turborepo.
+
+But when you run your tests in a watched mode, the process never exits. This makes a watch task more like a [development task](/repo/docs/crafting-your-repository/developing-applications).
+
+Because of this difference, we recommend specifying **two separate Turborepo tasks**: one for running your tests, and one for running them in Jest's watch mode. Inside your each `package.json` file for each workspace:
+
+<Tabs items={["web", "@repo/ui"]}>
+<Tab value="web">
+```json title="./apps/web/package.json"
+{
+  "name": "web"
+  "scripts": {
+    "test": "jest",
+    "test:watch": "jest --watch" // [!code highlight]
+  }
+  "devDependencies": {
+    "jest": "latest"
+  }
+}
+```
+</Tab>
+<Tab value="@repo/ui">
+```json title="./packages/ui/package.json"
+{
+  "name": "@repo/ui"
+  "scripts": {
+    "test": "jest",
+    "test:watch": "jest --watch" // [!code highlight]
+  },
+  "devDependencies": {
+    "jest": "latest"
+  }
+}
+```
+</Tab>
+</Tabs>
+
+Inside the root `turbo.json`:
+
+```json title="./turbo.json"
+{
+  "tasks": {
+    "test": {},
+    "test:watch": {
+      "cache": false, // [!code highlight]
+      "persistent": true // [!code highlight]
+    }
+  }
+}
+```
+
+You can now either run this task using [global `turbo`](/repo/docs/getting-started/installation#global-installation) as `turbo test:watch` or from a script in your root `package.json`:
+
+<Tabs items={["Global turbo", "./package.json"]}>
+<Tab value="Global turbo">
+
+```bash title="Terminal"
+turbo test
+```
+
+```bash title="Terminal"
+turbo test:watch
+```
+
+</Tab>
+
+<Tab value="./package.json">
+
+```json title="./package.json"
+{
+  "scripts": {
+    "test": "turbo run test",
+    "test:watch": "turbo run test:watch"
+  }
+}
+```
+
+</Tab>
+
+</Tabs>

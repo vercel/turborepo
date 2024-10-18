@@ -14,6 +14,33 @@ use crate::{PathError, RelativeUnixPath};
 #[serde(try_from = "String", into = "String")]
 pub struct RelativeUnixPathBuf(pub(crate) String);
 
+#[cfg(feature = "biome")]
+mod biome {
+    use biome_deserialize::{Deserializable, DeserializableValue, DeserializationDiagnostic};
+    use turborepo_unescape::UnescapedString;
+
+    use crate::RelativeUnixPathBuf;
+
+    impl Deserializable for RelativeUnixPathBuf {
+        fn deserialize(
+            value: &impl DeserializableValue,
+            name: &str,
+            diagnostics: &mut Vec<DeserializationDiagnostic>,
+        ) -> Option<Self> {
+            let path: String = UnescapedString::deserialize(value, name, diagnostics)?.into();
+            match Self::new(path) {
+                Ok(path) => Some(path),
+                Err(e) => {
+                    diagnostics.push(
+                        DeserializationDiagnostic::new(e.to_string()).with_range(value.range()),
+                    );
+                    None
+                }
+            }
+        }
+    }
+}
+
 impl Display for RelativeUnixPathBuf {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         Display::fmt(&self.0, f)
@@ -32,10 +59,6 @@ impl RelativeUnixPathBuf {
 
     pub fn into_inner(self) -> String {
         self.0
-    }
-
-    pub fn as_str(&self) -> &str {
-        self.0.as_str()
     }
 
     pub fn make_canonical_for_tar(&mut self, is_dir: bool) {

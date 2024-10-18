@@ -2,7 +2,7 @@
   "$schema": "https://turbo.build/schema.json",
   "globalDependencies": ["foo.txt"],
   "globalEnv": ["SOME_ENV_VAR", "NEW_ENV"],
-  "pipeline": {
+  "tasks": {
     "build": {
       "env": ["NODE_ENV"],
       "outputs": []

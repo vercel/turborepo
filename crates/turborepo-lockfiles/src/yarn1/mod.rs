@@ -117,6 +117,16 @@ impl Lockfile for Yarn1Lockfile {
         // if the types don't match then we changed package managers
         any_other.downcast_ref::<Self>().is_none()
     }
+
+    fn turbo_version(&self) -> Option<String> {
+        // Yarn lockfiles can have multiple descriptors as a key e.g. turbo@latest,
+        // turbo@1.2.3 We just check if the first descriptor is for turbo and
+        // return that. Using multiple versions of turbo in a single project is
+        // not supported.
+        let key = self.inner.keys().find(|key| key.starts_with("turbo@"))?;
+        let entry = self.inner.get(key)?;
+        Some(entry.version.clone())
+    }
 }
 
 pub fn yarn_subgraph(contents: &[u8], packages: &[String]) -> Result<Vec<u8>, crate::Error> {
@@ -175,5 +185,12 @@ mod test {
                 key
             );
         }
+    }
+
+    #[test_case(MINIMAL, "1.9.3" ; "minimal lockfile")]
+    #[test_case(FULL, "1.4.6" ; "full lockfile")]
+    fn test_turbo_version(lockfile: &str, expected: &str) {
+        let lockfile = Yarn1Lockfile::from_str(lockfile).unwrap();
+        assert_eq!(lockfile.turbo_version().as_deref(), Some(expected));
     }
 }

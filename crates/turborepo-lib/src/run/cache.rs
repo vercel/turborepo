@@ -4,8 +4,9 @@ use std::{
     time::Duration,
 };
 
+use itertools::Itertools;
 use tokio::sync::oneshot;
-use tracing::{debug, error};
+use tracing::{debug, error, log::warn};
 use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
 };
@@ -13,7 +14,7 @@ use turborepo_cache::{http::UploadMap, AsyncCache, CacheError, CacheHitMetadata,
 use turborepo_repository::package_graph::PackageInfo;
 use turborepo_scm::SCM;
 use turborepo_telemetry::events::{task::PackageTaskEventBuilder, TrackedErrors};
-use turborepo_ui::{color, ColorSelector, LogWriter, GREY, UI};
+use turborepo_ui::{color, tui::event::CacheResult, ColorConfig, ColorSelector, LogWriter, GREY};
 
 use crate::{
     cli::OutputLogsMode,
@@ -45,19 +46,20 @@ pub enum Error {
 }
 
 pub struct RunCache {
-    task_output_mode: Option<OutputLogsMode>,
+    task_output_logs: Option<OutputLogsMode>,
     cache: AsyncCache,
+    warnings: Arc<Mutex<Vec<String>>>,
     reads_disabled: bool,
     writes_disabled: bool,
     repo_root: AbsoluteSystemPathBuf,
     color_selector: ColorSelector,
     daemon_client: Option<DaemonClient<DaemonConnector>>,
-    ui: UI,
+    ui: ColorConfig,
 }
 
 /// Trait used to output cache information to user
 pub trait CacheOutput {
-    fn status(&mut self, message: &str);
+    fn status(&mut self, message: &str, result: CacheResult);
     fn error(&mut self, message: &str);
     fn replay_logs(&mut self, log_file: &AbsoluteSystemPath) -> Result<(), turborepo_ui::Error>;
 }
@@ -69,17 +71,18 @@ impl RunCache {
         opts: &RunCacheOpts,
         color_selector: ColorSelector,
         daemon_client: Option<DaemonClient<DaemonConnector>>,
-        ui: UI,
+        ui: ColorConfig,
         is_dry_run: bool,
     ) -> Self {
-        let task_output_mode = if is_dry_run {
+        let task_output_logs = if is_dry_run {
             Some(OutputLogsMode::None)
         } else {
-            opts.task_output_mode_override
+            opts.task_output_logs_override
         };
         RunCache {
-            task_output_mode,
+            task_output_logs,
             cache,
+            warnings: Default::default(),
             reads_disabled: opts.skip_reads,
             writes_disabled: opts.skip_writes,
             repo_root: repo_root.to_owned(),
@@ -104,9 +107,9 @@ impl RunCache {
         let repo_relative_globs =
             task_definition.repo_relative_hashable_outputs(&task_id, workspace_info.package_path());
 
-        let mut task_output_mode = task_definition.output_mode;
-        if let Some(task_output_mode_override) = self.task_output_mode {
-            task_output_mode = task_output_mode_override;
+        let mut task_output_logs = task_definition.output_logs;
+        if let Some(task_output_logs_override) = self.task_output_logs {
+            task_output_logs = task_output_logs_override;
         }
 
         let caching_disabled = !task_definition.cache;
@@ -117,17 +120,23 @@ impl RunCache {
             repo_relative_globs,
             hash: hash.to_owned(),
             task_id,
-            task_output_mode,
+            task_output_logs,
             caching_disabled,
             log_file_path,
             daemon_client: self.daemon_client.clone(),
             ui: self.ui,
+            warnings: self.warnings.clone(),
         }
     }
 
     pub async fn shutdown_cache(
         &self,
     ) -> Result<(Arc<Mutex<UploadMap>>, oneshot::Receiver<()>), CacheError> {
+        if let Ok(warnings) = self.warnings.lock() {
+            for warning in warnings.iter().sorted() {
+                warn!("{}", warning);
+            }
+        }
         // Ignore errors coming from cache already shutting down
         self.cache.start_shutdown().await
     }
@@ -138,15 +147,24 @@ pub struct TaskCache {
     run_cache: Arc<RunCache>,
     repo_relative_globs: TaskOutputs,
     hash: String,
-    task_output_mode: OutputLogsMode,
+    task_output_logs: OutputLogsMode,
     caching_disabled: bool,
     log_file_path: AbsoluteSystemPathBuf,
     daemon_client: Option<DaemonClient<DaemonConnector>>,
-    ui: UI,
+    ui: ColorConfig,
     task_id: TaskId<'static>,
+    warnings: Arc<Mutex<Vec<String>>>,
 }
 
 impl TaskCache {
+    pub fn output_logs(&self) -> OutputLogsMode {
+        self.task_output_logs
+    }
+
+    pub fn is_caching_disabled(&self) -> bool {
+        self.caching_disabled
+    }
+
     /// Will read log file and write to output a line at a time
     pub fn replay_log_file(&self, output: &mut impl CacheOutput) -> Result<(), Error> {
         if self.log_file_path.exists() {
@@ -157,11 +175,14 @@ impl TaskCache {
     }
 
     pub fn on_error(&self, terminal_output: &mut impl CacheOutput) -> Result<(), Error> {
-        if self.task_output_mode == OutputLogsMode::ErrorsOnly {
-            terminal_output.status(&format!(
-                "cache miss, executing {}",
-                color!(self.ui, GREY, "{}", self.hash)
-            ));
+        if self.task_output_logs == OutputLogsMode::ErrorsOnly {
+            terminal_output.status(
+                &format!(
+                    "cache miss, executing {}",
+                    color!(self.ui, GREY, "{}", self.hash)
+                ),
+                CacheResult::Miss,
+            );
             self.replay_log_file(terminal_output)?;
         }
 
@@ -179,7 +200,7 @@ impl TaskCache {
         log_writer.with_log_file(&self.log_file_path)?;
 
         if !matches!(
-            self.task_output_mode,
+            self.task_output_logs,
             OutputLogsMode::None | OutputLogsMode::HashOnly | OutputLogsMode::ErrorsOnly
         ) {
             log_writer.with_writer(writer);
@@ -199,13 +220,16 @@ impl TaskCache {
     ) -> Result<Option<CacheHitMetadata>, Error> {
         if self.caching_disabled || self.run_cache.reads_disabled {
             if !matches!(
-                self.task_output_mode,
+                self.task_output_logs,
                 OutputLogsMode::None | OutputLogsMode::ErrorsOnly
             ) {
-                terminal_output.status(&format!(
-                    "cache bypass, force executing {}",
-                    color!(self.ui, GREY, "{}", self.hash)
-                ));
+                terminal_output.status(
+                    &format!(
+                        "cache bypass, force executing {}",
+                        color!(self.ui, GREY, "{}", self.hash)
+                    ),
+                    CacheResult::Miss,
+                );
             }
 
             return Ok(None);
@@ -247,13 +271,16 @@ impl TaskCache {
 
             let Some((cache_hit_metadata, restored_files)) = cache_status else {
                 if !matches!(
-                    self.task_output_mode,
+                    self.task_output_logs,
                     OutputLogsMode::None | OutputLogsMode::ErrorsOnly
                 ) {
-                    terminal_output.status(&format!(
-                        "cache miss, executing {}",
-                        color!(self.ui, GREY, "{}", self.hash)
-                    ));
+                    terminal_output.status(
+                        &format!(
+                            "cache miss, executing {}",
+                            color!(self.ui, GREY, "{}", self.hash)
+                        ),
+                        CacheResult::Miss,
+                    );
                 }
 
                 return Ok(None);
@@ -296,21 +323,27 @@ impl TaskCache {
             " (outputs already on disk)"
         };
 
-        match self.task_output_mode {
+        match self.task_output_logs {
             OutputLogsMode::HashOnly | OutputLogsMode::NewOnly => {
-                terminal_output.status(&format!(
-                    "cache hit{}, suppressing logs {}",
-                    more_context,
-                    color!(self.ui, GREY, "{}", self.hash)
-                ));
+                terminal_output.status(
+                    &format!(
+                        "cache hit{}, suppressing logs {}",
+                        more_context,
+                        color!(self.ui, GREY, "{}", self.hash)
+                    ),
+                    CacheResult::Hit,
+                );
             }
             OutputLogsMode::Full => {
                 debug!("log file path: {}", self.log_file_path);
-                terminal_output.status(&format!(
-                    "cache hit{}, replaying logs {}",
-                    more_context,
-                    color!(self.ui, GREY, "{}", self.hash)
-                ));
+                terminal_output.status(
+                    &format!(
+                        "cache hit{}, replaying logs {}",
+                        more_context,
+                        color!(self.ui, GREY, "{}", self.hash)
+                    ),
+                    CacheResult::Hit,
+                );
                 self.replay_log_file(terminal_output)?;
             }
             // Note that if we're restoring from cache, the task succeeded
@@ -340,6 +373,18 @@ impl TaskCache {
             &validated_exclusions,
             globwalk::WalkType::All,
         )?;
+
+        // If we're only caching the log output, *and* output globs are not empty,
+        // we should warn the user
+        if files_to_be_cached.len() == 1 && !self.repo_relative_globs.is_empty() {
+            let _ = self.warnings.lock().map(|mut warnings| {
+                warnings.push(format!(
+                    "no output files found for task {}. Please check your `outputs` key in \
+                     `turbo.json`",
+                    self.task_id
+                ))
+            });
+        }
 
         let mut relative_paths = files_to_be_cached
             .into_iter()

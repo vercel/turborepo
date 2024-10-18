@@ -4,7 +4,7 @@ import { getWorkspaceDetails, type Project } from "@turbo/workspaces";
 import { type PackageJson, getAvailablePackageManagers } from "@turbo/utils";
 import { getTransformerHelpers } from "../utils/getTransformerHelpers";
 import type { TransformerResults } from "../runner";
-import type { TransformerArgs } from "../types";
+import type { Transformer, TransformerArgs } from "../types";
 
 // transformer details
 const TRANSFORMER = "add-package-manager";
@@ -20,6 +20,13 @@ export async function transformer({
     rootPath: root,
     options,
   });
+
+  const rootPackageJsonPath = path.join(root, "package.json");
+  const rootPackageJson = readJsonSync(rootPackageJsonPath) as PackageJson;
+  if ("packageManager" in rootPackageJson) {
+    log.info(`"packageManager" already set in root "package.json"`);
+    return runner.finish();
+  }
 
   log.info(`Set "packageManager" key in root "package.json" file...`);
   let project: Project;
@@ -41,8 +48,6 @@ export async function transformer({
   }
 
   const pkgManagerString = `${packageManager}@${version}`;
-  const rootPackageJsonPath = path.join(root, "package.json");
-  const rootPackageJson = readJsonSync(rootPackageJsonPath) as PackageJson;
   const allWorkspaces = [
     {
       name: "package.json",
@@ -66,7 +71,7 @@ export async function transformer({
   return runner.finish();
 }
 
-const transformerMeta = {
+const transformerMeta: Transformer = {
   name: TRANSFORMER,
   description: DESCRIPTION,
   introducedIn: INTRODUCED_IN,

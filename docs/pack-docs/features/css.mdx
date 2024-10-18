@@ -1,0 +1,91 @@
+---
+title: CSS
+description: Learn more about CSS in Turbopack.
+---
+
+import { Callout } from '#/components/callout';
+
+CSS parsing and transformation is handled by [Lightning CSS](https://lightningcss.dev/).
+
+## Global CSS
+
+Importing CSS into global scope is built-in in Turbopack.
+
+```tsx title="my-file.tsx"
+import './globals.css';
+```
+
+## CSS Modules
+
+Turbopack handles CSS Modules. Any file with a `.module.css` extension will be considered a CSS module, and you can import it into a JavaScript or TypeScript file:
+
+```tsx title="component.tsx"
+import cssExports from './phone.module.css';
+```
+
+This follows the same rules set out by [Next.js](https://nextjs.org/docs/basic-features/built-in-css-support#adding-component-level-css) - letting you easily distinguish between global and scoped CSS.
+
+## CSS nesting
+
+Turbopack handles [CSS Nesting](https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_nesting/Using_CSS_nesting) syntax. This is [officially part of the CSS specification](https://www.w3.org/TR/css-nesting-1/) and lets you nest CSS declarations inside each other:
+
+```css title="phone.css"
+.phone {
+  &_title {
+    width: 500px;
+    @media (max-width: 500px) {
+      width: auto;
+    }
+    body.is_dark & {
+      color: white;
+    }
+  }
+  img {
+    display: block;
+  }
+}
+```
+
+## `@import` syntax
+
+Using the CSS `@import` syntax to import other CSS files is supported. This gives you the ability to combine several CSS files together into a single module:
+
+```css title="globals.css"
+@import './modal.css';
+@import './dark.css';
+```
+
+## PostCSS
+
+PostCSS gives you the ability to use plugins to enhance your CSS toolchain. It's been an invaluable tool for integrating libraries like Tailwind and `autoprefixer` into applications.
+
+The most common pattern is adding a `postcss.config.js` file to the root of your application, where you can import and configure your plugins.
+
+When Turbopack finds a `postcss.config.js` file, it will automatically process your CSS files with PostCSS in a Node.js worker pool.
+
+```js title="postcss.config.js"
+module.exports = {
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {},
+  },
+};
+```
+
+## Sass and SCSS
+
+`.scss` and `.sass` files let you utilize the [Sass](https://sass-lang.com/) language.
+
+Sass is currently supported when using Next.js with Turbopack.
+
+This is likely to be available via plugins/loaders in the future when using Turbopack directly.
+
+## Less
+
+`.less` files let you utilize the [Less](https://lesscss.org/) language.
+
+This is likely to be available via plugins/loaders in the future.
+
+## Tailwind CSS
+
+Tailwind CSS can be used via PostCSS plugins. You can use the [official Tailwind Next.js guide](https://tailwindcss.com/docs/guides/nextjs) to get started.

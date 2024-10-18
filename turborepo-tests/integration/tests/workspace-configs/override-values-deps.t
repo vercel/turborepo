@@ -12,7 +12,7 @@ Setup
   \xe2\x80\xa2 Packages in scope: override-values (esc)
   \xe2\x80\xa2 Running override-values-task-with-deps in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  override-values:override-values-task-with-deps: cache miss, executing 596194c40fbbbca4
+  override-values:override-values-task-with-deps: cache miss, executing 9b51bda96ea87896
   override-values:override-values-task-with-deps: 
   override-values:override-values-task-with-deps: > override-values-task-with-deps
   override-values:override-values-task-with-deps: > echo running-override-values-task-with-deps > out/foo.min.txt
@@ -22,6 +22,7 @@ Setup
   Cached:    0 cached, 1 total
     Time:\s*[\.0-9]+m?s  (re)
   
+   WARNING  no output files found for task override-values#override-values-task-with-deps. Please check your `outputs` key in `turbo.json`
 
 # This is the same test as above, but with --dry and testing the resolvedTaskDefinition has the same value for dependsOn
   $ ${TURBO} run override-values-task-with-deps --filter=override-values --dry=json | jq '.tasks | map(select(.taskId == "override-values#override-values-task-with-deps")) | .[0].resolvedTaskDefinition'
@@ -30,11 +31,11 @@ Setup
     "cache": true,
     "dependsOn": [],
     "inputs": [],
-    "outputMode": "full",
+    "outputLogs": "full",
     "persistent": false,
+    "interruptible": false,
     "env": [],
     "passThroughEnv": null,
-    "dotEnv": null,
     "interactive": false
   }
 
@@ -46,10 +47,10 @@ Setup
     "cache": true,
     "dependsOn": [],
     "inputs": [],
-    "outputMode": "full",
+    "outputLogs": "full",
     "persistent": false,
+    "interruptible": false,
     "env": [],
     "passThroughEnv": null,
-    "dotEnv": null,
     "interactive": false
   }

@@ -2,7 +2,7 @@
 name = "turbo"
 version = "0.1.0"
 edition = "2021"
-license = "MPL-2.0"
+license = "MIT"
 
 [features]
 # By default, we enable rustls-tls for reqwest via downstream transitive features.
@@ -28,7 +28,6 @@ workspace = true
 
 [dependencies]
 anyhow = { workspace = true, features = ["backtrace"] }
-human-panic = "1.2.1"
 miette.workspace = true
 turborepo-lib = { workspace = true, default-features = false }
 

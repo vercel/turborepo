@@ -1,18 +1,18 @@
 {
   "name": "turbo-ignore",
-  "version": "1.13.4-canary.5",
+  "version": "2.1.4-canary.9",
   "description": "",
   "homepage": "https://turbo.build/repo",
   "keywords": [],
   "author": "Jared Palmer",
-  "license": "MPL-2.0",
+  "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/vercel/turbo",
+    "url": "https://github.com/vercel/turborepo",
     "directory": "packages/turbo-ignore"
   },
   "bugs": {
-    "url": "https://github.com/vercel/turbo/issues"
+    "url": "https://github.com/vercel/turborepo/issues"
   },
   "files": [
     "dist"
@@ -24,6 +24,9 @@
     "lint": "eslint src __tests__",
     "check-types": "tsc --noEmit",
     "lint:prettier": "prettier -c . --cache --ignore-path=../../.prettierignore"
+  },
+  "dependencies": {
+    "json5": "^2.2.3"
   },
   "devDependencies": {
     "@turbo/eslint-config": "workspace:*",

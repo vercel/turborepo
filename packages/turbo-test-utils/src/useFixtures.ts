@@ -1,6 +1,6 @@
 import path from "node:path";
-import { v4 as uuidv4 } from "uuid";
-import { rimraf } from "rimraf";
+import { randomUUID } from "node:crypto";
+import { rm } from "node:fs/promises";
 import {
   mkdirSync,
   existsSync,
@@ -25,28 +25,32 @@ export function setupTestFixtures({
   options = {},
 }: SetupTextFixtures) {
   const fixtures: Array<string> = [];
-  const parentDirectory = path.join(directory, test ? test : uuidv4());
+  const parentDirectory = path.join(directory, test ? test : randomUUID());
 
   afterEach(async () => {
     await Promise.all(
       fixtures.map((fixture) =>
-        rimraf(fixture, {
+        rm(fixture, {
           retryDelay: 50,
           maxRetries: 5,
+          recursive: true,
+          force: true,
         })
       )
     );
   });
 
   afterAll(async () => {
-    await rimraf(parentDirectory, {
+    await rm(parentDirectory, {
       retryDelay: 50,
       maxRetries: 5,
+      recursive: true,
+      force: true,
     });
   });
 
   const useFixture = ({ fixture }: { fixture: string }) => {
-    const directoryName = uuidv4();
+    const directoryName = randomUUID();
     const testDirectory = path.join(parentDirectory, directoryName);
     if (!existsSync(testDirectory)) {
       mkdirSync(testDirectory, { recursive: true });

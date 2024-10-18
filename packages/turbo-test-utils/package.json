@@ -7,14 +7,14 @@
   "keywords": [],
   "author": "Vercel",
   "main": "src/index.ts",
-  "license": "MPL-2.0",
+  "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/vercel/turbo",
+    "url": "https://github.com/vercel/turborepo",
     "directory": "packages/turbo-test-utils"
   },
   "bugs": {
-    "url": "https://github.com/vercel/turbo/issues"
+    "url": "https://github.com/vercel/turborepo/issues"
   },
   "scripts": {
     "lint": "eslint src/",
@@ -28,7 +28,6 @@
     "@types/jest": "^27.4.0",
     "@types/js-yaml": "^4.0.5",
     "@types/node": "^18.17.2",
-    "@types/uuid": "^9.0.0",
     "jest": "^27.4.3",
     "ts-jest": "^27.1.1",
     "typescript": "5.3.3"
@@ -36,8 +35,6 @@
   "dependencies": {
     "fs-extra": "^11.1.0",
     "js-yaml": "^4.1.0",
-    "json5": "^2.2.3",
-    "rimraf": "^5.0.1",
-    "uuid": "^9.0.0"
+    "json5": "^2.2.3"
   }
 }

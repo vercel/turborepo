@@ -1,0 +1,66 @@
+---
+title: Support policy
+description: Learn about Turborepo's Support policy.
+---
+
+import { Callout } from '#/components/callout';
+
+## Package managers
+
+Core `turbo` functionality depends on the package managers in the JavaScript ecosystem and their implementations of Workspaces and
+lockfiles formats.
+
+| Package manager | Supported                                                   |
+| --------------- | ----------------------------------------------------------- |
+| pnpm 8+         | Yes                                                         |
+| npm 8+          | Yes                                                         |
+| yarn 1+         | Yes (Includes Yarn Plug'n'Play)                             |
+| bun 1+          | Experimental, based on Bun's experimental Workspace support |
+
+<Callout type="info">
+  Package managers have their own release schedules, bugs, and features. While
+  we intend to keep up with new major versions, we likely will not be able to
+  release support immediately.
+</Callout>
+
+## Platforms
+
+`turbo` is generally supported on Debian-based Linux distributions, macOS, and
+Windows on both x86_64 and ARM 64 architectures. Specifically, we build and ship
+the following binaries via npm:
+
+- `turbo-darwin-64` (macOS with Intel chips)
+- `turbo-darwin-arm64` (macOS with Apple Silicon)
+- `turbo-linux-64`
+- `turbo-linux-arm64`
+- `turbo-windows-64`
+- `turbo-windows-arm64`
+
+## Node.js
+
+Core `turbo` functionality does not depend on the
+active Node.js version on your system, but [some packages in the Turborepo ecosystem](/repo/docs/reference#packages)
+such as [`create-turbo`](/repo/docs/reference/create-turbo), [`turbo-ignore`](/repo/docs/reference/turbo-ignore), and [`eslint-config-turbo`](/repo/docs/reference/eslint-config-turbo) do. For these features,
+we intend to support the [Active and Maintenance LTS versions of Node.js](https://nodejs.org/en/about/previous-releases).
+
+Turborepo's [examples](/repo/docs/getting-started/installation#start-with-an-example) are also expected to work with these Node.js versions.
+
+## Version control
+
+We support repositories that are version controlled with Git and repositories that don't have
+version control at all. Any other version control system will be ignored.
+
+Note that we use Git to hash files, so repositories without git may perform and behave differently.
+
+## LTS policy
+
+Major versions of Turborepo will be supported for two years from the release date of the next major version.
+
+Changes required for critical security fixes in older versions will be backported. Such situations will be rare and will land as semver-minor releases, even if they are breaking changes.
+
+We highly encourage you to use the most current version of Turborepo whenever possible.
+
+| Major version | Release date | End-of-life date |
+| ------------- | ------------ | ---------------- |
+| 2.x           | Jun. 4, 2024 |                  |
+| 1.x           | Dec. 9, 2021 | Jun. 4, 2026     |

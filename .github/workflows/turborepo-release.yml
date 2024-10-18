@@ -16,6 +16,9 @@ env:
   CARGO_PROFILE_RELEASE_LTO: true
   NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
   RELEASE_TURBO_CLI: true # TODO: do we need this?
+  # Needed since we need to build on Xenial which doesn't have a new enough
+  # GLIBC to use Node 20.
+  ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 
 on:
   workflow_dispatch:
@@ -124,8 +127,7 @@ jobs:
             rust-build-env: 'CC_aarch64_unknown_linux_musl=clang AR_aarch64_unknown_linux_musl=llvm-ar RUSTFLAGS="-Clink-self-contained=yes -Clinker=rust-lld"'
             setup: "sudo apt-get update && sudo apt-get install -y build-essential musl-tools clang llvm gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu"
           - host: windows-latest
-            target: x86_64-pc-windows-gnu
-            setup: "rustup set default-host x86_64-pc-windows-gnu"
+            target: x86_64-pc-windows-msvc
             container-options: "--rm"
     runs-on: ${{ matrix.settings.host }}
     container:
@@ -224,10 +226,10 @@ jobs:
         run: |
           mv rust-artifacts/turbo-aarch64-apple-darwin cli/dist-darwin-arm64
           mv rust-artifacts/turbo-aarch64-unknown-linux-musl cli/dist-linux-arm64
-          cp -r rust-artifacts/turbo-x86_64-pc-windows-gnu cli/dist-windows-arm64
+          cp -r rust-artifacts/turbo-x86_64-pc-windows-msvc cli/dist-windows-arm64
           mv rust-artifacts/turbo-x86_64-unknown-linux-musl cli/dist-linux-amd64
           mv rust-artifacts/turbo-x86_64-apple-darwin cli/dist-darwin-amd64
-          mv rust-artifacts/turbo-x86_64-pc-windows-gnu cli/dist-windows-amd64
+          mv rust-artifacts/turbo-x86_64-pc-windows-msvc cli/dist-windows-amd64
 
       - name: Perform Release
         run: cd cli && make publish-turbo SKIP_PUBLISH=${{ inputs.dry_run && '--skip-publish' || '' }}

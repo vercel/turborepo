@@ -1,0 +1,236 @@
+---
+title: ESLint
+description: Learn how to use ESLint in a monorepo.
+---
+
+import { PackageManagerTabs, Tabs, Tab } from '#/components/tabs';
+import { Callout } from '#/components/callout';
+import { Files, Folder, File } from '#/components/files';
+import { CreateTurboCallout } from './create-turbo-callout.tsx';
+
+ESLint is a static analysis tool for quickly finding and fixing problems in your JavaScript code.
+
+<CreateTurboCallout />
+
+<Callout type="info">
+  This page is written for ESLint v8. If you'd like to contribute to add a
+  version for v9, the core team is happy to review your pull request.
+</Callout>
+
+## Installing ESLint
+
+Install ESLint into each package where you'd like to run it:
+
+<PackageManagerTabs>
+<Tab>
+
+```bash title="Terminal"
+npm install eslint --workspace=web --workspace=docs --workspace=@repo/ui --save-dev
+```
+
+<Callout type="good-to-know">
+  You can keep ESLint versions in sync using a tool like
+  [syncpack](https://jamiemason.github.io/syncpack).
+</Callout>
+
+</Tab>
+
+<Tab>
+
+```bash title="Terminal"
+yarn workspace web add eslint --dev
+yarn workspace docs add eslint --dev
+yarn workspace @repo/ui add eslint --dev
+```
+
+</Tab>
+
+<Tab>
+
+```bash title="Terminal"
+pnpm install eslint --save-dev --filter=@repo/ui --filter=docs --filter=web
+```
+
+</Tab>
+</PackageManagerTabs>
+
+## Sharing configuration
+
+Sharing an ESLint config across packages makes their source code more consistent. Let's imagine a Workspace like this:
+
+<Files>
+  <Folder name="apps" defaultOpen>
+    <Folder name="docs" defaultOpen>
+     <File name="package.json" />
+     <File name=".eslintrc.js" />
+    </Folder>
+
+    <Folder name="web" defaultOpen>
+     <File name="package.json" />
+     <File name=".eslintrc.js" />
+    </Folder>
+
+  </Folder>
+
+  <Folder name="packages">
+    <Folder name="eslint-config">
+     <File name="next.js" />
+     <File name="library.js" />
+     <File name="package.json" />
+    </Folder>
+  </Folder>
+</Files>
+
+We've got a package called `@repo/eslint-config`, and two applications, each with their own `.eslintrc.js`.
+
+### Our `@repo/eslint-config` package
+
+Our `@repo/eslint-config` file contains two files, `next.js`, and `library.js`. These are two different ESLint configs, which we can use in different workspaces, depending on our needs.
+
+Let's investigate the `next.js` lint configuration:
+
+```js title="./packages/eslint-config/next.js"
+const { resolve } = require('node:path');
+
+const project = resolve(process.cwd(), 'tsconfig.json');
+
+/*
+ * This is a custom ESLint configuration for use with
+ * Next.js apps.
+ *
+ * This config extends the Vercel Engineering Style Guide.
+ * For more information, see https://github.com/vercel/style-guide
+ *
+ */
+
+module.exports = {
+  extends: [
+    require.resolve('@vercel/style-guide/eslint/node'),
+    require.resolve('@vercel/style-guide/eslint/typescript'),
+    require.resolve('@vercel/style-guide/eslint/browser'),
+    require.resolve('@vercel/style-guide/eslint/react'),
+    require.resolve('@vercel/style-guide/eslint/next'),
+    // Turborepo custom eslint configuration configures the following rules:
+    //  - https://github.com/vercel/turborepo/blob/main/packages/eslint-plugin-turbo/docs/rules/no-undeclared-env-vars.md
+    'eslint-config-turbo',
+  ].map(require.resolve),
+  parserOptions: {
+    project,
+  },
+  globals: {
+    React: true,
+    JSX: true,
+  },
+  settings: {
+    'import/resolver': {
+      typescript: {
+        project,
+      },
+    },
+  },
+  ignorePatterns: ['node_modules/', 'dist/'],
+  // add rules configurations here
+  rules: {
+    'import/no-default-export': 'off',
+  },
+};
+```
+
+It's a typical ESLint config that extends the [Vercel style guide](https://github.com/vercel/style-guide), nothing fancy.
+
+The `package.json` looks like this:
+
+```json title="./packages/eslint-config/package.json"
+{
+  "name": "@repo/eslint-config",
+  "version": "0.0.0",
+  "private": true,
+  "devDependencies": {
+    "@vercel/style-guide": "latest",
+    "eslint-config-turbo": "latest"
+  }
+}
+```
+
+Note that the ESLint dependencies are all listed here. This is useful, since it means we don't need to re-specify the dependencies inside the apps which import `@repo/eslint-config`.
+
+### How to use the `@repo/eslint-config` package
+
+In our `web` app, we first need to add `@repo/eslint-config` as a dependency.
+
+<PackageManagerTabs>
+  <Tab>
+```jsonc title="./apps/web/package.json"
+{
+  "dependencies": {
+    "@repo/eslint-config": "*"
+  }
+}
+```
+  </Tab>
+  <Tab>
+```jsonc title="./apps/web/package.json"
+{
+  "dependencies": {
+    "@repo/eslint-config": "*"
+  }
+}
+```
+  </Tab>
+  <Tab>
+```jsonc title="./apps/web/package.json"
+{
+  "dependencies": {
+    "@repo/eslint-config": "workspace:*"
+  }
+}
+```
+  </Tab>
+</PackageManagerTabs>
+
+We can then import the config like this:
+
+```js title="./apps/web/.eslintrc.js"
+module.exports = {
+  root: true,
+  extends: ['@repo/eslint-config/next.js'],
+};
+```
+
+By adding `@repo/eslint-config/next.js` to our `extends` array, we're telling ESLint to look for a package called `@repo/eslint-config`, and reference the file `next.js`.
+
+### Summary
+
+This setup ships by default when you [create a new monorepo](/repo/docs/crafting-your-repository#from-zero-to-turbo) with `npx create-turbo@latest`. You can also look at [our basic example](https://github.com/vercel/turborepo/tree/main/examples/basic) to see a working version.
+
+## Setting up a `lint` task
+
+The `package.json` for each package where you'd like to run ESLint should look like this:
+
+```json title="./packages/*/package.json"
+{
+  "scripts": {
+    "lint": "eslint ."
+  }
+}
+```
+
+With your scripts prepared, you can then create your Turborepo task:
+
+```bash title="./turbo.json"
+{
+  "tasks": {
+    "lint": {}
+  }
+}
+```
+
+You can now run `turbo lint` with [global `turbo`](/repo/docs/getting-started/installation#global-installation) or create a script in your root `package.json`:
+
+```json title="./package.json"
+{
+  "scripts": {
+    "lint": "turbo run lint"
+  }
+}
+```

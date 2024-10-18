@@ -2,7 +2,7 @@
 name = "turborepo-ui"
 version = "0.1.0"
 edition = "2021"
-license = "MPL-2.0"
+license = "MIT"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dev-dependencies]
@@ -15,17 +15,33 @@ test-case = { workspace = true }
 workspace = true
 
 [dependencies]
+async-graphql = { workspace = true }
+async-graphql-axum = { workspace = true }
+async-stream = "0.3.5"
 atty = { workspace = true }
+axum = { workspace = true, features = ["ws"] }
+axum-server = { workspace = true }
+base64 = "0.22"
+chrono = { workspace = true }
 console = { workspace = true }
-crossterm = "0.26.1"
+crossterm = { version = "0.27.0", features = ["event-stream"] }
 dialoguer = { workspace = true }
+futures = { workspace = true }
 indicatif = { workspace = true }
 lazy_static = { workspace = true }
 nix = { version = "0.26.2", features = ["signal"] }
 ratatui = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
 thiserror = { workspace = true }
+tokio = { workspace = true }
 tracing = { workspace = true }
 tui-term = { workspace = true }
 turbopath = { workspace = true }
+turborepo-ci = { workspace = true }
 turborepo-vt100 = { workspace = true }
+which = { workspace = true }
 winapi = "0.3.9"
+
+[target."cfg(windows)".dependencies]
+clipboard-win = "5.3.1"

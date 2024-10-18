@@ -7,18 +7,18 @@ Check
   Global Hash Inputs
     Global Files                          = 3
     External Dependencies Hash            = 
-    Global Cache Key                      = HEY STELLLLLLLAAAAAAAAAAAAA
-    Global .env Files Considered          = 0
+    Global Cache Key                      = I can\xe2\x80\x99t see ya, but I know you\xe2\x80\x99re here (esc)
     Global Env Vars                       = 
     Global Env Vars Values                = 
     Inferred Global Env Vars Values       = 
     Global Passed Through Env Vars        = 
     Global Passed Through Env Vars Values = 
+    Engines Values                        = 
   
   Tasks to Run
   build
     Task                           = build\s* (re)
-    Hash                           = f09bf783beacf5c9\s* (re)
+    Hash                           = 7ece7b62aad25615
     Cached \(Local\)                 = false\s* (re)
     Cached \(Remote\)                = false\s* (re)
     Command                        = echo building > foo.txt\s* (re)
@@ -27,11 +27,10 @@ Check
     Dependencies                   =\s* (re)
     Dependents                     =\s* (re)
     Inputs Files Considered        = 5\s* (re)
-    .env Files Considered          = 0\s* (re)
-    Env Vars                       =\s* (re)
-    Env Vars Values                =\s* (re)
-    Inferred Env Vars Values       =\s* (re)
-    Passed Through Env Vars        =\s* (re)
-    Passed Through Env Vars Values =\s* (re)
-    Resolved Task Definition       = {"outputs":["foo.txt"],"cache":true,"dependsOn":[],"inputs":[],"outputMode":"full","persistent":false,"env":[],"passThroughEnv":null,"dotEnv":null,"interactive":false}
-    Framework                      =\s* (re)
+    Env Vars                       = 
+    Env Vars Values                = 
+    Inferred Env Vars Values       = 
+    Passed Through Env Vars        = 
+    Passed Through Env Vars Values = 
+    Resolved Task Definition       = {"outputs":["foo.txt"],"cache":true,"dependsOn":[],"inputs":[],"outputLogs":"full","persistent":false,"interruptible":false,"env":[],"passThroughEnv":null,"interactive":false}
+    Framework                      = 

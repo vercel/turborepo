@@ -1,11 +1,11 @@
 import path from "node:path";
 import { readJsonSync, existsSync } from "fs-extra";
 import { type PackageJson, getTurboConfigs } from "@turbo/utils";
-import type { Schema as TurboJsonSchema } from "@turbo/types";
-import type { RootSchema } from "@turbo/types/src/types/config";
-import type { TransformerArgs } from "../types";
+import type { SchemaV1, RootSchemaV1, Pipeline } from "@turbo/types";
+import type { Transformer, TransformerArgs } from "../types";
 import { getTransformerHelpers } from "../utils/getTransformerHelpers";
 import type { TransformerResults } from "../runner";
+import { loadTurboJson } from "../utils/loadTurboJson";
 
 // transformer details
 const TRANSFORMER = "stabilize-env-mode";
@@ -13,7 +13,20 @@ const DESCRIPTION =
   "Rewrite experimentalPassThroughEnv and experimentalGlobalPassThroughEnv";
 const INTRODUCED_IN = "1.10.0";
 
-function migrateRootConfig(config: RootSchema) {
+type ExperimentalRootSchema = Omit<RootSchemaV1, "pipeline"> & {
+  experimentalGlobalPassThroughEnv?: null | Array<string>;
+  pipeline: Record<string, ExperimentalPipeline>;
+};
+
+type ExperimentalPipeline = Pipeline & {
+  experimentalPassThroughEnv?: null | Array<string>;
+};
+
+type ExperimentalSchema = Omit<SchemaV1, "pipeline"> & {
+  pipeline: Record<string, ExperimentalPipeline>;
+};
+
+function migrateRootConfig(config: ExperimentalRootSchema) {
   const oldConfig = config.experimentalGlobalPassThroughEnv;
   const newConfig = config.globalPassThroughEnv;
   // Set to an empty array is meaningful, so we have undefined as an option here.
@@ -45,7 +58,7 @@ function migrateRootConfig(config: RootSchema) {
   return migrateTaskConfigs(config);
 }
 
-function migrateTaskConfigs(config: TurboJsonSchema) {
+function migrateTaskConfigs(config: ExperimentalSchema) {
   for (const [_, taskDef] of Object.entries(config.pipeline)) {
     const oldConfig = taskDef.experimentalPassThroughEnv;
     const newConfig = taskDef.passThroughEnv;
@@ -119,7 +132,7 @@ export function transformer({
     });
   }
 
-  const turboJson = readJsonSync(turboConfigPath) as TurboJsonSchema;
+  const turboJson: SchemaV1 = loadTurboJson(turboConfigPath);
   runner.modifyFile({
     filePath: turboConfigPath,
     after: migrateRootConfig(turboJson),
@@ -129,7 +142,7 @@ export function transformer({
   const allTurboJsons = getTurboConfigs(root);
   allTurboJsons.forEach((workspaceConfig) => {
     const { config, turboConfigPath: filePath, isRootConfig } = workspaceConfig;
-    if (!isRootConfig) {
+    if (!isRootConfig && "pipeline" in config) {
       runner.modifyFile({
         filePath,
         after: migrateTaskConfigs(config),
@@ -140,7 +153,7 @@ export function transformer({
   return runner.finish();
 }
 
-const transformerMeta = {
+const transformerMeta: Transformer = {
   name: TRANSFORMER,
   description: DESCRIPTION,
   introducedIn: INTRODUCED_IN,

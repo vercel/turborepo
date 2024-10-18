@@ -1,13 +1,20 @@
 {
   "extends": ["//"],
-
-  "pipeline": {
+  "tasks": {
     "add-keys-task": {
-      "dependsOn": ["add-keys-underlying-task"],
-      "inputs": ["src/foo.txt"],
-      "outputs": ["out/**"],
-      "env": ["SOME_VAR"],
-      "outputMode": "new-only"
+      "dependsOn": [
+        "add-keys-underlying-task"
+      ],
+      "inputs": [
+        "src/foo.txt"
+      ],
+      "outputs": [
+        "out/**"
+      ],
+      "env": [
+        "SOME_VAR"
+      ],
+      "outputLogs": "new-only"
     },
     "add-keys-underlying-task": {}
   }

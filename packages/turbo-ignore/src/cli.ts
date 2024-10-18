@@ -56,6 +56,12 @@ turboIgnoreCli
   )
   .addOption(
     new Option(
+      "--turbo-version <version>",
+      "Explicitly set which version of turbo to invoke"
+    )
+  )
+  .addOption(
+    new Option(
       "-b, --max-buffer <number>",
       "maxBuffer for the child process in KB (default: 1024 KB)"
     ).argParser((val) => parseInt(val, 10) * 1024)

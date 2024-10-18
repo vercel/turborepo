@@ -21,12 +21,13 @@ mod engine;
 
 mod framework;
 mod gitignore;
-mod global_deps_package_change_mapper;
 pub(crate) mod globwatcher;
 mod hash;
 mod opts;
 mod package_changes_watcher;
+mod panic_handler;
 mod process;
+mod query;
 mod rewrite_json;
 mod run;
 mod shim;
@@ -35,12 +36,14 @@ mod task_graph;
 mod task_hash;
 mod tracing;
 mod turbo_json;
-mod unescape;
 
 pub use crate::{
     child::spawn_child,
     cli::Args,
-    daemon::{DaemonClient, DaemonConnector, Paths as DaemonPaths},
+    daemon::{
+        DaemonClient, DaemonConnector, DaemonConnectorError, DaemonError, Paths as DaemonPaths,
+    },
+    panic_handler::panic_handler,
     run::package_discovery::DaemonPackageDiscovery,
 };
 

@@ -1,0 +1,119 @@
+[
+  {
+    "slug": "astro",
+    "name": "Astro",
+    "envWildcards": ["PUBLIC_*"],
+    "dependencyMatch": {
+      "strategy": "all",
+      "dependencies": ["astro"]
+    }
+  },
+  {
+    "slug": "blitzjs",
+    "name": "Blitz",
+    "envWildcards": ["NEXT_PUBLIC_*"],
+    "dependencyMatch": {
+      "strategy": "all",
+      "dependencies": ["blitz"]
+    }
+  },
+  {
+    "slug": "create-react-app",
+    "name": "Create React App",
+    "envWildcards": ["REACT_APP_*"],
+    "dependencyMatch": {
+      "strategy": "some",
+      "dependencies": ["react-scripts", "react-dev-utils"]
+    }
+  },
+  {
+    "slug": "gatsby",
+    "name": "Gatsby",
+    "envWildcards": ["GATSBY_*"],
+    "dependencyMatch": {
+      "strategy": "all",
+      "dependencies": ["gatsby"]
+    }
+  },
+  {
+    "slug": "nextjs",
+    "name": "Next.js",
+    "envWildcards": ["NEXT_PUBLIC_*"],
+    "dependencyMatch": {
+      "strategy": "all",
+      "dependencies": ["next"]
+    }
+  },
+  {
+    "slug": "nitro",
+    "name": "Nitro",
+    "envWildcards": ["NITRO_*"],
+    "dependencyMatch": {
+      "strategy": "some",
+      "dependencies": ["nitropack", "nitropack-nightly"]
+    }
+  },
+  {
+    "slug": "nuxtjs",
+    "name": "Nuxt.js",
+    "envWildcards": ["NUXT_*", "NITRO_*"],
+    "dependencyMatch": {
+      "strategy": "some",
+      "dependencies": ["nuxt", "nuxt-edge", "nuxt3", "nuxt3-edge"]
+    }
+  },
+  {
+    "slug": "redwoodjs",
+    "name": "RedwoodJS",
+    "envWildcards": ["REDWOOD_ENV_*"],
+    "dependencyMatch": {
+      "strategy": "all",
+      "dependencies": ["@redwoodjs/core"]
+    }
+  },
+  {
+    "slug": "sanity",
+    "name": "Sanity Studio",
+    "envWildcards": ["SANITY_STUDIO_*"],
+    "dependencyMatch": {
+      "strategy": "all",
+      "dependencies": ["@sanity/cli"]
+    }
+  },
+  {
+    "slug": "solidstart",
+    "name": "Solid",
+    "envWildcards": ["VITE_*"],
+    "dependencyMatch": {
+      "strategy": "all",
+      "dependencies": ["solid-js", "solid-start"]
+    }
+  },
+  {
+    "slug": "sveltekit",
+    "name": "SvelteKit",
+    "envWildcards": ["VITE_*", "PUBLIC_*"],
+    "dependencyMatch": {
+      "strategy": "all",
+      "dependencies": ["@sveltejs/kit"]
+    }
+  },
+  {
+    "slug": "vite",
+    "name": "Vite",
+    "envWildcards": ["VITE_*"],
+    "dependencyMatch": {
+      "strategy": "all",
+      "dependencies": ["vite"]
+    }
+  },
+  {
+    "slug": "vue",
+    "name": "Vue",
+    "envWildcards": ["VUE_APP_*"],
+    "dependencyMatch": {
+      "strategy": "all",
+      "dependencies": ["@vue/cli-service"]
+    }
+  }
+]

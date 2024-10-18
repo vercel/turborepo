@@ -1,7 +1,7 @@
 [package]
 name = "turbopath"
 version = "0.1.0"
-license = "MPL-2.0"
+license = "MIT"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -9,7 +9,22 @@ edition = "2021"
 [lints]
 workspace = true
 
+[features]
+biome = [
+  "dep:biome_deserialize",
+  "dep:biome_deserialize_macros",
+  "dep:biome_diagnostics",
+  "dep:biome_json_parser",
+  "dep:turborepo-unescape",
+]
+
 [dependencies]
+biome_deserialize = { workspace = true, optional = true }
+biome_deserialize_macros = { workspace = true, optional = true }
+biome_diagnostics = { workspace = true, optional = true }
+biome_json_parser = { workspace = true, optional = true }
+turborepo-unescape = { workspace = true, optional = true }
+
 camino = { workspace = true }
 dunce = { workspace = true }
 fs-err = "2.9.0"
@@ -23,5 +38,5 @@ wax = { workspace = true }
 [dev-dependencies]
 anyhow = { workspace = true }
 serde_json = { workspace = true }
-tempdir = "0.3.7"
+tempfile = { workspace = true }
 test-case = { workspace = true }

@@ -8,18 +8,19 @@ Setup
   \xe2\x80\xa2 Packages in scope: util (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  util:build: cache miss, executing 1ce33e04f265f95c
+  util:build: cache miss, executing bf1798d3e46e1b48
   
    Tasks:    1 successful, 1 total
   Cached:    0 cached, 1 total
     Time:\s*[\.0-9]+m?s  (re)
   
+   WARNING  no output files found for task util#build. Please check your `outputs` key in `turbo.json`
 # run again and ensure there's a cache hit
   $ ${TURBO} run build --filter=util --output-logs=hash-only
   \xe2\x80\xa2 Packages in scope: util (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  util:build: cache hit, suppressing logs 1ce33e04f265f95c
+  util:build: cache hit, suppressing logs bf1798d3e46e1b48
   
    Tasks:    1 successful, 1 total
   Cached:    1 cached, 1 total
@@ -30,18 +31,19 @@ Setup
   \xe2\x80\xa2 Packages in scope: util (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  util:build: cache miss, executing 70278c4ec3fb5ac9
+  util:build: cache miss, executing 265e40ee03ae83ec
   
    Tasks:    1 successful, 1 total
   Cached:    0 cached, 1 total
     Time:\s*[\.0-9]+m?s  (re)
   
+   WARNING  no output files found for task util#build. Please check your `outputs` key in `turbo.json`
 # set env var with "THASH" and ensure cache miss
   $ SOMETHING_THASH_YES=hi ${TURBO} run build --filter=util --output-logs=hash-only
   \xe2\x80\xa2 Packages in scope: util (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  util:build: cache hit, suppressing logs 1ce33e04f265f95c
+  util:build: cache hit, suppressing logs bf1798d3e46e1b48
   
    Tasks:    1 successful, 1 total
   Cached:    1 cached, 1 total
@@ -52,12 +54,13 @@ Setup
   \xe2\x80\xa2 Packages in scope: util (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  util:build: cache miss, executing 8b12fdc0e2d94c8d
+  util:build: cache miss, executing b8f403756f67074c
   
    Tasks:    1 successful, 1 total
   Cached:    0 cached, 1 total
     Time:\s*[\.0-9]+m?s  (re)
   
+   WARNING  no output files found for task util#build. Please check your `outputs` key in `turbo.json`
 # THASH deprecation doesn't break --dry=json
   $ SOMETHING_THASH_YES=hi ${TURBO} run build --filter=util --dry=json | jq -r '.tasks[0].environmentVariables.global[0]'
   null

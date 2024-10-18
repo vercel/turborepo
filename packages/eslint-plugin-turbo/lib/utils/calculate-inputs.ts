@@ -3,8 +3,8 @@ import fs from "node:fs";
 import path from "node:path";
 import type { WorkspaceConfig } from "@turbo/utils";
 import { getWorkspaceConfigs } from "@turbo/utils";
-import type { Pipeline } from "@turbo/types";
-import type { RootSchema } from "@turbo/types/src/types/config";
+import type { PipelineV1, RootSchemaV1, RootSchemaV2 } from "@turbo/types";
+import { forEachTaskDef } from "@turbo/utils/src/getTurboConfigs";
 import { dotEnv } from "./dotenv-processing";
 import { wildcardTests } from "./wildcard-processing";
 
@@ -131,17 +131,23 @@ function processDotEnv(
 
 function processGlobal(
   workspacePath: string,
-  rootTurboJson: RootSchema
+  schema: RootSchemaV1 | RootSchemaV2
 ): EnvironmentConfig {
   return {
-    legacyConfig: processLegacyConfig(rootTurboJson.globalDependencies),
-    env: processEnv(rootTurboJson.globalEnv),
-    passThroughEnv: processPassThroughEnv(rootTurboJson.globalPassThroughEnv),
-    dotEnv: processDotEnv(workspacePath, rootTurboJson.globalDotEnv),
+    legacyConfig: processLegacyConfig(schema.globalDependencies),
+    env: processEnv(schema.globalEnv),
+    passThroughEnv: processPassThroughEnv(schema.globalPassThroughEnv),
+    dotEnv: processDotEnv(
+      workspacePath,
+      "globalDotEnv" in schema ? schema.globalDotEnv : undefined
+    ),
   };
 }
 
-function processTask(workspacePath: string, task: Pipeline): EnvironmentConfig {
+function processTask(
+  workspacePath: string,
+  task: PipelineV1
+): EnvironmentConfig {
   return {
     legacyConfig: processLegacyConfig(task.dependsOn),
     env: processEnv(task.env),
@@ -314,7 +320,8 @@ export class Project {
         this.projectRoot.turboConfig
       );
 
-      Object.entries(this.projectRoot.turboConfig.pipeline).forEach(
+      forEachTaskDef(
+        this.projectRoot.turboConfig,
         ([taskName, taskDefinition]) => {
           const { workspaceName, scriptName } = getTaskAddress(taskName);
           if (workspaceName) {
@@ -341,7 +348,8 @@ export class Project {
         return;
       }
 
-      Object.entries(projectWorkspace.turboConfig.pipeline).forEach(
+      forEachTaskDef(
+        projectWorkspace.turboConfig,
         ([taskName, taskDefinition]) => {
           const { workspaceName: erroneousWorkspaceName, scriptName } =
             getTaskAddress(taskName);

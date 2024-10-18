@@ -3,7 +3,14 @@
 set -eo pipefail
 
 FIXTURE_NAME="${1-basic_monorepo}"
-PACKAGE_MANAGER="$2"
+
+# Default to version of npm installed with Node 18.20.2
+# If CI is failing, check that this version is the same as
+# the CI runner's version of npm
+PACKAGE_MANAGER="npm@10.5.0"
+if [[ $2 != "" ]]; then
+  PACKAGE_MANAGER="$2"
+fi
 
 THIS_DIR=$(dirname "${BASH_SOURCE[0]}")
 MONOREPO_ROOT_DIR="$THIS_DIR/../.."
@@ -31,6 +38,8 @@ else
 fi
 
 export TURBO_TELEMETRY_MESSAGE_DISABLED=1
+export TURBO_GLOBAL_WARNING_DISABLED=1
+export TURBO_PRINT_VERSION_DISABLED=1
 export TURBO=${MONOREPO_ROOT_DIR}/target/debug/turbo${EXT}
 
 # Undo the set -eo pipefail at the top of this script

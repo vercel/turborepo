@@ -1,0 +1,113 @@
+---
+title: Vitest
+description: Learn how to use Vitest in a monorepo.
+---
+
+import { Callout } from '#/components/callout';
+import { File, Folder, Files } from '#/components/files';
+import { CreateTurboCallout } from './create-turbo-callout.tsx';
+import { Tab, Tabs } from '#/components/tabs';
+
+[Vitest](https://vitest.dev/) is a test runner from the Vite ecosystem. Integrating it with Turborepo will lead to enormous speed-ups.
+
+<CreateTurboCallout />
+
+## Setting up
+
+Let's say we have a monorepo that looks like this:
+
+<Files>
+  <Folder name="apps" defaultOpen>
+    <Folder name="web" defaultOpen>
+      <File name="package.json" />
+    </Folder>
+  </Folder>
+  <Folder name="packages" defaultOpen>
+    <Folder name="ui" defaultOpen>
+      <File name="package.json" />
+    </Folder>
+  </Folder>
+</Files>
+
+Both `apps/web` and `packages/ui` have their own test suite. Their `package.json` files include a `test` script that runs Vitest:
+
+```json title="./apps/web/package.json"
+{
+  "scripts": {
+    "test": "vitest"
+  }
+}
+```
+
+Inside the root `turbo.json`, create a `test` task:
+
+```json title="./turbo.json"
+{
+  "tasks": {
+    "test": {}
+  }
+}
+```
+
+Now, `turbo test` can parallelize and cache all of the test suites from each package, only testing code that has changed.
+
+## Running tests in watch mode
+
+When you run your test suite normally, it completes and outputs to `stdout`. This means you can [cache it](/repo/docs/crafting-your-repository/caching) with Turborepo.
+
+But when you run your tests in a watched mode, the process never exits. This makes a watch task more like a [development task](/repo/docs/crafting-your-repository/developing-applications).
+
+Because of this difference, we recommend specifying **two separate Turborepo tasks**: one for running your tests, and one for running them in watch mode. Inside your each `package.json` file for each workspace:
+
+```json title="./apps/web/package.json"
+{
+  "scripts": {
+    "test": "vitest",
+    "test:watch": "vitest --watch"
+  }
+}
+```
+
+Inside the root `turbo.json`:
+
+```json title="./turbo.json"
+{
+  "tasks": {
+    "test": {},
+    "test:watch": {
+      "cache": false, // [!code highlight]
+      "persistent": true // [!code highlight]
+    }
+  }
+}
+```
+
+You can now either run this task using [global `turbo`](/repo/docs/getting-started/installation#global-installation) as `turbo test:watch` or from a script in your root `package.json`:
+
+<Tabs items={["Global turbo", "./package.json"]}>
+<Tab value="Global turbo">
+
+```bash title="Terminal"
+turbo test
+```
+
+```bash title="Terminal"
+turbo test:watch
+```
+
+</Tab>
+
+<Tab value="./package.json">
+
+```json title="./package.json"
+{
+  "scripts": {
+    "test": "turbo run test",
+    "test:watch": "turbo run test:watch"
+  }
+}
+```
+
+</Tab>
+
+</Tabs>

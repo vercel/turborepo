@@ -19,13 +19,17 @@
     "lint": "turbo run lint"
   },
   "devDependencies": {
-    "@repo/eslint-config": "*",
     "prettier": "^3.2.5",
+    "prisma": "5.10.2",
     "tsx": "^4.7.1",
-    "turbo": "^1.12.4"
+    "turbo": "^2.0.3"
   },
   "engines": {
     "node": ">=18"
   },
-  "packageManager": "yarn@1.22.19"
+  "packageManager": "yarn@1.22.19",
+  "name": "with-prisma",
+  "dependencies": {
+    "@prisma/client": "5.10.2"
+  }
 }

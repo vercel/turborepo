@@ -6,7 +6,7 @@ Verbosity level 1
   \xe2\x80\xa2 Packages in scope: util (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  util:build: cache bypass, force executing 1ce33e04f265f95c
+  util:build: cache bypass, force executing bf1798d3e46e1b48
   util:build: 
   util:build: > build
   util:build: > echo building
@@ -17,11 +17,12 @@ Verbosity level 1
   Cached:    0 cached, 1 total
     Time:\s*[\.0-9]+m?s  (re)
   
+   WARNING  no output files found for task util#build. Please check your `outputs` key in `turbo.json`
   $ ${TURBO} build --verbosity=1 --filter=util --force
   \xe2\x80\xa2 Packages in scope: util (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  util:build: cache bypass, force executing 1ce33e04f265f95c
+  util:build: cache bypass, force executing bf1798d3e46e1b48
   util:build: 
   util:build: > build
   util:build: > echo building
@@ -32,6 +33,7 @@ Verbosity level 1
   Cached:    0 cached, 1 total
     Time:\s*[\.0-9]+m?s  (re)
   
+   WARNING  no output files found for task util#build. Please check your `outputs` key in `turbo.json`
 
 Verbosity level 2
   $ ${TURBO} build -vv --filter=util --force 1> VERBOSEVV 2>&1

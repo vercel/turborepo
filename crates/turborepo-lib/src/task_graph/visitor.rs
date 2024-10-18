@@ -10,12 +10,13 @@ use console::{Style, StyledObject};
 use either::Either;
 use futures::{stream::FuturesUnordered, StreamExt};
 use itertools::Itertools;
+use miette::{Diagnostic, NamedSource, SourceSpan};
 use regex::Regex;
 use tokio::sync::{mpsc, oneshot};
-use tracing::{debug, error, Instrument, Span};
+use tracing::{debug, error, warn, Instrument, Span};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath};
 use turborepo_ci::{Vendor, VendorBehavior};
-use turborepo_env::{EnvironmentVariableMap, ResolvedEnvMode};
+use turborepo_env::{platform::PlatformEnv, EnvironmentVariableMap};
 use turborepo_repository::{
     package_graph::{PackageGraph, PackageName, ROOT_PKG_NAME},
     package_manager::PackageManager,
@@ -24,13 +25,15 @@ use turborepo_telemetry::events::{
     generic::GenericEventBuilder, task::PackageTaskEventBuilder, EventBuilder, TrackedErrors,
 };
 use turborepo_ui::{
-    tui::{self, AppSender, TuiTask},
-    ColorSelector, OutputClient, OutputSink, OutputWriter, PrefixedUI, UI,
+    sender::{TaskSender, UISender},
+    tui::event::CacheResult,
+    ColorConfig, ColorSelector, OutputClient, OutputSink, OutputWriter, PrefixedUI,
 };
 use which::which;
 
 use crate::{
     cli::EnvMode,
+    config::UIMode,
     engine::{Engine, ExecutionOptions, StopExecution},
     opts::RunOpts,
     process::{ChildExit, Command, ProcessManager},
@@ -62,11 +65,13 @@ pub struct Visitor<'a> {
     task_access: &'a TaskAccess,
     sink: OutputSink<StdWriter>,
     task_hasher: TaskHasher<'a>,
-    ui: UI,
-    experimental_ui_sender: Option<AppSender>,
+    color_config: ColorConfig,
+    is_watch: bool,
+    ui_sender: Option<UISender>,
+    warnings: Arc<Mutex<Vec<TaskWarning>>>,
 }
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error, Diagnostic)]
 pub enum Error {
     #[error("cannot find package {package_name} for task {task_id}")]
     MissingPackage {
@@ -76,7 +81,14 @@ pub enum Error {
     #[error(
         "root task {task_name} ({command}) looks like it invokes turbo and might cause a loop"
     )]
-    RecursiveTurbo { task_name: String, command: String },
+    RecursiveTurbo {
+        task_name: String,
+        command: String,
+        #[label("task found here")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource,
+    },
     #[error("Could not find definition for task")]
     MissingDefinition,
     #[error("error while executing engine: {0}")]
@@ -94,7 +106,7 @@ impl<'a> Visitor<'a> {
     // Once we have the full picture we will go about grouping these pieces of data
     // together
     #[allow(clippy::too_many_arguments)]
-    pub fn new(
+    pub async fn new(
         package_graph: Arc<PackageGraph>,
         run_cache: Arc<RunCache>,
         run_tracker: RunTracker,
@@ -104,11 +116,12 @@ impl<'a> Visitor<'a> {
         env_at_execution_start: &'a EnvironmentVariableMap,
         global_hash: &'a str,
         global_env_mode: EnvMode,
-        ui: UI,
+        color_config: ColorConfig,
         manager: ProcessManager,
         repo_root: &'a AbsoluteSystemPath,
         global_env: EnvironmentVariableMap,
-        experimental_ui_sender: Option<AppSender>,
+        ui_sender: Option<UISender>,
+        is_watch: bool,
     ) -> Self {
         let task_hasher = TaskHasher::new(
             package_inputs_hashes,
@@ -119,6 +132,13 @@ impl<'a> Visitor<'a> {
 
         let sink = Self::sink(run_opts);
         let color_cache = ColorSelector::default();
+        // Set up correct size for underlying pty
+
+        if let Some(app) = ui_sender.as_ref() {
+            if let Some(pane_size) = app.pane_size().await {
+                manager.set_pty_size(pane_size.rows, pane_size.cols);
+            }
+        }
 
         Self {
             color_cache,
@@ -133,9 +153,11 @@ impl<'a> Visitor<'a> {
             task_access,
             sink,
             task_hasher,
-            ui,
+            color_config,
             global_env,
-            experimental_ui_sender,
+            ui_sender,
+            is_watch,
+            warnings: Default::default(),
         }
     }
 
@@ -145,6 +167,10 @@ impl<'a> Visitor<'a> {
         engine: Arc<Engine>,
         telemetry: &GenericEventBuilder,
     ) -> Result<Vec<TaskError>, Error> {
+        for task in engine.tasks().sorted() {
+            self.color_cache.color_for_key(&task.to_string());
+        }
+
         let concurrency = self.run_opts.concurrency as usize;
         let (node_sender, mut node_stream) = mpsc::channel(concurrency);
 
@@ -183,9 +209,12 @@ impl<'a> Visitor<'a> {
             match command {
                 Some(cmd) if info.package() == ROOT_PKG_NAME && turbo_regex().is_match(&cmd) => {
                     package_task_event.track_error(TrackedErrors::RecursiveError);
+                    let (span, text) = cmd.span_and_text("package.json");
                     return Err(Error::RecursiveTurbo {
                         task_name: info.to_string(),
                         command: cmd.to_string(),
+                        span,
+                        text,
                     });
                 }
                 _ => (),
@@ -195,18 +224,7 @@ impl<'a> Visitor<'a> {
                 .task_definition(&info)
                 .ok_or(Error::MissingDefinition)?;
 
-            let task_env_mode = match self.global_env_mode {
-                // Task env mode is only independent when global env mode is `infer`.
-                EnvMode::Infer if task_definition.pass_through_env.is_some() => {
-                    ResolvedEnvMode::Strict
-                }
-                // If we're in infer mode we have just detected non-usage of strict env vars.
-                // But our behavior's actual meaning of this state is `loose`.
-                EnvMode::Infer => ResolvedEnvMode::Loose,
-                // Otherwise we just use the global env mode.
-                EnvMode::Strict => ResolvedEnvMode::Strict,
-                EnvMode::Loose => ResolvedEnvMode::Loose,
-            };
+            let task_env_mode = task_definition.env_mode.unwrap_or(self.global_env_mode);
             package_task_event.track_env_mode(&task_env_mode.to_string());
 
             let dependency_set = engine.dependencies(&info).ok_or(Error::MissingDefinition)?;
@@ -250,7 +268,7 @@ impl<'a> Visitor<'a> {
                     }));
                 }
                 false => {
-                    // TODO(gsoltis): if/when we fix https://github.com/vercel/turbo/issues/937
+                    // TODO(gsoltis): if/when we fix https://github.com/vercel/turborepo/issues/937
                     // the following block should never get hit. In the meantime, keep it after
                     // hashing so that downstream tasks can count on the hash existing
                     //
@@ -275,11 +293,12 @@ impl<'a> Visitor<'a> {
                     let vendor_behavior =
                         Vendor::infer().and_then(|vendor| vendor.behavior.as_ref());
 
-                    let output_client = if let Some(handle) = &self.experimental_ui_sender {
+                    let output_client = if let Some(handle) = &self.ui_sender {
                         TaskOutput::UI(handle.task(info.to_string()))
                     } else {
                         TaskOutput::Direct(self.output_client(&info, vendor_behavior))
                     };
+
                     let tracker = self.run_tracker.track_task(info.clone().into_owned());
                     let spaces_client = self.run_tracker.spaces_task_client();
                     let parent_span = Span::current();
@@ -311,6 +330,12 @@ impl<'a> Visitor<'a> {
             }
         }
         drop(factory);
+
+        if !self.is_watch {
+            if let Some(handle) = &self.ui_sender {
+                handle.stop().await;
+            }
+        }
 
         if !internal_errors.is_empty() {
             return Err(Error::InternalErrors(
@@ -348,19 +373,48 @@ impl<'a> Visitor<'a> {
         engine: &Engine,
         env_at_execution_start: &EnvironmentVariableMap,
         pkg_inference_root: Option<&AnchoredSystemPath>,
-        has_experimental_ui: bool,
     ) -> Result<(), Error> {
         let Self {
             package_graph,
-            ui,
+            color_config: ui,
             run_opts,
             repo_root,
             global_env_mode,
             task_hasher,
+            is_watch,
             ..
         } = self;
 
         let global_hash_summary = GlobalHashSummary::try_from(global_hash_inputs)?;
+
+        // output any warnings that we collected while running tasks
+        if let Ok(warnings) = self.warnings.lock() {
+            if !warnings.is_empty() {
+                eprintln!();
+                warn!("finished with warnings");
+                eprintln!();
+
+                let has_missing_platform_env: bool = warnings
+                    .iter()
+                    .any(|warning| !warning.missing_platform_env.is_empty());
+                if has_missing_platform_env {
+                    PlatformEnv::output_header(
+                        global_env_mode == EnvMode::Strict,
+                        self.color_config,
+                    );
+
+                    for warning in warnings.iter() {
+                        if !warning.missing_platform_env.is_empty() {
+                            PlatformEnv::output_for_task(
+                                warning.missing_platform_env.clone(),
+                                &warning.task_id,
+                                self.color_config,
+                            )
+                        }
+                    }
+                }
+            }
+        }
 
         Ok(self
             .run_tracker
@@ -377,7 +431,7 @@ impl<'a> Visitor<'a> {
                 engine,
                 task_hasher.task_hash_tracker(),
                 env_at_execution_start,
-                has_experimental_ui,
+                is_watch,
             )
             .await?)
     }
@@ -413,15 +467,19 @@ impl<'a> Visitor<'a> {
             } else {
                 format!("{}:{}", task_id.package(), task_id.task())
             };
-            let (header, footer) = (
-                (vendor_behavior.group_prefix)(&group_name),
-                (vendor_behavior.group_suffix)(&group_name),
-            );
-            logger.with_header_footer(Some(header), Some(footer));
+
+            let header_factory = (vendor_behavior.group_prefix)(group_name.to_owned());
+            let footer_factory = (vendor_behavior.group_suffix)(group_name.to_owned());
+
+            logger.with_header_footer(Some(header_factory), Some(footer_factory));
 
             let (error_header, error_footer) = (
-                vendor_behavior.error_group_prefix.map(|f| f(&group_name)),
-                vendor_behavior.error_group_suffix.map(|f| f(&group_name)),
+                vendor_behavior
+                    .error_group_prefix
+                    .map(|f| f(group_name.to_owned())),
+                vendor_behavior
+                    .error_group_suffix
+                    .map(|f| f(group_name.to_owned())),
             );
             logger.with_error_header_footer(error_header, error_footer);
         }
@@ -449,17 +507,17 @@ impl<'a> Visitor<'a> {
     }
 
     fn prefixed_ui<W: Write>(
-        ui: UI,
+        color_config: ColorConfig,
         is_github_actions: bool,
         stdout: W,
         stderr: W,
         prefix: StyledObject<String>,
     ) -> PrefixedUI<W> {
-        let mut prefixed_ui = PrefixedUI::new(ui, stdout, stderr)
+        let mut prefixed_ui = PrefixedUI::new(color_config, stdout, stderr)
             .with_output_prefix(prefix.clone())
             // TODO: we can probably come up with a more ergonomic way to achieve this
             .with_error_prefix(
-                Style::new().apply_to(format!("{}ERROR: ", ui.apply(prefix.clone()))),
+                Style::new().apply_to(format!("{}ERROR: ", color_config.apply(prefix.clone()))),
             )
             .with_warn_prefix(prefix);
         if is_github_actions {
@@ -478,8 +536,8 @@ impl<'a> Visitor<'a> {
 
     pub fn dry_run(&mut self) {
         self.dry = true;
-        // No need to start a TUI on dry run
-        self.experimental_ui_sender = None;
+        // No need to start a UI on dry run
+        self.ui_sender = None;
     }
 }
 
@@ -533,12 +591,19 @@ impl std::io::Write for StdWriter {
 /// interacting with them.
 enum TaskOutput<W> {
     Direct(OutputClient<W>),
-    UI(tui::TuiTask),
+    UI(TaskSender),
 }
 
 fn turbo_regex() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| Regex::new(r"(?:^|\s)turbo(?:$|\s)").unwrap())
+}
+
+// Warning that comes from the execution of the task
+#[derive(Debug, Clone)]
+pub struct TaskWarning {
+    task_id: String,
+    missing_platform_env: Vec<String>,
 }
 
 // Error that comes from the execution of the task
@@ -620,7 +685,7 @@ struct ExecContextFactory<'a> {
 
 impl<'a> ExecContextFactory<'a> {
     pub fn new(
-        visitor: &'a Visitor,
+        visitor: &'a Visitor<'a>,
         errors: Arc<Mutex<Vec<TaskError>>>,
         manager: ProcessManager,
         engine: &'a Arc<Engine>,
@@ -646,15 +711,16 @@ impl<'a> ExecContextFactory<'a> {
     ) -> ExecContext {
         let task_id_for_display = self.visitor.display_task_id(&task_id);
         let pass_through_args = self.visitor.run_opts.args_for_task(&task_id);
+        let task_id_string = &task_id.to_string();
         ExecContext {
             engine: self.engine.clone(),
-            ui: self.visitor.ui,
-            experimental_ui: self.visitor.experimental_ui_sender.is_some(),
+            ui_mode: self.visitor.run_opts.ui_mode,
+            color_config: self.visitor.color_config,
             is_github_actions: self.visitor.run_opts.is_github_actions,
             pretty_prefix: self
                 .visitor
                 .color_cache
-                .prefix_with_color(&task_hash, &self.visitor.prefix(&task_id)),
+                .prefix_with_color(task_id_string, &self.visitor.prefix(&task_id)),
             task_id,
             task_id_for_display,
             task_cache,
@@ -667,8 +733,10 @@ impl<'a> ExecContextFactory<'a> {
             continue_on_error: self.visitor.run_opts.continue_on_error,
             pass_through_args,
             errors: self.errors.clone(),
+            warnings: self.visitor.warnings.clone(),
             takes_input,
             task_access,
+            platform_env: PlatformEnv::new(),
         }
     }
 
@@ -687,8 +755,8 @@ impl<'a> ExecContextFactory<'a> {
 
 struct ExecContext {
     engine: Arc<Engine>,
-    ui: UI,
-    experimental_ui: bool,
+    color_config: ColorConfig,
+    ui_mode: UIMode,
     is_github_actions: bool,
     pretty_prefix: StyledObject<String>,
     task_id: TaskId<'static>,
@@ -703,8 +771,10 @@ struct ExecContext {
     continue_on_error: bool,
     pass_through_args: Option<Vec<String>>,
     errors: Arc<Mutex<Vec<TaskError>>>,
+    warnings: Arc<Mutex<Vec<TaskWarning>>>,
     takes_input: bool,
     task_access: TaskAccess,
+    platform_env: PlatformEnv,
 }
 
 enum ExecOutcome {
@@ -737,7 +807,7 @@ impl ExecContext {
         &mut self,
         parent_span_id: Option<tracing::Id>,
         tracker: TaskTracker<()>,
-        output_client: TaskOutput<impl std::io::Write>,
+        output_client: TaskOutput<impl Write>,
         callback: oneshot::Sender<Result<(), StopExecution>>,
         spaces_client: Option<SpacesTaskClient>,
         telemetry: &PackageTaskEventBuilder,
@@ -753,7 +823,8 @@ impl ExecContext {
         // If the task resulted in an error, do not group in order to better highlight
         // the error.
         let is_error = matches!(result, Ok(ExecOutcome::Task { .. }));
-        let logs = match output_client.finish(is_error) {
+        let is_cache_hit = matches!(result, Ok(ExecOutcome::Success(SuccessOutcome::CacheHit)));
+        let logs = match output_client.finish(is_error, is_cache_hit) {
             Ok(logs) => logs,
             Err(e) => {
                 telemetry.track_error(TrackedErrors::DaemonFailedToMarkOutputsAsCached);
@@ -831,7 +902,7 @@ impl ExecContext {
     ) -> TaskCacheOutput<OutputWriter<'a, W>> {
         match output_client {
             TaskOutput::Direct(client) => TaskCacheOutput::Direct(Visitor::prefixed_ui(
-                self.ui,
+                self.color_config,
                 self.is_github_actions,
                 client.stdout(),
                 client.stderr(),
@@ -843,15 +914,29 @@ impl ExecContext {
 
     async fn execute_inner(
         &mut self,
-        output_client: &TaskOutput<impl std::io::Write>,
+        output_client: &TaskOutput<impl Write>,
         telemetry: &PackageTaskEventBuilder,
     ) -> Result<ExecOutcome, InternalError> {
         let task_start = Instant::now();
         let mut prefixed_ui = self.prefixed_ui(output_client);
 
-        if self.experimental_ui {
+        if self.ui_mode.has_sender() {
             if let TaskOutput::UI(task) = output_client {
-                task.start();
+                let output_logs = self.task_cache.output_logs().into();
+                task.start(output_logs);
+            }
+        }
+
+        if !self.task_cache.is_caching_disabled() {
+            let missing_platform_env = self.platform_env.validate(&self.execution_env);
+            if !missing_platform_env.is_empty() {
+                self.warnings
+                    .lock()
+                    .expect("warnings lock poisoned")
+                    .push(TaskWarning {
+                        task_id: self.task_id_for_display.clone(),
+                        missing_platform_env,
+                    });
             }
         }
 
@@ -897,6 +982,12 @@ impl ExecContext {
         cmd.envs(self.execution_env.iter());
         // Always last to make sure it overwrites any user configured env var.
         cmd.env("TURBO_HASH", &self.task_hash);
+
+        // Allow downstream tools to detect if the task is being ran with TUI
+        if self.ui_mode.use_tui() {
+            cmd.env("TURBO_IS_TUI", "true");
+        }
+
         // enable task access tracing
 
         // set the trace file env var - frameworks that support this can use it to
@@ -930,7 +1021,7 @@ impl ExecContext {
             }
         };
 
-        if self.experimental_ui && self.takes_input {
+        if self.ui_mode.has_sender() && self.takes_input {
             if let TaskOutput::UI(task) = output_client {
                 if let Some(stdin) = process.stdin() {
                     task.set_stdin(stdin);
@@ -938,12 +1029,18 @@ impl ExecContext {
             }
         }
 
+        // Even if user does not have the TUI and cannot interact with a task, we keep
+        // stdin open for persistent tasks as some programs will shut down if stdin is
+        // closed.
+        if !self.takes_input && !self.manager.closing_stdin_ends_process() {
+            process.stdin();
+        }
+
         let mut stdout_writer = self
             .task_cache
             .output_writer(prefixed_ui.task_writer())
-            .map_err(|e| {
+            .inspect_err(|_| {
                 telemetry.track_error(TrackedErrors::FailedToCaptureOutputs);
-                e
             })?;
 
         let exit_status = match process.wait_with_piped_outputs(&mut stdout_writer).await {
@@ -1064,11 +1161,11 @@ impl DryRunExecContext {
 /// Struct for displaying information about task's cache
 enum TaskCacheOutput<W> {
     Direct(PrefixedUI<W>),
-    UI(TuiTask),
+    UI(TaskSender),
 }
 
 impl<W: Write> TaskCacheOutput<W> {
-    fn task_writer(&mut self) -> Either<turborepo_ui::PrefixedWriter<&mut W>, TuiTask> {
+    fn task_writer(&mut self) -> Either<turborepo_ui::PrefixedWriter<&mut W>, TaskSender> {
         match self {
             TaskCacheOutput::Direct(prefixed) => Either::Left(prefixed.output_prefixed_writer()),
             TaskCacheOutput::UI(task) => Either::Right(task.clone()),
@@ -1086,10 +1183,10 @@ impl<W: Write> TaskCacheOutput<W> {
 }
 
 impl<W: Write> CacheOutput for TaskCacheOutput<W> {
-    fn status(&mut self, message: &str) {
+    fn status(&mut self, message: &str, result: CacheResult) {
         match self {
             TaskCacheOutput::Direct(direct) => direct.output(message),
-            TaskCacheOutput::UI(task) => task.status(message),
+            TaskCacheOutput::UI(task) => task.status(message, result),
         }
     }
 
@@ -1115,29 +1212,29 @@ impl<W: Write> CacheOutput for TaskCacheOutput<W> {
 
 /// Struct for displaying information about task
 impl<W: Write> TaskOutput<W> {
-    pub fn finish(self, use_error: bool) -> std::io::Result<Option<Vec<u8>>> {
+    pub fn finish(self, use_error: bool, is_cache_hit: bool) -> std::io::Result<Option<Vec<u8>>> {
         match self {
             TaskOutput::Direct(client) => client.finish(use_error),
             TaskOutput::UI(client) if use_error => Ok(Some(client.failed())),
-            TaskOutput::UI(client) => Ok(Some(client.succeeded())),
+            TaskOutput::UI(client) => Ok(Some(client.succeeded(is_cache_hit))),
         }
     }
 
-    pub fn stdout(&self) -> Either<OutputWriter<W>, TuiTask> {
+    pub fn stdout(&self) -> Either<OutputWriter<W>, TaskSender> {
         match self {
             TaskOutput::Direct(client) => Either::Left(client.stdout()),
             TaskOutput::UI(client) => Either::Right(client.clone()),
         }
     }
 
-    pub fn stderr(&self) -> Either<OutputWriter<W>, TuiTask> {
+    pub fn stderr(&self) -> Either<OutputWriter<W>, TaskSender> {
         match self {
             TaskOutput::Direct(client) => Either::Left(client.stderr()),
             TaskOutput::UI(client) => Either::Right(client.clone()),
         }
     }
 
-    pub fn task_logs(&self) -> Either<OutputWriter<W>, TuiTask> {
+    pub fn task_logs(&self) -> Either<OutputWriter<W>, TaskSender> {
         match self {
             TaskOutput::Direct(client) => Either::Left(client.stdout()),
             TaskOutput::UI(client) => Either::Right(client.clone()),

@@ -10,12 +10,12 @@ Setup
 
   $ cat tmpjson.log | jq .globalCacheInputs
   {
-    "rootKey": "HEY STELLLLLLLAAAAAAAAAAAAA",
+    "rootKey": "I can\xe2\x80\x99t see ya, but I know you\xe2\x80\x99re here", (esc)
     "files": {
       "foo.txt": "eebae5f3ca7b5831e429e947b7d61edd0de69236"
     },
     "hashOfExternalDependencies": "459c029558afe716",
-    "globalDotEnv": null,
+    "hashOfInternalDependencies": "",
     "environmentVariables": {
       "specified": {
         "env": [
@@ -26,7 +26,8 @@ Setup
       "configured": [],
       "inferred": [],
       "passthrough": null
-    }
+    },
+    "engines": null
   }
 
   $ cat tmpjson.log | jq 'keys'
@@ -50,7 +51,7 @@ Setup
     "taskId": "my-app#build",
     "task": "build",
     "package": "my-app",
-    "hash": "f5b905676d8a275c",
+    "hash": "0555ce94ca234049",
     "inputs": {
       ".env.local": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
       "package.json": "1746e0db2361085b5953a6a3beab08c24af5bc08"
@@ -80,19 +81,20 @@ Setup
       ],
       "cache": true,
       "dependsOn": [],
-      "inputs": [],
-      "outputMode": "full",
-      "persistent": false,
-      "env": [],
-      "passThroughEnv": null,
-      "dotEnv": [
+      "inputs": [
+        "$TURBO_DEFAULT$",
         ".env.local"
       ],
+      "outputLogs": "full",
+      "persistent": false,
+      "interruptible": false,
+      "env": [],
+      "passThroughEnv": null,
       "interactive": false
     },
     "expandedOutputs": [],
     "framework": "",
-    "envMode": "loose",
+    "envMode": "strict",
     "environmentVariables": {
       "specified": {
         "env": [],
@@ -101,10 +103,7 @@ Setup
       "configured": [],
       "inferred": [],
       "passthrough": null
-    },
-    "dotEnv": [
-      ".env.local"
-    ]
+    }
   }
 
 # Validate output of util#build task
@@ -113,7 +112,7 @@ Setup
     "taskId": "util#build",
     "task": "build",
     "package": "util",
-    "hash": "1ce33e04f265f95c",
+    "hash": "bf1798d3e46e1b48",
     "inputs": {
       "package.json": "e755064fd7893809d10fc067bb409c7ae516327f"
     },
@@ -137,18 +136,18 @@ Setup
       "cache": true,
       "dependsOn": [],
       "inputs": [],
-      "outputMode": "full",
+      "outputLogs": "full",
       "persistent": false,
+      "interruptible": false,
       "env": [
         "NODE_ENV"
       ],
       "passThroughEnv": null,
-      "dotEnv": null,
       "interactive": false
     },
     "expandedOutputs": [],
     "framework": "",
-    "envMode": "loose",
+    "envMode": "strict",
     "environmentVariables": {
       "specified": {
         "env": [
@@ -159,8 +158,7 @@ Setup
       "configured": [],
       "inferred": [],
       "passthrough": null
-    },
-    "dotEnv": null
+    }
   }
 
 Run again with NODE_ENV set and see the value in the summary. --filter=util workspace so the output is smaller

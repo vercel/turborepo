@@ -6,7 +6,7 @@ use turborepo_repository::package_graph::{PackageGraph, PackageInfo, PackageName
 use super::{
     execution::TaskExecutionSummary,
     task::{SharedTaskSummary, TaskEnvVarSummary},
-    EnvMode, SinglePackageTaskSummary, TaskSummary,
+    SinglePackageTaskSummary, TaskSummary,
 };
 use crate::{
     cli,
@@ -114,6 +114,7 @@ impl<'a> TaskSummaryFactory<'a> {
             .package_json
             .scripts
             .get(task_id.task())
+            .map(|script| script.as_inner())
             .cloned()
             .unwrap_or_else(|| "<NONEXISTENT>".to_string());
 
@@ -175,29 +176,13 @@ impl<'a> TaskSummaryFactory<'a> {
             framework,
             dependencies,
             dependents,
-            // TODO: this is some very messy code that appears in a few places
-            // we should attempt to calculate this once and reuse it
-            env_mode: match self.global_env_mode {
-                cli::EnvMode::Infer => {
-                    if task_definition.pass_through_env.is_some() {
-                        EnvMode::Strict
-                    } else {
-                        // If we're in infer mode we have just detected non-usage of strict env
-                        // vars. But our behavior's actual meaning of this
-                        // state is `loose`.
-                        EnvMode::Loose
-                    }
-                }
-                cli::EnvMode::Strict => EnvMode::Strict,
-                cli::EnvMode::Loose => EnvMode::Loose,
-            },
+            env_mode: self.global_env_mode,
             environment_variables: TaskEnvVarSummary::new(
                 task_definition,
                 env_vars,
                 self.env_at_start,
             )
             .expect("invalid glob in task definition should have been caught earlier"),
-            dot_env: task_definition.dot_env.clone(),
             execution,
         })
     }

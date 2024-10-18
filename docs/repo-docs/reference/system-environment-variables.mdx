@@ -1,0 +1,47 @@
+---
+title: System environment variables
+description: Learn about system variables used by Turborepo.
+---
+
+import { Heading } from 'fumadocs-ui/components/heading';
+
+By setting certain environment variables, you can change Turborepo's behavior. This can be useful for creating specific configurations for different environments and machines.
+
+System environment variables are always overridden by flag values provided directly to your `turbo` commands.
+
+| Variable                                          | Description                                                                                                                                                                                                                                             |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TURBO_API`                                       | Set the base URL for [Remote Cache](/repo/docs/core-concepts/remote-caching).                                                                                                                                                                           |
+| `TURBO_BINARY_PATH`                               | Manually set the path to the `turbo` binary. By default, `turbo` will automatically discover the binary so you should only use this in rare circumstances.                                                                                              |
+| `TURBO_CACHE_DIR`                                 | Sets the cache directory, similar to using [`--cache-dir`](/repo/docs/reference/run#--cache-dir-path) flag                                                                                                                                              |
+| `TURBO_CI_VENDOR_ENV_KEY`                         | Set a prefix for environment variables that you want **excluded** from [Framework Inference](/repo/docs/crafting-your-repository/using-environment-variables#framework-inference).                                                                      |
+| `TURBO_DANGEROUSLY_DISABLE_PACKAGE_MANAGER_CHECK` | Disable checking the `packageManager` field in `package.json`. You may run into [errors and unexpected caching behavior](/repo/docs/reference/run#--dangerously-disable-package-manager-check) when disabling this check. Use `true` or `1` to disable. |
+| `TURBO_DOWNLOAD_LOCAL_ENABLED`                    | Enables global `turbo` to install the correct local version if one is not found.                                                                                                                                                                        |
+| `TURBO_FORCE`                                     | Always force all tasks to run in full, opting out of all caching.                                                                                                                                                                                       |
+| `TURBO_GLOBAL_WARNING_DISABLED`                   | Disable warning when global `turbo` cannot find a local version to use.                                                                                                                                                                                 |
+| `TURBO_PRINT_VERSION_DISABLED`                    | Disable printing the version of `turbo` that is being executed.                                                                                                                                                                                         |
+| `TURBO_LOG_ORDER`                                 | Set the [log order](/repo/docs/reference/run#--log-order-option). Allowed values are `grouped` and `default`.                                                                                                                                           |
+| `TURBO_LOGIN`                                     | Set the URL used to log in to [Remote Cache](/repo/docs/core-concepts/remote-caching).                                                                                                                                                                  |
+| `TURBO_NO_UPDATE_NOTIFIER`                        | Remove the update notifier that appears when a new version of `turbo` is available. You can also use `NO_UPDATE_NOTIFIER` per ecosystem convention.                                                                                                     |
+| `TURBO_PREFLIGHT`                                 | Enables sending a preflight request before every cache artifact and analytics request. The follow-up upload and download will follow redirects. Only applicable when [Remote Caching](/repo/docs/core-concepts/remote-caching) is configured.           |
+| `TURBO_REMOTE_CACHE_READ_ONLY`                    | Prevent writing to the [Remote Cache](/repo/docs/core-concepts/remote-caching) - but still allow reading.                                                                                                                                               |
+| `TURBO_REMOTE_CACHE_SIGNATURE_KEY`                | Sign artifacts with a secret key. For more information, visit [the Artifact Integrity section](/repo/docs/core-concepts/remote-caching#artifact-integrity-and-authenticity-verification).                                                               |
+| `TURBO_REMOTE_CACHE_TIMEOUT`                      | Set a timeout in seconds for `turbo` to get artifacts from [Remote Cache](/repo/docs/core-concepts/remote-caching).                                                                                                                                     |
+| `TURBO_REMOTE_ONLY`                               | Always ignore the local filesystem cache for all tasks.                                                                                                                                                                                                 |
+| `TURBO_RUN_SUMMARY`                               | Generate a [Run Summary](/repo/docs/reference/run#--summarize) when you run tasks.                                                                                                                                                                      |
+| `TURBO_SCM_BASE`                                  | Base used by `--affected` when calculating what has changed from `base...head`                                                                                                                                                                          |
+| `TURBO_SCM_HEAD`                                  | Head used by `-affected` when calculating what has changed from `base...head`                                                                                                                                                                           |
+| `TURBO_TEAM`                                      | The account name associated with your repository. When using [Vercel Remote Cache](https://vercel.com/docs/monorepos/remote-caching#vercel-remote-cache), this is your team's slug.                                                                     |
+| `TURBO_TEAMID`                                    | The account identifier associated with your repository. When using [Vercel Remote Cache](https://vercel.com/docs/monorepos/remote-caching#vercel-remote-cache), this is your team's ID.                                                                 |
+| `TURBO_TELEMETRY_MESSAGE_DISABLED`                | Disable the message notifying you that [Telemetry](/repo/docs/telemetry) is enabled.                                                                                                                                                                    |
+| `TURBO_TOKEN`                                     | The Bearer token for authentication to access [Remote Cache](/repo/docs/core-concepts/remote-caching).                                                                                                                                                  |
+| `TURBO_UI`                                        | Enables TUI when passed true or 1, disables when passed false or 0.                                                                                                                                                                                     |
+
+## Environment variables in tasks
+
+Turborepo will make the following environment variables available within your tasks while they are executing:
+
+| Variable       | Description                                                                                  |
+| -------------- | -------------------------------------------------------------------------------------------- |
+| `TURBO_HASH`   | The hash of the currently running task.                                                      |
+| `TURBO_IS_TUI` | When using the [TUI](/repo/docs/reference/configuration#ui), this variable is set to `true`. |

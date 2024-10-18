@@ -6,7 +6,7 @@ Setup
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  my-app:build: cache miss, executing f5b905676d8a275c
+  my-app:build: cache miss, executing 0555ce94ca234049
   my-app:build: 
   my-app:build: > build
   my-app:build: > echo building
@@ -18,3 +18,4 @@ Setup
      Time:\s*[\.0-9]+m?s  (re)
   Summary:    .+\.turbo(\/|\\)runs(\/|\\)[a-zA-Z0-9]+.json (re)
   
+   WARNING  no output files found for task my-app#build. Please check your `outputs` key in `turbo.json`

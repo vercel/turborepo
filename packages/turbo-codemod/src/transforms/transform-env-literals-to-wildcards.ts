@@ -1,11 +1,11 @@
 import path from "node:path";
 import { readJsonSync, existsSync } from "fs-extra";
 import { type PackageJson, getTurboConfigs } from "@turbo/utils";
-import type { EnvWildcard, Schema as TurboJsonSchema } from "@turbo/types";
-import type { RootSchema } from "@turbo/types/src/types/config";
-import type { TransformerArgs } from "../types";
+import type { RootSchemaV1, SchemaV1, EnvWildcard } from "@turbo/types";
+import type { Transformer, TransformerArgs } from "../types";
 import { getTransformerHelpers } from "../utils/getTransformerHelpers";
 import type { TransformerResults } from "../runner";
+import { loadTurboJson } from "../utils/loadTurboJson";
 
 // transformer details
 const TRANSFORMER = "transform-env-literals-to-wildcards";
@@ -27,7 +27,7 @@ function transformEnvVarName(envVarName: string): EnvWildcard {
   return output;
 }
 
-function migrateRootConfig(config: RootSchema) {
+function migrateRootConfig(config: RootSchemaV1) {
   const { globalEnv, globalPassThroughEnv } = config;
 
   if (Array.isArray(globalEnv)) {
@@ -40,7 +40,7 @@ function migrateRootConfig(config: RootSchema) {
   return migrateTaskConfigs(config);
 }
 
-function migrateTaskConfigs(config: TurboJsonSchema) {
+function migrateTaskConfigs(config: SchemaV1) {
   for (const [_, taskDef] of Object.entries(config.pipeline)) {
     const { env, passThroughEnv } = taskDef;
 
@@ -91,7 +91,7 @@ export function transformer({
     });
   }
 
-  const turboJson = readJsonSync(turboConfigPath) as TurboJsonSchema;
+  const turboJson: SchemaV1 = loadTurboJson(turboConfigPath);
   runner.modifyFile({
     filePath: turboConfigPath,
     after: migrateRootConfig(turboJson),
@@ -101,7 +101,7 @@ export function transformer({
   const allTurboJsons = getTurboConfigs(root);
   allTurboJsons.forEach((workspaceConfig) => {
     const { config, turboConfigPath: filePath, isRootConfig } = workspaceConfig;
-    if (!isRootConfig) {
+    if (!isRootConfig && "pipeline" in config) {
       runner.modifyFile({
         filePath,
         after: migrateTaskConfigs(config),
@@ -112,7 +112,7 @@ export function transformer({
   return runner.finish();
 }
 
-const transformerMeta = {
+const transformerMeta: Transformer = {
   name: TRANSFORMER,
   description: DESCRIPTION,
   introducedIn: INTRODUCED_IN,

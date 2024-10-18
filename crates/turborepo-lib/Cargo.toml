@@ -2,7 +2,7 @@
 name = "turborepo-lib"
 version = "0.1.0"
 edition = "2021"
-license = "MPL-2.0"
+license = "MIT"
 
 [features]
 # Allows configuring a specific tls backend for reqwest.
@@ -22,7 +22,6 @@ async-stream = "0.3.4"
 itertools = { workspace = true }
 port_scanner = { workspace = true }
 pretty_assertions = { workspace = true }
-tempdir = "0.3.7"
 tempfile = { workspace = true }
 test-case = { workspace = true }
 tracing-test = { version = "0.2.4", features = ["no-env-filter"] }
@@ -33,10 +32,12 @@ turborepo-vercel-api-mock = { workspace = true }
 workspace = true
 
 [dependencies]
+async-graphql = { workspace = true }
+async-graphql-axum = { workspace = true }
 atty = { workspace = true }
 axum = { workspace = true }
 biome_deserialize = { workspace = true }
-biome_deserialize_macros = "0.5.7"
+biome_deserialize_macros = { workspace = true }
 biome_diagnostics = { workspace = true }
 biome_json_parser = { workspace = true }
 biome_json_syntax = { workspace = true }
@@ -51,6 +52,7 @@ const_format = "0.2.30"
 convert_case = "0.6.0"
 crossterm = "0.26"
 ctrlc = { version = "3.4.0", features = ["termination"] }
+derive_setters = { workspace = true }
 dialoguer = { workspace = true, features = ["fuzzy-select"] }
 dirs-next = "2.0.0"
 dunce = { workspace = true }
@@ -61,6 +63,7 @@ globwalk = { version = "0.1.0", path = "../turborepo-globwalk" }
 globwatch = { path = "../turborepo-globwatch" }
 go-parse-duration = "0.1.1"
 hex = "0.4.3"
+human-panic = "1.2.1"
 human_format = "1.1.0"
 humantime = "2.1.0"
 ignore = "0.4.22"
@@ -68,6 +71,7 @@ itertools = { workspace = true }
 jsonc-parser = { version = "0.21.0" }
 lazy_static = { workspace = true }
 libc = "0.2.140"
+merge = { workspace = true }
 miette = { workspace = true, features = ["fancy"] }
 nix = "0.26.2"
 notify = { workspace = true }
@@ -105,10 +109,12 @@ tokio-stream = { version = "0.1.12", features = ["net"] }
 tokio-util = { version = "0.7.7", features = ["compat"] }
 tonic = { version = "0.11.0", features = ["transport"] }
 tower = "0.4.13"
+tower-http = { version = "0.5.2", features = ["cors"] }
 tracing-appender = "0.2.2"
 tracing-chrome = "0.7.1"
 tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
 tracing.workspace = true
+turbo-trace = { workspace = true }
 turbo-updater = { workspace = true }
 turbopath = { workspace = true }
 turborepo-analytics = { path = "../turborepo-analytics" }
@@ -127,6 +133,7 @@ turborepo-repository = { path = "../turborepo-repository" }
 turborepo-scm = { workspace = true }
 turborepo-telemetry = { path = "../turborepo-telemetry" }
 turborepo-ui = { workspace = true }
+turborepo-unescape = { workspace = true }
 turborepo-vercel-api = { path = "../turborepo-vercel-api" }
 twox-hash = "1.6.3"
 uds_windows = "1.0.2"

@@ -1,6 +1,6 @@
 {
   "name": "eslint-plugin-turbo",
-  "version": "1.13.4-canary.5",
+  "version": "2.1.4-canary.9",
   "description": "ESLint plugin for Turborepo",
   "keywords": [
     "turbo",
@@ -11,14 +11,15 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/vercel/turbo",
+    "url": "https://github.com/vercel/turborepo",
     "directory": "packages/eslint-plugin-turbo"
   },
   "bugs": {
-    "url": "https://github.com/vercel/turbo/issues"
+    "url": "https://github.com/vercel/turborepo/issues"
   },
   "author": "Vercel",
   "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "files": [
     "dist/**"
   ],
@@ -52,5 +53,5 @@
   "peerDependencies": {
     "eslint": ">6.6.0"
   },
-  "license": "MPL-2.0"
+  "license": "MIT"
 }

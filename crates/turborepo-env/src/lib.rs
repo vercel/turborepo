@@ -11,23 +11,9 @@ use serde::Serialize;
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 
+pub mod platform;
+
 const DEFAULT_ENV_VARS: [&str; 1] = ["VERCEL_ANALYTICS_ID"];
-
-/// Environment mode after we've resolved the `Infer` variant
-#[derive(Debug, Clone, Copy)]
-pub enum ResolvedEnvMode {
-    Loose,
-    Strict,
-}
-
-impl std::fmt::Display for ResolvedEnvMode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ResolvedEnvMode::Loose => write!(f, "loose"),
-            ResolvedEnvMode::Strict => write!(f, "strict"),
-        }
-    }
-}
 
 #[derive(Clone, Debug, Error)]
 pub enum Error {

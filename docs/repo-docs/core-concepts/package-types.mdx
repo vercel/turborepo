@@ -1,0 +1,27 @@
+---
+title: Package types
+description: Learn about the different types of packages in a workspace.
+---
+
+import { Callout } from '#/components/callout';
+
+In Turborepo, we talk about two types of packages:
+
+- [Application Packages](#application-packages)
+- [Library Packages](#library-packages)
+
+## Application Packages
+
+An Application Package is a package in your workspace that will be deployed from your workspace. Examples of Application Packages are Next.js, Svelte, Vite, or CLI applications that are commonly found in the `./apps` directory.
+
+It's best practice that your Application Packages are the "end" of your [Package Graph](/repo/docs/core-concepts/package-and-task-graph#package-graph), not being installed into other packages of your repository. Your CI/CD pipelines will most often finalize at these nodes of your Package and Task Graphs.
+
+### Installing an application package into another package
+
+In rare cases, you may need to install an Application Package into another package. This should be the exception. If you find you are doing this often, you may want to rethink your package structure.
+
+An example of an exception for this rule is installing your Application Package into a package that handles end-to-end testing. Once installed, you can depend on the Application Package in your end-to-end testing package so it is aware of re-deploys of the application.
+
+## Library Packages
+
+Library Packages contain code that you intend to share around your workspace. They aren't independently deployable. Instead, they support the Application Packages to create the final deployables from your repository. You might also refer to these packages as [Internal Packages](/repo/docs/core-concepts/internal-packages), which have their own sub-types.

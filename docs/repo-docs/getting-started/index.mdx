@@ -1,0 +1,69 @@
+---
+title: Getting started
+description: Get started with Turborepo.
+---
+
+import { Card, Cards } from '#/components/card';
+import { Step, Steps } from '#/components/steps';
+import { Tab, Tabs } from '#/components/tabs';
+
+If you're new to Turborepo, you can follow these steps to get started.
+
+<Steps>
+<Step>
+## Install Turborepo
+
+Install `turbo` globally so you can conveniently run `turbo` commands in your terminal from anywhere in your repository.
+
+<Tabs items={["npm", "yarn", "pnpm"]} storageKey="selected-pkg-manager">
+  <Tab value="npm">
+  ```bash title="Terminal"
+  npm install turbo --global
+  ```
+
+  </Tab>
+  <Tab value="yarn">
+  ```bash title="Terminal"
+  yarn global add turbo
+  ```
+
+  </Tab>
+  <Tab value="pnpm">
+  ```bash title="Terminal"
+  pnpm install turbo --global
+  ```
+
+  </Tab>
+</Tabs>
+
+To learn more about installing `turbo`, see the [installation guide](/repo/docs/getting-started/installation).
+
+</Step>
+<Step>
+
+## Choose your learning path
+
+<Cards>
+  <Card
+    href="/repo/docs/getting-started/installation"
+    title="Use create-turbo"
+    description="Start with a template"
+  />
+  <Card
+    href="/repo/docs/getting-started/installation#start-with-an-example"
+    title="Use an example"
+    description="Start with a framework-specific example"
+  />
+  <Card
+    href="/repo/docs/crafting-your-repository"
+    title="Follow the in-depth guides"
+    description="From zero to monorepo"
+  />
+  <Card
+    href="/repo/docs/getting-started/add-to-existing-repository"
+    title="Add to an existing repository"
+    description="Make your current repo fast"
+  />
+</Cards>
+</Step>
+</Steps>

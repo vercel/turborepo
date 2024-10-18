@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import chalk from "chalk";
+import { red } from "picocolors";
 import { logger } from "@turbo/utils";
 import { Command } from "commander";
 import cliPkg from "../package.json";
@@ -36,7 +36,11 @@ codemodCli
     "Bypass Git safety checks and forcibly run codemods",
     false
   )
-  .option("--dry", "Dry run (no changes are made to files)", false)
+  .option(
+    "--dry, --dry-run, -d",
+    "Dry run (no changes are made to files)",
+    false
+  )
   .option("--print", "Print transformed files to your terminal", false)
   .action(migrate);
 
@@ -52,7 +56,11 @@ codemodCli
     false
   )
   .option("--list", "List all available transforms", false)
-  .option("--dry", "Dry run (no changes are made to files)", false)
+  .option(
+    "--dry, --dry-run, -d",
+    "Dry run (no changes are made to files)",
+    false
+  )
   .option("--print", "Print transformed files to your terminal", false)
   .action(transform);
 
@@ -61,7 +69,7 @@ codemodCli
   .then(notifyUpdate)
   .catch(async (reason) => {
     logger.log();
-    logger.log(chalk.red("Unexpected error. Please report it as a bug:"));
+    logger.log(red("Unexpected error. Please report it as a bug:"));
     logger.log(reason);
 
     logger.log();

@@ -9,7 +9,7 @@ use turborepo_errors::Spanned;
 pub use visitor::{Error as VisitorError, Visitor};
 
 use crate::{
-    cli::OutputLogsMode,
+    cli::{EnvMode, OutputLogsMode},
     run::task_id::{TaskId, TaskName},
     turbo_json::RawTaskDefinition,
 };
@@ -23,6 +23,9 @@ pub struct TaskOutputs {
 }
 
 impl TaskOutputs {
+    pub fn is_empty(&self) -> bool {
+        self.inclusions.is_empty() && self.exclusions.is_empty()
+    }
     pub fn validated_inclusions(&self) -> Result<Vec<ValidatedGlob>, GlobError> {
         self.inclusions
             .iter()
@@ -39,7 +42,7 @@ impl TaskOutputs {
 }
 
 // Constructed from a RawTaskDefinition
-#[derive(Debug, Deserialize, PartialEq, Clone, Eq)]
+#[derive(Debug, PartialEq, Clone, Eq)]
 pub struct TaskDefinition {
     pub outputs: TaskOutputs,
     pub(crate) cache: bool,
@@ -48,8 +51,6 @@ pub struct TaskDefinition {
     pub(crate) env: Vec<String>,
 
     pub(crate) pass_through_env: Option<Vec<String>>,
-
-    pub(crate) dot_env: Option<Vec<RelativeUnixPathBuf>>,
 
     // TopologicalDependencies are tasks from package dependencies.
     // E.g. "build" is a topological dependency in:
@@ -68,16 +69,23 @@ pub struct TaskDefinition {
     pub(crate) inputs: Vec<String>,
 
     // OutputMode determines how we should log the output.
-    pub(crate) output_mode: OutputLogsMode,
+    pub(crate) output_logs: OutputLogsMode,
 
     // Persistent indicates whether the Task is expected to exit or not
-    // Tasks marked Persistent do not exit (e.g. --watch mode or dev servers)
+    // Tasks marked Persistent do not exit (e.g. watch mode or dev servers)
     pub persistent: bool,
 
-    // Interactive marks that a task can have it's stdin written to.
+    // Indicates whether a persistent task can be interrupted in the middle of execution
+    // by watch mode
+    pub interruptible: bool,
+
+    // Interactive marks that a task can have its stdin written to.
     // Tasks that take stdin input cannot be cached as their outputs may depend on the
     // input.
     pub interactive: bool,
+
+    // Override for global env mode setting
+    pub env_mode: Option<EnvMode>,
 }
 
 impl Default for TaskDefinition {
@@ -90,10 +98,11 @@ impl Default for TaskDefinition {
             topological_dependencies: Default::default(),
             task_dependencies: Default::default(),
             inputs: Default::default(),
-            output_mode: Default::default(),
+            output_logs: Default::default(),
             persistent: Default::default(),
-            dot_env: Default::default(),
+            interruptible: Default::default(),
             interactive: Default::default(),
+            env_mode: Default::default(),
         }
     }
 }

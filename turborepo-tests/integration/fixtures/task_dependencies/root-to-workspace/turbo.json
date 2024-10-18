@@ -1,9 +1,7 @@
 {
-  "pipeline": {
+  "tasks": {
     "//#mytask": {
-      "dependsOn": [
-        "lib-a#build"
-      ]
+      "dependsOn": ["lib-a#build"]
     },
     "build": {}
   }

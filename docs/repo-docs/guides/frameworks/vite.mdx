@@ -1,0 +1,120 @@
+---
+title: Vite
+description: Learn more about using Vite in your monorepo.
+---
+
+import { PackageManagerTabs, Tab } from '#/components/tabs';
+import { Callout } from '#/components/callout';
+
+[Vite](https://vitejs.dev/) is a build tool that aims to provide a faster and leaner development experience for modern web projects.
+
+## Quickstart
+
+To get started with Vite in a Turborepo quickly, use [the `with-vite` example](https://github.com/vercel/turborepo/tree/main/examples/with-vite):
+
+<PackageManagerTabs>
+<Tab>
+
+```bash title="Terminal"
+npx create-turbo@latest -e with-vite
+```
+
+</Tab>
+
+<Tab>
+
+```bash title="Terminal"
+yarn dlx create-turbo@latest -e with-vite
+```
+
+</Tab>
+
+<Tab>
+
+```bash title="Terminal"
+pnpm dlx create-turbo@latest -e with-vite
+```
+
+</Tab>
+</PackageManagerTabs>
+
+## Adding a Vite application to an existing repository
+
+Use [`npm create vite`](https://vitejs.dev/guide/#scaffolding-your-first-vite-project) to set up a new Vite application in a package. From the root of your repository, run:
+
+<PackageManagerTabs>
+<Tab>
+
+```bash title="Terminal"
+npm create vite@latest apps/my-app
+```
+
+</Tab>
+
+<Tab>
+
+```bash title="Terminal"
+yarn create vite@latest apps/my-app
+```
+
+</Tab>
+
+<Tab>
+
+```bash title="Terminal"
+pnpm create vite@latest apps/my-app
+```
+
+</Tab>
+</PackageManagerTabs>
+
+## Integrating with your repository
+
+To add [Internal Packages](/repo/docs/core-concepts/internal-packages) to your new application, install them into the app with your package manager:
+
+<PackageManagerTabs>
+<Tab>
+
+```diff title="./apps/my-app/package.json"
+{
+ "name": "my-app",
+  "dependencies": {
++   "@repo/ui": "*"
+  }
+}
+```
+
+</Tab>
+
+<Tab>
+
+```diff title="./apps/my-app/package.json"
+{
+  "name": "my-app",
+  "dependencies": {
++   "@repo/ui": "*"
+  }
+}
+```
+
+</Tab>
+
+<Tab>
+
+```diff title="./apps/my-app/package.json"
+{
+  "name": "my-app",
+  "dependencies": {
++   "@repo/ui": "workspace:*"
+  }
+}
+```
+
+</Tab>
+</PackageManagerTabs>
+
+Make sure to run your package manager's install command. You also may need to update `scripts` in `package.json` to fit your use case in your repository.
+
+### Customizing tasks
+
+By default, the new application will use the tasks defined in the root `turbo.json`. If you'd like to configure tasks differently for the new application, use [Package Configurations](/repo/docs/reference/package-configurations).

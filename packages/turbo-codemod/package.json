@@ -1,16 +1,16 @@
 {
   "name": "@turbo/codemod",
-  "version": "1.13.4-canary.5",
+  "version": "2.1.4-canary.9",
   "description": "Provides Codemod transformations to help upgrade your Turborepo codebase when a feature is deprecated.",
   "homepage": "https://turbo.build/repo",
-  "license": "MPL-2.0",
+  "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/vercel/turbo",
+    "url": "https://github.com/vercel/turborepo",
     "directory": "packages/turbo-codemod"
   },
   "bugs": {
-    "url": "https://github.com/vercel/turbo/issues"
+    "url": "https://github.com/vercel/turborepo/issues"
   },
   "bin": "dist/cli.js",
   "scripts": {
@@ -23,7 +23,6 @@
   },
   "dependencies": {
     "axios": "0.27.2",
-    "chalk": "2.4.2",
     "commander": "^9.5.0",
     "diff": "^5.1.0",
     "find-up": "4.1.0",
@@ -31,8 +30,10 @@
     "gradient-string": "^2.0.0",
     "inquirer": "^8.2.4",
     "inquirer-file-tree-selection-prompt": "^1.0.19",
+    "json5": "^2.2.3",
     "is-git-clean": "^1.1.0",
     "ora": "4.1.1",
+    "picocolors": "1.0.1",
     "semver": "^7.3.7",
     "update-check": "^1.5.4"
   },
@@ -44,7 +45,6 @@
     "@turbo/types": "workspace:*",
     "@turbo/utils": "workspace:*",
     "@turbo/workspaces": "workspace:*",
-    "@types/chalk-animation": "^1.6.0",
     "@types/diff": "^5.0.2",
     "@types/fs-extra": "^9.0.13",
     "@types/gradient-string": "^1.1.2",

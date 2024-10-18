@@ -6,7 +6,10 @@ mod vendors;
 use std::{env, sync::OnceLock};
 
 use crate::vendors::get_vendors;
-pub use crate::{vendor_behavior::VendorBehavior, vendors::Vendor};
+pub use crate::{
+    vendor_behavior::{GroupPrefixFn, VendorBehavior},
+    vendors::Vendor,
+};
 
 static IS_CI: OnceLock<bool> = OnceLock::new();
 static VENDOR: OnceLock<Option<&'static Vendor>> = OnceLock::new();
@@ -86,6 +89,10 @@ impl Vendor {
 
     pub fn get_name() -> Option<&'static str> {
         Self::infer().map(|v| v.name)
+    }
+
+    pub fn is(name: &str) -> bool {
+        Self::infer().map_or(false, |v| v.name == name)
     }
 
     pub fn get_constant() -> Option<&'static str> {

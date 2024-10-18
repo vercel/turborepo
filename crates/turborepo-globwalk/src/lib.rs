@@ -15,7 +15,8 @@ use path_clean::PathClean;
 use path_slash::PathExt;
 use rayon::prelude::*;
 use regex::Regex;
-use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError};
+use tracing::debug;
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError, RelativeUnixPath};
 use wax::{walk::FileIterator, BuildError, Glob};
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -51,10 +52,13 @@ fn join_unix_like_paths(a: &str, b: &str) -> String {
     [a.trim_end_matches('/'), "/", b.trim_start_matches('/')].concat()
 }
 
-fn escape_glob_literals(literal_glob: &str) -> Cow<str> {
+fn glob_literals() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| Regex::new(r"(?<literal>[\?\*\$:<>\(\)\[\]{},])").unwrap())
-        .replace_all(literal_glob, "\\$literal")
+}
+
+fn escape_glob_literals(literal_glob: &str) -> Cow<str> {
+    glob_literals().replace_all(literal_glob, "\\$literal")
 }
 
 #[tracing::instrument]
@@ -63,6 +67,8 @@ fn preprocess_paths_and_globs(
     include: &[String],
     exclude: &[String],
 ) -> Result<(PathBuf, Vec<String>, Vec<String>), WalkError> {
+    debug!("processing includes: {include:?}");
+    debug!("processing excludes: {exclude:?}");
     let base_path_slash = base_path
         .as_std_path()
         .to_slash()
@@ -76,6 +82,12 @@ fn preprocess_paths_and_globs(
     let (include_paths, lowest_segment) = include
         .iter()
         .map(|s| fix_glob_pattern(s))
+        .map(|mut s| {
+            // We need to check inclusion globs before the join
+            // as to_slash doesn't preserve Windows drive names.
+            add_doublestar_to_dir(base_path, &mut s);
+            s
+        })
         .map(|s| join_unix_like_paths(&base_path_slash, &s))
         .filter_map(|s| collapse_path(&s).map(|(s, v)| (s.to_string(), v)))
         .fold(
@@ -102,25 +114,12 @@ fn preprocess_paths_and_globs(
         .map(|s| join_unix_like_paths(&base_path_slash, &s))
         .filter_map(|g| collapse_path(&g).map(|(s, _)| s.to_string()))
     {
-        let split = split.to_string();
         // if the glob ends with a slash, then we need to add a double star,
         // unless it already ends with a double star
-        if split.ends_with('/') {
-            if split.ends_with("**/") {
-                exclude_paths.push(split[..split.len() - 1].to_string());
-            } else {
-                exclude_paths.push(format!("{}**", split));
-            }
-        } else if split.ends_with("/**") {
-            exclude_paths.push(split);
-        } else {
-            // Match Go globby behavior. If the glob doesn't already end in /**, add it
-            // TODO: The Go version uses system separator. Are we forcing all globs to unix
-            // paths?
-            exclude_paths.push(format!("{}/**", split));
-            exclude_paths.push(split);
-        }
+        add_trailing_double_star(&mut exclude_paths, &split);
     }
+    debug!("processed includes: {include_paths:?}");
+    debug!("processed excludes: {exclude_paths:?}");
 
     Ok((base_path, include_paths, exclude_paths))
 }
@@ -213,6 +212,57 @@ fn collapse_path(path: &str) -> Option<(Cow<str>, usize)> {
 
         Some((Cow::Owned(string), lowest_index))
     }
+}
+
+fn add_trailing_double_star(exclude_paths: &mut Vec<String>, glob: &str) {
+    if let Some(stripped) = glob.strip_suffix('/') {
+        if stripped.ends_with("**") {
+            exclude_paths.push(stripped.to_string());
+        } else {
+            exclude_paths.push(format!("{}**", glob));
+        }
+    } else if glob.ends_with("/**") {
+        exclude_paths.push(glob.to_string());
+    } else {
+        // Match Go globby behavior. If the glob doesn't already end in /**, add it
+        // We use the unix style operator as wax expects unix style paths
+        exclude_paths.push(format!("{}/**", glob));
+        exclude_paths.push(glob.to_string());
+    }
+}
+
+fn add_doublestar_to_dir(base: &AbsoluteSystemPath, glob: &mut String) {
+    // If the glob has a glob literal in it e.g. *
+    // then skip trying to read it as a file path.
+    if glob_literals().is_match(&*glob) {
+        return;
+    }
+
+    // Globs are given in unix style
+    let Ok(glob_path) = RelativeUnixPath::new(&*glob) else {
+        // Glob isn't valid relative unix path so can't check if dir
+        debug!("'{glob}' isn't valid path");
+        return;
+    };
+
+    let path = base.join_unix_path(glob_path);
+
+    let Ok(metadata) = path.symlink_metadata() else {
+        debug!("'{path}' doesn't have metadata");
+        return;
+    };
+
+    if !metadata.is_dir() {
+        return;
+    }
+
+    debug!("'{path}' is a directory");
+
+    // Glob points to a dir, must add **
+    if !glob.ends_with('/') {
+        glob.push('/');
+    }
+    glob.push_str("**");
 }
 
 #[tracing::instrument]
@@ -357,7 +407,7 @@ fn visit_file(
         Err(e) => {
             let io_err = std::io::Error::from(e);
             match io_err.kind() {
-                // Ignore DNE and permission errors
+                // Ignore missing file and permission errors
                 std::io::ErrorKind::NotFound | std::io::ErrorKind::PermissionDenied => None,
                 _ => Some(Err(io_err.into())),
             }
@@ -370,12 +420,13 @@ mod test {
     use std::{collections::HashSet, str::FromStr};
 
     use itertools::Itertools;
+    use tempfile::TempDir;
     use test_case::test_case;
-    use turbopath::AbsoluteSystemPathBuf;
+    use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 
     use crate::{
-        collapse_path, escape_glob_literals, fix_glob_pattern, globwalk, ValidatedGlob, WalkError,
-        WalkType,
+        add_doublestar_to_dir, collapse_path, escape_glob_literals, fix_glob_pattern, globwalk,
+        ValidatedGlob, WalkError, WalkType,
     };
 
     #[cfg(unix)]
@@ -412,10 +463,10 @@ mod test {
     #[test_case("/a/b/.", "/a/b", 2 ; "test path with leading / and ending with dot segment")]
     #[test_case("/a/.././b", "/b", 0 ; "test path with leading / and mixed and consecutive dot and dotdot segments")]
     #[test_case("/a/b/c/../../d/e/f/g/h/i/../j", "/a/d/e/f/g/h/j", 1 ; "leading collapse followed by shorter one")]
-    fn test_collapse_path(glob: &str, expected: &str, earliest_collapsed_segement: usize) {
+    fn test_collapse_path(glob: &str, expected: &str, earliest_collapsed_segment: usize) {
         let (glob, segment) = collapse_path(glob).unwrap();
         assert_eq!(glob, expected);
-        assert_eq!(segment, earliest_collapsed_segement);
+        assert_eq!(segment, earliest_collapsed_segment);
     }
 
     #[test_case("../a/b" ; "test path starting with ../ segment should return None")]
@@ -480,8 +531,8 @@ mod test {
     }
 
     /// set up a globwalk test in a tempdir, returning the path to the tempdir
-    fn setup() -> tempdir::TempDir {
-        let tmp = tempdir::TempDir::new("globwalk").unwrap();
+    fn setup() -> tempfile::TempDir {
+        let tmp = tempfile::TempDir::with_prefix("globwalk").unwrap();
 
         let directories = ["a/b/c", "a/c", "abc", "axbxcxdxe/xxx", "axbxcxdxexxx", "b"];
 
@@ -537,7 +588,7 @@ mod test {
     #[test_case("**/*f", 4, 4 => matches None ; "leading doublestar expansion")]
     #[test_case("**f", 4, 4 => matches None ; "transform leading doublestar")]
     #[test_case("a**", 22, 22 => matches None ; "transform trailing doublestar")]
-    #[test_case("abc", 1, 1 => matches None ; "exact match")]
+    #[test_case("abc", 3, 3 => matches None ; "exact match")]
     #[test_case("*", 19, 15 => matches None ; "single star match")]
     #[test_case("*c", 2, 2 => matches None ; "single star suffix match")]
     #[test_case("a*", 9, 9 => matches None ; "single star prefix match")]
@@ -570,7 +621,7 @@ mod test {
     #[test_case("a/**/b", 2, 2 => matches None ; "a followed by double star and single subdirectory match")]
     #[test_case("a/**/c", 2, 2 => matches None ; "a followed by double star and multiple subdirectories match 2")]
     #[test_case("a/**/d", 1, 1 => matches None ; "a followed by double star and multiple subdirectories with target match")]
-    #[test_case("a/b/c", 1, 1 => matches None ; "a followed by subdirectories and double slash mismatch")]
+    #[test_case("a/b/c", 2, 2 => matches None ; "a followed by subdirectories and double slash mismatch")]
     #[test_case("ab{c,d}", 1, 1 => matches None ; "pattern with curly braces match")]
     #[test_case("ab{c,d,*}", 5, 5 => matches None ; "pattern with curly braces and wildcard match")]
     #[test_case("ab{c,d}[", 0, 0 => matches Some(WalkError::BadPattern(_, _)))]
@@ -903,8 +954,21 @@ mod test {
         "/repos/some-app/",
         &["dist"],
         &[],
-        &["/repos/some-app/dist"],
-        &[]
+        &[
+            "/repos/some-app/dist",
+            "/repos/some-app/dist/index.html",
+            "/repos/some-app/dist/js",
+            "/repos/some-app/dist/js/index.js",
+            "/repos/some-app/dist/js/lib.js",
+            "/repos/some-app/dist/js/node_modules",
+            "/repos/some-app/dist/js/node_modules/browserify.js",
+        ],
+        &[
+            "/repos/some-app/dist/index.html",
+            "/repos/some-app/dist/js/index.js",
+            "/repos/some-app/dist/js/lib.js",
+            "/repos/some-app/dist/js/node_modules/browserify.js",
+        ]
         ; "passing just a directory captures no children")]
     #[test_case(&[
             "/repos/some-app/dist/index.html",
@@ -1279,12 +1343,12 @@ mod test {
         // TODO: this test needs to be implemented...
     }
 
-    fn setup_files(files: &[&str]) -> tempdir::TempDir {
+    fn setup_files(files: &[&str]) -> tempfile::TempDir {
         setup_files_with_prefix("globwalk", files)
     }
 
-    fn setup_files_with_prefix(prefix: &str, files: &[&str]) -> tempdir::TempDir {
-        let tmp = tempdir::TempDir::new(prefix).unwrap();
+    fn setup_files_with_prefix(prefix: &str, files: &[&str]) -> tempfile::TempDir {
+        let tmp = tempfile::TempDir::with_prefix(prefix).unwrap();
         for file in files {
             let file = file.trim_start_matches('/');
             let path = tmp.path().join(file);
@@ -1422,5 +1486,27 @@ mod test {
             escape_glob_literals("?*$:<>()[]{},"),
             r"\?\*\$\:\<\>\(\)\[\]\{\}\,"
         );
+    }
+
+    #[test_case("foo", false, "foo" ; "file")]
+    #[test_case("foo", true, "foo/**" ; "dir")]
+    #[test_case("foo/", true, "foo/**" ; "dir slash")]
+    #[test_case("f[o0]o", true, "f[o0]o" ; "non-literal")]
+    fn test_add_double_star(glob: &str, is_dir: bool, expected: &str) {
+        let tmpdir = TempDir::with_prefix("doublestar").unwrap();
+        let base = AbsoluteSystemPath::new(tmpdir.path().to_str().unwrap()).unwrap();
+
+        let foo = base.join_component("foo");
+
+        match is_dir {
+            true => foo.create_dir_all().unwrap(),
+            false => foo.create_with_contents(b"bar").unwrap(),
+        }
+
+        let mut glob = glob.to_owned();
+
+        add_doublestar_to_dir(base, &mut glob);
+
+        assert_eq!(glob, expected);
     }
 }

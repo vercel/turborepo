@@ -14,7 +14,7 @@ Setup
   \xe2\x80\xa2 Packages in scope: omit-keys (esc)
   \xe2\x80\xa2 Running omit-keys-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  omit-keys:omit-keys-task: cache miss, executing 0e2764d66f4e31cb
+  omit-keys:omit-keys-task: cache miss, executing 3494dd1d95d1479e
   omit-keys:omit-keys-task: 
   omit-keys:omit-keys-task: > omit-keys-task
   omit-keys:omit-keys-task: > echo running-omit-keys-task > out/foo.min.txt
@@ -25,7 +25,7 @@ Setup
     Time:\s*[\.0-9]+m?s  (re)
   
   $ HASH=$(cat tmp.log | grep -E "omit-keys:omit-keys-task.* executing .*" | awk '{print $5}')
-  $ tar -tf $TARGET_DIR/node_modules/.cache/turbo/$HASH.tar.zst;
+  $ tar -tf $TARGET_DIR/.turbo/cache/$HASH.tar.zst;
   apps/omit-keys/.turbo/turbo-omit-keys-task.log
   apps/omit-keys/out/
   apps/omit-keys/out/.keep
@@ -36,7 +36,7 @@ Setup
   \xe2\x80\xa2 Packages in scope: omit-keys (esc)
   \xe2\x80\xa2 Running omit-keys-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  omit-keys:omit-keys-task: cache hit, suppressing logs 0e2764d66f4e31cb
+  omit-keys:omit-keys-task: cache hit, suppressing logs 3494dd1d95d1479e
   
    Tasks:    1 successful, 1 total
   Cached:    1 cached, 1 total
@@ -48,7 +48,7 @@ Setup
   \xe2\x80\xa2 Packages in scope: omit-keys (esc)
   \xe2\x80\xa2 Running omit-keys-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  omit-keys:omit-keys-task: cache miss, executing 610b5c185bcefc0c
+  omit-keys:omit-keys-task: cache miss, executing dc03a583d6fdaaf2
   omit-keys:omit-keys-task: 
   omit-keys:omit-keys-task: > omit-keys-task
   omit-keys:omit-keys-task: > echo running-omit-keys-task > out/foo.min.txt
@@ -65,7 +65,7 @@ Setup
   \xe2\x80\xa2 Packages in scope: omit-keys (esc)
   \xe2\x80\xa2 Running omit-keys-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  omit-keys:omit-keys-task: cache hit, suppressing logs 610b5c185bcefc0c
+  omit-keys:omit-keys-task: cache hit, suppressing logs dc03a583d6fdaaf2
   
    Tasks:    1 successful, 1 total
   Cached:    1 cached, 1 total
@@ -76,7 +76,7 @@ Setup
   \xe2\x80\xa2 Packages in scope: omit-keys (esc)
   \xe2\x80\xa2 Running omit-keys-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  omit-keys:omit-keys-task: cache miss, executing f4229f7e07a5c9b1
+  omit-keys:omit-keys-task: cache miss, executing 56670bf5aef6bb90
   omit-keys:omit-keys-task: 
   omit-keys:omit-keys-task: > omit-keys-task
   omit-keys:omit-keys-task: > echo running-omit-keys-task > out/foo.min.txt

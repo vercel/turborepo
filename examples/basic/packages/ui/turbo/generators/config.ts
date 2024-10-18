@@ -23,7 +23,7 @@ export default function generator(plop: PlopTypes.NodePlopAPI): void {
         type: "append",
         path: "package.json",
         pattern: /"exports": {(?<insertion>)/g,
-        template: '"./{{kebabCase name}}": "./src/{{kebabCase name}}.tsx",',
+        template: '    "./{{kebabCase name}}": "./src/{{kebabCase name}}.tsx",',
       },
     ],
   });

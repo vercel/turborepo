@@ -7,6 +7,8 @@ Setup
 
 # 1. First run, assert that dependet tasks run `dependsOn`
   $ ${TURBO} run missing-workspace-config-task-with-deps --filter=missing-workspace-config > tmp.log
+   WARNING  no output files found for task blank-pkg#missing-workspace-config-underlying-topo-task. Please check your `outputs` key in `turbo.json`
+   WARNING  no output files found for task missing-workspace-config#missing-workspace-config-underlying-task. Please check your `outputs` key in `turbo.json`
 # Validate in pieces. `omit-key` task has two dependsOn values, and those tasks
 # can run in non-deterministic order. So we need to validate the logs in the pieces.
   $ cat tmp.log | grep "in scope" -A 2
@@ -15,14 +17,14 @@ Setup
   \xe2\x80\xa2 Remote caching disabled (esc)
 
   $ cat tmp.log | grep "missing-workspace-config:missing-workspace-config-task-with-deps"
-  missing-workspace-config:missing-workspace-config-task-with-deps: cache miss, executing cb5a7b7c7ef29b91
+  missing-workspace-config:missing-workspace-config-task-with-deps: cache miss, executing 27111702ff2c516b
   missing-workspace-config:missing-workspace-config-task-with-deps: 
   missing-workspace-config:missing-workspace-config-task-with-deps: > missing-workspace-config-task-with-deps
   missing-workspace-config:missing-workspace-config-task-with-deps: > echo running-missing-workspace-config-task-with-deps > out/foo.min.txt
   missing-workspace-config:missing-workspace-config-task-with-deps: 
 
   $ cat tmp.log | grep "missing-workspace-config:missing-workspace-config-underlying-task"
-  missing-workspace-config:missing-workspace-config-underlying-task: cache miss, executing 26878c99d9f1f2ad
+  missing-workspace-config:missing-workspace-config-underlying-task: cache miss, executing abd612282d80ada6
   missing-workspace-config:missing-workspace-config-underlying-task: 
   missing-workspace-config:missing-workspace-config-underlying-task: > missing-workspace-config-underlying-task
   missing-workspace-config:missing-workspace-config-underlying-task: > echo running-missing-workspace-config-underlying-task
@@ -30,7 +32,7 @@ Setup
   missing-workspace-config:missing-workspace-config-underlying-task: running-missing-workspace-config-underlying-task
 
   $ cat tmp.log | grep "blank-pkg:missing-workspace-config-underlying-topo-task"
-  blank-pkg:missing-workspace-config-underlying-topo-task: cache miss, executing 86d7535cfbce352a
+  blank-pkg:missing-workspace-config-underlying-topo-task: cache miss, executing 9cc1b75893929720
   blank-pkg:missing-workspace-config-underlying-topo-task: 
   blank-pkg:missing-workspace-config-underlying-topo-task: > missing-workspace-config-underlying-topo-task
   blank-pkg:missing-workspace-config-underlying-topo-task: > echo missing-workspace-config-underlying-topo-task from blank-pkg

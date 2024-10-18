@@ -232,6 +232,118 @@ impl Screen {
         }
     }
 
+    /// Returns the text contents of the terminal logically between two cells at the given scrollback
+    /// This will include the remainder of the starting row after `start_col`,
+    /// followed by the entire contents of the rows between `start_row` and
+    /// `end_row`, followed by the beginning of the `end_row` up until
+    /// `end_col`. This is useful for things like determining the contents of
+    /// a clipboard selection.
+    #[must_use]
+    fn contents_between_absolute(
+        &self,
+        start_row: usize,
+        start_col: u16,
+        end_row: usize,
+        end_col: u16,
+    ) -> String {
+        match start_row.cmp(&end_row) {
+            std::cmp::Ordering::Less => {
+                let (_, cols) = self.size();
+                let mut contents = String::new();
+                for (i, row) in self
+                    .grid()
+                    .all_rows()
+                    .enumerate()
+                    .skip(start_row)
+                    .take(end_row - start_row + 1)
+                {
+                    if i == start_row {
+                        row.write_contents(
+                            &mut contents,
+                            start_col,
+                            cols - start_col,
+                            false,
+                        );
+                        if !row.wrapped() {
+                            contents.push('\n');
+                        }
+                    } else if i == end_row {
+                        row.write_contents(&mut contents, 0, end_col, false);
+                    } else {
+                        row.write_contents(&mut contents, 0, cols, false);
+                        if !row.wrapped() {
+                            contents.push('\n');
+                        }
+                    }
+                }
+                contents
+            }
+            std::cmp::Ordering::Equal => {
+                if start_col < end_col {
+                    self.grid()
+                        .all_rows()
+                        .nth(start_row)
+                        .map(move |row| {
+                            let mut contents = String::new();
+                            row.write_contents(
+                                &mut contents,
+                                start_col,
+                                end_col - start_col,
+                                false,
+                            );
+                            contents
+                        })
+                        .unwrap_or_default()
+                } else {
+                    String::new()
+                }
+            }
+            std::cmp::Ordering::Greater => String::new(),
+        }
+    }
+
+    /// Selects text on the viewable screen.
+    ///
+    /// The positions given should be provided in relation to the viewable screen, not including the scrollback.
+    ///
+    /// Positions will be clamped to actual size of the screen.
+    pub fn set_selection(
+        &mut self,
+        start_row: u16,
+        start_col: u16,
+        end_row: u16,
+        end_col: u16,
+    ) {
+        self.grid_mut()
+            .set_selection(start_row, start_col, end_row, end_col);
+    }
+
+    /// Updates the current selection to end at row and col.
+    ///
+    /// If no selection is currently set, then a selection will be created that starts and ends at the same position.
+    pub fn update_selection(&mut self, row: u16, col: u16) {
+        self.grid_mut().update_selection(row, col);
+    }
+
+    /// Clears current selection if one exists
+    pub fn clear_selection(&mut self) {
+        self.grid_mut().clear_selection();
+    }
+
+    /// Returns text contained in selection
+    #[must_use]
+    pub fn selected_text(&self) -> Option<String> {
+        let selection = self.grid().selection()?;
+        let start = selection.start;
+        let end = selection.end;
+        Some(self.contents_between_absolute(
+            start.row,
+            start.col,
+            end.row,
+            end.col + 1,
+        ))
+    }
+
     /// Return escape codes sufficient to reproduce the entire contents of the
     /// current terminal state. This is a convenience wrapper around
     /// `contents_formatted`, `input_mode_formatted`, and `title_formatted`.
@@ -1182,7 +1294,7 @@ impl Screen {
 
     // CSI h
     #[allow(clippy::unused_self)]
-    pub(crate) fn sm(&mut self, params: &vte::Params) {
+    pub(crate) fn sm(&self, params: &vte::Params) {
         // nothing, i think?
         if log::log_enabled!(log::Level::Debug) {
             log::debug!(
@@ -1241,7 +1353,7 @@ impl Screen {
 
     // CSI l
     #[allow(clippy::unused_self)]
-    pub(crate) fn rm(&mut self, params: &vte::Params) {
+    pub(crate) fn rm(&self, params: &vte::Params) {
         // nothing, i think?
         if log::log_enabled!(log::Level::Debug) {
             log::debug!(

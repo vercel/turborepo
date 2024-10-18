@@ -10,13 +10,13 @@ Setup
     "turboVersion": "[a-z0-9\.-]+", (re)
     "monorepo": false,
     "globalCacheInputs": {
-      "rootKey": "HEY STELLLLLLLAAAAAAAAAAAAA",
+      "rootKey": "I can\xe2\x80\x99t see ya, but I know you\xe2\x80\x99re here", (esc)
       "files": {
         "package-lock.json": "1c117cce37347befafe3a9cba1b8a609b3600021",
-        "package.json": "5519edda652c463054307421a3c05ff49f080328"
+        "package.json": "8606ff4b95a5330740d8d9d0948faeada64f1f32"
       },
       "hashOfExternalDependencies": "",
-      "globalDotEnv": null,
+      "hashOfInternalDependencies": "",
       "environmentVariables": {
         "specified": {
           "env": [],
@@ -25,19 +25,20 @@ Setup
         "configured": [],
         "inferred": [],
         "passthrough": null
-      }
+      },
+      "engines": null
     },
-    "envMode": "infer",
+    "envMode": "strict",
     "frameworkInference": true,
     "tasks": [
       {
         "taskId": "build",
         "task": "build",
-        "hash": "e46d6df5143cae99",
+        "hash": "e2b99dad85a4ff66",
         "inputs": {
           ".gitignore": "03b541460c1b836f96f9c0a941ceb48e91a9fd83",
           "package-lock.json": "1c117cce37347befafe3a9cba1b8a609b3600021",
-          "package.json": "5519edda652c463054307421a3c05ff49f080328",
+          "package.json": "8606ff4b95a5330740d8d9d0948faeada64f1f32",
           "somefile.txt": "45b983be36b73c0788dc9cbcb76cbb80fc7bb057"
         },
         "hashOfExternalDependencies": "",
@@ -59,16 +60,16 @@ Setup
           "cache": false,
           "dependsOn": [],
           "inputs": [],
-          "outputMode": "full",
+          "outputLogs": "full",
           "persistent": false,
+          "interruptible": false,
           "env": [],
           "passThroughEnv": null,
-          "dotEnv": null,
           "interactive": false
         },
         "expandedOutputs": [],
         "framework": "",
-        "envMode": "loose",
+        "envMode": "strict",
         "environmentVariables": {
           "specified": {
             "env": [],
@@ -77,8 +78,7 @@ Setup
           "configured": [],
           "inferred": [],
           "passthrough": null
-        },
-        "dotEnv": null
+        }
       }
     ],
     "user": ".*", (re)

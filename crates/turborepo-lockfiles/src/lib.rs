@@ -62,6 +62,9 @@ pub trait Lockfile: Send + Sync + Any + std::fmt::Debug {
 
     /// Determine if there's a global change between two lockfiles
     fn global_change(&self, other: &dyn Lockfile) -> bool;
+
+    /// Return any turbo version found in the lockfile
+    fn turbo_version(&self) -> Option<String>;
 }
 
 /// Takes a lockfile, and a map of workspace directory paths -> (package name,

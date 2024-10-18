@@ -1,8 +1,9 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "pipeline": {
+  "tasks": {
     "build": {
       "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT", ".env*"],
       "outputs": [".svelte-kit/**", ".vercel/**"]
     },
     "lint": {},

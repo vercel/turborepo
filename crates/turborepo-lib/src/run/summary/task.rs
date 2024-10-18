@@ -81,7 +81,6 @@ pub(crate) struct SharedTaskSummary<T> {
     pub framework: String,
     pub env_mode: EnvMode,
     pub environment_variables: TaskEnvVarSummary,
-    pub dot_env: Option<Vec<RelativeUnixPathBuf>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub execution: Option<TaskExecutionSummary>,
 }
@@ -100,12 +99,14 @@ pub struct TaskSummaryTaskDefinition {
     cache: bool,
     depends_on: Vec<String>,
     inputs: Vec<String>,
-    output_mode: OutputLogsMode,
+    output_logs: OutputLogsMode,
     persistent: bool,
+    interruptible: bool,
     env: Vec<String>,
     pass_through_env: Option<Vec<String>>,
-    dot_env: Option<Vec<RelativeUnixPathBuf>>,
     interactive: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    env_mode: Option<EnvMode>,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -233,7 +234,6 @@ impl From<SharedTaskSummary<TaskId<'static>>> for SharedTaskSummary<String> {
             execution,
             env_mode,
             environment_variables,
-            dot_env,
             ..
         } = value;
         Self {
@@ -261,7 +261,6 @@ impl From<SharedTaskSummary<TaskId<'static>>> for SharedTaskSummary<String> {
             execution,
             env_mode,
             environment_variables,
-            dot_env,
         }
     }
 }
@@ -277,13 +276,14 @@ impl From<TaskDefinition> for TaskSummaryTaskDefinition {
             cache,
             mut env,
             pass_through_env,
-            dot_env,
             topological_dependencies,
             task_dependencies,
             mut inputs,
-            output_mode,
+            output_logs,
             persistent,
+            interruptible,
             interactive,
+            env_mode,
         } = value;
 
         let mut outputs = inclusions;
@@ -313,13 +313,13 @@ impl From<TaskDefinition> for TaskSummaryTaskDefinition {
             cache,
             depends_on,
             inputs,
-            output_mode,
+            output_logs,
             persistent,
+            interruptible,
             interactive,
             env,
             pass_through_env,
-            // This should _not_ be sorted.
-            dot_env,
+            env_mode,
         }
     }
 }
@@ -373,12 +373,12 @@ mod test {
             "cache": true,
             "dependsOn": [],
             "inputs": [],
-            "outputMode": "full",
+            "outputLogs": "full",
             "persistent": false,
+            "interruptible": false,
             "interactive": false,
             "env": [],
             "passThroughEnv": null,
-            "dotEnv": null,
         })
         ; "resolved task definition"
     )]
