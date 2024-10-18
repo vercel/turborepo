@@ -317,15 +317,15 @@ describe("add-package-manager-2", () => {
         "Encountered an error while transforming files"
       );
       expect(result.changes).toMatchInlineSnapshot(`
-      Object {
-        "package.json": Object {
-          "action": "error",
-          "additions": 1,
-          "deletions": 0,
-          "error": [Error: could not write file],
-        },
-      }
-    `);
+        {
+          "package.json": {
+            "action": "error",
+            "additions": 1,
+            "deletions": 0,
+            "error": [Error: could not write file],
+          },
+        }
+      `);
 
       mockWriteJsonSync.mockRestore();
       mockGetAvailablePackageManagers.mockRestore();
