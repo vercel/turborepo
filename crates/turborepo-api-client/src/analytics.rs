@@ -25,8 +25,9 @@ impl AnalyticsClient for APIClient {
             .await?
             .json(&events);
 
-        retry::make_retryable_request(request_builder)
+        retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout)
             .await?
+            .into_response()
             .error_for_status()?;
 
         Ok(())

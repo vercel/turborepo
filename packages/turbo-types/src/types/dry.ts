@@ -4,6 +4,6 @@ export interface DryRun {
   version: string;
   turboVersion: string;
   monorepo: boolean;
-  packages: Array<string>;
+  packages?: Array<string>;
   frameworkInference: boolean;
 }

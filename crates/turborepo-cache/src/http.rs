@@ -1,5 +1,11 @@
-use std::{backtrace::Backtrace, io::Write};
+use std::{
+    backtrace::Backtrace,
+    collections::HashMap,
+    io::{Cursor, Write},
+    sync::{Arc, Mutex},
+};
 
+use tokio_stream::StreamExt;
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 use turborepo_analytics::AnalyticsSender;
@@ -11,8 +17,11 @@ use turborepo_api_client::{
 use crate::{
     cache_archive::{CacheReader, CacheWriter},
     signature_authentication::ArtifactSignatureAuthenticator,
+    upload_progress::{UploadProgress, UploadProgressQuery},
     CacheError, CacheHitMetadata, CacheOpts, CacheSource,
 };
+
+pub type UploadMap = HashMap<String, UploadProgressQuery<10, 100>>;
 
 pub struct HTTPCache {
     client: APIClient,
@@ -20,6 +29,7 @@ pub struct HTTPCache {
     repo_root: AbsoluteSystemPathBuf,
     api_auth: APIAuth,
     analytics_recorder: Option<AnalyticsSender>,
+    uploads: Arc<Mutex<UploadMap>>,
 }
 
 impl HTTPCache {
@@ -53,6 +63,7 @@ impl HTTPCache {
             client,
             signer_verifier,
             repo_root,
+            uploads: Arc::new(Mutex::new(HashMap::new())),
             api_auth,
             analytics_recorder,
         }
@@ -68,6 +79,7 @@ impl HTTPCache {
     ) -> Result<(), CacheError> {
         let mut artifact_body = Vec::new();
         self.write(&mut artifact_body, anchor, files).await?;
+        let bytes = artifact_body.len();
 
         let tag = self
             .signer_verifier
@@ -75,13 +87,29 @@ impl HTTPCache {
             .map(|signer| signer.generate_tag(hash.as_bytes(), &artifact_body))
             .transpose()?;
 
+        let stream = tokio_util::codec::FramedRead::new(
+            Cursor::new(artifact_body),
+            tokio_util::codec::BytesCodec::new(),
+        )
+        .map(|res| {
+            res.map(|bytes| bytes.freeze())
+                .map_err(turborepo_api_client::Error::from)
+        });
+
+        let (progress, query) = UploadProgress::<10, 100, _>::new(stream, Some(bytes));
+
+        {
+            let mut uploads = self.uploads.lock().unwrap();
+            uploads.insert(hash.to_string(), query);
+        }
+
         tracing::debug!("uploading {}", hash);
 
         match self
             .client
             .put_artifact(
                 hash,
-                &artifact_body,
+                progress,
                 duration,
                 tag.as_deref(),
                 &self.api_auth.token,
@@ -235,6 +263,10 @@ impl HTTPCache {
             },
             files,
         )))
+    }
+
+    pub fn requests(&self) -> Arc<Mutex<UploadMap>> {
+        self.uploads.clone()
     }
 
     #[tracing::instrument(skip_all)]

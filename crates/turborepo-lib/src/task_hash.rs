@@ -1,16 +1,13 @@
 use std::{
     collections::{HashMap, HashSet},
     sync::{Arc, Mutex},
-    time::Duration,
 };
 
 use rayon::prelude::*;
 use serde::Serialize;
 use thiserror::Error;
 use tracing::{debug, Span};
-use turbopath::{
-    AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf, RelativeUnixPathBuf,
-};
+use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
 use turborepo_cache::CacheHitMetadata;
 use turborepo_env::{BySource, DetailedMap, EnvironmentVariableMap, ResolvedEnvMode};
 use turborepo_repository::package_graph::{PackageInfo, PackageName};
@@ -83,7 +80,6 @@ impl PackageInputsHashes {
         tracing::trace!(scm_manual=%scm.is_manual(), "scm running in {} mode", if scm.is_manual() { "manual" } else { "git" });
 
         let span = Span::current();
-        let handle = tokio::runtime::Handle::current();
         let (hashes, expanded_hashes): (HashMap<_, _>, HashMap<_, _>) = all_tasks
             .filter_map(|task| {
                 let span = tracing::info_span!(parent: &span, "calculate_file_hash", ?task);
@@ -91,10 +87,6 @@ impl PackageInputsHashes {
                 let TaskNode::Task(task_id) = task else {
                     return None;
                 };
-
-                let mut daemon = daemon
-                    .as_ref() // Option::ref
-                    .cloned();
 
                 let task_definition = match task_definitions
                     .get(task_id)
@@ -126,58 +118,72 @@ impl PackageInputsHashes {
                 let scm_telemetry = package_task_event.child();
                 // Try hashing with the daemon, if we have a connection. If we don't, or if we
                 // timeout or get an error, fallback to local hashing
-                let hash_object = daemon
-                    .as_mut()
-                    .and_then(|daemon| {
-                        let handle = handle.clone();
-                        // We need an async block here because the timeout must be created with an
-                        // active tokio context. Constructing it directly in
-                        // the rayon thread doesn't provide one and will crash at runtime.
-                        handle
-                            .block_on(async {
-                                tokio::time::timeout(
-                                    Duration::from_millis(100),
-                                    daemon.get_file_hashes(package_path, &task_definition.inputs),
-                                )
-                                .await
-                            })
-                            .map_err(|e| {
-                                tracing::debug!(
-                                    "daemon file hashing timed out for {}",
-                                    package_path
-                                );
-                                e
-                            })
-                            .ok() // If we timed out, we don't need to error,
-                                  // just return None so we can move on to local
-                    })
-                    .and_then(|result| {
-                        match result {
-                            Ok(hashes_resp) => Some(
-                                hashes_resp
-                                    .file_hashes
-                                    .into_iter()
-                                    .map(|(path, hash)| {
-                                        (
-                                            RelativeUnixPathBuf::new(path)
-                                                .expect("daemon returns relative unix paths"),
-                                            hash,
-                                        )
-                                    })
-                                    .collect::<HashMap<_, _>>(),
-                            ),
-                            Err(e) => {
-                                // Daemon could've failed for various reasons. We can still try
-                                // local hashing.
-                                tracing::debug!(
-                                    "daemon file hashing failed for {}: {}",
-                                    package_path,
+                let hash_object = if cfg!(feature = "daemon-file-hashing") {
+                    let handle = tokio::runtime::Handle::current();
+                    let mut daemon = daemon
+                        .as_ref() // Option::ref
+                        .cloned();
+
+                    daemon
+                        .as_mut()
+                        .and_then(|daemon| {
+                            let handle = handle.clone();
+                            // We need an async block here because the timeout must be created with
+                            // an active tokio context. Constructing it
+                            // directly in the rayon thread doesn't
+                            // provide one and will crash at runtime.
+                            handle
+                                .block_on(async {
+                                    tokio::time::timeout(
+                                        std::time::Duration::from_millis(100),
+                                        daemon
+                                            .get_file_hashes(package_path, &task_definition.inputs),
+                                    )
+                                    .await
+                                })
+                                .map_err(|e| {
+                                    tracing::debug!(
+                                        "daemon file hashing timed out for {}",
+                                        package_path
+                                    );
                                     e
-                                );
-                                None
+                                })
+                                .ok() // If we timed out, we don't need to
+                                      // error,
+                                      // just return None so we can move on to
+                                      // local
+                        })
+                        .and_then(|result| {
+                            match result {
+                                Ok(hashes_resp) => Some(
+                                    hashes_resp
+                                        .file_hashes
+                                        .into_iter()
+                                        .map(|(path, hash)| {
+                                            (
+                                                turbopath::RelativeUnixPathBuf::new(path)
+                                                    .expect("daemon returns relative unix paths"),
+                                                hash,
+                                            )
+                                        })
+                                        .collect::<HashMap<_, _>>(),
+                                ),
+                                Err(e) => {
+                                    // Daemon could've failed for various reasons. We can still try
+                                    // local hashing.
+                                    tracing::debug!(
+                                        "daemon file hashing failed for {}: {}",
+                                        package_path,
+                                        e
+                                    );
+                                    None
+                                }
                             }
-                        }
-                    });
+                        })
+                } else {
+                    None
+                };
+
                 let mut hash_object = match hash_object {
                     Some(hash_object) => hash_object,
                     None => {

@@ -176,8 +176,8 @@ impl<W> TerminalOutput<W> {
 
     fn title(&self, task_name: &str) -> String {
         match self.status.as_deref() {
-            Some(status) => format!(" {task_name} > {status}"),
-            None => format!(" {task_name} >"),
+            Some(status) => format!(" {task_name} > {status} "),
+            None => format!(" {task_name} > "),
         }
     }
 

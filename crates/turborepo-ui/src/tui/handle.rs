@@ -56,6 +56,11 @@ impl AppSender {
         // it'll be a no-op.
         self.primary.send(Event::Stop).ok();
     }
+
+    /// Update the list of tasks displayed in the TUI
+    pub fn update_tasks(&self, tasks: Vec<String>) -> Result<(), mpsc::SendError<Event>> {
+        self.primary.send(Event::UpdateTasks { tasks })
+    }
 }
 
 impl AppReceiver {

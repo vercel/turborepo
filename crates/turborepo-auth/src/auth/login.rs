@@ -313,7 +313,11 @@ mod tests {
         async fn put_artifact(
             &self,
             _hash: &str,
-            _artifact_body: &[u8],
+            _artifact_body: impl turborepo_api_client::Stream<
+                    Item = Result<turborepo_api_client::Bytes, turborepo_api_client::Error>,
+                > + Send
+                + Sync
+                + 'static,
             _duration: u64,
             _tag: Option<&str>,
             _token: &str,

@@ -77,8 +77,13 @@ turbopack-wasi = [
 [workspace.lints.clippy]
 too_many_arguments = "allow"
 
-[profile.dev.package.turbo-tasks-macros]
-opt-level = 3
+# This crate is particularly sensitive to compiler optimizations
+[profile.dev.package.turbo-tasks-memory]
+opt-level = 1
+
+# Set the options for dependencies (not crates in the workspace), this mostly impacts cold builds
+[profile.dev.package."*"]
+opt-level = 1
 
 # Set the settings for build scripts and proc-macros.
 [profile.dev.build-override]
@@ -103,17 +108,17 @@ async-recursion = "1.0.2"
 # Keep consistent with preset_env_base through swc_core
 browserslist-rs = { version = "0.15.0" }
 miette = { version = "5.10.0", features = ["fancy"] }
-mdxjs = "0.1.23"
-modularize_imports = { version = "0.68.9" }
-styled_components = { version = "0.96.8" }
-styled_jsx = { version = "0.73.13" }
-swc_core = { version = "0.90.33", features = [
+mdxjs = "0.2.2"
+modularize_imports = { version = "0.68.14" }
+styled_components = { version = "0.96.15" }
+styled_jsx = { version = "0.73.22" }
+swc_core = { version = "0.92.8", features = [
   "ecma_loader_lru",
   "ecma_loader_parking_lot",
 ] }
-swc_emotion = { version = "0.72.8" }
-swc_relay = { version = "0.44.8" }
-testing = { version = "0.35.23" }
+swc_emotion = { version = "0.72.13" }
+swc_relay = { version = "0.44.14" }
+testing = { version = "0.35.25" }
 # Temporary: Reference the latest git minor version of pathfinder_simd until it's published.
 pathfinder_simd = "0.5.3"
 
@@ -235,7 +240,7 @@ indicatif = "0.17.3"
 indoc = "2.0.0"
 itertools = "0.10.5"
 lazy_static = "1.4.0"
-lightningcss = { version = "1.0.0-alpha.50", features = [
+lightningcss = { version = "1.0.0-alpha.57", features = [
   "serde",
   "visitor",
   "into_owned",
@@ -298,4 +303,5 @@ which = "4.4.0"
 unicode-segmentation = "1.10.1"
 
 [patch.crates-io]
-pathfinder_simd = { git = "https://github.com/servo/pathfinder", rev = "30419d" }
+# TODO: Use upstream when https://github.com/servo/pathfinder/pull/566 lands
+pathfinder_simd = { git = "https://github.com/vercel/pathfinder", branch = "rm-stdarch_arm_crc32" }

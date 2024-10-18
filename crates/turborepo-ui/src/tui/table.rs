@@ -68,33 +68,58 @@ impl TaskTable {
         self.len() == 0
     }
 
-    /// Mark the given planned task as started
-    /// Errors if given task wasn't a planned task
+    /// Mark the given task as started.
+    /// If planned, pulls it from planned tasks and starts it.
+    /// If finished, removes from finished and starts again as new task.
     pub fn start_task(&mut self, task: &str) -> Result<(), Error> {
-        let planned_idx = self
+        if let Ok(planned_idx) = self
             .planned
             .binary_search_by(|planned_task| planned_task.name().cmp(task))
-            .map_err(|_| {
-                debug!("could not find '{task}' to start");
-                Error::TaskNotFound { name: task.into() }
-            })?;
-        let planned = self.planned.remove(planned_idx);
-        let old_row_idx = self.finished.len() + self.running.len() + planned_idx;
-        let new_row_idx = self.finished.len() + self.running.len();
-        let running = planned.start();
-        self.running.push(running);
+        {
+            let planned = self.planned.remove(planned_idx);
+            let old_row_idx = self.finished.len() + self.running.len() + planned_idx;
+            let new_row_idx = self.finished.len() + self.running.len();
+            let running = planned.start();
+            self.running.push(running);
 
-        if let Some(selected_idx) = self.scroll.selected() {
-            // If task that was just started is selected, then update selection to follow
-            // task
-            if selected_idx == old_row_idx {
-                self.scroll.select(Some(new_row_idx));
-            } else if new_row_idx <= selected_idx && selected_idx < old_row_idx {
-                // If the selected task is between the old and new row positions
-                // then increment the selection index to keep selection the same.
-                self.scroll.select(Some(selected_idx + 1));
+            if let Some(selected_idx) = self.scroll.selected() {
+                // If task that was just started is selected, then update selection to follow
+                // task
+                if selected_idx == old_row_idx {
+                    self.scroll.select(Some(new_row_idx));
+                } else if new_row_idx <= selected_idx && selected_idx < old_row_idx {
+                    // If the selected task is between the old and new row positions
+                    // then increment the selection index to keep selection the same.
+                    self.scroll.select(Some(selected_idx + 1));
+                }
             }
+        } else if let Some(finished_idx) = self
+            .finished
+            .iter()
+            .position(|finished_task| finished_task.name() == task)
+        {
+            let finished = self.finished.remove(finished_idx);
+            let old_row_idx = finished_idx;
+            let new_row_idx = self.finished.len() + self.running.len();
+            let running = Task::new(finished.name().to_string()).start();
+            self.running.push(running);
+
+            if let Some(selected_idx) = self.scroll.selected() {
+                // If task that was just started is selected, then update selection to follow
+                // task
+                if selected_idx == old_row_idx {
+                    self.scroll.select(Some(new_row_idx));
+                } else if new_row_idx <= selected_idx && selected_idx < old_row_idx {
+                    // If the selected task is between the old and new row positions
+                    // then increment the selection index to keep selection the same.
+                    self.scroll.select(Some(selected_idx + 1));
+                }
+            }
+        } else {
+            debug!("could not find '{task}' to start");
+            return Err(Error::TaskNotFound { name: task.into() });
         }
+
         self.tick();
         Ok(())
     }
@@ -156,8 +181,7 @@ impl TaskTable {
         self.scroll.select(Some(i));
     }
 
-    pub fn selected(&self) -> Option<&str> {
-        let i = self.scroll.selected()?;
+    pub fn get(&self, i: usize) -> Option<&str> {
         if i < self.finished.len() {
             let task = self.finished.get(i)?;
             Some(task.name())
@@ -172,6 +196,11 @@ impl TaskTable {
         } else {
             None
         }
+    }
+
+    pub fn selected(&self) -> Option<&str> {
+        let i = self.scroll.selected()?;
+        self.get(i)
     }
 
     pub fn tasks_started(&self) -> impl Iterator<Item = &str> + '_ {
@@ -219,6 +248,8 @@ impl<'a> StatefulWidget for &'a TaskTable {
     type State = TableState;
 
     fn render(self, area: Rect, buf: &mut ratatui::prelude::Buffer, state: &mut Self::State) {
+        let width = area.width;
+        let bar = "─".repeat(usize::from(width));
         let table = Table::new(
             self.finished_rows()
                 .chain(self.running_rows())
@@ -232,9 +263,8 @@ impl<'a> StatefulWidget for &'a TaskTable {
         .highlight_style(Style::default().fg(Color::Yellow))
         .column_spacing(0)
         .header(
-            ["Task\n────", "\n─"]
-                .iter()
-                .copied()
+            vec![format!("Task\n{bar}"), "\n─".to_owned()]
+                .into_iter()
                 .map(Cell::from)
                 .collect::<Row>()
                 .height(2),
@@ -282,6 +312,47 @@ mod test {
         table.finish_task("a", TaskResult::Success).unwrap();
         assert_eq!(table.scroll.selected(), Some(1), "b stays selected");
         assert_eq!(table.selected(), Some("b"), "selected b");
+    }
+
+    #[test]
+    fn test_restart_task() {
+        let mut table = TaskTable::new(vec!["a".to_string(), "b".to_string(), "c".to_string()]);
+        table.next();
+        table.next();
+        // Start all tasks
+        table.start_task("b").unwrap();
+        table.start_task("a").unwrap();
+        table.start_task("c").unwrap();
+        assert_eq!(table.get(0), Some("b"), "b is on top (running)");
+        table.finish_task("a", TaskResult::Success).unwrap();
+        assert_eq!(
+            (table.get(0), table.get(1)),
+            (Some("a"), Some("b")),
+            "a is on top (done), b is second (running)"
+        );
+
+        table.finish_task("b", TaskResult::Success).unwrap();
+        assert_eq!(
+            (table.get(0), table.get(1)),
+            (Some("a"), Some("b")),
+            "a is on top (done), b is second (done)"
+        );
+
+        // Restart b
+        table.start_task("b").unwrap();
+        assert_eq!(
+            (table.get(1), table.get(2)),
+            (Some("c"), Some("b")),
+            "b is third (running)"
+        );
+
+        // Restart a
+        table.start_task("a").unwrap();
+        assert_eq!(
+            (table.get(0), table.get(1), table.get(2)),
+            (Some("c"), Some("b"), Some("a")),
+            "c is on top (running), b is second (running), a is third (running)"
+        );
     }
 
     #[test]

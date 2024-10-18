@@ -1,13 +1,11 @@
 #![feature(assert_matches)]
 #![feature(box_patterns)]
-#![feature(byte_slice_trim_ascii)]
 #![feature(error_generic_member_access)]
 #![feature(hash_extract_if)]
 #![feature(option_get_or_insert_default)]
 #![feature(once_cell_try)]
 #![feature(try_blocks)]
 #![feature(impl_trait_in_assoc_type)]
-#![feature(lazy_cell)]
 #![deny(clippy::all)]
 // Clippy's needless mut lint is buggy: https://github.com/rust-lang/rust-clippy/issues/11299
 #![allow(clippy::needless_pass_by_ref_mut)]

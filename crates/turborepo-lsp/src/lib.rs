@@ -1,3 +1,11 @@
+//! Turbo LSP server
+//!
+//! This is the main entry point for the LSP server. It is responsible for
+//! handling all LSP requests and responses.
+//!
+//! For more, see the [LSP specification](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/)
+//! as well as the architecture documentation in `packages/turbo-vsc`.
+
 #![deny(clippy::all)]
 #![warn(clippy::unwrap_used)]
 
@@ -168,12 +176,13 @@ impl LanguageServer for Backend {
         })
     }
 
+    /// Find which projects / scripts are affected by a given pipeline item
     async fn references(&self, params: ReferenceParams) -> LspResult<Option<Vec<Location>>> {
         self.client
             .log_message(MessageType::INFO, "references!")
             .await;
 
-        let tasks: Vec<_> = {
+        let Some(referenced_task) = ({
             let rope = {
                 let map = self.files.lock().expect("only fails if poisoned");
                 match map.get(&params.text_document_position.text_document.uri) {
@@ -211,7 +220,7 @@ impl LanguageServer for Backend {
                 .map(|p| p.properties.iter())
                 .into_iter()
                 .flatten()
-                .filter_map(|task| {
+                .find_map(|task| {
                     let mut range = task.range;
                     range.start += 1; // account for quote
                     let key_range = range.start + task.name.as_str().len();
@@ -228,11 +237,16 @@ impl LanguageServer for Backend {
                         None
                     }
                 })
-                .collect()
+        }) else {
+            // no overlap with any task definitions, exit
+            return Ok(None);
         };
 
         self.client
-            .log_message(MessageType::INFO, format!("{:?}", tasks))
+            .log_message(
+                MessageType::INFO,
+                format!("finding references for {:?}", referenced_task),
+            )
             .await;
 
         let repo_root = self
@@ -292,51 +306,49 @@ impl LanguageServer for Backend {
             // todo: use jsonc_ast instead of text search
             let rope = crop::Rope::from(data.clone());
 
-            for task in tasks.iter() {
-                let (package, task) = task
-                    .rsplit_once('#')
-                    .map(|(p, t)| (Some(p), t))
-                    .unwrap_or((None, task));
+            let (package, task) = referenced_task
+                .rsplit_once('#')
+                .map(|(p, t)| (Some(p), t))
+                .unwrap_or((None, &referenced_task));
 
-                if let (Some(package), Some(package_name)) = (package, package_json_name) {
-                    if package_name != package {
-                        continue;
-                    }
-                };
-
-                let Some(start) = data.find(&format!("\"{}\"", task)) else {
+            if let (Some(package), Some(package_name)) = (package, package_json_name) {
+                if package_name != package {
                     continue;
-                };
-                let end = start + task.len() + 2;
-
-                let start_line = rope.line_of_byte(start);
-                let end_line = rope.line_of_byte(end);
-
-                let range = Range {
-                    start: Position {
-                        line: start_line as u32,
-                        character: (start - rope.byte_of_line(start_line)) as u32,
-                    },
-                    end: Position {
-                        line: end_line as u32,
-                        character: (end - rope.byte_of_line(end_line)) as u32,
-                    },
-                };
-
-                if scripts.contains(task) {
-                    let location = Location::new(
-                        Url::from_file_path(&wd.package_json)
-                            .expect("only fails if path is relative"),
-                        range,
-                    );
-                    locations.push(location);
                 }
+            };
+
+            let Some(start) = data.find(&format!("\"{}\"", task)) else {
+                continue;
+            };
+            let end = start + task.len() + 2;
+
+            let start_line = rope.line_of_byte(start);
+            let end_line = rope.line_of_byte(end);
+
+            let range = Range {
+                start: Position {
+                    line: start_line as u32,
+                    character: (start - rope.byte_of_line(start_line)) as u32,
+                },
+                end: Position {
+                    line: end_line as u32,
+                    character: (end - rope.byte_of_line(end_line)) as u32,
+                },
+            };
+
+            if scripts.contains(task) {
+                let location = Location::new(
+                    Url::from_file_path(&wd.package_json).expect("only fails if path is relative"),
+                    range,
+                );
+                locations.push(location);
             }
         }
 
         Ok(Some(locations))
     }
 
+    /// Add code lens items for running a particular task in the turbo.json
     async fn code_lens(&self, params: CodeLensParams) -> LspResult<Option<Vec<CodeLens>>> {
         self.client
             .log_message(MessageType::INFO, "code lens!")
@@ -402,6 +414,8 @@ impl LanguageServer for Backend {
         Ok(Some(tasks))
     }
 
+    /// Given a list of diagnistics that we previously reported, produce code
+    /// actions that the user can run
     async fn code_action(&self, params: CodeActionParams) -> LspResult<Option<CodeActionResponse>> {
         self.client
             .log_message(MessageType::INFO, format!("{:#?}", params))
@@ -476,6 +490,7 @@ impl LanguageServer for Backend {
         Ok(None)
     }
 
+    /// Add an entry to the list of ropes for a newly opened file
     async fn did_open(&self, document: DidOpenTextDocumentParams) {
         self.client
             .log_message(MessageType::INFO, "file opened!")
@@ -492,6 +507,8 @@ impl LanguageServer for Backend {
             .await;
     }
 
+    /// Modify the rope that we have in memory to reflect the changes that were
+    /// made to the buffer in the editor
     async fn did_change(&self, document: DidChangeTextDocumentParams) {
         self.client
             .log_message(MessageType::INFO, "file changed!")
@@ -538,6 +555,13 @@ impl LanguageServer for Backend {
             .await;
     }
 
+    /// Provide intellisense completions for package / task names
+    ///
+    /// - get all packages
+    /// - get all package jsons
+    /// - produce all unique script names
+    /// - flatmap producing all package#script combos
+    /// - chain them
     async fn completion(&self, _: CompletionParams) -> LspResult<Option<CompletionResponse>> {
         let packages = self
             .package_discovery()

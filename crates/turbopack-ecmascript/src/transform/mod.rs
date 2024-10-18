@@ -3,19 +3,20 @@ use std::{fmt::Debug, hash::Hash, sync::Arc};
 use anyhow::Result;
 use async_trait::async_trait;
 use swc_core::{
+    atoms::JsWord,
     base::SwcComments,
-    common::{chain, comments::Comments, util::take::Take, Mark, SourceMap},
+    common::{chain, collections::AHashMap, comments::Comments, util::take::Take, Mark, SourceMap},
     ecma::{
         ast::{Module, ModuleItem, Program, Script},
-        preset_env::{
-            Targets, {self},
-        },
+        preset_env::{self, Targets},
         transforms::{
             base::{feature::FeatureFlag, helpers::inject_helpers, Assumptions},
+            optimization::inline_globals2,
             react::react,
         },
         visit::{FoldWith, VisitMutWith},
     },
+    quote,
 };
 use turbo_tasks::{ValueDefault, Vc};
 use turbo_tasks_fs::FileSystemPath;
@@ -39,6 +40,9 @@ pub enum EcmascriptInputTransform {
         import_source: Vc<Option<String>>,
         // swc.jsc.transform.react.runtime,
         runtime: Vc<Option<String>>,
+    },
+    GlobalTypeofs {
+        window_value: String,
     },
     // These options are subset of swc_core::ecma::transforms::typescript::Config, but
     // it doesn't derive `Copy` so repeating values in here
@@ -135,6 +139,17 @@ impl EcmascriptInputTransform {
             ..
         } = ctx;
         match self {
+            EcmascriptInputTransform::GlobalTypeofs { window_value } => {
+                let mut typeofs: AHashMap<JsWord, JsWord> = Default::default();
+                typeofs.insert("window".into(), JsWord::from(&**window_value));
+
+                program.visit_mut_with(&mut inline_globals2(
+                    Default::default(),
+                    Default::default(),
+                    Default::default(),
+                    Arc::new(typeofs),
+                ));
+            }
             EcmascriptInputTransform::React {
                 development,
                 refresh,
@@ -182,6 +197,25 @@ impl EcmascriptInputTransform {
                     top_level_mark,
                     unresolved_mark,
                 ));
+
+                if *refresh {
+                    let stmt = quote!(
+                        // AMP / No-JS mode does not inject these helpers
+                        "\nif (typeof globalThis.$RefreshHelpers$ === 'object' && \
+                         globalThis.$RefreshHelpers !== null) { \
+                         __turbopack_refresh__.registerExports(module, \
+                         globalThis.$RefreshHelpers$); }\n" as Stmt
+                    );
+
+                    match program {
+                        Program::Module(module) => {
+                            module.body.push(ModuleItem::Stmt(stmt));
+                        }
+                        Program::Script(script) => {
+                            script.body.push(stmt);
+                        }
+                    }
+                }
             }
             EcmascriptInputTransform::CommonJs => {
                 // Explicit type annotation to ensure that we don't duplicate transforms in the

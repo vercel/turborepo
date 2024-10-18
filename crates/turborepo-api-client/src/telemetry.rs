@@ -33,8 +33,9 @@ impl TelemetryClient for AnonAPIClient {
             .header("x-turbo-session-id", session_id)
             .json(&events);
 
-        retry::make_retryable_request(telemetry_request)
+        retry::make_retryable_request(telemetry_request, retry::RetryStrategy::Timeout)
             .await?
+            .into_response()
             .error_for_status()?;
 
         Ok(())

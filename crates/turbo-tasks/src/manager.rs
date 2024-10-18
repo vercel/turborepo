@@ -21,17 +21,18 @@ use nohash_hasher::BuildNoHashHasher;
 use serde::{de::Visitor, Deserialize, Serialize};
 use tokio::{runtime::Handle, select, task_local};
 use tracing::{info_span, instrument, trace_span, Instrument, Level};
+use turbo_tasks_malloc::TurboMalloc;
 
 use crate::{
     backend::{Backend, CellContent, PersistentTaskType, TaskExecutionSpec, TransientTaskType},
+    capture_future::{
+        CaptureFuture, {self},
+    },
     event::{Event, EventListener},
     id::{BackendJobId, FunctionId, TraitTypeId},
     id_factory::IdFactory,
     raw_vc::{CellId, RawVc},
     registry,
-    timed_future::{
-        TimedFuture, {self},
-    },
     trace::TraceRawVcs,
     util::StaticOrArc,
     Completion, ConcreteTaskInput, InvalidationReason, InvalidationReasonSet, SharedReference,
@@ -128,18 +129,6 @@ pub trait TurboTasksApi: TurboTasksCallApi + Sync + Send {
     ) -> Pin<Box<dyn Future<Output = Result<()>> + Send + 'static>>;
 }
 
-/// The type of stats reporting.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum StatsType {
-    /// Only report stats essential to Turbo Tasks' operation.
-    Essential,
-    /// Full stats reporting.
-    ///
-    /// This is useful for debugging, but it has a slight memory and performance
-    /// impact.
-    Full,
-}
-
 pub trait TaskIdProvider {
     fn get_fresh_task_id(&self) -> Unused<TaskId>;
     fn reuse_task_id(&self, id: Unused<TaskId>);
@@ -208,26 +197,10 @@ pub trait TurboTasksBackendApi<B: Backend + 'static>:
     /// eventually call `invalidate_tasks()` on all tasks.
     fn schedule_notify_tasks_set(&self, tasks: &TaskIdSet);
 
-    /// Returns the stats reporting type.
-    fn stats_type(&self) -> StatsType;
-    /// Sets the stats reporting type.
-    fn set_stats_type(&self, stats_type: StatsType);
     /// Returns the duration from the start of the program to the given instant.
     fn program_duration_until(&self, instant: Instant) -> Duration;
     /// Returns a reference to the backend.
     fn backend(&self) -> &B;
-}
-
-impl StatsType {
-    /// Returns `true` if the stats type is `Essential`.
-    pub fn is_essential(self) -> bool {
-        matches!(self, Self::Essential)
-    }
-
-    /// Returns `true` if the stats type is `Full`.
-    pub fn is_full(self) -> bool {
-        matches!(self, Self::Full)
-    }
 }
 
 impl<B: Backend + 'static> TaskIdProvider for &dyn TurboTasksBackendApi<B> {
@@ -274,9 +247,6 @@ pub struct TurboTasks<B: Backend + 'static> {
     event_start: Event,
     event_foreground: Event,
     event_background: Event,
-    // NOTE(alexkirsz) We use an atomic bool instead of a lock around `StatsType` to avoid the
-    // locking overhead.
-    enable_full_stats: AtomicBool,
     program_start: Instant,
 }
 
@@ -327,7 +297,6 @@ impl<B: Backend + 'static> TurboTasks<B> {
             event_start: Event::new(|| "TurboTasks::event_start".to_string()),
             event_foreground: Event::new(|| "TurboTasks::event_foreground".to_string()),
             event_background: Event::new(|| "TurboTasks::event_background".to_string()),
-            enable_full_stats: AtomicBool::new(false),
             program_start: Instant::now(),
         });
         this.backend.startup(&*this);
@@ -478,8 +447,9 @@ impl<B: Backend + 'static> TurboTasks<B> {
                             };
 
                             async {
-                                let (result, duration, instant) =
-                                    TimedFuture::new(AssertUnwindSafe(future).catch_unwind()).await;
+                                let (result, duration, _instant, memory_usage) =
+                                    CaptureFuture::new(AssertUnwindSafe(future).catch_unwind())
+                                        .await;
 
                                 let result = result.map_err(|any| match any.downcast::<String>() {
                                     Ok(owned) => Some(Cow::Owned(*owned)),
@@ -491,7 +461,11 @@ impl<B: Backend + 'static> TurboTasks<B> {
                                 this.backend.task_execution_result(task_id, result, &*this);
                                 let stateful = this.finish_current_task_state();
                                 this.backend.task_execution_completed(
-                                    task_id, duration, instant, stateful, &*this,
+                                    task_id,
+                                    duration,
+                                    memory_usage,
+                                    stateful,
+                                    &*this,
                                 )
                             }
                             .instrument(span)
@@ -1125,20 +1099,6 @@ impl<B: Backend + 'static> TurboTasksBackendApi<B> for TurboTasks<B> {
         self.schedule(task)
     }
 
-    fn stats_type(&self) -> StatsType {
-        match self.enable_full_stats.load(Ordering::Acquire) {
-            true => StatsType::Full,
-            false => StatsType::Essential,
-        }
-    }
-
-    fn set_stats_type(&self, stats_type: StatsType) {
-        match stats_type {
-            StatsType::Full => self.enable_full_stats.store(true, Ordering::Release),
-            StatsType::Essential => self.enable_full_stats.store(false, Ordering::Release),
-        }
-    }
-
     fn program_duration_until(&self, instant: Instant) -> Duration {
         instant - self.program_start
     }
@@ -1413,16 +1373,18 @@ pub fn emit<T: VcValueTrait + Send>(collectible: Vc<T>) {
 
 pub async fn spawn_blocking<T: Send + 'static>(func: impl FnOnce() -> T + Send + 'static) -> T {
     let span = trace_span!("blocking operation").or_current();
-    let (r, d) = tokio::task::spawn_blocking(|| {
+    let (result, duration, alloc_info) = tokio::task::spawn_blocking(|| {
         let _guard = span.entered();
         let start = Instant::now();
+        let start_allocations = TurboMalloc::allocation_counters();
         let r = func();
-        (r, start.elapsed())
+        (r, start.elapsed(), start_allocations.until_now())
     })
     .await
     .unwrap();
-    timed_future::add_duration(d);
-    r
+    capture_future::add_duration(duration);
+    capture_future::add_allocation_info(alloc_info);
+    result
 }
 
 pub fn spawn_thread(func: impl FnOnce() + Send + 'static) {

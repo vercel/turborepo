@@ -4,16 +4,16 @@ use swc_core::{
     ecma::{
         ast::{
             ComputedPropName, Expr, Ident, KeyValueProp, Lit, MemberExpr, MemberProp, Number, Prop,
-            PropName, SeqExpr, Str,
+            PropName, SeqExpr, SimpleAssignTarget, Str,
         },
         visit::fields::{CalleeField, PropField},
     },
 };
 use turbo_tasks::Vc;
+use turbopack_core::chunk::ChunkingContext;
 
 use super::EsmAssetReference;
 use crate::{
-    chunk::EcmascriptChunkingContext,
     code_gen::{CodeGenerateable, CodeGeneration},
     create_visitor,
     references::AstPath,
@@ -49,7 +49,7 @@ impl CodeGenerateable for EsmBinding {
     #[turbo_tasks::function]
     async fn code_generation(
         self: Vc<Self>,
-        _context: Vc<Box<dyn EcmascriptChunkingContext>>,
+        _context: Vc<Box<dyn ChunkingContext>>,
     ) -> Result<Vc<CodeGeneration>> {
         let this = self.await?;
         let mut visitors = Vec::new();
@@ -127,6 +127,7 @@ impl CodeGenerateable for EsmBinding {
                             CalleeField::Expr
                         ))
                     );
+
                     visitors.push(
                         create_visitor!(exact ast_path, visit_mut_expr(expr: &mut Expr) {
                             if let Some(ident) = imported_module.as_deref() {
@@ -139,6 +140,35 @@ impl CodeGenerateable for EsmBinding {
                         }),
                     );
                     break;
+                }
+                Some(swc_core::ecma::visit::AstParentKind::BindingIdent(
+                    swc_core::ecma::visit::fields::BindingIdentField::Id,
+                )) => {
+                    ast_path.pop();
+
+                    // We need to handle LHS because of code like
+                    // (function (RouteKind1){})(RouteKind || RouteKind = {})
+                    if let Some(swc_core::ecma::visit::AstParentKind::SimpleAssignTarget(
+                        swc_core::ecma::visit::fields::SimpleAssignTargetField::Ident,
+                    )) = ast_path.last()
+                    {
+                        ast_path.pop();
+
+                        visitors.push(
+                            create_visitor!(exact ast_path, visit_mut_simple_assign_target(l: &mut SimpleAssignTarget) {
+                                    if let Some(ident) = imported_module.as_deref() {
+                                        use swc_core::common::Spanned;
+                                        *l = match make_expr(ident, this.export.as_deref(), l.span(), false) {
+                                            Expr::Ident(ident) => SimpleAssignTarget::Ident(ident.into()),
+                                            Expr::Member(member) => SimpleAssignTarget::Member(member),
+                                            _ => unreachable!(),
+                                        };
+                                    }
+                            }),
+                        );
+
+                        break;
+                    }
                 }
                 Some(_) => {
                     ast_path.pop();

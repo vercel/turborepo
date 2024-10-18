@@ -71,13 +71,13 @@ turbo-linux
     );
     if (fs.existsSync(root)) {
       try {
-        fs.rmSync(root + "/packages", { recursive: true });
+        fs.rmSync(`${root}/packages`, { recursive: true });
       } catch (error) {
         // do nothing
       }
     }
 
-    let deps =
+    const deps =
       type !== "turbo"
         ? {
             devDependencies: {
@@ -295,5 +295,5 @@ module.exports = {
 
 generate(root);
 if (type === "turbo") {
-  generate(root + "-installed", true);
+  generate(`${root}-installed`, true);
 }

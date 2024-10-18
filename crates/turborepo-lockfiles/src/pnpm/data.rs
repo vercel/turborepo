@@ -966,6 +966,7 @@ mod tests {
             )]
             .into_iter()
             .collect(),
+            false,
         )
         .unwrap();
 
@@ -1037,6 +1038,7 @@ c:
             )]
             .into_iter()
             .collect(),
+            false,
         )
         .unwrap();
 
@@ -1113,7 +1115,7 @@ c:
                 .map(|(k, v)| (k.to_owned(), v.to_owned()))
                 .collect(),
         );
-        let mut closures: Vec<_> = crate::all_transitive_closures(&lockfile, workspaces)
+        let mut closures: Vec<_> = crate::all_transitive_closures(&lockfile, workspaces, false)
             .unwrap()
             .into_iter()
             .map(|(k, v)| (k, v.into_iter().sorted().collect::<Vec<_>>()))

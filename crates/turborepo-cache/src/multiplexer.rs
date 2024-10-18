@@ -1,11 +1,18 @@
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc, Mutex,
+};
 
 use tracing::{debug, warn};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 use turborepo_analytics::AnalyticsSender;
 use turborepo_api_client::{APIAuth, APIClient};
 
-use crate::{fs::FSCache, http::HTTPCache, CacheError, CacheHitMetadata, CacheOpts};
+use crate::{
+    fs::FSCache,
+    http::{HTTPCache, UploadMap},
+    CacheError, CacheHitMetadata, CacheOpts,
+};
 
 pub struct CacheMultiplexer {
     // We use an `AtomicBool` instead of removing the cache because that would require
@@ -80,6 +87,10 @@ impl CacheMultiplexer {
         } else {
             None
         }
+    }
+
+    pub fn requests(&self) -> Option<Arc<Mutex<UploadMap>>> {
+        self.http.as_ref().map(|http| http.requests())
     }
 
     #[tracing::instrument(skip_all)]

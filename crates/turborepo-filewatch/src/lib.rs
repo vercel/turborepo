@@ -21,6 +21,7 @@
 //! `tokio::time::interval`.
 
 #![deny(clippy::all)]
+#![allow(clippy::mutable_key_type)]
 #![feature(assert_matches)]
 
 use std::{

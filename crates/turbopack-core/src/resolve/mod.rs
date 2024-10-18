@@ -25,6 +25,7 @@ use self::{
     origin::{ResolveOrigin, ResolveOriginExt},
     parse::Request,
     pattern::Pattern,
+    plugin::BeforeResolvePlugin,
     remap::{ExportsField, ImportsField},
 };
 use crate::{
@@ -38,7 +39,7 @@ use crate::{
     reference_type::ReferenceType,
     resolve::{
         pattern::{read_matches, PatternMatch},
-        plugin::ResolvePlugin,
+        plugin::AfterResolvePlugin,
     },
     source::{OptionSource, Source, Sources},
 };
@@ -66,6 +67,7 @@ pub enum ModuleResolveResultItem {
     OutputAsset(Vc<Box<dyn OutputAsset>>),
     External(String, ExternalType),
     Ignore,
+    Error(Vc<String>),
     Empty,
     Custom(u8),
     Unresolveable,
@@ -98,6 +100,17 @@ impl ModuleResolveResult {
         ModuleResolveResult {
             primary: IndexMap::new(),
             affecting_sources,
+        }
+    }
+
+    pub fn ignored() -> ModuleResolveResult {
+        Self::ignored_with_key(RequestKey::default())
+    }
+
+    pub fn ignored_with_key(request_key: RequestKey) -> ModuleResolveResult {
+        ModuleResolveResult {
+            primary: indexmap! { request_key => ModuleResolveResultItem::Ignore },
+            affecting_sources: Vec::new(),
         }
     }
 
@@ -404,6 +417,7 @@ pub enum ResolveResultItem {
     Source(Vc<Box<dyn Source>>),
     External(String, ExternalType),
     Ignore,
+    Error(Vc<String>),
     Empty,
     Custom(u8),
     Unresolveable,
@@ -487,6 +501,9 @@ impl ValueToString for ResolveResult {
                 }
                 ResolveResultItem::Empty => {
                     result.push_str("empty");
+                }
+                ResolveResultItem::Error(_) => {
+                    result.push_str("error");
                 }
                 ResolveResultItem::Custom(_) => {
                     result.push_str("custom");
@@ -674,6 +691,7 @@ impl ResolveResult {
                                 }
                                 ResolveResultItem::Ignore => ModuleResolveResultItem::Ignore,
                                 ResolveResultItem::Empty => ModuleResolveResultItem::Empty,
+                                ResolveResultItem::Error(e) => ModuleResolveResultItem::Error(e),
                                 ResolveResultItem::Custom(u8) => {
                                     ModuleResolveResultItem::Custom(u8)
                                 }
@@ -1326,17 +1344,23 @@ pub async fn resolve_inline(
         )
     };
     async {
-        let raw_result = resolve_internal(lookup_path, request, options)
-            .resolve()
-            .await?;
-        let result = handle_resolve_plugins(
-            lookup_path,
-            Value::new(reference_type),
-            request,
-            options,
-            raw_result,
-        )
-        .await?;
+        let reference_type = Value::new(reference_type);
+        let before_plugins_result =
+            handle_before_resolve_plugins(lookup_path, reference_type.clone(), request, options)
+                .await?;
+
+        let raw_result = match before_plugins_result {
+            Some(result) => result,
+            None => {
+                resolve_internal(lookup_path, request, options)
+                    .resolve()
+                    .await?
+            }
+        };
+
+        let result =
+            handle_after_resolve_plugins(lookup_path, reference_type, request, options, raw_result)
+                .await?;
         Ok(result)
     }
     .instrument(span)
@@ -1386,7 +1410,29 @@ pub async fn url_resolve(
     .await
 }
 
-async fn handle_resolve_plugins(
+async fn handle_before_resolve_plugins(
+    lookup_path: Vc<FileSystemPath>,
+    reference_type: Value<ReferenceType>,
+    request: Vc<Request>,
+    options: Vc<ResolveOptions>,
+) -> Result<Option<Vc<ResolveResult>>> {
+    for plugin in &options.await?.before_resolve_plugins {
+        let condition = plugin.before_resolve_condition().resolve().await?;
+        if !*condition.matches(request).await? {
+            continue;
+        }
+
+        if let Some(result) = *plugin
+            .before_resolve(lookup_path, reference_type.clone(), request)
+            .await?
+        {
+            return Ok(Some(result));
+        }
+    }
+    Ok(None)
+}
+
+async fn handle_after_resolve_plugins(
     lookup_path: Vc<FileSystemPath>,
     reference_type: Value<ReferenceType>,
     request: Vc<Request>,
@@ -2553,6 +2599,7 @@ pub async fn handle_resolve_error(
                 .cell()
                 .emit();
             }
+
             result
         }
         Err(err) => {

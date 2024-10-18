@@ -7,6 +7,6 @@ runs:
     - name: Install Turbo globally
       shell: bash
       run: |
-        VERSION=$(npm view turbo --json | jq -r '.versions | last')
+        VERSION=$(npm view turbo --json | jq -r '.versions | map(select(test("2."))) | last')
         echo "Latest published version: $VERSION"
         npm i -g turbo@$VERSION

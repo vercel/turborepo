@@ -677,4 +677,26 @@ describe("turboIgnore()", () => {
 
     mockExec.mockRestore();
   });
+
+  it("allows build if packages is missing", () => {
+    const mockExec = jest
+      .spyOn(child_process, "exec")
+      .mockImplementation((command, options, callback) => {
+        if (callback) {
+          return callback(
+            null,
+            '{"tasks":[]}',
+            "stderr"
+          ) as unknown as ChildProcess;
+        }
+        return {} as unknown as ChildProcess;
+      });
+
+    turboIgnore(undefined, {
+      directory: "__fixtures__/app",
+    });
+
+    expectBuild(mockExit);
+    mockExec.mockRestore();
+  });
 });

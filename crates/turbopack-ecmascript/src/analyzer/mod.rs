@@ -361,8 +361,8 @@ enum JsValueMetaKind {
 /// - Replace all built-in functions with their values when they are
 ///   compile-time constant.
 /// - For optimization, any nested operations are replaced with
-///   [JsValue::Unknown]. So only one layer of operation remains.
-/// Any remaining operation or placeholder can be treated as unknown.
+///   [JsValue::Unknown]. So only one layer of operation remains. Any remaining
+///   operation or placeholder can be treated as unknown.
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum JsValue {
     // LEAF VALUES
@@ -3574,7 +3574,8 @@ mod tests {
                 let top_level_mark = Mark::new();
                 m.visit_mut_with(&mut resolver(unresolved_mark, top_level_mark, false));
 
-                let eval_context = EvalContext::new(&m, unresolved_mark, None);
+                let eval_context =
+                    EvalContext::new(&m, unresolved_mark, top_level_mark, false, None);
 
                 let mut var_graph = create_graph(&m, &eval_context);
 

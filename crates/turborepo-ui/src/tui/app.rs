@@ -77,6 +77,11 @@ impl<I> App<I> {
     pub fn term_size(&self) -> (u16, u16) {
         self.pane.term_size()
     }
+
+    pub fn update_tasks(&mut self, tasks: Vec<String>) {
+        self.table = TaskTable::new(tasks.clone());
+        self.next();
+    }
 }
 
 impl<I: std::io::Write> App<I> {
@@ -126,7 +131,6 @@ fn run_app_inner<B: Backend + std::io::Write>(
     // Render initial state to paint the screen
     terminal.draw(|f| view(app, f))?;
     let mut last_render = Instant::now();
-
     while let Some(event) = poll(app.interact, &receiver, last_render + FRAMERATE) {
         update(app, event)?;
         if app.done {
@@ -238,6 +242,10 @@ fn update(
         }
         Event::SetStdin { task, stdin } => {
             app.pane.insert_stdin(&task, Some(stdin))?;
+        }
+        Event::UpdateTasks { tasks } => {
+            app.update_tasks(tasks);
+            app.table.tick();
         }
     }
     Ok(None)

@@ -264,6 +264,7 @@ impl<'a> SpanRef<'a> {
                     if duration == 0 {
                         continue;
                     }
+                    store.set_max_self_time_lookup(*end);
                     let concurrent_time = store.self_time_tree.lookup_range_count(*start, *end);
                     self_time += duration * duration / concurrent_time;
                 }
@@ -331,9 +332,9 @@ impl<'a> SpanRef<'a> {
     pub fn bottom_up(self) -> impl Iterator<Item = SpanBottomUpRef<'a>> {
         self.extra()
             .bottom_up
-            .get_or_init(|| build_bottom_up_graph([self]))
+            .get_or_init(|| build_bottom_up_graph([self].into_iter()))
             .iter()
-            .map(|bottom_up| SpanBottomUpRef {
+            .map(move |bottom_up| SpanBottomUpRef {
                 bottom_up: bottom_up.clone(),
                 store: self.store,
             })

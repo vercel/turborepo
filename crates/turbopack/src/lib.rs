@@ -43,7 +43,8 @@ use turbopack_core::{
     output::OutputAsset,
     raw_module::RawModule,
     reference_type::{
-        CssReferenceSubType, EcmaScriptModulesReferenceSubType, InnerAssets, ReferenceType,
+        CssReferenceSubType, EcmaScriptModulesReferenceSubType, ImportWithType, InnerAssets,
+        ReferenceType,
     },
     resolve::{
         options::ResolveOptions, origin::PlainResolveOrigin, parse::Request, resolve, ModulePart,
@@ -162,13 +163,31 @@ async fn apply_module_type(
             if runtime_code {
                 Vc::upcast(builder.build())
             } else {
+                let options = options.await?;
                 match options.tree_shaking_mode {
                     Some(TreeShakingMode::ModuleFragments) => {
-                        if let Some(part) = part {
-                            Vc::upcast(builder.build_part(part))
-                        } else {
-                            Vc::upcast(builder.build_part(ModulePart::exports()))
-                        }
+                        let side_effect_free_packages =
+                            module_asset_context.side_effect_free_packages();
+
+                        let module = builder.clone().build();
+
+                        Vc::upcast(
+                            if let Some(part) = part {
+                                if let ModulePart::Evaluation = *part.await? {
+                                    if *module
+                                        .is_marked_as_side_effect_free(side_effect_free_packages)
+                                        .await?
+                                    {
+                                        return Ok(ProcessResult::Ignore.cell());
+                                    }
+                                }
+
+                                builder.build_part(part)
+                            } else {
+                                builder.build_part(ModulePart::facade())
+                            }
+                            .await?,
+                        )
                     }
                     Some(TreeShakingMode::ReexportsOnly) => {
                         let side_effect_free_packages =
@@ -405,23 +424,6 @@ impl ModuleAssetContext {
     ) -> Vc<ProcessResult> {
         process_default(self, source, reference_type, Vec::new())
     }
-
-    #[turbo_tasks::function]
-    pub async fn side_effect_free_packages(self: Vc<Self>) -> Result<Vc<Glob>> {
-        let pkgs = &*self
-            .await?
-            .module_options_context
-            .await?
-            .side_effect_free_packages;
-
-        let mut globs = Vec::with_capacity(pkgs.len());
-
-        for pkg in pkgs {
-            globs.push(Glob::new(format!("**/node_modules/{{{}}}/**", pkg)));
-        }
-
-        Ok(Glob::alternatives(globs))
-    }
 }
 
 #[turbo_tasks::function]
@@ -471,9 +473,25 @@ async fn process_default_internal(
         ReferenceType::Internal(inner_assets) => Some(*inner_assets),
         _ => None,
     };
+
+    let mut has_type_attribute = false;
+
     let mut current_source = source;
-    let mut current_module_type = None;
+    let mut current_module_type = match &reference_type {
+        ReferenceType::EcmaScriptModules(EcmaScriptModulesReferenceSubType::ImportWithType(ty)) => {
+            has_type_attribute = true;
+
+            match ty {
+                ImportWithType::Json => Some(ModuleType::Json),
+            }
+        }
+        _ => None,
+    };
+
     for (i, rule) in options.await?.rules.iter().enumerate() {
+        if has_type_attribute && current_module_type.is_some() {
+            continue;
+        }
         if processed_rules.contains(&i) {
             continue;
         }
@@ -720,6 +738,23 @@ impl AssetContext for ModuleAssetContext {
                 ))
             },
         )
+    }
+
+    #[turbo_tasks::function]
+    async fn side_effect_free_packages(self: Vc<Self>) -> Result<Vc<Glob>> {
+        let pkgs = &*self
+            .await?
+            .module_options_context
+            .await?
+            .side_effect_free_packages;
+
+        let mut globs = Vec::with_capacity(pkgs.len());
+
+        for pkg in pkgs {
+            globs.push(Glob::new(format!("**/node_modules/{{{}}}/**", pkg)));
+        }
+
+        Ok(Glob::alternatives(globs))
     }
 }
 

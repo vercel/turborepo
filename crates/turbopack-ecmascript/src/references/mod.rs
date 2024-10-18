@@ -29,10 +29,12 @@ use constant_value::ConstantValue;
 use indexmap::IndexSet;
 use lazy_static::lazy_static;
 use num_traits::Zero;
+use once_cell::sync::Lazy;
 use parking_lot::Mutex;
 use regex::Regex;
 use sourcemap::decode_data_url;
 use swc_core::{
+    atoms::JsWord,
     common::{
         comments::{CommentKind, Comments},
         errors::{DiagnosticId, Handler, HANDLER},
@@ -113,7 +115,7 @@ use crate::{
     analyzer::{
         builtin::early_replace_builtin,
         graph::{ConditionalKind, EffectArg, EvalContext, VarGraph},
-        imports::{ImportedSymbol, Reexport},
+        imports::{ImportAnnotations, ImportedSymbol, Reexport},
         parse_require_context,
         top_level_await::has_top_level_await,
         ConstantNumber, ConstantString, ModuleValue, RequireContextValue,
@@ -130,7 +132,7 @@ use crate::{
         require_context::{RequireContextAssetReference, RequireContextMap},
         type_issue::SpecifiedModuleTypeIssue,
     },
-    tree_shake::{part_of_module, split},
+    tree_shake::{find_turbopack_part_id_in_asserts, part_of_module, split},
     EcmascriptInputTransforms, EcmascriptModuleAsset, SpecifiedModuleType, TreeShakingMode,
 };
 
@@ -183,7 +185,8 @@ impl AnalyzeEcmascriptModuleResultBuilder {
     where
         R: Upcast<Box<dyn ModuleReference>>,
     {
-        self.references.insert(Vc::upcast(reference));
+        let r = Vc::upcast(reference);
+        self.references.insert(r);
         self.local_references.insert(Vc::upcast(reference));
     }
 
@@ -372,9 +375,17 @@ pub(crate) async fn analyse_ecmascript_module(
         let module = module.ident().to_string().await?;
         tracing::info_span!("analyse ecmascript module", module = *module)
     };
-    analyse_ecmascript_module_internal(module, part)
+    let result = analyse_ecmascript_module_internal(module, part)
         .instrument(span)
-        .await
+        .await;
+
+    match result {
+        Ok(result) => Ok(result),
+        Err(err) => Err(err.context(format!(
+            "failed to analyse ecmascript module '{}'",
+            module.ident().to_string().await?
+        ))),
+    }
 }
 
 pub(crate) async fn analyse_ecmascript_module_internal(
@@ -388,6 +399,7 @@ pub(crate) async fn analyse_ecmascript_module_internal(
     let transforms = raw_module.transforms;
     let options = raw_module.options;
     let compile_time_info = raw_module.compile_time_info;
+    let options = options.await?;
     let import_externals = options.import_externals;
 
     let origin = Vc::upcast::<Box<dyn ResolveOrigin>>(module);
@@ -404,7 +416,7 @@ pub(crate) async fn analyse_ecmascript_module_internal(
 
     let parsed = if let Some(part) = part {
         let parsed = parse(source, ty, transforms);
-        let split_data = split(path, source, parsed);
+        let split_data = split(source.ident(), source, parsed);
         part_of_module(split_data, part)
     } else {
         parse(source, ty, transforms)
@@ -552,6 +564,8 @@ pub(crate) async fn analyse_ecmascript_module_internal(
                         Some(ModulePart::evaluation())
                     }
                     ImportedSymbol::Symbol(name) => Some(ModulePart::export(name.to_string())),
+                    ImportedSymbol::Part(part_id) => Some(ModulePart::internal(*part_id)),
+                    ImportedSymbol::Exports => Some(ModulePart::exports()),
                     ImportedSymbol::Namespace => None,
                 },
                 Some(TreeShakingMode::ReexportsOnly) => match &r.imported_symbol {
@@ -560,6 +574,8 @@ pub(crate) async fn analyse_ecmascript_module_internal(
                         Some(ModulePart::evaluation())
                     }
                     ImportedSymbol::Symbol(name) => Some(ModulePart::export(name.to_string())),
+                    ImportedSymbol::Part(part_id) => Some(ModulePart::internal(*part_id)),
+                    ImportedSymbol::Exports => None,
                     ImportedSymbol::Namespace => None,
                 },
                 None => None,
@@ -574,6 +590,7 @@ pub(crate) async fn analyse_ecmascript_module_internal(
         // passing that to other turbo tasks functions later.
         *r = r.resolve().await?;
     }
+
     for r in import_references.iter() {
         // `add_import_reference` will avoid adding duplicate references
         analysis.add_import_reference(*r);
@@ -606,7 +623,11 @@ pub(crate) async fn analyse_ecmascript_module_internal(
                     } => {
                         visitor.esm_exports.insert(
                             e.to_string(),
-                            EsmExport::ImportedBinding(Vc::upcast(import_ref), i.to_string()),
+                            EsmExport::ImportedBinding(
+                                Vc::upcast(import_ref),
+                                i.to_string(),
+                                false,
+                            ),
                         );
                     }
                 }
@@ -625,11 +646,11 @@ pub(crate) async fn analyse_ecmascript_module_internal(
 
     for export in esm_exports.values() {
         match *export {
-            EsmExport::LocalBinding(_) => {}
+            EsmExport::LocalBinding(..) => {}
             EsmExport::ImportedNamespace(reference) => {
                 analysis.add_reexport_reference(reference);
             }
-            EsmExport::ImportedBinding(reference, _) => {
+            EsmExport::ImportedBinding(reference, ..) => {
                 analysis.add_reexport_reference(reference);
             }
             EsmExport::Error => {}
@@ -2544,6 +2565,13 @@ impl<'a> VisitAstPath for ModuleReferencesVisitor<'a> {
         ast_path: &mut AstNodePath<AstParentNodeRef<'r>>,
     ) {
         let path = Vc::cell(as_parent_path(ast_path));
+        // We create mutable exports for fake ESMs generated by module splitting
+        let is_fake_esm = export
+            .with
+            .as_deref()
+            .map(find_turbopack_part_id_in_asserts)
+            .is_some();
+
         if export.src.is_none() {
             for spec in export.specifiers.iter() {
                 fn to_string(name: &ModuleExportName) -> String {
@@ -2577,12 +2605,16 @@ impl<'a> VisitAstPath for ModuleReferencesVisitor<'a> {
                             if let Some((index, export)) = imported_binding {
                                 let esm_ref = self.import_references[index];
                                 if let Some(export) = export {
-                                    EsmExport::ImportedBinding(Vc::upcast(esm_ref), export)
+                                    EsmExport::ImportedBinding(
+                                        Vc::upcast(esm_ref),
+                                        export,
+                                        is_fake_esm,
+                                    )
                                 } else {
                                     EsmExport::ImportedNamespace(Vc::upcast(esm_ref))
                                 }
                             } else {
-                                EsmExport::LocalBinding(binding_name)
+                                EsmExport::LocalBinding(binding_name, is_fake_esm)
                             }
                         };
                         self.esm_exports.insert(key, export);
@@ -2602,7 +2634,7 @@ impl<'a> VisitAstPath for ModuleReferencesVisitor<'a> {
     ) {
         for_each_ident_in_decl(&export.decl, &mut |name| {
             self.esm_exports
-                .insert(name.clone(), EsmExport::LocalBinding(name));
+                .insert(name.clone(), EsmExport::LocalBinding(name, false));
         });
         self.analysis
             .add_code_gen(EsmModuleItem::new(Vc::cell(as_parent_path(ast_path))));
@@ -2616,7 +2648,7 @@ impl<'a> VisitAstPath for ModuleReferencesVisitor<'a> {
     ) {
         self.esm_exports.insert(
             "default".to_string(),
-            EsmExport::LocalBinding(magic_identifier::mangle("default export")),
+            EsmExport::LocalBinding(magic_identifier::mangle("default export"), false),
         );
         self.analysis
             .add_code_gen(EsmModuleItem::new(Vc::cell(as_parent_path(ast_path))));
@@ -2637,6 +2669,7 @@ impl<'a> VisitAstPath for ModuleReferencesVisitor<'a> {
                             .as_ref()
                             .map(|i| i.sym.to_string())
                             .unwrap_or_else(|| magic_identifier::mangle("default export")),
+                        false,
                     ),
                 );
             }
@@ -2791,18 +2824,12 @@ async fn resolve_as_webpack_runtime(
 #[turbo_tasks::value(transparent, serialization = "none")]
 pub struct AstPath(#[turbo_tasks(trace_ignore)] Vec<AstParentKind>);
 
-pub static TURBOPACK_HELPER: &str = "__turbopackHelper";
+pub static TURBOPACK_HELPER: Lazy<JsWord> = Lazy::new(|| "__turbopack-helper__".into());
 
 pub fn is_turbopack_helper_import(import: &ImportDecl) -> bool {
-    import.with.as_ref().map_or(false, |asserts| {
-        asserts.props.iter().any(|assert| {
-            assert
-                .as_prop()
-                .and_then(|prop| prop.as_key_value())
-                .and_then(|kv| kv.key.as_ident())
-                .map_or(false, |ident| &*ident.sym == TURBOPACK_HELPER)
-        })
-    })
+    let annotations = ImportAnnotations::parse(import.with.as_deref());
+
+    annotations.get(&TURBOPACK_HELPER).is_some()
 }
 
 #[derive(Debug)]

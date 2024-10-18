@@ -33,11 +33,21 @@ function defineProp(obj, name1, options) {
         value: "Module"
     });
     for(const key in getters){
-        defineProp(exports, key, {
-            get: getters[key],
-            enumerable: true
-        });
+        const item = getters[key];
+        if (Array.isArray(item)) {
+            defineProp(exports, key, {
+                get: item[0],
+                set: item[1],
+                enumerable: true
+            });
+        } else {
+            defineProp(exports, key, {
+                get: item,
+                enumerable: true
+            });
+        }
     }
+    Object.seal(exports);
 }
 /**
  * Makes the module an ESM with exports
@@ -576,13 +586,9 @@ function instantiateModule(id, source) {
     try {
         executeModule({
             register: globalThis.$RefreshReg$,
-            signature: globalThis.$RefreshSig$
+            signature: globalThis.$RefreshSig$,
+            registerExports: registerExportsAndSetupBoundaryForReactRefresh
         });
-        if ("$RefreshHelpers$" in globalThis) {
-            // This pattern can also be used to register the exports of
-            // a module with the React Refresh runtime.
-            registerExportsAndSetupBoundaryForReactRefresh(module, globalThis.$RefreshHelpers$);
-        }
     } catch (e) {
         throw e;
     } finally{
@@ -999,6 +1005,9 @@ function getAffectedModuleEffects(moduleId) {
     while(nextItem = queue.shift()){
         const { moduleId, dependencyChain } = nextItem;
         if (moduleId != null) {
+            if (outdatedModules.has(moduleId)) {
+                continue;
+            }
             outdatedModules.add(moduleId);
         }
         // We've arrived at the runtime of the chunk, which means that nothing

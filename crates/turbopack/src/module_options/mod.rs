@@ -81,8 +81,10 @@ impl ModuleOptions {
             import_externals,
             ignore_dynamic_requests,
             use_swc_css,
+            ref enable_typeof_window_inlining,
             ..
         } = *module_options_context.await?;
+
         if !rules.is_empty() {
             let path_value = path.await?;
 
@@ -97,6 +99,7 @@ impl ModuleOptions {
             }
         }
 
+        let mut refresh = false;
         let mut transforms = vec![];
 
         // Order of transforms is important. e.g. if the React transform occurs before
@@ -105,6 +108,7 @@ impl ModuleOptions {
         // should use `before_transform_plugins`.
         if let Some(enable_jsx) = enable_jsx {
             let jsx = enable_jsx.await?;
+            refresh = jsx.react_refresh;
 
             transforms.push(EcmascriptInputTransform::React {
                 development: jsx.development,
@@ -119,11 +123,22 @@ impl ModuleOptions {
             url_rewrite_behavior: esm_url_rewrite_behavior,
             import_externals,
             ignore_dynamic_requests,
+            refresh,
             ..Default::default()
         };
+        let ecmascript_options_vc = ecmascript_options.cell();
 
         if let Some(env) = preset_env_versions {
             transforms.push(EcmascriptInputTransform::PresetEnv(env));
+        }
+
+        if let Some(enable_typeof_window_inlining) = enable_typeof_window_inlining {
+            transforms.push(EcmascriptInputTransform::GlobalTypeofs {
+                window_value: match enable_typeof_window_inlining {
+                    TypeofWindow::Object => "object".to_string(),
+                    TypeofWindow::Undefined => "undefined".to_string(),
+                },
+            });
         }
 
         let ts_transform = if let Some(options) = enable_typescript_transform {
@@ -216,7 +231,7 @@ impl ModuleOptions {
                 ]),
                 vec![ModuleRuleEffect::ModuleType(ModuleType::Ecmascript {
                     transforms: app_transforms,
-                    options: ecmascript_options,
+                    options: ecmascript_options_vc,
                 })],
             ),
             ModuleRule::new_all(
@@ -226,7 +241,8 @@ impl ModuleOptions {
                     options: EcmascriptOptions {
                         specified_module_type: SpecifiedModuleType::EcmaScript,
                         ..ecmascript_options
-                    },
+                    }
+                    .into(),
                 })],
             ),
             ModuleRule::new_all(
@@ -236,7 +252,8 @@ impl ModuleOptions {
                     options: EcmascriptOptions {
                         specified_module_type: SpecifiedModuleType::CommonJs,
                         ..ecmascript_options
-                    },
+                    }
+                    .into(),
                 })],
             ),
             ModuleRule::new_all(
@@ -245,7 +262,7 @@ impl ModuleOptions {
                     transforms: ts_app_transforms,
                     tsx: false,
                     analyze_types: enable_types,
-                    options: ecmascript_options,
+                    options: ecmascript_options_vc,
                 })],
             ),
             ModuleRule::new_all(
@@ -254,7 +271,7 @@ impl ModuleOptions {
                     transforms: ts_app_transforms,
                     tsx: true,
                     analyze_types: enable_types,
-                    options: ecmascript_options,
+                    options: ecmascript_options_vc,
                 })],
             ),
             ModuleRule::new_all(
@@ -266,7 +283,8 @@ impl ModuleOptions {
                     options: EcmascriptOptions {
                         specified_module_type: SpecifiedModuleType::EcmaScript,
                         ..ecmascript_options
-                    },
+                    }
+                    .into(),
                 })],
             ),
             ModuleRule::new_all(
@@ -278,7 +296,8 @@ impl ModuleOptions {
                     options: EcmascriptOptions {
                         specified_module_type: SpecifiedModuleType::EcmaScript,
                         ..ecmascript_options
-                    },
+                    }
+                    .into(),
                 })],
             ),
             ModuleRule::new_all(
@@ -290,7 +309,8 @@ impl ModuleOptions {
                     options: EcmascriptOptions {
                         specified_module_type: SpecifiedModuleType::CommonJs,
                         ..ecmascript_options
-                    },
+                    }
+                    .into(),
                 })],
             ),
             ModuleRule::new_all(
@@ -302,7 +322,8 @@ impl ModuleOptions {
                     options: EcmascriptOptions {
                         specified_module_type: SpecifiedModuleType::CommonJs,
                         ..ecmascript_options
-                    },
+                    }
+                    .into(),
                 })],
             ),
             ModuleRule::new(
@@ -310,7 +331,7 @@ impl ModuleOptions {
                 vec![ModuleRuleEffect::ModuleType(
                     ModuleType::TypescriptDeclaration {
                         transforms: vendor_transforms,
-                        options: ecmascript_options,
+                        options: ecmascript_options_vc,
                     },
                 )],
             ),
@@ -355,7 +376,7 @@ impl ModuleOptions {
                 ModuleRuleCondition::ResourcePathHasNoExtension,
                 vec![ModuleRuleEffect::ModuleType(ModuleType::Ecmascript {
                     transforms: vendor_transforms,
-                    options: ecmascript_options,
+                    options: ecmascript_options_vc,
                 })],
             ),
             ModuleRule::new(
@@ -547,7 +568,7 @@ impl ModuleOptions {
                         // This can be overriden by specifying e. g. `as: "*.css"` in the rule.
                         ModuleRuleEffect::ModuleType(ModuleType::Ecmascript {
                             transforms: app_transforms,
-                            options: ecmascript_options,
+                            options: ecmascript_options_vc,
                         }),
                         ModuleRuleEffect::SourceTransforms(Vc::cell(vec![Vc::upcast(
                             WebpackLoaders::new(

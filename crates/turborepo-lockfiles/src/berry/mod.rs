@@ -774,6 +774,7 @@ mod test {
             &lockfile,
             "apps/docs",
             HashMap::from_iter(vec![("lodash".into(), "^4.17.21".into())]),
+            false,
         )
         .unwrap();
 
@@ -883,7 +884,7 @@ mod test {
         .map(|(k, v)| (k.to_string(), v.to_string()))
         .collect();
 
-        let closure = transitive_closure(&lockfile, "packages/ui", unresolved_deps).unwrap();
+        let closure = transitive_closure(&lockfile, "packages/ui", unresolved_deps, false).unwrap();
 
         assert!(closure.contains(&Package {
             key: "ajv@npm:8.11.2".into(),
@@ -1063,6 +1064,7 @@ mod test {
             )]
             .into_iter()
             .collect(),
+            false,
         )
         .unwrap();
 
