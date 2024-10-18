@@ -42,7 +42,7 @@ fn main() -> Result<(), PathError> {
         }
         std::process::exit(1);
     } else {
-        for (file, _) in &result.files {
+        for file in result.files.keys() {
             println!("{}", file);
         }
     }
