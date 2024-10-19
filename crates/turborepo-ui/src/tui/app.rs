@@ -568,7 +568,10 @@ pub async fn run_app(tasks: Vec<String>, receiver: AppReceiver) -> Result<(), Er
     let (result, callback) =
         match run_app_inner(&mut terminal, &mut app, receiver, crossterm_rx).await {
             Ok(callback) => (Ok(()), callback),
-            Err(err) => (Err(err), None),
+            Err(err) => {
+                debug!("tui shutting down: {err}");
+                (Err(err), None)
+            }
         };
 
     cleanup(terminal, app, callback)?;
@@ -634,25 +637,28 @@ async fn poll<'a>(
     crossterm_rx: &mut mpsc::Receiver<crossterm::event::Event>,
 ) -> Option<Event> {
     let input_closed = crossterm_rx.is_closed();
-    let input_fut = async {
-        crossterm_rx
-            .recv()
-            .await
-            .and_then(|event| input_options.handle_crossterm_event(event))
-    };
-    let receiver_fut = async { receiver.recv().await };
-    let event_fut = async move {
-        if input_closed {
-            receiver_fut.await
-        } else {
+
+    if input_closed {
+        receiver.recv().await
+    } else {
+        // tokio::select is messing with variable read detection
+        #[allow(unused_assignments)]
+        let mut event = None;
+        loop {
             tokio::select! {
-                e = input_fut => e,
-                e = receiver_fut => e,
+                e = crossterm_rx.recv() => {
+                    event = e.and_then(|e| input_options.handle_crossterm_event(e));
+                }
+                e = receiver.recv() => {
+                    event = e;
+                }
+            }
+            if event.is_some() {
+                break;
             }
         }
-    };
-
-    event_fut.await
+        event
+    }
 }
 
 const MIN_HEIGHT: u16 = 10;
@@ -729,9 +735,11 @@ fn update(
             app.set_status(task, status, result)?;
         }
         Event::InternalStop => {
+            debug!("shutting down due to internal failure");
             app.done = true;
         }
         Event::Stop(callback) => {
+            debug!("shutting down due to message");
             app.done = true;
             return Ok(Some(callback));
         }
