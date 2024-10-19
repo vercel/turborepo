@@ -1,6 +1,7 @@
 use crossterm::event::{EventStream, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use futures::StreamExt;
 use tokio::{sync::mpsc, task::JoinHandle};
+use tracing::debug;
 
 use super::{
     app::LayoutSections,
@@ -119,7 +120,6 @@ fn translate_key_event(options: InputOptions, key_event: KeyEvent) -> Option<Eve
 #[cfg(unix)]
 fn ctrl_c() -> Option<Event> {
     use nix::sys::signal;
-    use tracing::debug;
     match signal::raise(signal::SIGINT) {
         Ok(_) => None,
         // We're unable to send the signal, stop rendering to force shutdown
