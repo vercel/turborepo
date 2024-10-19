@@ -574,8 +574,6 @@ pub async fn run_app(tasks: Vec<String>, receiver: AppReceiver) -> Result<(), Er
             }
         };
 
-    debug!("it's real, we're shutting down");
-
     cleanup(terminal, app, callback)?;
 
     result
