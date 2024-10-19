@@ -119,10 +119,14 @@ fn translate_key_event(options: InputOptions, key_event: KeyEvent) -> Option<Eve
 #[cfg(unix)]
 fn ctrl_c() -> Option<Event> {
     use nix::sys::signal;
+    use tracing::debug;
     match signal::raise(signal::SIGINT) {
         Ok(_) => None,
         // We're unable to send the signal, stop rendering to force shutdown
-        Err(_) => Some(Event::InternalStop),
+        Err(_) => {
+            debug!("unable to send sigint, shutting down");
+            Some(Event::InternalStop)
+        }
     }
 }
 
@@ -146,6 +150,7 @@ fn ctrl_c() -> Option<Event> {
         None
     } else {
         // We're unable to send the Ctrl-C event, stop rendering to force shutdown
+        debug!("unable to send sigint, shutting down");
         Some(Event::InternalStop)
     }
 }
