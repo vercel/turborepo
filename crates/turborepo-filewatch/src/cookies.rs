@@ -1,4 +1,6 @@
-//! Cookies are the file watcher's way of synchronizing file system events. They
+//! Cookies.
+//!
+//! They are the file watcher's way of synchronizing file system events. They
 //! are files that are added to the file system that are named with the format
 //! `[id].cookie`, where `[id]` is an increasing serial number, e.g.
 //! `1.cookie`, `2.cookie`, and so on. The daemon can then watch for the

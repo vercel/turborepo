@@ -36,7 +36,9 @@ pub struct PackageGraph {
     repo_root: AbsoluteSystemPathBuf,
 }
 
-/// The WorkspacePackage follows the Vercel glossary of terms where "Workspace"
+/// The WorkspacePackage.
+///
+/// It follows the Vercel glossary of terms where "Workspace"
 /// is the collection of packages and "Package" is a single package within the
 /// workspace. https://vercel.com/docs/vercel-platform/glossary
 /// There are other structs in this module that have "Workspace" in the name,
