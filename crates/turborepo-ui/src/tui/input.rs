@@ -61,7 +61,8 @@ fn translate_key_event(options: InputOptions, key_event: KeyEvent) -> Option<Eve
     }
     match key_event.code {
         KeyCode::Char('c') if key_event.modifiers == crossterm::event::KeyModifiers::CONTROL => {
-            ctrl_c()
+            ctrl_c();
+            Some(Event::InternalStop)
         }
         KeyCode::Char('c') if options.has_selection => Some(Event::CopySelection),
         // Interactive branches
