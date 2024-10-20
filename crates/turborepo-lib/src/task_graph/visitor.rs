@@ -13,10 +13,10 @@ use itertools::Itertools;
 use miette::{Diagnostic, NamedSource, SourceSpan};
 use regex::Regex;
 use tokio::sync::{mpsc, oneshot};
-use tracing::{debug, error, Instrument, Span};
+use tracing::{debug, error, warn, Instrument, Span};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath};
 use turborepo_ci::{Vendor, VendorBehavior};
-use turborepo_env::EnvironmentVariableMap;
+use turborepo_env::{platform::PlatformEnv, EnvironmentVariableMap};
 use turborepo_repository::{
     package_graph::{PackageGraph, PackageName, ROOT_PKG_NAME},
     package_manager::PackageManager,
@@ -68,6 +68,7 @@ pub struct Visitor<'a> {
     color_config: ColorConfig,
     is_watch: bool,
     ui_sender: Option<UISender>,
+    warnings: Arc<Mutex<Vec<TaskWarning>>>,
 }
 
 #[derive(Debug, thiserror::Error, Diagnostic)]
@@ -105,7 +106,7 @@ impl<'a> Visitor<'a> {
     // Once we have the full picture we will go about grouping these pieces of data
     // together
     #[allow(clippy::too_many_arguments)]
-    pub fn new(
+    pub async fn new(
         package_graph: Arc<PackageGraph>,
         run_cache: Arc<RunCache>,
         run_tracker: RunTracker,
@@ -132,8 +133,11 @@ impl<'a> Visitor<'a> {
         let sink = Self::sink(run_opts);
         let color_cache = ColorSelector::default();
         // Set up correct size for underlying pty
-        if let Some(pane_size) = ui_sender.as_ref().and_then(|sender| sender.pane_size()) {
-            manager.set_pty_size(pane_size.rows, pane_size.cols);
+
+        if let Some(app) = ui_sender.as_ref() {
+            if let Some(pane_size) = app.pane_size().await {
+                manager.set_pty_size(pane_size.rows, pane_size.cols);
+            }
         }
 
         Self {
@@ -153,6 +157,7 @@ impl<'a> Visitor<'a> {
             global_env,
             ui_sender,
             is_watch,
+            warnings: Default::default(),
         }
     }
 
@@ -293,6 +298,7 @@ impl<'a> Visitor<'a> {
                     } else {
                         TaskOutput::Direct(self.output_client(&info, vendor_behavior))
                     };
+
                     let tracker = self.run_tracker.track_task(info.clone().into_owned());
                     let spaces_client = self.run_tracker.spaces_task_client();
                     let parent_span = Span::current();
@@ -327,7 +333,7 @@ impl<'a> Visitor<'a> {
 
         if !self.is_watch {
             if let Some(handle) = &self.ui_sender {
-                handle.stop();
+                handle.stop().await;
             }
         }
 
@@ -380,6 +386,35 @@ impl<'a> Visitor<'a> {
         } = self;
 
         let global_hash_summary = GlobalHashSummary::try_from(global_hash_inputs)?;
+
+        // output any warnings that we collected while running tasks
+        if let Ok(warnings) = self.warnings.lock() {
+            if !warnings.is_empty() {
+                eprintln!();
+                warn!("finished with warnings");
+                eprintln!();
+
+                let has_missing_platform_env: bool = warnings
+                    .iter()
+                    .any(|warning| !warning.missing_platform_env.is_empty());
+                if has_missing_platform_env {
+                    PlatformEnv::output_header(
+                        global_env_mode == EnvMode::Strict,
+                        self.color_config,
+                    );
+
+                    for warning in warnings.iter() {
+                        if !warning.missing_platform_env.is_empty() {
+                            PlatformEnv::output_for_task(
+                                warning.missing_platform_env.clone(),
+                                &warning.task_id,
+                                self.color_config,
+                            )
+                        }
+                    }
+                }
+            }
+        }
 
         Ok(self
             .run_tracker
@@ -564,6 +599,13 @@ fn turbo_regex() -> &'static Regex {
     RE.get_or_init(|| Regex::new(r"(?:^|\s)turbo(?:$|\s)").unwrap())
 }
 
+// Warning that comes from the execution of the task
+#[derive(Debug, Clone)]
+pub struct TaskWarning {
+    task_id: String,
+    missing_platform_env: Vec<String>,
+}
+
 // Error that comes from the execution of the task
 #[derive(Debug, thiserror::Error, Clone)]
 #[error("{task_id}: {cause}")]
@@ -691,8 +733,10 @@ impl<'a> ExecContextFactory<'a> {
             continue_on_error: self.visitor.run_opts.continue_on_error,
             pass_through_args,
             errors: self.errors.clone(),
+            warnings: self.visitor.warnings.clone(),
             takes_input,
             task_access,
+            platform_env: PlatformEnv::new(),
         }
     }
 
@@ -727,8 +771,10 @@ struct ExecContext {
     continue_on_error: bool,
     pass_through_args: Option<Vec<String>>,
     errors: Arc<Mutex<Vec<TaskError>>>,
+    warnings: Arc<Mutex<Vec<TaskWarning>>>,
     takes_input: bool,
     task_access: TaskAccess,
+    platform_env: PlatformEnv,
 }
 
 enum ExecOutcome {
@@ -878,6 +924,19 @@ impl ExecContext {
             if let TaskOutput::UI(task) = output_client {
                 let output_logs = self.task_cache.output_logs().into();
                 task.start(output_logs);
+            }
+        }
+
+        if !self.task_cache.is_caching_disabled() {
+            let missing_platform_env = self.platform_env.validate(&self.execution_env);
+            if !missing_platform_env.is_empty() {
+                self.warnings
+                    .lock()
+                    .expect("warnings lock poisoned")
+                    .push(TaskWarning {
+                        task_id: self.task_id_for_display.clone(),
+                        missing_platform_env,
+                    });
             }
         }
 

@@ -110,6 +110,7 @@ impl HTTPCache {
             .put_artifact(
                 hash,
                 progress,
+                bytes,
                 duration,
                 tag.as_deref(),
                 &self.api_auth.token,

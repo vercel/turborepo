@@ -57,7 +57,7 @@ export async function updateComment(
 export async function createComment(comment: string): Promise<string> {
   if (isFork) {
     setFailed(
-      "The action could not create a Github comment because it is initiated from a forked repo. View the action logs for a list of broken links."
+      "The action could not create a GitHub comment because it is initiated from a forked repo. View the action logs for a list of broken links."
     );
 
     return "";
@@ -111,7 +111,7 @@ export async function updateCheckStatus(
   if (isFork) {
     if (errorsExist) {
       setFailed(
-        "This PR introduces broken links to the docs. The action could not create a Github check because it is initiated from a forked repo."
+        "This PR introduces broken links to the docs. The action could not create a GitHub check because it is initiated from a forked repo."
       );
     } else {
       console.log("Link validation was successful.");

@@ -1,6 +1,7 @@
-use std::fs;
+use std::{fs, sync::Arc};
 
-use async_graphql::{EmptyMutation, EmptySubscription, Schema, ServerError};
+use async_graphql::{EmptyMutation, EmptySubscription, Request, Schema, ServerError, Variables};
+use camino::Utf8Path;
 use miette::{Diagnostic, Report, SourceSpan};
 use thiserror::Error;
 use turbopath::AbsoluteSystemPathBuf;
@@ -10,7 +11,7 @@ use crate::{
     cli::Command,
     commands::{run::get_signal, CommandBase},
     query,
-    query::{Error, Query},
+    query::{Error, RepositoryQuery},
     run::builder::RunBuilder,
     signal::SignalHandler,
 };
@@ -58,6 +59,7 @@ pub async fn run(
     mut base: CommandBase,
     telemetry: CommandEventBuilder,
     query: Option<String>,
+    variables_path: Option<&Utf8Path>,
 ) -> Result<i32, Error> {
     let signal = get_signal()?;
     let handler = SignalHandler::new(signal);
@@ -68,7 +70,9 @@ pub async fn run(
         execution_args: Box::default(),
     });
 
-    let run_builder = RunBuilder::new(base)?;
+    let run_builder = RunBuilder::new(base)?
+        .add_all_tasks()
+        .do_not_validate_engine();
     let run = run_builder.build(&handler, telemetry).await?;
 
     if let Some(query) = query {
@@ -84,9 +88,24 @@ pub async fn run(
             fs::read_to_string(AbsoluteSystemPathBuf::from_unknown(run.repo_root(), query))?
         };
 
-        let schema = Schema::new(Query::new(run), EmptyMutation, EmptySubscription);
+        let schema = Schema::new(
+            RepositoryQuery::new(Arc::new(run)),
+            EmptyMutation,
+            EmptySubscription,
+        );
 
-        let result = schema.execute(&query).await;
+        let variables: Variables = variables_path
+            .map(AbsoluteSystemPathBuf::from_cwd)
+            .transpose()?
+            .map(|path| path.read_to_string())
+            .transpose()?
+            .map(|content| serde_json::from_str(&content))
+            .transpose()?
+            .unwrap_or_default();
+
+        let request = Request::new(&query).variables(variables);
+
+        let result = schema.execute(request).await;
         if result.errors.is_empty() {
             println!("{}", serde_json::to_string_pretty(&result)?);
         } else {
@@ -96,7 +115,7 @@ pub async fn run(
             }
         }
     } else {
-        query::run_server(run, handler).await?;
+        query::run_query_server(run, handler).await?;
     }
 
     Ok(0)

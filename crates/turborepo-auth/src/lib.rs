@@ -84,7 +84,7 @@ impl Token {
     /// * `valid_message_fn` - An optional callback that gets called if the
     ///   token is valid. It will be passed the user's email.
     // TODO(voz): This should do a `get_user` or `get_teams` instead of the caller
-    // doing it. The reason we don't do it here is becuase the caller
+    // doing it. The reason we don't do it here is because the caller
     // needs to do printing and requires the user struct, which we don't want to
     // return here.
     pub async fn is_valid<T: Client + TokenClient + CacheClient>(
@@ -431,6 +431,7 @@ mod tests {
                 > + Send
                 + Sync
                 + 'static,
+            _body_len: usize,
             _duration: u64,
             _tag: Option<&str>,
             _token: &str,

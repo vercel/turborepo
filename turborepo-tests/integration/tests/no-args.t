@@ -20,6 +20,7 @@ Make sure exit code is 2 when no args are passed
     logout      Logout to your Vercel account
     prune       Prepare a subset of your monorepo
     run         Run tasks across projects in your monorepo
+    query       Query your monorepo using GraphQL. If no query is provided, spins up a GraphQL server with GraphiQL
     watch       Arguments used in run and watch
     unlink      Unlink the current directory from your Vercel organization and disable Remote Caching
   
@@ -126,6 +127,8 @@ Run without any tasks, get a list of potential tasks to run
       my-app, util
     maybefails
       my-app, util
+    dev
+      another
   [1]
 
 Run again with a filter and get only the packages that match
@@ -176,6 +179,8 @@ Initialize a new monorepo
       cross-workspace
     cross-workspace-underlying-task
       blank-pkg
+    dev
+      another
     missing-workspace-config-task
       missing-workspace-config
     missing-workspace-config-task-with-deps

@@ -7,7 +7,7 @@ import { Step, Steps } from '#/components/steps';
 import { PackageManagerTabs, Tab } from '#/components/tabs';
 import { Callout } from '#/components/callout';
 
-Turborepo uses caching to speed up builds, ensuring you **never do the same work twice**. When your task is cacheable, Turborepo will restore the results of your task from cache using a fingerprint from the first time the task was ran.
+Turborepo uses caching to speed up builds, ensuring you **never do the same work twice**. When your task is cacheable, Turborepo will restore the results of your task from cache using a fingerprint from the first time the task ran.
 
 ![12 tasks are being ran in 3 packages, resulting in a ">>> FULL TURBO" cache hit. The total time it takes to restore these tasks from cache is 80 milliseconds.](/images/docs/why-turborepo-solution.png)
 
@@ -121,9 +121,13 @@ For information on how to connect your CI machines to Remote Cache, visit [the C
 
 ## What gets cached?
 
+Turborepo caches two types of outputs: Task outputs and Logs.
+
 ### Task outputs
 
 Turborepo caches the file outputs of a task that are defined in [the `outputs` key](/repo/docs/reference/configuration#outputs) of `turbo.json`. When there's a cache hit, Turborepo will restore the files from the cache.
+
+The `outputs` key is optional, see [the API reference](/repo/docs/reference/configuration#outputs) for how Turborepo behaves in this case.
 
 <Callout type="warn" title="Providing file outputs">
 If you do not declare file outputs for a task, Turborepo will not cache them. This might be okay for some tasks (like linters) - but many tasks produce files that you will want to be cached.
@@ -134,7 +138,7 @@ If you're running into errors with files not being available when you hit cache,
 
 ### Logs
 
-Turborepo always captures the terminal outputs of your tasks, restoring those logs to your terminal from the first time that the task was ran.
+Turborepo always captures the terminal outputs of your tasks, restoring those logs to your terminal from the first time that the task ran.
 
 You can configure the verbosity of the replayed logs using [the `--output-logs` flag](/repo/docs/reference/run#--output-logs-option) or [`outputLogs` configuration option](/repo/docs/reference/configuration#outputlogs).
 

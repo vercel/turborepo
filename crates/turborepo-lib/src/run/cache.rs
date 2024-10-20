@@ -4,8 +4,9 @@ use std::{
     time::Duration,
 };
 
+use itertools::Itertools;
 use tokio::sync::oneshot;
-use tracing::{debug, error};
+use tracing::{debug, error, log::warn};
 use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
 };
@@ -47,6 +48,7 @@ pub enum Error {
 pub struct RunCache {
     task_output_logs: Option<OutputLogsMode>,
     cache: AsyncCache,
+    warnings: Arc<Mutex<Vec<String>>>,
     reads_disabled: bool,
     writes_disabled: bool,
     repo_root: AbsoluteSystemPathBuf,
@@ -80,6 +82,7 @@ impl RunCache {
         RunCache {
             task_output_logs,
             cache,
+            warnings: Default::default(),
             reads_disabled: opts.skip_reads,
             writes_disabled: opts.skip_writes,
             repo_root: repo_root.to_owned(),
@@ -122,12 +125,18 @@ impl RunCache {
             log_file_path,
             daemon_client: self.daemon_client.clone(),
             ui: self.ui,
+            warnings: self.warnings.clone(),
         }
     }
 
     pub async fn shutdown_cache(
         &self,
     ) -> Result<(Arc<Mutex<UploadMap>>, oneshot::Receiver<()>), CacheError> {
+        if let Ok(warnings) = self.warnings.lock() {
+            for warning in warnings.iter().sorted() {
+                warn!("{}", warning);
+            }
+        }
         // Ignore errors coming from cache already shutting down
         self.cache.start_shutdown().await
     }
@@ -144,11 +153,16 @@ pub struct TaskCache {
     daemon_client: Option<DaemonClient<DaemonConnector>>,
     ui: ColorConfig,
     task_id: TaskId<'static>,
+    warnings: Arc<Mutex<Vec<String>>>,
 }
 
 impl TaskCache {
     pub fn output_logs(&self) -> OutputLogsMode {
         self.task_output_logs
+    }
+
+    pub fn is_caching_disabled(&self) -> bool {
+        self.caching_disabled
     }
 
     /// Will read log file and write to output a line at a time
@@ -359,6 +373,18 @@ impl TaskCache {
             &validated_exclusions,
             globwalk::WalkType::All,
         )?;
+
+        // If we're only caching the log output, *and* output globs are not empty,
+        // we should warn the user
+        if files_to_be_cached.len() == 1 && !self.repo_relative_globs.is_empty() {
+            let _ = self.warnings.lock().map(|mut warnings| {
+                warnings.push(format!(
+                    "no output files found for task {}. Please check your `outputs` key in \
+                     `turbo.json`",
+                    self.task_id
+                ))
+            });
+        }
 
         let mut relative_paths = files_to_be_cached
             .into_iter()

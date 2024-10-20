@@ -248,7 +248,7 @@ describe("create-turbo", () => {
     expect(mockConsole.error).toHaveBeenNthCalledWith(
       1,
       logger.turboRed(bold(">>>")),
-      red("Unable to download template from Github")
+      red("Unable to download template from GitHub")
     );
     expect(mockConsole.error).toHaveBeenNthCalledWith(
       2,

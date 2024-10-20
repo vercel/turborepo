@@ -1,4 +1,4 @@
-use std::{collections::HashSet, rc::Rc};
+use std::{collections::HashSet, sync::Arc};
 
 use super::task::TasksByStatus;
 
@@ -9,8 +9,8 @@ pub struct SearchResults {
     // - Rc for cheap clones since elements in `matches` will always be in `tasks` as well
     // - Rc<str> implements Borrow<str> meaning we can query a `HashSet<Rc<str>>` using a `&str`
     // We do not modify the provided task names so we do not need the capabilities of String.
-    tasks: Vec<Rc<str>>,
-    matches: HashSet<Rc<str>>,
+    tasks: Vec<Arc<str>>,
+    matches: HashSet<Arc<str>>,
 }
 
 impl SearchResults {
@@ -18,7 +18,7 @@ impl SearchResults {
         Self {
             tasks: tasks
                 .task_names_in_displayed_order()
-                .map(Rc::from)
+                .map(Arc::from)
                 .collect(),
             query: String::new(),
             matches: HashSet::new(),
@@ -29,7 +29,7 @@ impl SearchResults {
     pub fn update_tasks(&mut self, tasks: &TasksByStatus) {
         self.tasks.clear();
         self.tasks
-            .extend(tasks.task_names_in_displayed_order().map(Rc::from));
+            .extend(tasks.task_names_in_displayed_order().map(Arc::from));
         self.update_matches();
     }
 

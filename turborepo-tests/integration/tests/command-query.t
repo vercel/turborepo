@@ -55,6 +55,45 @@ Query packages that have at least one dependent package
     }
   }
 
+Query packages that have a task named `build`
+  $ ${TURBO} query "query { packages(filter: { has: { field: TASK_NAME, value: \"build\" } }) { items { name } } }" | jq
+   WARNING  query command is experimental and may change in the future
+  {
+    "data": {
+      "packages": {
+        "items": [
+          {
+            "name": "my-app"
+          },
+          {
+            "name": "util"
+          }
+        ]
+      }
+    }
+  }
+
+Query packages that have a task named `build` or `dev`
+  $ ${TURBO} query "query { packages(filter: { or: [{ has: { field: TASK_NAME, value: \"build\" } }, { has: { field: TASK_NAME, value: \"dev\" } }] }) { items { name } } }" | jq
+   WARNING  query command is experimental and may change in the future
+  {
+    "data": {
+      "packages": {
+        "items": [
+          {
+            "name": "another"
+          },
+          {
+            "name": "my-app"
+          },
+          {
+            "name": "util"
+          }
+        ]
+      }
+    }
+  }
+
 Get dependents of `util`
   $ ${TURBO} query "query { packages(filter: { equal: { field: NAME, value: \"util\" } }) { items { directDependents { items { name } } } } }" | jq
    WARNING  query command is experimental and may change in the future
@@ -168,3 +207,10 @@ Run the query
       }
     }
   }
+
+  $ ${TURBO} query "query { version }" | jq ".data.version" > QUERY_VERSION
+   WARNING  query command is experimental and may change in the future
+
+  $ VERSION=${MONOREPO_ROOT_DIR}/version.txt
+  $ diff --strip-trailing-cr <(head -n 1 ${VERSION}) <(${TURBO} --version)
+

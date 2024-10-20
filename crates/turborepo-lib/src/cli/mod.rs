@@ -417,20 +417,6 @@ impl Args {
         clap_args
     }
 
-    pub fn get_tasks(&self) -> &[String] {
-        match &self.command {
-            Some(Command::Run {
-                run_args: _,
-                execution_args: box ExecutionArgs { tasks, .. },
-            }) => tasks,
-            _ => self
-                .execution_args
-                .as_ref()
-                .map(|execution_args| execution_args.tasks.as_slice())
-                .unwrap_or(&[]),
-        }
-    }
-
     pub fn track(&self, tel: &GenericEventBuilder) {
         // track usage only
         track_usage!(tel, self.skip_infer, |val| val);
@@ -618,8 +604,10 @@ pub enum Command {
     },
     /// Query your monorepo using GraphQL. If no query is provided, spins up a
     /// GraphQL server with GraphiQL.
-    #[clap(hide = true)]
     Query {
+        /// Pass variables to the query via a JSON file
+        #[clap(short = 'V', long, requires = "query")]
+        variables: Option<Utf8PathBuf>,
         /// The query to run, either a file path or a query string
         query: Option<String>,
     },
@@ -1357,14 +1345,16 @@ pub async fn run(
             })?;
             Ok(exit_code)
         }
-        Command::Query { query } => {
+        Command::Query { query, variables } => {
             warn!("query command is experimental and may change in the future");
             let query = query.clone();
+            let variables = variables.clone();
             let event = CommandEventBuilder::new("query").with_parent(&root_telemetry);
             event.track_call();
+
             let base = CommandBase::new(cli_args, repo_root, version, color_config);
 
-            let query = query::run(base, event, query).await?;
+            let query = query::run(base, event, query, variables.as_deref()).await?;
 
             Ok(query)
         }

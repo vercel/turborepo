@@ -100,6 +100,8 @@ pub struct EngineBuilder<'a> {
     tasks: Vec<Spanned<TaskName<'static>>>,
     root_enabled_tasks: HashSet<TaskName<'static>>,
     tasks_only: bool,
+    add_all_tasks: bool,
+    should_validate_engine: bool,
 }
 
 impl<'a> EngineBuilder<'a> {
@@ -118,6 +120,8 @@ impl<'a> EngineBuilder<'a> {
             tasks: Vec::new(),
             root_enabled_tasks: HashSet::new(),
             tasks_only: false,
+            add_all_tasks: false,
+            should_validate_engine: true,
         }
     }
 
@@ -145,6 +149,18 @@ impl<'a> EngineBuilder<'a> {
         tasks: I,
     ) -> Self {
         self.tasks = tasks.into_iter().collect();
+        self
+    }
+
+    /// If set, we will include all tasks in the graph, even if they are not
+    /// specified
+    pub fn add_all_tasks(mut self) -> Self {
+        self.add_all_tasks = true;
+        self
+    }
+
+    pub fn do_not_validate_engine(mut self) -> Self {
+        self.should_validate_engine = false;
         self
     }
 
@@ -185,7 +201,36 @@ impl<'a> EngineBuilder<'a> {
         let mut missing_tasks: HashMap<&TaskName<'_>, Spanned<()>> =
             HashMap::from_iter(self.tasks.iter().map(|spanned| spanned.as_ref().split()));
         let mut traversal_queue = VecDeque::with_capacity(1);
-        for (workspace, task) in self.workspaces.iter().cartesian_product(self.tasks.iter()) {
+        let tasks: Vec<Spanned<TaskName<'static>>> = if self.add_all_tasks {
+            let mut tasks = Vec::new();
+            if let Ok(turbo_json) = turbo_json_loader.load(&PackageName::Root) {
+                tasks.extend(
+                    turbo_json
+                        .tasks
+                        .keys()
+                        .map(|task| Spanned::new(task.clone())),
+                );
+            }
+
+            for workspace in self.workspaces.iter() {
+                let Ok(turbo_json) = turbo_json_loader.load(workspace) else {
+                    continue;
+                };
+
+                tasks.extend(
+                    turbo_json
+                        .tasks
+                        .keys()
+                        .map(|task| Spanned::new(task.clone())),
+                );
+            }
+
+            tasks
+        } else {
+            self.tasks.clone()
+        };
+
+        for (workspace, task) in self.workspaces.iter().cartesian_product(tasks.iter()) {
             let task_id = task
                 .task_id()
                 .unwrap_or_else(|| TaskId::new(workspace.as_ref(), task.task()));
@@ -464,7 +509,7 @@ impl<'a> EngineBuilder<'a> {
             }
         }
 
-        if task_definitions.is_empty() {
+        if task_definitions.is_empty() && self.should_validate_engine {
             let (span, text) = task_id.span_and_text("turbo.json");
             return Err(Error::MissingPackageTask {
                 span,

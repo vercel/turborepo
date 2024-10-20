@@ -24,8 +24,9 @@ axum-server = { workspace = true }
 base64 = "0.22"
 chrono = { workspace = true }
 console = { workspace = true }
-crossterm = "0.27.0"
+crossterm = { version = "0.27.0", features = ["event-stream"] }
 dialoguer = { workspace = true }
+futures = { workspace = true }
 indicatif = { workspace = true }
 lazy_static = { workspace = true }
 nix = { version = "0.26.2", features = ["signal"] }
@@ -34,8 +35,6 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
-
-tower-http = { version = "0.5.2", features = ["cors"] }
 tracing = { workspace = true }
 tui-term = { workspace = true }
 turbopath = { workspace = true }

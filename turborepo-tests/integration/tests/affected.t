@@ -30,6 +30,7 @@ Validate that we only run `my-app#build` with change not committed
   Cached:    0 cached, 1 total
     Time:\s*[\.0-9]+m?s  (re)
   
+   WARNING  no output files found for task my-app#build. Please check your `outputs` key in `turbo.json`
 
 
 Do the same thing with the `ls` command
@@ -42,14 +43,17 @@ Do the same thing with the `ls` command
 
 
 Do the same thing with the `query` command
-  $ ${TURBO} query "query { affectedPackages { items { name } } }"
+  $ ${TURBO} query "query { affectedPackages { items { name reason { __typename } } } }"
    WARNING  query command is experimental and may change in the future
   {
     "data": {
       "affectedPackages": {
         "items": [
           {
-            "name": "my-app"
+            "name": "my-app",
+            "reason": {
+              "__typename": "FileChanged"
+            }
           }
         ]
       }
@@ -59,6 +63,36 @@ Do the same thing with the `query` command
 
 Remove the new file
   $ rm apps/my-app/new.js
+
+Add a file in `util`
+  $ echo "hello world" > packages/util/new.js
+
+Validate that both `my-app` and `util` are affected
+  $ ${TURBO} query "query { affectedPackages { items { name reason { __typename } } } }"
+   WARNING  query command is experimental and may change in the future
+  {
+    "data": {
+      "affectedPackages": {
+        "items": [
+          {
+            "name": "my-app",
+            "reason": {
+              "__typename": "DependencyChanged"
+            }
+          },
+          {
+            "name": "util",
+            "reason": {
+              "__typename": "FileChanged"
+            }
+          }
+        ]
+      }
+    }
+  }
+
+Remove the new file
+  $ rm packages/util/new.js
 
 Add field to `apps/my-app/package.json`
   $ jq '. += {"description": "foo"}' apps/my-app/package.json | tr -d '\r' > apps/my-app/package.json.new
@@ -80,6 +114,7 @@ Validate that we only run `my-app#build` with change not committed
   Cached:    0 cached, 1 total
     Time:\s*[\.0-9]+m?s  (re)
   
+   WARNING  no output files found for task my-app#build. Please check your `outputs` key in `turbo.json`
 
 Do the same thing with the `ls` command
   $ ${TURBO} ls --affected
@@ -90,14 +125,17 @@ Do the same thing with the `ls` command
 
 
 Do the same thing with the `query` command
-  $ ${TURBO} query "query { affectedPackages { items { name } } }"
+  $ ${TURBO} query "query { affectedPackages { items { name reason { __typename } } } }"
    WARNING  query command is experimental and may change in the future
   {
     "data": {
       "affectedPackages": {
         "items": [
           {
-            "name": "my-app"
+            "name": "my-app",
+            "reason": {
+              "__typename": "FileChanged"
+            }
           }
         ]
       }
@@ -368,3 +406,21 @@ Do the same thing with the `query` command
       }
     }
   }
+
+Use a filter with `affectedPackages`
+  $ ${TURBO} query "query { affectedPackages(filter: { equal: { field: NAME, value: \"my-app\" } }) { items { name } } }"
+   WARNING  query command is experimental and may change in the future
+   WARNING  unable to detect git range, assuming all files have changed: git error: fatal: no merge base found
+  
+  {
+    "data": {
+      "affectedPackages": {
+        "items": [
+          {
+            "name": "my-app"
+          }
+        ]
+      }
+    }
+  }
+

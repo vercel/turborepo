@@ -1,9 +1,12 @@
 mod walker;
 
-use std::fmt::Display;
+use std::{collections::HashSet, fmt::Display, hash::Hash};
 
 use itertools::Itertools;
-use petgraph::prelude::*;
+use petgraph::{
+    prelude::*,
+    visit::{depth_first_search, Reversed},
+};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -12,6 +15,31 @@ pub enum Error {
     CyclicDependencies(String),
     #[error("{0} depends on itself")]
     SelfDependency(String),
+}
+
+pub fn transitive_closure<N: Hash + Eq + PartialEq, I: IntoIterator<Item = NodeIndex>>(
+    graph: &Graph<N, ()>,
+    indices: I,
+    direction: petgraph::Direction,
+) -> HashSet<&N> {
+    let mut visited = HashSet::new();
+
+    let visitor = |event| {
+        if let petgraph::visit::DfsEvent::Discover(n, _) = event {
+            visited.insert(
+                graph
+                    .node_weight(n)
+                    .expect("node index found during dfs doesn't exist"),
+            );
+        }
+    };
+
+    match direction {
+        petgraph::Direction::Outgoing => depth_first_search(&graph, indices, visitor),
+        petgraph::Direction::Incoming => depth_first_search(Reversed(&graph), indices, visitor),
+    };
+
+    visited
 }
 
 pub fn validate_graph<G: Display>(graph: &Graph<G, ()>) -> Result<(), Error> {

@@ -1,12 +1,13 @@
 //! Web UI for Turborepo. Creates a WebSocket server that can be subscribed to
 //! by a web client to display the status of tasks.
 
-mod event;
+pub mod event;
+pub mod query;
 pub mod sender;
-pub mod server;
-mod subscriber;
+pub mod subscriber;
 
 use event::WebUIEvent;
+pub use query::RunQuery;
 use thiserror::Error;
 
 #[derive(Debug, Error)]

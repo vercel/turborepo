@@ -9,14 +9,14 @@
   ],
   "exports": {
     "./counter-button": {
+      "types": "./src/counter-button/index.tsx",
       "require": "./dist/counter-button/index.js",
-      "import": "./dist/counter-button/index.mjs",
-      "types": "./src/counter-button/index.tsx"
+      "import": "./dist/counter-button/index.mjs"
     },
     "./link": {
+      "types": "./src/link/index.tsx",
       "require": "./dist/link/index.js",
-      "import": "./dist/link/index.mjs",
-      "types": "./src/link/index.tsx"
+      "import": "./dist/link/index.mjs"
     }
   },
   "scripts": {

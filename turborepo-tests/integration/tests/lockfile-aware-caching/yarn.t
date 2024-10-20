@@ -18,6 +18,7 @@ Populate cache
   Cached:    0 cached, 1 total
     Time:\s*[\.0-9]+m?s  (re)
   
+   WARNING  no output files found for task a#build. Please check your `outputs` key in `turbo.json`
   $ ${TURBO} build --filter=b
   \xe2\x80\xa2 Packages in scope: b (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
@@ -33,6 +34,7 @@ Populate cache
   Cached:    0 cached, 1 total
     Time:\s*[\.0-9]+m?s  (re)
   
+   WARNING  no output files found for task b#build. Please check your `outputs` key in `turbo.json`
 
 Bump dependency for b and rebuild
 Only b should have a cache miss
@@ -69,6 +71,7 @@ Only b should have a cache miss
   Cached:    0 cached, 1 total
     Time:\s*[\.0-9]+m?s  (re)
   
+   WARNING  no output files found for task b#build. Please check your `outputs` key in `turbo.json`
 Add lockfile changes to a commit
   $ git add . && git commit -m "bump lockfile" --quiet
 Only root and b should be rebuilt since only the deps for b had a version bump
@@ -77,7 +80,32 @@ Only root and b should be rebuilt since only the deps for b had a version bump
     "//",
     "b"
   ]
- 
+
+This should be annotated as a `ConservativeRootLockfileChanged` because the root package may pull from the workspace packages' dependencies (even though this is cursed)
+  $ ${TURBO} query "query { affectedPackages(base: \"HEAD~1\") { items { name reason { __typename } } } }" | jq
+   WARNING  query command is experimental and may change in the future
+  {
+    "data": {
+      "affectedPackages": {
+        "items": [
+          {
+            "name": "//",
+            "reason": {
+              "__typename": "ConservativeRootLockfileChanged"
+            }
+          },
+          {
+            "name": "b",
+            "reason": {
+              "__typename": "LockfileChanged"
+            }
+          }
+        ]
+      }
+    }
+  }
+
+
 Bump of root workspace invalidates all packages
   $ patch yarn.lock turbo-bump.patch
   patching file yarn.lock
@@ -96,6 +124,7 @@ Bump of root workspace invalidates all packages
   Cached:    0 cached, 1 total
     Time:\s*[\.0-9]+m?s  (re)
   
+   WARNING  no output files found for task a#build. Please check your `outputs` key in `turbo.json`
   $ ${TURBO} build  --filter=b
   \xe2\x80\xa2 Packages in scope: b (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
@@ -111,6 +140,7 @@ Bump of root workspace invalidates all packages
   Cached:    0 cached, 1 total
     Time:\s*[\.0-9]+m?s  (re)
   
+   WARNING  no output files found for task b#build. Please check your `outputs` key in `turbo.json`
 Add lockfile changes to a commit
   $ git add . && git commit -m "global lockfile change" --quiet
 Everything should be rebuilt as a dependency of the root package got bumped

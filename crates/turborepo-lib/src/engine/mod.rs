@@ -31,6 +31,23 @@ impl From<TaskId<'static>> for TaskNode {
     }
 }
 
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error("expected a task node, got root")]
+    Root,
+}
+
+impl TryFrom<TaskNode> for TaskId<'static> {
+    type Error = Error;
+
+    fn try_from(node: TaskNode) -> Result<Self, Self::Error> {
+        match node {
+            TaskNode::Root => Err(Error::Root),
+            TaskNode::Task(id) => Ok(id),
+        }
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct Building;
 #[derive(Debug, Default)]
@@ -45,7 +62,7 @@ pub struct Engine<S = Built> {
     task_definitions: HashMap<TaskId<'static>, TaskDefinition>,
     task_locations: HashMap<TaskId<'static>, Spanned<()>>,
     package_tasks: HashMap<PackageName, Vec<petgraph::graph::NodeIndex>>,
-    pub(crate) has_persistent_tasks: bool,
+    pub(crate) has_non_interruptible_tasks: bool,
 }
 
 impl Engine<Building> {
@@ -60,7 +77,7 @@ impl Engine<Building> {
             task_definitions: HashMap::default(),
             task_locations: HashMap::default(),
             package_tasks: HashMap::default(),
-            has_persistent_tasks: false,
+            has_non_interruptible_tasks: false,
         }
     }
 
@@ -87,8 +104,8 @@ impl Engine<Building> {
         task_id: TaskId<'static>,
         definition: TaskDefinition,
     ) -> Option<TaskDefinition> {
-        if definition.persistent {
-            self.has_persistent_tasks = true;
+        if definition.persistent && !definition.interruptible {
+            self.has_non_interruptible_tasks = true;
         }
         self.task_definitions.insert(task_id, definition)
     }
@@ -115,7 +132,7 @@ impl Engine<Building> {
             task_definitions,
             task_locations,
             package_tasks,
-            has_persistent_tasks: has_persistent_task,
+            has_non_interruptible_tasks,
             ..
         } = self;
         Engine {
@@ -126,7 +143,7 @@ impl Engine<Building> {
             task_definitions,
             task_locations,
             package_tasks,
-            has_persistent_tasks: has_persistent_task,
+            has_non_interruptible_tasks,
         }
     }
 }
@@ -169,7 +186,7 @@ impl Engine<Built> {
                         .get(task)
                         .expect("task should have definition");
 
-                    if def.persistent {
+                    if def.persistent && !def.interruptible {
                         return None;
                     }
                 }
@@ -208,13 +225,13 @@ impl Engine<Built> {
             task_locations: self.task_locations.clone(),
             package_tasks: self.package_tasks.clone(),
             // We've filtered out persistent tasks
-            has_persistent_tasks: false,
+            has_non_interruptible_tasks: false,
         }
     }
 
-    /// Creates an `Engine` with persistent tasks filtered out. Used in watch
-    /// mode to re-run the non-persistent tasks.
-    pub fn create_engine_without_persistent_tasks(&self) -> Engine<Built> {
+    /// Creates an `Engine` with only interruptible tasks, i.e. non-persistent
+    /// tasks and persistent tasks that are allowed to be interrupted
+    pub fn create_engine_for_interruptible_tasks(&self) -> Engine<Built> {
         let new_graph = self.task_graph.filter_map(
             |node_idx, node| match &self.task_graph[node_idx] {
                 TaskNode::Task(task) => {
@@ -223,7 +240,7 @@ impl Engine<Built> {
                         .get(task)
                         .expect("task should have definition");
 
-                    if !def.persistent {
+                    if !def.persistent || def.interruptible {
                         Some(node.clone())
                     } else {
                         None
@@ -260,12 +277,13 @@ impl Engine<Built> {
             task_definitions: self.task_definitions.clone(),
             task_locations: self.task_locations.clone(),
             package_tasks: self.package_tasks.clone(),
-            has_persistent_tasks: false,
+            has_non_interruptible_tasks: false,
         }
     }
 
-    /// Creates an `Engine` that is only the persistent tasks.
-    pub fn create_engine_for_persistent_tasks(&self) -> Engine<Built> {
+    /// Creates an `Engine` that is only the tasks that are not interruptible,
+    /// i.e. persistent and not allowed to be restarted
+    pub fn create_engine_for_non_interruptible_tasks(&self) -> Engine<Built> {
         let mut new_graph = self.task_graph.filter_map(
             |node_idx, node| match &self.task_graph[node_idx] {
                 TaskNode::Task(task) => {
@@ -274,7 +292,7 @@ impl Engine<Built> {
                         .get(task)
                         .expect("task should have definition");
 
-                    if def.persistent {
+                    if def.persistent && !def.interruptible {
                         Some(node.clone())
                     } else {
                         None
@@ -320,7 +338,7 @@ impl Engine<Built> {
             task_definitions: self.task_definitions.clone(),
             task_locations: self.task_locations.clone(),
             package_tasks: self.package_tasks.clone(),
-            has_persistent_tasks: true,
+            has_non_interruptible_tasks: true,
         }
     }
 
@@ -330,6 +348,22 @@ impl Engine<Built> {
 
     pub fn dependents(&self, task_id: &TaskId) -> Option<HashSet<&TaskNode>> {
         self.neighbors(task_id, petgraph::Direction::Incoming)
+    }
+
+    pub fn transitive_dependents(&self, task_id: &TaskId<'static>) -> HashSet<&TaskNode> {
+        turborepo_graph_utils::transitive_closure(
+            &self.task_graph,
+            self.task_lookup.get(task_id).cloned(),
+            petgraph::Direction::Incoming,
+        )
+    }
+
+    pub fn transitive_dependencies(&self, task_id: &TaskId<'static>) -> HashSet<&TaskNode> {
+        turborepo_graph_utils::transitive_closure(
+            &self.task_graph,
+            self.task_lookup.get(task_id).cloned(),
+            petgraph::Direction::Outgoing,
+        )
     }
 
     fn neighbors(
@@ -711,20 +745,20 @@ mod test {
 
         let engine = engine.seal();
 
-        let persistent_tasks_engine = engine.create_engine_for_persistent_tasks();
-        for node in persistent_tasks_engine.tasks() {
+        let non_interruptible_tasks_engine = engine.create_engine_for_non_interruptible_tasks();
+        for node in non_interruptible_tasks_engine.tasks() {
             if let TaskNode::Task(task_id) = node {
-                let def = persistent_tasks_engine
+                let def = non_interruptible_tasks_engine
                     .task_definition(task_id)
                     .expect("task should have definition");
                 assert!(def.persistent, "task should be persistent");
             }
         }
 
-        let non_persistent_tasks_engine = engine.create_engine_without_persistent_tasks();
-        for node in non_persistent_tasks_engine.tasks() {
+        let interruptible_tasks_engine = engine.create_engine_for_interruptible_tasks();
+        for node in interruptible_tasks_engine.tasks() {
             if let TaskNode::Task(task_id) = node {
-                let def = non_persistent_tasks_engine
+                let def = interruptible_tasks_engine
                     .task_definition(task_id)
                     .expect("task should have definition");
                 assert!(!def.persistent, "task should not be persistent");
