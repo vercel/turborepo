@@ -25,8 +25,6 @@
   Cached:    0 cached, 2 total
     Time:\s*[\.0-9]+m?s  (re)
   
-   WARNING  no output files found for task my-app#build. Please check your `outputs` key in `turbo.json`
-   WARNING  no output files found for task util#build. Please check your `outputs` key in `turbo.json`
 
 
 # We can get the same behavior with an env var
@@ -53,8 +51,6 @@
   Cached:    0 cached, 2 total
     Time:\s*[\.0-9]+m?s  (re)
   
-   WARNING  no output files found for task my-app#build. Please check your `outputs` key in `turbo.json`
-   WARNING  no output files found for task util#build. Please check your `outputs` key in `turbo.json`
 
 # The flag wins over the env var
   $ TURBO_LOG_ORDER=stream ${TURBO} run build --log-order grouped --force
@@ -80,6 +76,4 @@
   Cached:    0 cached, 2 total
     Time:\s*[\.0-9]+m?s  (re)
   
-   WARNING  no output files found for task my-app#build. Please check your `outputs` key in `turbo.json`
-   WARNING  no output files found for task util#build. Please check your `outputs` key in `turbo.json`
 

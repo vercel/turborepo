@@ -22,6 +22,5 @@ Make sure that the internal util package is part of the prune output
   Cached:    0 cached, 1 total
     Time:\s*[\.0-9]+m?s  (re)
   
-   WARNING  no output files found for task docs#new-task. Please check your `outputs` key in `turbo.json`
 
 

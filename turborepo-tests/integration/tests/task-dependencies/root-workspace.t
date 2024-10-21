@@ -22,5 +22,3 @@ This tests asserts that root tasks can depend on workspace#task
   Cached:    0 cached, 2 total
     Time:\s*[\.0-9ms]+  (re)
   
-   WARNING  no output files found for task //#mytask. Please check your `outputs` key in `turbo.json`
-   WARNING  no output files found for task lib-a#build. Please check your `outputs` key in `turbo.json`

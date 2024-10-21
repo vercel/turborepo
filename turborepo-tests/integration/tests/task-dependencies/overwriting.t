@@ -4,9 +4,6 @@ Setup
 
 Test
   $ ${TURBO} run build > tmp.log
-   WARNING  no output files found for task workspace-a#build. Please check your `outputs` key in `turbo.json`
-   WARNING  no output files found for task workspace-a#generate. Please check your `outputs` key in `turbo.json`
-   WARNING  no output files found for task workspace-b#build. Please check your `outputs` key in `turbo.json`
   $ cat tmp.log | grep "Packages in scope" -A2
   \xe2\x80\xa2 Packages in scope: workspace-a, workspace-b (esc)
   \xe2\x80\xa2 Running build in 2 packages (esc)

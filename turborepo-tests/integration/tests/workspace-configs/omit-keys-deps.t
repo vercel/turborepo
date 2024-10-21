@@ -8,8 +8,6 @@ Setup
 
 # 1. First run, assert for `dependsOn` and `outputs` keys
   $ ${TURBO} run omit-keys-task-with-deps --filter=omit-keys > tmp.log
-   WARNING  no output files found for task blank-pkg#omit-keys-underlying-topo-task. Please check your `outputs` key in `turbo.json`
-   WARNING  no output files found for task omit-keys#omit-keys-underlying-task. Please check your `outputs` key in `turbo.json`
 # Validate in pieces. `omit-key` task has two dependsOn values, and those tasks
 # can run in non-deterministic order. So we need to validatte the logs in pieces.
   $ cat tmp.log | grep "in scope" -A 1
