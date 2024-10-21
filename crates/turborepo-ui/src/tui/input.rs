@@ -72,10 +72,40 @@ fn translate_key_event(options: InputOptions, key_event: KeyEvent) -> Option<Eve
         {
             Some(Event::ExitInteractive)
         }
+        // Vim keybinds
+        KeyCode::Char('h')
+            if matches!(options.focus, LayoutSections::Pane)
+                && key_event.modifiers == crossterm::event::KeyModifiers::CONTROL =>
+        {
+            Some(Event::ExitInteractive)
+        }
+        KeyCode::Char('j')
+            if matches!(options.focus, LayoutSections::Pane)
+                && key_event.modifiers == crossterm::event::KeyModifiers::CONTROL =>
+        {
+            Some(Event::Down)
+        }
+        KeyCode::Char('k')
+            if matches!(options.focus, LayoutSections::Pane)
+                && key_event.modifiers == crossterm::event::KeyModifiers::CONTROL =>
+        {
+            Some(Event::Up)
+        }
+
+        KeyCode::Char('l')
+            if matches!(options.focus, LayoutSections::Pane)
+                && key_event.modifiers == crossterm::event::KeyModifiers::CONTROL =>
+        {
+            Some(Event::EnterInteractive)
+        }
         // If we're in interactive mode, convert the key event to bytes to send to stdin
         _ if matches!(options.focus, LayoutSections::Pane) => Some(Event::Input {
             bytes: encode_key(key_event),
         }),
+        // Vim keybinds
+        KeyCode::Char('j') => Some(Event::Down),
+        KeyCode::Char('k') => Some(Event::Up),
+        KeyCode::Char('l') => Some(Event::EnterInteractive),
         // If we're on the list and user presses `/` enter search mode
         KeyCode::Char('/') if matches!(options.focus, LayoutSections::TaskList) => {
             Some(Event::SearchEnter)
