@@ -37,8 +37,10 @@ impl<'a> CurrentRun<'a> {
 /// reading it.
 pub type SharedState = Arc<Mutex<WebUIState>>;
 
-/// The query for actively running tasks (as opposed to the query for general
-/// repository state `RepositoryQuery` in `turborepo_lib::query`)
+/// The query for actively running tasks.
+///
+/// (As opposed to the query for general repository state `RepositoryQuery`
+/// in `turborepo_lib::query`)
 /// This is `None` when we're not actually running a task (e.g. `turbo query`)
 pub struct RunQuery {
     state: Option<SharedState>,

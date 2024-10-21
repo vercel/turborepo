@@ -282,7 +282,9 @@ pub struct GlobError {
     reason: String,
 }
 
-/// ValidatedGlob represents an input string that we have either validated or
+/// ValidatedGlob.
+///
+/// Represents an input string that we have either validated or
 /// modified to fit our constraints. It does not _yet_ validate that the glob is
 /// a valid glob pattern, just that we have checked for unix format, ':'s, clean
 /// paths, etc.
