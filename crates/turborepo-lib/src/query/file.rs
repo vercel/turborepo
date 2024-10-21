@@ -155,10 +155,20 @@ impl File {
     }
 
     async fn dependencies(&self, depth: Option<usize>, ts_config: Option<String>) -> TraceResult {
+        let ts_config = match ts_config {
+            Some(ts_config) => Some(Utf8PathBuf::from(ts_config)),
+            None => self
+                .path
+                .ancestors()
+                .skip(1)
+                .find(|p| p.join_component("tsconfig.json").exists())
+                .map(|p| p.as_path().to_owned()),
+        };
+
         let tracer = Tracer::new(
             self.run.repo_root().to_owned(),
             vec![self.path.clone()],
-            ts_config.map(Utf8PathBuf::from),
+            ts_config,
         );
 
         let mut result = tracer.trace(depth);
