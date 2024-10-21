@@ -8,7 +8,7 @@ license = "MIT"
 camino.workspace = true
 clap = { version = "4.5.17", features = ["derive"] }
 miette = { workspace = true, features = ["fancy"] }
-oxc_resolver = "1.11.0"
+oxc_resolver = { path = "../../../oxc-resolver" }
 swc_common = { workspace = true }
 swc_ecma_ast = { workspace = true }
 swc_ecma_parser = { workspace = true }

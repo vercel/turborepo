@@ -718,7 +718,7 @@ dependencies = [
  "biome_text_size",
  "bitflags 2.5.0",
  "bpaf",
- "oxc_resolver",
+ "oxc_resolver 1.11.0",
  "serde",
  "termcolor",
  "unicode-width",
@@ -3599,6 +3599,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "oxc_resolver"
+version = "1.12.0"
+dependencies = [
+ "cfg-if",
+ "dashmap 6.1.0",
+ "dunce",
+ "indexmap 2.2.6",
+ "json-strip-comments",
+ "once_cell",
+ "rustc-hash 2.0.0",
+ "serde",
+ "serde_json",
+ "simdutf8",
+ "thiserror",
+ "tracing",
+]
+
+[[package]]
 name = "parking"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6041,7 +6059,7 @@ dependencies = [
  "camino",
  "clap",
  "miette",
- "oxc_resolver",
+ "oxc_resolver 1.12.0",
  "swc_common",
  "swc_ecma_ast",
  "swc_ecma_parser",
