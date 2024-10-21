@@ -11,7 +11,7 @@ Setup
           "files": {
             "items": [
               {
-                "path": "nm/index.js"
+                "path": "nm(\/|\\\\)index.js" (re)
               }
             ]
           },
