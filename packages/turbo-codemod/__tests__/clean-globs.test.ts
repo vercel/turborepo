@@ -22,8 +22,8 @@ describe("clean-globs", () => {
     // result should be correct
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toMatchInlineSnapshot(`
-      Object {
-        "turbo.json": Object {
+      {
+        "turbo.json": {
           "action": "modified",
           "additions": 6,
           "deletions": 6,

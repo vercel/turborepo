@@ -34,8 +34,8 @@ describe("rename-output-mode", () => {
 
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toMatchInlineSnapshot(`
-      Object {
-        "turbo.json": Object {
+      {
+        "turbo.json": {
           "action": "modified",
           "additions": 2,
           "deletions": 2,
@@ -99,23 +99,23 @@ describe("rename-output-mode", () => {
 
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toMatchInlineSnapshot(`
-      Object {
-        "apps/docs/turbo.json": Object {
+      {
+        "apps/docs/turbo.json": {
           "action": "unchanged",
           "additions": 0,
           "deletions": 0,
         },
-        "apps/web/turbo.json": Object {
+        "apps/web/turbo.json": {
           "action": "modified",
           "additions": 1,
           "deletions": 0,
         },
-        "packages/ui/turbo.json": Object {
+        "packages/ui/turbo.json": {
           "action": "modified",
           "additions": 1,
           "deletions": 1,
         },
-        "turbo.json": Object {
+        "turbo.json": {
           "action": "modified",
           "additions": 2,
           "deletions": 2,
@@ -143,8 +143,8 @@ describe("rename-output-mode", () => {
 
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toMatchInlineSnapshot(`
-      Object {
-        "turbo.json": Object {
+      {
+        "turbo.json": {
           "action": "skipped",
           "additions": 2,
           "deletions": 2,
@@ -180,8 +180,8 @@ describe("rename-output-mode", () => {
 
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toMatchInlineSnapshot(`
-      Object {
-        "turbo.json": Object {
+      {
+        "turbo.json": {
           "action": "modified",
           "additions": 2,
           "deletions": 2,
@@ -209,8 +209,8 @@ describe("rename-output-mode", () => {
 
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toMatchInlineSnapshot(`
-      Object {
-        "turbo.json": Object {
+      {
+        "turbo.json": {
           "action": "skipped",
           "additions": 2,
           "deletions": 2,
@@ -270,8 +270,8 @@ describe("rename-output-mode", () => {
 
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toMatchInlineSnapshot(`
-      Object {
-        "turbo.json": Object {
+      {
+        "turbo.json": {
           "action": "modified",
           "additions": 10,
           "deletions": 10,
@@ -300,8 +300,8 @@ describe("rename-output-mode", () => {
 
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toMatchInlineSnapshot(`
-      Object {
-        "turbo.json": Object {
+      {
+        "turbo.json": {
           "action": "unchanged",
           "additions": 0,
           "deletions": 0,
@@ -339,8 +339,8 @@ describe("rename-output-mode", () => {
 
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toMatchInlineSnapshot(`
-      Object {
-        "turbo.json": Object {
+      {
+        "turbo.json": {
           "action": "unchanged",
           "additions": 0,
           "deletions": 0,
