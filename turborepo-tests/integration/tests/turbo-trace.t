@@ -21,6 +21,9 @@ Setup
           "files": {
             "items": [
               {
+                "path": "bar.js"
+              },
+              {
                 "path": "button.tsx"
               },
               {
@@ -401,6 +404,32 @@ Get AST from file
             }
           ],
           "interpreter": null
+        }
+      }
+    }
+  }
+
+Set depth for dependencies
+  $ ${TURBO} query "query { file(path: \"main.ts\") { path dependencies(depth: 1) { files { items { path } } } } }"
+   WARNING  query command is experimental and may change in the future
+  {
+    "data": {
+      "file": {
+        "path": "main.ts",
+        "dependencies": {
+          "files": {
+            "items": [
+              {
+                "path": "button.tsx"
+              },
+              {
+                "path": "foo.js"
+              },
+              {
+                "path": "node_modules(\/|\\\\)repeat-string(\/|\\\\)index.js" (re)
+              }
+            ]
+          }
         }
       }
     }

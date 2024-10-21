@@ -65,7 +65,7 @@ impl Tracer {
         }
     }
 
-    pub fn trace(mut self, depth: Option<usize>) -> TraceResult {
+    pub fn trace(mut self, max_depth: Option<usize>) -> TraceResult {
         let mut options = ResolveOptions::default()
             .with_builtin_modules(true)
             .with_force_extension(EnforceExtension::Disabled)
@@ -92,8 +92,8 @@ impl Tracer {
                 continue;
             }
 
-            if let Some(depth) = depth {
-                if file_depth > depth {
+            if let Some(max_depth) = max_depth {
+                if file_depth > max_depth {
                     continue;
                 }
             }
