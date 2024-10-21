@@ -62,7 +62,7 @@ impl File {
             Some(&comments),
             &mut errors,
         )
-        .map_err(Error::ParseError)?;
+        .map_err(Error::Parse)?;
 
         Ok(module)
     }
@@ -162,7 +162,7 @@ impl File {
 
     async fn ast(&self) -> Option<serde_json::Value> {
         if let Some(ast) = &self.ast {
-            serde_json::to_value(&ast).ok()
+            serde_json::to_value(ast).ok()
         } else {
             serde_json::to_value(&self.parse_file().ok()?).ok()
         }
