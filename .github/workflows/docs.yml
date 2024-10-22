@@ -17,7 +17,9 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: "Setup Node"
-        uses: ./.github/actions/setup-node
+        uses: ./.github/actions/setup-node@v4
+        with:
+          node-version: 20
 
       - name: "Run link checker"
         run: cd docs && pnpm run check-links
