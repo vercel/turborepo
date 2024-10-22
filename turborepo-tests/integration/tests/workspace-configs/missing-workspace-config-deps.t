@@ -7,8 +7,6 @@ Setup
 
 # 1. First run, assert that dependet tasks run `dependsOn`
   $ ${TURBO} run missing-workspace-config-task-with-deps --filter=missing-workspace-config > tmp.log
-   WARNING  no output files found for task blank-pkg#missing-workspace-config-underlying-topo-task. Please check your `outputs` key in `turbo.json`
-   WARNING  no output files found for task missing-workspace-config#missing-workspace-config-underlying-task. Please check your `outputs` key in `turbo.json`
 # Validate in pieces. `omit-key` task has two dependsOn values, and those tasks
 # can run in non-deterministic order. So we need to validate the logs in the pieces.
   $ cat tmp.log | grep "in scope" -A 2

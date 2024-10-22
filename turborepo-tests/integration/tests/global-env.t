@@ -14,7 +14,6 @@ Setup
   Cached:    0 cached, 1 total
     Time:\s*[\.0-9]+m?s  (re)
   
-   WARNING  no output files found for task util#build. Please check your `outputs` key in `turbo.json`
 # run again and ensure there's a cache hit
   $ ${TURBO} run build --filter=util --output-logs=hash-only
   \xe2\x80\xa2 Packages in scope: util (esc)
@@ -37,7 +36,6 @@ Setup
   Cached:    0 cached, 1 total
     Time:\s*[\.0-9]+m?s  (re)
   
-   WARNING  no output files found for task util#build. Please check your `outputs` key in `turbo.json`
 # set env var with "THASH" and ensure cache miss
   $ SOMETHING_THASH_YES=hi ${TURBO} run build --filter=util --output-logs=hash-only
   \xe2\x80\xa2 Packages in scope: util (esc)
@@ -60,7 +58,6 @@ Setup
   Cached:    0 cached, 1 total
     Time:\s*[\.0-9]+m?s  (re)
   
-   WARNING  no output files found for task util#build. Please check your `outputs` key in `turbo.json`
 # THASH deprecation doesn't break --dry=json
   $ SOMETHING_THASH_YES=hi ${TURBO} run build --filter=util --dry=json | jq -r '.tasks[0].environmentVariables.global[0]'
   null

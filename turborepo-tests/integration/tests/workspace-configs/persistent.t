@@ -47,8 +47,6 @@ This test covers:
   Cached:    0 cached, 2 total
     Time:\s*[\.0-9]+m?s  (re)
   
-   WARNING  no output files found for task persistent#persistent-task-2-parent. Please check your `outputs` key in `turbo.json`
-   WARNING  no output files found for task persistent#persistent-task-2. Please check your `outputs` key in `turbo.json`
 # persistent-task-3-parent dependsOn persistent-task-3
 # persistent-task-3 is persistent:true in the root workspace
 # persistent-task-3 is defined in workspace, but does NOT have the persistent flag

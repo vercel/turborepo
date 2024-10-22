@@ -30,7 +30,6 @@ Note that npm reports any failed script as exit code 1, even though we "exit 2"
     Time:\s*[\.0-9]+m?s  (re)
   Failed:    my-app#error
   
-   WARNING  no output files found for task my-app#okay. Please check your `outputs` key in `turbo.json`
    ERROR  run failed: command  exited (1)
   [1]
 
@@ -99,6 +98,5 @@ Make sure error code isn't swallowed with continue
     Time:\s*[\.0-9]+m?s  (re)
   Failed:    my-app#error
   
-   WARNING  no output files found for task my-app#okay2. Please check your `outputs` key in `turbo.json`
    ERROR  run failed: command  exited (1)
   [1]

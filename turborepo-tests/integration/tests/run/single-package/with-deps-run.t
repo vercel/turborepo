@@ -21,7 +21,6 @@ Check
   Cached:    0 cached, 2 total
     Time:\s*[\.0-9]+m?s  (re)
   
-   WARNING  no output files found for task //#test. Please check your `outputs` key in `turbo.json`
 Run a second time, verify caching works because there is a config
   $ ${TURBO} run test
   \xe2\x80\xa2 Running test (esc)

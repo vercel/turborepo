@@ -809,6 +809,7 @@ mod test {
 
     use anyhow::Result;
     use bytes::Bytes;
+    use insta::assert_snapshot;
     use turborepo_vercel_api_mock::start_test_server;
     use url::Url;
 
@@ -886,9 +887,9 @@ mod test {
                 .unwrap(),
         );
         let err = APIClient::handle_403(response).await;
-        assert_eq!(
+        assert_snapshot!(
             err.to_string(),
-            "unable to parse 'this isn't valid JSON' as JSON: expected ident at line 1 column 2"
+            @"unable to parse 'this isn't valid JSON' as JSON: expected ident at line 1 column 2"
         );
     }
 
@@ -900,7 +901,7 @@ mod test {
                 .unwrap(),
         );
         let err = APIClient::handle_403(response).await;
-        assert_eq!(err.to_string(), "unknown status forbidden: Not authorized");
+        assert_snapshot!(err.to_string(), @"unknown status forbidden: Not authorized");
     }
 
     #[tokio::test]

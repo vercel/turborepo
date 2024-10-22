@@ -382,7 +382,7 @@ impl<'a> RunSummary<'a> {
         }
 
         if let Some(spaces_client_handle) = self.spaces_client_handle.take() {
-            self.send_to_space(spaces_client_handle, end_time, exit_code)
+            self.send_to_space(spaces_client_handle, end_time, exit_code, is_watch)
                 .await;
         }
 
@@ -395,26 +395,35 @@ impl<'a> RunSummary<'a> {
         spaces_client_handle: SpacesClientHandle,
         ended_at: DateTime<Local>,
         exit_code: i32,
+        is_watch: bool,
     ) {
-        let spinner = tokio::spawn(async {
-            tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
-            turborepo_ui::start_spinner("...sending run summary...");
+        let spinner = (!is_watch).then(|| {
+            tokio::spawn(async {
+                tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
+                turborepo_ui::start_spinner("...sending run summary...");
+            })
         });
 
         // We log the error here but don't fail because
         // failing to send the space shouldn't fail the run.
         if let Err(err) = spaces_client_handle.finish_run(exit_code, ended_at).await {
-            warn!("Error sending to space: {}", err);
+            if !is_watch {
+                warn!("Error sending to space: {}", err);
+            }
         };
 
         let result = spaces_client_handle.close().await;
 
-        spinner.abort();
+        if let Some(spinner) = spinner {
+            spinner.abort();
+        }
 
-        Self::print_errors(&result.errors);
+        if !is_watch {
+            Self::print_errors(&result.errors);
 
-        if let Some(run) = result.run {
-            println!("Run: {}\n", run.url);
+            if let Some(run) = result.run {
+                println!("Run: {}\n", run.url);
+            }
         }
     }
 

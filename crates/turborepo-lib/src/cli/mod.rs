@@ -604,7 +604,6 @@ pub enum Command {
     },
     /// Query your monorepo using GraphQL. If no query is provided, spins up a
     /// GraphQL server with GraphiQL.
-    #[clap(hide = true)]
     Query {
         /// Pass variables to the query via a JSON file
         #[clap(short = 'V', long, requires = "query")]

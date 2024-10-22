@@ -105,8 +105,7 @@ impl HTTPCache {
 
         tracing::debug!("uploading {}", hash);
 
-        match self
-            .client
+        self.client
             .put_artifact(
                 hash,
                 progress,
@@ -118,19 +117,9 @@ impl HTTPCache {
                 self.api_auth.team_slug.as_deref(),
             )
             .await
-        {
-            Ok(_) => {
-                tracing::debug!("uploaded {}", hash);
-                Ok(())
-            }
-            Err(turborepo_api_client::Error::ReqwestError(e)) if e.is_timeout() => {
-                Err(CacheError::TimeoutError(hash.to_string()))
-            }
-            Err(turborepo_api_client::Error::ReqwestError(e)) if e.is_connect() => {
-                Err(CacheError::ConnectError)
-            }
-            Err(e) => Err(e.into()),
-        }
+            .map_err(|err| Self::convert_api_error(hash, err))?;
+        tracing::debug!("uploaded {}", hash);
+        Ok(())
     }
 
     #[tracing::instrument(skip_all)]
@@ -278,14 +267,30 @@ impl HTTPCache {
         let mut cache_reader = CacheReader::from_reader(body, true)?;
         cache_reader.restore(root)
     }
+
+    fn convert_api_error(hash: &str, err: turborepo_api_client::Error) -> CacheError {
+        match err {
+            turborepo_api_client::Error::ReqwestError(e) if e.is_timeout() => {
+                CacheError::TimeoutError(hash.to_string())
+            }
+            turborepo_api_client::Error::ReqwestError(e) if e.is_connect() => {
+                CacheError::ConnectError
+            }
+            turborepo_api_client::Error::UnknownStatus { code, .. } if code == "forbidden" => {
+                CacheError::ForbiddenRemoteCacheWrite
+            }
+            e => e.into(),
+        }
+    }
 }
 
 #[cfg(test)]
 mod test {
-    use std::time::Duration;
+    use std::{backtrace::Backtrace, time::Duration};
 
     use anyhow::Result;
     use futures::future::try_join_all;
+    use insta::assert_snapshot;
     use tempfile::tempdir;
     use turbopath::AbsoluteSystemPathBuf;
     use turborepo_analytics::start_analytics;
@@ -380,5 +385,43 @@ mod test {
         analytics_handle.close_with_timeout().await;
 
         Ok(())
+    }
+
+    #[test]
+    fn test_forbidden_error() {
+        let err = HTTPCache::convert_api_error(
+            "hash",
+            turborepo_api_client::Error::UnknownStatus {
+                code: "forbidden".into(),
+                message: "Not authorized".into(),
+                backtrace: Backtrace::capture(),
+            },
+        );
+        assert_snapshot!(err.to_string(), @"Insufficient permissions to write to remote cache. Please verify that your role has write access for Remote Cache Artifact at https://vercel.com/docs/accounts/team-members-and-roles/access-roles/team-level-roles?resource=Remote+Cache+Artifact");
+    }
+
+    #[test]
+    fn test_unknown_status() {
+        let err = HTTPCache::convert_api_error(
+            "hash",
+            turborepo_api_client::Error::UnknownStatus {
+                code: "unknown".into(),
+                message: "Special message".into(),
+                backtrace: Backtrace::capture(),
+            },
+        );
+        assert_snapshot!(err.to_string(), @"failed to contact remote cache: unknown status unknown: Special message");
+    }
+
+    #[test]
+    fn test_cache_disabled() {
+        let err = HTTPCache::convert_api_error(
+            "hash",
+            turborepo_api_client::Error::CacheDisabled {
+                status: turborepo_vercel_api::CachingStatus::Disabled,
+                message: "Cache disabled".into(),
+            },
+        );
+        assert_snapshot!(err.to_string(), @"failed to contact remote cache: Cache disabled");
     }
 }

@@ -20,6 +20,7 @@ Make sure exit code is 2 when no args are passed
     logout      Logout to your Vercel account
     prune       Prepare a subset of your monorepo
     run         Run tasks across projects in your monorepo
+    query       Query your monorepo using GraphQL. If no query is provided, spins up a GraphQL server with GraphiQL
     watch       Arguments used in run and watch
     unlink      Unlink the current directory from your Vercel organization and disable Remote Caching
   

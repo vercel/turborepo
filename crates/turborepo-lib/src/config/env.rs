@@ -189,60 +189,7 @@ impl ResolvedConfigurationOptions for EnvVars {
     }
 }
 
-const VERCEL_ARTIFACTS_MAPPING: &[(&str, &str)] = [
-    ("vercel_artifacts_token", "token"),
-    ("vercel_artifacts_owner", "team_id"),
-]
-.as_slice();
-
-pub struct OverrideEnvVars<'a> {
-    environment: &'a HashMap<OsString, OsString>,
-    output_map: HashMap<&'static str, String>,
-}
-
-impl<'a> OverrideEnvVars<'a> {
-    pub fn new(environment: &'a HashMap<OsString, OsString>) -> Result<Self, Error> {
-        let vercel_artifacts_mapping: HashMap<_, _> =
-            VERCEL_ARTIFACTS_MAPPING.iter().copied().collect();
-
-        let output_map = map_environment(vercel_artifacts_mapping, environment)?;
-        Ok(Self {
-            environment,
-            output_map,
-        })
-    }
-
-    fn ui(&self) -> Option<UIMode> {
-        let value = self
-            .environment
-            .get(OsStr::new("ci"))
-            .or_else(|| self.environment.get(OsStr::new("no_color")))?;
-        match truth_env_var(value.to_str()?)? {
-            true => Some(UIMode::Stream),
-            false => None,
-        }
-    }
-}
-
-impl<'a> ResolvedConfigurationOptions for OverrideEnvVars<'a> {
-    fn get_configuration_options(
-        &self,
-        _existing_config: &ConfigurationOptions,
-    ) -> Result<ConfigurationOptions, Error> {
-        let ui = self.ui();
-        let output = ConfigurationOptions {
-            team_id: self.output_map.get("team_id").cloned(),
-            token: self.output_map.get("token").cloned(),
-            api_url: None,
-            ui,
-            ..Default::default()
-        };
-
-        Ok(output)
-    }
-}
-
-fn truth_env_var(s: &str) -> Option<bool> {
+pub fn truth_env_var(s: &str) -> Option<bool> {
     match s {
         "true" | "1" => Some(true),
         "false" | "0" => Some(false),
@@ -251,7 +198,13 @@ fn truth_env_var(s: &str) -> Option<bool> {
 }
 
 fn map_environment<'a>(
+    // keys are environment variable names
+    // values are properties of ConfigurationOptions we want to store the
+    // values in
     mapping: HashMap<&str, &'a str>,
+
+    // keys are environment variable names
+    // values are the values of those environment variables
     environment: &HashMap<OsString, OsString>,
 ) -> Result<HashMap<&'a str, String>, Error> {
     let mut output_map = HashMap::new();
@@ -394,31 +347,5 @@ mod test {
         assert!(!config.remote_cache_read_only());
         assert!(!config.run_summary());
         assert!(!config.allow_no_turbo_json());
-    }
-
-    #[test]
-    fn test_override_env_setting() {
-        let mut env: HashMap<OsString, OsString> = HashMap::new();
-
-        let vercel_artifacts_token = "correct-horse-battery-staple";
-        let vercel_artifacts_owner = "bobby_tables";
-
-        env.insert(
-            "vercel_artifacts_token".into(),
-            vercel_artifacts_token.into(),
-        );
-        env.insert(
-            "vercel_artifacts_owner".into(),
-            vercel_artifacts_owner.into(),
-        );
-        env.insert("ci".into(), "1".into());
-
-        let config = OverrideEnvVars::new(&env)
-            .unwrap()
-            .get_configuration_options(&ConfigurationOptions::default())
-            .unwrap();
-        assert_eq!(vercel_artifacts_token, config.token.unwrap());
-        assert_eq!(vercel_artifacts_owner, config.team_id.unwrap());
-        assert_eq!(Some(UIMode::Stream), config.ui);
     }
 }

@@ -70,3 +70,41 @@ pub fn validate_graph<G: Display>(graph: &Graph<G, ()>) -> Result<(), Error> {
 }
 
 pub use walker::{WalkMessage, Walker};
+
+#[cfg(test)]
+mod test {
+    use insta::assert_snapshot;
+    use petgraph::graph::Graph;
+
+    use super::*;
+
+    #[test]
+    fn test_cycle_err_message() {
+        /*
+         a -> b --> c -> d
+         |    |\____/    |
+         |     \_______/ |
+          \_____________/
+        */
+        let mut g = Graph::new();
+        let a = g.add_node("a");
+        let b = g.add_node("b");
+        let c = g.add_node("c");
+        let d = g.add_node("d");
+
+        g.add_edge(a, b, ());
+        g.add_edge(b, c, ());
+        g.add_edge(c, b, ());
+        g.add_edge(c, d, ());
+        g.add_edge(d, b, ());
+        g.add_edge(d, a, ());
+
+        let result = validate_graph(&g);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_snapshot!(err.to_string(), @r###"
+        cyclic dependency detected:
+        	d, c, b, a
+        "###);
+    }
+}

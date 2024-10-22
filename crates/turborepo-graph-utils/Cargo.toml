@@ -15,3 +15,6 @@ petgraph = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full", "time"] }
 tracing = { workspace = true, features = ["log"] }
+
+[dev-dependencies]
+insta = { workspace = true }

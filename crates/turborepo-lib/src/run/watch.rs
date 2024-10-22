@@ -101,7 +101,7 @@ pub enum Error {
     PackageChange(#[from] tonic::Status),
     #[error(transparent)]
     UI(#[from] turborepo_ui::Error),
-    #[error("could not connect to UI thread")]
+    #[error("could not connect to UI thread: {0}")]
     UISend(String),
     #[error("cannot use root turbo.json at {0} with watch mode")]
     NonStandardTurboJsonPath(String),
@@ -317,7 +317,7 @@ impl WatchClient {
                     let task_names = run.engine.tasks_with_command(&run.pkg_dep_graph);
                     sender
                         .restart_tasks(task_names)
-                        .map_err(|err| Error::UISend(err.to_string()))?;
+                        .map_err(|err| Error::UISend(format!("some packages changed: {err}")))?;
                 }
 
                 let ui_sender = self.ui_sender.clone();
@@ -371,7 +371,7 @@ impl WatchClient {
                     let task_names = self.run.engine.tasks_with_command(&self.run.pkg_dep_graph);
                     sender
                         .update_tasks(task_names)
-                        .map_err(|err| Error::UISend(err.to_string()))?;
+                        .map_err(|err| Error::UISend(format!("all packages changed {err}")))?;
                 }
 
                 if self.run.has_non_interruptible_tasks() {

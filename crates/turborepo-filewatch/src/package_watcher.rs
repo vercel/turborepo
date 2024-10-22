@@ -155,7 +155,7 @@ enum PackageState {
     InvalidGlobs(String),
     ValidWorkspaces {
         package_manager: PackageManager,
-        filter: WorkspaceGlobs,
+        filter: Box<WorkspaceGlobs>,
         workspaces: HashMap<AbsoluteSystemPathBuf, WorkspaceData>,
     },
 }
@@ -166,7 +166,7 @@ enum State {
         debouncer: Arc<Debouncer>,
         version: Version,
     },
-    Ready(PackageState),
+    Ready(Box<PackageState>),
 }
 
 // Because our package manager detection is coupled with the workspace globs, we
@@ -289,7 +289,7 @@ impl Subscriber {
             // ignore this update, as we know it is stale.
             if package_result.version == *version {
                 self.write_state(&package_result.state);
-                *state = State::Ready(package_result.state);
+                *state = State::Ready(Box::new(package_result.state));
             }
         }
     }
@@ -400,8 +400,10 @@ impl Subscriber {
         // If we don't have a valid package manager and workspace globs, nothing to be
         // done here
         let PackageState::ValidWorkspaces {
-            filter, workspaces, ..
-        } = package_state
+            ref filter,
+            ref mut workspaces,
+            ..
+        } = **package_state
         else {
             return;
         };
@@ -550,7 +552,7 @@ async fn discover_packages(repo_root: AbsoluteSystemPathBuf) -> PackageState {
         .collect::<HashMap<_, _>>();
     PackageState::ValidWorkspaces {
         package_manager: initial_discovery.package_manager,
-        filter,
+        filter: Box::new(filter),
         workspaces,
     }
 }

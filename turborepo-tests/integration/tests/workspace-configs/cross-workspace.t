@@ -21,5 +21,3 @@ Setup
   Cached:    0 cached, 2 total
     Time:\s*[\.0-9]+m?s  (re)
   
-   WARNING  no output files found for task blank-pkg#cross-workspace-underlying-task. Please check your `outputs` key in `turbo.json`
-   WARNING  no output files found for task cross-workspace#cross-workspace-task. Please check your `outputs` key in `turbo.json`

@@ -10,7 +10,6 @@ Setup
 
 # 1. First run, assert for `dependsOn` and `outputs` keys
   $ ${TURBO} run add-keys-task --filter=add-keys > tmp.log
-   WARNING  no output files found for task add-keys#add-keys-underlying-task. Please check your `outputs` key in `turbo.json`
   $ cat tmp.log
   \xe2\x80\xa2 Packages in scope: add-keys (esc)
   \xe2\x80\xa2 Running add-keys-task in 1 packages (esc)
@@ -77,7 +76,6 @@ Setup
   Cached:    0 cached, 2 total
     Time:\s*[\.0-9]+m?s  (re)
   
-   WARNING  no output files found for task add-keys#add-keys-underlying-task. Please check your `outputs` key in `turbo.json`
 # 4. Set env var and assert cache miss
   $ SOME_VAR=somevalue ${TURBO} run add-keys-task --filter=add-keys
   \xe2\x80\xa2 Packages in scope: add-keys (esc)

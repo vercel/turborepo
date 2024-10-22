@@ -57,11 +57,14 @@ impl Membership {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum Role {
-    Member,
+    // ordered by access-level
     Owner,
-    Viewer,
+    Admin,
+    Member,
     Developer,
+    Contributor,
     Billing,
+    Viewer,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

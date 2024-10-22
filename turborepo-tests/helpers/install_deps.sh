@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 
 set -eo pipefail
-
 # TODO: Should we default to pnpm here?
 PACKAGE_MANAGER="npm"
 # Check if "@" is present in the argument and remove it if so
@@ -10,7 +9,6 @@ if [[ $1 != "" && $1 == *'@'*  ]]; then
 elif [[ $1 != "" ]]; then
   PACKAGE_MANAGER=$1
 fi
-
 
 if [ "$PACKAGE_MANAGER" == "npm" ]; then
   npm install > /dev/null 2>&1

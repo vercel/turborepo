@@ -27,7 +27,9 @@ pub const VERCEL_TOKEN_FILE: &str = "auth.json";
 pub const TURBO_TOKEN_DIR: &str = "turborepo";
 pub const TURBO_TOKEN_FILE: &str = "config.json";
 
-/// Token is the result of a successful login or an existing token. This acts as
+/// Token.
+///
+/// It's the result of a successful login or an existing token. This acts as
 /// a wrapper for a bunch of token operations, like validation. We explicitly do
 /// not store any information about the underlying token for a few reasons, like
 /// having a token invalidated on the web but not locally.
