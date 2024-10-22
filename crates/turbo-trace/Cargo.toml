@@ -7,14 +7,16 @@ license = "MIT"
 [dependencies]
 camino.workspace = true
 clap = { version = "4.5.17", features = ["derive"] }
+futures = { workspace = true }
 globwalk = { version = "0.1.0", path = "../turborepo-globwalk" }
 miette = { workspace = true, features = ["fancy"] }
 oxc_resolver = { version = "2.0.0" }
-swc_common = { workspace = true }
+swc_common = { workspace = true, features = ["concurrent"] }
 swc_ecma_ast = { workspace = true }
 swc_ecma_parser = { workspace = true }
 swc_ecma_visit = { workspace = true }
 thiserror = { workspace = true }
+tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 turbopath = { workspace = true }

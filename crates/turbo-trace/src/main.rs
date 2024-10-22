@@ -21,7 +21,8 @@ struct Args {
     reverse: bool,
 }
 
-fn main() -> Result<(), PathError> {
+#[tokio::main]
+async fn main() -> Result<(), PathError> {
     tracing_subscriber::fmt::init();
     let args = Args::parse();
 
@@ -40,9 +41,9 @@ fn main() -> Result<(), PathError> {
     let tracer = Tracer::new(abs_cwd, files, args.ts_config);
 
     let result = if args.reverse {
-        tracer.reverse_trace()
+        tracer.reverse_trace().await
     } else {
-        tracer.trace(args.depth)
+        tracer.trace(args.depth).await
     };
 
     if !result.errors.is_empty() {

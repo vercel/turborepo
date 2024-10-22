@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fs, rc::Rc};
+use std::{collections::HashMap, sync::Arc};
 
 use camino::Utf8PathBuf;
 use globwalk::WalkType;
@@ -11,6 +11,7 @@ use swc_ecma_ast::EsVersion;
 use swc_ecma_parser::{lexer::Lexer, Capturing, EsSyntax, Parser, Syntax, TsSyntax};
 use swc_ecma_visit::VisitWith;
 use thiserror::Error;
+use tokio::{sync::Mutex, task::JoinSet};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError};
 
 use crate::import_finder::ImportFinder;
@@ -23,7 +24,7 @@ pub struct SeenFile {
 pub struct Tracer {
     files: Vec<(AbsoluteSystemPathBuf, usize)>,
     ts_config: Option<AbsoluteSystemPathBuf>,
-    source_map: Rc<SourceMap>,
+    source_map: Arc<SourceMap>,
     cwd: AbsoluteSystemPathBuf,
 }
 
@@ -69,17 +70,17 @@ impl Tracer {
             files,
             ts_config,
             cwd,
-            source_map: Rc::new(SourceMap::default()),
+            source_map: Arc::new(SourceMap::default()),
         }
     }
 
-    pub fn get_imports_from_file(
+    pub async fn get_imports_from_file(
         &self,
         resolver: &Resolver,
         file_path: &AbsoluteSystemPath,
     ) -> Result<(Vec<AbsoluteSystemPathBuf>, SeenFile), TraceError> {
         // Read the file content
-        let Ok(file_content) = fs::read_to_string(&file_path) else {
+        let Ok(file_content) = tokio::fs::read_to_string(&file_path).await else {
             return Err(TraceError::FileNotFound(file_path.to_owned()));
         };
 
@@ -151,18 +152,21 @@ impl Tracer {
         Ok((files, SeenFile { ast: Some(module) }))
     }
 
-    pub fn trace_file(
+    pub async fn trace_file(
         &mut self,
         resolver: &Resolver,
         file_path: AbsoluteSystemPathBuf,
         depth: usize,
         seen: &mut HashMap<AbsoluteSystemPathBuf, SeenFile>,
     ) -> Result<(), TraceError> {
+        if matches!(file_path.extension(), Some("css") | Some("json")) {
+            return Ok(());
+        }
         if seen.contains_key(&file_path) {
             return Ok(());
         }
 
-        let (imports, seen_file) = self.get_imports_from_file(resolver, &file_path)?;
+        let (imports, seen_file) = self.get_imports_from_file(resolver, &file_path).await?;
         self.files
             .extend(imports.into_iter().map(|import| (import, depth + 1)));
 
@@ -185,11 +189,10 @@ impl Tracer {
             });
         }
 
-        println!("Resolver options: {:?}", options);
         Resolver::new(options)
     }
 
-    pub fn trace(mut self, max_depth: Option<usize>) -> TraceResult {
+    pub async fn trace(mut self, max_depth: Option<usize>) -> TraceResult {
         let mut errors = vec![];
         let mut seen: HashMap<AbsoluteSystemPathBuf, SeenFile> = HashMap::new();
         let resolver = self.create_resolver();
@@ -200,7 +203,10 @@ impl Tracer {
                     continue;
                 }
             }
-            if let Err(err) = self.trace_file(&resolver, file_path, file_depth, &mut seen) {
+            if let Err(err) = self
+                .trace_file(&resolver, file_path, file_depth, &mut seen)
+                .await
+            {
                 errors.push(err);
             }
         }
@@ -211,7 +217,7 @@ impl Tracer {
         }
     }
 
-    pub fn reverse_trace(mut self) -> TraceResult {
+    pub async fn reverse_trace(mut self) -> TraceResult {
         let files = match globwalk::globwalk(
             &self.cwd,
             &[
@@ -233,27 +239,41 @@ impl Tracer {
             }
         };
 
-        let resolver = self.create_resolver();
+        let mut futures = JoinSet::new();
+
+        let resolver = Arc::new(self.create_resolver());
+        let shared_self = Arc::new(self);
+
+        for file in files {
+            let shared_self = shared_self.clone();
+            let resolver = resolver.clone();
+            futures.spawn(async move {
+                let (imported_files, seen_file) =
+                    shared_self.get_imports_from_file(&resolver, &file).await?;
+                for import in imported_files {
+                    if shared_self
+                        .files
+                        .iter()
+                        .any(|(source, _)| import.as_path() == source.as_path())
+                    {
+                        return Ok(Some((file, seen_file)));
+                    }
+                }
+
+                Ok(None)
+            });
+        }
 
         let mut usages = HashMap::new();
         let mut errors = Vec::new();
-        for file in files {
-            match self.get_imports_from_file(&resolver, &file) {
-                Ok((imported_files, seen_file)) => {
-                    for import in imported_files {
-                        if self
-                            .files
-                            .iter()
-                            .any(|(source, _)| import.as_path() == source.as_path())
-                        {
-                            usages.insert(file, seen_file);
-                            break;
-                        }
-                    }
+
+        while let Some(result) = futures.join_next().await {
+            match result.unwrap() {
+                Ok(Some((path, file))) => {
+                    usages.insert(path, file);
                 }
-                Err(e) => {
-                    errors.push(e);
-                }
+                Ok(None) => {}
+                Err(err) => errors.push(err),
             }
         }
 

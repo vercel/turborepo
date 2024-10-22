@@ -3,10 +3,8 @@ use std::sync::Arc;
 use async_graphql::{Object, SimpleObject};
 use camino::Utf8PathBuf;
 use itertools::Itertools;
-use miette::Report;
 use swc_ecma_ast::EsVersion;
 use swc_ecma_parser::{EsSyntax, Syntax, TsSyntax};
-use tracing::error;
 use turbo_trace::Tracer;
 use turbopath::AbsoluteSystemPathBuf;
 
@@ -181,7 +179,7 @@ impl File {
             ts_config,
         );
 
-        let mut result = tracer.trace(depth);
+        let mut result = tracer.trace(depth).await;
         // Remove the file itself from the result
         result.files.remove(&self.path);
         TraceResult::new(result, self.run.clone())
@@ -204,7 +202,7 @@ impl File {
             ts_config,
         );
 
-        let mut result = tracer.reverse_trace();
+        let mut result = tracer.reverse_trace().await;
         // Remove the file itself from the result
         result.files.remove(&self.path);
         TraceResult::new(result, self.run.clone())
