@@ -27,19 +27,20 @@ fi
 # `corepack enable` with no specified packageManager does not work for npm.
 pkgManagerName="${pkgManager%%@*}"
 
-# If we're in a prysk test, set the corepack install directory to the prysk temp directory.
+# Set the corepack install directory to a temp directory (either prysk temp or provided dir).
 # This will help isolate from the rest of the system, especially when running tests on a dev machine.
 if [ "$PRYSK_TEMP" == "" ]; then
-  # Enable corepack so that the packageManager setting in package.json is respected.
-  corepack enable $pkgManagerName
+  COREPACK_INSTALL_DIR="$dir/corepack"
+  mkdir -p "${COREPACK_INSTALL_DIR}"
+  export PATH=${COREPACK_INSTALL_DIR}:$PATH
 else
   COREPACK_INSTALL_DIR="${PRYSK_TEMP}/corepack"
   mkdir -p "${COREPACK_INSTALL_DIR}"
   export PATH=${COREPACK_INSTALL_DIR}:$PATH
-  # Enable corepack so that the packageManager setting in package.json is respected.
-  corepack enable $pkgManagerName "--install-directory=${COREPACK_INSTALL_DIR}"
 fi
 
+# Enable corepack so that the packageManager setting in package.json is respected.
+corepack enable $pkgManagerName "--install-directory=${COREPACK_INSTALL_DIR}"
 
 
 

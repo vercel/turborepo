@@ -216,7 +216,7 @@ mod test {
 
     fn get_script_command(script_name: &str) -> Command {
         let mut cmd = Command::new("node");
-        cmd.args([format!("./test/scripts/{script_name}")]);
+        cmd.args([format!("./test-data/scripts/{script_name}")]);
         cmd
     }
 
