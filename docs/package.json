@@ -6,7 +6,7 @@
     "src"
   ],
   "scripts": {
-    "check-links": "tsx src/validate-docs-links.ts"
+    "check-links": "tsx --env-file=.env src/validate-docs-links.ts"
   },
   "devDependencies": {
     "@types/github-slugger": "^1.3.0",
