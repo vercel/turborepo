@@ -83,7 +83,7 @@ pub enum CacheError {
     ConfigCacheInvalidBase,
     #[error("Unable to hash config cache inputs")]
     ConfigCacheError,
-    #[error("Insufficient permissions to write to remote cache. Please verify that your role has write access for Remote Cache Artifact at https://vercel.com/docs/accounts/team-members-and-roles/access-roles/team-level-roles")]
+    #[error("Insufficient permissions to write to remote cache. Please verify that your role has write access for Remote Cache Artifact at https://vercel.com/docs/accounts/team-members-and-roles/access-roles/team-level-roles?resource=Remote+Cache+Artifact")]
     ForbiddenRemoteCacheWrite,
 }
 
