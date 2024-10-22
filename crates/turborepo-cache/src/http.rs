@@ -276,6 +276,9 @@ impl HTTPCache {
             turborepo_api_client::Error::ReqwestError(e) if e.is_connect() => {
                 CacheError::ConnectError
             }
+            turborepo_api_client::Error::UnknownStatus { code, .. } if code == "forbidden" => {
+                CacheError::ForbiddenRemoteCacheWrite
+            }
             e => e.into(),
         }
     }
@@ -394,7 +397,7 @@ mod test {
                 backtrace: Backtrace::capture(),
             },
         );
-        assert_snapshot!(err.to_string(), @"failed to contact remote cache: unknown status forbidden: Not authorized");
+        assert_snapshot!(err.to_string(), @"Insufficient permissions to write to remote cache. Please verify that your role has write access for Remote Cache Artifact at https://vercel.com/docs/accounts/team-members-and-roles/access-roles/team-level-roles");
     }
 
     #[test]
