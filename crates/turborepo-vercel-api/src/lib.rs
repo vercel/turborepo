@@ -57,7 +57,9 @@ impl Membership {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum Role {
+    // ordered by access-level
     Owner,
+    Admin,
     Member,
     Developer,
     Contributor,
