@@ -25,15 +25,17 @@ pub fn setup_fixture(
     Ok(())
 }
 
+/// Executes a command with different arguments in a specific fixture and
+/// package manager. Creates a snapshot file for each set of arguments
 #[macro_export]
 macro_rules! check {
-    ($fixture:expr, $package_manager:expr, $($name:expr => $query:expr,)*) => {
+    ($fixture:expr, $package_manager:expr, $command:expr, $($name:expr => $query:expr,)*) => {
         {
             let tempdir = tempfile::tempdir()?;
             crate::common::setup_fixture($fixture, None, tempdir.path())?;
             $(
                 let output = assert_cmd::Command::cargo_bin("turbo")?
-                    .arg("query")
+                .arg($command)
                     .arg($query)
                     .current_dir(tempdir.path())
                     .output()?;

@@ -6,6 +6,7 @@ fn test_double_symlink() -> Result<(), anyhow::Error> {
     check!(
         "oxc_repro",
         "npm@10.5.0",
+        "query",
         "get_dependencies" => "query {
                  file(path: \"./index.js\") {
                     path
@@ -24,6 +25,7 @@ fn test_trace() -> Result<(), anyhow::Error> {
     check!(
         "turbo_trace",
         "npm@10.5.0",
+        "query",
         "get `main.ts`" => "query { file(path: \"main.ts\") { path } }",
         "get `main.ts` with dependencies" => "query { file(path: \"main.ts\") { path, dependencies { files { items { path } } } } }",
         "get `button.tsx` with dependencies" => "query { file(path: \"button.tsx\") { path, dependencies { files { items { path } } } } }",
