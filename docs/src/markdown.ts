@@ -112,9 +112,7 @@ const prepareDocumentMapEntry = async (
 
     return [normalizedUrlPath, { content, path, headings, frontMatter }];
   } catch (error) {
-    // TODO: handle error without needing GitHub
-    // setFailed(`Error preparing document map for file ${path}: ${error}`);
-    return ["", {} as Document];
+    throw new Error(`Error preparing document map for file ${path}: ${error}`);
   }
 };
 
@@ -203,7 +201,7 @@ const traverseTreeAndValidateLinks = (
       }
     });
   } catch (error) {
-    setFailed("Error traversing tree: " + error);
+    throw new Error(`Error traversing tree: ${error}`);
   }
 
   return errors;
