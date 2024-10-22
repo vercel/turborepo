@@ -32,7 +32,7 @@ macro_rules! check {
     ($fixture:expr, $package_manager:expr, $command:expr, $($name:expr => $query:expr,)*) => {
         {
             let tempdir = tempfile::tempdir()?;
-            crate::common::setup_fixture($fixture, None, tempdir.path())?;
+            crate::common::setup_fixture($fixture, $package_manager, tempdir.path())?;
             $(
                 let output = assert_cmd::Command::cargo_bin("turbo")?
                 .arg($command)
