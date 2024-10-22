@@ -53,12 +53,6 @@ importers:
 
   docs:
     dependencies:
-      '@actions/core':
-        specifier: 1.11.1
-        version: 1.11.1
-      '@actions/github':
-        specifier: 5.1.1
-        version: 5.1.1
       github-slugger:
         specifier: 2.0.0
         version: 2.0.0
@@ -81,15 +75,9 @@ importers:
         specifier: 5.0.0
         version: 5.0.0
     devDependencies:
-      '@octokit/webhooks-definitions':
-        specifier: 3.67.3
-        version: 3.67.3
       '@types/node':
         specifier: 22.7.8
         version: 22.7.8
-      '@vercel/ncc':
-        specifier: 0.38.2
-        version: 0.38.2
       tsx:
         specifier: 4.19.1
         version: 4.19.1
@@ -1019,13 +1007,6 @@ packages:
     dependencies:
       '@actions/http-client': 2.1.1
       uuid: 8.3.2
-    dev: false
-
-  /@actions/core@1.11.1:
-    resolution: {integrity: sha512-hXJCSrkwfA46Vd9Z3q4cpEpHB1rL5NG04+/rbqW9d3+CSvtB1tYe8UTpAlixa1vj0m/ULglfEK2UKxMGxCxv5A==}
-    dependencies:
-      '@actions/exec': 1.1.1
-      '@actions/http-client': 2.1.1
     dev: false
 
   /@actions/exec@1.1.1:
@@ -2789,11 +2770,6 @@ packages:
       '@octokit/openapi-types': 12.11.0
     dev: false
 
-  /@octokit/webhooks-definitions@3.67.3:
-    resolution: {integrity: sha512-do4Z1r2OVhuI0ihJhQ8Hg+yPWnBYEBNuFNCrvtPKoYT1w81jD7pBXgGe86lYuuNirkDHb0Nxt+zt4O5GiFJfgA==}
-    deprecated: Use @octokit/webhooks-types, @octokit/webhooks-schemas, or @octokit/webhooks-examples instead. See https://github.com/octokit/webhooks/issues/447
-    dev: true
-
   /@pkgjs/parseargs@0.11.0:
     resolution: {integrity: sha512-+1VkjdD0QBLPodGrJUeqarH8VAIvQODIbwh9XpP5Syisf7YoQgsJKPNFoqqLQlu+VQ/tVSshMR6loPMn8U+dPg==}
     engines: {node: '>=14'}
@@ -3410,11 +3386,6 @@ packages:
 
   /@vercel/ncc@0.36.0:
     resolution: {integrity: sha512-/ZTUJ/ZkRt694k7KJNimgmHjtQcRuVwsST2Z6XfYveQIuBbHR+EqkTc1jfgPkQmMyk/vtpxo3nVxe8CNuau86A==}
-    hasBin: true
-    dev: true
-
-  /@vercel/ncc@0.38.2:
-    resolution: {integrity: sha512-3yel3jaxUg9pHBv4+KeC9qlbdZPug+UMtUOlhvpDYCMSgcNSrS2Hv1LoqMsOV7hf2lYscx+BESfJOIla1WsmMQ==}
     hasBin: true
     dev: true
 

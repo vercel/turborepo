@@ -1,4 +1,3 @@
-import { inspect } from "util";
 import fs from "fs/promises";
 import path from "path";
 import { unified } from "unified";
@@ -8,7 +7,33 @@ import rehypeRaw from "rehype-raw";
 import { visit } from "unist-util-visit";
 import GitHubSlugger from "github-slugger";
 import matter from "gray-matter";
-import { DOCS_PATH, Document, EXCLUDED_HASHES, LinkError } from "./config";
+
+export interface Document {
+  /** the Markdown file itself, without from-matter */
+  content: string;
+
+  /** the path to this markdown file */
+  path: string;
+
+  /** the headings found in this markdown file */
+  headings: string[];
+
+  frontMatter: {
+    title: string;
+    description: string;
+  };
+}
+
+export type ErrorType = "link" | "hash" | "source" | "related";
+
+export type LinkError = {
+  type: ErrorType;
+  href: string;
+  doc: Document;
+};
+
+export const DOCS_PATH = ".";
+export const EXCLUDED_HASHES = ["top"];
 
 const slugger = new GitHubSlugger();
 
@@ -40,8 +65,6 @@ const getHeadingsFromMarkdownTree = (
 ): string[] => {
   const headings: string[] = [];
   slugger.reset();
-
-  // console.log(inspect(tree, { depth: null, colors: false }));
 
   visit(tree, "heading", (node) => {
     let headingText = "";
@@ -179,17 +202,13 @@ const validateHashLink = (doc: Document, href: string) => {
     doc,
   };
   const { content, ...docWithoutContent } = doc;
-  console.log(docWithoutContent);
   return [linkError];
 };
-
-// corresponds to vfile.VFile['contents']
-type Tree = string | Uint8Array;
 
 /** Traverse the document tree and validate links */
 const traverseTreeAndValidateLinks = (
   documentMap: Map<string, Document>,
-  tree: any, // TODO: Tree
+  tree: unknown,
   doc: Document
 ): LinkError[] => {
   let errors: LinkError[] = [];

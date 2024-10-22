@@ -1,4 +1,3 @@
-import { ReportRow } from "./config";
 import { collectLinkErrors } from "./markdown";
 
 /*
@@ -26,7 +25,7 @@ const validateAllInternalLinks = async (): Promise<void> => {
     return;
   }
 
-  const reportRows: ReportRow[] = errorReports
+  const reportRows = errorReports
     .map((linkError) => ({
       link: linkError.href,
       type: linkError.type,
@@ -34,7 +33,12 @@ const validateAllInternalLinks = async (): Promise<void> => {
     }))
     .sort((a, b) => a.type.localeCompare(b.type));
 
-  console.log("This PR introduces broken links to the docs:");
+  const plural = errorReports.length > 1;
+  console.log(
+    `Found ${plural ? "these" : "a"} broken link${
+      plural ? "s" : ""
+    } in the docs:`
+  );
   console.table(reportRows);
   process.exit(1);
 };
