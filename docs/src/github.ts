@@ -140,7 +140,6 @@ export const reportErrorsToGitHub = async (reportRows: ReportRow[]) => {
 
   try {
     const botComment = await findBotComment(octokit, pullRequest);
-    let commentUrl: string;
 
     if (reportRows.length > 0) {
       const errorComment = [
@@ -160,17 +159,15 @@ export const reportErrorsToGitHub = async (reportRows: ReportRow[]) => {
         "Thank you :pray:",
       ].join("\n");
 
-      let comment;
-
-      comment = `${COMMENT_TAG}\n${errorComment}`;
-      if (botComment) {
-        commentUrl = await updateComment(octokit, comment, botComment);
-      } else {
-        commentUrl = await createComment(octokit, comment, pullRequest);
-      }
+      await updateComment(
+        octokit,
+        `${COMMENT_TAG}\n${errorComment}`,
+        botComment ?? pullRequest
+      );
       process.exit(1);
     }
 
+    let commentUrl: string;
     if (botComment) {
       const comment = `${COMMENT_TAG}\nAll broken links are now fixed, thank you!`;
       commentUrl = await updateComment(octokit, comment, botComment);
