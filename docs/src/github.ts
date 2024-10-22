@@ -130,12 +130,32 @@ export const updateCheckStatus = async (
 };
 
 export const reportErrorsToGitHub = async (reportRows: ReportRow[]) => {
-  const octokit = getOctokit(process.env.GITHUB_TOKEN!);
+  const { GITHUB_TOKEN, GITHUB_REPOSITORY, CI, GITHUB_ACTIONS } = process.env;
+
+  if (!CI) {
+    // we only want to run this in CI
+    return;
+  }
+
+  if (!GITHUB_ACTIONS) {
+    // we only want to run this in GitHub Actions
+    return;
+  }
+
+  if (!GITHUB_TOKEN) {
+    throw new Error("No GITHUB_TOKEN found, skipping GitHub reporting");
+  }
+
+  if (!GITHUB_REPOSITORY) {
+    throw new Error("No GITHUB_REPOSITORY found, skipping GitHub reporting");
+  }
+
+  const octokit = getOctokit(GITHUB_TOKEN);
 
   const pullRequest = context.payload.pull_request as PullRequest;
 
   if (!pullRequest) {
-    return;
+    throw new Error("No pullRequest found, skipping GitHub reporting");
   }
 
   try {
