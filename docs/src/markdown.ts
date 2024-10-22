@@ -1,13 +1,12 @@
 import fs from "fs/promises";
 import path from "path";
-import unified from "unified";
-import markdown from "remark-parse";
-import remarkToRehype from "remark-rehype";
-import raw from "rehype-raw";
-import visit from "unist-util-visit";
+import { unified } from "unified";
+import remarkParse from "remark-parse";
+import remarkRehype from "remark-rehype";
+import rehypeRaw from "rehype-raw";
+import { visit } from "unist-util-visit";
 import GitHubSlugger from "github-slugger";
 import matter from "gray-matter";
-import { setFailed } from "./github";
 import { DOCS_PATH, Document, EXCLUDED_HASHES, LinkError } from "./config";
 
 const slugger = new GitHubSlugger();
@@ -58,9 +57,9 @@ const getHeadingsFromMarkdownTree = (
 
 /** Create a processor to parse MDX content */
 const markdownProcessor = unified()
-  .use(markdown)
-  .use(remarkToRehype, { allowDangerousHTML: true })
-  .use(raw)
+  .use(remarkParse)
+  .use(remarkRehype)
+  .use(rehypeRaw)
   .use(function compiler() {
     // A compiler is required, and we only need the AST, so we can
     // just return it.
@@ -79,6 +78,19 @@ const normalizePath = (filePath: string): string => {
   return normalized;
 };
 
+const validateFrontmatter = (path: string, data: Record<string, unknown>) => {
+  if (!data.title) {
+    throw new Error(`Document is missing a title: ${path}`);
+  }
+  if (!data.description) {
+    throw new Error(`Document is missing a description: ${path}`);
+  }
+  return data as {
+    title: string;
+    description: string;
+  };
+};
+
 /**
  * Create a map of documents with their paths as keys and
  * document content and metadata as values
@@ -87,21 +99,21 @@ const normalizePath = (filePath: string): string => {
  * doc pages: `api/example`
  */
 const prepareDocumentMapEntry = async (
-  filePath: string
+  path: string
 ): Promise<[string, Document]> => {
   try {
-    const mdxContent = await fs.readFile(filePath, "utf8");
+    const mdxContent = await fs.readFile(path, "utf8");
     const { content, data } = matter(mdxContent);
+    const frontMatter = validateFrontmatter(path, data);
+
     const tree = markdownProcessor.parse(content);
     const headings = getHeadingsFromMarkdownTree(tree);
-    const normalizedUrlPath = normalizePath(filePath);
+    const normalizedUrlPath = normalizePath(path);
 
-    return [
-      normalizedUrlPath,
-      { body: content, path: filePath, headings, ...data },
-    ];
+    return [normalizedUrlPath, { content, path, headings, frontMatter }];
   } catch (error) {
-    setFailed(`Error preparing document map for file ${filePath}: ${error}`);
+    // TODO: handle error without needing GitHub
+    // setFailed(`Error preparing document map for file ${path}: ${error}`);
     return ["", {} as Document];
   }
 };
@@ -212,7 +224,8 @@ export const collectLinkErrors = async (): Promise<LinkError[]> => {
     if (!doc) {
       return null;
     }
-    const { contents: tree } = await markdownProcessor.process(doc.body);
+    const vFile = await markdownProcessor.process(doc.content);
+    const tree = vFile.result;
     const linkErrors = traverseTreeAndValidateLinks(documentMap, tree, doc);
     if (linkErrors.length > 0) {
       return linkErrors;

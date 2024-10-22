@@ -1,34 +1,22 @@
-import * as github from "@actions/github";
 import { setFailed } from "@actions/core";
-import { WebhookPayload } from "@actions/github/lib/interfaces";
+import { context, getOctokit } from "@actions/github";
+import { PullRequest } from "@octokit/webhooks-definitions/schema";
 import { ReportRow } from "./config";
 
 interface Comment {
   id: number;
 }
 
-export { setFailed };
 export const COMMENT_TAG = "<!-- LINK_CHECKER_COMMENT -->";
 
-const { context, getOctokit } = github;
-const octokit = getOctokit(process.env.GITHUB_TOKEN!);
-const { owner, repo } = context.repo;
+type Octokit = ReturnType<typeof getOctokit>;
 
-export type PullRequest = NonNullable<WebhookPayload["pull_request"]> & {
-  head: {
-    sha: string;
-    repo: {
-      fork: boolean;
-    };
-  };
-};
-
-export const pullRequest = context.payload.pull_request as PullRequest;
-
-export async function findBotComment(
+export const findBotComment = async (
+  octokit: Octokit,
   pullRequest: PullRequest
-): Promise<Comment | undefined> {
+): Promise<Comment | undefined> => {
   try {
+    const { owner, repo } = context.repo;
     const { data: comments } = await octokit.rest.issues.listComments({
       owner,
       repo,
@@ -40,13 +28,15 @@ export async function findBotComment(
     setFailed("Error finding bot comment: " + error);
     return undefined;
   }
-}
+};
 
-export async function updateComment(
+export const updateComment = async (
+  octokit: Octokit,
   comment: string,
   botComment: Comment
-): Promise<string> {
+): Promise<string> => {
   try {
+    const { owner, repo } = context.repo;
     const { data } = await octokit.rest.issues.updateComment({
       owner,
       repo,
@@ -59,12 +49,13 @@ export async function updateComment(
     setFailed("Error updating comment: " + error);
     return "";
   }
-}
+};
 
-export async function createComment(
+export const createComment = async (
+  octokit: Octokit,
   comment: string,
   pullRequest: PullRequest
-): Promise<string> {
+): Promise<string> => {
   if (pullRequest.head.repo.fork) {
     setFailed(
       "The action could not create a GitHub comment because it is initiated from a forked repo. View the action logs for a list of broken links."
@@ -73,6 +64,7 @@ export async function createComment(
     return "";
   } else {
     try {
+      const { owner, repo } = context.repo;
       const { data } = await octokit.rest.issues.createComment({
         owner,
         repo,
@@ -86,15 +78,14 @@ export async function createComment(
       return "";
     }
   }
-}
+};
 
-export async function updateCheckStatus(
+export const updateCheckStatus = async (
+  octokit: Octokit,
   errorsExist: boolean,
   commentUrl: string | undefined,
   pullRequest: PullRequest
-): Promise<void> {
-  const checkName = "Docs Link Validation";
-
+): Promise<void> => {
   let summary, text;
 
   if (errorsExist) {
@@ -105,19 +96,21 @@ export async function updateCheckStatus(
     summary = "No broken links found";
   }
 
+  const { owner, repo } = context.repo;
+  const title = "Docs Link Validation";
   const checkParams = {
     owner,
     repo,
-    name: checkName,
+    name: title,
     head_sha: pullRequest.head.sha,
     status: "completed",
     conclusion: errorsExist ? "failure" : "success",
     output: {
-      title: checkName,
-      summary: summary,
-      text: text,
+      title,
+      summary,
+      text,
     },
-  };
+  } as const;
 
   if (pullRequest.head.repo.fork) {
     if (errorsExist) {
@@ -134,15 +127,19 @@ export async function updateCheckStatus(
       setFailed("Failed to create check: " + error);
     }
   }
-}
+};
 
 export const reportErrorsToGitHub = async (reportRows: ReportRow[]) => {
+  const octokit = getOctokit(process.env.GITHUB_TOKEN!);
+
+  const pullRequest = context.payload.pull_request as PullRequest;
+
   if (!pullRequest) {
     return;
   }
 
   try {
-    const botComment = await findBotComment(pullRequest);
+    const botComment = await findBotComment(octokit, pullRequest);
     let commentUrl: string;
 
     if (reportRows.length > 0) {
@@ -164,22 +161,27 @@ export const reportErrorsToGitHub = async (reportRows: ReportRow[]) => {
 
       comment = `${COMMENT_TAG}\n${errorComment}`;
       if (botComment) {
-        commentUrl = await updateComment(comment, botComment);
+        commentUrl = await updateComment(octokit, comment, botComment);
       } else {
-        commentUrl = await createComment(comment, pullRequest);
+        commentUrl = await createComment(octokit, comment, pullRequest);
       }
       process.exit(1);
     }
 
     if (botComment) {
       const comment = `${COMMENT_TAG}\nAll broken links are now fixed, thank you!`;
-      commentUrl = await updateComment(comment, botComment);
+      commentUrl = await updateComment(octokit, comment, botComment);
     } else {
       commentUrl = ""; // ??
     }
 
     try {
-      await updateCheckStatus(reportRows.length > 0, commentUrl, pullRequest);
+      await updateCheckStatus(
+        octokit,
+        reportRows.length > 0,
+        commentUrl,
+        pullRequest
+      );
     } catch (error) {
       setFailed("Failed to create GitHub check: " + error);
     }

@@ -1,10 +1,16 @@
 export interface Document {
-  body: string;
+  /** the Markdown file itself, without from-matter */
+  content: string;
+
+  /** the path to this markdown file */
   path: string;
+
+  /** the headings found in this markdown file */
   headings: string[];
-  source?: string;
-  related?: {
-    links: string[];
+
+  frontMatter: {
+    title: string;
+    description: string;
   };
 }
 
