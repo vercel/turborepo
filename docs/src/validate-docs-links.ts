@@ -1,6 +1,4 @@
-import { reportErrorsToGitHub } from "./github";
 import { ReportRow } from "./config";
-import { reportErrorsLocally } from "./local";
 import { collectLinkErrors } from "./markdown";
 
 /*
@@ -20,26 +18,25 @@ import { collectLinkErrors } from "./markdown";
   comment is added to the PR.
 */
 
-/**
- * this function will return a list of `ReportRow`s, preparing for presentation
- */
-const getReportRows = async (): Promise<ReportRow[]> => {
+/** Main function that triggers link validation across .mdx files */
+const validateAllInternalLinks = async (): Promise<void> => {
   let errorReports = await collectLinkErrors();
+  if (errorReports.length === 0) {
+    console.log("Link validation was successful.");
+    return;
+  }
 
-  return errorReports
+  const reportRows: ReportRow[] = errorReports
     .map((linkError) => ({
       link: linkError.href,
       type: linkError.type,
       path: linkError.doc.path,
     }))
     .sort((a, b) => a.type.localeCompare(b.type));
-};
 
-/** Main function that triggers link validation across .mdx files */
-const validateAllInternalLinks = async (): Promise<void> => {
-  const reportRows = await getReportRows();
-  reportErrorsLocally(reportRows);
-  reportErrorsToGitHub(reportRows);
+  console.log("This PR introduces broken links to the docs:");
+  console.table(reportRows);
+  process.exit(1);
 };
 
 validateAllInternalLinks();
