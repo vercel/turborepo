@@ -162,7 +162,7 @@ impl Tracer {
                             errors.push(TraceError::PathEncoding(err));
                         }
                     },
-                    Err(ResolveError::Builtin(_)) => {}
+                    Err(ResolveError::Builtin { .. }) => {}
                     Err(_) => {
                         let (start, end) = self.source_map.span_to_char_offset(&source_file, *span);
 

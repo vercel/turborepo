@@ -843,7 +843,8 @@ mod test {
         while !root.join_component(".git").exists() {
             root = root.parent().unwrap().to_owned();
         }
-        root.join_components(&["crates", "turborepo-lib", "test", "scripts"])
+        println!("root: {root:?}");
+        root.join_components(&["crates", "turborepo-lib", "test-data", "scripts"])
     }
 
     #[test_case(false)]

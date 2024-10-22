@@ -718,7 +718,7 @@ dependencies = [
  "biome_text_size",
  "bitflags 2.5.0",
  "bpaf",
- "oxc_resolver",
+ "oxc_resolver 1.11.0",
  "serde",
  "termcolor",
  "unicode-width",
@@ -2626,16 +2626,15 @@ dependencies = [
 
 [[package]]
 name = "insta"
-version = "1.34.0"
+version = "1.40.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5d64600be34b2fcfc267740a243fa7744441bb4947a619ac4e5bb6507f35fbfc"
+checksum = "6593a41c7a73841868772495db7dc1e8ecab43bb5c0b6da2059246c4b506ab60"
 dependencies = [
  "console",
  "lazy_static",
  "linked-hash-map",
  "serde",
  "similar",
- "yaml-rust",
 ]
 
 [[package]]
@@ -3583,6 +3582,26 @@ name = "oxc_resolver"
 version = "1.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e7fe4d07afdfcf6b1d7fb952e6691d82692a54b71964a377cf49f3e47dac283d"
+dependencies = [
+ "cfg-if",
+ "dashmap 6.1.0",
+ "dunce",
+ "indexmap 2.2.6",
+ "json-strip-comments",
+ "once_cell",
+ "rustc-hash 2.0.0",
+ "serde",
+ "serde_json",
+ "simdutf8",
+ "thiserror",
+ "tracing",
+]
+
+[[package]]
+name = "oxc_resolver"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9cf8bcda84674ae69228a823dcdb81eac9a398d99f1bbc1dbf00623009fc11c1"
 dependencies = [
  "cfg-if",
  "dashmap 6.1.0",
@@ -6027,9 +6046,13 @@ dependencies = [
  "anyhow",
  "assert_cmd",
  "build-target",
+ "camino",
+ "insta",
  "itertools 0.10.5",
  "miette",
  "pretty_assertions",
+ "serde_json",
+ "tempfile",
  "turborepo-lib",
  "winapi",
 ]
@@ -6041,7 +6064,7 @@ dependencies = [
  "camino",
  "clap",
  "miette",
- "oxc_resolver",
+ "oxc_resolver 2.0.0",
  "swc_common",
  "swc_ecma_ast",
  "swc_ecma_parser",
@@ -7428,15 +7451,6 @@ dependencies = [
  "libc",
  "linux-raw-sys 0.4.13",
  "rustix 0.38.31",
-]
-
-[[package]]
-name = "yaml-rust"
-version = "0.4.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "56c1936c4cc7a1c9ab21a1ebb602eb942ba868cbd44a99cb7cdc5892335e1c85"
-dependencies = [
- "linked-hash-map",
 ]
 
 [[package]]

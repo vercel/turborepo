@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use async_graphql::{Object, SimpleObject};
+use camino::Utf8PathBuf;
 use itertools::Itertools;
 use swc_ecma_ast::EsVersion;
 use swc_ecma_parser::{EsSyntax, Syntax, TsSyntax};
@@ -68,10 +69,11 @@ impl File {
     }
 }
 
-#[derive(SimpleObject, Debug)]
+#[derive(SimpleObject, Debug, Default)]
 pub struct TraceError {
     message: String,
     path: Option<String>,
+    import: Option<String>,
     start: Option<usize>,
     end: Option<usize>,
 }
@@ -83,27 +85,32 @@ impl From<turbo_trace::TraceError> for TraceError {
             turbo_trace::TraceError::FileNotFound(file) => TraceError {
                 message,
                 path: Some(file.to_string()),
-                start: None,
-                end: None,
+                ..Default::default()
             },
             turbo_trace::TraceError::PathEncoding(_) => TraceError {
                 message,
-                path: None,
-                start: None,
-                end: None,
+                ..Default::default()
             },
             turbo_trace::TraceError::RootFile(path) => TraceError {
                 message,
                 path: Some(path.to_string()),
-                start: None,
-                end: None,
+                ..Default::default()
             },
-            turbo_trace::TraceError::Resolve { span, text } => TraceError {
-                message,
-                path: Some(text.name().to_string()),
-                start: Some(span.offset()),
-                end: Some(span.offset() + span.len()),
-            },
+            turbo_trace::TraceError::Resolve { span, text } => {
+                let import = text
+                    .inner()
+                    .read_span(&span, 1, 1)
+                    .ok()
+                    .map(|s| String::from_utf8_lossy(s.data()).to_string());
+
+                TraceError {
+                    message,
+                    import,
+                    path: Some(text.name().to_string()),
+                    start: Some(span.offset()),
+                    end: Some(span.offset() + span.len()),
+                }
+            }
         }
     }
 }
@@ -147,11 +154,21 @@ impl File {
         Ok(self.path.to_string())
     }
 
-    async fn dependencies(&self, depth: Option<usize>) -> TraceResult {
+    async fn dependencies(&self, depth: Option<usize>, ts_config: Option<String>) -> TraceResult {
+        let ts_config = match ts_config {
+            Some(ts_config) => Some(Utf8PathBuf::from(ts_config)),
+            None => self
+                .path
+                .ancestors()
+                .skip(1)
+                .find(|p| p.join_component("tsconfig.json").exists())
+                .map(|p| p.as_path().to_owned()),
+        };
+
         let tracer = Tracer::new(
             self.run.repo_root().to_owned(),
             vec![self.path.clone()],
-            None,
+            ts_config,
         );
 
         let mut result = tracer.trace(depth);
