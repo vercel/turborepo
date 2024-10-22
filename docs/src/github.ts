@@ -86,25 +86,33 @@ export const updateCheckStatus = async (
   commentUrl: string | undefined,
   pullRequest: PullRequest
 ): Promise<void> => {
-  let summary, text;
+  let summary, text, conclusion;
 
   if (errorsExist) {
     summary =
       "This PR introduces broken links to the docs. Click details for a list.";
     text = `[See the comment for details](${commentUrl})`;
+    conclusion = "failure" as const;
+
+    if (pullRequest.head.repo.fork) {
+      setFailed(
+        "This PR introduces broken links to the docs. The action could not create a GitHub check because it is initiated from a forked repo."
+      );
+    }
   } else {
     summary = "No broken links found";
+    conclusion = "success" as const;
+    text = "";
   }
 
-  const { owner, repo } = context.repo;
   const title = "Docs Link Validation";
   const checkParams = {
-    owner,
-    repo,
+    owner: context.repo.owner,
+    repo: context.repo.repo,
     name: title,
     head_sha: pullRequest.head.sha,
     status: "completed",
-    conclusion: errorsExist ? "failure" : "success",
+    conclusion,
     output: {
       title,
       summary,
@@ -112,15 +120,7 @@ export const updateCheckStatus = async (
     },
   } as const;
 
-  if (pullRequest.head.repo.fork) {
-    if (errorsExist) {
-      setFailed(
-        "This PR introduces broken links to the docs. The action could not create a GitHub check because it is initiated from a forked repo."
-      );
-    } else {
-      console.log("Link validation was successful.");
-    }
-  } else {
+  if (!pullRequest.head.repo.fork) {
     try {
       await octokit.rest.checks.create(checkParams);
     } catch (error) {

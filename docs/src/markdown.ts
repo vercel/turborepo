@@ -1,3 +1,4 @@
+import { inspect } from "util";
 import fs from "fs/promises";
 import path from "path";
 import { unified } from "unified";
@@ -40,6 +41,8 @@ const getHeadingsFromMarkdownTree = (
   const headings: string[] = [];
   slugger.reset();
 
+  // console.log(inspect(tree, { depth: null, colors: false }));
+
   visit(tree, "heading", (node) => {
     let headingText = "";
     // Account for headings with inline code blocks by concatenating the
@@ -49,7 +52,8 @@ const getHeadingsFromMarkdownTree = (
         headingText += innerNode.value;
       }
     });
-    headings.push(slugger.slug(headingText));
+    const slugified = slugger.slug(headingText);
+    headings.push(slugified);
   });
 
   return headings;
@@ -161,16 +165,22 @@ const validateInternalLink =
 /** Checks if the hash links point to existing sections within the same document */
 const validateHashLink = (doc: Document, href: string) => {
   const hashLink = href.replace("#", "");
-
-  if (!EXCLUDED_HASHES.includes(hashLink) && !doc.headings.includes(hashLink)) {
-    let linkError: LinkError = {
-      type: "hash",
-      href,
-      doc,
-    };
-    return [linkError];
+  if (EXCLUDED_HASHES.includes(hashLink)) {
+    return [];
   }
-  return [];
+
+  if (doc.headings.includes(hashLink)) {
+    return [];
+  }
+
+  let linkError: LinkError = {
+    type: "hash",
+    href,
+    doc,
+  };
+  const { content, ...docWithoutContent } = doc;
+  console.log(docWithoutContent);
+  return [linkError];
 };
 
 // corresponds to vfile.VFile['contents']
