@@ -3600,8 +3600,9 @@ dependencies = [
 
 [[package]]
 name = "oxc_resolver"
-version = "1.12.0"
-source = "git+https://github.com/nicholaslyang/oxc-resolver.git?branch=symlink-hotfix#f25aec79673ad8007733b058c301e54cf69a6e67"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9cf8bcda84674ae69228a823dcdb81eac9a398d99f1bbc1dbf00623009fc11c1"
 dependencies = [
  "cfg-if",
  "dashmap 6.1.0",
@@ -6060,7 +6061,7 @@ dependencies = [
  "camino",
  "clap",
  "miette",
- "oxc_resolver 1.12.0",
+ "oxc_resolver 2.0.0",
  "swc_common",
  "swc_ecma_ast",
  "swc_ecma_parser",
