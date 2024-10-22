@@ -30,7 +30,7 @@ const getReportRows = async (): Promise<ReportRow[]> => {
     .map((linkError) => ({
       link: linkError.href,
       type: linkError.type,
-      path: linkError.doc.path, //.replace("../../../", "")// [/${docPath}](https://github.com/vercel/turborepo/blob/${pullRequest.head.sha}/${docPath}) | \n`;
+      path: linkError.doc.path,
     }))
     .sort((a, b) => a.type.localeCompare(b.type));
 };

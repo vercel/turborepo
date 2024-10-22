@@ -151,8 +151,11 @@ export const reportErrorsToGitHub = async (reportRows: ReportRow[]) => {
         "",
         "",
         "| Broken link | Type | File |",
-        "| ----------- | ----------- | ----------- |",
-        ...reportRows,
+        "| ----------- | ---- | ---- |",
+        ...reportRows.map(({ link, path, type }) => {
+          const docPath = path.replace("../../../", "");
+          return `| ${link} | ${type} | [/${docPath}](https://github.com/vercel/turborepo/blob/${pullRequest.head.sha}/${docPath}) |`;
+        }),
         "",
         "Thank you :pray:",
       ].join("\n");
