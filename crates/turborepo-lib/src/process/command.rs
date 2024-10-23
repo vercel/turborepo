@@ -9,6 +9,7 @@ use turbopath::AbsoluteSystemPathBuf;
 
 /// A command builder that can be used to build both regular
 /// child processes and ones spawned hooked up to a PTY
+#[derive(Debug, Clone)]
 pub struct Command {
     program: OsString,
     args: Vec<OsString>,
