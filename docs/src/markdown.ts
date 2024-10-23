@@ -96,14 +96,11 @@ const markdownProcessor = unified()
     };
   });
 
-const normalizePath = (filePath: string): string => {
-  const normalized = filePath
+const filePathToUrl = (filePath: string): string =>
+  filePath
     .replace("repo-docs", "/repo/docs")
     .replace("pack-docs", "/pack/docs")
     .replace(".mdx", "");
-
-  return normalized;
-};
 
 const validateFrontmatter = (path: string, data: Record<string, unknown>) => {
   if (!data.title) {
@@ -135,7 +132,7 @@ const prepareDocumentMapEntry = async (
 
     const tree = markdownProcessor.parse(content);
     const headings = getHeadingsFromMarkdownTree(tree);
-    const normalizedUrlPath = normalizePath(path);
+    const normalizedUrlPath = filePathToUrl(path);
 
     return [normalizedUrlPath, { content, path, headings, frontMatter }];
   } catch (error) {
@@ -247,7 +244,7 @@ export const collectLinkErrors = async (): Promise<LinkError[]> => {
   );
 
   const reportsWithErrors = allMdxFilePaths.map(async (filePath) => {
-    const doc = documentMap.get(normalizePath(filePath));
+    const doc = documentMap.get(filePathToUrl(filePath));
     if (!doc) {
       return null;
     }
