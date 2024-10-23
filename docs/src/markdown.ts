@@ -146,7 +146,7 @@ const prepareDocumentMapEntry = async (
 /** Checks if the links point to existing documents */
 const validateInternalLink =
   (documentMap: Map<string, Document>) => (doc: Document, href: string) => {
-    // /docs/api/example#heading -> ["api/example", "heading""]
+    // /docs/api/example#heading -> ["/docs/api/example", "heading""]
     const [link, hash] = href.replace(DOCS_PATH, "").split("#", 2);
 
     if (EXCLUDED_PATHS.includes(link)) {
