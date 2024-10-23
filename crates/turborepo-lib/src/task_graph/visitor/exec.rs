@@ -73,12 +73,12 @@ impl<'a> ExecContextFactory<'a> {
         let task_id_for_display = self.visitor.display_task_id(&task_id);
         let task_id_string = &task_id.to_string();
         self.populate_env(&mut execution_env, &task_hash, &task_access);
-        let cmd = self
+        let Some(cmd) = self
             .command_factory
-            .command(&task_id, execution_env.clone())?;
-        if cmd.is_none() {
+            .command(&task_id, execution_env.clone())?
+        else {
             return Ok(None);
-        }
+        };
         Ok(Some(ExecContext {
             engine: self.engine.clone(),
             ui_mode: self.visitor.run_opts.ui_mode,
@@ -162,7 +162,7 @@ pub struct ExecContext {
     warnings: Arc<Mutex<Vec<TaskWarning>>>,
     takes_input: bool,
     task_access: TaskAccess,
-    cmd: Option<Command>,
+    cmd: Command,
     platform_env: PlatformEnv,
 }
 
@@ -349,7 +349,7 @@ impl ExecContext {
             }
         }
 
-        let cmd = self.cmd.take().expect("should be present");
+        let cmd = self.cmd.clone();
 
         let mut process = match self.manager.spawn(cmd, Duration::from_millis(500)) {
             Some(Ok(child)) => child,
