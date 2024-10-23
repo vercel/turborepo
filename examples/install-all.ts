@@ -2,9 +2,11 @@ import { execSync } from "child_process";
 import { readdirSync, existsSync, readFileSync } from "fs";
 import * as path from "path";
 
+/** Note: this script intentionally doesn't run during regular `pnpm install` from the project root because it's not something we expect to need to do all the time and integrating it into the project install flow is excessive */
+
 const examplesDir = path.resolve(__dirname);
 
-// Get all directories in the examples folder
+/** Get all directories in the examples folder */
 const exampleDirs = readdirSync(examplesDir).filter((dir) =>
   existsSync(path.join(examplesDir, dir, "package.json"))
 );
