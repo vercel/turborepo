@@ -4,7 +4,7 @@ use camino::Utf8Path;
 
 pub fn setup_fixture(
     fixture: &str,
-    package_manager: Option<&str>,
+    package_manager: &str,
     test_dir: &Path,
 ) -> Result<(), anyhow::Error> {
     let script_path = Utf8Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -12,12 +12,7 @@ pub fn setup_fixture(
 
     Command::new("bash")
         .arg("-c")
-        .arg(format!(
-            "{} {} {}",
-            script_path,
-            fixture,
-            package_manager.unwrap_or("npm@10.5.0")
-        ))
+        .arg(format!("{} {} {}", script_path, fixture, package_manager))
         .current_dir(test_dir)
         .spawn()?
         .wait()?;
@@ -35,7 +30,7 @@ macro_rules! check {
             crate::common::setup_fixture($fixture, $package_manager, tempdir.path())?;
             $(
                 let output = assert_cmd::Command::cargo_bin("turbo")?
-                .arg($command)
+                    .arg($command)
                     .arg($query)
                     .current_dir(tempdir.path())
                     .output()?;
@@ -43,12 +38,21 @@ macro_rules! check {
                 let stdout = String::from_utf8(output.stdout)?;
                 let query_output: serde_json::Value = serde_json::from_str(&stdout)?;
                 let test_name = format!(
-                    "{}_{}_{}_({})",
-                    module_path!(),
+                    "{}_{}_({})",
                     $fixture,
                     $name.replace(' ', "_"),
                     $package_manager
                 );
+
+                if !output.stderr.is_empty() {
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    let stderr_test_name = format!(
+                        "{}_err",
+                        test_name
+                    );
+                    insta::assert_snapshot!(stderr_test_name, stderr);
+                }
+
                 insta::assert_json_snapshot!(test_name, query_output);
             )*
         }

@@ -1,0 +1,27 @@
+---
+source: crates/turborepo/tests/query.rs
+expression: query_output
+---
+{
+  "data": {
+    "file": {
+      "path": "invalid.ts",
+      "dependencies": {
+        "files": {
+          "items": [
+            {
+              "path": "button.tsx"
+            }
+          ]
+        },
+        "errors": {
+          "items": [
+            {
+              "message": "failed to resolve import"
+            }
+          ]
+        }
+      }
+    }
+  }
+}
