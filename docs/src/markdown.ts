@@ -32,8 +32,11 @@ export type LinkError = {
   doc: Document;
 };
 
-export const DOCS_PATH = ".";
-export const EXCLUDED_HASHES = ["top"];
+const DOCS_PATH = ".";
+const EXCLUDED_HASHES = ["top"];
+
+/** These paths exist, just not in our Markdown files */
+const EXCLUDED_PATHS = ["/api/remote-cache-spec", "/repo"];
 
 const slugger = new GitHubSlugger();
 
@@ -146,9 +149,7 @@ const validateInternalLink =
     // /docs/api/example#heading -> ["api/example", "heading""]
     const [link, hash] = href.replace(DOCS_PATH, "").split("#", 2);
 
-    // These paths exist, just not in our Markdown files
-    const ignorePaths = ["/api/remote-cache-spec", "/repo"];
-    if (ignorePaths.includes(link)) {
+    if (EXCLUDED_PATHS.includes(link)) {
       return [];
     }
 
