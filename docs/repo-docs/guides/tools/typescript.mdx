@@ -292,15 +292,15 @@ In [Compiled packages](https://turbo.build/repo/docs/core-concepts/internal-pack
 </Tab>
 
   <Tab value="Source code">
+
 ```tsx title="./packages/ui/button.tsx"
-import { MY_STRING } from "#utils.js" // Uses .js extension // [!code highlight]
+import { MY_STRING } from "#utils.js"; // Uses .js extension // [!code highlight]
 
 export const Button = () => {
-  return (
-    <button>{MY_STRING}</button>
-  )
-}
+  return <button>{MY_STRING}</button>;
+};
 ```
+
 </Tab>
 
 </Tabs>

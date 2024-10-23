@@ -14,12 +14,14 @@ jobs:
   validate-docs-links:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: "Setup Node"
-        uses: ./.github/actions/setup-node
+      - uses: ./.github/actions/setup-node
+        with:
+          node-version: 20
 
-      - name: "Run link checker"
+      - name: Run link checker
         run: cd docs && pnpm run check-links
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
