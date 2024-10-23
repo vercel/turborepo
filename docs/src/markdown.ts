@@ -32,6 +32,7 @@ export type LinkError = {
   doc: Document;
 };
 
+/** where to look for docs (.mdx files) */
 const DOCS_PATH = ".";
 const EXCLUDED_HASHES = ["top"];
 
@@ -40,26 +41,10 @@ const EXCLUDED_PATHS = ["/api/remote-cache-spec", "/repo"];
 
 const slugger = new GitHubSlugger();
 
-/** Collect the paths of all .mdx files in the passed directories */
-const getAllMdxFilePaths = async (
-  directoriesToScan: string[],
-  fileList: string[] = []
-): Promise<string[]> => {
-  for (const dir of directoriesToScan) {
-    const dirPath = path.join(".", dir);
-    const files = await fs.readdir(dirPath);
-    for (const file of files) {
-      const filePath = path.join(dirPath, file);
-      const stats = await fs.stat(filePath);
-      if (stats.isDirectory()) {
-        fileList = await getAllMdxFilePaths([filePath], fileList);
-      } else if (path.extname(file) === ".mdx") {
-        fileList.push(filePath);
-      }
-    }
-  }
-
-  return fileList;
+/** Collect the paths of all .mdx files we care about */
+const getAllMdxFilePaths = async (): Promise<string[]> => {
+  const allFiles = await fs.readdir(DOCS_PATH, { recursive: true });
+  return allFiles.filter((file) => file.endsWith(".mdx"));
 };
 
 // Returns the slugs of all headings in a tree
@@ -238,7 +223,7 @@ const traverseTreeAndValidateLinks = (
  * this function will look through all Mdx files and compile a list of `LinkError`s
  */
 export const collectLinkErrors = async (): Promise<LinkError[]> => {
-  const allMdxFilePaths = await getAllMdxFilePaths([DOCS_PATH]);
+  const allMdxFilePaths = await getAllMdxFilePaths();
 
   const documentMap = new Map(
     await Promise.all(allMdxFilePaths.map(prepareDocumentMapEntry))
