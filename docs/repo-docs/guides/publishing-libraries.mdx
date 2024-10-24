@@ -156,7 +156,17 @@ changeset publish
 
 Linking your publishing flow into Turborepo can make organizing your deploy a lot simpler and faster.
 
-Our recommendation is to add a `publish-packages` script into your root `package.json`:
+Our recommendation is to configure Changesets to automatically commit `changeset version`'s changes
+
+```json title="./changeset/config.json"
+{
+  // …
+  "commit": true,
+  // …
+}
+```
+
+and add a `publish-packages` script into your root `package.json`:
 
 ```json title="./package.json"
 {
@@ -165,6 +175,16 @@ Our recommendation is to add a `publish-packages` script into your root `package
     // before publishing
     "publish-packages": "turbo run build lint test && changeset version && changeset publish"
   }
+}
+```
+
+If your packages are public, set Changeset's `access` to `public`:
+
+```json title="./changeset/config.json"
+{
+  // …
+  "access": "public",
+  // …
 }
 ```
 
