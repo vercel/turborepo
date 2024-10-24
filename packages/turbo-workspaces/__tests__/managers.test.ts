@@ -2,6 +2,7 @@ import path from "node:path";
 import { ensureDirSync, existsSync } from "fs-extra";
 import { setupTestFixtures } from "@turbo/test-utils";
 import type { PackageJson } from "@turbo/utils";
+import { describe, it, expect, jest } from "@jest/globals";
 import { Logger } from "../src/logger";
 import { MANAGERS } from "../src/managers";
 import {
@@ -21,7 +22,7 @@ describe("managers", () => {
   });
 
   describe("detect", () => {
-    test.each(generateDetectMatrix())(
+    it.each(generateDetectMatrix())(
       "$project $type project detected by $manager manager - (expect: $result)",
       async ({ project, manager, type, result }) => {
         const { root } = useFixture({ fixture: `./${project}/${type}` });
@@ -36,7 +37,7 @@ describe("managers", () => {
   });
 
   describe("create", () => {
-    test.each(generateCreateMatrix())(
+    it.each(generateCreateMatrix())(
       "creates $manager project from $project $type project (interactive=$interactive, dry=$dry)",
       async ({ project, manager, type, interactive, dry }) => {
         expect.assertions(2);
@@ -72,7 +73,7 @@ describe("managers", () => {
   });
 
   describe("remove", () => {
-    test.each(generateRemoveMatrix())(
+    it.each(generateRemoveMatrix())(
       "removes $fixtureManager from $fixtureManager $fixtureType project when moving to $toManager (withNodeModules=$withNodeModules, interactive=$interactive, dry=$dry)",
       async ({
         fixtureManager,
@@ -154,7 +155,7 @@ describe("managers", () => {
   });
 
   describe("read", () => {
-    test.each(generateReadMatrix())(
+    it.each(generateReadMatrix())(
       "reads $toManager workspaces from $fixtureManager $fixtureType project - (shouldThrow: $shouldThrow)",
       async ({ fixtureManager, fixtureType, toManager, shouldThrow }) => {
         const { root, directoryName } = useFixture({
@@ -226,7 +227,7 @@ describe("managers", () => {
   });
 
   describe("read - alternate workspace format", () => {
-    test.each(generateReadMatrix())(
+    it.each(generateReadMatrix())(
       "reads $toManager workspaces using alternate format from $fixtureManager $fixtureType project - (shouldThrow: $shouldThrow)",
       async ({ fixtureManager, fixtureType, toManager, shouldThrow }) => {
         const { root, directoryName, readJson, write } = useFixture({
@@ -308,7 +309,7 @@ describe("managers", () => {
   });
 
   describe("clean", () => {
-    test.each(generateCleanMatrix())(
+    it.each(generateCleanMatrix())(
       "cleans $fixtureManager $fixtureType project (interactive=$interactive, dry=$dry)",
       async ({ fixtureManager, fixtureType, interactive, dry }) => {
         const { root } = useFixture({
@@ -336,7 +337,7 @@ describe("managers", () => {
   });
 
   describe("convertLock", () => {
-    test.each(generateConvertLockMatrix())(
+    it.each(generateConvertLockMatrix())(
       "converts lockfile for $fixtureManager $fixtureType project to $toManager format (interactive=$interactive, dry=$dry)",
       async ({ fixtureManager, fixtureType, toManager, interactive, dry }) => {
         const { root, exists } = useFixture({

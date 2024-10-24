@@ -3,6 +3,7 @@ import { execSync } from "node:child_process";
 import { type Schema } from "@turbo/types";
 import { parse, stringify } from "json5";
 import { setupTestFixtures } from "@turbo/test-utils";
+import { describe, it, expect } from "@jest/globals";
 
 describe("eslint settings check", () => {
   const { useFixture } = setupTestFixtures({

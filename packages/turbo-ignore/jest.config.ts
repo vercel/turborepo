@@ -1,5 +1,6 @@
-/** @type {import('ts-jest/dist/types').InitialOptionsTsJest} */
-module.exports = {
+import type { Config } from "jest";
+
+const config = {
   preset: "ts-jest/presets/js-with-ts",
   testEnvironment: "node",
   testPathIgnorePatterns: ["/__fixtures__/"],
@@ -17,4 +18,6 @@ module.exports = {
   transformIgnorePatterns: ["node_modules/*"],
   verbose: process.env.RUNNER_DEBUG === "1",
   silent: process.env.RUNNER_DEBUG !== "1",
-};
+} as const satisfies Config;
+
+export default config;

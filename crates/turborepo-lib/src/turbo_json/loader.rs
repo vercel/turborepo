@@ -356,9 +356,9 @@ mod test {
     use crate::{task_graph::TaskDefinition, turbo_json::CONFIG_FILE};
 
     #[test_case(r"{}", TurboJson::default() ; "empty")]
-    #[test_case(r#"{ "globalDependencies": ["tsconfig.json", "jest.config.js"] }"#,
+    #[test_case(r#"{ "globalDependencies": ["tsconfig.json", "jest.config.ts"] }"#,
         TurboJson {
-            global_deps: vec!["jest.config.js".to_string(), "tsconfig.json".to_string()],
+            global_deps: vec!["jest.config.ts".to_string(), "tsconfig.json".to_string()],
             ..TurboJson::default()
         }
     ; "global dependencies (sorted)")]

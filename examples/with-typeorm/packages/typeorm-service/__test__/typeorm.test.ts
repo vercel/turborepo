@@ -1,4 +1,4 @@
-import { suite, test, beforeEach, expect } from "vitest";
+import { suite, it, beforeEach, expect } from "vitest";
 import "reflect-metadata";
 import {
   DataSource,
@@ -44,7 +44,7 @@ suite("typeorm with SQL.js", () => {
     todoRepo = dataSource.getRepository(Todo);
   });
 
-  test("Insert", async () => {
+  it("Insert", async () => {
     const newTodo = await todoRepo.save({
       content: "Hello World",
       complete: false,
@@ -53,7 +53,7 @@ suite("typeorm with SQL.js", () => {
     expect(newTodo.complete).toBeFalsy();
   });
 
-  test("Select", async () => {
+  it("Select", async () => {
     const newTodo = await todoRepo.save({
       content: "Hello World",
       complete: false,
@@ -63,7 +63,7 @@ suite("typeorm with SQL.js", () => {
     expect(todo?.content).toBe("Hello World");
   });
 
-  test("Update", async () => {
+  it("Update", async () => {
     const newTodo = await todoRepo.save({
       content: "Hello World",
       complete: false,
@@ -73,7 +73,7 @@ suite("typeorm with SQL.js", () => {
     expect(todo?.complete).toBeTruthy();
   });
 
-  test("Delete", async () => {
+  it("Delete", async () => {
     const newTodo = await todoRepo.save({
       content: "Hello World",
       complete: false,

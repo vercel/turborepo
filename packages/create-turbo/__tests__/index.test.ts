@@ -8,11 +8,12 @@ import type { PackageManager } from "@turbo/utils";
 import * as turboWorkspaces from "@turbo/workspaces";
 import { CreateTurboTelemetry, TelemetryConfig } from "@turbo/telemetry";
 import * as turboUtils from "@turbo/utils";
+import { describe, it, expect, jest } from "@jest/globals";
 import type { CreateCommandArgument } from "../src/commands/create/types";
 import { create } from "../src/commands/create";
 import { getWorkspaceDetailsMockReturnValue } from "./test-utils";
 
-jest.mock("@turbo/workspaces", () => ({
+jest.mock<typeof import("@turbo/workspaces")>("@turbo/workspaces", () => ({
   __esModule: true,
   ...jest.requireActual("@turbo/workspaces"),
 }));
@@ -41,7 +42,7 @@ describe("create-turbo", () => {
     }),
   });
 
-  test.each<{ packageManager: PackageManager }>([
+  it.each<{ packageManager: PackageManager }>([
     { packageManager: "yarn" },
     { packageManager: "npm" },
     { packageManager: "pnpm" },
@@ -124,7 +125,7 @@ describe("create-turbo", () => {
     }
   );
 
-  test.each<{ packageManager: PackageManager }>([
+  it.each<{ packageManager: PackageManager }>([
     { packageManager: "yarn" },
     { packageManager: "npm" },
     { packageManager: "pnpm" },
@@ -206,7 +207,7 @@ describe("create-turbo", () => {
     }
   );
 
-  test("throws correct error message when a download error is encountered", async () => {
+  it("throws correct error message when a download error is encountered", async () => {
     const { root } = useFixture({ fixture: `create-turbo` });
     const packageManager = "pnpm";
     const mockAvailablePackageManagers = jest

@@ -1,5 +1,10 @@
 {
   "name": "@turbo/tsconfig",
   "version": "0.0.0",
-  "private": true
+  "private": true,
+  "exports": {
+    ".": "./src/index.js",
+    "./base.json": "./base.json",
+    "./library.json": "./library.json"
+  }
 }

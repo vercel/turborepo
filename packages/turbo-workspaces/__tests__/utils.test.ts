@@ -1,9 +1,10 @@
+import { describe, it, expect } from "@jest/globals";
 import type { Project } from "../src/types";
 import { isCompatibleWithBunWorkspaces } from "../src/utils";
 
 describe("utils", () => {
   describe("isCompatibleWithBunWorkspace", () => {
-    test.each([
+    it.each([
       { globs: ["apps/*"], expected: true },
       { globs: ["apps/*", "packages/*"], expected: true },
       { globs: ["*"], expected: true },

@@ -27,4 +27,23 @@ module.exports = {
       { peerDependencies: true, includeTypes: true },
     ],
   },
+  overrides: [
+    {
+      files: ["*.test.ts"],
+      rules: {
+        "@typescript-eslint/consistent-type-imports": [
+          "error",
+          {
+            disallowTypeAnnotations: false, // this is needed for `jest.mock<typeof import('module')>`
+          },
+        ],
+      },
+    },
+    {
+      files: ["jest.config.ts", "*/jest-config/*.ts", "jest-preset.ts"],
+      rules: {
+        "import/no-default-export": ["off"],
+      },
+    },
+  ],
 };

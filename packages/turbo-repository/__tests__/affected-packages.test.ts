@@ -1,4 +1,4 @@
-import { describe, test } from "node:test";
+import { describe, it } from "node:test";
 import { strict as assert } from "node:assert";
 import * as path from "node:path";
 import { Workspace, Package, PackageManager } from "../js/dist/index.js";
@@ -43,7 +43,7 @@ describe("affectedPackages", () => {
   ];
 
   for (const { description, files, expected } of tests) {
-    test(description, async () => {
+    it(description, async () => {
       const dir = path.resolve(__dirname, "./fixtures/monorepo");
       const workspace = await Workspace.find(dir);
 
