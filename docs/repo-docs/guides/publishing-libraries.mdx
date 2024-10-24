@@ -178,6 +178,16 @@ and add a `publish-packages` script into your root `package.json`:
 }
 ```
 
+If your packages are public, set Changeset's `access` to `public`:
+
+```json title="./changeset/config.json"
+{
+  // …
+  "access": "public",
+  // …
+}
+```
+
 <Callout>
   We recommend `publish-packages` so that it doesn't conflict with npm's
   built-in `publish` script.
