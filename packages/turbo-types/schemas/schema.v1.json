@@ -170,7 +170,7 @@
           "items": {
             "type": "string"
           },
-          "description": "A list of globs to include in the set of implicit global hash dependencies.\n\nThe contents of these files will be included in the global hashing algorithm and affect the hashes of all tasks.\n\nThis is useful for busting the cache based on:\n\n- .env files (not in Git)\n\n- any root level file that impacts package tasks that are not represented in the traditional dependency graph (e.g. a root tsconfig.json, jest.config.js, .eslintrc, etc.)\n\nDocumentation: https://turbo.build/repo/docs/reference/configuration#globaldependencies",
+          "description": "A list of globs to include in the set of implicit global hash dependencies.\n\nThe contents of these files will be included in the global hashing algorithm and affect the hashes of all tasks.\n\nThis is useful for busting the cache based on:\n\n- .env files (not in Git)\n\n- any root level file that impacts package tasks that are not represented in the traditional dependency graph (e.g. a root tsconfig.json, jest.config.ts, .eslintrc, etc.)\n\nDocumentation: https://turbo.build/repo/docs/reference/configuration#globaldependencies",
           "default": []
         },
         "globalEnv": {
