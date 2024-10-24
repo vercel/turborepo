@@ -96,7 +96,15 @@ impl From<turbo_trace::TraceError> for TraceError {
                 path: Some(path.to_string()),
                 ..Default::default()
             },
-            turbo_trace::TraceError::Resolve { span, text } => {
+            turbo_trace::TraceError::ParseError(e) => TraceError {
+                message: format!("failed to parse file: {:?}", e),
+                ..Default::default()
+            },
+            turbo_trace::TraceError::GlobError(_) => TraceError {
+                message: format!("failed to glob files"),
+                ..Default::default()
+            },
+            turbo_trace::TraceError::Resolve { span, text, .. } => {
                 let import = text
                     .inner()
                     .read_span(&span, 1, 1)
@@ -171,7 +179,30 @@ impl File {
             ts_config,
         );
 
-        let mut result = tracer.trace(depth);
+        let mut result = tracer.trace(depth).await;
+        // Remove the file itself from the result
+        result.files.remove(&self.path);
+        TraceResult::new(result, self.run.clone())
+    }
+
+    async fn dependents(&self, ts_config: Option<String>) -> TraceResult {
+        let ts_config = match ts_config {
+            Some(ts_config) => Some(Utf8PathBuf::from(ts_config)),
+            None => self
+                .path
+                .ancestors()
+                .skip(1)
+                .find(|p| p.join_component("tsconfig.json").exists())
+                .map(|p| p.as_path().to_owned()),
+        };
+
+        let tracer = Tracer::new(
+            self.run.repo_root().to_owned(),
+            vec![self.path.clone()],
+            ts_config,
+        );
+
+        let mut result = tracer.reverse_trace().await;
         // Remove the file itself from the result
         result.files.remove(&self.path);
         TraceResult::new(result, self.run.clone())
