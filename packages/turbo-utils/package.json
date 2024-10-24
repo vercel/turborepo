@@ -25,6 +25,7 @@
     "lint:prettier": "prettier -c . --cache --ignore-path=../../.prettierignore"
   },
   "devDependencies": {
+    "@jest/globals": "^29.7.0",
     "@manypkg/find-root": "^1.1.0",
     "@turbo/eslint-config": "workspace:*",
     "@turbo/test-utils": "workspace:*",
@@ -33,7 +34,6 @@
     "@types/async-retry": "^1.4.5",
     "@types/fs-extra": "^9.0.13",
     "@types/gradient-string": "^1.1.2",
-    "@types/jest": "^29.5.13",
     "@types/js-yaml": "^4.0.5",
     "@types/node": "^20.5.7",
     "@types/tar": "^6.1.4",

@@ -67,6 +67,9 @@ importers:
         specifier: ^1.10.0
         version: 1.10.0
     devDependencies:
+      '@jest/globals':
+        specifier: ^29.7.0
+        version: 29.7.0
       '@repo/eslint-config':
         specifier: workspace:*
         version: link:../../packages/config-eslint
@@ -85,9 +88,6 @@ importers:
       '@types/express':
         specifier: ^4.17.21
         version: 4.17.21
-      '@types/jest':
-        specifier: ^29.5.13
-        version: 29.5.13
       '@types/morgan':
         specifier: ^1.9.9
         version: 1.9.9
@@ -249,6 +249,9 @@ importers:
 
   packages/logger:
     devDependencies:
+      '@jest/globals':
+        specifier: ^29.7.0
+        version: 29.7.0
       '@repo/eslint-config':
         specifier: workspace:*
         version: link:../config-eslint
@@ -258,9 +261,6 @@ importers:
       '@repo/typescript-config':
         specifier: workspace:*
         version: link:../config-typescript
-      '@types/jest':
-        specifier: ^29.5.13
-        version: 29.5.13
       '@types/node':
         specifier: ^20.11.24
         version: 20.16.5
@@ -276,6 +276,9 @@ importers:
 
   packages/ui:
     devDependencies:
+      '@jest/globals':
+        specifier: ^29.7.0
+        version: 29.7.0
       '@repo/eslint-config':
         specifier: workspace:*
         version: link:../config-eslint
@@ -285,9 +288,6 @@ importers:
       '@repo/typescript-config':
         specifier: workspace:*
         version: link:../config-typescript
-      '@types/jest':
-        specifier: ^29.5.13
-        version: 29.5.13
       '@types/node':
         specifier: ^20.11.24
         version: 20.16.5
@@ -2541,13 +2541,6 @@ packages:
     resolution: {integrity: sha512-pk2B1NWalF9toCRu6gjBzR69syFjP4Od8WRAX+0mmf9lAjCRicLOWc+ZrxZHx/0XRjotgkF9t6iaMJ+aXcOdZQ==}
     dependencies:
       '@types/istanbul-lib-report': 3.0.3
-
-  /@types/jest@29.5.13:
-    resolution: {integrity: sha512-wd+MVEZCHt23V0/L642O5APvspWply/rGY5BcW4SUETo2UzPU3Z26qr8jC2qxpimI2jjx9h7+2cj2FwIr01bXg==}
-    dependencies:
-      expect: 29.7.0
-      pretty-format: 29.7.0
-    dev: true
 
   /@types/jsdom@20.0.1:
     resolution: {integrity: sha512-d0r18sZPmMQr1eG35u12FZfhIXNrnsPU/g5wvRKCUf/tOGilKKwYMYGqh33BNR6ba+2gkHw1EUiHoN3mn7E5IQ==}

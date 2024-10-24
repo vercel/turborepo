@@ -1,5 +1,6 @@
 import { setupTestFixtures } from "@turbo/test-utils";
 import { type Schema } from "@turbo/types";
+import { describe, it, expect } from "@jest/globals";
 import { transformer } from "../src/transforms/rename-output-mode";
 
 describe("rename-output-mode", () => {

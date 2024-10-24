@@ -1,5 +1,6 @@
 import path from "node:path";
 import { setupTestFixtures } from "@turbo/test-utils";
+import { describe, it, expect } from "@jest/globals";
 import { getTurboConfigs } from "../src/getTurboConfigs";
 
 describe("getTurboConfigs", () => {

@@ -1,4 +1,5 @@
 import { setupTestFixtures } from "@turbo/test-utils";
+import { describe, it, expect } from "@jest/globals";
 import { transformer } from "../src/transforms/transform-env-literals-to-wildcards";
 
 describe.only("transform-env-literals-to-wildcards", () => {

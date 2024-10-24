@@ -1,4 +1,5 @@
 import { setupTestFixtures } from "@turbo/test-utils";
+import { describe, it, expect } from "@jest/globals";
 import { transformer } from "../src/transforms/add-package-names";
 
 describe("add-package-names", () => {
@@ -7,7 +8,7 @@ describe("add-package-names", () => {
     test: "add-package-names",
   });
 
-  test("missing names", async () => {
+  it("missing names", async () => {
     // load the fixture for the test
     const { root, readJson } = useFixture({
       fixture: "missing-names",
@@ -49,7 +50,7 @@ describe("add-package-names", () => {
     }
   });
 
-  test("duplicate names", async () => {
+  it("duplicate names", async () => {
     // load the fixture for the test
     const { root, readJson } = useFixture({
       fixture: "duplicate-names",
@@ -86,7 +87,7 @@ describe("add-package-names", () => {
     }
   });
 
-  test("correct names", async () => {
+  it("correct names", async () => {
     // load the fixture for the test
     const { root, readJson } = useFixture({
       fixture: "correct-names",
@@ -115,7 +116,7 @@ describe("add-package-names", () => {
     }
   });
 
-  test("ignored packages", async () => {
+  it("ignored packages", async () => {
     // load the fixture for the test
     const { root, readJson } = useFixture({
       fixture: "ignored-packages",

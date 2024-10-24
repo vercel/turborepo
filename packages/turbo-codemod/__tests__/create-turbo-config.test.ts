@@ -1,4 +1,5 @@
 import { setupTestFixtures } from "@turbo/test-utils";
+import { describe, it, expect, jest } from "@jest/globals";
 import fs from "fs-extra";
 import { transformer } from "../src/transforms/create-turbo-config";
 
@@ -8,7 +9,7 @@ describe("create-turbo-config", () => {
     test: "create-turbo-config",
   });
 
-  test("package.json config exists but no turbo.json config - basic", () => {
+  it("package.json config exists but no turbo.json config - basic", () => {
     // load the fixture for the test
     const { root, read } = useFixture({ fixture: "no-turbo-json-config" });
 
@@ -45,7 +46,7 @@ describe("create-turbo-config", () => {
     `);
   });
 
-  test("package.json config exists but no turbo.json config - repeat run", () => {
+  it("package.json config exists but no turbo.json config - repeat run", () => {
     // load the fixture for the test
     const { root, read } = useFixture({ fixture: "no-turbo-json-config" });
 
@@ -104,7 +105,7 @@ describe("create-turbo-config", () => {
     `);
   });
 
-  test("package.json config exists but no turbo.json config - dry", () => {
+  it("package.json config exists but no turbo.json config - dry", () => {
     // load the fixture for the test
     const { root, read } = useFixture({ fixture: "no-turbo-json-config" });
 
@@ -141,7 +142,7 @@ describe("create-turbo-config", () => {
     `);
   });
 
-  test("package.json config exists but no turbo.json config - print", () => {
+  it("package.json config exists but no turbo.json config - print", () => {
     // load the fixture for the test
     const { root, read } = useFixture({ fixture: "no-turbo-json-config" });
 
@@ -178,7 +179,7 @@ describe("create-turbo-config", () => {
     `);
   });
 
-  test("package.json config exists but no turbo.json config - dry & print", () => {
+  it("package.json config exists but no turbo.json config - dry & print", () => {
     // load the fixture for the test
     const { root, read } = useFixture({ fixture: "no-turbo-json-config" });
 
@@ -215,7 +216,7 @@ describe("create-turbo-config", () => {
     `);
   });
 
-  test("no package.json config or turbo.json file exists", () => {
+  it("no package.json config or turbo.json file exists", () => {
     // load the fixture for the test
     const { root, read } = useFixture({ fixture: "no-package-json-config" });
 
@@ -256,7 +257,7 @@ describe("create-turbo-config", () => {
     `);
   });
 
-  test("no package.json file exists", () => {
+  it("no package.json file exists", () => {
     // load the fixture for the test
     const { root, read } = useFixture({ fixture: "no-package-json-file" });
 
@@ -278,7 +279,7 @@ describe("create-turbo-config", () => {
     );
   });
 
-  test("turbo.json file exists and no package.json config exists", () => {
+  it("turbo.json file exists and no package.json config exists", () => {
     // load the fixture for the test
     const { root, read } = useFixture({ fixture: "turbo-json-config" });
 
@@ -320,7 +321,7 @@ describe("create-turbo-config", () => {
     `);
   });
 
-  test("turbo.json file exists and package.json config exists", () => {
+  it("turbo.json file exists and package.json config exists", () => {
     // load the fixture for the test
     const { root, read } = useFixture({ fixture: "both-configs" });
 
@@ -363,7 +364,7 @@ describe("create-turbo-config", () => {
     `);
   });
 
-  test("errors when unable to write json", () => {
+  it("errors when unable to write json", () => {
     // load the fixture for the test
     const { root, read } = useFixture({ fixture: "no-turbo-json-config" });
 

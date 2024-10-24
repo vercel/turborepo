@@ -1,6 +1,7 @@
 import merge from "deepmerge";
 import type { SchemaV1, SchemaV2 } from "@turbo/types";
 import { setupTestFixtures } from "@turbo/test-utils";
+import { describe, it, expect } from "@jest/globals";
 import {
   hasLegacyEnvVarDependencies,
   migratePipeline,
