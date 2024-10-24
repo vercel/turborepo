@@ -111,6 +111,7 @@ httpmock = { version = "0.6.8", default-features = false }
 indexmap = "1.9.2"
 indicatif = "0.17.3"
 indoc = "2.0.0"
+insta = { version = "1.34.0", features = ["json"] }
 itertools = "0.10.5"
 lazy_static = "1.4.0"
 merge = "0.1.0"
@@ -146,6 +147,10 @@ smallvec = { version = "1.13.1", features = [
   "union",
   "const_new",
 ] }
+swc_common = "0.37.5"
+swc_ecma_ast = "0.118.2"
+swc_ecma_parser = "0.149.1"
+swc_ecma_visit = "0.104.8"
 syn = "1.0.107"
 tempfile = "3.3.0"
 test-case = "3.0.0"

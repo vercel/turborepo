@@ -116,8 +116,9 @@ jobs:
         uses: ./.github/actions/install-global-turbo
 
       - name: Lint
+        # Manually set TURBO_API to an empty string to override Hetzner env
         run: |
-          turbo run lint --env-mode=strict
+          TURBO_API= turbo run lint --env-mode=strict
 
   cleanup:
     name: Cleanup

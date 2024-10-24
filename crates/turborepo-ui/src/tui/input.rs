@@ -1,6 +1,7 @@
 use crossterm::event::{EventStream, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use futures::StreamExt;
 use tokio::{sync::mpsc, task::JoinHandle};
+use tracing::debug;
 
 use super::{
     app::LayoutSections,
@@ -60,7 +61,8 @@ fn translate_key_event(options: InputOptions, key_event: KeyEvent) -> Option<Eve
     }
     match key_event.code {
         KeyCode::Char('c') if key_event.modifiers == crossterm::event::KeyModifiers::CONTROL => {
-            ctrl_c()
+            ctrl_c();
+            Some(Event::InternalStop)
         }
         KeyCode::Char('c') if options.has_selection => Some(Event::CopySelection),
         // Interactive branches
@@ -122,7 +124,10 @@ fn ctrl_c() -> Option<Event> {
     match signal::raise(signal::SIGINT) {
         Ok(_) => None,
         // We're unable to send the signal, stop rendering to force shutdown
-        Err(_) => Some(Event::InternalStop),
+        Err(_) => {
+            debug!("unable to send sigint, shutting down");
+            Some(Event::InternalStop)
+        }
     }
 }
 
@@ -146,6 +151,7 @@ fn ctrl_c() -> Option<Event> {
         None
     } else {
         // We're unable to send the Ctrl-C event, stop rendering to force shutdown
+        debug!("unable to send sigint, shutting down");
         Some(Event::InternalStop)
     }
 }
