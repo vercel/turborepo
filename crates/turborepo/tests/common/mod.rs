@@ -15,14 +15,13 @@ pub fn setup_fixture(
         "helpers",
         "setup_integration_test.sh",
     ]);
-    println!("script path: {}", script_path);
+
     let unix_script_path = if cfg!(windows) {
         script_path.as_str().replace("\\", "/")
     } else {
         script_path.to_string()
     };
 
-    println!("unix script path: {}", unix_script_path);
     let bash = which("bash")?;
 
     Command::new(bash)
@@ -58,7 +57,6 @@ macro_rules! check_json {
                 let stdout = String::from_utf8(output.stdout)?;
                 let stderr = String::from_utf8_lossy(&output.stderr);
 
-                println!("stdout: {}", stdout);
                 println!("stderr: {}", stderr);
 
                 let query_output: serde_json::Value = serde_json::from_str(&stdout)?;
@@ -68,7 +66,6 @@ macro_rules! check_json {
                     $name.replace(' ', "_"),
                     $package_manager
                 );
-
                 insta::assert_json_snapshot!(test_name, query_output);
             )*
         }
