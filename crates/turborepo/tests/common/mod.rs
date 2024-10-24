@@ -16,12 +16,16 @@ pub fn setup_fixture(
         "setup_integration_test.sh",
     ]);
     println!("script path: {}", script_path);
-
+    let unix_script_path = script_path.as_str().replace("/", "\\");
+    println!("unix script path: {}", unix_script_path);
     let bash = which("bash")?;
 
     Command::new(bash)
         .arg("-c")
-        .arg(format!("{} {} {}", script_path, fixture, package_manager))
+        .arg(format!(
+            "{} {} {}",
+            unix_script_path, fixture, package_manager
+        ))
         .current_dir(test_dir)
         .spawn()?
         .wait()?;
