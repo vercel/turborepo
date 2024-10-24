@@ -1,6 +1,6 @@
 use std::{path::Path, process::Command};
 
-use camino::Utf8Path;
+use turbopath::AbsoluteSystemPath;
 use which::which;
 
 pub fn setup_fixture(
@@ -8,8 +8,13 @@ pub fn setup_fixture(
     package_manager: &str,
     test_dir: &Path,
 ) -> Result<(), anyhow::Error> {
-    let script_path = Utf8Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../turborepo-tests/helpers/setup_integration_test.sh");
+    let script_path = AbsoluteSystemPath::new(env!("CARGO_MANIFEST_DIR"))?.join_components(&[
+        "..",
+        "..",
+        "turborepo-tests",
+        "helpers",
+        "setup_integration_test.sh",
+    ]);
 
     let bash = which("bash")?;
 
