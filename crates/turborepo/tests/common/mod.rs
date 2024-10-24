@@ -15,6 +15,7 @@ pub fn setup_fixture(
         "helpers",
         "setup_integration_test.sh",
     ]);
+    println!("script path: {}", script_path);
 
     let bash = which("bash")?;
 
