@@ -1,6 +1,7 @@
 use std::{path::Path, process::Command};
 
 use camino::Utf8Path;
+use which::which;
 
 pub fn setup_fixture(
     fixture: &str,
@@ -10,7 +11,9 @@ pub fn setup_fixture(
     let script_path = Utf8Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../turborepo-tests/helpers/setup_integration_test.sh");
 
-    Command::new("bash")
+    let bash = which("bash")?;
+
+    Command::new(bash)
         .arg("-c")
         .arg(format!("{} {} {}", script_path, fixture, package_manager))
         .current_dir(test_dir)
@@ -39,8 +42,10 @@ macro_rules! check_json {
 
                 let stdout = String::from_utf8(output.stdout)?;
                 let stderr = String::from_utf8_lossy(&output.stderr);
+
                 println!("stdout: {}", stdout);
                 println!("stderr: {}", stderr);
+
                 let query_output: serde_json::Value = serde_json::from_str(&stdout)?;
                 let test_name = format!(
                     "{}_{}_({})",
