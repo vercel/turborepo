@@ -16,7 +16,12 @@ pub fn setup_fixture(
         "setup_integration_test.sh",
     ]);
     println!("script path: {}", script_path);
-    let unix_script_path = script_path.as_str().replace("/", "\\");
+    let unix_script_path = if cfg!(windows) {
+        script_path.as_str().replace("\\", "/")
+    } else {
+        script_path.to_string()
+    };
+
     println!("unix script path: {}", unix_script_path);
     let bash = which("bash")?;
 
