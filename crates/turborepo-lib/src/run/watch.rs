@@ -390,7 +390,6 @@ impl WatchClient {
                         ),
                     });
 
-                    // But we still run the regular tasks blocking
                     let non_persistent_run = self.run.create_run_for_interruptible_tasks();
                     let ui_sender = self.ui_sender.clone();
                     Ok(RunHandle {

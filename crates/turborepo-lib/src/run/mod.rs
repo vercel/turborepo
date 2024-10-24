@@ -137,7 +137,12 @@ impl Run {
     }
 
     pub fn create_run_for_non_interruptible_tasks(&self) -> Self {
-        let mut new_run = self.clone();
+        let mut new_run = Self {
+            // ProcessManager is a singleton, so we want to explicitly recreate it
+            processes: ProcessManager::new(self.processes.use_pty()),
+            ..self.clone()
+        };
+
         let new_engine = new_run.engine.create_engine_for_non_interruptible_tasks();
         new_run.engine = Arc::new(new_engine);
 
