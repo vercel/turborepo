@@ -3,7 +3,7 @@ mod common;
 #[cfg(not(windows))]
 #[test]
 fn test_double_symlink() -> Result<(), anyhow::Error> {
-    check!(
+    check_json!(
         "oxc_repro",
         "npm@10.5.0",
         "query",
@@ -22,7 +22,7 @@ fn test_double_symlink() -> Result<(), anyhow::Error> {
 
 #[test]
 fn test_trace() -> Result<(), anyhow::Error> {
-    check!(
+    check_json!(
         "turbo_trace",
         "npm@10.5.0",
         "query",

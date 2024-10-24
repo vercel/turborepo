@@ -21,9 +21,11 @@ pub fn setup_fixture(
 }
 
 /// Executes a command with different arguments in a specific fixture and
-/// package manager. Creates a snapshot file for each set of arguments
+/// package manager and snapshots the output as JSON.
+/// Creates a snapshot file for each set of arguments.
+/// Note that the command must return valid JSON
 #[macro_export]
-macro_rules! check {
+macro_rules! check_json {
     ($fixture:expr, $package_manager:expr, $command:expr, $($name:expr => $query:expr,)*) => {
         {
             let tempdir = tempfile::tempdir()?;
