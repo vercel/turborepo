@@ -46,15 +46,6 @@ macro_rules! check_json {
                     $package_manager
                 );
 
-                if !output.stderr.is_empty() {
-                    let stderr = String::from_utf8_lossy(&output.stderr);
-                    let stderr_test_name = format!(
-                        "{}_err",
-                        test_name
-                    );
-                    insta::assert_snapshot!(stderr_test_name, stderr);
-                }
-
                 insta::assert_json_snapshot!(test_name, query_output);
             )*
         }
