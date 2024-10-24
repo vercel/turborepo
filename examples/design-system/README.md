@@ -87,7 +87,7 @@ ui
     ├── button.d.ts  <-- Types
     ├── button.js    <-- CommonJS version
     ├── button.mjs   <-- ES Modules version
-    └── button.mts   <-- ES Modules version with Types
+    └── button.d.mts   <-- ES Modules version with Types
 ```
 
 ## Components
