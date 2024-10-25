@@ -175,6 +175,8 @@ impl Tracer {
         depth: usize,
         seen: &mut HashMap<AbsoluteSystemPathBuf, SeenFile>,
     ) {
+        let file_resolver = Self::infer_resolver_with_ts_config(&file_path, resolver);
+
         if matches!(file_path.extension(), Some("css") | Some("json")) {
             return;
         }
@@ -184,9 +186,13 @@ impl Tracer {
 
         let entry = seen.entry(file_path.clone()).or_default();
 
-        let Some((imports, seen_file)) =
-            Self::get_imports_from_file(&self.source_map, &mut self.errors, resolver, &file_path)
-                .await
+        let Some((imports, seen_file)) = Self::get_imports_from_file(
+            &self.source_map,
+            &mut self.errors,
+            file_resolver.as_ref().unwrap_or(resolver),
+            &file_path,
+        )
+        .await
         else {
             return;
         };
@@ -195,6 +201,26 @@ impl Tracer {
 
         self.files
             .extend(imports.into_iter().map(|import| (import, depth + 1)));
+    }
+
+    /// Attempts to find the closest tsconfig and creates a resolver with it,
+    /// so alias resolution, e.g. `@/foo/bar`, works.
+    fn infer_resolver_with_ts_config(
+        root: &AbsoluteSystemPath,
+        existing_resolver: &Resolver,
+    ) -> Option<Resolver> {
+        root.ancestors()
+            .skip(1)
+            .find(|p| p.join_component("tsconfig.json").exists())
+            .map(|ts_config| {
+                let mut options = existing_resolver.options().clone();
+                options.tsconfig = Some(TsconfigOptions {
+                    config_file: ts_config.as_std_path().into(),
+                    references: TsconfigReferences::Auto,
+                });
+
+                existing_resolver.clone_with_options(options)
+            })
     }
 
     pub fn create_resolver(&mut self) -> Resolver {
@@ -267,11 +293,13 @@ impl Tracer {
             let shared_self = shared_self.clone();
             let resolver = resolver.clone();
             futures.spawn(async move {
+                let file_resolver = Self::infer_resolver_with_ts_config(&file, &resolver);
                 let mut errors = Vec::new();
+
                 let Some((imported_files, seen_file)) = Self::get_imports_from_file(
                     &shared_self.source_map,
                     &mut errors,
-                    &resolver,
+                    file_resolver.as_ref().unwrap_or(&resolver),
                     &file,
                 )
                 .await
