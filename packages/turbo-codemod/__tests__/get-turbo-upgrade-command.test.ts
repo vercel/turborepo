@@ -1,11 +1,12 @@
 import * as turboWorkspaces from "@turbo/workspaces";
 import * as turboUtils from "@turbo/utils";
 import { setupTestFixtures } from "@turbo/test-utils";
+import { describe, it, expect, jest } from "@jest/globals";
 import { getTurboUpgradeCommand } from "../src/commands/migrate/steps/getTurboUpgradeCommand";
 import * as utils from "../src/commands/migrate/utils";
 import { getWorkspaceDetailsMockReturnValue } from "./test-utils";
 
-jest.mock("@turbo/workspaces", () => ({
+jest.mock<typeof import("@turbo/workspaces")>("@turbo/workspaces", () => ({
   __esModule: true,
   ...jest.requireActual("@turbo/workspaces"),
 }));
@@ -430,7 +431,7 @@ describe("get-turbo-upgrade-command", () => {
     test: "get-turbo-upgrade-command",
   });
 
-  test.each(LOCAL_INSTALL_COMMANDS)(
+  it.each(LOCAL_INSTALL_COMMANDS)(
     "returns correct upgrade command for local install of turbo@$version using $packageManager@$packageManagerVersion (fixture: $fixture)",
     async ({
       version,
@@ -492,7 +493,7 @@ describe("get-turbo-upgrade-command", () => {
     }
   );
 
-  test.each(GLOBAL_INSTALL_COMMANDS)(
+  it.each(GLOBAL_INSTALL_COMMANDS)(
     "returns correct upgrade command for global install of turbo@$version using $packageManager@$packageManagerVersion (fixture: $fixture)",
     async ({
       version,
@@ -555,7 +556,7 @@ describe("get-turbo-upgrade-command", () => {
   );
 
   describe("errors", () => {
-    test("fails gracefully if no package.json exists", async () => {
+    it("fails gracefully if no package.json exists", async () => {
       const { root } = useFixture({
         fixture: "no-package",
       });
@@ -598,7 +599,7 @@ describe("get-turbo-upgrade-command", () => {
       mockGetWorkspaceDetails.mockRestore();
     });
 
-    test.each([
+    it.each([
       {
         fixture: "no-package",
         name: "fails gracefully if no package.json exists",

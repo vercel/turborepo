@@ -1,4 +1,5 @@
 import { setupTestFixtures } from "@turbo/test-utils";
+import { describe, it, expect } from "@jest/globals";
 import { transformer, fixGlobPattern } from "../src/transforms/clean-globs";
 
 describe("clean-globs", () => {
@@ -7,7 +8,7 @@ describe("clean-globs", () => {
     test: "clean-globs",
   });
 
-  test("basic", () => {
+  it("basic", () => {
     // load the fixture for the test
     const { root } = useFixture({
       fixture: "clean-globs",
@@ -22,8 +23,8 @@ describe("clean-globs", () => {
     // result should be correct
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toMatchInlineSnapshot(`
-      Object {
-        "turbo.json": Object {
+      {
+        "turbo.json": {
           "action": "modified",
           "additions": 6,
           "deletions": 6,
@@ -32,7 +33,7 @@ describe("clean-globs", () => {
     `);
   });
 
-  test("collapses back-to-back doublestars", () => {
+  it("collapses back-to-back doublestars", () => {
     const badGlobPatterns = [
       ["../../app-store/**/**", "../../app-store/**"],
       ["**/**/result.json", "**/result.json"],
@@ -48,12 +49,12 @@ describe("clean-globs", () => {
     });
   });
 
-  test("doesn't update valid globs and prints a message", () => {
+  it("doesn't update valid globs and prints a message", () => {
     // Now let's test the function
     expect(fixGlobPattern("a/b/c/*")).toBe("a/b/c/*");
   });
 
-  test("transforms '**ext' to '**/*ext'", () => {
+  it("transforms '**ext' to '**/*ext'", () => {
     const badGlobPatterns = [
       ["cypress/integration/**.test.ts", "cypress/integration/**/*.test.ts"],
       ["scripts/**.mjs", "scripts/**/*.mjs"],
@@ -70,7 +71,7 @@ describe("clean-globs", () => {
     });
   });
 
-  test("transforms 'pre**' to pre*/**", () => {
+  it("transforms 'pre**' to pre*/**", () => {
     const badGlobPatterns = [
       ["pre**", "pre*/**"],
       ["pre**/foo", "pre*/**/foo"],

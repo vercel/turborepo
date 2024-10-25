@@ -1,8 +1,9 @@
 import got from "got";
 import * as Got from "got";
+import { describe, it, expect, jest } from "@jest/globals";
 import { isUrlOk, getRepoInfo, hasRepo } from "../src/examples";
 
-jest.mock("got", () => ({
+jest.mock<typeof import("got")>("got", () => ({
   __esModule: true,
   ...jest.requireActual("got"),
 }));
@@ -37,7 +38,7 @@ describe("examples", () => {
   });
 
   describe("getRepoInfo", () => {
-    test.each([
+    it.each([
       {
         repoUrl: "https://github.com/vercel/turborepo/",
         examplePath: undefined,
@@ -104,7 +105,7 @@ describe("examples", () => {
   });
 
   describe("hasRepo", () => {
-    test.each([
+    it.each([
       {
         repoInfo: {
           username: "vercel",
