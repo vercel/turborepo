@@ -14,7 +14,7 @@ mod ui;
 pub mod watch;
 
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     io::Write,
     sync::Arc,
     time::Duration,
@@ -23,6 +23,7 @@ use std::{
 pub use cache::{CacheOutput, ConfigCache, Error as CacheError, RunCache, TaskCache};
 use chrono::{DateTime, Local};
 use rayon::iter::ParallelBridge;
+use task_id::TaskId;
 use tokio::{select, task::JoinHandle};
 use tracing::{debug, instrument};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
@@ -73,6 +74,7 @@ pub struct Run {
     task_access: TaskAccess,
     daemon: Option<DaemonClient<DaemonConnector>>,
     should_print_prelude: bool,
+    micro_frontend_configs: HashMap<String, HashSet<TaskId<'static>>>,
 }
 
 type UIResult<T> = Result<Option<(T, JoinHandle<Result<(), turborepo_ui::Error>>)>, Error>;

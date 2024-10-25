@@ -370,6 +370,8 @@ impl RunBuilder {
         repo_telemetry.track_package_manager(pkg_dep_graph.package_manager().to_string());
         repo_telemetry.track_size(pkg_dep_graph.len());
         run_telemetry.track_run_type(self.opts.run_opts.dry_run.is_some());
+        let micro_frontend_configs =
+            crate::micro_frontends::find_micro_frontend_configs(&self.repo_root, &pkg_dep_graph)?;
 
         let scm = scm.await.expect("detecting scm panicked");
         let async_cache = AsyncCache::new(
@@ -476,6 +478,7 @@ impl RunBuilder {
             signal_handler: signal_handler.clone(),
             daemon,
             should_print_prelude,
+            micro_frontend_configs,
         })
     }
 
