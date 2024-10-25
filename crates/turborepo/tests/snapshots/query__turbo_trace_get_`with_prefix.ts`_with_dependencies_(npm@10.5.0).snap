@@ -5,19 +5,15 @@ expression: query_output
 {
   "data": {
     "file": {
-      "path": "invalid.ts",
+      "path": "with_prefix.ts",
       "dependencies": {
         "files": {
           "items": [
             {
-              "path": "button.tsx"
-            }
-          ]
-        },
-        "errors": {
-          "items": [
+              "path": "bar.js"
+            },
             {
-              "message": "failed to resolve import to `./non-existent-file.js`"
+              "path": "foo.js"
             }
           ]
         }

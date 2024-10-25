@@ -47,12 +47,12 @@ async fn main() -> Result<(), PathError> {
     };
 
     if !result.errors.is_empty() {
-        for error in &result.errors {
-            eprintln!("error: {}", error);
+        for error in result.errors {
+            println!("{:?}", Report::new(error))
         }
         std::process::exit(1);
     } else {
-        for file in &result.files {
+        for file in result.files.keys() {
             println!("{}", file);
         }
     }

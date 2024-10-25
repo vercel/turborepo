@@ -11,7 +11,8 @@ use swc_ecma_ast::EsVersion;
 use swc_ecma_parser::{lexer::Lexer, Capturing, EsSyntax, Parser, Syntax, TsSyntax};
 use swc_ecma_visit::VisitWith;
 use thiserror::Error;
-use tokio::{sync::Mutex, task::JoinSet};
+use tokio::task::JoinSet;
+use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError};
 
 use crate::import_finder::ImportFinder;
@@ -26,6 +27,7 @@ pub struct Tracer {
     ts_config: Option<AbsoluteSystemPathBuf>,
     source_map: Arc<SourceMap>,
     cwd: AbsoluteSystemPathBuf,
+    errors: Vec<TraceError>,
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -70,23 +72,26 @@ impl Tracer {
             files,
             ts_config,
             cwd,
+            errors: Vec::new(),
             source_map: Arc::new(SourceMap::default()),
         }
     }
 
     pub async fn get_imports_from_file(
-        &self,
+        source_map: &SourceMap,
+        errors: &mut Vec<TraceError>,
         resolver: &Resolver,
         file_path: &AbsoluteSystemPath,
-    ) -> Result<(Vec<AbsoluteSystemPathBuf>, SeenFile), TraceError> {
+    ) -> Option<(Vec<AbsoluteSystemPathBuf>, SeenFile)> {
         // Read the file content
         let Ok(file_content) = tokio::fs::read_to_string(&file_path).await else {
-            return Err(TraceError::FileNotFound(file_path.to_owned()));
+            errors.push(TraceError::FileNotFound(file_path.to_owned()));
+            return None;
         };
 
         let comments = SingleThreadedComments::default();
 
-        let source_file = self.source_map.new_source_file(
+        let source_file = source_map.new_source_file(
             FileName::Custom(file_path.to_string()).into(),
             file_content.clone(),
         );
@@ -116,7 +121,8 @@ impl Tracer {
 
         // Parse the file as a module
         let Ok(module) = parser.parse_module() else {
-            return Err(TraceError::FileNotFound(file_path.to_owned()));
+            errors.push(TraceError::FileNotFound(file_path.to_owned()));
+            return None;
         };
 
         // Visit the AST and find imports
@@ -126,30 +132,40 @@ impl Tracer {
         // visit
         let mut files = Vec::new();
         for (import, span) in finder.imports() {
+            debug!("processing {} in {}", import, file_path);
             let Some(file_dir) = file_path.parent() else {
-                return Err(TraceError::RootFile(file_path.to_owned()));
+                errors.push(TraceError::RootFile(file_path.to_owned()));
+                continue;
             };
             match resolver.resolve(file_dir, import) {
-                Ok(resolved) => match resolved.into_path_buf().try_into() {
-                    Ok(path) => files.push(path),
-                    Err(err) => {
-                        return Err(TraceError::PathEncoding(err));
+                Ok(resolved) => {
+                    debug!("resolved {:?}", resolved);
+                    match resolved.into_path_buf().try_into() {
+                        Ok(path) => files.push(path),
+                        Err(err) => {
+                            errors.push(TraceError::PathEncoding(err));
+                            continue;
+                        }
                     }
-                },
-                Err(ResolveError::Builtin { .. }) => {}
-                Err(_) => {
-                    let (start, end) = self.source_map.span_to_char_offset(&source_file, *span);
+                }
+                Err(err @ ResolveError::Builtin { .. }) => {
+                    debug!("built in: {:?}", err);
+                }
+                Err(err) => {
+                    debug!("failed to resolve: {:?}", err);
+                    let (start, end) = source_map.span_to_char_offset(&source_file, *span);
 
-                    return Err(TraceError::Resolve {
+                    errors.push(TraceError::Resolve {
                         path: import.to_string(),
                         span: (start as usize, end as usize).into(),
                         text: NamedSource::new(file_path.to_string(), file_content.clone()),
                     });
+                    continue;
                 }
             }
         }
 
-        Ok((files, SeenFile { ast: Some(module) }))
+        Some((files, SeenFile { ast: Some(module) }))
     }
 
     pub async fn trace_file(
@@ -158,21 +174,27 @@ impl Tracer {
         file_path: AbsoluteSystemPathBuf,
         depth: usize,
         seen: &mut HashMap<AbsoluteSystemPathBuf, SeenFile>,
-    ) -> Result<(), TraceError> {
+    ) {
         if matches!(file_path.extension(), Some("css") | Some("json")) {
-            return Ok(());
+            return;
         }
         if seen.contains_key(&file_path) {
-            return Ok(());
+            return;
         }
 
-        let (imports, seen_file) = self.get_imports_from_file(resolver, &file_path).await?;
+        let entry = seen.entry(file_path.clone()).or_default();
+
+        let Some((imports, seen_file)) =
+            Self::get_imports_from_file(&self.source_map, &mut self.errors, resolver, &file_path)
+                .await
+        else {
+            return;
+        };
+
+        *entry = seen_file;
+
         self.files
             .extend(imports.into_iter().map(|import| (import, depth + 1)));
-
-        seen.insert(file_path, seen_file);
-
-        Ok(())
     }
 
     pub fn create_resolver(&mut self) -> Resolver {
@@ -193,7 +215,6 @@ impl Tracer {
     }
 
     pub async fn trace(mut self, max_depth: Option<usize>) -> TraceResult {
-        let mut errors = vec![];
         let mut seen: HashMap<AbsoluteSystemPathBuf, SeenFile> = HashMap::new();
         let resolver = self.create_resolver();
 
@@ -203,17 +224,13 @@ impl Tracer {
                     continue;
                 }
             }
-            if let Err(err) = self
-                .trace_file(&resolver, file_path, file_depth, &mut seen)
-                .await
-            {
-                errors.push(err);
-            }
+            self.trace_file(&resolver, file_path, file_depth, &mut seen)
+                .await;
         }
 
         TraceResult {
             files: seen,
-            errors,
+            errors: self.errors,
         }
     }
 
@@ -221,6 +238,8 @@ impl Tracer {
         let files = match globwalk::globwalk(
             &self.cwd,
             &[
+                "**/*.js".parse().expect("valid glob"),
+                "**/*.jsx".parse().expect("valid glob"),
                 "**/*.ts".parse().expect("valid glob"),
                 "**/*.tsx".parse().expect("valid glob"),
             ],
@@ -248,19 +267,29 @@ impl Tracer {
             let shared_self = shared_self.clone();
             let resolver = resolver.clone();
             futures.spawn(async move {
-                let (imported_files, seen_file) =
-                    shared_self.get_imports_from_file(&resolver, &file).await?;
+                let mut errors = Vec::new();
+                let Some((imported_files, seen_file)) = Self::get_imports_from_file(
+                    &shared_self.source_map,
+                    &mut errors,
+                    &resolver,
+                    &file,
+                )
+                .await
+                else {
+                    return (errors, None);
+                };
+
                 for import in imported_files {
                     if shared_self
                         .files
                         .iter()
                         .any(|(source, _)| import.as_path() == source.as_path())
                     {
-                        return Ok(Some((file, seen_file)));
+                        return (errors, Some((file, seen_file)));
                     }
                 }
 
-                Ok(None)
+                (errors, None)
             });
         }
 
@@ -268,12 +297,11 @@ impl Tracer {
         let mut errors = Vec::new();
 
         while let Some(result) = futures.join_next().await {
-            match result.unwrap() {
-                Ok(Some((path, file))) => {
-                    usages.insert(path, file);
-                }
-                Ok(None) => {}
-                Err(err) => errors.push(err),
+            let (errs, file) = result.unwrap();
+            errors.extend(errs);
+
+            if let Some((path, seen_file)) = file {
+                usages.insert(path, seen_file);
             }
         }
 
