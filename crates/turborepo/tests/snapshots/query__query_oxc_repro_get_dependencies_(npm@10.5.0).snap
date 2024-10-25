@@ -1,0 +1,23 @@
+---
+source: crates/turborepo/tests/query.rs
+expression: query_output
+---
+{
+  "data": {
+    "file": {
+      "path": "index.js",
+      "dependencies": {
+        "files": {
+          "items": [
+            {
+              "path": "nm/index.js"
+            }
+          ]
+        },
+        "errors": {
+          "items": []
+        }
+      }
+    }
+  }
+}
