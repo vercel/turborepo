@@ -91,7 +91,7 @@ Trace file with invalid import
           "errors": {
             "items": [
               {
-                "message": "failed to resolve import"
+                "message": "failed to resolve import to `./non-existent-file.js`"
               }
             ]
           }

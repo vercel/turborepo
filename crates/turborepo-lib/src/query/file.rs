@@ -100,8 +100,8 @@ impl From<turbo_trace::TraceError> for TraceError {
                 message: format!("failed to parse file: {:?}", e),
                 ..Default::default()
             },
-            turbo_trace::TraceError::GlobError(_) => TraceError {
-                message: format!("failed to glob files"),
+            turbo_trace::TraceError::GlobError(err) => TraceError {
+                message: format!("failed to glob files: {}", err),
                 ..Default::default()
             },
             turbo_trace::TraceError::Resolve { span, text, .. } => {
