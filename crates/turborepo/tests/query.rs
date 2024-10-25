@@ -30,7 +30,7 @@ fn test_trace() -> Result<(), anyhow::Error> {
         "get `main.ts` with ast" => "query { file(path: \"main.ts\") { path ast } }",
     );
 
-    insta::with_settings!({ filters => vec![(r"\\", "/")]}, {
+    insta::with_settings!({ filters => vec![(r"\\\\", "/")]}, {
         check_json!(
             "turbo_trace",
             "npm@10.5.0",
