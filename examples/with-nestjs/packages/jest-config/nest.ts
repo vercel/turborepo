@@ -1,6 +1,8 @@
-/** @type {import('jest').Config} */
-module.exports = {
-  ...require('./base'),
+import type { Config } from 'jest';
+import { config as baseConfig } from './base';
+
+export const config = {
+  ...baseConfig,
   rootDir: 'src',
   testRegex: '.*\\.spec\\.ts$',
   transform: {
@@ -9,4 +11,4 @@ module.exports = {
   collectCoverageFrom: ['**/*.(t|j)s'],
   coverageDirectory: '../coverage',
   testEnvironment: 'node',
-};
+} as const satisfies Config;
