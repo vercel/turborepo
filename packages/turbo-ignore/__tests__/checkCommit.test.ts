@@ -1,6 +1,7 @@
 // eslint-disable-next-line camelcase -- this is a good exception to this rule
 import child_process from "node:child_process";
 import { mockEnv } from "@turbo/test-utils";
+import { describe, it, expect, jest } from "@jest/globals";
 import { checkCommit } from "../src/checkCommit";
 
 describe("checkCommit()", () => {

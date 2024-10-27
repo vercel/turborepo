@@ -10,6 +10,7 @@ import {
 } from "fs-extra";
 import yaml from "js-yaml";
 import { parse as JSON5Parse } from "json5";
+import { afterAll, afterEach } from "@jest/globals";
 
 interface SetupTextFixtures {
   directory: string;
