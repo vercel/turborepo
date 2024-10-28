@@ -433,8 +433,16 @@ impl<'a> EngineBuilder<'a> {
         };
 
         let task_id_as_name = task_id.as_task_name();
-        if turbo_json.tasks.contains_key(&task_id_as_name)
+        if
+        // See if pkg#task is defined e.g. `docs#build`. This can only happen in root turbo.json
+        turbo_json.tasks.contains_key(&task_id_as_name)
+            // See if task is defined e.g. `build`. This can happen in root or workspace turbo.json
+            // This will fail if the user provided a task id e.g. turbo `docs#build`
             || turbo_json.tasks.contains_key(task_name)
+            // If user provided a task id, then we see if the task is defined
+            // e.g. `docs#build` should resolve if there's a `build` in root turbo.json or docs workspace level turbo.json
+            || (matches!(workspace, PackageName::Root) && turbo_json.tasks.contains_key(&TaskName::from(task_name.task())))
+            || (workspace == &PackageName::from(task_id.package()) && turbo_json.tasks.contains_key(&TaskName::from(task_name.task())))
         {
             Ok(true)
         } else if !matches!(workspace, PackageName::Root) {
@@ -680,6 +688,10 @@ mod test {
     #[test_case(PackageName::from("b"), "build", "b#build", true ; "workspace task in workspace")]
     #[test_case(PackageName::from("b"), "test", "b#test", true ; "task missing from workspace")]
     #[test_case(PackageName::from("c"), "missing", "c#missing", false ; "task missing")]
+    #[test_case(PackageName::from("c"), "c#curse", "c#curse", true ; "root defined task")]
+    #[test_case(PackageName::from("b"), "c#curse", "c#curse", true ; "non-workspace root defined task")]
+    #[test_case(PackageName::from("b"), "b#special", "b#special", true ; "workspace defined task")]
+    #[test_case(PackageName::from("c"), "b#special", "b#special", false ; "non-workspace defined task")]
     fn test_task_definition(
         workspace: PackageName,
         task_name: &'static str,
@@ -694,6 +706,7 @@ mod test {
                         "test": { "inputs": ["testing"] },
                         "build": { "inputs": ["primary"] },
                         "a#build": { "inputs": ["special"] },
+                        "c#curse": {},
                     }
                 })),
             ),
@@ -702,6 +715,7 @@ mod test {
                 turbo_json(json!({
                     "tasks": {
                         "build": { "inputs": ["outer"]},
+                        "special": {},
                     }
                 })),
             ),
@@ -1272,8 +1286,9 @@ mod test {
             (
                 PackageName::from("app2"),
                 turbo_json(json!({
+                    "extends": ["//"],
                     "tasks": {
-                        "special": { "dependsOn": ["^build"] },
+                        "another": { "dependsOn": ["^build"] },
                     }
                 })),
             ),
@@ -1284,7 +1299,7 @@ mod test {
         let engine = EngineBuilder::new(&repo_root, &package_graph, loader, false)
             .with_tasks(vec![
                 Spanned::new(TaskName::from("app1#special")),
-                Spanned::new(TaskName::from("app2#special")),
+                Spanned::new(TaskName::from("app2#another")),
             ])
             .with_workspaces(vec![PackageName::from("app1"), PackageName::from("app2")])
             .build()
@@ -1292,6 +1307,7 @@ mod test {
 
         let expected = deps! {
             "app1#special" => ["libA#build"],
+            "app2#another" => ["libA#build"],
             "libA#build" => ["___ROOT___"]
         };
         assert_eq!(all_dependencies(&engine), expected);
