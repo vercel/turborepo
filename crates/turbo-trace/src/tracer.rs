@@ -17,7 +17,7 @@ use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError};
 
 use crate::import_finder::ImportFinder;
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct SeenFile {
     pub ast: Option<swc_ecma_ast::Module>,
 }
@@ -254,6 +254,7 @@ impl Tracer {
                 .await;
         }
 
+        eprintln!("seen: {:#?}", seen.keys().collect::<Vec<_>>());
         TraceResult {
             files: seen,
             errors: self.errors,
