@@ -85,8 +85,8 @@ mod test {
         sync::{Arc, Mutex},
     };
 
-    use reqwest::header::HeaderValue;
     use test_case::test_case;
+    use tonic::codegen::http::HeaderValue;
 
     use super::*;
 
