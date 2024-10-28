@@ -13,7 +13,7 @@ use turborepo_telemetry::events::{task::PackageTaskEventBuilder, TrackedErrors};
 use turborepo_ui::{ColorConfig, OutputWriter};
 
 use super::{
-    command::{CommandFactory, PackageGraphCommandProvider},
+    command::{CommandFactory, MicroFrontendProxyProvider, PackageGraphCommandProvider},
     error::{TaskError, TaskErrorCause, TaskWarning},
     output::TaskCacheOutput,
     TaskOutput, Visitor,
@@ -51,7 +51,15 @@ impl<'a> ExecContextFactory<'a> {
             &visitor.package_graph,
             visitor.run_opts.task_args(),
         );
-        let command_factory = CommandFactory::new().add_provider(pkg_graph_provider);
+        let mfe_proxy_provider = MicroFrontendProxyProvider::new(
+            visitor.repo_root,
+            &visitor.package_graph,
+            engine,
+            visitor.micro_frontends_configs,
+        );
+        let command_factory = CommandFactory::new()
+            .add_provider(mfe_proxy_provider)
+            .add_provider(pkg_graph_provider);
         Ok(Self {
             visitor,
             errors,

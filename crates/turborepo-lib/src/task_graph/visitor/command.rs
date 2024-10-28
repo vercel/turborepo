@@ -1,11 +1,14 @@
-use std::path::PathBuf;
+use std::{
+    collections::{HashMap, HashSet},
+    path::PathBuf,
+};
 
 use turbopath::AbsoluteSystemPath;
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_repository::package_graph::{PackageGraph, PackageInfo, PackageName};
 
 use super::Error;
-use crate::{opts::TaskArgs, process::Command, run::task_id::TaskId};
+use crate::{engine::Engine, opts::TaskArgs, process::Command, run::task_id::TaskId};
 
 pub trait CommandProvider {
     fn command(
@@ -125,6 +128,82 @@ impl<'a> CommandProvider for PackageGraphCommandProvider<'a> {
         // We always open stdin and the visitor will close it depending on task
         // configuration
         cmd.open_stdin();
+
+        Ok(Some(cmd))
+    }
+}
+
+#[derive(Debug)]
+pub struct MicroFrontendProxyProvider<'a> {
+    repo_root: &'a AbsoluteSystemPath,
+    package_graph: &'a PackageGraph,
+    tasks_in_graph: HashSet<TaskId<'a>>,
+    mfe_configs: &'a HashMap<String, HashSet<TaskId<'static>>>,
+}
+
+impl<'a> MicroFrontendProxyProvider<'a> {
+    pub fn new(
+        repo_root: &'a AbsoluteSystemPath,
+        package_graph: &'a PackageGraph,
+        engine: &Engine,
+        micro_frontends_configs: &'a HashMap<String, HashSet<TaskId<'static>>>,
+    ) -> Self {
+        let tasks_in_graph = engine
+            .tasks()
+            .filter_map(|task| match task {
+                crate::engine::TaskNode::Task(task_id) => Some(task_id),
+                crate::engine::TaskNode::Root => None,
+            })
+            .cloned()
+            .collect();
+        Self {
+            repo_root,
+            package_graph,
+            tasks_in_graph,
+            mfe_configs: micro_frontends_configs,
+        }
+    }
+
+    fn dev_tasks(&self, task_id: &TaskId) -> Option<&HashSet<TaskId<'static>>> {
+        (task_id.task() == "proxy")
+            .then(|| self.mfe_configs.get(task_id.package()))
+            .flatten()
+    }
+
+    fn package_info(&self, task_id: &TaskId) -> Result<&PackageInfo, Error> {
+        self.package_graph
+            .package_info(&PackageName::from(task_id.package()))
+            .ok_or_else(|| Error::MissingPackage {
+                package_name: task_id.package().into(),
+                task_id: task_id.clone().into_owned(),
+            })
+    }
+}
+
+impl<'a> CommandProvider for MicroFrontendProxyProvider<'a> {
+    fn command(
+        &self,
+        task_id: &TaskId,
+        _environment: EnvironmentVariableMap,
+    ) -> Result<Option<Command>, Error> {
+        let Some(dev_tasks) = self.dev_tasks(task_id) else {
+            return Ok(None);
+        };
+        let package_info = self.package_info(task_id)?;
+        let local_apps = dev_tasks
+            .iter()
+            .filter(|task| self.tasks_in_graph.contains(task))
+            .map(|task| task.package());
+        let package_dir = self.repo_root.resolve(package_info.package_path());
+        let mfe_path = package_dir.join_component("micro-frontends.jsonc");
+        let mut args = vec!["proxy", mfe_path.as_str(), "--names"];
+        args.extend(local_apps);
+
+        // TODO: leverage package manager to find the local proxy
+        let program = package_dir.join_components(&["node_modules", ".bin", "micro-frontends"]);
+        let mut cmd = Command::new(program.as_std_path());
+        cmd.current_dir(package_dir).args(args);
+        eprintln!("running proxy {}", cmd.label());
 
         Ok(Some(cmd))
     }

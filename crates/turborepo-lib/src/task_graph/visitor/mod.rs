@@ -5,7 +5,7 @@ mod output;
 
 use std::{
     borrow::Cow,
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     io::Write,
     sync::{Arc, Mutex, OnceLock},
 };
@@ -65,6 +65,7 @@ pub struct Visitor<'a> {
     is_watch: bool,
     ui_sender: Option<UISender>,
     warnings: Arc<Mutex<Vec<TaskWarning>>>,
+    micro_frontends_configs: &'a HashMap<String, HashSet<TaskId<'static>>>,
 }
 
 #[derive(Debug, thiserror::Error, Diagnostic)]
@@ -119,6 +120,7 @@ impl<'a> Visitor<'a> {
         global_env: EnvironmentVariableMap,
         ui_sender: Option<UISender>,
         is_watch: bool,
+        micro_frontends_configs: &'a HashMap<String, HashSet<TaskId<'static>>>,
     ) -> Self {
         let task_hasher = TaskHasher::new(
             package_inputs_hashes,
@@ -155,6 +157,7 @@ impl<'a> Visitor<'a> {
             ui_sender,
             is_watch,
             warnings: Default::default(),
+            micro_frontends_configs,
         }
     }
 

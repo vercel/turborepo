@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
@@ -12,7 +12,10 @@ use super::{Pipeline, RawTaskDefinition, TurboJson, CONFIG_FILE};
 use crate::{
     cli::EnvMode,
     config::Error,
-    run::{task_access::TASK_ACCESS_CONFIG_PATH, task_id::TaskName},
+    run::{
+        task_access::TASK_ACCESS_CONFIG_PATH,
+        task_id::{TaskId, TaskName},
+    },
 };
 
 /// Structure for loading TurboJson structures.
@@ -34,6 +37,7 @@ enum Strategy {
     Workspace {
         // Map of package names to their package specific turbo.json
         packages: HashMap<PackageName, AbsoluteSystemPathBuf>,
+        micro_frontends_configs: Option<HashMap<String, HashSet<TaskId<'static>>>>,
     },
     WorkspaceNoTurboJson {
         // Map of package names to their scripts
@@ -57,7 +61,28 @@ impl TurboJsonLoader {
         Self {
             repo_root,
             cache: HashMap::new(),
-            strategy: Strategy::Workspace { packages },
+            strategy: Strategy::Workspace {
+                packages,
+                micro_frontends_configs: None,
+            },
+        }
+    }
+
+    /// Create a loader that will load turbo.json files throughout the workspace
+    pub fn workspace_with_microfrontends<'a>(
+        repo_root: AbsoluteSystemPathBuf,
+        root_turbo_json_path: AbsoluteSystemPathBuf,
+        packages: impl Iterator<Item = (&'a PackageName, &'a PackageInfo)>,
+        micro_frontends_configs: HashMap<String, HashSet<TaskId<'static>>>,
+    ) -> Self {
+        let packages = package_turbo_jsons(&repo_root, root_turbo_json_path, packages);
+        Self {
+            repo_root,
+            cache: HashMap::new(),
+            strategy: Strategy::Workspace {
+                packages,
+                micro_frontends_configs: Some(micro_frontends_configs),
+            },
         }
     }
 
@@ -147,9 +172,24 @@ impl TurboJsonLoader {
                     load_from_root_package_json(&self.repo_root, root_turbo_json, package_json)
                 }
             }
-            Strategy::Workspace { packages } => {
+            Strategy::Workspace {
+                packages,
+                micro_frontends_configs,
+            } => {
+                eprint!("resolving {package:?}");
+                eprintln!("{micro_frontends_configs:?}");
                 let path = packages.get(package).ok_or_else(|| Error::NoTurboJSON)?;
-                load_from_file(&self.repo_root, path)
+                let should_inject_proxy_task =
+                    micro_frontends_configs.as_ref().map_or(false, |configs| {
+                        let pkg = package.to_string();
+                        eprintln!("{pkg}");
+                        configs.contains_key(&pkg)
+                    });
+                if should_inject_proxy_task {
+                    load_from_file_with_proxy(&self.repo_root, path)
+                } else {
+                    load_from_file(&self.repo_root, path)
+                }
             }
             Strategy::WorkspaceNoTurboJson { packages } => {
                 let script_names = packages.get(package).ok_or(Error::NoTurboJSON)?;
@@ -228,6 +268,35 @@ fn load_from_file(
         // We're not synthesizing anything and there was no error, we're done
         Ok(turbo) => Ok(turbo),
     }
+}
+
+fn load_from_file_with_proxy(
+    repo_root: &AbsoluteSystemPath,
+    turbo_json_path: &AbsoluteSystemPath,
+) -> Result<TurboJson, Error> {
+    let mut turbo = match TurboJson::read(repo_root, turbo_json_path) {
+        // If the file didn't exist, use a default so we can inject the proxy task
+        Err(Error::Io(_)) => Ok(TurboJson::default()),
+        // There was an error, and we don't have any chance of recovering
+        // because we aren't synthesizing anything
+        Err(e) => Err(e),
+        // We're not synthesizing anything and there was no error, we're done
+        Ok(turbo) => Ok(turbo),
+    }?;
+
+    if turbo.extends.is_empty() {
+        turbo.extends = Spanned::new(vec!["//".into()]);
+    }
+
+    turbo.tasks.insert(
+        TaskName::from("proxy"),
+        Spanned::new(RawTaskDefinition {
+            cache: Some(Spanned::new(false)),
+            ..Default::default()
+        }),
+    );
+
+    Ok(turbo)
 }
 
 fn load_from_root_package_json(
@@ -385,6 +454,7 @@ mod test {
                 packages: vec![(PackageName::Root, root_turbo_json)]
                     .into_iter()
                     .collect(),
+                micro_frontends_configs: None,
             },
         };
 
@@ -581,7 +651,10 @@ mod test {
         let mut loader = TurboJsonLoader {
             repo_root: repo_root.to_owned(),
             cache: HashMap::new(),
-            strategy: Strategy::Workspace { packages },
+            strategy: Strategy::Workspace {
+                packages,
+                micro_frontends_configs: None,
+            },
         };
         let result = loader.load(&PackageName::from("a"));
         assert!(
@@ -610,7 +683,10 @@ mod test {
         let mut loader = TurboJsonLoader {
             repo_root: repo_root.to_owned(),
             cache: HashMap::new(),
-            strategy: Strategy::Workspace { packages },
+            strategy: Strategy::Workspace {
+                packages,
+                micro_frontends_configs: None,
+            },
         };
         a_turbo_json
             .create_with_contents(r#"{"tasks": {"build": {}}}"#)

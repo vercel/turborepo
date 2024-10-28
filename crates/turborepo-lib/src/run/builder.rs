@@ -37,6 +37,7 @@ use {
     },
 };
 
+use super::task_id::TaskId;
 use crate::{
     cli::DryRunMode,
     commands::CommandBase,
@@ -403,6 +404,14 @@ impl RunBuilder {
                 self.repo_root.clone(),
                 pkg_dep_graph.packages(),
             )
+        } else if !micro_frontend_configs.is_empty() {
+            eprintln!("hit this");
+            TurboJsonLoader::workspace_with_microfrontends(
+                self.repo_root.clone(),
+                self.root_turbo_json_path.clone(),
+                pkg_dep_graph.packages(),
+                micro_frontend_configs.clone(),
+            )
         } else {
             TurboJsonLoader::workspace(
                 self.repo_root.clone(),
@@ -429,6 +438,7 @@ impl RunBuilder {
             &root_turbo_json,
             filtered_pkgs.keys(),
             turbo_json_loader.clone(),
+            &micro_frontend_configs,
         )?;
 
         if self.opts.run_opts.parallel {
@@ -438,6 +448,7 @@ impl RunBuilder {
                 &root_turbo_json,
                 filtered_pkgs.keys(),
                 turbo_json_loader,
+                &micro_frontend_configs,
             )?;
         }
 
@@ -488,7 +499,28 @@ impl RunBuilder {
         root_turbo_json: &TurboJson,
         filtered_pkgs: impl Iterator<Item = &'a PackageName>,
         turbo_json_loader: TurboJsonLoader,
+        micro_frontends_configs: &HashMap<String, HashSet<TaskId<'static>>>,
     ) -> Result<Engine, Error> {
+        let mut tasks = self
+            .opts
+            .run_opts
+            .tasks
+            .iter()
+            .map(|task| {
+                // TODO: Pull span info from command
+                Spanned::new(TaskName::from(task.as_str()).into_owned())
+            })
+            .collect::<Vec<_>>();
+        if !micro_frontends_configs.is_empty() {
+            tasks.push(Spanned::new(TaskName::from("proxy").into_owned()));
+        }
+        /*
+        tasks.extend(
+            micro_frontends_configs
+                .keys()
+                .map(|pkg| Spanned::new(TaskId::new(pkg, "proxy").as_task_name().into_owned())),
+        );
+                */
         let mut builder = EngineBuilder::new(
             &self.repo_root,
             pkg_dep_graph,
@@ -498,10 +530,7 @@ impl RunBuilder {
         .with_root_tasks(root_turbo_json.tasks.keys().cloned())
         .with_tasks_only(self.opts.run_opts.only)
         .with_workspaces(filtered_pkgs.cloned().collect())
-        .with_tasks(self.opts.run_opts.tasks.iter().map(|task| {
-            // TODO: Pull span info from command
-            Spanned::new(TaskName::from(task.as_str()).into_owned())
-        }));
+        .with_tasks(tasks);
 
         if self.add_all_tasks {
             builder = builder.add_all_tasks();

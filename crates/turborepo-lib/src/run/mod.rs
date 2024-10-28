@@ -462,6 +462,7 @@ impl Run {
             global_env,
             ui_sender,
             is_watch,
+            &self.micro_frontend_configs,
         )
         .await;
 
