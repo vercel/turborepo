@@ -202,7 +202,7 @@ impl<'a> CommandProvider for MicroFrontendProxyProvider<'a> {
         // TODO: leverage package manager to find the local proxy
         let program = package_dir.join_components(&["node_modules", ".bin", "micro-frontends"]);
         let mut cmd = Command::new(program.as_std_path());
-        cmd.current_dir(package_dir).args(args);
+        cmd.current_dir(package_dir).args(args).open_stdin();
         eprintln!("running proxy {}", cmd.label());
 
         Ok(Some(cmd))

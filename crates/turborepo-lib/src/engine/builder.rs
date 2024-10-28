@@ -234,7 +234,6 @@ impl<'a> EngineBuilder<'a> {
             let task_id = task
                 .task_id()
                 .unwrap_or_else(|| TaskId::new(workspace.as_ref(), task.task()));
-            eprintln!("{task_id:?}");
 
             if Self::has_task_definition(&mut turbo_json_loader, workspace, task, &task_id)? {
                 missing_tasks.remove(task.as_inner());
