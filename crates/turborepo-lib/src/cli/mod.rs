@@ -1147,6 +1147,8 @@ pub async fn run(
     } else {
         AbsoluteSystemPathBuf::cwd()?
     };
+    #[cfg(windows)]
+    let repo_root = repo_root.to_realpath()?;
 
     cli_args.command = Some(command);
     cli_args.cwd = Some(repo_root.as_path().to_owned());

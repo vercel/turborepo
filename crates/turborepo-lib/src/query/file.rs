@@ -20,12 +20,15 @@ pub struct File {
 }
 
 impl File {
-    pub fn new(run: Arc<Run>, path: AbsoluteSystemPathBuf) -> Self {
-        Self {
+    pub fn new(run: Arc<Run>, path: AbsoluteSystemPathBuf) -> Result<Self, Error> {
+        #[cfg(windows)]
+        let path = path.to_realpath()?;
+
+        Ok(Self {
             run,
             path,
             ast: None,
-        }
+        })
     }
 
     pub fn with_ast(mut self, ast: Option<swc_ecma_ast::Module>) -> Self {
@@ -130,16 +133,16 @@ struct TraceResult {
 }
 
 impl TraceResult {
-    fn new(result: turbo_trace::TraceResult, run: Arc<Run>) -> Self {
-        Self {
+    fn new(result: turbo_trace::TraceResult, run: Arc<Run>) -> Result<Self, Error> {
+        Ok(Self {
             files: result
                 .files
                 .into_iter()
                 .sorted_by(|a, b| a.0.cmp(&b.0))
-                .map(|(path, file)| File::new(run.clone(), path).with_ast(file.ast))
-                .collect(),
+                .map(|(path, file)| Ok(File::new(run.clone(), path)?.with_ast(file.ast)))
+                .collect::<Result<_, Error>>()?,
             errors: result.errors.into_iter().map(|e| e.into()).collect(),
-        }
+        })
     }
 }
 
@@ -162,7 +165,11 @@ impl File {
         Ok(self.path.to_string())
     }
 
-    async fn dependencies(&self, depth: Option<usize>, ts_config: Option<String>) -> TraceResult {
+    async fn dependencies(
+        &self,
+        depth: Option<usize>,
+        ts_config: Option<String>,
+    ) -> Result<TraceResult, Error> {
         let tracer = Tracer::new(
             self.run.repo_root().to_owned(),
             vec![self.path.clone()],
@@ -175,7 +182,7 @@ impl File {
         TraceResult::new(result, self.run.clone())
     }
 
-    async fn dependents(&self, ts_config: Option<String>) -> TraceResult {
+    async fn dependents(&self, ts_config: Option<String>) -> Result<TraceResult, Error> {
         let tracer = Tracer::new(
             self.run.repo_root().to_owned(),
             vec![self.path.clone()],

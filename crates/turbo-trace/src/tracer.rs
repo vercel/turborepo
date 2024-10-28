@@ -254,7 +254,6 @@ impl Tracer {
                 .await;
         }
 
-        eprintln!("seen: {:#?}", seen.keys().collect::<Vec<_>>());
         TraceResult {
             files: seen,
             errors: self.errors,
