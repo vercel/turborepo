@@ -1245,4 +1245,55 @@ mod test {
             .err();
         assert_eq!(result.as_deref(), reason);
     }
+
+    #[test]
+    fn test_run_package_task_exact() {
+        let repo_root_dir = TempDir::with_prefix("repo").unwrap();
+        let repo_root = AbsoluteSystemPathBuf::new(repo_root_dir.path().to_str().unwrap()).unwrap();
+        let package_graph = mock_package_graph(
+            &repo_root,
+            package_jsons! {
+                repo_root,
+                "app1" => ["libA"],
+                "app2" => ["libA"],
+                "libA" => []
+            },
+        );
+        let turbo_jsons = vec![
+            (
+                PackageName::Root,
+                turbo_json(json!({
+                    "tasks": {
+                        "build": { "dependsOn": ["^build"] },
+                        "special": { "dependsOn": ["^build"] },
+                    }
+                })),
+            ),
+            (
+                PackageName::from("app2"),
+                turbo_json(json!({
+                    "tasks": {
+                        "special": { "dependsOn": ["^build"] },
+                    }
+                })),
+            ),
+        ]
+        .into_iter()
+        .collect();
+        let loader = TurboJsonLoader::noop(turbo_jsons);
+        let engine = EngineBuilder::new(&repo_root, &package_graph, loader, false)
+            .with_tasks(vec![
+                Spanned::new(TaskName::from("app1#special")),
+                Spanned::new(TaskName::from("app2#special")),
+            ])
+            .with_workspaces(vec![PackageName::from("app1"), PackageName::from("app2")])
+            .build()
+            .unwrap();
+
+        let expected = deps! {
+            "app1#special" => ["libA#build"],
+            "libA#build" => ["___ROOT___"]
+        };
+        assert_eq!(all_dependencies(&engine), expected);
+    }
 }
