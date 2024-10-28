@@ -176,8 +176,6 @@ impl TurboJsonLoader {
                 packages,
                 micro_frontends_configs,
             } => {
-                eprint!("resolving {package:?}");
-                eprintln!("{micro_frontends_configs:?}");
                 let path = packages.get(package).ok_or_else(|| Error::NoTurboJSON)?;
                 let should_inject_proxy_task =
                     micro_frontends_configs.as_ref().map_or(false, |configs| {

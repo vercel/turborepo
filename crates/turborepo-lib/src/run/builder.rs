@@ -405,7 +405,6 @@ impl RunBuilder {
                 pkg_dep_graph.packages(),
             )
         } else if !micro_frontend_configs.is_empty() {
-            eprintln!("hit this");
             TurboJsonLoader::workspace_with_microfrontends(
                 self.repo_root.clone(),
                 self.root_turbo_json_path.clone(),
@@ -511,16 +510,21 @@ impl RunBuilder {
                 Spanned::new(TaskName::from(task.as_str()).into_owned())
             })
             .collect::<Vec<_>>();
+        let mut workspace_packages = filtered_pkgs.cloned().collect::<Vec<_>>();
         if !micro_frontends_configs.is_empty() {
             tasks.push(Spanned::new(TaskName::from("proxy").into_owned()));
+            // we need to add the MFE config packages into the scope here to make sure the
+            // proxy gets run
+            for (mfe_config_package, dev_tasks) in micro_frontends_configs.iter() {
+                for dev_task in dev_tasks {
+                    let package = PackageName::from(dev_task.package());
+                    if workspace_packages.contains(&package) {
+                        workspace_packages.push(PackageName::from(mfe_config_package.as_str()));
+                        break;
+                    }
+                }
+            }
         }
-        /*
-        tasks.extend(
-            micro_frontends_configs
-                .keys()
-                .map(|pkg| Spanned::new(TaskId::new(pkg, "proxy").as_task_name().into_owned())),
-        );
-                */
         let mut builder = EngineBuilder::new(
             &self.repo_root,
             pkg_dep_graph,
@@ -529,7 +533,7 @@ impl RunBuilder {
         )
         .with_root_tasks(root_turbo_json.tasks.keys().cloned())
         .with_tasks_only(self.opts.run_opts.only)
-        .with_workspaces(filtered_pkgs.cloned().collect())
+        .with_workspaces(workspace_packages)
         .with_tasks(tasks);
 
         if self.add_all_tasks {
