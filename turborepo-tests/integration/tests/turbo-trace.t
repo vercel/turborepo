@@ -1,6 +1,24 @@
 Setup
   $ . ${TESTDIR}/../../helpers/setup_integration_test.sh turbo_trace
 
+  $ ls
+  README.md
+  bar.js
+  button.css
+  button.json
+  button.tsx
+  circular.ts
+  circular2.ts
+  foo.js
+  invalid.ts
+  main.ts
+  node_modules
+  package-lock.json
+  package.json
+  tsconfig.json
+  turbo.json
+  with_prefix.ts
+
   $ ${TURBO} query "query { file(path: \"main.ts\") { path } }"
    WARNING  query command is experimental and may change in the future
   {
