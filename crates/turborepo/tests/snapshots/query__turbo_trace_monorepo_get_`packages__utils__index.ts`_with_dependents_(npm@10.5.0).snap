@@ -5,21 +5,20 @@ expression: query_output
 {
   "data": {
     "file": {
-      "path": "invalid.ts",
-      "dependencies": {
+      "path": "packages/utils/index.ts",
+      "dependents": {
         "files": {
           "items": [
             {
-              "path": "button.tsx"
+              "path": "apps/my-app/index.ts"
+            },
+            {
+              "path": "packages/another/index.js"
             }
           ]
         },
         "errors": {
-          "items": [
-            {
-              "message": "failed to resolve import to `./non-existent-file.js`"
-            }
-          ]
+          "items": []
         }
       }
     }

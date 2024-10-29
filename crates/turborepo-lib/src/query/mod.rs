@@ -530,7 +530,7 @@ impl RepositoryQuery {
             return Err(Error::FileNotFound(abs_path.to_string()));
         }
 
-        Ok(File::new(self.run.clone(), abs_path))
+        File::new(self.run.clone(), abs_path)
     }
 
     /// Gets a list of packages that match the given filter
