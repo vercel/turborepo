@@ -24,6 +24,12 @@ Setup
                 "path": "bar.js"
               },
               {
+                "path": "button.css"
+              },
+              {
+                "path": "button.json"
+              },
+              {
                 "path": "button.tsx"
               },
               {
@@ -47,7 +53,14 @@ Setup
         "path": "button.tsx",
         "dependencies": {
           "files": {
-            "items": []
+            "items": [
+              {
+                "path": "button.css"
+              },
+              {
+                "path": "button.json"
+              }
+            ]
           }
         }
       }
@@ -84,6 +97,12 @@ Trace file with invalid import
           "files": {
             "items": [
               {
+                "path": "button.css"
+              },
+              {
+                "path": "button.json"
+              },
+              {
                 "path": "button.tsx"
               }
             ]
@@ -91,7 +110,7 @@ Trace file with invalid import
           "errors": {
             "items": [
               {
-                "message": "failed to resolve import"
+                "message": "failed to resolve import to `./non-existent-file.js`"
               }
             ]
           }
@@ -111,14 +130,14 @@ Get AST from file
           "type": "Module",
           "span": {
             "start": 1,
-            "end": 169
+            "end": 173
           },
           "body": [
             {
               "type": "ImportDeclaration",
               "span": {
                 "start": 1,
-                "end": 35
+                "end": 39
               },
               "specifiers": [
                 {
@@ -145,10 +164,10 @@ Get AST from file
                 "type": "StringLiteral",
                 "span": {
                   "start": 24,
-                  "end": 34
+                  "end": 38
                 },
-                "value": "./button",
-                "raw": "\"./button\""
+                "value": "./button.tsx",
+                "raw": "\"./button.tsx\""
               },
               "typeOnly": false,
               "with": null,
@@ -157,21 +176,21 @@ Get AST from file
             {
               "type": "ImportDeclaration",
               "span": {
-                "start": 36,
-                "end": 60
+                "start": 40,
+                "end": 64
               },
               "specifiers": [
                 {
                   "type": "ImportDefaultSpecifier",
                   "span": {
-                    "start": 43,
-                    "end": 46
+                    "start": 47,
+                    "end": 50
                   },
                   "local": {
                     "type": "Identifier",
                     "span": {
-                      "start": 43,
-                      "end": 46
+                      "start": 47,
+                      "end": 50
                     },
                     "ctxt": 0,
                     "value": "foo",
@@ -182,8 +201,8 @@ Get AST from file
               "source": {
                 "type": "StringLiteral",
                 "span": {
-                  "start": 52,
-                  "end": 59
+                  "start": 56,
+                  "end": 63
                 },
                 "value": "./foo",
                 "raw": "\"./foo\""
@@ -195,21 +214,21 @@ Get AST from file
             {
               "type": "ImportDeclaration",
               "span": {
-                "start": 61,
-                "end": 96
+                "start": 65,
+                "end": 100
               },
               "specifiers": [
                 {
                   "type": "ImportDefaultSpecifier",
                   "span": {
-                    "start": 68,
-                    "end": 74
+                    "start": 72,
+                    "end": 78
                   },
                   "local": {
                     "type": "Identifier",
                     "span": {
-                      "start": 68,
-                      "end": 74
+                      "start": 72,
+                      "end": 78
                     },
                     "ctxt": 0,
                     "value": "repeat",
@@ -220,8 +239,8 @@ Get AST from file
               "source": {
                 "type": "StringLiteral",
                 "span": {
-                  "start": 80,
-                  "end": 95
+                  "start": 84,
+                  "end": 99
                 },
                 "value": "repeat-string",
                 "raw": "\"repeat-string\""
@@ -233,8 +252,8 @@ Get AST from file
             {
               "type": "VariableDeclaration",
               "span": {
-                "start": 98,
-                "end": 126
+                "start": 102,
+                "end": 130
               },
               "ctxt": 0,
               "kind": "const",
@@ -243,14 +262,14 @@ Get AST from file
                 {
                   "type": "VariableDeclarator",
                   "span": {
-                    "start": 104,
-                    "end": 125
+                    "start": 108,
+                    "end": 129
                   },
                   "id": {
                     "type": "Identifier",
                     "span": {
-                      "start": 104,
-                      "end": 110
+                      "start": 108,
+                      "end": 114
                     },
                     "ctxt": 0,
                     "value": "button",
@@ -260,15 +279,15 @@ Get AST from file
                   "init": {
                     "type": "NewExpression",
                     "span": {
-                      "start": 113,
-                      "end": 125
+                      "start": 117,
+                      "end": 129
                     },
                     "ctxt": 0,
                     "callee": {
                       "type": "Identifier",
                       "span": {
-                        "start": 117,
-                        "end": 123
+                        "start": 121,
+                        "end": 127
                       },
                       "ctxt": 0,
                       "value": "Button",
@@ -284,27 +303,27 @@ Get AST from file
             {
               "type": "ExpressionStatement",
               "span": {
-                "start": 128,
-                "end": 144
+                "start": 132,
+                "end": 148
               },
               "expression": {
                 "type": "CallExpression",
                 "span": {
-                  "start": 128,
-                  "end": 143
+                  "start": 132,
+                  "end": 147
                 },
                 "ctxt": 0,
                 "callee": {
                   "type": "MemberExpression",
                   "span": {
-                    "start": 128,
-                    "end": 141
+                    "start": 132,
+                    "end": 145
                   },
                   "object": {
                     "type": "Identifier",
                     "span": {
-                      "start": 128,
-                      "end": 134
+                      "start": 132,
+                      "end": 138
                     },
                     "ctxt": 0,
                     "value": "button",
@@ -313,8 +332,8 @@ Get AST from file
                   "property": {
                     "type": "Identifier",
                     "span": {
-                      "start": 135,
-                      "end": 141
+                      "start": 139,
+                      "end": 145
                     },
                     "value": "render"
                   }
@@ -326,21 +345,21 @@ Get AST from file
             {
               "type": "ExpressionStatement",
               "span": {
-                "start": 145,
-                "end": 162
+                "start": 149,
+                "end": 166
               },
               "expression": {
                 "type": "CallExpression",
                 "span": {
-                  "start": 145,
-                  "end": 161
+                  "start": 149,
+                  "end": 165
                 },
                 "ctxt": 0,
                 "callee": {
                   "type": "Identifier",
                   "span": {
-                    "start": 145,
-                    "end": 151
+                    "start": 149,
+                    "end": 155
                   },
                   "ctxt": 0,
                   "value": "repeat",
@@ -352,8 +371,8 @@ Get AST from file
                     "expression": {
                       "type": "StringLiteral",
                       "span": {
-                        "start": 152,
-                        "end": 157
+                        "start": 156,
+                        "end": 161
                       },
                       "value": "foo",
                       "raw": "\"foo\""
@@ -364,8 +383,8 @@ Get AST from file
                     "expression": {
                       "type": "NumericLiteral",
                       "span": {
-                        "start": 159,
-                        "end": 160
+                        "start": 163,
+                        "end": 164
                       },
                       "value": 5.0,
                       "raw": "5"
@@ -378,21 +397,21 @@ Get AST from file
             {
               "type": "ExpressionStatement",
               "span": {
-                "start": 163,
-                "end": 169
+                "start": 167,
+                "end": 173
               },
               "expression": {
                 "type": "CallExpression",
                 "span": {
-                  "start": 163,
-                  "end": 168
+                  "start": 167,
+                  "end": 172
                 },
                 "ctxt": 0,
                 "callee": {
                   "type": "Identifier",
                   "span": {
-                    "start": 163,
-                    "end": 166
+                    "start": 167,
+                    "end": 170
                   },
                   "ctxt": 0,
                   "value": "foo",

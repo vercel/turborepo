@@ -5,29 +5,26 @@ expression: query_output
 {
   "data": {
     "file": {
-      "path": "main.ts",
+      "path": "apps/my-app/index.ts",
       "dependencies": {
         "files": {
           "items": [
             {
-              "path": "bar.js"
+              "path": "apps/my-app/types.ts"
             },
             {
-              "path": "button.css"
+              "path": "packages/another/index.js"
             },
             {
-              "path": "button.json"
+              "path": "packages/utils/index.ts"
             },
             {
-              "path": "button.tsx"
-            },
-            {
-              "path": "foo.js"
-            },
-            {
-              "path": "node_modules/repeat-string/index.js"
+              "path": "packages/utils/my-hook.ts"
             }
           ]
+        },
+        "errors": {
+          "items": []
         }
       }
     }

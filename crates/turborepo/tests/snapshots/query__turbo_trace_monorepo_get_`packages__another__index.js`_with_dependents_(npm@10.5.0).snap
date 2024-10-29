@@ -5,17 +5,20 @@ expression: query_output
 {
   "data": {
     "file": {
-      "path": "button.tsx",
-      "dependencies": {
+      "path": "packages/another/index.js",
+      "dependents": {
         "files": {
           "items": [
             {
-              "path": "button.css"
+              "path": "apps/my-app/index.ts"
             },
             {
-              "path": "button.json"
+              "path": "apps/my-app/types.ts"
             }
           ]
+        },
+        "errors": {
+          "items": []
         }
       }
     }

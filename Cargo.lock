@@ -718,7 +718,7 @@ dependencies = [
  "biome_text_size",
  "bitflags 2.5.0",
  "bpaf",
- "oxc_resolver 1.11.0",
+ "oxc_resolver 1.12.0",
  "serde",
  "termcolor",
  "unicode-width",
@@ -3580,9 +3580,9 @@ checksum = "c1b04fb49957986fdce4d6ee7a65027d55d4b6d2265e5848bbb507b58ccfdb6f"
 
 [[package]]
 name = "oxc_resolver"
-version = "1.11.0"
+version = "1.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e7fe4d07afdfcf6b1d7fb952e6691d82692a54b71964a377cf49f3e47dac283d"
+checksum = "6c20bb345f290c46058ba650fef7ca2b579612cf2786b927ebad7b8bec0845a7"
 dependencies = [
  "cfg-if",
  "dashmap 6.1.0",
@@ -5179,6 +5179,7 @@ dependencies = [
  "new_debug_unreachable",
  "num-bigint",
  "once_cell",
+ "parking_lot",
  "rustc-hash 1.1.0",
  "serde",
  "siphasher",
@@ -6066,6 +6067,8 @@ version = "0.1.0"
 dependencies = [
  "camino",
  "clap",
+ "futures",
+ "globwalk",
  "miette",
  "oxc_resolver 2.0.0",
  "swc_common",
@@ -6073,6 +6076,9 @@ dependencies = [
  "swc_ecma_parser",
  "swc_ecma_visit",
  "thiserror",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
  "turbopath",
 ]
 
@@ -6361,6 +6367,7 @@ dependencies = [
  "human_format",
  "humantime",
  "ignore",
+ "insta",
  "itertools 0.10.5",
  "jsonc-parser 0.21.0",
  "lazy_static",

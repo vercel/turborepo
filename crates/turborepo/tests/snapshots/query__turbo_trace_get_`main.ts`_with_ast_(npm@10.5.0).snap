@@ -10,14 +10,14 @@ expression: query_output
         "type": "Module",
         "span": {
           "start": 1,
-          "end": 169
+          "end": 173
         },
         "body": [
           {
             "type": "ImportDeclaration",
             "span": {
               "start": 1,
-              "end": 35
+              "end": 39
             },
             "specifiers": [
               {
@@ -44,10 +44,10 @@ expression: query_output
               "type": "StringLiteral",
               "span": {
                 "start": 24,
-                "end": 34
+                "end": 38
               },
-              "value": "./button",
-              "raw": "\"./button\""
+              "value": "./button.tsx",
+              "raw": "\"./button.tsx\""
             },
             "typeOnly": false,
             "with": null,
@@ -56,21 +56,21 @@ expression: query_output
           {
             "type": "ImportDeclaration",
             "span": {
-              "start": 36,
-              "end": 60
+              "start": 40,
+              "end": 64
             },
             "specifiers": [
               {
                 "type": "ImportDefaultSpecifier",
                 "span": {
-                  "start": 43,
-                  "end": 46
+                  "start": 47,
+                  "end": 50
                 },
                 "local": {
                   "type": "Identifier",
                   "span": {
-                    "start": 43,
-                    "end": 46
+                    "start": 47,
+                    "end": 50
                   },
                   "ctxt": 0,
                   "value": "foo",
@@ -81,8 +81,8 @@ expression: query_output
             "source": {
               "type": "StringLiteral",
               "span": {
-                "start": 52,
-                "end": 59
+                "start": 56,
+                "end": 63
               },
               "value": "./foo",
               "raw": "\"./foo\""
@@ -94,21 +94,21 @@ expression: query_output
           {
             "type": "ImportDeclaration",
             "span": {
-              "start": 61,
-              "end": 96
+              "start": 65,
+              "end": 100
             },
             "specifiers": [
               {
                 "type": "ImportDefaultSpecifier",
                 "span": {
-                  "start": 68,
-                  "end": 74
+                  "start": 72,
+                  "end": 78
                 },
                 "local": {
                   "type": "Identifier",
                   "span": {
-                    "start": 68,
-                    "end": 74
+                    "start": 72,
+                    "end": 78
                   },
                   "ctxt": 0,
                   "value": "repeat",
@@ -119,8 +119,8 @@ expression: query_output
             "source": {
               "type": "StringLiteral",
               "span": {
-                "start": 80,
-                "end": 95
+                "start": 84,
+                "end": 99
               },
               "value": "repeat-string",
               "raw": "\"repeat-string\""
@@ -132,8 +132,8 @@ expression: query_output
           {
             "type": "VariableDeclaration",
             "span": {
-              "start": 98,
-              "end": 126
+              "start": 102,
+              "end": 130
             },
             "ctxt": 0,
             "kind": "const",
@@ -142,14 +142,14 @@ expression: query_output
               {
                 "type": "VariableDeclarator",
                 "span": {
-                  "start": 104,
-                  "end": 125
+                  "start": 108,
+                  "end": 129
                 },
                 "id": {
                   "type": "Identifier",
                   "span": {
-                    "start": 104,
-                    "end": 110
+                    "start": 108,
+                    "end": 114
                   },
                   "ctxt": 0,
                   "value": "button",
@@ -159,15 +159,15 @@ expression: query_output
                 "init": {
                   "type": "NewExpression",
                   "span": {
-                    "start": 113,
-                    "end": 125
+                    "start": 117,
+                    "end": 129
                   },
                   "ctxt": 0,
                   "callee": {
                     "type": "Identifier",
                     "span": {
-                      "start": 117,
-                      "end": 123
+                      "start": 121,
+                      "end": 127
                     },
                     "ctxt": 0,
                     "value": "Button",
@@ -183,27 +183,27 @@ expression: query_output
           {
             "type": "ExpressionStatement",
             "span": {
-              "start": 128,
-              "end": 144
+              "start": 132,
+              "end": 148
             },
             "expression": {
               "type": "CallExpression",
               "span": {
-                "start": 128,
-                "end": 143
+                "start": 132,
+                "end": 147
               },
               "ctxt": 0,
               "callee": {
                 "type": "MemberExpression",
                 "span": {
-                  "start": 128,
-                  "end": 141
+                  "start": 132,
+                  "end": 145
                 },
                 "object": {
                   "type": "Identifier",
                   "span": {
-                    "start": 128,
-                    "end": 134
+                    "start": 132,
+                    "end": 138
                   },
                   "ctxt": 0,
                   "value": "button",
@@ -212,8 +212,8 @@ expression: query_output
                 "property": {
                   "type": "Identifier",
                   "span": {
-                    "start": 135,
-                    "end": 141
+                    "start": 139,
+                    "end": 145
                   },
                   "value": "render"
                 }
@@ -225,21 +225,21 @@ expression: query_output
           {
             "type": "ExpressionStatement",
             "span": {
-              "start": 145,
-              "end": 162
+              "start": 149,
+              "end": 166
             },
             "expression": {
               "type": "CallExpression",
               "span": {
-                "start": 145,
-                "end": 161
+                "start": 149,
+                "end": 165
               },
               "ctxt": 0,
               "callee": {
                 "type": "Identifier",
                 "span": {
-                  "start": 145,
-                  "end": 151
+                  "start": 149,
+                  "end": 155
                 },
                 "ctxt": 0,
                 "value": "repeat",
@@ -251,8 +251,8 @@ expression: query_output
                   "expression": {
                     "type": "StringLiteral",
                     "span": {
-                      "start": 152,
-                      "end": 157
+                      "start": 156,
+                      "end": 161
                     },
                     "value": "foo",
                     "raw": "\"foo\""
@@ -263,8 +263,8 @@ expression: query_output
                   "expression": {
                     "type": "NumericLiteral",
                     "span": {
-                      "start": 159,
-                      "end": 160
+                      "start": 163,
+                      "end": 164
                     },
                     "value": 5.0,
                     "raw": "5"
@@ -277,21 +277,21 @@ expression: query_output
           {
             "type": "ExpressionStatement",
             "span": {
-              "start": 163,
-              "end": 169
+              "start": 167,
+              "end": 173
             },
             "expression": {
               "type": "CallExpression",
               "span": {
-                "start": 163,
-                "end": 168
+                "start": 167,
+                "end": 172
               },
               "ctxt": 0,
               "callee": {
                 "type": "Identifier",
                 "span": {
-                  "start": 163,
-                  "end": 166
+                  "start": 167,
+                  "end": 170
                 },
                 "ctxt": 0,
                 "value": "foo",
