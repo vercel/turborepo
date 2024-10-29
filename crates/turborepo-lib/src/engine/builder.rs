@@ -561,7 +561,7 @@ fn validate_task_name(task: Spanned<&str>) -> Result<(), Error> {
 mod test {
     use std::assert_matches::assert_matches;
 
-    use insta::assert_snapshot;
+    use insta::assert_json_snapshot;
     use pretty_assertions::assert_eq;
     use serde_json::json;
     use tempfile::TempDir;
@@ -1353,21 +1353,23 @@ mod test {
             .with_workspaces(vec![PackageName::from("app1")])
             .build();
         assert!(engine.is_err());
-        assert_snapshot!(format!("{:?}", miette::Report::new(engine.unwrap_err())), @r###"
-          [31m×[0m missing tasks in project
-
-        Error:   [31m×[0m could not find task `app1#special` in project
-        "###);
+        let report = miette::Report::new(engine.unwrap_err());
+        let mut msg = String::new();
+        miette::JSONReportHandler::new()
+            .render_report(&mut msg, report.as_ref())
+            .unwrap();
+        assert_json_snapshot!(msg);
 
         let engine = EngineBuilder::new(&repo_root, &package_graph, loader, false)
             .with_tasks(vec![Spanned::new(TaskName::from("app1#another"))])
             .with_workspaces(vec![PackageName::from("libA")])
             .build();
         assert!(engine.is_err());
-        assert_snapshot!(format!("{:?}", miette::Report::new(engine.unwrap_err())), @r###"
-          [31m×[0m missing tasks in project
-
-        Error:   [31m×[0m could not find task `app1#another` in project
-        "###);
+        let report = miette::Report::new(engine.unwrap_err());
+        let mut msg = String::new();
+        miette::JSONReportHandler::new()
+            .render_report(&mut msg, report.as_ref())
+            .unwrap();
+        assert_json_snapshot!(msg);
     }
 }
