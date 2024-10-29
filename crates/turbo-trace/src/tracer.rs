@@ -181,14 +181,15 @@ impl Tracer {
     ) {
         let file_resolver = Self::infer_resolver_with_ts_config(&file_path, resolver);
 
-        if matches!(file_path.extension(), Some("css") | Some("json")) {
-            return;
-        }
         if seen.contains_key(&file_path) {
             return;
         }
 
         let entry = seen.entry(file_path.clone()).or_default();
+
+        if matches!(file_path.extension(), Some("css") | Some("json")) {
+            return;
+        }
 
         let Some((imports, seen_file)) = Self::get_imports_from_file(
             &self.source_map,
