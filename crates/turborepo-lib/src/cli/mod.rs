@@ -1147,8 +1147,15 @@ pub async fn run(
     } else {
         AbsoluteSystemPathBuf::cwd()?
     };
-    #[cfg(windows)]
-    let repo_root = repo_root.to_realpath()?;
+
+    // Windows has this annoying habit of abbreviating paths
+    // like `C:\Users\Admini~1` instead of `C:\Users\Administrator`
+    // We canonicalize to get the proper, full length path
+    let repo_root = if cfg!(windows) {
+        repo_root.to_realpath()?
+    } else {
+        repo_root
+    };
 
     cli_args.command = Some(command);
     cli_args.cwd = Some(repo_root.as_path().to_owned());

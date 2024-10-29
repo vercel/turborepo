@@ -77,6 +77,7 @@ impl Tracer {
         }
     }
 
+    #[tracing::instrument(skip(resolver, source_map))]
     pub async fn get_imports_from_file(
         source_map: &SourceMap,
         errors: &mut Vec<TraceError>,
@@ -120,9 +121,12 @@ impl Tracer {
         let mut parser = Parser::new_from(Capturing::new(lexer));
 
         // Parse the file as a module
-        let Ok(module) = parser.parse_module() else {
-            errors.push(TraceError::FileNotFound(file_path.to_owned()));
-            return None;
+        let module = match parser.parse_module() {
+            Ok(module) => module,
+            Err(err) => {
+                errors.push(TraceError::ParseError(err));
+                return None;
+            }
         };
 
         // Visit the AST and find imports
