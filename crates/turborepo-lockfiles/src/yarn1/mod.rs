@@ -62,13 +62,13 @@ impl Lockfile for Yarn1Lockfile {
         name: &str,
         version: &str,
     ) -> Result<Option<crate::Package>, crate::Error> {
-        for key in possible_keys(name, version) {
-            if let Some(entry) = self.inner.get(&key) {
-                return Ok(Some(crate::Package {
-                    key,
-                    version: entry.version.clone(),
-                }));
-            }
+        let key = format!("{name}@{version}");
+
+        if let Some(entry) = self.inner.get(&key) {
+            return Ok(Some(crate::Package {
+                key,
+                version: entry.version.clone(),
+            }));
         }
 
         Ok(None)
@@ -143,15 +143,6 @@ impl Entry {
             .chain(self.optional_dependencies.iter().flatten())
             .map(|(k, v)| (k.clone(), v.clone()))
     }
-}
-
-const PROTOCOLS: &[&str] = ["", "npm:", "file:", "workspace:", "yarn:"].as_slice();
-
-fn possible_keys<'a>(name: &'a str, version: &'a str) -> impl Iterator<Item = String> + 'a {
-    PROTOCOLS
-        .iter()
-        .copied()
-        .map(move |protocol| format!("{name}@{protocol}{version}"))
 }
 
 #[cfg(test)]
