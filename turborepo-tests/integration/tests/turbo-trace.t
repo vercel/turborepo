@@ -24,6 +24,9 @@ Setup
                 "path": "bar.js"
               },
               {
+                "path": "button.css"
+              },
+              {
                 "path": "button.tsx"
               },
               {
@@ -47,7 +50,11 @@ Setup
         "path": "button.tsx",
         "dependencies": {
           "files": {
-            "items": []
+            "items": [
+              {
+                "path": "button.css"
+              }
+            ]
           }
         }
       }
@@ -83,6 +90,9 @@ Trace file with invalid import
         "dependencies": {
           "files": {
             "items": [
+              {
+                "path": "button.css"
+              },
               {
                 "path": "button.tsx"
               }
