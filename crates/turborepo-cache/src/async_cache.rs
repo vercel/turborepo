@@ -257,7 +257,7 @@ mod tests {
         let opts = CacheOpts {
             cache_dir: Utf8PathBuf::from(".turbo/cache"),
             cache: CacheConfig {
-                fs: CacheActions {
+                local: CacheActions {
                     read: false,
                     write: false,
                 },
@@ -346,7 +346,7 @@ mod tests {
         let opts = CacheOpts {
             cache_dir: Utf8PathBuf::from(".turbo/cache"),
             cache: CacheConfig {
-                fs: CacheActions {
+                local: CacheActions {
                     read: true,
                     write: true,
                 },
@@ -445,7 +445,7 @@ mod tests {
         let opts = CacheOpts {
             cache_dir: Utf8PathBuf::from(".turbo/cache"),
             cache: CacheConfig {
-                fs: CacheActions {
+                local: CacheActions {
                     read: true,
                     write: true,
                 },

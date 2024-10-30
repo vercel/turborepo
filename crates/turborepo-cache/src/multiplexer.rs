@@ -37,7 +37,7 @@ impl CacheMultiplexer {
         api_auth: Option<APIAuth>,
         analytics_recorder: Option<AnalyticsSender>,
     ) -> Result<Self, CacheError> {
-        let use_fs_cache = opts.cache.fs.should_use();
+        let use_fs_cache = opts.cache.local.should_use();
         let use_http_cache = opts.cache.remote.should_use();
 
         // Since the above two flags are not mutually exclusive it is possible to
@@ -95,7 +95,7 @@ impl CacheMultiplexer {
         files: &[AnchoredSystemPathBuf],
         duration: u64,
     ) -> Result<(), CacheError> {
-        if self.cache_config.fs.write {
+        if self.cache_config.local.write {
             self.fs
                 .as_ref()
                 .map(|fs| fs.put(anchor, key, files, duration))
@@ -146,7 +146,7 @@ impl CacheMultiplexer {
         anchor: &AbsoluteSystemPath,
         key: &str,
     ) -> Result<Option<(CacheHitMetadata, Vec<AnchoredSystemPathBuf>)>, CacheError> {
-        if self.cache_config.fs.read {
+        if self.cache_config.local.read {
             if let Some(fs) = &self.fs {
                 if let response @ Ok(Some(_)) = fs.fetch(anchor, key) {
                     return response;
@@ -163,7 +163,7 @@ impl CacheMultiplexer {
                     // we have previously successfully stored in HTTP cache, and so the overall
                     // result is a success at fetching. Storing in lower-priority caches is an
                     // optimization.
-                    if self.cache_config.fs.write {
+                    if self.cache_config.local.write {
                         if let Some(fs) = &self.fs {
                             let _ = fs.put(anchor, key, &files, time_saved);
                         }
@@ -179,7 +179,7 @@ impl CacheMultiplexer {
 
     #[tracing::instrument(skip_all)]
     pub async fn exists(&self, key: &str) -> Result<Option<CacheHitMetadata>, CacheError> {
-        if self.cache_config.fs.read {
+        if self.cache_config.local.read {
             if let Some(fs) = &self.fs {
                 match fs.exists(key) {
                     cache_hit @ Ok(Some(_)) => {

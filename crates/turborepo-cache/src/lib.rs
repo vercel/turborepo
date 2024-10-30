@@ -123,13 +123,13 @@ impl CacheActions {
 
 #[derive(Serialize, Deserialize, Deserializable, Debug, PartialEq, Eq, Clone, Copy, Default)]
 pub struct CacheConfig {
-    pub fs: CacheActions,
+    pub local: CacheActions,
     pub remote: CacheActions,
 }
 
 impl CacheConfig {
     pub fn skip_writes(&self) -> bool {
-        !self.fs.write && !self.remote.write
+        !self.local.write && !self.remote.write
     }
 }
 

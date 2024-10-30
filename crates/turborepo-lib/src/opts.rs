@@ -378,17 +378,17 @@ impl<'a> From<OptsInputs<'a>> for CacheOpts {
         }
 
         if inputs.config.remote_only() {
-            cache.fs.read = false;
-            cache.fs.write = false;
+            cache.local.read = false;
+            cache.local.write = false;
         }
 
         if inputs.config.force() {
-            cache.fs.read = false;
+            cache.local.read = false;
             cache.remote.read = false;
         }
 
         if inputs.run_args.no_cache {
-            cache.fs.write = false;
+            cache.local.write = false;
             cache.remote.write = false;
         }
 

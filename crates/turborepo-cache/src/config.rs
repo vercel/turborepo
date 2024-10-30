@@ -39,7 +39,7 @@ pub enum Error {
         #[label]
         span: Option<SourceSpan>,
     },
-    #[error("invalid cache type `{s}`, expected `fs` or `remote`")]
+    #[error("invalid cache type `{s}`, expected `local` or `remote`")]
     InvalidCacheType {
         #[source_code]
         text: String,
@@ -79,7 +79,7 @@ impl FromStr for CacheConfig {
     type Err = Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut cache = CacheConfig {
-            fs: CacheActions {
+            local: CacheActions {
                 read: false,
                 write: false,
             },
@@ -93,7 +93,7 @@ impl FromStr for CacheConfig {
             return Ok(cache);
         }
 
-        let mut seen_fs = false;
+        let mut seen_local = false;
         let mut seen_remote = false;
         let mut idx = 0;
 
@@ -107,17 +107,17 @@ impl FromStr for CacheConfig {
                 })?;
 
             match key {
-                "fs" => {
-                    if seen_fs {
+                "local" => {
+                    if seen_local {
                         return Err(Error::DuplicateKeys {
                             text: s.to_string(),
-                            key: "fs",
+                            key: "local",
                             span: Some(SourceSpan::new(idx.into(), key.len().into())),
                         });
                     }
 
-                    seen_fs = true;
-                    cache.fs = CacheActions::from_str(value).map_err(|err| {
+                    seen_local = true;
+                    cache.local = CacheActions::from_str(value).map_err(|err| {
                         err.add_text(s).add_span(SourceSpan::new(
                             (idx + key.len() + 1).into(),
                             key.len().into(),
@@ -207,23 +207,23 @@ mod test {
 
     use super::*;
 
-    #[test_case("fs:r,remote:w", Ok(CacheConfig { fs: CacheActions { read: true, write: false }, remote: CacheActions { read: false, write: true } }) ; "fs:r,remote:w"
+    #[test_case("local:r,remote:w", Ok(CacheConfig { local: CacheActions { read: true, write: false }, remote: CacheActions { read: false, write: true } }) ; "local:r,remote:w"
     )]
-    #[test_case("fs:r", Ok(CacheConfig { fs: CacheActions { read: true, write: false }, remote: CacheActions { read: false, write: false } }) ; "fs:r"
+    #[test_case("local:r", Ok(CacheConfig { local: CacheActions { read: true, write: false }, remote: CacheActions { read: false, write: false } }) ; "local:r"
     )]
-    #[test_case("fs:", Ok(CacheConfig { fs: CacheActions { read: false, write: false }, remote: CacheActions { read: false, write: false } }) ; "empty action"
+    #[test_case("local:", Ok(CacheConfig { local: CacheActions { read: false, write: false }, remote: CacheActions { read: false, write: false } }) ; "empty action"
     )]
-    #[test_case("fs:,remote:", Ok(CacheConfig { fs: CacheActions { read: false, write: false }, remote: CacheActions { read: false, write: false } }) ; "multiple empty actions"
+    #[test_case("local:,remote:", Ok(CacheConfig { local: CacheActions { read: false, write: false }, remote: CacheActions { read: false, write: false } }) ; "multiple empty actions"
     )]
-    #[test_case("fs:,remote:r", Ok(CacheConfig { fs: CacheActions { read: false, write: false }, remote: CacheActions { read: true, write: false } }) ; "fs: empty, remote:r"
+    #[test_case("local:,remote:r", Ok(CacheConfig { local: CacheActions { read: false, write: false }, remote: CacheActions { read: true, write: false } }) ; "local: empty, remote:r"
     )]
-    #[test_case("", Ok(CacheConfig { fs: CacheActions { read: false, write: false }, remote: CacheActions { read: false, write: false } }) ; "empty"
+    #[test_case("", Ok(CacheConfig { local: CacheActions { read: false, write: false }, remote: CacheActions { read: false, write: false } }) ; "empty"
     )]
-    #[test_case("fs:r,fs:w", Err(Error::DuplicateKeys { text: "fs:r,fs:w".to_string(), key: "fs", span: Some(SourceSpan::new(5.into(), 2.into())) }) ; "duplicate fs key"
+    #[test_case("local:r,local:w", Err(Error::DuplicateKeys { text: "local:r,local:w".to_string(), key: "local", span: Some(SourceSpan::new(8.into(), 5.into())) }) ; "duplicate local key"
     )]
-    #[test_case("fs:rr", Err(Error::DuplicateActions { text: "fs:rr".to_string(), action: "r (read)", span: Some(SourceSpan::new(3.into(), 2.into())) }) ; "duplicate action")]
-    #[test_case("remote:r,fs=rx", Err(Error::InvalidCacheTypeAndAction { text: "remote:r,fs=rx".to_string(), pair: "fs=rx".to_string(), span: Some(SourceSpan::new(9.into(), 5.into())) }) ; "invalid key action pair")]
-    #[test_case("fs:rx", Err(Error::InvalidCacheAction { c: 'x', text: "fs:rx".to_string(), span: Some(SourceSpan::new(3.into(), 2.into())) }) ; "invalid action")]
+    #[test_case("local:rr", Err(Error::DuplicateActions { text: "local:rr".to_string(), action: "r (read)", span: Some(SourceSpan::new(6.into(), 5.into())) }) ; "duplicate action")]
+    #[test_case("remote:r,local=rx", Err(Error::InvalidCacheTypeAndAction { text: "remote:r,local=rx".to_string(), pair: "local=rx".to_string(), span: Some(SourceSpan::new(9.into(), 8.into())) }) ; "invalid key action pair")]
+    #[test_case("local:rx", Err(Error::InvalidCacheAction { c: 'x', text: "local:rx".to_string(), span: Some(SourceSpan::new(6.into(), 5.into())) }) ; "invalid action")]
     #[test_case("file:r", Err(Error::InvalidCacheType { s: "file".to_string(), text: "file:r".to_string(), span: Some(SourceSpan::new(0.into(), 4.into())) }) ; "invalid cache type")]
     fn test_cache_config(s: &str, expected: Result<CacheConfig, Error>) {
         assert_eq!(CacheConfig::from_str(s), expected);
