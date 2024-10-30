@@ -5,6 +5,7 @@ use std::{
 
 use turbopath::AbsoluteSystemPath;
 use turborepo_env::EnvironmentVariableMap;
+use turborepo_micro_frontend::MICRO_FRONTENDS_PACKAGES;
 use turborepo_repository::package_graph::{PackageGraph, PackageInfo, PackageName};
 
 use super::Error;
@@ -190,6 +191,15 @@ impl<'a> CommandProvider for MicroFrontendProxyProvider<'a> {
             return Ok(None);
         };
         let package_info = self.package_info(task_id)?;
+        let has_mfe_dependency = package_info
+            .package_json
+            .all_dependencies()
+            .any(|(package, _version)| MICRO_FRONTENDS_PACKAGES.contains(&package.as_str()));
+        if !has_mfe_dependency {
+            return Err(Error::MissingMFEDependency {
+                package: task_id.package().into(),
+            });
+        }
         let local_apps = dev_tasks
             .iter()
             .filter(|task| self.tasks_in_graph.contains(task))
@@ -203,7 +213,6 @@ impl<'a> CommandProvider for MicroFrontendProxyProvider<'a> {
         let program = package_dir.join_components(&["node_modules", ".bin", "micro-frontends"]);
         let mut cmd = Command::new(program.as_std_path());
         cmd.current_dir(package_dir).args(args).open_stdin();
-        eprintln!("running proxy {}", cmd.label());
 
         Ok(Some(cmd))
     }

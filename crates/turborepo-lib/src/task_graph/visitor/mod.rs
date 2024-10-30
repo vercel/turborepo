@@ -98,6 +98,11 @@ pub enum Error {
     InternalErrors(String),
     #[error("unable to find package manager binary: {0}")]
     Which(#[from] which::Error),
+    #[error(
+        "'{package}' is configured with a microfrontend.jsonc, but doesn't have \
+         '@vercel/microfrontends' listed as a dependency"
+    )]
+    MissingMFEDependency { package: String },
 }
 
 impl<'a> Visitor<'a> {

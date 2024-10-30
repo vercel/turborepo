@@ -9,6 +9,7 @@ use serde::Serialize;
 use turbopath::AbsoluteSystemPath;
 
 pub const MICRO_FRONTENDS_CONFIG: &str = "micro-frontends.jsonc";
+pub const MICRO_FRONTENDS_PACKAGES: &[&str] = ["@vercel/micro-frontends-internal"].as_slice();
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserializable, Default)]
 pub struct Config {
