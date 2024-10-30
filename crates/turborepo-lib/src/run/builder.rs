@@ -515,6 +515,9 @@ impl RunBuilder {
             tasks.push(Spanned::new(TaskName::from("proxy").into_owned()));
             // we need to add the MFE config packages into the scope here to make sure the
             // proxy gets run
+            // TODO(olszewski): We are relying on the fact that persistent tasks must be
+            // entry points to the task graph so we can get away with only
+            // checking the entrypoint tasks.
             for (mfe_config_package, dev_tasks) in micro_frontends_configs.iter() {
                 for dev_task in dev_tasks {
                     let package = PackageName::from(dev_task.package());
