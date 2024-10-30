@@ -1,6 +1,5 @@
 use std::collections::{HashMap, HashSet};
 
-use tracing::warn;
 use turbopath::AbsoluteSystemPath;
 use turborepo_micro_frontend::{Config as MFEConfig, Error, MICRO_FRONTENDS_CONFIG};
 use turborepo_repository::package_graph::PackageGraph;
@@ -22,15 +21,9 @@ pub fn find_micro_frontend_configs(
         let tasks = config
             .applications
             .iter()
-            .filter_map(|(application, options)| {
-                let Some(dev_task) = options.development.task.as_deref() else {
-                    warn!(
-                        "{application} does not have a dev task configured. Turborepo will be \
-                         unable to detect if traffic should be routed to local server"
-                    );
-                    return None;
-                };
-                Some(TaskId::new(application, dev_task).into_owned())
+            .map(|(application, options)| {
+                let dev_task = options.development.task.as_deref().unwrap_or("dev");
+                TaskId::new(application, dev_task).into_owned()
             })
             .collect();
         configs.insert(package_name.to_string(), tasks);
