@@ -708,14 +708,11 @@ fn path_non_empty(s: &str) -> Result<Utf8PathBuf, String> {
 #[command(groups = [
 ArgGroup::new("scope-filter-group").multiple(true).required(false),
 ])]
-#[command(groups = [
-    ArgGroup::new("cache-group").multiple(false).required(false),
-])]
 pub struct ExecutionArgs {
     /// Set the cache behavior for this run. Pass a list of comma-separated key,
     /// value pairs to enable reading and writing to either the local or
     /// remote cache.
-    #[clap(long, group = "cache-group")]
+    #[clap(long)]
     pub cache: Option<String>,
     /// Override the filesystem cache directory.
     #[clap(long, value_parser = path_non_empty)]
@@ -731,7 +728,8 @@ pub struct ExecutionArgs {
     /// Run turbo in single-package mode
     #[clap(long)]
     pub single_package: bool,
-    /// Ignore the existing cache (to force execution)
+    /// Ignore the existing cache (to force execution). Equivalent to
+    /// `--cache=fs:w,remote:w`
     #[clap(long, default_missing_value = "true")]
     pub force: Option<Option<bool>>,
     /// Specify whether or not to do framework inference for tasks
@@ -778,6 +776,7 @@ pub struct ExecutionArgs {
     pub pkg_inference_root: Option<String>,
     /// Ignore the local filesystem cache for all tasks. Only
     /// allow reading and caching artifacts using the remote cache.
+    /// Equivalent to `--cache=remote:rw`
     #[clap(long, default_missing_value = "true", group = "cache-group")]
     pub remote_only: Option<Option<bool>>,
     /// Use "none" to remove prefixes from task logs. Use "task" to get task id
@@ -868,7 +867,7 @@ pub struct RunArgs {
     pub graph: Option<String>,
 
     /// Avoid saving task results to the cache. Useful for development/watch
-    /// tasks.
+    /// tasks. Equivalent to `--cache=fs:r,remote:r`
     #[clap(long)]
     pub no_cache: bool,
 
@@ -894,7 +893,7 @@ pub struct RunArgs {
     /// All identifying data omitted from the profile.
     #[clap(long, value_parser=NonEmptyStringValueParser::new(), conflicts_with = "profile")]
     pub anon_profile: Option<String>,
-    /// Treat remote cache as read only
+    /// Treat remote cache as read only. Equivalent to `--cache=remote:r`
     #[clap(long, default_missing_value = "true")]
     pub remote_cache_read_only: Option<Option<bool>>,
     /// Generate a summary of the turbo run
