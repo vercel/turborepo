@@ -109,6 +109,15 @@ impl Serialize for PackageName {
     }
 }
 
+impl PackageName {
+    pub fn as_str(&self) -> &str {
+        match self {
+            PackageName::Root => ROOT_PKG_NAME,
+            PackageName::Other(name) => name,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
 pub enum PackageNode {
     Root,

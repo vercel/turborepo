@@ -6,6 +6,7 @@ use std::{
 };
 
 use chrono::Local;
+use itertools::Itertools;
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_analytics::{start_analytics, AnalyticsHandle, AnalyticsSender};
@@ -512,7 +513,19 @@ impl RunBuilder {
             .collect::<Vec<_>>();
         let mut workspace_packages = filtered_pkgs.cloned().collect::<Vec<_>>();
         if !micro_frontends_configs.is_empty() {
-            tasks.push(Spanned::new(TaskName::from("proxy").into_owned()));
+            // TODO: this logic is very similar to what happens inside engine builder and
+            // could probably be exposed
+            let tasks_from_filter = workspace_packages
+                .iter()
+                .map(|package| package.as_str())
+                .cartesian_product(tasks.iter())
+                .map(|(package, task)| {
+                    task.task_id().map_or_else(
+                        || TaskId::new(package, task.task()).into_owned(),
+                        |task_id| task_id.into_owned(),
+                    )
+                })
+                .collect::<HashSet<_>>();
             // we need to add the MFE config packages into the scope here to make sure the
             // proxy gets run
             // TODO(olszewski): We are relying on the fact that persistent tasks must be
@@ -520,9 +533,13 @@ impl RunBuilder {
             // checking the entrypoint tasks.
             for (mfe_config_package, dev_tasks) in micro_frontends_configs.iter() {
                 for dev_task in dev_tasks {
-                    let package = PackageName::from(dev_task.package());
-                    if workspace_packages.contains(&package) {
+                    if tasks_from_filter.contains(dev_task) {
                         workspace_packages.push(PackageName::from(mfe_config_package.as_str()));
+                        tasks.push(Spanned::new(
+                            TaskId::new(mfe_config_package, "proxy")
+                                .as_task_name()
+                                .into_owned(),
+                        ));
                         break;
                     }
                 }
