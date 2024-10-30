@@ -28,6 +28,7 @@ pub struct Tracer {
     source_map: Arc<SourceMap>,
     cwd: AbsoluteSystemPathBuf,
     errors: Vec<TraceError>,
+    import_type: ImportType,
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -57,6 +58,17 @@ pub struct TraceResult {
     pub files: HashMap<AbsoluteSystemPathBuf, SeenFile>,
 }
 
+/// The type of imports to trace.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ImportType {
+    /// Trace all imports.
+    All,
+    /// Trace only `import type` imports
+    Types,
+    /// Trace only `import` imports and not `import type` imports
+    Values,
+}
+
 impl Tracer {
     pub fn new(
         cwd: AbsoluteSystemPathBuf,
@@ -72,9 +84,14 @@ impl Tracer {
             files,
             ts_config,
             cwd,
+            import_type: ImportType::All,
             errors: Vec::new(),
             source_map: Arc::new(SourceMap::default()),
         }
+    }
+
+    pub fn set_import_type(&mut self, import_type: ImportType) {
+        self.import_type = import_type;
     }
 
     #[tracing::instrument(skip(resolver, source_map))]
@@ -83,6 +100,7 @@ impl Tracer {
         errors: &mut Vec<TraceError>,
         resolver: &Resolver,
         file_path: &AbsoluteSystemPath,
+        import_type: ImportType,
     ) -> Option<(Vec<AbsoluteSystemPathBuf>, SeenFile)> {
         // Read the file content
         let Ok(file_content) = tokio::fs::read_to_string(&file_path).await else {
@@ -130,7 +148,7 @@ impl Tracer {
         };
 
         // Visit the AST and find imports
-        let mut finder = ImportFinder::default();
+        let mut finder = ImportFinder::new(import_type);
         module.visit_with(&mut finder);
         // Convert found imports/requires to absolute paths and add them to files to
         // visit
@@ -196,6 +214,7 @@ impl Tracer {
             &mut self.errors,
             file_resolver.as_ref().unwrap_or(resolver),
             &file_path,
+            self.import_type,
         )
         .await
         else {
@@ -306,6 +325,7 @@ impl Tracer {
                     &mut errors,
                     file_resolver.as_ref().unwrap_or(&resolver),
                     &file,
+                    shared_self.import_type,
                 )
                 .await
                 else {

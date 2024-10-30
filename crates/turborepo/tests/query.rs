@@ -47,6 +47,12 @@ fn test_trace() -> Result<(), anyhow::Error> {
             "get `invalid.ts` with dependencies" => "query { file(path: \"invalid.ts\") { path dependencies { files { items { path } } errors { items { message } } } } }",
             "get `main.ts` with depth = 0" => "query { file(path: \"main.ts\") { path dependencies(depth: 1) { files { items { path } } } } }",
             "get `with_prefix.ts` with dependencies" => "query { file(path: \"with_prefix.ts\") { path dependencies { files { items { path } } } } }",
+            "get `import_value_and_type.ts` with all dependencies" => "query { file(path: \"import_value_and_type.ts\") { path dependencies(importType: ALL) { files { items { path } } } } }",
+            "get `import_value_and_type.ts` with type dependencies" => "query { file(path: \"import_value_and_type.ts\") { path dependencies(importType: TYPES) { files { items { path } } } } }",
+            "get `import_value_and_type.ts` with value dependencies" => "query { file(path: \"import_value_and_type.ts\") { path dependencies(importType: VALUES) { files { items { path } } } } }",
+            "get `link.tsx` with all dependents" => "query { file(path: \"link.tsx\") { path dependents(importType: ALL) { files { items { path } } } } }",
+            "get `link.tsx` with type dependents" => "query { file(path: \"link.tsx\") { path dependents(importType: TYPES) { files { items { path } } } } }",
+            "get `link.tsx` with value dependents" => "query { file(path: \"link.tsx\") { path dependents(importType: VALUES) { files { items { path } } } } }",
         );
 
         Ok(())
