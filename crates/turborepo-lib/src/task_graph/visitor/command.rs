@@ -73,6 +73,10 @@ impl<'a> CommandFactory<'a> {
         cmd.env_clear();
         cmd.envs(environment.iter());
 
+        // We always open stdin and the visitor will close it depending on task
+        // configuration
+        cmd.open_stdin();
+
         Ok(Some(cmd))
     }
 }
