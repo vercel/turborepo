@@ -368,9 +368,6 @@ impl<'a> From<OptsInputs<'a>> for CacheOpts {
             // value
             cache.remote.read = enabled;
             cache.remote.write = enabled;
-        } else {
-            cache.remote.read = false;
-            cache.remote.write = false;
         };
 
         if inputs.config.remote_cache_read_only() {
@@ -580,9 +577,30 @@ mod test {
     #[test_case(RunArgs { force: Some(Some(true)), ..Default::default() }, "force")]
     #[test_case(RunArgs { remote_only: Some(Some(true)), ..Default::default() }, "remote-only")]
     #[test_case(RunArgs { remote_cache_read_only: Some(Some(true)), ..Default::default() }, "remote-cache-read-only")]
-    #[test_case(RunArgs { no_cache: true, cache: Some("remote:w,local:rw".to_string()), ..Default::default() }, "no-cache_remote:w,local:rw")]
-    #[test_case(RunArgs { remote_only: Some(Some(true)), cache: Some("remote:r,local:rw".to_string()), ..Default::default() }, "remote-only_remote:r,local:rw")]
-    #[test_case(RunArgs { force: Some(Some(true)), cache: Some("remote:r,local:r".to_string()), ..Default::default() }, "force_remote:r,local:r")]
+    #[test_case(
+         RunArgs {
+             no_cache: true,
+             cache: Some("remote:w,local:rw".to_string()),
+             ..Default::default()
+         },
+         "no-cache_remote:w,local:rw"
+    )]
+    #[test_case(
+         RunArgs {
+             remote_only: Some(Some(true)),
+             cache: Some("remote:r,local:rw".to_string()),
+             ..Default::default()
+         },
+         "remote-only_remote:r,local:rw"
+    )]
+    #[test_case(
+         RunArgs {
+             force: Some(Some(true)),
+             cache: Some("remote:r,local:r".to_string()),
+             ..Default::default()
+         },
+         "force_remote:r,local:r"
+    )]
     #[test_case(
          RunArgs {
              remote_cache_read_only: Some(Some(true)),
