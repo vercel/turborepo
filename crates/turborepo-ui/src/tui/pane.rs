@@ -50,7 +50,7 @@ impl<'a, W> TerminalPane<'a, W> {
                 "{FOOTER_TEXT_ACTIVE} {task_list_message} {HAS_SELECTION}"
             ))
             .centered(),
-            LayoutSections::Pane => Line::from("{FOOTER_TEXT_ACTIVE}".to_owned()).centered(),
+            LayoutSections::Pane => Line::from(FOOTER_TEXT_ACTIVE.to_owned()).centered(),
             LayoutSections::TaskList if self.terminal_output.has_selection() => Line::from(
                 format!("{FOOTER_TEXT_INACTIVE} {task_list_message} {HAS_SELECTION}"),
             )
