@@ -583,7 +583,7 @@ mod test {
              cache: Some("remote:w,local:rw".to_string()),
              ..Default::default()
          },
-         "no-cache_remote:w,local:rw"
+         "no-cache_remote_w,local_rw"
     )]
     #[test_case(
          RunArgs {
@@ -591,7 +591,7 @@ mod test {
              cache: Some("remote:r,local:rw".to_string()),
              ..Default::default()
          },
-         "remote-only_remote:r,local:rw"
+         "remote-only_remote_r,local_rw"
     )]
     #[test_case(
          RunArgs {
@@ -607,7 +607,7 @@ mod test {
              cache: Some("remote:rw,local:r".to_string()),
              ..Default::default()
          },
-         "remote-cache-read-only_remote:rw,local:r"
+         "remote-cache-read-only_remote_rw,local_r"
     )]
     fn test_resolve_cache_config(run_args: RunArgs, name: &str) -> Result<(), anyhow::Error> {
         let mut args = Args::default();
