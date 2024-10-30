@@ -428,14 +428,20 @@ impl ScopeOpts {
 
 #[cfg(test)]
 mod test {
-    use test_case::test_case;
-    use turborepo_cache::CacheOpts;
 
-    use super::RunOpts;
+    use test_case::test_case;
+    use turbopath::AbsoluteSystemPathBuf;
+    use turborepo_api_client::APIAuth;
+    use turborepo_cache::CacheOpts;
+    use turborepo_ui::ColorConfig;
+
+    use super::{OptsInputs, RunOpts};
     use crate::{
-        cli::DryRunMode,
+        cli::{Command, DryRunMode, RunArgs},
+        commands::CommandBase,
         opts::{Opts, RunCacheOpts, ScopeOpts},
         turbo_json::UIMode,
+        Args,
     };
 
     #[derive(Default)]
@@ -568,5 +574,48 @@ mod test {
         };
         let synthesized = opts.synthesize_command();
         assert_eq!(synthesized, expected);
+    }
+
+    #[test_case(RunArgs { no_cache: true, ..Default::default() }, "no-cache")]
+    #[test_case(RunArgs { force: Some(Some(true)), ..Default::default() }, "force")]
+    #[test_case(RunArgs { remote_only: Some(Some(true)), ..Default::default() }, "remote-only")]
+    #[test_case(RunArgs { remote_cache_read_only: Some(Some(true)), ..Default::default() }, "remote-cache-read-only")]
+    #[test_case(RunArgs { no_cache: true, cache: Some("remote:w,local:rw".to_string()), ..Default::default() }, "no-cache_remote:w,local:rw")]
+    #[test_case(RunArgs { remote_only: Some(Some(true)), cache: Some("remote:r,local:rw".to_string()), ..Default::default() }, "remote-only_remote:r,local:rw")]
+    #[test_case(RunArgs { force: Some(Some(true)), cache: Some("remote:r,local:r".to_string()), ..Default::default() }, "force_remote:r,local:r")]
+    #[test_case(
+         RunArgs {
+             remote_cache_read_only: Some(Some(true)),
+             cache: Some("remote:rw,local:r".to_string()),
+             ..Default::default()
+         },
+         "remote-cache-read-only_remote:rw,local:r"
+    )]
+    fn test_resolve_cache_config(run_args: RunArgs, name: &str) -> Result<(), anyhow::Error> {
+        let mut args = Args::default();
+        args.command = Some(Command::Run {
+            execution_args: Box::default(),
+            run_args: Box::new(run_args),
+        });
+        let base = CommandBase::new(
+            args,
+            AbsoluteSystemPathBuf::default(),
+            "1.0.0",
+            ColorConfig::new(true),
+        );
+
+        let cache_opts = CacheOpts::from(OptsInputs {
+            run_args: base.args().run_args().unwrap(),
+            execution_args: base.args().execution_args().unwrap(),
+            config: base.config()?,
+            api_auth: &Some(APIAuth {
+                team_id: Some("my-team".to_string()),
+                token: "my-token".to_string(),
+                team_slug: None,
+            }),
+        });
+
+        insta::assert_json_snapshot!(name, cache_opts.cache);
+        Ok(())
     }
 }
