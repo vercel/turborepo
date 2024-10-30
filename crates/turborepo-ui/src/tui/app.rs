@@ -49,6 +49,7 @@ pub struct App<W> {
     scroll: TableState,
     selected_task_index: usize,
     has_user_scrolled: bool,
+    has_sidebar: bool,
     done: bool,
 }
 
@@ -92,6 +93,7 @@ impl<W> App<W> {
             tasks_by_status,
             scroll: TableState::default().with_selected(selected_task_index),
             selected_task_index,
+            has_sidebar: true,
             has_user_scrolled: has_user_interacted,
         }
     }
@@ -771,6 +773,9 @@ fn update(
             app.has_user_scrolled = true;
             app.interact()?;
         }
+        Event::ToggleSidebar => {
+            app.has_sidebar = !app.has_sidebar;
+        }
         Event::Input { bytes } => {
             app.forward_input(&bytes)?;
         }
@@ -822,7 +827,11 @@ fn update(
 
 fn view<W>(app: &mut App<W>, f: &mut Frame) {
     let cols = app.size.pane_cols();
-    let horizontal = Layout::horizontal([Constraint::Fill(1), Constraint::Length(cols)]);
+    let horizontal = if app.has_sidebar {
+        Layout::horizontal([Constraint::Fill(1), Constraint::Length(cols)])
+    } else {
+        Layout::horizontal([Constraint::Max(0), Constraint::Length(cols)])
+    };
     let [table, pane] = horizontal.areas(f.size());
 
     let active_task = app.active_task().unwrap().to_string();

@@ -1,7 +1,7 @@
 use ratatui::{
     style::Style,
     text::Line,
-    widgets::{Block, Borders, Widget},
+    widgets::{Block, Widget},
 };
 use tui_term::widget::PseudoTerminal;
 
@@ -58,7 +58,6 @@ impl<'a, W> Widget for &TerminalPane<'a, W> {
     {
         let screen = self.terminal_output.parser.screen();
         let block = Block::default()
-            .borders(Borders::LEFT)
             .title(self.terminal_output.title(self.task_name))
             .title_bottom(self.footer())
             .style(if self.highlight() {
