@@ -837,7 +837,8 @@ fn view<W>(app: &mut App<W>, f: &mut Frame) {
     let active_task = app.active_task().unwrap().to_string();
 
     let output_logs = app.tasks.get(&active_task).unwrap();
-    let pane_to_render: TerminalPane<W> = TerminalPane::new(output_logs, &active_task, &app.focus);
+    let pane_to_render: TerminalPane<W> =
+        TerminalPane::new(output_logs, &active_task, &app.focus, app.has_sidebar);
 
     let table_to_render = TaskTable::new(&app.tasks_by_status);
 
