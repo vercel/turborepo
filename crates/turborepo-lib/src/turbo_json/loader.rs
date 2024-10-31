@@ -178,10 +178,16 @@ impl TurboJsonLoader {
                 let should_inject_proxy_task = micro_frontends_configs
                     .as_ref()
                     .map_or(false, |configs| configs.contains_package(package.as_str()));
+                let turbo_json = load_from_file(&self.repo_root, path);
                 if should_inject_proxy_task {
-                    load_from_file_with_proxy(&self.repo_root, path)
+                    let mut turbo_json = turbo_json.or_else(|err| match err {
+                        Error::NoTurboJSON => Ok(TurboJson::default()),
+                        err => Err(err),
+                    })?;
+                    turbo_json.with_proxy();
+                    Ok(turbo_json)
                 } else {
-                    load_from_file(&self.repo_root, path)
+                    turbo_json
                 }
             }
             Strategy::WorkspaceNoTurboJson { packages } => {
@@ -261,35 +267,6 @@ fn load_from_file(
         // We're not synthesizing anything and there was no error, we're done
         Ok(turbo) => Ok(turbo),
     }
-}
-
-fn load_from_file_with_proxy(
-    repo_root: &AbsoluteSystemPath,
-    turbo_json_path: &AbsoluteSystemPath,
-) -> Result<TurboJson, Error> {
-    let mut turbo = match TurboJson::read(repo_root, turbo_json_path) {
-        // If the file didn't exist, use a default so we can inject the proxy task
-        Err(Error::Io(_)) => Ok(TurboJson::default()),
-        // There was an error, and we don't have any chance of recovering
-        // because we aren't synthesizing anything
-        Err(e) => Err(e),
-        // We're not synthesizing anything and there was no error, we're done
-        Ok(turbo) => Ok(turbo),
-    }?;
-
-    if turbo.extends.is_empty() {
-        turbo.extends = Spanned::new(vec!["//".into()]);
-    }
-
-    turbo.tasks.insert(
-        TaskName::from("proxy"),
-        Spanned::new(RawTaskDefinition {
-            cache: Some(Spanned::new(false)),
-            ..Default::default()
-        }),
-    );
-
-    Ok(turbo)
 }
 
 fn load_from_root_package_json(
