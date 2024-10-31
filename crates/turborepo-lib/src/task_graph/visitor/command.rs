@@ -1,7 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet},
-    path::PathBuf,
-};
+use std::{collections::HashSet, path::PathBuf};
 
 use turbopath::AbsoluteSystemPath;
 use turborepo_env::EnvironmentVariableMap;
@@ -9,7 +6,10 @@ use turborepo_micro_frontend::MICRO_FRONTENDS_PACKAGES;
 use turborepo_repository::package_graph::{PackageGraph, PackageInfo, PackageName};
 
 use super::Error;
-use crate::{engine::Engine, opts::TaskArgs, process::Command, run::task_id::TaskId};
+use crate::{
+    engine::Engine, micro_frontends::MicroFrontendsConfigs, opts::TaskArgs, process::Command,
+    run::task_id::TaskId,
+};
 
 pub trait CommandProvider {
     fn command(
@@ -35,7 +35,7 @@ impl<'a> CommandFactory<'a> {
         }
     }
 
-    pub fn add_provider(mut self, provider: impl CommandProvider + 'a + Send) -> Self {
+    pub fn add_provider(&mut self, provider: impl CommandProvider + 'a + Send) -> &mut Self {
         self.providers.push(Box::new(provider));
         self
     }
@@ -139,7 +139,7 @@ pub struct MicroFrontendProxyProvider<'a> {
     repo_root: &'a AbsoluteSystemPath,
     package_graph: &'a PackageGraph,
     tasks_in_graph: HashSet<TaskId<'a>>,
-    mfe_configs: &'a HashMap<String, HashSet<TaskId<'static>>>,
+    mfe_configs: &'a MicroFrontendsConfigs,
 }
 
 impl<'a> MicroFrontendProxyProvider<'a> {
@@ -147,7 +147,7 @@ impl<'a> MicroFrontendProxyProvider<'a> {
         repo_root: &'a AbsoluteSystemPath,
         package_graph: &'a PackageGraph,
         engine: &Engine,
-        micro_frontends_configs: &'a HashMap<String, HashSet<TaskId<'static>>>,
+        micro_frontends_configs: &'a MicroFrontendsConfigs,
     ) -> Self {
         let tasks_in_graph = engine
             .tasks()
@@ -264,7 +264,8 @@ mod test {
 
     #[test]
     fn test_first_present_cmd_returned() {
-        let factory = CommandFactory::new()
+        let mut factory = CommandFactory::new();
+        factory
             .add_provider(EchoCmdFactory)
             .add_provider(ErrProvider);
         let task_id = TaskId::new("foo", "build");
@@ -277,7 +278,8 @@ mod test {
 
     #[test]
     fn test_error_short_circuits_factory() {
-        let factory = CommandFactory::new()
+        let mut factory = CommandFactory::new();
+        factory
             .add_provider(ErrProvider)
             .add_provider(EchoCmdFactory);
         let task_id = TaskId::new("foo", "build");
@@ -289,7 +291,8 @@ mod test {
 
     #[test]
     fn test_none_values_filtered() {
-        let factory = CommandFactory::new()
+        let mut factory = CommandFactory::new();
+        factory
             .add_provider(EchoCmdFactory)
             .add_provider(NoneProvider);
         let task_id = TaskId::new("foo", "build");

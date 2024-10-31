@@ -5,7 +5,7 @@ mod output;
 
 use std::{
     borrow::Cow,
-    collections::{HashMap, HashSet},
+    collections::HashSet,
     io::Write,
     sync::{Arc, Mutex, OnceLock},
 };
@@ -34,6 +34,7 @@ use turborepo_ui::{
 use crate::{
     cli::EnvMode,
     engine::{Engine, ExecutionOptions},
+    micro_frontends::MicroFrontendsConfigs,
     opts::RunOpts,
     process::ProcessManager,
     run::{
@@ -65,7 +66,7 @@ pub struct Visitor<'a> {
     is_watch: bool,
     ui_sender: Option<UISender>,
     warnings: Arc<Mutex<Vec<TaskWarning>>>,
-    micro_frontends_configs: &'a HashMap<String, HashSet<TaskId<'static>>>,
+    micro_frontends_configs: Option<&'a MicroFrontendsConfigs>,
 }
 
 #[derive(Debug, thiserror::Error, Diagnostic)]
@@ -125,7 +126,7 @@ impl<'a> Visitor<'a> {
         global_env: EnvironmentVariableMap,
         ui_sender: Option<UISender>,
         is_watch: bool,
-        micro_frontends_configs: &'a HashMap<String, HashSet<TaskId<'static>>>,
+        micro_frontends_configs: Option<&'a MicroFrontendsConfigs>,
     ) -> Self {
         let task_hasher = TaskHasher::new(
             package_inputs_hashes,

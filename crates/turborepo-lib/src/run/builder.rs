@@ -43,6 +43,7 @@ use crate::{
     cli::DryRunMode,
     commands::CommandBase,
     engine::{Engine, EngineBuilder},
+    micro_frontends::MicroFrontendsConfigs,
     opts::Opts,
     process::ProcessManager,
     run::{scope, task_access::TaskAccess, task_id::TaskName, Error, Run, RunCache},
@@ -372,8 +373,7 @@ impl RunBuilder {
         repo_telemetry.track_package_manager(pkg_dep_graph.package_manager().to_string());
         repo_telemetry.track_size(pkg_dep_graph.len());
         run_telemetry.track_run_type(self.opts.run_opts.dry_run.is_some());
-        let micro_frontend_configs =
-            crate::micro_frontends::find_micro_frontend_configs(&self.repo_root, &pkg_dep_graph)?;
+        let micro_frontend_configs = MicroFrontendsConfigs::new(&self.repo_root, &pkg_dep_graph)?;
 
         let scm = scm.await.expect("detecting scm panicked");
         let async_cache = AsyncCache::new(
@@ -405,12 +405,12 @@ impl RunBuilder {
                 self.repo_root.clone(),
                 pkg_dep_graph.packages(),
             )
-        } else if !micro_frontend_configs.is_empty() {
+        } else if let Some(micro_frontends) = &micro_frontend_configs {
             TurboJsonLoader::workspace_with_microfrontends(
                 self.repo_root.clone(),
                 self.root_turbo_json_path.clone(),
                 pkg_dep_graph.packages(),
-                micro_frontend_configs.clone(),
+                micro_frontends.clone(),
             )
         } else {
             TurboJsonLoader::workspace(
@@ -438,7 +438,7 @@ impl RunBuilder {
             &root_turbo_json,
             filtered_pkgs.keys(),
             turbo_json_loader.clone(),
-            &micro_frontend_configs,
+            micro_frontend_configs.as_ref(),
         )?;
 
         if self.opts.run_opts.parallel {
@@ -448,7 +448,7 @@ impl RunBuilder {
                 &root_turbo_json,
                 filtered_pkgs.keys(),
                 turbo_json_loader,
-                &micro_frontend_configs,
+                micro_frontend_configs.as_ref(),
             )?;
         }
 
@@ -499,7 +499,7 @@ impl RunBuilder {
         root_turbo_json: &TurboJson,
         filtered_pkgs: impl Iterator<Item = &'a PackageName>,
         turbo_json_loader: TurboJsonLoader,
-        micro_frontends_configs: &HashMap<String, HashSet<TaskId<'static>>>,
+        micro_frontends_configs: Option<&MicroFrontendsConfigs>,
     ) -> Result<Engine, Error> {
         let mut tasks = self
             .opts
@@ -512,7 +512,7 @@ impl RunBuilder {
             })
             .collect::<Vec<_>>();
         let mut workspace_packages = filtered_pkgs.cloned().collect::<Vec<_>>();
-        if !micro_frontends_configs.is_empty() {
+        if let Some(micro_frontends_configs) = micro_frontends_configs {
             // TODO: this logic is very similar to what happens inside engine builder and
             // could probably be exposed
             let tasks_from_filter = workspace_packages
@@ -531,7 +531,7 @@ impl RunBuilder {
             // TODO(olszewski): We are relying on the fact that persistent tasks must be
             // entry points to the task graph so we can get away with only
             // checking the entrypoint tasks.
-            for (mfe_config_package, dev_tasks) in micro_frontends_configs.iter() {
+            for (mfe_config_package, dev_tasks) in micro_frontends_configs.configs() {
                 for dev_task in dev_tasks {
                     if tasks_from_filter.contains(dev_task) {
                         workspace_packages.push(PackageName::from(mfe_config_package.as_str()));

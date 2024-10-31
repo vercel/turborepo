@@ -51,15 +51,17 @@ impl<'a> ExecContextFactory<'a> {
             &visitor.package_graph,
             visitor.run_opts.task_args(),
         );
-        let mfe_proxy_provider = MicroFrontendProxyProvider::new(
-            visitor.repo_root,
-            &visitor.package_graph,
-            engine,
-            visitor.micro_frontends_configs,
-        );
-        let command_factory = CommandFactory::new()
-            .add_provider(mfe_proxy_provider)
-            .add_provider(pkg_graph_provider);
+        let mut command_factory = CommandFactory::new();
+        if let Some(micro_frontends_configs) = visitor.micro_frontends_configs {
+            command_factory.add_provider(MicroFrontendProxyProvider::new(
+                visitor.repo_root,
+                &visitor.package_graph,
+                engine,
+                micro_frontends_configs,
+            ));
+        }
+        command_factory.add_provider(pkg_graph_provider);
+
         Ok(Self {
             visitor,
             errors,

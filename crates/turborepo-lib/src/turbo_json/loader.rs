@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
@@ -12,10 +12,8 @@ use super::{Pipeline, RawTaskDefinition, TurboJson, CONFIG_FILE};
 use crate::{
     cli::EnvMode,
     config::Error,
-    run::{
-        task_access::TASK_ACCESS_CONFIG_PATH,
-        task_id::{TaskId, TaskName},
-    },
+    micro_frontends::MicroFrontendsConfigs,
+    run::{task_access::TASK_ACCESS_CONFIG_PATH, task_id::TaskName},
 };
 
 /// Structure for loading TurboJson structures.
@@ -37,7 +35,7 @@ enum Strategy {
     Workspace {
         // Map of package names to their package specific turbo.json
         packages: HashMap<PackageName, AbsoluteSystemPathBuf>,
-        micro_frontends_configs: Option<HashMap<String, HashSet<TaskId<'static>>>>,
+        micro_frontends_configs: Option<MicroFrontendsConfigs>,
     },
     WorkspaceNoTurboJson {
         // Map of package names to their scripts
@@ -73,7 +71,7 @@ impl TurboJsonLoader {
         repo_root: AbsoluteSystemPathBuf,
         root_turbo_json_path: AbsoluteSystemPathBuf,
         packages: impl Iterator<Item = (&'a PackageName, &'a PackageInfo)>,
-        micro_frontends_configs: HashMap<String, HashSet<TaskId<'static>>>,
+        micro_frontends_configs: MicroFrontendsConfigs,
     ) -> Self {
         let packages = package_turbo_jsons(&repo_root, root_turbo_json_path, packages);
         Self {
@@ -177,12 +175,9 @@ impl TurboJsonLoader {
                 micro_frontends_configs,
             } => {
                 let path = packages.get(package).ok_or_else(|| Error::NoTurboJSON)?;
-                let should_inject_proxy_task =
-                    micro_frontends_configs.as_ref().map_or(false, |configs| {
-                        let pkg = package.to_string();
-                        eprintln!("{pkg}");
-                        configs.contains_key(&pkg)
-                    });
+                let should_inject_proxy_task = micro_frontends_configs
+                    .as_ref()
+                    .map_or(false, |configs| configs.contains_package(package.as_str()));
                 if should_inject_proxy_task {
                     load_from_file_with_proxy(&self.repo_root, path)
                 } else {
