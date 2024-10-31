@@ -30,7 +30,6 @@ mod loader;
 pub mod parser;
 
 pub use loader::TurboJsonLoader;
-use turborepo_cache::CacheConfig;
 
 #[derive(Serialize, Deserialize, Debug, Default, PartialEq, Clone, Deserializable)]
 #[serde(rename_all = "camelCase")]
@@ -141,8 +140,6 @@ pub struct RawTurboJson {
     pub env_mode: Option<EnvMode>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cache_dir: Option<Spanned<UnescapedString>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cache: Option<CacheConfig>,
 
     #[deserializable(rename = "//")]
     #[serde(skip)]

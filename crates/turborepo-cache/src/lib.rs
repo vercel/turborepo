@@ -25,7 +25,6 @@ mod upload_progress;
 use std::{backtrace, backtrace::Backtrace};
 
 pub use async_cache::AsyncCache;
-use biome_deserialize_macros::Deserializable;
 use camino::Utf8PathBuf;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -109,7 +108,7 @@ pub struct CacheHitMetadata {
     pub time_saved: u64,
 }
 
-#[derive(Serialize, Deserialize, Deserializable, Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct CacheActions {
     pub read: bool,
     pub write: bool,
@@ -121,7 +120,7 @@ impl CacheActions {
     }
 }
 
-#[derive(Serialize, Deserialize, Deserializable, Debug, PartialEq, Eq, Clone, Copy, Default)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Default)]
 pub struct CacheConfig {
     pub local: CacheActions,
     pub remote: CacheActions,
@@ -142,7 +141,7 @@ impl Default for CacheActions {
     }
 }
 
-#[derive(Clone, Debug, Default, Serialize)]
+#[derive(Clone, Debug, Default)]
 pub struct CacheOpts {
     pub cache_dir: Utf8PathBuf,
     pub cache: CacheConfig,

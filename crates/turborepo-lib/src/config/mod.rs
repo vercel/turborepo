@@ -255,6 +255,7 @@ pub struct ConfigurationOptions {
     pub(crate) root_turbo_json_path: Option<AbsoluteSystemPathBuf>,
     pub(crate) force: Option<bool>,
     pub(crate) log_order: Option<LogOrder>,
+    #[serde(skip)]
     pub(crate) cache: Option<CacheConfig>,
     pub(crate) remote_only: Option<bool>,
     pub(crate) remote_cache_read_only: Option<bool>,

@@ -39,6 +39,7 @@ const TURBO_MAPPING: &[(&str, &str)] = [
     ("turbo_remote_cache_read_only", "remote_cache_read_only"),
     ("turbo_run_summary", "run_summary"),
     ("turbo_allow_no_turbo_json", "allow_no_turbo_json"),
+    ("turbo_cache", "cache"),
 ]
 .as_slice();
 
