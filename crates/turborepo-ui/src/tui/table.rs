@@ -1,3 +1,4 @@
+use itertools::Itertools;
 use ratatui::{
     layout::{Constraint, Rect},
     style::{Color, Style, Stylize},
@@ -9,8 +10,13 @@ use super::{event::TaskResult, spinner::SpinnerState, task::TasksByStatus};
 
 /// A widget that renders a table of their tasks and their current status
 ///
-/// The table contains finished tasks, running tasks, and planned tasks rendered
-/// in that order.
+/// The tasks are ordered as follows:
+/// - running tasks
+/// - planned tasks
+/// - finished tasks
+///   - failed tasks
+///   - successful tasks
+///   - cached tasks
 pub struct TaskTable<'b> {
     tasks_by_type: &'b TasksByStatus,
     spinner: SpinnerState,
@@ -47,29 +53,39 @@ impl<'b> TaskTable<'b> {
     }
 
     fn finished_rows(&self) -> impl Iterator<Item = Row> + '_ {
-        self.tasks_by_type.finished.iter().map(move |task| {
-            let name = if matches!(task.result(), TaskResult::CacheHit) {
-                Cell::new(Text::styled(task.name(), Style::default().italic()))
-            } else {
-                Cell::new(task.name())
-            };
+        self.tasks_by_type
+            .finished
+            .iter()
+            // note we can't use the default Ord impl because
+            // we want failed tasks first
+            .sorted_by_key(|task| match task.result() {
+                TaskResult::Failure => 0,
+                TaskResult::Success => 1,
+                TaskResult::CacheHit => 2,
+            })
+            .map(move |task| {
+                let name = if matches!(task.result(), TaskResult::CacheHit) {
+                    Cell::new(Text::styled(task.name(), Style::default().italic()))
+                } else {
+                    Cell::new(task.name())
+                };
 
-            Row::new(vec![
-                name,
-                match task.result() {
-                    // matches Next.js (and many other CLI tools) https://github.com/vercel/next.js/blob/1a04d94aaec943d3cce93487fea3b8c8f8898f31/packages/next/src/build/output/log.ts
-                    TaskResult::Success => {
-                        Cell::new(Text::styled("✓", Style::default().green().bold()))
-                    }
-                    TaskResult::CacheHit => {
-                        Cell::new(Text::styled("⊙", Style::default().magenta()))
-                    }
-                    TaskResult::Failure => {
-                        Cell::new(Text::styled("⨯", Style::default().red().bold()))
-                    }
-                },
-            ])
-        })
+                Row::new(vec![
+                    name,
+                    match task.result() {
+                        // matches Next.js (and many other CLI tools) https://github.com/vercel/next.js/blob/1a04d94aaec943d3cce93487fea3b8c8f8898f31/packages/next/src/build/output/log.ts
+                        TaskResult::Success => {
+                            Cell::new(Text::styled("✓", Style::default().green().bold()))
+                        }
+                        TaskResult::CacheHit => {
+                            Cell::new(Text::styled("⊙", Style::default().magenta()))
+                        }
+                        TaskResult::Failure => {
+                            Cell::new(Text::styled("⨯", Style::default().red().bold()))
+                        }
+                    },
+                ])
+            })
     }
 
     fn running_rows(&self) -> impl Iterator<Item = Row> + '_ {
