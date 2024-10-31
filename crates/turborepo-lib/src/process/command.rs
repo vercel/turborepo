@@ -101,6 +101,11 @@ impl Command {
     pub fn will_open_stdin(&self) -> bool {
         self.open_stdin
     }
+
+    /// Program for the command
+    pub fn program(&self) -> &OsStr {
+        &self.program
+    }
 }
 
 impl From<Command> for tokio::process::Command {

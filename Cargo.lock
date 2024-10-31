@@ -6475,6 +6475,7 @@ dependencies = [
  "turborepo-fs",
  "turborepo-graph-utils",
  "turborepo-lockfiles",
+ "turborepo-micro-frontend",
  "turborepo-repository",
  "turborepo-scm",
  "turborepo-telemetry",
@@ -6527,6 +6528,23 @@ dependencies = [
  "turborepo-lib",
  "turborepo-repository",
  "wax",
+]
+
+[[package]]
+name = "turborepo-micro-frontend"
+version = "0.1.0"
+dependencies = [
+ "biome_deserialize",
+ "biome_deserialize_macros",
+ "biome_diagnostics",
+ "biome_json_parser",
+ "biome_json_syntax",
+ "pretty_assertions",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "turbopath",
+ "turborepo-errors",
 ]
 
 [[package]]
