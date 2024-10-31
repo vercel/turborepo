@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use async_graphql::{Object, SimpleObject};
+use async_graphql::{Enum, Object, SimpleObject};
 use camino::Utf8PathBuf;
 use itertools::Itertools;
 use swc_ecma_ast::EsVersion;
@@ -146,6 +146,27 @@ impl TraceResult {
     }
 }
 
+/// The type of imports to trace.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Enum)]
+pub enum ImportType {
+    /// Trace all imports.
+    All,
+    /// Trace only `import type` imports
+    Types,
+    /// Trace only `import` imports and not `import type` imports
+    Values,
+}
+
+impl From<ImportType> for turbo_trace::ImportType {
+    fn from(import_type: ImportType) -> Self {
+        match import_type {
+            ImportType::All => turbo_trace::ImportType::All,
+            ImportType::Types => turbo_trace::ImportType::Types,
+            ImportType::Values => turbo_trace::ImportType::Values,
+        }
+    }
+}
+
 #[Object]
 impl File {
     async fn contents(&self) -> Result<String, Error> {
@@ -169,12 +190,17 @@ impl File {
         &self,
         depth: Option<usize>,
         ts_config: Option<String>,
+        import_type: Option<ImportType>,
     ) -> Result<TraceResult, Error> {
-        let tracer = Tracer::new(
+        let mut tracer = Tracer::new(
             self.run.repo_root().to_owned(),
             vec![self.path.clone()],
             ts_config.map(Utf8PathBuf::from),
         );
+
+        if let Some(import_type) = import_type {
+            tracer.set_import_type(import_type.into());
+        }
 
         let mut result = tracer.trace(depth).await;
         // Remove the file itself from the result
@@ -182,12 +208,20 @@ impl File {
         TraceResult::new(result, self.run.clone())
     }
 
-    async fn dependents(&self, ts_config: Option<String>) -> Result<TraceResult, Error> {
-        let tracer = Tracer::new(
+    async fn dependents(
+        &self,
+        ts_config: Option<String>,
+        import_type: Option<ImportType>,
+    ) -> Result<TraceResult, Error> {
+        let mut tracer = Tracer::new(
             self.run.repo_root().to_owned(),
             vec![self.path.clone()],
             ts_config.map(Utf8PathBuf::from),
         );
+
+        if let Some(import_type) = import_type {
+            tracer.set_import_type(import_type.into());
+        }
 
         let mut result = tracer.reverse_trace().await;
         // Remove the file itself from the result
