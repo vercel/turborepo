@@ -1,3 +1,4 @@
+#![deny(clippy::all)]
 mod error;
 
 use std::collections::BTreeMap;
