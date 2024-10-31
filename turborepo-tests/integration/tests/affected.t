@@ -60,6 +60,27 @@ Do the same thing with the `query` command
     }
   }
 
+Also with `affectedFiles` in `turbo query`
+  $ ${TURBO} query "query { affectedFiles { items { path, affectedPackages { items { name } } } } }"
+   WARNING  query command is experimental and may change in the future
+  {
+    "data": {
+      "affectedFiles": {
+        "items": [
+          {
+            "path": "apps(\/|\\\\)my-app(\/|\\\\)new.js", (re)
+            "affectedPackages": {
+              "items": [
+                {
+                  "name": "my-app"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  }
 
 Remove the new file
   $ rm apps/my-app/new.js
@@ -142,6 +163,28 @@ Do the same thing with the `query` command
     }
   }
 
+Also with `affectedFiles` in `turbo query`
+  $ ${TURBO} query "query { affectedFiles { items { path, affectedPackages { items { name } } } } }"
+   WARNING  query command is experimental and may change in the future
+  {
+    "data": {
+      "affectedFiles": {
+        "items": [
+          {
+            "path": "apps(\/|\\\\)my-app(\/|\\\\)package.json", (re)
+            "affectedPackages": {
+              "items": [
+                {
+                  "name": "my-app"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  }
+
 Commit the change
   $ git add .
   $ git commit -m "add foo" --quiet
@@ -217,6 +260,17 @@ Do the same thing with the `query` command
     }
   }
 
+Also with `affectedFiles` in `turbo query`
+  $ ${TURBO} query "query { affectedFiles(base: \"HEAD\") { items { path, affectedPackages { items { name } } } } }"
+   WARNING  query command is experimental and may change in the future
+  {
+    "data": {
+      "affectedFiles": {
+        "items": []
+      }
+    }
+  }
+
 Override the SCM head to be main, so nothing runs
   $ TURBO_SCM_HEAD="main" ${TURBO} run build --affected --log-order grouped
   \xe2\x80\xa2 Packages in scope:  (esc)
@@ -243,6 +297,17 @@ Do the same thing with the `query` command
   {
     "data": {
       "affectedPackages": {
+        "items": []
+      }
+    }
+  }
+
+Also with `affectedFiles` in `turbo query`
+  $ ${TURBO} query "query { affectedFiles(head: \"main\") { items { path, affectedPackages { items { name } } } } }"
+   WARNING  query command is experimental and may change in the future
+  {
+    "data": {
+      "affectedFiles": {
         "items": []
       }
     }
@@ -291,6 +356,28 @@ Do the same thing with the `query` command
         "items": [
           {
             "name": "my-app"
+          }
+        ]
+      }
+    }
+  }
+
+Also with `affectedFiles` in `turbo query`
+  $ ${TURBO} query "query { affectedFiles { items { path, affectedPackages { items { name } } } } }"
+   WARNING  query command is experimental and may change in the future
+  {
+    "data": {
+      "affectedFiles": {
+        "items": [
+          {
+            "path": "apps(\/|\\\\)my-app(\/|\\\\)package.json", (re)
+            "affectedPackages": {
+              "items": [
+                {
+                  "name": "my-app"
+                }
+              ]
+            }
           }
         ]
       }

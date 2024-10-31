@@ -3,7 +3,7 @@ mod package;
 mod server;
 mod task;
 
-use std::{io, sync::Arc};
+use std::{borrow::Cow, io, sync::Arc};
 
 use async_graphql::{http::GraphiQLSource, *};
 use axum::{response, response::IntoResponse};
@@ -51,6 +51,10 @@ pub enum Error {
     Resolution(#[from] crate::run::scope::filter::ResolutionError),
     #[error("failed to parse file: {0:?}")]
     Parse(swc_ecma_parser::error::Error),
+    #[error(transparent)]
+    ChangeMapper(#[from] turborepo_repository::change_mapper::Error),
+    #[error(transparent)]
+    Scm(#[from] turborepo_scm::Error),
 }
 
 pub struct RepositoryQuery {
@@ -63,7 +67,7 @@ impl RepositoryQuery {
     }
 }
 
-#[derive(Debug, SimpleObject)]
+#[derive(Debug, SimpleObject, Default)]
 #[graphql(concrete(name = "RepositoryTasks", params(RepositoryTask)))]
 #[graphql(concrete(name = "Packages", params(Package)))]
 #[graphql(concrete(name = "ChangedPackages", params(ChangedPackage)))]
@@ -74,6 +78,15 @@ pub struct Array<T: OutputType> {
     length: usize,
 }
 
+impl<T: OutputType> Array<T> {
+    pub fn new() -> Self {
+        Self {
+            items: Vec::new(),
+            length: 0,
+        }
+    }
+}
+
 impl<T: OutputType> FromIterator<T> for Array<T> {
     fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
         let items: Vec<_> = iter.into_iter().collect();
@@ -81,6 +94,13 @@ impl<T: OutputType> FromIterator<T> for Array<T> {
         Self { items, length }
     }
 }
+
+impl<T: OutputType> TypeName for Array<T> {
+    fn type_name() -> Cow<'static, str> {
+        Cow::Owned(format!("Array<{}>", T::type_name()))
+    }
+}
+
 #[derive(Enum, Copy, Clone, Eq, PartialEq, Debug)]
 enum PackageFields {
     Name,
@@ -400,41 +420,50 @@ enum PackageChangeReason {
     InFilteredDirectory(InFilteredDirectory),
 }
 
-impl From<turborepo_repository::change_mapper::PackageInclusionReason> for PackageChangeReason {
-    fn from(value: turborepo_repository::change_mapper::PackageInclusionReason) -> Self {
-        match value {
-            turborepo_repository::change_mapper::PackageInclusionReason::All(
-                AllPackageChangeReason::GlobalDepsChanged { file },
-            ) => PackageChangeReason::GlobalDepsChanged(GlobalDepsChanged {
-                file_path: file.to_string(),
-            }),
-            turborepo_repository::change_mapper::PackageInclusionReason::All(
-                AllPackageChangeReason::DefaultGlobalFileChanged { file },
-            ) => PackageChangeReason::DefaultGlobalFileChanged(DefaultGlobalFileChanged {
-                file_path: file.to_string(),
-            }),
-            turborepo_repository::change_mapper::PackageInclusionReason::All(
-                AllPackageChangeReason::LockfileChangeDetectionFailed,
-            ) => {
+impl From<AllPackageChangeReason> for PackageChangeReason {
+    fn from(reason: AllPackageChangeReason) -> Self {
+        match reason {
+            AllPackageChangeReason::GlobalDepsChanged { file } => {
+                PackageChangeReason::GlobalDepsChanged(GlobalDepsChanged {
+                    file_path: file.to_string(),
+                })
+            }
+            AllPackageChangeReason::DefaultGlobalFileChanged { file } => {
+                PackageChangeReason::DefaultGlobalFileChanged(DefaultGlobalFileChanged {
+                    file_path: file.to_string(),
+                })
+            }
+
+            AllPackageChangeReason::LockfileChangeDetectionFailed => {
                 PackageChangeReason::LockfileChangeDetectionFailed(LockfileChangeDetectionFailed {
                     empty: false,
                 })
             }
-            turborepo_repository::change_mapper::PackageInclusionReason::All(
-                AllPackageChangeReason::GitRefNotFound { from_ref, to_ref },
-            ) => PackageChangeReason::GitRefNotFound(GitRefNotFound { from_ref, to_ref }),
-            turborepo_repository::change_mapper::PackageInclusionReason::All(
-                AllPackageChangeReason::LockfileChangedWithoutDetails,
-            ) => {
+
+            AllPackageChangeReason::GitRefNotFound { from_ref, to_ref } => {
+                PackageChangeReason::GitRefNotFound(GitRefNotFound { from_ref, to_ref })
+            }
+
+            AllPackageChangeReason::LockfileChangedWithoutDetails => {
                 PackageChangeReason::LockfileChangedWithoutDetails(LockfileChangedWithoutDetails {
                     empty: false,
                 })
             }
-            turborepo_repository::change_mapper::PackageInclusionReason::All(
-                AllPackageChangeReason::RootInternalDepChanged { root_internal_dep },
-            ) => PackageChangeReason::RootInternalDepChanged(RootInternalDepChanged {
-                root_internal_dep: root_internal_dep.to_string(),
-            }),
+            AllPackageChangeReason::RootInternalDepChanged { root_internal_dep } => {
+                PackageChangeReason::RootInternalDepChanged(RootInternalDepChanged {
+                    root_internal_dep: root_internal_dep.to_string(),
+                })
+            }
+        }
+    }
+}
+
+impl From<turborepo_repository::change_mapper::PackageInclusionReason> for PackageChangeReason {
+    fn from(value: turborepo_repository::change_mapper::PackageInclusionReason) -> Self {
+        match value {
+            turborepo_repository::change_mapper::PackageInclusionReason::All(reason) => {
+                PackageChangeReason::from(reason)
+            }
             turborepo_repository::change_mapper::PackageInclusionReason::RootTask { task } => {
                 PackageChangeReason::RootTask(RootTask {
                     task_name: task.to_string(),
@@ -531,6 +560,49 @@ impl RepositoryQuery {
         }
 
         File::new(self.run.clone(), abs_path)
+    }
+
+    /// Get the files that have changed between the `base` and `head` commits.
+    ///
+    /// # Arguments
+    ///
+    /// * `base`: Defaults to `main` or `master`
+    /// * `head`: Defaults to `HEAD`
+    /// * `include_uncommitted`: Defaults to `true` if `head` is not provided
+    /// * `allow_unknown_objects`: Defaults to `false`
+    /// * `merge_base`: Defaults to `true`
+    ///
+    /// returns: Result<Array<File>, Error>
+    async fn affected_files(
+        &self,
+        base: Option<String>,
+        head: Option<String>,
+        include_uncommitted: Option<bool>,
+        merge_base: Option<bool>,
+    ) -> Result<Array<File>, Error> {
+        let base = base.as_deref();
+        let head = head.as_deref();
+        let include_uncommitted = include_uncommitted.unwrap_or_else(|| head.is_none());
+        let merge_base = merge_base.unwrap_or(true);
+
+        let repo_root = self.run.repo_root();
+        let change_result = self
+            .run
+            .scm()
+            .changed_files(
+                repo_root,
+                base,
+                head,
+                include_uncommitted,
+                false,
+                merge_base,
+            )?
+            .expect("set allow unknown objects to false");
+
+        Ok(change_result
+            .into_iter()
+            .map(|file| File::new(self.run.clone(), self.run.repo_root().resolve(&file)))
+            .collect())
     }
 
     /// Gets a list of packages that match the given filter
