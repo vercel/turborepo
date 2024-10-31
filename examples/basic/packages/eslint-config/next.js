@@ -1,35 +1,37 @@
 const { resolve } = require("node:path");
+const { FlatCompat } = require("@eslint/eslintrc");
+const eslint = require("@eslint/js");
+const tseslint = require("typescript-eslint");
+const next = require("@next/eslint-plugin-next");
+const tsParser = require("@typescript-eslint/parser");
 
-const project = resolve(process.cwd(), "tsconfig.json");
+const flatCompat = new FlatCompat({});
 
-/** @type {import("eslint").Linter.Config} */
-module.exports = {
-  extends: [
-    "eslint:recommended",
-    "prettier",
-    require.resolve("@vercel/style-guide/eslint/next"),
-    "turbo",
-  ],
-  globals: {
-    React: true,
-    JSX: true,
+module.exports = [
+  {
+    ...eslint.configs.recommended,
   },
-  env: {
-    node: true,
-    browser: true,
-  },
-  plugins: ["only-warn"],
-  settings: {
-    "import/resolver": {
-      typescript: {
-        project,
+  ...tseslint.configs.recommendedTypeChecked,
+  ...flatCompat.config(next.configs.recommended),
+  ...flatCompat.extends("turbo"),
+  ...flatCompat.plugins("only-warn"),
+  ...flatCompat.config({
+    globals: {
+      React: true,
+      JSX: true,
+    },
+    env: {
+      node: true,
+      browser: true,
+    },
+  }),
+  {
+    ignores: ["*.config.js"],
+    languageOptions: {
+      parser: tsParser,
+      parserOptions: {
+        project: resolve(process.cwd(), "tsconfig.json"),
       },
     },
   },
-  ignorePatterns: [
-    // Ignore dotfiles
-    ".*.js",
-    "node_modules/",
-  ],
-  overrides: [{ files: ["*.js?(x)", "*.ts?(x)"] }],
-};
+];

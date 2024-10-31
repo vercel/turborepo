@@ -1,6 +1,10 @@
 const { resolve } = require("node:path");
+const { FlatCompat } = require("@eslint/eslintrc");
+const eslint = require("@eslint/js");
+const tseslint = require("typescript-eslint");
+const tsParser = require("@typescript-eslint/parser");
 
-const project = resolve(process.cwd(), "tsconfig.json");
+const flatCompat = new FlatCompat({});
 
 /*
  * This is a custom ESLint configuration for use with
@@ -8,32 +12,38 @@ const project = resolve(process.cwd(), "tsconfig.json");
  * that utilize React.
  */
 
-/** @type {import("eslint").Linter.Config} */
-module.exports = {
-  extends: ["eslint:recommended", "prettier", "turbo"],
-  plugins: ["only-warn"],
-  globals: {
-    React: true,
-    JSX: true,
+module.exports = [
+  {
+    ...eslint.configs.recommended,
   },
-  env: {
-    browser: true,
-  },
-  settings: {
-    "import/resolver": {
-      typescript: {
-        project,
+  ...tseslint.configs.recommendedTypeChecked,
+  ...flatCompat.extends("turbo"),
+  ...flatCompat.plugins("only-warn"),
+  ...flatCompat.config({
+    globals: {
+      React: true,
+      JSX: true,
+    },
+    env: {
+      node: true,
+      browser: true,
+    },
+  }),
+  {
+    ignores: ["*.config.js"],
+    languageOptions: {
+      parser: tsParser,
+      parserOptions: {
+        project: resolve(process.cwd(), "tsconfig.lint.json"),
       },
     },
   },
-  ignorePatterns: [
-    // Ignore dotfiles
-    ".*.js",
-    "node_modules/",
-    "dist/",
-  ],
-  overrides: [
-    // Force ESLint to detect .tsx files
-    { files: ["*.js?(x)", "*.ts?(x)"] },
-  ],
-};
+  {
+    files: ["eslint.config.js"],
+    ...tseslint.configs.disableTypeChecked,
+    rules: {
+      ...tseslint.configs.disableTypeChecked.rules,
+      "@typescript-eslint/no-require-imports": "off",
+    },
+  },
+];
