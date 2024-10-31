@@ -33,8 +33,8 @@ pub struct Tracer {
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum TraceError {
-    #[error("failed to parse file: {:?}", .0)]
-    ParseError(swc_ecma_parser::error::Error),
+    #[error("failed to parse file {}: {:?}", .0, .1)]
+    ParseError(AbsoluteSystemPathBuf, swc_ecma_parser::error::Error),
     #[error("failed to read file: {0}")]
     FileNotFound(AbsoluteSystemPathBuf),
     #[error(transparent)]
@@ -124,7 +124,7 @@ impl Tracer {
             })
         } else {
             Syntax::Es(EsSyntax {
-                jsx: file_path.extension() == Some("jsx"),
+                jsx: true,
                 ..Default::default()
             })
         };
@@ -142,7 +142,7 @@ impl Tracer {
         let module = match parser.parse_module() {
             Ok(module) => module,
             Err(err) => {
-                errors.push(TraceError::ParseError(err));
+                errors.push(TraceError::ParseError(file_path.to_owned(), err));
                 return None;
             }
         };
@@ -198,6 +198,7 @@ impl Tracer {
         seen: &mut HashMap<AbsoluteSystemPathBuf, SeenFile>,
     ) {
         let file_resolver = Self::infer_resolver_with_ts_config(&file_path, resolver);
+        let resolver = file_resolver.as_ref().unwrap_or(resolver);
 
         if seen.contains_key(&file_path) {
             return;
@@ -212,7 +213,7 @@ impl Tracer {
         let Some((imports, seen_file)) = Self::get_imports_from_file(
             &self.source_map,
             &mut self.errors,
-            file_resolver.as_ref().unwrap_or(resolver),
+            resolver,
             &file_path,
             self.import_type,
         )
@@ -233,17 +234,35 @@ impl Tracer {
         root: &AbsoluteSystemPath,
         existing_resolver: &Resolver,
     ) -> Option<Resolver> {
-        root.ancestors()
+        let resolver = root
+            .ancestors()
             .skip(1)
             .find(|p| p.join_component("tsconfig.json").exists())
-            .map(|ts_config| {
+            .map(|ts_config_dir| {
                 let mut options = existing_resolver.options().clone();
                 options.tsconfig = Some(TsconfigOptions {
-                    config_file: ts_config.as_std_path().into(),
+                    config_file: ts_config_dir
+                        .join_component("tsconfig.json")
+                        .as_std_path()
+                        .into(),
                     references: TsconfigReferences::Auto,
                 });
 
                 existing_resolver.clone_with_options(options)
+            });
+
+        root.ancestors()
+            .skip(1)
+            .find(|p| p.join_component("node_modules").exists())
+            .map(|node_modules_dir| {
+                let node_modules = node_modules_dir.join_component("node_modules");
+                let resolver = resolver.as_ref().unwrap_or(existing_resolver);
+                let options = resolver
+                    .options()
+                    .clone()
+                    .with_module(node_modules.to_string());
+
+                resolver.clone_with_options(options)
             })
     }
 
@@ -252,7 +271,8 @@ impl Tracer {
             .with_builtin_modules(true)
             .with_force_extension(EnforceExtension::Disabled)
             .with_extension(".ts")
-            .with_extension(".tsx");
+            .with_extension(".tsx")
+            .with_condition_names(&["import", "require"]);
 
         if let Some(ts_config) = self.ts_config.take() {
             options.tsconfig = Some(TsconfigOptions {
@@ -318,12 +338,13 @@ impl Tracer {
             let resolver = resolver.clone();
             futures.spawn(async move {
                 let file_resolver = Self::infer_resolver_with_ts_config(&file, &resolver);
+                let resolver = file_resolver.as_ref().unwrap_or(&resolver);
                 let mut errors = Vec::new();
 
                 let Some((imported_files, seen_file)) = Self::get_imports_from_file(
                     &shared_self.source_map,
                     &mut errors,
-                    file_resolver.as_ref().unwrap_or(&resolver),
+                    resolver,
                     &file,
                     shared_self.import_type,
                 )
