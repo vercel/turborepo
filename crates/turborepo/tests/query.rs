@@ -50,9 +50,7 @@ fn test_trace() -> Result<(), anyhow::Error> {
             "get `import_value_and_type.ts` with all dependencies" => "query { file(path: \"import_value_and_type.ts\") { path dependencies(importType: ALL) { files { items { path } } } } }",
             "get `import_value_and_type.ts` with type dependencies" => "query { file(path: \"import_value_and_type.ts\") { path dependencies(importType: TYPES) { files { items { path } } } } }",
             "get `import_value_and_type.ts` with value dependencies" => "query { file(path: \"import_value_and_type.ts\") { path dependencies(importType: VALUES) { files { items { path } } } } }",
-            "get `link.tsx` with all dependents" => "query { file(path: \"link.tsx\") { path dependents(importType: ALL) { files { items { path } } } } }",
-            "get `link.tsx` with type dependents" => "query { file(path: \"link.tsx\") { path dependents(importType: TYPES) { files { items { path } } } } }",
-            "get `link.tsx` with value dependents" => "query { file(path: \"link.tsx\") { path dependents(importType: VALUES) { files { items { path } } } } }",
+            "get `export_conditions` with dependencies" => "query { file(path: \"export_conditions.js\") { path dependencies(depth: 1) { files { items { path } } } } }",
         );
 
         Ok(())
@@ -82,6 +80,9 @@ fn test_reverse_trace() -> Result<(), anyhow::Error> {
         "npm@10.5.0",
         "query",
         "get `button.tsx` with dependents" => "query { file(path: \"button.tsx\") { path dependents { files { items { path } } } } }",
+        "get `link.tsx` with all dependents" => "query { file(path: \"link.tsx\") { path dependents(importType: ALL) { files { items { path } } } } }",
+        "get `link.tsx` with type dependents" => "query { file(path: \"link.tsx\") { path dependents(importType: TYPES) { files { items { path } } } } }",
+        "get `link.tsx` with value dependents" => "query { file(path: \"link.tsx\") { path dependents(importType: VALUES) { files { items { path } } } } }",
     );
 
     Ok(())
