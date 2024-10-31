@@ -85,6 +85,7 @@ fn translate_key_event(options: InputOptions, key_event: KeyEvent) -> Option<Eve
                 restore_scroll: true,
             })
         }
+        KeyCode::Char('h') => Some(Event::ToggleSidebar),
         KeyCode::Enter if matches!(options.focus, LayoutSections::Search { .. }) => {
             Some(Event::SearchExit {
                 restore_scroll: false,

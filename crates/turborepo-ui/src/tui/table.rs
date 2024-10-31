@@ -2,7 +2,7 @@ use ratatui::{
     layout::{Constraint, Rect},
     style::{Color, Style, Stylize},
     text::Text,
-    widgets::{Cell, Row, StatefulWidget, Table, TableState},
+    widgets::{Block, Borders, Cell, Row, StatefulWidget, Table, TableState},
 };
 
 use super::{event::TaskResult, spinner::SpinnerState, task::TasksByStatus};
@@ -17,6 +17,7 @@ pub struct TaskTable<'b> {
 }
 
 const TASK_NAVIGATE_INSTRUCTIONS: &str = "↑ ↓ to navigate";
+const HIDE_INSTRUCTIONS: &str = "h to hide";
 
 impl<'b> TaskTable<'b> {
     /// Construct a new table with all of the planned tasks
@@ -105,6 +106,7 @@ impl<'a> StatefulWidget for &'a TaskTable<'a> {
         )
         .highlight_style(Style::default().fg(Color::Yellow))
         .column_spacing(0)
+        .block(Block::new().borders(Borders::RIGHT))
         .header(
             vec![format!("Tasks\n{bar}"), " \n─".to_owned()]
                 .into_iter()
@@ -114,13 +116,13 @@ impl<'a> StatefulWidget for &'a TaskTable<'a> {
         )
         .footer(
             vec![
-                format!("{bar}\n{TASK_NAVIGATE_INSTRUCTIONS}"),
+                format!("{bar}\n{TASK_NAVIGATE_INSTRUCTIONS}\n{HIDE_INSTRUCTIONS}"),
                 format!("─\n "),
             ]
             .into_iter()
             .map(Cell::from)
             .collect::<Row>()
-            .height(2),
+            .height(3),
         );
         StatefulWidget::render(table, area, buf, state);
     }
