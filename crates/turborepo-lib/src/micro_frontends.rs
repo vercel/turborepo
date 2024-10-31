@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use turbopath::AbsoluteSystemPath;
-use turborepo_micro_frontend::{Config as MFEConfig, Error, MICRO_FRONTENDS_CONFIG};
+use turborepo_micro_frontend::{Config as MFEConfig, Error, DEFAULT_MICRO_FRONTENDS_CONFIG};
 use turborepo_repository::package_graph::PackageGraph;
 
 use crate::run::task_id::TaskId;
@@ -20,7 +20,7 @@ impl MicroFrontendsConfigs {
         for (package_name, package_info) in package_graph.packages() {
             let config_path = repo_root
                 .resolve(package_info.package_path())
-                .join_component(MICRO_FRONTENDS_CONFIG);
+                .join_component(DEFAULT_MICRO_FRONTENDS_CONFIG);
             let Some(config) = MFEConfig::load(&config_path)? else {
                 continue;
             };

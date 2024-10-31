@@ -9,7 +9,10 @@ pub use error::Error;
 use serde::Serialize;
 use turbopath::AbsoluteSystemPath;
 
-pub const MICRO_FRONTENDS_CONFIG: &str = "micro-frontends.jsonc";
+/// Currently the default path for a package that provides a configuration.
+///
+/// This is subject to change at any time.
+pub const DEFAULT_MICRO_FRONTENDS_CONFIG: &str = "micro-frontends.jsonc";
 pub const MICRO_FRONTENDS_PACKAGES: &[&str] = ["@vercel/micro-frontends-internal"].as_slice();
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserializable, Default)]
