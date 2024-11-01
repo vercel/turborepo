@@ -123,7 +123,7 @@ impl<'a> StatefulWidget for &'a TaskTable<'a> {
         .block(Block::new().borders(Borders::RIGHT))
         .header(
             vec![Text::styled(
-                "Tasks\n",
+                "Tasks",
                 Style::default().add_modifier(Modifier::DIM),
             )]
             .into_iter()
