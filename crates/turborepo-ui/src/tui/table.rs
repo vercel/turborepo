@@ -135,7 +135,7 @@ impl<'a> StatefulWidget for &'a TaskTable<'a> {
         )
         .footer(
             vec![Text::styled(
-                format!("\n{TASK_NAVIGATE_INSTRUCTIONS}\n{HIDE_INSTRUCTIONS}"),
+                format!("{TASK_NAVIGATE_INSTRUCTIONS}\n{HIDE_INSTRUCTIONS}"),
                 Style::default().fg(Color::DarkGray),
             )]
             .into_iter()
