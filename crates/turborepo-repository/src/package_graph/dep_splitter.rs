@@ -5,7 +5,7 @@ use turbopath::{
     RelativeUnixPathBuf,
 };
 
-use super::{npmrc::NpmRc, PackageInfo, PackageName};
+use super::{npmrc::NpmRc, yarnrc::YarnRc, PackageInfo, PackageName};
 use crate::package_manager::PackageManager;
 
 pub struct DependencySplitter<'a> {
@@ -22,6 +22,7 @@ impl<'a> DependencySplitter<'a> {
         workspaces: &'a HashMap<PackageName, PackageInfo>,
         package_manager: &PackageManager,
         npmrc: Option<&'a NpmRc>,
+        yarnrc: Option<&'a YarnRc>,
     ) -> Self {
         Self {
             repo_root,
@@ -29,6 +30,7 @@ impl<'a> DependencySplitter<'a> {
             workspaces,
             link_workspace_packages: npmrc
                 .and_then(|npmrc| npmrc.link_workspace_packages)
+                .or_else(|| yarnrc.map(|yarnrc| yarnrc.enableTransparentWorkspaces))
                 .unwrap_or(!matches!(package_manager, PackageManager::Pnpm9)),
         }
     }
