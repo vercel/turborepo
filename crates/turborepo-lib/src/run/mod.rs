@@ -261,8 +261,10 @@ impl Run {
         }
 
         let (sender, receiver) = TuiSender::new();
-        let handle =
-            tokio::task::spawn(async move { Ok(tui::run_app(task_names, receiver).await?) });
+        let color_config = self.color_config;
+        let handle = tokio::task::spawn(async move {
+            Ok(tui::run_app(task_names, receiver, color_config).await?)
+        });
 
         Ok(Some((sender, handle)))
     }
