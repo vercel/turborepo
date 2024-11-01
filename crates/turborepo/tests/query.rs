@@ -1,5 +1,17 @@
 mod common;
 
+#[test]
+fn test_query() -> Result<(), anyhow::Error> {
+    check_json!(
+        "basic_monorepo",
+        "npm@10.5.0",
+        "query",
+        "get package that doesn't exist" => "query { package(name: \"doesnotexist\") { path } }",
+    );
+
+    Ok(())
+}
+
 #[cfg(not(windows))]
 #[test]
 fn test_double_symlink() -> Result<(), anyhow::Error> {

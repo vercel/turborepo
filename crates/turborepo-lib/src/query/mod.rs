@@ -11,7 +11,6 @@ use std::{
 
 use async_graphql::{http::GraphiQLSource, *};
 use axum::{response, response::IntoResponse};
-use itertools::Itertools;
 use miette::Diagnostic;
 use package::Package;
 pub use server::run_server;
@@ -137,7 +136,7 @@ struct PackagePredicate {
 impl PackagePredicate {
     fn check_equals(pkg: &Package, field: &PackageFields, value: &Any) -> bool {
         match (field, &value.0) {
-            (PackageFields::Name, Value::String(name)) => pkg.name.as_ref() == name,
+            (PackageFields::Name, Value::String(name)) => pkg.get_name().as_ref() == name,
             (PackageFields::DirectDependencyCount, Value::Number(n)) => {
                 let Some(n) = n.as_u64() else {
                     return false;
@@ -264,7 +263,7 @@ impl PackagePredicate {
 
     fn check_has(pkg: &Package, field: &PackageFields, value: &Any) -> bool {
         match (field, &value.0) {
-            (PackageFields::Name, Value::String(name)) => pkg.name.as_ref() == name,
+            (PackageFields::Name, Value::String(name)) => pkg.get_name().as_str() == name,
             (PackageFields::TaskName, Value::String(name)) => pkg.get_tasks().contains_key(name),
             _ => false,
         }
@@ -522,8 +521,10 @@ impl RepositoryQuery {
                 reason: reason.into(),
             })
         })
-        .filter(|package| {
-            let package = package.as_ref()?;
+        .filter(|package: &Result<ChangedPackage, Error>| {
+            let Ok(package) = package.as_ref() else {
+                return true;
+            };
             filter.as_ref().map_or(true, |f| f.check(&package.package))
         })
         .collect::<Result<Array<_>, _>>()?;
