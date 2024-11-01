@@ -26,9 +26,12 @@ use super::{
     search::SearchResults,
     AppReceiver, Debouncer, Error, Event, InputOptions, SizeInfo, TaskTable, TerminalPane,
 };
-use crate::tui::{
-    task::{Task, TasksByStatus},
-    term_output::TerminalOutput,
+use crate::{
+    tui::{
+        task::{Task, TasksByStatus},
+        term_output::TerminalOutput,
+    },
+    ColorConfig,
 };
 
 #[derive(Debug, Clone)]
@@ -559,8 +562,12 @@ impl<W: Write> App<W> {
 
 /// Handle the rendering of the `App` widget based on events received by
 /// `receiver`
-pub async fn run_app(tasks: Vec<String>, receiver: AppReceiver) -> Result<(), Error> {
-    let mut terminal = startup()?;
+pub async fn run_app(
+    tasks: Vec<String>,
+    receiver: AppReceiver,
+    color_config: ColorConfig,
+) -> Result<(), Error> {
+    let mut terminal = startup(color_config)?;
     let size = terminal.size()?;
 
     let mut app: App<Box<dyn io::Write + Send>> = App::new(size.height, size.width, tasks);
@@ -673,7 +680,10 @@ pub fn terminal_big_enough() -> Result<bool, Error> {
 
 /// Configures terminal for rendering App
 #[tracing::instrument]
-fn startup() -> io::Result<Terminal<CrosstermBackend<Stdout>>> {
+fn startup(color_config: ColorConfig) -> io::Result<Terminal<CrosstermBackend<Stdout>>> {
+    if color_config.should_strip_ansi {
+        crossterm::style::force_color_output(false);
+    }
     crossterm::terminal::enable_raw_mode()?;
     let mut stdout = io::stdout();
     // Ensure all pending writes are flushed before we switch to alternative screen
