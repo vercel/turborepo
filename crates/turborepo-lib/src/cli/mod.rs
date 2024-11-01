@@ -1218,8 +1218,8 @@ pub async fn run(
             CommandEventBuilder::new("info")
                 .with_parent(&root_telemetry)
                 .track_call();
-            let mut base = CommandBase::new(cli_args.clone(), repo_root, version, color_config);
-            info::run(base);
+            let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config);
+            info::run(base).await;
 
             Ok(0)
         }
