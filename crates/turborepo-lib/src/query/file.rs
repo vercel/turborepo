@@ -99,8 +99,9 @@ impl From<turbo_trace::TraceError> for TraceError {
                 path: Some(path.to_string()),
                 ..Default::default()
             },
-            turbo_trace::TraceError::ParseError(e) => TraceError {
+            turbo_trace::TraceError::ParseError(path, e) => TraceError {
                 message: format!("failed to parse file: {:?}", e),
+                path: Some(path.to_string()),
                 ..Default::default()
             },
             turbo_trace::TraceError::GlobError(err) => TraceError {
