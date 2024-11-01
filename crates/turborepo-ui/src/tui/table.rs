@@ -1,7 +1,7 @@
 use itertools::Itertools;
 use ratatui::{
     layout::{Constraint, Rect},
-    style::{Color, Style, Stylize},
+    style::{Color, Modifier, Style, Stylize},
     text::Text,
     widgets::{Block, Borders, Cell, Row, StatefulWidget, Table, TableState},
 };
@@ -108,8 +108,6 @@ impl<'a> StatefulWidget for &'a TaskTable<'a> {
     type State = TableState;
 
     fn render(self, area: Rect, buf: &mut ratatui::prelude::Buffer, state: &mut Self::State) {
-        let width = area.width;
-        let bar = "─".repeat(usize::from(width));
         let table = Table::new(
             self.running_rows()
                 .chain(self.planned_rows())
@@ -124,21 +122,24 @@ impl<'a> StatefulWidget for &'a TaskTable<'a> {
         .column_spacing(0)
         .block(Block::new().borders(Borders::RIGHT))
         .header(
-            vec![format!("Tasks\n{bar}"), " \n─".to_owned()]
-                .into_iter()
-                .map(Cell::from)
-                .collect::<Row>()
-                .height(2),
-        )
-        .footer(
-            vec![
-                format!("{bar}\n{TASK_NAVIGATE_INSTRUCTIONS}\n{HIDE_INSTRUCTIONS}"),
-                format!("─\n "),
-            ]
+            vec![Text::styled(
+                "Tasks",
+                Style::default().add_modifier(Modifier::DIM),
+            )]
             .into_iter()
             .map(Cell::from)
             .collect::<Row>()
-            .height(3),
+            .height(1),
+        )
+        .footer(
+            vec![Text::styled(
+                format!("{TASK_NAVIGATE_INSTRUCTIONS}\n{HIDE_INSTRUCTIONS}"),
+                Style::default().add_modifier(Modifier::DIM),
+            )]
+            .into_iter()
+            .map(Cell::from)
+            .collect::<Row>()
+            .height(2),
         );
         StatefulWidget::render(table, area, buf, state);
     }
