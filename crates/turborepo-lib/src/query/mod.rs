@@ -529,7 +529,7 @@ impl RepositoryQuery {
         })
         .collect::<Result<Array<_>, _>>()?;
 
-        packages.sort_by(|a, b| a.package.get_name().cmp(&b.package.get_name()));
+        packages.sort_by(|a, b| a.package.get_name().cmp(b.package.get_name()));
         Ok(packages)
     }
 

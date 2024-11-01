@@ -37,13 +37,13 @@ impl RepositoryTask {
             .filter_map(|task| match task {
                 TaskNode::Root => None,
                 TaskNode::Task(task) if task == task_id => None,
-                TaskNode::Task(task) => Some(RepositoryTask::new(&task, &self.package.run())),
+                TaskNode::Task(task) => Some(RepositoryTask::new(task, self.package.run())),
             })
             .collect::<Result<Array<_>, _>>()?;
         tasks.sort_by(|a, b| {
             a.package
                 .get_name()
-                .cmp(&b.package.get_name())
+                .cmp(b.package.get_name())
                 .then_with(|| a.name.cmp(&b.name))
         });
         Ok(tasks)
