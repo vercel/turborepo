@@ -15,6 +15,7 @@ pub(crate) mod bin;
 pub(crate) mod config;
 pub(crate) mod daemon;
 pub(crate) mod generate;
+pub(crate) mod info;
 pub(crate) mod link;
 pub(crate) mod login;
 pub(crate) mod logout;
