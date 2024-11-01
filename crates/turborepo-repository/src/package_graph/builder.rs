@@ -10,8 +10,8 @@ use turborepo_graph_utils as graph;
 use turborepo_lockfiles::Lockfile;
 
 use super::{
-    dep_splitter::DependencySplitter, npmrc::NpmRc, PackageGraph, PackageInfo, PackageName,
-    PackageNode,
+    dep_splitter::DependencySplitter, npmrc::NpmRc, yarnrc::YarnRc, PackageGraph, PackageInfo,
+    PackageName, PackageNode,
 };
 use crate::{
     discovery::{
@@ -362,6 +362,17 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
             }
             _ => None,
         };
+        let yarnrc_path = self.repo_root.join_component(".yarnrc.yml");
+        let yarnrc = match package_manager {
+            PackageManager::Berry => {
+                // HOME?
+                match yarnrc_path.read_existing_to_string().ok().flatten() {
+                    Some(contents) => YarnRc::from_reader(contents.as_bytes()).ok(),
+                    None => None,
+                }
+            }
+            _ => None,
+        };
         let split_deps = self
             .workspaces
             .iter()
@@ -375,6 +386,7 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
                         &self.workspaces,
                         package_manager,
                         npmrc.as_ref(),
+                        yarnrc.as_ref(),
                         entry.package_json.all_dependencies(),
                     ),
                 )
@@ -567,6 +579,7 @@ impl Dependencies {
         workspaces: &HashMap<PackageName, PackageInfo>,
         package_manager: &PackageManager,
         npmrc: Option<&NpmRc>,
+        yarnrc: Option<&YarnRc>,
         dependencies: I,
     ) -> Self {
         let resolved_workspace_json_path = repo_root.resolve(workspace_json_path);
@@ -575,8 +588,14 @@ impl Dependencies {
             .expect("package.json path should have parent");
         let mut internal = HashSet::new();
         let mut external = BTreeMap::new();
-        let splitter =
-            DependencySplitter::new(repo_root, workspace_dir, workspaces, package_manager, npmrc);
+        let splitter = DependencySplitter::new(
+            repo_root,
+            workspace_dir,
+            workspaces,
+            package_manager,
+            npmrc,
+            yarnrc,
+        );
         for (name, version) in dependencies.into_iter() {
             if let Some(workspace) = splitter.is_internal(name, version) {
                 internal.insert(workspace);
