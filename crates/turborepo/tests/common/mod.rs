@@ -48,6 +48,7 @@ macro_rules! check_json {
             let tempdir = tempfile::tempdir()?;
             crate::common::setup_fixture($fixture, $package_manager, tempdir.path())?;
             $(
+                println!("Running command: `turbo {} {}` in {}", $command, $query, $fixture);
                 let output = assert_cmd::Command::cargo_bin("turbo")?
                     .arg($command)
                     .arg($query)

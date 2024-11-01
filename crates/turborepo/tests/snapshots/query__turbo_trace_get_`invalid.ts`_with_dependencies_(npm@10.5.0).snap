@@ -10,6 +10,12 @@ expression: query_output
         "files": {
           "items": [
             {
+              "path": "button.css"
+            },
+            {
+              "path": "button.json"
+            },
+            {
               "path": "button.tsx"
             }
           ]
@@ -17,7 +23,7 @@ expression: query_output
         "errors": {
           "items": [
             {
-              "message": "failed to resolve import"
+              "message": "failed to resolve import to `./non-existent-file.js`"
             }
           ]
         }

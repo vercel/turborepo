@@ -1,22 +1,29 @@
+use itertools::Itertools;
 use ratatui::{
     layout::{Constraint, Rect},
-    style::{Color, Style, Stylize},
+    style::{Color, Modifier, Style, Stylize},
     text::Text,
-    widgets::{Cell, Row, StatefulWidget, Table, TableState},
+    widgets::{Block, Borders, Cell, Row, StatefulWidget, Table, TableState},
 };
 
 use super::{event::TaskResult, spinner::SpinnerState, task::TasksByStatus};
 
 /// A widget that renders a table of their tasks and their current status
 ///
-/// The table contains finished tasks, running tasks, and planned tasks rendered
-/// in that order.
+/// The tasks are ordered as follows:
+/// - running tasks
+/// - planned tasks
+/// - finished tasks
+///   - failed tasks
+///   - successful tasks
+///   - cached tasks
 pub struct TaskTable<'b> {
     tasks_by_type: &'b TasksByStatus,
     spinner: SpinnerState,
 }
 
 const TASK_NAVIGATE_INSTRUCTIONS: &str = "↑ ↓ to navigate";
+const HIDE_INSTRUCTIONS: &str = "h to hide";
 
 impl<'b> TaskTable<'b> {
     /// Construct a new table with all of the planned tasks
@@ -46,29 +53,39 @@ impl<'b> TaskTable<'b> {
     }
 
     fn finished_rows(&self) -> impl Iterator<Item = Row> + '_ {
-        self.tasks_by_type.finished.iter().map(move |task| {
-            let name = if matches!(task.result(), TaskResult::CacheHit) {
-                Cell::new(Text::styled(task.name(), Style::default().italic()))
-            } else {
-                Cell::new(task.name())
-            };
+        self.tasks_by_type
+            .finished
+            .iter()
+            // note we can't use the default Ord impl because
+            // we want failed tasks first
+            .sorted_by_key(|task| match task.result() {
+                TaskResult::Failure => 0,
+                TaskResult::Success => 1,
+                TaskResult::CacheHit => 2,
+            })
+            .map(move |task| {
+                let name = if matches!(task.result(), TaskResult::CacheHit) {
+                    Cell::new(Text::styled(task.name(), Style::default().italic()))
+                } else {
+                    Cell::new(task.name())
+                };
 
-            Row::new(vec![
-                name,
-                match task.result() {
-                    // matches Next.js (and many other CLI tools) https://github.com/vercel/next.js/blob/1a04d94aaec943d3cce93487fea3b8c8f8898f31/packages/next/src/build/output/log.ts
-                    TaskResult::Success => {
-                        Cell::new(Text::styled("✓", Style::default().green().bold()))
-                    }
-                    TaskResult::CacheHit => {
-                        Cell::new(Text::styled("⊙", Style::default().magenta()))
-                    }
-                    TaskResult::Failure => {
-                        Cell::new(Text::styled("⨯", Style::default().red().bold()))
-                    }
-                },
-            ])
-        })
+                Row::new(vec![
+                    name,
+                    match task.result() {
+                        // matches Next.js (and many other CLI tools) https://github.com/vercel/next.js/blob/1a04d94aaec943d3cce93487fea3b8c8f8898f31/packages/next/src/build/output/log.ts
+                        TaskResult::Success => {
+                            Cell::new(Text::styled("✓", Style::default().green().bold()))
+                        }
+                        TaskResult::CacheHit => {
+                            Cell::new(Text::styled("⊙", Style::default().magenta()))
+                        }
+                        TaskResult::Failure => {
+                            Cell::new(Text::styled("⨯", Style::default().red().bold()))
+                        }
+                    },
+                ])
+            })
     }
 
     fn running_rows(&self) -> impl Iterator<Item = Row> + '_ {
@@ -91,8 +108,6 @@ impl<'a> StatefulWidget for &'a TaskTable<'a> {
     type State = TableState;
 
     fn render(self, area: Rect, buf: &mut ratatui::prelude::Buffer, state: &mut Self::State) {
-        let width = area.width;
-        let bar = "─".repeat(usize::from(width));
         let table = Table::new(
             self.running_rows()
                 .chain(self.planned_rows())
@@ -105,18 +120,22 @@ impl<'a> StatefulWidget for &'a TaskTable<'a> {
         )
         .highlight_style(Style::default().fg(Color::Yellow))
         .column_spacing(0)
+        .block(Block::new().borders(Borders::RIGHT))
         .header(
-            vec![format!("Tasks\n{bar}"), " \n─".to_owned()]
-                .into_iter()
-                .map(Cell::from)
-                .collect::<Row>()
-                .height(2),
+            vec![Text::styled(
+                "Tasks",
+                Style::default().add_modifier(Modifier::DIM),
+            )]
+            .into_iter()
+            .map(Cell::from)
+            .collect::<Row>()
+            .height(1),
         )
         .footer(
-            vec![
-                format!("{bar}\n{TASK_NAVIGATE_INSTRUCTIONS}"),
-                format!("─\n "),
-            ]
+            vec![Text::styled(
+                format!("{TASK_NAVIGATE_INSTRUCTIONS}\n{HIDE_INSTRUCTIONS}"),
+                Style::default().add_modifier(Modifier::DIM),
+            )]
             .into_iter()
             .map(Cell::from)
             .collect::<Row>()
