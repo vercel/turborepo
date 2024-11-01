@@ -2,6 +2,7 @@ use std::{env, io};
 
 use sysinfo::{System, SystemExt};
 use thiserror::Error;
+use turborepo_repository::{package_json::PackageJson, package_manager::PackageManager};
 
 use super::CommandBase;
 use crate::{DaemonConnector, DaemonConnectorError};
@@ -21,6 +22,16 @@ pub async fn run(base: CommandBase) -> Result<(), Error> {
         Err(_e) => "Error getting status",
     };
 
+    let package_manager = match PackageJson::load(&base.repo_root.join_component("package.json")) {
+        Ok(package_json) => {
+            match PackageManager::read_or_detect_package_manager(&package_json, &base.repo_root) {
+                Ok(pm) => pm.to_string(),
+                Err(_) => "Not found".to_owned(),
+            }
+        }
+        Err(_) => "Not found".to_owned(),
+    };
+
     println!("CLI:");
     println!("   Version: {}", base.version);
     println!(
@@ -28,14 +39,8 @@ pub async fn run(base: CommandBase) -> Result<(), Error> {
         std::env::current_exe()?.to_string_lossy()
     );
     println!("   Daemon status: {}", daemon_status);
-    println!("");
-
-    println!("Package managers:");
-    println!("   npm version: {}", "TODO");
-    println!("   yarn version: {}", "TODO");
-    println!("   pnpm version: {}", "TODO");
-    println!("   bun version: {}", "TODO");
-    println!("");
+    println!("   Package manager: {}", package_manager);
+    println!();
 
     println!("Platform:");
     println!("   Architecture: {}", std::env::consts::ARCH);
@@ -45,7 +50,7 @@ pub async fn run(base: CommandBase) -> Result<(), Error> {
         system.available_memory() / 1024 / 1024
     );
     println!("   Available CPU cores: {}", num_cpus::get());
-    println!("");
+    println!();
 
     println!("Environment:");
     println!("   CI: {:#?}", turborepo_ci::Vendor::get_name());
@@ -67,15 +72,15 @@ pub async fn run(base: CommandBase) -> Result<(), Error> {
         env::var("SHELL").unwrap_or_else(|_| "unknown".to_owned())
     );
     println!("   stdin: {}", turborepo_ci::is_ci());
-    println!("");
+    println!();
 
     println!("Turborepo System Environment Variables:");
     for (key, value) in env::vars() {
         // Don't print sensitive information
-        if key == "TURBO_TEAM".to_string()
-            || key == "TURBO_TEAMID".to_string()
-            || key == "TURBO_TOKEN".to_string()
-            || key == "TURBO_API".to_string()
+        if key == "TURBO_TEAM"
+            || key == "TURBO_TEAMID"
+            || key == "TURBO_TOKEN"
+            || key == "TURBO_API"
         {
             continue;
         }

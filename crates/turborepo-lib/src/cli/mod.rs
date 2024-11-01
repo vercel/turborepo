@@ -1219,8 +1219,11 @@ pub async fn run(
                 .with_parent(&root_telemetry)
                 .track_call();
             let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config);
-            info::run(base).await;
 
+            match info::run(base).await {
+                Ok(()) => {}
+                Err(e) => println!("Command failed. Please file a GitHub Issue.\n{}", e),
+            }
             Ok(0)
         }
         Command::Telemetry { command } => {
