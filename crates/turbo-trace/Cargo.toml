@@ -11,7 +11,7 @@ futures = { workspace = true }
 globwalk = { version = "0.1.0", path = "../turborepo-globwalk" }
 miette = { workspace = true, features = ["fancy"] }
 oxc_resolver = { version = "2.0.0" }
-swc_common = { workspace = true, features = ["concurrent"] }
+swc_common = { workspace = true, features = ["concurrent", "tty-emitter"] }
 swc_ecma_ast = { workspace = true }
 swc_ecma_parser = { workspace = true }
 swc_ecma_visit = { workspace = true }

@@ -2,17 +2,22 @@ use std::{collections::HashMap, sync::Arc};
 
 use camino::Utf8PathBuf;
 use globwalk::WalkType;
-use miette::{Diagnostic, NamedSource, SourceSpan};
+use miette::{Diagnostic, Report, SourceSpan};
 use oxc_resolver::{
     EnforceExtension, ResolveError, ResolveOptions, Resolver, TsconfigOptions, TsconfigReferences,
 };
-use swc_common::{comments::SingleThreadedComments, input::StringInput, FileName, SourceMap};
+use swc_common::{
+    comments::SingleThreadedComments,
+    errors::{ColorConfig, Handler},
+    input::StringInput,
+    FileName, SourceMap,
+};
 use swc_ecma_ast::EsVersion;
 use swc_ecma_parser::{lexer::Lexer, Capturing, EsSyntax, Parser, Syntax, TsSyntax};
 use swc_ecma_visit::VisitWith;
 use thiserror::Error;
 use tokio::task::JoinSet;
-use tracing::debug;
+use tracing::{debug, error};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError};
 
 use crate::import_finder::ImportFinder;
@@ -31,29 +36,52 @@ pub struct Tracer {
     import_type: ImportType,
 }
 
-#[derive(Debug, Error, Diagnostic)]
+#[derive(Clone, Debug, Error, Diagnostic)]
 pub enum TraceError {
     #[error("failed to parse file {}: {:?}", .0, .1)]
     ParseError(AbsoluteSystemPathBuf, swc_ecma_parser::error::Error),
     #[error("failed to read file: {0}")]
     FileNotFound(AbsoluteSystemPathBuf),
     #[error(transparent)]
-    PathEncoding(PathError),
+    PathEncoding(Arc<PathError>),
     #[error("tracing a root file `{0}`, no parent found")]
     RootFile(AbsoluteSystemPathBuf),
-    #[error("failed to resolve import to `{path}`")]
+    #[error("failed to resolve import to `{import}` in `{file_path}`")]
     Resolve {
-        path: String,
+        import: String,
+        file_path: String,
         #[label("import here")]
         span: SourceSpan,
         #[source_code]
-        text: NamedSource,
+        text: String,
     },
     #[error("failed to walk files")]
-    GlobError(#[from] globwalk::WalkError),
+    GlobError(Arc<globwalk::WalkError>),
+}
+
+impl TraceResult {
+    pub fn emit_errors(&self) {
+        let handler = Handler::with_tty_emitter(
+            ColorConfig::Auto,
+            true,
+            false,
+            Some(self.source_map.clone()),
+        );
+        for error in &self.errors {
+            match error {
+                TraceError::ParseError(e) => {
+                    e.clone().into_diagnostic(&handler).emit();
+                }
+                e => {
+                    eprintln!("{:?}", Report::new(e.clone()));
+                }
+            }
+        }
+    }
 }
 
 pub struct TraceResult {
+    source_map: Arc<SourceMap>,
     pub errors: Vec<TraceError>,
     pub files: HashMap<AbsoluteSystemPathBuf, SeenFile>,
 }
@@ -162,7 +190,7 @@ impl Tracer {
             match resolver.resolve(file_dir, import) {
                 Ok(resolved) => {
                     debug!("resolved {:?}", resolved);
-                    match resolved.into_path_buf().try_into() {
+                    match resolved.into_path_buf().try_into().map_err(Arc::new) {
                         Ok(path) => files.push(path),
                         Err(err) => {
                             errors.push(TraceError::PathEncoding(err));
@@ -176,11 +204,14 @@ impl Tracer {
                 Err(err) => {
                     debug!("failed to resolve: {:?}", err);
                     let (start, end) = source_map.span_to_char_offset(&source_file, *span);
+                    let start = start as usize;
+                    let end = end as usize;
 
                     errors.push(TraceError::Resolve {
-                        path: import.to_string(),
-                        span: (start as usize, end as usize).into(),
-                        text: NamedSource::new(file_path.to_string(), file_content.clone()),
+                        import: import.to_string(),
+                        file_path: file_path.to_string(),
+                        span: SourceSpan::new(start.into(), (end - start).into()),
+                        text: file_content.clone(),
                     });
                     continue;
                 }
@@ -299,6 +330,7 @@ impl Tracer {
         }
 
         TraceResult {
+            source_map: self.source_map.clone(),
             files: seen,
             errors: self.errors,
         }
@@ -322,8 +354,9 @@ impl Tracer {
             Ok(files) => files,
             Err(e) => {
                 return TraceResult {
+                    source_map: self.source_map.clone(),
                     files: HashMap::new(),
-                    errors: vec![e.into()],
+                    errors: vec![TraceError::GlobError(Arc::new(e))],
                 }
             }
         };
@@ -331,6 +364,7 @@ impl Tracer {
         let mut futures = JoinSet::new();
 
         let resolver = Arc::new(self.create_resolver());
+        let source_map = self.source_map.clone();
         let shared_self = Arc::new(self);
 
         for file in files {
@@ -380,6 +414,7 @@ impl Tracer {
         }
 
         TraceResult {
+            source_map,
             files: usages,
             errors,
         }
