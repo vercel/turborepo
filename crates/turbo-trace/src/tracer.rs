@@ -69,7 +69,7 @@ impl TraceResult {
         );
         for error in &self.errors {
             match error {
-                TraceError::ParseError(e) => {
+                TraceError::ParseError(_, e) => {
                     e.clone().into_diagnostic(&handler).emit();
                 }
                 e => {
