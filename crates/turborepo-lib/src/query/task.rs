@@ -43,7 +43,7 @@ impl RepositoryTask {
     }
 
     async fn full_name(&self) -> String {
-        format!("{}#{}", self.package.name, self.name)
+        format!("{}#{}", self.package.get_name(), self.name)
     }
 
     async fn script(&self) -> Option<String> {
@@ -51,9 +51,9 @@ impl RepositoryTask {
     }
 
     async fn direct_dependents(&self) -> Array<RepositoryTask> {
-        let task_id = TaskId::from_static(self.package.name.to_string(), self.name.clone());
+        let task_id = TaskId::from_static(self.package.get_name().to_string(), self.name.clone());
         self.package
-            .run
+            .run()
             .engine()
             .dependents(&task_id)
             .into_iter()
@@ -61,12 +61,12 @@ impl RepositoryTask {
             .filter_map(|task| match task {
                 TaskNode::Root => None,
                 TaskNode::Task(task) if task == &task_id => None,
-                TaskNode::Task(task) => Some(RepositoryTask::new(task, &self.package.run)),
+                TaskNode::Task(task) => Some(RepositoryTask::new(task, &self.package.run())),
             })
             .sorted_by(|a, b| {
                 a.package
-                    .name
-                    .cmp(&b.package.name)
+                    .get_name()
+                    .cmp(&b.package.get_name())
                     .then_with(|| a.name.cmp(&b.name))
             })
             .collect()
@@ -116,23 +116,23 @@ impl RepositoryTask {
             })
             .sorted_by(|a, b| {
                 a.package
-                    .name
-                    .cmp(&b.package.name)
+                    .get_name()
+                    .cmp(&b.package.get_name())
                     .then_with(|| a.name.cmp(&b.name))
             })
             .collect()
     }
 
     async fn indirect_dependencies(&self) -> Array<RepositoryTask> {
-        let task_id = TaskId::from_static(self.package.name.to_string(), self.name.clone());
+        let task_id = TaskId::from_static(self.package.get_name().to_string(), self.name.clone());
         let direct_dependencies = self
             .package
-            .run
+            .run()
             .engine()
             .dependencies(&task_id)
             .unwrap_or_default();
         self.package
-            .run
+            .run()
             .engine()
             .transitive_dependencies(&task_id)
             .into_iter()
@@ -173,21 +173,21 @@ impl RepositoryTask {
     }
 
     async fn all_dependencies(&self) -> Array<RepositoryTask> {
-        let task_id = TaskId::from_static(self.package.name.to_string(), self.name.clone());
+        let task_id = TaskId::from_static(self.package.get_name().to_string(), self.name.clone());
         self.package
-            .run
+            .run()
             .engine()
             .transitive_dependencies(&task_id)
             .into_iter()
             .filter_map(|node| match node {
                 TaskNode::Root => None,
                 TaskNode::Task(task) if task == &task_id => None,
-                TaskNode::Task(task) => Some(RepositoryTask::new(task, &self.package.run)),
+                TaskNode::Task(task) => Some(RepositoryTask::new(task, self.package.run())),
             })
             .sorted_by(|a, b| {
                 a.package
-                    .name
-                    .cmp(&b.package.name)
+                    .get_name()
+                    .cmp(&b.package.get_name())
                     .then_with(|| a.name.cmp(&b.name))
             })
             .collect()

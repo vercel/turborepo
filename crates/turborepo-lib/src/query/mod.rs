@@ -3,7 +3,11 @@ mod package;
 mod server;
 mod task;
 
-use std::{io, sync::Arc};
+use std::{
+    io,
+    ops::{Deref, DerefMut},
+    sync::Arc,
+};
 
 use async_graphql::{http::GraphiQLSource, *};
 use axum::{response, response::IntoResponse};
@@ -72,6 +76,19 @@ impl RepositoryQuery {
 pub struct Array<T: OutputType> {
     items: Vec<T>,
     length: usize,
+}
+
+impl<T: OutputType> Deref for Array<T> {
+    type Target = Vec<T>;
+    fn deref(&self) -> &Self::Target {
+        &self.items
+    }
+}
+
+impl<T: OutputType> DerefMut for Array<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.items
+    }
 }
 
 impl<T: OutputType> FromIterator<T> for Array<T> {
@@ -491,7 +508,7 @@ impl RepositoryQuery {
         let mut opts = self.run.opts().clone();
         opts.scope_opts.affected_range = Some((base, head));
 
-        Ok(RunBuilder::calculate_filtered_packages(
+        let mut packages = RunBuilder::calculate_filtered_packages(
             self.run.repo_root(),
             &opts,
             self.run.pkg_dep_graph(),
@@ -499,24 +516,26 @@ impl RepositoryQuery {
             self.run.root_turbo_json(),
         )?
         .into_iter()
-        .map(|(package, reason)| ChangedPackage {
-            package: Package {
-                run: self.run.clone(),
-                name: package,
-            },
-            reason: reason.into(),
+        .map(|(package, reason)| {
+            Ok(ChangedPackage {
+                package: Package::new(self.run.clone(), package)?,
+                reason: reason.into(),
+            })
         })
-        .filter(|package| filter.as_ref().map_or(true, |f| f.check(&package.package)))
-        .sorted_by(|a, b| a.package.name.cmp(&b.package.name))
-        .collect())
+        .filter(|package| {
+            let package = package.as_ref()?;
+            filter.as_ref().map_or(true, |f| f.check(&package.package))
+        })
+        .collect::<Result<Array<_>, _>>()?;
+
+        packages.sort_by(|a, b| a.package.get_name().cmp(&b.package.get_name()));
+        Ok(packages)
     }
+
     /// Gets a single package by name
     async fn package(&self, name: String) -> Result<Package, Error> {
         let name = PackageName::from(name);
-        Ok(Package {
-            run: self.run.clone(),
-            name,
-        })
+        Package::new(self.run.clone(), name)
     }
 
     async fn version(&self) -> &'static str {
@@ -536,29 +555,26 @@ impl RepositoryQuery {
     /// Gets a list of packages that match the given filter
     async fn packages(&self, filter: Option<PackagePredicate>) -> Result<Array<Package>, Error> {
         let Some(filter) = filter else {
-            return Ok(self
+            let mut packages = self
                 .run
                 .pkg_dep_graph()
                 .packages()
-                .map(|(name, _)| Package {
-                    run: self.run.clone(),
-                    name: name.clone(),
-                })
-                .sorted_by(|a, b| a.name.cmp(&b.name))
-                .collect());
+                .map(|(name, _)| Package::new(self.run.clone(), name.clone()))
+                .collect::<Result<Array<_>, _>>()?;
+            packages.sort_by(|a, b| a.get_name().cmp(b.get_name()));
+            return Ok(packages);
         };
 
-        Ok(self
+        let mut packages = self
             .run
             .pkg_dep_graph()
             .packages()
-            .map(|(name, _)| Package {
-                run: self.run.clone(),
-                name: name.clone(),
-            })
-            .filter(|pkg| filter.check(pkg))
-            .sorted_by(|a, b| a.name.cmp(&b.name))
-            .collect())
+            .map(|(name, _)| Package::new(self.run.clone(), name.clone()))
+            .filter(|pkg| pkg.as_ref().map_or(false, |pkg| filter.check(pkg)))
+            .collect::<Result<Array<_>, _>>()?;
+        packages.sort_by(|a, b| a.get_name().cmp(b.get_name()));
+
+        Ok(packages)
     }
 }
 
