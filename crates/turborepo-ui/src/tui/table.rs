@@ -124,21 +124,24 @@ impl<'a> StatefulWidget for &'a TaskTable<'a> {
         .column_spacing(0)
         .block(Block::new().borders(Borders::RIGHT))
         .header(
-            vec![format!("Tasks\n{bar}"), " \n─".to_owned()]
-                .into_iter()
-                .map(Cell::from)
-                .collect::<Row>()
-                .height(2),
-        )
-        .footer(
-            vec![
-                format!("{bar}\n{TASK_NAVIGATE_INSTRUCTIONS}\n{HIDE_INSTRUCTIONS}"),
-                format!("─\n "),
-            ]
+            vec![Text::styled(
+                "Tasks\n",
+                Style::default().fg(Color::DarkGray),
+            )]
             .into_iter()
             .map(Cell::from)
             .collect::<Row>()
-            .height(3),
+            .height(1),
+        )
+        .footer(
+            vec![Text::styled(
+                format!("\n{TASK_NAVIGATE_INSTRUCTIONS}\n{HIDE_INSTRUCTIONS}"),
+                Style::default().fg(Color::DarkGray),
+            )]
+            .into_iter()
+            .map(Cell::from)
+            .collect::<Row>()
+            .height(2),
         );
         StatefulWidget::render(table, area, buf, state);
     }
