@@ -47,7 +47,7 @@ pub enum Error {
     #[error("link cancelled")]
     NotLinking,
     #[error("canceled")]
-    UserCanceled(#[source] io::Error),
+    UserCanceled(#[source] dialoguer::Error),
     #[error("could not get user information {0}")]
     UserNotFound(#[source] turborepo_api_client::Error),
     // We failed to fetch the team for whatever reason

@@ -28,12 +28,13 @@ pub struct Tracer {
     source_map: Arc<SourceMap>,
     cwd: AbsoluteSystemPathBuf,
     errors: Vec<TraceError>,
+    import_type: ImportType,
 }
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum TraceError {
-    #[error("failed to parse file: {:?}", .0)]
-    ParseError(swc_ecma_parser::error::Error),
+    #[error("failed to parse file {}: {:?}", .0, .1)]
+    ParseError(AbsoluteSystemPathBuf, swc_ecma_parser::error::Error),
     #[error("failed to read file: {0}")]
     FileNotFound(AbsoluteSystemPathBuf),
     #[error(transparent)]
@@ -57,6 +58,17 @@ pub struct TraceResult {
     pub files: HashMap<AbsoluteSystemPathBuf, SeenFile>,
 }
 
+/// The type of imports to trace.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ImportType {
+    /// Trace all imports.
+    All,
+    /// Trace only `import type` imports
+    Types,
+    /// Trace only `import` imports and not `import type` imports
+    Values,
+}
+
 impl Tracer {
     pub fn new(
         cwd: AbsoluteSystemPathBuf,
@@ -72,9 +84,14 @@ impl Tracer {
             files,
             ts_config,
             cwd,
+            import_type: ImportType::All,
             errors: Vec::new(),
             source_map: Arc::new(SourceMap::default()),
         }
+    }
+
+    pub fn set_import_type(&mut self, import_type: ImportType) {
+        self.import_type = import_type;
     }
 
     #[tracing::instrument(skip(resolver, source_map))]
@@ -83,6 +100,7 @@ impl Tracer {
         errors: &mut Vec<TraceError>,
         resolver: &Resolver,
         file_path: &AbsoluteSystemPath,
+        import_type: ImportType,
     ) -> Option<(Vec<AbsoluteSystemPathBuf>, SeenFile)> {
         // Read the file content
         let Ok(file_content) = tokio::fs::read_to_string(&file_path).await else {
@@ -106,7 +124,7 @@ impl Tracer {
             })
         } else {
             Syntax::Es(EsSyntax {
-                jsx: file_path.extension() == Some("jsx"),
+                jsx: true,
                 ..Default::default()
             })
         };
@@ -124,13 +142,13 @@ impl Tracer {
         let module = match parser.parse_module() {
             Ok(module) => module,
             Err(err) => {
-                errors.push(TraceError::ParseError(err));
+                errors.push(TraceError::ParseError(file_path.to_owned(), err));
                 return None;
             }
         };
 
         // Visit the AST and find imports
-        let mut finder = ImportFinder::default();
+        let mut finder = ImportFinder::new(import_type);
         module.visit_with(&mut finder);
         // Convert found imports/requires to absolute paths and add them to files to
         // visit
@@ -180,6 +198,7 @@ impl Tracer {
         seen: &mut HashMap<AbsoluteSystemPathBuf, SeenFile>,
     ) {
         let file_resolver = Self::infer_resolver_with_ts_config(&file_path, resolver);
+        let resolver = file_resolver.as_ref().unwrap_or(resolver);
 
         if seen.contains_key(&file_path) {
             return;
@@ -194,8 +213,9 @@ impl Tracer {
         let Some((imports, seen_file)) = Self::get_imports_from_file(
             &self.source_map,
             &mut self.errors,
-            file_resolver.as_ref().unwrap_or(resolver),
+            resolver,
             &file_path,
+            self.import_type,
         )
         .await
         else {
@@ -214,17 +234,35 @@ impl Tracer {
         root: &AbsoluteSystemPath,
         existing_resolver: &Resolver,
     ) -> Option<Resolver> {
-        root.ancestors()
+        let resolver = root
+            .ancestors()
             .skip(1)
             .find(|p| p.join_component("tsconfig.json").exists())
-            .map(|ts_config| {
+            .map(|ts_config_dir| {
                 let mut options = existing_resolver.options().clone();
                 options.tsconfig = Some(TsconfigOptions {
-                    config_file: ts_config.as_std_path().into(),
+                    config_file: ts_config_dir
+                        .join_component("tsconfig.json")
+                        .as_std_path()
+                        .into(),
                     references: TsconfigReferences::Auto,
                 });
 
                 existing_resolver.clone_with_options(options)
+            });
+
+        root.ancestors()
+            .skip(1)
+            .find(|p| p.join_component("node_modules").exists())
+            .map(|node_modules_dir| {
+                let node_modules = node_modules_dir.join_component("node_modules");
+                let resolver = resolver.as_ref().unwrap_or(existing_resolver);
+                let options = resolver
+                    .options()
+                    .clone()
+                    .with_module(node_modules.to_string());
+
+                resolver.clone_with_options(options)
             })
     }
 
@@ -233,7 +271,8 @@ impl Tracer {
             .with_builtin_modules(true)
             .with_force_extension(EnforceExtension::Disabled)
             .with_extension(".ts")
-            .with_extension(".tsx");
+            .with_extension(".tsx")
+            .with_condition_names(&["import", "require"]);
 
         if let Some(ts_config) = self.ts_config.take() {
             options.tsconfig = Some(TsconfigOptions {
@@ -299,13 +338,15 @@ impl Tracer {
             let resolver = resolver.clone();
             futures.spawn(async move {
                 let file_resolver = Self::infer_resolver_with_ts_config(&file, &resolver);
+                let resolver = file_resolver.as_ref().unwrap_or(&resolver);
                 let mut errors = Vec::new();
 
                 let Some((imported_files, seen_file)) = Self::get_imports_from_file(
                     &shared_self.source_map,
                     &mut errors,
-                    file_resolver.as_ref().unwrap_or(&resolver),
+                    resolver,
                     &file,
+                    shared_self.import_type,
                 )
                 .await
                 else {

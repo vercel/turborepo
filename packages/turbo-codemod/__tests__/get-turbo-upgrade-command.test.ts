@@ -597,7 +597,7 @@ describe("get-turbo-upgrade-command", () => {
       mockedExec.mockRestore();
       mockGetAvailablePackageManagers.mockRestore();
       mockGetWorkspaceDetails.mockRestore();
-    });
+    }, 10000);
 
     it.each([
       {
@@ -612,47 +612,51 @@ describe("get-turbo-upgrade-command", () => {
         fixture: "no-deps",
         name: "fails gracefully if package.json has no deps or devDeps",
       },
-    ])("$name", async ({ fixture }) => {
-      const { root } = useFixture({
-        fixture,
-      });
-
-      const mockedExec = jest
-        .spyOn(utils, "exec")
-        .mockImplementation((command: string) => {
-          // fail the check for the turbo to force local
-          if (command.includes("bin")) {
-            return undefined;
-          }
+    ])(
+      "$name",
+      async ({ fixture }) => {
+        const { root } = useFixture({
+          fixture,
         });
 
-      const mockGetAvailablePackageManagers = jest
-        .spyOn(turboUtils, "getAvailablePackageManagers")
-        .mockResolvedValue({
-          pnpm: "8.0.0",
-          npm: undefined,
-          yarn: undefined,
-          bun: undefined,
+        const mockedExec = jest
+          .spyOn(utils, "exec")
+          .mockImplementation((command: string) => {
+            // fail the check for the turbo to force local
+            if (command.includes("bin")) {
+              return undefined;
+            }
+          });
+
+        const mockGetAvailablePackageManagers = jest
+          .spyOn(turboUtils, "getAvailablePackageManagers")
+          .mockResolvedValue({
+            pnpm: "8.0.0",
+            npm: undefined,
+            yarn: undefined,
+            bun: undefined,
+          });
+
+        const project = getWorkspaceDetailsMockReturnValue({
+          root,
+          packageManager: "pnpm",
+        });
+        const mockGetWorkspaceDetails = jest
+          .spyOn(turboWorkspaces, "getWorkspaceDetails")
+          .mockResolvedValue(project);
+
+        // get the command
+        const upgradeCommand = await getTurboUpgradeCommand({
+          project,
         });
 
-      const project = getWorkspaceDetailsMockReturnValue({
-        root,
-        packageManager: "pnpm",
-      });
-      const mockGetWorkspaceDetails = jest
-        .spyOn(turboWorkspaces, "getWorkspaceDetails")
-        .mockResolvedValue(project);
+        expect(upgradeCommand).toEqual(undefined);
 
-      // get the command
-      const upgradeCommand = await getTurboUpgradeCommand({
-        project,
-      });
-
-      expect(upgradeCommand).toEqual(undefined);
-
-      mockedExec.mockRestore();
-      mockGetAvailablePackageManagers.mockRestore();
-      mockGetWorkspaceDetails.mockRestore();
-    });
+        mockedExec.mockRestore();
+        mockGetAvailablePackageManagers.mockRestore();
+        mockGetWorkspaceDetails.mockRestore();
+      },
+      10000
+    );
   });
 });

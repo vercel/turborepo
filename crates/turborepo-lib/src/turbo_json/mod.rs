@@ -608,6 +608,21 @@ impl TurboJson {
             .iter()
             .any(|(task_name, _)| task_name.package() == Some(ROOT_PKG_NAME))
     }
+
+    /// Adds a local proxy task to a workspace TurboJson
+    pub fn with_proxy(&mut self) {
+        if self.extends.is_empty() {
+            self.extends = Spanned::new(vec!["//".into()]);
+        }
+
+        self.tasks.insert(
+            TaskName::from("proxy"),
+            Spanned::new(RawTaskDefinition {
+                cache: Some(Spanned::new(false)),
+                ..Default::default()
+            }),
+        );
+    }
 }
 
 type TurboJSONValidation = fn(&TurboJson) -> Vec<Error>;
