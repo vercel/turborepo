@@ -24,6 +24,11 @@ use crate::import_finder::ImportFinder;
 
 #[derive(Debug, Default)]
 pub struct SeenFile {
+    // We have to add these because of a Rust bug where dead code analysis
+    // doesn't work properly in multi-target crates
+    // (i.e. crates with both a binary and library)
+    // https://github.com/rust-lang/rust/issues/95513
+    #[allow(dead_code)]
     pub ast: Option<swc_ecma_ast::Module>,
 }
 
@@ -60,6 +65,7 @@ pub enum TraceError {
 }
 
 impl TraceResult {
+    #[allow(dead_code)]
     pub fn emit_errors(&self) {
         let handler = Handler::with_tty_emitter(
             ColorConfig::Auto,
@@ -81,6 +87,7 @@ impl TraceResult {
 }
 
 pub struct TraceResult {
+    #[allow(dead_code)]
     source_map: Arc<SourceMap>,
     pub errors: Vec<TraceError>,
     pub files: HashMap<AbsoluteSystemPathBuf, SeenFile>,
@@ -88,6 +95,7 @@ pub struct TraceResult {
 
 /// The type of imports to trace.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
 pub enum ImportType {
     /// Trace all imports.
     All,
@@ -118,6 +126,7 @@ impl Tracer {
         }
     }
 
+    #[allow(dead_code)]
     pub fn set_import_type(&mut self, import_type: ImportType) {
         self.import_type = import_type;
     }
