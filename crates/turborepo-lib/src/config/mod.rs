@@ -373,8 +373,8 @@ impl ConfigurationOptions {
         })
     }
 
-    pub fn cache(&self) -> CacheConfig {
-        self.cache.unwrap_or_default()
+    pub fn cache(&self) -> Option<CacheConfig> {
+        self.cache
     }
 
     pub fn force(&self) -> bool {

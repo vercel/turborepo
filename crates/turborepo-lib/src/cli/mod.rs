@@ -836,7 +836,7 @@ pub struct RunArgs {
     /// Set the cache behavior for this run. Pass a list of comma-separated key,
     /// value pairs to enable reading and writing to either the local or
     /// remote cache.
-    #[clap(long)]
+    #[clap(long, conflicts_with_all = &["force", "remote_only", "remote_cache_read_only", "no_cache"])]
     pub cache: Option<String>,
     /// Ignore the existing cache (to force execution). Equivalent to
     /// `--cache=local:w,remote:w`
@@ -847,7 +847,8 @@ pub struct RunArgs {
     /// Equivalent to `--cache=remote:rw`
     #[clap(long, default_missing_value = "true", group = "cache-group")]
     pub remote_only: Option<Option<bool>>,
-    /// Treat remote cache as read only. Equivalent to `--cache=remote:r`
+    /// Treat remote cache as read only. Equivalent to
+    /// `--cache=remote:r;local:rw`
     #[clap(long, default_missing_value = "true")]
     pub remote_cache_read_only: Option<Option<bool>>,
     /// Avoid saving task results to the cache. Useful for development/watch

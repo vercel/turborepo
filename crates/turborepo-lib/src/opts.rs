@@ -32,6 +32,11 @@ pub enum Error {
          or equal to 1: {1}"
     )]
     ConcurrencyOutOfBounds(#[backtrace] backtrace::Backtrace, String),
+    #[error(
+        "Cannot set `cache` config and other cache options (`force`, `remoteOnly`, \
+         `remoteCacheReadOnly`) at the same time"
+    )]
+    OverlappingCacheOptions,
     #[error(transparent)]
     Path(#[from] turbopath::PathError),
     #[error(transparent)]
@@ -107,7 +112,7 @@ impl Opts {
             api_auth: &api_auth,
         };
         let run_opts = RunOpts::try_from(inputs)?;
-        let cache_opts = CacheOpts::from(inputs);
+        let cache_opts = CacheOpts::try_from(inputs)?;
         let scope_opts = ScopeOpts::try_from(inputs)?;
         let runcache_opts = RunCacheOpts::from(inputs);
 
@@ -355,24 +360,22 @@ impl<'a> TryFrom<OptsInputs<'a>> for ScopeOpts {
     }
 }
 
-impl<'a> From<OptsInputs<'a>> for CacheOpts {
-    fn from(inputs: OptsInputs<'a>) -> Self {
+impl<'a> TryFrom<OptsInputs<'a>> for CacheOpts {
+    type Error = self::Error;
+
+    fn try_from(inputs: OptsInputs<'a>) -> Result<Self, Self::Error> {
         let is_linked = turborepo_api_client::is_linked(inputs.api_auth);
-        let mut cache = inputs.config.cache();
+        let cache = inputs.config.cache();
+        let has_old_cache_config = inputs.config.remote_only()
+            || inputs.config.force()
+            || inputs.run_args.no_cache
+            || inputs.config.remote_cache_read_only();
 
-        if !is_linked {
-            cache.remote.read = false;
-            cache.remote.write = false;
-        } else if let Some(enabled) = inputs.config.enabled {
-            // We're linked, but if the user has explicitly enabled or disabled, use that
-            // value
-            cache.remote.read = enabled;
-            cache.remote.write = enabled;
-        };
-
-        if inputs.config.remote_cache_read_only() {
-            cache.remote.write = false;
+        if has_old_cache_config && cache.is_some() {
+            return Err(Error::OverlappingCacheOptions);
         }
+
+        let mut cache = cache.unwrap_or_default();
 
         if inputs.config.remote_only() {
             cache.local.read = false;
@@ -389,6 +392,20 @@ impl<'a> From<OptsInputs<'a>> for CacheOpts {
             cache.remote.write = false;
         }
 
+        if !is_linked {
+            cache.remote.read = false;
+            cache.remote.write = false;
+        } else if let Some(enabled) = inputs.config.enabled {
+            // We're linked, but if the user has explicitly enabled or disabled, use that
+            // value
+            cache.remote.read = enabled;
+            cache.remote.write = enabled;
+        };
+
+        if inputs.config.remote_cache_read_only() {
+            cache.remote.write = false;
+        }
+
         // Note that we don't currently use the team_id value here. In the future, we
         // should probably verify that we only use the signature value when the
         // configured team_id matches the final resolved team_id.
@@ -400,12 +417,12 @@ impl<'a> From<OptsInputs<'a>> for CacheOpts {
             signature,
         ));
 
-        CacheOpts {
+        Ok(CacheOpts {
             cache_dir: inputs.config.cache_dir().into(),
             cache,
             workers: inputs.run_args.cache_workers,
             remote_cache_opts,
-        }
+        })
     }
 }
 
@@ -429,14 +446,14 @@ mod test {
     use test_case::test_case;
     use turbopath::AbsoluteSystemPathBuf;
     use turborepo_api_client::APIAuth;
-    use turborepo_cache::CacheOpts;
+    use turborepo_cache::{CacheActions, CacheConfig, CacheOpts};
     use turborepo_ui::ColorConfig;
 
     use super::{OptsInputs, RunOpts};
     use crate::{
         cli::{Command, DryRunMode, RunArgs},
         commands::CommandBase,
-        opts::{Opts, RunCacheOpts, ScopeOpts},
+        opts::{Error, Opts, RunCacheOpts, ScopeOpts},
         turbo_json::UIMode,
         Args,
     };
@@ -573,17 +590,53 @@ mod test {
         assert_eq!(synthesized, expected);
     }
 
-    #[test_case(RunArgs { no_cache: true, ..Default::default() }, "no-cache")]
-    #[test_case(RunArgs { force: Some(Some(true)), ..Default::default() }, "force")]
-    #[test_case(RunArgs { remote_only: Some(Some(true)), ..Default::default() }, "remote-only")]
-    #[test_case(RunArgs { remote_cache_read_only: Some(Some(true)), ..Default::default() }, "remote-cache-read-only")]
+    #[test_case(
+         RunArgs {
+             no_cache: true,
+             ..Default::default()
+         },
+         Ok(CacheConfig {
+                local: CacheActions { read: true, write: false },
+                remote: CacheActions { read: true, write: false }
+         }) ; "no-cache"
+    )]
+    #[test_case(
+         RunArgs {
+             force: Some(Some(true)),
+             ..Default::default()
+         },
+         Ok(CacheConfig {
+             local: CacheActions { read: false, write: true },
+             remote: CacheActions { read: false, write: true }
+         }) ; "force"
+    )]
+    #[test_case(
+         RunArgs {
+             remote_only: Some(Some(true)),
+             ..Default::default()
+         },
+         Ok(CacheConfig {
+             local: CacheActions { read: false, write: false },
+             remote: CacheActions { read: true, write: true }
+         }) ; "remote-only"
+    )]
+    #[test_case(
+         RunArgs {
+             remote_cache_read_only: Some(Some(true)),
+             ..Default::default()
+         },
+         Ok(CacheConfig {
+             local: CacheActions { read: true, write: true },
+             remote: CacheActions { read: true, write: false }
+         }) ; "remote-cache-read-only"
+    )]
     #[test_case(
          RunArgs {
              no_cache: true,
              cache: Some("remote:w,local:rw".to_string()),
              ..Default::default()
          },
-         "no-cache_remote_w,local_rw"
+         Err(Error::OverlappingCacheOptions) ; "no-cache_remote_w,local_rw"
     )]
     #[test_case(
          RunArgs {
@@ -591,7 +644,7 @@ mod test {
              cache: Some("remote:r,local:rw".to_string()),
              ..Default::default()
          },
-         "remote-only_remote_r,local_rw"
+         Err(Error::OverlappingCacheOptions) ; "remote-only_remote_r,local_rw"
     )]
     #[test_case(
          RunArgs {
@@ -599,17 +652,20 @@ mod test {
              cache: Some("remote:r,local:r".to_string()),
              ..Default::default()
          },
-         "force_remote:r,local:r"
+         Err(Error::OverlappingCacheOptions) ; "force_remote:r,local:r"
     )]
     #[test_case(
-         RunArgs {
-             remote_cache_read_only: Some(Some(true)),
-             cache: Some("remote:rw,local:r".to_string()),
-             ..Default::default()
-         },
-         "remote-cache-read-only_remote_rw,local_r"
+          RunArgs {
+              remote_cache_read_only: Some(Some(true)),
+              cache: Some("remote:rw,local:r".to_string()),
+              ..Default::default()
+          },
+          Err(Error::OverlappingCacheOptions) ; "remote-cache-read-only_remote_rw,local_r"
     )]
-    fn test_resolve_cache_config(run_args: RunArgs, name: &str) -> Result<(), anyhow::Error> {
+    fn test_resolve_cache_config(
+        run_args: RunArgs,
+        expected_result: Result<CacheConfig, Error>,
+    ) -> Result<(), anyhow::Error> {
         let mut args = Args::default();
         args.command = Some(Command::Run {
             execution_args: Box::default(),
@@ -622,7 +678,7 @@ mod test {
             ColorConfig::new(true),
         );
 
-        let cache_opts = CacheOpts::from(OptsInputs {
+        let cache_opts = CacheOpts::try_from(OptsInputs {
             run_args: base.args().run_args().unwrap(),
             execution_args: base.args().execution_args().unwrap(),
             config: base.config()?,
@@ -631,9 +687,18 @@ mod test {
                 token: "my-token".to_string(),
                 team_slug: None,
             }),
-        });
+        })
+        .map(|cache_opts| cache_opts.cache);
 
-        insta::assert_json_snapshot!(name, cache_opts.cache);
+        match (expected_result, cache_opts) {
+            (Ok(expected), Ok(actual)) => assert_eq!(expected, actual),
+            (Err(expected), Err(actual)) => assert_eq!(
+                std::mem::discriminant(&expected),
+                std::mem::discriminant(&actual)
+            ),
+            _ => panic!("expected_result and cache_opts should be the same type"),
+        }
+
         Ok(())
     }
 }
