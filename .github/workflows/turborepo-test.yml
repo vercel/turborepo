@@ -116,7 +116,7 @@ jobs:
       matrix:
         os:
           - runner: ubuntu-latest
-          - runner: macos-12
+          - runner: macos-13
           - runner: windows-latest
     steps:
       # On Windows, set autocrlf to input so that when the repo is cloned down
@@ -276,7 +276,7 @@ jobs:
               - "metal"
             nextest: linux
           - name: macos
-            runner: macos-12
+            runner: macos-13
             nextest: mac
           - name: windows
             runner: windows-latest
