@@ -106,10 +106,8 @@ pub async fn run(
         let request = Request::new(&query).variables(variables);
 
         let result = schema.execute(request).await;
-        if result.errors.is_empty() {
-            println!("{}", serde_json::to_string_pretty(&result)?);
-        } else {
-            println!("{}", serde_json::to_string_pretty(&result)?);
+        println!("{}", serde_json::to_string_pretty(&result)?);
+        if !result.errors.is_empty() {
             for error in result.errors {
                 let error = QueryError::new(error, query.clone());
                 eprintln!("{:?}", Report::new(error));
