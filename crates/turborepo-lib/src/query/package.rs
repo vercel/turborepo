@@ -29,6 +29,8 @@ impl Package {
         &self.run
     }
 
+    /// This uses a different naming convention because we already have a
+    /// `name` resolver defined for GraphQL
     pub fn get_name(&self) -> &PackageName {
         &self.name
     }

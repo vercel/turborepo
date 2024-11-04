@@ -78,7 +78,7 @@ pub struct Array<T: OutputType> {
 }
 
 impl<T: OutputType> Deref for Array<T> {
-    type Target = Vec<T>;
+    type Target = [T];
     fn deref(&self) -> &Self::Target {
         &self.items
     }
