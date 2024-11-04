@@ -914,4 +914,17 @@ mod test {
             ))
         );
     }
+
+    #[tokio::test]
+    async fn test_does_not_require_name_for_root_package_json() {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        let pkg_graph = PackageGraph::builder(&root, PackageJson::from_value(json!({})).unwrap())
+            .with_package_discovery(MockDiscovery)
+            .build()
+            .await
+            .unwrap();
+
+        assert!(pkg_graph.validate().is_ok());
+    }
 }
