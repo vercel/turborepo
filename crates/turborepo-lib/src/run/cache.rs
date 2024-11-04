@@ -67,6 +67,7 @@ pub trait CacheOutput {
 }
 
 impl RunCache {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         cache: AsyncCache,
         repo_root: &AbsoluteSystemPath,
