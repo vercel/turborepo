@@ -145,9 +145,21 @@ impl PackageGraph {
     pub fn validate(&self) -> Result<(), Error> {
         for info in self.packages.values() {
             let name = info.package_json.name.as_deref();
-            if matches!(name, None | Some("")) {
-                let package_json_path = self.repo_root.resolve(info.package_json_path());
-                return Err(Error::PackageJsonMissingName(package_json_path));
+            let package_json_path = self.repo_root.resolve(info.package_json_path());
+            match name {
+                Some("") => {
+                    return Err(Error::PackageJsonMissingName(package_json_path));
+                }
+                None => {
+                    // We don't need to require a name for the root package.json.
+                    if package_json_path == self.repo_root.join_component("package.json") {
+                        continue;
+                    }
+
+                    let package_json_path = self.repo_root.resolve(info.package_json_path());
+                    return Err(Error::PackageJsonMissingName(package_json_path));
+                }
+                Some(_) => continue,
             }
         }
         graph::validate_graph(&self.graph).map_err(Error::InvalidPackageGraph)?;
