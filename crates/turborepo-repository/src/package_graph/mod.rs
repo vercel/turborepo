@@ -156,7 +156,6 @@ impl PackageGraph {
                         continue;
                     }
 
-                    let package_json_path = self.repo_root.resolve(info.package_json_path());
                     return Err(Error::PackageJsonMissingName(package_json_path));
                 }
                 Some(_) => continue,
