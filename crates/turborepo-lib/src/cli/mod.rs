@@ -1222,7 +1222,7 @@ pub async fn run(
 
             match info::run(base).await {
                 Ok(()) => {}
-                Err(e) => println!("Command failed. Please file a GitHub Issue.\n{}", e),
+                Err(_e) => panic!("`info` command failed."),
             }
             Ok(0)
         }
