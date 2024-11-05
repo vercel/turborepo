@@ -12,11 +12,29 @@ use crate::{
 
 #[derive(Clone)]
 pub struct Package {
-    pub run: Arc<Run>,
-    pub name: PackageName,
+    run: Arc<Run>,
+    name: PackageName,
 }
 
 impl Package {
+    pub fn new(run: Arc<Run>, name: PackageName) -> Result<Self, Error> {
+        run.pkg_dep_graph()
+            .package_info(&name)
+            .ok_or_else(|| Error::PackageNotFound(name.clone()))?;
+
+        Ok(Self { run, name })
+    }
+
+    pub fn run(&self) -> &Arc<Run> {
+        &self.run
+    }
+
+    /// This uses a different naming convention because we already have a
+    /// `name` resolver defined for GraphQL
+    pub fn get_name(&self) -> &PackageName {
+        &self.name
+    }
+
     pub fn get_tasks(&self) -> HashMap<String, Spanned<String>> {
         self.run
             .pkg_dep_graph()

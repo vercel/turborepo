@@ -33,10 +33,10 @@ struct QueryError {
 impl QueryError {
     fn get_index_from_row_column(query: &str, row: usize, column: usize) -> usize {
         let mut index = 0;
-        for line in query.lines().take(row + 1) {
+        for line in query.lines().take(row.saturating_sub(1)) {
             index += line.len() + 1;
         }
-        index + column
+        index + column - 1
     }
     fn new(server_error: ServerError, query: String) -> Self {
         let span: Option<SourceSpan> = server_error.locations.first().map(|location| {
@@ -106,9 +106,8 @@ pub async fn run(
         let request = Request::new(&query).variables(variables);
 
         let result = schema.execute(request).await;
-        if result.errors.is_empty() {
-            println!("{}", serde_json::to_string_pretty(&result)?);
-        } else {
+        println!("{}", serde_json::to_string_pretty(&result)?);
+        if !result.errors.is_empty() {
             for error in result.errors {
                 let error = QueryError::new(error, query.clone());
                 eprintln!("{:?}", Report::new(error));
