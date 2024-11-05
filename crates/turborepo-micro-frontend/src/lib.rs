@@ -13,7 +13,8 @@ use turbopath::AbsoluteSystemPath;
 ///
 /// This is subject to change at any time.
 pub const DEFAULT_MICRO_FRONTENDS_CONFIG: &str = "micro-frontends.jsonc";
-pub const MICRO_FRONTENDS_PACKAGES: &[&str] = ["@vercel/micro-frontends-internal"].as_slice();
+pub const MICRO_FRONTENDS_PACKAGES: &[&str] = [MICRO_FRONTENDS_PACKAGE_INTERNAL].as_slice();
+pub const MICRO_FRONTENDS_PACKAGE_INTERNAL: &str = "@vercel/micro-frontends-internal";
 
 /// The minimal amount of information Turborepo needs to correctly start a local
 /// proxy server for microfrontends
