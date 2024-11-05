@@ -80,7 +80,9 @@ pub async fn run(
         // If the arg starts with "query" or "mutation", and ends in a bracket, it's
         // likely a direct query If it doesn't, it's a file path, so we need to
         // read it
-        let query = if (trimmed_query.starts_with("query") || trimmed_query.starts_with("mutation"))
+        let query = if (trimmed_query.starts_with("query")
+            || trimmed_query.starts_with("mutation")
+            || trimmed_query.starts_with('{'))
             && trimmed_query.ends_with('}')
         {
             query
