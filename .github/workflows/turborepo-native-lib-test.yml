@@ -2,6 +2,8 @@ name: Turborepo Native Library Tests
 on:
   push:
     branches: [main]
+    paths:
+      - "!docs/**"
   pull_request:
 
 permissions:
