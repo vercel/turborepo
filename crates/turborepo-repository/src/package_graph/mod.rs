@@ -143,19 +143,14 @@ impl PackageGraph {
 
     #[tracing::instrument(skip(self))]
     pub fn validate(&self) -> Result<(), Error> {
-        for info in self.packages.values() {
+        for (package_name, info) in self.packages.iter() {
+            if matches!(package_name, PackageName::Root) {
+                continue;
+            }
             let name = info.package_json.name.as_deref();
-            let package_json_path = self.repo_root.resolve(info.package_json_path());
             match name {
-                Some("") => {
-                    return Err(Error::PackageJsonMissingName(package_json_path));
-                }
-                None => {
-                    // We don't need to require a name for the root package.json.
-                    if package_json_path == self.repo_root.join_component("package.json") {
-                        continue;
-                    }
-
+                Some("") | None => {
+                    let package_json_path = self.repo_root.resolve(info.package_json_path());
                     return Err(Error::PackageJsonMissingName(package_json_path));
                 }
                 Some(_) => continue,
