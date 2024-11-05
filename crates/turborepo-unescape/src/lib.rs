@@ -57,6 +57,11 @@ impl From<UnescapedString> for String {
     }
 }
 
+impl From<String> for UnescapedString {
+    fn from(value: String) -> Self {
+        Self(value)
+    }
+}
 // For testing purposes
 impl From<&'static str> for UnescapedString {
     fn from(value: &'static str) -> Self {
