@@ -39,22 +39,14 @@ jobs:
           PATTERNS: |
             packages/**
 
-      - name: Docs related changes
-        id: docs
-        uses: technote-space/get-diff-action@v6
-        with:
-          PATTERNS: |
-            docs/**
-
     outputs:
       ci: ${{ steps.ci.outputs.diff != ''}}
       packages: ${{ steps.packages.outputs.diff != '' }}
-      docs: ${{ steps.docs.outputs.diff != '' }}
 
   js_packages:
     name: "JS Package Tests (${{matrix.os.name}}, Node ${{matrix.node-version}})"
     timeout-minutes: 30
-    if: needs.determine_jobs.outputs.ci == 'true' || needs.determine_jobs.outputs.packages == 'true' || needs.determine_jobs.outputs.docs == 'true'
+    if: needs.determine_jobs.outputs.ci == 'true' || needs.determine_jobs.outputs.packages == 'true'
     needs: [determine_jobs]
     runs-on: ${{ matrix.os.runner }}
     strategy:
