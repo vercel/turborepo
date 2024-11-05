@@ -145,9 +145,20 @@ impl PackageGraph {
     pub fn validate(&self) -> Result<(), Error> {
         for info in self.packages.values() {
             let name = info.package_json.name.as_deref();
-            if matches!(name, None | Some("")) {
-                let package_json_path = self.repo_root.resolve(info.package_json_path());
-                return Err(Error::PackageJsonMissingName(package_json_path));
+            let package_json_path = self.repo_root.resolve(info.package_json_path());
+            match name {
+                Some("") => {
+                    return Err(Error::PackageJsonMissingName(package_json_path));
+                }
+                None => {
+                    // We don't need to require a name for the root package.json.
+                    if package_json_path == self.repo_root.join_component("package.json") {
+                        continue;
+                    }
+
+                    return Err(Error::PackageJsonMissingName(package_json_path));
+                }
+                Some(_) => continue,
             }
         }
         graph::validate_graph(&self.graph).map_err(Error::InvalidPackageGraph)?;
@@ -901,5 +912,18 @@ mod test {
                 graph::Error::SelfDependency(_)
             ))
         );
+    }
+
+    #[tokio::test]
+    async fn test_does_not_require_name_for_root_package_json() {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        let pkg_graph = PackageGraph::builder(&root, PackageJson::from_value(json!({})).unwrap())
+            .with_package_discovery(MockDiscovery)
+            .build()
+            .await
+            .unwrap();
+
+        assert!(pkg_graph.validate().is_ok());
     }
 }
