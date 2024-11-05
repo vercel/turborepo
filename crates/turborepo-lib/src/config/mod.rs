@@ -19,6 +19,7 @@ use thiserror::Error;
 use tracing::debug;
 use turbo_json::TurboJsonReader;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
+use turborepo_cache::CacheConfig;
 use turborepo_errors::TURBO_SITE;
 use turborepo_repository::package_graph::PackageName;
 
@@ -81,6 +82,8 @@ pub enum Error {
         config_path: AbsoluteSystemPathBuf,
         error: io::Error,
     },
+    #[error(transparent)]
+    Cache(#[from] turborepo_cache::config::Error),
     #[error(
         "Package tasks (<package>#<task>) are not allowed in single-package repositories: found \
          {task_id}"
@@ -252,6 +255,8 @@ pub struct ConfigurationOptions {
     pub(crate) root_turbo_json_path: Option<AbsoluteSystemPathBuf>,
     pub(crate) force: Option<bool>,
     pub(crate) log_order: Option<LogOrder>,
+    #[serde(skip)]
+    pub(crate) cache: Option<CacheConfig>,
     pub(crate) remote_only: Option<bool>,
     pub(crate) remote_cache_read_only: Option<bool>,
     pub(crate) run_summary: Option<bool>,
@@ -366,6 +371,10 @@ impl ConfigurationOptions {
                 ".turbo/cache"
             })
         })
+    }
+
+    pub fn cache(&self) -> Option<CacheConfig> {
+        self.cache
     }
 
     pub fn force(&self) -> bool {
