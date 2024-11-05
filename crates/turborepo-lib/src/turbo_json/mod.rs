@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use struct_iterable::Iterable;
 use turbopath::AbsoluteSystemPath;
 use turborepo_errors::Spanned;
+use turborepo_micro_frontend::MICRO_FRONTENDS_PACKAGE_INTERNAL;
 use turborepo_repository::package_graph::ROOT_PKG_NAME;
 use turborepo_unescape::UnescapedString;
 
@@ -610,7 +611,7 @@ impl TurboJson {
     }
 
     /// Adds a local proxy task to a workspace TurboJson
-    pub fn with_proxy(&mut self) {
+    pub fn with_proxy(&mut self, needs_proxy_build: bool) {
         if self.extends.is_empty() {
             self.extends = Spanned::new(vec!["//".into()]);
         }
@@ -619,6 +620,11 @@ impl TurboJson {
             TaskName::from("proxy"),
             Spanned::new(RawTaskDefinition {
                 cache: Some(Spanned::new(false)),
+                depends_on: needs_proxy_build.then(|| {
+                    Spanned::new(vec![Spanned::new(UnescapedString::from(format!(
+                        "{MICRO_FRONTENDS_PACKAGE_INTERNAL}#build"
+                    )))])
+                }),
                 ..Default::default()
             }),
         );

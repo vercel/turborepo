@@ -457,7 +457,8 @@ impl RunBuilder {
         let run_cache = Arc::new(RunCache::new(
             async_cache,
             &self.repo_root,
-            &self.opts.runcache_opts,
+            self.opts.runcache_opts,
+            &self.opts.cache_opts,
             color_selector,
             daemon.clone(),
             self.color_config,

@@ -23,7 +23,7 @@ expression: query_output
         "errors": {
           "items": [
             {
-              "message": "failed to resolve import to `./non-existent-file.js`"
+              "import": "import foo from \"./non-existent-file.js\";\nimport { Button } from \"./button.tsx\";\n"
             }
           ]
         }

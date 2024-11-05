@@ -1,8 +1,10 @@
 use std::collections::HashMap;
 
+use itertools::Itertools;
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_errors::Spanned;
+use turborepo_micro_frontend::MICRO_FRONTENDS_PACKAGE_INTERNAL;
 use turborepo_repository::{
     package_graph::{PackageInfo, PackageName},
     package_json::PackageJson,
@@ -184,7 +186,10 @@ impl TurboJsonLoader {
                         Error::NoTurboJSON => Ok(TurboJson::default()),
                         err => Err(err),
                     })?;
-                    turbo_json.with_proxy();
+                    let needs_proxy_build = packages
+                        .keys()
+                        .contains(&PackageName::from(MICRO_FRONTENDS_PACKAGE_INTERNAL));
+                    turbo_json.with_proxy(needs_proxy_build);
                     Ok(turbo_json)
                 } else {
                     turbo_json
