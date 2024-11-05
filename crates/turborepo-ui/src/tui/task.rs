@@ -103,6 +103,7 @@ impl Task<Finished> {
     }
 }
 
+#[derive(Default)]
 pub struct TaskNamesByStatus {
     pub running: Vec<String>,
     pub planned: Vec<String>,
@@ -117,6 +118,10 @@ pub struct TasksByStatus {
 }
 
 impl TasksByStatus {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
     pub fn all_empty(&self) -> bool {
         self.planned.is_empty() && self.finished.is_empty() && self.running.is_empty()
     }
@@ -188,5 +193,131 @@ impl TasksByStatus {
                 .map(Task::new),
         );
         self.planned.sort_unstable();
+    }
+
+    /// Insert a finished task into the correct place in the finished section.
+    /// The order of `finished` is expected to be: failure, success, cached
+    /// with each subsection being sorted by finish time.
+    /// Returns the index task was inserted at
+    pub fn insert_finished_task(&mut self, task: Task<Finished>) -> usize {
+        let index = match task.result() {
+            TaskResult::Failure => self
+                .finished
+                .iter()
+                .enumerate()
+                .skip_while(|(_, task)| task.result() == TaskResult::Failure)
+                .map(|(idx, _)| idx)
+                .next(),
+            TaskResult::Success => self
+                .finished
+                .iter()
+                .enumerate()
+                .skip_while(|(_, task)| {
+                    task.result() == TaskResult::Failure || task.result() == TaskResult::Success
+                })
+                .map(|(idx, _)| idx)
+                .next(),
+            TaskResult::CacheHit => None,
+        }
+        .unwrap_or(self.finished.len());
+        self.finished.insert(index, task);
+        index
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use test_case::test_case;
+
+    use super::*;
+
+    struct TestCase {
+        failed: &'static [&'static str],
+        passed: &'static [&'static str],
+        cached: &'static [&'static str],
+        result: TaskResult,
+        expected_index: usize,
+    }
+
+    impl TestCase {
+        pub const fn new(result: TaskResult, expected_index: usize) -> Self {
+            Self {
+                failed: &[],
+                passed: &[],
+                cached: &[],
+                result,
+                expected_index,
+            }
+        }
+
+        pub const fn failed<const N: usize>(mut self, failed: &'static [&'static str; N]) -> Self {
+            self.failed = failed.as_slice();
+            self
+        }
+
+        pub const fn passed<const N: usize>(mut self, passed: &'static [&'static str; N]) -> Self {
+            self.passed = passed.as_slice();
+            self
+        }
+
+        pub const fn cached<const N: usize>(mut self, cached: &'static [&'static str; N]) -> Self {
+            self.cached = cached.as_slice();
+            self
+        }
+
+        pub fn tasks(&self) -> TasksByStatus {
+            let failed = self.failed.iter().map(|name| {
+                Task::new(name.to_string())
+                    .start()
+                    .finish(TaskResult::Failure)
+            });
+            let passed = self.passed.iter().map(|name| {
+                Task::new(name.to_string())
+                    .start()
+                    .finish(TaskResult::Success)
+            });
+            let cached = self.passed.iter().map(|name| {
+                Task::new(name.to_string())
+                    .start()
+                    .finish(TaskResult::CacheHit)
+            });
+            TasksByStatus {
+                running: Vec::new(),
+                planned: Vec::new(),
+                finished: failed.chain(passed).chain(cached).collect(),
+            }
+        }
+    }
+
+    const EMPTY_FAIL: TestCase = TestCase::new(TaskResult::Failure, 0);
+    const EMPTY_PASS: TestCase = TestCase::new(TaskResult::Success, 0);
+    const EMPTY_CACHE: TestCase = TestCase::new(TaskResult::CacheHit, 0);
+    const BASIC_FAIL: TestCase = TestCase::new(TaskResult::Failure, 1)
+        .failed(&["fail"])
+        .passed(&["passed"])
+        .cached(&["cached"]);
+    const BASIC_PASS: TestCase = TestCase::new(TaskResult::Success, 2)
+        .failed(&["fail"])
+        .passed(&["passed"])
+        .cached(&["cached"]);
+    const BASIC_CACHE: TestCase = TestCase::new(TaskResult::CacheHit, 3)
+        .failed(&["fail"])
+        .passed(&["passed"])
+        .cached(&["cached"]);
+
+    #[test_case(EMPTY_FAIL)]
+    #[test_case(EMPTY_PASS)]
+    #[test_case(EMPTY_CACHE)]
+    #[test_case(BASIC_FAIL)]
+    #[test_case(BASIC_PASS)]
+    #[test_case(BASIC_CACHE)]
+    fn test_finished_task(test_case: TestCase) {
+        let mut tasks = test_case.tasks();
+        let actual = tasks.insert_finished_task(
+            Task::new("inserted".into())
+                .start()
+                .finish(test_case.result),
+        );
+        assert_eq!(actual, test_case.expected_index);
     }
 }

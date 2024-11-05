@@ -227,7 +227,8 @@ mod tests {
 
     use crate::{
         test_cases::{get_test_cases, TestCase},
-        AsyncCache, CacheHitMetadata, CacheOpts, CacheSource, RemoteCacheOpts,
+        AsyncCache, CacheActions, CacheConfig, CacheHitMetadata, CacheOpts, CacheSource,
+        RemoteCacheOpts,
     };
 
     #[tokio::test]
@@ -255,9 +256,16 @@ mod tests {
 
         let opts = CacheOpts {
             cache_dir: Utf8PathBuf::from(".turbo/cache"),
-            remote_cache_read_only: false,
-            skip_remote: false,
-            skip_filesystem: true,
+            cache: CacheConfig {
+                local: CacheActions {
+                    read: false,
+                    write: false,
+                },
+                remote: CacheActions {
+                    read: true,
+                    write: true,
+                },
+            },
             workers: 10,
             remote_cache_opts: Some(RemoteCacheOpts {
                 unused_team_id: Some("my-team".to_string()),
@@ -337,9 +345,16 @@ mod tests {
 
         let opts = CacheOpts {
             cache_dir: Utf8PathBuf::from(".turbo/cache"),
-            remote_cache_read_only: false,
-            skip_remote: true,
-            skip_filesystem: false,
+            cache: CacheConfig {
+                local: CacheActions {
+                    read: true,
+                    write: true,
+                },
+                remote: CacheActions {
+                    read: false,
+                    write: false,
+                },
+            },
             workers: 10,
             remote_cache_opts: Some(RemoteCacheOpts {
                 unused_team_id: Some("my-team".to_string()),
@@ -429,9 +444,16 @@ mod tests {
 
         let opts = CacheOpts {
             cache_dir: Utf8PathBuf::from(".turbo/cache"),
-            remote_cache_read_only: false,
-            skip_remote: false,
-            skip_filesystem: false,
+            cache: CacheConfig {
+                local: CacheActions {
+                    read: true,
+                    write: true,
+                },
+                remote: CacheActions {
+                    read: true,
+                    write: true,
+                },
+            },
             workers: 10,
             remote_cache_opts: Some(RemoteCacheOpts {
                 unused_team_id: Some("my-team".to_string()),
