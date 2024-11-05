@@ -594,55 +594,55 @@ mod test {
          RunArgs {
              no_cache: true,
              ..Default::default()
-         } ; "no-cache"
+         }, "no-cache"
     )]
     #[test_case(
          RunArgs {
              force: Some(Some(true)),
              ..Default::default()
-         } ; "force"
+         }, "force"
     )]
     #[test_case(
          RunArgs {
              remote_only: Some(Some(true)),
              ..Default::default()
-         } ; "remote-only"
+         }, "remote-only"
     )]
     #[test_case(
          RunArgs {
              remote_cache_read_only: Some(Some(true)),
              ..Default::default()
-         }; "remote-cache-read-only"
+         }, "remote-cache-read-only"
     )]
     #[test_case(
          RunArgs {
              no_cache: true,
              cache: Some("remote:w,local:rw".to_string()),
              ..Default::default()
-         } ; "no-cache_remote_w,local_rw"
+         }, "no-cache_remote_w,local_rw"
     )]
     #[test_case(
          RunArgs {
              remote_only: Some(Some(true)),
              cache: Some("remote:r,local:rw".to_string()),
              ..Default::default()
-         } ; "remote-only_remote_r,local_rw"
+         }, "remote-only_remote_r,local_rw"
     )]
     #[test_case(
          RunArgs {
              force: Some(Some(true)),
              cache: Some("remote:r,local:r".to_string()),
              ..Default::default()
-         } ; "force_remote:r,local:r"
+         }, "force_remote_r,local_r"
     )]
     #[test_case(
           RunArgs {
               remote_cache_read_only: Some(Some(true)),
               cache: Some("remote:rw,local:r".to_string()),
               ..Default::default()
-          } ; "remote-cache-read-only_remote_rw,local_r"
+          }, "remote-cache-read-only_remote_rw,local_r"
     )]
-    fn test_resolve_cache_config(run_args: RunArgs) -> Result<(), anyhow::Error> {
+    fn test_resolve_cache_config(run_args: RunArgs, name: &str) -> Result<(), anyhow::Error> {
         let mut args = Args::default();
         args.command = Some(Command::Run {
             execution_args: Box::default(),
@@ -667,7 +667,7 @@ mod test {
         })
         .map(|cache_opts| cache_opts.cache);
 
-        insta::assert_debug_snapshot!(cache_opts);
+        insta::assert_debug_snapshot!(name, cache_opts);
 
         Ok(())
     }

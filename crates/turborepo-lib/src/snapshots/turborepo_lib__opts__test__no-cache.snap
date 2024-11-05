@@ -1,14 +1,16 @@
 ---
 source: crates/turborepo-lib/src/opts.rs
-expression: cache_opts.cache
+expression: cache_opts
 ---
-{
-  "local": {
-    "read": true,
-    "write": false
-  },
-  "remote": {
-    "read": true,
-    "write": false
-  }
-}
+Ok(
+    CacheConfig {
+        local: CacheActions {
+            read: true,
+            write: false,
+        },
+        remote: CacheActions {
+            read: true,
+            write: false,
+        },
+    },
+)

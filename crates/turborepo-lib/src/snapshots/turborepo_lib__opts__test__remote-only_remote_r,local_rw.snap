@@ -1,14 +1,7 @@
 ---
 source: crates/turborepo-lib/src/opts.rs
-expression: cache_opts.cache
+expression: cache_opts
 ---
-{
-  "local": {
-    "read": false,
-    "write": false
-  },
-  "remote": {
-    "read": true,
-    "write": false
-  }
-}
+Err(
+    OverlappingCacheOptions,
+)
