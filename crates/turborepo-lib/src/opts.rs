@@ -446,14 +446,14 @@ mod test {
     use test_case::test_case;
     use turbopath::AbsoluteSystemPathBuf;
     use turborepo_api_client::APIAuth;
-    use turborepo_cache::{CacheActions, CacheConfig, CacheOpts};
+    use turborepo_cache::CacheOpts;
     use turborepo_ui::ColorConfig;
 
     use super::{OptsInputs, RunOpts};
     use crate::{
         cli::{Command, DryRunMode, RunArgs},
         commands::CommandBase,
-        opts::{Error, Opts, RunCacheOpts, ScopeOpts},
+        opts::{Opts, RunCacheOpts, ScopeOpts},
         turbo_json::UIMode,
         Args,
     };
@@ -594,78 +594,55 @@ mod test {
          RunArgs {
              no_cache: true,
              ..Default::default()
-         },
-         Ok(CacheConfig {
-                local: CacheActions { read: true, write: false },
-                remote: CacheActions { read: true, write: false }
-         }) ; "no-cache"
+         } ; "no-cache"
     )]
     #[test_case(
          RunArgs {
              force: Some(Some(true)),
              ..Default::default()
-         },
-         Ok(CacheConfig {
-             local: CacheActions { read: false, write: true },
-             remote: CacheActions { read: false, write: true }
-         }) ; "force"
+         } ; "force"
     )]
     #[test_case(
          RunArgs {
              remote_only: Some(Some(true)),
              ..Default::default()
-         },
-         Ok(CacheConfig {
-             local: CacheActions { read: false, write: false },
-             remote: CacheActions { read: true, write: true }
-         }) ; "remote-only"
+         } ; "remote-only"
     )]
     #[test_case(
          RunArgs {
              remote_cache_read_only: Some(Some(true)),
              ..Default::default()
-         },
-         Ok(CacheConfig {
-             local: CacheActions { read: true, write: true },
-             remote: CacheActions { read: true, write: false }
-         }) ; "remote-cache-read-only"
+         }; "remote-cache-read-only"
     )]
     #[test_case(
          RunArgs {
              no_cache: true,
              cache: Some("remote:w,local:rw".to_string()),
              ..Default::default()
-         },
-         Err(Error::OverlappingCacheOptions) ; "no-cache_remote_w,local_rw"
+         } ; "no-cache_remote_w,local_rw"
     )]
     #[test_case(
          RunArgs {
              remote_only: Some(Some(true)),
              cache: Some("remote:r,local:rw".to_string()),
              ..Default::default()
-         },
-         Err(Error::OverlappingCacheOptions) ; "remote-only_remote_r,local_rw"
+         } ; "remote-only_remote_r,local_rw"
     )]
     #[test_case(
          RunArgs {
              force: Some(Some(true)),
              cache: Some("remote:r,local:r".to_string()),
              ..Default::default()
-         },
-         Err(Error::OverlappingCacheOptions) ; "force_remote:r,local:r"
+         } ; "force_remote:r,local:r"
     )]
     #[test_case(
           RunArgs {
               remote_cache_read_only: Some(Some(true)),
               cache: Some("remote:rw,local:r".to_string()),
               ..Default::default()
-          },
-          Err(Error::OverlappingCacheOptions) ; "remote-cache-read-only_remote_rw,local_r"
+          } ; "remote-cache-read-only_remote_rw,local_r"
     )]
-    fn test_resolve_cache_config(
-        run_args: RunArgs,
-        expected_result: Result<CacheConfig, Error>,
-    ) -> Result<(), anyhow::Error> {
+    fn test_resolve_cache_config(run_args: RunArgs) -> Result<(), anyhow::Error> {
         let mut args = Args::default();
         args.command = Some(Command::Run {
             execution_args: Box::default(),
@@ -690,14 +667,7 @@ mod test {
         })
         .map(|cache_opts| cache_opts.cache);
 
-        match (expected_result, cache_opts) {
-            (Ok(expected), Ok(actual)) => assert_eq!(expected, actual),
-            (Err(expected), Err(actual)) => assert_eq!(
-                std::mem::discriminant(&expected),
-                std::mem::discriminant(&actual)
-            ),
-            _ => panic!("expected_result and cache_opts should be the same type"),
-        }
+        insta::assert_debug_snapshot!(cache_opts);
 
         Ok(())
     }
