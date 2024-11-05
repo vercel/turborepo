@@ -152,7 +152,7 @@ impl PackageGraph {
                 }
                 None => {
                     // We don't need to require a name for the root package.json.
-                    if package_json_path == self.repo_root.join_component("package.json") {
+                    if info.package_path() == AnchoredSystemPath::new("").unwrap() {
                         continue;
                     }
 
