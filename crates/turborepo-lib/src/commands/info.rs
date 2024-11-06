@@ -74,20 +74,5 @@ pub async fn run(base: CommandBase) -> Result<(), Error> {
     println!("   stdin: {}", turborepo_ci::is_ci());
     println!();
 
-    println!("Turborepo System Environment Variables:");
-    for (key, value) in env::vars() {
-        // Don't print sensitive information
-        if key == "TURBO_TEAM"
-            || key == "TURBO_TEAMID"
-            || key == "TURBO_TOKEN"
-            || key == "TURBO_API"
-        {
-            continue;
-        }
-        if key.starts_with("TURBO_") {
-            println!("   {}: {}", key, value);
-        }
-    }
-
     Ok(())
 }
