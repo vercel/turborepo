@@ -13,7 +13,7 @@ pub enum Error {
     NoCurrentExe(#[from] io::Error),
 }
 
-pub async fn run(base: CommandBase) -> Result<(), Error> {
+pub async fn run(base: CommandBase) {
     let system = System::new_all();
     let connector = DaemonConnector::new(false, false, &base.repo_root);
     let daemon_status = match connector.connect().await {
@@ -22,19 +22,17 @@ pub async fn run(base: CommandBase) -> Result<(), Error> {
         Err(_e) => "Error getting status",
     };
     let package_manager = PackageJson::load(&base.repo_root.join_component("package.json"))
+        .ok()
         .and_then(|package_json| {
-            Ok(PackageManager::read_or_detect_package_manager(
-                &package_json,
-                &base.repo_root,
-            ))
+            PackageManager::read_or_detect_package_manager(&package_json, &base.repo_root).ok()
         })
-        .map_or_else(|_| "Not found".to_owned(), |pm| pm.unwrap().to_string());
+        .map_or_else(|| "Not found".to_owned(), |pm| pm.to_string());
 
     println!("CLI:");
     println!("   Version: {}", base.version);
 
     let exe_path = std::env::current_exe().map_or_else(
-        |_| "Cannot be found".to_string(),
+        |e| format!("Cannot determine current binary: {e}").to_owned(),
         |path| path.to_string_lossy().into_owned(),
     );
 
@@ -74,6 +72,4 @@ pub async fn run(base: CommandBase) -> Result<(), Error> {
     );
     println!("   stdin: {}", turborepo_ci::is_ci());
     println!();
-
-    Ok(())
 }
