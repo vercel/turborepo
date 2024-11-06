@@ -50,6 +50,7 @@ impl<'a> ExecContextFactory<'a> {
             visitor.repo_root,
             &visitor.package_graph,
             visitor.run_opts.task_args(),
+            visitor.micro_frontends_configs,
         );
         let mut command_factory = CommandFactory::new();
         if let Some(micro_frontends_configs) = visitor.micro_frontends_configs {

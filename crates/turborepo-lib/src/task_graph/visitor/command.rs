@@ -61,6 +61,7 @@ pub struct PackageGraphCommandProvider<'a> {
     package_graph: &'a PackageGraph,
     package_manager_binary: Result<PathBuf, which::Error>,
     task_args: TaskArgs<'a>,
+    mfe_configs: Option<&'a MicroFrontendsConfigs>,
 }
 
 impl<'a> PackageGraphCommandProvider<'a> {
@@ -68,6 +69,7 @@ impl<'a> PackageGraphCommandProvider<'a> {
         repo_root: &'a AbsoluteSystemPath,
         package_graph: &'a PackageGraph,
         task_args: TaskArgs<'a>,
+        mfe_configs: Option<&'a MicroFrontendsConfigs>,
     ) -> Self {
         let package_manager_binary = which::which(package_graph.package_manager().command());
         Self {
@@ -75,6 +77,7 @@ impl<'a> PackageGraphCommandProvider<'a> {
             package_graph,
             package_manager_binary,
             task_args,
+            mfe_configs,
         }
     }
 
@@ -125,6 +128,15 @@ impl<'a> CommandProvider for PackageGraphCommandProvider<'a> {
         // We clear the env before populating it with variables we expect
         cmd.env_clear();
         cmd.envs(environment.iter());
+
+        // If the task has an associated proxy, then we indicate this to the underlying
+        // task via an env var
+        if self
+            .mfe_configs
+            .map_or(false, |mfe_configs| mfe_configs.task_has_mfe_proxy(task_id))
+        {
+            cmd.env("TURBO_TASK_HAS_MFE_PROXY", "true");
+        }
 
         // We always open stdin and the visitor will close it depending on task
         // configuration
