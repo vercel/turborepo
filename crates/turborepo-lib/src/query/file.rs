@@ -197,6 +197,7 @@ impl File {
         depth: Option<usize>,
         ts_config: Option<String>,
         import_type: Option<ImportType>,
+        emit_errors: Option<bool>,
     ) -> Result<TraceResult, Error> {
         let mut tracer = Tracer::new(
             self.run.repo_root().to_owned(),
@@ -209,7 +210,9 @@ impl File {
         }
 
         let mut result = tracer.trace(depth).await;
-        result.emit_errors();
+        if emit_errors.unwrap_or(true) {
+            result.emit_errors();
+        }
         // Remove the file itself from the result
         result.files.remove(&self.path);
         TraceResult::new(result, self.run.clone())

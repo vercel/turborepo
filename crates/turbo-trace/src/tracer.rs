@@ -274,36 +274,37 @@ impl Tracer {
         root: &AbsoluteSystemPath,
         existing_resolver: &Resolver,
     ) -> Option<Resolver> {
-        let resolver = root
+        let tsconfig_dir = root
             .ancestors()
             .skip(1)
-            .find(|p| p.join_component("tsconfig.json").exists())
-            .map(|ts_config_dir| {
-                let mut options = existing_resolver.options().clone();
+            .find(|p| p.join_component("tsconfig.json").exists());
+
+        let node_modules_dir = root
+            .ancestors()
+            .skip(1)
+            .find(|p| p.join_component("node_modules").exists());
+
+        if tsconfig_dir.is_some() || node_modules_dir.is_some() {
+            let mut options = existing_resolver.options().clone();
+            if let Some(tsconfig_dir) = tsconfig_dir {
                 options.tsconfig = Some(TsconfigOptions {
-                    config_file: ts_config_dir
+                    config_file: tsconfig_dir
                         .join_component("tsconfig.json")
                         .as_std_path()
                         .into(),
                     references: TsconfigReferences::Auto,
                 });
+            }
 
-                existing_resolver.clone_with_options(options)
-            });
+            if let Some(node_modules_dir) = node_modules_dir {
+                options = options
+                    .with_module(node_modules_dir.join_component("node_modules").to_string());
+            }
 
-        root.ancestors()
-            .skip(1)
-            .find(|p| p.join_component("node_modules").exists())
-            .map(|node_modules_dir| {
-                let node_modules = node_modules_dir.join_component("node_modules");
-                let resolver = resolver.as_ref().unwrap_or(existing_resolver);
-                let options = resolver
-                    .options()
-                    .clone()
-                    .with_module(node_modules.to_string());
-
-                resolver.clone_with_options(options)
-            })
+            Some(existing_resolver.clone_with_options(options))
+        } else {
+            None
+        }
     }
 
     pub fn create_resolver(&mut self) -> Resolver {
@@ -312,7 +313,8 @@ impl Tracer {
             .with_force_extension(EnforceExtension::Disabled)
             .with_extension(".ts")
             .with_extension(".tsx")
-            .with_condition_names(&["import", "require"]);
+            .with_module(self.cwd.join_component("node_modules").to_string())
+            .with_condition_names(&["import", "require", "node", "default"]);
 
         if let Some(ts_config) = self.ts_config.take() {
             options.tsconfig = Some(TsconfigOptions {
