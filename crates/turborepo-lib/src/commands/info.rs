@@ -21,16 +21,14 @@ pub async fn run(base: CommandBase) -> Result<(), Error> {
         Err(DaemonConnectorError::NotRunning) => "Not running",
         Err(_e) => "Error getting status",
     };
-
-    let package_manager = match PackageJson::load(&base.repo_root.join_component("package.json")) {
-        Ok(package_json) => {
-            match PackageManager::read_or_detect_package_manager(&package_json, &base.repo_root) {
-                Ok(pm) => pm.to_string(),
-                Err(_) => "Not found".to_owned(),
-            }
-        }
-        Err(_) => "Not found".to_owned(),
-    };
+    let package_manager = PackageJson::load(&base.repo_root.join_component("package.json"))
+        .and_then(|package_json| {
+            Ok(PackageManager::read_or_detect_package_manager(
+                &package_json,
+                &base.repo_root,
+            ))
+        })
+        .map_or_else(|_| "Not found".to_owned(), |pm| pm.unwrap().to_string());
 
     println!("CLI:");
     println!("   Version: {}", base.version);
