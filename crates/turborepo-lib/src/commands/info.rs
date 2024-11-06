@@ -32,10 +32,13 @@ pub async fn run(base: CommandBase) -> Result<(), Error> {
 
     println!("CLI:");
     println!("   Version: {}", base.version);
-    println!(
-        "   Location: {}",
-        std::env::current_exe()?.to_string_lossy()
+
+    let exe_path = std::env::current_exe().map_or_else(
+        |_| "Cannot be found".to_string(),
+        |path| path.to_string_lossy().into_owned(),
     );
+
+    println!("   Path to executable: {}", exe_path);
     println!("   Daemon status: {}", daemon_status);
     println!("   Package manager: {}", package_manager);
     println!();

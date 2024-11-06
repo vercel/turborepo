@@ -1220,10 +1220,7 @@ pub async fn run(
                 .track_call();
             let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config);
 
-            match info::run(base).await {
-                Ok(()) => {}
-                Err(_e) => panic!("`info` command failed."),
-            }
+            info::run(base).await;
             Ok(0)
         }
         Command::Telemetry { command } => {
