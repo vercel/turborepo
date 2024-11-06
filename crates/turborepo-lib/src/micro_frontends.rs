@@ -49,4 +49,10 @@ impl MicroFrontendsConfigs {
     pub fn get(&self, package_name: &str) -> Option<&HashSet<TaskId<'static>>> {
         self.configs.get(package_name)
     }
+
+    pub fn task_has_mfe_proxy(&self, task_id: &TaskId) -> bool {
+        self.configs
+            .values()
+            .any(|dev_tasks| dev_tasks.contains(task_id))
+    }
 }
