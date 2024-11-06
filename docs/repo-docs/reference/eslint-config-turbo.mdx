@@ -37,10 +37,36 @@ Install `eslint-config-turbo` into the location where your ESLint configuration 
 
 ## Usage
 
-In your ESLint configuration file, add the package:
+Add `turbo` to the plugins section of your `.eslintrc` configuration file. You can omit the `eslint-plugin-` prefix:
 
-```json title="./packages/config-eslint/index.js"
+```json
 {
-  "extends": ["turbo"]
+  "plugins": ["turbo"]
+}
+```
+
+Then configure the rules you want to use under the rules section.
+
+```json
+{
+  "rules": {
+    "turbo/no-undeclared-env-vars": "error"
+  }
+}
+```
+
+### Example
+
+```json
+{
+  "plugins": ["turbo"],
+  "rules": {
+    "turbo/no-undeclared-env-vars": [
+      "error",
+      {
+        "allowList": ["^ENV_[A-Z]+$"]
+      }
+    ]
+  }
 }
 ```
