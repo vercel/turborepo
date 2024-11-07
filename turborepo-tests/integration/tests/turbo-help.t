@@ -18,6 +18,7 @@ Test help flag
     link        Link your local directory to a Vercel organization and enable remote caching
     login       Login to your Vercel account
     logout      Logout to your Vercel account
+    info        Print debugging information
     prune       Prepare a subset of your monorepo
     run         Run tasks across projects in your monorepo
     query       Query your monorepo using GraphQL. If no query is provided, spins up a GraphQL server with GraphiQL
@@ -141,6 +142,7 @@ Test help flag
     link        Link your local directory to a Vercel organization and enable remote caching
     login       Login to your Vercel account
     logout      Logout to your Vercel account
+    info        Print debugging information
     prune       Prepare a subset of your monorepo
     run         Run tasks across projects in your monorepo
     query       Query your monorepo using GraphQL. If no query is provided, spins up a GraphQL server with GraphiQL

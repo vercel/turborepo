@@ -22,8 +22,8 @@ use turborepo_ui::{ColorConfig, GREY};
 use crate::{
     cli::error::print_potential_tasks,
     commands::{
-        bin, config, daemon, generate, link, login, logout, ls, prune, query, run, scan, telemetry,
-        unlink, CommandBase,
+        bin, config, daemon, generate, info, link, login, logout, ls, prune, query, run, scan,
+        telemetry, unlink, CommandBase,
     },
     get_version,
     run::watch::WatchClient,
@@ -474,9 +474,7 @@ impl Args {
     }
 }
 
-/// Defines the subcommands for CLI. NOTE: If we change the commands in Go,
-/// we must change these as well to avoid accidentally passing the
-/// --single-package flag into non-build commands.
+/// Defines the subcommands for CLI
 #[derive(Subcommand, Clone, Debug, PartialEq)]
 pub enum Command {
     /// Get the path to the Turbo binary
@@ -569,6 +567,8 @@ pub enum Command {
         #[clap(long)]
         invalidate: bool,
     },
+    /// Print debugging information
+    Info,
     /// Prepare a subset of your monorepo.
     Prune {
         #[clap(hide = true, long)]
@@ -1221,6 +1221,15 @@ pub async fn run(
             };
             let child_event = event.child();
             generate::run(tag, command, &args, child_event)?;
+            Ok(0)
+        }
+        Command::Info => {
+            CommandEventBuilder::new("info")
+                .with_parent(&root_telemetry)
+                .track_call();
+            let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config);
+
+            info::run(base).await;
             Ok(0)
         }
         Command::Telemetry { command } => {
