@@ -8,7 +8,7 @@ use futures::StreamExt;
 use miette::{Diagnostic, SourceSpan};
 use thiserror::Error;
 use tokio::{select, sync::Notify, task::JoinHandle};
-use tracing::{instrument, trace};
+use tracing::{instrument, trace, warn};
 use turborepo_repository::package_graph::PackageName;
 use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_ui::sender::UISender;
@@ -113,11 +113,15 @@ impl WatchClient {
     pub async fn new(base: CommandBase, telemetry: CommandEventBuilder) -> Result<Self, Error> {
         let signal = commands::run::get_signal()?;
         let handler = SignalHandler::new(signal);
-        let root_turbo_json_path = base.config()?.root_turbo_json_path(&base.repo_root);
+        let config = base.config()?;
+        let root_turbo_json_path = config.root_turbo_json_path(&base.repo_root);
         if root_turbo_json_path != base.repo_root.join_component(CONFIG_FILE) {
             return Err(Error::NonStandardTurboJsonPath(
                 root_turbo_json_path.to_string(),
             ));
+        }
+        if matches!(config.daemon(), Some(false)) {
+            warn!("daemon is required for watch, ignoring request to disable daemon");
         }
 
         let Some(Command::Watch(execution_args)) = &base.args().command else {
