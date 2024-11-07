@@ -604,7 +604,7 @@ impl proto::turbod_server::Turbod for TurboGrpcServiceInner {
             .package_changes()
             .await;
 
-        let (tx, rx) = mpsc::channel(1024);
+        let (tx, rx) = mpsc::channel(4096);
 
         tx.send(Ok(proto::PackageChangeEvent {
             event: Some(proto::package_change_event::Event::RediscoverPackages(
