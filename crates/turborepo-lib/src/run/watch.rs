@@ -217,7 +217,13 @@ impl WatchClient {
             biased;
             _ = signal_subscriber.listen() => {
                 tracing::info!("shutting down");
-
+                if let Some(RunHandle { stopper, run_task }) = self.persistent_tasks_handle.take() {
+                    // Shut down the tasks for the run
+                    stopper.stop().await;
+                    // Run should exit shortly after we stop all child tasks, wait for it to finish
+                    // to ensure all messages are flushed.
+                    let _ = run_task.await;
+                }
                 Err(Error::SignalInterrupt)
             }
             result = event_fut => {
