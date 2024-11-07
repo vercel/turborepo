@@ -142,21 +142,21 @@ impl<W> App<W> {
     #[tracing::instrument(skip(self))]
     pub fn next(&mut self) {
         let num_rows = self.tasks_by_status.count_all();
-        let next_index = (self.selected_task_index + 1).clamp(0, num_rows - 1);
-        self.selected_task_index = next_index;
-        self.scroll.select(Some(next_index));
-        self.has_user_scrolled = true;
+        if num_rows > 0 {
+            self.selected_task_index = (self.selected_task_index + 1) % num_rows;
+            self.scroll.select(Some(self.selected_task_index));
+            self.has_user_scrolled = true;
+        }
     }
 
     #[tracing::instrument(skip(self))]
     pub fn previous(&mut self) {
-        let i = match self.selected_task_index {
-            0 => 0,
-            i => i - 1,
-        };
-        self.selected_task_index = i;
-        self.scroll.select(Some(i));
-        self.has_user_scrolled = true;
+        let num_rows = self.tasks_by_status.count_all();
+        if num_rows > 0 {
+            self.selected_task_index = (self.selected_task_index + num_rows - 1) % num_rows;
+            self.scroll.select(Some(self.selected_task_index));
+            self.has_user_scrolled = true;
+        }
     }
 
     #[tracing::instrument(skip_all)]
