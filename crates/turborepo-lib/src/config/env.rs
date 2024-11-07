@@ -39,6 +39,7 @@ const TURBO_MAPPING: &[(&str, &str)] = [
     ("turbo_remote_cache_read_only", "remote_cache_read_only"),
     ("turbo_run_summary", "run_summary"),
     ("turbo_allow_no_turbo_json", "allow_no_turbo_json"),
+    ("turbo_cache", "cache"),
 ]
 .as_slice();
 
@@ -75,12 +76,6 @@ impl ResolvedConfigurationOptions for EnvVars {
         let preflight = self
             .truthy_value("preflight")
             .map(|value| value.ok_or_else(|| Error::InvalidPreflight))
-            .transpose()?;
-
-        // Process enabled
-        let enabled = self
-            .truthy_value("enabled")
-            .map(|value| value.ok_or_else(|| Error::InvalidRemoteCacheEnabled))
             .transpose()?;
 
         let force = self.truthy_value("force").flatten();
@@ -162,10 +157,15 @@ impl ResolvedConfigurationOptions for EnvVars {
             token: self.output_map.get("token").cloned(),
             scm_base: self.output_map.get("scm_base").cloned(),
             scm_head: self.output_map.get("scm_head").cloned(),
+            cache: self
+                .output_map
+                .get("cache")
+                .map(|c| c.parse())
+                .transpose()?,
             // Processed booleans
             signature,
             preflight,
-            enabled,
+            enabled: None,
             ui,
             allow_no_package_manager,
             daemon,

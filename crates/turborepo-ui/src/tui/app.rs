@@ -326,7 +326,8 @@ impl<W> App<W> {
             .ok_or_else(|| Error::TaskNotFound { name: task.into() })?;
 
         let running = self.tasks_by_status.running.remove(running_idx);
-        self.tasks_by_status.finished.push(running.finish(result));
+        self.tasks_by_status
+            .insert_finished_task(running.finish(result));
 
         self.tasks
             .get_mut(task)

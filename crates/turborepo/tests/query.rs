@@ -1,5 +1,17 @@
 mod common;
 
+#[test]
+fn test_query() -> Result<(), anyhow::Error> {
+    check_json!(
+        "basic_monorepo",
+        "npm@10.5.0",
+        "query",
+        "get package that doesn't exist" => "query { package(name: \"doesnotexist\") { path } }",
+    );
+
+    Ok(())
+}
+
 #[cfg(not(windows))]
 #[test]
 fn test_double_symlink() -> Result<(), anyhow::Error> {
@@ -44,7 +56,7 @@ fn test_trace() -> Result<(), anyhow::Error> {
             "get `main.ts` with dependencies" => "query { file(path: \"main.ts\") { path, dependencies { files { items { path } } } } }",
             "get `button.tsx` with dependencies" => "query { file(path: \"button.tsx\") { path, dependencies { files { items { path } } } } }",
             "get `circular.ts` with dependencies" => "query { file(path: \"circular.ts\") { path dependencies { files { items { path } } } } }",
-            "get `invalid.ts` with dependencies" => "query { file(path: \"invalid.ts\") { path dependencies { files { items { path } } errors { items { message } } } } }",
+            "get `invalid.ts` with dependencies" => "query { file(path: \"invalid.ts\") { path dependencies { files { items { path } } errors { items { import } } } } }",
             "get `main.ts` with depth = 0" => "query { file(path: \"main.ts\") { path dependencies(depth: 1) { files { items { path } } } } }",
             "get `with_prefix.ts` with dependencies" => "query { file(path: \"with_prefix.ts\") { path dependencies { files { items { path } } } } }",
             "get `import_value_and_type.ts` with all dependencies" => "query { file(path: \"import_value_and_type.ts\") { path dependencies(importType: ALL) { files { items { path } } } } }",

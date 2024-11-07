@@ -87,8 +87,7 @@ Setup
   }
 
 Trace file with invalid import
-  $ ${TURBO} query "query { file(path: \"invalid.ts\") { path dependencies { files { items { path } } errors { items { message } } } } }"
-   WARNING  query command is experimental and may change in the future
+  $ ${TURBO} query "query { file(path: \"invalid.ts\") { path dependencies { files { items { path } } errors { items { message } } } } }" 2>/dev/null
   {
     "data": {
       "file": {
@@ -110,7 +109,7 @@ Trace file with invalid import
           "errors": {
             "items": [
               {
-                "message": "failed to resolve import to `./non-existent-file.js`"
+                "message": "failed to resolve import to `./non-existent-file.js` in `.*`" (re)
               }
             ]
           }

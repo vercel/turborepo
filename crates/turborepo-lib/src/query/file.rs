@@ -3,6 +3,7 @@ use std::sync::Arc;
 use async_graphql::{Enum, Object, SimpleObject};
 use camino::Utf8PathBuf;
 use itertools::Itertools;
+use miette::SourceCode;
 use swc_ecma_ast::EsVersion;
 use swc_ecma_parser::{EsSyntax, Syntax, TsSyntax};
 use turbo_trace::Tracer;
@@ -108,9 +109,13 @@ impl From<turbo_trace::TraceError> for TraceError {
                 message: format!("failed to glob files: {}", err),
                 ..Default::default()
             },
-            turbo_trace::TraceError::Resolve { span, text, .. } => {
+            turbo_trace::TraceError::Resolve {
+                span,
+                text,
+                file_path,
+                ..
+            } => {
                 let import = text
-                    .inner()
                     .read_span(&span, 1, 1)
                     .ok()
                     .map(|s| String::from_utf8_lossy(s.data()).to_string());
@@ -118,7 +123,7 @@ impl From<turbo_trace::TraceError> for TraceError {
                 TraceError {
                     message,
                     import,
-                    path: Some(text.name().to_string()),
+                    path: Some(file_path),
                     start: Some(span.offset()),
                     end: Some(span.offset() + span.len()),
                 }
@@ -204,6 +209,7 @@ impl File {
         }
 
         let mut result = tracer.trace(depth).await;
+        result.emit_errors();
         // Remove the file itself from the result
         result.files.remove(&self.path);
         TraceResult::new(result, self.run.clone())
@@ -225,6 +231,7 @@ impl File {
         }
 
         let mut result = tracer.reverse_trace().await;
+        result.emit_errors();
         // Remove the file itself from the result
         result.files.remove(&self.path);
         TraceResult::new(result, self.run.clone())

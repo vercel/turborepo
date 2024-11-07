@@ -33,7 +33,6 @@ use crate::{
 };
 
 mod error;
-
 // Global turbo sets this environment variable to its cwd so that local
 // turbo can use it for package inference.
 pub const INVOCATION_DIR_ENV_VAR: &str = "TURBO_INVOCATION_DIR";
@@ -724,9 +723,6 @@ pub struct ExecutionArgs {
     /// Run turbo in single-package mode
     #[clap(long)]
     pub single_package: bool,
-    /// Ignore the existing cache (to force execution)
-    #[clap(long, default_missing_value = "true")]
-    pub force: Option<Option<bool>>,
     /// Specify whether or not to do framework inference for tasks
     #[clap(long, value_name = "BOOL", action = ArgAction::Set, default_value = "true", default_missing_value = "true", num_args = 0..=1)]
     pub framework_inference: bool,
@@ -769,10 +765,6 @@ pub struct ExecutionArgs {
     pub only: bool,
     #[clap(long, hide = true)]
     pub pkg_inference_root: Option<String>,
-    /// Ignore the local filesystem cache for all tasks. Only
-    /// allow reading and caching artifacts using the remote cache.
-    #[clap(long, default_missing_value = "true")]
-    pub remote_only: Option<Option<bool>>,
     /// Use "none" to remove prefixes from task logs. Use "task" to get task id
     /// prefixing. Use "auto" to let turbo decide how to prefix the logs
     /// based on the execution environment. In most cases this will be the same
@@ -791,11 +783,6 @@ pub struct ExecutionArgs {
 }
 
 impl ExecutionArgs {
-    pub fn remote_only(&self) -> Option<bool> {
-        let remote_only = self.remote_only?;
-        Some(remote_only.unwrap_or(true))
-    }
-
     fn track(&self, telemetry: &CommandEventBuilder) {
         // default to false
         track_usage!(telemetry, self.framework_inference, |val: bool| !val);
@@ -803,9 +790,7 @@ impl ExecutionArgs {
         track_usage!(telemetry, self.continue_execution, |val| val);
         track_usage!(telemetry, self.single_package, |val| val);
         track_usage!(telemetry, self.only, |val| val);
-        track_usage!(telemetry, self.remote_only().unwrap_or_default(), |val| val);
         track_usage!(telemetry, &self.cache_dir, Option::is_some);
-        track_usage!(telemetry, &self.force, Option::is_some);
         track_usage!(telemetry, &self.pkg_inference_root, Option::is_some);
 
         if let Some(concurrency) = &self.concurrency {
@@ -848,6 +833,29 @@ impl ExecutionArgs {
     ArgGroup::new("daemon-group").multiple(false).required(false),
 ])]
 pub struct RunArgs {
+    /// Set the cache behavior for this run. Pass a list of comma-separated key,
+    /// value pairs to enable reading and writing to either the local or
+    /// remote cache.
+    #[clap(long, conflicts_with_all = &["force", "remote_only", "remote_cache_read_only", "no_cache"])]
+    pub cache: Option<String>,
+    /// Ignore the existing cache (to force execution). Equivalent to
+    /// `--cache=local:w,remote:w`
+    #[clap(long, default_missing_value = "true")]
+    pub force: Option<Option<bool>>,
+    /// Ignore the local filesystem cache for all tasks. Only
+    /// allow reading and caching artifacts using the remote cache.
+    /// Equivalent to `--cache=remote:rw`
+    #[clap(long, default_missing_value = "true", group = "cache-group")]
+    pub remote_only: Option<Option<bool>>,
+    /// Treat remote cache as read only. Equivalent to
+    /// `--cache=remote:r;local:rw`
+    #[clap(long, default_missing_value = "true")]
+    pub remote_cache_read_only: Option<Option<bool>>,
+    /// Avoid saving task results to the cache. Useful for development/watch
+    /// tasks. Equivalent to `--cache=local:r,remote:r`
+    #[clap(long)]
+    pub no_cache: bool,
+
     /// Set the number of concurrent cache operations (default 10)
     #[clap(long, default_value_t = DEFAULT_NUM_WORKERS)]
     pub cache_workers: u32,
@@ -859,12 +867,6 @@ pub struct RunArgs {
     /// is provided
     #[clap(long, num_args = 0..=1, default_missing_value = "", value_parser = validate_graph_extension)]
     pub graph: Option<String>,
-
-    /// Avoid saving task results to the cache. Useful for development/watch
-    /// tasks.
-    #[clap(long)]
-    pub no_cache: bool,
-
     // clap does not have negation flags such as --daemon and --no-daemon
     // so we need to use a group to enforce that only one of them is set.
     // -----------------------
@@ -887,9 +889,6 @@ pub struct RunArgs {
     /// All identifying data omitted from the profile.
     #[clap(long, value_parser=NonEmptyStringValueParser::new(), conflicts_with = "profile")]
     pub anon_profile: Option<String>,
-    /// Treat remote cache as read only
-    #[clap(long, default_missing_value = "true")]
-    pub remote_cache_read_only: Option<Option<bool>>,
     /// Generate a summary of the turbo run
     #[clap(long, default_missing_value = "true")]
     pub summarize: Option<Option<bool>>,
@@ -906,6 +905,9 @@ pub struct RunArgs {
 impl Default for RunArgs {
     fn default() -> Self {
         Self {
+            remote_only: None,
+            cache: None,
+            force: None,
             cache_workers: DEFAULT_NUM_WORKERS,
             dry_run: None,
             graph: None,
@@ -923,6 +925,11 @@ impl Default for RunArgs {
 }
 
 impl RunArgs {
+    pub fn remote_only(&self) -> Option<bool> {
+        let remote_only = self.remote_only?;
+        Some(remote_only.unwrap_or(true))
+    }
+
     /// Some(true) means force the daemon
     /// Some(false) means force no daemon
     /// None means use the default detection
@@ -957,6 +964,8 @@ impl RunArgs {
     pub fn track(&self, telemetry: &CommandEventBuilder) {
         // default to true
         track_usage!(telemetry, self.no_cache, |val| val);
+        track_usage!(telemetry, self.remote_only().unwrap_or_default(), |val| val);
+        track_usage!(telemetry, &self.force, Option::is_some);
         track_usage!(telemetry, self.daemon, |val| val);
         track_usage!(telemetry, self.no_daemon, |val| val);
         track_usage!(telemetry, self.parallel, |val| val);
@@ -1443,7 +1452,6 @@ mod test {
     fn get_default_execution_args() -> ExecutionArgs {
         ExecutionArgs {
             output_logs: None,
-            remote_only: None,
             framework_inference: true,
             ..ExecutionArgs::default()
         }
@@ -1779,10 +1787,12 @@ mod test {
             command: Some(Command::Run {
                 execution_args: Box::new(ExecutionArgs {
                     tasks: vec!["build".to_string()],
-                    force: Some(Some(true)),
                     ..get_default_execution_args()
                 }),
-                run_args: Box::new(get_default_run_args())
+                run_args: Box::new(RunArgs {
+                    force: Some(Some(true)),
+                    ..get_default_run_args()
+                })
             }),
             ..Args::default()
         } ;
@@ -2078,10 +2088,12 @@ mod test {
             command: Some(Command::Run {
                 execution_args: Box::new(ExecutionArgs {
                     tasks: vec!["build".to_string()],
-                    remote_only: None,
                     ..get_default_execution_args()
                 }),
-                run_args: Box::new(get_default_run_args())
+                run_args: Box::new(RunArgs {
+                    remote_only: None,
+                    ..get_default_run_args()
+                })
             }),
             ..Args::default()
 		} ;
@@ -2093,10 +2105,12 @@ mod test {
             command: Some(Command::Run {
                 execution_args: Box::new(ExecutionArgs {
                     tasks: vec!["build".to_string()],
-                    remote_only: Some(Some(true)),
                     ..get_default_execution_args()
                 }),
-                run_args: Box::new(get_default_run_args())
+                run_args: Box::new(RunArgs {
+                    remote_only: Some(Some(true)),
+                    ..get_default_run_args()
+                })
             }),
             ..Args::default()
 		} ;
@@ -2108,10 +2122,12 @@ mod test {
             command: Some(Command::Run {
                 execution_args: Box::new(ExecutionArgs {
                     tasks: vec!["build".to_string()],
-                    remote_only: Some(Some(true)),
                     ..get_default_execution_args()
                 }),
-                run_args: Box::new(get_default_run_args())
+                run_args: Box::new(RunArgs {
+                    remote_only: Some(Some(true)),
+                    ..get_default_run_args()
+                })
             }),
             ..Args::default()
 		} ;
@@ -2123,10 +2139,12 @@ mod test {
             command: Some(Command::Run {
                 execution_args: Box::new(ExecutionArgs {
                     tasks: vec!["build".to_string()],
-                    remote_only: Some(Some(false)),
                     ..get_default_execution_args()
                 }),
-                run_args: Box::new(get_default_run_args())
+                run_args: Box::new(RunArgs {
+                    remote_only: Some(Some(false)),
+                    ..get_default_run_args()
+                })
             }),
             ..Args::default()
 		} ;
