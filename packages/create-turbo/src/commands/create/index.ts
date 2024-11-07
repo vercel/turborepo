@@ -49,7 +49,7 @@ function handleErrors(
     process.exit(1);
     // handle download errors from @turbo/utils
   } else if (err instanceof DownloadError) {
-    error(red("Unable to download template from Github"));
+    error(red("Unable to download template from GitHub"));
     error(red(err.message));
     process.exit(1);
   }

@@ -371,7 +371,7 @@ mod test {
         match strategy {
             "stop" => manager.stop().await,
             "wait" => manager.wait().await,
-            _ => panic!("unknown strat"),
+            _ => panic!("unknown strategy"),
         }
 
         // tasks return proper exit code

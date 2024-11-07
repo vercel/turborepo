@@ -1,5 +1,6 @@
 mod env;
 mod file;
+mod override_env;
 mod turbo_json;
 
 use std::{collections::HashMap, ffi::OsString, io};
@@ -7,15 +8,18 @@ use std::{collections::HashMap, ffi::OsString, io};
 use camino::{Utf8Path, Utf8PathBuf};
 use convert_case::{Case, Casing};
 use derive_setters::Setters;
-use env::{EnvVars, OverrideEnvVars};
+use env::EnvVars;
 use file::{AuthFile, ConfigFile};
 use merge::Merge;
 use miette::{Diagnostic, NamedSource, SourceSpan};
+use override_env::OverrideEnvVars;
 use serde::Deserialize;
 use struct_iterable::Iterable;
 use thiserror::Error;
+use tracing::debug;
 use turbo_json::TurboJsonReader;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
+use turborepo_cache::CacheConfig;
 use turborepo_errors::TURBO_SITE;
 use turborepo_repository::package_graph::PackageName;
 
@@ -78,6 +82,8 @@ pub enum Error {
         config_path: AbsoluteSystemPathBuf,
         error: io::Error,
     },
+    #[error(transparent)]
+    Cache(#[from] turborepo_cache::config::Error),
     #[error(
         "Package tasks (<package>#<task>) are not allowed in single-package repositories: found \
          {task_id}"
@@ -88,6 +94,13 @@ pub enum Error {
         #[source_code]
         text: NamedSource,
         #[label("package task found here")]
+        span: Option<SourceSpan>,
+    },
+    #[error("interruptible tasks must be persistent")]
+    InterruptibleButNotPersistent {
+        #[source_code]
+        text: NamedSource,
+        #[label("`interruptible` set here")]
         span: Option<SourceSpan>,
     },
     #[error(transparent)]
@@ -211,11 +224,14 @@ pub struct ConfigurationOptions {
     #[serde(alias = "teamslug")]
     #[serde(alias = "TeamSlug")]
     #[serde(alias = "TEAMSLUG")]
+    /// corresponds to env var TURBO_TEAM
     pub(crate) team_slug: Option<String>,
     #[serde(alias = "teamid")]
     #[serde(alias = "TeamId")]
     #[serde(alias = "TEAMID")]
+    /// corresponds to env var TURBO_TEAMID
     pub(crate) team_id: Option<String>,
+    /// corresponds to env var TURBO_TOKEN
     pub(crate) token: Option<String>,
     pub(crate) signature: Option<bool>,
     pub(crate) preflight: Option<bool>,
@@ -239,6 +255,8 @@ pub struct ConfigurationOptions {
     pub(crate) root_turbo_json_path: Option<AbsoluteSystemPathBuf>,
     pub(crate) force: Option<bool>,
     pub(crate) log_order: Option<LogOrder>,
+    #[serde(skip)]
+    pub(crate) cache: Option<CacheConfig>,
     pub(crate) remote_only: Option<bool>,
     pub(crate) remote_cache_read_only: Option<bool>,
     pub(crate) run_summary: Option<bool>,
@@ -329,6 +347,15 @@ impl ConfigurationOptions {
     }
 
     pub fn daemon(&self) -> Option<bool> {
+        // hardcode to off in CI
+        if turborepo_ci::is_ci() {
+            if Some(true) == self.daemon {
+                debug!("Ignoring daemon setting and disabling the daemon because we're in CI");
+            }
+
+            return Some(false);
+        }
+
         self.daemon
     }
 
@@ -344,6 +371,10 @@ impl ConfigurationOptions {
                 ".turbo/cache"
             })
         })
+    }
+
+    pub fn cache(&self) -> Option<CacheConfig> {
+        self.cache
     }
 
     pub fn force(&self) -> bool {
@@ -450,9 +481,9 @@ impl TurborepoConfigBuilder {
 
         // These are ordered from highest to lowest priority
         let sources: [Box<dyn ResolvedConfigurationOptions>; 7] = [
-            Box::new(override_env_var_config),
             Box::new(&self.override_config),
             Box::new(env_var_config),
+            Box::new(override_env_var_config),
             Box::new(local_config),
             Box::new(global_auth),
             Box::new(global_config),
@@ -544,22 +575,16 @@ mod test {
             vercel_artifacts_owner.into(),
         );
 
-        let override_config = ConfigurationOptions {
-            token: Some("unseen".into()),
-            team_id: Some("unseen".into()),
-            ..Default::default()
-        };
-
         let builder = TurborepoConfigBuilder {
             repo_root,
-            override_config,
+            override_config: Default::default(),
             global_config_path: Some(global_config_path),
             environment: Some(env),
         };
 
         let config = builder.build().unwrap();
-        assert_eq!(config.team_id().unwrap(), vercel_artifacts_owner);
-        assert_eq!(config.token().unwrap(), vercel_artifacts_token);
+        assert_eq!(config.team_id().unwrap(), turbo_teamid);
+        assert_eq!(config.token().unwrap(), turbo_token);
         assert_eq!(config.spaces_id().unwrap(), "my-spaces-id");
     }
 

@@ -19,6 +19,7 @@ daemon-file-hashing = []
 anyhow = { workspace = true, features = ["backtrace"] }
 assert_cmd = { workspace = true }
 async-stream = "0.3.4"
+insta = { workspace = true }
 itertools = { workspace = true }
 port_scanner = { workspace = true }
 pretty_assertions = { workspace = true }
@@ -99,6 +100,9 @@ sha2 = { workspace = true }
 shared_child = "1.0.0"
 struct_iterable = "0.1.1"
 svix-ksuid = { version = "0.7.0", features = ["serde"] }
+swc_common = { workspace = true }
+swc_ecma_ast = { workspace = true, features = ["serde-impl"] }
+swc_ecma_parser = { workspace = true }
 sysinfo = "0.27.7"
 tabwriter = "1.3.0"
 thiserror = "1.0.38"
@@ -129,6 +133,7 @@ turborepo-filewatch = { path = "../turborepo-filewatch" }
 turborepo-fs = { path = "../turborepo-fs" }
 turborepo-graph-utils = { path = "../turborepo-graph-utils" }
 turborepo-lockfiles = { workspace = true }
+turborepo-micro-frontend = { workspace = true }
 turborepo-repository = { path = "../turborepo-repository" }
 turborepo-scm = { workspace = true }
 turborepo-telemetry = { path = "../turborepo-telemetry" }

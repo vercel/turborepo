@@ -2,12 +2,12 @@
 //! by a web client to display the status of tasks.
 
 pub mod event;
+pub mod query;
 pub mod sender;
-pub mod server;
 pub mod subscriber;
 
 use event::WebUIEvent;
-pub use server::RunQuery;
+pub use query::RunQuery;
 use thiserror::Error;
 
 #[derive(Debug, Error)]

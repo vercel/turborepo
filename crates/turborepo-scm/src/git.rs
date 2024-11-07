@@ -16,10 +16,10 @@ use turborepo_ci::Vendor;
 
 use crate::{Error, Git, SCM};
 
-#[derive(Debug)]
-pub enum ChangedFiles {
-    All,
-    Some(HashSet<AnchoredSystemPathBuf>),
+#[derive(Debug, PartialEq, Eq)]
+pub struct InvalidRange {
+    pub from_ref: Option<String>,
+    pub to_ref: Option<String>,
 }
 
 impl SCM {
@@ -45,13 +45,17 @@ impl SCM {
         include_uncommitted: bool,
         allow_unknown_objects: bool,
         merge_base: bool,
-    ) -> Result<ChangedFiles, Error> {
-        fn unable_to_detect_range(error: impl std::error::Error) -> Result<ChangedFiles, Error> {
+    ) -> Result<Result<HashSet<AnchoredSystemPathBuf>, InvalidRange>, Error> {
+        fn unable_to_detect_range(
+            error: impl std::error::Error,
+            from_ref: Option<String>,
+            to_ref: Option<String>,
+        ) -> Result<Result<HashSet<AnchoredSystemPathBuf>, InvalidRange>, Error> {
             warn!(
                 "unable to detect git range, assuming all files have changed: {}",
                 error
             );
-            Ok(ChangedFiles::All)
+            Ok(Err(InvalidRange { from_ref, to_ref }))
         }
         match self {
             Self::Git(git) => {
@@ -62,15 +66,23 @@ impl SCM {
                     include_uncommitted,
                     merge_base,
                 ) {
-                    Ok(files) => Ok(ChangedFiles::Some(files)),
+                    Ok(files) => Ok(Ok(files)),
                     Err(ref error @ Error::Git(ref message, _))
-                        if allow_unknown_objects && message.contains("no merge base") =>
+                        if allow_unknown_objects
+                            && (message.contains("no merge base")
+                                || message.contains("bad object")) =>
                     {
-                        unable_to_detect_range(error)
+                        unable_to_detect_range(
+                            error,
+                            from_commit.map(|c| c.to_string()),
+                            to_commit.map(|c| c.to_string()),
+                        )
                     }
-                    Err(Error::UnableToResolveRef) => {
-                        unable_to_detect_range(Error::UnableToResolveRef)
-                    }
+                    Err(Error::UnableToResolveRef) => unable_to_detect_range(
+                        Error::UnableToResolveRef,
+                        from_commit.map(|c| c.to_string()),
+                        to_commit.map(|c| c.to_string()),
+                    ),
                     Err(e) => Err(e),
                 }
             }
@@ -231,15 +243,18 @@ impl Git {
             // because at this point we know we're in a GITHUB CI environment
             // and we should really know by now what the base ref is
             // so it's better to just error if something went wrong
-            return if self
-                .execute_git_command(&["rev-parse", &github_base_ref], "")
-                .is_ok()
-            {
-                println!("Resolved base ref from GitHub Actions event: {github_base_ref}");
-                Ok(github_base_ref)
-            } else {
-                println!("Failed to resolve base ref from GitHub Actions event");
-                Err(Error::UnableToResolveRef)
+            return match self.execute_git_command(&["rev-parse", &github_base_ref], "") {
+                Ok(_) => {
+                    eprintln!("Resolved base ref from GitHub Actions event: {github_base_ref}");
+                    Ok(github_base_ref)
+                }
+                Err(e) => {
+                    eprintln!(
+                        "Failed to resolve base ref '{github_base_ref}' from GitHub Actions \
+                         event: {e}"
+                    );
+                    Err(Error::UnableToResolveRef)
+                }
             };
         }
 
@@ -400,7 +415,7 @@ mod tests {
     use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError};
     use which::which;
 
-    use super::{previous_content, CIEnv, ChangedFiles};
+    use super::{previous_content, CIEnv, InvalidRange};
     use crate::{
         git::{GitHubCommit, GitHubEvent},
         Error, Git, SCM,
@@ -436,7 +451,7 @@ mod tests {
         // Replicating the `--filter` behavior where we only do a merge base
         // if both ends of the git range are specified.
         let merge_base = to_commit.is_some();
-        let ChangedFiles::Some(files) = scm.changed_files(
+        let Ok(files) = scm.changed_files(
             &turbo_root,
             from_commit,
             to_commit,
@@ -1008,7 +1023,13 @@ mod tests {
             .changed_files(&root, None, Some("HEAD"), true, true, false)
             .unwrap();
 
-        assert_matches!(actual, ChangedFiles::All);
+        assert_eq!(
+            actual,
+            Err(InvalidRange {
+                from_ref: None,
+                to_ref: Some("HEAD".to_string()),
+            })
+        );
 
         Ok(())
     }

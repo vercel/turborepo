@@ -116,7 +116,7 @@ jobs:
       matrix:
         os:
           - runner: ubuntu-latest
-          - runner: macos-12
+          - runner: macos-13
           - runner: windows-latest
     steps:
       # On Windows, set autocrlf to input so that when the repo is cloned down
@@ -229,7 +229,7 @@ jobs:
 
       - name: Run cargo clippy
         run: |
-          cargo groups clippy turborepo-libraries --features rustls-tls -- --deny clippy::all
+          cargo clippy --workspace --features rustls-tls -- --deny clippy::all
 
       - name: Run ast-grep lints
         run: |
@@ -260,7 +260,7 @@ jobs:
 
       - name: Run cargo check
         run: |
-          cargo groups check turborepo-libraries
+          cargo check --workspace
 
   rust_test:
     needs: [rust_check]
@@ -276,7 +276,7 @@ jobs:
               - "metal"
             nextest: linux
           - name: macos
-            runner: macos-12
+            runner: macos-13
             nextest: mac
           - name: windows
             runner: windows-latest
@@ -308,8 +308,12 @@ jobs:
         run: |
           if [ -z "${RUSTC_WRAPPER}" ]; then
             unset RUSTC_WRAPPER
-          fi          
-          cargo groups test turborepo-libraries
+          fi
+          if [ "$RUNNER_OS" == "Windows" ]; then
+              cargo test --workspace --exclude turborepo-napi
+          else
+              cargo test --workspace
+          fi
         shell: bash
         env:
           SCCACHE_BUCKET: turborepo-sccache

@@ -1,11 +1,12 @@
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     io::{ErrorKind, IsTerminal},
     sync::Arc,
     time::SystemTime,
 };
 
 use chrono::Local;
+use itertools::Itertools;
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_analytics::{start_analytics, AnalyticsHandle, AnalyticsSender};
@@ -14,6 +15,7 @@ use turborepo_cache::AsyncCache;
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_errors::Spanned;
 use turborepo_repository::{
+    change_mapper::PackageInclusionReason,
     package_graph::{PackageGraph, PackageName},
     package_json,
     package_json::PackageJson,
@@ -36,10 +38,12 @@ use {
     },
 };
 
+use super::task_id::TaskId;
 use crate::{
     cli::DryRunMode,
     commands::CommandBase,
     engine::{Engine, EngineBuilder},
+    micro_frontends::MicroFrontendsConfigs,
     opts::Opts,
     process::ProcessManager,
     run::{scope, task_access::TaskAccess, task_id::TaskName, Error, Run, RunCache},
@@ -66,6 +70,10 @@ pub struct RunBuilder {
     should_print_prelude_override: Option<bool>,
     allow_missing_package_manager: bool,
     allow_no_turbo_json: bool,
+    // In query, we don't want to validate the engine. Defaults to `true`
+    should_validate_engine: bool,
+    // If true, we will add all tasks to the graph, even if they are not specified
+    add_all_tasks: bool,
 }
 
 impl RunBuilder {
@@ -108,6 +116,8 @@ impl RunBuilder {
             allow_missing_package_manager,
             root_turbo_json_path,
             allow_no_turbo_json,
+            should_validate_engine: true,
+            add_all_tasks: false,
         })
     }
 
@@ -118,6 +128,16 @@ impl RunBuilder {
 
     pub fn hide_prelude(mut self) -> Self {
         self.should_print_prelude_override = Some(false);
+        self
+    }
+
+    pub fn add_all_tasks(mut self) -> Self {
+        self.add_all_tasks = true;
+        self
+    }
+
+    pub fn do_not_validate_engine(mut self) -> Self {
+        self.should_validate_engine = false;
         self
     }
 
@@ -140,7 +160,7 @@ impl RunBuilder {
         pkg_dep_graph: &PackageGraph,
         scm: &SCM,
         root_turbo_json: &TurboJson,
-    ) -> Result<HashSet<PackageName>, Error> {
+    ) -> Result<HashMap<PackageName, PackageInclusionReason>, Error> {
         let (mut filtered_pkgs, is_all_packages) = scope::resolve_packages(
             &opts.scope_opts,
             repo_root,
@@ -158,7 +178,12 @@ impl RunBuilder {
                 }
 
                 if root_turbo_json.tasks.contains_key(&task_name) {
-                    filtered_pkgs.insert(PackageName::Root);
+                    filtered_pkgs.insert(
+                        PackageName::Root,
+                        PackageInclusionReason::RootTask {
+                            task: task_name.to_string(),
+                        },
+                    );
                     break;
                 }
             }
@@ -348,6 +373,7 @@ impl RunBuilder {
         repo_telemetry.track_package_manager(pkg_dep_graph.package_manager().to_string());
         repo_telemetry.track_size(pkg_dep_graph.len());
         run_telemetry.track_run_type(self.opts.run_opts.dry_run.is_some());
+        let micro_frontend_configs = MicroFrontendsConfigs::new(&self.repo_root, &pkg_dep_graph)?;
 
         let scm = scm.await.expect("detecting scm panicked");
         let async_cache = AsyncCache::new(
@@ -379,6 +405,13 @@ impl RunBuilder {
                 self.repo_root.clone(),
                 pkg_dep_graph.packages(),
             )
+        } else if let Some(micro_frontends) = &micro_frontend_configs {
+            TurboJsonLoader::workspace_with_microfrontends(
+                self.repo_root.clone(),
+                self.root_turbo_json_path.clone(),
+                pkg_dep_graph.packages(),
+                micro_frontends.clone(),
+            )
         } else {
             TurboJsonLoader::workspace(
                 self.repo_root.clone(),
@@ -403,8 +436,9 @@ impl RunBuilder {
         let mut engine = self.build_engine(
             &pkg_dep_graph,
             &root_turbo_json,
-            &filtered_pkgs,
+            filtered_pkgs.keys(),
             turbo_json_loader.clone(),
+            micro_frontend_configs.as_ref(),
         )?;
 
         if self.opts.run_opts.parallel {
@@ -412,8 +446,9 @@ impl RunBuilder {
             engine = self.build_engine(
                 &pkg_dep_graph,
                 &root_turbo_json,
-                &filtered_pkgs,
+                filtered_pkgs.keys(),
                 turbo_json_loader,
+                micro_frontend_configs.as_ref(),
             )?;
         }
 
@@ -422,7 +457,8 @@ impl RunBuilder {
         let run_cache = Arc::new(RunCache::new(
             async_cache,
             &self.repo_root,
-            &self.opts.runcache_opts,
+            self.opts.runcache_opts,
+            &self.opts.cache_opts,
             color_selector,
             daemon.clone(),
             self.color_config,
@@ -445,7 +481,7 @@ impl RunBuilder {
             api_client: self.api_client,
             api_auth: self.api_auth,
             env_at_execution_start,
-            filtered_pkgs,
+            filtered_pkgs: filtered_pkgs.keys().cloned().collect(),
             pkg_dep_graph: Arc::new(pkg_dep_graph),
             root_turbo_json,
             scm,
@@ -454,17 +490,63 @@ impl RunBuilder {
             signal_handler: signal_handler.clone(),
             daemon,
             should_print_prelude,
+            micro_frontend_configs,
         })
     }
 
-    fn build_engine(
+    fn build_engine<'a>(
         &self,
         pkg_dep_graph: &PackageGraph,
         root_turbo_json: &TurboJson,
-        filtered_pkgs: &HashSet<PackageName>,
+        filtered_pkgs: impl Iterator<Item = &'a PackageName>,
         turbo_json_loader: TurboJsonLoader,
+        micro_frontends_configs: Option<&MicroFrontendsConfigs>,
     ) -> Result<Engine, Error> {
-        let mut engine = EngineBuilder::new(
+        let mut tasks = self
+            .opts
+            .run_opts
+            .tasks
+            .iter()
+            .map(|task| {
+                // TODO: Pull span info from command
+                Spanned::new(TaskName::from(task.as_str()).into_owned())
+            })
+            .collect::<Vec<_>>();
+        let mut workspace_packages = filtered_pkgs.cloned().collect::<Vec<_>>();
+        if let Some(micro_frontends_configs) = micro_frontends_configs {
+            // TODO: this logic is very similar to what happens inside engine builder and
+            // could probably be exposed
+            let tasks_from_filter = workspace_packages
+                .iter()
+                .map(|package| package.as_str())
+                .cartesian_product(tasks.iter())
+                .map(|(package, task)| {
+                    task.task_id().map_or_else(
+                        || TaskId::new(package, task.task()).into_owned(),
+                        |task_id| task_id.into_owned(),
+                    )
+                })
+                .collect::<HashSet<_>>();
+            // we need to add the MFE config packages into the scope here to make sure the
+            // proxy gets run
+            // TODO(olszewski): We are relying on the fact that persistent tasks must be
+            // entry points to the task graph so we can get away with only
+            // checking the entrypoint tasks.
+            for (mfe_config_package, dev_tasks) in micro_frontends_configs.configs() {
+                for dev_task in dev_tasks {
+                    if tasks_from_filter.contains(dev_task) {
+                        workspace_packages.push(PackageName::from(mfe_config_package.as_str()));
+                        tasks.push(Spanned::new(
+                            TaskId::new(mfe_config_package, "proxy")
+                                .as_task_name()
+                                .into_owned(),
+                        ));
+                        break;
+                    }
+                }
+            }
+        }
+        let mut builder = EngineBuilder::new(
             &self.repo_root,
             pkg_dep_graph,
             turbo_json_loader,
@@ -472,12 +554,18 @@ impl RunBuilder {
         )
         .with_root_tasks(root_turbo_json.tasks.keys().cloned())
         .with_tasks_only(self.opts.run_opts.only)
-        .with_workspaces(filtered_pkgs.clone().into_iter().collect())
-        .with_tasks(self.opts.run_opts.tasks.iter().map(|task| {
-            // TODO: Pull span info from command
-            Spanned::new(TaskName::from(task.as_str()).into_owned())
-        }))
-        .build()?;
+        .with_workspaces(workspace_packages)
+        .with_tasks(tasks);
+
+        if self.add_all_tasks {
+            builder = builder.add_all_tasks();
+        }
+
+        if !self.should_validate_engine {
+            builder = builder.do_not_validate_engine();
+        }
+
+        let mut engine = builder.build()?;
 
         // If we have an initial task, we prune out the engine to only
         // tasks that are reachable from that initial task.
@@ -485,7 +573,7 @@ impl RunBuilder {
             engine = engine.create_engine_for_subgraph(entrypoint_packages);
         }
 
-        if !self.opts.run_opts.parallel {
+        if !self.opts.run_opts.parallel && self.should_validate_engine {
             engine
                 .validate(
                     pkg_dep_graph,

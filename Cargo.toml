@@ -57,6 +57,7 @@ turborepo-errors = { path = "crates/turborepo-errors" }
 turborepo-fs = { path = "crates/turborepo-fs" }
 turborepo-lib = { path = "crates/turborepo-lib", default-features = false }
 turborepo-lockfiles = { path = "crates/turborepo-lockfiles" }
+turborepo-micro-frontend = { path = "crates/turborepo-micro-frontend" }
 turborepo-repository = { path = "crates/turborepo-repository" }
 turborepo-ui = { path = "crates/turborepo-ui" }
 turborepo-unescape = { path = "crates/turborepo-unescape" }
@@ -66,11 +67,7 @@ turborepo-vercel-api = { path = "crates/turborepo-vercel-api" }
 turborepo-vercel-api-mock = { path = "crates/turborepo-vercel-api-mock" }
 turborepo-vt100 = { path = "crates/turborepo-vt100" }
 
-# Be careful when selecting tls backend, including change default tls backend.
-# If you changed, must verify with ALL build targets with next-swc to ensure
-# it works. next-swc have various platforms, some doesn't support native (using openssl-sys)
-# and some aren't buildable with rustls.
-reqwest = { version = "=0.11.17", default-features = false }
+reqwest = { version = "0.12.9", default-features = false }
 
 anyhow = "1.0.69"
 assert_cmd = "2.0.8"
@@ -101,7 +98,7 @@ console-subscriber = "0.1.8"
 crossbeam-channel = "0.5.8"
 dashmap = "5.4.0"
 derive_setters = "0.1.6"
-dialoguer = "0.10.3"
+dialoguer = "0.11.0"
 dunce = "1.0.3"
 either = "1.9.0"
 futures = "0.3.26"
@@ -111,6 +108,7 @@ httpmock = { version = "0.6.8", default-features = false }
 indexmap = "1.9.2"
 indicatif = "0.17.3"
 indoc = "2.0.0"
+insta = { version = "1.34.0", features = ["json"] }
 itertools = "0.10.5"
 lazy_static = "1.4.0"
 merge = "0.1.0"
@@ -146,6 +144,10 @@ smallvec = { version = "1.13.1", features = [
   "union",
   "const_new",
 ] }
+swc_common = "0.37.5"
+swc_ecma_ast = "0.118.2"
+swc_ecma_parser = "0.149.1"
+swc_ecma_visit = "0.104.8"
 syn = "1.0.107"
 tempfile = "3.3.0"
 test-case = "3.0.0"
