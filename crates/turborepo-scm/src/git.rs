@@ -708,6 +708,17 @@ mod tests {
         index.add_path(Path::new("bar.js")).unwrap();
         index.write().unwrap();
 
+        // Test that uncommitted file in index is not marked as changed when not
+        // checking uncommitted
+        let files = changed_files(
+            repo_root.path().to_path_buf(),
+            turbo_root.to_path_buf(),
+            Some("HEAD"),
+            None,
+            false,
+        )?;
+        assert_eq!(files, HashSet::new());
+
         // Test that uncommitted file in index is still marked as changed
         let files = changed_files(
             repo_root.path().to_path_buf(),
