@@ -153,7 +153,10 @@ impl<W> App<W> {
     pub fn previous(&mut self) {
         let num_rows = self.tasks_by_status.count_all();
         if num_rows > 0 {
-            self.selected_task_index = self.selected_task_index.checked_sub(1).unwrap_or(num_rows - 1);
+            self.selected_task_index = self
+                .selected_task_index
+                .checked_sub(1)
+                .unwrap_or(num_rows - 1);
             self.scroll.select(Some(self.selected_task_index));
             self.has_user_scrolled = true;
         }
