@@ -272,8 +272,9 @@ async fn watch_events(
                                 for new_path in &event.paths {
                                     if let Err(err) = manually_add_recursive_watches(new_path, &mut watcher, Some(&broadcast_sender)) {
                                         match err {
-                                            WatchError::WalkDir(_) => {
+                                            WatchError::WalkDir(err) => {
                                                 // Likely the path no longer exists
+                                                debug!("encountered error watching filesystem {}", err);
                                                 continue;
                                             },
                                             _ => {
