@@ -514,6 +514,26 @@ mod tests {
         .unwrap()
     }
 
+    fn commit_rename(repo: &Repository, source: &Path, dest: &Path, previous_commit: Oid) -> Oid {
+        let mut index = repo.index().unwrap();
+        index.remove_path(source).unwrap();
+        index.add_path(dest).unwrap();
+        let tree_oid = index.write_tree().unwrap();
+        index.write().unwrap();
+        let tree = repo.find_tree(tree_oid).unwrap();
+        let previous_commit = repo.find_commit(previous_commit).unwrap();
+
+        repo.commit(
+            Some("HEAD"),
+            &repo.signature().unwrap(),
+            &repo.signature().unwrap(),
+            "Commit",
+            &tree,
+            std::slice::from_ref(&&previous_commit),
+        )
+        .unwrap()
+    }
+
     #[test]
     fn test_shallow_clone() -> Result<(), Error> {
         let tmp_dir = tempfile::tempdir()?;
@@ -579,6 +599,38 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn test_renamed_files() -> Result<(), Error> {
+        let (repo_root, repo) = setup_repository(None)?;
+
+        let file = repo_root.path().join("foo.js");
+        let file_path = Path::new("foo.js");
+        fs::write(&file, "let z = 0;")?;
+
+        let first_commit_oid = commit_file(&repo, file_path, None);
+
+        fs::rename(file, repo_root.path().join("bar.js")).unwrap();
+
+        let new_file_path = Path::new("bar.js");
+        let _second_commit_oid = commit_rename(&repo, file_path, new_file_path, first_commit_oid);
+
+        let first_commit_sha = first_commit_oid.to_string();
+        let git_root = repo_root.path().to_owned();
+        let turborepo_root = repo_root.path().to_owned();
+        let files = changed_files(
+            git_root,
+            turborepo_root,
+            Some(&first_commit_sha),
+            Some("HEAD"),
+            false,
+        )?;
+
+        assert_eq!(
+            files,
+            HashSet::from(["foo.js".to_string(), "bar.js".to_string()])
+        );
+        Ok(())
+    }
     #[test]
     fn test_merge_base() -> Result<(), Error> {
         let (repo_root, repo) = setup_repository(None)?;
