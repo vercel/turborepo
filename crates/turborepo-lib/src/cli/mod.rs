@@ -1391,7 +1391,10 @@ pub async fn run(
             let base = CommandBase::new(cli_args, repo_root, version, color_config);
 
             let mut client = WatchClient::new(base, event).await?;
-            client.start().await?;
+            if let Err(e) = client.start().await {
+                client.shutdown().await;
+                return Err(e.into());
+            }
             // We only exit if we get a signal, so we return a non-zero exit code
             return Ok(1);
         }
