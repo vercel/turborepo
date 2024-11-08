@@ -302,8 +302,16 @@ impl Git {
         // comparison
         if include_uncommitted {
             // Add untracked files, i.e. files that are not in git at all
-            let output = self
-                .execute_git_command(&["ls-files", "--others", "--exclude-standard"], pathspec)?;
+            let output = self.execute_git_command(
+                &[
+                    "ls-files",
+                    "--others",
+                    "--modified",
+                    "--cached",
+                    "--exclude-standard",
+                ],
+                pathspec,
+            )?;
             self.add_files_from_stdout(&mut files, turbo_root, output);
         }
 
