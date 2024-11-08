@@ -1,4 +1,9 @@
-use std::{env, io};
+use std::{
+    env,
+    fs::File,
+    io::{self, Read},
+    path::Path,
+};
 
 use sysinfo::{System, SystemExt};
 use thiserror::Error;
@@ -11,6 +16,20 @@ use crate::{DaemonConnector, DaemonConnectorError};
 pub enum Error {
     #[error("could not get path to turbo binary: {0}")]
     NoCurrentExe(#[from] io::Error),
+}
+
+const OS: &str = std::env::consts::OS;
+
+fn os_release() -> Result<String, std::io::Error> {
+    let mut s = String::new();
+    File::open("/proc/sys/kernel/osrelease")?.read_to_string(&mut s)?;
+    s.pop(); // Remove trailing newline
+    Ok(s)
+}
+
+// https://superuser.com/questions/1749781/how-can-i-check-if-the-environment-is-wsl-from-a-shell-script/1749811#1749811
+fn is_wsl() -> bool {
+    Path::new("/proc/sys/fs/binfmt_misc/WSLInterop").exists()
 }
 
 pub async fn run(base: CommandBase) {
@@ -43,7 +62,8 @@ pub async fn run(base: CommandBase) {
 
     println!("Platform:");
     println!("   Architecture: {}", std::env::consts::ARCH);
-    println!("   Operating system: {}", std::env::consts::OS);
+    println!("   Operating system: {}", OS);
+    println!("   WSL: {}", is_wsl());
     println!(
         "   Available memory (MB): {}",
         system.available_memory() / 1024 / 1024
