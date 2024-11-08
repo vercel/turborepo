@@ -886,7 +886,7 @@ mod test {
         app.next();
         assert_eq!(app.scroll.selected(), Some(2), "scroll moves forwards");
         app.next();
-        assert_eq!(app.scroll.selected(), Some(0), "scroll stays in bounds");
+        assert_eq!(app.scroll.selected(), Some(0), "scroll wraps");
         app.previous();
         assert_eq!(app.scroll.selected(), Some(2), "scroll stays in bounds");
     }
