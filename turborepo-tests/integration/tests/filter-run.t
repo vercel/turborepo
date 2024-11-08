@@ -40,6 +40,7 @@ Setup
   Cached:    0 cached, 2 total
     Time:\s*[\.0-9]+m?s  (re)
   
+   WARNING  no output files found for task my-app#build. Please check your `outputs` key in `turbo.json`
 
 Non existent package name should error
   $ ${TURBO} run build --filter="foo" --output-logs none

@@ -1,3 +1,4 @@
+import { describe, it, expect } from "@jest/globals";
 import { convertCase, type CaseOptions } from "../src/convertCase";
 
 interface TestCase {

@@ -9,7 +9,7 @@ use turborepo_errors::Spanned;
 pub use visitor::{Error as VisitorError, Visitor};
 
 use crate::{
-    cli::OutputLogsMode,
+    cli::{EnvMode, OutputLogsMode},
     run::task_id::{TaskId, TaskName},
     turbo_json::RawTaskDefinition,
 };
@@ -23,6 +23,13 @@ pub struct TaskOutputs {
 }
 
 impl TaskOutputs {
+    // We consider an empty outputs to be a log output and nothing else
+    pub fn is_empty(&self) -> bool {
+        self.inclusions.len() == 1
+            && self.inclusions[0].ends_with(".log")
+            && self.exclusions.is_empty()
+    }
+
     pub fn validated_inclusions(&self) -> Result<Vec<ValidatedGlob>, GlobError> {
         self.inclusions
             .iter()
@@ -69,13 +76,20 @@ pub struct TaskDefinition {
     pub(crate) output_logs: OutputLogsMode,
 
     // Persistent indicates whether the Task is expected to exit or not
-    // Tasks marked Persistent do not exit (e.g. --watch mode or dev servers)
+    // Tasks marked Persistent do not exit (e.g. watch mode or dev servers)
     pub persistent: bool,
 
-    // Interactive marks that a task can have it's stdin written to.
+    // Indicates whether a persistent task can be interrupted in the middle of execution
+    // by watch mode
+    pub interruptible: bool,
+
+    // Interactive marks that a task can have its stdin written to.
     // Tasks that take stdin input cannot be cached as their outputs may depend on the
     // input.
     pub interactive: bool,
+
+    // Override for global env mode setting
+    pub env_mode: Option<EnvMode>,
 }
 
 impl Default for TaskDefinition {
@@ -90,7 +104,9 @@ impl Default for TaskDefinition {
             inputs: Default::default(),
             output_logs: Default::default(),
             persistent: Default::default(),
+            interruptible: Default::default(),
             interactive: Default::default(),
+            env_mode: Default::default(),
         }
     }
 }

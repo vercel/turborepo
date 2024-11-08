@@ -27,7 +27,7 @@ This Turborepo includes the following packages:
 ### Apps and Packages
 
 - `app-a`: A final package that depends on all other packages in the graph and has no dependents. This could resemble an application in your monorepo that consumes everything in your monorepo through its topological tree.
-- `app-b`: Another final package with many dependencies. No dependents, lost of dependencies.
+- `app-b`: Another final package with many dependencies. No dependents, lots of dependencies.
 - `pkg-a`: A package that has all scripts in the root `package.json`.
 - `pkg-b`: A package with _almost_ all scripts in the root `package.json`.
 - `tooling-config`: A package to simulate a common configuration used for all of your repository. This could resemble a configuration for tools like TypeScript or ESLint that are installed into all of your packages.

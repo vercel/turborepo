@@ -37,7 +37,7 @@ turbo gen workspace --copy
 Create a new workspace in your monorepo by copying from a remote package.
 
 ```sh title="Terminal"
-turbo gen workspace --copy https://github.com/vercel/turbo/tree/main/examples/with-tailwind/packages/tailwind-config
+turbo gen workspace --copy https://github.com/vercel/turborepo/tree/main/examples/with-tailwind/packages/tailwind-config
 ```
 
 <Callout>
@@ -63,7 +63,7 @@ generators within a repo configured with Turborepo.
 1. Generators are automatically discovered, loaded, and organized per workspace (no need to manually `load` them within a single configuration file)
 2. Generators are automatically run from the root of the workspace where they are defined
 3. Generators can be invoked from anywhere within your repo (or outside out it via the [`--root`](/repo/docs/reference/generate#--root-path) flag)
-4. Typescript generators are supported with zero configuration
+4. TypeScript generators are supported with zero configuration
 5. `plop` is not required to be installed as a dependency of your repo
 
 <Callout type="info" title="Known issue">
@@ -82,9 +82,9 @@ You'll be prompted to select an existing generator or to create one if you don't
 manually at `turbo/generators/config.ts` (or `config.js`) at the root of your repo - or within _any_ workspace.
 
 <Callout type="info">
-  If you are using Typescript, you will need to install [the `@turbo/gen`
-  package](https://github.com/vercel/turbo/tree/main/packages/turbo-gen) as a
-  `devDependency` to access the required TS types.
+  If you are using TypeScript, you will need to install [the `@turbo/gen`
+  package](https://github.com/vercel/turborepo/tree/main/packages/turbo-gen) as
+  a `devDependency` to access the required TS types.
 </Callout>
 
 For example, the following illustrates a monorepo with three locations for generators:

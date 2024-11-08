@@ -24,7 +24,7 @@ pub const DEFAULT_OUTPUT_DIR: &str = "out";
 pub enum Error {
     #[error("io error while pruning: {0}")]
     Io(#[from] std::io::Error),
-    #[error("fs error while pruning: {0}")]
+    #[error("File system error while pruning. The error from the operating system is: {0}")]
     Fs(#[from] turborepo_fs::Error),
     #[error("json error while pruning: {0}")]
     Json(#[from] serde_json::Error),
@@ -109,8 +109,8 @@ pub async fn prune(
 
     println!(
         "Generating pruned monorepo for {} in {}",
-        base.ui.apply(BOLD.apply_to(scope.join(", "))),
-        base.ui.apply(BOLD.apply_to(&prune.out_directory)),
+        base.color_config.apply(BOLD.apply_to(scope.join(", "))),
+        base.color_config.apply(BOLD.apply_to(&prune.out_directory)),
     );
 
     if let Some(workspace_config_path) = prune
@@ -449,7 +449,7 @@ impl<'a> Prune<'a> {
             Err(e) => return Err(e.into()),
         };
 
-        let turbo_json = RawTurboJson::parse(&turbo_json_contents, anchored_turbo_path)?;
+        let turbo_json = RawTurboJson::parse(&turbo_json_contents, anchored_turbo_path.as_str())?;
 
         let pruned_turbo_json = turbo_json.prune_tasks(workspaces);
         new_turbo_path.create_with_contents(serde_json::to_string_pretty(&pruned_turbo_json)?)?;

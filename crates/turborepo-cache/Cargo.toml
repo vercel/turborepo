@@ -13,10 +13,12 @@ rustls-tls = ["turborepo-api-client/rustls-tls"]
 [dev-dependencies]
 anyhow = { workspace = true, features = ["backtrace"] }
 futures = { workspace = true }
+insta = { workspace = true }
 libc = "0.2.146"
 port_scanner = { workspace = true }
 tempfile = { workspace = true }
 test-case = { workspace = true }
+turborepo-vercel-api = { workspace = true }
 turborepo-vercel-api-mock = { workspace = true }
 
 [lints]
@@ -28,6 +30,7 @@ bytes.workspace = true
 camino = { workspace = true }
 futures = { workspace = true }
 hmac = "0.12.1"
+miette = { workspace = true }
 os_str_bytes = "6.5.0"
 path-clean = { workspace = true }
 petgraph = "0.6.3"

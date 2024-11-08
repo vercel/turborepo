@@ -39,14 +39,23 @@ pub struct ProcessManager {
 struct ProcessManagerInner {
     is_closing: bool,
     children: Vec<child::Child>,
+    size: Option<PtySize>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct PtySize {
+    rows: u16,
+    cols: u16,
 }
 
 impl ProcessManager {
     pub fn new(use_pty: bool) -> Self {
+        debug!("spawning children with pty: {use_pty}");
         Self {
             state: Arc::new(Mutex::new(ProcessManagerInner {
                 is_closing: false,
                 children: Vec::new(),
+                size: None,
             })),
             use_pty,
         }
@@ -58,6 +67,19 @@ impl ProcessManager {
         // in a TTY
         let use_pty = !cfg!(windows) && atty::is(atty::Stream::Stdout);
         Self::new(use_pty)
+    }
+
+    /// Returns whether children will be spawned attached to a pseudoterminal
+    pub fn use_pty(&self) -> bool {
+        self.use_pty
+    }
+
+    /// Returns whether or not closing a child's stdin will result in it
+    /// immediately exiting.
+    pub fn closing_stdin_ends_process(&self) -> bool {
+        // Processes spawned hooked up to ConPTY on Windows will immediately exit
+        // if their stdin is closed. We avoid closing stdin in this case.
+        cfg!(windows) && self.use_pty
     }
 }
 
@@ -75,18 +97,26 @@ impl ProcessManager {
         command: Command,
         stop_timeout: Duration,
     ) -> Option<io::Result<child::Child>> {
+        let label = tracing::enabled!(tracing::Level::TRACE)
+            .then(|| command.label())
+            .unwrap_or_default();
+        trace!("acquiring lock for spawning {label}");
         let mut lock = self.state.lock().unwrap();
+        trace!("acquired lock for spawning {label}");
         if lock.is_closing {
+            debug!("process manager closing");
             return None;
         }
+        let pty_size = self.use_pty.then(|| lock.pty_size()).flatten();
         let child = child::Child::spawn(
             command,
             child::ShutdownStyle::Graceful(stop_timeout),
-            self.use_pty,
+            pty_size,
         );
         if let Ok(child) = &child {
             lock.children.push(child.clone());
         }
+        trace!("releasing lock for spawning {label}");
         Some(child)
     }
 
@@ -139,6 +169,33 @@ impl ProcessManager {
             // just allocate a new vec rather than clearing the old one
             lock.children = vec![];
         }
+    }
+
+    pub fn set_pty_size(&self, rows: u16, cols: u16) {
+        self.state.lock().expect("not poisoned").size = Some(PtySize { rows, cols });
+    }
+}
+
+impl ProcessManagerInner {
+    fn pty_size(&mut self) -> Option<PtySize> {
+        if self.size.is_none() {
+            self.size = PtySize::from_tty();
+        }
+        self.size
+    }
+}
+
+impl PtySize {
+    fn from_tty() -> Option<Self> {
+        console::Term::stdout()
+            .size_checked()
+            .map(|(rows, cols)| Self { rows, cols })
+    }
+}
+
+impl Default for PtySize {
+    fn default() -> Self {
+        Self { rows: 24, cols: 80 }
     }
 }
 
@@ -314,7 +371,7 @@ mod test {
         match strategy {
             "stop" => manager.stop().await,
             "wait" => manager.wait().await,
-            _ => panic!("unknown strat"),
+            _ => panic!("unknown strategy"),
         }
 
         // tasks return proper exit code

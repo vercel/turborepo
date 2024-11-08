@@ -154,8 +154,7 @@ export async function createProject({
   try {
     if (!isDefaultExample && repoInfo) {
       loader.start();
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- this is type guarded above (wtf TS)
-      await retry(() => downloadAndExtractRepo(root, repoInfo!), {
+      await retry(() => downloadAndExtractRepo(root, repoInfo), {
         retries: 3,
       });
     } else {

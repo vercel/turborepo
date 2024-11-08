@@ -21,9 +21,9 @@ use tokio::{
     sync::{mpsc, oneshot},
     task::{JoinError, JoinHandle},
 };
-use tracing::{debug, error};
+use tracing::{debug, error, trace};
 use turborepo_api_client::telemetry;
-use turborepo_ui::{color, BOLD, GREY, UI};
+use turborepo_ui::{color, ColorConfig, BOLD, GREY};
 use uuid::Uuid;
 
 const BUFFER_THRESHOLD: usize = 10;
@@ -78,11 +78,11 @@ pub fn telem(event: events::TelemetryEvent) {
 fn init(
     mut config: TelemetryConfig,
     client: impl telemetry::TelemetryClient + Clone + Send + Sync + 'static,
-    ui: UI,
+    color_config: ColorConfig,
 ) -> Result<(TelemetryHandle, TelemetrySender), Box<dyn std::error::Error>> {
     let (tx, rx) = mpsc::unbounded_channel();
     let (cancel_tx, cancel_rx) = oneshot::channel();
-    config.show_alert(ui);
+    config.show_alert(color_config);
 
     let session_id = Uuid::new_v4();
     let worker = Worker {
@@ -94,7 +94,7 @@ fn init(
         session_id: session_id.to_string(),
         telemetry_id: config.get_id().to_string(),
         enabled: config.is_enabled(),
-        ui,
+        color_config,
     };
     let handle = worker.start();
 
@@ -115,7 +115,7 @@ fn init(
 /// shared since it contains the structs necessary to shut down the worker.
 pub fn init_telemetry(
     client: impl telemetry::TelemetryClient + Clone + Send + Sync + 'static,
-    ui: UI,
+    color_config: ColorConfig,
 ) -> Result<TelemetryHandle, Box<dyn std::error::Error>> {
     // make sure we're not already initialized
     if SENDER_INSTANCE.get().is_some() {
@@ -123,7 +123,7 @@ pub fn init_telemetry(
         return Err(Box::new(Error::AlreadyInitialized()));
     }
     let config = TelemetryConfig::with_default_config_path()?;
-    let (handle, sender) = init(config, client, ui)?;
+    let (handle, sender) = init(config, client, color_config)?;
     SENDER_INSTANCE.set(sender).unwrap();
     Ok(handle)
 }
@@ -157,7 +157,7 @@ struct Worker<C> {
     telemetry_id: String,
     session_id: String,
     enabled: bool,
-    ui: UI,
+    color_config: ColorConfig,
 }
 
 impl<C: telemetry::TelemetryClient + Clone + Send + Sync + 'static> Worker<C> {
@@ -203,15 +203,15 @@ impl<C: telemetry::TelemetryClient + Clone + Send + Sync + 'static> Worker<C> {
     pub fn flush_events(&mut self) {
         if !self.buffer.is_empty() {
             let events = std::mem::take(&mut self.buffer);
-            debug!(
-                "Starting telemetry event queue flush (num_events={:?})",
-                events.len()
-            );
+            let num_events = events.len();
             let handle = self.send_events(events);
             if let Some(handle) = handle {
                 self.senders.push(handle);
             }
-            debug!("Done telemetry event queue flush");
+            trace!(
+                "Flushed telemetry event queue (num_events={:?})",
+                num_events
+            );
         }
     }
 
@@ -226,8 +226,8 @@ impl<C: telemetry::TelemetryClient + Clone + Send + Sync + 'static> Worker<C> {
                     .unwrap_or("Error serializing event".to_string());
                 println!(
                     "\n{}\n{}\n",
-                    color!(self.ui, BOLD, "{}", "[telemetry event]"),
-                    color!(self.ui, GREY, "{}", pretty_event)
+                    color!(self.color_config, BOLD, "{}", "[telemetry event]"),
+                    color!(self.color_config, GREY, "{}", pretty_event)
                 );
             }
         }
@@ -262,7 +262,7 @@ mod tests {
     };
     use turbopath::AbsoluteSystemPathBuf;
     use turborepo_api_client::telemetry::TelemetryClient;
-    use turborepo_ui::UI;
+    use turborepo_ui::ColorConfig;
     use turborepo_vercel_api::telemetry::{TelemetryEvent, TelemetryGenericEvent};
 
     use crate::{config::TelemetryConfig, init};
@@ -342,7 +342,7 @@ mod tests {
             tx,
         };
 
-        let result = init(config, client.clone(), UI::new(false));
+        let result = init(config, client.clone(), ColorConfig::new(false));
 
         let (telemetry_handle, telemetry_sender) = result.unwrap();
 
@@ -382,7 +382,7 @@ mod tests {
             tx,
         };
 
-        let result = init(config, client.clone(), UI::new(false));
+        let result = init(config, client.clone(), ColorConfig::new(false));
 
         let (telemetry_handle, telemetry_sender) = result.unwrap();
 
@@ -428,7 +428,7 @@ mod tests {
             tx,
         };
 
-        let result = init(config, client.clone(), UI::new(false));
+        let result = init(config, client.clone(), ColorConfig::new(false));
 
         let (telemetry_handle, telemetry_sender) = result.unwrap();
 

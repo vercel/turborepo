@@ -282,7 +282,9 @@ pub struct GlobError {
     reason: String,
 }
 
-/// ValidatedGlob represents an input string that we have either validated or
+/// ValidatedGlob.
+///
+/// Represents an input string that we have either validated or
 /// modified to fit our constraints. It does not _yet_ validate that the glob is
 /// a valid glob pattern, just that we have checked for unix format, ':'s, clean
 /// paths, etc.
@@ -407,7 +409,7 @@ fn visit_file(
         Err(e) => {
             let io_err = std::io::Error::from(e);
             match io_err.kind() {
-                // Ignore DNE and permission errors
+                // Ignore missing file and permission errors
                 std::io::ErrorKind::NotFound | std::io::ErrorKind::PermissionDenied => None,
                 _ => Some(Err(io_err.into())),
             }
@@ -420,7 +422,7 @@ mod test {
     use std::{collections::HashSet, str::FromStr};
 
     use itertools::Itertools;
-    use tempdir::TempDir;
+    use tempfile::TempDir;
     use test_case::test_case;
     use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 
@@ -463,10 +465,10 @@ mod test {
     #[test_case("/a/b/.", "/a/b", 2 ; "test path with leading / and ending with dot segment")]
     #[test_case("/a/.././b", "/b", 0 ; "test path with leading / and mixed and consecutive dot and dotdot segments")]
     #[test_case("/a/b/c/../../d/e/f/g/h/i/../j", "/a/d/e/f/g/h/j", 1 ; "leading collapse followed by shorter one")]
-    fn test_collapse_path(glob: &str, expected: &str, earliest_collapsed_segement: usize) {
+    fn test_collapse_path(glob: &str, expected: &str, earliest_collapsed_segment: usize) {
         let (glob, segment) = collapse_path(glob).unwrap();
         assert_eq!(glob, expected);
-        assert_eq!(segment, earliest_collapsed_segement);
+        assert_eq!(segment, earliest_collapsed_segment);
     }
 
     #[test_case("../a/b" ; "test path starting with ../ segment should return None")]
@@ -531,8 +533,8 @@ mod test {
     }
 
     /// set up a globwalk test in a tempdir, returning the path to the tempdir
-    fn setup() -> tempdir::TempDir {
-        let tmp = tempdir::TempDir::new("globwalk").unwrap();
+    fn setup() -> tempfile::TempDir {
+        let tmp = tempfile::TempDir::with_prefix("globwalk").unwrap();
 
         let directories = ["a/b/c", "a/c", "abc", "axbxcxdxe/xxx", "axbxcxdxexxx", "b"];
 
@@ -1343,12 +1345,12 @@ mod test {
         // TODO: this test needs to be implemented...
     }
 
-    fn setup_files(files: &[&str]) -> tempdir::TempDir {
+    fn setup_files(files: &[&str]) -> tempfile::TempDir {
         setup_files_with_prefix("globwalk", files)
     }
 
-    fn setup_files_with_prefix(prefix: &str, files: &[&str]) -> tempdir::TempDir {
-        let tmp = tempdir::TempDir::new(prefix).unwrap();
+    fn setup_files_with_prefix(prefix: &str, files: &[&str]) -> tempfile::TempDir {
+        let tmp = tempfile::TempDir::with_prefix(prefix).unwrap();
         for file in files {
             let file = file.trim_start_matches('/');
             let path = tmp.path().join(file);
@@ -1493,7 +1495,7 @@ mod test {
     #[test_case("foo/", true, "foo/**" ; "dir slash")]
     #[test_case("f[o0]o", true, "f[o0]o" ; "non-literal")]
     fn test_add_double_star(glob: &str, is_dir: bool, expected: &str) {
-        let tmpdir = TempDir::new("doublestar").unwrap();
+        let tmpdir = TempDir::with_prefix("doublestar").unwrap();
         let base = AbsoluteSystemPath::new(tmpdir.path().to_str().unwrap()).unwrap();
 
         let foo = base.join_component("foo");

@@ -10,6 +10,7 @@ import {
 } from "fs-extra";
 import yaml from "js-yaml";
 import { parse as JSON5Parse } from "json5";
+import { afterAll, afterEach } from "@jest/globals";
 
 interface SetupTextFixtures {
   directory: string;
@@ -28,7 +29,7 @@ export function setupTestFixtures({
   const parentDirectory = path.join(directory, test ? test : randomUUID());
 
   afterEach(async () => {
-    await Promise.all(
+    return Promise.all(
       fixtures.map((fixture) =>
         rm(fixture, {
           retryDelay: 50,
@@ -41,7 +42,7 @@ export function setupTestFixtures({
   });
 
   afterAll(async () => {
-    await rm(parentDirectory, {
+    return rm(parentDirectory, {
       retryDelay: 50,
       maxRetries: 5,
       recursive: true,

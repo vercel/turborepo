@@ -102,71 +102,12 @@ jobs:
       # We only test workspace dependency changes on main, not on PRs to speed up CI
       cargo_on_main: ${{ steps.ci.outputs.diff != '' || (steps.cargo.outputs.diff != '' && github.event_name == 'push' && github.ref == 'refs/heads/main') }}
       turborepo_rust: ${{ steps.ci.outputs.diff != '' || steps.turborepo_rust.outputs.diff != '' }}
-      turborepo_build: ${{ steps.ci.outputs.diff != '' || steps.turborepo_rust.outputs.diff != '' || steps.turborepo_integration.outputs.diff != ''}}
       turborepo_integration: ${{ steps.ci.outputs.diff != '' || steps.turborepo_rust.outputs.diff != ''  || steps.turborepo_integration.outputs.diff != '' }}
       examples: ${{ steps.ci.outputs.diff != '' || steps.examples.outputs.diff != '' || steps.turborepo_version.outputs.diff != '' }}
 
-  build_turborepo:
-    name: Build Turborepo
-    needs: determine_jobs
-    if: needs.determine_jobs.outputs.turborepo_build == 'true'
-    runs-on: ${{ matrix.os.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - name: ubuntu
-            runner:
-              - "self-hosted"
-              - "linux"
-              - "x64"
-              - "metal"
-          - name: macos
-            runner: macos-12
-          - name: windows
-            runner: windows-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-
-      - name: Run sccache-cache
-        uses: mozilla-actions/sccache-action@v0.0.3
-
-      - name: Setup Turborepo Environment
-        uses: ./.github/actions/setup-turborepo-environment
-        with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-          node-version: "18.20.2"
-
-      - name: Install Global Turbo
-        uses: ./.github/actions/install-global-turbo
-
-      # We explicitly unset RUSTC_WRAPPER if it is an empty string as causes build issues
-      - run: |
-          if [ -z "${RUSTC_WRAPPER}" ]; then
-            unset RUSTC_WRAPPER
-          fi
-          TURBO_API= turbo run build --filter=cli --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
-        shell: bash
-        env:
-          SCCACHE_BUCKET: turborepo-sccache
-          SCCACHE_REGION: us-east-2
-          # Only use sccache if we're in the Vercel repo.
-          RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
-          CARGO_INCREMENTAL: 0
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-
-      - name: Run sccache stat for check
-        shell: bash
-        run: ${SCCACHE_PATH} --show-stats
-        if: ${{ !github.event.pull_request.head.repo.fork }}
-
   integration:
     name: Turborepo Integration
-    needs: [determine_jobs, build_turborepo]
+    needs: [determine_jobs]
     if: needs.determine_jobs.outputs.turborepo_integration == 'true'
     runs-on: ${{ matrix.os.runner }}
     timeout-minutes: 45
@@ -175,7 +116,7 @@ jobs:
       matrix:
         os:
           - runner: ubuntu-latest
-          - runner: macos-12
+          - runner: macos-13
           - runner: windows-latest
     steps:
       # On Windows, set autocrlf to input so that when the repo is cloned down
@@ -286,6 +227,14 @@ jobs:
         with:
           command: check licenses
 
+      - name: Run cargo clippy
+        run: |
+          cargo clippy --workspace --features rustls-tls -- --deny clippy::all
+
+      - name: Run ast-grep lints
+        run: |
+          npx --package @ast-grep/cli -- ast-grep scan $(cargo groups list turborepo-libraries | awk '{ print $2 }' | tr '\n' ' ')
+
   rust_check:
     needs: [determine_jobs]
     # We test dependency changes only on main
@@ -311,32 +260,7 @@ jobs:
 
       - name: Run cargo check
         run: |
-          cargo groups check turborepo-libraries --features rustls-tls
-
-  rust_clippy:
-    needs: [rust_check]
-    name: Turborepo rust clippy
-    runs-on:
-      - "self-hosted"
-      - "linux"
-      - "x64"
-      - "metal"
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-
-      - name: Setup Turborepo Environment
-        uses: ./.github/actions/setup-turborepo-environment
-        with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-
-      - name: Run cargo clippy
-        run: |
-          cargo groups clippy turborepo-libraries --features rustls-tls -- --deny clippy::all
-
-      - name: Run ast-grep lints
-        run: |
-          npx --package @ast-grep/cli -- ast-grep scan $(cargo groups list turborepo-libraries | awk '{ print $2 }' | tr '\n' ' ')
+          cargo check --workspace
 
   rust_test:
     needs: [rust_check]
@@ -352,7 +276,7 @@ jobs:
               - "metal"
             nextest: linux
           - name: macos
-            runner: macos-12
+            runner: macos-13
             nextest: mac
           - name: windows
             runner: windows-latest
@@ -375,10 +299,30 @@ jobs:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
           node-version: "18.20.2"
 
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.3
+
       - name: Run tests
         timeout-minutes: 120
+        # We explicitly unset RUSTC_WRAPPER if it is an empty string as causes build issues
         run: |
-          cargo groups test turborepo-libraries
+          if [ -z "${RUSTC_WRAPPER}" ]; then
+            unset RUSTC_WRAPPER
+          fi
+          if [ "$RUNNER_OS" == "Windows" ]; then
+              cargo test --workspace --exclude turborepo-napi
+          else
+              cargo test --workspace
+          fi
+        shell: bash
+        env:
+          SCCACHE_BUCKET: turborepo-sccache
+          SCCACHE_REGION: us-east-2
+          # Only use sccache if we're in the Vercel repo.
+          RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
+          CARGO_INCREMENTAL: 0
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
   summary:
     name: Turborepo Test Summary
@@ -386,12 +330,10 @@ jobs:
     if: always()
     needs:
       - determine_jobs
-      - build_turborepo
       - integration
       - examples
       - rust_lint
       - rust_check
-      - rust_clippy
       - rust_test
     steps:
       - name: Compute info
@@ -411,12 +353,10 @@ jobs:
           }
 
           subjob ${{needs.determine_jobs.result}}
-          subjob ${{needs.build_turborepo.result}}
           subjob ${{needs.integration.result}}
           subjob ${{needs.examples.result}}
           subjob ${{needs.rust_lint.result}}
           subjob ${{needs.rust_check.result}}
-          subjob ${{needs.rust_clippy.result}}
           subjob ${{needs.rust_test.result}}
 
           if [ "$cancelled" = "true" ]; then

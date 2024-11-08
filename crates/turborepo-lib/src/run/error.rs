@@ -57,5 +57,9 @@ pub enum Error {
     #[error(transparent)]
     Daemon(#[from] daemon::DaemonError),
     #[error(transparent)]
+    UI(#[from] turborepo_ui::Error),
+    #[error(transparent)]
     Tui(#[from] tui::Error),
+    #[error("Error reading micro frontends configuration: {0}")]
+    MicroFrontends(#[from] turborepo_micro_frontend::Error),
 }

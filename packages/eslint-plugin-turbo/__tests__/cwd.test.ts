@@ -1,8 +1,9 @@
-import path from "path";
-import JSON5 from "json5";
-import { execSync } from "child_process";
-import { Schema } from "@turbo/types";
+import path from "node:path";
+import { execSync } from "node:child_process";
+import { type Schema } from "@turbo/types";
+import { parse, stringify } from "json5";
 import { setupTestFixtures } from "@turbo/test-utils";
+import { describe, it, expect } from "@jest/globals";
 
 describe("eslint settings check", () => {
   const { useFixture } = setupTestFixtures({
@@ -17,7 +18,7 @@ describe("eslint settings check", () => {
       cwd,
       encoding: "utf8",
     });
-    const configJson = JSON5.parse(configString);
+    const configJson: Record<string, unknown> = parse(configString);
 
     expect(configJson.settings).toEqual({
       turbo: {
@@ -77,7 +78,7 @@ describe("eslint settings check", () => {
         encoding: "utf8",
       }
     );
-    const configJson = JSON5.parse(configString);
+    const configJson: Record<string, unknown> = parse(configString);
 
     expect(configJson.settings).toEqual({
       turbo: {
@@ -144,8 +145,10 @@ describe("eslint cache is busted", () => {
         cwd,
         encoding: "utf8",
       });
-    } catch (error: any) {
-      const outputJson = JSON5.parse(error.stdout);
+    } catch (error: unknown) {
+      const outputJson: Record<string, unknown> = parse(
+        (error as { stdout: string }).stdout
+      );
       expect(outputJson).toMatchObject([
         {
           messages: [
@@ -162,7 +165,7 @@ describe("eslint cache is busted", () => {
     const turboJson = readJson<Schema>("turbo.json");
     if (turboJson && "globalEnv" in turboJson) {
       turboJson.globalEnv = ["CI", "NONEXISTENT"];
-      write("turbo.json", JSON5.stringify(turboJson, null, 2));
+      write("turbo.json", stringify(turboJson, null, 2));
     }
 
     // test that we invalidated the eslint cache
@@ -170,7 +173,7 @@ describe("eslint cache is busted", () => {
       cwd,
       encoding: "utf8",
     });
-    const outputJson = JSON5.parse(output);
+    const outputJson: Record<string, unknown> = parse(output);
     expect(outputJson).toMatchObject([{ errorCount: 0 }]);
   });
 });

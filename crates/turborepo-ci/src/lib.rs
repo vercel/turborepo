@@ -91,6 +91,10 @@ impl Vendor {
         Self::infer().map(|v| v.name)
     }
 
+    pub fn is(name: &str) -> bool {
+        Self::infer().map_or(false, |v| v.name == name)
+    }
+
     pub fn get_constant() -> Option<&'static str> {
         Self::infer().map(|v| v.constant)
     }

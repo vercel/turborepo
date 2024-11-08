@@ -1,4 +1,5 @@
 import { setupTestFixtures } from "@turbo/test-utils";
+import { describe, it, expect } from "@jest/globals";
 import { transformer } from "../src/transforms/stabilize-env-mode";
 
 describe("stabilize-env-mode", () => {
@@ -34,8 +35,8 @@ describe("stabilize-env-mode", () => {
 
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toMatchInlineSnapshot(`
-      Object {
-        "turbo.json": Object {
+      {
+        "turbo.json": {
           "action": "modified",
           "additions": 2,
           "deletions": 4,
@@ -76,8 +77,8 @@ describe("stabilize-env-mode", () => {
 
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toMatchInlineSnapshot(`
-      Object {
-        "turbo.json": Object {
+      {
+        "turbo.json": {
           "action": "modified",
           "additions": 2,
           "deletions": 6,
@@ -110,8 +111,8 @@ describe("stabilize-env-mode", () => {
 
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toMatchInlineSnapshot(`
-      Object {
-        "turbo.json": Object {
+      {
+        "turbo.json": {
           "action": "modified",
           "additions": 2,
           "deletions": 2,
@@ -141,8 +142,8 @@ describe("stabilize-env-mode", () => {
 
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toMatchInlineSnapshot(`
-      Object {
-        "turbo.json": Object {
+      {
+        "turbo.json": {
           "action": "unchanged",
           "additions": 0,
           "deletions": 0,
@@ -175,8 +176,8 @@ describe("stabilize-env-mode", () => {
 
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toMatchInlineSnapshot(`
-      Object {
-        "turbo.json": Object {
+      {
+        "turbo.json": {
           "action": "unchanged",
           "additions": 0,
           "deletions": 0,
@@ -209,8 +210,8 @@ describe("stabilize-env-mode", () => {
 
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toMatchInlineSnapshot(`
-      Object {
-        "turbo.json": Object {
+      {
+        "turbo.json": {
           "action": "modified",
           "additions": 2,
           "deletions": 2,
@@ -270,18 +271,18 @@ describe("stabilize-env-mode", () => {
 
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toMatchInlineSnapshot(`
-      Object {
-        "apps/docs/turbo.json": Object {
+      {
+        "apps/docs/turbo.json": {
           "action": "modified",
           "additions": 1,
           "deletions": 1,
         },
-        "apps/website/turbo.json": Object {
+        "apps/website/turbo.json": {
           "action": "modified",
           "additions": 1,
           "deletions": 2,
         },
-        "turbo.json": Object {
+        "turbo.json": {
           "action": "modified",
           "additions": 2,
           "deletions": 4,

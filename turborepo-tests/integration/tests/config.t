@@ -14,8 +14,13 @@ Run test run
     "uploadTimeout": 60,
     "enabled": true,
     "spacesId": null,
-    "ui": false,
-    "packageManager": "npm"
+    "ui": "stream",
+    "packageManager": "npm",
+    "daemon": null,
+    "envMode": "strict",
+    "scmBase": null,
+    "scmHead": null,
+    "cacheDir": ".turbo[\\/]+cache" (re)
   }
 
 Run test run with api overloaded
@@ -56,3 +61,54 @@ Run build with invalid env var
   
   [1]
 
+Confirm that the daemon is not configured
+  $ ${TURBO} config | jq .daemon
+  null
+
+Add env var: `TURBO_DAEMON=true`
+  $ TURBO_DAEMON=true ${TURBO} config | jq .daemon
+  true
+
+Add env var: `TURBO_DAEMON=false`
+  $ TURBO_DAEMON=false ${TURBO} config | jq .daemon
+  false
+
+Add flag: `--daemon`
+  $ ${TURBO} --daemon config | jq .daemon
+  true
+
+Add flag: `--no-daemon`
+  $ ${TURBO} --no-daemon config | jq .daemon
+  false
+
+Confirm that the envMode is `strict` by default
+  $ ${TURBO} config | jq .envMode
+  "strict"
+
+Add env var: `TURBO_ENV_MODE=loose`
+  $ TURBO_ENV_MODE=loose ${TURBO} config | jq .envMode
+  "loose"
+
+Add flag: `--env-mode=loose`
+  $ ${TURBO} --env-mode=loose config | jq .envMode
+  "loose"
+
+Add env var `TURBO_SCM_BASE=HEAD`
+  $ TURBO_SCM_BASE="HEAD" ${TURBO} config | jq .scmBase
+  "HEAD"
+
+Add env var `TURBO_SCM_HEAD=my-branch`
+  $ TURBO_SCM_HEAD="my-branch" ${TURBO} config | jq .scmHead
+  "my-branch"
+
+No cacheDir by default
+  $ ${TURBO} config | jq -r .cacheDir
+  .turbo[\\/]cache (re)
+
+Add env var: `TURBO_CACHE_DIR`
+  $ TURBO_CACHE_DIR=FifthDimension/Nebulo9 ${TURBO} config | jq -r .cacheDir
+  FifthDimension[\\/]Nebulo9 (re)
+
+Add flag: `--cache-dir`
+  $ ${TURBO} --cache-dir FifthDimension/Nebulo9 config | jq -r .cacheDir
+  FifthDimension[\\/]Nebulo9 (re)

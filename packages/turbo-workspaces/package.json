@@ -1,16 +1,16 @@
 {
   "name": "@turbo/workspaces",
-  "version": "2.0.9",
+  "version": "2.2.4-canary.8",
   "description": "Tools for working with package managers",
   "homepage": "https://turbo.build/repo",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/vercel/turbo",
+    "url": "https://github.com/vercel/turborepo",
     "directory": "packages/turbo-workspaces"
   },
   "bugs": {
-    "url": "https://github.com/vercel/turbo/issues"
+    "url": "https://github.com/vercel/turborepo/issues"
   },
   "bin": "dist/cli.js",
   "module": "dist/index.mjs",
@@ -39,6 +39,7 @@
     "update-check": "^1.5.4"
   },
   "devDependencies": {
+    "@jest/globals": "^29.7.0",
     "@turbo/eslint-config": "workspace:*",
     "@turbo/test-utils": "workspace:*",
     "@turbo/tsconfig": "workspace:*",
@@ -46,16 +47,15 @@
     "@types/fs-extra": "^9.0.13",
     "@types/gradient-string": "^1.1.2",
     "@types/inquirer": "^7.3.1",
-    "@types/jest": "^27.4.0",
     "@types/js-yaml": "^4.0.5",
     "@types/node": "^18.17.2",
     "@types/rimraf": "^3.0.2",
     "@types/semver": "7.5.8",
-    "jest": "^27.4.3",
+    "jest": "^29.7.0",
     "strip-ansi": "^6.0.1",
-    "ts-jest": "^27.1.1",
+    "ts-jest": "^29.2.5",
     "tsup": "^5.10.3",
-    "typescript": "5.3.3"
+    "typescript": "5.5.4"
   },
   "files": [
     "dist"

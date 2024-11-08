@@ -31,6 +31,9 @@ Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
 This repo is configured to be built with Docker, and Docker compose. To build all apps in this repo:
 
 ```
+# Install dependencies
+yarn install
+
 # Create a network, which allows containers to communicate
 # with each other, by using their container name as a hostname
 docker network create app_network

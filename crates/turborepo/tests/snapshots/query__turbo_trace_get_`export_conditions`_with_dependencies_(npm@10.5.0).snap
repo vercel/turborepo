@@ -1,0 +1,20 @@
+---
+source: crates/turborepo/tests/query.rs
+expression: query_output
+---
+{
+  "data": {
+    "file": {
+      "path": "export_conditions.js",
+      "dependencies": {
+        "files": {
+          "items": [
+            {
+              "path": "node_modules/swr/dist/core/index.mjs"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

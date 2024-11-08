@@ -1,0 +1,32 @@
+{
+  "tasks": {
+    "build0": {
+      "dependsOn": [
+        "^build0",
+        "prepare"
+      ]
+    },
+    "test": {
+      "dependsOn": [
+        "^build0",
+        "prepare"
+      ]
+    },
+    "prepare": {},
+    "side-quest": {
+      "dependsOn": [
+        "prepare"
+      ]
+    },
+    "build1": {
+      "dependsOn": [
+        "^build1"
+      ]
+    },
+    "build2": {
+      "dependsOn": [
+        "app-a#custom"
+      ]
+    }
+  }
+}
