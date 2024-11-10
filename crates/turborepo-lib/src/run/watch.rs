@@ -217,13 +217,6 @@ impl WatchClient {
             biased;
             _ = signal_subscriber.listen() => {
                 tracing::info!("shutting down");
-                if let Some(RunHandle { stopper, run_task }) = self.persistent_tasks_handle.take() {
-                    // Shut down the tasks for the run
-                    stopper.stop().await;
-                    // Run should exit shortly after we stop all child tasks, wait for it to finish
-                    // to ensure all messages are flushed.
-                    let _ = run_task.await;
-                }
                 Err(Error::SignalInterrupt)
             }
             result = event_fut => {
@@ -265,6 +258,20 @@ impl WatchClient {
         }
 
         Ok(())
+    }
+
+    /// Shut down any resources that run as part of watch.
+    pub async fn shutdown(&mut self) {
+        if let Some(sender) = &self.ui_sender {
+            sender.stop().await;
+        }
+        if let Some(RunHandle { stopper, run_task }) = self.persistent_tasks_handle.take() {
+            // Shut down the tasks for the run
+            stopper.stop().await;
+            // Run should exit shortly after we stop all child tasks, wait for it to finish
+            // to ensure all messages are flushed.
+            let _ = run_task.await;
+        }
     }
 
     /// Executes a run with the given changed packages. Splits the run into two
