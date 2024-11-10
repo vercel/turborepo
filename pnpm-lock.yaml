@@ -812,8 +812,8 @@ importers:
         specifier: ^3.0.2
         version: 3.0.2
       semver:
-        specifier: ^7.3.5
-        version: 7.5.0
+        specifier: 7.6.2
+        version: 7.6.2
       update-check:
         specifier: ^1.5.4
         version: 1.5.4
@@ -852,8 +852,8 @@ importers:
         specifier: ^3.0.2
         version: 3.0.2
       '@types/semver':
-        specifier: ^7.3.9
-        version: 7.3.12
+        specifier: 7.5.8
+        version: 7.5.8
       jest:
         specifier: ^29.7.0
         version: 29.7.0(@types/node@18.17.4)
@@ -3130,8 +3130,8 @@ packages:
     resolution: {integrity: sha512-WwA1MW0++RfXmCr12xeYOOC5baSC9mSb0ZqCquFzKhcoF4TvHu5MKOuXsncgZcpVFhB1pXd5hZmM0ryAoCp12A==}
     dev: true
 
-  /@types/semver@7.5.1:
-    resolution: {integrity: sha512-cJRQXpObxfNKkFAZbJl2yjWtJCqELQIdShsogr1d2MilP8dKD9TE/nEKHkJgUNHdGKCQaf9HbIynuV2csLGVLg==}
+  /@types/semver@7.5.8:
+    resolution: {integrity: sha512-I8EUhyrgfLrcTkzV3TSsGyl1tSuPrEDzr0yd5m90UgNxQkyDXULk3b6MlQqTCpZpNtWe1K0hzclnZkTcLBe2UQ==}
     dev: true
 
   /@types/stack-utils@2.0.1:
@@ -3205,7 +3205,7 @@ packages:
       graphemer: 1.4.0
       ignore: 5.3.0
       natural-compare: 1.4.0
-      semver: 7.5.4
+      semver: 7.6.2
       ts-api-utils: 1.0.2(typescript@5.5.4)
       typescript: 5.5.4
     transitivePeerDependencies:
@@ -3293,7 +3293,7 @@ packages:
       debug: 4.3.4
       globby: 11.1.0
       is-glob: 4.0.3
-      semver: 7.5.4
+      semver: 7.6.2
       tsutils: 3.21.0(typescript@5.5.4)
       typescript: 5.5.4
     transitivePeerDependencies:
@@ -3315,7 +3315,7 @@ packages:
       globby: 11.1.0
       is-glob: 4.0.3
       minimatch: 9.0.3
-      semver: 7.5.4
+      semver: 7.6.2
       ts-api-utils: 1.0.2(typescript@5.5.4)
       typescript: 5.5.4
     transitivePeerDependencies:
@@ -3330,13 +3330,13 @@ packages:
     dependencies:
       '@eslint-community/eslint-utils': 4.4.0(eslint@8.55.0)
       '@types/json-schema': 7.0.12
-      '@types/semver': 7.5.1
+      '@types/semver': 7.5.8
       '@typescript-eslint/scope-manager': 5.62.0
       '@typescript-eslint/types': 5.62.0
       '@typescript-eslint/typescript-estree': 5.62.0(typescript@5.5.4)
       eslint: 8.55.0
       eslint-scope: 5.1.1
-      semver: 7.5.4
+      semver: 7.6.2
     transitivePeerDependencies:
       - supports-color
       - typescript
@@ -3350,12 +3350,12 @@ packages:
     dependencies:
       '@eslint-community/eslint-utils': 4.4.0(eslint@8.55.0)
       '@types/json-schema': 7.0.12
-      '@types/semver': 7.5.1
+      '@types/semver': 7.5.8
       '@typescript-eslint/scope-manager': 6.18.1
       '@typescript-eslint/types': 6.18.1
       '@typescript-eslint/typescript-estree': 6.18.1(typescript@5.5.4)
       eslint: 8.55.0
-      semver: 7.5.4
+      semver: 7.6.2
     transitivePeerDependencies:
       - supports-color
       - typescript
@@ -3977,7 +3977,7 @@ packages:
   /builtins@5.0.1:
     resolution: {integrity: sha512-qwVpFEHNfhYJIzNRBvd2C1kyo6jz3ZSMPyyuR47OPdiKWlbYnZNyDWuyR175qDnAJLiCo5fBBqPb3RiXgWlkOQ==}
     dependencies:
-      semver: 7.5.4
+      semver: 7.6.2
     dev: false
 
   /bundle-name@3.0.0:
@@ -5864,7 +5864,7 @@ packages:
       read-pkg-up: 7.0.1
       regexp-tree: 0.1.27
       regjsparser: 0.10.0
-      semver: 7.5.4
+      semver: 7.6.2
       strip-indent: 3.0.0
     dev: true
 
@@ -7523,7 +7523,7 @@ packages:
       '@babel/parser': 7.25.6
       '@istanbuljs/schema': 0.1.3
       istanbul-lib-coverage: 3.2.0
-      semver: 7.5.4
+      semver: 7.6.2
     transitivePeerDependencies:
       - supports-color
     dev: true
@@ -8059,7 +8059,7 @@ packages:
       jest-util: 29.7.0
       natural-compare: 1.4.0
       pretty-format: 29.7.0
-      semver: 7.5.4
+      semver: 7.6.2
     transitivePeerDependencies:
       - supports-color
     dev: true
@@ -10190,6 +10190,12 @@ packages:
     hasBin: true
     dependencies:
       lru-cache: 6.0.0
+    dev: false
+
+  /semver@7.6.2:
+    resolution: {integrity: sha512-FNAIBWCx9qcRhoHcgcJ0gvU7SN1lYU2ZXuSfl04bSC5OpvDHFyJCjdNHomPXxjQlCBU67YW64PzY7/VIEH7F2w==}
+    engines: {node: '>=10'}
+    hasBin: true
 
   /semver@7.6.3:
     resolution: {integrity: sha512-oVekP1cKtI+CTDvHWYFUcMtsK/00wmAEfyqKfNdARm8u1wNVhSgaX7A8d4UuIlUI5e84iEwOhs7ZPYRmzU9U6A==}
@@ -11825,7 +11831,7 @@ packages:
     engines: {vscode: ^1.82.0}
     dependencies:
       minimatch: 5.1.0
-      semver: 7.5.4
+      semver: 7.6.2
       vscode-languageserver-protocol: 3.17.5
     dev: false
 
