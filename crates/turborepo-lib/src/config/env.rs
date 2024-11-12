@@ -87,11 +87,16 @@ impl ResolvedConfigurationOptions for EnvVars {
 
         let run_summary = self.truthy_value("run_summary").flatten();
         let allow_no_turbo_json = self.truthy_value("allow_no_turbo_json").flatten();
-        let cache: Option<turborepo_cache::CacheConfig> = self
+        let mut cache: Option<turborepo_cache::CacheConfig> = self
             .output_map
             .get("cache")
             .map(|c| c.parse())
             .transpose()?;
+
+        // If TURBO_FORCE is set it wins out over TURBO_CACHE
+        if force.is_some_and(|t| t) {
+            cache = None;
+        }
 
         if remote_only.is_some_and(|t| t) {
             if let Some(cache) = cache {
