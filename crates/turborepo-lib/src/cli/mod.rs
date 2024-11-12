@@ -413,6 +413,27 @@ impl Args {
             clap_args.test_run = true;
         }
 
+        if let Some(run_args) = clap_args.run_args() {
+            if run_args.no_cache {
+                warn!(
+                    "--no-cache is deprecated and will be removed in a future major version. Use \
+                     --cache=local:r,remote:r"
+                );
+            }
+            if run_args.remote_only.is_some() {
+                warn!(
+                    "--remote-only is deprecated and will be removed in a future major version. \
+                     Use --cache=remote:rw"
+                );
+            }
+            if run_args.remote_cache_read_only.is_some() {
+                warn!(
+                    "--remote-cache-read-only is deprecated and will be removed in a future major \
+                     version. Use --cache=remote:r"
+                );
+            }
+        }
+
         clap_args
     }
 
