@@ -118,6 +118,20 @@ impl CacheActions {
     pub fn should_use(&self) -> bool {
         self.read || self.write
     }
+
+    pub fn disabled() -> Self {
+        Self {
+            read: false,
+            write: false,
+        }
+    }
+
+    pub fn enabled() -> Self {
+        Self {
+            read: true,
+            write: true,
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Default)]
@@ -129,6 +143,23 @@ pub struct CacheConfig {
 impl CacheConfig {
     pub fn skip_writes(&self) -> bool {
         !self.local.write && !self.remote.write
+    }
+
+    pub fn remote_only() -> Self {
+        Self {
+            local: CacheActions::disabled(),
+            remote: CacheActions::enabled(),
+        }
+    }
+
+    pub fn remote_read_only() -> Self {
+        Self {
+            local: CacheActions::disabled(),
+            remote: CacheActions {
+                read: true,
+                write: false,
+            },
+        }
     }
 }
 
