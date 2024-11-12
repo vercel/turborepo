@@ -124,7 +124,13 @@ Splitting up **dependencies** and **source files** in this way lets us **only ru
 
 ### Example
 
-Our detailed [`with-docker` example](https://github.com/vercel/turbo/tree/main/examples/with-docker) goes into depth on how to use `prune` to its full potential. Here's the Dockerfile, copied over for convenience.
+Our detailed [`with-docker` example](https://github.com/vercel/turborepo/tree/main/examples/with-docker) goes into depth on how to use `prune` to its full potential. Here's the Dockerfile, copied over for convenience.
+
+Build the Dockerfile from the root of your monorepo:
+
+```bash title="Terminal"
+docker build -f apps/web/Dockerfile .
+```
 
 <Callout type="info">
   This Dockerfile is written for a [Next.js](https://nextjs.org/) app that is
@@ -156,9 +162,7 @@ RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
 # First install the dependencies (as they change less often)
-COPY .gitignore .gitignore
 COPY --from=builder /app/out/json/ .
-COPY --from=builder /app/out/yarn.lock ./yarn.lock
 RUN yarn install
 
 # Build the project
@@ -172,9 +176,6 @@ WORKDIR /app
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 USER nextjs
-
-COPY --from=installer /app/apps/web/next.config.js .
-COPY --from=installer /app/apps/web/package.json .
 
 # Automatically leverage output traces to reduce image size
 # https://nextjs.org/docs/advanced-features/output-file-tracing

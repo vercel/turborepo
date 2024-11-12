@@ -5,7 +5,7 @@ description: Learn how to use TypeScript in a monorepo.
 
 import { Callout } from '#/components/callout';
 import { File, Folder, Files } from '#/components/files';
-import { PackageManagerTabs, Tab } from '#/components/tabs';
+import { PackageManagerTabs, Tabs, Tab } from '#/components/tabs';
 import { LinkToDocumentation } from '#/components/link-to-documentation';
 
 TypeScript is an excellent tool in monorepos, allowing teams to safely add types to their JavaScript code. While there is some complexity to getting set up, this guide will walk you through the important parts of a TypeScript setup for most use cases.
@@ -56,9 +56,9 @@ pnpm dlx create-turbo@latest
 
 ### Use a base `tsconfig` file
 
-Inside `packages/tsconfig`, we have a few `json` files which represent different ways you might want to configure TypeScript in various packages. The `base.json` file is extended by every other `package.json` in the workspace and looks like this:
+Inside `packages/typescript-config`, you have a few `json` files which represent different ways you might want to configure TypeScript in various packages. The `base.json` file is extended by every other `tsconfig.json` in the workspace and looks like this:
 
-```json title="./packages/tsconfig/base.json"
+```json title="./packages/typescript-config/base.json"
 "compilerOptions": {
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -69,14 +69,11 @@ Inside `packages/tsconfig`, we have a few `json` files which represent different
     "isolatedModules": true,
     "strict": true,
     "noUncheckedIndexedAccess": true,
-    "module": "NodeNext",
-  }
+    "module": "NodeNext"
 }
 ```
 
-<LinkToDocumentation href="https://www.typescriptlang.org/tsconfig">
-  `tsconfig` options reference
-</LinkToDocumentation>
+<LinkToDocumentation href="https://www.typescriptlang.org/tsconfig">`tsconfig` options reference</LinkToDocumentation>
 
 ### Creating the rest of the package
 
@@ -176,7 +173,7 @@ Setting up `exports` this way has several advantages:
 
 - Using the `types` field allows `tsserver` to use the code in `src` as the source of truth for your code's types. Your editor will always be up-to-date with the latest interfaces from your code.
 - You can quickly add new entrypoints to your package without creating [dangerous barrel files](https://vercel.com/blog/how-we-optimized-package-imports-in-next-js#what's-the-problem-with-barrel-files).
-- You'll receive auto-importing suggestions for your imports across package boundaries in your editor. For more information about why you may not want to wildcard the entrypoints, see the [limitations section](/repo/docs/guides/tools/typescript#package-entrypoint-wildcards).
+- You'll receive auto-importing suggestions for your imports across package boundaries in your editor. For more information about why you may not want to wildcard the entrypoints, see the [limitations section](#package-entrypoint-wildcards).
 
 <Callout type="warn">
   If you're publishing the package, you cannot use references to source code in
@@ -208,7 +205,8 @@ Then, create a `check-types` task in `turbo.json`. From the [Configuring tasks g
     },
     "check-types": {
       "dependsOn": ["topo"]
-  },
+    }
+  }
 }
 ```
 
@@ -220,13 +218,92 @@ Then, run your task using `turbo check-types`.
 
 For [Internal Packages](/repo/docs/core-concepts/internal-packages), we recommend that you use `tsc` to compile your TypeScript libraries whenever possible. While you can use a bundler, it's not necessary and adds extra complexity to your build process. Additionally, bundling a library can mangle the code before it makes it to your applications' bundlers, causing hard to debug issues.
 
+### Enable go-to-definition across package boundaries
+
+"Go-to-definition" is an editor feature for quickly navigating to the original declaration or definition of a symbol (like a variable or function) with a click or hotkey. Once TypeScript is configured correctly, you can navigate across [Internal Packages](/repo/docs/core-concepts/internal-packages) with ease.
+
+#### Just-in-Time Packages
+
+Exports from [Just-in-Time Packages](/repo/docs/core-concepts/internal-packages#just-in-time-packages) will automatically bring you to the original TypeScript source code as long as you aren't using [entrypoint wildcards](#package-entrypoint-wildcards). Go-to-definition will work as expected.
+
+#### Compiled Packages
+
+Exports from [Compiled Packages](/repo/docs/core-concepts/internal-packages#compiled-packages) require the use of [`declaration`](https://www.typescriptlang.org/tsconfig/#declaration) and [`declarationMap`](https://www.typescriptlang.org/tsconfig/#declarationMap) configurations for go-to-definition to work. After you've enabled these two configurations for the package, compile the package with `tsc`, and open the output directory to find declaration files and source maps.
+
+<Files>
+  <Folder defaultOpen name="packages">
+    <Folder defaultOpen name="ui">
+      <Folder defaultOpen name="dist">
+        <File name="button.js" />
+        <File name="button.d.ts" green />
+        <File name="button.d.ts.map" green />
+      </Folder>
+    </Folder>
+  </Folder>
+</Files>
+
+With these two files in place, your editor will now navigate to the original source code.
+
 ### Use Node.js subpath imports instead of TypeScript compiler `paths`
 
-It's possible to create absolute imports in your packages using [the TypeScript compiler's `paths` option](https://www.typescriptlang.org/tsconfig#paths). However, [as of TypeScript 5.4](https://devblogs.microsoft.com/typescript/announcing-typescript-5-4/#auto-import-support-for-subpath-imports), you can use [Node.js subpath imports](https://nodejs.org/api/packages.html#imports) instead.
+It's possible to create absolute imports in your packages using [the TypeScript compiler's `paths` option](https://www.typescriptlang.org/tsconfig#paths), but these paths can cause failed compilation when using [Just-in-Time Packages](https://turbo.build/repo/docs/core-concepts/internal-packages#just-in-time-packages). [As of TypeScript 5.4](https://devblogs.microsoft.com/typescript/announcing-typescript-5-4/#auto-import-support-for-subpath-imports), you can use [Node.js subpath imports](https://nodejs.org/api/packages.html#imports) instead for a more robust solution.
 
-Additionally, Node.js subpath imports are usable in [Just-in-Time Packages](/repo/docs/core-concepts/internal-packages#just-in-time-packages) while TypeScript's `compilerOptions#paths` are not.
+#### Just-in-Time Packages
 
-This strategy brings your Node.js and TypeScript configurations closer together, making your project's configuration simpler.
+In [Just-in-Time packages](https://turbo.build/repo/docs/core-concepts/internal-packages#just-in-time-packages), `imports` must target the source code in the package, since build outputs like `dist` won't be created.
+
+<Tabs storageKey="ts-imports-jit" items={["package.json", "Source code"]}>
+  <Tab value="package.json">
+```json title="./packages/ui/package.json"
+{
+  "imports": {
+    "#*": "./src/*"
+  }
+}
+```
+</Tab>
+<Tab value="Source code">
+```tsx title="./packages/ui/button.tsx"
+import { MY_STRING } from "#utils.ts" // Uses .ts extension // [!code highlight]
+
+export const Button = () => {
+  return (
+    <button>{MY_STRING}</button>
+  )
+}
+```
+</Tab>
+
+</Tabs>
+
+#### Compiled Packages
+
+In [Compiled packages](https://turbo.build/repo/docs/core-concepts/internal-packages#compiled-packages), `imports` target the built outputs for the package.
+
+<Tabs storageKey="ts-imports-compiled" items={["package.json", "Source code"]}>
+  <Tab value="package.json">
+```json title="./packages/ui/package.json"
+{
+  "imports": {
+    "#*": "./dist/*"
+  }
+}
+```
+</Tab>
+
+  <Tab value="Source code">
+
+```tsx title="./packages/ui/button.tsx"
+import { MY_STRING } from "#utils.js"; // Uses .js extension // [!code highlight]
+
+export const Button = () => {
+  return <button>{MY_STRING}</button>;
+};
+```
+
+</Tab>
+
+</Tabs>
 
 ### You likely don't need a `tsconfig.json` file in the root of your project
 
@@ -244,7 +321,7 @@ We don't recommend using TypeScript Project References as they introduce both an
 
 ### Your editor won't use a package's TypeScript version
 
-`tsserver` is not able to use different Typescript versions for different packages in your code editor. Instead, it will discover a specific version and use that everywhere.
+`tsserver` is not able to use different TypeScript versions for different packages in your code editor. Instead, it will discover a specific version and use that everywhere.
 
 This can result in differences between the linting errors that show in your editor and when you run `tsc` scripts to check types. If this is an issue for you, consider [keeping the TypeScript dependency on the same version](/repo/docs/crafting-your-repository/managing-dependencies#keeping-dependencies-on-the-same-version).
 

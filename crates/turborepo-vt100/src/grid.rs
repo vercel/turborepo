@@ -13,6 +13,18 @@ pub struct Grid {
     scrollback: std::collections::VecDeque<crate::row::Row>,
     scrollback_len: usize,
     scrollback_offset: usize,
+    selection: Option<Selection>,
+}
+
+/// Represents a selection that starts at start (inclusive) and ends at
+/// end (column-wise exclusive).
+///
+/// Start position is not required to be less than the end position, if that ordering is desired
+/// use `.ordered()` to ensure that start is before end.
+#[derive(Clone, Debug, Copy)]
+pub struct Selection {
+    pub start: AbsPos,
+    pub end: AbsPos,
 }
 
 impl Grid {
@@ -29,6 +41,7 @@ impl Grid {
             scrollback: std::collections::VecDeque::with_capacity(0),
             scrollback_len,
             scrollback_offset: 0,
+            selection: None,
         }
     }
 
@@ -137,7 +150,8 @@ impl Grid {
         let rows_len = self.rows.len();
         self.scrollback
             .iter()
-            .skip(scrollback_len - self.scrollback_offset)
+            // Saturating sub to avoid underflow if user passes a scrollback that's too large
+            .skip(scrollback_len.saturating_sub(self.scrollback_offset))
             // when scrollback_offset > rows_len (e.g. rows = 3,
             // scrollback_len = 10, offset = 9) the skip(10 - 9)
             // will take 9 rows instead of 3. we need to set
@@ -158,6 +172,12 @@ impl Grid {
 
     pub fn all_rows(&self) -> impl Iterator<Item = &crate::row::Row> {
         self.scrollback.iter().chain(self.rows.iter())
+    }
+
+    pub fn all_rows_mut(
+        &mut self,
+    ) -> impl Iterator<Item = &mut crate::row::Row> {
+        self.scrollback.iter_mut().chain(self.rows.iter_mut())
     }
 
     pub(crate) fn all_row(&self, row: u16) -> Option<&crate::row::Row> {
@@ -221,6 +241,113 @@ impl Grid {
 
     pub fn set_scrollback(&mut self, rows: usize) {
         self.scrollback_offset = rows.min(self.scrollback.len());
+    }
+
+    pub fn clear_selection(&mut self) {
+        // go through and make sure all selected cells are toggled deselected
+        if let Some(selected_cells) = self.selection_cells() {
+            for cell in selected_cells {
+                debug_assert!(
+                    cell.selected(),
+                    "selected cell should be selected"
+                );
+                cell.select(false);
+            }
+        };
+        self.selection = None;
+    }
+
+    pub fn set_selection(
+        &mut self,
+        start_row: u16,
+        start_col: u16,
+        end_row: u16,
+        end_col: u16,
+    ) {
+        self.clear_selection();
+        let start = self.translate_pos(start_row, start_col);
+        let end = self.translate_pos(end_row, end_col);
+        self.selection = Some(Selection { start, end });
+        if let Some(selected_cells) = self.selection_cells() {
+            for cell in selected_cells {
+                debug_assert!(
+                    !cell.selected(),
+                    "cell shouldn't be selected at start"
+                );
+                cell.select(true);
+            }
+        };
+    }
+
+    pub fn update_selection(&mut self, row: u16, col: u16) {
+        let pos = self.translate_pos(row, col);
+        // Copy out current selection
+        let old_selection = self.selection;
+        // Unselect current selection
+        self.clear_selection();
+
+        // Update selection with new endpoint
+        let mut selection =
+            old_selection.unwrap_or_else(|| Selection::new(pos));
+        selection.update(pos);
+        self.selection = Some(selection);
+        // Mark cells in new selection as selected
+        if let Some(selected_cells) = self.selection_cells() {
+            for cell in selected_cells {
+                debug_assert!(
+                    !cell.selected(),
+                    "cell shouldn't be selected at start"
+                );
+                cell.select(true);
+            }
+        };
+    }
+
+    fn translate_pos(&self, row: u16, col: u16) -> AbsPos {
+        let Size { rows, cols } = self.size();
+        let (row, col) = (row.clamp(0, rows), col.clamp(0, cols));
+        // Add current scrollback length to make the row position absolute
+        AbsPos {
+            row: self.scrollback.len().saturating_sub(self.scrollback_offset)
+                + usize::from(row),
+            col,
+        }
+    }
+
+    fn selection_cells(
+        &mut self,
+    ) -> Option<impl Iterator<Item = &mut crate::Cell> + '_> {
+        let Selection { start, end } = self.selection()?;
+        let cols = self.size.cols;
+        Some(
+            self.all_rows_mut()
+                .enumerate()
+                .skip(start.row)
+                .take(end.row - start.row + 1)
+                .flat_map(move |(row_index, row)| {
+                    debug_assert!(
+                        start.row <= row_index && row_index <= end.row,
+                        "only rows in selection should be returned"
+                    );
+                    let (cells_to_skip, cells_to_take) =
+                        if row_index == start.row && row_index == end.row {
+                            (start.col, end.col - start.col + 1)
+                        } else if row_index == start.row {
+                            (start.col, cols)
+                        } else if row_index == end.row {
+                            (0, end.col)
+                        } else {
+                            (0, cols)
+                        };
+                    row.cells_mut()
+                        .skip(usize::from(cells_to_skip))
+                        .take(usize::from(cells_to_take))
+                }),
+        )
+    }
+
+    pub fn selection(&self) -> Option<Selection> {
+        self.selection.map(|s| s.ordered())
     }
 
     pub fn write_contents(&self, contents: &mut String) {
@@ -778,8 +905,44 @@ pub struct Size {
     pub cols: u16,
 }
 
-#[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq, PartialOrd, Ord)]
 pub struct Pos {
     pub row: u16,
     pub col: u16,
+}
+
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq, PartialOrd, Ord)]
+pub struct AbsPos {
+    pub row: usize,
+    pub col: u16,
+}
+
+impl Selection {
+    /// Create a new selection that starts and ends at pos
+    pub fn new(pos: AbsPos) -> Self {
+        Self {
+            start: pos,
+            end: pos,
+        }
+    }
+
+    /// Updates the end of the selection
+    pub fn update(&mut self, pos: AbsPos) {
+        self.end = pos;
+    }
+
+    /// Returns a selection where start is before after
+    pub fn ordered(&self) -> Self {
+        let Self { start, end } = *self;
+        let (start, end) = match start.row.cmp(&end.row) {
+            // Keep
+            std::cmp::Ordering::Less => (start, end),
+            std::cmp::Ordering::Equal if start.col < end.col => (start, end),
+            // Flip
+            std::cmp::Ordering::Equal | std::cmp::Ordering::Greater => {
+                (end, start)
+            }
+        };
+        Self { start, end }
+    }
 }

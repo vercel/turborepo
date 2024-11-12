@@ -124,7 +124,7 @@ Create a file called `.circleci/config.yml` in your repository with the followin
           - image: cimg/node:lts
         steps:
           - checkout
-          - node/install-packages:
+          - node/install-packages
           - run:
             command: npm i -g pnpm
             environment:

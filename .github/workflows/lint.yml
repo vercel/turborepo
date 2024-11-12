@@ -116,15 +116,9 @@ jobs:
         uses: ./.github/actions/install-global-turbo
 
       - name: Lint
-        # Filters some packages out, but not sure why
+        # Manually set TURBO_API to an empty string to override Hetzner env
         run: |
-          turbo run lint \
-          --filter=!@vercel/devlow-bench \
-          --filter=!@vercel/experimental-nft-next-plugin \
-          --filter=!@vercel/experimental-nft-next-plugin \
-          --filter=!turbopack-bump-action \
-          --filter=!next-integration-stat \
-          --env-mode=strict
+          TURBO_API= turbo run lint --env-mode=strict
 
   cleanup:
     name: Cleanup

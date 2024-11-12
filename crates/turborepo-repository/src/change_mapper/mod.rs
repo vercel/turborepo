@@ -1,15 +1,20 @@
 //! Maps changed files to changed packages in a repository.
 //! Used for both `--filter` and for isolated builds.
 
-use std::collections::HashSet;
+use std::{
+    collections::{HashMap, HashSet},
+    hash::Hash,
+};
 
 pub use package::{
-    DefaultPackageChangeMapper, GlobalDepsPackageChangeMapper, PackageChangeMapper, PackageMapping,
+    DefaultPackageChangeMapper, Error, GlobalDepsPackageChangeMapper, PackageChangeMapper,
+    PackageMapping,
 };
+use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 use wax::Program;
 
-use crate::package_graph::{ChangedPackagesError, PackageGraph, WorkspacePackage};
+use crate::package_graph::{ChangedPackagesError, PackageGraph, PackageName, WorkspacePackage};
 
 mod package;
 
@@ -22,10 +27,63 @@ pub enum LockfileChange {
     WithContent(Vec<u8>),
 }
 
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+pub enum PackageInclusionReason {
+    /// All the packages are invalidated
+    All(AllPackageChangeReason),
+    /// Root task was run
+    RootTask { task: String },
+    /// We conservatively assume that the root package is changed because
+    /// the lockfile changed.
+    ConservativeRootLockfileChanged,
+    /// The lockfile changed and caused this package to be invalidated
+    LockfileChanged,
+    /// A transitive dependency of this package changed
+    DependencyChanged { dependency: PackageName },
+    /// A transitive dependent of this package changed
+    DependentChanged { dependent: PackageName },
+    /// A file contained in this package changed
+    FileChanged { file: AnchoredSystemPathBuf },
+    /// The filter selected a directory which contains this package
+    InFilteredDirectory { directory: AnchoredSystemPathBuf },
+    /// Package is automatically included because of the filter (or lack
+    /// thereof)
+    IncludedByFilter { filters: Vec<String> },
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+pub enum AllPackageChangeReason {
+    GlobalDepsChanged {
+        file: AnchoredSystemPathBuf,
+    },
+    /// A file like `package.json` or `turbo.json` changed
+    DefaultGlobalFileChanged {
+        file: AnchoredSystemPathBuf,
+    },
+    LockfileChangeDetectionFailed,
+    LockfileChangedWithoutDetails,
+    RootInternalDepChanged {
+        root_internal_dep: PackageName,
+    },
+    GitRefNotFound {
+        from_ref: Option<String>,
+        to_ref: Option<String>,
+    },
+}
+
+pub fn merge_changed_packages<T: Hash + Eq>(
+    changed_packages: &mut HashMap<T, PackageInclusionReason>,
+    new_changes: impl IntoIterator<Item = (T, PackageInclusionReason)>,
+) {
+    for (package, reason) in new_changes {
+        changed_packages.entry(package).or_insert(reason);
+    }
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum PackageChanges {
-    All,
-    Some(HashSet<WorkspacePackage>),
+    All(AllPackageChangeReason),
+    Some(HashMap<WorkspacePackage, PackageInclusionReason>),
 }
 
 pub struct ChangeMapper<'a, PD> {
@@ -48,10 +106,12 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
         }
     }
 
-    fn default_global_file_changed(changed_files: &HashSet<AnchoredSystemPathBuf>) -> bool {
+    fn default_global_file_changed(
+        changed_files: &HashSet<AnchoredSystemPathBuf>,
+    ) -> Option<&AnchoredSystemPathBuf> {
         changed_files
             .iter()
-            .any(|f| DEFAULT_GLOBAL_DEPS.iter().any(|dep| *dep == f.as_str()))
+            .find(|f| DEFAULT_GLOBAL_DEPS.iter().any(|dep| *dep == f.as_str()))
     }
 
     pub fn changed_packages(
@@ -59,32 +119,60 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
         changed_files: HashSet<AnchoredSystemPathBuf>,
         lockfile_change: Option<LockfileChange>,
     ) -> Result<PackageChanges, ChangeMapError> {
-        if Self::default_global_file_changed(&changed_files) {
-            return Ok(PackageChanges::All);
+        if let Some(file) = Self::default_global_file_changed(&changed_files) {
+            debug!("global file changed");
+            return Ok(PackageChanges::All(
+                AllPackageChangeReason::DefaultGlobalFileChanged {
+                    file: file.to_owned(),
+                },
+            ));
         }
 
         // get filtered files and add the packages that contain them
         let filtered_changed_files = self.filter_ignored_files(changed_files.iter())?;
-        let PackageChanges::Some(mut changed_pkgs) =
-            self.get_changed_packages(filtered_changed_files.into_iter())
-        else {
-            return Ok(PackageChanges::All);
-        };
 
-        match lockfile_change {
-            Some(LockfileChange::WithContent(content)) => {
-                // if we run into issues, don't error, just assume all packages have changed
-                let Ok(lockfile_changes) = self.get_changed_packages_from_lockfile(content) else {
-                    return Ok(PackageChanges::All);
-                };
+        match self.get_changed_packages(filtered_changed_files.into_iter()) {
+            PackageChanges::All(reason) => Ok(PackageChanges::All(reason)),
 
-                changed_pkgs.extend(lockfile_changes);
+            PackageChanges::Some(mut changed_pkgs) => {
+                match lockfile_change {
+                    Some(LockfileChange::WithContent(content)) => {
+                        // if we run into issues, don't error, just assume all packages have changed
+                        let Ok(lockfile_changes) =
+                            self.get_changed_packages_from_lockfile(&content)
+                        else {
+                            debug!(
+                                "unable to determine lockfile changes, assuming all packages \
+                                 changed"
+                            );
+                            return Ok(PackageChanges::All(
+                                AllPackageChangeReason::LockfileChangeDetectionFailed,
+                            ));
+                        };
+                        debug!(
+                            "found {} packages changed by lockfile",
+                            lockfile_changes.len()
+                        );
+                        merge_changed_packages(
+                            &mut changed_pkgs,
+                            lockfile_changes
+                                .into_iter()
+                                .map(|pkg| (pkg, PackageInclusionReason::LockfileChanged)),
+                        );
 
-                Ok(PackageChanges::Some(changed_pkgs))
+                        Ok(PackageChanges::Some(changed_pkgs))
+                    }
+
+                    // We don't have the actual contents, so just invalidate everything
+                    Some(LockfileChange::Empty) => {
+                        debug!("no previous lockfile available, assuming all packages changed");
+                        Ok(PackageChanges::All(
+                            AllPackageChangeReason::LockfileChangedWithoutDetails,
+                        ))
+                    }
+                    None => Ok(PackageChanges::Some(changed_pkgs)),
+                }
             }
-            // We don't have the actual contents, so just invalidate everything
-            Some(LockfileChange::Empty) => Ok(PackageChanges::All),
-            None => Ok(PackageChanges::Some(changed_pkgs)),
         }
     }
 
@@ -104,18 +192,29 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
         files: impl Iterator<Item = &'b AnchoredSystemPathBuf>,
     ) -> PackageChanges {
         let root_internal_deps = self.pkg_graph.root_internal_package_dependencies();
-        let mut changed_packages = HashSet::new();
+        let mut changed_packages = HashMap::new();
         for file in files {
             match self.package_detector.detect_package(file) {
                 // Internal root dependency changed so global hash has changed
-                PackageMapping::Package(pkg) if root_internal_deps.contains(&pkg) => {
-                    return PackageChanges::All;
+                PackageMapping::Package((pkg, _)) if root_internal_deps.contains(&pkg) => {
+                    debug!(
+                        "{} changes root internal dependency: \"{}\"\nshortest path from root: \
+                         {:?}",
+                        file.to_string(),
+                        pkg.name,
+                        self.pkg_graph.root_internal_dependency_explanation(&pkg),
+                    );
+                    return PackageChanges::All(AllPackageChangeReason::RootInternalDepChanged {
+                        root_internal_dep: pkg.name.clone(),
+                    });
                 }
-                PackageMapping::Package(pkg) => {
-                    changed_packages.insert(pkg);
+                PackageMapping::Package((pkg, reason)) => {
+                    debug!("{} changes \"{}\"", file.to_string(), pkg.name);
+                    changed_packages.insert(pkg, reason);
                 }
-                PackageMapping::All => {
-                    return PackageChanges::All;
+                PackageMapping::All(reason) => {
+                    debug!("all packages changed due to {file:?}");
+                    return PackageChanges::All(reason);
                 }
                 PackageMapping::None => {}
             }
@@ -126,12 +225,12 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
 
     fn get_changed_packages_from_lockfile(
         &self,
-        lockfile_content: Vec<u8>,
+        lockfile_content: &[u8],
     ) -> Result<Vec<WorkspacePackage>, ChangeMapError> {
         let previous_lockfile = self
             .pkg_graph
             .package_manager()
-            .parse_lockfile(self.pkg_graph.root_package_json(), &lockfile_content)?;
+            .parse_lockfile(self.pkg_graph.root_package_json(), lockfile_content)?;
 
         let additional_packages = self
             .pkg_graph

@@ -24,7 +24,7 @@ pub const DEFAULT_OUTPUT_DIR: &str = "out";
 pub enum Error {
     #[error("io error while pruning: {0}")]
     Io(#[from] std::io::Error),
-    #[error("fs error while pruning: {0}")]
+    #[error("File system error while pruning. The error from the operating system is: {0}")]
     Fs(#[from] turborepo_fs::Error),
     #[error("json error while pruning: {0}")]
     Json(#[from] serde_json::Error),
@@ -49,6 +49,8 @@ pub enum Error {
     MissingLockfile,
     #[error("Prune is not supported for Bun")]
     BunUnsupported,
+    #[error("Unable to read config: {0}")]
+    Config(#[from] crate::config::Error),
 }
 
 // Files that should be copied from root and if they're required for install
@@ -96,7 +98,7 @@ pub async fn prune(
     telemetry.track_arg_usage("docker", docker);
     telemetry.track_arg_usage("out-dir", output_dir != DEFAULT_OUTPUT_DIR);
 
-    let prune = Prune::new(base, scope, docker, output_dir).await?;
+    let prune = Prune::new(base, scope, docker, output_dir, telemetry).await?;
 
     if matches!(
         prune.package_graph.package_manager(),
@@ -107,8 +109,8 @@ pub async fn prune(
 
     println!(
         "Generating pruned monorepo for {} in {}",
-        base.ui.apply(BOLD.apply_to(scope.join(", "))),
-        base.ui.apply(BOLD.apply_to(&prune.out_directory)),
+        base.color_config.apply(BOLD.apply_to(scope.join(", "))),
+        base.color_config.apply(BOLD.apply_to(&prune.out_directory)),
     );
 
     if let Some(workspace_config_path) = prune
@@ -259,7 +261,14 @@ impl<'a> Prune<'a> {
         scope: &'a [String],
         docker: bool,
         output_dir: &str,
+        telemetry: CommandEventBuilder,
     ) -> Result<Self, Error> {
+        let allow_missing_package_manager = base.config()?.allow_no_package_manager();
+        telemetry.track_arg_usage(
+            "dangerously-allow-missing-package-manager",
+            allow_missing_package_manager,
+        );
+
         if scope.is_empty() {
             return Err(Error::NoWorkspaceSpecified);
         }
@@ -268,6 +277,7 @@ impl<'a> Prune<'a> {
         let root_package_json = PackageJson::load(&root_package_json_path)?;
 
         let package_graph = PackageGraph::builder(&base.repo_root, root_package_json)
+            .with_allow_no_package_manager(allow_missing_package_manager)
             .build()
             .await?;
 
@@ -439,7 +449,7 @@ impl<'a> Prune<'a> {
             Err(e) => return Err(e.into()),
         };
 
-        let turbo_json = RawTurboJson::parse(&turbo_json_contents, anchored_turbo_path)?;
+        let turbo_json = RawTurboJson::parse(&turbo_json_contents, anchored_turbo_path.as_str())?;
 
         let pruned_turbo_json = turbo_json.prune_tasks(workspaces);
         new_turbo_path.create_with_contents(serde_json::to_string_pretty(&pruned_turbo_json)?)?;

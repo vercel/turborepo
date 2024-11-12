@@ -138,7 +138,7 @@ impl TaskAccessTraceFile {
 
 #[derive(Clone)]
 pub struct TaskAccess {
-    pub repo_root: AbsoluteSystemPathBuf,
+    repo_root: AbsoluteSystemPathBuf,
     trace_by_task: Arc<Mutex<HashMap<String, TaskAccessTraceFile>>>,
     config_cache: Option<ConfigCache>,
     enabled: bool,

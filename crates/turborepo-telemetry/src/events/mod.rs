@@ -29,6 +29,7 @@ pub struct Event {
     key: String,
     value: String,
     is_sensitive: EventType,
+    send_in_ci: bool,
 }
 
 pub trait Identifiable {

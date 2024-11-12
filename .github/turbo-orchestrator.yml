@@ -34,22 +34,15 @@ labeler:
     - label: "owned-by: turborepo"
       when:
         isAnyFileOwnedByMatch: '@vercel\/turbo-oss'
-    - label: "owned-by: turbopack"
-      when:
-        isAnyFileOwnedByMatch: '@vercel\/turbopack'
 
-    # created-by
-    - label: "created-by: turbopack"
-      when:
-        isPRAuthorMatch: "^(bgw|ForsakenHarmony|kdy1|kwonoj|padmaia|sokra|wbinnssmith)$"
     - label: "created-by: turborepo"
       when:
-        isPRAuthorMatch: "^(anthonyshew|tknickman|mehulkar|chris-olszewski|NicholasLYang|Zertsov|paulogdm|codybrouwers)$"
+        isPRAuthorMatch: "^(anthonyshew|dimitropoulos|tknickman|chris-olszewski|NicholasLYang)$"
 
     # needs: triage when not any of the turbopack or turborepo team
     - label: "needs: triage"
       when:
-        isNotPRAuthorMatch: "^(bgw|ForsakenHarmony|kdy1|kwonoj|padmaia|sokra|wbinnssmith|anthonyshew|tknickman|mehulkar|chris-olszewski|NicholasLYang|arlyon|Zertsov|paulogdm|codybrouwers)$"
+        isNotPRAuthorMatch: "^(padmaia|anthonyshew|dimitropoulos|tknickman|chris-olszewski|NicholasLYang)$"
 
     # areas
     - label: "area: ci"

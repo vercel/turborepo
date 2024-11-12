@@ -1,15 +1,19 @@
 use std::{backtrace, backtrace::Backtrace};
 
+use camino::Utf8PathBuf;
 use thiserror::Error;
 use turbopath::AnchoredSystemPathBuf;
-use turborepo_cache::CacheOpts;
+use turborepo_api_client::APIAuth;
+use turborepo_cache::{CacheOpts, RemoteCacheOpts};
 
 use crate::{
     cli::{
         Command, DryRunMode, EnvMode, ExecutionArgs, LogOrder, LogPrefix, OutputLogsMode, RunArgs,
     },
+    commands::CommandBase,
+    config::ConfigurationOptions,
     run::task_id::TaskId,
-    Args,
+    turbo_json::UIMode,
 };
 
 #[derive(Debug, Error)]
@@ -28,11 +32,18 @@ pub enum Error {
          or equal to 1: {1}"
     )]
     ConcurrencyOutOfBounds(#[backtrace] backtrace::Backtrace, String),
+    #[error(
+        "Cannot set `cache` config and other cache options (`force`, `remoteOnly`, \
+         `remoteCacheReadOnly`) at the same time"
+    )]
+    OverlappingCacheOptions,
     #[error(transparent)]
     Path(#[from] turbopath::PathError),
+    #[error(transparent)]
+    Config(#[from] crate::config::Error),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Opts {
     pub cache_opts: CacheOpts,
     pub run_opts: RunOpts,
@@ -46,6 +57,10 @@ impl Opts {
         for pattern in &self.scope_opts.filter_patterns {
             cmd.push_str(" --filter=");
             cmd.push_str(pattern);
+        }
+
+        if self.scope_opts.affected_range.is_some() {
+            cmd.push_str(" --affected");
         }
 
         if self.run_opts.parallel {
@@ -76,10 +91,12 @@ impl Opts {
     }
 }
 
-impl<'a> TryFrom<&'a Args> for Opts {
-    type Error = self::Error;
+impl Opts {
+    pub fn new(base: &CommandBase) -> Result<Self, Error> {
+        let args = base.args();
+        let config = base.config()?;
+        let api_auth = base.api_auth()?;
 
-    fn try_from(args: &'a Args) -> Result<Self, Self::Error> {
         let Some(Command::Run {
             run_args,
             execution_args,
@@ -87,14 +104,17 @@ impl<'a> TryFrom<&'a Args> for Opts {
         else {
             return Err(Error::ExpectedRun(Backtrace::capture()));
         };
-        let run_and_execution_args = RunAndExecutionArgs {
+
+        let inputs = OptsInputs {
             run_args: run_args.as_ref(),
             execution_args: execution_args.as_ref(),
+            config,
+            api_auth: &api_auth,
         };
-        let run_opts = RunOpts::try_from(run_and_execution_args)?;
-        let cache_opts = CacheOpts::from(run_and_execution_args);
-        let scope_opts = ScopeOpts::try_from(run_and_execution_args)?;
-        let runcache_opts = RunCacheOpts::from(run_and_execution_args);
+        let run_opts = RunOpts::try_from(inputs)?;
+        let cache_opts = CacheOpts::try_from(inputs)?;
+        let scope_opts = ScopeOpts::try_from(inputs)?;
+        let runcache_opts = RunCacheOpts::from(inputs);
 
         Ok(Self {
             run_opts,
@@ -105,36 +125,34 @@ impl<'a> TryFrom<&'a Args> for Opts {
     }
 }
 
-// This is not ideal, but it allows us to impl From
 #[derive(Debug, Clone, Copy)]
-struct RunAndExecutionArgs<'a> {
+struct OptsInputs<'a> {
     run_args: &'a RunArgs,
     execution_args: &'a ExecutionArgs,
+    config: &'a ConfigurationOptions,
+    api_auth: &'a Option<APIAuth>,
 }
 
-#[derive(Debug, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct RunCacheOpts {
-    pub(crate) skip_reads: bool,
-    pub(crate) skip_writes: bool,
     pub(crate) task_output_logs_override: Option<OutputLogsMode>,
 }
 
-impl<'a> From<RunAndExecutionArgs<'a>> for RunCacheOpts {
-    fn from(args: RunAndExecutionArgs<'a>) -> Self {
+impl<'a> From<OptsInputs<'a>> for RunCacheOpts {
+    fn from(inputs: OptsInputs<'a>) -> Self {
         RunCacheOpts {
-            skip_reads: args.execution_args.force.flatten().is_some_and(|f| f),
-            skip_writes: args.run_args.no_cache,
-            task_output_logs_override: args.execution_args.output_logs,
+            task_output_logs_override: inputs.execution_args.output_logs,
         }
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct RunOpts {
     pub(crate) tasks: Vec<String>,
     pub(crate) concurrency: u32,
     pub(crate) parallel: bool,
     pub(crate) env_mode: EnvMode,
+    pub(crate) cache_dir: Utf8PathBuf,
     // Whether or not to infer the framework for each workspace.
     pub(crate) framework_inference: bool,
     pub profile: Option<String>,
@@ -147,27 +165,45 @@ pub struct RunOpts {
     pub(crate) single_package: bool,
     pub log_prefix: ResolvedLogPrefix,
     pub log_order: ResolvedLogOrder,
-    pub summarize: Option<Option<bool>>,
+    pub summarize: bool,
     pub(crate) experimental_space_id: Option<String>,
     pub is_github_actions: bool,
+    pub ui_mode: UIMode,
+}
+
+/// Projection of `RunOpts` that only includes information necessary to compute
+/// pass through args.
+#[derive(Debug)]
+pub struct TaskArgs<'a> {
+    pass_through_args: &'a [String],
+    tasks: &'a [String],
 }
 
 impl RunOpts {
-    pub fn args_for_task(&self, task_id: &TaskId) -> Option<Vec<String>> {
+    pub fn task_args(&self) -> TaskArgs {
+        TaskArgs {
+            pass_through_args: &self.pass_through_args,
+            tasks: &self.tasks,
+        }
+    }
+}
+
+impl<'a> TaskArgs<'a> {
+    pub fn args_for_task(&self, task_id: &TaskId) -> Option<&'a [String]> {
         if !self.pass_through_args.is_empty()
             && self
                 .tasks
                 .iter()
                 .any(|task| task.as_str() == task_id.task())
         {
-            Some(self.pass_through_args.clone())
+            Some(self.pass_through_args)
         } else {
             None
         }
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum GraphOpts {
     Stdout,
     File(String),
@@ -187,11 +223,11 @@ pub enum ResolvedLogPrefix {
 
 const DEFAULT_CONCURRENCY: u32 = 10;
 
-impl<'a> TryFrom<RunAndExecutionArgs<'a>> for RunOpts {
+impl<'a> TryFrom<OptsInputs<'a>> for RunOpts {
     type Error = self::Error;
 
-    fn try_from(args: RunAndExecutionArgs) -> Result<Self, Self::Error> {
-        let concurrency = args
+    fn try_from(inputs: OptsInputs) -> Result<Self, Self::Error> {
+        let concurrency = inputs
             .execution_args
             .concurrency
             .as_deref()
@@ -199,16 +235,16 @@ impl<'a> TryFrom<RunAndExecutionArgs<'a>> for RunOpts {
             .transpose()?
             .unwrap_or(DEFAULT_CONCURRENCY);
 
-        let graph = args.run_args.graph.as_deref().map(|file| match file {
+        let graph = inputs.run_args.graph.as_deref().map(|file| match file {
             "" => GraphOpts::Stdout,
             f => GraphOpts::File(f.to_string()),
         });
 
-        let (is_github_actions, log_order, log_prefix) = match args.execution_args.log_order {
+        let (is_github_actions, log_order, log_prefix) = match inputs.config.log_order() {
             LogOrder::Auto if turborepo_ci::Vendor::get_constant() == Some("GITHUB_ACTIONS") => (
                 true,
                 ResolvedLogOrder::Grouped,
-                match args.execution_args.log_prefix {
+                match inputs.execution_args.log_prefix {
                     LogPrefix::Task => ResolvedLogPrefix::Task,
                     _ => ResolvedLogPrefix::None,
                 },
@@ -218,34 +254,40 @@ impl<'a> TryFrom<RunAndExecutionArgs<'a>> for RunOpts {
             LogOrder::Auto | LogOrder::Stream => (
                 false,
                 ResolvedLogOrder::Stream,
-                args.execution_args.log_prefix.into(),
+                inputs.execution_args.log_prefix.into(),
             ),
             LogOrder::Grouped => (
                 false,
                 ResolvedLogOrder::Grouped,
-                args.execution_args.log_prefix.into(),
+                inputs.execution_args.log_prefix.into(),
             ),
         };
 
         Ok(Self {
-            tasks: args.execution_args.tasks.clone(),
+            tasks: inputs.execution_args.tasks.clone(),
             log_prefix,
             log_order,
-            summarize: args.run_args.summarize,
-            experimental_space_id: args.run_args.experimental_space_id.clone(),
-            framework_inference: args.execution_args.framework_inference,
-            env_mode: args.execution_args.env_mode,
+            summarize: inputs.config.run_summary(),
+            experimental_space_id: inputs
+                .run_args
+                .experimental_space_id
+                .clone()
+                .or(inputs.config.spaces_id().map(|s| s.to_owned())),
+            framework_inference: inputs.execution_args.framework_inference,
             concurrency,
-            parallel: args.run_args.parallel,
-            profile: args.run_args.profile.clone(),
-            continue_on_error: args.execution_args.continue_execution,
-            pass_through_args: args.execution_args.pass_through_args.clone(),
-            only: args.execution_args.only,
-            daemon: args.run_args.daemon(),
-            single_package: args.execution_args.single_package,
+            parallel: inputs.run_args.parallel,
+            profile: inputs.run_args.profile.clone(),
+            continue_on_error: inputs.execution_args.continue_execution,
+            pass_through_args: inputs.execution_args.pass_through_args.clone(),
+            only: inputs.execution_args.only,
+            daemon: inputs.config.daemon(),
+            single_package: inputs.execution_args.single_package,
             graph,
-            dry_run: args.run_args.dry_run,
+            dry_run: inputs.run_args.dry_run,
+            env_mode: inputs.config.env_mode(),
+            cache_dir: inputs.config.cache_dir().into(),
             is_github_actions,
+            ui_mode: inputs.config.ui(),
         })
     }
 }
@@ -281,41 +323,106 @@ impl From<LogPrefix> for ResolvedLogPrefix {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ScopeOpts {
     pub pkg_inference_root: Option<AnchoredSystemPathBuf>,
     pub global_deps: Vec<String>,
     pub filter_patterns: Vec<String>,
+    pub affected_range: Option<(Option<String>, Option<String>)>,
 }
 
-impl<'a> TryFrom<RunAndExecutionArgs<'a>> for ScopeOpts {
+impl<'a> TryFrom<OptsInputs<'a>> for ScopeOpts {
     type Error = self::Error;
 
-    fn try_from(args: RunAndExecutionArgs<'a>) -> Result<Self, Self::Error> {
-        let pkg_inference_root = args
+    fn try_from(inputs: OptsInputs<'a>) -> Result<Self, Self::Error> {
+        let pkg_inference_root = inputs
             .execution_args
             .pkg_inference_root
             .as_ref()
             .map(AnchoredSystemPathBuf::from_raw)
             .transpose()?;
 
+        let affected_range = inputs.execution_args.affected.then(|| {
+            let scm_base = inputs.config.scm_base();
+            let scm_head = inputs.config.scm_head();
+            (
+                scm_base.map(|b| b.to_owned()),
+                scm_head.map(|h| h.to_string()),
+            )
+        });
+
         Ok(Self {
-            global_deps: args.execution_args.global_deps.clone(),
+            global_deps: inputs.execution_args.global_deps.clone(),
             pkg_inference_root,
-            filter_patterns: args.execution_args.filter.clone(),
+            affected_range,
+            filter_patterns: inputs.execution_args.filter.clone(),
         })
     }
 }
 
-impl<'a> From<RunAndExecutionArgs<'a>> for CacheOpts {
-    fn from(args: RunAndExecutionArgs<'a>) -> Self {
-        CacheOpts {
-            override_dir: args.execution_args.cache_dir.clone(),
-            skip_filesystem: args.execution_args.remote_only,
-            remote_cache_read_only: args.run_args.remote_cache_read_only,
-            workers: args.run_args.cache_workers,
-            ..CacheOpts::default()
+impl<'a> TryFrom<OptsInputs<'a>> for CacheOpts {
+    type Error = self::Error;
+
+    fn try_from(inputs: OptsInputs<'a>) -> Result<Self, Self::Error> {
+        let is_linked = turborepo_api_client::is_linked(inputs.api_auth);
+        let cache = inputs.config.cache();
+        let has_old_cache_config = inputs.config.remote_only()
+            || inputs.config.force()
+            || inputs.run_args.no_cache
+            || inputs.config.remote_cache_read_only();
+
+        if has_old_cache_config && cache.is_some() {
+            return Err(Error::OverlappingCacheOptions);
         }
+
+        let mut cache = cache.unwrap_or_default();
+
+        if inputs.config.remote_only() {
+            cache.local.read = false;
+            cache.local.write = false;
+        }
+
+        if inputs.config.force() {
+            cache.local.read = false;
+            cache.remote.read = false;
+        }
+
+        if inputs.run_args.no_cache {
+            cache.local.write = false;
+            cache.remote.write = false;
+        }
+
+        if !is_linked {
+            cache.remote.read = false;
+            cache.remote.write = false;
+        } else if let Some(enabled) = inputs.config.enabled {
+            // We're linked, but if the user has explicitly enabled or disabled, use that
+            // value
+            cache.remote.read = enabled;
+            cache.remote.write = enabled;
+        };
+
+        if inputs.config.remote_cache_read_only() {
+            cache.remote.write = false;
+        }
+
+        // Note that we don't currently use the team_id value here. In the future, we
+        // should probably verify that we only use the signature value when the
+        // configured team_id matches the final resolved team_id.
+        let unused_remote_cache_opts_team_id =
+            inputs.config.team_id().map(|team_id| team_id.to_string());
+        let signature = inputs.config.signature();
+        let remote_cache_opts = Some(RemoteCacheOpts::new(
+            unused_remote_cache_opts_team_id,
+            signature,
+        ));
+
+        Ok(CacheOpts {
+            cache_dir: inputs.config.cache_dir().into(),
+            cache,
+            workers: inputs.run_args.cache_workers,
+            remote_cache_opts,
+        })
     }
 }
 
@@ -335,13 +442,20 @@ impl ScopeOpts {
 
 #[cfg(test)]
 mod test {
-    use test_case::test_case;
-    use turborepo_cache::CacheOpts;
 
-    use super::RunOpts;
+    use test_case::test_case;
+    use turbopath::AbsoluteSystemPathBuf;
+    use turborepo_api_client::APIAuth;
+    use turborepo_cache::CacheOpts;
+    use turborepo_ui::ColorConfig;
+
+    use super::{OptsInputs, RunOpts};
     use crate::{
-        cli::DryRunMode,
+        cli::{Command, DryRunMode, RunArgs},
+        commands::CommandBase,
         opts::{Opts, RunCacheOpts, ScopeOpts},
+        turbo_json::UIMode,
+        Args,
     };
 
     #[derive(Default)]
@@ -353,6 +467,7 @@ mod test {
         parallel: bool,
         continue_on_error: bool,
         dry_run: Option<DryRunMode>,
+        affected: Option<(String, String)>,
     }
 
     #[test_case(TestCaseOpts {
@@ -415,12 +530,30 @@ mod test {
         },
         "turbo run build --filter=my-app --dry=json"
     )]
+    #[test_case    (
+        TestCaseOpts {
+            filter_patterns: vec!["my-app".to_string()],
+            tasks: vec!["build".to_string()],
+            affected: Some(("HEAD".to_string(), "my-branch".to_string())),
+            ..Default::default()
+        },
+        "turbo run build --filter=my-app --affected"
+    )]
+    #[test_case    (
+        TestCaseOpts {
+            tasks: vec!["build".to_string()],
+            affected: Some(("HEAD".to_string(), "my-branch".to_string())),
+            ..Default::default()
+        },
+        "turbo run build --affected"
+    )]
     fn test_synthesize_command(opts_input: TestCaseOpts, expected: &str) {
         let run_opts = RunOpts {
             tasks: opts_input.tasks,
             concurrency: 10,
             parallel: opts_input.parallel,
             env_mode: crate::cli::EnvMode::Loose,
+            cache_dir: camino::Utf8PathBuf::new(),
             framework_inference: true,
             profile: None,
             continue_on_error: opts_input.continue_on_error,
@@ -428,13 +561,14 @@ mod test {
             only: opts_input.only,
             dry_run: opts_input.dry_run,
             graph: None,
-            daemon: None,
+            ui_mode: UIMode::Stream,
             single_package: false,
             log_prefix: crate::opts::ResolvedLogPrefix::Task,
             log_order: crate::opts::ResolvedLogOrder::Stream,
-            summarize: None,
+            summarize: false,
             experimental_space_id: None,
             is_github_actions: false,
+            daemon: None,
         };
         let cache_opts = CacheOpts::default();
         let runcache_opts = RunCacheOpts::default();
@@ -442,6 +576,9 @@ mod test {
             pkg_inference_root: None,
             global_deps: vec![],
             filter_patterns: opts_input.filter_patterns,
+            affected_range: opts_input
+                .affected
+                .map(|(base, head)| (Some(base), Some(head))),
         };
         let opts = Opts {
             run_opts,
@@ -451,5 +588,87 @@ mod test {
         };
         let synthesized = opts.synthesize_command();
         assert_eq!(synthesized, expected);
+    }
+
+    #[test_case(
+         RunArgs {
+             no_cache: true,
+             ..Default::default()
+         }, "no-cache"
+    )]
+    #[test_case(
+         RunArgs {
+             force: Some(Some(true)),
+             ..Default::default()
+         }, "force"
+    )]
+    #[test_case(
+         RunArgs {
+             remote_only: Some(Some(true)),
+             ..Default::default()
+         }, "remote-only"
+    )]
+    #[test_case(
+         RunArgs {
+             remote_cache_read_only: Some(Some(true)),
+             ..Default::default()
+         }, "remote-cache-read-only"
+    )]
+    #[test_case(
+         RunArgs {
+             no_cache: true,
+             cache: Some("remote:w,local:rw".to_string()),
+             ..Default::default()
+         }, "no-cache_remote_w,local_rw"
+    )]
+    #[test_case(
+         RunArgs {
+             remote_only: Some(Some(true)),
+             cache: Some("remote:r,local:rw".to_string()),
+             ..Default::default()
+         }, "remote-only_remote_r,local_rw"
+    )]
+    #[test_case(
+         RunArgs {
+             force: Some(Some(true)),
+             cache: Some("remote:r,local:r".to_string()),
+             ..Default::default()
+         }, "force_remote_r,local_r"
+    )]
+    #[test_case(
+          RunArgs {
+              remote_cache_read_only: Some(Some(true)),
+              cache: Some("remote:rw,local:r".to_string()),
+              ..Default::default()
+          }, "remote-cache-read-only_remote_rw,local_r"
+    )]
+    fn test_resolve_cache_config(run_args: RunArgs, name: &str) -> Result<(), anyhow::Error> {
+        let mut args = Args::default();
+        args.command = Some(Command::Run {
+            execution_args: Box::default(),
+            run_args: Box::new(run_args),
+        });
+        let base = CommandBase::new(
+            args,
+            AbsoluteSystemPathBuf::default(),
+            "1.0.0",
+            ColorConfig::new(true),
+        );
+
+        let cache_opts = CacheOpts::try_from(OptsInputs {
+            run_args: base.args().run_args().unwrap(),
+            execution_args: base.args().execution_args().unwrap(),
+            config: base.config()?,
+            api_auth: &Some(APIAuth {
+                team_id: Some("my-team".to_string()),
+                token: "my-token".to_string(),
+                team_slug: None,
+            }),
+        })
+        .map(|cache_opts| cache_opts.cache);
+
+        insta::assert_debug_snapshot!(name, cache_opts);
+
+        Ok(())
     }
 }

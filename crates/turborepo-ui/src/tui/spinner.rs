@@ -1,6 +1,8 @@
 use std::time::{Duration, Instant};
 
-const SPINNER_FRAMES: &[&str] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"].as_slice();
+const SPINNER_FRAMES: &[&str] = ["»"].as_slice();
+// const SPINNER_FRAMES: &[&str] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇",
+// "⠏"].as_slice();
 const FRAMERATE: Duration = Duration::from_millis(80);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -39,30 +41,32 @@ impl Default for SpinnerState {
     }
 }
 
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    fn test_inital_update() {
-        let mut spinner = SpinnerState::new();
-        assert!(spinner.last_render.is_none());
-        assert_eq!(spinner.frame, 0);
-        spinner.update();
-        assert!(spinner.last_render.is_some());
-        assert_eq!(spinner.frame, 0, "initial update doesn't move frame");
-    }
-
-    #[test]
-    fn test_frame_update() {
-        let mut spinner = SpinnerState::new();
-        // set last update to time that happened far before the spinner should increment
-        let prev_render = Instant::now() - (FRAMERATE * 2);
-        spinner.last_render = Some(prev_render);
-        assert_eq!(spinner.frame, 0);
-        spinner.update();
-        assert_eq!(spinner.frame, 1);
-        let last_render = spinner.last_render.unwrap();
-        assert!(prev_render < last_render, "last render should be updated");
-    }
-}
+// Removed with iteration to double arrow symbol
+// #[cfg(test)]
+// mod test {
+//     use super::*;
+//
+//     #[test]
+//     fn test_initial_update() {
+//         let mut spinner = SpinnerState::new();
+//         assert!(spinner.last_render.is_none());
+//         assert_eq!(spinner.frame, 0);
+//         spinner.update();
+//         assert!(spinner.last_render.is_some());
+//         assert_eq!(spinner.frame, 0, "initial update doesn't move frame");
+//     }
+//
+//     Removed with change to double arrow
+//     #[test]
+//     fn test_frame_update() {
+//         let mut spinner = SpinnerState::new();
+//         // set last update to time that happened far before the spinner
+// should increment         let prev_render = Instant::now() - (FRAMERATE * 2);
+//         spinner.last_render = Some(prev_render);
+//         assert_eq!(spinner.frame, 0);
+//         spinner.update();
+//         assert_eq!(spinner.frame, 1);
+//         let last_render = spinner.last_render.unwrap();
+//         assert!(prev_render < last_render, "last render should be updated");
+//     }
+// }

@@ -2,7 +2,10 @@ import path from "node:path";
 import { execSync } from "node:child_process";
 import JSON5 from "json5";
 import type { Schema } from "@turbo/types";
+import { type Schema } from "@turbo/types";
+import { parse, stringify } from "json5";
 import { setupTestFixtures } from "@turbo/test-utils";
+import { describe, it, expect } from "@jest/globals";
 
 const env: NodeJS.ProcessEnv = {
   ...process.env,
@@ -27,6 +30,7 @@ describe("eslint settings check", () => {
       }
     );
     const configJson = JSON5.parse(configString);
+
 
     expect(configJson.settings).toEqual({
       turbo: {
@@ -87,7 +91,7 @@ describe("eslint settings check", () => {
         env,
       }
     );
-    const configJson = JSON5.parse(configString);
+    const configJson: Record<string, unknown> = parse(configString);
 
     expect(configJson.settings).toEqual({
       turbo: {
@@ -155,8 +159,10 @@ describe("eslint cache is busted", () => {
         encoding: "utf8",
         env,
       });
-    } catch (error: any) {
-      const outputJson = JSON5.parse(error.stdout);
+    } catch (error: unknown) {
+      const outputJson: Record<string, unknown> = parse(
+        (error as { stdout: string }).stdout
+      );
       expect(outputJson).toMatchObject([
         {
           messages: [
@@ -173,7 +179,7 @@ describe("eslint cache is busted", () => {
     const turboJson = readJson<Schema>("turbo.json");
     if (turboJson && "globalEnv" in turboJson) {
       turboJson.globalEnv = ["CI", "NONEXISTENT"];
-      write("turbo.json", JSON5.stringify(turboJson, null, 2));
+      write("turbo.json", stringify(turboJson, null, 2));
     }
 
     // test that we invalidated the eslint cache
@@ -186,6 +192,7 @@ describe("eslint cache is busted", () => {
       }
     );
     const outputJson = JSON5.parse(output);
+    
     expect(outputJson).toMatchObject([{ errorCount: 0 }]);
   });
 });

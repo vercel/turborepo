@@ -1,71 +1,7 @@
 # Learn how to add code owners here:
 # https://help.github.com/en/articles/about-code-owners
 
-# Default to both teams
-* @vercel/turbo-oss @vercel/turbopack
+* @vercel/turbo-oss
 
 # Shared docs (team specific overrides below)
-/docs @vercel/turbopack @vercel/turbo-oss @anthonyshew
-
-# Turborepo-specific things
-
-/cli @vercel/turbo-oss
-/benchmark @vercel/turbo-oss
-/buildcontainer @vercel/turbo-oss
-/examples @vercel/turbo-oss @anthonyshew
-/docs/pages/repo @vercel/turbo-oss @anthonyshew
-.github/workflows/bench-turborepo.yml @vercel/turbo-oss
-.github/workflows/pr-go-*.yml @vercel/turbo-oss
-.github/workflows/pr-js-tests-*.yml @vercel/turbo-oss
-/version.txt @vercel/turbo-oss
-.github/turborepo-release.yml @vercel/turbo-oss
-/turborepo-tests @vercel/turbo-oss
-
-# Nobody owns these files, so nobody should get tagged on changes
-Cargo.lock
-pnpm-lock.yaml
-.gitignore
-
-# Turbopack-specific things
-/.config/nextest.toml
-/docs/pages/pack @vercel/turbopack
-/xtask @vercel/turbopack
-.github/release.yml @vercel/turbopack
-.github/workflows/bench-turbopack.yml @vercel/turbopack
-.github/workflows/on-nextjs-release-publish.yml @vercel/turbopack
-.github/workflows/setup-nextjs-build.yml @vercel/turbopack
-.github/workflows/daily-nextjs-integration-test.yml @vercel/turbopack
-
-# Nobody owns crates by default
-/crates
-
-# overrides for crates that are owned by turbo-oss
-/crates/turborepo* @vercel/turbo-oss
-/crates/turborepo-telemetry/src/events @gsoltis @tknickman @padmaia
-
-# overrides for crates that are owned by turbopack
-/crates/turbo-tasks* @vercel/turbopack
-/crates/turbopack* @vercel/turbopack
-/crates/node-file-trace @vercel/turbopack
-
-# packages in alphabetical order, to match view github https://github.com/vercel/turbo/tree/main/packages
-# Separate section in this file, so we can add new entries more easily.
-# Note: Some packages may be omitted to indicate shared ownership.
-
-/packages/create-turbo					@vercel/turbo-oss
-/packages/eslint-config-turbo			@vercel/turbo-oss
-/packages/eslint-plugin-turbo			@vercel/turbo-oss
-/packages/node-module-trace				@vercel/turbopack
-/packages/turbo							@vercel/turbo-oss
-/packages/turbo-benchmark				@vercel/turbo-oss
-/packages/turbo-codemod					@vercel/turbo-oss
-/packages/turbo-gen						@vercel/turbo-oss
-/packages/turbo-ignore					@vercel/turbo-oss
-/packages/turbo-repository				@vercel/turbo-oss
-/packages/turbo-tracing-next-plugin		@vercel/turbopack
-/packages/turbo-types					@vercel/turbo-oss
-/packages/turbo-telemetry				@vercel/turbo-oss
-/packages/turbo-utils					@vercel/turbo-oss
-/packages/turbo-workspaces				@vercel/turbo-oss
-/packages/webpack-nmt					@vercel/turbopack
-
+/docs @vercel/turbo-oss @anthonyshew

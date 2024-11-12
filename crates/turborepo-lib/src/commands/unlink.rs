@@ -23,11 +23,12 @@ fn unlink_remote_caching(base: &mut CommandBase) -> Result<(), cli::Error> {
         let local_config_path = base.local_config_path();
 
         let before = local_config_path
-            .read_existing_to_string_or(Ok("{}"))
+            .read_existing_to_string()
             .map_err(|error| config::Error::FailedToReadConfig {
                 config_path: local_config_path.clone(),
                 error,
-            })?;
+            })?
+            .unwrap_or_else(|| String::from("{}"));
         let no_id = unset_path(&before, &["teamid"], false)?.unwrap_or(before);
         let no_slug = unset_path(&no_id, &["teamslug"], false)?.unwrap_or(no_id);
 
@@ -50,7 +51,7 @@ fn unlink_remote_caching(base: &mut CommandBase) -> Result<(), cli::Error> {
         "> No Remote Caching config found"
     };
 
-    println!("{}", base.ui.apply(GREY.apply_to(output)));
+    println!("{}", base.color_config.apply(GREY.apply_to(output)));
 
     Ok(())
 }
@@ -62,11 +63,12 @@ fn unlink_spaces(base: &mut CommandBase) -> Result<(), cli::Error> {
     if needs_disabling {
         let local_config_path = base.local_config_path();
         let before = local_config_path
-            .read_existing_to_string_or(Ok("{}"))
+            .read_existing_to_string()
             .map_err(|e| config::Error::FailedToReadConfig {
                 config_path: local_config_path.clone(),
                 error: e,
-            })?;
+            })?
+            .unwrap_or_else(|| String::from("{}"));
         let no_id = unset_path(&before, &["teamid"], false)?.unwrap_or(before);
         let no_slug = unset_path(&no_id, &["teamslug"], false)?.unwrap_or(no_id);
 
@@ -94,7 +96,7 @@ fn unlink_spaces(base: &mut CommandBase) -> Result<(), cli::Error> {
         (false, UnlinkSpacesResult::NoSpacesFound) => "> No Spaces config found",
     };
 
-    println!("{}", base.ui.apply(GREY.apply_to(output)));
+    println!("{}", base.color_config.apply(GREY.apply_to(output)));
 
     Ok(())
 }

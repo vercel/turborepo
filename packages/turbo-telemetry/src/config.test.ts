@@ -1,4 +1,4 @@
-import { describe, test, mock, afterEach, beforeEach } from "node:test";
+import { describe, it, mock, afterEach, beforeEach } from "node:test";
 import { strict as assert } from "node:assert";
 import fs from "node:fs";
 import { TelemetryConfig } from "./config";
@@ -28,7 +28,7 @@ describe("TelemetryConfig", () => {
   });
 
   describe("fromDefaultConfig", () => {
-    test("should create TelemetryConfig instance from default config", async (t) => {
+    it("should create TelemetryConfig instance from default config", async (t) => {
       const mockConfigPath = "/path/to/defaultConfig.json";
       const mockFileContent = JSON.stringify({
         telemetry_enabled: true,
@@ -53,7 +53,7 @@ describe("TelemetryConfig", () => {
       assert.equal(result?.id, "654321");
     });
 
-    test("should generate new config if default config doesn't exist", async (t) => {
+    it("should generate new config if default config doesn't exist", async (t) => {
       const mockConfigPath = "/path/to/defaultConfig.json";
       const mockDefaultConfigPath = mock.fn(() => mockConfigPath);
       const mockReadFileSync = mock.fn(() => {
@@ -102,7 +102,7 @@ describe("TelemetryConfig", () => {
       assert.equal(result?.config.telemetry_enabled, true);
     });
 
-    test("should not throw if default config is missing a key", async (t) => {
+    it("should not throw if default config is missing a key", async (t) => {
       const mockConfigPath = "/path/to/defaultConfig.json";
       const id = "654321";
       const mockFileContent = JSON.stringify({
@@ -152,7 +152,7 @@ describe("TelemetryConfig", () => {
       assert.equal(result?.config.telemetry_enabled, true);
     });
 
-    test("should not throw if default config has a key of the wrong type", async (t) => {
+    it("should not throw if default config has a key of the wrong type", async (t) => {
       const mockConfigPath = "/path/to/defaultConfig.json";
       const salt = "default-salt";
       const mockFileContent = JSON.stringify({
@@ -204,7 +204,7 @@ describe("TelemetryConfig", () => {
   });
 
   describe("write", () => {
-    test("should write the config to the file", (t) => {
+    it("should write the config to the file", (t) => {
       const mockWriteFileSync = mock.fn();
       t.mock.method(fs, "writeFileSync", mockWriteFileSync);
 
@@ -217,7 +217,7 @@ describe("TelemetryConfig", () => {
       ]);
     });
 
-    test("should not throw if write fails", (t) => {
+    it("should not throw if write fails", (t) => {
       const mockWriteFileSync = t.mock.method(fs, "writeFileSync", () => {
         throw new Error("Write error");
       });
@@ -233,7 +233,7 @@ describe("TelemetryConfig", () => {
   });
 
   describe("hasSeenAlert", () => {
-    test("should return true if telemetry_alerted is defined", () => {
+    it("should return true if telemetry_alerted is defined", () => {
       telemetryConfig = new TelemetryConfig({
         configPath: "/path/to/config.json",
         config: {
@@ -249,7 +249,7 @@ describe("TelemetryConfig", () => {
       assert.equal(result, true);
     });
 
-    test("should return false if telemetry_alerted key exists but is undefined", () => {
+    it("should return false if telemetry_alerted key exists but is undefined", () => {
       telemetryConfig = new TelemetryConfig({
         configPath: "/path/to/config.json",
         config: {
@@ -264,7 +264,7 @@ describe("TelemetryConfig", () => {
       assert.equal(result, false);
     });
 
-    test("should return false if telemetry_alerted is undefined", () => {
+    it("should return false if telemetry_alerted is undefined", () => {
       const result = telemetryConfig.hasSeenAlert();
 
       assert.equal(result, false);
@@ -284,7 +284,7 @@ describe("TelemetryConfig", () => {
       { envVar: null, value: null, expectedResult: true },
     ];
     for (const { envVar, value, expectedResult } of testCases) {
-      test(`should return ${expectedResult} when ${envVar} is set to '${value}'`, () => {
+      it(`should return ${expectedResult} when ${envVar} is set to '${value}'`, () => {
         const config = new TelemetryConfig({
           configPath: "/path/to/config.json",
           config: {
@@ -305,7 +305,7 @@ describe("TelemetryConfig", () => {
   });
 
   describe("isTelemetryWarningEnabled", () => {
-    test("should return false if TURBO_TELEMETRY_MESSAGE_DISABLED is set to '1'", () => {
+    it("should return false if TURBO_TELEMETRY_MESSAGE_DISABLED is set to '1'", () => {
       process.env.TURBO_TELEMETRY_MESSAGE_DISABLED = "1";
 
       const result = telemetryConfig.isTelemetryWarningEnabled();
@@ -313,7 +313,7 @@ describe("TelemetryConfig", () => {
       assert.equal(result, false);
     });
 
-    test("should return false if TURBO_TELEMETRY_MESSAGE_DISABLED is set to 'true'", () => {
+    it("should return false if TURBO_TELEMETRY_MESSAGE_DISABLED is set to 'true'", () => {
       process.env.TURBO_TELEMETRY_MESSAGE_DISABLED = "true";
 
       const result = telemetryConfig.isTelemetryWarningEnabled();
@@ -321,7 +321,7 @@ describe("TelemetryConfig", () => {
       assert.equal(result, false);
     });
 
-    test("should return true if TURBO_TELEMETRY_MESSAGE_DISABLED is not set", () => {
+    it("should return true if TURBO_TELEMETRY_MESSAGE_DISABLED is not set", () => {
       const result = telemetryConfig.isTelemetryWarningEnabled();
 
       assert.equal(result, true);
@@ -329,13 +329,13 @@ describe("TelemetryConfig", () => {
   });
 
   describe("showAlert", () => {
-    test("should log the telemetry alert if conditions are met", (t) => {
+    it("should log the telemetry alert if conditions are met", (t) => {
       const mockLog = t.mock.method(console, "log");
       telemetryConfig.showAlert();
       assert.equal(mockLog.mock.calls.length, 6);
     });
 
-    test("should not log the telemetry alert if conditions are not met", (t) => {
+    it("should not log the telemetry alert if conditions are not met", (t) => {
       const mockLog = t.mock.method(console, "log");
 
       telemetryConfig = new TelemetryConfig({
@@ -354,7 +354,7 @@ describe("TelemetryConfig", () => {
   });
 
   describe("enable", () => {
-    test("should set telemetry_enabled to true and write the config", (t) => {
+    it("should set telemetry_enabled to true and write the config", (t) => {
       const mockWriteFileSync = t.mock.method(fs, "writeFileSync");
 
       telemetryConfig.enable();
@@ -368,7 +368,7 @@ describe("TelemetryConfig", () => {
   });
 
   describe("disable", () => {
-    test("should set telemetry_enabled to false and write the config", (t) => {
+    it("should set telemetry_enabled to false and write the config", (t) => {
       const mockWriteFileSync = t.mock.method(fs, "writeFileSync");
       telemetryConfig.disable();
 
@@ -382,7 +382,7 @@ describe("TelemetryConfig", () => {
   });
 
   describe("alertShown", () => {
-    test("should return true if telemetry_alerted is defined", () => {
+    it("should return true if telemetry_alerted is defined", () => {
       telemetryConfig = new TelemetryConfig({
         configPath: "/path/to/config.json",
         config: {
@@ -398,7 +398,7 @@ describe("TelemetryConfig", () => {
       assert.equal(result, true);
     });
 
-    test("should set telemetry_alerted to current date and write the config if telemetry_alerted is undefined", (t) => {
+    it("should set telemetry_alerted to current date and write the config if telemetry_alerted is undefined", (t) => {
       const mockWriteFileSync = mock.fn();
       t.mock.method(fs, "writeFileSync", mockWriteFileSync);
       const result = telemetryConfig.alertShown();
@@ -414,7 +414,7 @@ describe("TelemetryConfig", () => {
   });
 
   describe("oneWayHash", () => {
-    test("should call oneWayHashWithSalt with the input and telemetry_salt from the config", (t) => {
+    it("should call oneWayHashWithSalt with the input and telemetry_salt from the config", (t) => {
       const mockOneWayHashWithSalt = mock.fn(() => "hashed-value");
       t.mock.method(utils, "oneWayHashWithSalt", mockOneWayHashWithSalt);
 
@@ -430,7 +430,7 @@ describe("TelemetryConfig", () => {
   });
 
   describe("isDebug", () => {
-    test("should return true if TURBO_TELEMETRY_DEBUG is set to '1'", () => {
+    it("should return true if TURBO_TELEMETRY_DEBUG is set to '1'", () => {
       process.env.TURBO_TELEMETRY_DEBUG = "1";
 
       const result = TelemetryConfig.isDebug();
@@ -438,7 +438,7 @@ describe("TelemetryConfig", () => {
       assert.equal(result, true);
     });
 
-    test("should return true if TURBO_TELEMETRY_DEBUG is set to 'true'", () => {
+    it("should return true if TURBO_TELEMETRY_DEBUG is set to 'true'", () => {
       process.env.TURBO_TELEMETRY_DEBUG = "true";
 
       const result = TelemetryConfig.isDebug();
@@ -446,7 +446,7 @@ describe("TelemetryConfig", () => {
       assert.equal(result, true);
     });
 
-    test("should return false if TURBO_TELEMETRY_DEBUG is not set", () => {
+    it("should return false if TURBO_TELEMETRY_DEBUG is not set", () => {
       const result = TelemetryConfig.isDebug();
 
       assert.equal(result, false);

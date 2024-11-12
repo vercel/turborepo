@@ -1,7 +1,7 @@
 # `@turbo/telemetry`
 
 **NOTE**:
-This package is a direct port of the [turbo-telemetry](https://github.com/vercel/turbo/blob/main/crates/turborepo-telemetry) crate.
+This package is a direct port of the [turbo-telemetry](https://github.com/vercel/turborepo/blob/main/crates/turborepo-telemetry) crate.
 Any changes made here should also be made to that crate as well.
 
 ## Overview
