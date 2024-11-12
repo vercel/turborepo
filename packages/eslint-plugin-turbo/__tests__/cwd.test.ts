@@ -1,9 +1,7 @@
 import path from "node:path";
 import { execSync } from "node:child_process";
-import JSON5 from "json5";
-import type { Schema } from "@turbo/types";
+import JSON5, { parse, stringify } from "json5";
 import { type Schema } from "@turbo/types";
-import { parse, stringify } from "json5";
 import { setupTestFixtures } from "@turbo/test-utils";
 import { describe, it, expect } from "@jest/globals";
 
@@ -30,7 +28,6 @@ describe("eslint settings check", () => {
       }
     );
     const configJson = JSON5.parse(configString);
-
 
     expect(configJson.settings).toEqual({
       turbo: {
@@ -192,7 +189,7 @@ describe("eslint cache is busted", () => {
       }
     );
     const outputJson = JSON5.parse(output);
-    
+
     expect(outputJson).toMatchObject([{ errorCount: 0 }]);
   });
 });
