@@ -58,6 +58,34 @@ TURBO_SCM_HEAD=your-branch turbo run build --affected
   changed.
 </Callout>
 
+### `--cache <options>`
+
+Default: `local:rw,remote:rw`
+
+Specify caching sources for the run. Accepts a comma-separated list of options:
+
+- `local`: Use the local filesystem cache
+- `remote`: Use the Remote Cache
+
+When an option is omitted, it is neither read nor written to.
+
+Each option must be followed by one of:
+
+- `rw`: Read and write
+- `r`: Read only
+- `w`: Write only
+
+```bash title="Terminal"
+# Read and write to local cache, read only to Remote Cache
+turbo run build --cache=local:rw,remote:r
+
+# Read-only to local cache, read write to Remote Cache
+turbo run build --cache=local:r,remote:rw
+
+# Read and write to local cache, no Remote Cache activity
+turbo run build --cache=local:rw
+```
+
 ### `--cache-dir <path>`
 
 Default: `.turbo/cache`
