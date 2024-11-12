@@ -1,7 +1,7 @@
-import path from "path";
+import path from "node:path";
+import { execSync } from "node:child_process";
 import JSON5 from "json5";
-import { execSync } from "child_process";
-import { Schema } from "@turbo/types";
+import type { Schema } from "@turbo/types";
 import { setupTestFixtures } from "@turbo/test-utils";
 
 const env: NodeJS.ProcessEnv = {
