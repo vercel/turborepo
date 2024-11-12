@@ -5,6 +5,7 @@ use std::{
 
 use clap::ValueEnum;
 use itertools::Itertools;
+use tracing::warn;
 use turbopath::AbsoluteSystemPathBuf;
 
 use super::{ConfigurationOptions, Error, ResolvedConfigurationOptions};
@@ -80,7 +81,19 @@ impl ResolvedConfigurationOptions for EnvVars {
 
         let force = self.truthy_value("force").flatten();
         let remote_only = self.truthy_value("remote_only").flatten();
+        if remote_only.is_some() {
+            warn!(
+                "TURBO_REMOTE_ONLY is deprecated and will be removed in a future major version. \
+                 Use TURBO_CACHE=remote:rw"
+            );
+        }
         let remote_cache_read_only = self.truthy_value("remote_cache_read_only").flatten();
+        if remote_cache_read_only.is_some() {
+            warn!(
+                "TURBO_REMOTE_CACHE_READ_ONLY is deprecated and will be removed in a future major \
+                 version. Use TURBO_CACHE=remote:r"
+            );
+        }
         let run_summary = self.truthy_value("run_summary").flatten();
         let allow_no_turbo_json = self.truthy_value("allow_no_turbo_json").flatten();
 
