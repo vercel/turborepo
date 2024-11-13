@@ -6,7 +6,7 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
-use regex::{Regex, RegexBuilder};
+use regex::RegexBuilder;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use thiserror::Error;
