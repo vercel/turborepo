@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
+use tracing::warn;
 use turbopath::AbsoluteSystemPath;
 use turborepo_micro_frontend::{Config as MFEConfig, Error, DEFAULT_MICRO_FRONTENDS_CONFIG};
 use turborepo_repository::package_graph::PackageGraph;
@@ -21,7 +22,15 @@ impl MicroFrontendsConfigs {
             let config_path = repo_root
                 .resolve(package_info.package_path())
                 .join_component(DEFAULT_MICRO_FRONTENDS_CONFIG);
-            let Some(config) = MFEConfig::load(&config_path)? else {
+            let Some(config) = MFEConfig::load(&config_path).or_else(|err| {
+                if matches!(err, turborepo_micro_frontend::Error::UnsupportedVersion(_)) {
+                    warn!("Ignoring {config_path}: {err}");
+                    Ok(None)
+                } else {
+                    Err(err)
+                }
+            })?
+            else {
                 continue;
             };
             let tasks = config
