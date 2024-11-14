@@ -7,10 +7,10 @@ import { describe, it, expect } from "@jest/globals";
 
 const env: NodeJS.ProcessEnv = {
   ...process.env,
-  ESLINT_USE_FLAT_CONFIG: "false",
+  ESLINT_USE_FLAT_CONFIG: "true",
 };
 
-describe("eslint settings check", () => {
+describe("flat eslint settings check", () => {
   const { useFixture } = setupTestFixtures({
     directory: path.join(__dirname, "../"),
   });
@@ -134,7 +134,7 @@ describe("eslint settings check", () => {
   });
 });
 
-describe("eslint cache is busted", () => {
+describe("flat eslint cache is busted", () => {
   const { useFixture } = setupTestFixtures({
     directory: path.join(__dirname, "../"),
   });
