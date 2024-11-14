@@ -336,27 +336,8 @@ pub enum LinkTarget {
 
 impl Args {
     pub fn new(os_args: Vec<OsString>) -> Self {
-        let (is_single_package, single_package_free) = Self::remove_single_package(os_args);
-
-        let mut clap_args = match Args::try_parse_from(single_package_free) {
-            Ok(mut args) => {
-                // And then only add them back in when we're in `run`.
-                // The value can appear in two places in the struct.
-                // We defensively attempt to set both.
-                if let Some(ref mut execution_args) = args.execution_args {
-                    execution_args.single_package = is_single_package
-                }
-
-                if let Some(Command::Run {
-                    run_args: _,
-                    ref mut execution_args,
-                }) = args.command
-                {
-                    execution_args.single_package = is_single_package;
-                }
-
-                args
-            }
+        let clap_args = match Args::parse(os_args) {
+            Ok(args) => args,
             // Don't use error logger when displaying help text
             Err(e)
                 if matches!(
@@ -391,10 +372,6 @@ impl Args {
             process::exit(0);
         }
 
-        if env::var("TEST_RUN").is_ok() {
-            clap_args.test_run = true;
-        }
-
         if let Some(run_args) = clap_args.run_args() {
             if run_args.no_cache {
                 warn!(
@@ -417,6 +394,31 @@ impl Args {
         }
 
         clap_args
+    }
+
+    fn parse(os_args: Vec<OsString>) -> Result<Self, clap::Error> {
+        let (is_single_package, single_package_free) = Self::remove_single_package(os_args);
+        let mut args = Args::try_parse_from(single_package_free)?;
+        // And then only add them back in when we're in `run`.
+        // The value can appear in two places in the struct.
+        // We defensively attempt to set both.
+        if let Some(ref mut execution_args) = args.execution_args {
+            execution_args.single_package = is_single_package
+        }
+
+        if let Some(Command::Run {
+            run_args: _,
+            ref mut execution_args,
+        }) = args.command
+        {
+            execution_args.single_package = is_single_package;
+        }
+
+        if env::var("TEST_RUN").is_ok() {
+            args.test_run = true;
+        }
+
+        Ok(args)
     }
 
     pub fn track(&self, tel: &GenericEventBuilder) {
@@ -2806,5 +2808,36 @@ mod test {
         let os_args = test.os_args();
         let actual = Args::remove_single_package(os_args);
         test.assert_actual(actual);
+    }
+
+    #[test]
+    fn test_set_single_package() {
+        let inferred_run = Args::parse(
+            ["turbo", "--single-package", "build"]
+                .iter()
+                .map(|s| OsString::from(*s))
+                .collect(),
+        )
+        .unwrap();
+        let explicit_run = Args::parse(
+            ["turbo", "run", "--single-package", "build"]
+                .iter()
+                .map(|s| OsString::from(*s))
+                .collect(),
+        )
+        .unwrap();
+        assert!(inferred_run
+            .execution_args
+            .as_ref()
+            .map_or(false, |e| e.single_package));
+        assert!(explicit_run
+            .command
+            .as_ref()
+            .and_then(|cmd| if let Command::Run { execution_args, .. } = cmd {
+                Some(execution_args.single_package)
+            } else {
+                None
+            })
+            .unwrap_or(false));
     }
 }
