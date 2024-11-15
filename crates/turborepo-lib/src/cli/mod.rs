@@ -513,11 +513,30 @@ impl Args {
     }
 
     fn validate(&self) -> Result<(), clap::Error> {
-        if self.run_args.is_some() && !matches!(self.command, None | Some(Command::Run { .. })) {
+        if self.run_args.is_some()
+            && !matches!(
+                self.command,
+                None | Some(Command::Run { .. }) | Some(Command::Config)
+            )
+        {
             let mut cmd = Self::command();
             Err(cmd.error(
                 clap::error::ErrorKind::UnknownArgument,
                 "Cannot use run arguments outside of run command",
+            ))
+        } else if self.execution_args.is_some() && matches!(self.command, Some(Command::Watch(_))) {
+            let mut cmd = Self::command();
+            Err(cmd.error(
+                clap::error::ErrorKind::ArgumentConflict,
+                "Cannot use watch arguments before `watch` subcommand",
+            ))
+        } else if matches!(self.command, Some(Command::Run { .. }))
+            && (self.run_args.is_some() || self.execution_args.is_some())
+        {
+            let mut cmd = Self::command();
+            Err(cmd.error(
+                clap::error::ErrorKind::ArgumentConflict,
+                "Cannot use run arguments before `run` subcommand",
             ))
         } else {
             Ok(())
@@ -2862,5 +2881,20 @@ mod test {
         let os_args = args.iter().map(|s| OsString::from(*s)).collect();
         let err = Args::parse(os_args).unwrap_err();
         assert_snapshot!(args.join("-").as_str(), err);
+    }
+
+    #[test_case::test_case(&["turbo", "--filter=foo", "run", "build"], false; "execution args")]
+    #[test_case::test_case(&["turbo", "--no-daemon", "run", "build"], false; "run args")]
+    #[test_case::test_case(&["turbo", "build", "run"], true; "task")]
+    #[test_case::test_case(&["turbo", "--filter=web", "watch", "build"], false; "execution before watch")]
+    fn test_no_run_args_before_run(args: &[&str], is_okay: bool) {
+        let os_args = args.iter().map(|s| OsString::from(*s)).collect();
+        let cli = Args::parse(os_args);
+        if is_okay {
+            cli.unwrap();
+        } else {
+            let err = cli.unwrap_err();
+            assert_snapshot!(args.join("-").as_str(), err);
+        }
     }
 }
