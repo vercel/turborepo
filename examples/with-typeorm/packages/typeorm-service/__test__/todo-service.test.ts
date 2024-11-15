@@ -1,4 +1,4 @@
-import { suite, expect, test, beforeEach, vi } from "vitest";
+import { suite, expect, it, beforeEach, vi } from "vitest";
 import { TodoService } from "../src/domain/todo/todo.service";
 import { TodoRepository } from "../src/domain/todo/todo.repository";
 import { Todo } from "../src/domain/todo/todo.entity";
@@ -27,7 +27,7 @@ suite("TodoService Unit Tests", () => {
     todoService = new TodoService(mockTodoRepo as TodoRepository);
   });
 
-  test("Insert", async () => {
+  it("Insert", async () => {
     const newTodo = await todoService.add("Hello World");
 
     expect(newTodo.content).toBe("Hello World");
@@ -35,26 +35,26 @@ suite("TodoService Unit Tests", () => {
     expect(mockTodoRepo.insert).toHaveBeenCalledWith("Hello World");
   });
 
-  test("Select", async () => {
+  it("Select", async () => {
     const todo = await todoService.findById(1);
 
     expect(todo?.content).toBe("Hello World");
     expect(mockTodoRepo.findById).toHaveBeenCalledWith(1);
   });
 
-  test("Update", async () => {
+  it("Update", async () => {
     await todoService.complete(1);
 
     expect(mockTodoRepo.update).toHaveBeenCalledWith(1);
   });
 
-  test("Delete", async () => {
+  it("Delete", async () => {
     await todoService.deleteById(1);
 
     expect(mockTodoRepo.delete).toHaveBeenCalledWith(1);
   });
 
-  test("Find All", async () => {
+  it("Find All", async () => {
     const todoList = await todoService.findAll();
 
     expect(todoList).toEqual([mockTodo]);

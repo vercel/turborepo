@@ -23,9 +23,13 @@ pub struct TaskOutputs {
 }
 
 impl TaskOutputs {
+    // We consider an empty outputs to be a log output and nothing else
     pub fn is_empty(&self) -> bool {
-        self.inclusions.is_empty() && self.exclusions.is_empty()
+        self.inclusions.len() == 1
+            && self.inclusions[0].ends_with(".log")
+            && self.exclusions.is_empty()
     }
+
     pub fn validated_inclusions(&self) -> Result<Vec<ValidatedGlob>, GlobError> {
         self.inclusions
             .iter()

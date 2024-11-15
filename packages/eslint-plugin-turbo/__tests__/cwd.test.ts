@@ -3,6 +3,12 @@ import { execSync } from "node:child_process";
 import { type Schema } from "@turbo/types";
 import { parse, stringify } from "json5";
 import { setupTestFixtures } from "@turbo/test-utils";
+import { describe, it, expect } from "@jest/globals";
+
+const env: NodeJS.ProcessEnv = {
+  ...process.env,
+  ESLINT_USE_FLAT_CONFIG: "false",
+};
 
 describe("eslint settings check", () => {
   const { useFixture } = setupTestFixtures({
@@ -16,6 +22,7 @@ describe("eslint settings check", () => {
     const configString = execSync(`npm exec eslint -- --print-config peer.js`, {
       cwd,
       encoding: "utf8",
+      env,
     });
     const configJson: Record<string, unknown> = parse(configString);
 
@@ -75,6 +82,7 @@ describe("eslint settings check", () => {
       {
         cwd,
         encoding: "utf8",
+        env,
       }
     );
     const configJson: Record<string, unknown> = parse(configString);
@@ -143,6 +151,7 @@ describe("eslint cache is busted", () => {
       execSync(`npm exec eslint -- --format=json child.js`, {
         cwd,
         encoding: "utf8",
+        env,
       });
     } catch (error: unknown) {
       const outputJson: Record<string, unknown> = parse(
@@ -171,6 +180,7 @@ describe("eslint cache is busted", () => {
     const output = execSync(`npm exec eslint -- --format=json child.js`, {
       cwd,
       encoding: "utf8",
+      env,
     });
     const outputJson: Record<string, unknown> = parse(output);
     expect(outputJson).toMatchObject([{ errorCount: 0 }]);

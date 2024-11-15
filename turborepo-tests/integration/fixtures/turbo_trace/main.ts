@@ -1,4 +1,4 @@
-import { Button } from "./button";
+import { Button } from "./button.tsx";
 import foo from "./foo";
 import repeat from "repeat-string";
 

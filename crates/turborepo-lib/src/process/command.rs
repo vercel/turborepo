@@ -9,6 +9,7 @@ use turbopath::AbsoluteSystemPathBuf;
 
 /// A command builder that can be used to build both regular
 /// child processes and ones spawned hooked up to a PTY
+#[derive(Debug, Clone)]
 pub struct Command {
     program: OsString,
     args: Vec<OsString>,
@@ -99,6 +100,11 @@ impl Command {
     /// If stdin is expected to be opened
     pub fn will_open_stdin(&self) -> bool {
         self.open_stdin
+    }
+
+    /// Program for the command
+    pub fn program(&self) -> &OsStr {
+        &self.program
     }
 }
 

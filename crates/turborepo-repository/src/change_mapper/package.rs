@@ -24,6 +24,7 @@ pub trait PackageChangeMapper {
 }
 
 /// Detects package by checking if the file is inside the package.
+///
 /// Does *not* use the `globalDependencies` in turbo.json.
 /// Since we don't have these dependencies, any file that is
 /// not in any package will automatically invalidate all
@@ -77,7 +78,9 @@ pub enum Error {
     InvalidFilter(#[from] BuildError),
 }
 
-/// A package detector that uses a global deps list to determine
+/// A package detector.
+///
+/// It uses a global deps list to determine
 /// if a file should cause all packages to be marked as changed.
 /// This is less conservative than the `DefaultPackageChangeMapper`,
 /// which assumes that any changed file that is not in a package

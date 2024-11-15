@@ -3,11 +3,14 @@ mod package;
 mod server;
 mod task;
 
-use std::{io, sync::Arc};
+use std::{
+    io,
+    ops::{Deref, DerefMut},
+    sync::Arc,
+};
 
 use async_graphql::{http::GraphiQLSource, *};
 use axum::{response, response::IntoResponse};
-use itertools::Itertools;
 use miette::Diagnostic;
 use package::Package;
 pub use server::run_server;
@@ -49,6 +52,8 @@ pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Resolution(#[from] crate::run::scope::filter::ResolutionError),
+    #[error("failed to parse file: {0:?}")]
+    Parse(swc_ecma_parser::error::Error),
 }
 
 pub struct RepositoryQuery {
@@ -70,6 +75,19 @@ impl RepositoryQuery {
 pub struct Array<T: OutputType> {
     items: Vec<T>,
     length: usize,
+}
+
+impl<T: OutputType> Deref for Array<T> {
+    type Target = [T];
+    fn deref(&self) -> &Self::Target {
+        &self.items
+    }
+}
+
+impl<T: OutputType> DerefMut for Array<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.items
+    }
 }
 
 impl<T: OutputType> FromIterator<T> for Array<T> {
@@ -118,7 +136,7 @@ struct PackagePredicate {
 impl PackagePredicate {
     fn check_equals(pkg: &Package, field: &PackageFields, value: &Any) -> bool {
         match (field, &value.0) {
-            (PackageFields::Name, Value::String(name)) => pkg.name.as_ref() == name,
+            (PackageFields::Name, Value::String(name)) => pkg.get_name().as_ref() == name,
             (PackageFields::DirectDependencyCount, Value::Number(n)) => {
                 let Some(n) = n.as_u64() else {
                     return false;
@@ -245,7 +263,7 @@ impl PackagePredicate {
 
     fn check_has(pkg: &Package, field: &PackageFields, value: &Any) -> bool {
         match (field, &value.0) {
-            (PackageFields::Name, Value::String(name)) => pkg.name.as_ref() == name,
+            (PackageFields::Name, Value::String(name)) => pkg.get_name().as_str() == name,
             (PackageFields::TaskName, Value::String(name)) => pkg.get_tasks().contains_key(name),
             _ => false,
         }
@@ -489,7 +507,7 @@ impl RepositoryQuery {
         let mut opts = self.run.opts().clone();
         opts.scope_opts.affected_range = Some((base, head));
 
-        Ok(RunBuilder::calculate_filtered_packages(
+        let mut packages = RunBuilder::calculate_filtered_packages(
             self.run.repo_root(),
             &opts,
             self.run.pkg_dep_graph(),
@@ -497,24 +515,28 @@ impl RepositoryQuery {
             self.run.root_turbo_json(),
         )?
         .into_iter()
-        .map(|(package, reason)| ChangedPackage {
-            package: Package {
-                run: self.run.clone(),
-                name: package,
-            },
-            reason: reason.into(),
+        .map(|(package, reason)| {
+            Ok(ChangedPackage {
+                package: Package::new(self.run.clone(), package)?,
+                reason: reason.into(),
+            })
         })
-        .filter(|package| filter.as_ref().map_or(true, |f| f.check(&package.package)))
-        .sorted_by(|a, b| a.package.name.cmp(&b.package.name))
-        .collect())
+        .filter(|package: &Result<ChangedPackage, Error>| {
+            let Ok(package) = package.as_ref() else {
+                return true;
+            };
+            filter.as_ref().map_or(true, |f| f.check(&package.package))
+        })
+        .collect::<Result<Array<_>, _>>()?;
+
+        packages.sort_by(|a, b| a.package.get_name().cmp(b.package.get_name()));
+        Ok(packages)
     }
+
     /// Gets a single package by name
     async fn package(&self, name: String) -> Result<Package, Error> {
         let name = PackageName::from(name);
-        Ok(Package {
-            run: self.run.clone(),
-            name,
-        })
+        Package::new(self.run.clone(), name)
     }
 
     async fn version(&self) -> &'static str {
@@ -528,35 +550,32 @@ impl RepositoryQuery {
             return Err(Error::FileNotFound(abs_path.to_string()));
         }
 
-        Ok(File::new(self.run.clone(), abs_path))
+        File::new(self.run.clone(), abs_path)
     }
 
     /// Gets a list of packages that match the given filter
     async fn packages(&self, filter: Option<PackagePredicate>) -> Result<Array<Package>, Error> {
         let Some(filter) = filter else {
-            return Ok(self
+            let mut packages = self
                 .run
                 .pkg_dep_graph()
                 .packages()
-                .map(|(name, _)| Package {
-                    run: self.run.clone(),
-                    name: name.clone(),
-                })
-                .sorted_by(|a, b| a.name.cmp(&b.name))
-                .collect());
+                .map(|(name, _)| Package::new(self.run.clone(), name.clone()))
+                .collect::<Result<Array<_>, _>>()?;
+            packages.sort_by(|a, b| a.get_name().cmp(b.get_name()));
+            return Ok(packages);
         };
 
-        Ok(self
+        let mut packages = self
             .run
             .pkg_dep_graph()
             .packages()
-            .map(|(name, _)| Package {
-                run: self.run.clone(),
-                name: name.clone(),
-            })
-            .filter(|pkg| filter.check(pkg))
-            .sorted_by(|a, b| a.name.cmp(&b.name))
-            .collect())
+            .map(|(name, _)| Package::new(self.run.clone(), name.clone()))
+            .filter(|pkg| pkg.as_ref().map_or(false, |pkg| filter.check(pkg)))
+            .collect::<Result<Array<_>, _>>()?;
+        packages.sort_by(|a, b| a.get_name().cmp(b.get_name()));
+
+        Ok(packages)
     }
 }
 

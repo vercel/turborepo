@@ -23,6 +23,7 @@ mod framework;
 mod gitignore;
 pub(crate) mod globwatcher;
 mod hash;
+mod micro_frontends;
 mod opts;
 mod package_changes_watcher;
 mod panic_handler;

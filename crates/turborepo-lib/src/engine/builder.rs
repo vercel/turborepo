@@ -19,13 +19,17 @@ use crate::{
 };
 
 #[derive(Debug, thiserror::Error, Diagnostic)]
-#[error("could not find task `{name}` in project")]
-pub struct MissingTaskError {
-    name: String,
-    #[label]
-    span: Option<SourceSpan>,
-    #[source_code]
-    text: NamedSource,
+pub enum MissingTaskError {
+    #[error("could not find task `{name}` in project")]
+    MissingTaskDefinition {
+        name: String,
+        #[label]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource,
+    },
+    #[error("could not find package `{name}` in project")]
+    MissingPackage { name: String },
 }
 
 #[derive(Debug, thiserror::Error, Diagnostic)]
@@ -253,6 +257,17 @@ impl<'a> EngineBuilder<'a> {
         }
 
         if !missing_tasks.is_empty() {
+            let missing_pkgs: HashMap<_, _> = missing_tasks
+                .iter()
+                .filter_map(|(task, _)| {
+                    let pkg = task.package()?;
+                    let missing_pkg = self
+                        .package_graph
+                        .package_info(&PackageName::from(pkg))
+                        .is_none();
+                    missing_pkg.then(|| (task.to_string(), pkg.to_string()))
+                })
+                .collect();
             let mut missing_tasks = missing_tasks
                 .into_iter()
                 .map(|(task_name, span)| (task_name.to_string(), span))
@@ -262,8 +277,12 @@ impl<'a> EngineBuilder<'a> {
             let errors = missing_tasks
                 .into_iter()
                 .map(|(name, span)| {
-                    let (span, text) = span.span_and_text("turbo.json");
-                    MissingTaskError { name, span, text }
+                    if let Some(pkg) = missing_pkgs.get(&name) {
+                        MissingTaskError::MissingPackage { name: pkg.clone() }
+                    } else {
+                        let (span, text) = span.span_and_text("turbo.json");
+                        MissingTaskError::MissingTaskDefinition { name, span, text }
+                    }
                 })
                 .collect();
 
@@ -433,8 +452,16 @@ impl<'a> EngineBuilder<'a> {
         };
 
         let task_id_as_name = task_id.as_task_name();
-        if turbo_json.tasks.contains_key(&task_id_as_name)
+        if
+        // See if pkg#task is defined e.g. `docs#build`. This can only happen in root turbo.json
+        turbo_json.tasks.contains_key(&task_id_as_name)
+            // See if task is defined e.g. `build`. This can happen in root or workspace turbo.json
+            // This will fail if the user provided a task id e.g. turbo `docs#build`
             || turbo_json.tasks.contains_key(task_name)
+            // If user provided a task id, then we see if the task is defined
+            // e.g. `docs#build` should resolve if there's a `build` in root turbo.json or docs workspace level turbo.json
+            || (matches!(workspace, PackageName::Root) && turbo_json.tasks.contains_key(&TaskName::from(task_name.task())))
+            || (workspace == &PackageName::from(task_id.package()) && turbo_json.tasks.contains_key(&TaskName::from(task_name.task())))
         {
             Ok(true)
         } else if !matches!(workspace, PackageName::Root) {
@@ -553,6 +580,7 @@ fn validate_task_name(task: Spanned<&str>) -> Result<(), Error> {
 mod test {
     use std::assert_matches::assert_matches;
 
+    use insta::{assert_json_snapshot, assert_snapshot};
     use pretty_assertions::assert_eq;
     use serde_json::json;
     use tempfile::TempDir;
@@ -680,6 +708,10 @@ mod test {
     #[test_case(PackageName::from("b"), "build", "b#build", true ; "workspace task in workspace")]
     #[test_case(PackageName::from("b"), "test", "b#test", true ; "task missing from workspace")]
     #[test_case(PackageName::from("c"), "missing", "c#missing", false ; "task missing")]
+    #[test_case(PackageName::from("c"), "c#curse", "c#curse", true ; "root defined task")]
+    #[test_case(PackageName::from("b"), "c#curse", "c#curse", true ; "non-workspace root defined task")]
+    #[test_case(PackageName::from("b"), "b#special", "b#special", true ; "workspace defined task")]
+    #[test_case(PackageName::from("c"), "b#special", "b#special", false ; "non-workspace defined task")]
     fn test_task_definition(
         workspace: PackageName,
         task_name: &'static str,
@@ -694,6 +726,7 @@ mod test {
                         "test": { "inputs": ["testing"] },
                         "build": { "inputs": ["primary"] },
                         "a#build": { "inputs": ["special"] },
+                        "c#curse": {},
                     }
                 })),
             ),
@@ -702,6 +735,7 @@ mod test {
                 turbo_json(json!({
                     "tasks": {
                         "build": { "inputs": ["outer"]},
+                        "special": {},
                     }
                 })),
             ),
@@ -1244,5 +1278,153 @@ mod test {
             })
             .err();
         assert_eq!(result.as_deref(), reason);
+    }
+
+    #[test]
+    fn test_run_package_task_exact() {
+        let repo_root_dir = TempDir::with_prefix("repo").unwrap();
+        let repo_root = AbsoluteSystemPathBuf::new(repo_root_dir.path().to_str().unwrap()).unwrap();
+        let package_graph = mock_package_graph(
+            &repo_root,
+            package_jsons! {
+                repo_root,
+                "app1" => ["libA"],
+                "app2" => ["libA"],
+                "libA" => []
+            },
+        );
+        let turbo_jsons = vec![
+            (
+                PackageName::Root,
+                turbo_json(json!({
+                    "tasks": {
+                        "build": { "dependsOn": ["^build"] },
+                        "special": { "dependsOn": ["^build"] },
+                    }
+                })),
+            ),
+            (
+                PackageName::from("app2"),
+                turbo_json(json!({
+                    "extends": ["//"],
+                    "tasks": {
+                        "another": { "dependsOn": ["^build"] },
+                    }
+                })),
+            ),
+        ]
+        .into_iter()
+        .collect();
+        let loader = TurboJsonLoader::noop(turbo_jsons);
+        let engine = EngineBuilder::new(&repo_root, &package_graph, loader, false)
+            .with_tasks(vec![
+                Spanned::new(TaskName::from("app1#special")),
+                Spanned::new(TaskName::from("app2#another")),
+            ])
+            .with_workspaces(vec![PackageName::from("app1"), PackageName::from("app2")])
+            .build()
+            .unwrap();
+
+        let expected = deps! {
+            "app1#special" => ["libA#build"],
+            "app2#another" => ["libA#build"],
+            "libA#build" => ["___ROOT___"]
+        };
+        assert_eq!(all_dependencies(&engine), expected);
+    }
+
+    #[test]
+    fn test_run_package_task_exact_error() {
+        let repo_root_dir = TempDir::with_prefix("repo").unwrap();
+        let repo_root = AbsoluteSystemPathBuf::new(repo_root_dir.path().to_str().unwrap()).unwrap();
+        let package_graph = mock_package_graph(
+            &repo_root,
+            package_jsons! {
+                repo_root,
+                "app1" => ["libA"],
+                "libA" => []
+            },
+        );
+        let turbo_jsons = vec![
+            (
+                PackageName::Root,
+                turbo_json(json!({
+                    "tasks": {
+                        "build": { "dependsOn": ["^build"] },
+                    }
+                })),
+            ),
+            (
+                PackageName::from("app1"),
+                turbo_json(json!({
+                    "extends": ["//"],
+                    "tasks": {
+                        "another": { "dependsOn": ["^build"] },
+                    }
+                })),
+            ),
+        ]
+        .into_iter()
+        .collect();
+        let loader = TurboJsonLoader::noop(turbo_jsons);
+        let engine = EngineBuilder::new(&repo_root, &package_graph, loader.clone(), false)
+            .with_tasks(vec![Spanned::new(TaskName::from("app1#special"))])
+            .with_workspaces(vec![PackageName::from("app1")])
+            .build();
+        assert!(engine.is_err());
+        let report = miette::Report::new(engine.unwrap_err());
+        let mut msg = String::new();
+        miette::JSONReportHandler::new()
+            .render_report(&mut msg, report.as_ref())
+            .unwrap();
+        assert_json_snapshot!(msg);
+
+        let engine = EngineBuilder::new(&repo_root, &package_graph, loader, false)
+            .with_tasks(vec![Spanned::new(TaskName::from("app1#another"))])
+            .with_workspaces(vec![PackageName::from("libA")])
+            .build();
+        assert!(engine.is_err());
+        let report = miette::Report::new(engine.unwrap_err());
+        let mut msg = String::new();
+        miette::JSONReportHandler::new()
+            .render_report(&mut msg, report.as_ref())
+            .unwrap();
+        assert_json_snapshot!(msg);
+    }
+
+    #[test]
+    fn test_run_package_task_invalid_package() {
+        let repo_root_dir = TempDir::with_prefix("repo").unwrap();
+        let repo_root = AbsoluteSystemPathBuf::new(repo_root_dir.path().to_str().unwrap()).unwrap();
+        let package_graph = mock_package_graph(
+            &repo_root,
+            package_jsons! {
+                repo_root,
+                "app1" => ["libA"],
+                "libA" => []
+            },
+        );
+        let turbo_jsons = vec![(
+            PackageName::Root,
+            turbo_json(json!({
+                "tasks": {
+                    "build": { "dependsOn": ["^build"] },
+                }
+            })),
+        )]
+        .into_iter()
+        .collect();
+        let loader = TurboJsonLoader::noop(turbo_jsons);
+        let engine = EngineBuilder::new(&repo_root, &package_graph, loader.clone(), false)
+            .with_tasks(vec![Spanned::new(TaskName::from("app2#bad-task"))])
+            .with_workspaces(vec![PackageName::from("app1"), PackageName::from("libA")])
+            .build();
+        assert!(engine.is_err());
+        let report = miette::Report::new(engine.unwrap_err());
+        let mut msg = String::new();
+        miette::NarratableReportHandler::new()
+            .render_report(&mut msg, report.as_ref())
+            .unwrap();
+        assert_snapshot!(msg);
     }
 }

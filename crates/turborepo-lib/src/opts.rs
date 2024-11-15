@@ -32,6 +32,11 @@ pub enum Error {
          or equal to 1: {1}"
     )]
     ConcurrencyOutOfBounds(#[backtrace] backtrace::Backtrace, String),
+    #[error(
+        "Cannot set `cache` config and other cache options (`force`, `remoteOnly`, \
+         `remoteCacheReadOnly`) at the same time"
+    )]
+    OverlappingCacheOptions,
     #[error(transparent)]
     Path(#[from] turbopath::PathError),
     #[error(transparent)]
@@ -100,16 +105,16 @@ impl Opts {
             return Err(Error::ExpectedRun(Backtrace::capture()));
         };
 
-        let run_and_execution_args = OptsInputs {
+        let inputs = OptsInputs {
             run_args: run_args.as_ref(),
             execution_args: execution_args.as_ref(),
             config,
             api_auth: &api_auth,
         };
-        let run_opts = RunOpts::try_from(run_and_execution_args)?;
-        let cache_opts = CacheOpts::from(run_and_execution_args);
-        let scope_opts = ScopeOpts::try_from(run_and_execution_args)?;
-        let runcache_opts = RunCacheOpts::from(run_and_execution_args);
+        let run_opts = RunOpts::try_from(inputs)?;
+        let cache_opts = CacheOpts::try_from(inputs)?;
+        let scope_opts = ScopeOpts::try_from(inputs)?;
+        let runcache_opts = RunCacheOpts::from(inputs);
 
         Ok(Self {
             run_opts,
@@ -128,18 +133,14 @@ struct OptsInputs<'a> {
     api_auth: &'a Option<APIAuth>,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct RunCacheOpts {
-    pub(crate) skip_reads: bool,
-    pub(crate) skip_writes: bool,
     pub(crate) task_output_logs_override: Option<OutputLogsMode>,
 }
 
 impl<'a> From<OptsInputs<'a>> for RunCacheOpts {
     fn from(inputs: OptsInputs<'a>) -> Self {
         RunCacheOpts {
-            skip_reads: inputs.config.force(),
-            skip_writes: inputs.run_args.no_cache,
             task_output_logs_override: inputs.execution_args.output_logs,
         }
     }
@@ -170,15 +171,32 @@ pub struct RunOpts {
     pub ui_mode: UIMode,
 }
 
+/// Projection of `RunOpts` that only includes information necessary to compute
+/// pass through args.
+#[derive(Debug)]
+pub struct TaskArgs<'a> {
+    pass_through_args: &'a [String],
+    tasks: &'a [String],
+}
+
 impl RunOpts {
-    pub fn args_for_task(&self, task_id: &TaskId) -> Option<Vec<String>> {
+    pub fn task_args(&self) -> TaskArgs {
+        TaskArgs {
+            pass_through_args: &self.pass_through_args,
+            tasks: &self.tasks,
+        }
+    }
+}
+
+impl<'a> TaskArgs<'a> {
+    pub fn args_for_task(&self, task_id: &TaskId) -> Option<&'a [String]> {
         if !self.pass_through_args.is_empty()
             && self
                 .tasks
                 .iter()
                 .any(|task| task.as_str() == task_id.task())
         {
-            Some(self.pass_through_args.clone())
+            Some(self.pass_through_args)
         } else {
             None
         }
@@ -342,18 +360,51 @@ impl<'a> TryFrom<OptsInputs<'a>> for ScopeOpts {
     }
 }
 
-impl<'a> From<OptsInputs<'a>> for CacheOpts {
-    fn from(inputs: OptsInputs<'a>) -> Self {
+impl<'a> TryFrom<OptsInputs<'a>> for CacheOpts {
+    type Error = self::Error;
+
+    fn try_from(inputs: OptsInputs<'a>) -> Result<Self, Self::Error> {
         let is_linked = turborepo_api_client::is_linked(inputs.api_auth);
-        let skip_remote = if !is_linked {
-            true
+        let cache = inputs.config.cache();
+        let has_old_cache_config = inputs.config.remote_only()
+            || inputs.config.force()
+            || inputs.run_args.no_cache
+            || inputs.config.remote_cache_read_only();
+
+        if has_old_cache_config && cache.is_some() {
+            return Err(Error::OverlappingCacheOptions);
+        }
+
+        let mut cache = cache.unwrap_or_default();
+
+        if inputs.config.remote_only() {
+            cache.local.read = false;
+            cache.local.write = false;
+        }
+
+        if inputs.config.force() {
+            cache.local.read = false;
+            cache.remote.read = false;
+        }
+
+        if inputs.run_args.no_cache {
+            cache.local.write = false;
+            cache.remote.write = false;
+        }
+
+        if !is_linked {
+            cache.remote.read = false;
+            cache.remote.write = false;
         } else if let Some(enabled) = inputs.config.enabled {
             // We're linked, but if the user has explicitly enabled or disabled, use that
             // value
-            !enabled
-        } else {
-            false
+            cache.remote.read = enabled;
+            cache.remote.write = enabled;
         };
+
+        if inputs.config.remote_cache_read_only() {
+            cache.remote.write = false;
+        }
 
         // Note that we don't currently use the team_id value here. In the future, we
         // should probably verify that we only use the signature value when the
@@ -366,14 +417,12 @@ impl<'a> From<OptsInputs<'a>> for CacheOpts {
             signature,
         ));
 
-        CacheOpts {
+        Ok(CacheOpts {
             cache_dir: inputs.config.cache_dir().into(),
-            skip_filesystem: inputs.config.remote_only(),
-            remote_cache_read_only: inputs.config.remote_cache_read_only(),
+            cache,
             workers: inputs.run_args.cache_workers,
-            skip_remote,
             remote_cache_opts,
-        }
+        })
     }
 }
 
@@ -393,14 +442,20 @@ impl ScopeOpts {
 
 #[cfg(test)]
 mod test {
-    use test_case::test_case;
-    use turborepo_cache::CacheOpts;
 
-    use super::RunOpts;
+    use test_case::test_case;
+    use turbopath::AbsoluteSystemPathBuf;
+    use turborepo_api_client::APIAuth;
+    use turborepo_cache::CacheOpts;
+    use turborepo_ui::ColorConfig;
+
+    use super::{OptsInputs, RunOpts};
     use crate::{
-        cli::DryRunMode,
+        cli::{Command, DryRunMode, RunArgs},
+        commands::CommandBase,
         opts::{Opts, RunCacheOpts, ScopeOpts},
         turbo_json::UIMode,
+        Args,
     };
 
     #[derive(Default)]
@@ -533,5 +588,87 @@ mod test {
         };
         let synthesized = opts.synthesize_command();
         assert_eq!(synthesized, expected);
+    }
+
+    #[test_case(
+         RunArgs {
+             no_cache: true,
+             ..Default::default()
+         }, "no-cache"
+    )]
+    #[test_case(
+         RunArgs {
+             force: Some(Some(true)),
+             ..Default::default()
+         }, "force"
+    )]
+    #[test_case(
+         RunArgs {
+             remote_only: Some(Some(true)),
+             ..Default::default()
+         }, "remote-only"
+    )]
+    #[test_case(
+         RunArgs {
+             remote_cache_read_only: Some(Some(true)),
+             ..Default::default()
+         }, "remote-cache-read-only"
+    )]
+    #[test_case(
+         RunArgs {
+             no_cache: true,
+             cache: Some("remote:w,local:rw".to_string()),
+             ..Default::default()
+         }, "no-cache_remote_w,local_rw"
+    )]
+    #[test_case(
+         RunArgs {
+             remote_only: Some(Some(true)),
+             cache: Some("remote:r,local:rw".to_string()),
+             ..Default::default()
+         }, "remote-only_remote_r,local_rw"
+    )]
+    #[test_case(
+         RunArgs {
+             force: Some(Some(true)),
+             cache: Some("remote:r,local:r".to_string()),
+             ..Default::default()
+         }, "force_remote_r,local_r"
+    )]
+    #[test_case(
+          RunArgs {
+              remote_cache_read_only: Some(Some(true)),
+              cache: Some("remote:rw,local:r".to_string()),
+              ..Default::default()
+          }, "remote-cache-read-only_remote_rw,local_r"
+    )]
+    fn test_resolve_cache_config(run_args: RunArgs, name: &str) -> Result<(), anyhow::Error> {
+        let mut args = Args::default();
+        args.command = Some(Command::Run {
+            execution_args: Box::default(),
+            run_args: Box::new(run_args),
+        });
+        let base = CommandBase::new(
+            args,
+            AbsoluteSystemPathBuf::default(),
+            "1.0.0",
+            ColorConfig::new(true),
+        );
+
+        let cache_opts = CacheOpts::try_from(OptsInputs {
+            run_args: base.args().run_args().unwrap(),
+            execution_args: base.args().execution_args().unwrap(),
+            config: base.config()?,
+            api_auth: &Some(APIAuth {
+                team_id: Some("my-team".to_string()),
+                token: "my-token".to_string(),
+                team_slug: None,
+            }),
+        })
+        .map(|cache_opts| cache_opts.cache);
+
+        insta::assert_debug_snapshot!(name, cache_opts);
+
+        Ok(())
     }
 }

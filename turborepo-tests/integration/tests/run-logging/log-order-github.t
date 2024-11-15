@@ -31,8 +31,6 @@ because otherwise prysk interprets them as multiline commands
   Cached:    0 cached, 2 total
     Time:\s*[\.0-9]+m?s  (re)
   
-   WARNING  no output files found for task my-app#build. Please check your `outputs` key in `turbo.json`
-   WARNING  no output files found for task util#build. Please check your `outputs` key in `turbo.json`
 # Build as if we are in Github Actions with a task log prefix.
   $ GITHUB_ACTIONS=1 ${TURBO} run build --force --log-prefix="task" --filter=util
   \xe2\x80\xa2 Packages in scope: util (esc)
@@ -52,7 +50,6 @@ because otherwise prysk interprets them as multiline commands
   Cached:    0 cached, 1 total
     Time:\s*[\.0-9]+m?s  (re)
   
-   WARNING  no output files found for task util#build. Please check your `outputs` key in `turbo.json`
 
 Verify that errors are grouped properly
   $ GITHUB_ACTIONS=1 ${TURBO} run fail

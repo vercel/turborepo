@@ -36,7 +36,9 @@ pub struct PackageGraph {
     repo_root: AbsoluteSystemPathBuf,
 }
 
-/// The WorkspacePackage follows the Vercel glossary of terms where "Workspace"
+/// The WorkspacePackage.
+///
+/// It follows the Vercel glossary of terms where "Workspace"
 /// is the collection of packages and "Package" is a single package within the
 /// workspace. https://vercel.com/docs/vercel-platform/glossary
 /// There are other structs in this module that have "Workspace" in the name,
@@ -107,6 +109,15 @@ impl Serialize for PackageName {
     }
 }
 
+impl PackageName {
+    pub fn as_str(&self) -> &str {
+        match self {
+            PackageName::Root => ROOT_PKG_NAME,
+            PackageName::Other(name) => name,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
 pub enum PackageNode {
     Root,
@@ -132,11 +143,17 @@ impl PackageGraph {
 
     #[tracing::instrument(skip(self))]
     pub fn validate(&self) -> Result<(), Error> {
-        for info in self.packages.values() {
+        for (package_name, info) in self.packages.iter() {
+            if matches!(package_name, PackageName::Root) {
+                continue;
+            }
             let name = info.package_json.name.as_deref();
-            if matches!(name, None | Some("")) {
-                let package_json_path = self.repo_root.resolve(info.package_json_path());
-                return Err(Error::PackageJsonMissingName(package_json_path));
+            match name {
+                Some("") | None => {
+                    let package_json_path = self.repo_root.resolve(info.package_json_path());
+                    return Err(Error::PackageJsonMissingName(package_json_path));
+                }
+                Some(_) => continue,
             }
         }
         graph::validate_graph(&self.graph).map_err(Error::InvalidPackageGraph)?;
@@ -890,5 +907,18 @@ mod test {
                 graph::Error::SelfDependency(_)
             ))
         );
+    }
+
+    #[tokio::test]
+    async fn test_does_not_require_name_for_root_package_json() {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        let pkg_graph = PackageGraph::builder(&root, PackageJson::from_value(json!({})).unwrap())
+            .with_package_discovery(MockDiscovery)
+            .build()
+            .await
+            .unwrap();
+
+        assert!(pkg_graph.validate().is_ok());
     }
 }
