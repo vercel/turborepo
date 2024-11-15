@@ -26,8 +26,8 @@ pub const SUPPORTED_VERSIONS: &[&str] = ["1"].as_slice();
 /// proxy server for microfrontends
 #[derive(Debug, PartialEq, Eq, Serialize, Deserializable, Default)]
 pub struct Config {
-    pub version: String,
-    pub applications: BTreeMap<String, Application>,
+    version: String,
+    applications: BTreeMap<String, Application>,
 }
 
 impl Config {
@@ -70,6 +70,10 @@ impl Config {
         } else {
             Err(Error::biome_error(errs))
         }
+    }
+
+    pub fn applications(&self) -> impl Iterator<Item = (&String, &Application)> {
+        self.applications.iter()
     }
 }
 

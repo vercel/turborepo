@@ -42,8 +42,7 @@ impl MicroFrontendsConfigs {
                 continue;
             };
             let tasks = config
-                .applications
-                .iter()
+                .applications()
                 .map(|(application, options)| {
                     let dev_task = options.development.task.as_deref().unwrap_or("dev");
                     TaskId::new(application, dev_task).into_owned()
