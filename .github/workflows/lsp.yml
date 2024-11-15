@@ -15,10 +15,10 @@ jobs:
       fail-fast: false
       matrix:
         settings:
-          - host: macos-12
+          - host: macos-13
             target: "x86_64-apple-darwin"
             container-options: "--rm"
-          - host: macos-12
+          - host: macos-13
             target: "aarch64-apple-darwin"
             container-options: "--rm"
           - host: ubuntu-latest

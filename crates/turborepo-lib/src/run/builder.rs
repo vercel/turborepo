@@ -6,6 +6,7 @@ use std::{
 };
 
 use chrono::Local;
+use itertools::Itertools;
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_analytics::{start_analytics, AnalyticsHandle, AnalyticsSender};
@@ -37,10 +38,12 @@ use {
     },
 };
 
+use super::task_id::TaskId;
 use crate::{
     cli::DryRunMode,
     commands::CommandBase,
     engine::{Engine, EngineBuilder},
+    micro_frontends::MicroFrontendsConfigs,
     opts::Opts,
     process::ProcessManager,
     run::{scope, task_access::TaskAccess, task_id::TaskName, Error, Run, RunCache},
@@ -370,6 +373,7 @@ impl RunBuilder {
         repo_telemetry.track_package_manager(pkg_dep_graph.package_manager().to_string());
         repo_telemetry.track_size(pkg_dep_graph.len());
         run_telemetry.track_run_type(self.opts.run_opts.dry_run.is_some());
+        let micro_frontend_configs = MicroFrontendsConfigs::new(&self.repo_root, &pkg_dep_graph)?;
 
         let scm = scm.await.expect("detecting scm panicked");
         let async_cache = AsyncCache::new(
@@ -401,6 +405,13 @@ impl RunBuilder {
                 self.repo_root.clone(),
                 pkg_dep_graph.packages(),
             )
+        } else if let Some(micro_frontends) = &micro_frontend_configs {
+            TurboJsonLoader::workspace_with_microfrontends(
+                self.repo_root.clone(),
+                self.root_turbo_json_path.clone(),
+                pkg_dep_graph.packages(),
+                micro_frontends.clone(),
+            )
         } else {
             TurboJsonLoader::workspace(
                 self.repo_root.clone(),
@@ -427,6 +438,7 @@ impl RunBuilder {
             &root_turbo_json,
             filtered_pkgs.keys(),
             turbo_json_loader.clone(),
+            micro_frontend_configs.as_ref(),
         )?;
 
         if self.opts.run_opts.parallel {
@@ -436,6 +448,7 @@ impl RunBuilder {
                 &root_turbo_json,
                 filtered_pkgs.keys(),
                 turbo_json_loader,
+                micro_frontend_configs.as_ref(),
             )?;
         }
 
@@ -444,7 +457,8 @@ impl RunBuilder {
         let run_cache = Arc::new(RunCache::new(
             async_cache,
             &self.repo_root,
-            &self.opts.runcache_opts,
+            self.opts.runcache_opts,
+            &self.opts.cache_opts,
             color_selector,
             daemon.clone(),
             self.color_config,
@@ -476,6 +490,7 @@ impl RunBuilder {
             signal_handler: signal_handler.clone(),
             daemon,
             should_print_prelude,
+            micro_frontend_configs,
         })
     }
 
@@ -485,7 +500,52 @@ impl RunBuilder {
         root_turbo_json: &TurboJson,
         filtered_pkgs: impl Iterator<Item = &'a PackageName>,
         turbo_json_loader: TurboJsonLoader,
+        micro_frontends_configs: Option<&MicroFrontendsConfigs>,
     ) -> Result<Engine, Error> {
+        let mut tasks = self
+            .opts
+            .run_opts
+            .tasks
+            .iter()
+            .map(|task| {
+                // TODO: Pull span info from command
+                Spanned::new(TaskName::from(task.as_str()).into_owned())
+            })
+            .collect::<Vec<_>>();
+        let mut workspace_packages = filtered_pkgs.cloned().collect::<Vec<_>>();
+        if let Some(micro_frontends_configs) = micro_frontends_configs {
+            // TODO: this logic is very similar to what happens inside engine builder and
+            // could probably be exposed
+            let tasks_from_filter = workspace_packages
+                .iter()
+                .map(|package| package.as_str())
+                .cartesian_product(tasks.iter())
+                .map(|(package, task)| {
+                    task.task_id().map_or_else(
+                        || TaskId::new(package, task.task()).into_owned(),
+                        |task_id| task_id.into_owned(),
+                    )
+                })
+                .collect::<HashSet<_>>();
+            // we need to add the MFE config packages into the scope here to make sure the
+            // proxy gets run
+            // TODO(olszewski): We are relying on the fact that persistent tasks must be
+            // entry points to the task graph so we can get away with only
+            // checking the entrypoint tasks.
+            for (mfe_config_package, dev_tasks) in micro_frontends_configs.configs() {
+                for dev_task in dev_tasks {
+                    if tasks_from_filter.contains(dev_task) {
+                        workspace_packages.push(PackageName::from(mfe_config_package.as_str()));
+                        tasks.push(Spanned::new(
+                            TaskId::new(mfe_config_package, "proxy")
+                                .as_task_name()
+                                .into_owned(),
+                        ));
+                        break;
+                    }
+                }
+            }
+        }
         let mut builder = EngineBuilder::new(
             &self.repo_root,
             pkg_dep_graph,
@@ -494,11 +554,8 @@ impl RunBuilder {
         )
         .with_root_tasks(root_turbo_json.tasks.keys().cloned())
         .with_tasks_only(self.opts.run_opts.only)
-        .with_workspaces(filtered_pkgs.cloned().collect())
-        .with_tasks(self.opts.run_opts.tasks.iter().map(|task| {
-            // TODO: Pull span info from command
-            Spanned::new(TaskName::from(task.as_str()).into_owned())
-        }));
+        .with_workspaces(workspace_packages)
+        .with_tasks(tasks);
 
         if self.add_all_tasks {
             builder = builder.add_all_tasks();

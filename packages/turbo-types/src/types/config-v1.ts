@@ -221,7 +221,7 @@ export interface RootSchemaV1 extends BaseSchemaV1 {
    *
    * - any root level file that impacts package tasks
    * that are not represented in the traditional dependency graph
-   * (e.g. a root tsconfig.json, jest.config.js, .eslintrc, etc.)
+   * (e.g. a root tsconfig.json, jest.config.ts, .eslintrc, etc.)
    *
    * Documentation: https://turbo.build/repo/docs/reference/configuration#globaldependencies
    *

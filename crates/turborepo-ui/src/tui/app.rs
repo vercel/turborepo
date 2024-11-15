@@ -26,9 +26,12 @@ use super::{
     search::SearchResults,
     AppReceiver, Debouncer, Error, Event, InputOptions, SizeInfo, TaskTable, TerminalPane,
 };
-use crate::tui::{
-    task::{Task, TasksByStatus},
-    term_output::TerminalOutput,
+use crate::{
+    tui::{
+        task::{Task, TasksByStatus},
+        term_output::TerminalOutput,
+    },
+    ColorConfig,
 };
 
 #[derive(Debug, Clone)]
@@ -49,6 +52,7 @@ pub struct App<W> {
     scroll: TableState,
     selected_task_index: usize,
     has_user_scrolled: bool,
+    has_sidebar: bool,
     done: bool,
 }
 
@@ -92,6 +96,7 @@ impl<W> App<W> {
             tasks_by_status,
             scroll: TableState::default().with_selected(selected_task_index),
             selected_task_index,
+            has_sidebar: true,
             has_user_scrolled: has_user_interacted,
         }
     }
@@ -137,21 +142,24 @@ impl<W> App<W> {
     #[tracing::instrument(skip(self))]
     pub fn next(&mut self) {
         let num_rows = self.tasks_by_status.count_all();
-        let next_index = (self.selected_task_index + 1).clamp(0, num_rows - 1);
-        self.selected_task_index = next_index;
-        self.scroll.select(Some(next_index));
-        self.has_user_scrolled = true;
+        if num_rows > 0 {
+            self.selected_task_index = (self.selected_task_index + 1) % num_rows;
+            self.scroll.select(Some(self.selected_task_index));
+            self.has_user_scrolled = true;
+        }
     }
 
     #[tracing::instrument(skip(self))]
     pub fn previous(&mut self) {
-        let i = match self.selected_task_index {
-            0 => 0,
-            i => i - 1,
-        };
-        self.selected_task_index = i;
-        self.scroll.select(Some(i));
-        self.has_user_scrolled = true;
+        let num_rows = self.tasks_by_status.count_all();
+        if num_rows > 0 {
+            self.selected_task_index = self
+                .selected_task_index
+                .checked_sub(1)
+                .unwrap_or(num_rows - 1);
+            self.scroll.select(Some(self.selected_task_index));
+            self.has_user_scrolled = true;
+        }
     }
 
     #[tracing::instrument(skip_all)]
@@ -321,7 +329,8 @@ impl<W> App<W> {
             .ok_or_else(|| Error::TaskNotFound { name: task.into() })?;
 
         let running = self.tasks_by_status.running.remove(running_idx);
-        self.tasks_by_status.finished.push(running.finish(result));
+        self.tasks_by_status
+            .insert_finished_task(running.finish(result));
 
         self.tasks
             .get_mut(task)
@@ -557,8 +566,12 @@ impl<W: Write> App<W> {
 
 /// Handle the rendering of the `App` widget based on events received by
 /// `receiver`
-pub async fn run_app(tasks: Vec<String>, receiver: AppReceiver) -> Result<(), Error> {
-    let mut terminal = startup()?;
+pub async fn run_app(
+    tasks: Vec<String>,
+    receiver: AppReceiver,
+    color_config: ColorConfig,
+) -> Result<(), Error> {
+    let mut terminal = startup(color_config)?;
     let size = terminal.size()?;
 
     let mut app: App<Box<dyn io::Write + Send>> = App::new(size.height, size.width, tasks);
@@ -671,7 +684,10 @@ pub fn terminal_big_enough() -> Result<bool, Error> {
 
 /// Configures terminal for rendering App
 #[tracing::instrument]
-fn startup() -> io::Result<Terminal<CrosstermBackend<Stdout>>> {
+fn startup(color_config: ColorConfig) -> io::Result<Terminal<CrosstermBackend<Stdout>>> {
+    if color_config.should_strip_ansi {
+        crossterm::style::force_color_output(false);
+    }
     crossterm::terminal::enable_raw_mode()?;
     let mut stdout = io::stdout();
     // Ensure all pending writes are flushed before we switch to alternative screen
@@ -771,6 +787,9 @@ fn update(
             app.has_user_scrolled = true;
             app.interact()?;
         }
+        Event::ToggleSidebar => {
+            app.has_sidebar = !app.has_sidebar;
+        }
         Event::Input { bytes } => {
             app.forward_input(&bytes)?;
         }
@@ -822,13 +841,18 @@ fn update(
 
 fn view<W>(app: &mut App<W>, f: &mut Frame) {
     let cols = app.size.pane_cols();
-    let horizontal = Layout::horizontal([Constraint::Fill(1), Constraint::Length(cols)]);
+    let horizontal = if app.has_sidebar {
+        Layout::horizontal([Constraint::Fill(1), Constraint::Length(cols)])
+    } else {
+        Layout::horizontal([Constraint::Max(0), Constraint::Length(cols)])
+    };
     let [table, pane] = horizontal.areas(f.size());
 
     let active_task = app.active_task().unwrap().to_string();
 
     let output_logs = app.tasks.get(&active_task).unwrap();
-    let pane_to_render: TerminalPane<W> = TerminalPane::new(output_logs, &active_task, &app.focus);
+    let pane_to_render: TerminalPane<W> =
+        TerminalPane::new(output_logs, &active_task, &app.focus, app.has_sidebar);
 
     let table_to_render = TaskTable::new(&app.tasks_by_status);
 
@@ -865,6 +889,8 @@ mod test {
         app.next();
         assert_eq!(app.scroll.selected(), Some(2), "scroll moves forwards");
         app.next();
+        assert_eq!(app.scroll.selected(), Some(0), "scroll wraps");
+        app.previous();
         assert_eq!(app.scroll.selected(), Some(2), "scroll stays in bounds");
     }
 

@@ -506,12 +506,6 @@ impl<'a> TaskHasher<'a> {
                         "PROGRAMDATA",
                         "SYSTEMROOT",
                         "SYSTEMDRIVE",
-                        // Powershell casing of env variables
-                        "Path",
-                        "ProgramData",
-                        "SystemRoot",
-                        "AppData",
-                        "SystemDrive",
                     ])?;
                 let tracker_env = self
                     .task_hash_tracker
