@@ -1,10 +1,12 @@
 #![deny(clippy::all)]
+mod configv1;
 mod error;
 
 use std::collections::BTreeMap;
 
 use biome_deserialize_macros::Deserializable;
 use biome_json_parser::JsonParserOptions;
+use configv1::ConfigV1;
 pub use error::Error;
 use serde::Serialize;
 use turbopath::AbsoluteSystemPath;
@@ -24,10 +26,9 @@ pub const SUPPORTED_VERSIONS: &[&str] = ["1"].as_slice();
 
 /// The minimal amount of information Turborepo needs to correctly start a local
 /// proxy server for microfrontends
-#[derive(Debug, PartialEq, Eq, Serialize, Deserializable, Default)]
-pub struct Config {
-    version: String,
-    applications: BTreeMap<String, Application>,
+#[derive(Debug, PartialEq, Eq)]
+pub enum Config {
+    V1(ConfigV1),
 }
 
 impl Config {
@@ -52,28 +53,23 @@ impl Config {
             source,
         )
         .consume();
-        // If parsing just the version fails, fallback to full schema to provide better
-        // error message
-        if let Some(VersionOnly { version }) = version_only {
-            if !SUPPORTED_VERSIONS.contains(&version.as_str()) {
-                return Err(Error::UnsupportedVersion(version));
-            }
-        }
-        let (config, errs) = biome_deserialize::json::deserialize_from_json_str(
-            input,
-            JsonParserOptions::default().with_allow_comments(),
-            source,
-        )
-        .consume();
-        if let Some(config) = config {
-            Ok(config)
-        } else {
-            Err(Error::biome_error(errs))
+
+        let version = match version_only {
+            Some(VersionOnly { version }) => version,
+            // Default to version 1 if no version found
+            None => "1".to_string(),
+        };
+
+        match version.as_str() {
+            "1" => ConfigV1::from_str(input, source).map(Config::V1),
+            version => Err(Error::UnsupportedVersion(version.to_string())),
         }
     }
 
     pub fn applications(&self) -> impl Iterator<Item = (&String, &Application)> {
-        self.applications.iter()
+        match self {
+            Config::V1(config_v1) => config_v1.applications(),
+        }
     }
 }
 
