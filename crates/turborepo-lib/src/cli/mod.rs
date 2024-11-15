@@ -418,6 +418,8 @@ impl Args {
             args.test_run = true;
         }
 
+        args.validate()?;
+
         Ok(args)
     }
 
@@ -508,6 +510,18 @@ impl Args {
             .map(|(_, input_token)| input_token);
 
         (is_single_package, single_package_free)
+    }
+
+    fn validate(&self) -> Result<(), clap::Error> {
+        if self.run_args.is_some() && !matches!(self.command, None | Some(Command::Run { .. })) {
+            let mut cmd = Self::command();
+            Err(cmd.error(
+                clap::error::ErrorKind::UnknownArgument,
+                "Cannot use run arguments outside of run command",
+            ))
+        } else {
+            Ok(())
+        }
     }
 }
 
@@ -1482,6 +1496,7 @@ mod test {
 
     use camino::Utf8PathBuf;
     use clap::Parser;
+    use insta::assert_snapshot;
     use itertools::Itertools;
     use pretty_assertions::assert_eq;
 
@@ -2839,5 +2854,13 @@ mod test {
                 None
             })
             .unwrap_or(false));
+    }
+
+    #[test_case::test_case(&["turbo", "watch", "build", "--no-daemon"]; "after watch")]
+    #[test_case::test_case(&["turbo", "--no-daemon", "watch", "build"]; "before watch")]
+    fn test_no_run_args_outside_of_run(args: &[&str]) {
+        let os_args = args.iter().map(|s| OsString::from(*s)).collect();
+        let err = Args::parse(os_args).unwrap_err();
+        assert_snapshot!(args.join("-").as_str(), err);
     }
 }
