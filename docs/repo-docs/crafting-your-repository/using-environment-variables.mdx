@@ -3,9 +3,11 @@ title: Using environment variables
 description: Learn how to handle environments for your applications.
 ---
 
+import { Fragment } from 'react';
 import { Callout } from '#/components/callout';
 import { Tabs, Tab } from '#/components/tabs';
 import { Accordion, Accordions } from '#/components/accordion';
+import frameworks from '@turbo/types/src/json/frameworks.json';
 
 Environment variable inputs are a vital part of your applications that you'll need to account for in your Turborepo configuration.
 
@@ -30,7 +32,7 @@ There are three important questions when working with environment variables in T
 
 ## Adding environment variables to task hashes
 
-Turborepo needs to be aware your environment variables to account for changes in application behavior. To do this, use the `env` and `globalEnv` keys in your `turbo.json` file.
+Turborepo needs to be aware of your environment variables to account for changes in application behavior. To do this, use the `env` and `globalEnv` keys in your `turbo.json` file.
 
 ```json title="./turbo.json"
 {
@@ -56,20 +58,33 @@ Turborepo needs to be aware your environment variables to account for changes in
 
 Turborepo automatically adds prefix wildcards to your [`env`](/repo/docs/reference/configuration#env) key for common frameworks. If you're using one of the frameworks below in a package, you don't need to specify environment variables with these prefixes:
 
-| Framework        | `env` wildcard    |
-| ---------------- | ----------------- |
-| Astro            | `PUBLIC_*`        |
-| Blitz            | `NEXT_PUBLIC_*`   |
-| Create React App | `REACT_APP_*`     |
-| Gatsby           | `GATSBY_*`        |
-| Next.js          | `NEXT_PUBLIC_*`   |
-| Nuxt.js          | `NUXT_*`      |
-| RedwoodJS        | `REDWOOD_ENV_*`   |
-| Sanity Studio    | `SANITY_STUDIO_*` |
-| Solid            | `VITE_*`          |
-| SvelteKit        | `VITE_*`          |
-| Vite             | `VITE_*`          |
-| Vue              | `VUE_APP_*`       |
+<table>
+  <thead>
+    <tr>
+      <th>Framework</th>
+      <th>
+        <span>
+          <code>env</code> wildcards
+        </span>
+      </th>
+    </tr>
+  </thead>
+  <tbody>
+    {frameworks.map(({ name, envWildcards }) => (
+      <tr key={name}>
+        <td>{name}</td>
+        <td>
+          {envWildcards.map((envWildcard, index) => (
+            <Fragment key={envWildcard}>
+              {index !== 0 ? <span>, </span> : null}
+              <code>{envWildcard}</code>
+            </Fragment>
+          ))}
+        </td>
+      </tr>
+    ))}
+  </tbody>
+</table>
 
 <Callout type="good-to-know">Framework inference is per-package.</Callout>
 
@@ -94,7 +109,7 @@ This means that tasks that do not account for all of the environment variables t
 <Callout type="warn" title="Cache safety with Strict Mode">
   While Strict Mode makes it much more likely for your task to fail when you
   haven't accounted for all of your environment variables, it doesn't guarantee
-  task failure. If your applicaton is able to gracefully handle a missing
+  task failure. If your application is able to gracefully handle a missing
   environment variable, you could still successfully complete tasks and get
   unintended cache hits.
 </Callout>
@@ -108,9 +123,9 @@ For these cases, add those environment variables to [`globalPassThroughEnv`](/re
 
 #### CI vendor compatibility
 
-Strict Mode will filter out environment variables that come from your CI vendors until you've accounted for them using `env` or `globalEnv`.
+Strict Mode will filter out environment variables that come from your CI vendors until you've accounted for them using [`env`](/repo/docs/reference/configuration#env), [`globalEnv`](/repo/docs/reference/configuration#globalenv), [`passThroughEnv`](/repo/docs/reference/configuration#passthroughenv), or [`globalPassThroughEnv`](/repo/docs/reference/configuration#globalpassthroughenv).
 
-If any of these variables are important to your build and aren't included by [Framework Inference](#framework-inference), make sure they are in your `turbo.json` configuration.
+If any of these variables are important to your tasks and aren't included by [Framework Inference](#framework-inference), make sure they are in your `turbo.json` configuration.
 
 ### Loose Mode
 
@@ -133,6 +148,13 @@ const data = fetch(`${process.env.MY_API_URL}/resource/1`);
 You then build your application using a value for `MY_API_URL` that targets your preview environment. When you're ready to ship your application, you build for production and see a cache hit - even though the value of the `MY_API_URL` variable has changed! `MY_API_URL` changed - but Turborepo restored a version of your application from cache that uses the preview environment's `MY_API_URL` rather than production's.
 
 When you're using Loose Mode, `MY_API_URL` is available in the task runtime **even though it isn't accounted for in the task hash**. To make this task more likely to fail and protect you from this misconfiguration, we encourage you to opt for [Strict Mode](#strict-mode).
+
+### Platform Environment Variables
+
+When deploying your application to [Vercel](https://vercel.com/new?ref=turborepo), you likely already have [environment variables](https://vercel.com/docs/projects/environment-variables) configured on your project. Turborepo will automatically check these variables against your `turbo.json` configuration to ensure that you've [accounted for them](/repo/docs/crafting-your-repository/using-environment-variables#adding-environment-variables-to-task-hashes),
+and will warn you about any missing variables.
+
+This functionality can be disabled by setting `TURBO_PLATFORM_ENV_DISABLED=false`
 
 ## Handling `.env` files
 
@@ -168,6 +190,12 @@ To do this, add the files to the [`inputs`](/repo/docs/reference/configuration#i
 Using a `.env` file at the root of the repository is not recommended. Instead, we recommend placing your `.env` files into the packages where they're used.
 
 This practice more closely models the runtime behavior of your applications since environment variables exist in each application's runtime individually. Additionally, as your monorepo scales, this practice makes it easier to manage each application's environment, preventing environment variable leakage across applications.
+
+<Callout type="good-to-know">
+  You may find it easier to use a root `.env` file when incrementally migrating
+  to a monorepo. Tools like [dotenv](https://www.npmjs.com/package/dotenv) can
+  load `.env` files from different locations.
+</Callout>
 
 ### Use `eslint-config-turbo`
 

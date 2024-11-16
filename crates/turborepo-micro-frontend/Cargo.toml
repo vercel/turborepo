@@ -1,0 +1,24 @@
+[package]
+name = "turborepo-micro-frontend"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[dependencies]
+biome_deserialize = { workspace = true }
+biome_deserialize_macros = { workspace = true }
+biome_diagnostics = { workspace = true }
+biome_json_parser = { workspace = true }
+biome_json_syntax = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+turbopath = { workspace = true }
+turborepo-errors = { workspace = true }
+
+[dev-dependencies]
+insta = { workspace = true }
+pretty_assertions = { workspace = true }
+
+[lints]
+workspace = true

@@ -1,5 +1,6 @@
 use std::process::Command;
 
+use miette::NamedSource;
 use node_semver::{Range, Version};
 use turbopath::{AbsoluteSystemPath, RelativeUnixPath};
 use which::which;
@@ -32,11 +33,18 @@ impl<'a> YarnDetector<'a> {
             .current_dir(self.repo_root)
             .output()?;
         let yarn_version_output = String::from_utf8(output.stdout)?;
-        Ok(yarn_version_output.trim().parse()?)
+        yarn_version_output
+            .trim()
+            .parse()
+            .map_err(|err| Error::InvalidVersion {
+                explanation: format!("{} {}", yarn_version_output, err),
+                span: None,
+                text: NamedSource::new("yarn --version", yarn_version_output),
+            })
     }
 
     pub fn detect_berry_or_yarn(version: &Version) -> Result<PackageManager, Error> {
-        let berry_constraint: Range = ">=2.0.0-0".parse()?;
+        let berry_constraint: Range = ">=2.0.0-0".parse().expect("valid version");
         if berry_constraint.satisfies(version) {
             Ok(PackageManager::Berry)
         } else {

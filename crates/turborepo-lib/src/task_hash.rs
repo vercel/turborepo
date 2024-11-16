@@ -76,7 +76,7 @@ impl PackageInputsHashes {
         task_definitions: &HashMap<TaskId<'static>, TaskDefinition>,
         repo_root: &AbsoluteSystemPath,
         telemetry: &GenericEventBuilder,
-        daemon: &mut Option<DaemonClient<DaemonConnector>>,
+        daemon: &Option<DaemonClient<DaemonConnector>>,
     ) -> Result<PackageInputsHashes, Error> {
         tracing::trace!(scm_manual=%scm.is_manual(), "scm running in {} mode", if scm.is_manual() { "manual" } else { "git" });
 
@@ -142,12 +142,11 @@ impl PackageInputsHashes {
                                     )
                                     .await
                                 })
-                                .map_err(|e| {
+                                .inspect_err(|_| {
                                     tracing::debug!(
                                         "daemon file hashing timed out for {}",
                                         package_path
                                     );
-                                    e
                                 })
                                 .ok() // If we timed out, we don't need to
                                       // error,
@@ -366,12 +365,14 @@ impl<'a> TaskHasher<'a> {
         let external_deps_hash =
             is_monorepo.then(|| get_external_deps_hash(&workspace.transitive_dependencies));
 
-        debug!(
-            "task hash env vars for {}:{}\n vars: {:?}",
-            task_id.package(),
-            task_id.task(),
-            hashable_env_pairs
-        );
+        if !hashable_env_pairs.is_empty() {
+            debug!(
+                "task hash env vars for {}:{}\n vars: {:?}",
+                task_id.package(),
+                task_id.task(),
+                hashable_env_pairs
+            );
+        }
 
         let package_dir = workspace.package_path().to_unix();
         let is_root_package = package_dir.is_empty();
@@ -465,18 +466,22 @@ impl<'a> TaskHasher<'a> {
                 let default_env_var_pass_through_map =
                     self.env_at_execution_start.from_wildcards(&[
                         "HOME",
+                        "USER",
                         "TZ",
                         "LANG",
                         "SHELL",
                         "PWD",
                         "CI",
                         "NODE_OPTIONS",
+                        "COREPACK_HOME",
                         "LD_LIBRARY_PATH",
                         "DYLD_FALLBACK_LIBRARY_PATH",
                         "LIBPATH",
                         "COLORTERM",
                         "TERM",
                         "TERM_PROGRAM",
+                        "TMP",
+                        "TEMP",
                         // VSCode IDE - https://github.com/microsoft/vscode-js-debug/blob/5b0f41dbe845d693a541c1fae30cec04c878216f/src/targets/node/nodeLauncherBase.ts#L320
                         "VSCODE_*",
                         "ELECTRON_RUN_AS_NODE",
@@ -490,6 +495,7 @@ impl<'a> TaskHasher<'a> {
                         "JB_INTERPRETER",
                         "_JETBRAINS_TEST_RUNNER_RUN_SCOPE_TYPE",
                         // Vercel specific
+                        "VERCEL",
                         "VERCEL_*",
                         "NEXT_*",
                         "USE_OUTPUT_FOR_EDGE_FUNCTIONS",
@@ -500,12 +506,6 @@ impl<'a> TaskHasher<'a> {
                         "PROGRAMDATA",
                         "SYSTEMROOT",
                         "SYSTEMDRIVE",
-                        // Powershell casing of env variables
-                        "Path",
-                        "ProgramData",
-                        "SystemRoot",
-                        "AppData",
-                        "SystemDrive",
                     ])?;
                 let tracker_env = self
                     .task_hash_tracker

@@ -1,16 +1,16 @@
-use std::io::Write;
+use std::{io::Write, mem};
 
 use turborepo_vt100 as vt100;
 
 use super::{
-    app::Direction,
-    event::{CacheResult, OutputLogs, TaskResult},
+    event::{CacheResult, Direction, OutputLogs, TaskResult},
     Error,
 };
 
+const SCROLLBACK_LEN: usize = 1024;
+
 pub struct TerminalOutput<W> {
-    rows: u16,
-    cols: u16,
+    output: Vec<u8>,
     pub parser: vt100::Parser,
     pub stdin: Option<W>,
     pub status: Option<String>,
@@ -29,10 +29,9 @@ enum LogBehavior {
 impl<W> TerminalOutput<W> {
     pub fn new(rows: u16, cols: u16, stdin: Option<W>) -> Self {
         Self {
-            parser: vt100::Parser::new(rows, cols, 1024),
+            output: Vec::new(),
+            parser: vt100::Parser::new(rows, cols, SCROLLBACK_LEN),
             stdin,
-            rows,
-            cols,
             status: None,
             output_logs: None,
             task_result: None,
@@ -47,12 +46,24 @@ impl<W> TerminalOutput<W> {
         }
     }
 
+    pub fn size(&self) -> (u16, u16) {
+        self.parser.screen().size()
+    }
+
+    pub fn process(&mut self, bytes: &[u8]) {
+        self.parser.process(bytes);
+        self.output.extend_from_slice(bytes);
+    }
+
     pub fn resize(&mut self, rows: u16, cols: u16) {
-        if self.rows != rows || self.cols != cols {
-            self.parser.screen_mut().set_size(rows, cols);
+        if self.parser.screen().size() != (rows, cols) {
+            let scrollback = self.parser.screen().scrollback();
+            let mut new_parser = vt100::Parser::new(rows, cols, SCROLLBACK_LEN);
+            new_parser.process(&self.output);
+            new_parser.screen_mut().set_scrollback(scrollback);
+            // Completely swap out the old vterm with a new correctly sized one
+            mem::swap(&mut self.parser, &mut new_parser);
         }
-        self.rows = rows;
-        self.cols = cols;
     }
 
     pub fn scroll(&mut self, direction: Direction) -> Result<(), Error> {
@@ -94,10 +105,11 @@ impl<W> TerminalOutput<W> {
         match self.persist_behavior() {
             LogBehavior::Full => {
                 let screen = self.parser.entire_screen();
+                let (_, cols) = screen.size();
                 stdout.write_all("┌".as_bytes())?;
                 stdout.write_all(title.as_bytes())?;
                 stdout.write_all(b"\r\n")?;
-                for row in screen.rows_formatted(0, self.cols) {
+                for row in screen.rows_formatted(0, cols) {
                     stdout.write_all("│ ".as_bytes())?;
                     stdout.write_all(&row)?;
                     stdout.write_all(b"\r\n")?;
@@ -111,5 +123,45 @@ impl<W> TerminalOutput<W> {
             LogBehavior::Nothing => (),
         }
         Ok(())
+    }
+
+    pub fn has_selection(&self) -> bool {
+        self.parser
+            .screen()
+            .selected_text()
+            .map_or(false, |s| !s.is_empty())
+    }
+
+    pub fn handle_mouse(&mut self, event: crossterm::event::MouseEvent) -> Result<(), Error> {
+        match event.kind {
+            crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left) => {
+                // We need to update the vterm so we don't continue to render the selection
+                self.parser.screen_mut().clear_selection();
+            }
+            crossterm::event::MouseEventKind::Drag(crossterm::event::MouseButton::Left) => {
+                // Update selection of underlying parser
+                self.parser
+                    .screen_mut()
+                    .update_selection(event.row, event.column);
+            }
+            // Scrolling is handled elsewhere
+            crossterm::event::MouseEventKind::ScrollDown => (),
+            crossterm::event::MouseEventKind::ScrollUp => (),
+            // I think we can ignore this?
+            crossterm::event::MouseEventKind::Moved => (),
+            // Don't care about other mouse buttons
+            crossterm::event::MouseEventKind::Down(_) => (),
+            crossterm::event::MouseEventKind::Drag(_) => (),
+            // We don't support horizontal scroll
+            crossterm::event::MouseEventKind::ScrollLeft
+            | crossterm::event::MouseEventKind::ScrollRight => (),
+            // Cool, person stopped holding down mouse
+            crossterm::event::MouseEventKind::Up(_) => (),
+        }
+        Ok(())
+    }
+
+    pub fn copy_selection(&self) -> Option<String> {
+        self.parser.screen().selected_text()
     }
 }

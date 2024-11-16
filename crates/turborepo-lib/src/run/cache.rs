@@ -4,16 +4,19 @@ use std::{
     time::Duration,
 };
 
+use itertools::Itertools;
 use tokio::sync::oneshot;
-use tracing::{debug, error};
+use tracing::{debug, error, log::warn};
 use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
 };
-use turborepo_cache::{http::UploadMap, AsyncCache, CacheError, CacheHitMetadata, CacheSource};
+use turborepo_cache::{
+    http::UploadMap, AsyncCache, CacheError, CacheHitMetadata, CacheOpts, CacheSource,
+};
 use turborepo_repository::package_graph::PackageInfo;
 use turborepo_scm::SCM;
 use turborepo_telemetry::events::{task::PackageTaskEventBuilder, TrackedErrors};
-use turborepo_ui::{color, tui::event::CacheResult, ColorSelector, LogWriter, GREY, UI};
+use turborepo_ui::{color, tui::event::CacheResult, ColorConfig, ColorSelector, LogWriter, GREY};
 
 use crate::{
     cli::OutputLogsMode,
@@ -47,12 +50,13 @@ pub enum Error {
 pub struct RunCache {
     task_output_logs: Option<OutputLogsMode>,
     cache: AsyncCache,
+    warnings: Arc<Mutex<Vec<String>>>,
     reads_disabled: bool,
     writes_disabled: bool,
     repo_root: AbsoluteSystemPathBuf,
     color_selector: ColorSelector,
     daemon_client: Option<DaemonClient<DaemonConnector>>,
-    ui: UI,
+    ui: ColorConfig,
 }
 
 /// Trait used to output cache information to user
@@ -63,25 +67,28 @@ pub trait CacheOutput {
 }
 
 impl RunCache {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         cache: AsyncCache,
         repo_root: &AbsoluteSystemPath,
-        opts: &RunCacheOpts,
+        run_cache_opts: RunCacheOpts,
+        cache_opts: &CacheOpts,
         color_selector: ColorSelector,
         daemon_client: Option<DaemonClient<DaemonConnector>>,
-        ui: UI,
+        ui: ColorConfig,
         is_dry_run: bool,
     ) -> Self {
         let task_output_logs = if is_dry_run {
             Some(OutputLogsMode::None)
         } else {
-            opts.task_output_logs_override
+            run_cache_opts.task_output_logs_override
         };
         RunCache {
             task_output_logs,
             cache,
-            reads_disabled: opts.skip_reads,
-            writes_disabled: opts.skip_writes,
+            warnings: Default::default(),
+            reads_disabled: !cache_opts.cache.remote.read && !cache_opts.cache.local.read,
+            writes_disabled: !cache_opts.cache.remote.write && !cache_opts.cache.local.write,
             repo_root: repo_root.to_owned(),
             color_selector,
             daemon_client,
@@ -122,12 +129,18 @@ impl RunCache {
             log_file_path,
             daemon_client: self.daemon_client.clone(),
             ui: self.ui,
+            warnings: self.warnings.clone(),
         }
     }
 
     pub async fn shutdown_cache(
         &self,
     ) -> Result<(Arc<Mutex<UploadMap>>, oneshot::Receiver<()>), CacheError> {
+        if let Ok(warnings) = self.warnings.lock() {
+            for warning in warnings.iter().sorted() {
+                warn!("{}", warning);
+            }
+        }
         // Ignore errors coming from cache already shutting down
         self.cache.start_shutdown().await
     }
@@ -142,13 +155,18 @@ pub struct TaskCache {
     caching_disabled: bool,
     log_file_path: AbsoluteSystemPathBuf,
     daemon_client: Option<DaemonClient<DaemonConnector>>,
-    ui: UI,
+    ui: ColorConfig,
     task_id: TaskId<'static>,
+    warnings: Arc<Mutex<Vec<String>>>,
 }
 
 impl TaskCache {
     pub fn output_logs(&self) -> OutputLogsMode {
         self.task_output_logs
+    }
+
+    pub fn is_caching_disabled(&self) -> bool {
+        self.caching_disabled
     }
 
     /// Will read log file and write to output a line at a time
@@ -359,6 +377,18 @@ impl TaskCache {
             &validated_exclusions,
             globwalk::WalkType::All,
         )?;
+
+        // If we're only caching the log output, *and* output globs are not empty,
+        // we should warn the user
+        if files_to_be_cached.len() == 1 && !self.repo_relative_globs.is_empty() {
+            let _ = self.warnings.lock().map(|mut warnings| {
+                warnings.push(format!(
+                    "no output files found for task {}. Please check your `outputs` key in \
+                     `turbo.json`",
+                    self.task_id
+                ))
+            });
+        }
 
         let mut relative_paths = files_to_be_cached
             .into_iter()

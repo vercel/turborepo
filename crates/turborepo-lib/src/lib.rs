@@ -4,7 +4,6 @@
 #![feature(hash_extract_if)]
 #![feature(option_get_or_insert_default)]
 #![feature(once_cell_try)]
-#![feature(panic_info_message)]
 #![feature(try_blocks)]
 #![feature(impl_trait_in_assoc_type)]
 #![deny(clippy::all)]
@@ -22,13 +21,14 @@ mod engine;
 
 mod framework;
 mod gitignore;
-mod global_deps_package_change_mapper;
 pub(crate) mod globwatcher;
 mod hash;
+mod micro_frontends;
 mod opts;
 mod package_changes_watcher;
 mod panic_handler;
 mod process;
+mod query;
 mod rewrite_json;
 mod run;
 mod shim;

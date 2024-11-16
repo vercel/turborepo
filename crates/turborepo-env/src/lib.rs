@@ -6,10 +6,12 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
-use regex::Regex;
+use regex::RegexBuilder;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use thiserror::Error;
+
+pub mod platform;
 
 const DEFAULT_ENV_VARS: [&str; 1] = ["VERCEL_ANALYTICS_ID"];
 
@@ -178,8 +180,13 @@ impl EnvironmentVariableMap {
         let include_regex_string = format!("^({})$", include_patterns.join("|"));
         let exclude_regex_string = format!("^({})$", exclude_patterns.join("|"));
 
-        let include_regex = Regex::new(&include_regex_string)?;
-        let exclude_regex = Regex::new(&exclude_regex_string)?;
+        let case_insensitive = cfg!(windows);
+        let include_regex = RegexBuilder::new(&include_regex_string)
+            .case_insensitive(case_insensitive)
+            .build()?;
+        let exclude_regex = RegexBuilder::new(&exclude_regex_string)
+            .case_insensitive(case_insensitive)
+            .build()?;
         for (env_var, env_value) in &self.0 {
             if !include_patterns.is_empty() && include_regex.is_match(env_var) {
                 output.inclusions.insert(env_var.clone(), env_value.clone());
@@ -302,6 +309,8 @@ pub fn get_global_hashable_env_vars(
 mod tests {
     use test_case::test_case;
 
+    use super::*;
+
     #[test_case("LITERAL_\\*", "LITERAL_\\*" ; "literal star")]
     #[test_case("\\*LEADING", "\\*LEADING" ; "leading literal star")]
     #[test_case("\\!LEADING", "\\\\!LEADING" ; "leading literal bang")]
@@ -310,5 +319,20 @@ mod tests {
     fn test_wildcard_to_regex_pattern(pattern: &str, expected: &str) {
         let actual = super::wildcard_to_regex_pattern(pattern);
         assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_case_sensitivity() {
+        let start = EnvironmentVariableMap(
+            vec![("Turbo".to_string(), "true".to_string())]
+                .into_iter()
+                .collect(),
+        );
+        let actual = start.from_wildcards(&["TURBO"]).unwrap();
+        if cfg!(windows) {
+            assert_eq!(actual.get("Turbo").map(|s| s.as_str()), Some("true"));
+        } else {
+            assert_eq!(actual.get("Turbo"), None);
+        }
     }
 }

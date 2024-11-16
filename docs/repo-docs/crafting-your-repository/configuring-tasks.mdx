@@ -280,13 +280,15 @@ You can also run scripts in the `package.json` in the Workspace root using `turb
 ```json title="./package.json"
 {
   "scripts": {
-    "lint": "turbo run lint",
+    "lint": "turbo run lint lint:root",
     "lint:root": "eslint ." // [!code highlight]
   }
 }
 ```
 </Tab>
 </Tabs>
+
+With the Root Task now registered, `turbo run lint:root` will now run the task. You can also run `turbo run lint lint:root` to run all your linting tasks.
 
 #### When to use Root Tasks
 
@@ -365,6 +367,7 @@ To meet both requirements (correctness and parallelism), you can introduce [Tran
     },
     "check-types": {
       "dependsOn": ["transit"]
+    },
   },
 }
 ```

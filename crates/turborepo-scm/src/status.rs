@@ -94,7 +94,7 @@ fn nom_parse_status(i: &[u8]) -> nom::IResult<&[u8], StatusEntry<'_>> {
     let (i, _) = nom::character::complete::space1(i)?;
     let (i, filename) = nom::bytes::complete::is_not("\0")(i)?;
     // We explicitly support a missing terminator
-    let (i, _) = nom::combinator::opt(nom::bytes::complete::tag(&[b'\0']))(i)?;
+    let (i, _) = nom::combinator::opt(nom::bytes::complete::tag(b"\0"))(i)?;
     Ok((
         i,
         StatusEntry {

@@ -1,6 +1,6 @@
 import { execSync } from "node:child_process";
 import path from "node:path";
-import { sync as rmSync } from "rimraf";
+import { rmSync } from "node:fs";
 
 export const DEFAULT_IGNORE = `
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
@@ -71,7 +71,7 @@ export function tryGitInit(root: string, message: string): boolean {
   } catch (err) {
     if (didInit) {
       try {
-        rmSync(path.join(root, ".git"));
+        rmSync(path.join(root, ".git"), { recursive: true, force: true });
       } catch (_) {
         // do nothing
       }

@@ -1,6 +1,6 @@
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { rimraf } from "rimraf";
+import { rm } from "node:fs/promises";
 import {
   mkdirSync,
   existsSync,
@@ -10,6 +10,7 @@ import {
 } from "fs-extra";
 import yaml from "js-yaml";
 import { parse as JSON5Parse } from "json5";
+import { afterAll, afterEach } from "@jest/globals";
 
 interface SetupTextFixtures {
   directory: string;
@@ -28,20 +29,24 @@ export function setupTestFixtures({
   const parentDirectory = path.join(directory, test ? test : randomUUID());
 
   afterEach(async () => {
-    await Promise.all(
+    return Promise.all(
       fixtures.map((fixture) =>
-        rimraf(fixture, {
+        rm(fixture, {
           retryDelay: 50,
           maxRetries: 5,
+          recursive: true,
+          force: true,
         })
       )
     );
   });
 
   afterAll(async () => {
-    await rimraf(parentDirectory, {
+    return rm(parentDirectory, {
       retryDelay: 50,
       maxRetries: 5,
+      recursive: true,
+      force: true,
     });
   });
 

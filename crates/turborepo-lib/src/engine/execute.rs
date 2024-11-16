@@ -116,7 +116,9 @@ impl Engine {
 
                 if let Err(StopExecution) = result.await.unwrap_or_else(|_| {
                     // If the visitor doesn't send a callback, then we assume the task finished
-                    debug!("Engine visitor dropped callback sender without sending result");
+                    tracing::trace!(
+                        "Engine visitor dropped callback sender without sending result"
+                    );
                     Ok(())
                 }) {
                     if walker

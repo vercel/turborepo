@@ -211,7 +211,7 @@ impl Workspace {
         };
 
         let packages = match package_changes {
-            PackageChanges::All => self
+            PackageChanges::All(_) => self
                 .graph
                 .packages()
                 .map(|(name, info)| WorkspacePackage {
@@ -219,7 +219,7 @@ impl Workspace {
                     path: info.package_path().to_owned(),
                 })
                 .collect::<Vec<WorkspacePackage>>(),
-            PackageChanges::Some(packages) => packages.into_iter().collect(),
+            PackageChanges::Some(packages) => packages.into_keys().collect(),
         };
 
         let mut serializable_packages: Vec<Package> = packages

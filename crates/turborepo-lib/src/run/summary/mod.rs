@@ -29,7 +29,7 @@ use turborepo_api_client::{spaces::CreateSpaceRunPayload, APIAuth, APIClient};
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_repository::package_graph::{PackageGraph, PackageName};
 use turborepo_scm::SCM;
-use turborepo_ui::{color, cprintln, cwriteln, BOLD, BOLD_CYAN, GREY, UI};
+use turborepo_ui::{color, cprintln, cwriteln, ColorConfig, BOLD, BOLD_CYAN, GREY};
 
 use self::{
     execution::TaskState, task::SinglePackageTaskSummary, task_factory::TaskSummaryFactory,
@@ -188,7 +188,7 @@ impl RunTracker {
         task_factory: TaskSummaryFactory<'a>,
     ) -> Result<RunSummary<'a>, Error> {
         let single_package = run_opts.single_package;
-        let should_save = run_opts.summarize.flatten().is_some_and(|s| s);
+        let should_save = run_opts.summarize;
 
         let run_type = match run_opts.dry_run {
             None => RunType::Real,
@@ -248,7 +248,7 @@ impl RunTracker {
         self,
         exit_code: i32,
         pkg_dep_graph: &PackageGraph,
-        ui: UI,
+        ui: ColorConfig,
         repo_root: &'a AbsoluteSystemPath,
         package_inference_root: Option<&AnchoredSystemPath>,
         run_opts: &'a RunOpts,
@@ -360,7 +360,7 @@ impl<'a> RunSummary<'a> {
         end_time: DateTime<Local>,
         exit_code: i32,
         pkg_dep_graph: &PackageGraph,
-        ui: UI,
+        ui: ColorConfig,
         is_watch: bool,
     ) -> Result<(), Error> {
         if matches!(self.run_type, RunType::DryJson | RunType::DryText) {
@@ -382,7 +382,7 @@ impl<'a> RunSummary<'a> {
         }
 
         if let Some(spaces_client_handle) = self.spaces_client_handle.take() {
-            self.send_to_space(spaces_client_handle, end_time, exit_code)
+            self.send_to_space(spaces_client_handle, end_time, exit_code, is_watch)
                 .await;
         }
 
@@ -395,26 +395,35 @@ impl<'a> RunSummary<'a> {
         spaces_client_handle: SpacesClientHandle,
         ended_at: DateTime<Local>,
         exit_code: i32,
+        is_watch: bool,
     ) {
-        let spinner = tokio::spawn(async {
-            tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
-            turborepo_ui::start_spinner("...sending run summary...");
+        let spinner = (!is_watch).then(|| {
+            tokio::spawn(async {
+                tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
+                turborepo_ui::start_spinner("...sending run summary...");
+            })
         });
 
         // We log the error here but don't fail because
         // failing to send the space shouldn't fail the run.
         if let Err(err) = spaces_client_handle.finish_run(exit_code, ended_at).await {
-            warn!("Error sending to space: {}", err);
+            if !is_watch {
+                warn!("Error sending to space: {}", err);
+            }
         };
 
         let result = spaces_client_handle.close().await;
 
-        spinner.abort();
+        if let Some(spinner) = spinner {
+            spinner.abort();
+        }
 
-        Self::print_errors(&result.errors);
+        if !is_watch {
+            Self::print_errors(&result.errors);
 
-        if let Some(run) = result.run {
-            println!("Run: {}\n", run.url);
+            if let Some(run) = result.run {
+                println!("Run: {}\n", run.url);
+            }
         }
     }
 
@@ -428,7 +437,11 @@ impl<'a> RunSummary<'a> {
         }
     }
 
-    fn close_dry_run(&mut self, pkg_dep_graph: &PackageGraph, ui: UI) -> Result<(), Error> {
+    fn close_dry_run(
+        &mut self,
+        pkg_dep_graph: &PackageGraph,
+        ui: ColorConfig,
+    ) -> Result<(), Error> {
         if matches!(self.run_type, RunType::DryJson) {
             let rendered = self.format_json()?;
 
@@ -439,7 +452,11 @@ impl<'a> RunSummary<'a> {
         self.format_and_print_text(pkg_dep_graph, ui)
     }
 
-    fn format_and_print_text(&mut self, pkg_dep_graph: &PackageGraph, ui: UI) -> Result<(), Error> {
+    fn format_and_print_text(
+        &mut self,
+        pkg_dep_graph: &PackageGraph,
+        ui: ColorConfig,
+    ) -> Result<(), Error> {
         self.normalize();
 
         if self.monorepo {

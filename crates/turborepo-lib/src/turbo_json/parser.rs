@@ -11,7 +11,6 @@ use convert_case::{Case, Casing};
 use miette::Diagnostic;
 use struct_iterable::Iterable;
 use thiserror::Error;
-use turbopath::AnchoredSystemPath;
 use turborepo_errors::{ParseDiagnostic, WithMetadata};
 use turborepo_unescape::UnescapedString;
 
@@ -105,6 +104,7 @@ impl WithMetadata for RawTurboJson {
         self.global_env.add_text(text.clone());
         self.global_pass_through_env.add_text(text.clone());
         self.tasks.add_text(text.clone());
+        self.cache_dir.add_text(text.clone());
         self.pipeline.add_text(text);
     }
 
@@ -115,6 +115,7 @@ impl WithMetadata for RawTurboJson {
         self.global_env.add_path(path.clone());
         self.global_pass_through_env.add_path(path.clone());
         self.tasks.add_path(path.clone());
+        self.cache_dir.add_path(path.clone());
         self.pipeline.add_path(path);
     }
 }
@@ -145,6 +146,7 @@ impl WithMetadata for RawTaskDefinition {
         self.inputs.add_text(text.clone());
         self.pass_through_env.add_text(text.clone());
         self.persistent.add_text(text.clone());
+        self.interruptible.add_text(text.clone());
         self.outputs.add_text(text.clone());
         self.output_logs.add_text(text.clone());
         self.interactive.add_text(text);
@@ -159,6 +161,7 @@ impl WithMetadata for RawTaskDefinition {
         self.inputs.add_path(path.clone());
         self.pass_through_env.add_path(path.clone());
         self.persistent.add_path(path.clone());
+        self.interruptible.add_path(path.clone());
         self.outputs.add_path(path.clone());
         self.output_logs.add_path(path.clone());
         self.interactive.add_path(path);
@@ -170,7 +173,7 @@ impl RawTurboJson {
     #[cfg(test)]
     pub fn parse_from_serde(value: serde_json::Value) -> Result<RawTurboJson, Error> {
         let json_string = serde_json::to_string(&value).expect("should be able to serialize");
-        Self::parse(&json_string, AnchoredSystemPath::new("turbo.json").unwrap())
+        Self::parse(&json_string, "turbo.json")
     }
     /// Parses a turbo.json file into the raw representation with span info
     /// attached.
@@ -182,11 +185,11 @@ impl RawTurboJson {
     ///   display, so doesn't need to actually be a correct path.
     ///
     /// returns: Result<RawTurboJson, Error>
-    pub fn parse(text: &str, file_path: &AnchoredSystemPath) -> Result<RawTurboJson, Error> {
+    pub fn parse(text: &str, file_path: &str) -> Result<RawTurboJson, Error> {
         let result = deserialize_from_json_str::<RawTurboJson>(
             text,
             JsonParserOptions::default().with_allow_comments(),
-            file_path.as_str(),
+            file_path,
         );
 
         if !result.diagnostics().is_empty() {
@@ -195,7 +198,7 @@ impl RawTurboJson {
                 .into_iter()
                 .map(|d| {
                     d.with_file_source_code(text)
-                        .with_file_path(file_path.as_str())
+                        .with_file_path(file_path)
                         .into()
                 })
                 .collect();
@@ -214,7 +217,7 @@ impl RawTurboJson {
         })?;
 
         turbo_json.add_text(Arc::from(text));
-        turbo_json.add_path(Arc::from(file_path.as_str()));
+        turbo_json.add_path(Arc::from(file_path));
 
         Ok(turbo_json)
     }

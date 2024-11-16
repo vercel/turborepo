@@ -1,25 +1,26 @@
-use std::{cell::RefCell, collections::HashSet, sync::Arc};
+use std::{
+    collections::HashSet,
+    ops::DerefMut as _,
+    sync::{Arc, Mutex},
+};
 
 use futures::StreamExt;
 use miette::{Diagnostic, SourceSpan};
 use thiserror::Error;
-use tokio::{
-    select,
-    sync::{Mutex, Notify},
-    task::JoinHandle,
-};
+use tokio::{select, sync::Notify, task::JoinHandle};
+use tracing::{instrument, trace, warn};
 use turborepo_repository::package_graph::PackageName;
 use turborepo_telemetry::events::command::CommandEventBuilder;
-use turborepo_ui::{tui, tui::AppSender};
+use turborepo_ui::sender::UISender;
 
 use crate::{
     cli::{Command, RunArgs},
-    commands,
-    commands::CommandBase,
+    commands::{self, CommandBase},
     daemon::{proto, DaemonConnectorError, DaemonError},
-    get_version, opts, run,
-    run::{builder::RunBuilder, scope::target_selector::InvalidSelectorError, Run},
+    get_version, opts,
+    run::{self, builder::RunBuilder, scope::target_selector::InvalidSelectorError, Run},
     signal::SignalHandler,
+    turbo_json::CONFIG_FILE,
     DaemonConnector, DaemonPaths,
 };
 
@@ -45,15 +46,20 @@ impl ChangedPackages {
 }
 
 pub struct WatchClient {
-    run: Run,
+    run: Arc<Run>,
     watched_packages: HashSet<PackageName>,
-    persistent_tasks_handle: Option<JoinHandle<Result<i32, run::Error>>>,
+    persistent_tasks_handle: Option<RunHandle>,
     connector: DaemonConnector,
     base: CommandBase,
     telemetry: CommandEventBuilder,
     handler: SignalHandler,
-    ui_sender: Option<AppSender>,
-    ui_handle: Option<JoinHandle<Result<(), tui::Error>>>,
+    ui_sender: Option<UISender>,
+    ui_handle: Option<JoinHandle<Result<(), turborepo_ui::Error>>>,
+}
+
+struct RunHandle {
+    stopper: run::RunStopper,
+    run_task: JoinHandle<Result<i32, run::Error>>,
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -93,14 +99,30 @@ pub enum Error {
     SignalInterrupt,
     #[error("package change error")]
     PackageChange(#[from] tonic::Status),
-    #[error("could not connect to UI thread")]
+    #[error(transparent)]
+    UI(#[from] turborepo_ui::Error),
+    #[error("could not connect to UI thread: {0}")]
     UISend(String),
+    #[error("cannot use root turbo.json at {0} with watch mode")]
+    NonStandardTurboJsonPath(String),
+    #[error("invalid config: {0}")]
+    Config(#[from] crate::config::Error),
 }
 
 impl WatchClient {
     pub async fn new(base: CommandBase, telemetry: CommandEventBuilder) -> Result<Self, Error> {
         let signal = commands::run::get_signal()?;
         let handler = SignalHandler::new(signal);
+        let config = base.config()?;
+        let root_turbo_json_path = config.root_turbo_json_path(&base.repo_root);
+        if root_turbo_json_path != base.repo_root.join_component(CONFIG_FILE) {
+            return Err(Error::NonStandardTurboJsonPath(
+                root_turbo_json_path.to_string(),
+            ));
+        }
+        if matches!(config.daemon(), Some(false)) {
+            warn!("daemon is required for watch, ignoring request to disable daemon");
+        }
 
         let Some(Command::Watch(execution_args)) = &base.args().command else {
             unreachable!()
@@ -112,13 +134,15 @@ impl WatchClient {
             execution_args: execution_args.clone(),
         });
 
-        let run = RunBuilder::new(new_base)?
-            .build(&handler, telemetry.clone())
-            .await?;
+        let run = Arc::new(
+            RunBuilder::new(new_base)?
+                .build(&handler, telemetry.clone())
+                .await?,
+        );
 
         let watched_packages = run.get_relevant_packages();
 
-        let (sender, handle) = run.start_experimental_ui()?.unzip();
+        let (ui_sender, ui_handle) = run.start_ui()?.unzip();
 
         let connector = DaemonConnector {
             can_start_server: true,
@@ -134,8 +158,8 @@ impl WatchClient {
             handler,
             telemetry,
             persistent_tasks_handle: None,
-            ui_sender: sender,
-            ui_handle: handle,
+            ui_sender,
+            ui_handle,
         })
     }
 
@@ -145,7 +169,7 @@ impl WatchClient {
 
         let mut events = client.package_changes().await?;
 
-        if !self.run.has_experimental_ui() {
+        if !self.run.has_tui() {
             self.run.print_run_prelude();
         }
 
@@ -154,14 +178,14 @@ impl WatchClient {
         // We explicitly use a tokio::sync::Mutex here to avoid deadlocks.
         // If we used a std::sync::Mutex, we could deadlock by spinning the lock
         // and not yielding back to the tokio runtime.
-        let changed_packages = Mutex::new(RefCell::new(ChangedPackages::default()));
+        let changed_packages = Mutex::new(ChangedPackages::default());
         let notify_run = Arc::new(Notify::new());
         let notify_event = notify_run.clone();
 
         let event_fut = async {
             while let Some(event) = events.next().await {
                 let event = event?;
-                Self::handle_change_event(&changed_packages, event.event.unwrap()).await?;
+                Self::handle_change_event(&changed_packages, event.event.unwrap())?;
                 notify_event.notify_one();
             }
 
@@ -169,12 +193,26 @@ impl WatchClient {
         };
 
         let run_fut = async {
+            let mut run_handle: Option<RunHandle> = None;
             loop {
                 notify_run.notified().await;
-                let changed_packages_guard = changed_packages.lock().await;
-                if !changed_packages_guard.borrow().is_empty() {
-                    let changed_packages = changed_packages_guard.take();
-                    self.execute_run(changed_packages).await?;
+                let some_changed_packages = {
+                    let mut changed_packages_guard =
+                        changed_packages.lock().expect("poisoned lock");
+                    (!changed_packages_guard.is_empty())
+                        .then(|| std::mem::take(changed_packages_guard.deref_mut()))
+                };
+
+                if let Some(changed_packages) = some_changed_packages {
+                    // Clean up currently running tasks
+                    if let Some(RunHandle { stopper, run_task }) = run_handle.take() {
+                        // Shut down the tasks for the run
+                        stopper.stop().await;
+                        // Run should exit shortly after we stop all child tasks, wait for it to
+                        // finish to ensure all messages are flushed.
+                        let _ = run_task.await;
+                    }
+                    run_handle = Some(self.execute_run(changed_packages).await?);
                 }
             }
         };
@@ -183,7 +221,6 @@ impl WatchClient {
             biased;
             _ = signal_subscriber.listen() => {
                 tracing::info!("shutting down");
-
                 Err(Error::SignalInterrupt)
             }
             result = event_fut => {
@@ -195,8 +232,9 @@ impl WatchClient {
         }
     }
 
-    async fn handle_change_event(
-        changed_packages: &Mutex<RefCell<ChangedPackages>>,
+    #[instrument(skip(changed_packages))]
+    fn handle_change_event(
+        changed_packages: &Mutex<ChangedPackages>,
         event: proto::package_change_event::Event,
     ) -> Result<(), Error> {
         // Should we recover here?
@@ -206,7 +244,7 @@ impl WatchClient {
             }) => {
                 let package_name = PackageName::from(package_name);
 
-                match changed_packages.lock().await.get_mut() {
+                match changed_packages.lock().expect("poisoned lock").deref_mut() {
                     ChangedPackages::All => {
                         // If we've already changed all packages, ignore
                     }
@@ -216,7 +254,7 @@ impl WatchClient {
                 }
             }
             proto::package_change_event::Event::RediscoverPackages(_) => {
-                *changed_packages.lock().await.get_mut() = ChangedPackages::All;
+                *changed_packages.lock().expect("poisoned lock") = ChangedPackages::All;
             }
             proto::package_change_event::Event::Error(proto::PackageChangeError { message }) => {
                 return Err(DaemonError::Unavailable(message).into());
@@ -226,8 +264,30 @@ impl WatchClient {
         Ok(())
     }
 
-    async fn execute_run(&mut self, changed_packages: ChangedPackages) -> Result<i32, Error> {
+    /// Shut down any resources that run as part of watch.
+    pub async fn shutdown(&mut self) {
+        if let Some(sender) = &self.ui_sender {
+            sender.stop().await;
+        }
+        if let Some(RunHandle { stopper, run_task }) = self.persistent_tasks_handle.take() {
+            // Shut down the tasks for the run
+            stopper.stop().await;
+            // Run should exit shortly after we stop all child tasks, wait for it to finish
+            // to ensure all messages are flushed.
+            let _ = run_task.await;
+        }
+    }
+
+    /// Executes a run with the given changed packages. Splits the run into two
+    /// parts:
+    /// 1. The persistent tasks that are not allowed to be interrupted
+    /// 2. The non-persistent tasks and the persistent tasks that are allowed to
+    ///    be interrupted
+    ///
+    /// Returns a handle to the task running (2)
+    async fn execute_run(&mut self, changed_packages: ChangedPackages) -> Result<RunHandle, Error> {
         // Should we recover here?
+        trace!("handling run with changed packages: {changed_packages:?}");
         match changed_packages {
             ChangedPackages::Some(packages) => {
                 let packages = packages
@@ -258,19 +318,30 @@ impl WatchClient {
                     args,
                     self.base.repo_root.clone(),
                     get_version(),
-                    self.base.ui,
+                    self.base.color_config,
                 );
 
                 let signal_handler = self.handler.clone();
                 let telemetry = self.telemetry.clone();
 
-                let mut run = RunBuilder::new(new_base)?
+                let run = RunBuilder::new(new_base)?
                     .with_entrypoint_packages(packages)
                     .hide_prelude()
                     .build(&signal_handler, telemetry)
                     .await?;
 
-                Ok(run.run(self.ui_sender.clone(), true).await?)
+                if let Some(sender) = &self.ui_sender {
+                    let task_names = run.engine.tasks_with_command(&run.pkg_dep_graph);
+                    sender
+                        .restart_tasks(task_names)
+                        .map_err(|err| Error::UISend(format!("some packages changed: {err}")))?;
+                }
+
+                let ui_sender = self.ui_sender.clone();
+                Ok(RunHandle {
+                    stopper: run.stopper(),
+                    run_task: tokio::spawn(async move { run.run(ui_sender, true).await }),
+                })
             }
             ChangedPackages::All => {
                 let mut args = self.base.args().clone();
@@ -293,43 +364,64 @@ impl WatchClient {
                     args,
                     self.base.repo_root.clone(),
                     get_version(),
-                    self.base.ui,
+                    self.base.color_config,
                 );
 
                 // rebuild run struct
                 self.run = RunBuilder::new(base.clone())?
                     .hide_prelude()
                     .build(&self.handler, self.telemetry.clone())
-                    .await?;
+                    .await?
+                    .into();
 
                 self.watched_packages = self.run.get_relevant_packages();
 
+                // Clean up currently running persistent tasks
+                if let Some(RunHandle { stopper, run_task }) = self.persistent_tasks_handle.take() {
+                    // Shut down the tasks for the run
+                    stopper.stop().await;
+                    // Run should exit shortly after we stop all child tasks, wait for it to finish
+                    // to ensure all messages are flushed.
+                    let _ = run_task.await;
+                }
                 if let Some(sender) = &self.ui_sender {
                     let task_names = self.run.engine.tasks_with_command(&self.run.pkg_dep_graph);
                     sender
                         .update_tasks(task_names)
-                        .map_err(|err| Error::UISend(err.to_string()))?;
+                        .map_err(|err| Error::UISend(format!("all packages changed {err}")))?;
                 }
 
-                if self.run.has_persistent_tasks() {
-                    // Abort old run
-                    if let Some(run) = self.persistent_tasks_handle.take() {
-                        run.abort();
-                    }
-
-                    let mut persistent_run = self.run.create_run_for_persistent_tasks();
+                if self.run.has_non_interruptible_tasks() {
+                    debug_assert!(
+                        self.persistent_tasks_handle.is_none(),
+                        "persistent handle should be empty before creating a new one"
+                    );
+                    let persistent_run = self.run.create_run_for_non_interruptible_tasks();
                     let ui_sender = self.ui_sender.clone();
                     // If we have persistent tasks, we run them on a separate thread
                     // since persistent tasks don't finish
-                    self.persistent_tasks_handle = Some(tokio::spawn(async move {
-                        persistent_run.run(ui_sender, true).await
-                    }));
+                    self.persistent_tasks_handle = Some(RunHandle {
+                        stopper: persistent_run.stopper(),
+                        run_task: tokio::spawn(
+                            async move { persistent_run.run(ui_sender, true).await },
+                        ),
+                    });
 
-                    // But we still run the regular tasks blocking
-                    let mut non_persistent_run = self.run.create_run_without_persistent_tasks();
-                    Ok(non_persistent_run.run(self.ui_sender.clone(), true).await?)
+                    let non_persistent_run = self.run.create_run_for_interruptible_tasks();
+                    let ui_sender = self.ui_sender.clone();
+                    Ok(RunHandle {
+                        stopper: non_persistent_run.stopper(),
+                        run_task: tokio::spawn(async move {
+                            non_persistent_run.run(ui_sender, true).await
+                        }),
+                    })
                 } else {
-                    Ok(self.run.run(self.ui_sender.clone(), true).await?)
+                    let ui_sender = self.ui_sender.clone();
+                    let run = self.run.clone();
+                    Ok(RunHandle {
+                        stopper: run.stopper(),
+                        run_task: tokio::spawn(async move { run.run(ui_sender, true).await }),
+                    })
                 }
             }
         }
