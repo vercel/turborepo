@@ -18,3 +18,4 @@ Setup
      Time:\s*[\.0-9]+m?s  (re)
   Summary:    .+\.turbo(\/|\\)runs(\/|\\)[a-zA-Z0-9]+.json (re)
   
+   WARNING  no output files found for task my-app#build. Please check your `outputs` key in `turbo.json`

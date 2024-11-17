@@ -114,6 +114,7 @@ impl<'a> TaskSummaryFactory<'a> {
             .package_json
             .scripts
             .get(task_id.task())
+            .map(|script| script.as_inner())
             .cloned()
             .unwrap_or_else(|| "<NONEXISTENT>".to_string());
 

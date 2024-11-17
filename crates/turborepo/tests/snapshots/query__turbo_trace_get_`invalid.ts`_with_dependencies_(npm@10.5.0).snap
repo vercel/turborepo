@@ -1,0 +1,33 @@
+---
+source: crates/turborepo/tests/query.rs
+expression: query_output
+---
+{
+  "data": {
+    "file": {
+      "path": "invalid.ts",
+      "dependencies": {
+        "files": {
+          "items": [
+            {
+              "path": "button.css"
+            },
+            {
+              "path": "button.json"
+            },
+            {
+              "path": "button.tsx"
+            }
+          ]
+        },
+        "errors": {
+          "items": [
+            {
+              "import": "import foo from \"./non-existent-file.js\";\nimport { Button } from \"./button.tsx\";\n"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

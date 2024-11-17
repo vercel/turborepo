@@ -24,7 +24,67 @@ turbo run [tasks] [options] [-- [args passed to tasks]]
   of use.
 </Callout>
 
+If no tasks are provided, `turbo` will display what tasks are available for the packages in the repository.
+
+```bash title="Terminal"
+turbo run
+```
+
 ## Options
+
+### `--affected`
+
+Automatically filter to only packages that are affected by changes on the current branch.
+
+```bash title="Terminal"
+turbo run build lint test --affected
+```
+
+By default, the flag is equivalent to `--filter=[main...HEAD]`. This considers changes between `main` and `HEAD` from Git's perspective.
+
+You can override the default base and head with their respective [System Environment Variables](/repo/docs/reference/system-environment-variables).
+
+```bash title="Terminal"
+# Override Git comparison base
+TURBO_SCM_BASE=development turbo run build --affected
+
+# Override Git comparison head
+TURBO_SCM_HEAD=your-branch turbo run build --affected
+```
+
+<Callout type="warn">
+  The comparison requires everything between base and head to exist in the
+  checkout. If the checkout is too shallow, then all packages will be considered
+  changed.
+</Callout>
+
+### `--cache <options>`
+
+Default: `local:rw,remote:rw`
+
+Specify caching sources for the run. Accepts a comma-separated list of options:
+
+- `local`: Use the local filesystem cache
+- `remote`: Use the Remote Cache
+
+When an option is omitted, reading and writing are both disabled
+
+Each option must be followed by one of:
+
+- `rw`: Read and write
+- `r`: Read only
+- `w`: Write only
+
+```bash title="Terminal"
+# Read and write to local cache, read only to Remote Cache
+turbo run build --cache=local:rw,remote:r
+
+# Read-only to local cache, read write to Remote Cache
+turbo run build --cache=local:r,remote:rw
+
+# Read and write to local cache, no Remote Cache activity
+turbo run build --cache=local:rw
+```
 
 ### `--cache-dir <path>`
 
@@ -39,6 +99,8 @@ turbo run build --cache-dir="./my-cache"
 <Callout type="warn">
   Ensure the directory is in your `.gitignore` when changing it.
 </Callout>
+
+The same behavior can also be set via the `TURBO_CACHE_DIR=example/path` system variable.
 
 ### `--concurrency <number | percentage>`
 
@@ -82,6 +144,20 @@ Set the working directory of the command.
 turbo run build --cwd=./somewhere/else/in/your/repo
 ```
 
+### `--dangerously-disable-package-manager-check`
+
+Turborepo uses your repository's lockfile to determine caching behavior, [Package Graphs](https://turbo.build/repo/docs/core-concepts/internal-packages), and more. Because of this, we use [the `packageManager` field](https://nodejs.org/api/packages.html#packagemanager) to help you stabilize your Turborepo.
+
+To help with incremental migration or in situations where you cannot use the `packageManager` field, you may use `--dangerously-disable-package-manager-check` to opt out of this check and assume the risks of unstable lockfiles producing unpredictable behavior. When disabled, Turborepo will attempt a best-effort discovery of the intended package manager meant for the repository.
+
+<Callout type="info">
+  You may also opt out of this check using [configuration in
+  `turbo.json`](/repo/docs/reference/configuration#dangerouslydisablepacakgemanagercheck)
+  or the
+  [`TURBO_DANGEROUSLY_DISABLE_PACKAGE_MANAGER_CHECK`](/repo/docs/reference/system-environment-variables)
+  environment variable for broader coverage.
+</Callout>
+
 ### `--dry / --dry-run`
 
 Instead of executing tasks, display details about the packages and tasks that would be run.
@@ -122,6 +198,8 @@ Controls the available environment variables in the task's runtime.
 ```bash title="Terminal"
 turbo run build --env-mode=loose
 ```
+
+The same behavior can also be set via the `TURBO_ENV_MODE=strict` system variable.
 
 #### `strict`
 
@@ -170,13 +248,26 @@ Filters can be combined to create combinations of packages, directories, and git
 
 For in-depth discussion and practical use cases of filtering, visit [the Running Tasks page](/repo/docs/crafting-your-repository/running-tasks).
 
+#### Using a task identifier
+
+You can also run a specific task for a specific package in the format of `package-name#task-name`.
+
+```bash title="Terminal"
+turbo run web#lint
+```
+
+<Callout type="good-to-know">
+  This will also run the task's dependencies. To run a task without its
+  dependencies, use [the `--only` flag](#--only).
+</Callout>
+
 #### Advanced filtering examples
 
-You can combine multiple filters to further refine your targets. Multiple filters are combined as a **union**, meaning that the [Task Graph](/repo/docs/core-concepts/package-and-task-graph#task-graph) will include tasks that match any of the filters.
+You can combine multiple filters to further refine your targets. Multiple filters are combined as a union, with negated filters removing packages from the result of the union.
 
 ```bash title="Terminal"
 # Any packages in `apps` subdirectories that have changed since the last commit
-turbo run build --filter=.apps/* --filter=[HEAD^1]
+turbo run build --filter={.apps/*}[HEAD^1]
 
 # Any packages in `apps` subdirectories except ./apps/admin
 turbo run build --filter=./apps/* --filter=!./apps/admin
@@ -233,7 +324,7 @@ Specify glob of global filesystem dependencies to be hashed. Useful for `.env` a
 
 ```bash title="Terminal"
 turbo run build --global-deps=".env"
-turbo run build --global-deps=".env.*" --global-deps=".eslintrc" --global-deps="jest.config.js"
+turbo run build --global-deps=".env.*" --global-deps=".eslintrc" --global-deps="jest.config.ts"
 ```
 
 <Callout type="info">
@@ -306,19 +397,19 @@ Do not cache results of the task.
 turbo run dev --no-cache
 ```
 
-### `--no-daemon`
-
-Default: `false`
+### `--daemon` and `--no-daemon`
 
 `turbo` can run a background process to pre-calculate values used for determining work that needs to be done. This standalone process (daemon) is an optimization, and not required for proper functioning of `turbo`.
 
-Passing `--no-daemon` instructs `turbo` to avoid using or creating the standalone process.
+Passing `--daemon` instructs `turbo` to use the standalone process, while `--no-daemon` instructs `turbo` to avoid using or creating the standalone process.
+
+The same behavior can also be set via the `TURBO_DAEMON=true` system variable.
 
 ### `--output-logs <option>`
 
 Default: `full`
 
-Set type of output logging, overriding [`outputLogs`](/repo/docs/reference/configuration#outputmode) if it's defined in `turbo.json`.
+Set type of output logging, overriding [`outputLogs`](/repo/docs/reference/configuration#outputlogs) if it's defined in `turbo.json`.
 
 ```bash title="Terminal"
 turbo run build --output-logs=errors-only
@@ -469,6 +560,10 @@ turbo run build --team=my-team --token=xxxxxxxxxxxxxxxxx
 ```
 
 This value can also be set using [the `TURBO_TEAM` system variable](/repo/docs/reference/system-environment-variables). If both are present, the flag value will override the system variable.
+
+### `--ui`
+
+Specify the UI to use for output. Accepts `stream` or `tui`.
 
 ### `--verbosity`
 

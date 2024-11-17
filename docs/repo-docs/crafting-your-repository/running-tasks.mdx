@@ -6,6 +6,7 @@ description: Learn how to run tasks in your repository through the `turbo` CLI.
 import { Callout } from '#/components/callout';
 import { PackageManagerTabs, Tab } from '#/components/tabs';
 import { LinkToDocumentation } from '#/components/link-to-documentation';
+import { InVersion } from '#/components/in-version';
 
 Turborepo optimizes the developer workflows in your repository by automatically parallelizing and caching tasks. Once a task is [registered in `turbo.json`](/repo/docs/crafting-your-repository/configuring-tasks), you have a powerful new toolset for running the scripts in your repository:
 
@@ -68,7 +69,7 @@ calling `turbo`.
 
 ## Using global `turbo`
 
-[Installing `turbo` globally](/repo/docs/getting-started/installation#installing-globally) lets you run commands directly from your terminal. This improves your local development experience since it makes it easier to run exactly what you need, when you need it.
+[Installing `turbo` globally](/repo/docs/getting-started/installation#global-installation) lets you run commands directly from your terminal. This improves your local development experience since it makes it easier to run exactly what you need, when you need it.
 
 Additionally, global `turbo` is useful in your CI pipelines, giving you maximum control of exactly which tasks to run at each point in your pipeline.
 
@@ -93,7 +94,7 @@ In [the documentation for the `run` subcommand](/repo/docs/reference/run), you'l
 
 - **Variations of your most common commands**: The `build` script in `package.json` has the most utility when it is `turbo build` - but you might only be interested in a specific package at the moment. You can quickly filter for the specific package you're interested in using `turbo build --filter=@repo/ui`.
 - **One-off commands**: Commands like `turbo build --dry` aren't needed often so you likely won't create a script in your `package.json` for it. Instead, you can run it directly in your terminal whenever you need it.
-- **Overriding `turbo.json` configuration**: Some CLI flags have an equivalent in `turbo.json` that you can override. For instance, you may have a `turbo build` command configured to use [`"outputLogs": "full"` in `turbo.json`](/repo/docs/reference/configuration#outputmode) - but you're only interested in seeing errors at the moment. Using global `turbo`, you can use `turbo lint --output-logs=errors-only` to only show errors.
+- **Overriding `turbo.json` configuration**: Some CLI flags have an equivalent in `turbo.json` that you can override. For instance, you may have a `turbo build` command configured to use [`"outputLogs": "full"` in `turbo.json`](/repo/docs/reference/configuration#outputlogs) - but you're only interested in seeing errors at the moment. Using global `turbo`, you can use `turbo lint --output-logs=errors-only` to only show errors.
 
 ## Running multiple tasks
 
@@ -114,17 +115,31 @@ If you want to ensure that one task blocks the execution of another, express tha
 
 ## Using filters
 
-While [caching](/repo/docs/crafting-your-repository/running-tasks) ensures you stay fast by never doing the same work twice, you can also filter tasks to run only a subset of [the Task Graph](/repo/docs/core-concepts/package-and-task-graph#task-graph), according to your needs.
+While [caching](/repo/docs/crafting-your-repository/running-tasks) ensures you stay fast by never doing the same work twice, you can also filter tasks to run only a subset of [the Task Graph](/repo/docs/core-concepts/package-and-task-graph#task-graph).
 
 There are many advanced use cases for filtering in [the `--filter` API reference](/repo/docs/reference/run#--filter-string) but the most common use cases are discussed below.
 
-### Filtering by package name
+### Filtering by package
 
 Filtering by package is a simple way to only run tasks for the packages you're currently working on.
 
 ```bash title="Terminal"
 turbo build --filter=@acme/web
 ```
+
+<InVersion version="2.2.4">
+
+You can also filter to a specific task for the package directly in your CLI command without needing to use `--filter`:
+
+```bash title="Terminal"
+# Run the `build` task for the `web` package
+turbo run web#build
+
+# Run the `build` task for the `web` package, and the `lint` task for the `docs` package
+turbo run web#build docs#lint
+```
+
+</InVersion>
 
 ### Filtering by directory
 

@@ -22,6 +22,6 @@ reqwest = { workspace = true, features = ["json", "blocking"] }
 semver = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 thiserror = { workspace = true }
-update-informer = { version = "1.1", default-features = false, features = [
+update-informer = { git = "https://github.com/nicholaslyang/update-informer.git", default-features = false, features = [
   "reqwest",
 ] }

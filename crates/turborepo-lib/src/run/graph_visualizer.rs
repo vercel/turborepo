@@ -6,7 +6,7 @@ use std::{
 
 use thiserror::Error;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
-use turborepo_ui::{cprintln, cwrite, cwriteln, BOLD, BOLD_YELLOW_REVERSE, UI, YELLOW};
+use turborepo_ui::{cprintln, cwrite, cwriteln, ColorConfig, BOLD, BOLD_YELLOW_REVERSE, YELLOW};
 use which::which;
 
 use crate::{engine::Engine, opts::GraphOpts, spawn_child};
@@ -25,7 +25,7 @@ pub enum Error {
 }
 
 pub(crate) fn write_graph(
-    ui: UI,
+    ui: ColorConfig,
     graph_opts: &GraphOpts,
     engine: &Engine,
     single_package: bool,
@@ -52,17 +52,17 @@ pub(crate) fn write_graph(
                 write_graphviz_warning(ui).map_err(Error::GraphOutput)?;
                 render_dot_graph(std::io::stdout(), engine, single_package)?;
             }
-            print!("\n✔ Generated task graph in ");
+            print!("\n✓ Generated task graph in ");
             cprintln!(ui, BOLD, "{filename}");
         }
     }
     Ok(())
 }
 
-fn write_graphviz_warning(ui: UI) -> Result<(), io::Error> {
+fn write_graphviz_warning(color_config: ColorConfig) -> Result<(), io::Error> {
     let stderr = io::stderr();
-    cwrite!(&stderr, ui, BOLD_YELLOW_REVERSE, " WARNING ")?;
-    cwriteln!(&stderr, ui, YELLOW, " `turbo` uses Graphviz to generate an image of your\ngraph, but Graphviz isn't installed on this machine.\n\nYou can download Graphviz from https://graphviz.org/download.\n\nIn the meantime, you can use this string output with an\nonline Dot graph viewer.")?;
+    cwrite!(&stderr, color_config, BOLD_YELLOW_REVERSE, " WARNING ")?;
+    cwriteln!(&stderr, color_config, YELLOW, " `turbo` uses Graphviz to generate an image of your\ngraph, but Graphviz isn't installed on this machine.\n\nYou can download Graphviz from https://graphviz.org/download.\n\nIn the meantime, you can use this string output with an\nonline Dot graph viewer.")?;
     Ok(())
 }
 

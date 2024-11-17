@@ -102,7 +102,7 @@ pub struct PackageSnapshot {
     version: Option<String>,
 
     // In lockfile v7, this portion of package is stored in the top level
-    // `shapshots` map as opposed to being stored inline.
+    // `snapshots` map as opposed to being stored inline.
     #[serde(flatten)]
     snapshot: PackageSnapshotV7,
 

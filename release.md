@@ -57,7 +57,7 @@ You need to run `git push --follow-tags` to finish the release.
 
 ### Notes
 
-- Github Release Notes are published automatically using the config from [`turborepo-release.yml`][2],
+- GitHub Release Notes are published automatically using the config from [`turborepo-release.yml`][2],
   triggered by the [`turbo-orchestrator`][3] bot.
 
 ## Release `@turbo/repository`
@@ -67,8 +67,8 @@ You need to run `git push --follow-tags` to finish the release.
 2. Create a release by triggering the [Turborepo Library Release][5] workflow.
    - Check the "Dry Run" box to run the full release workflow without publishing any packages.
 
-[1]: https://github.com/vercel/turbo/actions/workflows/turborepo-release.yml
-[2]: https://github.com/vercel/turbo/blob/main/.github/turborepo-release.yml
+[1]: https://github.com/vercel/turborepo/actions/workflows/turborepo-release.yml
+[2]: https://github.com/vercel/turborepo/blob/main/.github/turborepo-release.yml
 [3]: https://github.com/apps/turbo-orchestrator
-[4]: https://github.com/vercel/turbo/blob/main/packages/turbo-repository/scripts/bump-version.sh
-[5]: https://github.com/vercel/turbo/actions/workflows/turborepo-library-release.yml
+[4]: https://github.com/vercel/turborepo/blob/main/packages/turbo-repository/scripts/bump-version.sh
+[5]: https://github.com/vercel/turborepo/actions/workflows/turborepo-library-release.yml

@@ -1,11 +1,7 @@
 import path from "node:path";
 import { readJsonSync, existsSync } from "fs-extra";
 import { type PackageJson, getTurboConfigs } from "@turbo/utils";
-import type {
-  SchemaV1,
-  RootSchemaV1,
-  Pipeline,
-} from "@turbo/types/src/types/config";
+import type { SchemaV1, RootSchemaV1, Pipeline } from "@turbo/types";
 import type { Transformer, TransformerArgs } from "../types";
 import { getTransformerHelpers } from "../utils/getTransformerHelpers";
 import type { TransformerResults } from "../runner";

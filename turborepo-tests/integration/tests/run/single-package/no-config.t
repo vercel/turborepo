@@ -34,7 +34,7 @@ Check
     Inferred Env Vars Values       = 
     Passed Through Env Vars        = 
     Passed Through Env Vars Values = 
-    Resolved Task Definition       = {"outputs":[],"cache":false,"dependsOn":[],"inputs":[],"outputLogs":"full","persistent":false,"env":[],"passThroughEnv":null,"interactive":false}
+    Resolved Task Definition       = {"outputs":[],"cache":false,"dependsOn":[],"inputs":[],"outputLogs":"full","persistent":false,"interruptible":false,"env":[],"passThroughEnv":null,"interactive":false}
     Framework                      = 
 
   $ ${TURBO} run build --graph

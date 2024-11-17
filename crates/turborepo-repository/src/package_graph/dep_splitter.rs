@@ -34,7 +34,7 @@ impl<'a> DependencySplitter<'a> {
     }
 
     pub fn is_internal(&self, name: &str, version: &str) -> Option<PackageName> {
-        // If link_workspace_packages isn't set any version wihtout workspace protocol
+        // If link_workspace_packages isn't set any version without workspace protocol
         // is considered external.
         if !self.link_workspace_packages && !version.starts_with("workspace:") {
             return None;
@@ -174,8 +174,8 @@ impl<'a> DependencyVersion<'a> {
             _ if self.version == "*" => true,
             _ => {
                 // If we got this far, then we need to check the workspace package version to
-                // see it satisfies the dependencies range to determin whether
-                // or not its an internal or external dependency.
+                // see it satisfies the dependencies range to determine whether
+                // or not it's an internal or external dependency.
                 let constraint = node_semver::Range::parse(self.version);
                 let version = node_semver::Version::parse(package_version);
 
@@ -222,9 +222,9 @@ mod test {
     #[test_case("1.2.3", None, "npm:^1.2.3", Some("@scope/foo"), true ; "handles npm protocol with satisfied semver range")]
     #[test_case("2.3.4", None, "npm:^1.2.3", None, true ; "handles npm protocol with not satisfied semver range")]
     #[test_case("1.2.3", None, "1.2.2-alpha-123abcd.0", None, true ; "handles pre-release versions")]
-    // for backwards compatability with the code before versions were verified
+    // for backwards compatibility with the code before versions were verified
     #[test_case("sometag", None, "1.2.3", Some("@scope/foo"), true ; "handles non-semver package version")]
-    // for backwards compatability with the code before versions were verified
+    // for backwards compatibility with the code before versions were verified
     #[test_case("1.2.3", None, "sometag", Some("@scope/foo"), true ; "handles non-semver dependency version")]
     #[test_case("1.2.3", None, "file:../libB", Some("@scope/foo"), true ; "handles file:.. inside repo")]
     #[test_case("1.2.3", None, "file:../../../otherproject", None, true ; "handles file:.. outside repo")]
@@ -232,7 +232,7 @@ mod test {
     #[test_case("1.2.3", None, "link:../../../otherproject", None, true ; "handles link:.. outside repo")]
     #[test_case("0.0.0-development", None, "*", Some("@scope/foo"), true ; "handles development versions")]
     #[test_case("1.2.3", Some("foo"), "workspace:@scope/foo@*", Some("@scope/foo"), true ; "handles pnpm alias star")]
-    #[test_case("1.2.3", Some("foo"), "workspace:@scope/foo@~", Some("@scope/foo"), true ; "handles pnpm alias tilda")]
+    #[test_case("1.2.3", Some("foo"), "workspace:@scope/foo@~", Some("@scope/foo"), true ; "handles pnpm alias tilde")]
     #[test_case("1.2.3", Some("foo"), "workspace:@scope/foo@^", Some("@scope/foo"), true ; "handles pnpm alias caret")]
     #[test_case("1.2.3", None, "1.2.3", None, false ; "no workspace linking")]
     #[test_case("1.2.3", None, "workspace:1.2.3", Some("@scope/foo"), false ; "no workspace linking with protocol")]

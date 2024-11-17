@@ -48,7 +48,7 @@ yarn workspace @repo/ui add eslint --dev
 <Tab>
 
 ```bash title="Terminal"
-pnpm install eslint --save-dev --recursive --filter=ui --filter=docs --filter=web
+pnpm install eslint --save-dev --filter=@repo/ui --filter=docs --filter=web
 ```
 
 </Tab>
@@ -105,13 +105,13 @@ const project = resolve(process.cwd(), 'tsconfig.json');
 
 module.exports = {
   extends: [
-    '@vercel/style-guide/eslint/node',
-    '@vercel/style-guide/eslint/typescript',
-    '@vercel/style-guide/eslint/browser',
-    '@vercel/style-guide/eslint/react',
-    '@vercel/style-guide/eslint/next',
+    require.resolve('@vercel/style-guide/eslint/node'),
+    require.resolve('@vercel/style-guide/eslint/typescript'),
+    require.resolve('@vercel/style-guide/eslint/browser'),
+    require.resolve('@vercel/style-guide/eslint/react'),
+    require.resolve('@vercel/style-guide/eslint/next'),
     // Turborepo custom eslint configuration configures the following rules:
-    //  - https://github.com/vercel/turbo/blob/main/packages/eslint-plugin-turbo/docs/rules/no-undeclared-env-vars.md
+    //  - https://github.com/vercel/turborepo/blob/main/packages/eslint-plugin-turbo/docs/rules/no-undeclared-env-vars.md
     'eslint-config-turbo',
   ].map(require.resolve),
   parserOptions: {
@@ -201,7 +201,7 @@ By adding `@repo/eslint-config/next.js` to our `extends` array, we're telling ES
 
 ### Summary
 
-This setup ships by default when you [create a new monorepo](/repo/docs/getting-started/create-new) with `npx create-turbo@latest`. You can also look at [our basic example](https://github.com/vercel/turbo/tree/main/examples/basic) to see a working version.
+This setup ships by default when you [create a new monorepo](/repo/docs/crafting-your-repository#from-zero-to-turbo) with `npx create-turbo@latest`. You can also look at [our basic example](https://github.com/vercel/turborepo/tree/main/examples/basic) to see a working version.
 
 ## Setting up a `lint` task
 

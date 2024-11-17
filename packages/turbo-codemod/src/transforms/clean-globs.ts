@@ -1,5 +1,5 @@
 import path from "node:path";
-import type { SchemaV1 } from "@turbo/types/src/types/config";
+import type { SchemaV1 } from "@turbo/types";
 import { getTurboConfigs } from "@turbo/utils";
 import type { TransformerArgs, Transformer } from "../types";
 import type { TransformerResults } from "../runner";

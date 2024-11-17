@@ -1,6 +1,6 @@
 import path from "node:path";
 import retry from "async-retry";
-import chalk from "chalk";
+import { dim, red } from "picocolors";
 import { mkdir, readJsonSync, existsSync } from "fs-extra";
 import * as logger from "./logger";
 import {
@@ -65,7 +65,7 @@ export async function createProject({
     if (repoUrl) {
       if (repoUrl.origin !== "https://github.com") {
         logger.error(
-          `Invalid URL: ${chalk.red(
+          `Invalid URL: ${red(
             `"${example}"`
           )}. Only GitHub repositories are supported. Please use a GitHub URL and try again.`
         );
@@ -76,7 +76,7 @@ export async function createProject({
 
       if (!repoInfo) {
         logger.error(
-          `Unable to fetch repository information from: ${chalk.red(
+          `Unable to fetch repository information from: ${red(
             `"${example}"`
           )}. Please fix the URL and try again.`
         );
@@ -87,7 +87,7 @@ export async function createProject({
 
       if (!found) {
         logger.error(
-          `Could not locate the repository for ${chalk.red(
+          `Could not locate the repository for ${red(
             `"${example}"`
           )}. Please check that the repository exists and try again.`
         );
@@ -98,10 +98,10 @@ export async function createProject({
 
       if (!found) {
         logger.error(
-          `Could not locate an example named ${chalk.red(
+          `Could not locate an example named ${red(
             `"${example}"`
           )}. It could be due to the following:\n`,
-          `1. Your spelling of example ${chalk.red(
+          `1. Your spelling of example ${red(
             `"${example}"`
           )} might be incorrect.\n`,
           `2. You might not be connected to the internet or you are behind a proxy.`
@@ -134,7 +134,7 @@ export async function createProject({
   const { isEmpty, conflicts } = isFolderEmpty(root);
   if (!isEmpty) {
     logger.error(
-      `${chalk.dim(root)} has ${conflicts.length} conflicting ${
+      `${dim(root)} has ${conflicts.length} conflicting ${
         conflicts.length === 1 ? "file" : "files"
       } - please try a different location`
     );
@@ -154,8 +154,7 @@ export async function createProject({
   try {
     if (!isDefaultExample && repoInfo) {
       loader.start();
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- this is type guarded above (wtf TS)
-      await retry(() => downloadAndExtractRepo(root, repoInfo!), {
+      await retry(() => downloadAndExtractRepo(root, repoInfo), {
         retries: 3,
       });
     } else {
