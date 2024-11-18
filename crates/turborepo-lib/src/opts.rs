@@ -367,7 +367,6 @@ impl<'a> TryFrom<OptsInputs<'a>> for CacheOpts {
         let is_linked = turborepo_api_client::is_linked(inputs.api_auth);
         let cache = inputs.config.cache();
         let has_old_cache_config = inputs.config.remote_only()
-            || inputs.config.force()
             || inputs.run_args.no_cache
             || inputs.config.remote_cache_read_only();
 
