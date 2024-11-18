@@ -42,9 +42,9 @@ impl MicroFrontendsConfigs {
                 continue;
             };
             let tasks = config
-                .applications()
-                .map(|(application, options)| {
-                    let dev_task = options.development.task.as_deref().unwrap_or("dev");
+                .development_tasks()
+                .map(|(application, task)| {
+                    let dev_task = task.unwrap_or("dev");
                     TaskId::new(application, dev_task).into_owned()
                 })
                 .collect();

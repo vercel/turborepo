@@ -1,8 +1,7 @@
 #![deny(clippy::all)]
 mod configv1;
+mod configv2;
 mod error;
-
-use std::collections::BTreeMap;
 
 use biome_deserialize_macros::Deserializable;
 use biome_json_parser::JsonParserOptions;
@@ -66,9 +65,11 @@ impl Config {
         }
     }
 
-    pub fn applications(&self) -> impl Iterator<Item = (&String, &Application)> {
+    pub fn development_tasks(&self) -> impl Iterator<Item = (&str, Option<&str>)> {
         match self {
-            Config::V1(config_v1) => config_v1.applications(),
+            Config::V1(config_v1) => config_v1
+                .applications()
+                .map(|(name, config)| (name.as_str(), config.development.task.as_deref())),
         }
     }
 }
