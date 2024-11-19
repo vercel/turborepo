@@ -3,9 +3,7 @@ use std::collections::{HashMap, HashSet};
 use itertools::Itertools;
 use tracing::warn;
 use turbopath::AbsoluteSystemPath;
-use turborepo_micro_frontend::{
-    Config as MFEConfig, Error, DEFAULT_MICRO_FRONTENDS_CONFIG_V1, MICRO_FRONTENDS_PACKAGES,
-};
+use turborepo_micro_frontend::{Config as MFEConfig, Error, MICRO_FRONTENDS_PACKAGES};
 use turborepo_repository::package_graph::{PackageGraph, PackageName};
 
 use crate::{
@@ -26,17 +24,19 @@ impl MicroFrontendsConfigs {
         package_graph: &PackageGraph,
     ) -> Result<Option<Self>, Error> {
         let mut configs = HashMap::new();
+        let mut referenced_default_apps = HashSet::new();
         for (package_name, package_info) in package_graph.packages() {
-            let config_path = repo_root
-                .resolve(package_info.package_path())
-                .join_component(DEFAULT_MICRO_FRONTENDS_CONFIG_V1);
-            let Some(config) = MFEConfig::load(&config_path).or_else(|err| {
-                if matches!(err, turborepo_micro_frontend::Error::UnsupportedVersion(_)) {
-                    warn!("Ignoring {config_path}: {err}");
+            let package_dir = repo_root.resolve(package_info.package_path());
+            let Some(config) = MFEConfig::load_from_dir(&package_dir).or_else(|err| match err {
+                turborepo_micro_frontend::Error::UnsupportedVersion(_) => {
+                    warn!("Ignoring {package_dir}: {err}");
                     Ok(None)
-                } else {
-                    Err(err)
                 }
+                turborepo_micro_frontend::Error::ChildConfig { reference } => {
+                    referenced_default_apps.insert(reference);
+                    Ok(None)
+                }
+                err => Err(err),
             })?
             else {
                 continue;
@@ -51,7 +51,18 @@ impl MicroFrontendsConfigs {
                 .collect();
             configs.insert(package_name.to_string(), tasks);
         }
-
+        let default_apps_found = configs.keys().cloned().collect();
+        let mut missing_default_apps = referenced_default_apps
+            .difference(&default_apps_found)
+            .map(|s| s.as_str())
+            .collect::<Vec<_>>();
+        if !missing_default_apps.is_empty() {
+            missing_default_apps.sort();
+            warn!(
+                "Missing default applications: {}",
+                missing_default_apps.join(", ")
+            );
+        }
         let mfe_package = package_graph
             .packages()
             .map(|(pkg, _)| pkg.as_str())
