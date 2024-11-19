@@ -117,9 +117,8 @@ jobs:
             container-options: "--rm"
           - host: ubuntu-latest
             container-options: "--platform=linux/amd64 --rm"
-            container-setup: "apt-get update && apt-get install -y curl musl-tools sudo unzip"
             target: "x86_64-unknown-linux-musl"
-            setup: "apt-get install -y build-essential clang-5.0 lldb-5.0 llvm-5.0-dev libclang-5.0-dev"
+            setup: "sudo apt-get && sudo apt-get install -y build-essential clang lldb llvm libclang curl musl-tools sudo unzip"
           - host: ubuntu-latest
             container-options: "--rm"
             target: "aarch64-unknown-linux-musl"
