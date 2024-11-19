@@ -5,12 +5,7 @@ description: Learn about the innovative architecture that powers Turbopack's spe
 
 import { ThemeAwareImage } from '#/components/theme-aware-image';
 
-{/*
-  The excalidraw diagrams are available here:
-  https://excalidraw.com/#json=NJtM9yXvteQdPLBco0InQ,K5zND2XpqXCHUe_VJj4roA
-*/}
-
-Turbopack uses an automatic demand-driven incremental computation architecture to provide [React Fast Refresh](https://nextjs.org/docs/architecture/fast-refresh) with massive Next.js and React applications in *tens of milliseconds*.
+Turbopack uses an automatic demand-driven incremental computation architecture to provide [React Fast Refresh](https://nextjs.org/docs/architecture/fast-refresh) with massive Next.js and React applications.
 
 This architecture uses caching to remember what values functions were called with and what values they returned. Incremental builds scale by the size of your local changes, not the size of your application.
 
@@ -18,7 +13,7 @@ This architecture uses caching to remember what values functions were called wit
   className="flex justify-center"
   light={{
     alt: 'A formula with big-o notation showing a change in time spent from "your entire application" to "your changes"',
-    src: '/images/docs/pack/big-o-changes-equation-light.svg',
+    src: '/images/docs/pack/big-o-changes-equation-light.png',
     props: {
       width: 500,
       height: 24,
@@ -26,7 +21,7 @@ This architecture uses caching to remember what values functions were called wit
   }}
   dark={{
     alt: 'A formula with big-o notation showing a change in time spent from "your entire application" to "your changes"',
-    src: '/images/docs/pack/big-o-changes-equation-dark.svg',
+    src: '/images/docs/pack/big-o-changes-equation-dark.png',f
     props: {
       width: 500,
       height: 24,
@@ -74,7 +69,7 @@ To facilitate automatic caching and dependency tracking, Turbopack introduces a 
   }}
 />
 
-By not marking cells as dependencies until they are read, Turbopack achieves finer-grained caching than [a traditional top-down memoization approach](https://en.wikipedia.org/wiki/Memoization) would provide. For example, an argument might be an object or mapping of *many* value cells. Instead of needing to recompute our tracked function when *any part of* the object or mapping changes, it only needs to recompute the tracked function when a cell that *it has actually read* changes.
+By not marking cells as dependencies until they are read, Turbopack achieves finer-grained caching than [a traditional top-down memoization approach](https://en.wikipedia.org/wiki/Memoization) would provide. For example, an argument might be an object or mapping of _many_ value cells. Instead of needing to recompute our tracked function when _any part of_ the object or mapping changes, it only needs to recompute the tracked function when a cell that _it has actually read_ changes.
 
 Value cells represent nearly everything inside of Turbopack, such as a file on disk, an abstract syntax tree (AST), metadata about imports and exports of modules, or clustering information used for chunking and bundling.
 
