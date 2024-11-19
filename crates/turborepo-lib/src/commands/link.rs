@@ -185,10 +185,8 @@ pub async fn link(
                 REMOTE_CACHING_URL
             );
 
-            if !yes {
-                if !should_link_remote_cache(base, &repo_root_with_tilde)? {
-                    return Err(Error::NotLinking);
-                }
+            if !yes && !should_link_remote_cache(base, &repo_root_with_tilde)? {
+                return Err(Error::NotLinking);
             }
 
             let user_response = api_client
