@@ -569,9 +569,10 @@ pub enum Command {
         #[clap(long)]
         no_gitignore: bool,
 
-        /// The scope, i.e. Vercel team, that you are linking
+        /// The scope, i.e. Vercel team, to which you are linking
         #[clap(long)]
         scope: Option<String>,
+
         /// Answer yes to all prompts (default false)
         #[clap(long, short)]
         yes: bool,
