@@ -13,6 +13,13 @@ pub enum Error {
          {SUPPORTED_VERSIONS:?}"
     )]
     UnsupportedVersion(String),
+    #[error("Configuration references config located in package {reference}")]
+    ChildConfig { reference: String },
+    #[error("Cannot parse config with version '{actual}' as version '{expected}'")]
+    InvalidVersion {
+        expected: &'static str,
+        actual: String,
+    },
 }
 
 impl Error {

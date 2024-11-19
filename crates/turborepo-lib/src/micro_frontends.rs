@@ -4,7 +4,7 @@ use itertools::Itertools;
 use tracing::warn;
 use turbopath::AbsoluteSystemPath;
 use turborepo_micro_frontend::{
-    Config as MFEConfig, Error, DEFAULT_MICRO_FRONTENDS_CONFIG, MICRO_FRONTENDS_PACKAGES,
+    Config as MFEConfig, Error, DEFAULT_MICRO_FRONTENDS_CONFIG_V1, MICRO_FRONTENDS_PACKAGES,
 };
 use turborepo_repository::package_graph::{PackageGraph, PackageName};
 
@@ -29,7 +29,7 @@ impl MicroFrontendsConfigs {
         for (package_name, package_info) in package_graph.packages() {
             let config_path = repo_root
                 .resolve(package_info.package_path())
-                .join_component(DEFAULT_MICRO_FRONTENDS_CONFIG);
+                .join_component(DEFAULT_MICRO_FRONTENDS_CONFIG_V1);
             let Some(config) = MFEConfig::load(&config_path).or_else(|err| {
                 if matches!(err, turborepo_micro_frontend::Error::UnsupportedVersion(_)) {
                     warn!("Ignoring {config_path}: {err}");
@@ -42,9 +42,10 @@ impl MicroFrontendsConfigs {
                 continue;
             };
             let tasks = config
-                .development_tasks()
-                .map(|(application, task)| {
-                    let dev_task = task.unwrap_or("dev");
+                .applications
+                .iter()
+                .map(|(application, options)| {
+                    let dev_task = options.development.task.as_deref().unwrap_or("dev");
                     TaskId::new(application, dev_task).into_owned()
                 })
                 .collect();
