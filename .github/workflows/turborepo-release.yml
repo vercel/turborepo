@@ -116,7 +116,6 @@ jobs:
             target: "aarch64-apple-darwin"
             container-options: "--rm"
           - host: ubuntu-latest
-            container: ubuntu:xenial
             container-options: "--platform=linux/amd64 --rm"
             container-setup: "apt-get update && apt-get install -y curl musl-tools sudo unzip"
             target: "x86_64-unknown-linux-musl"
