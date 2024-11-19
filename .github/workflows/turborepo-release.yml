@@ -118,7 +118,7 @@ jobs:
           - host: ubuntu-latest
             container-options: "--platform=linux/amd64 --rm"
             target: "x86_64-unknown-linux-musl"
-            setup: "sudo apt-get && sudo apt-get install -y build-essential clang lldb llvm libclang curl musl-tools sudo unzip"
+            setup: "sudo apt-get update && sudo apt-get install -y build-essential clang lldb llvm libclang curl musl-tools sudo unzip"
           - host: ubuntu-latest
             container-options: "--rm"
             target: "aarch64-unknown-linux-musl"
