@@ -1482,7 +1482,7 @@ mod test {
     use itertools::Itertools;
     use pretty_assertions::assert_eq;
 
-    use crate::cli::{ExecutionArgs, RunArgs};
+    use crate::cli::{ExecutionArgs, LinkTarget, RunArgs};
 
     struct CommandTestCase {
         command: &'static str,
@@ -2306,6 +2306,90 @@ mod test {
             global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
             expected_output: Args {
                 command: Some(Command::Bin {}),
+                cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
+                ..Args::default()
+            },
+        }
+        .test();
+    }
+
+    #[test]
+    fn test_parse_link() {
+        assert_eq!(
+            Args::try_parse_from(["turbo", "link"]).unwrap(),
+            Args {
+                command: Some(Command::Link {
+                    no_gitignore: false,
+                    scope: None,
+                    yes: false,
+                    target: LinkTarget::RemoteCache,
+                }),
+                ..Args::default()
+            }
+        );
+
+        CommandTestCase {
+            command: "link",
+            command_args: vec![],
+            global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
+            expected_output: Args {
+                command: Some(Command::Link {
+                    no_gitignore: false,
+                    scope: None,
+                    yes: false,
+                    target: LinkTarget::RemoteCache,
+                }),
+                cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
+                ..Args::default()
+            },
+        }
+        .test();
+
+        CommandTestCase {
+            command: "link",
+            command_args: vec![vec!["--yes"]],
+            global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
+            expected_output: Args {
+                command: Some(Command::Link {
+                    yes: true,
+                    no_gitignore: false,
+                    scope: None,
+                    target: LinkTarget::RemoteCache,
+                }),
+                cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
+                ..Args::default()
+            },
+        }
+        .test();
+
+        CommandTestCase {
+            command: "link",
+            command_args: vec![vec!["--scope", "foo"]],
+            global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
+            expected_output: Args {
+                command: Some(Command::Link {
+                    yes: false,
+                    no_gitignore: false,
+                    scope: Some("foo".to_string()),
+                    target: LinkTarget::RemoteCache,
+                }),
+                cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
+                ..Args::default()
+            },
+        }
+        .test();
+
+        CommandTestCase {
+            command: "link",
+            command_args: vec![vec!["--no-gitignore"]],
+            global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
+            expected_output: Args {
+                command: Some(Command::Link {
+                    yes: false,
+                    no_gitignore: true,
+                    scope: None,
+                    target: LinkTarget::RemoteCache,
+                }),
                 cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
             },
