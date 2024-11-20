@@ -113,7 +113,9 @@ fn translate_key_event(options: InputOptions, key_event: KeyEvent) -> Option<Eve
             Some(Event::ScrollDown)
         }
         KeyCode::Up => Some(Event::Up),
+        KeyCode::Char('k') => Some(Event::Up),
         KeyCode::Down => Some(Event::Down),
+        KeyCode::Char('j') => Some(Event::Down),
         KeyCode::Enter => Some(Event::EnterInteractive),
         _ => None,
     }
