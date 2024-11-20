@@ -7,9 +7,7 @@ use turborepo_dirs::config_dir;
 use turborepo_ui::ColorConfig;
 
 use crate::{
-    cli::Command,
     config::{ConfigurationOptions, Error as ConfigError, TurborepoConfigBuilder},
-    turbo_json::UIMode,
     Args,
 };
 
@@ -17,6 +15,7 @@ pub(crate) mod bin;
 pub(crate) mod config;
 pub(crate) mod daemon;
 pub(crate) mod generate;
+pub(crate) mod info;
 pub(crate) mod link;
 pub(crate) mod login;
 pub(crate) mod logout;
@@ -69,17 +68,7 @@ impl CommandBase {
             .with_token(self.args.token.clone())
             .with_timeout(self.args.remote_cache_timeout)
             .with_preflight(self.args.preflight.then_some(true))
-            .with_ui(self.args.ui.or_else(|| {
-                self.args.execution_args.as_ref().and_then(|args| {
-                    if !args.log_order.compatible_with_tui() {
-                        Some(UIMode::Stream)
-                    } else {
-                        // If the argument is compatible with the TUI this does not mean we should
-                        // override other configs
-                        None
-                    }
-                })
-            }))
+            .with_ui(self.args.ui)
             .with_allow_no_package_manager(
                 self.args
                     .dangerously_disable_package_manager_check
@@ -88,33 +77,13 @@ impl CommandBase {
             .with_daemon(self.args.run_args().and_then(|args| args.daemon()))
             .with_env_mode(
                 self.args
-                    .command
-                    .as_ref()
-                    .and_then(|c| match c {
-                        Command::Run { execution_args, .. } => execution_args.env_mode,
-                        _ => None,
-                    })
-                    .or_else(|| {
-                        self.args
-                            .execution_args
-                            .as_ref()
-                            .and_then(|args| args.env_mode)
-                    }),
+                    .execution_args()
+                    .and_then(|execution_args| execution_args.env_mode),
             )
             .with_cache_dir(
                 self.args
-                    .command
-                    .as_ref()
-                    .and_then(|c| match c {
-                        Command::Run { execution_args, .. } => execution_args.cache_dir.clone(),
-                        _ => None,
-                    })
-                    .or_else(|| {
-                        self.args
-                            .execution_args
-                            .as_ref()
-                            .and_then(|args| args.cache_dir.clone())
-                    }),
+                    .execution_args()
+                    .and_then(|execution_args| execution_args.cache_dir.clone()),
             )
             .with_root_turbo_json_path(
                 self.args
@@ -123,6 +92,27 @@ impl CommandBase {
                     .map(AbsoluteSystemPathBuf::from_cwd)
                     .transpose()?,
             )
+            .with_force(
+                self.args
+                    .run_args()
+                    .and_then(|args| args.force.map(|value| value.unwrap_or(true))),
+            )
+            .with_log_order(self.args.execution_args().and_then(|args| args.log_order))
+            .with_remote_only(self.args.run_args().and_then(|args| args.remote_only()))
+            .with_remote_cache_read_only(
+                self.args
+                    .run_args()
+                    .and_then(|args| args.remote_cache_read_only()),
+            )
+            .with_cache(
+                self.args
+                    .run_args()
+                    .and_then(|args| args.cache.as_deref())
+                    .map(|cache| cache.parse())
+                    .transpose()?,
+            )
+            .with_run_summary(self.args.run_args().and_then(|args| args.summarize()))
+            .with_allow_no_turbo_json(self.args.allow_no_turbo_json.then_some(true))
             .build()
     }
 

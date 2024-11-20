@@ -146,6 +146,7 @@ impl WithMetadata for RawTaskDefinition {
         self.inputs.add_text(text.clone());
         self.pass_through_env.add_text(text.clone());
         self.persistent.add_text(text.clone());
+        self.interruptible.add_text(text.clone());
         self.outputs.add_text(text.clone());
         self.output_logs.add_text(text.clone());
         self.interactive.add_text(text);
@@ -160,6 +161,7 @@ impl WithMetadata for RawTaskDefinition {
         self.inputs.add_path(path.clone());
         self.pass_through_env.add_path(path.clone());
         self.persistent.add_path(path.clone());
+        self.interruptible.add_path(path.clone());
         self.outputs.add_path(path.clone());
         self.output_logs.add_path(path.clone());
         self.interactive.add_path(path);

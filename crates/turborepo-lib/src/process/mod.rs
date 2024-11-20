@@ -39,6 +39,13 @@ pub struct ProcessManager {
 struct ProcessManagerInner {
     is_closing: bool,
     children: Vec<child::Child>,
+    size: Option<PtySize>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct PtySize {
+    rows: u16,
+    cols: u16,
 }
 
 impl ProcessManager {
@@ -48,6 +55,7 @@ impl ProcessManager {
             state: Arc::new(Mutex::new(ProcessManagerInner {
                 is_closing: false,
                 children: Vec::new(),
+                size: None,
             })),
             use_pty,
         }
@@ -99,10 +107,11 @@ impl ProcessManager {
             debug!("process manager closing");
             return None;
         }
+        let pty_size = self.use_pty.then(|| lock.pty_size()).flatten();
         let child = child::Child::spawn(
             command,
             child::ShutdownStyle::Graceful(stop_timeout),
-            self.use_pty,
+            pty_size,
         );
         if let Ok(child) = &child {
             lock.children.push(child.clone());
@@ -160,6 +169,33 @@ impl ProcessManager {
             // just allocate a new vec rather than clearing the old one
             lock.children = vec![];
         }
+    }
+
+    pub fn set_pty_size(&self, rows: u16, cols: u16) {
+        self.state.lock().expect("not poisoned").size = Some(PtySize { rows, cols });
+    }
+}
+
+impl ProcessManagerInner {
+    fn pty_size(&mut self) -> Option<PtySize> {
+        if self.size.is_none() {
+            self.size = PtySize::from_tty();
+        }
+        self.size
+    }
+}
+
+impl PtySize {
+    fn from_tty() -> Option<Self> {
+        console::Term::stdout()
+            .size_checked()
+            .map(|(rows, cols)| Self { rows, cols })
+    }
+}
+
+impl Default for PtySize {
+    fn default() -> Self {
+        Self { rows: 24, cols: 80 }
     }
 }
 
@@ -335,7 +371,7 @@ mod test {
         match strategy {
             "stop" => manager.stop().await,
             "wait" => manager.wait().await,
-            _ => panic!("unknown strat"),
+            _ => panic!("unknown strategy"),
         }
 
         // tasks return proper exit code

@@ -9,7 +9,9 @@ mod line;
 mod logs;
 mod output;
 mod prefixed;
+pub mod sender;
 pub mod tui;
+pub mod wui;
 
 use std::{borrow::Cow, env, f64::consts::PI, time::Duration};
 
@@ -29,6 +31,10 @@ pub use crate::{
 
 #[derive(Debug, Error)]
 pub enum Error {
+    #[error(transparent)]
+    Tui(#[from] tui::Error),
+    #[error(transparent)]
+    Wui(#[from] wui::Error),
     #[error("cannot read logs: {0}")]
     CannotReadLogs(#[source] std::io::Error),
     #[error("cannot write logs: {0}")]
@@ -111,6 +117,28 @@ macro_rules! cwriteln {
         let colored_str = $color.apply_to(formatted_str);
 
         writeln!($writer, "{}", $ui.apply(colored_str))
+    }};
+}
+
+#[macro_export]
+macro_rules! ceprintln {
+    ($ui:expr, $color:expr, $format_string:expr $(, $arg:expr)*) => {{
+        let formatted_str = format!($format_string $(, $arg)*);
+
+        let colored_str = $color.apply_to(formatted_str);
+
+        eprintln!("{}", $ui.apply(colored_str))
+    }};
+}
+
+#[macro_export]
+macro_rules! ceprint {
+    ($ui:expr, $color:expr, $format_string:expr $(, $arg:expr)*) => {{
+        let formatted_str = format!($format_string $(, $arg)*);
+
+        let colored_str = $color.apply_to(formatted_str);
+
+        eprint!("{}", $ui.apply(colored_str))
     }};
 }
 

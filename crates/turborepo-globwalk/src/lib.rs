@@ -282,7 +282,9 @@ pub struct GlobError {
     reason: String,
 }
 
-/// ValidatedGlob represents an input string that we have either validated or
+/// ValidatedGlob.
+///
+/// Represents an input string that we have either validated or
 /// modified to fit our constraints. It does not _yet_ validate that the glob is
 /// a valid glob pattern, just that we have checked for unix format, ':'s, clean
 /// paths, etc.
@@ -407,7 +409,7 @@ fn visit_file(
         Err(e) => {
             let io_err = std::io::Error::from(e);
             match io_err.kind() {
-                // Ignore DNE and permission errors
+                // Ignore missing file and permission errors
                 std::io::ErrorKind::NotFound | std::io::ErrorKind::PermissionDenied => None,
                 _ => Some(Err(io_err.into())),
             }
@@ -463,10 +465,10 @@ mod test {
     #[test_case("/a/b/.", "/a/b", 2 ; "test path with leading / and ending with dot segment")]
     #[test_case("/a/.././b", "/b", 0 ; "test path with leading / and mixed and consecutive dot and dotdot segments")]
     #[test_case("/a/b/c/../../d/e/f/g/h/i/../j", "/a/d/e/f/g/h/j", 1 ; "leading collapse followed by shorter one")]
-    fn test_collapse_path(glob: &str, expected: &str, earliest_collapsed_segement: usize) {
+    fn test_collapse_path(glob: &str, expected: &str, earliest_collapsed_segment: usize) {
         let (glob, segment) = collapse_path(glob).unwrap();
         assert_eq!(glob, expected);
-        assert_eq!(segment, earliest_collapsed_segement);
+        assert_eq!(segment, earliest_collapsed_segment);
     }
 
     #[test_case("../a/b" ; "test path starting with ../ segment should return None")]

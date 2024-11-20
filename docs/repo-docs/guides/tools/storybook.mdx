@@ -280,6 +280,12 @@ Update components imports so that they reference the now co-located modules. For
 + import { Button } from "./button";
 ```
 
+<Callout type="good-to-know">
+  You may also need to update [absolute
+  imports](/repo/docs/guides/tools/typescript#use-nodejs-subpath-imports-instead-of-typescript-compiler-paths)
+  according to your changes and usage.
+</Callout>
+
 You'll also need to install any Storybook packages required for writing stories. For example, moving the story from above would require that you install `@storybook/react` into your `@repo/ui` package.
 
 <PackageManagerTabs>

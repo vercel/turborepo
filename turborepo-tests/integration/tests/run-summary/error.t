@@ -59,6 +59,7 @@ Validate that we got a full task summary for the failed task with an error in .e
       "inputs": [],
       "outputLogs": "full",
       "persistent": false,
+      "interruptible": false,
       "env": [],
       "passThroughEnv": null,
       "interactive": false

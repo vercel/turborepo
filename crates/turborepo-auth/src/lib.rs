@@ -27,7 +27,9 @@ pub const VERCEL_TOKEN_FILE: &str = "auth.json";
 pub const TURBO_TOKEN_DIR: &str = "turborepo";
 pub const TURBO_TOKEN_FILE: &str = "config.json";
 
-/// Token is the result of a successful login or an existing token. This acts as
+/// Token.
+///
+/// It's the result of a successful login or an existing token. This acts as
 /// a wrapper for a bunch of token operations, like validation. We explicitly do
 /// not store any information about the underlying token for a few reasons, like
 /// having a token invalidated on the web but not locally.
@@ -84,7 +86,7 @@ impl Token {
     /// * `valid_message_fn` - An optional callback that gets called if the
     ///   token is valid. It will be passed the user's email.
     // TODO(voz): This should do a `get_user` or `get_teams` instead of the caller
-    // doing it. The reason we don't do it here is becuase the caller
+    // doing it. The reason we don't do it here is because the caller
     // needs to do printing and requires the user struct, which we don't want to
     // return here.
     pub async fn is_valid<T: Client + TokenClient + CacheClient>(
@@ -431,6 +433,7 @@ mod tests {
                 > + Send
                 + Sync
                 + 'static,
+            _body_len: usize,
             _duration: u64,
             _tag: Option<&str>,
             _token: &str,

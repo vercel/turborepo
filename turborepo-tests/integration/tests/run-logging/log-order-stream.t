@@ -25,6 +25,7 @@
   Cached:    0 cached, 2 total
     Time:\s*[\.0-9]+m?s  (re)
   
+
 The env var set to stream works (this is default, so this test doesn't guarantee the env var is "working"),
 it just guarantees setting this env var won't crash.
   $ TURBO_LOG_ORDER=stream ${TURBO} run build --force
@@ -50,6 +51,7 @@ it just guarantees setting this env var won't crash.
   Cached:    0 cached, 2 total
     Time:\s*[\.0-9]+m?s  (re)
   
+
 The flag wins over the env var
   $ TURBO_LOG_ORDER=grouped ${TURBO} run build --log-order stream --force
   \xe2\x80\xa2 Packages in scope: my-app, util (esc)
@@ -74,3 +76,4 @@ The flag wins over the env var
   Cached:    0 cached, 2 total
     Time:\s*[\.0-9]+m?s  (re)
   
+

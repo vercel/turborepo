@@ -1,4 +1,5 @@
-import { spyConsole, validateLogs } from "@turbo/test-utils";
+import { spyConsole } from "@turbo/test-utils";
+import { describe, it, expect } from "@jest/globals";
 import { getTurboVersion } from "../src/getTurboVersion";
 
 describe("getWorkspace()", () => {
@@ -12,10 +13,11 @@ describe("getWorkspace()", () => {
         "./__fixtures__/app"
       )
     ).toEqual("1.2.3");
-    validateLogs(
-      ['Using turbo version "1.2.3" from arguments'],
-      mockConsole.log,
-      { prefix: "≫  " }
+
+    expect(mockConsole.log).toHaveBeenNthCalledWith(
+      1,
+      "≫  ",
+      'Using turbo version "1.2.3" from arguments'
     );
   });
 

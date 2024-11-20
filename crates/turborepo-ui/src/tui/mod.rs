@@ -16,8 +16,8 @@ pub use app::{run_app, terminal_big_enough};
 use clipboard::copy_to_clipboard;
 use debouncer::Debouncer;
 use event::{Event, TaskResult};
-pub use handle::{AppReceiver, AppSender, TuiTask};
-use input::{input, InputOptions};
+pub use handle::{AppReceiver, TuiSender};
+use input::InputOptions;
 pub use pane::TerminalPane;
 use size::SizeInfo;
 pub use table::TaskTable;
@@ -25,6 +25,8 @@ pub use term_output::TerminalOutput;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error("failed to send event to TUI: {0}")]
+    Mpsc(String),
     #[error("No task found with name '{name}'")]
     TaskNotFound { name: String },
     #[error("No task at index {index} (only {len} tasks) ")]

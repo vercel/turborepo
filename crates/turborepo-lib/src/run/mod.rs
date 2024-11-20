@@ -6,10 +6,11 @@ mod error;
 pub(crate) mod global_hash;
 mod graph_visualizer;
 pub(crate) mod package_discovery;
-mod scope;
+pub(crate) mod scope;
 pub(crate) mod summary;
 pub mod task_access;
 pub mod task_id;
+mod ui;
 pub mod watch;
 
 use std::{
@@ -31,12 +32,16 @@ use turborepo_env::EnvironmentVariableMap;
 use turborepo_repository::package_graph::{PackageGraph, PackageName, PackageNode};
 use turborepo_scm::SCM;
 use turborepo_telemetry::events::generic::GenericEventBuilder;
-use turborepo_ui::{cprint, cprintln, tui, tui::AppSender, ColorConfig, BOLD_GREY, GREY};
+use turborepo_ui::{
+    cprint, cprintln, sender::UISender, tui, tui::TuiSender, wui::sender::WebUISender, ColorConfig,
+    BOLD_GREY, GREY,
+};
 
 pub use crate::run::error::Error;
 use crate::{
     cli::EnvMode,
     engine::Engine,
+    micro_frontends::MicroFrontendsConfigs,
     opts::Opts,
     process::ProcessManager,
     run::{global_hash::get_global_hash_inputs, summary::RunTracker, task_access::TaskAccess},
@@ -69,12 +74,17 @@ pub struct Run {
     task_access: TaskAccess,
     daemon: Option<DaemonClient<DaemonConnector>>,
     should_print_prelude: bool,
-    ui_mode: UIMode,
+    micro_frontend_configs: Option<MicroFrontendsConfigs>,
 }
 
+type UIResult<T> = Result<Option<(T, JoinHandle<Result<(), turborepo_ui::Error>>)>, Error>;
+
+type WuiResult = UIResult<WebUISender>;
+type TuiResult = UIResult<TuiSender>;
+
 impl Run {
-    fn has_persistent_tasks(&self) -> bool {
-        self.engine.has_persistent_tasks
+    fn has_non_interruptible_tasks(&self) -> bool {
+        self.engine.has_non_interruptible_tasks
     }
     fn print_run_prelude(&self) {
         let targets_list = self.opts.run_opts.tasks.join(", ");
@@ -104,7 +114,7 @@ impl Run {
             );
         }
 
-        let use_http_cache = !self.opts.cache_opts.skip_remote;
+        let use_http_cache = self.opts.cache_opts.cache.remote.should_use();
         if use_http_cache {
             cprintln!(self.color_config, GREY, "• Remote caching enabled");
         } else {
@@ -128,17 +138,23 @@ impl Run {
         &self.root_turbo_json
     }
 
-    pub fn create_run_for_persistent_tasks(&self) -> Self {
-        let mut new_run = self.clone();
-        let new_engine = new_run.engine.create_engine_for_persistent_tasks();
+    pub fn create_run_for_non_interruptible_tasks(&self) -> Self {
+        let mut new_run = Self {
+            // ProcessManager is shared via an `Arc`,
+            // so we want to explicitly recreate it instead of cloning
+            processes: ProcessManager::new(self.processes.use_pty()),
+            ..self.clone()
+        };
+
+        let new_engine = new_run.engine.create_engine_for_non_interruptible_tasks();
         new_run.engine = Arc::new(new_engine);
 
         new_run
     }
 
-    pub fn create_run_without_persistent_tasks(&self) -> Self {
+    pub fn create_run_for_interruptible_tasks(&self) -> Self {
         let mut new_run = self.clone();
-        let new_engine = new_run.engine.create_engine_without_persistent_tasks();
+        let new_engine = new_run.engine.create_engine_for_interruptible_tasks();
         new_run.engine = Arc::new(new_engine);
 
         new_run
@@ -186,6 +202,10 @@ impl Run {
         &self.pkg_dep_graph
     }
 
+    pub fn engine(&self) -> &Engine {
+        &self.engine
+    }
+
     pub fn filtered_pkgs(&self) -> &HashSet<PackageName> {
         &self.filtered_pkgs
     }
@@ -195,24 +215,41 @@ impl Run {
     }
 
     pub fn has_tui(&self) -> bool {
-        self.ui_mode.use_tui()
+        self.opts.run_opts.ui_mode.use_tui()
     }
 
     pub fn should_start_ui(&self) -> Result<bool, Error> {
-        Ok(self.ui_mode.use_tui()
+        Ok(self.opts.run_opts.ui_mode.use_tui()
             && self.opts.run_opts.dry_run.is_none()
             && tui::terminal_big_enough()?)
     }
 
-    #[allow(clippy::type_complexity)]
-    pub fn start_experimental_ui(
-        &self,
-    ) -> Result<Option<(AppSender, JoinHandle<Result<(), tui::Error>>)>, Error> {
+    pub fn start_ui(self: &Arc<Self>) -> UIResult<UISender> {
         // Print prelude here as this needs to happen before the UI is started
         if self.should_print_prelude {
             self.print_run_prelude();
         }
 
+        match self.opts.run_opts.ui_mode {
+            UIMode::Tui => self
+                .start_terminal_ui()
+                .map(|res| res.map(|(sender, handle)| (UISender::Tui(sender), handle))),
+            UIMode::Stream => Ok(None),
+            UIMode::Web => self
+                .start_web_ui()
+                .map(|res| res.map(|(sender, handle)| (UISender::Wui(sender), handle))),
+        }
+    }
+    fn start_web_ui(self: &Arc<Self>) -> WuiResult {
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+
+        let handle = tokio::spawn(ui::start_web_ui_server(rx, self.clone()));
+
+        Ok(Some((WebUISender { tx }, handle)))
+    }
+
+    #[allow(clippy::type_complexity)]
+    fn start_terminal_ui(&self) -> TuiResult {
         if !self.should_start_ui()? {
             return Ok(None);
         }
@@ -223,8 +260,11 @@ impl Run {
             return Ok(None);
         }
 
-        let (sender, receiver) = AppSender::new();
-        let handle = tokio::task::spawn_blocking(move || tui::run_app(task_names, receiver));
+        let (sender, receiver) = TuiSender::new();
+        let color_config = self.color_config;
+        let handle = tokio::task::spawn(async move {
+            Ok(tui::run_app(task_names, receiver, color_config).await?)
+        });
 
         Ok(Some((sender, handle)))
     }
@@ -236,12 +276,8 @@ impl Run {
         }
     }
 
-    pub async fn run(
-        &mut self,
-        experimental_ui_sender: Option<AppSender>,
-        is_watch: bool,
-    ) -> Result<i32, Error> {
-        let skip_cache_writes = self.opts.runcache_opts.skip_writes;
+    pub async fn run(&self, ui_sender: Option<UISender>, is_watch: bool) -> Result<i32, Error> {
+        let skip_cache_writes = self.opts.cache_opts.cache.skip_writes();
         if let Some(subscriber) = self.signal_handler.subscribe() {
             let run_cache = self.run_cache.clone();
             tokio::spawn(async move {
@@ -336,7 +372,7 @@ impl Run {
             self.engine.task_definitions(),
             &self.repo_root,
             &self.run_telemetry,
-            &mut self.daemon,
+            &self.daemon,
         )?;
 
         let root_workspace = self
@@ -422,14 +458,15 @@ impl Run {
             package_inputs_hashes,
             &self.env_at_execution_start,
             &global_hash,
-            self.opts.run_opts.env_mode,
             self.color_config,
             self.processes.clone(),
             &self.repo_root,
             global_env,
-            experimental_ui_sender,
+            ui_sender,
             is_watch,
-        );
+            self.micro_frontend_configs.as_ref(),
+        )
+        .await;
 
         if self.opts.run_opts.dry_run.is_some() {
             visitor.dry_run();

@@ -7,7 +7,7 @@ license = "MIT"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dev-dependencies]
-insta = { version = "1.34.0", features = ["json"] }
+insta = { workspace = true }
 serde_json = { workspace = true }
 test-case = { workspace = true }
 

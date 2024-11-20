@@ -17,7 +17,7 @@ const [currentVersion] = versionFileContents.split("\n");
 const identifier = increment.startsWith("pre") ? "canary" : "latest";
 const newVersion = semver.inc(currentVersion, increment, identifier);
 
-// Parse the output semver identifer to identify which npm tag to publish to.
+// Parse the output semver identifier to identify which npm tag to publish to.
 const parsed = semver.parse(newVersion);
 const tag = parsed?.prerelease[0] || "latest";
 

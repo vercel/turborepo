@@ -1,3 +1,7 @@
+use async_graphql::Enum;
+use serde::Serialize;
+use tokio::sync::oneshot;
+
 pub enum Event {
     StartTask {
         task: String,
@@ -16,7 +20,8 @@ pub enum Event {
         status: String,
         result: CacheResult,
     },
-    Stop(std::sync::mpsc::SyncSender<()>),
+    PaneSizeQuery(oneshot::Sender<PaneSize>),
+    Stop(oneshot::Sender<()>),
     // Stop initiated by the TUI itself
     InternalStop,
     Tick,
@@ -45,6 +50,7 @@ pub enum Event {
         rows: u16,
         cols: u16,
     },
+    ToggleSidebar,
     SearchEnter,
     SearchExit {
         restore_scroll: bool,
@@ -61,20 +67,20 @@ pub enum Direction {
     Down,
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Serialize, Enum)]
 pub enum TaskResult {
     Success,
     Failure,
     CacheHit,
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Serialize, Enum)]
 pub enum CacheResult {
     Hit,
     Miss,
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Serialize, Enum)]
 pub enum OutputLogs {
     // Entire task output is persisted after run
     Full,
@@ -86,6 +92,12 @@ pub enum OutputLogs {
     NewOnly,
     // Output is only persisted if the task failed
     ErrorsOnly,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PaneSize {
+    pub rows: u16,
+    pub cols: u16,
 }
 
 #[cfg(test)]

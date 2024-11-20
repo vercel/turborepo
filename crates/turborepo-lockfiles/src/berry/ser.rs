@@ -237,7 +237,7 @@ mod test {
             .cloned()
             .collect(),
         };
-        let serailized = lockfile.to_string();
-        assert!(serailized.contains(&format!("? {long_key}\n")));
+        let serialized = lockfile.to_string();
+        assert!(serialized.contains(&format!("? {long_key}\n")));
     }
 }
