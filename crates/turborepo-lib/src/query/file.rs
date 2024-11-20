@@ -76,6 +76,7 @@ impl File {
 #[derive(SimpleObject, Debug, Default)]
 pub struct TraceError {
     message: String,
+    reason: String,
     path: Option<String>,
     import: Option<String>,
     start: Option<usize>,
@@ -113,6 +114,7 @@ impl From<turbo_trace::TraceError> for TraceError {
                 span,
                 text,
                 file_path,
+                reason,
                 ..
             } => {
                 let import = text
@@ -123,6 +125,7 @@ impl From<turbo_trace::TraceError> for TraceError {
                 TraceError {
                     message,
                     import,
+                    reason,
                     path: Some(file_path),
                     start: Some(span.offset()),
                     end: Some(span.offset() + span.len()),

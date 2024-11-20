@@ -59,13 +59,14 @@ pub enum TraceError {
         span: SourceSpan,
         #[source_code]
         text: String,
+        #[help]
+        reason: String,
     },
     #[error("failed to walk files")]
     GlobError(Arc<globwalk::WalkError>),
 }
 
 impl TraceResult {
-    #[allow(dead_code)]
     pub fn emit_errors(&self) {
         let handler = Handler::with_tty_emitter(
             ColorConfig::Auto,
@@ -152,8 +153,7 @@ impl Tracer {
             file_content.clone(),
         );
 
-        let syntax = if file_path.extension() == Some("ts") || file_path.extension() == Some("tsx")
-        {
+        let syntax = if matches!(file_path.extension(), Some("ts") | Some("tsx")) {
             Syntax::Typescript(TsSyntax {
                 tsx: file_path.extension() == Some("tsx"),
                 decorators: true,
@@ -211,6 +211,18 @@ impl Tracer {
                     debug!("built in: {:?}", err);
                 }
                 Err(err) => {
+                    // Try to resolve the import as a type import via `@/types/<import>`
+                    let type_package = format!("@types/{}", import);
+                    let resolved_type_import = resolver
+                        .resolve(file_path, type_package.as_str())
+                        .ok()
+                        .and_then(|resolved| resolved.into_path_buf().try_into().ok());
+
+                    if let Some(resolved_type_import) = resolved_type_import {
+                        files.push(resolved_type_import);
+                        continue;
+                    }
+
                     debug!("failed to resolve: {:?}", err);
                     let (start, end) = source_map.span_to_char_offset(&source_file, *span);
                     let start = start as usize;
@@ -221,8 +233,8 @@ impl Tracer {
                         file_path: file_path.to_string(),
                         span: SourceSpan::new(start.into(), (end - start).into()),
                         text: file_content.clone(),
+                        reason: err.to_string(),
                     });
-                    continue;
                 }
             }
         }
@@ -316,7 +328,14 @@ impl Tracer {
             .with_force_extension(EnforceExtension::Disabled)
             .with_extension(".ts")
             .with_extension(".tsx")
-            .with_module(self.cwd.join_component("node_modules").to_string())
+            .with_extension(".jsx")
+            .with_extension(".d.ts")
+            .with_extension(".mjs")
+            .with_extension(".cjs")
+            // Some packages export a `module` field instead of `main`. This is non-standard,
+            // but was a proposal at some point.
+            .with_main_field("module")
+            .with_main_field("types")
             // Condition names are used to determine which export to use when importing a module.
             // We add a bunch so oxc_resolver can resolve all kinds of imports.
             .with_condition_names(&["import", "require", "node", "default"]);
