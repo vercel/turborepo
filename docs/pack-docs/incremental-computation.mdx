@@ -37,7 +37,7 @@ Many build systems include explicit dependency graphs that must be manually popu
 
 The difficulty of specifying an explicit dependency graph means that usually caching is done at a coarse file-level granularity. This granularity does have some benefits: less incremental results means less data to cache, which might be worth it if you have limited disk space or memory.
 
-An example of such an architecture is [GNU Make](https://www.gnu.org/software/make/), where output targets and prerequisites are manually configured and represented as files. Systems like GNU Make miss caching opportunities due to their coarse granularity: they does not understand and cannot cache internal data structures within the compiler.
+An example of such an architecture is [GNU Make](https://www.gnu.org/software/make/), where output targets and prerequisites are manually configured and represented as files. Systems like GNU Make miss caching opportunities due to their coarse granularity: they do not understand and cannot cache internal data structures within the compiler.
 
 ## Function-level fine-grained automatic incremental computation
 
