@@ -44,7 +44,7 @@ jobs:
   stage:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-node
         with:
           enable-corepack: false
@@ -71,7 +71,7 @@ jobs:
     steps:
       - name: Show Stage Commit
         run: echo "${{ needs.stage.outputs.stage-branch }}"
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           ref: ${{ needs.stage.outputs.stage-branch }}
       - name: Setup Turborepo Environment
@@ -89,7 +89,7 @@ jobs:
     steps:
       - name: Show Stage Commit
         run: echo "${{ needs.stage.outputs.stage-branch }}"
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           ref: ${{ needs.stage.outputs.stage-branch }}
       - name: Setup Turborepo Environment
@@ -135,7 +135,7 @@ jobs:
       - name: Show Stage Commit
         run: echo "${{ needs.stage.outputs.stage-branch }}"
       - name: Checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: "${{ needs.stage.outputs.stage-branch }}"
 
@@ -190,7 +190,7 @@ jobs:
     steps:
       - name: Show Stage Commit
         run: echo "${{ needs.stage.outputs.stage-branch }}"
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           ref: "${{ needs.stage.outputs.stage-branch }}"
       - run: git fetch origin --tags
@@ -249,7 +249,7 @@ jobs:
     steps:
       - name: Show Stage Commit
         run: echo "${{ needs.stage.outputs.stage-branch }}"
-      - uses: actions/checkout@1.0.0
+      - uses: actions/checkout@4
         with:
           ref: ${{ needs.stage.outputs.stage-branch }}
       - name: Get version
