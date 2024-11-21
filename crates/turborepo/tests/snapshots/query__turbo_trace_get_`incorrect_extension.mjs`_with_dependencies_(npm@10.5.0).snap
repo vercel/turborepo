@@ -1,0 +1,20 @@
+---
+source: crates/turborepo/tests/query.rs
+expression: query_output
+---
+{
+  "data": {
+    "file": {
+      "path": "incorrect_extension.mjs",
+      "dependencies": {
+        "files": {
+          "items": [
+            {
+              "path": "bar.js"
+            }
+          ]
+        }
+      }
+    }
+  }
+}
