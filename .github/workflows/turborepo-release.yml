@@ -16,9 +16,6 @@ env:
   CARGO_PROFILE_RELEASE_LTO: true
   NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
   RELEASE_TURBO_CLI: true # TODO: do we need this?
-  # Needed since we need to build on Xenial which doesn't have a new enough
-  # GLIBC to use Node 20.
-  ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 
 on:
   workflow_dispatch:
@@ -249,7 +246,7 @@ jobs:
     steps:
       - name: Show Stage Commit
         run: echo "${{ needs.stage.outputs.stage-branch }}"
-      - uses: actions/checkout@4
+      - uses: actions/checkout@v4
         with:
           ref: ${{ needs.stage.outputs.stage-branch }}
       - name: Get version
