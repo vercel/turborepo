@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-node
 
       - name: Setup Turborepo Environment
@@ -61,7 +61,7 @@ jobs:
             runner: windows-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Set filename for profile
         id: filename
         shell: bash
@@ -106,7 +106,7 @@ jobs:
       TINYBIRD_TOKEN: ${{secrets.TINYBIRD_TOKEN}}
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Setup Node
         uses: ./.github/actions/setup-node
@@ -141,7 +141,7 @@ jobs:
     needs: [send-to-tinybird]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Setup Node
         uses: ./.github/actions/setup-node

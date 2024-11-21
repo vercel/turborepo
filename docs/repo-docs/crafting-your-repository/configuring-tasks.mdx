@@ -213,7 +213,7 @@ Below are a few examples of outputs for common tools:
 </Tab>
 </Tabs>
 
-For more on building globbing patterns for the `outputs` key, see [the globbing specification](/repo/docs/reference/globs).
+Globs are relative to the package, so `dist/**` will handle the `dist` that is outputted for each package, respectively. For more on building globbing patterns for the `outputs` key, see [the globbing specification](/repo/docs/reference/globs).
 
 ### Specifying `inputs`
 
@@ -367,8 +367,8 @@ To meet both requirements (correctness and parallelism), you can introduce [Tran
     },
     "check-types": {
       "dependsOn": ["transit"]
-    },
-  },
+    }
+  }
 }
 ```
 
