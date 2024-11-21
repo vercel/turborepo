@@ -141,7 +141,7 @@ jobs:
         uses: ./.github/actions/install-global-turbo
 
       - name: Setup Graphviz
-        uses: ts-graphviz/setup-graphviz@v1
+        uses: ts-graphviz/setup-graphviz@v2
         with:
           macos-skip-brew-update: "true"
         env:
