@@ -51,8 +51,9 @@ jobs:
         run: ${{ matrix.settings.container-setup }}
 
       - name: Setup Protoc
-        uses: arduino/setup-protoc@v1.2.0
+        uses: arduino/setup-protoc@v3
         with:
+          version: "26.x"
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup capnproto
