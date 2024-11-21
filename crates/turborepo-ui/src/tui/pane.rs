@@ -7,8 +7,8 @@ use tui_term::widget::PseudoTerminal;
 
 use super::{app::LayoutSections, TerminalOutput};
 
-const FOOTER_TEXT_ACTIVE: &str = "Press`Ctrl-Z` to stop interacting.";
-const FOOTER_TEXT_INACTIVE: &str = "Press `Enter` to interact.";
+const FOOTER_TEXT_ACTIVE: &str = "Press `Ctrl-Z` to stop interacting.";
+const FOOTER_TEXT_INACTIVE: &str = "Press `i` to interact.";
 const HAS_SELECTION: &str = "Press `c` to copy selection";
 const TASK_LIST_HIDDEN: &str = "Press `h` to show task list.";
 
