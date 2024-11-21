@@ -46,7 +46,7 @@ For even faster developer workflows, you can [install `turbo` globally](/repo/do
 
 Once installed, you can run `turbo build` and Turborepo will run your `build` script from `package.json`. Running `turbo build` again will hit the cache.
 
-At this point, `turbo` is providing much value since you're likely to only be rebuilding your application when code changes and, when your code changes, `turbo` will miss the cache. In two short steps, you can get more out of `turbo`.
+At this point, `turbo` isn't providing much value since you're likely to only be rebuilding your application when code changes and, when your code changes, `turbo` will miss the cache. In two short steps, you can get more out of `turbo`.
 
 ## Running many scripts with one command
 
@@ -84,7 +84,7 @@ Then, create tasks in `turbo.json` to run these scripts in order:
 {
   "tasks": {
     "dev": {
-      "dependsOn": ["db:seed"]
+      "dependsOn": ["db:seed"],
       "cache": false,
       "persistent": true
     },

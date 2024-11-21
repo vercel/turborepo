@@ -22,8 +22,8 @@ use turborepo_ui::{ColorConfig, GREY};
 use crate::{
     cli::error::print_potential_tasks,
     commands::{
-        bin, config, daemon, generate, link, login, logout, ls, prune, query, run, scan, telemetry,
-        unlink, CommandBase,
+        bin, config, daemon, generate, info, link, login, logout, ls, prune, query, run, scan,
+        telemetry, unlink, CommandBase,
     },
     get_version,
     run::watch::WatchClient,
@@ -413,6 +413,27 @@ impl Args {
             clap_args.test_run = true;
         }
 
+        if let Some(run_args) = clap_args.run_args() {
+            if run_args.no_cache {
+                warn!(
+                    "--no-cache is deprecated and will be removed in a future major version. Use \
+                     --cache=local:r,remote:r"
+                );
+            }
+            if run_args.remote_only.is_some() {
+                warn!(
+                    "--remote-only is deprecated and will be removed in a future major version. \
+                     Use --cache=remote:rw"
+                );
+            }
+            if run_args.remote_cache_read_only.is_some() {
+                warn!(
+                    "--remote-cache-read-only is deprecated and will be removed in a future major \
+                     version. Use --cache=remote:r"
+                );
+            }
+        }
+
         clap_args
     }
 
@@ -474,9 +495,7 @@ impl Args {
     }
 }
 
-/// Defines the subcommands for CLI. NOTE: If we change the commands in Go,
-/// we must change these as well to avoid accidentally passing the
-/// --single-package flag into non-build commands.
+/// Defines the subcommands for CLI
 #[derive(Subcommand, Clone, Debug, PartialEq)]
 pub enum Command {
     /// Get the path to the Turbo binary
@@ -550,6 +569,13 @@ pub enum Command {
         #[clap(long)]
         no_gitignore: bool,
 
+        /// The scope, i.e. Vercel team, to which you are linking
+        #[clap(long)]
+        scope: Option<String>,
+
+        /// Answer yes to all prompts (default false)
+        #[clap(long, short)]
+        yes: bool,
         /// Specify what should be linked (default "remote cache")
         #[clap(long, value_enum, default_value_t = LinkTarget::RemoteCache)]
         target: LinkTarget,
@@ -569,6 +595,8 @@ pub enum Command {
         #[clap(long)]
         invalidate: bool,
     },
+    /// Print debugging information
+    Info,
     /// Prepare a subset of your monorepo.
     Prune {
         #[clap(hide = true, long)]
@@ -1106,41 +1134,44 @@ pub async fn run(
     };
 
     // Set some run flags if we have the data and are executing a Run
-    if let Command::Run {
-        run_args: _,
-        execution_args,
-    } = &mut command
-    {
-        // Don't overwrite the flag if it's already been set for whatever reason
-        execution_args.single_package = execution_args.single_package
-            || repo_state
-                .as_ref()
-                .map(|repo_state| matches!(repo_state.mode, RepoMode::SinglePackage))
-                .unwrap_or(false);
-        // If this is a run command, and we know the actual invocation path, set the
-        // inference root, as long as the user hasn't overridden the cwd
-        if cli_args.cwd.is_none() {
-            if let Ok(invocation_dir) = env::var(INVOCATION_DIR_ENV_VAR) {
-                // TODO: this calculation can probably be wrapped into the path library
-                // and made a little more robust or clear
-                let invocation_path = Utf8Path::new(&invocation_dir);
+    match &mut command {
+        Command::Run {
+            run_args: _,
+            execution_args,
+        }
+        | Command::Watch(execution_args) => {
+            // Don't overwrite the flag if it's already been set for whatever reason
+            execution_args.single_package = execution_args.single_package
+                || repo_state
+                    .as_ref()
+                    .map(|repo_state| matches!(repo_state.mode, RepoMode::SinglePackage))
+                    .unwrap_or(false);
+            // If this is a run command, and we know the actual invocation path, set the
+            // inference root, as long as the user hasn't overridden the cwd
+            if cli_args.cwd.is_none() {
+                if let Ok(invocation_dir) = env::var(INVOCATION_DIR_ENV_VAR) {
+                    // TODO: this calculation can probably be wrapped into the path library
+                    // and made a little more robust or clear
+                    let invocation_path = Utf8Path::new(&invocation_dir);
 
-                // If repo state doesn't exist, we're either local turbo running at the root
-                // (cwd), or inference failed.
-                // If repo state does exist, we're global turbo, and want to calculate
-                // package inference based on the repo root
-                let this_dir = AbsoluteSystemPathBuf::cwd()?;
-                let repo_root = repo_state.as_ref().map_or(&this_dir, |r| &r.root);
-                if let Ok(relative_path) = invocation_path.strip_prefix(repo_root) {
-                    if !relative_path.as_str().is_empty() {
-                        debug!("pkg_inference_root set to \"{}\"", relative_path);
-                        execution_args.pkg_inference_root = Some(relative_path.to_string());
+                    // If repo state doesn't exist, we're either local turbo running at the root
+                    // (cwd), or inference failed.
+                    // If repo state does exist, we're global turbo, and want to calculate
+                    // package inference based on the repo root
+                    let this_dir = AbsoluteSystemPathBuf::cwd()?;
+                    let repo_root = repo_state.as_ref().map_or(&this_dir, |r| &r.root);
+                    if let Ok(relative_path) = invocation_path.strip_prefix(repo_root) {
+                        if !relative_path.as_str().is_empty() {
+                            debug!("pkg_inference_root set to \"{}\"", relative_path);
+                            execution_args.pkg_inference_root = Some(relative_path.to_string());
+                        }
                     }
+                } else {
+                    debug!("{} not set", INVOCATION_DIR_ENV_VAR);
                 }
-            } else {
-                debug!("{} not set", INVOCATION_DIR_ENV_VAR);
             }
         }
+        _ => {}
     }
 
     // TODO: make better use of RepoState, here and below. We've already inferred
@@ -1223,6 +1254,15 @@ pub async fn run(
             generate::run(tag, command, &args, child_event)?;
             Ok(0)
         }
+        Command::Info => {
+            CommandEventBuilder::new("info")
+                .with_parent(&root_telemetry)
+                .track_call();
+            let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config);
+
+            info::run(base).await;
+            Ok(0)
+        }
         Command::Telemetry { command } => {
             let event = CommandEventBuilder::new("telemetry").with_parent(&root_telemetry);
             event.track_call();
@@ -1266,11 +1306,18 @@ pub async fn run(
         }
         Command::Link {
             no_gitignore,
+            scope,
+            yes,
             target,
         } => {
             CommandEventBuilder::new("link")
                 .with_parent(&root_telemetry)
                 .track_call();
+
+            if cli_args.team.is_some() {
+                warn!("team flag does not set the scope for linking. Use --scope instead.");
+            }
+
             if cli_args.test_run {
                 println!("Link test run successful");
                 return Ok(0);
@@ -1278,11 +1325,11 @@ pub async fn run(
 
             let modify_gitignore = !*no_gitignore;
             let to = *target;
+            let yes = *yes;
+            let scope = scope.clone();
             let mut base = CommandBase::new(cli_args, repo_root, version, color_config);
 
-            if let Err(err) = link::link(&mut base, modify_gitignore, to).await {
-                error!("error: {}", err.to_string())
-            }
+            link::link(&mut base, scope, modify_gitignore, yes, to).await?;
 
             Ok(0)
         }
@@ -1382,7 +1429,10 @@ pub async fn run(
             let base = CommandBase::new(cli_args, repo_root, version, color_config);
 
             let mut client = WatchClient::new(base, event).await?;
-            client.start().await?;
+            if let Err(e) = client.start().await {
+                client.shutdown().await;
+                return Err(e.into());
+            }
             // We only exit if we get a signal, so we return a non-zero exit code
             return Ok(1);
         }
@@ -1433,7 +1483,7 @@ mod test {
     use itertools::Itertools;
     use pretty_assertions::assert_eq;
 
-    use crate::cli::{ExecutionArgs, RunArgs};
+    use crate::cli::{ExecutionArgs, LinkTarget, RunArgs};
 
     struct CommandTestCase {
         command: &'static str,
@@ -2257,6 +2307,90 @@ mod test {
             global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
             expected_output: Args {
                 command: Some(Command::Bin {}),
+                cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
+                ..Args::default()
+            },
+        }
+        .test();
+    }
+
+    #[test]
+    fn test_parse_link() {
+        assert_eq!(
+            Args::try_parse_from(["turbo", "link"]).unwrap(),
+            Args {
+                command: Some(Command::Link {
+                    no_gitignore: false,
+                    scope: None,
+                    yes: false,
+                    target: LinkTarget::RemoteCache,
+                }),
+                ..Args::default()
+            }
+        );
+
+        CommandTestCase {
+            command: "link",
+            command_args: vec![],
+            global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
+            expected_output: Args {
+                command: Some(Command::Link {
+                    no_gitignore: false,
+                    scope: None,
+                    yes: false,
+                    target: LinkTarget::RemoteCache,
+                }),
+                cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
+                ..Args::default()
+            },
+        }
+        .test();
+
+        CommandTestCase {
+            command: "link",
+            command_args: vec![vec!["--yes"]],
+            global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
+            expected_output: Args {
+                command: Some(Command::Link {
+                    yes: true,
+                    no_gitignore: false,
+                    scope: None,
+                    target: LinkTarget::RemoteCache,
+                }),
+                cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
+                ..Args::default()
+            },
+        }
+        .test();
+
+        CommandTestCase {
+            command: "link",
+            command_args: vec![vec!["--scope", "foo"]],
+            global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
+            expected_output: Args {
+                command: Some(Command::Link {
+                    yes: false,
+                    no_gitignore: false,
+                    scope: Some("foo".to_string()),
+                    target: LinkTarget::RemoteCache,
+                }),
+                cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
+                ..Args::default()
+            },
+        }
+        .test();
+
+        CommandTestCase {
+            command: "link",
+            command_args: vec![vec!["--no-gitignore"]],
+            global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
+            expected_output: Args {
+                command: Some(Command::Link {
+                    yes: false,
+                    no_gitignore: true,
+                    scope: None,
+                    target: LinkTarget::RemoteCache,
+                }),
                 cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
             },

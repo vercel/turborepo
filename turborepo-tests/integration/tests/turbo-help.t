@@ -18,6 +18,7 @@ Test help flag
     link        Link your local directory to a Vercel organization and enable remote caching
     login       Login to your Vercel account
     logout      Logout to your Vercel account
+    info        Print debugging information
     prune       Prepare a subset of your monorepo
     run         Run tasks across projects in your monorepo
     query       Query your monorepo using GraphQL. If no query is provided, spins up a GraphQL server with GraphiQL
@@ -141,6 +142,7 @@ Test help flag
     link        Link your local directory to a Vercel organization and enable remote caching
     login       Login to your Vercel account
     logout      Logout to your Vercel account
+    info        Print debugging information
     prune       Prepare a subset of your monorepo
     run         Run tasks across projects in your monorepo
     query       Query your monorepo using GraphQL. If no query is provided, spins up a GraphQL server with GraphiQL
@@ -327,14 +329,18 @@ Test help flag for link command
             Do not create or modify .gitignore (default false)
         --version
             
+        --scope <SCOPE>
+            The scope, i.e. Vercel team, to which you are linking
         --skip-infer
             Skip any attempts to infer which version of Turbo the project is configured to use
-        --target <TARGET>
-            Specify what should be linked (default "remote cache") [default: remote-cache] [possible values: remote-cache, spaces]
         --no-update-notifier
             Disable the turbo update notification
+    -y, --yes
+            Answer yes to all prompts (default false)
         --api <API>
             Override the endpoint for API calls
+        --target <TARGET>
+            Specify what should be linked (default "remote cache") [default: remote-cache] [possible values: remote-cache, spaces]
         --color
             Force color usage in the terminal
         --cwd <CWD>

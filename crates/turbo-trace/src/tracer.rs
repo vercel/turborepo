@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
-use camino::Utf8PathBuf;
+use camino::{Utf8Path, Utf8PathBuf};
 use globwalk::WalkType;
 use miette::{Diagnostic, Report, SourceSpan};
 use oxc_resolver::{
@@ -59,13 +59,14 @@ pub enum TraceError {
         span: SourceSpan,
         #[source_code]
         text: String,
+        #[help]
+        reason: String,
     },
     #[error("failed to walk files")]
     GlobError(Arc<globwalk::WalkError>),
 }
 
 impl TraceResult {
-    #[allow(dead_code)]
     pub fn emit_errors(&self) {
         let handler = Handler::with_tty_emitter(
             ColorConfig::Auto,
@@ -152,8 +153,7 @@ impl Tracer {
             file_content.clone(),
         );
 
-        let syntax = if file_path.extension() == Some("ts") || file_path.extension() == Some("tsx")
-        {
+        let syntax = if matches!(file_path.extension(), Some("ts") | Some("tsx")) {
             Syntax::Typescript(TsSyntax {
                 tsx: file_path.extension() == Some("tsx"),
                 decorators: true,
@@ -211,6 +211,39 @@ impl Tracer {
                     debug!("built in: {:?}", err);
                 }
                 Err(err) => {
+                    if !import.starts_with(".") {
+                        // Try to resolve the import as a type import via `@/types/<import>`
+                        let type_package = format!("@types/{}", import);
+                        debug!("trying to resolve type import: {}", type_package);
+                        let resolved_type_import = resolver
+                            .resolve(file_dir, type_package.as_str())
+                            .ok()
+                            .and_then(|resolved| resolved.into_path_buf().try_into().ok());
+
+                        if let Some(resolved_type_import) = resolved_type_import {
+                            debug!("resolved type import succeeded");
+                            files.push(resolved_type_import);
+                            continue;
+                        }
+                    }
+
+                    // Also try without the extension just in case the wrong extension is used
+                    let without_extension = Utf8Path::new(import).with_extension("");
+                    debug!(
+                        "trying to resolve extensionless import: {}",
+                        without_extension
+                    );
+                    let resolved_extensionless_import = resolver
+                        .resolve(file_dir, without_extension.as_str())
+                        .ok()
+                        .and_then(|resolved| resolved.into_path_buf().try_into().ok());
+
+                    if let Some(resolved_extensionless_import) = resolved_extensionless_import {
+                        debug!("resolved extensionless import succeeded");
+                        files.push(resolved_extensionless_import);
+                        continue;
+                    }
+
                     debug!("failed to resolve: {:?}", err);
                     let (start, end) = source_map.span_to_char_offset(&source_file, *span);
                     let start = start as usize;
@@ -221,8 +254,8 @@ impl Tracer {
                         file_path: file_path.to_string(),
                         span: SourceSpan::new(start.into(), (end - start).into()),
                         text: file_content.clone(),
+                        reason: err.to_string(),
                     });
-                    continue;
                 }
             }
         }
@@ -274,36 +307,40 @@ impl Tracer {
         root: &AbsoluteSystemPath,
         existing_resolver: &Resolver,
     ) -> Option<Resolver> {
-        let resolver = root
+        let tsconfig_dir = root
             .ancestors()
             .skip(1)
-            .find(|p| p.join_component("tsconfig.json").exists())
-            .map(|ts_config_dir| {
-                let mut options = existing_resolver.options().clone();
+            .find(|p| p.join_component("tsconfig.json").exists());
+
+        // Resolves the closest `node_modules` directory. This is to work with monorepos
+        // where both the package and the monorepo have a `node_modules`
+        // directory.
+        let node_modules_dir = root
+            .ancestors()
+            .skip(1)
+            .find(|p| p.join_component("node_modules").exists());
+
+        if tsconfig_dir.is_some() || node_modules_dir.is_some() {
+            let mut options = existing_resolver.options().clone();
+            if let Some(tsconfig_dir) = tsconfig_dir {
                 options.tsconfig = Some(TsconfigOptions {
-                    config_file: ts_config_dir
+                    config_file: tsconfig_dir
                         .join_component("tsconfig.json")
                         .as_std_path()
                         .into(),
                     references: TsconfigReferences::Auto,
                 });
+            }
 
-                existing_resolver.clone_with_options(options)
-            });
+            if let Some(node_modules_dir) = node_modules_dir {
+                options = options
+                    .with_module(node_modules_dir.join_component("node_modules").to_string());
+            }
 
-        root.ancestors()
-            .skip(1)
-            .find(|p| p.join_component("node_modules").exists())
-            .map(|node_modules_dir| {
-                let node_modules = node_modules_dir.join_component("node_modules");
-                let resolver = resolver.as_ref().unwrap_or(existing_resolver);
-                let options = resolver
-                    .options()
-                    .clone()
-                    .with_module(node_modules.to_string());
-
-                resolver.clone_with_options(options)
-            })
+            Some(existing_resolver.clone_with_options(options))
+        } else {
+            None
+        }
     }
 
     pub fn create_resolver(&mut self) -> Resolver {
@@ -312,7 +349,17 @@ impl Tracer {
             .with_force_extension(EnforceExtension::Disabled)
             .with_extension(".ts")
             .with_extension(".tsx")
-            .with_condition_names(&["import", "require"]);
+            .with_extension(".jsx")
+            .with_extension(".d.ts")
+            .with_extension(".mjs")
+            .with_extension(".cjs")
+            // Some packages export a `module` field instead of `main`. This is non-standard,
+            // but was a proposal at some point.
+            .with_main_field("module")
+            .with_main_field("types")
+            // Condition names are used to determine which export to use when importing a module.
+            // We add a bunch so oxc_resolver can resolve all kinds of imports.
+            .with_condition_names(&["import", "require", "node", "default"]);
 
         if let Some(ts_config) = self.ts_config.take() {
             options.tsconfig = Some(TsconfigOptions {

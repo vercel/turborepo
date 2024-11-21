@@ -1036,12 +1036,13 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.0.83"
+version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f1174fb0b6ec23863f8b971027804a42614e347eafb0a95bf0b12cdae21fc4d0"
+checksum = "fd9de9f2205d5ef3fd67e685b0df337994ddd4495e2a28d185500d0e1edfea47"
 dependencies = [
  "jobserver",
  "libc",
+ "shlex",
 ]
 
 [[package]]
@@ -2802,9 +2803,9 @@ checksum = "8eaf4bc02d17cbdd7ff4c7438cafcdf7fb9a4613313ad11b4f8fefe7d3fa0130"
 
 [[package]]
 name = "jobserver"
-version = "0.1.26"
+version = "0.1.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "936cfd212a0155903bcbc060e316fb6cc7cbf2e1907329391ebadc1fe0ce77c2"
+checksum = "48d1dbcbbeb6a7fec7e059840aa538bd62aaccf972c7346c4d9d2059312853d0"
 dependencies = [
  "libc",
 ]
@@ -3616,13 +3617,12 @@ dependencies = [
 
 [[package]]
 name = "oxc_resolver"
-version = "2.0.0"
+version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9cf8bcda84674ae69228a823dcdb81eac9a398d99f1bbc1dbf00623009fc11c1"
+checksum = "ff67bf7c8cb5f4ea7537faa849892d8e13a408d50d0903aa40889fd395c66993"
 dependencies = [
  "cfg-if",
  "dashmap 6.1.0",
- "dunce",
  "indexmap 2.2.6",
  "json-strip-comments",
  "once_cell",
@@ -4109,9 +4109,9 @@ dependencies = [
 
 [[package]]
 name = "psm"
-version = "0.1.23"
+version = "0.1.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aa37f80ca58604976033fae9515a8a2989fc13797d953f7c04fb8fa36a11f205"
+checksum = "200b9ff220857e53e184257720a14553b2f4aa02577d2ed9842d45d4b9654810"
 dependencies = [
  "cc",
 ]
@@ -4879,6 +4879,12 @@ name = "shell-words"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "24188a676b6ae68c3b2cb3a01be17fbf7240ce009799bb56d5b1409051e78fde"
+
+[[package]]
+name = "shlex"
+version = "1.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
 
 [[package]]
 name = "signal-hook"
@@ -6110,7 +6116,7 @@ dependencies = [
  "futures",
  "globwalk",
  "miette",
- "oxc_resolver 2.0.0",
+ "oxc_resolver 2.1.0",
  "swc_common",
  "swc_ecma_ast",
  "swc_ecma_parser",
@@ -6541,6 +6547,7 @@ dependencies = [
  "biome_diagnostics",
  "biome_json_parser",
  "biome_json_syntax",
+ "insta",
  "pretty_assertions",
  "serde",
  "serde_json",

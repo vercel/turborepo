@@ -1,4 +1,4 @@
-import { blackbeard } from "@/../../packages/another/index.js";
+import { blackbeard } from "@/../../packages/another/index.jsx";
 
 export interface Pirate {
   ship: string;

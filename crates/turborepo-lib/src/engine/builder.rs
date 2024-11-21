@@ -19,13 +19,17 @@ use crate::{
 };
 
 #[derive(Debug, thiserror::Error, Diagnostic)]
-#[error("could not find task `{name}` in project")]
-pub struct MissingTaskError {
-    name: String,
-    #[label]
-    span: Option<SourceSpan>,
-    #[source_code]
-    text: NamedSource,
+pub enum MissingTaskError {
+    #[error("could not find task `{name}` in project")]
+    MissingTaskDefinition {
+        name: String,
+        #[label]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource,
+    },
+    #[error("could not find package `{name}` in project")]
+    MissingPackage { name: String },
 }
 
 #[derive(Debug, thiserror::Error, Diagnostic)]
@@ -253,6 +257,17 @@ impl<'a> EngineBuilder<'a> {
         }
 
         if !missing_tasks.is_empty() {
+            let missing_pkgs: HashMap<_, _> = missing_tasks
+                .iter()
+                .filter_map(|(task, _)| {
+                    let pkg = task.package()?;
+                    let missing_pkg = self
+                        .package_graph
+                        .package_info(&PackageName::from(pkg))
+                        .is_none();
+                    missing_pkg.then(|| (task.to_string(), pkg.to_string()))
+                })
+                .collect();
             let mut missing_tasks = missing_tasks
                 .into_iter()
                 .map(|(task_name, span)| (task_name.to_string(), span))
@@ -262,8 +277,12 @@ impl<'a> EngineBuilder<'a> {
             let errors = missing_tasks
                 .into_iter()
                 .map(|(name, span)| {
-                    let (span, text) = span.span_and_text("turbo.json");
-                    MissingTaskError { name, span, text }
+                    if let Some(pkg) = missing_pkgs.get(&name) {
+                        MissingTaskError::MissingPackage { name: pkg.clone() }
+                    } else {
+                        let (span, text) = span.span_and_text("turbo.json");
+                        MissingTaskError::MissingTaskDefinition { name, span, text }
+                    }
                 })
                 .collect();
 
@@ -561,7 +580,7 @@ fn validate_task_name(task: Spanned<&str>) -> Result<(), Error> {
 mod test {
     use std::assert_matches::assert_matches;
 
-    use insta::assert_json_snapshot;
+    use insta::{assert_json_snapshot, assert_snapshot};
     use pretty_assertions::assert_eq;
     use serde_json::json;
     use tempfile::TempDir;
@@ -1371,5 +1390,41 @@ mod test {
             .render_report(&mut msg, report.as_ref())
             .unwrap();
         assert_json_snapshot!(msg);
+    }
+
+    #[test]
+    fn test_run_package_task_invalid_package() {
+        let repo_root_dir = TempDir::with_prefix("repo").unwrap();
+        let repo_root = AbsoluteSystemPathBuf::new(repo_root_dir.path().to_str().unwrap()).unwrap();
+        let package_graph = mock_package_graph(
+            &repo_root,
+            package_jsons! {
+                repo_root,
+                "app1" => ["libA"],
+                "libA" => []
+            },
+        );
+        let turbo_jsons = vec![(
+            PackageName::Root,
+            turbo_json(json!({
+                "tasks": {
+                    "build": { "dependsOn": ["^build"] },
+                }
+            })),
+        )]
+        .into_iter()
+        .collect();
+        let loader = TurboJsonLoader::noop(turbo_jsons);
+        let engine = EngineBuilder::new(&repo_root, &package_graph, loader.clone(), false)
+            .with_tasks(vec![Spanned::new(TaskName::from("app2#bad-task"))])
+            .with_workspaces(vec![PackageName::from("app1"), PackageName::from("libA")])
+            .build();
+        assert!(engine.is_err());
+        let report = miette::Report::new(engine.unwrap_err());
+        let mut msg = String::new();
+        miette::NarratableReportHandler::new()
+            .render_report(&mut msg, report.as_ref())
+            .unwrap();
+        assert_snapshot!(msg);
     }
 }
