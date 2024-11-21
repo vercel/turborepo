@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
-use camino::Utf8PathBuf;
+use camino::{Utf8Path, Utf8PathBuf};
 use globwalk::WalkType;
 use miette::{Diagnostic, Report, SourceSpan};
 use oxc_resolver::{
@@ -211,15 +211,36 @@ impl Tracer {
                     debug!("built in: {:?}", err);
                 }
                 Err(err) => {
-                    // Try to resolve the import as a type import via `@/types/<import>`
-                    let type_package = format!("@types/{}", import);
-                    let resolved_type_import = resolver
-                        .resolve(file_path, type_package.as_str())
+                    if !import.starts_with(".") {
+                        // Try to resolve the import as a type import via `@/types/<import>`
+                        let type_package = format!("@types/{}", import);
+                        debug!("trying to resolve type import: {}", type_package);
+                        let resolved_type_import = resolver
+                            .resolve(file_dir, type_package.as_str())
+                            .ok()
+                            .and_then(|resolved| resolved.into_path_buf().try_into().ok());
+
+                        if let Some(resolved_type_import) = resolved_type_import {
+                            debug!("resolved type import succeeded");
+                            files.push(resolved_type_import);
+                            continue;
+                        }
+                    }
+
+                    // Also try without the extension just in case the wrong extension is used
+                    let without_extension = Utf8Path::new(import).with_extension("");
+                    debug!(
+                        "trying to resolve extensionless import: {}",
+                        without_extension
+                    );
+                    let resolved_extensionless_import = resolver
+                        .resolve(file_dir, without_extension.as_str())
                         .ok()
                         .and_then(|resolved| resolved.into_path_buf().try_into().ok());
 
-                    if let Some(resolved_type_import) = resolved_type_import {
-                        files.push(resolved_type_import);
+                    if let Some(resolved_extensionless_import) = resolved_extensionless_import {
+                        debug!("resolved extensionless import succeeded");
+                        files.push(resolved_extensionless_import);
                         continue;
                     }
 
