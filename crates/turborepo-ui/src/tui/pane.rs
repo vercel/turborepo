@@ -51,7 +51,7 @@ impl<'a, W> TerminalPane<'a, W> {
             }
 
             // Spaces are used to pad the footer text for aesthetics
-            ["   ".into(), messages.join(", ")].join("")
+            format!("   {}", messages.join(", "))
         };
 
         match self.section {
