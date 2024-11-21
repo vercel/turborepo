@@ -22,7 +22,7 @@ jobs:
       pull-requests: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: CI related changes
         id: ci
@@ -116,7 +116,7 @@ jobs:
       matrix:
         os:
           - runner: ubuntu-latest
-          - runner: macos-12
+          - runner: macos-13
           - runner: windows-latest
     steps:
       # On Windows, set autocrlf to input so that when the repo is cloned down
@@ -129,7 +129,7 @@ jobs:
         if: matrix.os.runner == 'windows-latest'
         shell: bash
         run: git config --global core.autocrlf input
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Setup Turborepo Environment
         uses: ./.github/actions/setup-turborepo-environment
@@ -141,7 +141,7 @@ jobs:
         uses: ./.github/actions/install-global-turbo
 
       - name: Setup Graphviz
-        uses: ts-graphviz/setup-graphviz@v1
+        uses: ts-graphviz/setup-graphviz@v2
         with:
           macos-skip-brew-update: "true"
         env:
@@ -149,7 +149,7 @@ jobs:
 
       - name: Cache Prysk
         id: cache-prysk
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: cli/.cram_env
           key: prysk-venv-${{ matrix.os.runner }}
@@ -166,7 +166,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       # Disable corepack. actions/setup-node invokes other package managers and
       # that causes corepack to throw an error, so we disable it first.
@@ -208,7 +208,7 @@ jobs:
       - "metal"
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup Rust
         uses: ./.github/actions/setup-rust
@@ -229,7 +229,7 @@ jobs:
 
       - name: Run cargo clippy
         run: |
-          cargo groups clippy turborepo-libraries --features rustls-tls -- --deny clippy::all
+          cargo clippy --workspace --features rustls-tls -- --deny clippy::all
 
       - name: Run ast-grep lints
         run: |
@@ -250,7 +250,7 @@ jobs:
       - "metal"
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup Turborepo Environment
         uses: ./.github/actions/setup-turborepo-environment
@@ -260,7 +260,7 @@ jobs:
 
       - name: Run cargo check
         run: |
-          cargo groups check turborepo-libraries
+          cargo check --workspace
 
   rust_test:
     needs: [rust_check]
@@ -276,7 +276,7 @@ jobs:
               - "metal"
             nextest: linux
           - name: macos
-            runner: macos-12
+            runner: macos-13
             nextest: mac
           - name: windows
             runner: windows-latest
@@ -291,7 +291,7 @@ jobs:
         if: matrix.os.name == 'windows'
 
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup Turborepo Environment
         uses: ./.github/actions/setup-turborepo-environment
@@ -300,7 +300,7 @@ jobs:
           node-version: "18.20.2"
 
       - name: Run sccache-cache
-        uses: mozilla-actions/sccache-action@v0.0.3
+        uses: mozilla-actions/sccache-action@v0.0.6
 
       - name: Run tests
         timeout-minutes: 120
@@ -308,8 +308,12 @@ jobs:
         run: |
           if [ -z "${RUSTC_WRAPPER}" ]; then
             unset RUSTC_WRAPPER
-          fi          
-          cargo groups test turborepo-libraries
+          fi
+          if [ "$RUNNER_OS" == "Windows" ]; then
+              cargo test --workspace --exclude turborepo-napi
+          else
+              cargo test --workspace
+          fi
         shell: bash
         env:
           SCCACHE_BUCKET: turborepo-sccache

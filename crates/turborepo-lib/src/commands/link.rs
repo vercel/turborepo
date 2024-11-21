@@ -47,7 +47,7 @@ pub enum Error {
     #[error("link cancelled")]
     NotLinking,
     #[error("canceled")]
-    UserCanceled(#[source] io::Error),
+    UserCanceled(#[source] dialoguer::Error),
     #[error("could not get user information {0}")]
     UserNotFound(#[source] turborepo_api_client::Error),
     // We failed to fetch the team for whatever reason
@@ -163,7 +163,9 @@ pub(crate) async fn verify_caching_enabled<'a>(
 
 pub async fn link(
     base: &mut CommandBase,
+    scope: Option<String>,
     modify_gitignore: bool,
+    yes: bool,
     target: LinkTarget,
 ) -> Result<(), Error> {
     let homedir_path = home_dir().ok_or_else(|| Error::HomeDirectoryNotFound)?;
@@ -183,7 +185,7 @@ pub async fn link(
                 REMOTE_CACHING_URL
             );
 
-            if !should_link_remote_cache(base, &repo_root_with_tilde)? {
+            if !yes && !should_link_remote_cache(base, &repo_root_with_tilde)? {
                 return Err(Error::NotLinking);
             }
 
@@ -203,7 +205,17 @@ pub async fn link(
                 .await
                 .map_err(Error::TeamsRequest)?;
 
-            let selected_team = select_team(base, &teams_response.teams)?;
+            let selected_team = if let Some(team_slug) = scope {
+                SelectedTeam::Team(
+                    teams_response
+                        .teams
+                        .iter()
+                        .find(|team| team.slug == team_slug)
+                        .ok_or_else(|| Error::TeamNotFound(team_slug.to_string()))?,
+                )
+            } else {
+                select_team(base, &teams_response.teams)?
+            };
 
             let team_id = match selected_team {
                 SelectedTeam::User => user_response.user.id.as_str(),
@@ -632,7 +644,7 @@ mod test {
             )
             .unwrap();
 
-        link::link(&mut base, false, LinkTarget::RemoteCache)
+        link::link(&mut base, None, false, false, LinkTarget::RemoteCache)
             .await
             .unwrap();
 
@@ -707,7 +719,7 @@ mod test {
         )
         .unwrap();
 
-        link::link(&mut base, false, LinkTarget::Spaces)
+        link::link(&mut base, None, false, false, LinkTarget::Spaces)
             .await
             .unwrap();
 

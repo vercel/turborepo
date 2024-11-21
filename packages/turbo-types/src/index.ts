@@ -1,3 +1,10 @@
+import type { Framework as FW } from "./types/frameworks";
+import frameworksJson from "./json/frameworks.json";
+
+export const frameworks = frameworksJson as Array<Framework>;
+export type Framework = FW;
+export type { FrameworkStrategy } from "./types/frameworks";
+
 export {
   type BaseSchema,
   type BaseSchema as BaseSchemaV2,

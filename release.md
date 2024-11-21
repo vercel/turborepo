@@ -57,7 +57,7 @@ You need to run `git push --follow-tags` to finish the release.
 
 ### Notes
 
-- Github Release Notes are published automatically using the config from [`turborepo-release.yml`][2],
+- GitHub Release Notes are published automatically using the config from [`turborepo-release.yml`][2],
   triggered by the [`turbo-orchestrator`][3] bot.
 
 ## Release `@turbo/repository`

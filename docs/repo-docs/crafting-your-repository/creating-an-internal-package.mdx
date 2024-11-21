@@ -62,7 +62,7 @@ Next, create the `package.json` for the package. By adding this file, you'll ful
     "./subtract": {
       "types": "./src/subtract.ts",
       "default": "./dist/subtract.js"
-    },
+    }
   },
   "devDependencies": {
     "@repo/typescript-config": "*",
@@ -260,11 +260,12 @@ Add the artifacts for the new `@repo/math` library to the `outputs` for the `bui
 ```json title="./turbo.json"
 // [!code word:"dist/**"]
 {
-"tasks": {
-  "build": {
-    "dependsOn": ["^build"],
-    "outputs": [".next/**", "!.next/cache/**", "dist/**"]
-  },
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": [".next/**", "!.next/cache/**", "dist/**"]
+    }
+  }
 }
 ```
 

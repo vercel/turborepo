@@ -5,6 +5,8 @@ set -eo pipefail
 FIXTURE_NAME="${1-basic_monorepo}"
 
 # Default to version of npm installed with Node 18.20.2
+# If CI is failing, check that this version is the same as
+# the CI runner's version of npm
 PACKAGE_MANAGER="npm@10.5.0"
 if [[ $2 != "" ]]; then
   PACKAGE_MANAGER="$2"

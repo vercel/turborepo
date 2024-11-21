@@ -7,6 +7,7 @@
 mod async_cache;
 /// The core cache creation and restoration logic.
 pub mod cache_archive;
+pub mod config;
 /// File system cache
 pub mod fs;
 /// Remote cache
@@ -61,6 +62,8 @@ pub enum CacheError {
     LinkTargetDoesNotExist(String, #[backtrace] Backtrace),
     #[error("Invalid tar, link target does not exist on header")]
     LinkTargetNotOnHeader(#[backtrace] Backtrace),
+    #[error(transparent)]
+    Config(#[from] config::Error),
     #[error("attempted to restore unsupported file type: {0:?}")]
     RestoreUnsupportedFileType(tar::EntryType, #[backtrace] Backtrace),
     // We don't pass the `FileType` because there's no simple
@@ -83,6 +86,8 @@ pub enum CacheError {
     ConfigCacheInvalidBase,
     #[error("Unable to hash config cache inputs")]
     ConfigCacheError,
+    #[error("Insufficient permissions to write to remote cache. Please verify that your role has write access for Remote Cache Artifact at https://vercel.com/docs/accounts/team-members-and-roles/access-roles/team-level-roles?resource=Remote+Cache+Artifact")]
+    ForbiddenRemoteCacheWrite,
 }
 
 impl From<turborepo_api_client::Error> for CacheError {
@@ -103,12 +108,74 @@ pub struct CacheHitMetadata {
     pub time_saved: u64,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub struct CacheActions {
+    pub read: bool,
+    pub write: bool,
+}
+
+impl CacheActions {
+    pub fn should_use(&self) -> bool {
+        self.read || self.write
+    }
+
+    pub fn disabled() -> Self {
+        Self {
+            read: false,
+            write: false,
+        }
+    }
+
+    pub fn enabled() -> Self {
+        Self {
+            read: true,
+            write: true,
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Default)]
+pub struct CacheConfig {
+    pub local: CacheActions,
+    pub remote: CacheActions,
+}
+
+impl CacheConfig {
+    pub fn skip_writes(&self) -> bool {
+        !self.local.write && !self.remote.write
+    }
+
+    pub fn remote_only() -> Self {
+        Self {
+            local: CacheActions::disabled(),
+            remote: CacheActions::enabled(),
+        }
+    }
+
+    pub fn remote_read_only() -> Self {
+        Self {
+            local: CacheActions::disabled(),
+            remote: CacheActions {
+                read: true,
+                write: false,
+            },
+        }
+    }
+}
+
+impl Default for CacheActions {
+    fn default() -> Self {
+        Self {
+            read: true,
+            write: true,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct CacheOpts {
     pub cache_dir: Utf8PathBuf,
-    pub remote_cache_read_only: bool,
-    pub skip_remote: bool,
-    pub skip_filesystem: bool,
+    pub cache: CacheConfig,
     pub workers: u32,
     pub remote_cache_opts: Option<RemoteCacheOpts>,
 }

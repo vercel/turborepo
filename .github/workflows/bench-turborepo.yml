@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-node
 
       - name: Setup Turborepo Environment
@@ -61,7 +61,7 @@ jobs:
             runner: windows-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Set filename for profile
         id: filename
         shell: bash
@@ -87,9 +87,9 @@ jobs:
         run: pnpm -F @turbo/benchmark ttft "${{ steps.filename.outputs.filename }}"
 
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: profiles # This name will be the folder each file gets downloaded to
+          name: profiles-${{ matrix.os.name }} # This name will be the folder each file gets downloaded to
           if-no-files-found: error
           # cwd is root of the repository, so we need the benchmark/ prefixed path
           path: |
@@ -106,16 +106,17 @@ jobs:
       TINYBIRD_TOKEN: ${{secrets.TINYBIRD_TOKEN}}
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Setup Node
         uses: ./.github/actions/setup-node
 
       - name: Download profiles
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
-          name: profiles
           path: packages/turbo-benchmark/profiles/
+          pattern: profiles-*
+          merge-multiple: true
 
       - name: Display TTFT Data
         shell: bash
@@ -140,16 +141,17 @@ jobs:
     needs: [send-to-tinybird]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Setup Node
         uses: ./.github/actions/setup-node
 
       - name: Download profiles
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
-          name: profiles
           path: packages/turbo-benchmark/profiles/
+          pattern: profiles-*
+          merge-multiple: true
 
       - name: Display TTFT Data
         shell: bash

@@ -415,7 +415,7 @@ where
 ///
 /// **This trait provides the only API for implementing a
 /// [`SeparatingFilter`].** [`Iterator`]s can implement this trait for a
-/// transitive [`SeparatingFilter`] implemention that provides all items
+/// transitive [`SeparatingFilter`] implementation that provides all items
 /// as filtrate. This bridges [`Iterator`]s into the input of a separating
 /// filter. See the [`filtrate`] function for the output analog.
 ///

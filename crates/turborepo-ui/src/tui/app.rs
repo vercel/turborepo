@@ -2,8 +2,7 @@ use std::{
     collections::BTreeMap,
     io::{self, Stdout, Write},
     mem,
-    sync::mpsc,
-    time::{Duration, Instant},
+    time::Duration,
 };
 
 use ratatui::{
@@ -12,9 +11,13 @@ use ratatui::{
     widgets::TableState,
     Frame, Terminal,
 };
+use tokio::{
+    sync::{mpsc, oneshot},
+    time::Instant,
+};
 use tracing::{debug, trace};
 
-const FRAMERATE: Duration = Duration::from_millis(3);
+pub const FRAMERATE: Duration = Duration::from_millis(3);
 const RESIZE_DEBOUNCE_DELAY: Duration = Duration::from_millis(10);
 
 use super::{
@@ -23,9 +26,12 @@ use super::{
     search::SearchResults,
     AppReceiver, Debouncer, Error, Event, InputOptions, SizeInfo, TaskTable, TerminalPane,
 };
-use crate::tui::{
-    task::{Task, TasksByStatus},
-    term_output::TerminalOutput,
+use crate::{
+    tui::{
+        task::{Task, TasksByStatus},
+        term_output::TerminalOutput,
+    },
+    ColorConfig,
 };
 
 #[derive(Debug, Clone)]
@@ -43,10 +49,10 @@ pub struct App<W> {
     tasks: BTreeMap<String, TerminalOutput<W>>,
     tasks_by_status: TasksByStatus,
     focus: LayoutSections,
-    tty_stdin: bool,
     scroll: TableState,
     selected_task_index: usize,
     has_user_scrolled: bool,
+    has_sidebar: bool,
     done: bool,
 }
 
@@ -78,8 +84,6 @@ impl<W> App<W> {
             size,
             done: false,
             focus: LayoutSections::TaskList,
-            // Check if stdin is a tty that we should read input from
-            tty_stdin: atty::is(atty::Stream::Stdin),
             tasks: tasks_by_status
                 .task_names_in_displayed_order()
                 .map(|task_name| {
@@ -92,6 +96,7 @@ impl<W> App<W> {
             tasks_by_status,
             scroll: TableState::default().with_selected(selected_task_index),
             selected_task_index,
+            has_sidebar: true,
             has_user_scrolled: has_user_interacted,
         }
     }
@@ -112,7 +117,6 @@ impl<W> App<W> {
         let has_selection = self.get_full_task()?.has_selection();
         Ok(InputOptions {
             focus: &self.focus,
-            tty_stdin: self.tty_stdin,
             has_selection,
         })
     }
@@ -138,21 +142,24 @@ impl<W> App<W> {
     #[tracing::instrument(skip(self))]
     pub fn next(&mut self) {
         let num_rows = self.tasks_by_status.count_all();
-        let next_index = (self.selected_task_index + 1).clamp(0, num_rows - 1);
-        self.selected_task_index = next_index;
-        self.scroll.select(Some(next_index));
-        self.has_user_scrolled = true;
+        if num_rows > 0 {
+            self.selected_task_index = (self.selected_task_index + 1) % num_rows;
+            self.scroll.select(Some(self.selected_task_index));
+            self.has_user_scrolled = true;
+        }
     }
 
     #[tracing::instrument(skip(self))]
     pub fn previous(&mut self) {
-        let i = match self.selected_task_index {
-            0 => 0,
-            i => i - 1,
-        };
-        self.selected_task_index = i;
-        self.scroll.select(Some(i));
-        self.has_user_scrolled = true;
+        let num_rows = self.tasks_by_status.count_all();
+        if num_rows > 0 {
+            self.selected_task_index = self
+                .selected_task_index
+                .checked_sub(1)
+                .unwrap_or(num_rows - 1);
+            self.scroll.select(Some(self.selected_task_index));
+            self.has_user_scrolled = true;
+        }
     }
 
     #[tracing::instrument(skip_all)]
@@ -322,7 +329,8 @@ impl<W> App<W> {
             .ok_or_else(|| Error::TaskNotFound { name: task.into() })?;
 
         let running = self.tasks_by_status.running.remove(running_idx);
-        self.tasks_by_status.finished.push(running.finish(result));
+        self.tasks_by_status
+            .insert_finished_task(running.finish(result));
 
         self.tasks
             .get_mut(task)
@@ -558,16 +566,26 @@ impl<W: Write> App<W> {
 
 /// Handle the rendering of the `App` widget based on events received by
 /// `receiver`
-pub fn run_app(tasks: Vec<String>, receiver: AppReceiver) -> Result<(), Error> {
-    let mut terminal = startup()?;
+pub async fn run_app(
+    tasks: Vec<String>,
+    receiver: AppReceiver,
+    color_config: ColorConfig,
+) -> Result<(), Error> {
+    let mut terminal = startup(color_config)?;
     let size = terminal.size()?;
 
     let mut app: App<Box<dyn io::Write + Send>> = App::new(size.height, size.width, tasks);
+    let (crossterm_tx, crossterm_rx) = mpsc::channel(1024);
+    input::start_crossterm_stream(crossterm_tx);
 
-    let (result, callback) = match run_app_inner(&mut terminal, &mut app, receiver) {
-        Ok(callback) => (Ok(()), callback),
-        Err(err) => (Err(err), None),
-    };
+    let (result, callback) =
+        match run_app_inner(&mut terminal, &mut app, receiver, crossterm_rx).await {
+            Ok(callback) => (Ok(()), callback),
+            Err(err) => {
+                debug!("tui shutting down: {err}");
+                (Err(err), None)
+            }
+        };
 
     cleanup(terminal, app, callback)?;
 
@@ -576,18 +594,19 @@ pub fn run_app(tasks: Vec<String>, receiver: AppReceiver) -> Result<(), Error> {
 
 // Break out inner loop so we can use `?` without worrying about cleaning up the
 // terminal.
-fn run_app_inner<B: Backend + std::io::Write>(
+async fn run_app_inner<B: Backend + std::io::Write>(
     terminal: &mut Terminal<B>,
     app: &mut App<Box<dyn io::Write + Send>>,
-    receiver: AppReceiver,
-) -> Result<Option<mpsc::SyncSender<()>>, Error> {
+    mut receiver: AppReceiver,
+    mut crossterm_rx: mpsc::Receiver<crossterm::event::Event>,
+) -> Result<Option<oneshot::Sender<()>>, Error> {
     // Render initial state to paint the screen
     terminal.draw(|f| view(app, f))?;
     let mut last_render = Instant::now();
     let mut resize_debouncer = Debouncer::new(RESIZE_DEBOUNCE_DELAY);
     let mut callback = None;
     let mut needs_rerender = true;
-    while let Some(event) = poll(app.input_options()?, &receiver, last_render + FRAMERATE) {
+    while let Some(event) = poll(app.input_options()?, &mut receiver, &mut crossterm_rx).await {
         // If we only receive ticks, then there's been no state change so no update
         // needed
         if !matches!(event, Event::Tick) {
@@ -625,12 +644,33 @@ fn run_app_inner<B: Backend + std::io::Write>(
 
 /// Blocking poll for events, will only return None if app handle has been
 /// dropped
-fn poll(input_options: InputOptions, receiver: &AppReceiver, deadline: Instant) -> Option<Event> {
-    match input(input_options) {
-        Ok(Some(event)) => Some(event),
-        Ok(None) => receiver.recv(deadline).ok(),
-        // Unable to read from stdin, shut down and attempt to clean up
-        Err(_) => Some(Event::InternalStop),
+async fn poll<'a>(
+    input_options: InputOptions<'a>,
+    receiver: &mut AppReceiver,
+    crossterm_rx: &mut mpsc::Receiver<crossterm::event::Event>,
+) -> Option<Event> {
+    let input_closed = crossterm_rx.is_closed();
+
+    if input_closed {
+        receiver.recv().await
+    } else {
+        // tokio::select is messing with variable read detection
+        #[allow(unused_assignments)]
+        let mut event = None;
+        loop {
+            tokio::select! {
+                e = crossterm_rx.recv() => {
+                    event = e.and_then(|e| input_options.handle_crossterm_event(e));
+                }
+                e = receiver.recv() => {
+                    event = e;
+                }
+            }
+            if event.is_some() {
+                break;
+            }
+        }
+        event
     }
 }
 
@@ -644,7 +684,10 @@ pub fn terminal_big_enough() -> Result<bool, Error> {
 
 /// Configures terminal for rendering App
 #[tracing::instrument]
-fn startup() -> io::Result<Terminal<CrosstermBackend<Stdout>>> {
+fn startup(color_config: ColorConfig) -> io::Result<Terminal<CrosstermBackend<Stdout>>> {
+    if color_config.should_strip_ansi {
+        crossterm::style::force_color_output(false);
+    }
     crossterm::terminal::enable_raw_mode()?;
     let mut stdout = io::stdout();
     // Ensure all pending writes are flushed before we switch to alternative screen
@@ -672,7 +715,7 @@ fn startup() -> io::Result<Terminal<CrosstermBackend<Stdout>>> {
 fn cleanup<B: Backend + io::Write>(
     mut terminal: Terminal<B>,
     mut app: App<Box<dyn io::Write + Send>>,
-    callback: Option<mpsc::SyncSender<()>>,
+    callback: Option<oneshot::Sender<()>>,
 ) -> io::Result<()> {
     terminal.clear()?;
     crossterm::execute!(
@@ -692,7 +735,7 @@ fn cleanup<B: Backend + io::Write>(
 fn update(
     app: &mut App<Box<dyn io::Write + Send>>,
     event: Event,
-) -> Result<Option<mpsc::SyncSender<()>>, Error> {
+) -> Result<Option<oneshot::Sender<()>>, Error> {
     match event {
         Event::StartTask { task, output_logs } => {
             app.start_task(&task, output_logs)?;
@@ -708,9 +751,11 @@ fn update(
             app.set_status(task, status, result)?;
         }
         Event::InternalStop => {
+            debug!("shutting down due to internal failure");
             app.done = true;
         }
         Event::Stop(callback) => {
+            debug!("shutting down due to message");
             app.done = true;
             return Ok(Some(callback));
         }
@@ -741,6 +786,9 @@ fn update(
         Event::ExitInteractive => {
             app.has_user_scrolled = true;
             app.interact()?;
+        }
+        Event::ToggleSidebar => {
+            app.has_sidebar = !app.has_sidebar;
         }
         Event::Input { bytes } => {
             app.forward_input(&bytes)?;
@@ -793,13 +841,18 @@ fn update(
 
 fn view<W>(app: &mut App<W>, f: &mut Frame) {
     let cols = app.size.pane_cols();
-    let horizontal = Layout::horizontal([Constraint::Fill(1), Constraint::Length(cols)]);
+    let horizontal = if app.has_sidebar {
+        Layout::horizontal([Constraint::Fill(1), Constraint::Length(cols)])
+    } else {
+        Layout::horizontal([Constraint::Max(0), Constraint::Length(cols)])
+    };
     let [table, pane] = horizontal.areas(f.size());
 
     let active_task = app.active_task().unwrap().to_string();
 
     let output_logs = app.tasks.get(&active_task).unwrap();
-    let pane_to_render: TerminalPane<W> = TerminalPane::new(output_logs, &active_task, &app.focus);
+    let pane_to_render: TerminalPane<W> =
+        TerminalPane::new(output_logs, &active_task, &app.focus, app.has_sidebar);
 
     let table_to_render = TaskTable::new(&app.tasks_by_status);
 
@@ -836,6 +889,8 @@ mod test {
         app.next();
         assert_eq!(app.scroll.selected(), Some(2), "scroll moves forwards");
         app.next();
+        assert_eq!(app.scroll.selected(), Some(0), "scroll wraps");
+        app.previous();
         assert_eq!(app.scroll.selected(), Some(2), "scroll stays in bounds");
     }
 

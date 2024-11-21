@@ -1,6 +1,7 @@
-use std::{sync::mpsc, time::Instant};
+use tokio::sync::{mpsc, oneshot};
 
 use super::{
+    app::FRAMERATE,
     event::{CacheResult, OutputLogs, PaneSize},
     Error, Event, TaskResult,
 };
@@ -9,12 +10,12 @@ use crate::sender::{TaskSender, UISender};
 /// Struct for sending app events to TUI rendering
 #[derive(Debug, Clone)]
 pub struct TuiSender {
-    primary: mpsc::Sender<Event>,
+    primary: mpsc::UnboundedSender<Event>,
 }
 
 /// Struct for receiving app events
 pub struct AppReceiver {
-    primary: mpsc::Receiver<Event>,
+    primary: mpsc::UnboundedReceiver<Event>,
 }
 
 impl TuiSender {
@@ -23,7 +24,17 @@ impl TuiSender {
     /// AppSender is meant to be held by the actual task runner
     /// AppReceiver should be passed to `crate::tui::run_app`
     pub fn new() -> (Self, AppReceiver) {
-        let (primary_tx, primary_rx) = mpsc::channel();
+        let (primary_tx, primary_rx) = mpsc::unbounded_channel();
+        let tick_sender = primary_tx.clone();
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(FRAMERATE);
+            loop {
+                interval.tick().await;
+                if tick_sender.send(Event::Tick).is_err() {
+                    break;
+                }
+            }
+        });
         (
             Self {
                 primary: primary_tx,
@@ -70,13 +81,13 @@ impl TuiSender {
     }
 
     /// Stop rendering TUI and restore terminal to default configuration
-    pub fn stop(&self) {
-        let (callback_tx, callback_rx) = mpsc::sync_channel(1);
+    pub async fn stop(&self) {
+        let (callback_tx, callback_rx) = oneshot::channel();
         // Send stop event, if receiver has dropped ignore error as
         // it'll be a no-op.
         self.primary.send(Event::Stop(callback_tx)).ok();
         // Wait for callback to be sent or the channel closed.
-        callback_rx.recv().ok();
+        callback_rx.await.ok();
     }
 
     /// Update the list of tasks displayed in the TUI
@@ -103,23 +114,19 @@ impl TuiSender {
     }
 
     /// Fetches the size of the terminal pane
-    pub fn pane_size(&self) -> Option<PaneSize> {
-        let (callback_tx, callback_rx) = mpsc::sync_channel(1);
+    pub async fn pane_size(&self) -> Option<PaneSize> {
+        let (callback_tx, callback_rx) = oneshot::channel();
         // Send query, if no receiver to handle the request return None
         self.primary.send(Event::PaneSizeQuery(callback_tx)).ok()?;
         // Wait for callback to be sent
-        callback_rx.recv().ok()
+        callback_rx.await.ok()
     }
 }
 
 impl AppReceiver {
     /// Receive an event, producing a tick event if no events are rec eived by
     /// the deadline.
-    pub fn recv(&self, deadline: Instant) -> Result<Event, mpsc::RecvError> {
-        match self.primary.recv_deadline(deadline) {
-            Ok(event) => Ok(event),
-            Err(mpsc::RecvTimeoutError::Timeout) => Ok(Event::Tick),
-            Err(mpsc::RecvTimeoutError::Disconnected) => Err(mpsc::RecvError),
-        }
+    pub async fn recv(&mut self) -> Option<Event> {
+        self.primary.recv().await
     }
 }

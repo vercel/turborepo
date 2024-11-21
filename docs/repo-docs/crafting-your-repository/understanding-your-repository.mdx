@@ -1,0 +1,145 @@
+---
+title: Understanding your repository
+description: Learn how to understand your repository structure using Turborepo.
+---
+
+Turborepo includes tools for understanding your repository structure, that can help you use and optimize your codebase.
+
+## `turbo ls`
+
+To list your packages, you can run `turbo ls`. This will show the packages in your repository and where they're located.
+
+```bash title="Terminal"
+> turbo ls
+turbo 2.1.3
+
+ WARNING  ls command is experimental and may change in the future
+5 packages (pnpm9)
+
+  @repo/eslint-config packages/eslint-config
+  @repo/typescript-config packages/typescript-config
+  @repo/ui packages/ui
+  docs apps/docs
+  web apps/web
+```
+
+You can [apply filters](/repo/docs/crafting-your-repository/running-tasks#using-filters) to `ls`, just like `run`:
+
+```bash title="Terminal"
+> turbo ls --filter ...ui
+3 packages (pnpm9)
+
+  @repo/ui packages/ui
+  docs apps/docs
+  web apps/web
+```
+
+## `turbo run`
+
+To determine which tasks can be run in your monorepo, simply call `turbo run` without any tasks. You will get a list of
+tasks and the packages in which they are defined:
+
+```bash title="Terminal"
+> turbo run
+No tasks provided, here are some potential ones to run
+
+  lint
+    @repo/ui, docs, web
+  build
+    docs, web
+  dev
+    docs, web
+  start
+    docs, web
+  generate:component
+    @repo/ui
+```
+
+## `turbo query`
+
+If you wish to dig into your repository structure, since `2.2.0`, Turbo provides a GraphQL interface into your repository
+via `turbo query`. You can execute queries such as finding all packages that have a `test` task:
+
+```bash title="Terminal"
+> turbo query "query { packages(filter: { has: { field: TASK_NAME, value: \"build\"}}) { items { name } } }"
+{
+  "data": {
+    "packages": {
+      "items": [
+        {
+          "name": "//"
+        },
+        {
+          "name": "docs"
+        },
+        {
+          "name": "web"
+        }
+      ]
+    }
+  }
+}
+```
+
+This can be helpful for diagnosing potential problems in your package or task dependency graph. For instance, let's say
+you're getting a lot of cache misses in your builds. This could be because there's a package that keeps getting changed
+and is imported throughout your codebase.
+
+To do this, we can run a query to find packages that are directly imported more than 10 times in your monorepo:
+
+```bash title="Terminal"
+> turbo query "query { packages(filter: { greaterThan: { field: DIRECT_DEPENDENT_COUNT, value: 10 } }) { items { name } } }"
+{
+  "data": {
+    "packages": {
+      "items": [
+        {
+          "name": "utils"
+        }
+      ]
+    }
+  }
+}
+```
+
+Now that we've found this package, we can try to split it up into smaller packages so that a small change won't
+invalidate the whole dependency graph.
+
+Or let's say you're using our new `--affected` flag, but you're still running more tasks than you'd like.
+With `turbo query`, you can find all the packages and the reason why they were invalidated:
+
+```bash title="Terminal"
+> turbo query "query { affectedPackages(base: \"HEAD^\", head: \"HEAD\") { items { reason {  __typename } } } }"
+{
+  "data": {
+    "affectedPackages": {
+      "items": [
+        {
+          "name": "utils",
+          "reason": {
+            "__typename": "FileChanged"
+          }
+        },
+        {
+          "name": "web",
+          "reason": {
+            "__typename": "DependencyChanged"
+          }
+        },
+        {
+          "name": "docs",
+          "reason": {
+            "__typename": "DependencyChanged"
+          }
+        },
+        {
+          "name": "cli",
+          "reason": {
+            "__typename": "DependencyChanged"
+          }
+        },
+      ]
+    }
+  }
+}
+```

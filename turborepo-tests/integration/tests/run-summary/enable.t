@@ -26,6 +26,7 @@ Setup
 # env var=true, missing flag: yes
   $ rm -rf .turbo/runs
   $ TURBO_RUN_SUMMARY=true ${TURBO} run build > /dev/null
+   WARNING  no output files found for task my-app#build. Please check your `outputs` key in `turbo.json`
   $ /bin/ls .turbo/runs/*.json | wc -l
   \s*1 (re)
 # env var=true, --flag=true: yes

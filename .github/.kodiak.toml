@@ -17,7 +17,7 @@ notify_on_conflict = false
 # Without this, only branches that are passing CI will get updated.
 # The benefit of this config is that PRs that we want to automerge, but
 # have failed because the test suite is flaky will get stuck, unless someone
-# presses the Update Branch button manually, or re-triggers the Github workflow
+# presses the Update Branch button manually, or re-triggers the GitHub workflow
 # for tests again. This causes delays in getting easy PRs in.
 always = true
 
@@ -28,7 +28,7 @@ always = true
 # (i.e. PRs with the "pr: automerge" label, which is configured above).
 # This label allows PR authors to keep their PR branch up-to-date without
 # opting into Kodiak's automerge feature. This is useful if you want to use
-# Github's AutoMerge feature instead.
+# GitHub's AutoMerge feature instead.
 autoupdate_label = "pr: autoupdate"
 
 [merge.message]

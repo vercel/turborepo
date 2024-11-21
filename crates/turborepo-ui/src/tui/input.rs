@@ -1,45 +1,52 @@
-use std::time::Duration;
-
-use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use crossterm::event::{EventStream, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use futures::StreamExt;
+use tokio::{sync::mpsc, task::JoinHandle};
+use tracing::debug;
 
 use super::{
     app::LayoutSections,
     event::{Direction, Event},
-    Error,
 };
 
 #[derive(Debug, Clone, Copy)]
 pub struct InputOptions<'a> {
     pub focus: &'a LayoutSections,
-    pub tty_stdin: bool,
     pub has_selection: bool,
 }
 
-/// Return any immediately available event
-pub fn input(options: InputOptions) -> Result<Option<Event>, Error> {
-    // If stdin is not a tty, then we do not attempt to read from it
-    if !options.tty_stdin {
-        return Ok(None);
+pub fn start_crossterm_stream(tx: mpsc::Sender<crossterm::event::Event>) -> Option<JoinHandle<()>> {
+    // quick check if stdin is tty
+    if !atty::is(atty::Stream::Stdin) {
+        return None;
     }
-    // poll with 0 duration will only return true if event::read won't need to wait
-    // for input
-    if crossterm::event::poll(Duration::from_millis(0))? {
-        match crossterm::event::read()? {
-            crossterm::event::Event::Key(k) => Ok(translate_key_event(options, k)),
+
+    let mut events = EventStream::new();
+    Some(tokio::spawn(async move {
+        while let Some(Ok(event)) = events.next().await {
+            if tx.send(event).await.is_err() {
+                break;
+            }
+        }
+    }))
+}
+
+impl<'a> InputOptions<'a> {
+    /// Maps a crossterm::event::Event to a tui::Event
+    pub fn handle_crossterm_event(self, event: crossterm::event::Event) -> Option<Event> {
+        match event {
+            crossterm::event::Event::Key(k) => translate_key_event(self, k),
             crossterm::event::Event::Mouse(m) => match m.kind {
-                crossterm::event::MouseEventKind::ScrollDown => Ok(Some(Event::ScrollDown)),
-                crossterm::event::MouseEventKind::ScrollUp => Ok(Some(Event::ScrollUp)),
+                crossterm::event::MouseEventKind::ScrollDown => Some(Event::ScrollDown),
+                crossterm::event::MouseEventKind::ScrollUp => Some(Event::ScrollUp),
                 crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left)
                 | crossterm::event::MouseEventKind::Drag(crossterm::event::MouseButton::Left) => {
-                    Ok(Some(Event::Mouse(m)))
+                    Some(Event::Mouse(m))
                 }
-                _ => Ok(None),
+                _ => None,
             },
-            crossterm::event::Event::Resize(cols, rows) => Ok(Some(Event::Resize { rows, cols })),
-            _ => Ok(None),
+            crossterm::event::Event::Resize(cols, rows) => Some(Event::Resize { rows, cols }),
+            _ => None,
         }
-    } else {
-        Ok(None)
     }
 }
 
@@ -54,7 +61,8 @@ fn translate_key_event(options: InputOptions, key_event: KeyEvent) -> Option<Eve
     }
     match key_event.code {
         KeyCode::Char('c') if key_event.modifiers == crossterm::event::KeyModifiers::CONTROL => {
-            ctrl_c()
+            ctrl_c();
+            Some(Event::InternalStop)
         }
         KeyCode::Char('c') if options.has_selection => Some(Event::CopySelection),
         // Interactive branches
@@ -77,6 +85,7 @@ fn translate_key_event(options: InputOptions, key_event: KeyEvent) -> Option<Eve
                 restore_scroll: true,
             })
         }
+        KeyCode::Char('h') => Some(Event::ToggleSidebar),
         KeyCode::Enter if matches!(options.focus, LayoutSections::Search { .. }) => {
             Some(Event::SearchExit {
                 restore_scroll: false,
@@ -105,7 +114,7 @@ fn translate_key_event(options: InputOptions, key_event: KeyEvent) -> Option<Eve
         }
         KeyCode::Up => Some(Event::Up),
         KeyCode::Down => Some(Event::Down),
-        KeyCode::Enter => Some(Event::EnterInteractive),
+        KeyCode::Enter | KeyCode::Char('i') => Some(Event::EnterInteractive),
         _ => None,
     }
 }
@@ -116,7 +125,10 @@ fn ctrl_c() -> Option<Event> {
     match signal::raise(signal::SIGINT) {
         Ok(_) => None,
         // We're unable to send the signal, stop rendering to force shutdown
-        Err(_) => Some(Event::InternalStop),
+        Err(_) => {
+            debug!("unable to send sigint, shutting down");
+            Some(Event::InternalStop)
+        }
     }
 }
 
@@ -140,6 +152,7 @@ fn ctrl_c() -> Option<Event> {
         None
     } else {
         // We're unable to send the Ctrl-C event, stop rendering to force shutdown
+        debug!("unable to send sigint, shutting down");
         Some(Event::InternalStop)
     }
 }

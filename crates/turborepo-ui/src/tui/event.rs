@@ -1,5 +1,6 @@
 use async_graphql::Enum;
 use serde::Serialize;
+use tokio::sync::oneshot;
 
 pub enum Event {
     StartTask {
@@ -19,8 +20,8 @@ pub enum Event {
         status: String,
         result: CacheResult,
     },
-    PaneSizeQuery(std::sync::mpsc::SyncSender<PaneSize>),
-    Stop(std::sync::mpsc::SyncSender<()>),
+    PaneSizeQuery(oneshot::Sender<PaneSize>),
+    Stop(oneshot::Sender<()>),
     // Stop initiated by the TUI itself
     InternalStop,
     Tick,
@@ -49,6 +50,7 @@ pub enum Event {
         rows: u16,
         cols: u16,
     },
+    ToggleSidebar,
     SearchEnter,
     SearchExit {
         restore_scroll: bool,
