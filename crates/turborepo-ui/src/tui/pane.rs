@@ -7,10 +7,10 @@ use tui_term::widget::PseudoTerminal;
 
 use super::{app::LayoutSections, TerminalOutput};
 
-const FOOTER_TEXT_ACTIVE: &str = "Press`Ctrl-Z` to stop interacting.";
-const FOOTER_TEXT_INACTIVE: &str = "Press `Enter` to interact.";
-const HAS_SELECTION: &str = "Press `c` to copy selection";
-const TASK_LIST_HIDDEN: &str = "Press `h` to show task list.";
+const FOOTER_TEXT_ACTIVE: &str = "Ctrl-z - Stop interacting";
+const FOOTER_TEXT_INACTIVE: &str = "i - Interact";
+const HAS_SELECTION: &str = "c - Copy selection";
+const TASK_LIST_HIDDEN: &str = "h - Show task list";
 
 pub struct TerminalPane<'a, W> {
     terminal_output: &'a TerminalOutput<W>,
@@ -39,24 +39,29 @@ impl<'a, W> TerminalPane<'a, W> {
     }
 
     fn footer(&self) -> Line {
-        let task_list_message = if !self.has_sidebar {
-            TASK_LIST_HIDDEN
-        } else {
-            ""
+        let build_message_vec = |footer_text: &str| -> String {
+            let mut messages = vec![footer_text];
+
+            if !self.has_sidebar {
+                messages.push(TASK_LIST_HIDDEN);
+            }
+
+            if self.terminal_output.has_selection() {
+                messages.push(HAS_SELECTION);
+            }
+
+            // Spaces are used to pad the footer text for aesthetics
+            ["   ".into(), messages.join(", ")].join("")
         };
 
         match self.section {
-            LayoutSections::Pane if self.terminal_output.has_selection() => Line::from(format!(
-                "{FOOTER_TEXT_ACTIVE} {task_list_message} {HAS_SELECTION}"
-            ))
-            .centered(),
-            LayoutSections::Pane => Line::from(FOOTER_TEXT_ACTIVE.to_owned()).centered(),
-            LayoutSections::TaskList if self.terminal_output.has_selection() => Line::from(
-                format!("{FOOTER_TEXT_INACTIVE} {task_list_message} {HAS_SELECTION}"),
-            )
-            .centered(),
+            LayoutSections::Pane => {
+                let messages = build_message_vec(FOOTER_TEXT_ACTIVE);
+                Line::from(messages).left_aligned()
+            }
             LayoutSections::TaskList => {
-                Line::from(format!("{FOOTER_TEXT_INACTIVE} {task_list_message}")).centered()
+                let messages = build_message_vec(FOOTER_TEXT_INACTIVE);
+                Line::from(messages).left_aligned()
             }
             LayoutSections::Search { results, .. } => {
                 Line::from(format!("/ {}", results.query())).left_aligned()
