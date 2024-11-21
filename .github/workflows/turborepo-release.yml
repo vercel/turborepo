@@ -207,7 +207,7 @@ jobs:
           git config --global user.email 'turbobot@vercel.com'
 
       - name: Install GoReleaser
-        uses: goreleaser/goreleaser-action@v3
+        uses: goreleaser/goreleaser-action@v6
         with:
           distribution: goreleaser-pro
           version: v1.18.2
