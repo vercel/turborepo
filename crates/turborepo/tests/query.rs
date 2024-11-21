@@ -78,7 +78,7 @@ fn test_trace_on_monorepo() -> Result<(), anyhow::Error> {
             "query",
             "get `apps/my-app/index.ts` with dependencies" => "query { file(path: \"apps/my-app/index.ts\") { path dependencies { files { items { path } } errors { items { message } } } } }",
             "get `packages/utils/index.ts` with dependents" => "query { file(path: \"packages/utils/index.ts\") { path dependents { files { items { path } } errors { items { message } } } } }",
-            "get `packages/another/index.js` with dependents" => "query { file(path: \"packages/another/index.js\") { path dependents { files { items { path } } errors { items { message } } } } }",
+            "get `packages/another/index.js` with dependents" => "query { file(path: \"packages/another/index.jsx\") { path dependents { files { items { path } } errors { items { message } } } } }",
         );
 
         Ok(())

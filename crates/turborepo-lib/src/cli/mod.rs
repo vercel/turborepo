@@ -569,6 +569,13 @@ pub enum Command {
         #[clap(long)]
         no_gitignore: bool,
 
+        /// The scope, i.e. Vercel team, to which you are linking
+        #[clap(long)]
+        scope: Option<String>,
+
+        /// Answer yes to all prompts (default false)
+        #[clap(long, short)]
+        yes: bool,
         /// Specify what should be linked (default "remote cache")
         #[clap(long, value_enum, default_value_t = LinkTarget::RemoteCache)]
         target: LinkTarget,
@@ -1299,11 +1306,18 @@ pub async fn run(
         }
         Command::Link {
             no_gitignore,
+            scope,
+            yes,
             target,
         } => {
             CommandEventBuilder::new("link")
                 .with_parent(&root_telemetry)
                 .track_call();
+
+            if cli_args.team.is_some() {
+                warn!("team flag does not set the scope for linking. Use --scope instead.");
+            }
+
             if cli_args.test_run {
                 println!("Link test run successful");
                 return Ok(0);
@@ -1311,11 +1325,11 @@ pub async fn run(
 
             let modify_gitignore = !*no_gitignore;
             let to = *target;
+            let yes = *yes;
+            let scope = scope.clone();
             let mut base = CommandBase::new(cli_args, repo_root, version, color_config);
 
-            if let Err(err) = link::link(&mut base, modify_gitignore, to).await {
-                error!("error: {}", err.to_string())
-            }
+            link::link(&mut base, scope, modify_gitignore, yes, to).await?;
 
             Ok(0)
         }
@@ -1469,7 +1483,7 @@ mod test {
     use itertools::Itertools;
     use pretty_assertions::assert_eq;
 
-    use crate::cli::{ExecutionArgs, RunArgs};
+    use crate::cli::{ExecutionArgs, LinkTarget, RunArgs};
 
     struct CommandTestCase {
         command: &'static str,
@@ -2293,6 +2307,90 @@ mod test {
             global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
             expected_output: Args {
                 command: Some(Command::Bin {}),
+                cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
+                ..Args::default()
+            },
+        }
+        .test();
+    }
+
+    #[test]
+    fn test_parse_link() {
+        assert_eq!(
+            Args::try_parse_from(["turbo", "link"]).unwrap(),
+            Args {
+                command: Some(Command::Link {
+                    no_gitignore: false,
+                    scope: None,
+                    yes: false,
+                    target: LinkTarget::RemoteCache,
+                }),
+                ..Args::default()
+            }
+        );
+
+        CommandTestCase {
+            command: "link",
+            command_args: vec![],
+            global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
+            expected_output: Args {
+                command: Some(Command::Link {
+                    no_gitignore: false,
+                    scope: None,
+                    yes: false,
+                    target: LinkTarget::RemoteCache,
+                }),
+                cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
+                ..Args::default()
+            },
+        }
+        .test();
+
+        CommandTestCase {
+            command: "link",
+            command_args: vec![vec!["--yes"]],
+            global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
+            expected_output: Args {
+                command: Some(Command::Link {
+                    yes: true,
+                    no_gitignore: false,
+                    scope: None,
+                    target: LinkTarget::RemoteCache,
+                }),
+                cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
+                ..Args::default()
+            },
+        }
+        .test();
+
+        CommandTestCase {
+            command: "link",
+            command_args: vec![vec!["--scope", "foo"]],
+            global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
+            expected_output: Args {
+                command: Some(Command::Link {
+                    yes: false,
+                    no_gitignore: false,
+                    scope: Some("foo".to_string()),
+                    target: LinkTarget::RemoteCache,
+                }),
+                cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
+                ..Args::default()
+            },
+        }
+        .test();
+
+        CommandTestCase {
+            command: "link",
+            command_args: vec![vec!["--no-gitignore"]],
+            global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
+            expected_output: Args {
+                command: Some(Command::Link {
+                    yes: false,
+                    no_gitignore: true,
+                    scope: None,
+                    target: LinkTarget::RemoteCache,
+                }),
                 cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
             },
