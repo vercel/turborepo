@@ -78,6 +78,8 @@ pub(crate) struct RawRemoteCacheOptions {
     timeout: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     enabled: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    upload_timeout: Option<u64>,
 }
 
 impl From<&RawRemoteCacheOptions> for ConfigurationOptions {
@@ -90,6 +92,7 @@ impl From<&RawRemoteCacheOptions> for ConfigurationOptions {
             signature: remote_cache_opts.signature,
             preflight: remote_cache_opts.preflight,
             timeout: remote_cache_opts.timeout,
+            upload_timeout: remote_cache_opts.upload_timeout,
             enabled: remote_cache_opts.enabled,
             ..Self::default()
         }
