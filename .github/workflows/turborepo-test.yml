@@ -300,7 +300,7 @@ jobs:
           node-version: "18.20.2"
 
       - name: Run sccache-cache
-        uses: mozilla-actions/sccache-action@v0.0.3
+        uses: mozilla-actions/sccache-action@v0.0.6
 
       - name: Run tests
         timeout-minutes: 120
