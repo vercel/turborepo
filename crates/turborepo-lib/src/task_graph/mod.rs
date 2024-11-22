@@ -90,6 +90,12 @@ pub struct TaskDefinition {
 
     // Override for global env mode setting
     pub env_mode: Option<EnvMode>,
+
+    // Tasks that will get added to the graph if this one is
+    // It contains no guarantees regarding ordering, just that this will also get run.
+    // It will also not affect the task's hash aside from the definition getting folded into the
+    // hash.
+    pub siblings: Option<Vec<Spanned<TaskName<'static>>>>,
 }
 
 impl Default for TaskDefinition {
@@ -107,6 +113,7 @@ impl Default for TaskDefinition {
             interruptible: Default::default(),
             interactive: Default::default(),
             env_mode: Default::default(),
+            siblings: Default::default(),
         }
     }
 }

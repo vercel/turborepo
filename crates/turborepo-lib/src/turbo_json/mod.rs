@@ -233,6 +233,9 @@ pub struct RawTaskDefinition {
     // instead of deriving them from a TurboJson
     #[serde(skip)]
     env_mode: Option<EnvMode>,
+    // This can currently only be set internally and isn't a part of turbo.json
+    #[serde(skip)]
+    siblings: Option<Vec<Spanned<UnescapedString>>>,
 }
 
 macro_rules! set_field {
@@ -267,6 +270,13 @@ impl RawTaskDefinition {
         set_field!(self, other, pass_through_env);
         set_field!(self, other, interactive);
         set_field!(self, other, env_mode);
+        set_field!(self, other, siblings);
+    }
+
+    // Used by engine builder tests to inject a sibling task
+    #[cfg(test)]
+    pub fn with_sibling(&mut self, sibling: &'static str) {
+        self.siblings = Some(vec![Spanned::new(UnescapedString::from(sibling))]);
     }
 }
 
@@ -411,6 +421,16 @@ impl TryFrom<RawTaskDefinition> for TaskDefinition {
             })
             .transpose()?;
 
+        let siblings = raw_task.siblings.map(|siblings| {
+            siblings
+                .into_iter()
+                .map(|sibling| {
+                    let (sibling, span) = sibling.split();
+                    span.to(TaskName::from(String::from(sibling)))
+                })
+                .collect()
+        });
+
         Ok(TaskDefinition {
             outputs,
             cache,
@@ -424,6 +444,7 @@ impl TryFrom<RawTaskDefinition> for TaskDefinition {
             interruptible: *interruptible,
             interactive,
             env_mode: raw_task.env_mode,
+            siblings,
         })
     }
 }
@@ -769,6 +790,7 @@ mod tests {
             interactive: Some(Spanned::new(true).with_range(309..313)),
             interruptible: Some(Spanned::new(true).with_range(342..346)),
             env_mode: None,
+            siblings: None,
         },
         TaskDefinition {
           env: vec!["OS".to_string()],
@@ -786,6 +808,7 @@ mod tests {
           interactive: true,
           interruptible: true,
           env_mode: None,
+          siblings: None,
         }
       ; "full"
     )]
@@ -813,6 +836,7 @@ mod tests {
             interruptible: Some(Spanned::new(true).with_range(352..356)),
             interactive: None,
             env_mode: None,
+            siblings: None,
         },
         TaskDefinition {
             env: vec!["OS".to_string()],
@@ -830,6 +854,7 @@ mod tests {
             interruptible: true,
             interactive: false,
             env_mode: None,
+            siblings: None,
         }
       ; "full (windows)"
     )]

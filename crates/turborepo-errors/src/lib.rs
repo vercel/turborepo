@@ -176,6 +176,10 @@ impl<T> Spanned<T> {
             text: self.text,
         }
     }
+
+    pub fn inner_mut(&mut self) -> &mut T {
+        &mut self.value
+    }
 }
 
 impl<T> Spanned<Option<T>> {
