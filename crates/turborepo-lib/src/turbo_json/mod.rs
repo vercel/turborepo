@@ -272,12 +272,6 @@ impl RawTaskDefinition {
         set_field!(self, other, env_mode);
         set_field!(self, other, siblings);
     }
-
-    // Used by engine builder tests to inject a sibling task
-    #[cfg(test)]
-    pub fn with_sibling(&mut self, sibling: &'static str) {
-        self.siblings = Some(vec![Spanned::new(UnescapedString::from(sibling))]);
-    }
 }
 
 pub const CONFIG_FILE: &str = "turbo.json";
@@ -759,7 +753,7 @@ mod tests {
     use test_case::test_case;
     use turborepo_unescape::UnescapedString;
 
-    use super::{RawTurboJson, Spanned, UIMode};
+    use super::{RawTurboJson, Spanned, TurboJson, UIMode};
     use crate::{
         cli::OutputLogsMode,
         run::task_id::TaskName,
@@ -1020,5 +1014,79 @@ mod tests {
         assert_eq!(json.allow_no_package_manager, expected);
         let serialized = serde_json::to_string(&json).unwrap();
         assert_eq!(serialized, json_str);
+    }
+
+    #[test]
+    fn test_with_proxy_empty() {
+        let mut json = TurboJson::default();
+        json.with_proxy(None);
+        assert_eq!(json.extends.as_inner().as_slice(), &["//".to_string()]);
+        assert!(json.tasks.contains_key(&TaskName::from("proxy")));
+    }
+
+    #[test]
+    fn test_with_proxy_existing() {
+        let mut json = TurboJson::default();
+        json.tasks.insert(
+            TaskName::from("build"),
+            Spanned::new(RawTaskDefinition::default()),
+        );
+        json.with_proxy(None);
+        assert_eq!(json.extends.as_inner().as_slice(), &["//".to_string()]);
+        assert!(json.tasks.contains_key(&TaskName::from("proxy")));
+        assert!(json.tasks.contains_key(&TaskName::from("build")));
+    }
+
+    #[test]
+    fn test_with_proxy_with_proxy_build() {
+        let mut json = TurboJson::default();
+        json.with_proxy(Some("my-proxy"));
+        assert_eq!(json.extends.as_inner().as_slice(), &["//".to_string()]);
+        let proxy_task = json.tasks.get(&TaskName::from("proxy"));
+        assert!(proxy_task.is_some());
+        let proxy_task = proxy_task.unwrap().as_inner();
+        assert_eq!(
+            proxy_task
+                .depends_on
+                .as_ref()
+                .unwrap()
+                .as_inner()
+                .as_slice(),
+            &[Spanned::new(UnescapedString::from("my-proxy#build"))]
+        );
+    }
+
+    #[test]
+    fn test_with_sibling_empty() {
+        let mut json = TurboJson::default();
+        json.with_sibling(TaskName::from("dev"), &TaskName::from("api#server"));
+        let dev_task = json.tasks.get(&TaskName::from("dev"));
+        assert!(dev_task.is_some());
+        let dev_task = dev_task.unwrap().as_inner();
+        assert_eq!(
+            dev_task.siblings.as_ref().unwrap().as_slice(),
+            &[Spanned::new(UnescapedString::from("api#server"))]
+        );
+    }
+
+    #[test]
+    fn test_with_sibling_existing() {
+        let mut json = TurboJson::default();
+        json.tasks.insert(
+            TaskName::from("dev"),
+            Spanned::new(RawTaskDefinition {
+                persistent: Some(Spanned::new(true)),
+                ..Default::default()
+            }),
+        );
+        json.with_sibling(TaskName::from("dev"), &TaskName::from("api#server"));
+        let dev_task = json.tasks.get(&TaskName::from("dev"));
+        assert!(dev_task.is_some());
+        let dev_task = dev_task.unwrap().as_inner();
+        assert_eq!(dev_task.persistent, Some(Spanned::new(true)));
+        assert_eq!(
+            dev_task.siblings.as_ref().unwrap().as_slice(),
+            &[Spanned::new(UnescapedString::from("api#server"))]
+        );
     }
 }

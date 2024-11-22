@@ -6,7 +6,6 @@ use std::{
 };
 
 use chrono::Local;
-use itertools::Itertools;
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_analytics::{start_analytics, AnalyticsHandle, AnalyticsSender};
@@ -38,7 +37,6 @@ use {
     },
 };
 
-use super::task_id::TaskId;
 use crate::{
     cli::DryRunMode,
     commands::CommandBase,

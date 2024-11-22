@@ -1365,8 +1365,7 @@ mod test {
                     "api#serve": { "persistent": true }
                 }
             }));
-            let a_dev = t_json.tasks.get_mut(&TaskName::from("web#dev")).unwrap();
-            a_dev.as_inner_mut().with_sibling("api#serve");
+            t_json.with_sibling(TaskName::from("web#dev"), &TaskName::from("api#serve"));
             t_json
         })]
         .into_iter()
