@@ -22,6 +22,10 @@
     "eslint-config"
   ],
   "main": "index.js",
+  "exports": {
+    "./flat": "./flat/index.js",
+    ".": "./index.js"
+  },
   "author": "Vercel",
   "dependencies": {
     "eslint-plugin-turbo": "workspace:*"
