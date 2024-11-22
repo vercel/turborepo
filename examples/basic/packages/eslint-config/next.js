@@ -39,7 +39,6 @@ export const config = [
     plugins: {
       "react-hooks": pluginReactHooks,
     },
-
     settings: { react: { version: "detect" } },
     rules: {
       ...pluginReactHooks.configs.recommended.rules,
