@@ -4,7 +4,7 @@ use itertools::Itertools;
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_errors::Spanned;
-use turborepo_micro_frontend::MICRO_FRONTENDS_PACKAGE_INTERNAL;
+use turborepo_micro_frontend::MICRO_FRONTENDS_PACKAGES;
 use turborepo_repository::{
     package_graph::{PackageInfo, PackageName},
     package_json::PackageJson,
@@ -186,10 +186,15 @@ impl TurboJsonLoader {
                         Error::NoTurboJSON => Ok(TurboJson::default()),
                         err => Err(err),
                     })?;
-                    let needs_proxy_build = packages
+                    let mfe_package_name = packages
                         .keys()
-                        .contains(&PackageName::from(MICRO_FRONTENDS_PACKAGE_INTERNAL));
-                    turbo_json.with_proxy(needs_proxy_build);
+                        .filter(|package| MICRO_FRONTENDS_PACKAGES.contains(&package.as_str()))
+                        .map(|package| package.as_str())
+                        // If multiple MFE packages are present in the graph, then be deterministic
+                        // in which ones we select
+                        .sorted()
+                        .next();
+                    turbo_json.with_proxy(mfe_package_name);
                     Ok(turbo_json)
                 } else {
                     turbo_json
