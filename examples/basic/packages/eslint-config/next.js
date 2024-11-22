@@ -1,13 +1,11 @@
 import js from "@eslint/js";
 import eslintConfigPrettier from "eslint-config-prettier";
-import turboConfig from "eslint-plugin-turbo";
 import tseslint from "typescript-eslint";
 import pluginReactHooks from "eslint-plugin-react-hooks";
 import pluginReact from "eslint-plugin-react";
 import globals from "globals";
-import nextPlugin from "@next/eslint-plugin-next";
+import pluginNext from "@next/eslint-plugin-next";
 import { config as baseConfig } from "./base.js";
-import eslintPluginReactHooks from "eslint-plugin-react-hooks";
 
 /**
  * A custom ESLint configuration for libraries that use React.
@@ -30,17 +28,19 @@ export const config = [
   },
   {
     plugins: {
-      "@next/next": nextPlugin,
+      "@next/next": pluginNext,
     },
     rules: {
-      ...nextPlugin.configs.recommended.rules,
-      ...nextPlugin.configs["core-web-vitals"].rules,
+      ...pluginNext.configs.recommended.rules,
+      ...pluginNext.configs["core-web-vitals"].rules,
     },
   },
   {
     plugins: {
       "react-hooks": pluginReactHooks,
     },
+
+    settings: { react: { version: "detect" } },
     rules: {
       ...pluginReactHooks.configs.recommended.rules,
       // React scope no longer necessary with new JSX transform.
