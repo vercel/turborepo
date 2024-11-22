@@ -336,6 +336,14 @@ export interface RemoteCache {
    * @defaultValue `30`
    */
   timeout?: number;
+  /**
+   * Sets a timeout for remote cache uploads. Value is given in seconds and
+   * only whole values are accepted. If `0` is passed, then there is no timeout
+   * for any remote cache uploads.
+   *
+   * @defaultValue `60`
+   */
+  uploadTimeout?: number;
 }
 
 export const isRootSchemaV2 = (schema: Schema): schema is RootSchema =>

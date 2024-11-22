@@ -319,6 +319,7 @@ mod test {
         env.insert("turbo_remote_cache_read_only".into(), "1".into());
         env.insert("turbo_run_summary".into(), "true".into());
         env.insert("turbo_allow_no_turbo_json".into(), "true".into());
+        env.insert("turbo_remote_cache_upload_timeout".into(), "200".into());
 
         let config = EnvVars::new(&env)
             .unwrap()
@@ -331,6 +332,7 @@ mod test {
         assert!(config.remote_cache_read_only());
         assert!(config.run_summary());
         assert!(config.allow_no_turbo_json());
+        assert_eq!(config.upload_timeout(), 200);
         assert_eq!(turbo_api, config.api_url.unwrap());
         assert_eq!(turbo_login, config.login_url.unwrap());
         assert_eq!(turbo_team, config.team_slug.unwrap());
