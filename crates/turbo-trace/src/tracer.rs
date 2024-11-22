@@ -359,7 +359,7 @@ impl Tracer {
             .with_main_field("types")
             // Condition names are used to determine which export to use when importing a module.
             // We add a bunch so oxc_resolver can resolve all kinds of imports.
-            .with_condition_names(&["import", "require", "node", "default"]);
+            .with_condition_names(&["import", "require", "node", "types", "default"]);
 
         if let Some(ts_config) = self.ts_config.take() {
             options.tsconfig = Some(TsconfigOptions {
