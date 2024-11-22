@@ -1,9 +1,10 @@
 use std::collections::{HashMap, HashSet};
 
+use itertools::Itertools;
 use tracing::warn;
 use turbopath::AbsoluteSystemPath;
 use turborepo_micro_frontend::{Config as MFEConfig, Error, DEFAULT_MICRO_FRONTENDS_CONFIG};
-use turborepo_repository::package_graph::PackageGraph;
+use turborepo_repository::package_graph::{PackageGraph, PackageName};
 
 use crate::run::task_id::TaskId;
 
@@ -64,4 +65,27 @@ impl MicroFrontendsConfigs {
             .values()
             .any(|dev_tasks| dev_tasks.contains(task_id))
     }
+
+    /// Returns the proxy task for a given package in a MFE
+    pub fn package_mfe_proxy(&self, package_name: &PackageName) -> Option<DevTaskAndProxy> {
+        self.configs
+            .iter()
+            // Find the MFE this package belongs to
+            .find_map(|(pkg_with_proxy, dev_tasks)| {
+                dev_tasks.iter().find_map(|dev_task| {
+                    (dev_task.package() == package_name.as_str())
+                        .then_some((pkg_with_proxy, dev_task))
+                })
+            })
+            // Return package's dev task with it's proxy task
+            .map(|(pkg_with_proxy, dev_task)| DevTaskAndProxy {
+                dev: dev_task.as_borrowed(),
+                proxy: TaskId::new(pkg_with_proxy, "proxy"),
+            })
+    }
+}
+
+pub struct DevTaskAndProxy<'a> {
+    pub dev: TaskId<'a>,
+    pub proxy: TaskId<'a>,
 }

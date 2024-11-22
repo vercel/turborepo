@@ -652,6 +652,22 @@ impl TurboJson {
             }),
         );
     }
+
+    /// Adds a sibling relationship from task to sibling
+    pub fn with_sibling(&mut self, task: TaskName<'static>, sibling: &TaskName) {
+        if self.extends.is_empty() {
+            self.extends = Spanned::new(vec!["//".into()]);
+        }
+
+        let task_definition = self.tasks.entry(task).or_default();
+
+        let siblings = task_definition
+            .as_inner_mut()
+            .siblings
+            .get_or_insert_default();
+
+        siblings.push(Spanned::new(UnescapedString::from(sibling.to_string())))
+    }
 }
 
 type TurboJSONValidation = fn(&TurboJson) -> Vec<Error>;

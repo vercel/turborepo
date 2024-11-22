@@ -177,7 +177,8 @@ impl<T> Spanned<T> {
         }
     }
 
-    pub fn inner_mut(&mut self) -> &mut T {
+    /// Gets a mutable ref to the inner value
+    pub fn as_inner_mut(&mut self) -> &mut T {
         &mut self.value
     }
 }

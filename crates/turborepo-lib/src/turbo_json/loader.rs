@@ -14,7 +14,7 @@ use super::{Pipeline, RawTaskDefinition, TurboJson, CONFIG_FILE};
 use crate::{
     cli::EnvMode,
     config::Error,
-    micro_frontends::MicroFrontendsConfigs,
+    micro_frontends::{DevTaskAndProxy, MicroFrontendsConfigs},
     run::{task_access::TASK_ACCESS_CONFIG_PATH, task_id::TaskName},
 };
 
@@ -177,15 +177,25 @@ impl TurboJsonLoader {
                 micro_frontends_configs,
             } => {
                 let path = packages.get(package).ok_or_else(|| Error::NoTurboJSON)?;
+                let turbo_json = load_from_file(&self.repo_root, path);
                 let should_inject_proxy_task = micro_frontends_configs
                     .as_ref()
                     .map_or(false, |configs| configs.contains_package(package.as_str()));
-                let turbo_json = load_from_file(&self.repo_root, path);
+                let proxy_task = micro_frontends_configs
+                    .as_ref()
+                    .and_then(|configs| configs.package_mfe_proxy(package));
+                if !(should_inject_proxy_task || proxy_task.is_some()) {
+                    // Nothing special needs to be done with turbo.json
+                    return turbo_json;
+                }
+                // We need to modify turbo.json, use default one if there isn't one present
+                let mut turbo_json = turbo_json.or_else(|err| match err {
+                    Error::NoTurboJSON => Ok(TurboJson::default()),
+                    err => Err(err),
+                })?;
                 if should_inject_proxy_task {
-                    let mut turbo_json = turbo_json.or_else(|err| match err {
-                        Error::NoTurboJSON => Ok(TurboJson::default()),
-                        err => Err(err),
-                    })?;
+                    // This is the branch that gets taken if the current package is the one that
+                    // contains the proxy task
                     let mfe_package_name = packages
                         .keys()
                         .filter(|package| MICRO_FRONTENDS_PACKAGES.contains(&package.as_str()))
@@ -195,10 +205,16 @@ impl TurboJsonLoader {
                         .sorted()
                         .next();
                     turbo_json.with_proxy(mfe_package_name);
-                    Ok(turbo_json)
-                } else {
-                    turbo_json
                 }
+                if let Some(DevTaskAndProxy { dev, proxy }) = proxy_task {
+                    // This is the branch if this package is part of a mfe
+                    turbo_json.with_sibling(
+                        TaskName::from(dev.task()).into_owned(),
+                        &proxy.as_task_name(),
+                    );
+                }
+
+                Ok(turbo_json)
             }
             Strategy::WorkspaceNoTurboJson { packages } => {
                 let script_names = packages.get(package).ok_or(Error::NoTurboJSON)?;
