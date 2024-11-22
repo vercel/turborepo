@@ -16,7 +16,20 @@ npm install eslint --save-dev
 npm install eslint-config-turbo --save-dev
 ```
 
-## Usage
+## Usage (Flat Config `eslint.config.js`)
+
+```
+{
+import turboConfig from "eslint-config-turbo/flat";
+
+export default [
+  ...turboConfig
+  // Other configuration
+];
+}
+```
+
+## Usage (Legacy `eslintrc*`)
 
 Add `turbo` to the extends section of your eslint configuration file. You can omit the `eslint-config-` prefix:
 
