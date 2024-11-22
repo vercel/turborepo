@@ -11,7 +11,7 @@ use turborepo_api_client::{APIAuth, APIClient};
 use crate::{
     fs::FSCache,
     http::{HTTPCache, UploadMap},
-    CacheError, CacheHitMetadata, CacheOpts,
+    CacheConfig, CacheError, CacheHitMetadata, CacheOpts,
 };
 
 pub struct CacheMultiplexer {
@@ -23,7 +23,7 @@ pub struct CacheMultiplexer {
     // Just for keeping track of whether we've already printed a warning about the remote cache
     // being read-only
     should_print_skipping_remote_put: AtomicBool,
-    remote_cache_read_only: bool,
+    cache_config: CacheConfig,
     fs: Option<FSCache>,
     http: Option<HTTPCache>,
 }
@@ -37,8 +37,8 @@ impl CacheMultiplexer {
         api_auth: Option<APIAuth>,
         analytics_recorder: Option<AnalyticsSender>,
     ) -> Result<Self, CacheError> {
-        let use_fs_cache = !opts.skip_filesystem;
-        let use_http_cache = !opts.skip_remote;
+        let use_fs_cache = opts.cache.local.should_use();
+        let use_http_cache = opts.cache.remote.should_use();
 
         // Since the above two flags are not mutually exclusive it is possible to
         // configure yourself out of having a cache. We should tell you about it
@@ -67,7 +67,7 @@ impl CacheMultiplexer {
         Ok(CacheMultiplexer {
             should_print_skipping_remote_put: AtomicBool::new(true),
             should_use_http_cache: AtomicBool::new(http_cache.is_some()),
-            remote_cache_read_only: opts.remote_cache_read_only,
+            cache_config: opts.cache,
             fs: fs_cache,
             http: http_cache,
         })
@@ -95,14 +95,20 @@ impl CacheMultiplexer {
         files: &[AnchoredSystemPathBuf],
         duration: u64,
     ) -> Result<(), CacheError> {
-        self.fs
-            .as_ref()
-            .map(|fs| fs.put(anchor, key, files, duration))
-            .transpose()?;
+        if self.cache_config.local.write {
+            self.fs
+                .as_ref()
+                .map(|fs| fs.put(anchor, key, files, duration))
+                .transpose()?;
+        }
 
         let http_result = match self.get_http_cache() {
             Some(http) => {
-                if self.remote_cache_read_only {
+                if self.cache_config.remote.write {
+                    let http_result = http.put(anchor, key, files, duration).await;
+
+                    Some(http_result)
+                } else {
                     if self
                         .should_print_skipping_remote_put
                         .load(Ordering::Relaxed)
@@ -115,10 +121,6 @@ impl CacheMultiplexer {
                     // Cache is functional but running in read-only mode, so we don't want to try to
                     // write to it
                     None
-                } else {
-                    let http_result = http.put(anchor, key, files, duration).await;
-
-                    Some(http_result)
                 }
             }
             _ => None,
@@ -144,25 +146,31 @@ impl CacheMultiplexer {
         anchor: &AbsoluteSystemPath,
         key: &str,
     ) -> Result<Option<(CacheHitMetadata, Vec<AnchoredSystemPathBuf>)>, CacheError> {
-        if let Some(fs) = &self.fs {
-            if let response @ Ok(Some(_)) = fs.fetch(anchor, key) {
-                return response;
+        if self.cache_config.local.read {
+            if let Some(fs) = &self.fs {
+                if let response @ Ok(Some(_)) = fs.fetch(anchor, key) {
+                    return response;
+                }
             }
         }
 
-        if let Some(http) = self.get_http_cache() {
-            if let Ok(Some((CacheHitMetadata { source, time_saved }, files))) =
-                http.fetch(key).await
-            {
-                // Store this into fs cache. We can ignore errors here because we know
-                // we have previously successfully stored in HTTP cache, and so the overall
-                // result is a success at fetching. Storing in lower-priority caches is an
-                // optimization.
-                if let Some(fs) = &self.fs {
-                    let _ = fs.put(anchor, key, &files, time_saved);
-                }
+        if self.cache_config.remote.read {
+            if let Some(http) = self.get_http_cache() {
+                if let Ok(Some((CacheHitMetadata { source, time_saved }, files))) =
+                    http.fetch(key).await
+                {
+                    // Store this into fs cache. We can ignore errors here because we know
+                    // we have previously successfully stored in HTTP cache, and so the overall
+                    // result is a success at fetching. Storing in lower-priority caches is an
+                    // optimization.
+                    if self.cache_config.local.write {
+                        if let Some(fs) = &self.fs {
+                            let _ = fs.put(anchor, key, &files, time_saved);
+                        }
+                    }
 
-                return Ok(Some((CacheHitMetadata { source, time_saved }, files)));
+                    return Ok(Some((CacheHitMetadata { source, time_saved }, files)));
+                }
             }
         }
 
@@ -171,23 +179,27 @@ impl CacheMultiplexer {
 
     #[tracing::instrument(skip_all)]
     pub async fn exists(&self, key: &str) -> Result<Option<CacheHitMetadata>, CacheError> {
-        if let Some(fs) = &self.fs {
-            match fs.exists(key) {
-                cache_hit @ Ok(Some(_)) => {
-                    return cache_hit;
+        if self.cache_config.local.read {
+            if let Some(fs) = &self.fs {
+                match fs.exists(key) {
+                    cache_hit @ Ok(Some(_)) => {
+                        return cache_hit;
+                    }
+                    Ok(None) => {}
+                    Err(err) => debug!("failed to check fs cache: {:?}", err),
                 }
-                Ok(None) => {}
-                Err(err) => debug!("failed to check fs cache: {:?}", err),
             }
         }
 
-        if let Some(http) = self.get_http_cache() {
-            match http.exists(key).await {
-                cache_hit @ Ok(Some(_)) => {
-                    return cache_hit;
+        if self.cache_config.remote.read {
+            if let Some(http) = self.get_http_cache() {
+                match http.exists(key).await {
+                    cache_hit @ Ok(Some(_)) => {
+                        return cache_hit;
+                    }
+                    Ok(None) => {}
+                    Err(err) => debug!("failed to check http cache: {:?}", err),
                 }
-                Ok(None) => {}
-                Err(err) => debug!("failed to check http cache: {:?}", err),
             }
         }
 

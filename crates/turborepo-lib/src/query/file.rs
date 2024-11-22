@@ -1,8 +1,9 @@
 use std::sync::Arc;
 
-use async_graphql::{Object, SimpleObject};
+use async_graphql::{Enum, Object, SimpleObject};
 use camino::Utf8PathBuf;
 use itertools::Itertools;
+use miette::SourceCode;
 use swc_ecma_ast::EsVersion;
 use swc_ecma_parser::{EsSyntax, Syntax, TsSyntax};
 use turbo_trace::Tracer;
@@ -75,6 +76,7 @@ impl File {
 #[derive(SimpleObject, Debug, Default)]
 pub struct TraceError {
     message: String,
+    reason: String,
     path: Option<String>,
     import: Option<String>,
     start: Option<usize>,
@@ -99,17 +101,23 @@ impl From<turbo_trace::TraceError> for TraceError {
                 path: Some(path.to_string()),
                 ..Default::default()
             },
-            turbo_trace::TraceError::ParseError(e) => TraceError {
+            turbo_trace::TraceError::ParseError(path, e) => TraceError {
                 message: format!("failed to parse file: {:?}", e),
+                path: Some(path.to_string()),
                 ..Default::default()
             },
             turbo_trace::TraceError::GlobError(err) => TraceError {
                 message: format!("failed to glob files: {}", err),
                 ..Default::default()
             },
-            turbo_trace::TraceError::Resolve { span, text, .. } => {
+            turbo_trace::TraceError::Resolve {
+                span,
+                text,
+                file_path,
+                reason,
+                ..
+            } => {
                 let import = text
-                    .inner()
                     .read_span(&span, 1, 1)
                     .ok()
                     .map(|s| String::from_utf8_lossy(s.data()).to_string());
@@ -117,7 +125,8 @@ impl From<turbo_trace::TraceError> for TraceError {
                 TraceError {
                     message,
                     import,
-                    path: Some(text.name().to_string()),
+                    reason,
+                    path: Some(file_path),
                     start: Some(span.offset()),
                     end: Some(span.offset() + span.len()),
                 }
@@ -146,6 +155,27 @@ impl TraceResult {
     }
 }
 
+/// The type of imports to trace.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Enum)]
+pub enum ImportType {
+    /// Trace all imports.
+    All,
+    /// Trace only `import type` imports
+    Types,
+    /// Trace only `import` imports and not `import type` imports
+    Values,
+}
+
+impl From<ImportType> for turbo_trace::ImportType {
+    fn from(import_type: ImportType) -> Self {
+        match import_type {
+            ImportType::All => turbo_trace::ImportType::All,
+            ImportType::Types => turbo_trace::ImportType::Types,
+            ImportType::Values => turbo_trace::ImportType::Values,
+        }
+    }
+}
+
 #[Object]
 impl File {
     async fn contents(&self) -> Result<String, Error> {
@@ -169,27 +199,45 @@ impl File {
         &self,
         depth: Option<usize>,
         ts_config: Option<String>,
+        import_type: Option<ImportType>,
+        emit_errors: Option<bool>,
     ) -> Result<TraceResult, Error> {
-        let tracer = Tracer::new(
+        let mut tracer = Tracer::new(
             self.run.repo_root().to_owned(),
             vec![self.path.clone()],
             ts_config.map(Utf8PathBuf::from),
         );
 
+        if let Some(import_type) = import_type {
+            tracer.set_import_type(import_type.into());
+        }
+
         let mut result = tracer.trace(depth).await;
+        if emit_errors.unwrap_or(true) {
+            result.emit_errors();
+        }
         // Remove the file itself from the result
         result.files.remove(&self.path);
         TraceResult::new(result, self.run.clone())
     }
 
-    async fn dependents(&self, ts_config: Option<String>) -> Result<TraceResult, Error> {
-        let tracer = Tracer::new(
+    async fn dependents(
+        &self,
+        ts_config: Option<String>,
+        import_type: Option<ImportType>,
+    ) -> Result<TraceResult, Error> {
+        let mut tracer = Tracer::new(
             self.run.repo_root().to_owned(),
             vec![self.path.clone()],
             ts_config.map(Utf8PathBuf::from),
         );
 
+        if let Some(import_type) = import_type {
+            tracer.set_import_type(import_type.into());
+        }
+
         let mut result = tracer.reverse_trace().await;
+        result.emit_errors();
         // Remove the file itself from the result
         result.files.remove(&self.path);
         TraceResult::new(result, self.run.clone())

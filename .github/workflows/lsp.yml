@@ -15,10 +15,10 @@ jobs:
       fail-fast: false
       matrix:
         settings:
-          - host: macos-12
+          - host: macos-13
             target: "x86_64-apple-darwin"
             container-options: "--rm"
-          - host: macos-12
+          - host: macos-13
             target: "aarch64-apple-darwin"
             container-options: "--rm"
           - host: ubuntu-latest
@@ -45,14 +45,15 @@ jobs:
       options: ${{ matrix.settings.container-options }}
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Setup Container
         if: ${{ matrix.settings.container-setup }}
         run: ${{ matrix.settings.container-setup }}
 
       - name: Setup Protoc
-        uses: arduino/setup-protoc@v1.2.0
+        uses: arduino/setup-protoc@v3
         with:
+          version: "26.x"
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup capnproto
@@ -73,7 +74,7 @@ jobs:
         run: ${{ matrix.settings.rust-build-env }} cargo build --profile release-turborepo-lsp -p turborepo-lsp --target ${{ matrix.settings.target }}
 
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: turborepo-lsp-${{ matrix.settings.target }}
           path: target/${{ matrix.settings.target }}/release-turborepo-lsp/turborepo-lsp*

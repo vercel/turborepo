@@ -1,0 +1,136 @@
+---
+title: Incremental computation
+description: Learn about the innovative architecture that powers Turbopack's speed improvements.
+---
+
+import { ThemeAwareImage } from '#/components/theme-aware-image';
+
+Turbopack uses an automatic demand-driven incremental computation architecture to provide [React Fast Refresh](https://nextjs.org/docs/architecture/fast-refresh) with massive Next.js and React applications.
+
+This architecture uses caching to remember what values functions were called with and what values they returned. Incremental builds scale by the size of your local changes, not the size of your application.
+
+<ThemeAwareImage
+  className="flex justify-center"
+  light={{
+    alt: 'A formula with big-o notation showing a change in time spent from "your entire application" to "your changes"',
+    src: '/images/docs/pack/big-o-changes-equation-light.png',
+    props: {
+      width: 500,
+      height: 24,
+    },
+  }}
+  dark={{
+    alt: 'A formula with big-o notation showing a change in time spent from "your entire application" to "your changes"',
+    src: '/images/docs/pack/big-o-changes-equation-dark.png',
+    props: {
+      width: 500,
+      height: 24,
+    },
+  }}
+/>
+
+Turbopack’s architecture is based on over a decade of learnings and prior research. It draws inspiration from [webpack](https://webpack.js.org/), [Salsa](https://salsa-rs.netlify.app/overview) (which powers [Rust-Analyzer](https://rust-analyzer.github.io/) and [Ruff](https://docs.astral.sh/ruff/)), [Parcel](https://parceljs.org/), the [Rust compiler’s query system](https://rustc-dev-guide.rust-lang.org/query.html), [Adapton](http://adapton.org/), and many others.
+
+## Background: Manual incremental computation
+
+Many build systems include explicit dependency graphs that must be manually populated when evaluating build rules. Explicitly declaring your dependency graph can theoretically give optimal results, but in practice it leaves room for errors.
+
+The difficulty of specifying an explicit dependency graph means that usually caching is done at a coarse file-level granularity. This granularity does have some benefits: less incremental results means less data to cache, which might be worth it if you have limited disk space or memory.
+
+An example of such an architecture is [GNU Make](https://www.gnu.org/software/make/), where output targets and prerequisites are manually configured and represented as files. Systems like GNU Make miss caching opportunities due to their coarse granularity: they do not understand and cannot cache internal data structures within the compiler.
+
+## Function-level fine-grained automatic incremental computation
+
+In Turbopack, the relationship between input files and resulting build artifacts isn’t straightforward. Bundlers employ whole-program analysis for dead code elimination ("tree shaking") and clustering of common dependencies in the module graph. Consequently, the build artifacts—JavaScript files shared across multiple application routes—form complex many-to-many relationships with input files.
+
+Turbopack uses a very fine-grained caching architecture. Because manually declaring and adding dependencies to a graph is prone to human errors, Turbopack needs an automated solution that can scale.
+
+### Value cells
+
+To facilitate automatic caching and dependency tracking, Turbopack introduces a concept of “value cells” (`Vc<…>`). Each value cell represents a fine-grained piece of execution, like a cell in a spreadsheet. When reading a cell, it records the currently executing function and all of its cells as dependent on that cell.
+
+<ThemeAwareImage
+  className="flex justify-center"
+  light={{
+    alt: 'Example Rust code annotated with a macro that says "turbo_tasks::function", along with arguments annotated as inputs. Those arguments are awaited in the function\'s body. The arguments become tracked when awaited.',
+    src: '/images/docs/pack/cell-storage-light.png',
+    props: {
+      width: 550,
+      height: 238,
+    },
+  }}
+  dark={{
+    alt: 'Example Rust code annotated with a macro that says "turbo_tasks::function", along with arguments annotated as inputs. Those arguments are awaited in the function\'s body. The arguments become tracked when awaited.',
+    src: '/images/docs/pack/cell-storage-dark.png',
+    props: {
+      width: 550,
+      height: 238,
+    },
+  }}
+/>
+
+By not marking cells as dependencies until they are read, Turbopack achieves finer-grained caching than [a traditional top-down memoization approach](https://en.wikipedia.org/wiki/Memoization) would provide. For example, an argument might be an object or mapping of _many_ value cells. Instead of needing to recompute our tracked function when _any part of_ the object or mapping changes, it only needs to recompute the tracked function when a cell that _it has actually read_ changes.
+
+Value cells represent nearly everything inside of Turbopack, such as a file on disk, an abstract syntax tree (AST), metadata about imports and exports of modules, or clustering information used for chunking and bundling.
+
+<ThemeAwareImage
+  className="flex justify-center"
+  light={{
+    alt: 'Examples of types of data that could be stored inside a value cell.',
+    src: '/images/docs/pack/cell-contents-examples-light.png',
+    props: {
+      width: 800,
+      height: 136,
+    },
+  }}
+  dark={{
+    alt: 'Examples of types of data that could be stored inside a value cell.',
+    src: '/images/docs/pack/cell-contents-examples-dark.png',
+    props: {
+      width: 800,
+      height: 136,
+    },
+  }}
+/>
+
+### Marking dirty and propagating changes
+
+When a cell’s value changes, Turbopack must determine what work to recompute. It uses [Adapton’s](http://adapton.org/) two-phase dirty and propagate algorithms.
+
+<ThemeAwareImage
+  className="flex justify-center"
+  light={{
+    alt: 'Three call trees representing an initial (cold) execution, the "mark dirty" phase when a file has been changed, and the propagation from the leaf up to the root.',
+    src: '/images/docs/pack/execution-graph-light.png',
+    props: {
+      width: 700,
+      height: 198,
+    },
+  }}
+  dark={{
+    alt: 'Three call trees representing an initial (cold) execution, the "mark dirty" phase when a file has been changed, and the propagation from the leaf up to the root.',
+    src: '/images/docs/pack/execution-graph-dark.png',
+    props: {
+      width: 700,
+      height: 198,
+    },
+  }}
+/>
+
+Typically, source code files are at the bottom of the dependency graph. When the incremental execution engine finds that a file’s contents have changed, it marks the function that read it and its associated value cells as “dirty”. To watch for filesystem changes, Turbopack uses `inotify` (Linux) or the equivalent platform API [via the `notify` crate](https://docs.rs/notify/).
+
+Next comes propagation, where the bundler is re-run from the bottom up, bubbling up any computations that yield new results. This propagation is "demand-driven," meaning the system only recomputes a dependent cell if it's part of an "active query". An active query could be a currently open webpage with hot reloading enabled, or even a request to build the full production app.
+
+If a cell isn't part of an active query, propagation of it’s dirty flag is deferred until either the dependency graph changes or a new active query is created.
+
+### Additional optimization: The aggregation tree
+
+The dependency graph can contain hundreds of thousands of unique invocations of small tracked functions, and the incremental execution engine must frequently traverse the graph to inspect and update dirty flags.
+
+Turbopack optimizes these operations using an “aggregation tree”. Each node of the aggregation tree represents a cluster of tracked function calls, reducing some of the memory overhead associated with dependency tracking, and reducing the number of nodes that must be traversed.
+
+## Parallel and async execution with Rust and Tokio
+
+To parallelize execution, Turbopack uses Rust with [the Tokio asynchronous runtime](https://tokio.rs/). Each tracked function is spawned into Tokio’s thread pool as [a Tokio task](https://tokio.rs/tokio/tutorial/spawning#tasks). That allows Turbopack to benefit from Rust’s low-overhead parallelism and [Tokio’s work-stealing scheduler](https://tokio.rs/blog/2019-10-scheduler).
+
+While bundling is CPU-bound in most scenarios, it can become IO-bound when building from slow hard drives, [a network drive](https://github.com/facebook/sapling/blob/main/eden/fs/docs/Overview.md), or when reading from or writing to persistent caches. Tokio allows Turbopack to more gracefully handle these degraded situations than we might otherwise be able to.

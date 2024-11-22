@@ -85,6 +85,7 @@ fn translate_key_event(options: InputOptions, key_event: KeyEvent) -> Option<Eve
                 restore_scroll: true,
             })
         }
+        KeyCode::Char('h') => Some(Event::ToggleSidebar),
         KeyCode::Enter if matches!(options.focus, LayoutSections::Search { .. }) => {
             Some(Event::SearchExit {
                 restore_scroll: false,
@@ -113,7 +114,7 @@ fn translate_key_event(options: InputOptions, key_event: KeyEvent) -> Option<Eve
         }
         KeyCode::Up => Some(Event::Up),
         KeyCode::Down => Some(Event::Down),
-        KeyCode::Enter => Some(Event::EnterInteractive),
+        KeyCode::Enter | KeyCode::Char('i') => Some(Event::EnterInteractive),
         _ => None,
     }
 }

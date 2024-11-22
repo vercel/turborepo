@@ -2,6 +2,8 @@ name: Turborepo Native Library Tests
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "docs/**"
   pull_request:
 
 permissions:
@@ -41,7 +43,7 @@ jobs:
           echo "depth=$(( ${{ github.event.pull_request.commits || 1 }} + 1 ))" >> $GITHUB_OUTPUT
 
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: ${{ github.ref }}
           fetch-depth: ${{ steps.fetch-depth.outputs.depth  }}

@@ -404,7 +404,10 @@ impl Engine<Built> {
             .filter_map(|task| {
                 let pkg_name = PackageName::from(task.package());
                 let json = pkg_graph.package_json(&pkg_name)?;
-                json.command(task.task()).map(|_| task.to_string())
+                // TODO: delegate to command factory to filter down tasks to those that will
+                // have a runnable command.
+                (task.task() == "proxy" || json.command(task.task()).is_some())
+                    .then(|| task.to_string())
             })
             .collect()
     }
@@ -571,8 +574,8 @@ pub enum ValidateError {
         concurrency: u32,
     },
     #[error(
-        "Cannot run interactive task \"{task}\" without experimental UI. Set `\"experimentalUI\": \
-         true` in `turbo.json` or `TURBO_EXPERIMENTAL_UI=true` as an environment variable"
+        "Cannot run interactive task \"{task}\" without Terminal UI. Set `\"ui\": true` in \
+         `turbo.json`, use the `--ui=tui` flag, or set `TURBO_UI=true` as an environment variable."
     )]
     InteractiveNeedsUI { task: String },
 }

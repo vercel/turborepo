@@ -22,7 +22,7 @@ jobs:
       pull-requests: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: CI related changes
         id: ci
@@ -39,22 +39,14 @@ jobs:
           PATTERNS: |
             packages/**
 
-      - name: Docs related changes
-        id: docs
-        uses: technote-space/get-diff-action@v6
-        with:
-          PATTERNS: |
-            docs/**
-
     outputs:
       ci: ${{ steps.ci.outputs.diff != ''}}
       packages: ${{ steps.packages.outputs.diff != '' }}
-      docs: ${{ steps.docs.outputs.diff != '' }}
 
   js_packages:
     name: "JS Package Tests (${{matrix.os.name}}, Node ${{matrix.node-version}})"
     timeout-minutes: 30
-    if: needs.determine_jobs.outputs.ci == 'true' || needs.determine_jobs.outputs.packages == 'true' || needs.determine_jobs.outputs.docs == 'true'
+    if: needs.determine_jobs.outputs.ci == 'true' || needs.determine_jobs.outputs.packages == 'true'
     needs: [determine_jobs]
     runs-on: ${{ matrix.os.runner }}
     strategy:
@@ -68,7 +60,7 @@ jobs:
               - "x64"
               - "metal"
           - name: macos
-            runner: macos-12
+            runner: macos-13
         node-version:
           - 18
           - 20
@@ -86,7 +78,7 @@ jobs:
           echo "depth=$(( ${{ github.event.pull_request.commits || 1 }} + 1 ))" >> $GITHUB_OUTPUT
 
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: ${{ github.ref }}
           fetch-depth: ${{ steps.fetch-depth.outputs.depth  }}
