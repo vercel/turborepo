@@ -76,6 +76,9 @@ fn translate_key_event(options: InputOptions, key_event: KeyEvent) -> Option<Eve
         _ if matches!(options.focus, LayoutSections::Pane) => Some(Event::Input {
             bytes: encode_key(key_event),
         }),
+        // Vim keybinds
+        KeyCode::Char('j') => Some(Event::Down),
+        KeyCode::Char('k') => Some(Event::Up),
         // If we're on the list and user presses `/` enter search mode
         KeyCode::Char('/') if matches!(options.focus, LayoutSections::TaskList) => {
             Some(Event::SearchEnter)
