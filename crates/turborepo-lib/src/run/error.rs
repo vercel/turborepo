@@ -61,5 +61,5 @@ pub enum Error {
     #[error(transparent)]
     Tui(#[from] tui::Error),
     #[error("Error reading micro frontends configuration: {0}")]
-    MicroFrontends(#[from] turborepo_micro_frontend::Error),
+    MicroFrontends(#[from] turborepo_microfrontends::Error),
 }

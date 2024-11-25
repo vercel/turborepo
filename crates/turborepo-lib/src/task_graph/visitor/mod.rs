@@ -23,7 +23,7 @@ use tracing::{debug, error, warn, Span};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath};
 use turborepo_ci::{Vendor, VendorBehavior};
 use turborepo_env::{platform::PlatformEnv, EnvironmentVariableMap};
-use turborepo_micro_frontend::DEFAULT_MICRO_FRONTENDS_CONFIG_V1;
+use turborepo_microfrontends::DEFAULT_MICRO_FRONTENDS_CONFIG_V1;
 use turborepo_repository::package_graph::{PackageGraph, PackageName, ROOT_PKG_NAME};
 use turborepo_telemetry::events::{
     generic::GenericEventBuilder, task::PackageTaskEventBuilder, EventBuilder, TrackedErrors,

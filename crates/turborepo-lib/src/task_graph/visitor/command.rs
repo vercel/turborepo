@@ -2,7 +2,7 @@ use std::{collections::HashSet, path::PathBuf};
 
 use turbopath::AbsoluteSystemPath;
 use turborepo_env::EnvironmentVariableMap;
-use turborepo_micro_frontend::MICRO_FRONTENDS_PACKAGES;
+use turborepo_microfrontends::MICRO_FRONTENDS_PACKAGES;
 use turborepo_repository::package_graph::{PackageGraph, PackageInfo, PackageName};
 
 use super::Error;

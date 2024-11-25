@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use itertools::Itertools;
 use tracing::warn;
 use turbopath::AbsoluteSystemPath;
-use turborepo_micro_frontend::{Config as MFEConfig, Error, MICRO_FRONTENDS_PACKAGES};
+use turborepo_microfrontends::{Config as MFEConfig, Error, MICRO_FRONTENDS_PACKAGES};
 use turborepo_repository::package_graph::{PackageGraph, PackageName};
 
 use crate::{
@@ -28,11 +28,11 @@ impl MicroFrontendsConfigs {
         for (package_name, package_info) in package_graph.packages() {
             let package_dir = repo_root.resolve(package_info.package_path());
             let Some(config) = MFEConfig::load_from_dir(&package_dir).or_else(|err| match err {
-                turborepo_micro_frontend::Error::UnsupportedVersion(_) => {
+                turborepo_microfrontends::Error::UnsupportedVersion(_) => {
                     warn!("Ignoring {package_dir}: {err}");
                     Ok(None)
                 }
-                turborepo_micro_frontend::Error::ChildConfig { reference } => {
+                turborepo_microfrontends::Error::ChildConfig { reference } => {
                     referenced_default_apps.insert(reference);
                     Ok(None)
                 }
