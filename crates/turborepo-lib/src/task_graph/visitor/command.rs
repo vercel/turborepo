@@ -7,7 +7,7 @@ use turborepo_repository::package_graph::{PackageGraph, PackageInfo, PackageName
 
 use super::Error;
 use crate::{
-    engine::Engine, micro_frontends::MicroFrontendsConfigs, opts::TaskArgs, process::Command,
+    engine::Engine, micro_frontends::MicrofrontendsConfigs, opts::TaskArgs, process::Command,
     run::task_id::TaskId,
 };
 
@@ -61,7 +61,7 @@ pub struct PackageGraphCommandProvider<'a> {
     package_graph: &'a PackageGraph,
     package_manager_binary: Result<PathBuf, which::Error>,
     task_args: TaskArgs<'a>,
-    mfe_configs: Option<&'a MicroFrontendsConfigs>,
+    mfe_configs: Option<&'a MicrofrontendsConfigs>,
 }
 
 impl<'a> PackageGraphCommandProvider<'a> {
@@ -69,7 +69,7 @@ impl<'a> PackageGraphCommandProvider<'a> {
         repo_root: &'a AbsoluteSystemPath,
         package_graph: &'a PackageGraph,
         task_args: TaskArgs<'a>,
-        mfe_configs: Option<&'a MicroFrontendsConfigs>,
+        mfe_configs: Option<&'a MicrofrontendsConfigs>,
     ) -> Self {
         let package_manager_binary = which::which(package_graph.package_manager().command());
         Self {
@@ -151,7 +151,7 @@ pub struct MicroFrontendProxyProvider<'a> {
     repo_root: &'a AbsoluteSystemPath,
     package_graph: &'a PackageGraph,
     tasks_in_graph: HashSet<TaskId<'a>>,
-    mfe_configs: &'a MicroFrontendsConfigs,
+    mfe_configs: &'a MicrofrontendsConfigs,
 }
 
 impl<'a> MicroFrontendProxyProvider<'a> {
@@ -159,7 +159,7 @@ impl<'a> MicroFrontendProxyProvider<'a> {
         repo_root: &'a AbsoluteSystemPath,
         package_graph: &'a PackageGraph,
         engine: &Engine,
-        micro_frontends_configs: &'a MicroFrontendsConfigs,
+        micro_frontends_configs: &'a MicrofrontendsConfigs,
     ) -> Self {
         let tasks_in_graph = engine
             .tasks()

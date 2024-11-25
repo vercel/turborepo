@@ -13,12 +13,12 @@ use crate::{
 };
 
 #[derive(Debug, Clone)]
-pub struct MicroFrontendsConfigs {
+pub struct MicrofrontendsConfigs {
     configs: HashMap<String, HashSet<TaskId<'static>>>,
     mfe_package: Option<&'static str>,
 }
 
-impl MicroFrontendsConfigs {
+impl MicrofrontendsConfigs {
     pub fn new(
         repo_root: &AbsoluteSystemPath,
         package_graph: &PackageGraph,
@@ -263,7 +263,7 @@ mod test {
             "mfe-config-pkg" => ["web#dev", "docs#dev"],
             "mfe-web" => ["mfe-web#dev", "mfe-docs#serve"]
         );
-        let mfe = MicroFrontendsConfigs {
+        let mfe = MicrofrontendsConfigs {
             configs,
             mfe_package: None,
         };
