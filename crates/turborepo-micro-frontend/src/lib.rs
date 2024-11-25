@@ -4,18 +4,21 @@ mod configv1;
 mod configv2;
 mod error;
 
+use std::io;
+
 use biome_deserialize_macros::Deserializable;
 use biome_json_parser::JsonParserOptions;
 use configv1::ConfigV1;
 use configv2::ConfigV2;
 pub use error::Error;
-use turbopath::AbsoluteSystemPath;
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 
 /// Currently the default path for a package that provides a configuration.
 ///
 /// This is subject to change at any time.
 pub const DEFAULT_MICRO_FRONTENDS_CONFIG_V1: &str = "micro-frontends.jsonc";
 pub const DEFAULT_MICRO_FRONTENDS_CONFIG_V2: &str = "microfrontends.json";
+pub const DEFAULT_MICRO_FRONTENDS_CONFIG_V2_ALT: &str = "microfrontends.jsonc";
 pub const MICRO_FRONTENDS_PACKAGES: &[&str] = [
     MICRO_FRONTENDS_PACKAGE_EXTERNAL,
     MICRO_FRONTENDS_PACKAGE_INTERNAL,
@@ -90,10 +93,18 @@ impl Config {
     }
 
     fn load_v2_dir(dir: &AbsoluteSystemPath) -> Result<Option<Self>, Error> {
-        let path = dir.join_component(DEFAULT_MICRO_FRONTENDS_CONFIG_V2);
-        let Some(contents) = path.read_existing_to_string()? else {
+        let load_config =
+            |filename: &str| -> Option<(Result<String, io::Error>, AbsoluteSystemPathBuf)> {
+                let path = dir.join_component(filename);
+                let contents = path.read_existing_to_string().transpose()?;
+                Some((contents, path))
+            };
+        let Some((contents, path)) = load_config(DEFAULT_MICRO_FRONTENDS_CONFIG_V2)
+            .or_else(|| load_config(DEFAULT_MICRO_FRONTENDS_CONFIG_V2_ALT))
+        else {
             return Ok(None);
         };
+        let contents = contents?;
 
         ConfigV2::from_str(&contents, path.as_str())
             .and_then(|result| match result {
@@ -150,6 +161,11 @@ mod test {
         path.create_with_contents(r#"{"version": "2", "applications": {"web": {"development": {"task": "serve"}}, "docs": {}}}"#)
     }
 
+    fn add_v2_alt_config(dir: &AbsoluteSystemPath) -> Result<(), std::io::Error> {
+        let path = dir.join_component(DEFAULT_MICRO_FRONTENDS_CONFIG_V2_ALT);
+        path.create_with_contents(r#"{"version": "2", "applications": {"web": {"development": {"task": "serve"}}, "docs": {}}}"#)
+    }
+
     #[test]
     fn test_load_dir_v1() {
         let dir = TempDir::new().unwrap();
@@ -174,6 +190,15 @@ mod test {
         let path = AbsoluteSystemPath::new(dir.path().to_str().unwrap()).unwrap();
         add_v1_config(path).unwrap();
         add_v2_config(path).unwrap();
+        let config = Config::load_from_dir(path).unwrap();
+        assert_matches!(config, Some(Config::V2(_)));
+    }
+
+    #[test]
+    fn test_load_dir_v2_alt() {
+        let dir = TempDir::new().unwrap();
+        let path = AbsoluteSystemPath::new(dir.path().to_str().unwrap()).unwrap();
+        add_v2_alt_config(path).unwrap();
         let config = Config::load_from_dir(path).unwrap();
         assert_matches!(config, Some(Config::V2(_)));
     }
