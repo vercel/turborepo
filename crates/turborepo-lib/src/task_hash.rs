@@ -480,6 +480,7 @@ impl<'a> TaskHasher<'a> {
                         "COLORTERM",
                         "TERM",
                         "TERM_PROGRAM",
+                        "DISPLAY",
                         "TMP",
                         "TEMP",
                         // VSCode IDE - https://github.com/microsoft/vscode-js-debug/blob/5b0f41dbe845d693a541c1fae30cec04c878216f/src/targets/node/nodeLauncherBase.ts#L320
