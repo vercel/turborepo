@@ -30,16 +30,7 @@
 
 labeler:
   labels:
-    # owned-by
-    - label: "owned-by: turborepo"
-      when:
-        isAnyFileOwnedByMatch: '@vercel\/turbo-oss'
-
-    - label: "created-by: turborepo"
-      when:
-        isPRAuthorMatch: "^(anthonyshew|dimitropoulos|tknickman|chris-olszewski|NicholasLYang)$"
-
-    # needs: triage when not any of the turbopack or turborepo team
+    # needs: triage when not any of the turborepo team
     - label: "needs: triage"
       when:
         isNotPRAuthorMatch: "^(padmaia|anthonyshew|dimitropoulos|tknickman|chris-olszewski|NicholasLYang)$"

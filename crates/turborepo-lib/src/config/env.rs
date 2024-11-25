@@ -5,7 +5,9 @@ use std::{
 
 use clap::ValueEnum;
 use itertools::Itertools;
+use tracing::warn;
 use turbopath::AbsoluteSystemPathBuf;
+use turborepo_cache::CacheConfig;
 
 use super::{ConfigurationOptions, Error, ResolvedConfigurationOptions};
 use crate::{
@@ -79,10 +81,57 @@ impl ResolvedConfigurationOptions for EnvVars {
             .transpose()?;
 
         let force = self.truthy_value("force").flatten();
-        let remote_only = self.truthy_value("remote_only").flatten();
-        let remote_cache_read_only = self.truthy_value("remote_cache_read_only").flatten();
+        let mut remote_only = self.truthy_value("remote_only").flatten();
+
+        let mut remote_cache_read_only = self.truthy_value("remote_cache_read_only").flatten();
+
         let run_summary = self.truthy_value("run_summary").flatten();
         let allow_no_turbo_json = self.truthy_value("allow_no_turbo_json").flatten();
+        let mut cache: Option<turborepo_cache::CacheConfig> = self
+            .output_map
+            .get("cache")
+            .map(|c| c.parse())
+            .transpose()?;
+
+        // If TURBO_FORCE is set it wins out over TURBO_CACHE
+        if force.is_some_and(|t| t) {
+            cache = None;
+        }
+
+        if remote_only.is_some_and(|t| t) {
+            if let Some(cache) = cache {
+                // If TURBO_REMOTE_ONLY and TURBO_CACHE result in the same behavior, remove
+                // REMOTE_ONLY to avoid deprecation warning or mixing of old/new
+                // cache flag error.
+                if cache == CacheConfig::remote_only() {
+                    remote_only = None;
+                }
+            }
+        }
+        if remote_cache_read_only.is_some_and(|t| t) {
+            if let Some(cache) = cache {
+                // If TURBO_REMOTE_CACHE_READ_ONLY and TURBO_CACHE result in the same behavior,
+                // remove REMOTE_CACHE_READ_ONLY to avoid deprecation warning or
+                // mixing of old/new cache flag error.
+                if cache == CacheConfig::remote_read_only() {
+                    remote_cache_read_only = None;
+                }
+            }
+        }
+
+        if remote_only.is_some() {
+            warn!(
+                "TURBO_REMOTE_ONLY is deprecated and will be removed in a future major version. \
+                 Use TURBO_CACHE=remote:rw"
+            );
+        }
+
+        if remote_cache_read_only.is_some() {
+            warn!(
+                "TURBO_REMOTE_CACHE_READ_ONLY is deprecated and will be removed in a future major \
+                 version. Use TURBO_CACHE=remote:r"
+            );
+        }
 
         // Process timeout
         let timeout = self
@@ -157,11 +206,7 @@ impl ResolvedConfigurationOptions for EnvVars {
             token: self.output_map.get("token").cloned(),
             scm_base: self.output_map.get("scm_base").cloned(),
             scm_head: self.output_map.get("scm_head").cloned(),
-            cache: self
-                .output_map
-                .get("cache")
-                .map(|c| c.parse())
-                .transpose()?,
+            cache,
             // Processed booleans
             signature,
             preflight,
@@ -274,6 +319,7 @@ mod test {
         env.insert("turbo_remote_cache_read_only".into(), "1".into());
         env.insert("turbo_run_summary".into(), "true".into());
         env.insert("turbo_allow_no_turbo_json".into(), "true".into());
+        env.insert("turbo_remote_cache_upload_timeout".into(), "200".into());
 
         let config = EnvVars::new(&env)
             .unwrap()
@@ -286,6 +332,7 @@ mod test {
         assert!(config.remote_cache_read_only());
         assert!(config.run_summary());
         assert!(config.allow_no_turbo_json());
+        assert_eq!(config.upload_timeout(), 200);
         assert_eq!(turbo_api, config.api_url.unwrap());
         assert_eq!(turbo_login, config.login_url.unwrap());
         assert_eq!(turbo_team, config.team_slug.unwrap());

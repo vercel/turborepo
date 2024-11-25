@@ -17,7 +17,7 @@ jobs:
 
     steps:
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: 18
 
@@ -32,7 +32,7 @@ jobs:
           turbo run build --filter=docs --filter=web --summarize --skip-infer -vvv
 
       - name: Grab Turborepo artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: cache-item-${{ matrix.os }}-${{ inputs.version }}
           path: |
@@ -51,7 +51,7 @@ jobs:
 
     steps:
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: 18
 
@@ -61,7 +61,7 @@ jobs:
           pnpm dlx create-turbo@${{ inputs.version }} my-turborepo pnpm
 
       - name: Download cache artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: cache-item-${{ matrix.cache_os }}-${{ inputs.version }}
           path: my-turborepo

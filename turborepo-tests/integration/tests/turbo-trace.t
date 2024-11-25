@@ -34,9 +34,6 @@ Setup
               },
               {
                 "path": "foo.js"
-              },
-              {
-                "path": "node_modules(\/|\\\\)repeat-string(\/|\\\\)index.js" (re)
               }
             ]
           }
@@ -129,7 +126,7 @@ Get AST from file
           "type": "Module",
           "span": {
             "start": 1,
-            "end": 173
+            "end": 119
           },
           "body": [
             {
@@ -211,48 +208,10 @@ Get AST from file
               "phase": "evaluation"
             },
             {
-              "type": "ImportDeclaration",
-              "span": {
-                "start": 65,
-                "end": 100
-              },
-              "specifiers": [
-                {
-                  "type": "ImportDefaultSpecifier",
-                  "span": {
-                    "start": 72,
-                    "end": 78
-                  },
-                  "local": {
-                    "type": "Identifier",
-                    "span": {
-                      "start": 72,
-                      "end": 78
-                    },
-                    "ctxt": 0,
-                    "value": "repeat",
-                    "optional": false
-                  }
-                }
-              ],
-              "source": {
-                "type": "StringLiteral",
-                "span": {
-                  "start": 84,
-                  "end": 99
-                },
-                "value": "repeat-string",
-                "raw": "\"repeat-string\""
-              },
-              "typeOnly": false,
-              "with": null,
-              "phase": "evaluation"
-            },
-            {
               "type": "VariableDeclaration",
               "span": {
-                "start": 102,
-                "end": 130
+                "start": 66,
+                "end": 94
               },
               "ctxt": 0,
               "kind": "const",
@@ -261,14 +220,14 @@ Get AST from file
                 {
                   "type": "VariableDeclarator",
                   "span": {
-                    "start": 108,
-                    "end": 129
+                    "start": 72,
+                    "end": 93
                   },
                   "id": {
                     "type": "Identifier",
                     "span": {
-                      "start": 108,
-                      "end": 114
+                      "start": 72,
+                      "end": 78
                     },
                     "ctxt": 0,
                     "value": "button",
@@ -278,15 +237,15 @@ Get AST from file
                   "init": {
                     "type": "NewExpression",
                     "span": {
-                      "start": 117,
-                      "end": 129
+                      "start": 81,
+                      "end": 93
                     },
                     "ctxt": 0,
                     "callee": {
                       "type": "Identifier",
                       "span": {
-                        "start": 121,
-                        "end": 127
+                        "start": 85,
+                        "end": 91
                       },
                       "ctxt": 0,
                       "value": "Button",
@@ -302,27 +261,27 @@ Get AST from file
             {
               "type": "ExpressionStatement",
               "span": {
-                "start": 132,
-                "end": 148
+                "start": 96,
+                "end": 112
               },
               "expression": {
                 "type": "CallExpression",
                 "span": {
-                  "start": 132,
-                  "end": 147
+                  "start": 96,
+                  "end": 111
                 },
                 "ctxt": 0,
                 "callee": {
                   "type": "MemberExpression",
                   "span": {
-                    "start": 132,
-                    "end": 145
+                    "start": 96,
+                    "end": 109
                   },
                   "object": {
                     "type": "Identifier",
                     "span": {
-                      "start": 132,
-                      "end": 138
+                      "start": 96,
+                      "end": 102
                     },
                     "ctxt": 0,
                     "value": "button",
@@ -331,8 +290,8 @@ Get AST from file
                   "property": {
                     "type": "Identifier",
                     "span": {
-                      "start": 139,
-                      "end": 145
+                      "start": 103,
+                      "end": 109
                     },
                     "value": "render"
                   }
@@ -344,73 +303,21 @@ Get AST from file
             {
               "type": "ExpressionStatement",
               "span": {
-                "start": 149,
-                "end": 166
+                "start": 113,
+                "end": 119
               },
               "expression": {
                 "type": "CallExpression",
                 "span": {
-                  "start": 149,
-                  "end": 165
+                  "start": 113,
+                  "end": 118
                 },
                 "ctxt": 0,
                 "callee": {
                   "type": "Identifier",
                   "span": {
-                    "start": 149,
-                    "end": 155
-                  },
-                  "ctxt": 0,
-                  "value": "repeat",
-                  "optional": false
-                },
-                "arguments": [
-                  {
-                    "spread": null,
-                    "expression": {
-                      "type": "StringLiteral",
-                      "span": {
-                        "start": 156,
-                        "end": 161
-                      },
-                      "value": "foo",
-                      "raw": "\"foo\""
-                    }
-                  },
-                  {
-                    "spread": null,
-                    "expression": {
-                      "type": "NumericLiteral",
-                      "span": {
-                        "start": 163,
-                        "end": 164
-                      },
-                      "value": 5.0,
-                      "raw": "5"
-                    }
-                  }
-                ],
-                "typeArguments": null
-              }
-            },
-            {
-              "type": "ExpressionStatement",
-              "span": {
-                "start": 167,
-                "end": 173
-              },
-              "expression": {
-                "type": "CallExpression",
-                "span": {
-                  "start": 167,
-                  "end": 172
-                },
-                "ctxt": 0,
-                "callee": {
-                  "type": "Identifier",
-                  "span": {
-                    "start": 167,
-                    "end": 170
+                    "start": 113,
+                    "end": 116
                   },
                   "ctxt": 0,
                   "value": "foo",
@@ -442,9 +349,6 @@ Set depth for dependencies
               },
               {
                 "path": "foo.js"
-              },
-              {
-                "path": "node_modules(\/|\\\\)repeat-string(\/|\\\\)index.js" (re)
               }
             ]
           }

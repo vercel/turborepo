@@ -12,7 +12,6 @@ use serde::{Deserialize, Serialize};
 use struct_iterable::Iterable;
 use turbopath::AbsoluteSystemPath;
 use turborepo_errors::Spanned;
-use turborepo_micro_frontend::MICRO_FRONTENDS_PACKAGE_INTERNAL;
 use turborepo_repository::package_graph::ROOT_PKG_NAME;
 use turborepo_unescape::UnescapedString;
 
@@ -78,6 +77,8 @@ pub(crate) struct RawRemoteCacheOptions {
     timeout: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     enabled: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    upload_timeout: Option<u64>,
 }
 
 impl From<&RawRemoteCacheOptions> for ConfigurationOptions {
@@ -90,6 +91,7 @@ impl From<&RawRemoteCacheOptions> for ConfigurationOptions {
             signature: remote_cache_opts.signature,
             preflight: remote_cache_opts.preflight,
             timeout: remote_cache_opts.timeout,
+            upload_timeout: remote_cache_opts.upload_timeout,
             enabled: remote_cache_opts.enabled,
             ..Self::default()
         }
@@ -611,7 +613,7 @@ impl TurboJson {
     }
 
     /// Adds a local proxy task to a workspace TurboJson
-    pub fn with_proxy(&mut self, needs_proxy_build: bool) {
+    pub fn with_proxy(&mut self, mfe_package_name: Option<&str>) {
         if self.extends.is_empty() {
             self.extends = Spanned::new(vec!["//".into()]);
         }
@@ -620,9 +622,9 @@ impl TurboJson {
             TaskName::from("proxy"),
             Spanned::new(RawTaskDefinition {
                 cache: Some(Spanned::new(false)),
-                depends_on: needs_proxy_build.then(|| {
+                depends_on: mfe_package_name.map(|mfe_package_name| {
                     Spanned::new(vec![Spanned::new(UnescapedString::from(format!(
-                        "{MICRO_FRONTENDS_PACKAGE_INTERNAL}#build"
+                        "{mfe_package_name}#build"
                     )))])
                 }),
                 ..Default::default()
