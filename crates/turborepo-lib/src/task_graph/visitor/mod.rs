@@ -35,7 +35,7 @@ use turborepo_ui::{
 use crate::{
     cli::EnvMode,
     engine::{Engine, ExecutionOptions},
-    micro_frontends::MicrofrontendsConfigs,
+    microfrontends::MicrofrontendsConfigs,
     opts::RunOpts,
     process::ProcessManager,
     run::{

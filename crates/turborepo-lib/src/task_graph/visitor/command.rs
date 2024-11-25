@@ -7,7 +7,7 @@ use turborepo_repository::package_graph::{PackageGraph, PackageInfo, PackageName
 
 use super::Error;
 use crate::{
-    engine::Engine, micro_frontends::MicrofrontendsConfigs, opts::TaskArgs, process::Command,
+    engine::Engine, microfrontends::MicrofrontendsConfigs, opts::TaskArgs, process::Command,
     run::task_id::TaskId,
 };
 

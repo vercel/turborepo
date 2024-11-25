@@ -41,7 +41,7 @@ use crate::{
     cli::DryRunMode,
     commands::CommandBase,
     engine::{Engine, EngineBuilder},
-    micro_frontends::MicrofrontendsConfigs,
+    microfrontends::MicrofrontendsConfigs,
     opts::Opts,
     process::ProcessManager,
     run::{scope, task_access::TaskAccess, task_id::TaskName, Error, Run, RunCache},

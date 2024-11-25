@@ -12,7 +12,7 @@ use super::{Pipeline, RawTaskDefinition, TurboJson, CONFIG_FILE};
 use crate::{
     cli::EnvMode,
     config::Error,
-    micro_frontends::MicrofrontendsConfigs,
+    microfrontends::MicrofrontendsConfigs,
     run::{task_access::TASK_ACCESS_CONFIG_PATH, task_id::TaskName},
 };
 

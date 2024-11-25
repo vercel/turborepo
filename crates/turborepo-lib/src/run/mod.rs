@@ -41,7 +41,7 @@ pub use crate::run::error::Error;
 use crate::{
     cli::EnvMode,
     engine::Engine,
-    micro_frontends::MicrofrontendsConfigs,
+    microfrontends::MicrofrontendsConfigs,
     opts::Opts,
     process::ProcessManager,
     run::{global_hash::get_global_hash_inputs, summary::RunTracker, task_access::TaskAccess},
