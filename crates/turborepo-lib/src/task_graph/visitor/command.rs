@@ -2,7 +2,7 @@ use std::{collections::HashSet, path::PathBuf};
 
 use turbopath::AbsoluteSystemPath;
 use turborepo_env::EnvironmentVariableMap;
-use turborepo_microfrontends::MICRO_FRONTENDS_PACKAGES;
+use turborepo_microfrontends::MICROFRONTENDS_PACKAGES;
 use turborepo_repository::package_graph::{PackageGraph, PackageInfo, PackageName};
 
 use super::Error;
@@ -206,7 +206,7 @@ impl<'a> CommandProvider for MicroFrontendProxyProvider<'a> {
         let has_mfe_dependency = package_info
             .package_json
             .all_dependencies()
-            .any(|(package, _version)| MICRO_FRONTENDS_PACKAGES.contains(&package.as_str()));
+            .any(|(package, _version)| MICROFRONTENDS_PACKAGES.contains(&package.as_str()));
         if !has_mfe_dependency {
             return Err(Error::MissingMFEDependency {
                 package: task_id.package().into(),

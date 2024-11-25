@@ -16,16 +16,16 @@ use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 /// Currently the default path for a package that provides a configuration.
 ///
 /// This is subject to change at any time.
-pub const DEFAULT_MICRO_FRONTENDS_CONFIG_V1: &str = "micro-frontends.jsonc";
-pub const DEFAULT_MICRO_FRONTENDS_CONFIG_V2: &str = "microfrontends.json";
-pub const DEFAULT_MICRO_FRONTENDS_CONFIG_V2_ALT: &str = "microfrontends.jsonc";
-pub const MICRO_FRONTENDS_PACKAGES: &[&str] = [
-    MICRO_FRONTENDS_PACKAGE_EXTERNAL,
-    MICRO_FRONTENDS_PACKAGE_INTERNAL,
+pub const DEFAULT_MICROFRONTENDS_CONFIG_V1: &str = "micro-frontends.jsonc";
+pub const DEFAULT_MICROFRONTENDS_CONFIG_V2: &str = "microfrontends.json";
+pub const DEFAULT_MICROFRONTENDS_CONFIG_V2_ALT: &str = "microfrontends.jsonc";
+pub const MICROFRONTENDS_PACKAGES: &[&str] = [
+    MICROFRONTENDS_PACKAGE_EXTERNAL,
+    MICROFRONTENDS_PACKAGE_INTERNAL,
 ]
 .as_slice();
-pub const MICRO_FRONTENDS_PACKAGE_INTERNAL: &str = "@vercel/micro-frontends-internal";
-pub const MICRO_FRONTENDS_PACKAGE_EXTERNAL: &str = "@vercel/microfrontends";
+pub const MICROFRONTENDS_PACKAGE_INTERNAL: &str = "@vercel/micro-frontends-internal";
+pub const MICROFRONTENDS_PACKAGE_EXTERNAL: &str = "@vercel/microfrontends";
 pub const SUPPORTED_VERSIONS: &[&str] = ["1", "2"].as_slice();
 
 /// The minimal amount of information Turborepo needs to correctly start a local
@@ -99,8 +99,8 @@ impl Config {
                 let contents = path.read_existing_to_string().transpose()?;
                 Some((contents, path))
             };
-        let Some((contents, path)) = load_config(DEFAULT_MICRO_FRONTENDS_CONFIG_V2)
-            .or_else(|| load_config(DEFAULT_MICRO_FRONTENDS_CONFIG_V2_ALT))
+        let Some((contents, path)) = load_config(DEFAULT_MICROFRONTENDS_CONFIG_V2)
+            .or_else(|| load_config(DEFAULT_MICROFRONTENDS_CONFIG_V2_ALT))
         else {
             return Ok(None);
         };
@@ -117,7 +117,7 @@ impl Config {
     }
 
     fn load_v1_dir(dir: &AbsoluteSystemPath) -> Result<Option<Self>, Error> {
-        let path = dir.join_component(DEFAULT_MICRO_FRONTENDS_CONFIG_V1);
+        let path = dir.join_component(DEFAULT_MICROFRONTENDS_CONFIG_V1);
         let Some(contents) = path.read_existing_to_string()? else {
             return Ok(None);
         };
@@ -152,17 +152,17 @@ mod test {
     }
 
     fn add_v1_config(dir: &AbsoluteSystemPath) -> Result<(), std::io::Error> {
-        let path = dir.join_component(DEFAULT_MICRO_FRONTENDS_CONFIG_V1);
+        let path = dir.join_component(DEFAULT_MICROFRONTENDS_CONFIG_V1);
         path.create_with_contents(r#"{"version": "1", "applications": {"web": {"development": {"task": "serve"}}, "docs": {}}}"#)
     }
 
     fn add_v2_config(dir: &AbsoluteSystemPath) -> Result<(), std::io::Error> {
-        let path = dir.join_component(DEFAULT_MICRO_FRONTENDS_CONFIG_V2);
+        let path = dir.join_component(DEFAULT_MICROFRONTENDS_CONFIG_V2);
         path.create_with_contents(r#"{"version": "2", "applications": {"web": {"development": {"task": "serve"}}, "docs": {}}}"#)
     }
 
     fn add_v2_alt_config(dir: &AbsoluteSystemPath) -> Result<(), std::io::Error> {
-        let path = dir.join_component(DEFAULT_MICRO_FRONTENDS_CONFIG_V2_ALT);
+        let path = dir.join_component(DEFAULT_MICROFRONTENDS_CONFIG_V2_ALT);
         path.create_with_contents(r#"{"version": "2", "applications": {"web": {"development": {"task": "serve"}}, "docs": {}}}"#)
     }
 

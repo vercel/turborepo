@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use itertools::Itertools;
 use tracing::warn;
 use turbopath::AbsoluteSystemPath;
-use turborepo_microfrontends::{Config as MFEConfig, Error, MICRO_FRONTENDS_PACKAGES};
+use turborepo_microfrontends::{Config as MFEConfig, Error, MICROFRONTENDS_PACKAGES};
 use turborepo_repository::package_graph::{PackageGraph, PackageName};
 
 use crate::{
@@ -69,7 +69,7 @@ impl MicroFrontendsConfigs {
             // We use `find_map` here instead of a simple `find` so we get the &'static str
             // instead of the &str tied to the lifetime of the package graph.
             .find_map(|pkg| {
-                MICRO_FRONTENDS_PACKAGES
+                MICROFRONTENDS_PACKAGES
                     .iter()
                     .find(|static_pkg| pkg == **static_pkg)
             })
