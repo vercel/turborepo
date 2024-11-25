@@ -5,6 +5,7 @@ pub mod event;
 mod handle;
 mod input;
 mod pane;
+mod preferences;
 mod search;
 mod size;
 mod spinner;

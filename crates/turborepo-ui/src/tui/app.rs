@@ -16,6 +16,9 @@ use tokio::{
     time::Instant,
 };
 use tracing::{debug, trace};
+use turbopath::AbsoluteSystemPathBuf;
+
+use crate::tui::preferences;
 
 pub const FRAMERATE: Duration = Duration::from_millis(3);
 const RESIZE_DEBOUNCE_DELAY: Duration = Duration::from_millis(10);
@@ -570,6 +573,7 @@ pub async fn run_app(
     tasks: Vec<String>,
     receiver: AppReceiver,
     color_config: ColorConfig,
+    repo_root: AbsoluteSystemPathBuf,
 ) -> Result<(), Error> {
     let mut terminal = startup(color_config)?;
     let size = terminal.size()?;
@@ -579,7 +583,7 @@ pub async fn run_app(
     input::start_crossterm_stream(crossterm_tx);
 
     let (result, callback) =
-        match run_app_inner(&mut terminal, &mut app, receiver, crossterm_rx).await {
+        match run_app_inner(&mut terminal, &mut app, receiver, crossterm_rx, repo_root).await {
             Ok(callback) => (Ok(()), callback),
             Err(err) => {
                 debug!("tui shutting down: {err}");
@@ -599,6 +603,7 @@ async fn run_app_inner<B: Backend + std::io::Write>(
     app: &mut App<Box<dyn io::Write + Send>>,
     mut receiver: AppReceiver,
     mut crossterm_rx: mpsc::Receiver<crossterm::event::Event>,
+    repo_root: AbsoluteSystemPathBuf,
 ) -> Result<Option<oneshot::Sender<()>>, Error> {
     // Render initial state to paint the screen
     terminal.draw(|f| view(app, f))?;
@@ -612,6 +617,7 @@ async fn run_app_inner<B: Backend + std::io::Write>(
         if !matches!(event, Event::Tick) {
             needs_rerender = true;
         }
+
         let mut event = Some(event);
         let mut resize_event = None;
         if matches!(event, Some(Event::Resize { .. })) {
@@ -624,10 +630,10 @@ async fn run_app_inner<B: Backend + std::io::Write>(
         if let Some(resize) = resize_event.take().or_else(|| resize_debouncer.query()) {
             // If we got a resize event, make sure to update ratatui backend.
             terminal.autoresize()?;
-            update(app, resize)?;
+            update(app, resize, &repo_root)?;
         }
         if let Some(event) = event {
-            callback = update(app, event)?;
+            callback = update(app, event, &repo_root)?;
             if app.done {
                 break;
             }
@@ -735,6 +741,7 @@ fn cleanup<B: Backend + io::Write>(
 fn update(
     app: &mut App<Box<dyn io::Write + Send>>,
     event: Event,
+    repo_root: &AbsoluteSystemPathBuf,
 ) -> Result<Option<oneshot::Sender<()>>, Error> {
     match event {
         Event::StartTask { task, output_logs } => {
@@ -766,6 +773,7 @@ fn update(
             app.finish_task(&task, result)?;
         }
         Event::Up => {
+            preferences::Preferences::write_preferences(repo_root);
             app.previous();
         }
         Event::Down => {
