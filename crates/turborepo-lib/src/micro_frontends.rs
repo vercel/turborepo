@@ -97,7 +97,7 @@ impl MicroFrontendsConfigs {
         // If package either
         // - contains the proxy task
         // - a member of one of the microfrontends
-        // then we need to modify it's task definitions
+        // then we need to modify its task definitions
         if let Some(FindResult { dev, proxy }) = self.package_turbo_json_update(package_name) {
             // We need to modify turbo.json, use default one if there isn't one present
             let mut turbo_json = turbo_json.or_else(|err| match err {
