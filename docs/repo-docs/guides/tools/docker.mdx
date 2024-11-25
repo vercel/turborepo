@@ -167,7 +167,7 @@ RUN yarn install
 
 # Build the project
 COPY --from=builder /app/out/full/ .
-RUN yarn turbo run build --filter=web...
+RUN yarn turbo run build
 
 FROM base AS runner
 WORKDIR /app
@@ -201,7 +201,7 @@ ENV TURBO_TEAM=$TURBO_TEAM
 ARG TURBO_TOKEN
 ENV TURBO_TOKEN=$TURBO_TOKEN
 
-RUN yarn turbo run build --filter=web...
+RUN yarn turbo run build
 ```
 
 `turbo` will now be able to hit your Remote Cache. To see a Turborepo cache hit for a non-cached Docker build image, run a command like this one from your project root:
