@@ -33,7 +33,7 @@ COPY --from=builder /app/out/full/ .
 # ARG TURBO_TOKEN
 # ENV TURBO_TOKEN=$TURBO_TOKEN
 
-RUN yarn turbo build --filter=api...
+RUN yarn turbo build
 
 FROM base AS runner
 WORKDIR /app
