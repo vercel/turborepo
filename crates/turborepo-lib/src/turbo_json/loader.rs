@@ -1,10 +1,8 @@
 use std::collections::HashMap;
 
-use itertools::Itertools;
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_errors::Spanned;
-use turborepo_micro_frontend::MICRO_FRONTENDS_PACKAGES;
 use turborepo_repository::{
     package_graph::{PackageInfo, PackageName},
     package_json::PackageJson,
@@ -177,25 +175,9 @@ impl TurboJsonLoader {
                 micro_frontends_configs,
             } => {
                 let path = packages.get(package).ok_or_else(|| Error::NoTurboJSON)?;
-                let should_inject_proxy_task = micro_frontends_configs
-                    .as_ref()
-                    .map_or(false, |configs| configs.contains_package(package.as_str()));
                 let turbo_json = load_from_file(&self.repo_root, path);
-                if should_inject_proxy_task {
-                    let mut turbo_json = turbo_json.or_else(|err| match err {
-                        Error::NoTurboJSON => Ok(TurboJson::default()),
-                        err => Err(err),
-                    })?;
-                    let mfe_package_name = packages
-                        .keys()
-                        .filter(|package| MICRO_FRONTENDS_PACKAGES.contains(&package.as_str()))
-                        .map(|package| package.as_str())
-                        // If multiple MFE packages are present in the graph, then be deterministic
-                        // in which ones we select
-                        .sorted()
-                        .next();
-                    turbo_json.with_proxy(mfe_package_name);
-                    Ok(turbo_json)
+                if let Some(mfe_configs) = micro_frontends_configs {
+                    mfe_configs.update_turbo_json(package, turbo_json)
                 } else {
                     turbo_json
                 }

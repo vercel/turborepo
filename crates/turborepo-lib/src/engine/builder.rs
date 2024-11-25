@@ -395,6 +395,19 @@ impl<'a> EngineBuilder<'a> {
                     }
                 });
 
+            for (sibling, span) in task_definition
+                .siblings
+                .iter()
+                .flatten()
+                .map(|s| s.as_ref().split())
+            {
+                let sibling_task_id = sibling
+                    .task_id()
+                    .unwrap_or_else(|| TaskId::new(to_task_id.package(), sibling.task()))
+                    .into_owned();
+                traversal_queue.push_back(span.to(sibling_task_id));
+            }
+
             for (dep, span) in deps {
                 let from_task_id = dep
                     .task_id()
@@ -1329,6 +1342,44 @@ mod test {
             "app1#special" => ["libA#build"],
             "app2#another" => ["libA#build"],
             "libA#build" => ["___ROOT___"]
+        };
+        assert_eq!(all_dependencies(&engine), expected);
+    }
+
+    #[test]
+    fn test_sibling_task() {
+        let repo_root_dir = TempDir::with_prefix("repo").unwrap();
+        let repo_root = AbsoluteSystemPathBuf::new(repo_root_dir.path().to_str().unwrap()).unwrap();
+        let package_graph = mock_package_graph(
+            &repo_root,
+            package_jsons! {
+                repo_root,
+                "web" => [],
+                "api" => []
+            },
+        );
+        let turbo_jsons = vec![(PackageName::Root, {
+            let mut t_json = turbo_json(json!({
+                "tasks": {
+                    "web#dev": { "persistent": true },
+                    "api#serve": { "persistent": true }
+                }
+            }));
+            t_json.with_sibling(TaskName::from("web#dev"), &TaskName::from("api#serve"));
+            t_json
+        })]
+        .into_iter()
+        .collect();
+        let loader = TurboJsonLoader::noop(turbo_jsons);
+        let engine = EngineBuilder::new(&repo_root, &package_graph, loader, false)
+            .with_tasks(Some(Spanned::new(TaskName::from("dev"))))
+            .with_workspaces(vec![PackageName::from("web")])
+            .build()
+            .unwrap();
+
+        let expected = deps! {
+            "web#dev" => ["___ROOT___"],
+            "api#serve" => ["___ROOT___"]
         };
         assert_eq!(all_dependencies(&engine), expected);
     }

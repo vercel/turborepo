@@ -233,6 +233,9 @@ pub struct RawTaskDefinition {
     // instead of deriving them from a TurboJson
     #[serde(skip)]
     env_mode: Option<EnvMode>,
+    // This can currently only be set internally and isn't a part of turbo.json
+    #[serde(skip)]
+    siblings: Option<Vec<Spanned<UnescapedString>>>,
 }
 
 macro_rules! set_field {
@@ -267,6 +270,7 @@ impl RawTaskDefinition {
         set_field!(self, other, pass_through_env);
         set_field!(self, other, interactive);
         set_field!(self, other, env_mode);
+        set_field!(self, other, siblings);
     }
 }
 
@@ -411,6 +415,16 @@ impl TryFrom<RawTaskDefinition> for TaskDefinition {
             })
             .transpose()?;
 
+        let siblings = raw_task.siblings.map(|siblings| {
+            siblings
+                .into_iter()
+                .map(|sibling| {
+                    let (sibling, span) = sibling.split();
+                    span.to(TaskName::from(String::from(sibling)))
+                })
+                .collect()
+        });
+
         Ok(TaskDefinition {
             outputs,
             cache,
@@ -424,6 +438,7 @@ impl TryFrom<RawTaskDefinition> for TaskDefinition {
             interruptible: *interruptible,
             interactive,
             env_mode: raw_task.env_mode,
+            siblings,
         })
     }
 }
@@ -631,6 +646,22 @@ impl TurboJson {
             }),
         );
     }
+
+    /// Adds a sibling relationship from task to sibling
+    pub fn with_sibling(&mut self, task: TaskName<'static>, sibling: &TaskName) {
+        if self.extends.is_empty() {
+            self.extends = Spanned::new(vec!["//".into()]);
+        }
+
+        let task_definition = self.tasks.entry(task).or_default();
+
+        let siblings = task_definition
+            .as_inner_mut()
+            .siblings
+            .get_or_insert_default();
+
+        siblings.push(Spanned::new(UnescapedString::from(sibling.to_string())))
+    }
 }
 
 type TurboJSONValidation = fn(&TurboJson) -> Vec<Error>;
@@ -722,7 +753,7 @@ mod tests {
     use test_case::test_case;
     use turborepo_unescape::UnescapedString;
 
-    use super::{RawTurboJson, Spanned, UIMode};
+    use super::{RawTurboJson, Spanned, TurboJson, UIMode};
     use crate::{
         cli::OutputLogsMode,
         run::task_id::TaskName,
@@ -769,6 +800,7 @@ mod tests {
             interactive: Some(Spanned::new(true).with_range(309..313)),
             interruptible: Some(Spanned::new(true).with_range(342..346)),
             env_mode: None,
+            siblings: None,
         },
         TaskDefinition {
           env: vec!["OS".to_string()],
@@ -786,6 +818,7 @@ mod tests {
           interactive: true,
           interruptible: true,
           env_mode: None,
+          siblings: None,
         }
       ; "full"
     )]
@@ -813,6 +846,7 @@ mod tests {
             interruptible: Some(Spanned::new(true).with_range(352..356)),
             interactive: None,
             env_mode: None,
+            siblings: None,
         },
         TaskDefinition {
             env: vec!["OS".to_string()],
@@ -830,6 +864,7 @@ mod tests {
             interruptible: true,
             interactive: false,
             env_mode: None,
+            siblings: None,
         }
       ; "full (windows)"
     )]
@@ -979,5 +1014,79 @@ mod tests {
         assert_eq!(json.allow_no_package_manager, expected);
         let serialized = serde_json::to_string(&json).unwrap();
         assert_eq!(serialized, json_str);
+    }
+
+    #[test]
+    fn test_with_proxy_empty() {
+        let mut json = TurboJson::default();
+        json.with_proxy(None);
+        assert_eq!(json.extends.as_inner().as_slice(), &["//".to_string()]);
+        assert!(json.tasks.contains_key(&TaskName::from("proxy")));
+    }
+
+    #[test]
+    fn test_with_proxy_existing() {
+        let mut json = TurboJson::default();
+        json.tasks.insert(
+            TaskName::from("build"),
+            Spanned::new(RawTaskDefinition::default()),
+        );
+        json.with_proxy(None);
+        assert_eq!(json.extends.as_inner().as_slice(), &["//".to_string()]);
+        assert!(json.tasks.contains_key(&TaskName::from("proxy")));
+        assert!(json.tasks.contains_key(&TaskName::from("build")));
+    }
+
+    #[test]
+    fn test_with_proxy_with_proxy_build() {
+        let mut json = TurboJson::default();
+        json.with_proxy(Some("my-proxy"));
+        assert_eq!(json.extends.as_inner().as_slice(), &["//".to_string()]);
+        let proxy_task = json.tasks.get(&TaskName::from("proxy"));
+        assert!(proxy_task.is_some());
+        let proxy_task = proxy_task.unwrap().as_inner();
+        assert_eq!(
+            proxy_task
+                .depends_on
+                .as_ref()
+                .unwrap()
+                .as_inner()
+                .as_slice(),
+            &[Spanned::new(UnescapedString::from("my-proxy#build"))]
+        );
+    }
+
+    #[test]
+    fn test_with_sibling_empty() {
+        let mut json = TurboJson::default();
+        json.with_sibling(TaskName::from("dev"), &TaskName::from("api#server"));
+        let dev_task = json.tasks.get(&TaskName::from("dev"));
+        assert!(dev_task.is_some());
+        let dev_task = dev_task.unwrap().as_inner();
+        assert_eq!(
+            dev_task.siblings.as_ref().unwrap().as_slice(),
+            &[Spanned::new(UnescapedString::from("api#server"))]
+        );
+    }
+
+    #[test]
+    fn test_with_sibling_existing() {
+        let mut json = TurboJson::default();
+        json.tasks.insert(
+            TaskName::from("dev"),
+            Spanned::new(RawTaskDefinition {
+                persistent: Some(Spanned::new(true)),
+                ..Default::default()
+            }),
+        );
+        json.with_sibling(TaskName::from("dev"), &TaskName::from("api#server"));
+        let dev_task = json.tasks.get(&TaskName::from("dev"));
+        assert!(dev_task.is_some());
+        let dev_task = dev_task.unwrap().as_inner();
+        assert_eq!(dev_task.persistent, Some(Spanned::new(true)));
+        assert_eq!(
+            dev_task.siblings.as_ref().unwrap().as_slice(),
+            &[Spanned::new(UnescapedString::from("api#server"))]
+        );
     }
 }
