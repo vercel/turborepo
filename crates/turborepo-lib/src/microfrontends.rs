@@ -24,59 +24,35 @@ impl MicrofrontendsConfigs {
         repo_root: &AbsoluteSystemPath,
         package_graph: &PackageGraph,
     ) -> Result<Option<Self>, Error> {
-        let mut configs = HashMap::new();
-        let mut config_filenames = HashMap::new();
-        let mut referenced_default_apps = HashSet::new();
-        for (package_name, package_info) in package_graph.packages() {
-            let package_dir = repo_root.resolve(package_info.package_path());
-            let Some(config) = MFEConfig::load_from_dir(&package_dir).or_else(|err| match err {
-                turborepo_microfrontends::Error::UnsupportedVersion(_) => {
-                    warn!("Ignoring {package_dir}: {err}");
-                    Ok(None)
-                }
-                turborepo_microfrontends::Error::ChildConfig { reference } => {
-                    referenced_default_apps.insert(reference);
-                    Ok(None)
-                }
-                err => Err(err),
-            })?
-            else {
-                continue;
-            };
-            let tasks = config
-                .development_tasks()
-                .map(|(application, options)| {
-                    let dev_task = options.unwrap_or("dev");
-                    TaskId::new(application, dev_task).into_owned()
-                })
-                .collect();
-            configs.insert(package_name.to_string(), tasks);
-            config_filenames.insert(package_name.to_string(), config.filename().to_owned());
+        let PackageGraphResult {
+            configs,
+            config_filenames,
+            missing_default_apps,
+            unsupported_version,
+            mfe_package,
+        } = PackageGraphResult::new(
+            package_graph
+                .packages()
+                // We sort packages to make sure we have a deterministic ordering for any warnings
+                .sorted_by(|(a, _), (b, _)| a.cmp(b))
+                .map(|(name, info)| {
+                    (
+                        name,
+                        MFEConfig::load_from_dir(&repo_root.resolve(info.package_path())),
+                    )
+                }),
+        )?;
+
+        for (package, err) in unsupported_version {
+            warn!("Ignoring {package}: {err}");
         }
-        let default_apps_found = configs.keys().cloned().collect();
-        let mut missing_default_apps = referenced_default_apps
-            .difference(&default_apps_found)
-            .map(|s| s.as_str())
-            .collect::<Vec<_>>();
+
         if !missing_default_apps.is_empty() {
-            missing_default_apps.sort();
             warn!(
                 "Missing default applications: {}",
                 missing_default_apps.join(", ")
             );
         }
-        let mfe_package = package_graph
-            .packages()
-            .map(|(pkg, _)| pkg.as_str())
-            .sorted()
-            // We use `find_map` here instead of a simple `find` so we get the &'static str
-            // instead of the &str tied to the lifetime of the package graph.
-            .find_map(|pkg| {
-                MICROFRONTENDS_PACKAGES
-                    .iter()
-                    .find(|static_pkg| pkg == **static_pkg)
-            })
-            .copied();
 
         Ok((!configs.is_empty()).then_some(Self {
             configs,
@@ -160,6 +136,72 @@ impl MicrofrontendsConfigs {
                 proxy: TaskId::new(config, "proxy"),
             });
             dev_task.or(proxy_owner)
+        })
+    }
+}
+
+// Internal struct used to capture the results of checking the package graph
+struct PackageGraphResult {
+    configs: HashMap<String, HashSet<TaskId<'static>>>,
+    config_filenames: HashMap<String, String>,
+    missing_default_apps: Vec<String>,
+    unsupported_version: Vec<(String, String)>,
+    mfe_package: Option<&'static str>,
+}
+
+impl PackageGraphResult {
+    fn new<'a>(
+        packages: impl Iterator<Item = (&'a PackageName, Result<Option<MFEConfig>, Error>)>,
+    ) -> Result<Self, Error> {
+        let mut configs = HashMap::new();
+        let mut config_filenames = HashMap::new();
+        let mut referenced_default_apps = HashSet::new();
+        let mut unsupported_version = Vec::new();
+        let mut mfe_package = None;
+        for (package_name, config) in packages {
+            if let Some(pkg) = MICROFRONTENDS_PACKAGES
+                .iter()
+                .find(|static_pkg| package_name.as_str() == **static_pkg)
+            {
+                mfe_package = Some(*pkg);
+            }
+
+            let Some(config) = config.or_else(|err| match err {
+                turborepo_microfrontends::Error::UnsupportedVersion(_) => {
+                    unsupported_version.push((package_name.to_string(), err.to_string()));
+                    Ok(None)
+                }
+                turborepo_microfrontends::Error::ChildConfig { reference } => {
+                    referenced_default_apps.insert(reference);
+                    Ok(None)
+                }
+                err => Err(err),
+            })?
+            else {
+                continue;
+            };
+            let tasks = config
+                .development_tasks()
+                .map(|(application, options)| {
+                    let dev_task = options.unwrap_or("dev");
+                    TaskId::new(application, dev_task).into_owned()
+                })
+                .collect();
+            configs.insert(package_name.to_string(), tasks);
+            config_filenames.insert(package_name.to_string(), config.filename().to_owned());
+        }
+        let default_apps_found = configs.keys().cloned().collect();
+        let mut missing_default_apps = referenced_default_apps
+            .difference(&default_apps_found)
+            .cloned()
+            .collect::<Vec<_>>();
+        missing_default_apps.sort();
+        Ok(Self {
+            configs,
+            config_filenames,
+            missing_default_apps,
+            unsupported_version,
+            mfe_package,
         })
     }
 }
