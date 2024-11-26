@@ -208,8 +208,10 @@ impl<'a> CommandProvider for MicroFrontendProxyProvider<'a> {
             .all_dependencies()
             .any(|(package, _version)| MICROFRONTENDS_PACKAGES.contains(&package.as_str()));
         if !has_mfe_dependency {
+            let mfe_config_filename = self.mfe_configs.config_filename(task_id.package());
             return Err(Error::MissingMFEDependency {
                 package: task_id.package().into(),
+                mfe_config_filename: mfe_config_filename.unwrap_or_default().to_owned(),
             });
         }
         let local_apps = dev_tasks

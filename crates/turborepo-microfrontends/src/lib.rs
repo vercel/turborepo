@@ -31,7 +31,13 @@ pub const SUPPORTED_VERSIONS: &[&str] = ["1", "2"].as_slice();
 /// The minimal amount of information Turborepo needs to correctly start a local
 /// proxy server for microfrontends
 #[derive(Debug, PartialEq, Eq)]
-pub enum Config {
+pub struct Config {
+    inner: ConfigInner,
+    filename: String,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum ConfigInner {
     V1(ConfigV1),
     V2(ConfigV2),
 }
@@ -73,23 +79,32 @@ impl Config {
             None => "2".to_string(),
         };
 
-        match version.as_str() {
-            "1" => ConfigV1::from_str(input, source).map(Config::V1),
+        let inner = match version.as_str() {
+            "1" => ConfigV1::from_str(input, source).map(ConfigInner::V1),
             "2" => ConfigV2::from_str(input, source).and_then(|result| match result {
-                configv2::ParseResult::Actual(config_v2) => Ok(Config::V2(config_v2)),
+                configv2::ParseResult::Actual(config_v2) => Ok(ConfigInner::V2(config_v2)),
                 configv2::ParseResult::Reference(default_app) => Err(Error::ChildConfig {
                     reference: default_app,
                 }),
             }),
             version => Err(Error::UnsupportedVersion(version.to_string())),
-        }
+        }?;
+        Ok(Self {
+            inner,
+            filename: source.to_owned(),
+        })
     }
 
     pub fn development_tasks<'a>(&'a self) -> Box<dyn Iterator<Item = (&str, Option<&str>)> + 'a> {
-        match self {
-            Config::V1(config_v1) => Box::new(config_v1.development_tasks()),
-            Config::V2(config_v2) => Box::new(config_v2.development_tasks()),
+        match &self.inner {
+            ConfigInner::V1(config_v1) => Box::new(config_v1.development_tasks()),
+            ConfigInner::V2(config_v2) => Box::new(config_v2.development_tasks()),
         }
+    }
+
+    /// Filename of the loaded configuration
+    pub fn filename(&self) -> &str {
+        &self.filename
     }
 
     fn load_v2_dir(dir: &AbsoluteSystemPath) -> Result<Option<Self>, Error> {
@@ -108,7 +123,13 @@ impl Config {
 
         ConfigV2::from_str(&contents, path.as_str())
             .and_then(|result| match result {
-                configv2::ParseResult::Actual(config_v2) => Ok(Config::V2(config_v2)),
+                configv2::ParseResult::Actual(config_v2) => Ok(Config {
+                    inner: ConfigInner::V2(config_v2),
+                    filename: path
+                        .file_name()
+                        .expect("microfrontends config should not be root")
+                        .to_owned(),
+                }),
                 configv2::ParseResult::Reference(default_app) => Err(Error::ChildConfig {
                     reference: default_app,
                 }),
@@ -123,7 +144,10 @@ impl Config {
         };
 
         ConfigV1::from_str(&contents, path.as_str())
-            .map(Self::V1)
+            .map(|config_v1| Self {
+                inner: ConfigInner::V1(config_v1),
+                filename: DEFAULT_MICROFRONTENDS_CONFIG_V1.to_owned(),
+            })
             .map(Some)
     }
 }
@@ -171,8 +195,10 @@ mod test {
         let dir = TempDir::new().unwrap();
         let path = AbsoluteSystemPath::new(dir.path().to_str().unwrap()).unwrap();
         add_v1_config(path).unwrap();
-        let config = Config::load_from_dir(path).unwrap();
-        assert_matches!(config, Some(Config::V1(_)));
+        let config = Config::load_from_dir(path)
+            .unwrap()
+            .map(|config| config.inner);
+        assert_matches!(config, Some(ConfigInner::V1(_)));
     }
 
     #[test]
@@ -180,8 +206,10 @@ mod test {
         let dir = TempDir::new().unwrap();
         let path = AbsoluteSystemPath::new(dir.path().to_str().unwrap()).unwrap();
         add_v2_config(path).unwrap();
-        let config = Config::load_from_dir(path).unwrap();
-        assert_matches!(config, Some(Config::V2(_)));
+        let config = Config::load_from_dir(path)
+            .unwrap()
+            .map(|config| config.inner);
+        assert_matches!(config, Some(ConfigInner::V2(_)));
     }
 
     #[test]
@@ -190,8 +218,10 @@ mod test {
         let path = AbsoluteSystemPath::new(dir.path().to_str().unwrap()).unwrap();
         add_v1_config(path).unwrap();
         add_v2_config(path).unwrap();
-        let config = Config::load_from_dir(path).unwrap();
-        assert_matches!(config, Some(Config::V2(_)));
+        let config = Config::load_from_dir(path)
+            .unwrap()
+            .map(|config| config.inner);
+        assert_matches!(config, Some(ConfigInner::V2(_)));
     }
 
     #[test]
@@ -199,8 +229,10 @@ mod test {
         let dir = TempDir::new().unwrap();
         let path = AbsoluteSystemPath::new(dir.path().to_str().unwrap()).unwrap();
         add_v2_alt_config(path).unwrap();
-        let config = Config::load_from_dir(path).unwrap();
-        assert_matches!(config, Some(Config::V2(_)));
+        let config = Config::load_from_dir(path)
+            .unwrap()
+            .map(|config| config.inner);
+        assert_matches!(config, Some(ConfigInner::V2(_)));
     }
 
     #[test]

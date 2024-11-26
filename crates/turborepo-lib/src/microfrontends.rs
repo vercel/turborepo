@@ -15,6 +15,7 @@ use crate::{
 #[derive(Debug, Clone)]
 pub struct MicrofrontendsConfigs {
     configs: HashMap<String, HashSet<TaskId<'static>>>,
+    config_filenames: HashMap<String, String>,
     mfe_package: Option<&'static str>,
 }
 
@@ -24,6 +25,7 @@ impl MicrofrontendsConfigs {
         package_graph: &PackageGraph,
     ) -> Result<Option<Self>, Error> {
         let mut configs = HashMap::new();
+        let mut config_filenames = HashMap::new();
         let mut referenced_default_apps = HashSet::new();
         for (package_name, package_info) in package_graph.packages() {
             let package_dir = repo_root.resolve(package_info.package_path());
@@ -49,6 +51,7 @@ impl MicrofrontendsConfigs {
                 })
                 .collect();
             configs.insert(package_name.to_string(), tasks);
+            config_filenames.insert(package_name.to_string(), config.filename().to_owned());
         }
         let default_apps_found = configs.keys().cloned().collect();
         let mut missing_default_apps = referenced_default_apps
@@ -77,6 +80,7 @@ impl MicrofrontendsConfigs {
 
         Ok((!configs.is_empty()).then_some(Self {
             configs,
+            config_filenames,
             mfe_package,
         }))
     }
@@ -97,6 +101,11 @@ impl MicrofrontendsConfigs {
         self.configs
             .values()
             .any(|dev_tasks| dev_tasks.contains(task_id))
+    }
+
+    pub fn config_filename(&self, package_name: &str) -> Option<&str> {
+        let filename = self.config_filenames.get(package_name)?;
+        Some(filename.as_str())
     }
 
     pub fn update_turbo_json(
@@ -265,6 +274,7 @@ mod test {
         );
         let mfe = MicrofrontendsConfigs {
             configs,
+            config_filenames: HashMap::new(),
             mfe_package: None,
         };
         assert_eq!(

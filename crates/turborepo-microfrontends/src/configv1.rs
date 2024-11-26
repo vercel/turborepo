@@ -47,10 +47,6 @@ impl ConfigV1 {
         }
     }
 
-    pub fn applications(&self) -> impl Iterator<Item = (&String, &Application)> {
-        self.applications.iter()
-    }
-
     pub fn development_tasks(&self) -> impl Iterator<Item = (&str, Option<&str>)> {
         self.applications
             .iter()
