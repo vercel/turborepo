@@ -26,6 +26,7 @@ const RESIZE_DEBOUNCE_DELAY: Duration = Duration::from_millis(10);
 use super::{
     event::{CacheResult, Direction, OutputLogs, PaneSize, TaskResult},
     input,
+    preferences::Preferences,
     search::SearchResults,
     AppReceiver, Debouncer, Error, Event, InputOptions, SizeInfo, TaskTable, TerminalPane,
 };
@@ -773,10 +774,23 @@ fn update(
             app.finish_task(&task, result)?;
         }
         Event::Up => {
-            preferences::Preferences::write_preferences(repo_root);
+            preferences::Preferences::write_preferences(
+                &Preferences {
+                    is_task_list_visible: app.has_sidebar,
+                    active_task: app.active_task()?.to_string(),
+                },
+                repo_root,
+            );
             app.previous();
         }
         Event::Down => {
+            preferences::Preferences::write_preferences(
+                &Preferences {
+                    is_task_list_visible: app.has_sidebar,
+                    active_task: app.active_task()?.to_string(),
+                },
+                repo_root,
+            );
             app.next();
         }
         Event::ScrollUp => {
@@ -796,6 +810,13 @@ fn update(
             app.interact()?;
         }
         Event::ToggleSidebar => {
+            preferences::Preferences::write_preferences(
+                &Preferences {
+                    is_task_list_visible: app.has_sidebar,
+                    active_task: app.active_task()?.to_string(),
+                },
+                repo_root,
+            );
             app.has_sidebar = !app.has_sidebar;
         }
         Event::Input { bytes } => {

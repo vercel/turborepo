@@ -5,22 +5,62 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
+use turbopath::AbsoluteSystemPathBuf;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Preferences {
     pub is_task_list_visible: bool,
+    pub active_task: String,
 }
 
-fn save_to_json(
-    preferences: &Preferences,
-    path: AbsoluteSystemPathBuf,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let json = serde_json::to_string_pretty(preferences)?;
-    let mut file = File::create(path.as_std_path())?;
-    file.write_all(json.as_bytes())?;
+fn read_from_json(path: &str) -> Result<Preferences, Box<dyn std::error::Error>> {
+    let file = File::open(path)?;
+    let reader = BufReader::new(file);
 
-    Ok(())
+    let preferences: Preferences = serde_json::from_reader(reader)?;
+
+    Ok(preferences)
+}
+
+impl Default for Preferences {
+    fn default() -> Self {
+        Preferences {
+            is_task_list_visible: true,
+            active_task: String::new(),
+        }
+    }
+}
+
+impl Preferences {
+    // pub fn new(is_task_list_visible: bool, active_task: String) -> Self {
+    //     Preferences {
+    //         is_task_list_visible,
+    //         active_task,
+    //     }
+    // }
+
+    pub fn write_preferences(
+        &self,
+        repo_root: &AbsoluteSystemPathBuf,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let preferences_dir = repo_root.join_components(&[".turbo", "preferences"]);
+        let preferences_file = preferences_dir.join_component("tui.json");
+
+        fs::create_dir_all(preferences_dir.as_std_path())?;
+
+        let json = serde_json::to_string_pretty(self)?;
+        let mut file = File::create(preferences_file.as_std_path())?;
+        file.write_all(json.as_bytes())?;
+
+        Ok(())
+    }
+
+    // pub fn read_preferences(
+    //     repo_root: &AbsoluteSystemPathBuf,
+    // ) -> Result<Self, Box<dyn std::error::Error>> {
+    //     let preferences_file = repo_root.join_components(&[".turbo",
+    // "preferences", "tui.json"]);     read_from_json(preferences_file.
+    // as_std_path().to_str().unwrap()) }
 }
 
 fn update_json_field(
@@ -38,35 +78,4 @@ fn update_json_field(
     file.write_all(updated_json_string.as_bytes())?;
 
     Ok(())
-}
-
-fn read_from_json(path: &str) -> Result<Preferences, Box<dyn std::error::Error>> {
-    let file = File::open(path)?;
-    let reader = BufReader::new(file);
-
-    let person: Preferences = serde_json::from_reader(reader)?;
-
-    Ok(person)
-}
-
-impl Preferences {
-    pub fn write_preferences(
-        repo_root: &AbsoluteSystemPath,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let preferences_dir = repo_root.join_components(&[".turbo", "preferences"]);
-        let preferences_file = preferences_dir.join_component("tui.json");
-
-        // Create the directory structure if it doesn't exist
-        fs::create_dir_all(preferences_dir.as_std_path())?;
-
-        save_to_json(
-            &Preferences {
-                is_task_list_visible: true,
-            },
-            preferences_file,
-        )
-        .unwrap();
-
-        Ok(())
-    }
 }
