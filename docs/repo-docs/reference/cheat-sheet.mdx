@@ -19,6 +19,12 @@ Below is a table showing the various ways to options available for setting behav
 
 ## Options table
 
-| Behavior      | Flags                                                 | Environment Variables | turbo.json |
-| ------------- | ----------------------------------------------------- | --------------------- | ---------- |
-| Cache sources | [`--cache`](/repo/docs/reference/run#--cache-options) | `TURBO_CACHE`         | None       |
+| Behavior                     | Flags                                                                        | Environment Variables                                                                                  | turbo.json                                                                |
+| ---------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------- |
+| Remote Cache base URL        | [`--api`](/repo/docs/reference/run#--api-route)                              | [`TURBO_API`](/repo/docs/reference/system-environment-variables#turbo_API)                             | [`remoteCache.apiUrl`](/repo/docs/reference/configuration#remote-caching) |
+| Cache sources                | [`--cache`](/repo/docs/reference/run#--cache-options)                        | [`TURBO_CACHE`](/repo/docs/reference/system-environment-variables#turbo_cache)                         | None                                                                      |
+| Local cache directory        | [`--cache-dir`](/repo/docs/reference/run#--cache-dir-path)                   | [`TURBO_CACHE_DIR`](/repo/docs/reference/system-environment-variables#turbo_cache_dir)                 | [`cacheDir`](/repo/docs/reference/configuration#cachedir)                 |
+| Task concurrency             | [`--concurrency`](/repo/docs/reference/run#--concurrency-number--percentage) | None                                                                                                   | None                                                                      |
+| Binary path                  | None                                                                         | [`TURBO_BINARY_PATH`](/repo/docs/reference/system-environment-variables#turbo_binary_path)             | None                                                                      |
+| Vendor environment variables | None                                                                         | [`TURBO_CI_VENDOR_ENV_KEY`](/repo/docs/reference/system-environment-variables#turbo_ci_vendor_env_key) | None                                                                      |
+|                              | [``](/repo/docs/reference/run#)                                              | [``](/repo/docs/reference/system-environment-variables#)                                               | [``](/repo/docs/reference/configuration#)                                 |
