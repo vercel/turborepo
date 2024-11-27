@@ -1,0 +1,24 @@
+---
+title: Options cheat sheet
+description: Flags, configurations, and System Environment Variables for Turborepo
+---
+
+There are three ways to manage the behavior of `turbo run` or `turbo watch` invocations:
+
+- Configuration in `turbo.json`
+- System environment variables
+- Flags passed to the CLI invocation
+
+The three strategies listed above are in order of precedence. Where a flag value is provided, for the same System Environment Variable or `turbo.json` configuration, the value for the flag will be used. Because of this, we recommend using:
+
+- `turbo.json` configuration for defaults
+- System Environment Variables for per-environment overrides
+- Flags for per-invocation overrides
+
+Below is a table showing the various ways to options available for setting behaviors and where the strategies overlap.
+
+## Options table
+
+| Behavior      | Flags                                                 | Environment Variables | turbo.json |
+| ------------- | ----------------------------------------------------- | --------------------- | ---------- |
+| Cache sources | [`--cache`](/repo/docs/reference/run#--cache-options) | `TURBO_CACHE`         | None       |
