@@ -176,6 +176,11 @@ impl<T> Spanned<T> {
             text: self.text,
         }
     }
+
+    /// Gets a mutable ref to the inner value
+    pub fn as_inner_mut(&mut self) -> &mut T {
+        &mut self.value
+    }
 }
 
 impl<T> Spanned<Option<T>> {

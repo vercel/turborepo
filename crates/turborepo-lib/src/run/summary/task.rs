@@ -284,6 +284,7 @@ impl From<TaskDefinition> for TaskSummaryTaskDefinition {
             interruptible,
             interactive,
             env_mode,
+            siblings: _,
         } = value;
 
         let mut outputs = inclusions;
