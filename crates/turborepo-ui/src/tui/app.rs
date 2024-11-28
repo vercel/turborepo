@@ -61,7 +61,12 @@ pub struct App<W> {
 }
 
 impl<W> App<W> {
-    pub fn new(rows: u16, cols: u16, tasks: Vec<String>) -> Self {
+    pub fn new(
+        rows: u16,
+        cols: u16,
+        tasks: Vec<String>,
+        repo_root: &AbsoluteSystemPathBuf,
+    ) -> Self {
         debug!("tasks: {tasks:?}");
         let size = SizeInfo::new(rows, cols, tasks.iter().map(|s| s.as_str()));
 
@@ -100,7 +105,9 @@ impl<W> App<W> {
             tasks_by_status,
             scroll: TableState::default().with_selected(selected_task_index),
             selected_task_index,
-            has_sidebar: true,
+            has_sidebar: preferences::Preferences::read_preferences(repo_root)
+                .map(|prefs| prefs.is_task_list_visible)
+                .unwrap_or(false),
             has_user_scrolled: has_user_interacted,
         }
     }
@@ -579,7 +586,8 @@ pub async fn run_app(
     let mut terminal = startup(color_config)?;
     let size = terminal.size()?;
 
-    let mut app: App<Box<dyn io::Write + Send>> = App::new(size.height, size.width, tasks);
+    let mut app: App<Box<dyn io::Write + Send>> =
+        App::new(size.height, size.width, tasks, &repo_root);
     let (crossterm_tx, crossterm_rx) = mpsc::channel(1024);
     input::start_crossterm_stream(crossterm_tx);
 
@@ -774,24 +782,24 @@ fn update(
             app.finish_task(&task, result)?;
         }
         Event::Up => {
-            preferences::Preferences::write_preferences(
+            app.previous();
+            let _ = preferences::Preferences::write_preferences(
                 &Preferences {
                     is_task_list_visible: app.has_sidebar,
                     active_task: app.active_task()?.to_string(),
                 },
                 repo_root,
             );
-            app.previous();
         }
         Event::Down => {
-            preferences::Preferences::write_preferences(
+            app.next();
+            let _ = preferences::Preferences::write_preferences(
                 &Preferences {
                     is_task_list_visible: app.has_sidebar,
                     active_task: app.active_task()?.to_string(),
                 },
                 repo_root,
             );
-            app.next();
         }
         Event::ScrollUp => {
             app.has_user_scrolled = true;
@@ -810,14 +818,14 @@ fn update(
             app.interact()?;
         }
         Event::ToggleSidebar => {
-            preferences::Preferences::write_preferences(
+            app.has_sidebar = !app.has_sidebar;
+            let _ = preferences::Preferences::write_preferences(
                 &Preferences {
                     is_task_list_visible: app.has_sidebar,
                     active_task: app.active_task()?.to_string(),
                 },
                 repo_root,
             );
-            app.has_sidebar = !app.has_sidebar;
         }
         Event::Input { bytes } => {
             app.forward_input(&bytes)?;
@@ -900,6 +908,7 @@ mod test {
             100,
             100,
             vec!["foo".to_string(), "bar".to_string(), "baz".to_string()],
+            &AbsoluteSystemPathBuf::default(),
         );
         assert_eq!(
             app.scroll.selected(),
@@ -929,6 +938,7 @@ mod test {
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
+            &AbsoluteSystemPathBuf::default(),
         );
         app.next();
         assert_eq!(app.scroll.selected(), Some(1), "selected b");
@@ -951,6 +961,7 @@ mod test {
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
+            &AbsoluteSystemPathBuf::default(),
         );
         app.next();
         app.next();
@@ -1017,6 +1028,7 @@ mod test {
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
+            &AbsoluteSystemPathBuf::default(),
         );
         app.next();
         app.next();
@@ -1051,7 +1063,12 @@ mod test {
 
     #[test]
     fn test_forward_stdin() -> Result<(), Error> {
-        let mut app: App<Vec<u8>> = App::new(100, 100, vec!["a".to_string(), "b".to_string()]);
+        let mut app: App<Vec<u8>> = App::new(
+            100,
+            100,
+            vec!["a".to_string(), "b".to_string()],
+            &AbsoluteSystemPathBuf::default(),
+        );
         app.next();
         assert_eq!(app.scroll.selected(), Some(1), "selected b");
         assert_eq!(app.tasks_by_status.task_name(1)?, "b", "selected b");
@@ -1084,7 +1101,12 @@ mod test {
 
     #[test]
     fn test_interact() -> Result<(), Error> {
-        let mut app: App<Vec<u8>> = App::new(100, 100, vec!["a".to_string(), "b".to_string()]);
+        let mut app: App<Vec<u8>> = App::new(
+            100,
+            100,
+            vec!["a".to_string(), "b".to_string()],
+            &AbsoluteSystemPathBuf::default(),
+        );
         assert!(!app.is_focusing_pane(), "app starts focused on table");
         app.insert_stdin("a", Some(Vec::new()))?;
 
@@ -1106,7 +1128,12 @@ mod test {
 
     #[test]
     fn test_task_status() -> Result<(), Error> {
-        let mut app: App<Vec<u8>> = App::new(100, 100, vec!["a".to_string(), "b".to_string()]);
+        let mut app: App<Vec<u8>> = App::new(
+            100,
+            100,
+            vec!["a".to_string(), "b".to_string()],
+            &AbsoluteSystemPathBuf::default(),
+        );
         app.next();
         assert_eq!(app.scroll.selected(), Some(1), "selected b");
         assert_eq!(app.tasks_by_status.task_name(1)?, "b", "selected b");
@@ -1127,6 +1154,7 @@ mod test {
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
+            &AbsoluteSystemPathBuf::default(),
         );
         assert_eq!(app.scroll.selected(), Some(0), "selected a");
         assert_eq!(app.tasks_by_status.task_name(0)?, "a", "selected a");
@@ -1157,6 +1185,7 @@ mod test {
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
+            &AbsoluteSystemPathBuf::default(),
         );
         app.next();
         assert_eq!(app.scroll.selected(), Some(1), "selected b");
@@ -1184,7 +1213,12 @@ mod test {
 
     #[test]
     fn test_resize() -> Result<(), Error> {
-        let mut app: App<Vec<u8>> = App::new(20, 24, vec!["a".to_string(), "b".to_string()]);
+        let mut app: App<Vec<u8>> = App::new(
+            20,
+            24,
+            vec!["a".to_string(), "b".to_string()],
+            &AbsoluteSystemPathBuf::default(),
+        );
         let pane_rows = app.size.pane_rows();
         let pane_cols = app.size.pane_cols();
         for (name, task) in app.tasks.iter() {
@@ -1219,6 +1253,7 @@ mod test {
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
+            &AbsoluteSystemPathBuf::default(),
         );
         app.next();
         app.update_tasks(Vec::new())?;
@@ -1233,6 +1268,7 @@ mod test {
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
+            &AbsoluteSystemPathBuf::default(),
         );
         app.next();
         app.restart_tasks(vec!["d".to_string()])?;
@@ -1249,6 +1285,7 @@ mod test {
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
+            &AbsoluteSystemPathBuf::default(),
         );
         app.enter_search()?;
         assert!(matches!(app.focus, LayoutSections::Search { .. }));
@@ -1270,6 +1307,7 @@ mod test {
             100,
             100,
             vec!["a".to_string(), "ab".to_string(), "abc".to_string()],
+            &AbsoluteSystemPathBuf::default(),
         );
         app.enter_search()?;
         app.search_enter_char('a')?;
@@ -1293,6 +1331,7 @@ mod test {
             100,
             100,
             vec!["a".to_string(), "ab".to_string(), "abc".to_string()],
+            &AbsoluteSystemPathBuf::default(),
         );
         app.enter_search()?;
         app.search_enter_char('b')?;
@@ -1320,6 +1359,7 @@ mod test {
             100,
             100,
             vec!["a".to_string(), "abc".to_string(), "b".to_string()],
+            &AbsoluteSystemPathBuf::default(),
         );
         app.next();
         assert_eq!(app.active_task()?, "abc");
@@ -1339,6 +1379,7 @@ mod test {
             100,
             100,
             vec!["a".to_string(), "abc".to_string(), "b".to_string()],
+            &AbsoluteSystemPathBuf::default(),
         );
         app.next();
         assert_eq!(app.active_task()?, "abc");
@@ -1358,6 +1399,7 @@ mod test {
             100,
             100,
             vec!["a".to_string(), "ab".to_string(), "abc".to_string()],
+            &AbsoluteSystemPathBuf::default(),
         );
         app.enter_search()?;
         app.search_enter_char('b')?;
@@ -1374,6 +1416,7 @@ mod test {
             100,
             100,
             vec!["a".to_string(), "ab".to_string(), "abc".to_string()],
+            &AbsoluteSystemPathBuf::default(),
         );
         app.enter_search()?;
         app.search_enter_char('b')?;

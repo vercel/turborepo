@@ -55,12 +55,12 @@ impl Preferences {
         Ok(())
     }
 
-    // pub fn read_preferences(
-    //     repo_root: &AbsoluteSystemPathBuf,
-    // ) -> Result<Self, Box<dyn std::error::Error>> {
-    //     let preferences_file = repo_root.join_components(&[".turbo",
-    // "preferences", "tui.json"]);     read_from_json(preferences_file.
-    // as_std_path().to_str().unwrap()) }
+    pub fn read_preferences(
+        repo_root: &AbsoluteSystemPathBuf,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        let preferences_file = repo_root.join_components(&[".turbo", "preferences", "tui.json"]);
+        read_from_json(preferences_file.as_std_path().to_str().unwrap())
+    }
 }
 
 fn update_json_field(
