@@ -8,7 +8,8 @@ async function exec(command: string, args: Array<string> = [], opts?: Options) {
   // this is no longer needed as of https://github.com/nodejs/corepack/pull/167
   // but we'll keep the behavior for those on older versions)
   const execOptions: Options = {
-    cwd: os.tmpdir(),
+    // Commented this line which causes local yarn version to not be used, uses global yarn instead.
+    // cwd: os.tmpdir(),
     env: { COREPACK_ENABLE_STRICT: "0" },
     ...opts,
   };
