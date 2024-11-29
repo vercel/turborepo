@@ -1,5 +1,5 @@
 use ratatui::{
-    style::{Modifier, Style},
+    style::{Modifier, Style, Stylize},
     text::Line,
     widgets::{Block, Widget},
 };
@@ -32,10 +32,6 @@ impl<'a, W> TerminalPane<'a, W> {
             task_name,
             has_sidebar,
         }
-    }
-
-    fn highlight(&self) -> bool {
-        matches!(self.section, LayoutSections::Pane)
     }
 
     fn footer(&self) -> Line {
@@ -77,13 +73,12 @@ impl<'a, W> Widget for &TerminalPane<'a, W> {
     {
         let screen = self.terminal_output.parser.screen();
         let block = Block::default()
-            .title(self.terminal_output.title(self.task_name))
-            .title_bottom(self.footer())
-            .style(if self.highlight() {
-                Style::new().fg(ratatui::style::Color::Yellow)
-            } else {
-                Style::new()
-            });
+            .title(
+                self.terminal_output
+                    .title(self.task_name)
+                    .add_modifier(Modifier::DIM),
+            )
+            .title_bottom(self.footer());
 
         let term = PseudoTerminal::new(screen).block(block);
         term.render(area, buf)
