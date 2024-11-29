@@ -52,7 +52,7 @@ impl<'a> InputOptions<'a> {
 }
 
 /// Converts a crossterm key event into a TUI interaction event
-fn translate_key_event(mut options: InputOptions, key_event: KeyEvent) -> Option<Event> {
+fn translate_key_event(options: InputOptions, key_event: KeyEvent) -> Option<Event> {
     // On Windows events for releasing a key are produced
     // We skip these to avoid emitting 2 events per key press.
     // There is still a `Repeat` event for when a key is held that will pass through
@@ -81,10 +81,7 @@ fn translate_key_event(mut options: InputOptions, key_event: KeyEvent) -> Option
         KeyCode::Char('/') if matches!(options.focus, LayoutSections::TaskList) => {
             Some(Event::SearchEnter)
         }
-        KeyCode::Esc if options.is_help_popup_open => {
-            options.is_help_popup_open = false;
-            Some(Event::ToggleHelpPopup)
-        }
+        KeyCode::Esc if options.is_help_popup_open => Some(Event::ToggleHelpPopup),
         KeyCode::Esc if matches!(options.focus, LayoutSections::Search { .. }) => {
             Some(Event::SearchExit {
                 restore_scroll: true,
