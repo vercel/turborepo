@@ -868,7 +868,7 @@ fn view<W>(app: &mut App<W>, f: &mut Frame) {
     f.render_widget(&pane_to_render, pane);
 
     if app.showing_help_popup {
-        let area = popup::popup_area(app.size, 80, 80);
+        let area = popup::popup_area(app.size);
         f.render_widget(Clear, area); // Clears background underneath popup
         f.render_widget(popup::block(), area);
     }

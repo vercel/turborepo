@@ -90,7 +90,6 @@ fn translate_key_event(mut options: InputOptions, key_event: KeyEvent) -> Option
                 restore_scroll: true,
             })
         }
-        KeyCode::Char('h') => Some(Event::ToggleSidebar),
         KeyCode::Enter if matches!(options.focus, LayoutSections::Search { .. }) => {
             Some(Event::SearchExit {
                 restore_scroll: false,
@@ -117,6 +116,7 @@ fn translate_key_event(mut options: InputOptions, key_event: KeyEvent) -> Option
         KeyCode::Char('n') if key_event.modifiers == KeyModifiers::CONTROL => {
             Some(Event::ScrollDown)
         }
+        KeyCode::Char('h') => Some(Event::ToggleSidebar),
         KeyCode::Char('m') => Some(Event::ToggleHelpPopup),
         KeyCode::Up | KeyCode::Char('k') => Some(Event::Up),
         KeyCode::Down | KeyCode::Char('j') => Some(Event::Down),
