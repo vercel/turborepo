@@ -32,13 +32,6 @@ impl Default for Preferences {
 }
 
 impl Preferences {
-    // pub fn new(is_task_list_visible: bool, active_task: String) -> Self {
-    //     Preferences {
-    //         is_task_list_visible,
-    //         active_task,
-    //     }
-    // }
-
     pub fn write_preferences(
         &self,
         repo_root: &AbsoluteSystemPathBuf,

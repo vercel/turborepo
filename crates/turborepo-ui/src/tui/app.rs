@@ -5,6 +5,7 @@ use std::{
     time::Duration,
 };
 
+use itertools::Itertools;
 use ratatui::{
     backend::{Backend, CrosstermBackend},
     layout::{Constraint, Layout},
@@ -83,8 +84,28 @@ impl<W> App<W> {
             running: Vec::new(),
         };
 
-        let has_user_interacted = false;
-        let selected_task_index: usize = 0;
+        let preferences_from_disk = preferences::Preferences::read_preferences(repo_root);
+        let task_name_selected_from_previous_invocation = preferences_from_disk
+            .as_ref()
+            .map(|prefs| prefs.active_task.clone())
+            .ok();
+
+        let has_selected_task_from_previous_invocation =
+            task_name_selected_from_previous_invocation.is_some();
+
+        let task_selected_from_previous_invocation = preferences_from_disk
+            .as_ref()
+            .map(|prefs| {
+                tasks_by_status
+                    .task_names_in_displayed_order()
+                    .find_position(|task_name| *task_name == prefs.active_task)
+                    .unwrap()
+                    .0
+            })
+            .unwrap_or(0);
+
+        let has_user_interacted = has_selected_task_from_previous_invocation;
+        let selected_task_index: usize = task_selected_from_previous_invocation;
 
         let pane_rows = size.pane_rows();
         let pane_cols = size.pane_cols();
@@ -105,9 +126,9 @@ impl<W> App<W> {
             tasks_by_status,
             scroll: TableState::default().with_selected(selected_task_index),
             selected_task_index,
-            has_sidebar: preferences::Preferences::read_preferences(repo_root)
+            has_sidebar: preferences_from_disk
                 .map(|prefs| prefs.is_task_list_visible)
-                .unwrap_or(false),
+                .unwrap_or(true),
             has_user_scrolled: has_user_interacted,
         }
     }
