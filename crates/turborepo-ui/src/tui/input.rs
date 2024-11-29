@@ -2,7 +2,6 @@ use crossterm::event::{EventStream, KeyCode, KeyEvent, KeyEventKind, KeyModifier
 use futures::StreamExt;
 use tokio::{sync::mpsc, task::JoinHandle};
 use tracing::debug;
-use turbopath::AbsoluteSystemPathBuf;
 
 use super::{
     app::LayoutSections,
