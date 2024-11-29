@@ -12,6 +12,7 @@ use super::{
 pub struct InputOptions<'a> {
     pub focus: &'a LayoutSections,
     pub has_selection: bool,
+    pub is_help_popup_open: bool,
 }
 
 pub fn start_crossterm_stream(tx: mpsc::Sender<crossterm::event::Event>) -> Option<JoinHandle<()>> {
@@ -51,7 +52,7 @@ impl<'a> InputOptions<'a> {
 }
 
 /// Converts a crossterm key event into a TUI interaction event
-fn translate_key_event(options: InputOptions, key_event: KeyEvent) -> Option<Event> {
+fn translate_key_event(mut options: InputOptions, key_event: KeyEvent) -> Option<Event> {
     // On Windows events for releasing a key are produced
     // We skip these to avoid emitting 2 events per key press.
     // There is still a `Repeat` event for when a key is held that will pass through
@@ -79,6 +80,10 @@ fn translate_key_event(options: InputOptions, key_event: KeyEvent) -> Option<Eve
         // If we're on the list and user presses `/` enter search mode
         KeyCode::Char('/') if matches!(options.focus, LayoutSections::TaskList) => {
             Some(Event::SearchEnter)
+        }
+        KeyCode::Esc if options.is_help_popup_open => {
+            options.is_help_popup_open = false;
+            Some(Event::ToggleHelpPopup)
         }
         KeyCode::Esc if matches!(options.focus, LayoutSections::Search { .. }) => {
             Some(Event::SearchExit {
@@ -112,6 +117,7 @@ fn translate_key_event(options: InputOptions, key_event: KeyEvent) -> Option<Eve
         KeyCode::Char('n') if key_event.modifiers == KeyModifiers::CONTROL => {
             Some(Event::ScrollDown)
         }
+        KeyCode::Char('m') => Some(Event::ToggleHelpPopup),
         KeyCode::Up | KeyCode::Char('k') => Some(Event::Up),
         KeyCode::Down | KeyCode::Char('j') => Some(Event::Down),
         KeyCode::Enter | KeyCode::Char('i') => Some(Event::EnterInteractive),
