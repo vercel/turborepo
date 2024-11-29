@@ -1,5 +1,5 @@
 use ratatui::{
-    style::Style,
+    style::{Modifier, Style, Stylize},
     text::Line,
     widgets::{Block, Widget},
 };
@@ -34,12 +34,8 @@ impl<'a, W> TerminalPane<'a, W> {
         }
     }
 
-    fn highlight(&self) -> bool {
-        matches!(self.section, LayoutSections::Pane)
-    }
-
     fn footer(&self) -> Line {
-        let build_message_vec = |footer_text: &str| -> String {
+        let build_message_vec = |footer_text: &str| -> Line {
             let mut messages = vec![footer_text];
 
             if !self.has_sidebar {
@@ -51,18 +47,18 @@ impl<'a, W> TerminalPane<'a, W> {
             }
 
             // Spaces are used to pad the footer text for aesthetics
-            format!("   {}", messages.join(", "))
+            let formatted_messages = format!("   {}", messages.join(", "));
+
+            Line::styled(
+                formatted_messages.to_string(),
+                Style::default().add_modifier(Modifier::DIM),
+            )
+            .left_aligned()
         };
 
         match self.section {
-            LayoutSections::Pane => {
-                let messages = build_message_vec(FOOTER_TEXT_ACTIVE);
-                Line::from(messages).left_aligned()
-            }
-            LayoutSections::TaskList => {
-                let messages = build_message_vec(FOOTER_TEXT_INACTIVE);
-                Line::from(messages).left_aligned()
-            }
+            LayoutSections::Pane => build_message_vec(FOOTER_TEXT_ACTIVE),
+            LayoutSections::TaskList => build_message_vec(FOOTER_TEXT_INACTIVE),
             LayoutSections::Search { results, .. } => {
                 Line::from(format!("/ {}", results.query())).left_aligned()
             }
@@ -77,13 +73,12 @@ impl<'a, W> Widget for &TerminalPane<'a, W> {
     {
         let screen = self.terminal_output.parser.screen();
         let block = Block::default()
-            .title(self.terminal_output.title(self.task_name))
-            .title_bottom(self.footer())
-            .style(if self.highlight() {
-                Style::new().fg(ratatui::style::Color::Yellow)
-            } else {
-                Style::new()
-            });
+            .title(
+                self.terminal_output
+                    .title(self.task_name)
+                    .add_modifier(Modifier::DIM),
+            )
+            .title_bottom(self.footer());
 
         let term = PseudoTerminal::new(screen).block(block);
         term.render(area, buf)

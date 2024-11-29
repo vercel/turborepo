@@ -109,6 +109,7 @@ fn translate_key_event(options: InputOptions, key_event: KeyEvent) -> Option<Eve
             Some(Event::SearchEnterChar(c))
         }
         // Fall through if we aren't in interactive mode
+        KeyCode::Char('h') => Some(Event::ToggleSidebar),
         KeyCode::Char('p') if key_event.modifiers == KeyModifiers::CONTROL => Some(Event::ScrollUp),
         KeyCode::Char('n') if key_event.modifiers == KeyModifiers::CONTROL => {
             Some(Event::ScrollDown)
