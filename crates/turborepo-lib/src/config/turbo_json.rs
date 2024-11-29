@@ -12,23 +12,10 @@ impl<'a> TurboJsonReader<'a> {
     pub fn new(repo_root: &'a AbsoluteSystemPath) -> Self {
         Self { repo_root }
     }
-}
 
-impl<'a> ResolvedConfigurationOptions for TurboJsonReader<'a> {
-    fn get_configuration_options(
-        &self,
-        existing_config: &ConfigurationOptions,
+    fn turbo_json_to_config_options(
+        turbo_json: RawTurboJson,
     ) -> Result<ConfigurationOptions, Error> {
-        let turbo_json_path = existing_config.root_turbo_json_path(self.repo_root);
-        let turbo_json = RawTurboJson::read(self.repo_root, &turbo_json_path).or_else(|e| {
-            if let Error::Io(e) = &e {
-                if matches!(e.kind(), std::io::ErrorKind::NotFound) {
-                    return Ok(Default::default());
-                }
-            }
-
-            Err(e)
-        })?;
         let mut opts = if let Some(remote_cache_options) = &turbo_json.remote_cache {
             remote_cache_options.into()
         } else {
@@ -64,8 +51,28 @@ impl<'a> ResolvedConfigurationOptions for TurboJsonReader<'a> {
     }
 }
 
+impl<'a> ResolvedConfigurationOptions for TurboJsonReader<'a> {
+    fn get_configuration_options(
+        &self,
+        existing_config: &ConfigurationOptions,
+    ) -> Result<ConfigurationOptions, Error> {
+        let turbo_json_path = existing_config.root_turbo_json_path(self.repo_root);
+        let turbo_json = RawTurboJson::read(self.repo_root, &turbo_json_path).or_else(|e| {
+            if let Error::Io(e) = &e {
+                if matches!(e.kind(), std::io::ErrorKind::NotFound) {
+                    return Ok(Default::default());
+                }
+            }
+
+            Err(e)
+        })?;
+        Self::turbo_json_to_config_options(turbo_json)
+    }
+}
+
 #[cfg(test)]
 mod test {
+    use serde_json::json;
     use tempfile::tempdir;
 
     use super::*;
@@ -111,7 +118,7 @@ mod test {
         };
         root_turbo_json_path
             .create_with_contents(
-                serde_json::to_string_pretty(&serde_json::json!({
+                serde_json::to_string_pretty(&json!({
                     "daemon": false
                 }))
                 .unwrap(),
@@ -122,5 +129,43 @@ mod test {
         let config = reader.get_configuration_options(&existing_config).unwrap();
         // Make sure we read the correct turbo.json
         assert_eq!(config.daemon(), Some(false));
+    }
+
+    #[test]
+    fn test_remote_cache_options() {
+        let timeout = 100;
+        let upload_timeout = 200;
+        let api_url = "localhost:3000";
+        let login_url = "localhost:3001";
+        let team_slug = "acme-packers";
+        let team_id = "id-123";
+        let turbo_json = RawTurboJson::parse(
+            &serde_json::to_string_pretty(&json!({
+                "remoteCache": {
+                    "enabled": true,
+                    "timeout": timeout,
+                    "uploadTimeout": upload_timeout,
+                    "apiUrl": api_url,
+                    "loginUrl": login_url,
+                    "teamSlug": team_slug,
+                    "teamId": team_id,
+                    "signature": true,
+                    "preflight": true
+                }
+            }))
+            .unwrap(),
+            "junk",
+        )
+        .unwrap();
+        let config = TurboJsonReader::turbo_json_to_config_options(turbo_json).unwrap();
+        assert!(config.enabled());
+        assert_eq!(config.timeout(), timeout);
+        assert_eq!(config.upload_timeout(), upload_timeout);
+        assert_eq!(config.api_url(), api_url);
+        assert_eq!(config.login_url(), login_url);
+        assert_eq!(config.team_slug(), Some(team_slug));
+        assert_eq!(config.team_id(), Some(team_id));
+        assert!(config.signature());
+        assert!(config.preflight());
     }
 }

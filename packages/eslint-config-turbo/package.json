@@ -1,6 +1,6 @@
 {
   "name": "eslint-config-turbo",
-  "version": "2.3.1",
+  "version": "2.3.3",
   "description": "ESLint config for Turborepo",
   "repository": {
     "type": "git",
@@ -22,6 +22,10 @@
     "eslint-config"
   ],
   "main": "index.js",
+  "exports": {
+    "./flat": "./flat/index.js",
+    ".": "./index.js"
+  },
   "author": "Vercel",
   "dependencies": {
     "eslint-plugin-turbo": "workspace:*"

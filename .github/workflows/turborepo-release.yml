@@ -26,12 +26,19 @@ on:
         default: "prerelease"
         type: choice
         options:
+          # Bump the canary version of the existing semver release
           - prerelease
+          # Bump to the next patch version, creating its first canary release
           - prepatch
+          # Bump to the next minor version, creating its first canary release
           - preminor
+          # Bump to the next major version, creating its first canary release
           - premajor
+          # Bump to the next patch version
           - patch
+          # Bump to the next minor version
           - minor
+          # Bump to the next major version
           - major
       dry_run:
         description: "Do a dry run, skipping the final publish step."
