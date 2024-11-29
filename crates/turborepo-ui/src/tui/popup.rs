@@ -22,7 +22,7 @@ pub fn popup_area(area: SizeInfo, percent_x: u16, percent_y: u16) -> Rect {
 
 pub fn block() -> List<'static> {
     let mer = Block::bordered()
-        .title(" Terminal UI keymaps ")
+        .title(" Terminal UI keybinds ")
         .padding(Padding::uniform(1));
 
     let list_items = vec![
