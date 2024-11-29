@@ -46,8 +46,8 @@ pub fn popup_area(area: SizeInfo) -> Rect {
     area
 }
 
-pub fn block() -> List<'static> {
-    let mer = Block::bordered()
+pub fn popup() -> List<'static> {
+    let outer = Block::bordered()
         .title(" Keybinds ")
         .padding(Padding::uniform(1));
 
@@ -56,5 +56,5 @@ pub fn block() -> List<'static> {
             .into_iter()
             .map(|item| ListItem::new(Line::from(item))),
     )
-    .block(mer)
+    .block(outer)
 }

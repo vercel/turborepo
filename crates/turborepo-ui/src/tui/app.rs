@@ -17,7 +17,7 @@ use tokio::{
 };
 use tracing::{debug, trace};
 
-use crate::tui::popup;
+use crate::tui::popup::{popup, popup_area};
 
 pub const FRAMERATE: Duration = Duration::from_millis(3);
 const RESIZE_DEBOUNCE_DELAY: Duration = Duration::from_millis(10);
@@ -868,9 +868,9 @@ fn view<W>(app: &mut App<W>, f: &mut Frame) {
     f.render_widget(&pane_to_render, pane);
 
     if app.showing_help_popup {
-        let area = popup::popup_area(app.size);
+        let area = popup_area(app.size);
         f.render_widget(Clear, area); // Clears background underneath popup
-        f.render_widget(popup::block(), area);
+        f.render_widget(popup(), area);
     }
 }
 
