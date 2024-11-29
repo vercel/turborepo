@@ -27,7 +27,6 @@ const RESIZE_DEBOUNCE_DELAY: Duration = Duration::from_millis(10);
 use super::{
     event::{CacheResult, Direction, OutputLogs, PaneSize, TaskResult},
     input,
-    preferences::Preferences,
     search::SearchResults,
     AppReceiver, Debouncer, Error, Event, InputOptions, SizeInfo, TaskTable, TerminalPane,
 };
@@ -85,10 +84,11 @@ impl<W> App<W> {
         };
 
         let preferences_from_disk = preferences::Preferences::read_preferences(repo_root);
+        eprintln!("{:?}", preferences_from_disk);
         let task_name_selected_from_previous_invocation = preferences_from_disk
             .as_ref()
             .map(|prefs| prefs.active_task.clone())
-            .ok();
+            .unwrap();
 
         let has_selected_task_from_previous_invocation =
             task_name_selected_from_previous_invocation.is_some();
@@ -98,7 +98,8 @@ impl<W> App<W> {
             .map(|prefs| {
                 tasks_by_status
                     .task_names_in_displayed_order()
-                    .find_position(|task_name| *task_name == prefs.active_task)
+                    .find_position(|task_name| Some(task_name.to_string()) == prefs.active_task)
+                    // TODO: This is causing a crash.
                     .unwrap()
                     .0
             })
@@ -128,7 +129,8 @@ impl<W> App<W> {
             selected_task_index,
             has_sidebar: preferences_from_disk
                 .map(|prefs| prefs.is_task_list_visible)
-                .unwrap_or(true),
+                .unwrap_or(Some(true))
+                .unwrap(),
             has_user_scrolled: has_user_interacted,
         }
     }
@@ -804,22 +806,18 @@ fn update(
         }
         Event::Up => {
             app.previous();
-            let _ = preferences::Preferences::write_preferences(
-                &Preferences {
-                    is_task_list_visible: app.has_sidebar,
-                    active_task: app.active_task()?.to_string(),
-                },
+            let _ = preferences::Preferences::update_preference(
                 repo_root,
+                preferences::PreferenceFields::ActiveTask,
+                serde_json::Value::String(app.active_task()?.to_string()),
             );
         }
         Event::Down => {
             app.next();
-            let _ = preferences::Preferences::write_preferences(
-                &Preferences {
-                    is_task_list_visible: app.has_sidebar,
-                    active_task: app.active_task()?.to_string(),
-                },
+            let _ = preferences::Preferences::update_preference(
                 repo_root,
+                preferences::PreferenceFields::ActiveTask,
+                serde_json::Value::String(app.active_task()?.to_string()),
             );
         }
         Event::ScrollUp => {
@@ -840,12 +838,10 @@ fn update(
         }
         Event::ToggleSidebar => {
             app.has_sidebar = !app.has_sidebar;
-            let _ = preferences::Preferences::write_preferences(
-                &Preferences {
-                    is_task_list_visible: app.has_sidebar,
-                    active_task: app.active_task()?.to_string(),
-                },
+            let _ = preferences::Preferences::update_preference(
                 repo_root,
+                preferences::PreferenceFields::IsTaskListVisible,
+                serde_json::Value::Bool(app.has_sidebar),
             );
         }
         Event::Input { bytes } => {
