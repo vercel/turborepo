@@ -39,21 +39,16 @@ fn read_json(path: &AbsoluteSystemPathBuf) -> Preferences {
     File::open(path)
         .ok()
         .and_then(|file| from_reader(BufReader::new(file)).ok())
-        .unwrap_or_else(|| Preferences::default())
+        .unwrap_or_default()
 }
 
 impl Preferences {
-    pub fn get_all_preferences(repo_root: &AbsoluteSystemPathBuf) -> Preferences {
-        let preferences_file = repo_root.join_components(TUI_PREFERENCES_PATH_COMPONENTS);
-
-        read_json(&preferences_file)
-    }
-
     pub fn update_preference(
         repo_root: &AbsoluteSystemPathBuf,
         field: PreferenceFields,
         new_value: Value,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        // TODO: Clean these up, should be taken from constants
         let preferences_dir = repo_root.join_components(&[".turbo", "preferences"]);
         let preferences_file = repo_root.join_components(&[".turbo", "preferences", "tui.json"]);
 
@@ -100,15 +95,7 @@ impl Preferences {
 
         read_json(&preferences_file)
             .is_task_list_visible
-            .unwrap_or(false)
-    }
-
-    pub fn read_selected_task(repo_root: &AbsoluteSystemPathBuf) -> String {
-        let preferences_file = repo_root.join_components(TUI_PREFERENCES_PATH_COMPONENTS);
-
-        read_json(&preferences_file)
-            .active_task
-            .unwrap_or("".to_string())
+            .unwrap_or(true)
     }
 
     pub fn get_selected_task_index(
@@ -121,9 +108,25 @@ impl Preferences {
             .active_task
             .unwrap_or("".to_string());
 
-        tasks_by_status
+        match tasks_by_status
             .task_names_in_displayed_order()
-            .position(|task_name| task_name.to_string() == selected_task_name)
-            .unwrap_or(0)
+            .position(|task_name| *task_name == selected_task_name)
+        {
+            Some(index) => index,
+            None => {
+                let _ = Self::update_preference(
+                    repo_root,
+                    PreferenceFields::PinnedTaskSelection,
+                    serde_json::Value::Bool(false),
+                );
+
+                let _ = Self::update_preference(
+                    repo_root,
+                    PreferenceFields::ActiveTask,
+                    serde_json::Value::String("".to_string()),
+                );
+                0
+            }
+        }
     }
 }
