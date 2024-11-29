@@ -90,8 +90,12 @@ impl<W> App<W> {
             .map(|prefs| prefs.active_task.clone())
             .unwrap();
 
-        let has_selected_task_from_previous_invocation =
-            task_name_selected_from_previous_invocation.is_some();
+        let has_selected_task_from_previous_invocation = task_name_selected_from_previous_invocation
+            .is_some()
+            && preferences_from_disk
+                .as_ref()
+                .map(|prefs| prefs.is_pinned_task_selection.unwrap_or(false))
+                .unwrap_or(false);
 
         let task_selected_from_previous_invocation = preferences_from_disk
             .as_ref()
@@ -99,8 +103,7 @@ impl<W> App<W> {
                 tasks_by_status
                     .task_names_in_displayed_order()
                     .find_position(|task_name| Some(task_name.to_string()) == prefs.active_task)
-                    // TODO: This is causing a crash.
-                    .unwrap()
+                    .unwrap_or((0, ""))
                     .0
             })
             .unwrap_or(0);
@@ -811,6 +814,12 @@ fn update(
                 preferences::PreferenceFields::ActiveTask,
                 serde_json::Value::String(app.active_task()?.to_string()),
             );
+
+            let _ = preferences::Preferences::update_preference(
+                repo_root,
+                preferences::PreferenceFields::PinnedTaskSelection,
+                serde_json::Value::Bool(true),
+            );
         }
         Event::Down => {
             app.next();
@@ -818,6 +827,12 @@ fn update(
                 repo_root,
                 preferences::PreferenceFields::ActiveTask,
                 serde_json::Value::String(app.active_task()?.to_string()),
+            );
+
+            let _ = preferences::Preferences::update_preference(
+                repo_root,
+                preferences::PreferenceFields::PinnedTaskSelection,
+                serde_json::Value::Bool(true),
             );
         }
         Event::ScrollUp => {
@@ -835,6 +850,25 @@ fn update(
         Event::ExitInteractive => {
             app.has_user_scrolled = true;
             app.interact()?;
+        }
+        Event::TogglePinnedTask => {
+            app.has_user_scrolled = !app.has_user_scrolled;
+            let _ = preferences::Preferences::update_preference(
+                repo_root,
+                preferences::PreferenceFields::PinnedTaskSelection,
+                serde_json::Value::Bool(app.has_user_scrolled),
+            );
+
+            // Clear the selected task because the user has expressed that they don't care
+            // which task they're looking at right now. If they do care, they will either
+            // pin again or scroll through the task list.
+            if !app.has_user_scrolled {
+                let _ = preferences::Preferences::update_preference(
+                    repo_root,
+                    preferences::PreferenceFields::ActiveTask,
+                    serde_json::Value::String("".to_string()),
+                );
+            }
         }
         Event::ToggleSidebar => {
             app.has_sidebar = !app.has_sidebar;

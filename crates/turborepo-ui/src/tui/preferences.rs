@@ -11,12 +11,14 @@ use turbopath::AbsoluteSystemPathBuf;
 pub struct Preferences {
     pub is_task_list_visible: Option<bool>,
     pub active_task: Option<String>,
+    pub is_pinned_task_selection: Option<bool>,
 }
 
 #[derive(Debug)]
 pub enum PreferenceFields {
     IsTaskListVisible,
     ActiveTask,
+    PinnedTaskSelection,
 }
 
 impl Preferences {
@@ -44,6 +46,9 @@ impl Preferences {
             }
             PreferenceFields::ActiveTask => {
                 json["active_task"] = new_value;
+            }
+            PreferenceFields::PinnedTaskSelection => {
+                json["is_pinned_task_selection"] = new_value;
             }
         }
 

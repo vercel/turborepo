@@ -50,6 +50,7 @@ pub enum Event {
         rows: u16,
         cols: u16,
     },
+    TogglePinnedTask,
     ToggleSidebar,
     SearchEnter,
     SearchExit {
