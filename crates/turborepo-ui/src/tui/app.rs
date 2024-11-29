@@ -16,6 +16,9 @@ use tokio::{
     time::Instant,
 };
 use tracing::{debug, trace};
+use turbopath::AbsoluteSystemPathBuf;
+
+use crate::tui::preferences;
 
 pub const FRAMERATE: Duration = Duration::from_millis(3);
 const RESIZE_DEBOUNCE_DELAY: Duration = Duration::from_millis(10);
@@ -57,7 +60,12 @@ pub struct App<W> {
 }
 
 impl<W> App<W> {
-    pub fn new(rows: u16, cols: u16, tasks: Vec<String>) -> Self {
+    pub fn new(
+        rows: u16,
+        cols: u16,
+        tasks: Vec<String>,
+        repo_root: &AbsoluteSystemPathBuf,
+    ) -> Self {
         debug!("tasks: {tasks:?}");
         let size = SizeInfo::new(rows, cols, tasks.iter().map(|s| s.as_str()));
 
@@ -73,9 +81,6 @@ impl<W> App<W> {
             finished: Vec::new(),
             running: Vec::new(),
         };
-
-        let has_user_interacted = false;
-        let selected_task_index: usize = 0;
 
         let pane_rows = size.pane_rows();
         let pane_cols = size.pane_cols();
@@ -93,11 +98,16 @@ impl<W> App<W> {
                     )
                 })
                 .collect(),
+            scroll: TableState::default().with_selected(
+                preferences::Preferences::get_selected_task_index(repo_root, &tasks_by_status),
+            ),
+            selected_task_index: preferences::Preferences::get_selected_task_index(
+                repo_root,
+                &tasks_by_status,
+            ),
             tasks_by_status,
-            scroll: TableState::default().with_selected(selected_task_index),
-            selected_task_index,
-            has_sidebar: true,
-            has_user_scrolled: has_user_interacted,
+            has_sidebar: preferences::Preferences::read_task_list_visibility(repo_root),
+            has_user_scrolled: preferences::Preferences::read_pinned_task_state(repo_root),
         }
     }
 
@@ -570,16 +580,18 @@ pub async fn run_app(
     tasks: Vec<String>,
     receiver: AppReceiver,
     color_config: ColorConfig,
+    repo_root: AbsoluteSystemPathBuf,
 ) -> Result<(), Error> {
     let mut terminal = startup(color_config)?;
     let size = terminal.size()?;
 
-    let mut app: App<Box<dyn io::Write + Send>> = App::new(size.height, size.width, tasks);
+    let mut app: App<Box<dyn io::Write + Send>> =
+        App::new(size.height, size.width, tasks, &repo_root);
     let (crossterm_tx, crossterm_rx) = mpsc::channel(1024);
     input::start_crossterm_stream(crossterm_tx);
 
     let (result, callback) =
-        match run_app_inner(&mut terminal, &mut app, receiver, crossterm_rx).await {
+        match run_app_inner(&mut terminal, &mut app, receiver, crossterm_rx, repo_root).await {
             Ok(callback) => (Ok(()), callback),
             Err(err) => {
                 debug!("tui shutting down: {err}");
@@ -599,6 +611,7 @@ async fn run_app_inner<B: Backend + std::io::Write>(
     app: &mut App<Box<dyn io::Write + Send>>,
     mut receiver: AppReceiver,
     mut crossterm_rx: mpsc::Receiver<crossterm::event::Event>,
+    repo_root: AbsoluteSystemPathBuf,
 ) -> Result<Option<oneshot::Sender<()>>, Error> {
     // Render initial state to paint the screen
     terminal.draw(|f| view(app, f))?;
@@ -612,6 +625,7 @@ async fn run_app_inner<B: Backend + std::io::Write>(
         if !matches!(event, Event::Tick) {
             needs_rerender = true;
         }
+
         let mut event = Some(event);
         let mut resize_event = None;
         if matches!(event, Some(Event::Resize { .. })) {
@@ -624,10 +638,10 @@ async fn run_app_inner<B: Backend + std::io::Write>(
         if let Some(resize) = resize_event.take().or_else(|| resize_debouncer.query()) {
             // If we got a resize event, make sure to update ratatui backend.
             terminal.autoresize()?;
-            update(app, resize)?;
+            update(app, resize, &repo_root)?;
         }
         if let Some(event) = event {
-            callback = update(app, event)?;
+            callback = update(app, event, &repo_root)?;
             if app.done {
                 break;
             }
@@ -735,6 +749,7 @@ fn cleanup<B: Backend + io::Write>(
 fn update(
     app: &mut App<Box<dyn io::Write + Send>>,
     event: Event,
+    repo_root: &AbsoluteSystemPathBuf,
 ) -> Result<Option<oneshot::Sender<()>>, Error> {
     match event {
         Event::StartTask { task, output_logs } => {
@@ -767,9 +782,31 @@ fn update(
         }
         Event::Up => {
             app.previous();
+            let _ = preferences::Preferences::update_preference(
+                repo_root,
+                preferences::PreferenceFields::ActiveTask,
+                serde_json::Value::String(app.active_task()?.to_string()),
+            );
+
+            let _ = preferences::Preferences::update_preference(
+                repo_root,
+                preferences::PreferenceFields::PinnedTaskSelection,
+                serde_json::Value::Bool(true),
+            );
         }
         Event::Down => {
             app.next();
+            let _ = preferences::Preferences::update_preference(
+                repo_root,
+                preferences::PreferenceFields::ActiveTask,
+                serde_json::Value::String(app.active_task()?.to_string()),
+            );
+
+            let _ = preferences::Preferences::update_preference(
+                repo_root,
+                preferences::PreferenceFields::PinnedTaskSelection,
+                serde_json::Value::Bool(true),
+            );
         }
         Event::ScrollUp => {
             app.has_user_scrolled = true;
@@ -787,8 +824,32 @@ fn update(
             app.has_user_scrolled = true;
             app.interact()?;
         }
+        Event::TogglePinnedTask => {
+            app.has_user_scrolled = !app.has_user_scrolled;
+            let _ = preferences::Preferences::update_preference(
+                repo_root,
+                preferences::PreferenceFields::PinnedTaskSelection,
+                serde_json::Value::Bool(app.has_user_scrolled),
+            );
+
+            // Clear the selected task because the user has expressed that they don't care
+            // which task they're looking at right now. If they do care, they will either
+            // pin again or scroll through the task list.
+            if !app.has_user_scrolled {
+                let _ = preferences::Preferences::update_preference(
+                    repo_root,
+                    preferences::PreferenceFields::ActiveTask,
+                    serde_json::Value::String("".to_string()),
+                );
+            }
+        }
         Event::ToggleSidebar => {
             app.has_sidebar = !app.has_sidebar;
+            let _ = preferences::Preferences::update_preference(
+                repo_root,
+                preferences::PreferenceFields::IsTaskListVisible,
+                serde_json::Value::Bool(app.has_sidebar),
+            );
         }
         Event::Input { bytes } => {
             app.forward_input(&bytes)?;
@@ -871,6 +932,7 @@ mod test {
             100,
             100,
             vec!["foo".to_string(), "bar".to_string(), "baz".to_string()],
+            &AbsoluteSystemPathBuf::default(),
         );
         assert_eq!(
             app.scroll.selected(),
@@ -900,6 +962,7 @@ mod test {
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
+            &AbsoluteSystemPathBuf::default(),
         );
         app.next();
         assert_eq!(app.scroll.selected(), Some(1), "selected b");
@@ -922,6 +985,7 @@ mod test {
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
+            &AbsoluteSystemPathBuf::default(),
         );
         app.next();
         app.next();
@@ -988,6 +1052,7 @@ mod test {
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
+            &AbsoluteSystemPathBuf::default(),
         );
         app.next();
         app.next();
@@ -1022,7 +1087,12 @@ mod test {
 
     #[test]
     fn test_forward_stdin() -> Result<(), Error> {
-        let mut app: App<Vec<u8>> = App::new(100, 100, vec!["a".to_string(), "b".to_string()]);
+        let mut app: App<Vec<u8>> = App::new(
+            100,
+            100,
+            vec!["a".to_string(), "b".to_string()],
+            &AbsoluteSystemPathBuf::default(),
+        );
         app.next();
         assert_eq!(app.scroll.selected(), Some(1), "selected b");
         assert_eq!(app.tasks_by_status.task_name(1)?, "b", "selected b");
@@ -1055,7 +1125,12 @@ mod test {
 
     #[test]
     fn test_interact() -> Result<(), Error> {
-        let mut app: App<Vec<u8>> = App::new(100, 100, vec!["a".to_string(), "b".to_string()]);
+        let mut app: App<Vec<u8>> = App::new(
+            100,
+            100,
+            vec!["a".to_string(), "b".to_string()],
+            &AbsoluteSystemPathBuf::default(),
+        );
         assert!(!app.is_focusing_pane(), "app starts focused on table");
         app.insert_stdin("a", Some(Vec::new()))?;
 
@@ -1077,7 +1152,12 @@ mod test {
 
     #[test]
     fn test_task_status() -> Result<(), Error> {
-        let mut app: App<Vec<u8>> = App::new(100, 100, vec!["a".to_string(), "b".to_string()]);
+        let mut app: App<Vec<u8>> = App::new(
+            100,
+            100,
+            vec!["a".to_string(), "b".to_string()],
+            &AbsoluteSystemPathBuf::default(),
+        );
         app.next();
         assert_eq!(app.scroll.selected(), Some(1), "selected b");
         assert_eq!(app.tasks_by_status.task_name(1)?, "b", "selected b");
@@ -1098,6 +1178,7 @@ mod test {
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
+            &AbsoluteSystemPathBuf::default(),
         );
         assert_eq!(app.scroll.selected(), Some(0), "selected a");
         assert_eq!(app.tasks_by_status.task_name(0)?, "a", "selected a");
@@ -1128,6 +1209,7 @@ mod test {
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
+            &AbsoluteSystemPathBuf::default(),
         );
         app.next();
         assert_eq!(app.scroll.selected(), Some(1), "selected b");
@@ -1155,7 +1237,12 @@ mod test {
 
     #[test]
     fn test_resize() -> Result<(), Error> {
-        let mut app: App<Vec<u8>> = App::new(20, 24, vec!["a".to_string(), "b".to_string()]);
+        let mut app: App<Vec<u8>> = App::new(
+            20,
+            24,
+            vec!["a".to_string(), "b".to_string()],
+            &AbsoluteSystemPathBuf::default(),
+        );
         let pane_rows = app.size.pane_rows();
         let pane_cols = app.size.pane_cols();
         for (name, task) in app.tasks.iter() {
@@ -1190,6 +1277,7 @@ mod test {
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
+            &AbsoluteSystemPathBuf::default(),
         );
         app.next();
         app.update_tasks(Vec::new())?;
@@ -1204,6 +1292,7 @@ mod test {
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
+            &AbsoluteSystemPathBuf::default(),
         );
         app.next();
         app.restart_tasks(vec!["d".to_string()])?;
@@ -1220,6 +1309,7 @@ mod test {
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
+            &AbsoluteSystemPathBuf::default(),
         );
         app.enter_search()?;
         assert!(matches!(app.focus, LayoutSections::Search { .. }));
@@ -1241,6 +1331,7 @@ mod test {
             100,
             100,
             vec!["a".to_string(), "ab".to_string(), "abc".to_string()],
+            &AbsoluteSystemPathBuf::default(),
         );
         app.enter_search()?;
         app.search_enter_char('a')?;
@@ -1264,6 +1355,7 @@ mod test {
             100,
             100,
             vec!["a".to_string(), "ab".to_string(), "abc".to_string()],
+            &AbsoluteSystemPathBuf::default(),
         );
         app.enter_search()?;
         app.search_enter_char('b')?;
@@ -1291,6 +1383,7 @@ mod test {
             100,
             100,
             vec!["a".to_string(), "abc".to_string(), "b".to_string()],
+            &AbsoluteSystemPathBuf::default(),
         );
         app.next();
         assert_eq!(app.active_task()?, "abc");
@@ -1310,6 +1403,7 @@ mod test {
             100,
             100,
             vec!["a".to_string(), "abc".to_string(), "b".to_string()],
+            &AbsoluteSystemPathBuf::default(),
         );
         app.next();
         assert_eq!(app.active_task()?, "abc");
@@ -1329,6 +1423,7 @@ mod test {
             100,
             100,
             vec!["a".to_string(), "ab".to_string(), "abc".to_string()],
+            &AbsoluteSystemPathBuf::default(),
         );
         app.enter_search()?;
         app.search_enter_char('b')?;
@@ -1345,6 +1440,7 @@ mod test {
             100,
             100,
             vec!["a".to_string(), "ab".to_string(), "abc".to_string()],
+            &AbsoluteSystemPathBuf::default(),
         );
         app.enter_search()?;
         app.search_enter_char('b')?;
