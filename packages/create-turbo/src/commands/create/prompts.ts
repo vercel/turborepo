@@ -53,10 +53,10 @@ export async function packageManager({
       // provided, but isn't available (always allow npm)
       !manager || !availablePackageManagers[manager as PackageManager],
     choices: [
-      { pm: "npm", label: "npm" },
-      { pm: "pnpm", label: "pnpm" },
-      { pm: "yarn", label: "yarn" },
-      { pm: "bun", label: "Bun (beta)" },
+      { pm: "npm", label: `npm (${availablePackageManagers.npm})` },
+      { pm: "pnpm", label: `pnpm (${availablePackageManagers.pnpm})` },
+      { pm: "yarn", label: `yarn (${availablePackageManagers.yarn})` },
+      { pm: "bun", label: `Bun (${availablePackageManagers.bun}) (Beta)` },
     ].map(({ pm, label }) => ({
       name: label,
       value: pm,
