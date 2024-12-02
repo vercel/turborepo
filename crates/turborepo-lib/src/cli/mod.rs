@@ -154,6 +154,9 @@ impl fmt::Display for EnvMode {
     }
 }
 
+/// The parsed arguments from the command line. In general we should avoid using
+/// or mutating this directly, and instead use the fully canonicalized `Opts`
+/// struct.
 #[derive(Parser, Clone, Default, Debug, PartialEq)]
 #[clap(author, about = "The build system that makes ship happen", long_about = None)]
 #[clap(disable_help_subcommand = true)]

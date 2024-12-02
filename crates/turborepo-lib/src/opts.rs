@@ -43,6 +43,8 @@ pub enum Error {
     Config(#[from] crate::config::Error),
 }
 
+/// The fully resolved options for Turborepo. This is the combination of config,
+/// including all the layers (env, args, etc.), and the command line arguments.
 #[derive(Debug, Clone)]
 pub struct Opts {
     pub config: ConfigurationOptions,
