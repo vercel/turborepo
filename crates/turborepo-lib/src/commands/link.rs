@@ -631,12 +631,12 @@ mod test {
         let override_global_config_path =
             AbsoluteSystemPathBuf::try_from(user_config_file.path().to_path_buf())?;
 
-        let config =
-            TurborepoConfigBuilder::new(&repo_root, Some(override_global_config_path.clone()))
-                .with_api_url(Some(format!("http://localhost:{}", port)))
-                .with_login_url(Some(format!("http://localhost:{}", port)))
-                .with_token(Some("token".to_string()))
-                .build()?;
+        let config = TurborepoConfigBuilder::new(&repo_root)
+            .with_global_config_path(override_global_config_path.clone())
+            .with_api_url(Some(format!("http://localhost:{}", port)))
+            .with_login_url(Some(format!("http://localhost:{}", port)))
+            .with_token(Some("token".to_string()))
+            .build()?;
 
         let mut base = CommandBase::from_opts(
             Opts::new(&Args::default(), config)?,
@@ -650,9 +650,9 @@ mod test {
         handle.abort();
 
         // read the config
-        let updated_config =
-            TurborepoConfigBuilder::new(&base.repo_root, Some(override_global_config_path))
-                .build()?;
+        let updated_config = TurborepoConfigBuilder::new(&base.repo_root)
+            .with_global_config_path(override_global_config_path)
+            .build()?;
         let team_id = updated_config.team_id();
 
         assert!(
@@ -693,12 +693,12 @@ mod test {
         let override_global_config_path =
             AbsoluteSystemPathBuf::try_from(user_config_file.path().to_path_buf())?;
 
-        let config =
-            TurborepoConfigBuilder::new(&repo_root, Some(override_global_config_path.clone()))
-                .with_api_url(Some(format!("http://localhost:{}", port)))
-                .with_login_url(Some(format!("http://localhost:{}", port)))
-                .with_token(Some("token".to_string()))
-                .build()?;
+        let config = TurborepoConfigBuilder::new(&repo_root)
+            .with_global_config_path(override_global_config_path.clone())
+            .with_api_url(Some(format!("http://localhost:{}", port)))
+            .with_login_url(Some(format!("http://localhost:{}", port)))
+            .with_token(Some("token".to_string()))
+            .build()?;
 
         let mut base = CommandBase::from_opts(
             Opts::new(&Args::default(), config)?,

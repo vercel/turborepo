@@ -436,16 +436,18 @@ fn get_lowercased_env_vars() -> HashMap<OsString, OsString> {
 }
 
 impl TurborepoConfigBuilder {
-    pub fn new(
-        repo_root: &AbsoluteSystemPath,
-        override_global_config_path: Option<AbsoluteSystemPathBuf>,
-    ) -> Self {
+    pub fn new(repo_root: &AbsoluteSystemPath) -> Self {
         Self {
             repo_root: repo_root.to_owned(),
             override_config: Default::default(),
-            global_config_path: override_global_config_path,
+            global_config_path: None,
             environment: None,
         }
+    }
+
+    pub fn with_global_config_path(mut self, path: AbsoluteSystemPathBuf) -> Self {
+        self.global_config_path = Some(path);
+        self
     }
 
     // Getting all of the paths.

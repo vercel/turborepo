@@ -33,7 +33,6 @@ pub(crate) mod unlink;
 pub struct CommandBase {
     pub repo_root: AbsoluteSystemPathBuf,
     pub color_config: ColorConfig,
-    pub override_global_config_path: Option<AbsoluteSystemPathBuf>,
     pub opts: Opts,
     version: &'static str,
 }
@@ -45,7 +44,15 @@ impl CommandBase {
         version: &'static str,
         color_config: ColorConfig,
     ) -> Result<Self, cli::Error> {
-        Self::new_with_override_global_config_path(args, repo_root, version, None, color_config)
+        let config = Self::config_init(&repo_root, &args)?;
+        let opts = Opts::new(&args, config)?;
+
+        Ok(Self {
+            repo_root,
+            color_config,
+            opts,
+            version,
+        })
     }
 
     pub fn from_opts(
@@ -59,41 +66,14 @@ impl CommandBase {
             color_config,
             version,
             opts,
-            override_global_config_path: None,
         }
-    }
-
-    /// `override_global_config_path` is only used for testing
-    fn new_with_override_global_config_path(
-        args: Args,
-        repo_root: AbsoluteSystemPathBuf,
-        version: &'static str,
-        override_global_config_path: Option<AbsoluteSystemPathBuf>,
-        color_config: ColorConfig,
-    ) -> Result<Self, cli::Error> {
-        let config = Self::config_init(&repo_root, override_global_config_path, &args)?;
-        let opts = Opts::new(&args, config)?;
-
-        Ok(Self {
-            repo_root,
-            color_config,
-            override_global_config_path: None,
-            opts,
-            version,
-        })
-    }
-
-    pub fn with_override_global_config_path(mut self, path: AbsoluteSystemPathBuf) -> Self {
-        self.override_global_config_path = Some(path);
-        self
     }
 
     fn config_init(
         repo_root: &AbsoluteSystemPath,
-        override_global_config_path: Option<AbsoluteSystemPathBuf>,
         args: &Args,
     ) -> Result<ConfigurationOptions, ConfigError> {
-        TurborepoConfigBuilder::new(&repo_root, override_global_config_path)
+        TurborepoConfigBuilder::new(&repo_root)
             // The below should be deprecated and removed.
             .with_api_url(args.api.clone())
             .with_login_url(args.login.clone())
@@ -148,11 +128,6 @@ impl CommandBase {
 
     // Getting all of the paths.
     fn global_config_path(&self) -> Result<AbsoluteSystemPathBuf, ConfigError> {
-        #[cfg(test)]
-        if let Some(global_config_path) = self.override_global_config_path.clone() {
-            return Ok(global_config_path);
-        }
-
         let config_dir = config_dir()?.ok_or(ConfigError::NoGlobalConfigPath)?;
 
         Ok(config_dir.join_components(&[TURBO_TOKEN_DIR, TURBO_TOKEN_FILE]))
