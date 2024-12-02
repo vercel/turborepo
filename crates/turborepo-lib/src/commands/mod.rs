@@ -73,7 +73,7 @@ impl CommandBase {
         repo_root: &AbsoluteSystemPath,
         args: &Args,
     ) -> Result<ConfigurationOptions, ConfigError> {
-        TurborepoConfigBuilder::new(&repo_root)
+        TurborepoConfigBuilder::new(repo_root)
             // The below should be deprecated and removed.
             .with_api_url(args.api.clone())
             .with_login_url(args.login.clone())

@@ -113,9 +113,12 @@ impl Opts {
             Some(Command::Ls {
                 affected, filter, ..
             }) => {
-                let mut execution_args = ExecutionArgs::default();
-                execution_args.affected = *affected;
-                execution_args.filter = filter.clone();
+                let execution_args = ExecutionArgs {
+                    filter: filter.clone(),
+                    affected: *affected,
+                    ..Default::default()
+                };
+
                 (&Box::new(execution_args), &Box::default())
             }
             _ => (&Box::default(), &Box::default()),
