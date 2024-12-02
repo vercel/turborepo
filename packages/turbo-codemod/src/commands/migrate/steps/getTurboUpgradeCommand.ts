@@ -56,8 +56,8 @@ function getLocalUpgradeCommand({
           `turbo@${to}`,
           installType === "devDependencies" && "--dev",
         ]);
-        // yarn 1.x
       }
+      // yarn 1.x
       return renderCommand([
         "yarn",
         "add",
