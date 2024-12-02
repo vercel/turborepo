@@ -172,9 +172,13 @@ pub async fn link(
     let homedir = homedir_path.to_string_lossy();
     let repo_root_with_tilde = base.repo_root.to_string().replacen(&*homedir, "~", 1);
     let api_client = base.api_client()?;
-    let token = base.config()?.token().ok_or_else(|| Error::TokenNotFound {
-        command: base.color_config.apply(BOLD.apply_to("`npx turbo login`")),
-    })?;
+    let token = base
+        .opts()
+        .config
+        .token()
+        .ok_or_else(|| Error::TokenNotFound {
+            command: base.color_config.apply(BOLD.apply_to("`npx turbo login`")),
+        })?;
 
     match target {
         LinkTarget::RemoteCache => {
@@ -580,7 +584,7 @@ fn add_space_id_to_turbo_json(base: &CommandBase, space_id: &str) -> Result<(), 
 
 #[cfg(test)]
 mod test {
-    use std::{cell::OnceCell, fs};
+    use std::fs;
 
     use anyhow::Result;
     use tempfile::{NamedTempFile, TempDir};
@@ -592,6 +596,7 @@ mod test {
         cli::LinkTarget,
         commands::{link, CommandBase},
         config::TurborepoConfigBuilder,
+        opts::Opts,
         turbo_json::RawTurboJson,
         Args,
     };
@@ -623,35 +628,31 @@ mod test {
 
         let port = port_scanner::request_open_port().unwrap();
         let handle = tokio::spawn(start_test_server(port));
-        let mut base = CommandBase {
-            override_global_config_path: Some(
-                AbsoluteSystemPathBuf::try_from(user_config_file.path().to_path_buf()).unwrap(),
-            ),
-            repo_root: repo_root.clone(),
-            color_config: ColorConfig::new(false),
-            config: OnceCell::new(),
-            args: Args::default(),
-            version: "",
-        };
-        base.config
-            .set(
-                TurborepoConfigBuilder::new(&base)
-                    .with_api_url(Some(format!("http://localhost:{}", port)))
-                    .with_login_url(Some(format!("http://localhost:{}", port)))
-                    .with_token(Some("token".to_string()))
-                    .build()
-                    .unwrap(),
-            )
-            .unwrap();
+        let override_global_config_path =
+            AbsoluteSystemPathBuf::try_from(user_config_file.path().to_path_buf())?;
 
-        link::link(&mut base, None, false, false, LinkTarget::RemoteCache)
-            .await
-            .unwrap();
+        let config =
+            TurborepoConfigBuilder::new(&repo_root, Some(override_global_config_path.clone()))
+                .with_api_url(Some(format!("http://localhost:{}", port)))
+                .with_login_url(Some(format!("http://localhost:{}", port)))
+                .with_token(Some("token".to_string()))
+                .build()?;
+
+        let mut base = CommandBase::from_opts(
+            Opts::new(&Args::default(), config)?,
+            repo_root.clone(),
+            "1.0.0",
+            ColorConfig::new(false),
+        );
+
+        link::link(&mut base, None, false, false, LinkTarget::RemoteCache).await?;
 
         handle.abort();
 
         // read the config
-        let updated_config = TurborepoConfigBuilder::new(&base).build().unwrap();
+        let updated_config =
+            TurborepoConfigBuilder::new(&base.repo_root, Some(override_global_config_path))
+                .build()?;
         let team_id = updated_config.team_id();
 
         assert!(
@@ -663,7 +664,7 @@ mod test {
     }
 
     #[tokio::test]
-    async fn test_link_spaces() {
+    async fn test_link_spaces() -> Result<()> {
         // user config
         let user_config_file = NamedTempFile::new().unwrap();
         fs::write(user_config_file.path(), r#"{ "token": "hello" }"#).unwrap();
@@ -689,26 +690,22 @@ mod test {
 
         let port = port_scanner::request_open_port().unwrap();
         let handle = tokio::spawn(start_test_server(port));
-        let mut base = CommandBase {
-            override_global_config_path: Some(
-                AbsoluteSystemPathBuf::try_from(user_config_file.path().to_path_buf()).unwrap(),
-            ),
-            repo_root: repo_root.clone(),
-            color_config: ColorConfig::new(false),
-            config: OnceCell::new(),
-            args: Args::default(),
-            version: "",
-        };
-        base.config
-            .set(
-                TurborepoConfigBuilder::new(&base)
-                    .with_api_url(Some(format!("http://localhost:{}", port)))
-                    .with_login_url(Some(format!("http://localhost:{}", port)))
-                    .with_token(Some("token".to_string()))
-                    .build()
-                    .unwrap(),
-            )
-            .unwrap();
+        let override_global_config_path =
+            AbsoluteSystemPathBuf::try_from(user_config_file.path().to_path_buf())?;
+
+        let config =
+            TurborepoConfigBuilder::new(&repo_root, Some(override_global_config_path.clone()))
+                .with_api_url(Some(format!("http://localhost:{}", port)))
+                .with_login_url(Some(format!("http://localhost:{}", port)))
+                .with_token(Some("token".to_string()))
+                .build()?;
+
+        let mut base = CommandBase::from_opts(
+            Opts::new(&Args::default(), config)?,
+            repo_root.clone(),
+            "",
+            ColorConfig::new(false),
+        );
 
         // turbo config
         let turbo_json_file = base.repo_root.join_component("turbo.json");
@@ -732,5 +729,7 @@ mod test {
             turbo_json.experimental_spaces.unwrap().id.unwrap(),
             turborepo_vercel_api_mock::EXPECTED_SPACE_ID.into()
         );
+
+        Ok(())
     }
 }

@@ -1224,7 +1224,7 @@ pub async fn run(
             CommandEventBuilder::new("daemon")
                 .with_parent(&root_telemetry)
                 .track_call();
-            let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config);
+            let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
 
             match command {
                 Some(command) => daemon::daemon_client(command, &base).await,
@@ -1258,7 +1258,7 @@ pub async fn run(
             CommandEventBuilder::new("info")
                 .with_parent(&root_telemetry)
                 .track_call();
-            let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config);
+            let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
 
             info::run(base).await;
             Ok(0)
@@ -1266,13 +1266,13 @@ pub async fn run(
         Command::Telemetry { command } => {
             let event = CommandEventBuilder::new("telemetry").with_parent(&root_telemetry);
             event.track_call();
-            let mut base = CommandBase::new(cli_args.clone(), repo_root, version, color_config);
+            let mut base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
             let child_event = event.child();
             telemetry::configure(command, &mut base, child_event);
             Ok(0)
         }
         Command::Scan {} => {
-            let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config);
+            let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
             if scan::run(base).await {
                 Ok(0)
             } else {
@@ -1280,27 +1280,22 @@ pub async fn run(
             }
         }
         Command::Config => {
-            let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config);
+            let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
             config::run(base).await?;
             Ok(0)
         }
         Command::Ls {
-            affected,
-            filter,
-            packages,
-            output,
+            packages, output, ..
         } => {
             warn!("ls command is experimental and may change in the future");
             let event = CommandEventBuilder::new("info").with_parent(&root_telemetry);
 
             event.track_call();
-            let affected = *affected;
             let output = *output;
-            let filter = filter.clone();
             let packages = packages.clone();
-            let base = CommandBase::new(cli_args, repo_root, version, color_config);
+            let base = CommandBase::new(cli_args, repo_root, version, color_config)?;
 
-            ls::run(base, packages, event, filter, affected, output).await?;
+            ls::run(base, packages, event, output).await?;
 
             Ok(0)
         }
@@ -1327,7 +1322,7 @@ pub async fn run(
             let to = *target;
             let yes = *yes;
             let scope = scope.clone();
-            let mut base = CommandBase::new(cli_args, repo_root, version, color_config);
+            let mut base = CommandBase::new(cli_args, repo_root, version, color_config)?;
 
             link::link(&mut base, scope, modify_gitignore, yes, to).await?;
 
@@ -1338,7 +1333,7 @@ pub async fn run(
             event.track_call();
             let invalidate = *invalidate;
 
-            let mut base = CommandBase::new(cli_args, repo_root, version, color_config);
+            let mut base = CommandBase::new(cli_args, repo_root, version, color_config)?;
             let event_child = event.child();
 
             logout::logout(&mut base, invalidate, event_child).await?;
@@ -1356,7 +1351,7 @@ pub async fn run(
             let sso_team = sso_team.clone();
             let force = *force;
 
-            let mut base = CommandBase::new(cli_args, repo_root, version, color_config);
+            let mut base = CommandBase::new(cli_args, repo_root, version, color_config)?;
             let event_child = event.child();
 
             if let Some(sso_team) = sso_team {
@@ -1377,7 +1372,7 @@ pub async fn run(
             }
 
             let from = *target;
-            let mut base = CommandBase::new(cli_args, repo_root, version, color_config);
+            let mut base = CommandBase::new(cli_args, repo_root, version, color_config)?;
 
             unlink::unlink(&mut base, from)?;
 
@@ -1390,7 +1385,7 @@ pub async fn run(
             let event = CommandEventBuilder::new("run").with_parent(&root_telemetry);
             event.track_call();
 
-            let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config);
+            let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
 
             if execution_args.tasks.is_empty() {
                 print_potential_tasks(base, event).await?;
@@ -1417,7 +1412,7 @@ pub async fn run(
             let event = CommandEventBuilder::new("query").with_parent(&root_telemetry);
             event.track_call();
 
-            let base = CommandBase::new(cli_args, repo_root, version, color_config);
+            let base = CommandBase::new(cli_args, repo_root, version, color_config)?;
 
             let query = query::run(base, event, query, variables.as_deref()).await?;
 
@@ -1426,7 +1421,7 @@ pub async fn run(
         Command::Watch(_) => {
             let event = CommandEventBuilder::new("watch").with_parent(&root_telemetry);
             event.track_call();
-            let base = CommandBase::new(cli_args, repo_root, version, color_config);
+            let base = CommandBase::new(cli_args, repo_root, version, color_config)?;
 
             let mut client = WatchClient::new(base, event).await?;
             if let Err(e) = client.start().await {
@@ -1451,7 +1446,7 @@ pub async fn run(
                 .unwrap_or_default();
             let docker = *docker;
             let output_dir = output_dir.clone();
-            let base = CommandBase::new(cli_args, repo_root, version, color_config);
+            let base = CommandBase::new(cli_args, repo_root, version, color_config)?;
             let event_child = event.child();
             prune::prune(&base, &scope, docker, &output_dir, event_child).await?;
             Ok(0)

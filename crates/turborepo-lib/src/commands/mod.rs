@@ -1,4 +1,4 @@
-use std::{cell::OnceCell, time::Duration};
+use std::time::Duration;
 
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_api_client::{APIAuth, APIClient};
@@ -7,7 +7,9 @@ use turborepo_dirs::config_dir;
 use turborepo_ui::ColorConfig;
 
 use crate::{
+    cli,
     config::{ConfigurationOptions, Error as ConfigError, TurborepoConfigBuilder},
+    opts::Opts,
     Args,
 };
 
@@ -32,8 +34,7 @@ pub struct CommandBase {
     pub repo_root: AbsoluteSystemPathBuf,
     pub color_config: ColorConfig,
     pub override_global_config_path: Option<AbsoluteSystemPathBuf>,
-    config: OnceCell<ConfigurationOptions>,
-    args: Args,
+    pub opts: Opts,
     version: &'static str,
 }
 
@@ -43,15 +44,43 @@ impl CommandBase {
         repo_root: AbsoluteSystemPathBuf,
         version: &'static str,
         color_config: ColorConfig,
+    ) -> Result<Self, cli::Error> {
+        Self::new_with_override_global_config_path(args, repo_root, version, None, color_config)
+    }
+
+    pub fn from_opts(
+        opts: Opts,
+        repo_root: AbsoluteSystemPathBuf,
+        version: &'static str,
+        color_config: ColorConfig,
     ) -> Self {
         Self {
             repo_root,
             color_config,
-            args,
-            override_global_config_path: None,
-            config: OnceCell::new(),
             version,
+            opts,
+            override_global_config_path: None,
         }
+    }
+
+    /// `override_global_config_path` is only used for testing
+    fn new_with_override_global_config_path(
+        args: Args,
+        repo_root: AbsoluteSystemPathBuf,
+        version: &'static str,
+        override_global_config_path: Option<AbsoluteSystemPathBuf>,
+        color_config: ColorConfig,
+    ) -> Result<Self, cli::Error> {
+        let config = Self::config_init(&repo_root, override_global_config_path, &args)?;
+        let opts = Opts::new(&args, config)?;
+
+        Ok(Self {
+            repo_root,
+            color_config,
+            override_global_config_path: None,
+            opts,
+            version,
+        })
     }
 
     pub fn with_override_global_config_path(mut self, path: AbsoluteSystemPathBuf) -> Self {
@@ -59,65 +88,62 @@ impl CommandBase {
         self
     }
 
-    fn config_init(&self) -> Result<ConfigurationOptions, ConfigError> {
-        TurborepoConfigBuilder::new(self)
+    fn config_init(
+        repo_root: &AbsoluteSystemPath,
+        override_global_config_path: Option<AbsoluteSystemPathBuf>,
+        args: &Args,
+    ) -> Result<ConfigurationOptions, ConfigError> {
+        TurborepoConfigBuilder::new(&repo_root, override_global_config_path)
             // The below should be deprecated and removed.
-            .with_api_url(self.args.api.clone())
-            .with_login_url(self.args.login.clone())
-            .with_team_slug(self.args.team.clone())
-            .with_token(self.args.token.clone())
-            .with_timeout(self.args.remote_cache_timeout)
-            .with_preflight(self.args.preflight.then_some(true))
-            .with_ui(self.args.ui)
+            .with_api_url(args.api.clone())
+            .with_login_url(args.login.clone())
+            .with_team_slug(args.team.clone())
+            .with_token(args.token.clone())
+            .with_timeout(args.remote_cache_timeout)
+            .with_preflight(args.preflight.then_some(true))
+            .with_ui(args.ui)
             .with_allow_no_package_manager(
-                self.args
-                    .dangerously_disable_package_manager_check
+                args.dangerously_disable_package_manager_check
                     .then_some(true),
             )
-            .with_daemon(self.args.run_args().and_then(|args| args.daemon()))
+            .with_daemon(args.run_args().and_then(|args| args.daemon()))
             .with_env_mode(
-                self.args
-                    .execution_args()
+                args.execution_args()
                     .and_then(|execution_args| execution_args.env_mode),
             )
             .with_cache_dir(
-                self.args
-                    .execution_args()
+                args.execution_args()
                     .and_then(|execution_args| execution_args.cache_dir.clone()),
             )
             .with_root_turbo_json_path(
-                self.args
-                    .root_turbo_json
+                args.root_turbo_json
                     .clone()
                     .map(AbsoluteSystemPathBuf::from_cwd)
                     .transpose()?,
             )
             .with_force(
-                self.args
-                    .run_args()
+                args.run_args()
                     .and_then(|args| args.force.map(|value| value.unwrap_or(true))),
             )
-            .with_log_order(self.args.execution_args().and_then(|args| args.log_order))
-            .with_remote_only(self.args.run_args().and_then(|args| args.remote_only()))
+            .with_log_order(args.execution_args().and_then(|args| args.log_order))
+            .with_remote_only(args.run_args().and_then(|args| args.remote_only()))
             .with_remote_cache_read_only(
-                self.args
-                    .run_args()
+                args.run_args()
                     .and_then(|args| args.remote_cache_read_only()),
             )
             .with_cache(
-                self.args
-                    .run_args()
+                args.run_args()
                     .and_then(|args| args.cache.as_deref())
                     .map(|cache| cache.parse())
                     .transpose()?,
             )
-            .with_run_summary(self.args.run_args().and_then(|args| args.summarize()))
-            .with_allow_no_turbo_json(self.args.allow_no_turbo_json.then_some(true))
+            .with_run_summary(args.run_args().and_then(|args| args.summarize()))
+            .with_allow_no_turbo_json(args.allow_no_turbo_json.then_some(true))
             .build()
     }
 
-    pub fn config(&self) -> Result<&ConfigurationOptions, ConfigError> {
-        self.config.get_or_try_init(|| self.config_init())
+    pub fn opts(&self) -> &Opts {
+        &self.opts
     }
 
     // Getting all of the paths.
@@ -142,7 +168,7 @@ impl CommandBase {
     }
 
     pub fn api_auth(&self) -> Result<Option<APIAuth>, ConfigError> {
-        let config = self.config()?;
+        let config = self.config();
         let team_id = config.team_id();
         let team_slug = config.team_slug();
 
@@ -157,16 +183,12 @@ impl CommandBase {
         }))
     }
 
-    pub fn args(&self) -> &Args {
-        &self.args
-    }
-
-    pub fn args_mut(&mut self) -> &mut Args {
-        &mut self.args
+    pub fn config(&self) -> &ConfigurationOptions {
+        &self.opts.config
     }
 
     pub fn api_client(&self) -> Result<APIClient, ConfigError> {
-        let config = self.config()?;
+        let config = &self.opts.config;
         let api_url = config.api_url();
         let timeout = config.timeout();
         let upload_timeout = config.upload_timeout();

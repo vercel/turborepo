@@ -29,7 +29,7 @@ struct ConfigOutput<'a> {
 }
 
 pub async fn run(base: CommandBase) -> Result<(), cli::Error> {
-    let config = base.config()?;
+    let config = base.config();
     let root_package_json = PackageJson::load(&base.repo_root.join_component("package.json"))?;
 
     let package_graph = PackageGraph::builder(&base.repo_root, root_package_json)
