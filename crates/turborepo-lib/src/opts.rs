@@ -625,7 +625,12 @@ mod test {
             is_github_actions: false,
             daemon: None,
         };
-        let cache_opts = CacheOpts::default();
+        let cache_opts = CacheOpts {
+            cache_dir: ".turbo/cache".into(),
+            cache: Default::default(),
+            workers: 0,
+            remote_cache_opts: None,
+        };
         let runcache_opts = RunCacheOpts::default();
         let scope_opts = ScopeOpts {
             pkg_inference_root: None,
@@ -641,10 +646,21 @@ mod test {
         let opts = Opts {
             config,
             root_turbo_json_path,
+            api_url: "".to_string(),
+            timeout: 0,
+            upload_timeout: 0,
+            token: None,
+            team_id: None,
+            team_slug: None,
+            allow_no_package_manager: false,
+            allow_no_turbo_json: false,
             run_opts,
             cache_opts,
             scope_opts,
             runcache_opts,
+
+            login_url: "".to_string(),
+            preflight: false,
         };
         let synthesized = opts.synthesize_command();
         assert_eq!(synthesized, expected);

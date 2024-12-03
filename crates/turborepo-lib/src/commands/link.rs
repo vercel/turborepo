@@ -639,7 +639,7 @@ mod test {
             .build()?;
 
         let mut base = CommandBase::from_opts(
-            Opts::new(&Args::default(), config)?,
+            Opts::new(&repo_root, &Args::default(), config)?,
             repo_root.clone(),
             "1.0.0",
             ColorConfig::new(false),
@@ -701,7 +701,7 @@ mod test {
             .build()?;
 
         let mut base = CommandBase::from_opts(
-            Opts::new(&Args::default(), config)?,
+            Opts::new(&repo_root, &Args::default(), config)?,
             repo_root.clone(),
             "",
             ColorConfig::new(false),

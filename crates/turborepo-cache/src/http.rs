@@ -337,7 +337,12 @@ mod test {
             "2.0.0",
             true,
         )?;
-        let opts = CacheOpts::default();
+        let opts = CacheOpts {
+            cache_dir: ".turbo/cache".into(),
+            cache: Default::default(),
+            workers: 0,
+            remote_cache_opts: None,
+        };
         let api_auth = APIAuth {
             team_id: Some("my-team".to_string()),
             token: "my-token".to_string(),
