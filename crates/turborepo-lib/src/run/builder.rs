@@ -80,8 +80,7 @@ impl RunBuilder {
 
         let opts = base.opts();
         let api_auth = base.api_auth()?;
-        let config = base.config();
-        let allow_missing_package_manager = config.allow_no_package_manager();
+        let allow_missing_package_manager = base.opts.allow_no_package_manager;
 
         let version = base.version();
         let processes = ProcessManager::new(
@@ -91,8 +90,8 @@ impl RunBuilder {
             // - if we're on windows, we're using the UI
             (!cfg!(windows) || matches!(opts.run_opts.ui_mode, UIMode::Tui)),
         );
-        let root_turbo_json_path = config.root_turbo_json_path(&base.repo_root);
-        let allow_no_turbo_json = config.allow_no_turbo_json();
+        let root_turbo_json_path = base.opts.root_turbo_json_path.clone();
+        let allow_no_turbo_json = base.opts.allow_no_turbo_json;
 
         let CommandBase {
             repo_root,

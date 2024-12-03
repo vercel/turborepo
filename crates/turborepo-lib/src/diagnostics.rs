@@ -406,8 +406,8 @@ impl Diagnostic for RemoteCacheDiagnostic {
             let (has_team_id, has_team_slug) = {
                 let base = base.lock().await;
                 (
-                    base.config().team_id().is_some(),
-                    base.config().team_slug().is_some(),
+                    base.opts().team_id.is_some(),
+                    base.opts().team_slug.is_some(),
                 )
             };
 

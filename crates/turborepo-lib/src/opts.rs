@@ -2,7 +2,7 @@ use std::backtrace;
 
 use camino::Utf8PathBuf;
 use thiserror::Error;
-use turbopath::AnchoredSystemPathBuf;
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 use turborepo_api_client::APIAuth;
 use turborepo_cache::{CacheOpts, RemoteCacheOpts};
 
@@ -48,10 +48,21 @@ pub enum Error {
 #[derive(Debug, Clone)]
 pub struct Opts {
     pub config: ConfigurationOptions,
+    pub root_turbo_json_path: AbsoluteSystemPathBuf,
+    pub api_url: String,
+    pub timeout: u64,
+    pub upload_timeout: u64,
+    pub token: Option<String>,
+    pub team_id: Option<String>,
+    pub team_slug: Option<String>,
+    pub allow_no_package_manager: bool,
+    pub allow_no_turbo_json: bool,
+    pub login_url: String,
     pub cache_opts: CacheOpts,
     pub run_opts: RunOpts,
     pub runcache_opts: RunCacheOpts,
     pub scope_opts: ScopeOpts,
+    pub preflight: bool,
 }
 
 impl Opts {
@@ -95,7 +106,11 @@ impl Opts {
 }
 
 impl Opts {
-    pub fn new(args: &Args, config: ConfigurationOptions) -> Result<Self, Error> {
+    pub fn new(
+        repo_root: &AbsoluteSystemPath,
+        args: &Args,
+        config: ConfigurationOptions,
+    ) -> Result<Self, Error> {
         let team_id = config.team_id();
         let team_slug = config.team_slug();
 
@@ -134,9 +149,31 @@ impl Opts {
         let cache_opts = CacheOpts::try_from(inputs)?;
         let scope_opts = ScopeOpts::try_from(inputs)?;
         let runcache_opts = RunCacheOpts::from(inputs);
+        let root_turbo_json_path = config.root_turbo_json_path(repo_root);
+        let api_url = config.api_url().to_string();
+        let timeout = config.timeout();
+        let upload_timeout = config.upload_timeout();
+        let preflight = config.preflight();
+        let token = config.token().map(|s| s.to_string());
+        let team_id = config.team_id().map(|s| s.to_string());
+        let team_slug = config.team_slug().map(|s| s.to_string());
+        let login_url = config.login_url().to_string();
+        let allow_no_package_manager = config.allow_no_package_manager();
+        let allow_no_turbo_json = config.allow_no_turbo_json();
 
         Ok(Self {
             config,
+            root_turbo_json_path,
+            api_url,
+            timeout,
+            upload_timeout,
+            preflight,
+            token,
+            team_id,
+            team_slug,
+            login_url,
+            allow_no_package_manager,
+            allow_no_turbo_json,
             run_opts,
             cache_opts,
             scope_opts,
@@ -598,8 +635,12 @@ mod test {
                 .affected
                 .map(|(base, head)| (Some(base), Some(head))),
         };
+        let config = ConfigurationOptions::default();
+        let root_turbo_json_path = config.root_turbo_json_path(&AbsoluteSystemPathBuf::default());
+
         let opts = Opts {
-            config: ConfigurationOptions::default(),
+            config,
+            root_turbo_json_path,
             run_opts,
             cache_opts,
             scope_opts,

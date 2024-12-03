@@ -172,7 +172,7 @@ impl Default for CacheActions {
     }
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CacheOpts {
     pub cache_dir: Utf8PathBuf,
     pub cache: CacheConfig,
@@ -182,7 +182,7 @@ pub struct CacheOpts {
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct RemoteCacheOpts {
-    unused_team_id: Option<String>,
+    pub unused_team_id: Option<String>,
     signature: bool,
 }
 
