@@ -219,7 +219,11 @@ impl<'a> CommandProvider for MicroFrontendProxyProvider<'a> {
             .filter(|task| self.tasks_in_graph.contains(task))
             .map(|task| task.package());
         let package_dir = self.repo_root.resolve(package_info.package_path());
-        let mfe_path = package_dir.join_component("micro-frontends.jsonc");
+        let mfe_config_filename = self
+            .mfe_configs
+            .config_filename(task_id.package())
+            .expect("every microfrontends default application should have configuration path");
+        let mfe_path = package_dir.join_component(mfe_config_filename);
         let mut args = vec!["proxy", mfe_path.as_str(), "--names"];
         args.extend(local_apps);
 

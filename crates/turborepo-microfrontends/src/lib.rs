@@ -75,7 +75,7 @@ impl Config {
 
         let version = match version_only {
             Some(VersionOnly { version }) => version,
-            // Default to version 1 if no version found
+            // Default to version 2 if no version found
             None => "2".to_string(),
         };
 

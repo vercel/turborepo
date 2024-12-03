@@ -30,18 +30,12 @@ impl MicrofrontendsConfigs {
             missing_default_apps,
             unsupported_version,
             mfe_package,
-        } = PackageGraphResult::new(
-            package_graph
-                .packages()
-                // We sort packages to make sure we have a deterministic ordering for any warnings
-                .sorted_by(|(a, _), (b, _)| a.cmp(b))
-                .map(|(name, info)| {
-                    (
-                        name,
-                        MFEConfig::load_from_dir(&repo_root.resolve(info.package_path())),
-                    )
-                }),
-        )?;
+        } = PackageGraphResult::new(package_graph.packages().map(|(name, info)| {
+            (
+                name.as_str(),
+                MFEConfig::load_from_dir(&repo_root.resolve(info.package_path())),
+            )
+        }))?;
 
         for (package, err) in unsupported_version {
             warn!("Ignoring {package}: {err}");
@@ -151,17 +145,19 @@ struct PackageGraphResult {
 
 impl PackageGraphResult {
     fn new<'a>(
-        packages: impl Iterator<Item = (&'a PackageName, Result<Option<MFEConfig>, Error>)>,
+        packages: impl Iterator<Item = (&'a str, Result<Option<MFEConfig>, Error>)>,
     ) -> Result<Self, Error> {
         let mut configs = HashMap::new();
         let mut config_filenames = HashMap::new();
         let mut referenced_default_apps = HashSet::new();
         let mut unsupported_version = Vec::new();
         let mut mfe_package = None;
-        for (package_name, config) in packages {
+        // We sort packages to ensure deterministic behavior
+        let sorted_packages = packages.sorted_by(|(a, _), (b, _)| a.cmp(b));
+        for (package_name, config) in sorted_packages {
             if let Some(pkg) = MICROFRONTENDS_PACKAGES
                 .iter()
-                .find(|static_pkg| package_name.as_str() == **static_pkg)
+                .find(|static_pkg| package_name == **static_pkg)
             {
                 mfe_package = Some(*pkg);
             }
@@ -214,7 +210,11 @@ struct FindResult<'a> {
 
 #[cfg(test)]
 mod test {
+    use serde_json::json;
     use test_case::test_case;
+    use turborepo_microfrontends::{
+        MICROFRONTENDS_PACKAGE_EXTERNAL, MICROFRONTENDS_PACKAGE_INTERNAL,
+    };
 
     use super::*;
 
@@ -323,5 +323,103 @@ mod test {
             mfe.package_turbo_json_update(&test.package_name()),
             test.expected()
         );
+    }
+
+    #[test]
+    fn test_mfe_package_is_found() {
+        let result = PackageGraphResult::new(
+            vec![
+                // These should never be present in the same graph, but if for some reason they
+                // are, we defer to the external variant.
+                (MICROFRONTENDS_PACKAGE_EXTERNAL, Ok(None)),
+                (MICROFRONTENDS_PACKAGE_INTERNAL, Ok(None)),
+            ]
+            .into_iter(),
+        )
+        .unwrap();
+        assert_eq!(result.mfe_package, Some(MICROFRONTENDS_PACKAGE_EXTERNAL));
+    }
+
+    #[test]
+    fn test_no_mfe_package() {
+        let result =
+            PackageGraphResult::new(vec![("foo", Ok(None)), ("bar", Ok(None))].into_iter())
+                .unwrap();
+        assert_eq!(result.mfe_package, None);
+    }
+
+    #[test]
+    fn test_unsupported_versions_ignored() {
+        let result = PackageGraphResult::new(
+            vec![("foo", Err(Error::UnsupportedVersion("bad version".into())))].into_iter(),
+        )
+        .unwrap();
+        assert_eq!(result.configs, HashMap::new());
+    }
+
+    #[test]
+    fn test_child_configs_with_missing_default() {
+        let result = PackageGraphResult::new(
+            vec![(
+                "child",
+                Err(Error::ChildConfig {
+                    reference: "main".into(),
+                }),
+            )]
+            .into_iter(),
+        )
+        .unwrap();
+        assert_eq!(result.configs, HashMap::new());
+        assert_eq!(result.missing_default_apps, &["main".to_string()]);
+    }
+
+    #[test]
+    fn test_io_err_stops_traversal() {
+        let result = PackageGraphResult::new(
+            vec![
+                (
+                    "a",
+                    Err(Error::Io(std::io::Error::new(
+                        std::io::ErrorKind::Other,
+                        "something",
+                    ))),
+                ),
+                (
+                    "b",
+                    Err(Error::ChildConfig {
+                        reference: "main".into(),
+                    }),
+                ),
+            ]
+            .into_iter(),
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_dev_task_collection() {
+        let config = MFEConfig::from_str(
+            &serde_json::to_string_pretty(&json!({
+                "version": "2",
+                "applications": {
+                    "web": {},
+                    "docs": {
+                        "development": {
+                            "task": "serve"
+                        }
+                    }
+                }
+            }))
+            .unwrap(),
+            "something.txt",
+        )
+        .unwrap();
+        let result = PackageGraphResult::new(vec![("web", Ok(Some(config)))].into_iter()).unwrap();
+        assert_eq!(
+            result.configs,
+            mfe_configs!(
+                "web" => ["web#dev", "docs#serve"]
+            )
+        )
     }
 }
