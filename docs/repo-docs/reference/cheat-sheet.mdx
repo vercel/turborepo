@@ -61,10 +61,10 @@ The three strategies listed above are in order of precedence. Where a flag value
 | Only run directly specified tasks | [`--only`](/repo/docs/reference/run#--only)                                                                           | -                                                                                                                                                      | -                                                                                                                   |
 | Task concurrency                  | [`--concurrency`](/repo/docs/reference/run#--concurrency-number--percentage)                                          | -                                                                                                                                                      | -                                                                                                                   |
 | Task log order                    | [`--log-order`](/repo/docs/reference/run#--log-order-option)                                                          | [`TURBO_LOG_ORDER`](/repo/docs/reference/system-environment-variables#turbo_log_order)                                                                 | -                                                                                                                   |
-| Current working directory         | [`--cwd`](/repo/docs/reference/run#--cwd)                                                                             | -                                                                                                                                                      | -                                                                                                                   |
-| Streamed logs prefix              | [`--log-prefix`](/repo/docs/reference/run#--log-prefix)                                                               | -                                                                                                                                                      | -                                                                                                                   |
+| Current working directory         | [`--cwd`](/repo/docs/reference/run#--cwd-path)                                                                        | -                                                                                                                                                      | -                                                                                                                   |
+| Streamed logs prefix              | [`--log-prefix`](/repo/docs/reference/run#--log-prefix-option)                                                        | -                                                                                                                                                      | -                                                                                                                   |
 | Task logs output level            | [`--output-logs-option`](/repo/docs/reference/run#--output-logs-option)                                               | -                                                                                                                                                      | [`outputLogs`](/repo/docs/reference/configuration#outputlogs)                                                       |
-| Global inputs                     | [`--global-deps`](/repo/docs/reference/run#--global-deps)                                                             | -                                                                                                                                                      | [`globalDependencies`](/repo/docs/reference/configuration#globaldependencies)                                       |
+| Global inputs                     | [`--global-deps`](/repo/docs/reference/run#--global-deps-file-glob)                                                   | -                                                                                                                                                      | [`globalDependencies`](/repo/docs/reference/configuration#globaldependencies)                                       |
 
 </div>
 
@@ -74,7 +74,7 @@ The three strategies listed above are in order of precedence. Where a flag value
 
 | Behavior                      | Flags                                                                     | Environment Variables                                                                                  | turbo.json                                              |
 | ----------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------- |
-| Environment variable mode     | [`--env-mode`](/repo/docs/reference/run#--env-mode)                       | -                                                                                                      | [`envMode`](/repo/docs/reference/configuration#envmode) |
+| Environment variable mode     | [`--env-mode`](/repo/docs/reference/run#--env-mode-option)                | -                                                                                                      | [`envMode`](/repo/docs/reference/configuration#envmode) |
 | Vendor environment variables  | -                                                                         | [`TURBO_CI_VENDOR_ENV_KEY`](/repo/docs/reference/system-environment-variables#turbo_ci_vendor_env_key) | -                                                       |
 | Framework variable exceptions | [`--framework-inference`](/repo/docs/reference/run#--framework-inference) | [`TURBO_CI_VENDOR_KEY`](/repo/docs/reference/system-environment-variables#turbo_ci_vendor_key)         | -                                                       |
 
@@ -84,11 +84,11 @@ The three strategies listed above are in order of precedence. Where a flag value
 
 <div className="options-cheat-sheet-table">
 
-| Behavior            | Flags                                                 | Environment Variables                                                                      | turbo.json |
-| ------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------ | ---------- |
-| Run Summaries       | [`--summarize`](/repo/docs/reference/run#--summarize) | [`TURBO_RUN_SUMMARY`](/repo/docs/reference/system-environment-variables#turbo_run_summary) | -          |
-| Graph visualization | [`--graph`](/repo/docs/reference/run#--graph)         | -                                                                                          | -          |
-| Dry run             | [`--dry`](/repo/docs/reference/run#--dry)             | -                                                                                          | -          |
+| Behavior            | Flags                                                   | Environment Variables                                                                      | turbo.json |
+| ------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------------ | ---------- |
+| Run Summaries       | [`--summarize`](/repo/docs/reference/run#--summarize)   | [`TURBO_RUN_SUMMARY`](/repo/docs/reference/system-environment-variables#turbo_run_summary) | -          |
+| Graph visualization | [`--graph`](/repo/docs/reference/run#--graph-file-type) | -                                                                                          | -          |
+| Dry run             | [`--dry`](/repo/docs/reference/run#--dry----dry-run)    | -                                                                                          | -          |
 
 </div>
 
@@ -109,10 +109,10 @@ The three strategies listed above are in order of precedence. Where a flag value
 
 <div className="options-cheat-sheet-table">
 
-| Behavior               | Flags                                                                         | Environment Variables                                                                                            | turbo.json                                            |
-| ---------------------- | ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| Binary path            | -                                                                             | [`TURBO_BINARY_PATH`](/repo/docs/reference/system-environment-variables#turbo_binary_path)                       | -                                                     |
-| Download local `turbo` | -                                                                             | [`TURBO_DOWNLOAD_LOCAL_ENABLED`](/repo/docs/reference/system-environment-variables#turbo_download_local_enabled) | -                                                     |
-| Daemon                 | [`--daemon` / `--no-daemon`](/repo/docs/reference/run#--daemon-and-no-daemon) | -                                                                                                                | [`daemon`](/repo/docs/reference/configuration#daemon) |
+| Behavior               | Flags                                                                           | Environment Variables                                                                                            | turbo.json                                            |
+| ---------------------- | ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| Binary path            | -                                                                               | [`TURBO_BINARY_PATH`](/repo/docs/reference/system-environment-variables#turbo_binary_path)                       | -                                                     |
+| Download local `turbo` | -                                                                               | [`TURBO_DOWNLOAD_LOCAL_ENABLED`](/repo/docs/reference/system-environment-variables#turbo_download_local_enabled) | -                                                     |
+| Daemon                 | [`--daemon` / `--no-daemon`](/repo/docs/reference/run#--daemon-and---no-daemon) | -                                                                                                                | [`daemon`](/repo/docs/reference/configuration#daemon) |
 
 </div>
