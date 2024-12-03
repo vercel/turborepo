@@ -48,10 +48,10 @@ pub struct App<W> {
     size: SizeInfo,
     tasks: BTreeMap<String, TerminalOutput<W>>,
     tasks_by_status: TasksByStatus,
-    focus: LayoutSections,
-    scroll: TableState,
+    section_focus: LayoutSections,
+    task_list_scroll: TableState,
     selected_task_index: usize,
-    has_user_scrolled: bool,
+    is_task_selection_pinned: bool,
     has_sidebar: bool,
     done: bool,
 }
@@ -83,7 +83,7 @@ impl<W> App<W> {
         Self {
             size,
             done: false,
-            focus: LayoutSections::TaskList,
+            section_focus: LayoutSections::TaskList,
             tasks: tasks_by_status
                 .task_names_in_displayed_order()
                 .map(|task_name| {
@@ -94,16 +94,16 @@ impl<W> App<W> {
                 })
                 .collect(),
             tasks_by_status,
-            scroll: TableState::default().with_selected(selected_task_index),
+            task_list_scroll: TableState::default().with_selected(selected_task_index),
             selected_task_index,
             has_sidebar: true,
-            has_user_scrolled: has_user_interacted,
+            is_task_selection_pinned: has_user_interacted,
         }
     }
 
     #[cfg(test)]
     fn is_focusing_pane(&self) -> bool {
-        match self.focus {
+        match self.section_focus {
             LayoutSections::Pane => true,
             LayoutSections::TaskList | LayoutSections::Search { .. } => false,
         }
@@ -116,7 +116,7 @@ impl<W> App<W> {
     fn input_options(&self) -> Result<InputOptions, Error> {
         let has_selection = self.get_full_task()?.has_selection();
         Ok(InputOptions {
-            focus: &self.focus,
+            focus: &self.section_focus,
             has_selection,
         })
     }
@@ -144,8 +144,8 @@ impl<W> App<W> {
         let num_rows = self.tasks_by_status.count_all();
         if num_rows > 0 {
             self.selected_task_index = (self.selected_task_index + 1) % num_rows;
-            self.scroll.select(Some(self.selected_task_index));
-            self.has_user_scrolled = true;
+            self.task_list_scroll.select(Some(self.selected_task_index));
+            self.is_task_selection_pinned = true;
         }
     }
 
@@ -157,8 +157,8 @@ impl<W> App<W> {
                 .selected_task_index
                 .checked_sub(1)
                 .unwrap_or(num_rows - 1);
-            self.scroll.select(Some(self.selected_task_index));
-            self.has_user_scrolled = true;
+            self.task_list_scroll.select(Some(self.selected_task_index));
+            self.is_task_selection_pinned = true;
         }
     }
 
@@ -169,18 +169,18 @@ impl<W> App<W> {
     }
 
     pub fn enter_search(&mut self) -> Result<(), Error> {
-        self.focus = LayoutSections::Search {
+        self.section_focus = LayoutSections::Search {
             previous_selection: self.active_task()?.to_string(),
             results: SearchResults::new(&self.tasks_by_status),
         };
         // We set scroll as we want to keep the current selection
-        self.has_user_scrolled = true;
+        self.is_task_selection_pinned = true;
         Ok(())
     }
 
     pub fn exit_search(&mut self, restore_scroll: bool) {
         let mut prev_focus = LayoutSections::TaskList;
-        mem::swap(&mut self.focus, &mut prev_focus);
+        mem::swap(&mut self.section_focus, &mut prev_focus);
         if let LayoutSections::Search {
             previous_selection, ..
         } = prev_focus
@@ -194,7 +194,7 @@ impl<W> App<W> {
     }
 
     pub fn search_scroll(&mut self, direction: Direction) -> Result<(), Error> {
-        let LayoutSections::Search { results, .. } = &self.focus else {
+        let LayoutSections::Search { results, .. } = &self.section_focus else {
             debug!("scrolling search while not searching");
             return Ok(());
         };
@@ -220,7 +220,7 @@ impl<W> App<W> {
     }
 
     pub fn search_enter_char(&mut self, c: char) -> Result<(), Error> {
-        let LayoutSections::Search { results, .. } = &mut self.focus else {
+        let LayoutSections::Search { results, .. } = &mut self.section_focus else {
             debug!("modifying search query while not searching");
             return Ok(());
         };
@@ -230,7 +230,7 @@ impl<W> App<W> {
     }
 
     pub fn search_remove_char(&mut self) -> Result<(), Error> {
-        let LayoutSections::Search { results, .. } = &mut self.focus else {
+        let LayoutSections::Search { results, .. } = &mut self.section_focus else {
             debug!("modified search query while not searching");
             return Ok(());
         };
@@ -247,7 +247,7 @@ impl<W> App<W> {
     }
 
     fn update_search_results(&mut self) {
-        let LayoutSections::Search { results, .. } = &self.focus else {
+        let LayoutSections::Search { results, .. } = &self.section_focus else {
             return;
         };
 
@@ -262,7 +262,7 @@ impl<W> App<W> {
             .or_else(|| results.first_match(self.tasks_by_status.task_names_in_displayed_order()))
         {
             let new_selection = result.to_owned();
-            self.has_user_scrolled = true;
+            self.is_task_selection_pinned = true;
             self.select_task(&new_selection).expect("todo");
         }
     }
@@ -352,10 +352,10 @@ impl<W> App<W> {
     }
 
     pub fn interact(&mut self) -> Result<(), Error> {
-        if matches!(self.focus, LayoutSections::Pane) {
-            self.focus = LayoutSections::TaskList
+        if matches!(self.section_focus, LayoutSections::Pane) {
+            self.section_focus = LayoutSections::TaskList
         } else if self.has_stdin()? {
-            self.focus = LayoutSections::Pane;
+            self.section_focus = LayoutSections::Pane;
         }
         Ok(())
     }
@@ -392,7 +392,7 @@ impl<W> App<W> {
             self.reset_scroll();
         }
 
-        if let LayoutSections::Search { results, .. } = &mut self.focus {
+        if let LayoutSections::Search { results, .. } = &mut self.section_focus {
             results.update_tasks(&self.tasks_by_status);
         }
         self.update_search_results();
@@ -414,7 +414,7 @@ impl<W> App<W> {
         self.tasks_by_status
             .restart_tasks(tasks.iter().map(|s| s.as_str()));
 
-        if let LayoutSections::Search { results, .. } = &mut self.focus {
+        if let LayoutSections::Search { results, .. } = &mut self.section_focus {
             results.update_tasks(&self.tasks_by_status);
         }
 
@@ -483,7 +483,7 @@ impl<W> App<W> {
     }
 
     fn select_task(&mut self, task_name: &str) -> Result<(), Error> {
-        if !self.has_user_scrolled {
+        if !self.is_task_selection_pinned {
             return Ok(());
         }
 
@@ -497,15 +497,15 @@ impl<W> App<W> {
             });
         };
         self.selected_task_index = new_index_to_highlight;
-        self.scroll.select(Some(new_index_to_highlight));
+        self.task_list_scroll.select(Some(new_index_to_highlight));
 
         Ok(())
     }
 
     /// Resets scroll state
     pub fn reset_scroll(&mut self) {
-        self.has_user_scrolled = false;
-        self.scroll.select(Some(0));
+        self.is_task_selection_pinned = false;
+        self.task_list_scroll.select(Some(0));
         self.selected_task_index = 0;
     }
 
@@ -534,7 +534,7 @@ impl<W: Write> App<W> {
 
     #[tracing::instrument(skip_all)]
     pub fn forward_input(&mut self, bytes: &[u8]) -> Result<(), Error> {
-        if matches!(self.focus, LayoutSections::Pane) {
+        if matches!(self.section_focus, LayoutSections::Pane) {
             let task_output = self.get_full_task_mut()?;
             if let Some(stdin) = &mut task_output.stdin {
                 stdin.write_all(bytes).map_err(|e| Error::Stdin {
@@ -772,19 +772,19 @@ fn update(
             app.next();
         }
         Event::ScrollUp => {
-            app.has_user_scrolled = true;
+            app.is_task_selection_pinned = true;
             app.scroll_terminal_output(Direction::Up)?;
         }
         Event::ScrollDown => {
-            app.has_user_scrolled = true;
+            app.is_task_selection_pinned = true;
             app.scroll_terminal_output(Direction::Down)?;
         }
         Event::EnterInteractive => {
-            app.has_user_scrolled = true;
+            app.is_task_selection_pinned = true;
             app.interact()?;
         }
         Event::ExitInteractive => {
-            app.has_user_scrolled = true;
+            app.is_task_selection_pinned = true;
             app.interact()?;
         }
         Event::ToggleSidebar => {
@@ -851,12 +851,16 @@ fn view<W>(app: &mut App<W>, f: &mut Frame) {
     let active_task = app.active_task().unwrap().to_string();
 
     let output_logs = app.tasks.get(&active_task).unwrap();
-    let pane_to_render: TerminalPane<W> =
-        TerminalPane::new(output_logs, &active_task, &app.focus, app.has_sidebar);
+    let pane_to_render: TerminalPane<W> = TerminalPane::new(
+        output_logs,
+        &active_task,
+        &app.section_focus,
+        app.has_sidebar,
+    );
 
     let table_to_render = TaskTable::new(&app.tasks_by_status);
 
-    f.render_stateful_widget(&table_to_render, table, &mut app.scroll);
+    f.render_stateful_widget(&table_to_render, table, &mut app.task_list_scroll);
     f.render_widget(&pane_to_render, pane);
 }
 
@@ -873,25 +877,37 @@ mod test {
             vec!["foo".to_string(), "bar".to_string(), "baz".to_string()],
         );
         assert_eq!(
-            app.scroll.selected(),
+            app.task_list_scroll.selected(),
             Some(0),
             "starts with first selection"
         );
         app.next();
         assert_eq!(
-            app.scroll.selected(),
+            app.task_list_scroll.selected(),
             Some(1),
             "scroll starts from 0 and goes to 1"
         );
         app.previous();
-        assert_eq!(app.scroll.selected(), Some(0), "scroll stays in bounds");
+        assert_eq!(
+            app.task_list_scroll.selected(),
+            Some(0),
+            "scroll stays in bounds"
+        );
         app.next();
         app.next();
-        assert_eq!(app.scroll.selected(), Some(2), "scroll moves forwards");
+        assert_eq!(
+            app.task_list_scroll.selected(),
+            Some(2),
+            "scroll moves forwards"
+        );
         app.next();
-        assert_eq!(app.scroll.selected(), Some(0), "scroll wraps");
+        assert_eq!(app.task_list_scroll.selected(), Some(0), "scroll wraps");
         app.previous();
-        assert_eq!(app.scroll.selected(), Some(2), "scroll stays in bounds");
+        assert_eq!(
+            app.task_list_scroll.selected(),
+            Some(2),
+            "scroll stays in bounds"
+        );
     }
 
     #[test]
@@ -902,16 +918,16 @@ mod test {
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
         );
         app.next();
-        assert_eq!(app.scroll.selected(), Some(1), "selected b");
+        assert_eq!(app.task_list_scroll.selected(), Some(1), "selected b");
         assert_eq!(app.active_task()?, "b", "selected b");
         app.start_task("b", OutputLogs::Full).unwrap();
-        assert_eq!(app.scroll.selected(), Some(0), "b stays selected");
+        assert_eq!(app.task_list_scroll.selected(), Some(0), "b stays selected");
         assert_eq!(app.active_task()?, "b", "selected b");
         app.start_task("a", OutputLogs::Full).unwrap();
-        assert_eq!(app.scroll.selected(), Some(0), "b stays selected");
+        assert_eq!(app.task_list_scroll.selected(), Some(0), "b stays selected");
         assert_eq!(app.active_task()?, "b", "selected b");
         app.finish_task("a", TaskResult::Success).unwrap();
-        assert_eq!(app.scroll.selected(), Some(0), "b stays selected");
+        assert_eq!(app.task_list_scroll.selected(), Some(0), "b stays selected");
         assert_eq!(app.active_task()?, "b", "selected b");
         Ok(())
     }
@@ -991,31 +1007,39 @@ mod test {
         );
         app.next();
         app.next();
-        assert_eq!(app.scroll.selected(), Some(2), "selected c");
+        assert_eq!(app.task_list_scroll.selected(), Some(2), "selected c");
         assert_eq!(app.tasks_by_status.task_name(2)?, "c", "selected c");
         // start c which moves it to "running" which is before "planned"
         app.start_task("c", OutputLogs::Full)?;
-        assert_eq!(app.scroll.selected(), Some(0), "selection stays on c");
+        assert_eq!(
+            app.task_list_scroll.selected(),
+            Some(0),
+            "selection stays on c"
+        );
         assert_eq!(app.tasks_by_status.task_name(0)?, "c", "selected c");
         app.start_task("a", OutputLogs::Full)?;
-        assert_eq!(app.scroll.selected(), Some(0), "selection stays on c");
+        assert_eq!(
+            app.task_list_scroll.selected(),
+            Some(0),
+            "selection stays on c"
+        );
         assert_eq!(app.tasks_by_status.task_name(0)?, "c", "selected c");
         // c
         // a
         // b <-
         app.next();
         app.next();
-        assert_eq!(app.scroll.selected(), Some(2), "selected b");
+        assert_eq!(app.task_list_scroll.selected(), Some(2), "selected b");
         assert_eq!(app.tasks_by_status.task_name(2)?, "b", "selected b");
         app.finish_task("a", TaskResult::Success)?;
-        assert_eq!(app.scroll.selected(), Some(1), "b stays selected");
+        assert_eq!(app.task_list_scroll.selected(), Some(1), "b stays selected");
         assert_eq!(app.tasks_by_status.task_name(1)?, "b", "selected b");
         // c <-
         // b
         // a
         app.previous();
         app.finish_task("c", TaskResult::Success)?;
-        assert_eq!(app.scroll.selected(), Some(2), "c stays selected");
+        assert_eq!(app.task_list_scroll.selected(), Some(2), "c stays selected");
         assert_eq!(app.tasks_by_status.task_name(2)?, "c", "selected c");
         Ok(())
     }
@@ -1024,7 +1048,7 @@ mod test {
     fn test_forward_stdin() -> Result<(), Error> {
         let mut app: App<Vec<u8>> = App::new(100, 100, vec!["a".to_string(), "b".to_string()]);
         app.next();
-        assert_eq!(app.scroll.selected(), Some(1), "selected b");
+        assert_eq!(app.task_list_scroll.selected(), Some(1), "selected b");
         assert_eq!(app.tasks_by_status.task_name(1)?, "b", "selected b");
         // start c which moves it to "running" which is before "planned"
         app.start_task("a", OutputLogs::Full)?;
@@ -1079,7 +1103,7 @@ mod test {
     fn test_task_status() -> Result<(), Error> {
         let mut app: App<Vec<u8>> = App::new(100, 100, vec!["a".to_string(), "b".to_string()]);
         app.next();
-        assert_eq!(app.scroll.selected(), Some(1), "selected b");
+        assert_eq!(app.task_list_scroll.selected(), Some(1), "selected b");
         assert_eq!(app.tasks_by_status.task_name(1)?, "b", "selected b");
         // set status for a
         app.set_status("a".to_string(), "building".to_string(), CacheResult::Hit)?;
@@ -1099,7 +1123,7 @@ mod test {
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
         );
-        assert_eq!(app.scroll.selected(), Some(0), "selected a");
+        assert_eq!(app.task_list_scroll.selected(), Some(0), "selected a");
         assert_eq!(app.tasks_by_status.task_name(0)?, "a", "selected a");
         app.start_task("a", OutputLogs::None)?;
         app.start_task("b", OutputLogs::None)?;
@@ -1108,14 +1132,14 @@ mod test {
         app.finish_task("c", TaskResult::Success)?;
         app.finish_task("a", TaskResult::Success)?;
 
-        assert_eq!(app.scroll.selected(), Some(0), "selected b");
+        assert_eq!(app.task_list_scroll.selected(), Some(0), "selected b");
         assert_eq!(app.tasks_by_status.task_name(0)?, "b", "selected b");
 
         app.restart_tasks(vec!["c".to_string()])?;
 
         assert_eq!(
             app.tasks_by_status
-                .task_name(app.scroll.selected().unwrap())?,
+                .task_name(app.task_list_scroll.selected().unwrap())?,
             "c",
             "selected c"
         );
@@ -1130,7 +1154,7 @@ mod test {
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
         );
         app.next();
-        assert_eq!(app.scroll.selected(), Some(1), "selected b");
+        assert_eq!(app.task_list_scroll.selected(), Some(1), "selected b");
         assert_eq!(app.tasks_by_status.task_name(1)?, "b", "selected b");
         app.start_task("a", OutputLogs::None)?;
         app.start_task("b", OutputLogs::None)?;
@@ -1139,14 +1163,14 @@ mod test {
         app.finish_task("c", TaskResult::Success)?;
         app.finish_task("a", TaskResult::Success)?;
 
-        assert_eq!(app.scroll.selected(), Some(0), "selected b");
+        assert_eq!(app.task_list_scroll.selected(), Some(0), "selected b");
         assert_eq!(app.tasks_by_status.task_name(0)?, "b", "selected b");
 
         app.restart_tasks(vec!["c".to_string()])?;
 
         assert_eq!(
             app.tasks_by_status
-                .task_name(app.scroll.selected().unwrap())?,
+                .task_name(app.task_list_scroll.selected().unwrap())?,
             "b",
             "selected b"
         );
@@ -1222,16 +1246,16 @@ mod test {
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
         );
         app.enter_search()?;
-        assert!(matches!(app.focus, LayoutSections::Search { .. }));
+        assert!(matches!(app.section_focus, LayoutSections::Search { .. }));
         app.search_remove_char()?;
-        assert!(matches!(app.focus, LayoutSections::TaskList));
+        assert!(matches!(app.section_focus, LayoutSections::TaskList));
         app.enter_search()?;
         app.search_enter_char('a')?;
-        assert!(matches!(app.focus, LayoutSections::Search { .. }));
+        assert!(matches!(app.section_focus, LayoutSections::Search { .. }));
         app.search_remove_char()?;
-        assert!(matches!(app.focus, LayoutSections::Search { .. }));
+        assert!(matches!(app.section_focus, LayoutSections::Search { .. }));
         app.search_remove_char()?;
-        assert!(matches!(app.focus, LayoutSections::TaskList));
+        assert!(matches!(app.section_focus, LayoutSections::TaskList));
         Ok(())
     }
 
