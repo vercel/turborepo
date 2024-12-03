@@ -47,7 +47,6 @@ pub enum Error {
 /// including all the layers (env, args, etc.), and the command line arguments.
 #[derive(Debug, Clone)]
 pub struct Opts {
-    pub config: ConfigurationOptions,
     pub root_turbo_json_path: AbsoluteSystemPathBuf,
     pub api_url: String,
     pub timeout: u64,
@@ -162,7 +161,6 @@ impl Opts {
         let allow_no_turbo_json = config.allow_no_turbo_json();
 
         Ok(Self {
-            config,
             root_turbo_json_path,
             api_url,
             timeout,

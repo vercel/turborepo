@@ -174,8 +174,8 @@ pub async fn link(
     let api_client = base.api_client()?;
     let token = base
         .opts()
-        .config
-        .token()
+        .token
+        .as_deref()
         .ok_or_else(|| Error::TokenNotFound {
             command: base.color_config.apply(BOLD.apply_to("`npx turbo login`")),
         })?;
