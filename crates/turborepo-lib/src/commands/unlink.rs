@@ -16,8 +16,7 @@ enum UnlinkSpacesResult {
 }
 
 fn unlink_remote_caching(base: &mut CommandBase) -> Result<(), cli::Error> {
-    let needs_disabling =
-        base.config()?.team_id().is_some() || base.config()?.team_slug().is_some();
+    let needs_disabling = base.config().team_id().is_some() || base.config().team_slug().is_some();
 
     let output = if needs_disabling {
         let local_config_path = base.local_config_path();
@@ -57,8 +56,7 @@ fn unlink_remote_caching(base: &mut CommandBase) -> Result<(), cli::Error> {
 }
 
 fn unlink_spaces(base: &mut CommandBase) -> Result<(), cli::Error> {
-    let needs_disabling =
-        base.config()?.team_id().is_some() || base.config()?.team_slug().is_some();
+    let needs_disabling = base.config().team_id().is_some() || base.config().team_slug().is_some();
 
     if needs_disabling {
         let local_config_path = base.local_config_path();

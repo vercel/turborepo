@@ -64,6 +64,8 @@ pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Watch(#[from] watch::Error),
+    #[error(transparent)]
+    Opts(#[from] crate::opts::Error),
 }
 
 const MAX_CHARS_PER_TASK_LINE: usize = 100;

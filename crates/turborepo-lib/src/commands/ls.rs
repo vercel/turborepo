@@ -10,7 +10,7 @@ use turborepo_ui::{color, cprint, cprintln, ColorConfig, BOLD, BOLD_GREEN, GREY}
 
 use crate::{
     cli,
-    cli::{Command, ExecutionArgs, OutputFormat},
+    cli::OutputFormat,
     commands::{run::get_signal, CommandBase},
     run::{builder::RunBuilder, Run},
     signal::SignalHandler,
@@ -110,25 +110,13 @@ impl<'a> From<PackageDetails<'a>> for PackageDetailsDisplay<'a> {
 }
 
 pub async fn run(
-    mut base: CommandBase,
+    base: CommandBase,
     packages: Vec<String>,
     telemetry: CommandEventBuilder,
-    filter: Vec<String>,
-    affected: bool,
     output: Option<OutputFormat>,
 ) -> Result<(), cli::Error> {
     let signal = get_signal()?;
     let handler = SignalHandler::new(signal);
-
-    // We fake a run command, so we can construct a `Run` type
-    base.args_mut().command = Some(Command::Run {
-        run_args: Box::default(),
-        execution_args: Box::new(ExecutionArgs {
-            filter,
-            affected,
-            ..Default::default()
-        }),
-    });
 
     let run_builder = RunBuilder::new(base)?;
     let run = run_builder.build(&handler, telemetry).await?;

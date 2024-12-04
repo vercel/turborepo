@@ -78,9 +78,9 @@ impl RunBuilder {
     pub fn new(base: CommandBase) -> Result<Self, Error> {
         let api_client = base.api_client()?;
 
-        let opts = Opts::new(&base)?;
+        let opts = base.opts();
         let api_auth = base.api_auth()?;
-        let config = base.config()?;
+        let config = base.config();
         let allow_missing_package_manager = config.allow_no_package_manager();
 
         let version = base.version();
@@ -97,6 +97,7 @@ impl RunBuilder {
         let CommandBase {
             repo_root,
             color_config: ui,
+            opts,
             ..
         } = base;
 
