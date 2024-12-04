@@ -79,12 +79,6 @@ pub enum PackageManager {
     Bun,
 }
 
-impl Display for PackageManager {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.name())
-    }
-}
-
 // WorkspaceGlobs is suitable for finding package.json files via globwalk
 #[derive(Clone)]
 pub struct WorkspaceGlobs {
@@ -496,7 +490,7 @@ impl PackageManager {
             _ => {
                 let managers = detected_package_managers
                     .iter()
-                    .map(|mgr| mgr.to_string())
+                    .map(|mgr| mgr.name().to_string())
                     .collect();
                 Err(Error::MultiplePackageManagers { managers })
             }
@@ -720,7 +714,7 @@ mod tests {
             let found = mgr.get_package_jsons(&basic).unwrap();
             let mut found = Vec::from_iter(found);
             found.sort();
-            assert_eq!(found, basic_expected, "{}", mgr);
+            assert_eq!(found, basic_expected, "{}", mgr.name());
         }
     }
 

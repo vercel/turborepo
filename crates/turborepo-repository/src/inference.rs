@@ -3,7 +3,8 @@ use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 
 use crate::{
     package_json::PackageJson,
-    package_manager::{self, PackageManager, WorkspaceGlobs},
+    package_manager::{self, PackageManager},
+    workspaces::WorkspaceGlobs,
 };
 
 #[derive(Debug, PartialEq)]
