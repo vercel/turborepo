@@ -2,8 +2,10 @@ import fs from "fs/promises";
 import { unified } from "unified";
 import remarkParse from "remark-parse";
 import remarkRehype from "remark-rehype";
+import rehypeParse from "rehype-parse";
 import rehypeRaw from "rehype-raw";
 import { visit } from "unist-util-visit";
+import { selectAll } from "hast-util-select";
 import GitHubSlugger from "github-slugger";
 import matter from "gray-matter";
 
@@ -118,7 +120,18 @@ const prepareDocumentMapEntry = async (
     const frontMatter = validateFrontmatter(path, data);
 
     const tree = markdownProcessor.parse(content);
-    const headings = getHeadingsFromMarkdownTree(tree);
+
+    const htmlNodes = tree.children
+      .filter((node) => node.type === "html")
+      .map((node) => unified().use(rehypeParse).parse(node.value));
+
+    // console.log(htmlNodes);
+    const ids = selectAll("[id]", htmlNodes[0]).map(
+      (node) => node.properties.id as string
+    );
+
+    const headings = [...getHeadingsFromMarkdownTree(tree), ...ids];
+
     const normalizedUrlPath = filePathToUrl(path);
 
     return [normalizedUrlPath, { content, path, headings, frontMatter }];
