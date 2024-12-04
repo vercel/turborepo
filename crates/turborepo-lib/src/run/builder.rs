@@ -368,7 +368,7 @@ impl RunBuilder {
             }
         };
 
-        repo_telemetry.track_package_manager(pkg_dep_graph.package_manager().to_string());
+        repo_telemetry.track_package_manager(pkg_dep_graph.package_manager().name().to_string());
         repo_telemetry.track_size(pkg_dep_graph.len());
         run_telemetry.track_run_type(self.opts.run_opts.dry_run.is_some());
         let micro_frontend_configs = MicroFrontendsConfigs::new(&self.repo_root, &pkg_dep_graph)?;

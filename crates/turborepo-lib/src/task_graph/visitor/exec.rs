@@ -104,7 +104,7 @@ impl<'a> ExecContextFactory<'a> {
             task_id_for_display,
             task_cache,
             hash_tracker: self.visitor.task_hasher.task_hash_tracker(),
-            package_manager: *self.visitor.package_graph.package_manager(),
+            package_manager: self.visitor.package_graph.package_manager().clone(),
             manager: self.manager.clone(),
             task_hash,
             execution_env,

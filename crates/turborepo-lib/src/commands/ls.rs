@@ -4,10 +4,7 @@ use miette::Diagnostic;
 use serde::Serialize;
 use thiserror::Error;
 use turbopath::AnchoredSystemPath;
-use turborepo_repository::{
-    package_graph::{PackageName, PackageNode},
-    package_manager::PackageManager,
-};
+use turborepo_repository::package_graph::{PackageName, PackageNode};
 use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_ui::{color, cprint, cprintln, ColorConfig, BOLD, BOLD_GREEN, GREY};
 
@@ -32,17 +29,17 @@ struct ItemsWithCount<T> {
 }
 
 #[derive(Clone, Serialize)]
-#[serde(into = "RepositoryDetailsDisplay<'a>")]
+#[serde(into = "RepositoryDetailsDisplay")]
 struct RepositoryDetails<'a> {
     color_config: ColorConfig,
-    package_manager: &'a PackageManager,
+    package_manager: &'static str,
     packages: Vec<(&'a PackageName, &'a AnchoredSystemPath)>,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct RepositoryDetailsDisplay<'a> {
-    package_manager: &'a PackageManager,
+struct RepositoryDetailsDisplay {
+    package_manager: &'static str,
     packages: ItemsWithCount<PackageDetailDisplay>,
 }
 
@@ -52,8 +49,8 @@ struct PackageDetailDisplay {
     path: String,
 }
 
-impl<'a> From<RepositoryDetails<'a>> for RepositoryDetailsDisplay<'a> {
-    fn from(val: RepositoryDetails<'a>) -> Self {
+impl<'a> From<RepositoryDetails<'a>> for RepositoryDetailsDisplay {
+    fn from(val: RepositoryDetails) -> Self {
         RepositoryDetailsDisplay {
             package_manager: val.package_manager,
             packages: ItemsWithCount {
@@ -186,7 +183,7 @@ impl<'a> RepositoryDetails<'a> {
 
         Self {
             color_config,
-            package_manager: package_graph.package_manager(),
+            package_manager: package_graph.package_manager().name(),
             packages,
         }
     }
