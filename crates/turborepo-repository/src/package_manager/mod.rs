@@ -19,7 +19,7 @@ use miette::{Diagnostic, NamedSource, SourceSpan};
 use node_semver::SemverError;
 use npm::NpmDetector;
 use regex::Regex;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use thiserror::Error;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError, RelativeUnixPath};
 use turborepo_errors::Spanned;
@@ -68,8 +68,7 @@ impl From<Workspaces> for Vec<String> {
     }
 }
 
-#[derive(Debug, Serialize, PartialEq, Eq, Clone, Copy)]
-#[serde(rename_all = "lowercase")]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum PackageManager {
     Berry,
     Npm,
@@ -82,15 +81,7 @@ pub enum PackageManager {
 
 impl Display for PackageManager {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            PackageManager::Berry => write!(f, "berry"),
-            PackageManager::Npm => write!(f, "npm"),
-            PackageManager::Pnpm => write!(f, "pnpm"),
-            PackageManager::Pnpm6 => write!(f, "pnpm6"),
-            PackageManager::Pnpm9 => write!(f, "pnpm9"),
-            PackageManager::Yarn => write!(f, "yarn"),
-            PackageManager::Bun => write!(f, "bun"),
-        }
+        write!(f, "{}", self.name())
     }
 }
 
@@ -351,6 +342,18 @@ impl PackageManager {
             Self::Bun,
         ]
         .as_slice()
+    }
+
+    pub fn name(&self) -> &'static str {
+        match self {
+            PackageManager::Berry => "berry",
+            PackageManager::Npm => "npm",
+            PackageManager::Pnpm => "pnpm",
+            PackageManager::Pnpm6 => "pnpm6",
+            PackageManager::Pnpm9 => "pnpm9",
+            PackageManager::Yarn => "yarn",
+            PackageManager::Bun => "bun",
+        }
     }
 
     pub fn command(&self) -> &'static str {
