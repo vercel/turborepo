@@ -20,9 +20,22 @@ pub struct MicrofrontendsConfigs {
 }
 
 impl MicrofrontendsConfigs {
-    pub fn new(
+    /// Constructs a collection of configurations from disk
+    pub fn from_disk(
         repo_root: &AbsoluteSystemPath,
         package_graph: &PackageGraph,
+    ) -> Result<Option<Self>, Error> {
+        Self::from_configs(package_graph.packages().map(|(name, info)| {
+            (
+                name.as_str(),
+                MFEConfig::load_from_dir(&repo_root.resolve(info.package_path())),
+            )
+        }))
+    }
+
+    /// Constructs a collection of configurations from a list of configurations
+    pub fn from_configs<'a>(
+        configs: impl Iterator<Item = (&'a str, Result<Option<MFEConfig>, Error>)>,
     ) -> Result<Option<Self>, Error> {
         let PackageGraphResult {
             configs,
@@ -30,12 +43,7 @@ impl MicrofrontendsConfigs {
             missing_default_apps,
             unsupported_version,
             mfe_package,
-        } = PackageGraphResult::new(package_graph.packages().map(|(name, info)| {
-            (
-                name.as_str(),
-                MFEConfig::load_from_dir(&repo_root.resolve(info.package_path())),
-            )
-        }))?;
+        } = PackageGraphResult::new(configs)?;
 
         for (package, err) in unsupported_version {
             warn!("Ignoring {package}: {err}");
