@@ -182,7 +182,7 @@ pub struct CacheOpts {
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct RemoteCacheOpts {
-    pub unused_team_id: Option<String>,
+    unused_team_id: Option<String>,
     signature: bool,
 }
 

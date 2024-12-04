@@ -28,7 +28,7 @@ struct ConfigOutput<'a> {
 }
 
 pub async fn run(repo_root: AbsoluteSystemPathBuf, args: Args) -> Result<(), cli::Error> {
-    let config = CommandBase::config_init(&repo_root, &args)?;
+    let config = CommandBase::load_config(&repo_root, &args)?;
     let root_package_json = PackageJson::load(&repo_root.join_component("package.json"))?;
 
     let package_graph = PackageGraph::builder(&repo_root, root_package_json)

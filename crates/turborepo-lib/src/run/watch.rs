@@ -113,10 +113,9 @@ impl WatchClient {
         let signal = commands::run::get_signal()?;
         let handler = SignalHandler::new(signal);
 
-        if base.opts.config_opts.root_turbo_json_path != base.repo_root.join_component(CONFIG_FILE)
-        {
+        if base.opts.repo_opts.root_turbo_json_path != base.repo_root.join_component(CONFIG_FILE) {
             return Err(Error::NonStandardTurboJsonPath(
-                base.opts.config_opts.root_turbo_json_path.to_string(),
+                base.opts.repo_opts.root_turbo_json_path.to_string(),
             ));
         }
 

@@ -44,7 +44,7 @@ impl CommandBase {
         version: &'static str,
         color_config: ColorConfig,
     ) -> Result<Self, cli::Error> {
-        let config = Self::config_init(&repo_root, &args)?;
+        let config = Self::load_config(&repo_root, &args)?;
         let opts = Opts::new(&repo_root, &args, config)?;
 
         Ok(Self {
@@ -69,7 +69,7 @@ impl CommandBase {
         }
     }
 
-    pub fn config_init(
+    pub fn load_config(
         repo_root: &AbsoluteSystemPath,
         args: &Args,
     ) -> Result<ConfigurationOptions, ConfigError> {

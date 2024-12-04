@@ -56,7 +56,7 @@ pub struct APIClientOpts {
 }
 
 #[derive(Debug, Clone)]
-pub struct ConfigOpts {
+pub struct RepoOpts {
     pub root_turbo_json_path: AbsoluteSystemPathBuf,
     pub allow_no_package_manager: bool,
     pub allow_no_turbo_json: bool,
@@ -67,7 +67,7 @@ pub struct ConfigOpts {
 /// arguments.
 #[derive(Debug, Clone)]
 pub struct Opts {
-    pub config_opts: ConfigOpts,
+    pub repo_opts: RepoOpts,
     pub api_client_opts: APIClientOpts,
     pub cache_opts: CacheOpts,
     pub run_opts: RunOpts,
@@ -161,10 +161,10 @@ impl Opts {
         let scope_opts = ScopeOpts::try_from(inputs)?;
         let runcache_opts = RunCacheOpts::from(inputs);
         let api_client_opts = APIClientOpts::from(inputs);
-        let config_opts = ConfigOpts::from(inputs);
+        let repo_opts = RepoOpts::from(inputs);
 
         Ok(Self {
-            config_opts,
+            repo_opts,
             run_opts,
             cache_opts,
             scope_opts,
@@ -271,13 +271,13 @@ pub enum ResolvedLogPrefix {
     None,
 }
 
-impl<'a> From<OptsInputs<'a>> for ConfigOpts {
+impl<'a> From<OptsInputs<'a>> for RepoOpts {
     fn from(inputs: OptsInputs<'a>) -> Self {
         let root_turbo_json_path = inputs.config.root_turbo_json_path(inputs.repo_root);
         let allow_no_package_manager = inputs.config.allow_no_package_manager();
         let allow_no_turbo_json = inputs.config.allow_no_turbo_json();
 
-        ConfigOpts {
+        RepoOpts {
             root_turbo_json_path,
             allow_no_package_manager,
             allow_no_turbo_json,
@@ -534,7 +534,7 @@ mod test {
     use turborepo_cache::CacheOpts;
     use turborepo_ui::ColorConfig;
 
-    use super::{APIClientOpts, ConfigOpts, RunOpts};
+    use super::{APIClientOpts, RepoOpts, RunOpts};
     use crate::{
         cli::{Command, DryRunMode, RunArgs},
         commands::CommandBase,
@@ -675,7 +675,7 @@ mod test {
         let root_turbo_json_path = config.root_turbo_json_path(&AbsoluteSystemPathBuf::default());
 
         let opts = Opts {
-            config_opts: ConfigOpts {
+            repo_opts: RepoOpts {
                 root_turbo_json_path,
                 allow_no_package_manager: false,
                 allow_no_turbo_json: false,

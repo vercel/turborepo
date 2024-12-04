@@ -228,7 +228,7 @@ impl RunBuilder {
         run_telemetry.track_is_linked(is_linked);
         run_telemetry.track_arg_usage(
             "dangerously_allow_missing_package_manager",
-            self.opts.config_opts.allow_no_package_manager,
+            self.opts.repo_opts.allow_no_package_manager,
         );
         // we only track the remote cache if we're linked because this defaults to
         // Vercel
@@ -289,11 +289,11 @@ impl RunBuilder {
         let mut pkg_dep_graph = {
             let builder = PackageGraph::builder(&self.repo_root, root_package_json.clone())
                 .with_single_package_mode(self.opts.run_opts.single_package)
-                .with_allow_no_package_manager(self.opts.config_opts.allow_no_package_manager);
+                .with_allow_no_package_manager(self.opts.repo_opts.allow_no_package_manager);
 
             // Daemon package discovery depends on packageManager existing in package.json
             let graph = if cfg!(feature = "daemon-package-discovery")
-                && !self.opts.config_opts.allow_no_package_manager
+                && !self.opts.repo_opts.allow_no_package_manager
             {
                 match (&daemon, self.opts.run_opts.daemon) {
                     (None, Some(true)) => {
@@ -381,18 +381,18 @@ impl RunBuilder {
         let mut turbo_json_loader = if task_access.is_enabled() {
             TurboJsonLoader::task_access(
                 self.repo_root.clone(),
-                self.opts.config_opts.root_turbo_json_path.clone(),
+                self.opts.repo_opts.root_turbo_json_path.clone(),
                 root_package_json.clone(),
             )
         } else if is_single_package {
             TurboJsonLoader::single_package(
                 self.repo_root.clone(),
-                self.opts.config_opts.root_turbo_json_path.clone(),
+                self.opts.repo_opts.root_turbo_json_path.clone(),
                 root_package_json.clone(),
             )
-        } else if !self.opts.config_opts.root_turbo_json_path.exists() &&
+        } else if !self.opts.repo_opts.root_turbo_json_path.exists() &&
         // Infer a turbo.json if allowing no turbo.json is explicitly allowed or if MFE configs are discovered
-        (self.opts.config_opts.allow_no_turbo_json || micro_frontend_configs.is_some())
+        (self.opts.repo_opts.allow_no_turbo_json || micro_frontend_configs.is_some())
         {
             TurboJsonLoader::workspace_no_turbo_json(
                 self.repo_root.clone(),
@@ -402,14 +402,14 @@ impl RunBuilder {
         } else if let Some(micro_frontends) = &micro_frontend_configs {
             TurboJsonLoader::workspace_with_microfrontends(
                 self.repo_root.clone(),
-                self.opts.config_opts.root_turbo_json_path.clone(),
+                self.opts.repo_opts.root_turbo_json_path.clone(),
                 pkg_dep_graph.packages(),
                 micro_frontends.clone(),
             )
         } else {
             TurboJsonLoader::workspace(
                 self.repo_root.clone(),
-                self.opts.config_opts.root_turbo_json_path.clone(),
+                self.opts.repo_opts.root_turbo_json_path.clone(),
                 pkg_dep_graph.packages(),
             )
         };
