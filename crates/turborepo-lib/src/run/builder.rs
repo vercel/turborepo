@@ -371,7 +371,8 @@ impl RunBuilder {
         repo_telemetry.track_package_manager(pkg_dep_graph.package_manager().name().to_string());
         repo_telemetry.track_size(pkg_dep_graph.len());
         run_telemetry.track_run_type(self.opts.run_opts.dry_run.is_some());
-        let micro_frontend_configs = MicrofrontendsConfigs::new(&self.repo_root, &pkg_dep_graph)?;
+        let micro_frontend_configs =
+            MicrofrontendsConfigs::from_disk(&self.repo_root, &pkg_dep_graph)?;
 
         let scm = scm.await.expect("detecting scm panicked");
         let async_cache = AsyncCache::new(
@@ -398,10 +399,14 @@ impl RunBuilder {
                 self.root_turbo_json_path.clone(),
                 root_package_json.clone(),
             )
-        } else if self.allow_no_turbo_json && !self.root_turbo_json_path.exists() {
+        } else if !self.root_turbo_json_path.exists() &&
+        // Infer a turbo.json if allowing no turbo.json is explicitly allowed or if MFE configs are discovered
+        (self.allow_no_turbo_json || micro_frontend_configs.is_some())
+        {
             TurboJsonLoader::workspace_no_turbo_json(
                 self.repo_root.clone(),
                 pkg_dep_graph.packages(),
+                micro_frontend_configs.clone(),
             )
         } else if let Some(micro_frontends) = &micro_frontend_configs {
             TurboJsonLoader::workspace_with_microfrontends(
