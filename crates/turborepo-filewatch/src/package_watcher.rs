@@ -27,7 +27,8 @@ use turborepo_repository::{
         DiscoveryResponse, LocalPackageDiscoveryBuilder, PackageDiscovery, PackageDiscoveryBuilder,
         WorkspaceData,
     },
-    package_manager::{self, PackageManager, WorkspaceGlobs},
+    package_manager::{self, PackageManager},
+    workspaces::WorkspaceGlobs,
 };
 
 use crate::{
