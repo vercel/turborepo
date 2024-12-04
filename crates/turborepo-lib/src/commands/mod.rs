@@ -44,8 +44,8 @@ impl CommandBase {
         version: &'static str,
         color_config: ColorConfig,
     ) -> Result<Self, cli::Error> {
-        let config = Self::config_init(&repo_root, &args)?;
-        let opts = Opts::new(&args, config)?;
+        let config = Self::load_config(&repo_root, &args)?;
+        let opts = Opts::new(&repo_root, &args, config)?;
 
         Ok(Self {
             repo_root,
@@ -69,7 +69,7 @@ impl CommandBase {
         }
     }
 
-    fn config_init(
+    pub fn load_config(
         repo_root: &AbsoluteSystemPath,
         args: &Args,
     ) -> Result<ConfigurationOptions, ConfigError> {
@@ -143,11 +143,10 @@ impl CommandBase {
     }
 
     pub fn api_auth(&self) -> Result<Option<APIAuth>, ConfigError> {
-        let config = self.config();
-        let team_id = config.team_id();
-        let team_slug = config.team_slug();
+        let team_id = self.opts.api_client_opts.team_id.as_ref();
+        let team_slug = self.opts.api_client_opts.team_slug.as_ref();
 
-        let Some(token) = config.token() else {
+        let Some(token) = &self.opts.api_client_opts.token else {
             return Ok(None);
         };
 
@@ -158,18 +157,12 @@ impl CommandBase {
         }))
     }
 
-    pub fn config(&self) -> &ConfigurationOptions {
-        &self.opts.config
-    }
-
     pub fn api_client(&self) -> Result<APIClient, ConfigError> {
-        let config = &self.opts.config;
-        let api_url = config.api_url();
-        let timeout = config.timeout();
-        let upload_timeout = config.upload_timeout();
+        let timeout = self.opts.api_client_opts.timeout;
+        let upload_timeout = self.opts.api_client_opts.upload_timeout;
 
         APIClient::new(
-            api_url,
+            &self.opts.api_client_opts.api_url,
             if timeout > 0 {
                 Some(Duration::from_secs(timeout))
             } else {
@@ -181,7 +174,7 @@ impl CommandBase {
                 None
             },
             self.version,
-            config.preflight(),
+            self.opts.api_client_opts.preflight,
         )
         .map_err(ConfigError::ApiClient)
     }

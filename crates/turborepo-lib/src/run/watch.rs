@@ -112,14 +112,14 @@ impl WatchClient {
     pub async fn new(base: CommandBase, telemetry: CommandEventBuilder) -> Result<Self, Error> {
         let signal = commands::run::get_signal()?;
         let handler = SignalHandler::new(signal);
-        let config = &base.opts.config;
-        let root_turbo_json_path = config.root_turbo_json_path(&base.repo_root);
-        if root_turbo_json_path != base.repo_root.join_component(CONFIG_FILE) {
+
+        if base.opts.repo_opts.root_turbo_json_path != base.repo_root.join_component(CONFIG_FILE) {
             return Err(Error::NonStandardTurboJsonPath(
-                root_turbo_json_path.to_string(),
+                base.opts.repo_opts.root_turbo_json_path.to_string(),
             ));
         }
-        if matches!(config.daemon(), Some(false)) {
+
+        if matches!(base.opts.run_opts.daemon, Some(false)) {
             warn!("daemon is required for watch, ignoring request to disable daemon");
         }
 

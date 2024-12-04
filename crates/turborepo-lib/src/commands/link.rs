@@ -174,8 +174,9 @@ pub async fn link(
     let api_client = base.api_client()?;
     let token = base
         .opts()
-        .config
-        .token()
+        .api_client_opts
+        .token
+        .as_deref()
         .ok_or_else(|| Error::TokenNotFound {
             command: base.color_config.apply(BOLD.apply_to("`npx turbo login`")),
         })?;
@@ -639,7 +640,7 @@ mod test {
             .build()?;
 
         let mut base = CommandBase::from_opts(
-            Opts::new(&Args::default(), config)?,
+            Opts::new(&repo_root, &Args::default(), config)?,
             repo_root.clone(),
             "1.0.0",
             ColorConfig::new(false),
@@ -701,7 +702,7 @@ mod test {
             .build()?;
 
         let mut base = CommandBase::from_opts(
-            Opts::new(&Args::default(), config)?,
+            Opts::new(&repo_root, &Args::default(), config)?,
             repo_root.clone(),
             "",
             ColorConfig::new(false),

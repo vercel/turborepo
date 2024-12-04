@@ -1283,8 +1283,7 @@ pub async fn run(
             }
         }
         Command::Config => {
-            let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
-            config::run(base).await?;
+            config::run(repo_root, cli_args).await?;
             Ok(0)
         }
         Command::Ls {

@@ -263,7 +263,7 @@ impl<'a> Prune<'a> {
         output_dir: &str,
         telemetry: CommandEventBuilder,
     ) -> Result<Self, Error> {
-        let allow_missing_package_manager = base.config().allow_no_package_manager();
+        let allow_missing_package_manager = base.opts().repo_opts.allow_no_package_manager;
         telemetry.track_arg_usage(
             "dangerously-allow-missing-package-manager",
             allow_missing_package_manager,

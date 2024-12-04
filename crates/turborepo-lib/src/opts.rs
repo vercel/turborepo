@@ -2,7 +2,7 @@ use std::backtrace;
 
 use camino::Utf8PathBuf;
 use thiserror::Error;
-use turbopath::AnchoredSystemPathBuf;
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 use turborepo_api_client::APIAuth;
 use turborepo_cache::{CacheOpts, RemoteCacheOpts};
 
@@ -43,11 +43,32 @@ pub enum Error {
     Config(#[from] crate::config::Error),
 }
 
+#[derive(Debug, Clone)]
+pub struct APIClientOpts {
+    pub api_url: String,
+    pub timeout: u64,
+    pub upload_timeout: u64,
+    pub token: Option<String>,
+    pub team_id: Option<String>,
+    pub team_slug: Option<String>,
+    pub login_url: String,
+    pub preflight: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct RepoOpts {
+    pub root_turbo_json_path: AbsoluteSystemPathBuf,
+    pub allow_no_package_manager: bool,
+    pub allow_no_turbo_json: bool,
+}
+
 /// The fully resolved options for Turborepo. This is the combination of config,
-/// including all the layers (env, args, etc.), and the command line arguments.
+/// including all the layers (env, args, defaults, etc.), and the command line
+/// arguments.
 #[derive(Debug, Clone)]
 pub struct Opts {
-    pub config: ConfigurationOptions,
+    pub repo_opts: RepoOpts,
+    pub api_client_opts: APIClientOpts,
     pub cache_opts: CacheOpts,
     pub run_opts: RunOpts,
     pub runcache_opts: RunCacheOpts,
@@ -95,7 +116,11 @@ impl Opts {
 }
 
 impl Opts {
-    pub fn new(args: &Args, config: ConfigurationOptions) -> Result<Self, Error> {
+    pub fn new(
+        repo_root: &AbsoluteSystemPath,
+        args: &Args,
+        config: ConfigurationOptions,
+    ) -> Result<Self, Error> {
         let team_id = config.team_id();
         let team_slug = config.team_slug();
 
@@ -125,6 +150,7 @@ impl Opts {
         };
 
         let inputs = OptsInputs {
+            repo_root,
             run_args: run_args.as_ref(),
             execution_args: execution_args.as_ref(),
             config: &config,
@@ -134,19 +160,23 @@ impl Opts {
         let cache_opts = CacheOpts::try_from(inputs)?;
         let scope_opts = ScopeOpts::try_from(inputs)?;
         let runcache_opts = RunCacheOpts::from(inputs);
+        let api_client_opts = APIClientOpts::from(inputs);
+        let repo_opts = RepoOpts::from(inputs);
 
         Ok(Self {
-            config,
+            repo_opts,
             run_opts,
             cache_opts,
             scope_opts,
             runcache_opts,
+            api_client_opts,
         })
     }
 }
 
 #[derive(Debug, Clone, Copy)]
 struct OptsInputs<'a> {
+    repo_root: &'a AbsoluteSystemPath,
     run_args: &'a RunArgs,
     execution_args: &'a ExecutionArgs,
     config: &'a ConfigurationOptions,
@@ -239,6 +269,20 @@ pub enum ResolvedLogOrder {
 pub enum ResolvedLogPrefix {
     Task,
     None,
+}
+
+impl<'a> From<OptsInputs<'a>> for RepoOpts {
+    fn from(inputs: OptsInputs<'a>) -> Self {
+        let root_turbo_json_path = inputs.config.root_turbo_json_path(inputs.repo_root);
+        let allow_no_package_manager = inputs.config.allow_no_package_manager();
+        let allow_no_turbo_json = inputs.config.allow_no_turbo_json();
+
+        RepoOpts {
+            root_turbo_json_path,
+            allow_no_package_manager,
+            allow_no_turbo_json,
+        }
+    }
 }
 
 const DEFAULT_CONCURRENCY: u32 = 10;
@@ -380,6 +424,30 @@ impl<'a> TryFrom<OptsInputs<'a>> for ScopeOpts {
     }
 }
 
+impl<'a> From<OptsInputs<'a>> for APIClientOpts {
+    fn from(inputs: OptsInputs<'a>) -> Self {
+        let api_url = inputs.config.api_url().to_string();
+        let timeout = inputs.config.timeout();
+        let upload_timeout = inputs.config.upload_timeout();
+        let preflight = inputs.config.preflight();
+        let token = inputs.config.token().map(|s| s.to_string());
+        let team_id = inputs.config.team_id().map(|s| s.to_string());
+        let team_slug = inputs.config.team_slug().map(|s| s.to_string());
+        let login_url = inputs.config.login_url().to_string();
+
+        APIClientOpts {
+            api_url,
+            timeout,
+            upload_timeout,
+            token,
+            team_id,
+            team_slug,
+            login_url,
+            preflight,
+        }
+    }
+}
+
 impl<'a> TryFrom<OptsInputs<'a>> for CacheOpts {
     type Error = self::Error;
 
@@ -466,7 +534,7 @@ mod test {
     use turborepo_cache::CacheOpts;
     use turborepo_ui::ColorConfig;
 
-    use super::RunOpts;
+    use super::{APIClientOpts, RepoOpts, RunOpts};
     use crate::{
         cli::{Command, DryRunMode, RunArgs},
         commands::CommandBase,
@@ -588,7 +656,12 @@ mod test {
             is_github_actions: false,
             daemon: None,
         };
-        let cache_opts = CacheOpts::default();
+        let cache_opts = CacheOpts {
+            cache_dir: ".turbo/cache".into(),
+            cache: Default::default(),
+            workers: 0,
+            remote_cache_opts: None,
+        };
         let runcache_opts = RunCacheOpts::default();
         let scope_opts = ScopeOpts {
             pkg_inference_root: None,
@@ -598,11 +671,28 @@ mod test {
                 .affected
                 .map(|(base, head)| (Some(base), Some(head))),
         };
+        let config = ConfigurationOptions::default();
+        let root_turbo_json_path = config.root_turbo_json_path(&AbsoluteSystemPathBuf::default());
+
         let opts = Opts {
-            config: ConfigurationOptions::default(),
+            repo_opts: RepoOpts {
+                root_turbo_json_path,
+                allow_no_package_manager: false,
+                allow_no_turbo_json: false,
+            },
+            api_client_opts: APIClientOpts {
+                api_url: "".to_string(),
+                timeout: 0,
+                upload_timeout: 0,
+                token: None,
+                team_id: None,
+                team_slug: None,
+                login_url: "".to_string(),
+                preflight: false,
+            },
+            scope_opts,
             run_opts,
             cache_opts,
-            scope_opts,
             runcache_opts,
         };
         let synthesized = opts.synthesize_command();

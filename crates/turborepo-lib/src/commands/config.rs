@@ -1,8 +1,9 @@
 use camino::Utf8Path;
 use serde::Serialize;
+use turbopath::AbsoluteSystemPathBuf;
 use turborepo_repository::{package_graph::PackageGraph, package_json::PackageJson};
 
-use crate::{cli, cli::EnvMode, commands::CommandBase, turbo_json::UIMode};
+use crate::{cli, cli::EnvMode, commands::CommandBase, turbo_json::UIMode, Args};
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -26,11 +27,11 @@ struct ConfigOutput<'a> {
     cache_dir: &'a Utf8Path,
 }
 
-pub async fn run(base: CommandBase) -> Result<(), cli::Error> {
-    let config = base.config();
-    let root_package_json = PackageJson::load(&base.repo_root.join_component("package.json"))?;
+pub async fn run(repo_root: AbsoluteSystemPathBuf, args: Args) -> Result<(), cli::Error> {
+    let config = CommandBase::load_config(&repo_root, &args)?;
+    let root_package_json = PackageJson::load(&repo_root.join_component("package.json"))?;
 
-    let package_graph = PackageGraph::builder(&base.repo_root, root_package_json)
+    let package_graph = PackageGraph::builder(&repo_root, root_package_json)
         .build()
         .await?;
 
