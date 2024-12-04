@@ -1,5 +1,5 @@
 [package]
-name = "turborepo-micro-frontend"
+name = "turborepo-microfrontends"
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
@@ -19,6 +19,7 @@ turborepo-errors = { workspace = true }
 [dev-dependencies]
 insta = { workspace = true }
 pretty_assertions = { workspace = true }
+tempfile = { workspace = true }
 
 [lints]
 workspace = true

@@ -12,7 +12,7 @@ use super::{Pipeline, RawTaskDefinition, TurboJson, CONFIG_FILE};
 use crate::{
     cli::EnvMode,
     config::Error,
-    micro_frontends::MicroFrontendsConfigs,
+    microfrontends::MicrofrontendsConfigs,
     run::{task_access::TASK_ACCESS_CONFIG_PATH, task_id::TaskName},
 };
 
@@ -35,7 +35,7 @@ enum Strategy {
     Workspace {
         // Map of package names to their package specific turbo.json
         packages: HashMap<PackageName, AbsoluteSystemPathBuf>,
-        micro_frontends_configs: Option<MicroFrontendsConfigs>,
+        micro_frontends_configs: Option<MicrofrontendsConfigs>,
     },
     WorkspaceNoTurboJson {
         // Map of package names to their scripts
@@ -71,7 +71,7 @@ impl TurboJsonLoader {
         repo_root: AbsoluteSystemPathBuf,
         root_turbo_json_path: AbsoluteSystemPathBuf,
         packages: impl Iterator<Item = (&'a PackageName, &'a PackageInfo)>,
-        micro_frontends_configs: MicroFrontendsConfigs,
+        micro_frontends_configs: MicrofrontendsConfigs,
     ) -> Self {
         let packages = package_turbo_jsons(&repo_root, root_turbo_json_path, packages);
         Self {

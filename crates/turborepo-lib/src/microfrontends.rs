@@ -3,9 +3,7 @@ use std::collections::{HashMap, HashSet};
 use itertools::Itertools;
 use tracing::warn;
 use turbopath::AbsoluteSystemPath;
-use turborepo_micro_frontend::{
-    Config as MFEConfig, Error, DEFAULT_MICRO_FRONTENDS_CONFIG, MICRO_FRONTENDS_PACKAGES,
-};
+use turborepo_microfrontends::{Config as MFEConfig, Error, MICROFRONTENDS_PACKAGES};
 use turborepo_repository::package_graph::{PackageGraph, PackageName};
 
 use crate::{
@@ -15,58 +13,44 @@ use crate::{
 };
 
 #[derive(Debug, Clone)]
-pub struct MicroFrontendsConfigs {
+pub struct MicrofrontendsConfigs {
     configs: HashMap<String, HashSet<TaskId<'static>>>,
+    config_filenames: HashMap<String, String>,
     mfe_package: Option<&'static str>,
 }
 
-impl MicroFrontendsConfigs {
+impl MicrofrontendsConfigs {
     pub fn new(
         repo_root: &AbsoluteSystemPath,
         package_graph: &PackageGraph,
     ) -> Result<Option<Self>, Error> {
-        let mut configs = HashMap::new();
-        for (package_name, package_info) in package_graph.packages() {
-            let config_path = repo_root
-                .resolve(package_info.package_path())
-                .join_component(DEFAULT_MICRO_FRONTENDS_CONFIG);
-            let Some(config) = MFEConfig::load(&config_path).or_else(|err| {
-                if matches!(err, turborepo_micro_frontend::Error::UnsupportedVersion(_)) {
-                    warn!("Ignoring {config_path}: {err}");
-                    Ok(None)
-                } else {
-                    Err(err)
-                }
-            })?
-            else {
-                continue;
-            };
-            let tasks = config
-                .applications
-                .iter()
-                .map(|(application, options)| {
-                    let dev_task = options.development.task.as_deref().unwrap_or("dev");
-                    TaskId::new(application, dev_task).into_owned()
-                })
-                .collect();
-            configs.insert(package_name.to_string(), tasks);
+        let PackageGraphResult {
+            configs,
+            config_filenames,
+            missing_default_apps,
+            unsupported_version,
+            mfe_package,
+        } = PackageGraphResult::new(package_graph.packages().map(|(name, info)| {
+            (
+                name.as_str(),
+                MFEConfig::load_from_dir(&repo_root.resolve(info.package_path())),
+            )
+        }))?;
+
+        for (package, err) in unsupported_version {
+            warn!("Ignoring {package}: {err}");
         }
 
-        let mfe_package = package_graph
-            .packages()
-            .map(|(pkg, _)| pkg.as_str())
-            .sorted()
-            // We use `find_map` here instead of a simple `find` so we get the &'static str
-            // instead of the &str tied to the lifetime of the package graph.
-            .find_map(|pkg| {
-                MICRO_FRONTENDS_PACKAGES
-                    .iter()
-                    .find(|static_pkg| pkg == **static_pkg)
-            })
-            .copied();
+        if !missing_default_apps.is_empty() {
+            warn!(
+                "Missing default applications: {}",
+                missing_default_apps.join(", ")
+            );
+        }
 
         Ok((!configs.is_empty()).then_some(Self {
             configs,
+            config_filenames,
             mfe_package,
         }))
     }
@@ -87,6 +71,11 @@ impl MicroFrontendsConfigs {
         self.configs
             .values()
             .any(|dev_tasks| dev_tasks.contains(task_id))
+    }
+
+    pub fn config_filename(&self, package_name: &str) -> Option<&str> {
+        let filename = self.config_filenames.get(package_name)?;
+        Some(filename.as_str())
     }
 
     pub fn update_turbo_json(
@@ -145,6 +134,74 @@ impl MicroFrontendsConfigs {
     }
 }
 
+// Internal struct used to capture the results of checking the package graph
+struct PackageGraphResult {
+    configs: HashMap<String, HashSet<TaskId<'static>>>,
+    config_filenames: HashMap<String, String>,
+    missing_default_apps: Vec<String>,
+    unsupported_version: Vec<(String, String)>,
+    mfe_package: Option<&'static str>,
+}
+
+impl PackageGraphResult {
+    fn new<'a>(
+        packages: impl Iterator<Item = (&'a str, Result<Option<MFEConfig>, Error>)>,
+    ) -> Result<Self, Error> {
+        let mut configs = HashMap::new();
+        let mut config_filenames = HashMap::new();
+        let mut referenced_default_apps = HashSet::new();
+        let mut unsupported_version = Vec::new();
+        let mut mfe_package = None;
+        // We sort packages to ensure deterministic behavior
+        let sorted_packages = packages.sorted_by(|(a, _), (b, _)| a.cmp(b));
+        for (package_name, config) in sorted_packages {
+            if let Some(pkg) = MICROFRONTENDS_PACKAGES
+                .iter()
+                .find(|static_pkg| package_name == **static_pkg)
+            {
+                mfe_package = Some(*pkg);
+            }
+
+            let Some(config) = config.or_else(|err| match err {
+                turborepo_microfrontends::Error::UnsupportedVersion(_) => {
+                    unsupported_version.push((package_name.to_string(), err.to_string()));
+                    Ok(None)
+                }
+                turborepo_microfrontends::Error::ChildConfig { reference } => {
+                    referenced_default_apps.insert(reference);
+                    Ok(None)
+                }
+                err => Err(err),
+            })?
+            else {
+                continue;
+            };
+            let tasks = config
+                .development_tasks()
+                .map(|(application, options)| {
+                    let dev_task = options.unwrap_or("dev");
+                    TaskId::new(application, dev_task).into_owned()
+                })
+                .collect();
+            configs.insert(package_name.to_string(), tasks);
+            config_filenames.insert(package_name.to_string(), config.filename().to_owned());
+        }
+        let default_apps_found = configs.keys().cloned().collect();
+        let mut missing_default_apps = referenced_default_apps
+            .difference(&default_apps_found)
+            .cloned()
+            .collect::<Vec<_>>();
+        missing_default_apps.sort();
+        Ok(Self {
+            configs,
+            config_filenames,
+            missing_default_apps,
+            unsupported_version,
+            mfe_package,
+        })
+    }
+}
+
 #[derive(Debug, PartialEq, Eq)]
 struct FindResult<'a> {
     dev: Option<TaskId<'a>>,
@@ -153,7 +210,11 @@ struct FindResult<'a> {
 
 #[cfg(test)]
 mod test {
+    use serde_json::json;
     use test_case::test_case;
+    use turborepo_microfrontends::{
+        MICROFRONTENDS_PACKAGE_EXTERNAL, MICROFRONTENDS_PACKAGE_INTERNAL,
+    };
 
     use super::*;
 
@@ -253,13 +314,112 @@ mod test {
             "mfe-config-pkg" => ["web#dev", "docs#dev"],
             "mfe-web" => ["mfe-web#dev", "mfe-docs#serve"]
         );
-        let mfe = MicroFrontendsConfigs {
+        let mfe = MicrofrontendsConfigs {
             configs,
+            config_filenames: HashMap::new(),
             mfe_package: None,
         };
         assert_eq!(
             mfe.package_turbo_json_update(&test.package_name()),
             test.expected()
         );
+    }
+
+    #[test]
+    fn test_mfe_package_is_found() {
+        let result = PackageGraphResult::new(
+            vec![
+                // These should never be present in the same graph, but if for some reason they
+                // are, we defer to the external variant.
+                (MICROFRONTENDS_PACKAGE_EXTERNAL, Ok(None)),
+                (MICROFRONTENDS_PACKAGE_INTERNAL, Ok(None)),
+            ]
+            .into_iter(),
+        )
+        .unwrap();
+        assert_eq!(result.mfe_package, Some(MICROFRONTENDS_PACKAGE_EXTERNAL));
+    }
+
+    #[test]
+    fn test_no_mfe_package() {
+        let result =
+            PackageGraphResult::new(vec![("foo", Ok(None)), ("bar", Ok(None))].into_iter())
+                .unwrap();
+        assert_eq!(result.mfe_package, None);
+    }
+
+    #[test]
+    fn test_unsupported_versions_ignored() {
+        let result = PackageGraphResult::new(
+            vec![("foo", Err(Error::UnsupportedVersion("bad version".into())))].into_iter(),
+        )
+        .unwrap();
+        assert_eq!(result.configs, HashMap::new());
+    }
+
+    #[test]
+    fn test_child_configs_with_missing_default() {
+        let result = PackageGraphResult::new(
+            vec![(
+                "child",
+                Err(Error::ChildConfig {
+                    reference: "main".into(),
+                }),
+            )]
+            .into_iter(),
+        )
+        .unwrap();
+        assert_eq!(result.configs, HashMap::new());
+        assert_eq!(result.missing_default_apps, &["main".to_string()]);
+    }
+
+    #[test]
+    fn test_io_err_stops_traversal() {
+        let result = PackageGraphResult::new(
+            vec![
+                (
+                    "a",
+                    Err(Error::Io(std::io::Error::new(
+                        std::io::ErrorKind::Other,
+                        "something",
+                    ))),
+                ),
+                (
+                    "b",
+                    Err(Error::ChildConfig {
+                        reference: "main".into(),
+                    }),
+                ),
+            ]
+            .into_iter(),
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_dev_task_collection() {
+        let config = MFEConfig::from_str(
+            &serde_json::to_string_pretty(&json!({
+                "version": "2",
+                "applications": {
+                    "web": {},
+                    "docs": {
+                        "development": {
+                            "task": "serve"
+                        }
+                    }
+                }
+            }))
+            .unwrap(),
+            "something.txt",
+        )
+        .unwrap();
+        let result = PackageGraphResult::new(vec![("web", Ok(Some(config)))].into_iter()).unwrap();
+        assert_eq!(
+            result.configs,
+            mfe_configs!(
+                "web" => ["web#dev", "docs#serve"]
+            )
+        )
     }
 }
