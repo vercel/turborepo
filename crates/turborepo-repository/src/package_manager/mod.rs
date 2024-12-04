@@ -66,7 +66,7 @@ impl From<Workspaces> for Vec<String> {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum PackageManager {
     Berry,
     Npm,
@@ -117,10 +117,10 @@ impl Display for MissingWorkspaceError {
     }
 }
 
-impl From<&PackageManager> for MissingWorkspaceError {
-    fn from(value: &PackageManager) -> Self {
+impl From<PackageManager> for MissingWorkspaceError {
+    fn from(value: PackageManager) -> Self {
         Self {
-            package_manager: *value,
+            package_manager: value,
         }
     }
 }
@@ -278,10 +278,10 @@ impl PackageManager {
                 // so we can catch it in the case of single package mode.
                 let source = self.workspace_glob_source(root_path);
                 let workspace_yaml = fs::read_to_string(source)
-                    .map_err(|_| Error::Workspace(MissingWorkspaceError::from(self)))?;
+                    .map_err(|_| Error::Workspace(MissingWorkspaceError::from(self.clone())))?;
                 let pnpm_workspace: PnpmWorkspace = serde_yaml::from_str(&workspace_yaml)?;
                 if pnpm_workspace.packages.is_empty() {
-                    return Err(MissingWorkspaceError::from(self).into());
+                    return Err(MissingWorkspaceError::from(self.clone()).into());
                 } else {
                     pnpm_workspace.packages
                 }
@@ -292,10 +292,10 @@ impl PackageManager {
             | PackageManager::Bun => {
                 let package_json_text = fs::read_to_string(self.workspace_glob_source(root_path))?;
                 let package_json: PackageJsonWorkspaces = serde_json::from_str(&package_json_text)
-                    .map_err(|_| Error::Workspace(MissingWorkspaceError::from(self)))?; // Make sure to convert this to a missing workspace error
+                    .map_err(|_| Error::Workspace(MissingWorkspaceError::from(self.clone())))?; // Make sure to convert this to a missing workspace error
 
                 if package_json.workspaces.as_ref().is_empty() {
-                    return Err(MissingWorkspaceError::from(self).into());
+                    return Err(MissingWorkspaceError::from(self.clone()).into());
                 } else {
                     package_json.workspaces.into()
                 }
@@ -363,7 +363,7 @@ impl PackageManager {
 
         match detected_package_managers.as_slice() {
             [] => Err(NoPackageManager.into()),
-            [package_manager] => Ok(*package_manager),
+            [package_manager] => Ok(package_manager.clone()),
             _ => {
                 let managers = detected_package_managers
                     .iter()

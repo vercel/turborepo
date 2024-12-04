@@ -104,7 +104,7 @@ impl Workspace {
                 path: self.workspace_state.root.clone(),
             })?;
 
-        let package_manager = *package_manager;
+        let package_manager = package_manager.clone();
         let workspace_root = self.workspace_state.root.clone();
 
         let package_json_paths =

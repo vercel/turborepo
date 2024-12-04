@@ -508,7 +508,7 @@ impl Subscriber {
                 ..
             } => {
                 let resp = DiscoveryResponse {
-                    package_manager: *package_manager,
+                    package_manager: package_manager.clone(),
                     workspaces: workspaces.values().cloned().collect(),
                 };
                 // Note that we could implement PartialEq for DiscoveryResponse, but we

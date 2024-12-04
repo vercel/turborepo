@@ -226,7 +226,7 @@ mod test {
                 Some(RepoState {
                     root: monorepo_root.clone(),
                     mode: RepoMode::MultiPackage,
-                    package_manager: Ok(pnpm),
+                    package_manager: Ok(pnpm.clone()),
                     root_package_json: PackageJson::load(&monorepo_pkg_json).unwrap(),
                 }),
             ),
@@ -235,7 +235,7 @@ mod test {
                 Some(RepoState {
                     root: monorepo_root.clone(),
                     mode: RepoMode::MultiPackage,
-                    package_manager: Ok(pnpm),
+                    package_manager: Ok(pnpm.clone()),
                     root_package_json: PackageJson::load(&monorepo_pkg_json).unwrap(),
                 }),
             ),
@@ -244,7 +244,7 @@ mod test {
                 Some(RepoState {
                     root: monorepo_root.clone(),
                     mode: RepoMode::MultiPackage,
-                    package_manager: Ok(pnpm),
+                    package_manager: Ok(pnpm.clone()),
                     root_package_json: PackageJson::load(&monorepo_pkg_json).unwrap(),
                 }),
             ),
@@ -253,7 +253,7 @@ mod test {
                 Some(RepoState {
                     root: single_root.clone(),
                     mode: RepoMode::SinglePackage,
-                    package_manager: Ok(pnpm),
+                    package_manager: Ok(pnpm.clone()),
                     root_package_json: PackageJson::load(&single_root_package_json).unwrap(),
                 }),
             ),
@@ -262,7 +262,7 @@ mod test {
                 Some(RepoState {
                     root: single_root.clone(),
                     mode: RepoMode::SinglePackage,
-                    package_manager: Ok(pnpm),
+                    package_manager: Ok(pnpm.clone()),
                     root_package_json: PackageJson::load(&single_root_package_json).unwrap(),
                 }),
             ),
@@ -272,7 +272,7 @@ mod test {
                 Some(RepoState {
                     root: standalone.clone(),
                     mode: RepoMode::SinglePackage,
-                    package_manager: Ok(pnpm),
+                    package_manager: Ok(pnpm.clone()),
                     root_package_json: PackageJson::load(&standalone_pkg_json).unwrap(),
                 }),
             ),
@@ -281,7 +281,7 @@ mod test {
                 Some(RepoState {
                     root: standalone_monorepo.clone(),
                     mode: RepoMode::MultiPackage,
-                    package_manager: Ok(pnpm),
+                    package_manager: Ok(pnpm.clone()),
                     root_package_json: PackageJson::load(&standalone_monorepo_package_json)
                         .unwrap(),
                 }),
