@@ -399,10 +399,14 @@ impl RunBuilder {
                 self.root_turbo_json_path.clone(),
                 root_package_json.clone(),
             )
-        } else if self.allow_no_turbo_json && !self.root_turbo_json_path.exists() {
+        } else if !self.root_turbo_json_path.exists() &&
+        // Infer a turbo.json if allowing no turbo.json is explicitly allowed or if MFE configs are discovered
+        (self.allow_no_turbo_json || micro_frontend_configs.is_some())
+        {
             TurboJsonLoader::workspace_no_turbo_json(
                 self.repo_root.clone(),
                 pkg_dep_graph.packages(),
+                micro_frontend_configs.clone(),
             )
         } else if let Some(micro_frontends) = &micro_frontend_configs {
             TurboJsonLoader::workspace_with_microfrontends(
