@@ -420,3 +420,48 @@ fn encode_modifiers(mods: KeyModifiers) -> u8 {
     }
     number
 }
+
+#[cfg(test)]
+mod test {
+    use std::{mem, sync::OnceLock};
+
+    use crossterm::event::{KeyCode, KeyEvent};
+    use test_case::test_case;
+
+    use super::*;
+    use crate::tui::{search::SearchResults, task::TasksByStatus};
+
+    fn search() -> &'static LayoutSections {
+        static SEARCH: OnceLock<LayoutSections> = OnceLock::new();
+        SEARCH.get_or_init(|| LayoutSections::Search {
+            previous_selection: "".into(),
+            results: SearchResults::new(&TasksByStatus::new()),
+        })
+    }
+
+    fn in_find() -> InputOptions<'static> {
+        InputOptions {
+            focus: search(),
+            has_selection: false,
+        }
+    }
+
+    const H: KeyEvent = KeyEvent::new(KeyCode::Char('h'), KeyModifiers::empty());
+
+    #[test_case(in_find(), H, Some(Event::SearchEnterChar('h')) ; "h while searching")]
+    // Note: This only checks event variants not any data contained in the variant
+    fn test_translate_key_event_variant(
+        opts: InputOptions,
+        key_event: crossterm::event::KeyEvent,
+        expected: Option<Event>,
+    ) {
+        match (translate_key_event(opts, key_event), expected) {
+            (Some(actual), Some(expected)) => {
+                assert_eq!(mem::discriminant(&actual), mem::discriminant(&expected));
+            }
+            (None, None) => (),
+            (None, Some(_)) => panic!("expected event, got None"),
+            (Some(_), None) => panic!("expected no event, got an event"),
+        }
+    }
+}
