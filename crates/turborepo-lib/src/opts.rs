@@ -43,25 +43,36 @@ pub enum Error {
     Config(#[from] crate::config::Error),
 }
 
-/// The fully resolved options for Turborepo. This is the combination of config,
-/// including all the layers (env, args, etc.), and the command line arguments.
 #[derive(Debug, Clone)]
-pub struct Opts {
-    pub root_turbo_json_path: AbsoluteSystemPathBuf,
+pub struct APIClientOpts {
     pub api_url: String,
     pub timeout: u64,
     pub upload_timeout: u64,
     pub token: Option<String>,
     pub team_id: Option<String>,
     pub team_slug: Option<String>,
+    pub login_url: String,
+    pub preflight: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct ConfigOpts {
+    pub root_turbo_json_path: AbsoluteSystemPathBuf,
     pub allow_no_package_manager: bool,
     pub allow_no_turbo_json: bool,
-    pub login_url: String,
+}
+
+/// The fully resolved options for Turborepo. This is the combination of config,
+/// including all the layers (env, args, defaults, etc.), and the command line
+/// arguments.
+#[derive(Debug, Clone)]
+pub struct Opts {
+    pub config_opts: ConfigOpts,
+    pub api_client_opts: APIClientOpts,
     pub cache_opts: CacheOpts,
     pub run_opts: RunOpts,
     pub runcache_opts: RunCacheOpts,
     pub scope_opts: ScopeOpts,
-    pub preflight: bool,
 }
 
 impl Opts {
@@ -139,6 +150,7 @@ impl Opts {
         };
 
         let inputs = OptsInputs {
+            repo_root,
             run_args: run_args.as_ref(),
             execution_args: execution_args.as_ref(),
             config: &config,
@@ -148,40 +160,23 @@ impl Opts {
         let cache_opts = CacheOpts::try_from(inputs)?;
         let scope_opts = ScopeOpts::try_from(inputs)?;
         let runcache_opts = RunCacheOpts::from(inputs);
-        let root_turbo_json_path = config.root_turbo_json_path(repo_root);
-        let api_url = config.api_url().to_string();
-        let timeout = config.timeout();
-        let upload_timeout = config.upload_timeout();
-        let preflight = config.preflight();
-        let token = config.token().map(|s| s.to_string());
-        let team_id = config.team_id().map(|s| s.to_string());
-        let team_slug = config.team_slug().map(|s| s.to_string());
-        let login_url = config.login_url().to_string();
-        let allow_no_package_manager = config.allow_no_package_manager();
-        let allow_no_turbo_json = config.allow_no_turbo_json();
+        let api_client_opts = APIClientOpts::from(inputs);
+        let config_opts = ConfigOpts::from(inputs);
 
         Ok(Self {
-            root_turbo_json_path,
-            api_url,
-            timeout,
-            upload_timeout,
-            preflight,
-            token,
-            team_id,
-            team_slug,
-            login_url,
-            allow_no_package_manager,
-            allow_no_turbo_json,
+            config_opts,
             run_opts,
             cache_opts,
             scope_opts,
             runcache_opts,
+            api_client_opts,
         })
     }
 }
 
 #[derive(Debug, Clone, Copy)]
 struct OptsInputs<'a> {
+    repo_root: &'a AbsoluteSystemPath,
     run_args: &'a RunArgs,
     execution_args: &'a ExecutionArgs,
     config: &'a ConfigurationOptions,
@@ -274,6 +269,20 @@ pub enum ResolvedLogOrder {
 pub enum ResolvedLogPrefix {
     Task,
     None,
+}
+
+impl<'a> From<OptsInputs<'a>> for ConfigOpts {
+    fn from(inputs: OptsInputs<'a>) -> Self {
+        let root_turbo_json_path = inputs.config.root_turbo_json_path(inputs.repo_root);
+        let allow_no_package_manager = inputs.config.allow_no_package_manager();
+        let allow_no_turbo_json = inputs.config.allow_no_turbo_json();
+
+        ConfigOpts {
+            root_turbo_json_path,
+            allow_no_package_manager,
+            allow_no_turbo_json,
+        }
+    }
 }
 
 const DEFAULT_CONCURRENCY: u32 = 10;
@@ -415,6 +424,30 @@ impl<'a> TryFrom<OptsInputs<'a>> for ScopeOpts {
     }
 }
 
+impl<'a> From<OptsInputs<'a>> for APIClientOpts {
+    fn from(inputs: OptsInputs<'a>) -> Self {
+        let api_url = inputs.config.api_url().to_string();
+        let timeout = inputs.config.timeout();
+        let upload_timeout = inputs.config.upload_timeout();
+        let preflight = inputs.config.preflight();
+        let token = inputs.config.token().map(|s| s.to_string());
+        let team_id = inputs.config.team_id().map(|s| s.to_string());
+        let team_slug = inputs.config.team_slug().map(|s| s.to_string());
+        let login_url = inputs.config.login_url().to_string();
+
+        APIClientOpts {
+            api_url,
+            timeout,
+            upload_timeout,
+            token,
+            team_id,
+            team_slug,
+            login_url,
+            preflight,
+        }
+    }
+}
+
 impl<'a> TryFrom<OptsInputs<'a>> for CacheOpts {
     type Error = self::Error;
 
@@ -501,7 +534,7 @@ mod test {
     use turborepo_cache::CacheOpts;
     use turborepo_ui::ColorConfig;
 
-    use super::RunOpts;
+    use super::{APIClientOpts, ConfigOpts, RunOpts};
     use crate::{
         cli::{Command, DryRunMode, RunArgs},
         commands::CommandBase,
@@ -642,23 +675,25 @@ mod test {
         let root_turbo_json_path = config.root_turbo_json_path(&AbsoluteSystemPathBuf::default());
 
         let opts = Opts {
-            config,
-            root_turbo_json_path,
-            api_url: "".to_string(),
-            timeout: 0,
-            upload_timeout: 0,
-            token: None,
-            team_id: None,
-            team_slug: None,
-            allow_no_package_manager: false,
-            allow_no_turbo_json: false,
+            config_opts: ConfigOpts {
+                root_turbo_json_path,
+                allow_no_package_manager: false,
+                allow_no_turbo_json: false,
+            },
+            api_client_opts: APIClientOpts {
+                api_url: "".to_string(),
+                timeout: 0,
+                upload_timeout: 0,
+                token: None,
+                team_id: None,
+                team_slug: None,
+                login_url: "".to_string(),
+                preflight: false,
+            },
+            scope_opts,
             run_opts,
             cache_opts,
-            scope_opts,
             runcache_opts,
-
-            login_url: "".to_string(),
-            preflight: false,
         };
         let synthesized = opts.synthesize_command();
         assert_eq!(synthesized, expected);

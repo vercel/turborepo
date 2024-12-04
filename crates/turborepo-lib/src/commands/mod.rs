@@ -143,10 +143,10 @@ impl CommandBase {
     }
 
     pub fn api_auth(&self) -> Result<Option<APIAuth>, ConfigError> {
-        let team_id = self.opts.team_id.as_ref();
-        let team_slug = self.opts.team_slug.as_ref();
+        let team_id = self.opts.api_client_opts.team_id.as_ref();
+        let team_slug = self.opts.api_client_opts.team_slug.as_ref();
 
-        let Some(token) = &self.opts.token else {
+        let Some(token) = &self.opts.api_client_opts.token else {
             return Ok(None);
         };
 
@@ -158,11 +158,11 @@ impl CommandBase {
     }
 
     pub fn api_client(&self) -> Result<APIClient, ConfigError> {
-        let timeout = self.opts.timeout;
-        let upload_timeout = self.opts.upload_timeout;
+        let timeout = self.opts.api_client_opts.timeout;
+        let upload_timeout = self.opts.api_client_opts.upload_timeout;
 
         APIClient::new(
-            &self.opts.api_url,
+            &self.opts.api_client_opts.api_url,
             if timeout > 0 {
                 Some(Duration::from_secs(timeout))
             } else {
@@ -174,7 +174,7 @@ impl CommandBase {
                 None
             },
             self.version,
-            self.opts.preflight,
+            self.opts.api_client_opts.preflight,
         )
         .map_err(ConfigError::ApiClient)
     }

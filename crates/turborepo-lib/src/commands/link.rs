@@ -174,6 +174,7 @@ pub async fn link(
     let api_client = base.api_client()?;
     let token = base
         .opts()
+        .api_client_opts
         .token
         .as_deref()
         .ok_or_else(|| Error::TokenNotFound {
