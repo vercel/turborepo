@@ -105,7 +105,29 @@ pub(crate) fn wait_for_success<R: Read, T>(
         // In this case, we don't care about waiting for the child to exit,
         // we need to kill it. It's possible that we didn't read all of the output,
         // or that the child process doesn't know to exit.
-        child.kill()?;
+        // For good measure close off `stdin`
+        child.stdin.take();
+        match child.kill() {
+            Ok(()) => {
+                // If we successfully sent the signal, then we wait for process to exit
+                // Do not error if wait fails as that can indicate the pid has already been
+                // reaped.
+                child.wait().ok();
+            }
+            Err(e) => {
+                debug!("failed to kill git process: {e}");
+                // There are exactly 3 reasons why killing a child could fail:
+                // - Invalid signal number (Unix only, would indicate Rust stdlib is faulty)
+                // - Insufficient permission (Windows + Unix) (Not sure how this could happen
+                //   given we're talking about a child process)
+                // - Process has already exited (Windows + Unix)
+                // The final option is by far the most likely in which case `try_call` is a
+                // nonblocking option that will reap the child pid if it has
+                // already exited. We use this over `wait` to avoid blocking on a process
+                // exiting which possibly did not receive our kill signal.
+                child.try_wait().ok();
+            }
+        };
         let stderr_output = read_git_error_to_string(stderr);
         let stderr_text = stderr_output
             .map(|stderr| format!(" stderr: {}", stderr))
