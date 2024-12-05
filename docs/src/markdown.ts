@@ -130,8 +130,8 @@ const prepareDocumentMapEntry = async (
     const frontMatter = validateFrontmatter(path, data);
 
     const tree = markdownProcessor.parse(content);
-    const ids = getIdsFromHhtmlNodes(tree);
 
+    const ids = getIdsFromHhtmlNodes(tree);
     const headings = [...getHeadingsFromMarkdownTree(tree), ...ids];
 
     const normalizedUrlPath = filePathToUrl(path);
