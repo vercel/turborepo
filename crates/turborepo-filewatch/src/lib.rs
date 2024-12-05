@@ -65,6 +65,7 @@ pub mod globwatcher;
 pub mod hash_watcher;
 mod optional_watch;
 pub mod package_watcher;
+mod scm_resource;
 
 pub use optional_watch::OptionalWatch;
 
