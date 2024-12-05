@@ -410,7 +410,7 @@ turbo run dev --no-cache
 
 `turbo` can run a background process to pre-calculate values used for determining work that needs to be done. This standalone process (daemon) is an optimization, and not required for proper functioning of `turbo`.
 
-The default daemon usage is set for your repository using [the `daemon` field in `turbo.json`](/repo/docs/reference/configuration#daemon). Passing `--daemon` instructs `turbo` to use the standalone process, while `--no-daemon` instructs `turbo` to avoid using or creating the standalone process.
+The default daemon usage is set for your repository using [the `daemon` field in `turbo.json`](/repo/docs/reference/configuration#daemon). Passing `--daemon` requires `turbo` to use the standalone process, while `--no-daemon` instructs `turbo` to avoid using or creating the standalone process.
 
 The same behavior can also be set via the `TURBO_DAEMON=true` system variable.
 
