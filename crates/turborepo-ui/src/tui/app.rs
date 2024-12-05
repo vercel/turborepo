@@ -100,7 +100,6 @@ impl<W> App<W> {
             task_list_scroll: TableState::default().with_selected(selected_task_index),
             selected_task_index,
             has_sidebar: true,
-            has_user_scrolled: has_user_interacted,
             showing_help_popup: false,
             is_task_selection_pinned: has_user_interacted,
         }
