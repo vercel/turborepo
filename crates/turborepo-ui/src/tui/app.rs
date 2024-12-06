@@ -873,8 +873,9 @@ fn view<W>(app: &mut App<W>, f: &mut Frame) {
 
     if app.showing_help_popup {
         let area = popup_area(app.size);
+        let area = area.intersection(*f.buffer_mut().area());
         f.render_widget(Clear, area); // Clears background underneath popup
-        f.render_widget(popup(), area);
+        f.render_widget(popup(app.size), area);
     }
 }
 
