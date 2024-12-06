@@ -1,5 +1,5 @@
 import Image from "next/image";
-import { Button } from "@repo/shadcn/components/ui/button";
+import { Button } from "@repo/ui/components/ui/button";
 import styles from "@/app/page.module.css";
 
 export default function Home() {
