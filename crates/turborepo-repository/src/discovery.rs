@@ -143,7 +143,7 @@ impl PackageDiscovery for LocalPackageDiscovery {
             Err(package_manager::Error::Workspace(_)) => {
                 return Ok(DiscoveryResponse {
                     workspaces: vec![],
-                    package_manager: self.package_manager,
+                    package_manager: self.package_manager.clone(),
                 })
             }
             Err(e) => return Err(Error::Failed(Box::new(e))),
@@ -168,7 +168,7 @@ impl PackageDiscovery for LocalPackageDiscovery {
             .await
             .map(|workspaces| DiscoveryResponse {
                 workspaces,
-                package_manager: self.package_manager,
+                package_manager: self.package_manager.clone(),
             })
     }
 

@@ -4,16 +4,13 @@ use miette::Diagnostic;
 use serde::Serialize;
 use thiserror::Error;
 use turbopath::AnchoredSystemPath;
-use turborepo_repository::{
-    package_graph::{PackageName, PackageNode},
-    package_manager::PackageManager,
-};
+use turborepo_repository::package_graph::{PackageName, PackageNode};
 use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_ui::{color, cprint, cprintln, ColorConfig, BOLD, BOLD_GREEN, GREY};
 
 use crate::{
     cli,
-    cli::{Command, ExecutionArgs, OutputFormat},
+    cli::OutputFormat,
     commands::{run::get_signal, CommandBase},
     run::{builder::RunBuilder, Run},
     signal::SignalHandler,
@@ -32,17 +29,17 @@ struct ItemsWithCount<T> {
 }
 
 #[derive(Clone, Serialize)]
-#[serde(into = "RepositoryDetailsDisplay<'a>")]
+#[serde(into = "RepositoryDetailsDisplay")]
 struct RepositoryDetails<'a> {
     color_config: ColorConfig,
-    package_manager: &'a PackageManager,
+    package_manager: &'static str,
     packages: Vec<(&'a PackageName, &'a AnchoredSystemPath)>,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct RepositoryDetailsDisplay<'a> {
-    package_manager: &'a PackageManager,
+struct RepositoryDetailsDisplay {
+    package_manager: &'static str,
     packages: ItemsWithCount<PackageDetailDisplay>,
 }
 
@@ -52,8 +49,8 @@ struct PackageDetailDisplay {
     path: String,
 }
 
-impl<'a> From<RepositoryDetails<'a>> for RepositoryDetailsDisplay<'a> {
-    fn from(val: RepositoryDetails<'a>) -> Self {
+impl<'a> From<RepositoryDetails<'a>> for RepositoryDetailsDisplay {
+    fn from(val: RepositoryDetails) -> Self {
         RepositoryDetailsDisplay {
             package_manager: val.package_manager,
             packages: ItemsWithCount {
@@ -113,25 +110,13 @@ impl<'a> From<PackageDetails<'a>> for PackageDetailsDisplay<'a> {
 }
 
 pub async fn run(
-    mut base: CommandBase,
+    base: CommandBase,
     packages: Vec<String>,
     telemetry: CommandEventBuilder,
-    filter: Vec<String>,
-    affected: bool,
     output: Option<OutputFormat>,
 ) -> Result<(), cli::Error> {
     let signal = get_signal()?;
     let handler = SignalHandler::new(signal);
-
-    // We fake a run command, so we can construct a `Run` type
-    base.args_mut().command = Some(Command::Run {
-        run_args: Box::default(),
-        execution_args: Box::new(ExecutionArgs {
-            filter,
-            affected,
-            ..Default::default()
-        }),
-    });
 
     let run_builder = RunBuilder::new(base)?;
     let run = run_builder.build(&handler, telemetry).await?;
@@ -186,7 +171,7 @@ impl<'a> RepositoryDetails<'a> {
 
         Self {
             color_config,
-            package_manager: package_graph.package_manager(),
+            package_manager: package_graph.package_manager().name(),
             packages,
         }
     }

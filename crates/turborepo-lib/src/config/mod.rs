@@ -26,7 +26,6 @@ use turborepo_repository::package_graph::PackageName;
 pub use crate::turbo_json::{RawTurboJson, UIMode};
 use crate::{
     cli::{EnvMode, LogOrder},
-    commands::CommandBase,
     turbo_json::CONFIG_FILE,
 };
 
@@ -437,13 +436,18 @@ fn get_lowercased_env_vars() -> HashMap<OsString, OsString> {
 }
 
 impl TurborepoConfigBuilder {
-    pub fn new(base: &CommandBase) -> Self {
+    pub fn new(repo_root: &AbsoluteSystemPath) -> Self {
         Self {
-            repo_root: base.repo_root.to_owned(),
+            repo_root: repo_root.to_owned(),
             override_config: Default::default(),
-            global_config_path: base.override_global_config_path.clone(),
+            global_config_path: None,
             environment: None,
         }
+    }
+
+    pub fn with_global_config_path(mut self, path: AbsoluteSystemPathBuf) -> Self {
+        self.global_config_path = Some(path);
+        self
     }
 
     // Getting all of the paths.

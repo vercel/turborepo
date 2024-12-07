@@ -57,7 +57,7 @@ turborepo-errors = { path = "crates/turborepo-errors" }
 turborepo-fs = { path = "crates/turborepo-fs" }
 turborepo-lib = { path = "crates/turborepo-lib", default-features = false }
 turborepo-lockfiles = { path = "crates/turborepo-lockfiles" }
-turborepo-micro-frontend = { path = "crates/turborepo-micro-frontend" }
+turborepo-microfrontends = { path = "crates/turborepo-microfrontends" }
 turborepo-repository = { path = "crates/turborepo-repository" }
 turborepo-ui = { path = "crates/turborepo-ui" }
 turborepo-unescape = { path = "crates/turborepo-unescape" }
@@ -114,6 +114,7 @@ lazy_static = "1.4.0"
 merge = "0.1.0"
 mime = "0.3.16"
 notify = "6.1.1"
+num_cpus = "1.15.0"
 once_cell = "1.17.1"
 owo-colors = "3.5.0"
 parking_lot = "0.12.1"

@@ -3,6 +3,13 @@ on:
   push:
     branches: [main]
   pull_request:
+    paths:
+      - package.json
+      - pnpm-workspace.yaml
+      - pnpm-lock.yaml
+      - "packages/**"
+      - ".github/actions/**"
+      - ".github/workflows/test-js-packages.yml"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
@@ -14,40 +21,9 @@ permissions:
   pull-requests: read
 
 jobs:
-  determine_jobs:
-    name: Determine jobs to run
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: CI related changes
-        id: ci
-        uses: technote-space/get-diff-action@v6
-        with:
-          PATTERNS: |
-            .github/actions/**
-            .github/workflows/test-js-packages.yml
-
-      - name: /packages related changes
-        id: packages
-        uses: technote-space/get-diff-action@v6
-        with:
-          PATTERNS: |
-            packages/**
-
-    outputs:
-      ci: ${{ steps.ci.outputs.diff != ''}}
-      packages: ${{ steps.packages.outputs.diff != '' }}
-
   js_packages:
     name: "JS Package Tests (${{matrix.os.name}}, Node ${{matrix.node-version}})"
     timeout-minutes: 30
-    if: needs.determine_jobs.outputs.ci == 'true' || needs.determine_jobs.outputs.packages == 'true'
-    needs: [determine_jobs]
     runs-on: ${{ matrix.os.runner }}
     strategy:
       fail-fast: false
@@ -109,7 +85,6 @@ jobs:
     runs-on: ubuntu-latest
     if: always()
     needs:
-      - determine_jobs
       - js_packages
     steps:
       - name: Compute info
@@ -128,7 +103,6 @@ jobs:
             fi
           }
 
-          subjob ${{needs.determine_jobs.result}}
           subjob ${{needs.js_packages.result}}
 
           if [ "$cancelled" = "true" ]; then

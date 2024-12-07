@@ -12,7 +12,7 @@ use super::{Pipeline, RawTaskDefinition, TurboJson, CONFIG_FILE};
 use crate::{
     cli::EnvMode,
     config::Error,
-    micro_frontends::MicroFrontendsConfigs,
+    microfrontends::MicrofrontendsConfigs,
     run::{task_access::TASK_ACCESS_CONFIG_PATH, task_id::TaskName},
 };
 
@@ -35,11 +35,12 @@ enum Strategy {
     Workspace {
         // Map of package names to their package specific turbo.json
         packages: HashMap<PackageName, AbsoluteSystemPathBuf>,
-        micro_frontends_configs: Option<MicroFrontendsConfigs>,
+        micro_frontends_configs: Option<MicrofrontendsConfigs>,
     },
     WorkspaceNoTurboJson {
         // Map of package names to their scripts
         packages: HashMap<PackageName, Vec<String>>,
+        microfrontends_configs: Option<MicrofrontendsConfigs>,
     },
     TaskAccess {
         root_turbo_json: AbsoluteSystemPathBuf,
@@ -71,7 +72,7 @@ impl TurboJsonLoader {
         repo_root: AbsoluteSystemPathBuf,
         root_turbo_json_path: AbsoluteSystemPathBuf,
         packages: impl Iterator<Item = (&'a PackageName, &'a PackageInfo)>,
-        micro_frontends_configs: MicroFrontendsConfigs,
+        micro_frontends_configs: MicrofrontendsConfigs,
     ) -> Self {
         let packages = package_turbo_jsons(&repo_root, root_turbo_json_path, packages);
         Self {
@@ -89,12 +90,16 @@ impl TurboJsonLoader {
     pub fn workspace_no_turbo_json<'a>(
         repo_root: AbsoluteSystemPathBuf,
         packages: impl Iterator<Item = (&'a PackageName, &'a PackageInfo)>,
+        microfrontends_configs: Option<MicrofrontendsConfigs>,
     ) -> Self {
         let packages = workspace_package_scripts(packages);
         Self {
             repo_root,
             cache: HashMap::new(),
-            strategy: Strategy::WorkspaceNoTurboJson { packages },
+            strategy: Strategy::WorkspaceNoTurboJson {
+                packages,
+                microfrontends_configs,
+            },
         }
     }
 
@@ -182,12 +187,20 @@ impl TurboJsonLoader {
                     turbo_json
                 }
             }
-            Strategy::WorkspaceNoTurboJson { packages } => {
+            Strategy::WorkspaceNoTurboJson {
+                packages,
+                microfrontends_configs,
+            } => {
                 let script_names = packages.get(package).ok_or(Error::NoTurboJSON)?;
                 if matches!(package, PackageName::Root) {
                     root_turbo_json_from_scripts(script_names)
                 } else {
-                    workspace_turbo_json_from_scripts(script_names)
+                    let turbo_json = workspace_turbo_json_from_scripts(script_names);
+                    if let Some(mfe_configs) = microfrontends_configs {
+                        mfe_configs.update_turbo_json(package, turbo_json)
+                    } else {
+                        turbo_json
+                    }
                 }
             }
             Strategy::TaskAccess {
@@ -382,6 +395,7 @@ mod test {
     use anyhow::Result;
     use tempfile::tempdir;
     use test_case::test_case;
+    use turborepo_unescape::UnescapedString;
 
     use super::*;
     use crate::{task_graph::TaskDefinition, turbo_json::CONFIG_FILE};
@@ -680,7 +694,10 @@ mod test {
         let mut loader = TurboJsonLoader {
             repo_root: repo_root.to_owned(),
             cache: HashMap::new(),
-            strategy: Strategy::WorkspaceNoTurboJson { packages },
+            strategy: Strategy::WorkspaceNoTurboJson {
+                packages,
+                microfrontends_configs: None,
+            },
         };
 
         {
@@ -713,5 +730,93 @@ mod test {
         // Should get no turbo.json error if package wasn't declared
         let goose_err = loader.load(&PackageName::from("goose")).unwrap_err();
         assert!(matches!(goose_err, Error::NoTurboJSON));
+    }
+
+    #[test]
+    fn test_no_turbo_json_with_mfe() {
+        let root_dir = tempdir().unwrap();
+        let repo_root = AbsoluteSystemPath::from_std_path(root_dir.path()).unwrap();
+        let packages = vec![
+            (PackageName::Root, vec![]),
+            (
+                PackageName::from("web"),
+                vec!["dev".to_owned(), "build".to_owned()],
+            ),
+            (
+                PackageName::from("docs"),
+                vec!["dev".to_owned(), "build".to_owned()],
+            ),
+        ]
+        .into_iter()
+        .collect();
+
+        let microfrontends_configs = MicrofrontendsConfigs::from_configs(
+            vec![
+                (
+                    "web",
+                    turborepo_microfrontends::Config::from_str(
+                        r#"{"version": "2", "applications": {"web": {}, "docs": {}}}"#,
+                        "mfe.json",
+                    )
+                    .map(Some),
+                ),
+                (
+                    "docs",
+                    Err(turborepo_microfrontends::Error::ChildConfig {
+                        reference: "web".into(),
+                    }),
+                ),
+            ]
+            .into_iter(),
+        )
+        .unwrap();
+
+        let mut loader = TurboJsonLoader {
+            repo_root: repo_root.to_owned(),
+            cache: HashMap::new(),
+            strategy: Strategy::WorkspaceNoTurboJson {
+                packages,
+                microfrontends_configs,
+            },
+        };
+
+        {
+            let web_json = loader.load(&PackageName::from("web")).unwrap();
+            for task_name in ["dev", "build", "proxy"] {
+                if let Some(def) = web_json.tasks.get(&TaskName::from(task_name)) {
+                    assert_eq!(
+                        def.cache.as_ref().map(|cache| *cache.as_inner()),
+                        Some(false)
+                    );
+                    // Make sure proxy is in there
+                    if task_name == "dev" {
+                        assert_eq!(
+                            def.siblings.as_ref().unwrap().first().unwrap().as_inner(),
+                            &UnescapedString::from("web#proxy")
+                        )
+                    }
+                } else {
+                    panic!("didn't find {task_name}");
+                }
+            }
+        }
+
+        {
+            let docs_json = loader.load(&PackageName::from("docs")).unwrap();
+            for task_name in ["dev"] {
+                if let Some(def) = docs_json.tasks.get(&TaskName::from(task_name)) {
+                    assert_eq!(
+                        def.cache.as_ref().map(|cache| *cache.as_inner()),
+                        Some(false)
+                    );
+                    assert_eq!(
+                        def.siblings.as_ref().unwrap().first().unwrap().as_inner(),
+                        &UnescapedString::from("web#proxy")
+                    )
+                } else {
+                    panic!("didn't find {task_name}");
+                }
+            }
+        }
     }
 }

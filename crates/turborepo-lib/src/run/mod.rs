@@ -41,7 +41,7 @@ pub use crate::run::error::Error;
 use crate::{
     cli::EnvMode,
     engine::Engine,
-    micro_frontends::MicroFrontendsConfigs,
+    microfrontends::MicrofrontendsConfigs,
     opts::Opts,
     process::ProcessManager,
     run::{global_hash::get_global_hash_inputs, summary::RunTracker, task_access::TaskAccess},
@@ -74,7 +74,7 @@ pub struct Run {
     task_access: TaskAccess,
     daemon: Option<DaemonClient<DaemonConnector>>,
     should_print_prelude: bool,
-    micro_frontend_configs: Option<MicroFrontendsConfigs>,
+    micro_frontend_configs: Option<MicrofrontendsConfigs>,
 }
 
 type UIResult<T> = Result<Option<(T, JoinHandle<Result<(), turborepo_ui::Error>>)>, Error>;
