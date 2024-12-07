@@ -155,7 +155,7 @@ First, your package manager needs to describe the locations of your packages. We
 Using this configuration, every directory **with a `package.json`** in the `apps` or `packages` directories will be considered a package.
 
 <Callout type="error">
-Turborepo does not support nested packages like `apps/**` or `packages/**`. Using a structure that would put a package at `apps/a` and another at `apps/a/b` will result in an error.
+Turborepo does not support nested packages like `apps/**` or `packages/**` due to ambiguous behavior among package managers in the JavaScript ecosystem. Using a structure that would put a package at `apps/a` and another at `apps/a/b` will result in an error.
 
 If you'd like to group packages by directory, you can do this using globs like `packages/*` and `packages/group/*` and **not** creating a `packages/group/package.json` file.
 
