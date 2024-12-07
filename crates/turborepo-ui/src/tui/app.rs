@@ -8,7 +8,7 @@ use std::{
 use ratatui::{
     backend::{Backend, CrosstermBackend},
     layout::{Constraint, Layout},
-    widgets::TableState,
+    widgets::{Clear, TableState},
     Frame, Terminal,
 };
 use tokio::{
@@ -16,6 +16,8 @@ use tokio::{
     time::Instant,
 };
 use tracing::{debug, trace};
+
+use crate::tui::popup::{popup, popup_area};
 
 pub const FRAMERATE: Duration = Duration::from_millis(3);
 const RESIZE_DEBOUNCE_DELAY: Duration = Duration::from_millis(10);
@@ -53,6 +55,7 @@ pub struct App<W> {
     selected_task_index: usize,
     is_task_selection_pinned: bool,
     has_sidebar: bool,
+    showing_help_popup: bool,
     done: bool,
 }
 
@@ -97,6 +100,7 @@ impl<W> App<W> {
             task_list_scroll: TableState::default().with_selected(selected_task_index),
             selected_task_index,
             has_sidebar: true,
+            showing_help_popup: false,
             is_task_selection_pinned: has_user_interacted,
         }
     }
@@ -118,6 +122,7 @@ impl<W> App<W> {
         Ok(InputOptions {
             focus: &self.section_focus,
             has_selection,
+            is_help_popup_open: self.showing_help_popup,
         })
     }
 
@@ -790,6 +795,9 @@ fn update(
         Event::ToggleSidebar => {
             app.has_sidebar = !app.has_sidebar;
         }
+        Event::ToggleHelpPopup => {
+            app.showing_help_popup = !app.showing_help_popup;
+        }
         Event::Input { bytes } => {
             app.forward_input(&bytes)?;
         }
@@ -862,6 +870,13 @@ fn view<W>(app: &mut App<W>, f: &mut Frame) {
 
     f.render_stateful_widget(&table_to_render, table, &mut app.task_list_scroll);
     f.render_widget(&pane_to_render, pane);
+
+    if app.showing_help_popup {
+        let area = popup_area(*f.buffer_mut().area());
+        let area = area.intersection(*f.buffer_mut().area());
+        f.render_widget(Clear, area); // Clears background underneath popup
+        f.render_widget(popup(area), area);
+    }
 }
 
 #[cfg(test)]
