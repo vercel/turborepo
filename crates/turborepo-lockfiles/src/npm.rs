@@ -30,6 +30,7 @@ pub struct NpmLockfile {
 struct NpmPackage {
     version: Option<String>,
     resolved: Option<String>,
+    dev: Option<bool>,
     #[serde(default)]
     dependencies: Map<String, String>,
     #[serde(default)]
@@ -72,7 +73,12 @@ impl Lockfile for NpmLockfile {
             .filter_map(|key| {
                 self.packages.get(&key).map(|pkg| {
                     let version = pkg.version.clone().unwrap_or_default();
-                    Ok(Package { key, version })
+                    let is_dev: bool = pkg.dev.clone().unwrap_or(false);
+                    Ok(Package {
+                        key,
+                        version,
+                        is_dev,
+                    })
                 })
             })
             .next()
@@ -305,28 +311,37 @@ mod test {
     fn test_resolve_package() -> Result<(), Error> {
         let lockfile = NpmLockfile::load(include_bytes!("../fixtures/npm-lock.json"))?;
         let tests = [
-            ("", "turbo", "node_modules/turbo", "1.5.5"),
+            ("", "turbo", "node_modules/turbo", "1.5.5", true),
             (
                 "apps/web",
                 "lodash",
                 "apps/web/node_modules/lodash",
                 "4.17.21",
+                false,
             ),
-            ("apps/docs", "lodash", "node_modules/lodash", "3.10.1"),
+            (
+                "apps/docs",
+                "lodash",
+                "node_modules/lodash",
+                "3.10.1",
+                false,
+            ),
             (
                 "apps/docs",
                 "node_modules/@babel/generator/node_modules/@jridgewell/gen-mapping",
                 "node_modules/@babel/generator/node_modules/@jridgewell/gen-mapping",
                 "0.3.2",
+                true,
             ),
         ];
 
-        for (workspace, name, key, version) in &tests {
+        for (workspace, name, key, version, is_dev) in &tests {
             let pkg = lockfile.resolve_package(workspace, name, "")?;
             assert!(pkg.is_some());
             let pkg = pkg.unwrap();
             assert_eq!(pkg.key, *key);
             assert_eq!(pkg.version, *version);
+            assert_eq!(pkg.is_dev, *is_dev)
         }
 
         Ok(())
@@ -449,7 +464,8 @@ mod test {
         )?;
         assert!(closures.get("packages/a").unwrap().contains(&Package {
             key: "node_modules/eslint-plugin-turbo".into(),
-            version: "1.9.3".into()
+            version: "1.9.3".into(),
+            is_dev: false,
         }));
         assert!(closures.get("packages/b").unwrap().is_empty());
         assert!(closures.get("packages/c").unwrap().is_empty());
