@@ -6,7 +6,7 @@ use ratatui::{
     widgets::{Block, List, ListItem, Padding},
 };
 
-const BIND_LIST_ITEMS: [&str; 11] = [
+const BIND_LIST: [&str; 11] = [
     "m      - Toggle this help popup",
     "↑ or j - Select previous task",
     "↓ or k - Select next task",
@@ -24,15 +24,12 @@ pub fn popup_area(area: Rect) -> Rect {
     let screen_width = area.width;
     let screen_height = area.height;
 
-    let popup_width = BIND_LIST_ITEMS
+    let popup_width = BIND_LIST
         .iter()
         .map(|s| s.len().saturating_add(4))
         .max()
         .unwrap_or(0) as u16;
-    let popup_height = min(
-        (BIND_LIST_ITEMS.len().saturating_add(4)) as u16,
-        screen_height,
-    );
+    let popup_height = min((BIND_LIST.len().saturating_add(4)) as u16, screen_height);
 
     let x = screen_width.saturating_sub(popup_width) / 2;
     let y = screen_height.saturating_sub(popup_height) / 2;
@@ -40,27 +37,29 @@ pub fn popup_area(area: Rect) -> Rect {
     let vertical = Layout::vertical([Constraint::Percentage(100)]).flex(Flex::Center);
     let horizontal = Layout::horizontal([Constraint::Percentage(100)]).flex(Flex::Center);
 
-    let [area] = vertical.areas(Rect {
+    let [vertical_area] = vertical.areas(Rect {
         x,
         y,
         width: popup_width,
         height: popup_height,
     });
-    let [area] = horizontal.areas(area);
+
+    let [area] = horizontal.areas(vertical_area);
+
     area
 }
 
 pub fn popup(area: Rect) -> List<'static> {
     let available_height = area.height.saturating_sub(4) as usize;
 
-    let items: Vec<ListItem> = BIND_LIST_ITEMS
+    let items: Vec<ListItem> = BIND_LIST
         .iter()
         .take(available_height)
         .map(|item| ListItem::new(Line::from(*item)))
         .collect();
 
-    let title_bottom = if available_height < BIND_LIST_ITEMS.len() {
-        let binds_not_visible = BIND_LIST_ITEMS.len().saturating_sub(available_height);
+    let title_bottom = if available_height < BIND_LIST.len() {
+        let binds_not_visible = BIND_LIST.len().saturating_sub(available_height);
 
         let pluralize = if binds_not_visible > 1 { "s" } else { "" };
         let message = format!(
