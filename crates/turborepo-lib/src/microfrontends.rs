@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use itertools::Itertools;
 use tracing::warn;
-use turbopath::AbsoluteSystemPath;
+use turbopath::{AbsoluteSystemPath, RelativeUnixPathBuf};
 use turborepo_microfrontends::{Config as MFEConfig, Error, MICROFRONTENDS_PACKAGES};
 use turborepo_repository::package_graph::{PackageGraph, PackageName};
 
@@ -15,7 +15,7 @@ use crate::{
 #[derive(Debug, Clone)]
 pub struct MicrofrontendsConfigs {
     configs: HashMap<String, HashSet<TaskId<'static>>>,
-    config_filenames: HashMap<String, String>,
+    config_paths: HashMap<String, RelativeUnixPathBuf>,
     mfe_package: Option<&'static str>,
 }
 
@@ -28,7 +28,7 @@ impl MicrofrontendsConfigs {
         Self::from_configs(package_graph.packages().map(|(name, info)| {
             (
                 name.as_str(),
-                MFEConfig::load_from_dir(&repo_root.resolve(info.package_path())),
+                MFEConfig::load_from_dir(repo_root, info.package_path()),
             )
         }))
     }
@@ -39,7 +39,7 @@ impl MicrofrontendsConfigs {
     ) -> Result<Option<Self>, Error> {
         let PackageGraphResult {
             configs,
-            config_filenames,
+            config_paths,
             missing_default_apps,
             unsupported_version,
             mfe_package,
@@ -58,7 +58,7 @@ impl MicrofrontendsConfigs {
 
         Ok((!configs.is_empty()).then_some(Self {
             configs,
-            config_filenames,
+            config_paths,
             mfe_package,
         }))
     }
@@ -82,15 +82,27 @@ impl MicrofrontendsConfigs {
     }
 
     pub fn config_filename(&self, package_name: &str) -> Option<&str> {
-        let filename = self.config_filenames.get(package_name)?;
-        Some(filename.as_str())
+        let path = self.config_paths.get(package_name)?;
+        Some(path.as_str())
     }
 
     pub fn update_turbo_json(
         &self,
         package_name: &PackageName,
-        turbo_json: Result<TurboJson, config::Error>,
+        mut turbo_json: Result<TurboJson, config::Error>,
     ) -> Result<TurboJson, config::Error> {
+        // We add all of the microfrontend configurations as global dependencies so any
+        // changes will invalidate all tasks.
+        // TODO: Move this to only apply to packages that are part of the
+        // microfrontends. This will require us operating on task definitions
+        // instead of `turbo.json`s which currently isn't feasible.
+        if matches!(package_name, PackageName::Root) {
+            if let Ok(turbo_json) = &mut turbo_json {
+                turbo_json
+                    .global_deps
+                    .append(&mut self.configuration_file_paths());
+            }
+        }
         // If package either
         // - contains the proxy task
         // - a member of one of the microfrontends
@@ -140,12 +152,20 @@ impl MicrofrontendsConfigs {
             dev_task.or(proxy_owner)
         })
     }
+
+    // Returns a list of repo relative paths to all MFE configurations
+    fn configuration_file_paths(&self) -> Vec<String> {
+        self.config_paths
+            .values()
+            .map(|config_path| config_path.as_str().to_string())
+            .collect()
+    }
 }
 
 // Internal struct used to capture the results of checking the package graph
 struct PackageGraphResult {
     configs: HashMap<String, HashSet<TaskId<'static>>>,
-    config_filenames: HashMap<String, String>,
+    config_paths: HashMap<String, RelativeUnixPathBuf>,
     missing_default_apps: Vec<String>,
     unsupported_version: Vec<(String, String)>,
     mfe_package: Option<&'static str>,
@@ -156,7 +176,7 @@ impl PackageGraphResult {
         packages: impl Iterator<Item = (&'a str, Result<Option<MFEConfig>, Error>)>,
     ) -> Result<Self, Error> {
         let mut configs = HashMap::new();
-        let mut config_filenames = HashMap::new();
+        let mut config_paths = HashMap::new();
         let mut referenced_default_apps = HashSet::new();
         let mut unsupported_version = Vec::new();
         let mut mfe_package = None;
@@ -192,7 +212,9 @@ impl PackageGraphResult {
                 })
                 .collect();
             configs.insert(package_name.to_string(), tasks);
-            config_filenames.insert(package_name.to_string(), config.filename().to_owned());
+            if let Some(path) = config.path() {
+                config_paths.insert(package_name.to_string(), path.to_unix());
+            }
         }
         let default_apps_found = configs.keys().cloned().collect();
         let mut missing_default_apps = referenced_default_apps
@@ -202,7 +224,7 @@ impl PackageGraphResult {
         missing_default_apps.sort();
         Ok(Self {
             configs,
-            config_filenames,
+            config_paths,
             missing_default_apps,
             unsupported_version,
             mfe_package,
@@ -324,7 +346,7 @@ mod test {
         );
         let mfe = MicrofrontendsConfigs {
             configs,
-            config_filenames: HashMap::new(),
+            config_paths: HashMap::new(),
             mfe_package: None,
         };
         assert_eq!(
@@ -429,5 +451,27 @@ mod test {
                 "web" => ["web#dev", "docs#serve"]
             )
         )
+    }
+
+    #[test]
+    fn test_configs_added_as_global_deps() {
+        let configs = MicrofrontendsConfigs {
+            configs: vec![("web".to_owned(), Default::default())]
+                .into_iter()
+                .collect(),
+            config_paths: vec![(
+                "web".to_owned(),
+                RelativeUnixPathBuf::new("web/microfrontends.json").unwrap(),
+            )]
+            .into_iter()
+            .collect(),
+            mfe_package: None,
+        };
+
+        let turbo_json = TurboJson::default();
+        let actual = configs
+            .update_turbo_json(&PackageName::Root, Ok(turbo_json))
+            .unwrap();
+        assert_eq!(actual.global_deps, &["web/microfrontends.json".to_owned()]);
     }
 }

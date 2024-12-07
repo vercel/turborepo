@@ -11,7 +11,9 @@ use biome_json_parser::JsonParserOptions;
 use configv1::ConfigV1;
 use configv2::ConfigV2;
 pub use error::Error;
-use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
+use turbopath::{
+    AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
+};
 
 /// Currently the default path for a package that provides a configuration.
 ///
@@ -34,6 +36,7 @@ pub const SUPPORTED_VERSIONS: &[&str] = ["1", "2"].as_slice();
 pub struct Config {
     inner: ConfigInner,
     filename: String,
+    path: Option<AnchoredSystemPathBuf>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -53,12 +56,22 @@ impl Config {
         Ok(Some(config))
     }
 
-    pub fn load_from_dir(dir: &AbsoluteSystemPath) -> Result<Option<Self>, Error> {
-        if let Some(config) = Self::load_v2_dir(dir)? {
+    /// Attempts to load a configuration file from the given directory
+    /// Returns `Ok(None)` if no configuration is found in the directory
+    pub fn load_from_dir(
+        repo_root: &AbsoluteSystemPath,
+        package_dir: &AnchoredSystemPath,
+    ) -> Result<Option<Self>, Error> {
+        let absolute_dir = repo_root.resolve(package_dir);
+        let mut config = if let Some(config) = Self::load_v2_dir(&absolute_dir)? {
             Ok(Some(config))
         } else {
-            Self::load_v1_dir(dir)
+            Self::load_v1_dir(&absolute_dir)
+        };
+        if let Ok(Some(config)) = &mut config {
+            config.set_path(package_dir);
         }
+        config
     }
 
     pub fn from_str(input: &str, source: &str) -> Result<Self, Error> {
@@ -92,6 +105,7 @@ impl Config {
         Ok(Self {
             inner,
             filename: source.to_owned(),
+            path: None,
         })
     }
 
@@ -105,6 +119,11 @@ impl Config {
     /// Filename of the loaded configuration
     pub fn filename(&self) -> &str {
         &self.filename
+    }
+
+    pub fn path(&self) -> Option<&AnchoredSystemPath> {
+        let path = self.path.as_deref()?;
+        Some(path)
     }
 
     fn load_v2_dir(dir: &AbsoluteSystemPath) -> Result<Option<Self>, Error> {
@@ -129,6 +148,7 @@ impl Config {
                         .file_name()
                         .expect("microfrontends config should not be root")
                         .to_owned(),
+                    path: None,
                 }),
                 configv2::ParseResult::Reference(default_app) => Err(Error::ChildConfig {
                     reference: default_app,
@@ -147,8 +167,14 @@ impl Config {
             .map(|config_v1| Self {
                 inner: ConfigInner::V1(config_v1),
                 filename: DEFAULT_MICROFRONTENDS_CONFIG_V1.to_owned(),
+                path: None,
             })
             .map(Some)
+    }
+
+    /// Sets the path the configuration was loaded from
+    pub fn set_path(&mut self, dir: &AnchoredSystemPath) {
+        self.path = Some(dir.join_component(&self.filename));
     }
 }
 
@@ -158,6 +184,7 @@ mod test {
 
     use insta::assert_snapshot;
     use tempfile::TempDir;
+    use test_case::test_case;
 
     use super::*;
 
@@ -177,68 +204,138 @@ mod test {
 
     fn add_v1_config(dir: &AbsoluteSystemPath) -> Result<(), std::io::Error> {
         let path = dir.join_component(DEFAULT_MICROFRONTENDS_CONFIG_V1);
+        path.ensure_dir()?;
         path.create_with_contents(r#"{"version": "1", "applications": {"web": {"development": {"task": "serve"}}, "docs": {}}}"#)
     }
 
     fn add_v2_config(dir: &AbsoluteSystemPath) -> Result<(), std::io::Error> {
         let path = dir.join_component(DEFAULT_MICROFRONTENDS_CONFIG_V2);
+        path.ensure_dir()?;
         path.create_with_contents(r#"{"version": "2", "applications": {"web": {"development": {"task": "serve"}}, "docs": {}}}"#)
     }
 
     fn add_v2_alt_config(dir: &AbsoluteSystemPath) -> Result<(), std::io::Error> {
         let path = dir.join_component(DEFAULT_MICROFRONTENDS_CONFIG_V2_ALT);
+        path.ensure_dir()?;
         path.create_with_contents(r#"{"version": "2", "applications": {"web": {"development": {"task": "serve"}}, "docs": {}}}"#)
     }
 
-    #[test]
-    fn test_load_dir_v1() {
-        let dir = TempDir::new().unwrap();
-        let path = AbsoluteSystemPath::new(dir.path().to_str().unwrap()).unwrap();
-        add_v1_config(path).unwrap();
-        let config = Config::load_from_dir(path)
-            .unwrap()
-            .map(|config| config.inner);
-        assert_matches!(config, Some(ConfigInner::V1(_)));
+    struct LoadDirTest {
+        has_v1: bool,
+        has_v2: bool,
+        has_alt_v2: bool,
+        pkg_dir: &'static str,
+        expected_version: Option<FoundConfig>,
+        expected_filename: Option<&'static str>,
     }
 
-    #[test]
-    fn test_load_dir_v2() {
-        let dir = TempDir::new().unwrap();
-        let path = AbsoluteSystemPath::new(dir.path().to_str().unwrap()).unwrap();
-        add_v2_config(path).unwrap();
-        let config = Config::load_from_dir(path)
-            .unwrap()
-            .map(|config| config.inner);
-        assert_matches!(config, Some(ConfigInner::V2(_)));
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    enum FoundConfig {
+        V1,
+        V2,
     }
 
-    #[test]
-    fn test_load_dir_both() {
-        let dir = TempDir::new().unwrap();
-        let path = AbsoluteSystemPath::new(dir.path().to_str().unwrap()).unwrap();
-        add_v1_config(path).unwrap();
-        add_v2_config(path).unwrap();
-        let config = Config::load_from_dir(path)
-            .unwrap()
-            .map(|config| config.inner);
-        assert_matches!(config, Some(ConfigInner::V2(_)));
+    impl LoadDirTest {
+        pub const fn new(pkg_dir: &'static str) -> Self {
+            Self {
+                pkg_dir,
+                has_v1: false,
+                has_v2: false,
+                has_alt_v2: false,
+                expected_version: None,
+                expected_filename: None,
+            }
+        }
+
+        pub const fn has_v1(mut self) -> Self {
+            self.has_v1 = true;
+            self
+        }
+
+        pub const fn has_v2(mut self) -> Self {
+            self.has_v2 = true;
+            self
+        }
+
+        pub const fn has_alt_v2(mut self) -> Self {
+            self.has_alt_v2 = true;
+            self
+        }
+
+        pub const fn expects_v1(mut self) -> Self {
+            self.expected_version = Some(FoundConfig::V1);
+            self
+        }
+
+        pub const fn expects_v2(mut self) -> Self {
+            self.expected_version = Some(FoundConfig::V2);
+            self
+        }
+
+        pub const fn with_filename(mut self, filename: &'static str) -> Self {
+            self.expected_filename = Some(filename);
+            self
+        }
+
+        pub fn expected_path(&self) -> Option<AnchoredSystemPathBuf> {
+            let filename = self.expected_filename?;
+            Some(
+                AnchoredSystemPath::new(self.pkg_dir)
+                    .unwrap()
+                    .join_component(filename),
+            )
+        }
     }
 
-    #[test]
-    fn test_load_dir_v2_alt() {
-        let dir = TempDir::new().unwrap();
-        let path = AbsoluteSystemPath::new(dir.path().to_str().unwrap()).unwrap();
-        add_v2_alt_config(path).unwrap();
-        let config = Config::load_from_dir(path)
-            .unwrap()
-            .map(|config| config.inner);
-        assert_matches!(config, Some(ConfigInner::V2(_)));
-    }
+    const LOAD_V1: LoadDirTest = LoadDirTest::new("web")
+        .has_v1()
+        .expects_v1()
+        .with_filename(DEFAULT_MICROFRONTENDS_CONFIG_V1);
 
-    #[test]
-    fn test_load_dir_none() {
+    const LOAD_V2: LoadDirTest = LoadDirTest::new("web")
+        .has_v2()
+        .expects_v2()
+        .with_filename(DEFAULT_MICROFRONTENDS_CONFIG_V2);
+
+    const LOAD_BOTH: LoadDirTest = LoadDirTest::new("web")
+        .has_v1()
+        .has_v2()
+        .expects_v2()
+        .with_filename(DEFAULT_MICROFRONTENDS_CONFIG_V2);
+
+    const LOAD_V2_ALT: LoadDirTest = LoadDirTest::new("web")
+        .has_alt_v2()
+        .expects_v2()
+        .with_filename(DEFAULT_MICROFRONTENDS_CONFIG_V2_ALT);
+
+    const LOAD_NONE: LoadDirTest = LoadDirTest::new("web");
+    #[test_case(LOAD_V1)]
+    #[test_case(LOAD_V2)]
+    #[test_case(LOAD_BOTH)]
+    #[test_case(LOAD_V2_ALT)]
+    #[test_case(LOAD_NONE)]
+    fn test_load_dir(case: LoadDirTest) {
         let dir = TempDir::new().unwrap();
-        let path = AbsoluteSystemPath::new(dir.path().to_str().unwrap()).unwrap();
-        assert!(Config::load_from_dir(path).unwrap().is_none());
+        let repo_root = AbsoluteSystemPath::new(dir.path().to_str().unwrap()).unwrap();
+        let pkg_dir = AnchoredSystemPath::new(case.pkg_dir).unwrap();
+        let pkg_path = repo_root.resolve(pkg_dir);
+        if case.has_v1 {
+            add_v1_config(&pkg_path).unwrap();
+        }
+        if case.has_v2 {
+            add_v2_config(&pkg_path).unwrap();
+        }
+        if case.has_alt_v2 {
+            add_v2_alt_config(&pkg_path).unwrap();
+        }
+
+        let config = Config::load_from_dir(repo_root, pkg_dir).unwrap();
+        let actual_version = config.as_ref().map(|config| match &config.inner {
+            ConfigInner::V1(_) => FoundConfig::V1,
+            ConfigInner::V2(_) => FoundConfig::V2,
+        });
+        let actual_path = config.as_ref().and_then(|config| config.path());
+        assert_eq!(actual_version, case.expected_version);
+        assert_eq!(actual_path, case.expected_path().as_deref());
     }
 }
