@@ -446,6 +446,7 @@ mod test {
         InputOptions {
             focus: search(),
             has_selection: false,
+            is_help_popup_open: false,
         }
     }
 
