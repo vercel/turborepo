@@ -114,7 +114,6 @@ fn translate_key_event(options: InputOptions, key_event: KeyEvent) -> Option<Eve
         KeyCode::Char('n') if key_event.modifiers == KeyModifiers::CONTROL => {
             Some(Event::ScrollDown)
         }
-        KeyCode::Char('h') => Some(Event::ToggleSidebar),
         KeyCode::Char('m') => Some(Event::ToggleHelpPopup),
         KeyCode::Up | KeyCode::Char('k') => Some(Event::Up),
         KeyCode::Down | KeyCode::Char('j') => Some(Event::Down),

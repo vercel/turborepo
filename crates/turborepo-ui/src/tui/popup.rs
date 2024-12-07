@@ -3,10 +3,8 @@ use std::cmp::min;
 use ratatui::{
     layout::{Constraint, Flex, Layout, Rect},
     text::Line,
-    widgets::{Block, List, ListItem, Padding, Paragraph},
+    widgets::{Block, List, ListItem, Padding},
 };
-
-use super::size::SizeInfo;
 
 const BIND_LIST_ITEMS: [&str; 11] = [
     "m      - Toggle this help popup",
@@ -22,9 +20,9 @@ const BIND_LIST_ITEMS: [&str; 11] = [
     "Ctrl+p - Scroll logs down",
 ];
 
-pub fn popup_area(area: SizeInfo) -> Rect {
-    let screen_width = area.task_list_width() + area.pane_cols();
-    let screen_height = area.pane_rows();
+pub fn popup_area(area: Rect) -> Rect {
+    let screen_width = area.width;
+    let screen_height = area.height;
 
     let popup_width = BIND_LIST_ITEMS
         .iter()
@@ -41,6 +39,7 @@ pub fn popup_area(area: SizeInfo) -> Rect {
 
     let vertical = Layout::vertical([Constraint::Percentage(100)]).flex(Flex::Center);
     let horizontal = Layout::horizontal([Constraint::Percentage(100)]).flex(Flex::Center);
+
     let [area] = vertical.areas(Rect {
         x,
         y,
@@ -51,23 +50,21 @@ pub fn popup_area(area: SizeInfo) -> Rect {
     area
 }
 
-pub fn popup(area: SizeInfo) -> List<'static> {
-    let available_height = area.pane_rows().saturating_sub(4);
+pub fn popup(area: Rect) -> List<'static> {
+    let available_height = area.height.saturating_sub(4) as usize;
 
     let items: Vec<ListItem> = BIND_LIST_ITEMS
         .iter()
-        .take(available_height as usize)
+        .take(available_height)
         .map(|item| ListItem::new(Line::from(*item)))
         .collect();
 
-    let title_bottom = if area.pane_rows().saturating_sub(4) < BIND_LIST_ITEMS.len() as u16 {
-        let binds_not_visible = BIND_LIST_ITEMS
-            .len()
-            .saturating_sub(area.pane_rows().saturating_sub(4) as usize);
+    let title_bottom = if available_height < BIND_LIST_ITEMS.len() {
+        let binds_not_visible = BIND_LIST_ITEMS.len().saturating_sub(available_height);
 
         let pluralize = if binds_not_visible > 1 { "s" } else { "" };
         let message = format!(
-            "{} more bind{}. Make your terminal taller.",
+            " {} more bind{}. Make your terminal taller. ",
             binds_not_visible, pluralize
         );
         Line::from(message)
@@ -77,7 +74,7 @@ pub fn popup(area: SizeInfo) -> List<'static> {
 
     let outer = Block::bordered()
         .title(" Keybinds ")
-        .title_bottom(format!("{title_bottom}").to_string())
+        .title_bottom(title_bottom.to_string())
         .padding(Padding::uniform(1));
 
     List::new(items).block(outer)
