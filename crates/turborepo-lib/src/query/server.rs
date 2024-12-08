@@ -1,13 +1,17 @@
 use std::sync::Arc;
 
-use async_graphql::{EmptyMutation, EmptySubscription, MergedObject, Schema};
+use async_graphql::{EmptySubscription, MergedObject, Schema};
 use async_graphql_axum::GraphQL;
 use axum::{http::Method, routing::get, Router};
 use tokio::net::TcpListener;
 use tower_http::cors::{Any, CorsLayer};
 use turborepo_ui::wui::query::SharedState;
 
-use crate::{query, query::graphiql, run::Run};
+use crate::{
+    query,
+    query::{graphiql, mutation::Mutation},
+    run::Run,
+};
 
 #[derive(MergedObject)]
 struct Query(turborepo_ui::wui::RunQuery, query::RepositoryQuery);
@@ -23,11 +27,13 @@ pub async fn run_server(
         // allow requests from any origin
         .allow_origin(Any);
 
+    let repo_root = run.repo_root().to_owned();
     let web_ui_query = turborepo_ui::wui::RunQuery::new(state.clone());
     let turbo_query = query::RepositoryQuery::new(run);
     let combined_query = Query(web_ui_query, turbo_query);
+    let mutation = Mutation::new(repo_root);
 
-    let schema = Schema::new(combined_query, EmptyMutation, EmptySubscription);
+    let schema = Schema::new(combined_query, mutation, EmptySubscription);
     let app = Router::new()
         .route("/", get(graphiql).post_service(GraphQL::new(schema)))
         .layer(cors);

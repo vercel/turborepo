@@ -12,12 +12,18 @@ struct RunTask {
     state: TaskState,
 }
 
-struct CurrentRun<'a> {
-    state: &'a SharedState,
+pub struct Run {
+    state: SharedState,
+}
+
+impl Run {
+    pub fn new(state: SharedState) -> Self {
+        Self { state }
+    }
 }
 
 #[Object]
-impl<'a> CurrentRun<'a> {
+impl Run {
     async fn tasks(&self) -> Vec<RunTask> {
         self.state
             .lock()
@@ -32,7 +38,7 @@ impl<'a> CurrentRun<'a> {
     }
 }
 
-/// We keep the state in a `Arc<Mutex<RefCell<T>>>` so both `Subscriber` and
+/// We keep the state in a `Arc<Mutex<T>>` so both `Subscriber` and
 /// `Query` can access it, with `Subscriber` mutating it and `Query` only
 /// reading it.
 pub type SharedState = Arc<Mutex<WebUIState>>;
@@ -54,9 +60,9 @@ impl RunQuery {
 
 #[Object]
 impl RunQuery {
-    async fn current_run(&self) -> Option<CurrentRun> {
-        Some(CurrentRun {
-            state: self.state.as_ref()?,
+    async fn current_run(&self) -> Option<Run> {
+        Some(Run {
+            state: self.state.as_ref().map(|c| c.clone())?,
         })
     }
 }

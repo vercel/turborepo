@@ -10,6 +10,7 @@ use crate::{
     cli,
     config::{ConfigurationOptions, Error as ConfigError, TurborepoConfigBuilder},
     opts::Opts,
+    query::RunOptions,
     Args,
 };
 
@@ -38,14 +39,31 @@ pub struct CommandBase {
 }
 
 impl CommandBase {
+    pub fn from_query_options(
+        tasks: Vec<String>,
+        repo_root: AbsoluteSystemPathBuf,
+        run_options: RunOptions,
+        version: &'static str,
+    ) -> Result<Self, cli::Error> {
+        let config = Self::load_config_from_query_options(&repo_root, &run_options)?;
+        let opts = Opts::from_query_options(&repo_root, tasks, run_options, config)?;
+
+        Ok(Self {
+            repo_root,
+            color_config: ColorConfig::new(true),
+            opts,
+            version,
+        })
+    }
+
     pub fn new(
         args: Args,
         repo_root: AbsoluteSystemPathBuf,
         version: &'static str,
         color_config: ColorConfig,
     ) -> Result<Self, cli::Error> {
-        let config = Self::load_config(&repo_root, &args)?;
-        let opts = Opts::new(&repo_root, &args, config)?;
+        let config = Self::load_config_from_args(&repo_root, &args)?;
+        let opts = Opts::from_args(&repo_root, &args, config)?;
 
         Ok(Self {
             repo_root,
@@ -69,7 +87,20 @@ impl CommandBase {
         }
     }
 
-    pub fn load_config(
+    pub fn load_config_from_query_options(
+        repo_root: &AbsoluteSystemPath,
+        run_options: &RunOptions,
+    ) -> Result<ConfigurationOptions, ConfigError> {
+        let cache = run_options.cache.as_ref().map(|s| s.parse()).transpose()?;
+        TurborepoConfigBuilder::new(repo_root)
+            .with_team_slug(run_options.team_slug.clone())
+            .with_token(run_options.token.clone())
+            .with_remote_cache_read_only(run_options.remote_cache_read_only)
+            .with_cache(cache)
+            .build()
+    }
+
+    pub fn load_config_from_args(
         repo_root: &AbsoluteSystemPath,
         args: &Args,
     ) -> Result<ConfigurationOptions, ConfigError> {

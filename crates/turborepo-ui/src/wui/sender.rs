@@ -5,17 +5,21 @@ use tracing::log::warn;
 use crate::{
     sender::{TaskSender, UISender},
     tui::event::{CacheResult, OutputLogs, TaskResult},
-    wui::{event::WebUIEvent, Error},
+    wui::{event::WebUIEvent, query::SharedState, Error},
 };
 
 #[derive(Debug, Clone)]
 pub struct WebUISender {
     pub tx: tokio::sync::mpsc::UnboundedSender<WebUIEvent>,
+    pub shared_state: SharedState,
 }
 
 impl WebUISender {
-    pub fn new(tx: tokio::sync::mpsc::UnboundedSender<WebUIEvent>) -> Self {
-        Self { tx }
+    pub fn new(
+        tx: tokio::sync::mpsc::UnboundedSender<WebUIEvent>,
+        shared_state: SharedState,
+    ) -> Self {
+        Self { tx, shared_state }
     }
     pub fn start_task(&self, task: String, output_logs: OutputLogs) {
         self.tx

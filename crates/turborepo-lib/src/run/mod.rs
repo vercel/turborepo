@@ -33,8 +33,12 @@ use turborepo_repository::package_graph::{PackageGraph, PackageName, PackageNode
 use turborepo_scm::SCM;
 use turborepo_telemetry::events::generic::GenericEventBuilder;
 use turborepo_ui::{
-    cprint, cprintln, sender::UISender, tui, tui::TuiSender, wui::sender::WebUISender, ColorConfig,
-    BOLD_GREY, GREY,
+    cprint, cprintln,
+    sender::UISender,
+    tui,
+    tui::TuiSender,
+    wui::{query::SharedState, sender::WebUISender},
+    ColorConfig, BOLD_GREY, GREY,
 };
 
 pub use crate::run::error::Error;
@@ -242,10 +246,14 @@ impl Run {
     }
     fn start_web_ui(self: &Arc<Self>) -> WuiResult {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        let shared_state = SharedState::default();
+        let handle = tokio::spawn(ui::start_web_ui_server(
+            shared_state.clone(),
+            rx,
+            self.clone(),
+        ));
 
-        let handle = tokio::spawn(ui::start_web_ui_server(rx, self.clone()));
-
-        Ok(Some((WebUISender { tx }, handle)))
+        Ok(Some((WebUISender { tx, shared_state }, handle)))
     }
 
     #[allow(clippy::type_complexity)]

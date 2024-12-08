@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, sync::Arc};
 
-use async_graphql::{Enum, SimpleObject};
+use async_graphql::{Enum, Object};
 use serde::Serialize;
 use tokio::sync::Mutex;
 
@@ -123,13 +123,36 @@ impl From<TaskResult> for TaskStatus {
     }
 }
 
-#[derive(Debug, Clone, Serialize, SimpleObject)]
+#[derive(Debug, Clone, Serialize)]
 pub struct TaskState {
     output: Vec<u8>,
     status: TaskStatus,
     cache_result: Option<CacheResult>,
     /// The message for the cache status, i.e. `cache hit, replaying logs`
     cache_message: Option<String>,
+}
+
+#[Object]
+impl TaskState {
+    async fn status(&self) -> TaskStatus {
+        self.status
+    }
+
+    async fn cache_result(&self) -> Option<CacheResult> {
+        self.cache_result
+    }
+
+    async fn cache_message(&self) -> Option<String> {
+        self.cache_message.clone()
+    }
+
+    async fn output_string(&self) -> String {
+        String::from_utf8_lossy(&self.output).to_string()
+    }
+
+    async fn output(&self) -> Vec<u8> {
+        self.output.clone()
+    }
 }
 
 #[derive(Debug, Default, Clone, Serialize)]
@@ -159,7 +182,7 @@ mod test {
         let state = Arc::new(Mutex::new(WebUIState::default()));
         let subscriber = Subscriber::new(rx);
 
-        let sender = WebUISender::new(tx);
+        let sender = WebUISender::new(tx, state.clone());
 
         // Start a successful task
         sender.start_task("task".to_string(), OutputLogs::Full);
@@ -243,7 +266,7 @@ mod test {
         let state = Arc::new(Mutex::new(WebUIState::default()));
         let subscriber = Subscriber::new(rx);
 
-        let sender = WebUISender::new(tx);
+        let sender = WebUISender::new(tx, state.clone());
 
         // Start a successful task
         sender.start_task("task".to_string(), OutputLogs::Full);

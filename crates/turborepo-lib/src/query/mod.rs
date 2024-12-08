@@ -1,4 +1,5 @@
 mod file;
+mod mutation;
 mod package;
 mod server;
 mod task;
@@ -12,6 +13,7 @@ use std::{
 use async_graphql::{http::GraphiQLSource, *};
 use axum::{response, response::IntoResponse};
 use miette::Diagnostic;
+pub use mutation::RunOptions;
 use package::Package;
 pub use server::run_server;
 use thiserror::Error;

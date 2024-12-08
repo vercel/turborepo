@@ -9,8 +9,10 @@ use turborepo_cache::{CacheOpts, RemoteCacheOpts};
 use crate::{
     cli::{
         Command, DryRunMode, EnvMode, ExecutionArgs, LogOrder, LogPrefix, OutputLogsMode, RunArgs,
+        DEFAULT_NUM_WORKERS,
     },
     config::ConfigurationOptions,
+    query::RunOptions,
     run::task_id::TaskId,
     turbo_json::UIMode,
     Args,
@@ -116,7 +118,81 @@ impl Opts {
 }
 
 impl Opts {
-    pub fn new(
+    pub fn from_query_options(
+        repo_root: &AbsoluteSystemPath,
+        tasks: Vec<String>,
+        run_options: RunOptions,
+        config: ConfigurationOptions,
+    ) -> Result<Self, Error> {
+        let repo_opts = RepoOpts {
+            root_turbo_json_path: config.root_turbo_json_path(repo_root),
+            allow_no_package_manager: false,
+            allow_no_turbo_json: false,
+        };
+        let api_client_opts = APIClientOpts {
+            api_url: config.api_url().to_string(),
+            timeout: config.timeout(),
+            upload_timeout: config.upload_timeout(),
+            token: config.token().map(|s| s.to_string()),
+            team_id: config.team_id().map(|s| s.to_string()),
+            team_slug: config.team_slug().map(|s| s.to_string()),
+            login_url: config.login_url().to_string(),
+            preflight: config.preflight(),
+        };
+        let cache_opts = CacheOpts {
+            cache_dir: config.cache_dir().into(),
+            cache: config.cache().unwrap_or_default(),
+            workers: DEFAULT_NUM_WORKERS,
+            remote_cache_opts: None,
+        };
+        let run_opts = RunOpts {
+            tasks,
+            concurrency: 10,
+            parallel: false,
+            env_mode: Default::default(),
+            cache_dir: Default::default(),
+            framework_inference: false,
+            profile: None,
+            continue_on_error: false,
+            pass_through_args: vec![],
+            only: false,
+            dry_run: None,
+            graph: None,
+            daemon: None,
+            single_package: false,
+            log_prefix: ResolvedLogPrefix::Task,
+            log_order: ResolvedLogOrder::Stream,
+            summarize: false,
+            experimental_space_id: None,
+            is_github_actions: false,
+            ui_mode: UIMode::Web,
+        };
+
+        let runcache_opts = RunCacheOpts {
+            task_output_logs_override: None,
+        };
+
+        let scope_opts = ScopeOpts {
+            pkg_inference_root: None,
+            global_deps: vec![],
+            filter_patterns: run_options.filter.clone().unwrap_or_default(),
+            affected_range: run_options
+                .affected_range
+                .as_ref()
+                .map(|range| (range.base.clone(), range.head.clone())),
+        };
+
+        Ok(Opts {
+            repo_opts,
+            api_client_opts,
+            cache_opts,
+            run_opts,
+            runcache_opts,
+            scope_opts,
+        })
+    }
+
+    pub fn from_args(
         repo_root: &AbsoluteSystemPath,
         args: &Args,
         config: ConfigurationOptions,
