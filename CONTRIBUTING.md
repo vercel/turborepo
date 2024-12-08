@@ -9,6 +9,7 @@ Thank you for your interest in contributing to Turborepo!
 - [Manually testing `turbo`](#manually-testing-turbo)
   - [Repositories to test with](#repositories-to-test-with)
 - [Debugging tips](#debugging-tips)
+  - [Verbose logging](#verbose-logging)  
   - [Crash logs](#crash-logs)
   - [Terminal UI debugging](#terminal-ui-debugging)
 - [Publishing `turbo` to the npm registry](#publishing-turbo-to-the-npm-registry)
