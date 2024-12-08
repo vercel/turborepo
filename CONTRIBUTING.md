@@ -1,6 +1,22 @@
 Thank you for your interest in contributing to Turborepo!
 
-TODO: Table of contents
+- [General dependencies](#general-dependencies)
+- [Optional dependencies](#optional-dependencies)
+- [Structure of the repository](#structure-of-the-repository)
+- [Building Turborepo](#building-turborepo)
+  - [TLS implementation](#tls-implementation)
+- [Running tests](#running-tests)
+- [Manually testing `turbo`](#manually-testing-turbo)
+  - [Repositories to test with](#repositories-to-test-with)
+- [Debugging tips](#debugging-tips)
+  - [Crash logs](#crash-logs)
+  - [Terminal UI debugging](#terminal-ui-debugging)
+- [Publishing `turbo` to the npm registry](#publishing-turbo-to-the-npm-registry)
+- [Contributing to examples](#contributing-to-examples)
+  - [Contributing to an existing example](#contributing-to-an-existing-example)
+  - [Philosophy for new examples](#philosophy-for-new-examples)
+    - [Designing a new example](#designing-a-new-example)
+    - [Testing examples](#testing-examples)
 
 ## General dependencies
 
