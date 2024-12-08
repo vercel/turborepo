@@ -142,6 +142,14 @@ There are many open-source Turborepos out in the community that you can test wit
 
 ## Debugging tips
 
+### Verbose logging
+
+Verbose logging can be enabled by using the `-v`, `-vv`, or `-vvv` flag on your `turbo` command, depending on the level of logging you're looking for.
+
+```bash
+turbo build --vvv
+```
+
 ### Crash logs
 
 In the event of a crash, Rust's crash logs will be written to your temp directory. When `turbo` crashes, the location of the crash log will be printed to the console.
