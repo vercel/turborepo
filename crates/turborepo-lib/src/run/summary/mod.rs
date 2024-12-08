@@ -13,6 +13,7 @@ mod task;
 mod task_factory;
 use std::{collections::HashSet, io, io::Write};
 
+use camino::Utf8PathBuf;
 use chrono::{DateTime, Local};
 pub use duration::TurboDuration;
 pub use execution::{TaskExecutionSummary, TaskTracker};
@@ -69,6 +70,8 @@ pub enum Error {
     Env(#[source] turborepo_env::Error),
     #[error("failed to construct task summary: {0}")]
     TaskSummary(#[from] task_factory::Error),
+    #[error(transparent)]
+    Database(#[from] turborepo_db::Error),
 }
 
 // NOTE: When changing this, please ensure that the server side is updated to
@@ -136,24 +139,28 @@ impl RunTracker {
         api_auth: Option<APIAuth>,
         user: String,
         scm: &SCM,
+        cache_dir: Utf8PathBuf,
     ) -> Self {
         let scm = SCMState::get(env_at_execution_start, scm, repo_root);
-
-        let spaces_client_handle =
-            SpacesClient::new(spaces_id.clone(), spaces_api_client, api_auth).and_then(
-                |spaces_client| {
-                    let payload = CreateSpaceRunPayload::new(
-                        started_at,
-                        synthesized_command.clone(),
-                        package_inference_root,
-                        scm.branch.clone(),
-                        scm.sha.clone(),
-                        version.to_string(),
-                        user.clone(),
-                    );
-                    spaces_client.start(payload).ok()
-                },
+        let spaces_client_handle = SpacesClient::new(
+            spaces_id.clone(),
+            spaces_api_client,
+            api_auth,
+            repo_root.to_owned(),
+            cache_dir,
+        )
+        .and_then(|spaces_client| {
+            let payload = CreateSpaceRunPayload::new(
+                started_at,
+                synthesized_command.clone(),
+                package_inference_root,
+                scm.branch.clone(),
+                scm.sha.clone(),
+                version.to_string(),
+                user.clone(),
             );
+            spaces_client.start(payload).ok()
+        });
 
         RunTracker {
             scm,
