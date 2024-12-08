@@ -21,11 +21,11 @@ fi
 
 # Use the right command for each package manager
 if [ "$package_manager" == "npm" ]; then
-  package_manager_command="npm install"
+  package_manager_command="npx @turbo/workspaces convert . npm || true && npm install"
 elif [ "$package_manager" == "pnpm" ]; then
-  package_manager_command="pnpm install"
+  package_manager_command="npx @turbo/workspaces convert . pnpm || true && pnpm install"
 elif [ "$package_manager" == "yarn" ]; then
-  package_manager_command="yarn"
+  package_manager_command="npx @turbo/workspaces convert . yarn || true && yarn"
 fi
 
 # All examples implement these two tasks
@@ -39,20 +39,20 @@ cd ../../examples-tests-tmp
 # Start up a fresh directory for the test
 rm -rf "$example_path" || true
 rsync -avq \
---exclude='node_modules' \
---exclude="dist" \
---exclude=".turbo" \
---exclude=".expo" \
---exclude=".cache" \
---exclude=".next" \
-"../examples/$example_path" "."
+  --exclude='node_modules' \
+  --exclude="dist" \
+  --exclude=".turbo" \
+  --exclude=".expo" \
+  --exclude=".cache" \
+  --exclude=".next" \
+  "../examples/$example_path" "."
 
 cd "$example_path"
 "../../turborepo-tests/helpers/setup_git.sh" .
 
 # Make /tmp dir for writing dump logs
 mkdir -p ./tmp
-echo "/tmp/" >> ".gitignore"
+echo "/tmp/" >>".gitignore"
 
 # Simulating the user's first run and dumping logs to a file
 $package_manager --version >./tmp/package_manager_version.txt
