@@ -61,8 +61,29 @@ jobs:
           path: cli/.cram_env
           key: prysk-venv-${{ matrix.os.runner }}
 
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.6
+
       - name: Integration Tests
-        run: turbo run test --filter=turborepo-tests-integration --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
+        run: |
+          if [ -z "${RUSTC_WRAPPER}" ]; then
+            unset RUSTC_WRAPPER
+          fi
+          if [ "$RUNNER_OS" == "Windows" ]; then
+              cargo test --workspace --exclude turborepo-napi
+          else
+              cargo test --workspace
+          fi
+          turbo run test --filter=turborepo-tests-integration --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
+        shell: bash
+        env:
+          SCCACHE_BUCKET: turborepo-sccache
+          SCCACHE_REGION: us-east-2
+          # Only use sccache if we're in the Vercel repo.
+          RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
+          CARGO_INCREMENTAL: 0
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
   examples:
     name: Turborepo Examples
