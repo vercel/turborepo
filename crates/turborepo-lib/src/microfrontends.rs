@@ -326,13 +326,13 @@ mod test {
 
     const NON_MFE_PKG: PackageUpdateTest = PackageUpdateTest::new("other-pkg");
     const MFE_CONFIG_PKG: PackageUpdateTest =
-        PackageUpdateTest::new("mfe-config-pkg").proxy_only("mfe-config-pkg#proxy");
+        PackageUpdateTest::new("z-config-pkg").proxy_only("z-config-pkg#proxy");
     const MFE_CONFIG_PKG_DEV_TASK: PackageUpdateTest =
-        PackageUpdateTest::new("web").dev("web#dev", "mfe-config-pkg#proxy");
+        PackageUpdateTest::new("web").dev("web#dev", "web#proxy");
     const DEFAULT_APP_PROXY: PackageUpdateTest =
-        PackageUpdateTest::new("mfe-docs").dev("mfe-docs#serve", "mfe-web#proxy");
+        PackageUpdateTest::new("docs").dev("docs#serve", "web#proxy");
     const DEFAULT_APP_PROXY_AND_DEV: PackageUpdateTest =
-        PackageUpdateTest::new("mfe-web").dev("mfe-web#dev", "mfe-web#proxy");
+        PackageUpdateTest::new("web").dev("web#dev", "web#proxy");
 
     #[test_case(NON_MFE_PKG)]
     #[test_case(MFE_CONFIG_PKG)]
@@ -341,8 +341,8 @@ mod test {
     #[test_case(DEFAULT_APP_PROXY_AND_DEV)]
     fn test_package_turbo_json_update(test: PackageUpdateTest) {
         let configs = mfe_configs!(
-            "mfe-config-pkg" => ["web#dev", "docs#dev"],
-            "mfe-web" => ["mfe-web#dev", "mfe-docs#serve"]
+            "z-config-pkg" => ["web#dev", "docs#dev"],
+            "web" => ["web#dev", "docs#serve"]
         );
         let mfe = MicrofrontendsConfigs {
             configs,
@@ -473,5 +473,57 @@ mod test {
             .update_turbo_json(&PackageName::Root, Ok(turbo_json))
             .unwrap();
         assert_eq!(actual.global_deps, &["web/microfrontends.json".to_owned()]);
+    }
+
+    #[test]
+    fn test_v2_and_v1() {
+        let config_v2 = MFEConfig::from_str(
+            &serde_json::to_string_pretty(&json!({
+                "version": "2",
+                "applications": {
+                    "web": {},
+                    "docs": {
+                        "development": {
+                            "task": "serve"
+                        }
+                    }
+                }
+            }))
+            .unwrap(),
+            "something.txt",
+        )
+        .unwrap();
+        let config_v1 = MFEConfig::from_str(
+            &serde_json::to_string_pretty(&json!({
+                "version": "1",
+                "applications": {
+                    "web": {},
+                    "docs": {
+                        "development": {
+                            "task": "serve"
+                        }
+                    }
+                }
+            }))
+            .unwrap(),
+            "something.txt",
+        )
+        .unwrap();
+        let result = PackageGraphResult::new(
+            vec![
+                ("web", Ok(Some(config_v2))),
+                ("docs", Ok(None)),
+                ("mfe-config", Ok(Some(config_v1))),
+            ]
+            .into_iter(),
+        )
+        .unwrap();
+        assert_eq!(
+            result.configs,
+            mfe_configs!(
+                "web" => ["web#dev", "docs#serve"],
+                "mfe-config" => ["web#dev", "docs#serve"]
+            )
+        )
     }
 }
