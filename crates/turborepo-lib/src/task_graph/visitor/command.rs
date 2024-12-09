@@ -211,7 +211,9 @@ impl<'a> CommandProvider for MicroFrontendProxyProvider<'a> {
             let mfe_config_filename = self.mfe_configs.config_filename(task_id.package());
             return Err(Error::MissingMFEDependency {
                 package: task_id.package().into(),
-                mfe_config_filename: mfe_config_filename.unwrap_or_default().to_owned(),
+                mfe_config_filename: mfe_config_filename
+                    .map(|p| p.to_string())
+                    .unwrap_or_default(),
             });
         }
         let local_apps = dev_tasks
@@ -223,7 +225,7 @@ impl<'a> CommandProvider for MicroFrontendProxyProvider<'a> {
             .mfe_configs
             .config_filename(task_id.package())
             .expect("every microfrontends default application should have configuration path");
-        let mfe_path = package_dir.join_component(mfe_config_filename);
+        let mfe_path = self.repo_root.join_unix_path(mfe_config_filename);
         let mut args = vec!["proxy", mfe_path.as_str(), "--names"];
         args.extend(local_apps);
 

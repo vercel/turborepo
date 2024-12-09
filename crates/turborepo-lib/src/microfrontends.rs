@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use itertools::Itertools;
 use tracing::warn;
-use turbopath::{AbsoluteSystemPath, RelativeUnixPathBuf};
+use turbopath::{AbsoluteSystemPath, RelativeUnixPath, RelativeUnixPathBuf};
 use turborepo_microfrontends::{Config as MFEConfig, Error, MICROFRONTENDS_PACKAGES};
 use turborepo_repository::package_graph::{PackageGraph, PackageName};
 
@@ -86,10 +86,10 @@ impl MicrofrontendsConfigs {
             .any(|info| info.tasks.contains(task_id))
     }
 
-    pub fn config_filename(&self, package_name: &str) -> Option<&str> {
+    pub fn config_filename(&self, package_name: &str) -> Option<&RelativeUnixPath> {
         let info = self.configs.get(package_name)?;
         let path = info.path.as_ref()?;
-        Some(path.as_str())
+        Some(path)
     }
 
     pub fn update_turbo_json(
