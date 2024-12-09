@@ -56,7 +56,8 @@ echo "/tmp/" >>".gitignore"
 
 # Simulating the user's first run and dumping logs to a file
 $package_manager --version >./tmp/package_manager_version.txt
-$package_manager_command >./tmp/install.txt 2>&1
+$package_manager_command
+# $package_manager_command >./tmp/install.txt 2>&1
 $turbo_command >./tmp/run-1.txt
 
 # We don't want to hit cache on first run because we're acting like a user.
