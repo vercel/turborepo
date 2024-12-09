@@ -14,9 +14,14 @@ use crate::{
 
 #[derive(Debug, Clone)]
 pub struct MicrofrontendsConfigs {
-    configs: HashMap<String, HashSet<TaskId<'static>>>,
-    config_paths: HashMap<String, RelativeUnixPathBuf>,
+    configs: HashMap<String, ConfigInfo>,
     mfe_package: Option<&'static str>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq)]
+struct ConfigInfo {
+    tasks: HashSet<TaskId<'static>>,
+    path: Option<RelativeUnixPathBuf>,
 }
 
 impl MicrofrontendsConfigs {
@@ -39,7 +44,6 @@ impl MicrofrontendsConfigs {
     ) -> Result<Option<Self>, Error> {
         let PackageGraphResult {
             configs,
-            config_paths,
             missing_default_apps,
             unsupported_version,
             mfe_package,
@@ -58,7 +62,6 @@ impl MicrofrontendsConfigs {
 
         Ok((!configs.is_empty()).then_some(Self {
             configs,
-            config_paths,
             mfe_package,
         }))
     }
@@ -68,21 +71,23 @@ impl MicrofrontendsConfigs {
     }
 
     pub fn configs(&self) -> impl Iterator<Item = (&String, &HashSet<TaskId<'static>>)> {
-        self.configs.iter()
+        self.configs.iter().map(|(pkg, info)| (pkg, &info.tasks))
     }
 
     pub fn get(&self, package_name: &str) -> Option<&HashSet<TaskId<'static>>> {
-        self.configs.get(package_name)
+        let info = self.configs.get(package_name)?;
+        Some(&info.tasks)
     }
 
     pub fn task_has_mfe_proxy(&self, task_id: &TaskId) -> bool {
         self.configs
             .values()
-            .any(|dev_tasks| dev_tasks.contains(task_id))
+            .any(|info| info.tasks.contains(task_id))
     }
 
     pub fn config_filename(&self, package_name: &str) -> Option<&str> {
-        let path = self.config_paths.get(package_name)?;
+        let info = self.configs.get(package_name)?;
+        let path = info.path.as_ref()?;
         Some(path.as_str())
     }
 
@@ -155,17 +160,19 @@ impl MicrofrontendsConfigs {
 
     // Returns a list of repo relative paths to all MFE configurations
     fn configuration_file_paths(&self) -> Vec<String> {
-        self.config_paths
+        self.configs
             .values()
-            .map(|config_path| config_path.as_str().to_string())
+            .filter_map(|info| {
+                let path = info.path.as_ref()?;
+                Some(path.as_str().to_string())
+            })
             .collect()
     }
 }
 
 // Internal struct used to capture the results of checking the package graph
 struct PackageGraphResult {
-    configs: HashMap<String, HashSet<TaskId<'static>>>,
-    config_paths: HashMap<String, RelativeUnixPathBuf>,
+    configs: HashMap<String, ConfigInfo>,
     missing_default_apps: Vec<String>,
     unsupported_version: Vec<(String, String)>,
     mfe_package: Option<&'static str>,
@@ -176,7 +183,6 @@ impl PackageGraphResult {
         packages: impl Iterator<Item = (&'a str, Result<Option<MFEConfig>, Error>)>,
     ) -> Result<Self, Error> {
         let mut configs = HashMap::new();
-        let mut config_paths = HashMap::new();
         let mut referenced_default_apps = HashSet::new();
         let mut unsupported_version = Vec::new();
         let mut mfe_package = None;
@@ -211,10 +217,11 @@ impl PackageGraphResult {
                     TaskId::new(application, dev_task).into_owned()
                 })
                 .collect();
-            configs.insert(package_name.to_string(), tasks);
+            let mut info = ConfigInfo { tasks, path: None };
             if let Some(path) = config.path() {
-                config_paths.insert(package_name.to_string(), path.to_unix());
+                info.path = Some(path.to_unix());
             }
+            configs.insert(package_name.to_string(), info);
         }
         let default_apps_found = configs.keys().cloned().collect();
         let mut missing_default_apps = referenced_default_apps
@@ -224,7 +231,6 @@ impl PackageGraphResult {
         missing_default_apps.sort();
         Ok(Self {
             configs,
-            config_paths,
             missing_default_apps,
             unsupported_version,
             mfe_package,
@@ -257,7 +263,7 @@ mod test {
                     for _dev_task in $dev_tasks.as_slice() {
                         _dev_tasks.insert(crate::run::task_id::TaskName::from(*_dev_task).task_id().unwrap().into_owned());
                     }
-                    _map.insert($config_owner.to_string(), _dev_tasks);
+                    _map.insert($config_owner.to_string(), ConfigInfo { tasks: _dev_tasks, path: None });
                 )+
                 _map
             }
@@ -346,7 +352,6 @@ mod test {
         );
         let mfe = MicrofrontendsConfigs {
             configs,
-            config_paths: HashMap::new(),
             mfe_package: None,
         };
         assert_eq!(
@@ -456,12 +461,12 @@ mod test {
     #[test]
     fn test_configs_added_as_global_deps() {
         let configs = MicrofrontendsConfigs {
-            configs: vec![("web".to_owned(), Default::default())]
-                .into_iter()
-                .collect(),
-            config_paths: vec![(
+            configs: vec![(
                 "web".to_owned(),
-                RelativeUnixPathBuf::new("web/microfrontends.json").unwrap(),
+                ConfigInfo {
+                    path: Some(RelativeUnixPathBuf::new("web/microfrontends.json").unwrap()),
+                    ..Default::default()
+                },
             )]
             .into_iter()
             .collect(),
