@@ -19,6 +19,8 @@ if [ -z "$package_manager" ]; then
   exit 1
 fi
 
+echo "node --version: $(node --version)"
+
 # Use the right command for each package manager
 if [ "$package_manager" == "npm" ]; then
   package_manager_command="(npx @turbo/workspaces convert . npm; exit 0) && npm install"
