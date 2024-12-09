@@ -113,7 +113,7 @@ impl MicrofrontendsConfigs {
         // - contains the proxy task
         // - a member of one of the microfrontends
         // then we need to modify its task definitions
-        if let Some(FindResult { dev, proxy }) = self.package_turbo_json_update(package_name) {
+        if let Some(FindResult { dev, proxy, .. }) = self.package_turbo_json_update(package_name) {
             // We need to modify turbo.json, use default one if there isn't one present
             let mut turbo_json = turbo_json.or_else(|err| match err {
                 config::Error::NoTurboJSON => Ok(TurboJson::default()),
@@ -144,19 +144,23 @@ impl MicrofrontendsConfigs {
         &'a self,
         package_name: &PackageName,
     ) -> Option<FindResult<'a>> {
-        self.configs().find_map(|(config, tasks)| {
-            let dev_task = tasks.iter().find_map(|task| {
+        let results = self.configs.iter().filter_map(|(config, info)| {
+            let dev_task = info.tasks.iter().find_map(|task| {
                 (task.package() == package_name.as_str()).then(|| FindResult {
                     dev: Some(task.as_borrowed()),
                     proxy: TaskId::new(config, "proxy"),
+                    version: info.version,
                 })
             });
             let proxy_owner = (config.as_str() == package_name.as_str()).then(|| FindResult {
                 dev: None,
                 proxy: TaskId::new(config, "proxy"),
+                version: info.version,
             });
             dev_task.or(proxy_owner)
-        })
+        });
+        // We invert the standard comparing order so higher versions are prioritized
+        results.sorted_by(|a, b| b.version.cmp(a.version)).next()
     }
 
     // Returns a list of repo relative paths to all MFE configurations
@@ -236,6 +240,7 @@ impl PackageGraphResult {
 struct FindResult<'a> {
     dev: Option<TaskId<'a>>,
     proxy: TaskId<'a>,
+    version: &'static str,
 }
 
 impl ConfigInfo {
@@ -285,6 +290,7 @@ mod test {
 
     struct PackageUpdateTest {
         package_name: &'static str,
+        version: &'static str,
         result: Option<TestFindResult>,
     }
 
@@ -297,8 +303,14 @@ mod test {
         pub const fn new(package_name: &'static str) -> Self {
             Self {
                 package_name,
+                version: "2",
                 result: None,
             }
+        }
+
+        pub const fn v1(mut self) -> Self {
+            self.version = "1";
+            self
         }
 
         pub const fn dev(mut self, dev: &'static str, proxy: &'static str) -> Self {
@@ -326,10 +338,12 @@ mod test {
                 }) => Some(FindResult {
                     dev: Some(Self::str_to_task(dev)),
                     proxy: Self::str_to_task(proxy),
+                    version: self.version,
                 }),
                 Some(TestFindResult { dev: None, proxy }) => Some(FindResult {
                     dev: None,
                     proxy: Self::str_to_task(proxy),
+                    version: self.version,
                 }),
                 None => None,
             }
@@ -344,8 +358,9 @@ mod test {
     }
 
     const NON_MFE_PKG: PackageUpdateTest = PackageUpdateTest::new("other-pkg");
-    const MFE_CONFIG_PKG: PackageUpdateTest =
-        PackageUpdateTest::new("z-config-pkg").proxy_only("z-config-pkg#proxy");
+    const MFE_CONFIG_PKG: PackageUpdateTest = PackageUpdateTest::new("z-config-pkg")
+        .v1()
+        .proxy_only("z-config-pkg#proxy");
     const MFE_CONFIG_PKG_DEV_TASK: PackageUpdateTest =
         PackageUpdateTest::new("web").dev("web#dev", "web#proxy");
     const DEFAULT_APP_PROXY: PackageUpdateTest =
@@ -359,10 +374,11 @@ mod test {
     #[test_case(DEFAULT_APP_PROXY)]
     #[test_case(DEFAULT_APP_PROXY_AND_DEV)]
     fn test_package_turbo_json_update(test: PackageUpdateTest) {
-        let configs = mfe_configs!(
+        let mut configs = mfe_configs!(
             "z-config-pkg" => ["web#dev", "docs#dev"],
             "web" => ["web#dev", "docs#serve"]
         );
+        configs.get_mut("z-config-pkg").unwrap().version = "1";
         let mfe = MicrofrontendsConfigs {
             configs,
             mfe_package: None,

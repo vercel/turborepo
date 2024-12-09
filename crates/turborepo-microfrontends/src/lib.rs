@@ -1,4 +1,3 @@
-#![feature(assert_matches)]
 #![deny(clippy::all)]
 mod configv1;
 mod configv2;
@@ -187,8 +186,6 @@ impl Config {
 
 #[cfg(test)]
 mod test {
-    use std::assert_matches::assert_matches;
-
     use insta::assert_snapshot;
     use tempfile::TempDir;
     use test_case::test_case;
