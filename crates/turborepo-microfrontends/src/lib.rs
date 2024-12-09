@@ -126,6 +126,13 @@ impl Config {
         Some(path)
     }
 
+    pub fn version(&self) -> &'static str {
+        match &self.inner {
+            ConfigInner::V1(_) => "1",
+            ConfigInner::V2(_) => "2",
+        }
+    }
+
     fn load_v2_dir(dir: &AbsoluteSystemPath) -> Result<Option<Self>, Error> {
         let load_config =
             |filename: &str| -> Option<(Result<String, io::Error>, AbsoluteSystemPathBuf)> {

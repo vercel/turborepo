@@ -21,6 +21,7 @@ pub struct MicrofrontendsConfigs {
 #[derive(Debug, Clone, Default, PartialEq)]
 struct ConfigInfo {
     tasks: HashSet<TaskId<'static>>,
+    version: &'static str,
     path: Option<RelativeUnixPathBuf>,
 }
 
@@ -210,14 +211,7 @@ impl PackageGraphResult {
             else {
                 continue;
             };
-            let tasks = config
-                .development_tasks()
-                .map(|(application, options)| {
-                    let dev_task = options.unwrap_or("dev");
-                    TaskId::new(application, dev_task).into_owned()
-                })
-                .collect();
-            let mut info = ConfigInfo { tasks, path: None };
+            let mut info = ConfigInfo::new(&config);
             if let Some(path) = config.path() {
                 info.path = Some(path.to_unix());
             }
@@ -244,6 +238,25 @@ struct FindResult<'a> {
     proxy: TaskId<'a>,
 }
 
+impl ConfigInfo {
+    fn new(config: &MFEConfig) -> Self {
+        let tasks = config
+            .development_tasks()
+            .map(|(application, options)| {
+                let dev_task = options.unwrap_or("dev");
+                TaskId::new(application, dev_task).into_owned()
+            })
+            .collect();
+        let version = config.version();
+
+        Self {
+            tasks,
+            version,
+            path: None,
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use serde_json::json;
@@ -263,7 +276,7 @@ mod test {
                     for _dev_task in $dev_tasks.as_slice() {
                         _dev_tasks.insert(crate::run::task_id::TaskName::from(*_dev_task).task_id().unwrap().into_owned());
                     }
-                    _map.insert($config_owner.to_string(), ConfigInfo { tasks: _dev_tasks, path: None });
+                    _map.insert($config_owner.to_string(), ConfigInfo { tasks: _dev_tasks, version: "2", path: None });
                 )+
                 _map
             }
@@ -523,12 +536,12 @@ mod test {
             .into_iter(),
         )
         .unwrap();
-        assert_eq!(
-            result.configs,
-            mfe_configs!(
-                "web" => ["web#dev", "docs#serve"],
-                "mfe-config" => ["web#dev", "docs#serve"]
-            )
-        )
+        let mut expected = mfe_configs!(
+            "web" => ["web#dev", "docs#serve"],
+            "mfe-config" => ["web#dev", "docs#serve"]
+        );
+        expected.get_mut("mfe-config").unwrap().version = "1";
+
+        assert_eq!(result.configs, expected,)
     }
 }
