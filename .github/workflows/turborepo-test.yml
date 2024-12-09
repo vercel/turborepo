@@ -69,11 +69,6 @@ jobs:
           if [ -z "${RUSTC_WRAPPER}" ]; then
             unset RUSTC_WRAPPER
           fi
-          if [ "$RUNNER_OS" == "Windows" ]; then
-              cargo test --workspace --exclude turborepo-napi
-          else
-              cargo test --workspace
-          fi
           turbo run test --filter=turborepo-tests-integration --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
         shell: bash
         env:
