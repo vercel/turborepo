@@ -19,18 +19,13 @@ if [ -z "$package_manager" ]; then
   exit 1
 fi
 
-echo $PWD
-
-../helpers/setup_package_manager.sh . "$package_manager"
-
 # Use the right command for each package manager
 if [ "$package_manager" == "npm" ]; then
-  # package_manager_command="npx @turbo/workspaces convert . npm || true && npm install"
-  package_manager_command="npm install"
+  package_manager_command="npx @turbo/workspaces convert . npm || true && npm install"
 elif [ "$package_manager" == "pnpm" ]; then
-  package_manager_command="true && pnpm install"
+  package_manager_command="npx @turbo/workspaces convert . pnpm || true && pnpm install"
 elif [ "$package_manager" == "yarn" ]; then
-  package_manager_command="true && yarn"
+  package_manager_command="npx @turbo/workspaces convert . yarn || true && yarn"
 fi
 
 # All examples implement these two tasks
