@@ -21,11 +21,11 @@ fi
 
 # Use the right command for each package manager
 if [ "$package_manager" == "npm" ]; then
-  package_manager_command="npx @turbo/workspaces convert . npm || true && npm install"
+  package_manager_command="(npx @turbo/workspaces convert . npm; exit 0) && npm install"
 elif [ "$package_manager" == "pnpm" ]; then
-  package_manager_command="npx @turbo/workspaces convert . pnpm || true && pnpm install"
+  package_manager_command="(npx @turbo/workspaces convert . pnpm; exit 0) && pnpm install"
 elif [ "$package_manager" == "yarn" ]; then
-  package_manager_command="npx @turbo/workspaces convert . yarn || true && yarn"
+  package_manager_command="(npx @turbo/workspaces convert . yarn; exit 0) && yarn"
 fi
 
 # All examples implement these two tasks
