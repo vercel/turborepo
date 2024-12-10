@@ -67,6 +67,7 @@ pub enum TraceError {
 }
 
 impl TraceResult {
+    #[allow(dead_code)]
     pub fn emit_errors(&self) {
         let handler = Handler::with_tty_emitter(
             ColorConfig::Auto,
