@@ -62,7 +62,7 @@ jobs:
           key: prysk-venv-${{ matrix.os.runner }}
 
       - name: Integration Tests
-        run: turbo run test --filter=turborepo-tests-integration --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
+        run: turbo run test:parallel --filter=turborepo-tests-integration --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
 
   examples:
     name: Turborepo Examples
