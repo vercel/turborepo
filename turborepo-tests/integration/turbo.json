@@ -9,6 +9,10 @@
     "test": {
       "dependsOn": ["cli#build", "topo", "^build"],
       "passThroughEnv": ["CI"]
+    },
+    "test:parallel": {
+      "dependsOn": ["cli#build", "topo", "^build"],
+      "passThroughEnv": ["CI"]
     }
   }
 }

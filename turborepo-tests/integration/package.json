@@ -4,8 +4,7 @@
     "test": "prysk tests",
     "clean": "rm -rf tests/**/*.t.err",
     "test:interactive": "PRYSK_INTERACTIVE=true prysk tests",
-    "test:parallel": ".cram_env/bin/pytest --prysk-shell='bash'",
-    "pretest:parallel": ".cram_env/bin/pip3 install --quiet pytest \"prysk[pytest-plugin]\" pytest-xdist"
+    "test:parallel": "prysk"
   },
   "dependencies": {
     "turborepo-tests-helpers": "workspace:*",
