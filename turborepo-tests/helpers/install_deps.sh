@@ -11,7 +11,7 @@ elif [[ $1 != "" ]]; then
 fi
 
 if [ "$PACKAGE_MANAGER" == "npm" ]; then
-  npm install > /dev/null 2>&1
+  npm install --offline > /dev/null 2>&1
   if [[ "$OSTYPE" == "msys" ]]; then
     dos2unix --quiet "package-lock.json"
   fi
