@@ -27,7 +27,7 @@ execSync(
 const flags = [
   "--prysk-shell=bash",
   process.env.PRYSK_INTERACTIVE === "true" ? "--interactive" : "",
-  isWindows ? "--pytest-dos2unix" : "",
+  isWindows ? "--prysk-dos2unix" : "",
 ].join(" ");
 
 const cmd = [getVenvBin("pytest"), flags].join(" ");
