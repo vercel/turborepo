@@ -1469,10 +1469,15 @@ pub async fn run(
 
             Ok(query)
         }
-        Command::Watch(_) => {
+        Command::Watch(execution_args) => {
             let event = CommandEventBuilder::new("watch").with_parent(&root_telemetry);
             event.track_call();
-            let base = CommandBase::new(cli_args, repo_root, version, color_config)?;
+            let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
+
+            if execution_args.tasks.is_empty() {
+                print_potential_tasks(base, event).await?;
+                return Ok(1);
+            }
 
             let mut client = WatchClient::new(base, event).await?;
             if let Err(e) = client.start().await {
