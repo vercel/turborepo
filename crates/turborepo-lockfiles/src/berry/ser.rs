@@ -147,27 +147,34 @@ where
     let mut string = String::new();
     let mut first = true;
 
-    let mut add_line = |dependency: &str, field: &str| {
+    let mut add_line = |dependency: &str, settings: &[(Option<bool>, &str)]| {
         if !first {
             string.push('\n');
         }
 
-        string.push_str(&format!(
-            "    {}:\n      {}: true",
-            wrap_string(dependency),
-            wrap_string(field)
-        ));
+        string.push_str(&format!("    {}:\n", wrap_string(dependency)));
+
+        for (i, (setting, field)) in settings.iter().enumerate() {
+            if let Some(value) = setting {
+                string.push_str(&format!("      {}: {}", wrap_string(field), value));
+                if i < settings.len() - 1 {
+                    string.push('\n');
+                }
+            }
+        }
 
         first = false;
     };
 
     for (dependency, meta) in metadata {
         let dependency = dependency.as_ref();
-        if meta.optional.unwrap_or_default() {
-            add_line(dependency, "optional");
-        }
-        if meta.unplugged.unwrap_or_default() {
-            add_line(dependency, "unplugged");
+        let settings = [
+            (meta.built, "built"),
+            (meta.optional, "optional"),
+            (meta.unplugged, "unplugged"),
+        ];
+        if settings.iter().any(|&(setting, _)| setting.is_some()) {
+            add_line(dependency, &settings);
         }
     }
 
