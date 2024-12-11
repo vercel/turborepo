@@ -98,6 +98,7 @@ struct BerryPackage {
 struct DependencyMeta {
     optional: Option<bool>,
     unplugged: Option<bool>,
+    built: Option<bool>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
