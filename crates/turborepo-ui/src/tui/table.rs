@@ -21,8 +21,8 @@ pub struct TaskTable<'b> {
     spinner: SpinnerState,
 }
 
-const TASK_NAVIGATE_INSTRUCTIONS: &str = "↑ ↓ to navigate";
-const HIDE_INSTRUCTIONS: &str = "h to hide";
+const TASK_NAVIGATE_INSTRUCTIONS: &str = "↑ ↓ - Select";
+const MORE_BINDS_INSTRUCTIONS: &str = "m - More binds";
 
 impl<'b> TaskTable<'b> {
     /// Construct a new table with all of the planned tasks
@@ -122,7 +122,7 @@ impl<'a> StatefulWidget for &'a TaskTable<'a> {
         )
         .footer(
             vec![Text::styled(
-                format!("{TASK_NAVIGATE_INSTRUCTIONS}\n{HIDE_INSTRUCTIONS}"),
+                format!("{TASK_NAVIGATE_INSTRUCTIONS}\n{MORE_BINDS_INSTRUCTIONS}"),
                 Style::default().add_modifier(Modifier::DIM),
             )]
             .into_iter()

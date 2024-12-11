@@ -12,6 +12,7 @@ use super::{
 pub struct InputOptions<'a> {
     pub focus: &'a LayoutSections,
     pub has_selection: bool,
+    pub is_help_popup_open: bool,
 }
 
 pub fn start_crossterm_stream(tx: mpsc::Sender<crossterm::event::Event>) -> Option<JoinHandle<()>> {
@@ -80,6 +81,7 @@ fn translate_key_event(options: InputOptions, key_event: KeyEvent) -> Option<Eve
         KeyCode::Char('/') if matches!(options.focus, LayoutSections::TaskList) => {
             Some(Event::SearchEnter)
         }
+        KeyCode::Esc if options.is_help_popup_open => Some(Event::ToggleHelpPopup),
         KeyCode::Esc if matches!(options.focus, LayoutSections::Search { .. }) => {
             Some(Event::SearchExit {
                 restore_scroll: true,
@@ -112,6 +114,7 @@ fn translate_key_event(options: InputOptions, key_event: KeyEvent) -> Option<Eve
         KeyCode::Char('n') if key_event.modifiers == KeyModifiers::CONTROL => {
             Some(Event::ScrollDown)
         }
+        KeyCode::Char('m') => Some(Event::ToggleHelpPopup),
         KeyCode::Up | KeyCode::Char('k') => Some(Event::Up),
         KeyCode::Down | KeyCode::Char('j') => Some(Event::Down),
         KeyCode::Enter | KeyCode::Char('i') => Some(Event::EnterInteractive),
@@ -443,6 +446,7 @@ mod test {
         InputOptions {
             focus: search(),
             has_selection: false,
+            is_help_popup_open: false,
         }
     }
 
