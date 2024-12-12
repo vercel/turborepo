@@ -36,8 +36,9 @@ impl<'a, W> TerminalPane<'a, W> {
     }
 
     fn footer(&self) -> Line {
-        let build_message_vec = |footer_text: &str| -> Line {
-            let mut messages = vec![footer_text];
+        let build_message_vec = |footer_text: &[&str]| -> Line {
+            let mut messages = Vec::new();
+            messages.extend_from_slice(footer_text);
 
             if !self.has_sidebar {
                 messages.push(TASK_LIST_HIDDEN);
@@ -58,11 +59,8 @@ impl<'a, W> TerminalPane<'a, W> {
         };
 
         match self.section {
-            LayoutSections::Pane => build_message_vec(EXIT_INTERACTIVE_HINT),
-            LayoutSections::TaskList => {
-                // Spaces are used to pad the footer text for aesthetics
-                build_message_vec(format!("{}   {}", ENTER_INTERACTIVE_HINT, SCROLL_LOGS).as_str())
-            }
+            LayoutSections::Pane => build_message_vec(&[EXIT_INTERACTIVE_HINT]),
+            LayoutSections::TaskList => build_message_vec(&[ENTER_INTERACTIVE_HINT, SCROLL_LOGS]),
             LayoutSections::Search { results, .. } => {
                 Line::from(format!("/ {}", results.query())).left_aligned()
             }
