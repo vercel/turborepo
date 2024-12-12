@@ -16,8 +16,8 @@ const BIND_LIST: [&str; 11] = [
     "i      - Interact with task",
     "Ctrl+z - Stop interacting with task",
     "c      - Copy logs selection (Only when logs are selected)",
-    "Ctrl+n - Scroll logs up",
-    "Ctrl+p - Scroll logs down",
+    "d      - Scroll logs up",
+    "u      - Scroll logs down",
 ];
 
 pub fn popup_area(area: Rect) -> Rect {

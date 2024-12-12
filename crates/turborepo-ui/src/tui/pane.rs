@@ -7,10 +7,11 @@ use tui_term::widget::PseudoTerminal;
 
 use super::{app::LayoutSections, TerminalOutput};
 
-const FOOTER_TEXT_ACTIVE: &str = "Ctrl-z - Stop interacting";
-const FOOTER_TEXT_INACTIVE: &str = "i - Interact";
+const ENTER_INTERACTIVE_HINT: &str = "i - Interact";
 const HAS_SELECTION: &str = "c - Copy selection";
+const SCROLL_LOGS: &str = "u/d - Scroll logs";
 const TASK_LIST_HIDDEN: &str = "h - Show task list";
+const FOOTER_TEXT_ACTIVE: &str = "Ctrl-z - Stop interacting";
 
 pub struct TerminalPane<'a, W> {
     terminal_output: &'a TerminalOutput<W>,
@@ -47,7 +48,7 @@ impl<'a, W> TerminalPane<'a, W> {
             }
 
             // Spaces are used to pad the footer text for aesthetics
-            let formatted_messages = format!("   {}", messages.join(", "));
+            let formatted_messages = format!("   {}", messages.join("   "));
 
             Line::styled(
                 formatted_messages.to_string(),
@@ -58,7 +59,10 @@ impl<'a, W> TerminalPane<'a, W> {
 
         match self.section {
             LayoutSections::Pane => build_message_vec(FOOTER_TEXT_ACTIVE),
-            LayoutSections::TaskList => build_message_vec(FOOTER_TEXT_INACTIVE),
+            LayoutSections::TaskList => {
+                // Spaces are used to pad the footer text for aesthetics
+                build_message_vec(format!("{}   {}", ENTER_INTERACTIVE_HINT, SCROLL_LOGS).as_str())
+            }
             LayoutSections::Search { results, .. } => {
                 Line::from(format!("/ {}", results.query())).left_aligned()
             }
