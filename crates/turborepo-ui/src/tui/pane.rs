@@ -7,7 +7,7 @@ use tui_term::widget::PseudoTerminal;
 
 use super::{app::LayoutSections, TerminalOutput};
 
-const FOOTER_TEXT_ACTIVE: &str = "Ctrl-z - Stop interacting";
+const EXIT_INTERACTIVE_HINT: &str = "Ctrl-z - Stop interacting";
 const ENTER_INTERACTIVE_HINT: &str = "i - Interact";
 const HAS_SELECTION: &str = "c - Copy selection";
 const SCROLL_LOGS: &str = "u/d - Scroll logs";
