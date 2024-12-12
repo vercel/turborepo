@@ -27,7 +27,7 @@ workspacesCli
   )
   .option(
     "--ignore-unchanged-package-manager",
-    "Always exit with a successful status (exit code 0)",
+    "Prevent script failure if the package manager is unchanged",
     false
   )
   .option("--dry", "Dry run (no changes are made to files)", false)
