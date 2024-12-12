@@ -21,8 +21,6 @@ fi
 
 echo "node --version: $(node --version)"
 
-echo "$PWD"
-
 # Use the right command for each package manager
 if [ "$package_manager" == "npm" ]; then
   package_manager_command="node ../../../packages/turbo-workspaces/dist/cli.js convert . npm --ignore-unchanged-package-manager || true && npm install"
