@@ -59,7 +59,7 @@ echo "/tmp/" >>".gitignore"
 $package_manager_command
 
 # Simulating the user's first run and dumping logs to a file
-$turbo_command >./tmp/run-1.txt
+$turbo_command >tee >(./tmp/run-1.txt)
 
 # We don't want to hit cache on first run because we're acting like a user.
 # A user would never hit cache on first run. Why should we?
