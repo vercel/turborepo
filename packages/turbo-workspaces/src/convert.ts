@@ -36,19 +36,21 @@ export async function convertProject({
     `Converting project from ${project.packageManager} to ${convertTo.name}.`
   );
 
-  if (project.packageManager === convertTo.name) {
-    throw new ConvertError("You are already using this package manager", {
-      type: "package_manager-already_in_use",
-    });
-  }
+  if (!options?.ignoreUnchangedPackageManager) {
+    if (project.packageManager === convertTo.name) {
+      throw new ConvertError("You are already using this package manager", {
+        type: "package_manager-already_in_use",
+      });
+    }
 
-  if (!convertTo.version) {
-    throw new ConvertError(
-      `${convertTo.name} is not installed, or could not be located`,
-      {
-        type: "package_manager-could_not_be_found",
-      }
-    );
+    if (!convertTo.version) {
+      throw new ConvertError(
+        `${convertTo.name} is not installed, or could not be located`,
+        {
+          type: "package_manager-could_not_be_found",
+        }
+      );
+    }
   }
 
   // this cast is safe since we've just verified that the version exists above

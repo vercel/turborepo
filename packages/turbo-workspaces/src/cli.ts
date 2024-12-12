@@ -25,6 +25,11 @@ workspacesCli
     "Do not run a package manager install after conversion",
     false
   )
+  .option(
+    "--ignore-unchanged-package-manager",
+    "Always exit with a successful status (exit code 0)",
+    false
+  )
   .option("--dry", "Dry run (no changes are made to files)", false)
   .option(
     "--force",

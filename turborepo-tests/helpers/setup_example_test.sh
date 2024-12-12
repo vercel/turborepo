@@ -21,13 +21,15 @@ fi
 
 echo "node --version: $(node --version)"
 
+echo "$PWD"
+
 # Use the right command for each package manager
 if [ "$package_manager" == "npm" ]; then
-  package_manager_command="bash -c 'npx @turbo/workspaces convert . npm || true' && npm install"
+  package_manager_command="node ../../../packages/turbo-workspaces/dist/cli.js convert . npm --ignore-unchanged-package-manager || true && npm install"
 elif [ "$package_manager" == "pnpm" ]; then
-  package_manager_command="bash -c 'npx @turbo/workspaces convert . pnpm || true' && pnpm install"
+  package_manager_command="node ../../../packages/turbo-workspaces/dist/cli.js convert . pnpm --ignore-unchanged-package-manager || true && pnpm install"
 elif [ "$package_manager" == "yarn" ]; then
-  package_manager_command="bash -c 'npx @turbo/workspaces convert . yarn || true' && yarn"
+  package_manager_command="node ../../../packages/turbo-workspaces/dist/cli.js convert . yarn --ignore-unchanged-package-manager || true && yarn"
 fi
 
 # All examples implement these two tasks
@@ -39,7 +41,7 @@ mkdir -p ../../examples-tests-tmp
 cd ../../examples-tests-tmp
 
 # Start up a fresh directory for the test
-rm -rf "$example_path" || true
+rm -rf "$example_path-$package_manager" || true
 rsync -avq \
   --exclude='node_modules' \
   --exclude="dist" \
@@ -47,10 +49,10 @@ rsync -avq \
   --exclude=".expo" \
   --exclude=".cache" \
   --exclude=".next" \
-  "../examples/$example_path" "."
+  "../examples/$example_path" "$example_path-$package_manager"
 
-cd "$example_path"
-"../../turborepo-tests/helpers/setup_git.sh" .
+cd "$example_path-$package_manager/$example_path"
+"../../../turborepo-tests/helpers/setup_git.sh" .
 
 # Make /tmp dir for writing dump logs
 mkdir -p ./tmp
