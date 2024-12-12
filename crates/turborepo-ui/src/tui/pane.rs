@@ -58,7 +58,7 @@ impl<'a, W> TerminalPane<'a, W> {
         };
 
         match self.section {
-            LayoutSections::Pane => build_message_vec(FOOTER_TEXT_ACTIVE),
+            LayoutSections::Pane => build_message_vec(EXIT_INTERACTIVE_HINT),
             LayoutSections::TaskList => {
                 // Spaces are used to pad the footer text for aesthetics
                 build_message_vec(format!("{}   {}", ENTER_INTERACTIVE_HINT, SCROLL_LOGS).as_str())
