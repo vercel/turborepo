@@ -798,6 +798,9 @@ fn update(
         Event::ToggleHelpPopup => {
             app.showing_help_popup = !app.showing_help_popup;
         }
+        Event::TogglePinnedTask => {
+            app.is_task_selection_pinned = !app.is_task_selection_pinned;
+        }
         Event::Input { bytes } => {
             app.forward_input(&bytes)?;
         }

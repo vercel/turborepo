@@ -6,11 +6,12 @@ use ratatui::{
     widgets::{Block, List, ListItem, Padding},
 };
 
-const BIND_LIST: [&str; 11] = [
+const BIND_LIST: [&str; 12] = [
     "m      - Toggle this help popup",
     "↑ or j - Select previous task",
     "↓ or k - Select next task",
     "h      - Toggle task list",
+    "p      - Toggle pinned task selection",
     "/      - Filter tasks to search term",
     "ESC    - Clear filter",
     "i      - Interact with task",
