@@ -11,6 +11,12 @@ turbo watch [tasks]
 
 `turbo watch` is dependency-aware, meaning tasks will re-run in the order [configured in `turbo.json`](/repo/docs/reference/configuration).
 
+If no tasks are provided, `turbo` will display what tasks are available for the packages in the repository.
+
+```bash title="Terminal"
+turbo watch
+```
+
 ## Using `turbo watch` with persistent tasks
 
 Persistent tasks are marked with [`"persistent": true`](/repo/docs/reference/configuration#persistent), meaning they won't exit. Because of this, they cannot be depended on in your task graph.
