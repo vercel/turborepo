@@ -57,16 +57,17 @@ export async function convertProject({
   const to = convertTo as AvailablePackageManagerDetails;
 
   // remove old workspace data
-  await MANAGERS[project.packageManager].remove({
-    project,
-    to,
-    logger,
-    options,
-  });
+  if (!options?.ignoreUnchangedPackageManager) {
+    await MANAGERS[project.packageManager].remove({
+      project,
+      to,
+      logger,
+      options,
+    });
+  }
 
   // create new workspace data
   await MANAGERS[to.name].create({ project, to, logger, options });
-
   logger.mainStep("Installing dependencies");
   if (!options?.skipInstall) {
     await MANAGERS[to.name].convertLock({ project, to, logger, options });
@@ -76,5 +77,7 @@ export async function convertProject({
   }
 
   logger.mainStep(`Cleaning up ${project.packageManager} workspaces`);
-  await MANAGERS[project.packageManager].clean({ project, logger });
+  if (project.packageManager !== convertTo.name) {
+    await MANAGERS[project.packageManager].clean({ project, logger });
+  }
 }
