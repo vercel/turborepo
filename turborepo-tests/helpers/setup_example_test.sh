@@ -56,10 +56,9 @@ cd "$example_path-$package_manager/$example_path"
 mkdir -p ./tmp
 echo "/tmp/" >>".gitignore"
 
-# Simulating the user's first run and dumping logs to a file
-$package_manager --version
 $package_manager_command
-# $package_manager_command >./tmp/install.txt 2>&1
+
+# Simulating the user's first run and dumping logs to a file
 $turbo_command >./tmp/run-1.txt
 
 # We don't want to hit cache on first run because we're acting like a user.
@@ -72,7 +71,7 @@ if grep -q ">>> FULL TURBO" ./tmp/run-1.txt; then
   exit 1
 fi
 
-# Simulating the user's second run
+# Simulating the user's second run and dumping logs to a file
 $turbo_command >./tmp/run-2.txt
 
 # Make sure the user hits FULL TURBO on the second go
