@@ -1,4 +1,3 @@
-#![feature(assert_matches)]
 #![deny(clippy::all)]
 mod configv1;
 mod configv2;
@@ -126,6 +125,13 @@ impl Config {
         Some(path)
     }
 
+    pub fn version(&self) -> &'static str {
+        match &self.inner {
+            ConfigInner::V1(_) => "1",
+            ConfigInner::V2(_) => "2",
+        }
+    }
+
     fn load_v2_dir(dir: &AbsoluteSystemPath) -> Result<Option<Self>, Error> {
         let load_config =
             |filename: &str| -> Option<(Result<String, io::Error>, AbsoluteSystemPathBuf)> {
@@ -180,8 +186,6 @@ impl Config {
 
 #[cfg(test)]
 mod test {
-    use std::assert_matches::assert_matches;
-
     use insta::assert_snapshot;
     use tempfile::TempDir;
     use test_case::test_case;
