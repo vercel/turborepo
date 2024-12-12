@@ -57,7 +57,7 @@ mkdir -p ./tmp
 echo "/tmp/" >>".gitignore"
 
 # Simulating the user's first run and dumping logs to a file
-$package_manager --version >./tmp/package_manager_version.txt
+$package_manager --version
 $package_manager_command
 # $package_manager_command >./tmp/install.txt 2>&1
 $turbo_command >./tmp/run-1.txt
