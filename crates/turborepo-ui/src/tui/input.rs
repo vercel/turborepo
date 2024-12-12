@@ -115,6 +115,7 @@ fn translate_key_event(options: InputOptions, key_event: KeyEvent) -> Option<Eve
             Some(Event::ScrollDown)
         }
         KeyCode::Char('m') => Some(Event::ToggleHelpPopup),
+        KeyCode::Char('p') => Some(Event::TogglePinnedTask),
         KeyCode::Up | KeyCode::Char('k') => Some(Event::Up),
         KeyCode::Down | KeyCode::Char('j') => Some(Event::Down),
         KeyCode::Enter | KeyCode::Char('i') => Some(Event::EnterInteractive),
