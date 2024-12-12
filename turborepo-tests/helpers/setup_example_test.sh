@@ -59,7 +59,7 @@ echo "/tmp/" >>".gitignore"
 $package_manager_command
 
 # Simulating the user's first run and dumping logs to a file
-$turbo_command >tee >(./tmp/run-1.txt)
+$turbo_command >tee ./tmp/run-1.txt
 
 # We don't want to hit cache on first run because we're acting like a user.
 # A user would never hit cache on first run. Why should we?
@@ -72,7 +72,7 @@ if grep -q ">>> FULL TURBO" ./tmp/run-1.txt; then
 fi
 
 # Simulating the user's second run and dumping logs to a file
-$turbo_command >tee >(./tmp/run-2.txt)
+$turbo_command >tee ./tmp/run-2.txt
 
 # Make sure the user hits FULL TURBO on the second go
 if ! grep -q ">>> FULL TURBO" ./tmp/run-2.txt; then
