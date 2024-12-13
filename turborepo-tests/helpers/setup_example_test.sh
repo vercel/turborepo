@@ -23,11 +23,11 @@ echo "node --version: $(node --version)"
 
 # Use the right command for each package manager
 if [ "$package_manager" == "npm" ]; then
-  package_manager_command="node ../../../packages/turbo-workspaces/dist/cli.js convert . npm --ignore-unchanged-package-manager || true && npm install"
+  package_manager_command="node ../../../packages/turbo-workspaces/dist/cli.js convert . npm --ignore-unchanged-package-manager && npm install"
 elif [ "$package_manager" == "pnpm" ]; then
-  package_manager_command="node ../../../packages/turbo-workspaces/dist/cli.js convert . pnpm --ignore-unchanged-package-manager || true && pnpm install"
+  package_manager_command="node ../../../packages/turbo-workspaces/dist/cli.js convert . pnpm --ignore-unchanged-package-manager && pnpm install"
 elif [ "$package_manager" == "yarn" ]; then
-  package_manager_command="node ../../../packages/turbo-workspaces/dist/cli.js convert . yarn --ignore-unchanged-package-manager || true && yarn"
+  package_manager_command="node ../../../packages/turbo-workspaces/dist/cli.js convert . yarn --ignore-unchanged-package-manager && yarn"
 fi
 
 # All examples implement these two tasks
