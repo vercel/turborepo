@@ -14,7 +14,6 @@ use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_ui::sender::UISender;
 
 use crate::{
-    cli::{Command, RunArgs},
     commands::{self, CommandBase},
     daemon::{proto, DaemonConnectorError, DaemonError},
     get_version, opts,
@@ -113,27 +112,18 @@ impl WatchClient {
     pub async fn new(base: CommandBase, telemetry: CommandEventBuilder) -> Result<Self, Error> {
         let signal = commands::run::get_signal()?;
         let handler = SignalHandler::new(signal);
-        let config = base.config()?;
-        let root_turbo_json_path = config.root_turbo_json_path(&base.repo_root);
-        if root_turbo_json_path != base.repo_root.join_component(CONFIG_FILE) {
+
+        if base.opts.repo_opts.root_turbo_json_path != base.repo_root.join_component(CONFIG_FILE) {
             return Err(Error::NonStandardTurboJsonPath(
-                root_turbo_json_path.to_string(),
+                base.opts.repo_opts.root_turbo_json_path.to_string(),
             ));
         }
-        if matches!(config.daemon(), Some(false)) {
+
+        if matches!(base.opts.run_opts.daemon, Some(false)) {
             warn!("daemon is required for watch, ignoring request to disable daemon");
         }
 
-        let Some(Command::Watch(execution_args)) = &base.args().command else {
-            unreachable!()
-        };
-
-        let mut new_base = base.clone();
-        new_base.args_mut().command = Some(Command::Run {
-            run_args: Box::default(),
-            execution_args: execution_args.clone(),
-        });
-
+        let new_base = base.clone();
         let run = Arc::new(
             RunBuilder::new(new_base)?
                 .build(&handler, telemetry.clone())
@@ -298,24 +288,12 @@ impl WatchClient {
                     })
                     .collect();
 
-                let mut args = self.base.args().clone();
-                args.command = args.command.map(|c| {
-                    if let Command::Watch(execution_args) = c {
-                        Command::Run {
-                            execution_args,
-                            run_args: Box::new(RunArgs {
-                                no_cache: true,
-                                daemon: true,
-                                ..Default::default()
-                            }),
-                        }
-                    } else {
-                        unreachable!()
-                    }
-                });
+                let mut opts = self.base.opts().clone();
+                opts.cache_opts.cache.remote.write = false;
+                opts.cache_opts.cache.local.write = false;
 
-                let new_base = CommandBase::new(
-                    args,
+                let new_base = CommandBase::from_opts(
+                    opts,
                     self.base.repo_root.clone(),
                     get_version(),
                     self.base.color_config,
@@ -344,24 +322,12 @@ impl WatchClient {
                 })
             }
             ChangedPackages::All => {
-                let mut args = self.base.args().clone();
-                args.command = args.command.map(|c| {
-                    if let Command::Watch(execution_args) = c {
-                        Command::Run {
-                            run_args: Box::new(RunArgs {
-                                no_cache: true,
-                                daemon: true,
-                                ..Default::default()
-                            }),
-                            execution_args,
-                        }
-                    } else {
-                        unreachable!()
-                    }
-                });
+                let mut opts = self.base.opts().clone();
+                opts.cache_opts.cache.remote.write = false;
+                opts.cache_opts.cache.local.write = false;
 
-                let base = CommandBase::new(
-                    args,
+                let base = CommandBase::from_opts(
+                    opts,
                     self.base.repo_root.clone(),
                     get_version(),
                     self.base.color_config,

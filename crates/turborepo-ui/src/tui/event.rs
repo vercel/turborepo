@@ -52,6 +52,7 @@ pub enum Event {
     },
     TogglePinnedTask,
     ToggleSidebar,
+    ToggleHelpPopup,
     SearchEnter,
     SearchExit {
         restore_scroll: bool,

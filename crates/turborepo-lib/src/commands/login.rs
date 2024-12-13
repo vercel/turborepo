@@ -15,9 +15,9 @@ pub async fn sso_login(
     telemetry.track_login_method(LoginMethod::SSO);
     let api_client: APIClient = base.api_client()?;
     let color_config = base.color_config;
-    let login_url_config = base.config()?.login_url().to_string();
+    let login_url_config = base.opts.api_client_opts.login_url.to_string();
     let options = LoginOptions {
-        existing_token: base.config()?.token(),
+        existing_token: base.opts.api_client_opts.token.as_deref(),
         sso_team: Some(sso_team),
         force,
         ..LoginOptions::new(
@@ -72,9 +72,11 @@ pub async fn login(
 
     let api_client: APIClient = base.api_client()?;
     let color_config = base.color_config;
-    let login_url_config = base.config()?.login_url().to_string();
+    let login_url_config = base.opts.api_client_opts.login_url.to_string();
+    let existing_token = base.opts.api_client_opts.token.as_deref();
+
     let options = LoginOptions {
-        existing_token: base.config()?.token(),
+        existing_token,
         force,
         ..LoginOptions::new(
             &color_config,

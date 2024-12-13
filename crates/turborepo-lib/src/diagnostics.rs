@@ -403,15 +403,12 @@ impl Diagnostic for RemoteCacheDiagnostic {
         tokio::task::spawn(async move {
             chan.started("Remote Cache".to_string()).await;
 
-            let result = {
+            let (has_team_id, has_team_slug) = {
                 let base = base.lock().await;
-                base.config()
-                    .map(|c| (c.team_id().is_some(), c.team_slug().is_some()))
-            };
-
-            let Ok((has_team_id, has_team_slug)) = result else {
-                chan.failed("Malformed config file".to_string()).await;
-                return;
+                (
+                    base.opts().api_client_opts.team_id.is_some(),
+                    base.opts().api_client_opts.team_slug.is_some(),
+                )
             };
 
             chan.log_line("Checking credentials".to_string()).await;

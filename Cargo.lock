@@ -6331,6 +6331,7 @@ dependencies = [
  "libc",
  "nibble_vec",
  "notify",
+ "num_cpus",
  "radix_trie",
  "tempfile",
  "thiserror",
@@ -6483,7 +6484,7 @@ dependencies = [
  "turborepo-fs",
  "turborepo-graph-utils",
  "turborepo-lockfiles",
- "turborepo-micro-frontend",
+ "turborepo-microfrontends",
  "turborepo-repository",
  "turborepo-scm",
  "turborepo-telemetry",
@@ -6539,7 +6540,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "turborepo-micro-frontend"
+name = "turborepo-microfrontends"
 version = "0.1.0"
 dependencies = [
  "biome_deserialize",
@@ -6551,6 +6552,8 @@ dependencies = [
  "pretty_assertions",
  "serde",
  "serde_json",
+ "tempfile",
+ "test-case",
  "thiserror",
  "turbopath",
  "turborepo-errors",

@@ -350,7 +350,7 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
     #[tracing::instrument(skip(self))]
     fn connect_internal_dependencies(
         &mut self,
-        package_manager: PackageManager,
+        package_manager: &PackageManager,
     ) -> Result<(), Error> {
         let npmrc = match package_manager {
             PackageManager::Pnpm | PackageManager::Pnpm6 | PackageManager::Pnpm9 => {
@@ -444,7 +444,7 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
             .discover_packages()
             .await?
             .package_manager;
-        self.connect_internal_dependencies(package_manager)?;
+        self.connect_internal_dependencies(&package_manager)?;
 
         let lockfile = match self.populate_lockfile().await {
             Ok(lockfile) => Some(lockfile),
@@ -565,7 +565,7 @@ impl Dependencies {
         repo_root: &AbsoluteSystemPath,
         workspace_json_path: &AnchoredSystemPathBuf,
         workspaces: &HashMap<PackageName, PackageInfo>,
-        package_manager: PackageManager,
+        package_manager: &PackageManager,
         npmrc: Option<&NpmRc>,
         dependencies: I,
     ) -> Self {

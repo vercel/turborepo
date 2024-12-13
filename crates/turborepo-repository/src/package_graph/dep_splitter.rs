@@ -20,7 +20,7 @@ impl<'a> DependencySplitter<'a> {
         repo_root: &'a AbsoluteSystemPath,
         workspace_dir: &'a AbsoluteSystemPath,
         workspaces: &'a HashMap<PackageName, PackageInfo>,
-        package_manager: PackageManager,
+        package_manager: &PackageManager,
         npmrc: Option<&'a NpmRc>,
     ) -> Self {
         Self {
