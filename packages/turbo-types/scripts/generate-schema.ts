@@ -2,9 +2,10 @@
 
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { createGenerator } from "ts-json-schema-generator";
 
-const __dirname = new URL(".", import.meta.url).pathname;
+const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const packageRoot = join(__dirname, "..", "src");
 
 /**
