@@ -30,6 +30,7 @@ const flags = [
     : "--prysk-shell=bash",
   process.env.PRYSK_INTERACTIVE === "true" ? "--interactive" : "",
   isWindows ? "--prysk-dos2unix=true" : "",
+  "--capture=fd",
 ].join(" ");
 
 const cmd = [getVenvBin("pytest"), flags].join(" ");
