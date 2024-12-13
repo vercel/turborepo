@@ -21,13 +21,13 @@ execSync(`${getVenvBin("python3")} -m pip install --quiet --upgrade pip`);
 execSync(
   `${getVenvBin(
     "pip"
-  )} install "pytest==8.3.3" "prysk[pytest-plugin]==0.15.2" "pytest-xdist==3.6.1"`
+  )} install "pytest==8.3.3" "prysk[pytest-plugin]==0.15.2" "pytest-prysk==0.4.0" "pytest-xdist==3.6.1"`
 );
 
 const flags = [
   "--prysk-shell=bash",
   process.env.PRYSK_INTERACTIVE === "true" ? "--interactive" : "",
-  isWindows ? "--prysk-dos2unix" : "",
+  isWindows ? "--prysk-dos2unix=true" : "",
 ].join(" ");
 
 const cmd = [getVenvBin("pytest"), flags].join(" ");
