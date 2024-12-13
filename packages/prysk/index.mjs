@@ -25,7 +25,9 @@ execSync(
 );
 
 const flags = [
-  "--prysk-shell=$(which bash)",
+  isWindows
+    ? "--prysk-shell=$(cygpath -w $(which bash))"
+    : "--prysk-shell=$(which bash)",
   process.env.PRYSK_INTERACTIVE === "true" ? "--interactive" : "",
   isWindows ? "--prysk-dos2unix=true" : "",
 ].join(" ");
