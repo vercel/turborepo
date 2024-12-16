@@ -72,3 +72,9 @@ impl Default for Preferences {
         }
     }
 }
+
+#[test]
+fn default_preferences() {
+    let preferences = Preferences::default();
+    assert!(preferences.is_task_list_visible.unwrap(), "true");
+}

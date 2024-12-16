@@ -914,16 +914,23 @@ fn view<W>(app: &mut App<W>, f: &mut Frame) {
 
 #[cfg(test)]
 mod test {
+    use tempfile::tempdir;
+    use turbopath::AbsoluteSystemPathBuf;
+
     use super::*;
     use crate::tui::event::CacheResult;
 
     #[test]
-    fn test_scroll() {
+    fn test_scroll() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
         let mut app: App<bool> = App::new(
             100,
             100,
             vec!["foo".to_string(), "bar".to_string(), "baz".to_string()],
-            &AbsoluteSystemPathBuf::default(),
+            PreferenceLoader::new(&repo_root)?,
         );
         assert_eq!(
             app.task_list_scroll.selected(),
@@ -957,15 +964,20 @@ mod test {
             Some(2),
             "scroll stays in bounds"
         );
+        Ok(())
     }
 
     #[test]
     fn test_selection_follows() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
         let mut app: App<bool> = App::new(
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
-            &AbsoluteSystemPathBuf::default(),
+            PreferenceLoader::new(&repo_root)?,
         );
         app.next();
         assert_eq!(app.task_list_scroll.selected(), Some(1), "selected b");
@@ -984,11 +996,15 @@ mod test {
 
     #[test]
     fn test_restart_task() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
         let mut app: App<()> = App::new(
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
-            &AbsoluteSystemPathBuf::default(),
+            PreferenceLoader::new(&repo_root)?,
         );
         app.next();
         app.next();
@@ -1051,11 +1067,15 @@ mod test {
 
     #[test]
     fn test_selection_stable() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
         let mut app: App<bool> = App::new(
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
-            &AbsoluteSystemPathBuf::default(),
+            PreferenceLoader::new(&repo_root)?,
         );
         app.next();
         app.next();
@@ -1098,11 +1118,15 @@ mod test {
 
     #[test]
     fn test_forward_stdin() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
         let mut app: App<Vec<u8>> = App::new(
             100,
             100,
             vec!["a".to_string(), "b".to_string()],
-            &AbsoluteSystemPathBuf::default(),
+            PreferenceLoader::new(&repo_root)?,
         );
         app.next();
         assert_eq!(app.task_list_scroll.selected(), Some(1), "selected b");
@@ -1136,11 +1160,15 @@ mod test {
 
     #[test]
     fn test_interact() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
         let mut app: App<Vec<u8>> = App::new(
             100,
             100,
             vec!["a".to_string(), "b".to_string()],
-            &AbsoluteSystemPathBuf::default(),
+            PreferenceLoader::new(&repo_root)?,
         );
         assert!(!app.is_focusing_pane(), "app starts focused on table");
         app.insert_stdin("a", Some(Vec::new()))?;
@@ -1163,11 +1191,15 @@ mod test {
 
     #[test]
     fn test_task_status() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
         let mut app: App<Vec<u8>> = App::new(
             100,
             100,
             vec!["a".to_string(), "b".to_string()],
-            &AbsoluteSystemPathBuf::default(),
+            PreferenceLoader::new(&repo_root)?,
         );
         app.next();
         assert_eq!(app.task_list_scroll.selected(), Some(1), "selected b");
@@ -1185,11 +1217,15 @@ mod test {
 
     #[test]
     fn test_restarting_task_no_scroll() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
         let mut app: App<()> = App::new(
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
-            &AbsoluteSystemPathBuf::default(),
+            PreferenceLoader::new(&repo_root)?,
         );
         assert_eq!(app.task_list_scroll.selected(), Some(0), "selected a");
         assert_eq!(app.tasks_by_status.task_name(0)?, "a", "selected a");
@@ -1216,11 +1252,15 @@ mod test {
 
     #[test]
     fn test_restarting_task() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
         let mut app: App<()> = App::new(
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
-            &AbsoluteSystemPathBuf::default(),
+            PreferenceLoader::new(&repo_root)?,
         );
         app.next();
         assert_eq!(app.task_list_scroll.selected(), Some(1), "selected b");
@@ -1248,11 +1288,15 @@ mod test {
 
     #[test]
     fn test_resize() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
         let mut app: App<Vec<u8>> = App::new(
             20,
             24,
             vec!["a".to_string(), "b".to_string()],
-            &AbsoluteSystemPathBuf::default(),
+            PreferenceLoader::new(&repo_root)?,
         );
         let pane_rows = app.size.pane_rows();
         let pane_cols = app.size.pane_cols();
@@ -1284,11 +1328,15 @@ mod test {
 
     #[test]
     fn test_update_empty_task_list() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
         let mut app: App<()> = App::new(
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
-            &AbsoluteSystemPathBuf::default(),
+            PreferenceLoader::new(&repo_root)?,
         );
         app.next();
         app.update_tasks(Vec::new())?;
@@ -1299,11 +1347,15 @@ mod test {
 
     #[test]
     fn test_restart_missing_task() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
         let mut app: App<()> = App::new(
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
-            &AbsoluteSystemPathBuf::default(),
+            PreferenceLoader::new(&repo_root)?,
         );
         app.next();
         app.restart_tasks(vec!["d".to_string()])?;
@@ -1316,11 +1368,15 @@ mod test {
 
     #[test]
     fn test_search_backspace_exits_search() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
         let mut app: App<()> = App::new(
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
-            &AbsoluteSystemPathBuf::default(),
+            PreferenceLoader::new(&repo_root)?,
         );
         app.enter_search()?;
         assert!(matches!(app.section_focus, LayoutSections::Search { .. }));
@@ -1338,11 +1394,15 @@ mod test {
 
     #[test]
     fn test_search_moves_with_typing() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
         let mut app: App<()> = App::new(
             100,
             100,
             vec!["a".to_string(), "ab".to_string(), "abc".to_string()],
-            &AbsoluteSystemPathBuf::default(),
+            PreferenceLoader::new(&repo_root)?,
         );
         app.enter_search()?;
         app.search_enter_char('a')?;
@@ -1362,11 +1422,15 @@ mod test {
 
     #[test]
     fn test_search_scroll() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
         let mut app: App<()> = App::new(
             100,
             100,
             vec!["a".to_string(), "ab".to_string(), "abc".to_string()],
-            &AbsoluteSystemPathBuf::default(),
+            PreferenceLoader::new(&repo_root)?,
         );
         app.enter_search()?;
         app.search_enter_char('b')?;
@@ -1390,11 +1454,15 @@ mod test {
 
     #[test]
     fn test_exit_search_restore_selection() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
         let mut app: App<()> = App::new(
             100,
             100,
             vec!["a".to_string(), "abc".to_string(), "b".to_string()],
-            &AbsoluteSystemPathBuf::default(),
+            PreferenceLoader::new(&repo_root)?,
         );
         app.next();
         assert_eq!(app.active_task()?, "abc");
@@ -1410,11 +1478,15 @@ mod test {
 
     #[test]
     fn test_exit_search_keep_selection() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
         let mut app: App<()> = App::new(
             100,
             100,
             vec!["a".to_string(), "abc".to_string(), "b".to_string()],
-            &AbsoluteSystemPathBuf::default(),
+            PreferenceLoader::new(&repo_root)?,
         );
         app.next();
         assert_eq!(app.active_task()?, "abc");
@@ -1430,11 +1502,15 @@ mod test {
 
     #[test]
     fn test_select_update_task_removes_task() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
         let mut app: App<()> = App::new(
             100,
             100,
             vec!["a".to_string(), "ab".to_string(), "abc".to_string()],
-            &AbsoluteSystemPathBuf::default(),
+            PreferenceLoader::new(&repo_root)?,
         );
         app.enter_search()?;
         app.search_enter_char('b')?;
@@ -1447,11 +1523,15 @@ mod test {
 
     #[test]
     fn test_select_restart_tasks_reorders_tasks() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
         let mut app: App<()> = App::new(
             100,
             100,
             vec!["a".to_string(), "ab".to_string(), "abc".to_string()],
-            &AbsoluteSystemPathBuf::default(),
+            PreferenceLoader::new(&repo_root)?,
         );
         app.enter_search()?;
         app.search_enter_char('b')?;
