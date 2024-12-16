@@ -37,4 +37,6 @@ pub enum Error {
     Stdin { name: String, e: std::io::Error },
     #[error(transparent)]
     Io(#[from] std::io::Error),
+    #[error("Unable to persist preferences")]
+    Preferences(#[from] preferences::Error),
 }
