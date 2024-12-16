@@ -56,7 +56,6 @@ pub struct App<W> {
     task_list_scroll: TableState,
     selected_task_index: usize,
     is_task_selection_pinned: bool,
-    has_sidebar: bool,
     showing_help_popup: bool,
     done: bool,
     preferences: PreferenceLoader,
@@ -105,7 +104,6 @@ impl<W> App<W> {
             selected_task_index,
             tasks_by_status: tasks_by_status.clone(),
             task_list_scroll: TableState::default().with_selected(selected_task_index),
-            has_sidebar: preferences.is_task_list_visible(),
             showing_help_popup: false,
             is_task_selection_pinned: preferences.active_task().is_some(),
             preferences,
@@ -131,6 +129,12 @@ impl<W> App<W> {
             has_selection,
             is_help_popup_open: self.showing_help_popup,
         })
+    }
+
+    fn update_sidebar_toggle(&mut self) {
+        let value = Some(self.preferences.is_task_list_visible());
+
+        self.preferences.set_is_task_list_visible(value).ok();
     }
 
     pub fn get_full_task(&self) -> Result<&TerminalOutput<W>, Error> {
@@ -818,11 +822,7 @@ fn update(
             app.is_task_selection_pinned = !app.is_task_selection_pinned;
         }
         Event::ToggleSidebar => {
-            let new_value = !app.preferences.is_task_list_visible();
-
-            app.preferences
-                .set_is_task_list_visible(Some(new_value))
-                .ok();
+            app.update_sidebar_toggle();
         }
         Event::ToggleHelpPopup => {
             app.showing_help_popup = !app.showing_help_popup;
