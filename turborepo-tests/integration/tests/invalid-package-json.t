@@ -25,7 +25,7 @@ Build should fail due to invalid packageManager field (sed removes the square br
     x could not resolve workspaces
     `-> could not parse the packageManager field in package.json, expected to
         match regular expression (?P<manager>bun|npm|pnpm|yarn)@(?P<version>\d+
-        \.\d+\.\d+(-.+)?)
+        \.\d+\.\d+(-.+)?|https?://.+)
      ,-\1
    5 |   },
    6 |   "packageManager": "bower@8.19.4",
