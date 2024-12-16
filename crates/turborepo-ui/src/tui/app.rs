@@ -16,7 +16,7 @@ use tokio::{
     time::Instant,
 };
 use tracing::{debug, trace};
-use turbopath::AbsoluteSystemPathBuf;
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 
 use crate::tui::{
     popup::{popup, popup_area},
@@ -29,6 +29,7 @@ const RESIZE_DEBOUNCE_DELAY: Duration = Duration::from_millis(10);
 use super::{
     event::{CacheResult, Direction, OutputLogs, PaneSize, TaskResult},
     input,
+    preferences::PreferenceLoader,
     search::SearchResults,
     AppReceiver, Debouncer, Error, Event, InputOptions, SizeInfo, TaskTable, TerminalPane,
 };
@@ -57,19 +58,14 @@ pub struct App<W> {
     section_focus: LayoutSections,
     task_list_scroll: TableState,
     selected_task_index: usize,
-    is_task_selection_pinned: bool,
-    has_sidebar: bool,
     showing_help_popup: bool,
     done: bool,
+    is_task_selection_pinned: bool,
+    preferences: PreferenceLoader,
 }
 
 impl<W> App<W> {
-    pub fn new(
-        rows: u16,
-        cols: u16,
-        tasks: Vec<String>,
-        repo_root: &AbsoluteSystemPathBuf,
-    ) -> Self {
+    pub fn new(rows: u16, cols: u16, tasks: Vec<String>, preferences: PreferenceLoader) -> Self {
         debug!("tasks: {tasks:?}");
         let size = SizeInfo::new(rows, cols, tasks.iter().map(|s| s.as_str()));
 
@@ -88,6 +84,11 @@ impl<W> App<W> {
 
         let pane_rows = size.pane_rows();
         let pane_cols = size.pane_cols();
+        // Attempt to find prev selection, if not go to 0
+        let selected_task_index = preferences
+            .active_task()
+            .and_then(|active_task| tasks_by_status.task_index(active_task))
+            .unwrap_or(0);
 
         Self {
             size,
@@ -102,17 +103,12 @@ impl<W> App<W> {
                     )
                 })
                 .collect(),
-            selected_task_index: preferences::Preferences::get_selected_task_index(
-                repo_root,
-                &tasks_by_status,
-            ),
+            selected_task_index,
             tasks_by_status: tasks_by_status.clone(),
-            task_list_scroll: TableState::default().with_selected(
-                preferences::Preferences::get_selected_task_index(repo_root, &tasks_by_status),
-            ),
-            has_sidebar: preferences::Preferences::read_task_list_visibility(repo_root),
+            task_list_scroll: TableState::default().with_selected(selected_task_index),
             showing_help_popup: false,
-            is_task_selection_pinned: preferences::Preferences::read_pinned_task_state(repo_root),
+            is_task_selection_pinned: preferences.active_task().is_some(),
+            preferences,
         }
     }
 
@@ -162,6 +158,7 @@ impl<W> App<W> {
             self.selected_task_index = (self.selected_task_index + 1) % num_rows;
             self.task_list_scroll.select(Some(self.selected_task_index));
             self.is_task_selection_pinned = true;
+            self.persist_active_task().ok();
         }
     }
 
@@ -175,7 +172,17 @@ impl<W> App<W> {
                 .unwrap_or(num_rows - 1);
             self.task_list_scroll.select(Some(self.selected_task_index));
             self.is_task_selection_pinned = true;
+            self.persist_active_task().ok();
         }
+    }
+
+    fn persist_active_task(&mut self) -> Result<(), Error> {
+        let active_task = self.active_task()?;
+        self.preferences.set_active_task(
+            self.is_task_selection_pinned
+                .then(|| active_task.to_owned()),
+        )?;
+        Ok(())
     }
 
     #[tracing::instrument(skip_all)]
@@ -190,7 +197,7 @@ impl<W> App<W> {
             results: SearchResults::new(&self.tasks_by_status),
         };
         // We set scroll as we want to keep the current selection
-        self.is_task_selection_pinned = true;
+        self.preferences.set_is_pinned_task_selection(Some(true))?;
         Ok(())
     }
 
@@ -586,18 +593,19 @@ pub async fn run_app(
     tasks: Vec<String>,
     receiver: AppReceiver,
     color_config: ColorConfig,
-    repo_root: AbsoluteSystemPathBuf,
+    repo_root: &AbsoluteSystemPath,
 ) -> Result<(), Error> {
+    let preferences = PreferenceLoader::new(repo_root)?;
     let mut terminal = startup(color_config)?;
     let size = terminal.size()?;
 
     let mut app: App<Box<dyn io::Write + Send>> =
-        App::new(size.height, size.width, tasks, &repo_root);
+        App::new(size.height, size.width, tasks, preferences);
     let (crossterm_tx, crossterm_rx) = mpsc::channel(1024);
     input::start_crossterm_stream(crossterm_tx);
 
     let (result, callback) =
-        match run_app_inner(&mut terminal, &mut app, receiver, crossterm_rx, repo_root).await {
+        match run_app_inner(&mut terminal, &mut app, receiver, crossterm_rx).await {
             Ok(callback) => (Ok(()), callback),
             Err(err) => {
                 debug!("tui shutting down: {err}");
@@ -617,7 +625,6 @@ async fn run_app_inner<B: Backend + std::io::Write>(
     app: &mut App<Box<dyn io::Write + Send>>,
     mut receiver: AppReceiver,
     mut crossterm_rx: mpsc::Receiver<crossterm::event::Event>,
-    repo_root: AbsoluteSystemPathBuf,
 ) -> Result<Option<oneshot::Sender<()>>, Error> {
     // Render initial state to paint the screen
     terminal.draw(|f| view(app, f))?;
@@ -644,10 +651,10 @@ async fn run_app_inner<B: Backend + std::io::Write>(
         if let Some(resize) = resize_event.take().or_else(|| resize_debouncer.query()) {
             // If we got a resize event, make sure to update ratatui backend.
             terminal.autoresize()?;
-            update(app, resize, &repo_root)?;
+            update(app, resize)?;
         }
         if let Some(event) = event {
-            callback = update(app, event, &repo_root)?;
+            callback = update(app, event)?;
             if app.done {
                 break;
             }
@@ -755,7 +762,6 @@ fn cleanup<B: Backend + io::Write>(
 fn update(
     app: &mut App<Box<dyn io::Write + Send>>,
     event: Event,
-    repo_root: &AbsoluteSystemPathBuf,
 ) -> Result<Option<oneshot::Sender<()>>, Error> {
     match event {
         Event::StartTask { task, output_logs } => {
@@ -788,31 +794,9 @@ fn update(
         }
         Event::Up => {
             app.previous();
-            let _ = preferences::Preferences::update_preference(
-                repo_root,
-                preferences::PreferenceFields::ActiveTask,
-                serde_json::Value::String(app.active_task()?.to_string()),
-            );
-
-            let _ = preferences::Preferences::update_preference(
-                repo_root,
-                preferences::PreferenceFields::PinnedTaskSelection,
-                serde_json::Value::Bool(true),
-            );
         }
         Event::Down => {
             app.next();
-            let _ = preferences::Preferences::update_preference(
-                repo_root,
-                preferences::PreferenceFields::ActiveTask,
-                serde_json::Value::String(app.active_task()?.to_string()),
-            );
-
-            let _ = preferences::Preferences::update_preference(
-                repo_root,
-                preferences::PreferenceFields::PinnedTaskSelection,
-                serde_json::Value::Bool(true),
-            );
         }
         Event::ScrollUp => {
             app.is_task_selection_pinned = true;
@@ -832,30 +816,13 @@ fn update(
         }
         Event::TogglePinnedTask => {
             app.is_task_selection_pinned = !app.is_task_selection_pinned;
-            let _ = preferences::Preferences::update_preference(
-                repo_root,
-                preferences::PreferenceFields::PinnedTaskSelection,
-                serde_json::Value::Bool(app.is_task_selection_pinned),
-            );
-
-            // Clear the selected task because the user has expressed that they don't care
-            // which task they're looking at right now. If they do care, they will either
-            // pin again or scroll through the task list.
-            if !app.is_task_selection_pinned {
-                let _ = preferences::Preferences::update_preference(
-                    repo_root,
-                    preferences::PreferenceFields::ActiveTask,
-                    serde_json::Value::String("".to_string()),
-                );
-            }
+            app.persist_active_task().ok();
         }
         Event::ToggleSidebar => {
-            app.has_sidebar = !app.has_sidebar;
-            let _ = preferences::Preferences::update_preference(
-                repo_root,
-                preferences::PreferenceFields::IsTaskListVisible,
-                serde_json::Value::Bool(app.has_sidebar),
-            );
+            let new_value = !app.preferences.is_task_list_visible();
+            app.preferences
+                .set_is_task_list_visible(Some(new_value))
+                .ok();
         }
         Event::ToggleHelpPopup => {
             app.showing_help_popup = !app.showing_help_popup;
@@ -911,7 +878,7 @@ fn update(
 
 fn view<W>(app: &mut App<W>, f: &mut Frame) {
     let cols = app.size.pane_cols();
-    let horizontal = if app.has_sidebar {
+    let horizontal = if app.preferences.is_task_list_visible() {
         Layout::horizontal([Constraint::Fill(1), Constraint::Length(cols)])
     } else {
         Layout::horizontal([Constraint::Max(0), Constraint::Length(cols)])
@@ -925,7 +892,7 @@ fn view<W>(app: &mut App<W>, f: &mut Frame) {
         output_logs,
         &active_task,
         &app.section_focus,
-        app.has_sidebar,
+        app.preferences.is_task_list_visible(),
     );
 
     let table_to_render = TaskTable::new(&app.tasks_by_status);
@@ -952,7 +919,8 @@ mod test {
             100,
             100,
             vec!["foo".to_string(), "bar".to_string(), "baz".to_string()],
-            &AbsoluteSystemPathBuf::default(),
+            // TODO: this will not work
+            PreferenceLoader::new(AbsoluteSystemPath::new("/").unwrap()).unwrap(),
         );
         assert_eq!(
             app.task_list_scroll.selected(),

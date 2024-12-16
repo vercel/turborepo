@@ -262,9 +262,8 @@ impl Run {
 
         let (sender, receiver) = TuiSender::new();
         let color_config = self.color_config;
-        let repo_root = self.repo_root.clone();
         let handle = tokio::task::spawn(async move {
-            Ok(tui::run_app(task_names, receiver, color_config, repo_root).await?)
+            Ok(tui::run_app(task_names, receiver, color_config, &self.repo_root).await?)
         });
 
         Ok(Some((sender, handle)))

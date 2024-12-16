@@ -138,6 +138,11 @@ impl TasksByStatus {
         running_names.chain(planned_names).chain(finished_names)
     }
 
+    pub fn task_index(&self, task_name: &str) -> Option<usize> {
+        self.task_names_in_displayed_order()
+            .position(|task| task == task_name)
+    }
+
     pub fn task_name(&self, index: usize) -> Result<&str, Error> {
         self.task_names_in_displayed_order()
             .nth(index)
