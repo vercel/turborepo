@@ -39,3 +39,10 @@ Set package manager to pnpm in package.json
 Run test run
   $ TURBO_LOG_VERBOSITY=off ${TURBO} config | jq .packageManager
   "pnpm"
+
+Set package manager to npm with custom URL in package.json
+  $ jq '.packageManager = "npm@https://registry.npmjs.org/some-npm-fork/-/some-npm-fork-1.0.0.tgz"' package.json > package.json.tmp && mv package.json.tmp package.json
+
+Run test run
+  $ TURBO_LOG_VERBOSITY=off ${TURBO} config | jq .packageManager
+  "npm"

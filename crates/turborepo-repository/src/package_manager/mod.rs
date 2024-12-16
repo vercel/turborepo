@@ -199,7 +199,7 @@ impl From<std::convert::Infallible> for Error {
 }
 
 static PACKAGE_MANAGER_PATTERN: Lazy<Regex> =
-    lazy_regex!(r"(?P<manager>bun|npm|pnpm|yarn)@(?P<version>\d+\.\d+\.\d+(-.+)?)");
+    lazy_regex!(r"(?P<manager>bun|npm|pnpm|yarn)@(?P<version>\d+\.\d+\.\d+(-.+)?|https?://.+)");
 
 impl PackageManager {
     pub fn supported_managers() -> &'static [Self] {
@@ -695,6 +695,13 @@ mod tests {
                 package_manager: Spanned::new("bun@1.0.1".to_owned()),
                 expected_manager: "bun".to_owned(),
                 expected_version: "1.0.1".to_owned(),
+                expected_error: false,
+            },
+            TestCase {
+                name: "supports custom URL".to_owned(),
+                package_manager: Spanned::new("npm@https://some-npm-fork".to_owned()),
+                expected_manager: "npm".to_owned(),
+                expected_version: "https://some-npm-fork".to_owned(),
                 expected_error: false,
             },
         ];
