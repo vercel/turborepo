@@ -40,6 +40,11 @@ impl PreferenceLoader {
         self.config.is_task_list_visible.unwrap_or(true)
     }
 
+    pub fn set_is_task_list_visible(&mut self, value: Option<bool>) -> Result<(), Error> {
+        self.config.is_task_list_visible = value;
+        self.flush_to_disk()
+    }
+
     pub fn active_task(&self) -> Option<&str> {
         let active_task = self.config.active_task.as_deref()?;
         Some(active_task)

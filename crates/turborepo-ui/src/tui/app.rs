@@ -156,7 +156,7 @@ impl<W> App<W> {
         self.preferences.set_active_task(
             self.is_task_selection_pinned
                 .then(|| active_task.to_owned()),
-        );
+        )?;
         Ok(())
     }
 
@@ -167,6 +167,7 @@ impl<W> App<W> {
             self.selected_task_index = (self.selected_task_index + 1) % num_rows;
             self.task_list_scroll.select(Some(self.selected_task_index));
             self.is_task_selection_pinned = true;
+            self.persist_active_task().ok();
         }
     }
 
@@ -180,6 +181,7 @@ impl<W> App<W> {
                 .unwrap_or(num_rows - 1);
             self.task_list_scroll.select(Some(self.selected_task_index));
             self.is_task_selection_pinned = true;
+            self.persist_active_task().ok();
         }
     }
 
@@ -816,7 +818,11 @@ fn update(
             app.is_task_selection_pinned = !app.is_task_selection_pinned;
         }
         Event::ToggleSidebar => {
-            app.has_sidebar = !app.has_sidebar;
+            let new_value = !app.preferences.is_task_list_visible();
+
+            app.preferences
+                .set_is_task_list_visible(Some(new_value))
+                .ok();
         }
         Event::ToggleHelpPopup => {
             app.showing_help_popup = !app.showing_help_popup;
@@ -872,7 +878,7 @@ fn update(
 
 fn view<W>(app: &mut App<W>, f: &mut Frame) {
     let cols = app.size.pane_cols();
-    let horizontal = if app.has_sidebar {
+    let horizontal = if app.preferences.is_task_list_visible() {
         Layout::horizontal([Constraint::Fill(1), Constraint::Length(cols)])
     } else {
         Layout::horizontal([Constraint::Max(0), Constraint::Length(cols)])
@@ -886,7 +892,7 @@ fn view<W>(app: &mut App<W>, f: &mut Frame) {
         output_logs,
         &active_task,
         &app.section_focus,
-        app.has_sidebar,
+        app.preferences.is_task_list_visible(),
     );
 
     let table_to_render = TaskTable::new(&app.tasks_by_status);
