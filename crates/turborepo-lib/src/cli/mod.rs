@@ -28,8 +28,8 @@ use turborepo_ui::{ColorConfig, GREY};
 use crate::{
     cli::error::print_potential_tasks,
     commands::{
-        bin, config, daemon, generate, info, link, login, logout, ls, prune, query, run, scan,
-        telemetry, unlink, CommandBase,
+        bin, boundaries, config, daemon, generate, info, link, login, logout, ls, prune, query,
+        run, scan, telemetry, unlink, CommandBase,
     },
     get_version,
     run::watch::WatchClient,
@@ -552,6 +552,7 @@ impl Args {
 pub enum Command {
     /// Get the path to the Turbo binary
     Bin,
+    Boundaries,
     /// Generate the autocompletion script for the specified shell
     Completion {
         shell: Shell,
@@ -1269,6 +1270,15 @@ pub async fn run(
                 .track_call();
             bin::run()?;
 
+            Ok(0)
+        }
+        Command::Boundaries => {
+            let event = CommandEventBuilder::new("boundaries").with_parent(&root_telemetry);
+
+            event.track_call();
+            let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
+
+            boundaries::run(base, event).await?;
             Ok(0)
         }
         #[allow(unused_variables)]

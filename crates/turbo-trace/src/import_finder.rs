@@ -9,6 +9,12 @@ pub struct ImportFinder {
     imports: Vec<(String, Span)>,
 }
 
+impl Default for ImportFinder {
+    fn default() -> Self {
+        Self::new(ImportType::All)
+    }
+}
+
 impl ImportFinder {
     pub fn new(import_type: ImportType) -> Self {
         Self {

@@ -20,6 +20,7 @@ mod daemon;
 mod diagnostics;
 mod engine;
 
+mod boundaries;
 mod framework;
 mod gitignore;
 pub(crate) mod globwatcher;

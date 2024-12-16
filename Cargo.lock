@@ -3617,9 +3617,9 @@ dependencies = [
 
 [[package]]
 name = "oxc_resolver"
-version = "2.1.0"
+version = "3.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ff67bf7c8cb5f4ea7537faa849892d8e13a408d50d0903aa40889fd395c66993"
+checksum = "bed381b6ab4bbfebfc7a011ad43b110ace8d201d02a39c0e09855f16b8f3f741"
 dependencies = [
  "cfg-if",
  "dashmap 6.1.0",
@@ -6116,7 +6116,7 @@ dependencies = [
  "futures",
  "globwalk",
  "miette",
- "oxc_resolver 2.1.0",
+ "oxc_resolver 3.0.3",
  "swc_common",
  "swc_ecma_ast",
  "swc_ecma_parser",
@@ -6426,6 +6426,7 @@ dependencies = [
  "notify",
  "num_cpus",
  "owo-colors",
+ "oxc_resolver 3.0.3",
  "path-clean",
  "petgraph",
  "pidlock",
@@ -6450,6 +6451,7 @@ dependencies = [
  "swc_common",
  "swc_ecma_ast",
  "swc_ecma_parser",
+ "swc_ecma_visit",
  "sysinfo",
  "tabwriter",
  "tempfile",

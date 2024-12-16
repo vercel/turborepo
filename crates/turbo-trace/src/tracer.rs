@@ -344,7 +344,7 @@ impl Tracer {
         }
     }
 
-    pub fn create_resolver(&mut self) -> Resolver {
+    pub fn create_resolver(ts_config: Option<AbsoluteSystemPathBuf>) -> Resolver {
         let mut options = ResolveOptions::default()
             .with_builtin_modules(true)
             .with_force_extension(EnforceExtension::Disabled)
@@ -362,7 +362,7 @@ impl Tracer {
             // We add a bunch so oxc_resolver can resolve all kinds of imports.
             .with_condition_names(&["import", "require", "node", "types", "default"]);
 
-        if let Some(ts_config) = self.ts_config.take() {
+        if let Some(ts_config) = ts_config {
             options.tsconfig = Some(TsconfigOptions {
                 config_file: ts_config.into(),
                 references: TsconfigReferences::Auto,
@@ -374,7 +374,7 @@ impl Tracer {
 
     pub async fn trace(mut self, max_depth: Option<usize>) -> TraceResult {
         let mut seen: HashMap<AbsoluteSystemPathBuf, SeenFile> = HashMap::new();
-        let resolver = self.create_resolver();
+        let resolver = Self::create_resolver(self.ts_config.take());
 
         while let Some((file_path, file_depth)) = self.files.pop() {
             if let Some(max_depth) = max_depth {
@@ -420,7 +420,7 @@ impl Tracer {
 
         let mut futures = JoinSet::new();
 
-        let resolver = Arc::new(self.create_resolver());
+        let resolver = Arc::new(Self::create_resolver(self.ts_config.take()));
         let source_map = self.source_map.clone();
         let shared_self = Arc::new(self);
 
