@@ -24,6 +24,8 @@ pub enum Error {
     #[error("{0}")]
     Bin(#[from] bin::Error, #[backtrace] backtrace::Backtrace),
     #[error(transparent)]
+    Boundaries(#[from] crate::boundaries::Error),
+    #[error(transparent)]
     Path(#[from] turbopath::PathError),
     #[error(transparent)]
     #[diagnostic(transparent)]
