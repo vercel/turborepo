@@ -55,6 +55,7 @@ pub struct App<W> {
     section_focus: LayoutSections,
     task_list_scroll: TableState,
     selected_task_index: usize,
+    // is_task_list_visible: bool,
     is_task_selection_pinned: bool,
     showing_help_popup: bool,
     done: bool,
@@ -104,6 +105,7 @@ impl<W> App<W> {
             selected_task_index,
             tasks_by_status: tasks_by_status.clone(),
             task_list_scroll: TableState::default().with_selected(selected_task_index),
+            // is_task_list_visible: preferences.is_task_list_visible(),
             showing_help_popup: false,
             is_task_selection_pinned: preferences.active_task().is_some(),
             preferences,
@@ -132,9 +134,10 @@ impl<W> App<W> {
     }
 
     fn update_sidebar_toggle(&mut self) {
-        let value = Some(self.preferences.is_task_list_visible());
+        let value = !self.preferences.is_task_list_visible();
 
-        self.preferences.set_is_task_list_visible(value).ok();
+        // self.is_task_list_visible = value;
+        self.preferences.set_is_task_list_visible(Some(value)).ok();
     }
 
     pub fn get_full_task(&self) -> Result<&TerminalOutput<W>, Error> {
@@ -756,6 +759,7 @@ fn cleanup<B: Backend + io::Write>(
     )?;
     let tasks_started = app.tasks_by_status.tasks_started();
     app.persist_tasks(tasks_started)?;
+    app.preferences.flush_to_disk().ok();
     crossterm::terminal::disable_raw_mode()?;
     terminal.show_cursor()?;
     // We can close the channel now that terminal is back restored to a normal state

@@ -34,7 +34,7 @@ impl PreferenceLoader {
 
     pub fn set_is_task_list_visible(&mut self, value: Option<bool>) -> Result<(), Error> {
         self.config.is_task_list_visible = value;
-        self.flush_to_disk()
+        Ok(())
     }
 
     pub fn active_task(&self) -> Option<&str> {
@@ -44,10 +44,10 @@ impl PreferenceLoader {
 
     pub fn set_active_task(&mut self, value: Option<String>) -> Result<(), Error> {
         self.config.active_task = value;
-        self.flush_to_disk()
+        Ok(())
     }
 
-    fn flush_to_disk(&self) -> Result<(), Error> {
+    pub fn flush_to_disk(&self) -> Result<(), Error> {
         self.file_path.ensure_dir()?;
         self.file_path
             .create_with_contents(serde_json::to_string_pretty(&self.config)?)?;
