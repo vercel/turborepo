@@ -60,7 +60,6 @@ impl PreferenceLoader {
 pub struct Preferences {
     pub is_task_list_visible: Option<bool>,
     pub active_task: Option<String>,
-    pub is_pinned_task_selection: Option<bool>,
 }
 
 impl Default for Preferences {
@@ -68,7 +67,6 @@ impl Default for Preferences {
         Self {
             active_task: None,
             is_task_list_visible: Some(true),
-            is_pinned_task_selection: Some(false),
         }
     }
 }
@@ -88,7 +86,6 @@ mod test {
         let preferences = Preferences::default();
         assert_eq!(preferences.active_task, None);
         assert_eq!(preferences.is_task_list_visible, Some(true));
-        assert_eq!(preferences.is_pinned_task_selection, Some(false));
     }
 
     #[test]
@@ -130,7 +127,6 @@ mod test {
         let preferences = Preferences {
             active_task: Some("web#dev".to_owned()),
             is_task_list_visible: Some(false),
-            is_pinned_task_selection: Some(true),
         };
 
         loader
@@ -161,7 +157,6 @@ mod test {
         let preferences = Preferences {
             active_task: Some("web#dev".to_owned()),
             is_task_list_visible: Some(false),
-            is_pinned_task_selection: Some(true),
         };
 
         loader
