@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 
+use git2::Repository;
 use itertools::Itertools;
 use miette::{Diagnostic, NamedSource, Report, SourceSpan};
 use oxc_resolver::{ResolveError, Resolver};
@@ -35,18 +36,21 @@ pub enum Error {
 impl Run {
     pub async fn check_boundaries(&self) -> Result<(), Error> {
         let packages = self.pkg_dep_graph().packages();
+        let repo = Repository::discover(&self.repo_root()).ok();
         for (package_name, package_info) in packages {
             let package_root = self.repo_root().resolve(package_info.package_path());
             let dependencies = self
                 .pkg_dep_graph()
                 .immediate_dependencies(&PackageNode::Workspace(package_name.to_owned()))
                 .unwrap_or_default();
-            self.check_package(&package_root, dependencies).await?;
+            self.check_package(&repo, &package_root, dependencies)
+                .await?;
         }
         Ok(())
     }
     async fn check_package(
         &self,
+        repo: &Option<Repository>,
         package_root: &AbsoluteSystemPath,
         dependencies: HashSet<&PackageNode>,
     ) -> Result<(), Error> {
@@ -57,6 +61,8 @@ impl Run {
                 "**/*.jsx".parse().unwrap(),
                 "**/*.ts".parse().unwrap(),
                 "**/*.tsx".parse().unwrap(),
+                "**/*.vue".parse().unwrap(),
+                "**/*.svelte".parse().unwrap(),
             ],
             &["**/node_modules/**".parse().unwrap()],
             globwalk::WalkType::Files,
@@ -68,6 +74,11 @@ impl Run {
         let resolver = Tracer::create_resolver(None);
 
         for file_path in files {
+            if let Some(repo) = repo {
+                if matches!(repo.status_should_ignore(file_path.as_std_path()), Ok(true)) {
+                    continue;
+                }
+            };
             // Read the file content
             let Ok(file_content) = tokio::fs::read_to_string(&file_path).await else {
                 errors.push(Error::FileNotFound(file_path.to_owned()));
