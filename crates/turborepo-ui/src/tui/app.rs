@@ -82,7 +82,7 @@ impl<W> App<W> {
         let pane_rows = size.pane_rows();
         let pane_cols = size.pane_cols();
 
-        // Attempt to load previous selection. If not, go to 0.
+        // Attempt to load previous selection. If there isn't one, go to index 0.
         let selected_task_index = preferences
             .active_task()
             .and_then(|active_task| tasks_by_status.active_index(active_task))
