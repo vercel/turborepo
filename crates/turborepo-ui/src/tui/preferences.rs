@@ -73,8 +73,106 @@ impl Default for Preferences {
     }
 }
 
-#[test]
-fn default_preferences() {
-    let preferences = Preferences::default();
-    assert!(preferences.is_task_list_visible.unwrap(), "true");
+#[cfg(test)]
+mod test {
+    use tempfile::tempdir;
+
+    use super::*;
+
+    fn create_loader(repo_root: AbsoluteSystemPathBuf) -> PreferenceLoader {
+        PreferenceLoader::new(&repo_root).expect("Failed to create PreferenceLoader")
+    }
+
+    #[test]
+    fn default_preferences() {
+        let preferences = Preferences::default();
+        assert_eq!(preferences.active_task, None);
+        assert_eq!(preferences.is_task_list_visible, Some(true));
+        assert_eq!(preferences.is_pinned_task_selection, Some(false));
+    }
+
+    #[test]
+    fn task_list_visible_when_no_preferences() {
+        let repo_root_tmp = tempdir().expect("Failed to create tempdir");
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+        let loader = create_loader(repo_root);
+
+        let visibility = PreferenceLoader::is_task_list_visible(&loader);
+        assert!(visibility);
+    }
+
+    #[test]
+    fn task_is_none_when_no_preferences() {
+        let repo_root_tmp = tempdir().expect("Failed to create tempdir");
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let loader = create_loader(repo_root);
+
+        let task = PreferenceLoader::active_task(&loader);
+        assert_eq!(task, None);
+    }
+
+    #[test]
+    fn sets_active_task() {
+        let repo_root_tmp = tempdir().expect("Failed to create tempdir");
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let loader = create_loader(repo_root.clone());
+
+        loader
+            .file_path
+            .ensure_dir()
+            .expect("Failed to create directory");
+
+        let preferences = Preferences {
+            active_task: Some("web#dev".to_owned()),
+            is_task_list_visible: Some(false),
+            is_pinned_task_selection: Some(true),
+        };
+
+        loader
+            .file_path
+            .create_with_contents(
+                serde_json::to_string_pretty(&preferences)
+                    .expect("Failed to serialize preferences"),
+            )
+            .expect("Failed to create file");
+
+        let task = PreferenceLoader::new(&repo_root).expect("Failed to create PreferenceLoader");
+        assert_eq!(task.active_task(), Some("web#dev"));
+    }
+
+    #[test]
+    fn sets_task_list_visibility() {
+        let repo_root_tmp = tempdir().expect("Failed to create tempdir");
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let loader = create_loader(repo_root.clone());
+
+        loader
+            .file_path
+            .ensure_dir()
+            .expect("Failed to create directory");
+
+        let preferences = Preferences {
+            active_task: Some("web#dev".to_owned()),
+            is_task_list_visible: Some(false),
+            is_pinned_task_selection: Some(true),
+        };
+
+        loader
+            .file_path
+            .create_with_contents(
+                serde_json::to_string_pretty(&preferences)
+                    .expect("Failed to serialize preferences"),
+            )
+            .expect("Failed to create file");
+
+        let task = PreferenceLoader::new(&repo_root).expect("Failed to create PreferenceLoader");
+        assert!(!task.is_task_list_visible());
+    }
 }
