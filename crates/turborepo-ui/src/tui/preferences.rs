@@ -32,9 +32,8 @@ impl PreferenceLoader {
         self.config.is_task_list_visible.unwrap_or(true)
     }
 
-    pub fn set_is_task_list_visible(&mut self, value: Option<bool>) -> Result<(), Error> {
+    pub fn set_is_task_list_visible(&mut self, value: Option<bool>) {
         self.config.is_task_list_visible = value;
-        Ok(())
     }
 
     pub fn active_task(&self) -> Option<&str> {

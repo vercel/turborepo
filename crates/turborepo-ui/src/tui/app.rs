@@ -102,7 +102,7 @@ impl<W> App<W> {
                 })
                 .collect(),
             selected_task_index,
-            tasks_by_status: tasks_by_status.clone(),
+            tasks_by_status,
             task_list_scroll: TableState::default().with_selected(selected_task_index),
             showing_help_popup: false,
             is_task_selection_pinned: preferences.active_task().is_some(),
@@ -133,13 +133,14 @@ impl<W> App<W> {
 
     fn update_sidebar_toggle(&mut self) {
         let value = !self.preferences.is_task_list_visible();
-        self.preferences.set_is_task_list_visible(Some(value)).ok();
+        self.preferences.set_is_task_list_visible(Some(value));
     }
 
-    fn update_task_selection_pinned_state(&mut self) {
+    fn update_task_selection_pinned_state(&mut self) -> Result<(), Error> {
         // Preferences assume a pinned state when there is an active task.
         // This `None` creates "un-pinned-ness" on the next TUI startup.
-        self.preferences.set_active_task(None).ok();
+        self.preferences.set_active_task(None)?;
+        Ok(())
     }
 
     pub fn get_full_task(&self) -> Result<&TerminalOutput<W>, Error> {
@@ -825,7 +826,7 @@ fn update(
             app.interact()?;
         }
         Event::TogglePinnedTask => {
-            app.update_task_selection_pinned_state();
+            app.update_task_selection_pinned_state()?;
         }
         Event::ToggleSidebar => {
             app.update_sidebar_toggle();
