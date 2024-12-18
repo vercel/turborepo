@@ -118,3 +118,23 @@ Make sure to run your package manager's install command. You also may need to up
 ### Customizing tasks
 
 By default, the new application will use the tasks defined in the root `turbo.json`. If you'd like to configure tasks differently for the new application, use [Package Configurations](/repo/docs/reference/package-configurations).
+
+## Creating packages with Next.js bindings
+
+At times, you may want to create a package that has bindings specific to Next.js. For example, you may want the package to be using the Next.js `<Link />` component. In these cases, install `next` directly into the package and use it there.
+
+These bindings may make your package incompatible with other frameworks or packages that are not using Next.js. To ensure compatibility, create a specific entrypoint to your package for your Next.js adapter code.
+
+```json title="./packages/ui/package.json"
+{
+  "exports": {
+    "./link": "./dist/link.js"
+    "./image": "./dist/image.js"
+    "./next-js/link": "./dist/link.js"
+    "./next-js/image": "./dist/image.js"
+  },
+  "peerDependencies": {
+    "next": "*" // You may want to specify a version range, according to your package's needs and constraints
+  }
+}
+```
