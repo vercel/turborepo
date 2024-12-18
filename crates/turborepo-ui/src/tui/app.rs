@@ -16,6 +16,7 @@ use tokio::{
     time::Instant,
 };
 use tracing::{debug, trace};
+use turbopath::AbsoluteSystemPathBuf;
 
 use crate::tui::popup::{popup, popup_area};
 
@@ -25,6 +26,7 @@ const RESIZE_DEBOUNCE_DELAY: Duration = Duration::from_millis(10);
 use super::{
     event::{CacheResult, Direction, OutputLogs, PaneSize, TaskResult},
     input,
+    preferences::PreferenceLoader,
     search::SearchResults,
     AppReceiver, Debouncer, Error, Event, InputOptions, SizeInfo, TaskTable, TerminalPane,
 };
@@ -54,13 +56,13 @@ pub struct App<W> {
     task_list_scroll: TableState,
     selected_task_index: usize,
     is_task_selection_pinned: bool,
-    has_sidebar: bool,
     showing_help_popup: bool,
     done: bool,
+    preferences: PreferenceLoader,
 }
 
 impl<W> App<W> {
-    pub fn new(rows: u16, cols: u16, tasks: Vec<String>) -> Self {
+    pub fn new(rows: u16, cols: u16, tasks: Vec<String>, preferences: PreferenceLoader) -> Self {
         debug!("tasks: {tasks:?}");
         let size = SizeInfo::new(rows, cols, tasks.iter().map(|s| s.as_str()));
 
@@ -77,11 +79,14 @@ impl<W> App<W> {
             running: Vec::new(),
         };
 
-        let has_user_interacted = false;
-        let selected_task_index: usize = 0;
-
         let pane_rows = size.pane_rows();
         let pane_cols = size.pane_cols();
+
+        // Attempt to load previous selection. If there isn't one, go to index 0.
+        let selected_task_index = preferences
+            .active_task()
+            .and_then(|active_task| tasks_by_status.active_index(active_task))
+            .unwrap_or(0);
 
         Self {
             size,
@@ -96,12 +101,12 @@ impl<W> App<W> {
                     )
                 })
                 .collect(),
+            selected_task_index,
             tasks_by_status,
             task_list_scroll: TableState::default().with_selected(selected_task_index),
-            selected_task_index,
-            has_sidebar: true,
             showing_help_popup: false,
-            is_task_selection_pinned: has_user_interacted,
+            is_task_selection_pinned: preferences.active_task().is_some(),
+            preferences,
         }
     }
 
@@ -126,6 +131,18 @@ impl<W> App<W> {
         })
     }
 
+    fn update_sidebar_toggle(&mut self) {
+        let value = !self.preferences.is_task_list_visible();
+        self.preferences.set_is_task_list_visible(Some(value));
+    }
+
+    fn update_task_selection_pinned_state(&mut self) -> Result<(), Error> {
+        // Preferences assume a pinned state when there is an active task.
+        // This `None` creates "un-pinned-ness" on the next TUI startup.
+        self.preferences.set_active_task(None)?;
+        Ok(())
+    }
+
     pub fn get_full_task(&self) -> Result<&TerminalOutput<W>, Error> {
         let active_task = self.active_task()?;
         self.tasks
@@ -144,6 +161,15 @@ impl<W> App<W> {
             .ok_or_else(|| Error::TaskNotFound { name: active_task })
     }
 
+    fn persist_active_task(&mut self) -> Result<(), Error> {
+        let active_task = self.active_task()?;
+        self.preferences.set_active_task(
+            self.is_task_selection_pinned
+                .then(|| active_task.to_owned()),
+        )?;
+        Ok(())
+    }
+
     #[tracing::instrument(skip(self))]
     pub fn next(&mut self) {
         let num_rows = self.tasks_by_status.count_all();
@@ -151,6 +177,7 @@ impl<W> App<W> {
             self.selected_task_index = (self.selected_task_index + 1) % num_rows;
             self.task_list_scroll.select(Some(self.selected_task_index));
             self.is_task_selection_pinned = true;
+            self.persist_active_task().ok();
         }
     }
 
@@ -164,6 +191,7 @@ impl<W> App<W> {
                 .unwrap_or(num_rows - 1);
             self.task_list_scroll.select(Some(self.selected_task_index));
             self.is_task_selection_pinned = true;
+            self.persist_active_task().ok();
         }
     }
 
@@ -575,11 +603,14 @@ pub async fn run_app(
     tasks: Vec<String>,
     receiver: AppReceiver,
     color_config: ColorConfig,
+    repo_root: &AbsoluteSystemPathBuf,
 ) -> Result<(), Error> {
     let mut terminal = startup(color_config)?;
     let size = terminal.size()?;
+    let preferences = PreferenceLoader::new(repo_root)?;
 
-    let mut app: App<Box<dyn io::Write + Send>> = App::new(size.height, size.width, tasks);
+    let mut app: App<Box<dyn io::Write + Send>> =
+        App::new(size.height, size.width, tasks, preferences);
     let (crossterm_tx, crossterm_rx) = mpsc::channel(1024);
     input::start_crossterm_stream(crossterm_tx);
 
@@ -617,6 +648,7 @@ async fn run_app_inner<B: Backend + std::io::Write>(
         if !matches!(event, Event::Tick) {
             needs_rerender = true;
         }
+
         let mut event = Some(event);
         let mut resize_event = None;
         if matches!(event, Some(Event::Resize { .. })) {
@@ -730,6 +762,7 @@ fn cleanup<B: Backend + io::Write>(
     )?;
     let tasks_started = app.tasks_by_status.tasks_started();
     app.persist_tasks(tasks_started)?;
+    app.preferences.flush_to_disk().ok();
     crossterm::terminal::disable_raw_mode()?;
     terminal.show_cursor()?;
     // We can close the channel now that terminal is back restored to a normal state
@@ -792,14 +825,14 @@ fn update(
             app.is_task_selection_pinned = true;
             app.interact()?;
         }
+        Event::TogglePinnedTask => {
+            app.update_task_selection_pinned_state()?;
+        }
         Event::ToggleSidebar => {
-            app.has_sidebar = !app.has_sidebar;
+            app.update_sidebar_toggle();
         }
         Event::ToggleHelpPopup => {
             app.showing_help_popup = !app.showing_help_popup;
-        }
-        Event::TogglePinnedTask => {
-            app.is_task_selection_pinned = !app.is_task_selection_pinned;
         }
         Event::Input { bytes } => {
             app.forward_input(&bytes)?;
@@ -852,7 +885,7 @@ fn update(
 
 fn view<W>(app: &mut App<W>, f: &mut Frame) {
     let cols = app.size.pane_cols();
-    let horizontal = if app.has_sidebar {
+    let horizontal = if app.preferences.is_task_list_visible() {
         Layout::horizontal([Constraint::Fill(1), Constraint::Length(cols)])
     } else {
         Layout::horizontal([Constraint::Max(0), Constraint::Length(cols)])
@@ -866,7 +899,7 @@ fn view<W>(app: &mut App<W>, f: &mut Frame) {
         output_logs,
         &active_task,
         &app.section_focus,
-        app.has_sidebar,
+        app.preferences.is_task_list_visible(),
     );
 
     let table_to_render = TaskTable::new(&app.tasks_by_status);
@@ -884,15 +917,23 @@ fn view<W>(app: &mut App<W>, f: &mut Frame) {
 
 #[cfg(test)]
 mod test {
+    use tempfile::tempdir;
+    use turbopath::AbsoluteSystemPathBuf;
+
     use super::*;
     use crate::tui::event::CacheResult;
 
     #[test]
-    fn test_scroll() {
+    fn test_scroll() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
         let mut app: App<bool> = App::new(
             100,
             100,
             vec!["foo".to_string(), "bar".to_string(), "baz".to_string()],
+            PreferenceLoader::new(&repo_root)?,
         );
         assert_eq!(
             app.task_list_scroll.selected(),
@@ -926,14 +967,20 @@ mod test {
             Some(2),
             "scroll stays in bounds"
         );
+        Ok(())
     }
 
     #[test]
     fn test_selection_follows() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
         let mut app: App<bool> = App::new(
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
+            PreferenceLoader::new(&repo_root)?,
         );
         app.next();
         assert_eq!(app.task_list_scroll.selected(), Some(1), "selected b");
@@ -952,10 +999,15 @@ mod test {
 
     #[test]
     fn test_restart_task() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
         let mut app: App<()> = App::new(
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
+            PreferenceLoader::new(&repo_root)?,
         );
         app.next();
         app.next();
@@ -1018,10 +1070,15 @@ mod test {
 
     #[test]
     fn test_selection_stable() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
         let mut app: App<bool> = App::new(
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
+            PreferenceLoader::new(&repo_root)?,
         );
         app.next();
         app.next();
@@ -1064,7 +1121,16 @@ mod test {
 
     #[test]
     fn test_forward_stdin() -> Result<(), Error> {
-        let mut app: App<Vec<u8>> = App::new(100, 100, vec!["a".to_string(), "b".to_string()]);
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let mut app: App<Vec<u8>> = App::new(
+            100,
+            100,
+            vec!["a".to_string(), "b".to_string()],
+            PreferenceLoader::new(&repo_root)?,
+        );
         app.next();
         assert_eq!(app.task_list_scroll.selected(), Some(1), "selected b");
         assert_eq!(app.tasks_by_status.task_name(1)?, "b", "selected b");
@@ -1097,7 +1163,16 @@ mod test {
 
     #[test]
     fn test_interact() -> Result<(), Error> {
-        let mut app: App<Vec<u8>> = App::new(100, 100, vec!["a".to_string(), "b".to_string()]);
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let mut app: App<Vec<u8>> = App::new(
+            100,
+            100,
+            vec!["a".to_string(), "b".to_string()],
+            PreferenceLoader::new(&repo_root)?,
+        );
         assert!(!app.is_focusing_pane(), "app starts focused on table");
         app.insert_stdin("a", Some(Vec::new()))?;
 
@@ -1119,7 +1194,16 @@ mod test {
 
     #[test]
     fn test_task_status() -> Result<(), Error> {
-        let mut app: App<Vec<u8>> = App::new(100, 100, vec!["a".to_string(), "b".to_string()]);
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let mut app: App<Vec<u8>> = App::new(
+            100,
+            100,
+            vec!["a".to_string(), "b".to_string()],
+            PreferenceLoader::new(&repo_root)?,
+        );
         app.next();
         assert_eq!(app.task_list_scroll.selected(), Some(1), "selected b");
         assert_eq!(app.tasks_by_status.task_name(1)?, "b", "selected b");
@@ -1136,10 +1220,15 @@ mod test {
 
     #[test]
     fn test_restarting_task_no_scroll() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
         let mut app: App<()> = App::new(
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
+            PreferenceLoader::new(&repo_root)?,
         );
         assert_eq!(app.task_list_scroll.selected(), Some(0), "selected a");
         assert_eq!(app.tasks_by_status.task_name(0)?, "a", "selected a");
@@ -1166,10 +1255,15 @@ mod test {
 
     #[test]
     fn test_restarting_task() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
         let mut app: App<()> = App::new(
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
+            PreferenceLoader::new(&repo_root)?,
         );
         app.next();
         assert_eq!(app.task_list_scroll.selected(), Some(1), "selected b");
@@ -1197,7 +1291,16 @@ mod test {
 
     #[test]
     fn test_resize() -> Result<(), Error> {
-        let mut app: App<Vec<u8>> = App::new(20, 24, vec!["a".to_string(), "b".to_string()]);
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let mut app: App<Vec<u8>> = App::new(
+            20,
+            24,
+            vec!["a".to_string(), "b".to_string()],
+            PreferenceLoader::new(&repo_root)?,
+        );
         let pane_rows = app.size.pane_rows();
         let pane_cols = app.size.pane_cols();
         for (name, task) in app.tasks.iter() {
@@ -1228,10 +1331,15 @@ mod test {
 
     #[test]
     fn test_update_empty_task_list() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
         let mut app: App<()> = App::new(
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
+            PreferenceLoader::new(&repo_root)?,
         );
         app.next();
         app.update_tasks(Vec::new())?;
@@ -1242,10 +1350,15 @@ mod test {
 
     #[test]
     fn test_restart_missing_task() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
         let mut app: App<()> = App::new(
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
+            PreferenceLoader::new(&repo_root)?,
         );
         app.next();
         app.restart_tasks(vec!["d".to_string()])?;
@@ -1258,10 +1371,15 @@ mod test {
 
     #[test]
     fn test_search_backspace_exits_search() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
         let mut app: App<()> = App::new(
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
+            PreferenceLoader::new(&repo_root)?,
         );
         app.enter_search()?;
         assert!(matches!(app.section_focus, LayoutSections::Search { .. }));
@@ -1279,10 +1397,15 @@ mod test {
 
     #[test]
     fn test_search_moves_with_typing() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
         let mut app: App<()> = App::new(
             100,
             100,
             vec!["a".to_string(), "ab".to_string(), "abc".to_string()],
+            PreferenceLoader::new(&repo_root)?,
         );
         app.enter_search()?;
         app.search_enter_char('a')?;
@@ -1302,10 +1425,15 @@ mod test {
 
     #[test]
     fn test_search_scroll() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
         let mut app: App<()> = App::new(
             100,
             100,
             vec!["a".to_string(), "ab".to_string(), "abc".to_string()],
+            PreferenceLoader::new(&repo_root)?,
         );
         app.enter_search()?;
         app.search_enter_char('b')?;
@@ -1329,10 +1457,15 @@ mod test {
 
     #[test]
     fn test_exit_search_restore_selection() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
         let mut app: App<()> = App::new(
             100,
             100,
             vec!["a".to_string(), "abc".to_string(), "b".to_string()],
+            PreferenceLoader::new(&repo_root)?,
         );
         app.next();
         assert_eq!(app.active_task()?, "abc");
@@ -1348,10 +1481,15 @@ mod test {
 
     #[test]
     fn test_exit_search_keep_selection() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
         let mut app: App<()> = App::new(
             100,
             100,
             vec!["a".to_string(), "abc".to_string(), "b".to_string()],
+            PreferenceLoader::new(&repo_root)?,
         );
         app.next();
         assert_eq!(app.active_task()?, "abc");
@@ -1367,10 +1505,15 @@ mod test {
 
     #[test]
     fn test_select_update_task_removes_task() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
         let mut app: App<()> = App::new(
             100,
             100,
             vec!["a".to_string(), "ab".to_string(), "abc".to_string()],
+            PreferenceLoader::new(&repo_root)?,
         );
         app.enter_search()?;
         app.search_enter_char('b')?;
@@ -1383,10 +1526,15 @@ mod test {
 
     #[test]
     fn test_select_restart_tasks_reorders_tasks() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
         let mut app: App<()> = App::new(
             100,
             100,
             vec!["a".to_string(), "ab".to_string(), "abc".to_string()],
+            PreferenceLoader::new(&repo_root)?,
         );
         app.enter_search()?;
         app.search_enter_char('b')?;
