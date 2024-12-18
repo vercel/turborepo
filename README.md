@@ -29,7 +29,7 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for more information.
 
 The Turborepo community can be found on [GitHub Discussions](https://github.com/vercel/turborepo/discussions), where you can ask questions, voice ideas, and share your projects.
 
-To chat with other community members, you can join the [Turborepo Discord](https://turbo.build/discord).
+To chat with other community members, you can join [Vercel Community's `#turborepo` tag](https://vercel.community/tag/turborepo).
 
 Our [Code of Conduct](https://github.com/vercel/turborepo/blob/main/CODE_OF_CONDUCT.md) applies to all Turborepo community channels.
 
