@@ -10,20 +10,25 @@ pub enum Error {
 }
 
 /// A yarnrc.yaml file representing settings affecting the package graph.
-#[allow(non_snake_case)]
 #[derive(Debug, PartialEq, Eq, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct YarnRc {
     /// Used by Yarn(Berry) as `enableTransparentWorkspaces`.
     /// When true, treats local workspaces that match a package name
     /// and semver range as correct match resulting in turbo including
     /// the package in the dependency graph
-    pub enableTransparentWorkspaces: bool,
+    #[serde(default = "default_enable_transparent_workspaces")]
+    pub enable_transparent_workspaces: bool,
+}
+
+fn default_enable_transparent_workspaces() -> bool {
+    true
 }
 
 impl Default for YarnRc {
     fn default() -> YarnRc {
         YarnRc {
-            enableTransparentWorkspaces: true,
+            enable_transparent_workspaces: default_enable_transparent_workspaces(),
         }
     }
 }
@@ -45,7 +50,7 @@ mod test {
         assert_eq!(
             empty,
             YarnRc {
-                enableTransparentWorkspaces: true
+                enable_transparent_workspaces: true
             }
         );
     }
@@ -56,7 +61,18 @@ mod test {
         assert_eq!(
             empty,
             YarnRc {
-                enableTransparentWorkspaces: false
+                enable_transparent_workspaces: false
+            }
+        );
+    }
+
+    #[test]
+    fn test_parses_additional_settings() {
+        let empty = YarnRc::from_reader(b"httpProxy: \"http://my-proxy.com\"".as_slice()).unwrap();
+        assert_eq!(
+            empty,
+            YarnRc {
+                enable_transparent_workspaces: true
             }
         );
     }

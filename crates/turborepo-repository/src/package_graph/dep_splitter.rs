@@ -30,7 +30,7 @@ impl<'a> DependencySplitter<'a> {
             workspaces,
             link_workspace_packages: npmrc
                 .and_then(|npmrc| npmrc.link_workspace_packages)
-                .or_else(|| yarnrc.map(|yarnrc| yarnrc.enableTransparentWorkspaces))
+                .or_else(|| yarnrc.map(|yarnrc| yarnrc.enable_transparent_workspaces))
                 .unwrap_or(!matches!(package_manager, PackageManager::Pnpm9)),
         }
     }
