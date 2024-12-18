@@ -2,9 +2,14 @@ use std::io;
 
 use serde::Deserialize;
 use serde_yaml;
+use turbopath::AbsoluteSystemPath;
+
+pub const YARNRC_FILENAME: &str = ".yarnrc.yml";
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error("encountered error opening yarnrc.yml: {0}")]
+    Io(#[from] std::io::Error),
     #[error("encountered error parsing yarnrc.yml: {0}")]
     SerdeYaml(#[from] serde_yaml::Error),
 }
@@ -37,6 +42,16 @@ impl YarnRc {
     pub fn from_reader(mut reader: impl io::Read) -> Result<Self, Error> {
         let config: YarnRc = serde_yaml::from_reader(&mut reader)?;
         Ok(config)
+    }
+
+    pub fn from_file(repo_root: &AbsoluteSystemPath) -> Result<Self, Error> {
+        let yarnrc_path = repo_root.join_component(YARNRC_FILENAME);
+        let yarnrc = yarnrc_path
+            .read_existing_to_string()?
+            .map(|contents| Self::from_reader(contents.as_bytes()))
+            .transpose()?
+            .unwrap_or_default();
+        Ok(yarnrc)
     }
 }
 

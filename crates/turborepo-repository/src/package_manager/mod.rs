@@ -1,7 +1,9 @@
 mod bun;
 mod npm;
+mod npmrc;
 mod pnpm;
 mod yarn;
+mod yarnrc;
 
 use std::{
     backtrace,
@@ -16,13 +18,16 @@ use lazy_regex::{lazy_regex, Lazy};
 use miette::{Diagnostic, NamedSource, SourceSpan};
 use node_semver::SemverError;
 use npm::NpmDetector;
+use npmrc::NpmRc;
 use regex::Regex;
 use serde::Deserialize;
 use thiserror::Error;
+use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, RelativeUnixPath};
 use turborepo_errors::Spanned;
 use turborepo_lockfiles::Lockfile;
 use which::which;
+use yarnrc::YarnRc;
 
 use crate::{
     discovery,
@@ -190,6 +195,8 @@ pub enum Error {
     WorkspaceDiscovery(#[from] discovery::Error),
     #[error("missing packageManager field in package.json")]
     MissingPackageManager,
+    #[error(transparent)]
+    Yarnrc(#[from] yarnrc::Error),
 }
 
 impl From<std::convert::Infallible> for Error {
@@ -545,6 +552,34 @@ impl PackageManager {
             PackageManager::Pnpm | PackageManager::Pnpm9 | PackageManager::Berry => None,
         }
     }
+
+    /// Returns whether or not the package manager will select a package in the
+    /// workspace as a dependency if the `workspace:` protocol isn't used.
+    /// For example if a package in the workspace has `"lib": "1.2.3"` and
+    /// there's a package in the workspace with the name of `lib` and
+    /// version `1.2.3` if this is true, then the local `lib` package will
+    /// be used where `false` would use a `lib` package from the registry.
+    pub fn link_workspace_packages(&self, repo_root: &AbsoluteSystemPath) -> bool {
+        match self {
+            PackageManager::Berry => {
+                let yarnrc = YarnRc::from_file(repo_root)
+                    .inspect_err(|e| debug!("unable to read yarnrc: {e}"))
+                    .unwrap_or_default();
+                yarnrc.enable_transparent_workspaces
+            }
+            PackageManager::Pnpm9 | PackageManager::Pnpm | PackageManager::Pnpm6 => {
+                let npmrc = NpmRc::from_file(repo_root)
+                    .inspect_err(|e| debug!("unable to read npmrc: {e}"))
+                    .unwrap_or_default();
+                npmrc
+                    .link_workspace_packages
+                    // The default for pnpm 9 is false if not explicitly set
+                    // All previous versions had a default of true
+                    .unwrap_or(!matches!(self, PackageManager::Pnpm9))
+            }
+            PackageManager::Yarn | PackageManager::Bun | PackageManager::Npm => true,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -553,6 +588,7 @@ mod tests {
 
     use pretty_assertions::assert_eq;
     use tempfile::TempDir;
+    use test_case::test_case;
 
     use super::*;
 
@@ -822,5 +858,35 @@ mod tests {
             serde_json::from_str("{ \"workspaces\": {\"packages\": [\"packages/**\"]}}")?;
         assert_eq!(nested.workspaces.as_ref(), vec!["packages/**"]);
         Ok(())
+    }
+
+    #[test_case(PackageManager::Npm, None, true)]
+    #[test_case(PackageManager::Yarn, None, true)]
+    #[test_case(PackageManager::Bun, None, true)]
+    #[test_case(PackageManager::Pnpm6, None, true)]
+    #[test_case(PackageManager::Pnpm, None, true)]
+    #[test_case(PackageManager::Pnpm, Some(false), false)]
+    #[test_case(PackageManager::Pnpm, Some(true), true)]
+    #[test_case(PackageManager::Pnpm9, None, false)]
+    #[test_case(PackageManager::Pnpm9, Some(true), true)]
+    #[test_case(PackageManager::Pnpm9, Some(false), false)]
+    #[test_case(PackageManager::Berry, None, true)]
+    #[test_case(PackageManager::Berry, Some(false), false)]
+    #[test_case(PackageManager::Berry, Some(true), true)]
+    fn test_link_workspace_packages(pm: PackageManager, enabled: Option<bool>, expected: bool) {
+        let tmpdir = tempfile::tempdir().unwrap();
+        let repo_root = AbsoluteSystemPath::from_std_path(tmpdir.path()).unwrap();
+        if let Some(enabled) = enabled {
+            repo_root
+                .join_component(npmrc::NPMRC_FILENAME)
+                .create_with_contents(format!("link-workspace-packages={enabled}"))
+                .unwrap();
+            repo_root
+                .join_component(yarnrc::YARNRC_FILENAME)
+                .create_with_contents(format!("enableTransparentWorkspaces: {enabled}"))
+                .unwrap();
+        }
+        let actual = pm.link_workspace_packages(repo_root);
+        assert_eq!(actual, expected);
     }
 }
