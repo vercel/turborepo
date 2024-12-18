@@ -19,8 +19,6 @@ use crate::{
 
 pub mod builder;
 mod dep_splitter;
-mod npmrc;
-mod yarnrc;
 
 pub use builder::{Error, PackageGraphBuilder};
 
