@@ -10,8 +10,7 @@ use turborepo_graph_utils as graph;
 use turborepo_lockfiles::Lockfile;
 
 use super::{
-    dep_splitter::DependencySplitter, npmrc::NpmRc, PackageGraph, PackageInfo, PackageName,
-    PackageNode,
+    dep_splitter::DependencySplitter, PackageGraph, PackageInfo, PackageName, PackageNode,
 };
 use crate::{
     discovery::{
@@ -352,16 +351,6 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
         &mut self,
         package_manager: &PackageManager,
     ) -> Result<(), Error> {
-        let npmrc = match package_manager {
-            PackageManager::Pnpm | PackageManager::Pnpm6 | PackageManager::Pnpm9 => {
-                let npmrc_path = self.repo_root.join_component(".npmrc");
-                match npmrc_path.read_existing_to_string().ok().flatten() {
-                    Some(contents) => NpmRc::from_reader(contents.as_bytes()).ok(),
-                    None => None,
-                }
-            }
-            _ => None,
-        };
         let split_deps = self
             .workspaces
             .iter()
@@ -374,7 +363,6 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
                         &entry.package_json_path,
                         &self.workspaces,
                         package_manager,
-                        npmrc.as_ref(),
                         entry.package_json.all_dependencies(),
                     ),
                 )
@@ -566,7 +554,6 @@ impl Dependencies {
         workspace_json_path: &AnchoredSystemPathBuf,
         workspaces: &HashMap<PackageName, PackageInfo>,
         package_manager: &PackageManager,
-        npmrc: Option<&NpmRc>,
         dependencies: I,
     ) -> Self {
         let resolved_workspace_json_path = repo_root.resolve(workspace_json_path);
@@ -576,7 +563,7 @@ impl Dependencies {
         let mut internal = HashSet::new();
         let mut external = BTreeMap::new();
         let splitter =
-            DependencySplitter::new(repo_root, workspace_dir, workspaces, package_manager, npmrc);
+            DependencySplitter::new(repo_root, workspace_dir, workspaces, package_manager);
         for (name, version) in dependencies.into_iter() {
             if let Some(workspace) = splitter.is_internal(name, version) {
                 internal.insert(workspace);

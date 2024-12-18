@@ -1,9 +1,14 @@
 use std::io;
 
 use ini::Ini;
+use turbopath::AbsoluteSystemPath;
+
+pub const NPMRC_FILENAME: &str = ".npmrc";
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error("encountered error reading .npmrc: {0}")]
+    Io(#[from] std::io::Error),
     #[error("encountered error parsing .npmrc: {0}")]
     Ini(#[from] ini::Error),
 }
@@ -11,7 +16,7 @@ pub enum Error {
 /// Representation of .npmrc used by both npm and pnpm to configure behavior
 /// The representation is intentionally incomplete and is only intended to
 /// contain settings that affect the package graph.
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Default)]
 pub struct NpmRc {
     /// Used by pnpm to determine whether dependencies
     /// declared without an explicit workspace protocol
@@ -20,6 +25,16 @@ pub struct NpmRc {
 }
 
 impl NpmRc {
+    pub fn from_file(repo_root: &AbsoluteSystemPath) -> Result<Self, Error> {
+        let npmrc_path = repo_root.join_component(NPMRC_FILENAME);
+        let npmrc = npmrc_path
+            .read_existing_to_string()?
+            .map(|contents| Self::from_reader(contents.as_bytes()))
+            .transpose()?
+            .unwrap_or_default();
+        Ok(npmrc)
+    }
+
     pub fn from_reader(mut reader: impl io::Read) -> Result<Self, Error> {
         let ini = Ini::read_from(&mut reader)?;
         Ok(Self::from_ini(ini))
