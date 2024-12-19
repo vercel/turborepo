@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 
 use git2::Repository;
 use itertools::Itertools;
@@ -37,14 +37,27 @@ impl Run {
     pub async fn check_boundaries(&self) -> Result<(), Error> {
         let packages = self.pkg_dep_graph().packages();
         let repo = Repository::discover(&self.repo_root()).ok();
+        println!(
+            "{:?}",
+            self.pkg_dep_graph()
+                .package_info(&PackageName::Other("@turbo/gen".to_string()))
+                .unwrap()
+                .unresolved_external_dependencies
+        );
         for (package_name, package_info) in packages {
             let package_root = self.repo_root().resolve(package_info.package_path());
-            let dependencies = self
+            let internal_dependencies = self
                 .pkg_dep_graph()
                 .immediate_dependencies(&PackageNode::Workspace(package_name.to_owned()))
                 .unwrap_or_default();
-            self.check_package(&repo, &package_root, dependencies)
-                .await?;
+            let external_dependencies = package_info.unresolved_external_dependencies.as_ref();
+            self.check_package(
+                &repo,
+                &package_root,
+                internal_dependencies,
+                external_dependencies,
+            )
+            .await?;
         }
         Ok(())
     }
@@ -52,7 +65,8 @@ impl Run {
         &self,
         repo: &Option<Repository>,
         package_root: &AbsoluteSystemPath,
-        dependencies: HashSet<&PackageNode>,
+        internal_dependencies: HashSet<&PackageNode>,
+        external_dependencies: Option<&BTreeMap<String, String>>,
     ) -> Result<(), Error> {
         let files = globwalk::globwalk(
             package_root,
@@ -64,12 +78,15 @@ impl Run {
                 "**/*.vue".parse().unwrap(),
                 "**/*.svelte".parse().unwrap(),
             ],
-            &["**/node_modules/**".parse().unwrap()],
+            &[
+                "**/node_modules/**".parse().unwrap(),
+                "**/examples/**".parse().unwrap(),
+            ],
             globwalk::WalkType::Files,
         )?;
 
         let source_map = SourceMap::default();
-        let mut errors = Vec::new();
+        let mut errors: Vec<Error> = Vec::new();
         // TODO: Load tsconfig.json
         let resolver = Tracer::create_resolver(None);
 
@@ -141,7 +158,8 @@ impl Run {
                         span,
                         &file_path,
                         &file_content,
-                        &dependencies,
+                        &internal_dependencies,
+                        external_dependencies,
                         &resolver,
                     )
                 };
@@ -169,7 +187,8 @@ impl Run {
         span: SourceSpan,
         file_path: &AbsoluteSystemPath,
         file_content: &str,
-        dependencies: &HashSet<&PackageNode>,
+        internal_dependencies: &HashSet<&PackageNode>,
+        external_dependencies: Option<&BTreeMap<String, String>>,
         resolver: &Resolver,
     ) -> Result<(), Error> {
         let package_name = if import.starts_with("@") {
@@ -183,8 +202,12 @@ impl Run {
         };
         let package_name = PackageNode::Workspace(PackageName::Other(package_name));
         let folder = file_path.parent().expect("file_path should have a parent");
+        let contained_in_dependencies = internal_dependencies.contains(&package_name)
+            || external_dependencies.map_or(false, |external_dependencies| {
+                external_dependencies.contains_key(&package_name.to_string())
+            });
 
-        if !dependencies.contains(&package_name)
+        if !contained_in_dependencies
             && !matches!(
                 resolver.resolve(folder, import),
                 Err(ResolveError::Builtin { .. })
