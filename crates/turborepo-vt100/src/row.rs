@@ -135,7 +135,7 @@ impl Row {
                 }
                 prev_col += col - prev_col;
 
-                contents.push_str(&cell.contents());
+                contents.push_str(cell.contents());
                 prev_col += if cell.is_wide() { 2 } else { 1 };
             }
         }
@@ -322,7 +322,7 @@ impl Row {
             }
             let mut cell_contents = prev_first_cell.contents();
             let need_erase = if cell_contents.is_empty() {
-                cell_contents = " ".to_string();
+                cell_contents = " ";
                 true
             } else {
                 false
