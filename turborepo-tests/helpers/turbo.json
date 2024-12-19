@@ -1,8 +1,11 @@
 {
   "extends": ["//"],
-  "pipeline": {
+  "tasks": {
     // This needs to exist because upstream packages depend on it and
     // it's not defined at the root level.
-    "topo": {}
+    "topo": {},
+    "test": {
+      "dependsOn": ["^build"]
+    }
   }
 }

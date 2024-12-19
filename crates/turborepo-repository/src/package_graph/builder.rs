@@ -1,26 +1,24 @@
-use std::{
-    backtrace::Backtrace,
-    collections::{BTreeMap, HashMap, HashSet},
-    fmt,
-};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
+use miette::{Diagnostic, Report};
 use petgraph::graph::{Graph, NodeIndex};
 use tracing::{warn, Instrument};
 use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
-    RelativeUnixPathBuf,
 };
 use turborepo_graph_utils as graph;
 use turborepo_lockfiles::Lockfile;
 
-use super::{PackageGraph, WorkspaceInfo, WorkspaceName, WorkspaceNode};
+use super::{
+    dep_splitter::DependencySplitter, PackageGraph, PackageInfo, PackageName, PackageNode,
+};
 use crate::{
     discovery::{
         self, CachingPackageDiscovery, LocalPackageDiscoveryBuilder, PackageDiscovery,
         PackageDiscoveryBuilder,
     },
-    package_graph::{PackageName, PackageVersion},
     package_json::PackageJson,
+    package_manager::PackageManager,
 };
 
 pub struct PackageGraphBuilder<'a, T> {
@@ -32,13 +30,11 @@ pub struct PackageGraphBuilder<'a, T> {
     package_discovery: T,
 }
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Diagnostic, thiserror::Error)]
 pub enum Error {
-    #[error("could not resolve workspaces: {0}")]
-    PackageManager(
-        #[from] crate::package_manager::Error,
-        #[backtrace] Backtrace,
-    ),
+    #[error("could not resolve workspaces")]
+    #[diagnostic(transparent)]
+    PackageManager(#[from] crate::package_manager::Error),
     #[error(
         "Failed to add workspace \"{name}\" from \"{path}\", it already exists at \
          \"{existing_path}\""
@@ -50,7 +46,8 @@ pub enum Error {
     },
     #[error("path error: {0}")]
     Path(#[from] turbopath::PathError),
-    #[error("unable to parse workspace package.json: {0}")]
+    #[diagnostic(transparent)]
+    #[error(transparent)]
     PackageJson(#[from] crate::package_json::Error),
     #[error("package.json must have a name field:\n{0}")]
     PackageJsonMissingName(AbsoluteSystemPathBuf),
@@ -77,6 +74,12 @@ impl<'a> PackageGraphBuilder<'a, LocalPackageDiscoveryBuilder> {
             lockfile: None,
         }
     }
+
+    pub fn with_allow_no_package_manager(mut self, allow_no_package_manager: bool) -> Self {
+        self.package_discovery
+            .with_allow_no_package_manager(allow_no_package_manager);
+        self
+    }
 }
 
 impl<'a, P> PackageGraphBuilder<'a, P> {
@@ -85,7 +88,6 @@ impl<'a, P> PackageGraphBuilder<'a, P> {
         self
     }
 
-    #[allow(dead_code)]
     pub fn with_package_jsons(
         mut self,
         package_jsons: Option<HashMap<AbsoluteSystemPathBuf, PackageJson>>,
@@ -94,7 +96,6 @@ impl<'a, P> PackageGraphBuilder<'a, P> {
         self
     }
 
-    #[allow(dead_code)]
     pub fn with_lockfile(mut self, lockfile: Option<Box<dyn Lockfile>>) -> Self {
         self.lockfile = lockfile;
         self
@@ -103,7 +104,6 @@ impl<'a, P> PackageGraphBuilder<'a, P> {
     /// Set the package discovery strategy to use. Note that whatever strategy
     /// selected here will be wrapped in a `CachingPackageDiscovery` to
     /// prevent unnecessary work during building.
-    #[allow(dead_code)]
     pub fn with_package_discovery<P2: PackageDiscoveryBuilder>(
         self,
         discovery: P2,
@@ -122,7 +122,7 @@ impl<'a, P> PackageGraphBuilder<'a, P> {
 impl<'a, T> PackageGraphBuilder<'a, T>
 where
     T: PackageDiscoveryBuilder,
-    T::Output: Send,
+    T::Output: Send + Sync,
     T::Error: Into<crate::package_manager::Error>,
 {
     /// Build the `PackageGraph`.
@@ -145,9 +145,9 @@ where
 struct BuildState<'a, S, T> {
     repo_root: &'a AbsoluteSystemPath,
     single: bool,
-    workspaces: HashMap<WorkspaceName, WorkspaceInfo>,
-    workspace_graph: Graph<WorkspaceNode, ()>,
-    node_lookup: HashMap<WorkspaceNode, NodeIndex>,
+    workspaces: HashMap<PackageName, PackageInfo>,
+    workspace_graph: Graph<PackageNode, ()>,
+    node_lookup: HashMap<PackageNode, NodeIndex>,
     lockfile: Option<Box<dyn Lockfile>>,
     package_jsons: Option<HashMap<AbsoluteSystemPathBuf, PackageJson>>,
     state: std::marker::PhantomData<S>,
@@ -164,15 +164,15 @@ enum ResolvedWorkspaces {}
 enum ResolvedLockfile {}
 
 impl<'a, S, T> BuildState<'a, S, T> {
-    fn add_node(&mut self, node: WorkspaceNode) -> NodeIndex {
+    fn add_node(&mut self, node: PackageNode) -> NodeIndex {
         let idx = self.workspace_graph.add_node(node.clone());
         self.node_lookup.insert(node, idx);
         idx
     }
 
     fn add_root_workspace(&mut self) {
-        let root_index = self.add_node(WorkspaceNode::Root);
-        let root_workspace = self.add_node(WorkspaceNode::Workspace(WorkspaceName::Root));
+        let root_index = self.add_node(PackageNode::Root);
+        let root_workspace = self.add_node(PackageNode::Workspace(PackageName::Root));
         self.workspace_graph
             .add_edge(root_workspace, root_index, ());
     }
@@ -201,8 +201,8 @@ where
         } = builder;
         let mut workspaces = HashMap::new();
         workspaces.insert(
-            WorkspaceName::Root,
-            WorkspaceInfo {
+            PackageName::Root,
+            PackageInfo {
                 package_json: root_package_json,
                 package_json_path: AnchoredSystemPathBuf::from_raw("package.json").unwrap(),
                 ..Default::default()
@@ -234,12 +234,12 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedPackageManager, T> {
     ) -> Result<(), Error> {
         let relative_json_path =
             AnchoredSystemPathBuf::relative_path_between(self.repo_root, &package_json_path);
-        let name = WorkspaceName::Other(
+        let name = PackageName::Other(
             json.name
                 .clone()
                 .ok_or(Error::PackageJsonMissingName(package_json_path))?,
         );
-        let entry = WorkspaceInfo {
+        let entry = PackageInfo {
             package_json: json,
             package_json_path: relative_json_path,
             ..Default::default()
@@ -257,7 +257,7 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedPackageManager, T> {
                 existing_path: existing.package_json_path.to_string(),
             });
         }
-        self.add_node(WorkspaceNode::Workspace(name));
+        self.add_node(PackageNode::Workspace(name));
         Ok(())
     }
 
@@ -281,7 +281,18 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedPackageManager, T> {
         }?;
 
         for (path, json) in package_jsons {
-            self.add_json(path, json)?;
+            match self.add_json(path, json) {
+                Ok(()) => {}
+                Err(Error::PackageJsonMissingName(path)) => {
+                    // previous implementations of turbo would silently ignore package.json files
+                    // that didn't have a name field (well, actually, if two or more had the same
+                    // name, it would throw a 'name clash' error, but that's a different story)
+                    //
+                    // let's try to match that behavior, but log a debug message
+                    tracing::debug!("ignoring package.json at {} since it has no name", path);
+                }
+                Err(err) => return Err(err),
+            }
         }
 
         let Self {
@@ -315,7 +326,8 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedPackageManager, T> {
             workspace_graph,
             node_lookup,
             lockfile,
-            mut package_discovery,
+            package_discovery,
+            repo_root,
             ..
         } = self;
 
@@ -323,18 +335,22 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedPackageManager, T> {
 
         debug_assert!(single, "expected single package graph");
         Ok(PackageGraph {
-            workspace_graph,
+            graph: workspace_graph,
             node_lookup,
-            workspaces,
+            packages: workspaces,
             lockfile,
             package_manager,
+            repo_root: repo_root.to_owned(),
         })
     }
 }
 
 impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
     #[tracing::instrument(skip(self))]
-    fn connect_internal_dependencies(&mut self) -> Result<(), Error> {
+    fn connect_internal_dependencies(
+        &mut self,
+        package_manager: &PackageManager,
+    ) -> Result<(), Error> {
         let split_deps = self
             .workspaces
             .iter()
@@ -346,6 +362,7 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
                         self.repo_root,
                         &entry.package_json_path,
                         &self.workspaces,
+                        package_manager,
                         entry.package_json.all_dependencies(),
                     ),
                 )
@@ -359,19 +376,19 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
             let Dependencies { internal, external } = deps;
             let node_idx = self
                 .node_lookup
-                .get(&WorkspaceNode::Workspace(name))
+                .get(&PackageNode::Workspace(name))
                 .expect("unable to find workspace node index");
             if internal.is_empty() {
                 let root_idx = self
                     .node_lookup
-                    .get(&WorkspaceNode::Root)
+                    .get(&PackageNode::Root)
                     .expect("root node should have index");
                 self.workspace_graph.add_edge(*node_idx, *root_idx, ());
             }
             for dependency in internal {
                 let dependency_idx = self
                     .node_lookup
-                    .get(&WorkspaceNode::Workspace(dependency))
+                    .get(&PackageNode::Workspace(dependency))
                     .expect("unable to find workspace node index");
                 self.workspace_graph
                     .add_edge(*node_idx, *dependency_idx, ());
@@ -396,7 +413,7 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
                 let lockfile = package_manager.read_lockfile(
                     self.repo_root,
                     self.workspaces
-                        .get(&WorkspaceName::Root)
+                        .get(&PackageName::Root)
                         .as_ref()
                         .map(|e| &e.package_json)
                         .expect("root workspace should have json"),
@@ -408,15 +425,22 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
 
     #[tracing::instrument(skip(self))]
     async fn resolve_lockfile(mut self) -> Result<BuildState<'a, ResolvedLockfile, T>, Error> {
-        self.connect_internal_dependencies()?;
+        // Since we've already performed package discovery, this should just be a cache
+        // hit
+        let package_manager = self
+            .package_discovery
+            .discover_packages()
+            .await?
+            .package_manager;
+        self.connect_internal_dependencies(&package_manager)?;
 
         let lockfile = match self.populate_lockfile().await {
             Ok(lockfile) => Some(lockfile),
             Err(e) => {
                 warn!(
                     "Issues occurred when constructing package graph. Turbo will function, but \
-                     some features may not be available: {}",
-                    e
+                     some features may not be available:\n {:?}",
+                    Report::new(e)
                 );
                 None
             }
@@ -476,9 +500,12 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedLockfile, T> {
             return Ok(());
         };
 
+        // We cannot ignore missing packages in this context, it would indicate a
+        // malformed or stale lockfile.
         let mut closures = turborepo_lockfiles::all_transitive_closures(
             lockfile,
             self.all_external_dependencies()?,
+            false,
         )?;
         for (_, entry) in self.workspaces.iter_mut() {
             entry.transitive_dependencies = closures.remove(&entry.unix_dir_str()?);
@@ -502,28 +529,31 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedLockfile, T> {
             workspace_graph,
             node_lookup,
             lockfile,
+            repo_root,
             ..
         } = self;
         Ok(PackageGraph {
-            workspace_graph,
+            graph: workspace_graph,
             node_lookup,
-            workspaces,
+            packages: workspaces,
             package_manager,
             lockfile,
+            repo_root: repo_root.to_owned(),
         })
     }
 }
 
 struct Dependencies {
-    internal: HashSet<WorkspaceName>,
-    external: BTreeMap<PackageName, PackageVersion>,
+    internal: HashSet<PackageName>,
+    external: BTreeMap<String, String>, // Package name and version
 }
 
 impl Dependencies {
     pub fn new<'a, I: IntoIterator<Item = (&'a String, &'a String)>>(
         repo_root: &AbsoluteSystemPath,
         workspace_json_path: &AnchoredSystemPathBuf,
-        workspaces: &HashMap<WorkspaceName, WorkspaceInfo>,
+        workspaces: &HashMap<PackageName, PackageInfo>,
+        package_manager: &PackageManager,
         dependencies: I,
     ) -> Self {
         let resolved_workspace_json_path = repo_root.resolve(workspace_json_path);
@@ -532,11 +562,8 @@ impl Dependencies {
             .expect("package.json path should have parent");
         let mut internal = HashSet::new();
         let mut external = BTreeMap::new();
-        let splitter = DependencySplitter {
-            repo_root,
-            workspace_dir,
-            workspaces,
-        };
+        let splitter =
+            DependencySplitter::new(repo_root, workspace_dir, workspaces, package_manager);
         for (name, version) in dependencies.into_iter() {
             if let Some(workspace) = splitter.is_internal(name, version) {
                 internal.insert(workspace);
@@ -548,129 +575,7 @@ impl Dependencies {
     }
 }
 
-struct DependencySplitter<'a, 'b, 'c> {
-    repo_root: &'a AbsoluteSystemPath,
-    workspace_dir: &'b AbsoluteSystemPath,
-    workspaces: &'c HashMap<WorkspaceName, WorkspaceInfo>,
-}
-
-impl<'a, 'b, 'c> DependencySplitter<'a, 'b, 'c> {
-    fn is_internal(&self, name: &str, version: &str) -> Option<WorkspaceName> {
-        // TODO implement borrowing for workspaces to allow for zero copy queries
-        let workspace_name = WorkspaceName::Other(
-            version
-                .strip_prefix("workspace:")
-                .and_then(|version| version.rsplit_once('@'))
-                .filter(|(_, version)| *version == "*" || *version == "^" || *version == "~")
-                .map_or(name, |(actual_name, _)| actual_name)
-                .to_string(),
-        );
-        let is_internal = self
-            .workspaces
-            .get(&workspace_name)
-            // This is the current Go behavior, in the future we might not want to paper over a
-            // missing version
-            .map(|e| e.package_json.version.as_deref().unwrap_or_default())
-            .map_or(false, |workspace_version| {
-                DependencyVersion::new(version).matches_workspace_package(
-                    workspace_version,
-                    self.workspace_dir,
-                    self.repo_root,
-                )
-            });
-        match is_internal {
-            true => Some(workspace_name),
-            false => None,
-        }
-    }
-}
-
-struct DependencyVersion<'a> {
-    protocol: Option<&'a str>,
-    version: &'a str,
-}
-
-impl<'a> DependencyVersion<'a> {
-    fn new(qualified_version: &'a str) -> Self {
-        qualified_version.split_once(':').map_or(
-            Self {
-                protocol: None,
-                version: qualified_version,
-            },
-            |(protocol, version)| Self {
-                protocol: Some(protocol),
-                version,
-            },
-        )
-    }
-
-    fn is_external(&self) -> bool {
-        // The npm protocol for yarn by default still uses the workspace package if the
-        // workspace version is in a compatible semver range. See https://github.com/yarnpkg/berry/discussions/4015
-        // For now, we will just assume if the npm protocol is being used and the
-        // version matches its an internal dependency which matches the existing
-        // behavior before this additional logic was added.
-
-        // TODO: extend this to support the `enableTransparentWorkspaces` yarn option
-        self.protocol.map_or(false, |p| p != "npm")
-    }
-
-    fn matches_workspace_package(
-        &self,
-        package_version: &str,
-        cwd: &AbsoluteSystemPath,
-        root: &AbsoluteSystemPath,
-    ) -> bool {
-        match self.protocol {
-            Some("workspace") => {
-                // TODO: Since support at the moment is non-existent for workspaces that contain
-                // multiple versions of the same package name, just assume its a
-                // match and don't check the range for an exact match.
-                true
-            }
-            Some("file") | Some("link") => {
-                // Default to internal if we have the package but somehow cannot get the path
-                RelativeUnixPathBuf::new(self.version)
-                    .and_then(|file_path| cwd.join_unix_path(file_path))
-                    .map_or(true, |dep_path| root.contains(&dep_path))
-            }
-            Some(_) if self.is_external() => {
-                // Other protocols are assumed to be external references ("github:", etc)
-                false
-            }
-            _ if self.version == "*" => true,
-            _ => {
-                // If we got this far, then we need to check the workspace package version to
-                // see it satisfies the dependencies range to determin whether
-                // or not its an internal or external dependency.
-                let constraint = node_semver::Range::parse(self.version);
-                let version = node_semver::Version::parse(package_version);
-
-                // For backwards compatibility with existing behavior, if we can't parse the
-                // version then we treat the dependency as an internal package
-                // reference and swallow the error.
-
-                // TODO: some package managers also support tags like "latest". Does extra
-                // handling need to be added for this corner-case
-                constraint
-                    .ok()
-                    .zip(version.ok())
-                    .map_or(true, |(constraint, version)| constraint.satisfies(&version))
-            }
-        }
-    }
-}
-
-impl<'a> fmt::Display for DependencyVersion<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self.protocol {
-            Some(protocol) => f.write_fmt(format_args!("{}:{}", protocol, self.version)),
-            None => f.write_str(self.version),
-        }
-    }
-}
-
-impl WorkspaceInfo {
+impl PackageInfo {
     fn unix_dir_str(&self) -> Result<String, Error> {
         let unix = self
             .package_json_path
@@ -685,84 +590,23 @@ impl WorkspaceInfo {
 mod test {
     use std::assert_matches::assert_matches;
 
-    use test_case::test_case;
-    use turbopath::AbsoluteSystemPathBuf;
-
     use super::*;
-
-    #[test_case("1.2.3", None, "1.2.3", Some("@scope/foo") ; "handles exact match")]
-    #[test_case("1.2.3", None, "^1.0.0", Some("@scope/foo") ; "handles semver range satisfied")]
-    #[test_case("2.3.4", None, "^1.0.0", None ; "handles semver range not satisfied")]
-    #[test_case("1.2.3", None, "workspace:1.2.3", Some("@scope/foo") ; "handles workspace protocol with version")]
-    #[test_case("1.2.3", None, "workspace:*", Some("@scope/foo") ; "handles workspace protocol with no version")]
-    #[test_case("1.2.3", None, "workspace:../other-packages/", Some("@scope/foo") ; "handles workspace protocol with relative path")]
-    #[test_case("1.2.3", None, "workspace:../@scope/foo", Some("@scope/foo") ; "handles workspace protocol with scoped relative path")]
-    #[test_case("1.2.3", None, "npm:^1.2.3", Some("@scope/foo") ; "handles npm protocol with satisfied semver range")]
-    #[test_case("2.3.4", None, "npm:^1.2.3", None ; "handles npm protocol with not satisfied semver range")]
-    #[test_case("1.2.3", None, "1.2.2-alpha-123abcd.0", None ; "handles pre-release versions")]
-    // for backwards compatability with the code before versions were verified
-    #[test_case("sometag", None, "1.2.3", Some("@scope/foo") ; "handles non-semver package version")]
-    // for backwards compatability with the code before versions were verified
-    #[test_case("1.2.3", None, "sometag", Some("@scope/foo") ; "handles non-semver dependency version")]
-    #[test_case("1.2.3", None, "file:../libB", Some("@scope/foo") ; "handles file:.. inside repo")]
-    #[test_case("1.2.3", None, "file:../../../otherproject", None ; "handles file:.. outside repo")]
-    #[test_case("1.2.3", None, "link:../libB", Some("@scope/foo") ; "handles link:.. inside repo")]
-    #[test_case("1.2.3", None, "link:../../../otherproject", None ; "handles link:.. outside repo")]
-    #[test_case("0.0.0-development", None, "*", Some("@scope/foo") ; "handles development versions")]
-    #[test_case("1.2.3", Some("foo"), "workspace:@scope/foo@*", Some("@scope/foo") ; "handles pnpm alias star")]
-    #[test_case("1.2.3", Some("foo"), "workspace:@scope/foo@~", Some("@scope/foo") ; "handles pnpm alias tilda")]
-    #[test_case("1.2.3", Some("foo"), "workspace:@scope/foo@^", Some("@scope/foo") ; "handles pnpm alias caret")]
-    fn test_matches_workspace_package(
-        package_version: &str,
-        dependency_name: Option<&str>,
-        range: &str,
-        expected: Option<&str>,
-    ) {
-        let root = AbsoluteSystemPathBuf::new(if cfg!(windows) {
-            "C:\\some\\repo"
-        } else {
-            "/some/repo"
-        })
-        .unwrap();
-        let pkg_dir = root.join_components(&["packages", "libA"]);
-        let workspaces = {
-            let mut map = HashMap::new();
-            map.insert(
-                WorkspaceName::Other("@scope/foo".to_string()),
-                WorkspaceInfo {
-                    package_json: PackageJson {
-                        version: Some(package_version.to_string()),
-                        ..Default::default()
-                    },
-                    package_json_path: AnchoredSystemPathBuf::from_raw("unused").unwrap(),
-                    unresolved_external_dependencies: None,
-                    transitive_dependencies: None,
-                },
-            );
-            map
-        };
-
-        let splitter = DependencySplitter {
-            repo_root: &root,
-            workspace_dir: &pkg_dir,
-            workspaces: &workspaces,
-        };
-
-        assert_eq!(
-            splitter.is_internal(dependency_name.unwrap_or("@scope/foo"), range),
-            expected.map(WorkspaceName::from)
-        );
-    }
 
     struct MockDiscovery;
     impl PackageDiscovery for MockDiscovery {
         async fn discover_packages(
-            &mut self,
+            &self,
         ) -> Result<crate::discovery::DiscoveryResponse, crate::discovery::Error> {
             Ok(crate::discovery::DiscoveryResponse {
                 package_manager: crate::package_manager::PackageManager::Npm,
                 workspaces: vec![],
             })
+        }
+
+        async fn discover_packages_blocking(
+            &self,
+        ) -> Result<crate::discovery::DiscoveryResponse, crate::discovery::Error> {
+            self.discover_packages().await
         }
     }
 
@@ -796,6 +640,6 @@ mod test {
             );
             map
         }));
-        assert_matches!(builder.build().await, Err(Error::DuplicateWorkspace { .. }))
+        assert_matches!(builder.build().await, Err(Error::DuplicateWorkspace { .. }));
     }
 }

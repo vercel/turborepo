@@ -11,13 +11,15 @@ Run a build to get a local cache.
   Cached:    0 cached, 2 total
     Time:\s+[.0-9]+m?s  (re)
   
+   WARNING  no output files found for task my-app#build. Please check your `outputs` key in `turbo.json`
+
 
 Do a dry run so we can see the state of the cache
   $ ${TURBO} run build --dry=json > dry.json
 
 Get the hash of the my-app#build task, so we can inspect the cache
   $ HASH=$(cat dry.json | jq -r '.tasks | map(select(.taskId == "my-app#build")) | .[0].hash')
-  $ duration=$(cat "node_modules/.cache/turbo/$HASH-meta.json" | jq .duration)
+  $ duration=$(cat ".turbo/cache/$HASH-meta.json" | jq .duration)
 check that it exists
   $ echo $duration
   [0-9]+ (re)

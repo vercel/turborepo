@@ -1,4 +1,4 @@
-import chalk from "chalk";
+import { bold, cyan, dim, gray } from "picocolors";
 import { prompt } from "inquirer";
 import { logger } from "@turbo/utils";
 import { loadTransformers } from "../../utils/loadTransformers";
@@ -17,12 +17,12 @@ export async function transform(
 ) {
   const transforms = loadTransformers();
   if (options.list) {
-    logger.log(transforms.map((t) => `- ${chalk.cyan(t.name)}`).join("\n"));
+    logger.log(transforms.map((t) => `- ${cyan(t.name)}`).join("\n"));
     return process.exit(0);
   }
 
   // check git status
-  if (!options.dry) {
+  if (!options.dryRun) {
     checkGitStatus({ directory, force: options.force });
   }
 
@@ -41,7 +41,7 @@ export async function transform(
         if (exists) {
           return true;
         }
-        return `Directory ${chalk.dim(`(${absolute})`)} does not exist`;
+        return `Directory ${dim(`(${absolute})`)} does not exist`;
       },
       filter: (d: string) => d.trim(),
     },
@@ -52,9 +52,9 @@ export async function transform(
       when: !transformName,
       pageSize: transforms.length,
       choices: transforms.map((t) => ({
-        name: `${chalk.bold(t.name)} - ${chalk.gray(
-          t.description
-        )} ${chalk.gray(`(${t.introducedIn})`)}`,
+        name: `${bold(t.name)} - ${gray(t.description)} ${gray(
+          `(${t.introducedIn})`
+        )}`,
         value: t.name,
       })),
     },
@@ -69,7 +69,7 @@ export async function transform(
     directory: selectedDirectory,
   });
   if (!exists) {
-    logger.error(`Directory ${chalk.dim(`(${root})`)} does not exist`);
+    logger.error(`Directory ${dim(`(${root})`)} does not exist`);
     return process.exit(1);
   }
 
@@ -79,9 +79,7 @@ export async function transform(
   // validate transforms
   if (!transformData) {
     logger.error(
-      `Invalid transform choice ${chalk.dim(
-        `(${transformName})`
-      )}, pick one of:`
+      `Invalid transform choice ${dim(`(${transformName})`)}, pick one of:`
     );
     logger.error(transformKeys.map((key) => `- ${key}`).join("\n"));
     return process.exit(1);

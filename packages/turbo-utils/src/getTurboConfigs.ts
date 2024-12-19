@@ -2,8 +2,14 @@ import fs from "node:fs";
 import path from "node:path";
 import yaml from "js-yaml";
 import { sync } from "fast-glob";
-import type { Schema } from "@turbo/types";
 import JSON5 from "json5";
+import type {
+  BaseSchemaV1,
+  PipelineV1,
+  SchemaV1,
+  BaseSchemaV2,
+  PipelineV2,
+} from "@turbo/types";
 import * as logger from "./logger";
 import { getTurboRoot } from "./getTurboRoot";
 import type { PackageJson, PNPMWorkspaceConfig } from "./types";
@@ -15,11 +21,11 @@ export interface WorkspaceConfig {
   workspaceName: string;
   workspacePath: string;
   isWorkspaceRoot: boolean;
-  turboConfig?: Schema;
+  turboConfig?: SchemaV1;
 }
 
 export interface TurboConfig {
-  config: Schema;
+  config: SchemaV1;
   turboConfigPath: string;
   workspacePath: string;
   isRootConfig: boolean;
@@ -92,7 +98,7 @@ export function getTurboConfigs(cwd?: string, opts?: Options): TurboConfigs {
       try {
         const raw = fs.readFileSync(configPath, "utf8");
         // eslint-disable-next-line import/no-named-as-default-member -- json5 exports different objects depending on if you're using esm or cjs (https://github.com/json5/json5/issues/240)
-        const turboJsonContent: Schema = JSON5.parse(raw);
+        const turboJsonContent: SchemaV1 = JSON5.parse(raw);
         // basic config validation
         const isRootConfig = path.dirname(configPath) === turboRoot;
         if (isRootConfig) {
@@ -163,7 +169,7 @@ export function getWorkspaceConfigs(
         // Try and get turbo.json
         const turboJsonPath = path.join(workspacePath, "turbo.json");
         let rawTurboJson = null;
-        let turboConfig: Schema | undefined;
+        let turboConfig: SchemaV1 | undefined;
         try {
           rawTurboJson = fs.readFileSync(turboJsonPath, "utf8");
           // eslint-disable-next-line import/no-named-as-default-member -- json5 exports different objects depending on if you're using esm or cjs (https://github.com/json5/json5/issues/240)
@@ -203,4 +209,17 @@ export function getWorkspaceConfigs(
   }
 
   return configs;
+}
+
+export function forEachTaskDef<BaseSchema extends BaseSchemaV1 | BaseSchemaV2>(
+  config: BaseSchema,
+  f: (
+    value: [string, BaseSchema extends BaseSchemaV1 ? PipelineV1 : PipelineV2]
+  ) => void
+): void {
+  if ("pipeline" in config) {
+    Object.entries(config.pipeline).forEach(f);
+  } else {
+    Object.entries(config.tasks).forEach(f);
+  }
 }

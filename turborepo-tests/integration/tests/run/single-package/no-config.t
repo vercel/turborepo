@@ -9,18 +9,18 @@ Check
   Global Hash Inputs
     Global Files                          = 2\s* (re)
     External Dependencies Hash            =\s* (re)
-    Global Cache Key                      = HEY STELLLLLLLAAAAAAAAAAAAA\s* (re)
-    Global .env Files Considered          = 0\s* (re)
-    Global Env Vars                       =\s* (re)
-    Global Env Vars Values                =\s* (re)
-    Inferred Global Env Vars Values       =\s* (re)
-    Global Passed Through Env Vars        =\s* (re)
-    Global Passed Through Env Vars Values =\s* (re)
+    Global Cache Key                      = I can\xe2\x80\x99t see ya, but I know you\xe2\x80\x99re here (esc)
+    Global Env Vars                       = 
+    Global Env Vars Values                = 
+    Inferred Global Env Vars Values       = 
+    Global Passed Through Env Vars        = 
+    Global Passed Through Env Vars Values = 
+    Engines Values                        = 
   
   Tasks to Run
   build
     Task                           = build\s* (re)
-    Hash                           = e46d6df5143cae99\s* (re)
+    Hash                           = e2b99dad85a4ff66
     Cached \(Local\)                 = false\s* (re)
     Cached \(Remote\)                = false\s* (re)
     Command                        = echo building > foo.txt\s* (re)
@@ -29,14 +29,13 @@ Check
     Dependencies                   =\s* (re)
     Dependents                     =\s* (re)
     Inputs Files Considered        = 4\s* (re)
-    .env Files Considered          = 0\s* (re)
-    Env Vars                       =\s* (re)
-    Env Vars Values                =\s* (re)
-    Inferred Env Vars Values       =\s* (re)
-    Passed Through Env Vars        =\s* (re)
-    Passed Through Env Vars Values =\s* (re)
-    Resolved Task Definition       = {"outputs":\[],"cache":false,"dependsOn":\[],"inputs":\[],"outputMode":"full","persistent":false,"env":\[],"passThroughEnv":null,"dotEnv":null}\s* (re)
-    Framework                      =\s* (re)
+    Env Vars                       = 
+    Env Vars Values                = 
+    Inferred Env Vars Values       = 
+    Passed Through Env Vars        = 
+    Passed Through Env Vars Values = 
+    Resolved Task Definition       = {"outputs":[],"cache":false,"dependsOn":[],"inputs":[],"outputLogs":"full","persistent":false,"interruptible":false,"env":[],"passThroughEnv":null,"interactive":false}
+    Framework                      = 
 
   $ ${TURBO} run build --graph
   
@@ -52,7 +51,7 @@ Run real once
   $ ${TURBO} run build
   \xe2\x80\xa2 Running build (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  build: cache bypass, force executing e46d6df5143cae99
+  build: cache bypass, force executing e2b99dad85a4ff66
   build: 
   build: > build
   build: > echo building > foo.txt
@@ -66,7 +65,7 @@ Run a second time, verify no caching because there is no config
   $ ${TURBO} run build
   \xe2\x80\xa2 Running build (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  build: cache bypass, force executing e46d6df5143cae99
+  build: cache bypass, force executing e2b99dad85a4ff66
   build: 
   build: > build
   build: > echo building > foo.txt

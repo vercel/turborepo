@@ -2,7 +2,7 @@
 name = "turborepo-graph-utils"
 version = "0.1.0"
 edition = "2021"
-license = "MPL-2.0"
+license = "MIT"
 
 [lints]
 workspace = true
@@ -15,3 +15,6 @@ petgraph = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full", "time"] }
 tracing = { workspace = true, features = ["log"] }
+
+[dev-dependencies]
+insta = { workspace = true }

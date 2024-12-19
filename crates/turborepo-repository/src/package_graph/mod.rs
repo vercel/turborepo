@@ -3,9 +3,12 @@ use std::{
     fmt,
 };
 
-use petgraph::visit::{depth_first_search, Reversed};
+use itertools::Itertools;
 use serde::Serialize;
-use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
+use tracing::debug;
+use turbopath::{
+    AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
+};
 use turborepo_graph_utils as graph;
 use turborepo_lockfiles::Lockfile;
 
@@ -15,6 +18,7 @@ use crate::{
 };
 
 pub mod builder;
+mod dep_splitter;
 
 pub use builder::{Error, PackageGraphBuilder};
 
@@ -22,28 +26,57 @@ pub const ROOT_PKG_NAME: &str = "//";
 
 #[derive(Debug)]
 pub struct PackageGraph {
-    workspace_graph: petgraph::Graph<WorkspaceNode, ()>,
+    graph: petgraph::Graph<PackageNode, ()>,
     #[allow(dead_code)]
-    node_lookup: HashMap<WorkspaceNode, petgraph::graph::NodeIndex>,
-    workspaces: HashMap<WorkspaceName, WorkspaceInfo>,
+    node_lookup: HashMap<PackageNode, petgraph::graph::NodeIndex>,
+    packages: HashMap<PackageName, PackageInfo>,
     package_manager: PackageManager,
     lockfile: Option<Box<dyn Lockfile>>,
+    repo_root: AbsoluteSystemPathBuf,
 }
 
+/// The WorkspacePackage.
+///
+/// It follows the Vercel glossary of terms where "Workspace"
+/// is the collection of packages and "Package" is a single package within the
+/// workspace. https://vercel.com/docs/vercel-platform/glossary
+/// There are other structs in this module that have "Workspace" in the name,
+/// but they do NOT follow the glossary, and instead mean "package" when they
+/// say Workspace. Some of these are labeled as such.
+#[derive(Debug, Eq, PartialEq, Hash)]
+pub struct WorkspacePackage {
+    pub name: PackageName,
+    pub path: AnchoredSystemPathBuf,
+}
+
+impl WorkspacePackage {
+    pub fn root() -> Self {
+        Self {
+            name: PackageName::Root,
+            path: AnchoredSystemPathBuf::default(),
+        }
+    }
+}
+
+/// PackageInfo represents a package within the workspace.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct WorkspaceInfo {
+pub struct PackageInfo {
     pub package_json: PackageJson,
     pub package_json_path: AnchoredSystemPathBuf,
-    pub unresolved_external_dependencies: Option<BTreeMap<PackageName, PackageVersion>>,
+    pub unresolved_external_dependencies: Option<BTreeMap<PackageKey, PackageVersion>>, /* name -> version */
     pub transitive_dependencies: Option<HashSet<turborepo_lockfiles::Package>>,
 }
 
-impl WorkspaceInfo {
+impl PackageInfo {
+    pub fn package_name(&self) -> Option<String> {
+        self.package_json.name.clone()
+    }
+
     pub fn package_json_path(&self) -> &AnchoredSystemPath {
         &self.package_json_path
     }
 
-    /// Get the path to this workspace.
+    /// Get the path to this package.
     ///
     /// note: This is infallible because `package_json_path` is guaranteed to
     /// have       at least one segment
@@ -54,36 +87,47 @@ impl WorkspaceInfo {
     }
 }
 
-type PackageName = String;
+type PackageKey = String;
 type PackageVersion = String;
 
-/// Name of workspaces with a special marker for the workspace root
+// PackageName refers to a real package's name or the root package.
+// It's not the best name, because root isn't a real package, but it's
+// the best we have right now.
 #[derive(Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
-pub enum WorkspaceName {
+pub enum PackageName {
     Root,
     Other(String),
 }
 
-impl Serialize for WorkspaceName {
+impl Serialize for PackageName {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         match self {
-            WorkspaceName::Root => serializer.serialize_str(ROOT_PKG_NAME),
-            WorkspaceName::Other(other) => serializer.serialize_str(other),
+            PackageName::Root => serializer.serialize_str(ROOT_PKG_NAME),
+            PackageName::Other(other) => serializer.serialize_str(other),
+        }
+    }
+}
+
+impl PackageName {
+    pub fn as_str(&self) -> &str {
+        match self {
+            PackageName::Root => ROOT_PKG_NAME,
+            PackageName::Other(name) => name,
         }
     }
 }
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
-pub enum WorkspaceNode {
+pub enum PackageNode {
     Root,
-    Workspace(WorkspaceName),
+    Workspace(PackageName),
 }
 
-impl WorkspaceNode {
-    pub fn as_workspace(&self) -> &WorkspaceName {
+impl PackageNode {
+    pub fn as_package_name(&self) -> &PackageName {
         match self {
-            WorkspaceNode::Workspace(name) => name,
-            WorkspaceNode::Root => &WorkspaceName::Root,
+            PackageNode::Workspace(name) => name,
+            PackageNode::Root => &PackageName::Root,
         }
     }
 }
@@ -98,15 +142,30 @@ impl PackageGraph {
 
     #[tracing::instrument(skip(self))]
     pub fn validate(&self) -> Result<(), Error> {
-        graph::validate_graph(&self.workspace_graph).map_err(Error::InvalidPackageGraph)
+        for (package_name, info) in self.packages.iter() {
+            if matches!(package_name, PackageName::Root) {
+                continue;
+            }
+            let name = info.package_json.name.as_deref();
+            match name {
+                Some("") | None => {
+                    let package_json_path = self.repo_root.resolve(info.package_json_path());
+                    return Err(Error::PackageJsonMissingName(package_json_path));
+                }
+                Some(_) => continue,
+            }
+        }
+        graph::validate_graph(&self.graph).map_err(Error::InvalidPackageGraph)?;
+
+        Ok(())
     }
 
-    pub fn remove_workspace_dependencies(&mut self) {
+    pub fn remove_package_dependencies(&mut self) {
         let root_index = self
             .node_lookup
-            .get(&WorkspaceNode::Root)
-            .expect("graph should have root workspace node");
-        self.workspace_graph.retain_edges(|graph, index| {
+            .get(&PackageNode::Root)
+            .expect("graph should have root package node");
+        self.graph.retain_edges(|graph, index| {
             let Some((_src, dst)) = graph.edge_endpoints(index) else {
                 return false;
             };
@@ -114,14 +173,14 @@ impl PackageGraph {
         });
     }
 
-    /// Returns the number of workspaces in the repo
-    /// *including* the root workspace.
+    /// Returns the number of packages in the repo
+    /// *including* the root package.
     pub fn len(&self) -> usize {
-        self.workspaces.len()
+        self.packages.len()
     }
 
     pub fn is_empty(&self) -> bool {
-        self.workspaces.is_empty()
+        self.packages.is_empty()
     }
 
     pub fn package_manager(&self) -> &PackageManager {
@@ -132,13 +191,13 @@ impl PackageGraph {
         self.lockfile.as_deref()
     }
 
-    pub fn package_json(&self, workspace: &WorkspaceName) -> Option<&PackageJson> {
-        let entry = self.workspaces.get(workspace)?;
+    pub fn package_json(&self, package: &PackageName) -> Option<&PackageJson> {
+        let entry = self.packages.get(package)?;
         Some(&entry.package_json)
     }
 
-    pub fn workspace_dir(&self, workspace: &WorkspaceName) -> Option<&AnchoredSystemPath> {
-        let entry = self.workspaces.get(workspace)?;
+    pub fn package_dir(&self, package: &PackageName) -> Option<&AnchoredSystemPath> {
+        let entry = self.packages.get(package)?;
         Some(
             entry
                 .package_json_path()
@@ -147,37 +206,34 @@ impl PackageGraph {
         )
     }
 
-    pub fn workspace_info(&self, workspace: &WorkspaceName) -> Option<&WorkspaceInfo> {
-        self.workspaces.get(workspace)
+    pub fn package_info(&self, package: &PackageName) -> Option<&PackageInfo> {
+        self.packages.get(package)
     }
 
-    pub fn workspaces(&self) -> impl Iterator<Item = (&WorkspaceName, &WorkspaceInfo)> {
-        self.workspaces.iter()
+    pub fn packages(&self) -> impl Iterator<Item = (&PackageName, &PackageInfo)> {
+        self.packages.iter()
     }
 
     pub fn root_package_json(&self) -> &PackageJson {
-        self.package_json(&WorkspaceName::Root)
+        self.package_json(&PackageName::Root)
             .expect("package graph was built without root package.json")
     }
 
     /// Gets all the nodes that directly depend on this one, that is to say
-    /// have a edge to `workspace`.
+    /// have a edge to `package`.
     ///
     /// Example:
     ///
     /// a -> b -> c
     ///
     /// immediate_dependencies(a) -> {b}
-    pub fn immediate_dependencies(
-        &self,
-        workspace: &WorkspaceNode,
-    ) -> Option<HashSet<&WorkspaceNode>> {
-        let index = self.node_lookup.get(workspace)?;
+    pub fn immediate_dependencies(&self, package: &PackageNode) -> Option<HashSet<&PackageNode>> {
+        let index = self.node_lookup.get(package)?;
         Some(
-            self.workspace_graph
+            self.graph
                 .neighbors_directed(*index, petgraph::Outgoing)
                 .map(|index| {
-                    self.workspace_graph
+                    self.graph
                         .node_weight(index)
                         .expect("node index from neighbors should be present")
                 })
@@ -186,7 +242,7 @@ impl PackageGraph {
     }
 
     /// Gets all the nodes that directly depend on this one, that is to say
-    /// have a edge to `workspace`.
+    /// have a edge to `package`.
     ///
     /// Example:
     ///
@@ -194,16 +250,13 @@ impl PackageGraph {
     ///
     /// immediate_ancestors(c) -> {b}
     #[allow(dead_code)]
-    pub fn immediate_ancestors(
-        &self,
-        workspace: &WorkspaceNode,
-    ) -> Option<HashSet<&WorkspaceNode>> {
-        let index = self.node_lookup.get(workspace)?;
+    pub fn immediate_ancestors(&self, package: &PackageNode) -> Option<HashSet<&PackageNode>> {
+        let index = self.node_lookup.get(package)?;
         Some(
-            self.workspace_graph
+            self.graph
                 .neighbors_directed(*index, petgraph::Incoming)
                 .map(|index| {
-                    self.workspace_graph
+                    self.graph
                         .node_weight(index)
                         .expect("node index from neighbors should be present")
                 })
@@ -211,7 +264,7 @@ impl PackageGraph {
         )
     }
 
-    /// For a given workspace in the repo, returns the set of workspaces
+    /// For a given package in the repo, returns the set of packages
     /// that this one depends on, excluding those that are unresolved.
     ///
     /// Example:
@@ -220,14 +273,20 @@ impl PackageGraph {
     ///
     /// dependencies(a) = {b, c}
     #[allow(dead_code)]
-    pub fn dependencies<'a>(&'a self, node: &WorkspaceNode) -> HashSet<&'a WorkspaceNode> {
-        let mut dependencies =
-            self.transitive_closure_inner(Some(node), petgraph::Direction::Outgoing);
+    pub fn dependencies<'a>(&'a self, node: &PackageNode) -> HashSet<&'a PackageNode> {
+        let mut dependencies = turborepo_graph_utils::transitive_closure(
+            &self.graph,
+            self.node_lookup.get(node).cloned(),
+            petgraph::Direction::Outgoing,
+        );
+        // Add in all root dependencies as they're implied dependencies for every
+        // package in the graph.
+        dependencies.extend(self.root_internal_dependencies());
         dependencies.remove(node);
         dependencies
     }
 
-    /// For a given workspace in the repo, returns the set of workspaces
+    /// For a given package in the repo, returns the set of packages
     /// that depend on this one, excluding those that are unresolved.
     ///
     /// Example:
@@ -235,82 +294,144 @@ impl PackageGraph {
     /// a -> b -> c (external)
     ///
     /// ancestors(c) = {a, b}
-    pub fn ancestors(&self, node: &WorkspaceNode) -> HashSet<&WorkspaceNode> {
-        let mut dependents =
-            self.transitive_closure_inner(Some(node), petgraph::Direction::Incoming);
+    pub fn ancestors(&self, node: &PackageNode) -> HashSet<&PackageNode> {
+        // If node is a root dep, then *every* package is an ancestor of this one
+        let mut dependents = if self.root_internal_dependencies().contains(node) {
+            return self.graph.node_weights().collect();
+        } else {
+            turborepo_graph_utils::transitive_closure(
+                &self.graph,
+                self.node_lookup.get(node).cloned(),
+                petgraph::Direction::Incoming,
+            )
+        };
         dependents.remove(node);
         dependents
     }
 
-    /// Returns the transitive closure of the given nodes in the workspace
+    pub fn root_internal_package_dependencies(&self) -> HashSet<WorkspacePackage> {
+        let dependencies = self.root_internal_dependencies();
+        dependencies
+            .into_iter()
+            .filter_map(|package| match package {
+                PackageNode::Workspace(package) => {
+                    let path = self
+                        .package_dir(package)
+                        .expect("packages in graph should have info");
+                    Some(WorkspacePackage {
+                        name: package.clone(),
+                        path: path.to_owned(),
+                    })
+                }
+                PackageNode::Root => None,
+            })
+            .collect()
+    }
+
+    pub fn root_internal_package_dependencies_paths(&self) -> Vec<&AnchoredSystemPath> {
+        let dependencies = self.root_internal_dependencies();
+        dependencies
+            .into_iter()
+            .filter_map(|package| match package {
+                PackageNode::Workspace(package) => Some(
+                    self.package_dir(package)
+                        .expect("packages in graph should have info"),
+                ),
+                PackageNode::Root => None,
+            })
+            .sorted()
+            .collect()
+    }
+
+    /// Provides a path from the root package to package
+    ///
+    /// Currently only provides the shortest path as calculating all paths can
+    /// be O(n!)
+    pub fn root_internal_dependency_explanation(
+        &self,
+        package: &WorkspacePackage,
+    ) -> Option<String> {
+        let from = *self
+            .node_lookup
+            .get(&PackageNode::Workspace(PackageName::Root))
+            .expect("all graphs should have a root");
+        let to = *self
+            .node_lookup
+            .get(&PackageNode::Workspace(package.name.clone()))?;
+        let (_cost, path) =
+            petgraph::algo::astar(&self.graph, from, |node| node == to, |_| 1, |_| 1)?;
+        Some(
+            self.path_display(&path)
+                .expect("path should only contain valid node indices"),
+        )
+    }
+
+    fn path_display(&self, path: &[petgraph::graph::NodeIndex]) -> Option<String> {
+        let mut package_names = Vec::with_capacity(path.len());
+        for index in path {
+            let node = self.graph.node_weight(*index)?;
+            let name = node.as_package_name().to_string();
+            package_names.push(name);
+        }
+
+        Some(package_names.join(" -> "))
+    }
+
+    fn root_internal_dependencies(&self) -> HashSet<&PackageNode> {
+        // We cannot call self.dependencies(&PackageNode::Workspace(PackageName::Root))
+        // as it will infinitely recurse.
+        let mut dependencies = turborepo_graph_utils::transitive_closure(
+            &self.graph,
+            self.node_lookup
+                .get(&PackageNode::Workspace(PackageName::Root))
+                .cloned(),
+            petgraph::Direction::Outgoing,
+        );
+        dependencies.remove(&PackageNode::Workspace(PackageName::Root));
+        dependencies
+    }
+
+    /// Returns the transitive closure of the given nodes in the package
     /// graph. Note that this includes the nodes themselves. If you want just
     /// the dependencies, or the dependents, use `dependencies` or `ancestors`.
     /// Alternatively, if you need just direct dependents, use
     /// `immediate_dependents`.
-    pub fn transitive_closure<'a, 'b, I: IntoIterator<Item = &'b WorkspaceNode>>(
+    pub fn transitive_closure<'a, 'b, I: IntoIterator<Item = &'b PackageNode>>(
         &'a self,
         nodes: I,
-    ) -> HashSet<&'a WorkspaceNode> {
-        self.transitive_closure_inner(nodes, petgraph::Direction::Outgoing)
+    ) -> HashSet<&'a PackageNode> {
+        turborepo_graph_utils::transitive_closure(
+            &self.graph,
+            nodes
+                .into_iter()
+                .flat_map(|node| self.node_lookup.get(node).cloned()),
+            petgraph::Direction::Outgoing,
+        )
     }
 
-    fn transitive_closure_inner<'a, 'b, I: IntoIterator<Item = &'b WorkspaceNode>>(
-        &'a self,
-        nodes: I,
-        direction: petgraph::Direction,
-    ) -> HashSet<&'a WorkspaceNode> {
-        let indices = nodes
-            .into_iter()
-            .filter_map(|node| self.node_lookup.get(node))
-            .copied();
-
-        let mut visited = HashSet::new();
-
-        let visitor = |event| {
-            if let petgraph::visit::DfsEvent::Discover(n, _) = event {
-                visited.insert(
-                    self.workspace_graph
-                        .node_weight(n)
-                        .expect("node index found during dfs doesn't exist"),
-                );
-            }
-        };
-
-        match direction {
-            petgraph::Direction::Outgoing => {
-                depth_first_search(&self.workspace_graph, indices, visitor)
-            }
-            petgraph::Direction::Incoming => {
-                depth_first_search(Reversed(&self.workspace_graph), indices, visitor)
-            }
-        };
-
-        visited
-    }
-
-    pub fn transitive_external_dependencies<'a, I: IntoIterator<Item = &'a WorkspaceName>>(
+    pub fn transitive_external_dependencies<'a, I: IntoIterator<Item = &'a PackageName>>(
         &self,
-        workspaces: I,
+        packages: I,
     ) -> HashSet<&turborepo_lockfiles::Package> {
-        workspaces
+        packages
             .into_iter()
-            .filter_map(|workspace| self.workspaces.get(workspace))
+            .filter_map(|package| self.packages.get(package))
             .filter_map(|entry| entry.transitive_dependencies.as_ref())
             .flatten()
             .collect()
     }
 
     /// Returns a list of changed packages based on the contents of a previous
-    /// `Lockfile`. This assumes that none of the package.json in the workspace
+    /// `Lockfile`. This assumes that none of the package.json in the package
     /// change, it is the responsibility of the caller to verify this.
-    pub fn changed_packages(
+    pub fn changed_packages_from_lockfile(
         &self,
         previous: &dyn Lockfile,
-    ) -> Result<Vec<WorkspaceName>, ChangedPackagesError> {
+    ) -> Result<Vec<WorkspacePackage>, ChangedPackagesError> {
         let current = self.lockfile().ok_or(ChangedPackagesError::NoLockfile)?;
 
         let external_deps = self
-            .workspaces()
+            .packages()
             .filter_map(|(_name, info)| {
                 info.unresolved_external_dependencies.as_ref().map(|dep| {
                     (
@@ -323,37 +444,68 @@ impl PackageGraph {
             })
             .collect::<HashMap<_, HashMap<_, _>>>();
 
-        let closures = turborepo_lockfiles::all_transitive_closures(previous, external_deps)?;
+        // We're comparing to a previous lockfile, it's possible that a package was
+        // added and thus won't exist in the previous lockfile. In that case,
+        // we're fine to ignore it. Assuming there is not a commit with a stale
+        // lockfile, the same commit should add the package, so it will get
+        // picked up as changed.
+        let closures = turborepo_lockfiles::all_transitive_closures(previous, external_deps, true)?;
 
         let global_change = current.global_change(previous);
 
         let changed = if global_change {
             None
         } else {
-            self.workspaces
+            self.packages
                 .iter()
-                .filter(|(_name, info)| {
-                    closures.get(info.package_path().to_unix().as_str())
-                        != info.transitive_dependencies.as_ref()
+                .filter(|(name, info)| {
+                    let previous_closure = closures.get(info.package_path().to_unix().as_str());
+                    let not_equal = previous_closure != info.transitive_dependencies.as_ref();
+                    if not_equal {
+                        if let (Some(prev), Some(curr)) =
+                            (previous_closure, info.transitive_dependencies.as_ref())
+                        {
+                            debug!(
+                                "package {name} has differing closure: {:?}",
+                                prev.symmetric_difference(curr)
+                            );
+                        }
+                    }
+                    not_equal
                 })
-                .map(|(name, _info)| match name {
-                    WorkspaceName::Other(n) => Some(WorkspaceName::Other(n.to_owned())),
+                .map(|(name, info)| match name {
+                    PackageName::Other(n) => {
+                        let w_name = PackageName::Other(n.to_owned());
+                        Some(WorkspacePackage {
+                            name: w_name.clone(),
+                            path: info.package_path().to_owned(),
+                        })
+                    }
                     // if the root package has changed, then we should report `None`
                     // since all packages need to be revalidated
-                    WorkspaceName::Root => None,
+                    PackageName::Root => None,
                 })
-                .collect::<Option<Vec<WorkspaceName>>>()
+                .collect::<Option<Vec<WorkspacePackage>>>()
         };
 
-        Ok(changed.unwrap_or_else(|| self.workspaces.keys().cloned().collect()))
+        Ok(changed.unwrap_or_else(|| {
+            self.packages
+                .iter()
+                .map(|(name, info)| WorkspacePackage {
+                    name: name.clone(),
+                    path: info.package_path().to_owned(),
+                })
+                .collect()
+        }))
     }
 
+    // Returns a map of package name and version for external dependencies
     #[allow(dead_code)]
     fn external_dependencies(
         &self,
-        workspace: &WorkspaceName,
-    ) -> Option<&BTreeMap<PackageName, PackageVersion>> {
-        let entry = self.workspaces.get(workspace)?;
+        package: &PackageName,
+    ) -> Option<&BTreeMap<PackageKey, PackageVersion>> {
+        let entry = self.packages.get(package)?;
         entry.unresolved_external_dependencies.as_ref()
     }
 }
@@ -366,24 +518,24 @@ pub enum ChangedPackagesError {
     Lockfile(#[from] turborepo_lockfiles::Error),
 }
 
-impl fmt::Display for WorkspaceName {
+impl fmt::Display for PackageName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            WorkspaceName::Root => f.write_str("//"),
-            WorkspaceName::Other(other) => f.write_str(other),
+            PackageName::Root => f.write_str("//"),
+            PackageName::Other(other) => f.write_str(other),
         }
     }
 }
 
-impl fmt::Display for WorkspaceNode {
+impl fmt::Display for PackageNode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            WorkspaceNode::Root => f.write_str("___ROOT___"),
-            WorkspaceNode::Workspace(workspace) => workspace.fmt(f),
+            PackageNode::Root => f.write_str("___ROOT___"),
+            PackageNode::Workspace(package) => package.fmt(f),
         }
     }
 }
-impl From<String> for WorkspaceName {
+impl From<String> for PackageName {
     fn from(value: String) -> Self {
         match value == "//" {
             true => Self::Root,
@@ -392,17 +544,17 @@ impl From<String> for WorkspaceName {
     }
 }
 
-impl<'a> From<&'a str> for WorkspaceName {
+impl<'a> From<&'a str> for PackageName {
     fn from(value: &'a str) -> Self {
         Self::from(value.to_string())
     }
 }
 
-impl AsRef<str> for WorkspaceName {
+impl AsRef<str> for PackageName {
     fn as_ref(&self) -> &str {
         match self {
-            WorkspaceName::Root => "//",
-            WorkspaceName::Other(workspace) => workspace,
+            PackageName::Root => "//",
+            PackageName::Other(package) => package,
         }
     }
 }
@@ -412,7 +564,6 @@ mod test {
     use std::assert_matches::assert_matches;
 
     use serde_json::json;
-    use turbopath::AbsoluteSystemPathBuf;
 
     use super::*;
     use crate::discovery::PackageDiscovery;
@@ -420,12 +571,18 @@ mod test {
     struct MockDiscovery;
     impl PackageDiscovery for MockDiscovery {
         async fn discover_packages(
-            &mut self,
+            &self,
         ) -> Result<crate::discovery::DiscoveryResponse, crate::discovery::Error> {
             Ok(crate::discovery::DiscoveryResponse {
                 package_manager: PackageManager::Npm,
                 workspaces: vec![],
             })
+        }
+
+        async fn discover_packages_blocking(
+            &self,
+        ) -> Result<crate::discovery::DiscoveryResponse, crate::discovery::Error> {
+            self.discover_packages().await
         }
     }
 
@@ -433,17 +590,24 @@ mod test {
     async fn test_single_package_is_depends_on_root() {
         let root =
             AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
-        let pkg_graph = PackageGraph::builder(&root, PackageJson::default())
-            .with_package_discovery(MockDiscovery)
-            .with_single_package_mode(true)
-            .build()
-            .await
-            .unwrap();
+        let pkg_graph = PackageGraph::builder(
+            &root,
+            PackageJson {
+                name: Some("my-package".to_owned()),
+                ..Default::default()
+            },
+        )
+        .with_package_discovery(MockDiscovery)
+        .with_single_package_mode(true)
+        .build()
+        .await
+        .unwrap();
 
         let closure =
-            pkg_graph.transitive_closure(Some(&WorkspaceNode::Workspace(WorkspaceName::Root)));
-        assert!(closure.contains(&WorkspaceNode::Root));
-        assert!(pkg_graph.validate().is_ok());
+            pkg_graph.transitive_closure(Some(&PackageNode::Workspace(PackageName::Root)));
+        assert!(closure.contains(&PackageNode::Root));
+        let result = pkg_graph.validate();
+        assert!(result.is_ok(), "expected ok {:?}", result);
     }
 
     #[tokio::test]
@@ -452,7 +616,10 @@ mod test {
             AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
         let pkg_graph = PackageGraph::builder(
             &root,
-            PackageJson::from_value(json!({ "name": "root" })).unwrap(),
+            PackageJson::from_value(
+                json!({ "name": "root", "dependencies": { "a": "workspace:*"} }),
+            )
+            .unwrap(),
         )
         .with_package_discovery(MockDiscovery)
         .with_package_jsons(Some({
@@ -484,20 +651,20 @@ mod test {
         .unwrap();
 
         assert!(pkg_graph.validate().is_ok());
-        let closure = pkg_graph.transitive_closure(Some(&WorkspaceNode::Workspace("a".into())));
+        let closure = pkg_graph.transitive_closure(Some(&PackageNode::Workspace("a".into())));
         assert_eq!(
             closure,
             [
-                WorkspaceNode::Root,
-                WorkspaceNode::Workspace("a".into()),
-                WorkspaceNode::Workspace("b".into())
+                PackageNode::Root,
+                PackageNode::Workspace("a".into()),
+                PackageNode::Workspace("b".into())
             ]
             .iter()
             .collect::<HashSet<_>>()
         );
         let b_external = pkg_graph
-            .workspaces
-            .get(&WorkspaceName::from("b"))
+            .packages
+            .get(&PackageName::from("b"))
             .unwrap()
             .unresolved_external_dependencies
             .as_ref()
@@ -505,6 +672,19 @@ mod test {
 
         let pkg_version = b_external.get("c").unwrap();
         assert_eq!(pkg_version, "1.2.3");
+        let closure =
+            pkg_graph.transitive_closure(Some(&PackageNode::Workspace(PackageName::Root)));
+        assert_eq!(
+            closure,
+            [
+                PackageNode::Root,
+                PackageNode::Workspace(PackageName::Root),
+                PackageNode::Workspace("a".into()),
+                PackageNode::Workspace("b".into()),
+            ]
+            .iter()
+            .collect::<HashSet<_>>()
+        );
     }
 
     #[derive(Debug)]
@@ -563,6 +743,10 @@ mod test {
         fn global_change(&self, _other: &dyn Lockfile) -> bool {
             unreachable!("global change detection not necessary for package graph construction")
         }
+
+        fn turbo_version(&self) -> Option<String> {
+            None
+        }
     }
 
     #[tokio::test]
@@ -604,18 +788,18 @@ mod test {
         .unwrap();
 
         assert!(pkg_graph.validate().is_ok());
-        let foo = WorkspaceName::from("foo");
-        let bar = WorkspaceName::from("bar");
+        let foo = PackageName::from("foo");
+        let bar = PackageName::from("bar");
 
         let foo_deps = pkg_graph
-            .workspaces
+            .packages
             .get(&foo)
             .unwrap()
             .transitive_dependencies
             .as_ref()
             .unwrap();
         let bar_deps = pkg_graph
-            .workspaces
+            .packages
             .get(&bar)
             .unwrap()
             .transitive_dependencies
@@ -722,5 +906,18 @@ mod test {
                 graph::Error::SelfDependency(_)
             ))
         );
+    }
+
+    #[tokio::test]
+    async fn test_does_not_require_name_for_root_package_json() {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        let pkg_graph = PackageGraph::builder(&root, PackageJson::from_value(json!({})).unwrap())
+            .with_package_discovery(MockDiscovery)
+            .build()
+            .await
+            .unwrap();
+
+        assert!(pkg_graph.validate().is_ok());
     }
 }

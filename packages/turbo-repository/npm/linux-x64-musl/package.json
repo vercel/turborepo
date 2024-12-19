@@ -1,0 +1,26 @@
+{
+  "name": "@turbo/repository-linux-x64-musl",
+  "version": "0.0.1-canary.10",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vercel/turborepo",
+    "directory": "packages/turbo-repository/npm/linux-x64-musl"
+  },
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "libc": [
+    "musl"
+  ],
+  "main": "repository.linux-x64-musl.node",
+  "files": [
+    "repository.linux-x64-musl.node"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">= 10"
+  }
+}

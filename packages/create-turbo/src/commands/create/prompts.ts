@@ -9,7 +9,7 @@ export async function directory({ dir }: { dir: CreateCommandArgument }) {
   }>({
     type: "input",
     name: "projectDirectory",
-    message: "Where would you like to create your turborepo?",
+    message: "Where would you like to create your Turborepo?",
     when: !dir,
     default: "./my-turborepo",
     validate: (d: string) => {
@@ -53,10 +53,10 @@ export async function packageManager({
       // provided, but isn't available (always allow npm)
       !manager || !availablePackageManagers[manager as PackageManager],
     choices: [
-      { pm: "npm", label: "npm workspaces" },
-      { pm: "pnpm", label: "pnpm workspaces" },
-      { pm: "yarn", label: "yarn workspaces" },
-      { pm: "bun", label: "bun workspaces (beta)" },
+      { pm: "npm", label: "npm" },
+      { pm: "pnpm", label: "pnpm" },
+      { pm: "yarn", label: "yarn" },
+      { pm: "bun", label: "Bun (beta)" },
     ].map(({ pm, label }) => ({
       name: label,
       value: pm,

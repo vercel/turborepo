@@ -12,18 +12,17 @@ npx create-turbo@latest -e with-docker
 
 ## What's inside?
 
-This turborepo uses [Yarn](https://classic.yarnpkg.com/lang/en/) as a package manager. It includes the following packages/apps:
+This Turborepo includes the following:
 
 ### Apps and Packages
 
-- `@repo/web`: a [Next.js](https://nextjs.org/) app
-- `@repo/api`: an [Express](https://expressjs.com/) server
-- `@repo/ui`: ui: a React component library
-- `@repo/eslint-config-custom`: `eslint` configurations for client side applications (includes `eslint-config-next` and `eslint-config-prettier`)
-- `@repo/eslint-config-custom-server`: `eslint` configurations for server side applications (includes `eslint-config-next` and `eslint-config-prettier`)
-- `scripts`: Jest configurations
+- `web`: a [Next.js](https://nextjs.org/) app
+- `api`: an [Express](https://expressjs.com/) server
+- `@repo/ui`: a React component library
 - `@repo/logger`: Isomorphic logger (a small wrapper around console.log)
+- `@repo/eslint-config`: ESLint presets
 - `@repo/typescript-config`: tsconfig.json's used throughout the monorepo
+- `@repo/jest-presets`: Jest configurations
 
 Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
 
@@ -32,6 +31,9 @@ Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
 This repo is configured to be built with Docker, and Docker compose. To build all apps in this repo:
 
 ```
+# Install dependencies
+yarn install
+
 # Create a network, which allows containers to communicate
 # with each other, by using their container name as a hostname
 docker network create app_network

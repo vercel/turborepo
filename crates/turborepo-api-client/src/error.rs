@@ -7,6 +7,8 @@ use crate::CachingStatus;
 
 #[derive(Debug, Error)]
 pub enum Error {
+    #[error("Error reading from disk: {0}")]
+    ReadError(#[from] std::io::Error),
     #[error("Error making HTTP request: {0}")]
     ReqwestError(#[from] reqwest::Error),
     #[error("skipping HTTP Request, too many failures have occurred.\nLast error: {0}")]
@@ -36,6 +38,17 @@ pub enum Error {
         err: serde_json::Error,
         text: String,
     },
+    #[error(
+        "[HTTP {status}] request to {url} returned \"{message}\" \ntry logging in again, or force \
+         a new token (turbo login <--sso-team your_team> -f)."
+    )]
+    InvalidToken {
+        status: u16,
+        url: String,
+        message: String,
+    },
+    #[error("[HTTP 403] token is forbidden from accessing {url}")]
+    ForbiddenToken { url: String },
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

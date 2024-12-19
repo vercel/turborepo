@@ -1,19 +1,20 @@
 use std::{
-    fmt::{Debug, Display, Formatter},
+    fmt::{Debug, Display},
     io::Write,
 };
 
 use console::{Style, StyledObject};
 use tracing::error;
 
-use crate::UI;
+use crate::{ColorConfig, LineWriter};
 
-/// Writes messages with different prefixes, depending on log level. Note that
-/// this does output the prefix when message is empty, unlike the Go
+/// Writes messages with different prefixes, depending on log level.
+///
+/// Note that this does output the prefix when message is empty, unlike the Go
 /// implementation. We do this because this behavior is what we actually
 /// want for replaying logs.
 pub struct PrefixedUI<W> {
-    ui: UI,
+    color_config: ColorConfig,
     output_prefix: Option<StyledObject<String>>,
     warn_prefix: Option<StyledObject<String>>,
     error_prefix: Option<StyledObject<String>>,
@@ -23,9 +24,9 @@ pub struct PrefixedUI<W> {
 }
 
 impl<W: Write> PrefixedUI<W> {
-    pub fn new(ui: UI, out: W, err: W) -> Self {
+    pub fn new(color_config: ColorConfig, out: W, err: W) -> Self {
         Self {
-            ui,
+            color_config,
             out,
             err,
             output_prefix: None,
@@ -36,17 +37,17 @@ impl<W: Write> PrefixedUI<W> {
     }
 
     pub fn with_output_prefix(mut self, output_prefix: StyledObject<String>) -> Self {
-        self.output_prefix = Some(self.ui.apply(output_prefix));
+        self.output_prefix = Some(self.color_config.apply(output_prefix));
         self
     }
 
     pub fn with_warn_prefix(mut self, warn_prefix: StyledObject<String>) -> Self {
-        self.warn_prefix = Some(self.ui.apply(warn_prefix));
+        self.warn_prefix = Some(self.color_config.apply(warn_prefix));
         self
     }
 
     pub fn with_error_prefix(mut self, error_prefix: StyledObject<String>) -> Self {
-        self.error_prefix = Some(self.ui.apply(error_prefix));
+        self.error_prefix = Some(self.color_config.apply(error_prefix));
         self
     }
 
@@ -85,15 +86,14 @@ impl<W: Write> PrefixedUI<W> {
 
     /// Construct a PrefixedWriter which will behave the same as `output`, but
     /// without the requirement that messages be valid UTF-8
-    pub(crate) fn output_prefixed_writer(&mut self) -> PrefixedWriter<&mut W> {
-        PrefixedWriter {
-            prefix: self
-                .output_prefix
-                .as_ref()
-                .map(|prefix| prefix.to_string())
-                .unwrap_or_default(),
-            writer: &mut self.out,
-        }
+    pub fn output_prefixed_writer(&mut self) -> PrefixedWriter<&mut W> {
+        PrefixedWriter::new(
+            self.color_config,
+            self.output_prefix
+                .clone()
+                .unwrap_or_else(|| Style::new().apply_to(String::new())),
+            &mut self.out,
+        )
     }
 }
 
@@ -107,26 +107,42 @@ enum Command {
 
 /// Wraps a writer with a prefix before the actual message.
 pub struct PrefixedWriter<W> {
-    prefix: String,
-    writer: W,
-}
-
-impl<W> Debug for PrefixedWriter<W> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("PrefixedWriter")
-            .field("prefix", &self.prefix)
-            .finish()
-    }
+    inner: LineWriter<PrefixedWriterInner<W>>,
 }
 
 impl<W: Write> PrefixedWriter<W> {
-    pub fn new(ui: UI, prefix: StyledObject<impl Display>, writer: W) -> Self {
-        let prefix = ui.apply(prefix).to_string();
-        Self { prefix, writer }
+    pub fn new(color_config: ColorConfig, prefix: StyledObject<impl Display>, writer: W) -> Self {
+        Self {
+            inner: LineWriter::new(PrefixedWriterInner::new(color_config, prefix, writer)),
+        }
     }
 }
 
 impl<W: Write> Write for PrefixedWriter<W> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.inner.write(buf)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.inner.flush()
+    }
+}
+
+/// Wraps a writer so that a prefix will be added at the start of each line.
+/// Expects to only be called with complete lines.
+struct PrefixedWriterInner<W> {
+    prefix: String,
+    writer: W,
+}
+
+impl<W: Write> PrefixedWriterInner<W> {
+    pub fn new(color_config: ColorConfig, prefix: StyledObject<impl Display>, writer: W) -> Self {
+        let prefix = color_config.apply(prefix).to_string();
+        Self { prefix, writer }
+    }
+}
+
+impl<W: Write> Write for PrefixedWriterInner<W> {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         let mut is_first = true;
         for chunk in buf.split_inclusive(|c| *c == b'\r') {
@@ -142,6 +158,7 @@ impl<W: Write> Write for PrefixedWriter<W> {
             self.writer.write_all(chunk)?;
             is_first = false;
         }
+
         // We do end up writing more bytes than this to the underlying writer, but we
         // cannot report this to the callers as the amount of bytes we report
         // written must be less than or equal to the number of bytes in the buffer.
@@ -159,10 +176,10 @@ mod test {
 
     use super::*;
 
-    fn prefixed_ui<W: Write>(out: W, err: W, ui: UI) -> PrefixedUI<W> {
+    fn prefixed_ui<W: Write>(out: W, err: W, color_config: ColorConfig) -> PrefixedUI<W> {
         let output_prefix = crate::BOLD.apply_to("output ".to_string());
         let warn_prefix = crate::MAGENTA.apply_to("warn ".to_string());
-        PrefixedUI::new(ui, out, err)
+        PrefixedUI::new(color_config, out, err)
             .with_output_prefix(output_prefix)
             .with_warn_prefix(warn_prefix)
             .with_error_prefix(crate::MAGENTA.apply_to("error ".to_string()))
@@ -178,7 +195,7 @@ mod test {
         let mut out = Vec::new();
         let mut err = Vec::new();
 
-        let mut prefixed_ui = prefixed_ui(&mut out, &mut err, UI::new(strip_ansi));
+        let mut prefixed_ui = prefixed_ui(&mut out, &mut err, ColorConfig::new(strip_ansi));
         match cmd {
             Command::Output => prefixed_ui.output("all good"),
             Command::Warn => prefixed_ui.warn("be careful!"),
@@ -196,8 +213,8 @@ mod test {
     #[test_case(false, "\u{1b}[1mfoo#build: \u{1b}[0mcool!")]
     fn test_prefixed_writer(strip_ansi: bool, expected: &str) {
         let mut buffer = Vec::new();
-        let mut writer = PrefixedWriter::new(
-            UI::new(strip_ansi),
+        let mut writer = PrefixedWriterInner::new(
+            ColorConfig::new(strip_ansi),
             crate::BOLD.apply_to("foo#build: "),
             &mut buffer,
         );
@@ -213,13 +230,50 @@ mod test {
     #[test_case("\n", "turbo > \n" ; "leading new line")]
     fn test_prefixed_writer_cr(input: &str, expected: &str) {
         let mut buffer = Vec::new();
-        let mut writer = PrefixedWriter::new(
-            UI::new(false),
+        let mut writer = PrefixedWriterInner::new(
+            ColorConfig::new(false),
             Style::new().apply_to("turbo > "),
             &mut buffer,
         );
 
         writer.write_all(input.as_bytes()).unwrap();
         assert_eq!(String::from_utf8(buffer).unwrap(), expected);
+    }
+
+    #[test_case(&["foo"], "" ; "no newline")]
+    #[test_case(&["\n"], "\n" ; "one newline")]
+    #[test_case(&["foo\n"], "foo\n" ; "single newline")]
+    #[test_case(&["foo ", "bar ", "baz\n"], "foo bar baz\n" ; "building line")]
+    #[test_case(&["multiple\nlines\nin\none"], "multiple\nlines\nin\n" ; "multiple lines")]
+    fn test_line_writer(inputs: &[&str], expected: &str) {
+        let mut buffer = Vec::new();
+        let mut writer = LineWriter::new(&mut buffer);
+        for input in inputs {
+            writer.write_all(input.as_bytes()).unwrap();
+        }
+
+        assert_eq!(String::from_utf8(buffer).unwrap(), expected);
+    }
+
+    #[test]
+    fn test_prefixed_writer_split_lines() {
+        let mut buffer = Vec::new();
+        let mut writer = PrefixedWriter::new(
+            ColorConfig::new(false),
+            Style::new().apply_to("turbo > "),
+            &mut buffer,
+        );
+
+        writer.write_all(b"not a line yet").unwrap();
+        writer
+            .write_all(b", now\nbut \ranother one starts")
+            .unwrap();
+        writer.write_all(b" done\n").unwrap();
+        writer.write_all(b"\n").unwrap();
+        assert_eq!(
+            String::from_utf8(buffer).unwrap(),
+            "turbo > not a line yet, now\nturbo > but \rturbo > another one starts done\nturbo > \
+             \n"
+        );
     }
 }

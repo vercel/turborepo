@@ -1,6 +1,6 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "pipeline": {
+  "tasks": {
     "build": {
       "outputs": []
     },
@@ -11,5 +11,6 @@
     "web#build": {
       "dependsOn": ["web#gen"]
     }
-  }
+  },
+  "ui": "stream"
 }

@@ -26,12 +26,19 @@ on:
         default: "prerelease"
         type: choice
         options:
+          # Bump the canary version of the existing semver release
           - prerelease
+          # Bump to the next patch version, creating its first canary release
           - prepatch
+          # Bump to the next minor version, creating its first canary release
           - preminor
+          # Bump to the next major version, creating its first canary release
           - premajor
+          # Bump to the next patch version
           - patch
+          # Bump to the next minor version
           - minor
+          # Bump to the next major version
           - major
       dry_run:
         description: "Do a dry run, skipping the final publish step."
@@ -41,7 +48,7 @@ jobs:
   stage:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-node
         with:
           enable-corepack: false
@@ -57,7 +64,7 @@ jobs:
         id: stage
         run: cd cli && make stage-release && echo "STAGE_BRANCH=$(git branch --show-current)" >> $GITHUB_OUTPUT
       - name: Show Stage Commit
-        run: echo "${{ needs.stage.outputs.stage-branch }}"
+        run: echo "${{ steps.stage.outputs.STAGE_BRANCH }}"
     outputs:
       stage-branch: "${{ steps.stage.outputs.STAGE_BRANCH }}"
 
@@ -68,13 +75,14 @@ jobs:
     steps:
       - name: Show Stage Commit
         run: echo "${{ needs.stage.outputs.stage-branch }}"
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           ref: ${{ needs.stage.outputs.stage-branch }}
-      - name: Build turborepo CLI from source
+      - name: Setup Turborepo Environment
         uses: ./.github/actions/setup-turborepo-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
+
       - name: Run Rust Unit Tests
         run: cargo groups test turborepo
 
@@ -85,13 +93,16 @@ jobs:
     steps:
       - name: Show Stage Commit
         run: echo "${{ needs.stage.outputs.stage-branch }}"
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           ref: ${{ needs.stage.outputs.stage-branch }}
-      - name: Build turborepo CLI from source
+      - name: Setup Turborepo Environment
         uses: ./.github/actions/setup-turborepo-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
+          node-version: "20"
+      - name: Install Global Turbo
+        uses: ./.github/actions/install-global-turbo
       - name: Run JS Package Tests
         run: turbo run check-types test --filter="./packages/*" --color
 
@@ -109,19 +120,16 @@ jobs:
             target: "aarch64-apple-darwin"
             container-options: "--rm"
           - host: ubuntu-latest
-            container: ubuntu:xenial
             container-options: "--platform=linux/amd64 --rm"
-            container-setup: "apt-get update && apt-get install -y curl musl-tools sudo"
             target: "x86_64-unknown-linux-musl"
-            setup: "apt-get install -y build-essential clang-5.0 lldb-5.0 llvm-5.0-dev libclang-5.0-dev"
+            setup: "sudo apt-get update && sudo apt-get install -y build-essential clang lldb llvm libclang-dev curl musl-tools sudo unzip"
           - host: ubuntu-latest
             container-options: "--rm"
             target: "aarch64-unknown-linux-musl"
             rust-build-env: 'CC_aarch64_unknown_linux_musl=clang AR_aarch64_unknown_linux_musl=llvm-ar RUSTFLAGS="-Clink-self-contained=yes -Clinker=rust-lld"'
             setup: "sudo apt-get update && sudo apt-get install -y build-essential musl-tools clang llvm gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu"
           - host: windows-latest
-            target: x86_64-pc-windows-gnu
-            setup: "rustup set default-host x86_64-pc-windows-gnu"
+            target: x86_64-pc-windows-msvc
             container-options: "--rm"
     runs-on: ${{ matrix.settings.host }}
     container:
@@ -131,7 +139,7 @@ jobs:
       - name: Show Stage Commit
         run: echo "${{ needs.stage.outputs.stage-branch }}"
       - name: Checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: "${{ needs.stage.outputs.stage-branch }}"
 
@@ -140,19 +148,30 @@ jobs:
         run: ${{ matrix.settings.container-setup }}
 
       - name: Setup Protoc
-        uses: arduino/setup-protoc@v1.2.0
+        uses: arduino/setup-protoc@v3
         with:
+          version: "26.x"
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup capnproto
         uses: ./.github/actions/setup-capnproto
 
+      - name: Setup Rust Up
+        if: ${{ matrix.settings.container-setup }}
+        # setup-rust-toolchain uses the --retry-connrefused flag with curl to install rustup
+        # this flag was added in curl 7.52.0, but the Ubuntu version we use only has 7.47.0
+        run: |
+          curl --proto '=https' --tlsv1.2 --retry 10 --location --silent --show-error --fail "https://sh.rustup.rs" | sh -s -- --default-toolchain none -y
+          echo "${CARGO_HOME:-$HOME/.cargo}/bin" >> $GITHUB_PATH
+
       - name: Rust Setup
-        uses: actions-rs/toolchain@v1
+        uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          profile: minimal
-          override: true
           target: ${{ matrix.settings.target }}
+          # needed to not make it override the defaults
+          rustflags: ""
+          # we want more specific settings
+          cache: false
 
       - name: Build Setup
         shell: bash
@@ -163,7 +182,7 @@ jobs:
         run: ${{ matrix.settings.rust-build-env }} cargo build --profile release-turborepo -p turbo --target ${{ matrix.settings.target }}
 
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: turbo-${{ matrix.settings.target }}
           path: target/${{ matrix.settings.target }}/release-turborepo/turbo*
@@ -175,7 +194,7 @@ jobs:
     steps:
       - name: Show Stage Commit
         run: echo "${{ needs.stage.outputs.stage-branch }}"
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           ref: "${{ needs.stage.outputs.stage-branch }}"
       - run: git fetch origin --tags
@@ -183,18 +202,16 @@ jobs:
         with:
           enable-corepack: false
 
+      - name: Install Global Turbo
+        uses: ./.github/actions/install-global-turbo
+
       - name: Configure git
         run: |
           git config --global user.name 'Turbobot'
           git config --global user.email 'turbobot@vercel.com'
 
-      - name: Setup turborepo environment
-        uses: ./.github/actions/setup-turborepo-environment
-        with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-
       - name: Install GoReleaser
-        uses: goreleaser/goreleaser-action@v3
+        uses: goreleaser/goreleaser-action@v6
         with:
           distribution: goreleaser-pro
           version: v1.18.2
@@ -203,7 +220,7 @@ jobs:
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
 
       - name: Download Rust artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           path: rust-artifacts
 
@@ -211,10 +228,10 @@ jobs:
         run: |
           mv rust-artifacts/turbo-aarch64-apple-darwin cli/dist-darwin-arm64
           mv rust-artifacts/turbo-aarch64-unknown-linux-musl cli/dist-linux-arm64
-          cp -r rust-artifacts/turbo-x86_64-pc-windows-gnu cli/dist-windows-arm64
+          cp -r rust-artifacts/turbo-x86_64-pc-windows-msvc cli/dist-windows-arm64
           mv rust-artifacts/turbo-x86_64-unknown-linux-musl cli/dist-linux-amd64
           mv rust-artifacts/turbo-x86_64-apple-darwin cli/dist-darwin-amd64
-          mv rust-artifacts/turbo-x86_64-pc-windows-gnu cli/dist-windows-amd64
+          mv rust-artifacts/turbo-x86_64-pc-windows-msvc cli/dist-windows-amd64
 
       - name: Perform Release
         run: cd cli && make publish-turbo SKIP_PUBLISH=${{ inputs.dry_run && '--skip-publish' || '' }}
@@ -224,7 +241,7 @@ jobs:
 
       # Upload published artifacts in case they are needed for debugging later
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: turbo-combined
           path: cli/dist
@@ -236,7 +253,7 @@ jobs:
     steps:
       - name: Show Stage Commit
         run: echo "${{ needs.stage.outputs.stage-branch }}"
-      - uses: actions/checkout@1.0.0
+      - uses: actions/checkout@v4
         with:
           ref: ${{ needs.stage.outputs.stage-branch }}
       - name: Get version

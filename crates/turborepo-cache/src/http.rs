@@ -1,17 +1,27 @@
-use std::{backtrace::Backtrace, io::Write};
+use std::{
+    backtrace::Backtrace,
+    collections::HashMap,
+    io::{Cursor, Write},
+    sync::{Arc, Mutex},
+};
 
+use tokio_stream::StreamExt;
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 use turborepo_analytics::AnalyticsSender;
 use turborepo_api_client::{
-    analytics, analytics::AnalyticsEvent, APIAuth, APIClient, Client, Response,
+    analytics::{self, AnalyticsEvent},
+    APIAuth, APIClient, CacheClient, Response,
 };
 
 use crate::{
     cache_archive::{CacheReader, CacheWriter},
     signature_authentication::ArtifactSignatureAuthenticator,
+    upload_progress::{UploadProgress, UploadProgressQuery},
     CacheError, CacheHitMetadata, CacheOpts, CacheSource,
 };
+
+pub type UploadMap = HashMap<String, UploadProgressQuery<10, 100>>;
 
 pub struct HTTPCache {
     client: APIClient,
@@ -19,6 +29,7 @@ pub struct HTTPCache {
     repo_root: AbsoluteSystemPathBuf,
     api_auth: APIAuth,
     analytics_recorder: Option<AnalyticsSender>,
+    uploads: Arc<Mutex<UploadMap>>,
 }
 
 impl HTTPCache {
@@ -52,6 +63,7 @@ impl HTTPCache {
             client,
             signer_verifier,
             repo_root,
+            uploads: Arc::new(Mutex::new(HashMap::new())),
             api_auth,
             analytics_recorder,
         }
@@ -67,6 +79,7 @@ impl HTTPCache {
     ) -> Result<(), CacheError> {
         let mut artifact_body = Vec::new();
         self.write(&mut artifact_body, anchor, files).await?;
+        let bytes = artifact_body.len();
 
         let tag = self
             .signer_verifier
@@ -74,18 +87,38 @@ impl HTTPCache {
             .map(|signer| signer.generate_tag(hash.as_bytes(), &artifact_body))
             .transpose()?;
 
+        let stream = tokio_util::codec::FramedRead::new(
+            Cursor::new(artifact_body),
+            tokio_util::codec::BytesCodec::new(),
+        )
+        .map(|res| {
+            res.map(|bytes| bytes.freeze())
+                .map_err(turborepo_api_client::Error::from)
+        });
+
+        let (progress, query) = UploadProgress::<10, 100, _>::new(stream, Some(bytes));
+
+        {
+            let mut uploads = self.uploads.lock().unwrap();
+            uploads.insert(hash.to_string(), query);
+        }
+
+        tracing::debug!("uploading {}", hash);
+
         self.client
             .put_artifact(
                 hash,
-                &artifact_body,
+                progress,
+                bytes,
                 duration,
                 tag.as_deref(),
                 &self.api_auth.token,
                 self.api_auth.team_id.as_deref(),
                 self.api_auth.team_slug.as_deref(),
             )
-            .await?;
-
+            .await
+            .map_err(|err| Self::convert_api_error(hash, err))?;
+        tracing::debug!("uploaded {}", hash);
         Ok(())
     }
 
@@ -222,6 +255,10 @@ impl HTTPCache {
         )))
     }
 
+    pub fn requests(&self) -> Arc<Mutex<UploadMap>> {
+        self.uploads.clone()
+    }
+
     #[tracing::instrument(skip_all)]
     pub(crate) fn restore_tar(
         root: &AbsoluteSystemPath,
@@ -230,12 +267,30 @@ impl HTTPCache {
         let mut cache_reader = CacheReader::from_reader(body, true)?;
         cache_reader.restore(root)
     }
+
+    fn convert_api_error(hash: &str, err: turborepo_api_client::Error) -> CacheError {
+        match err {
+            turborepo_api_client::Error::ReqwestError(e) if e.is_timeout() => {
+                CacheError::TimeoutError(hash.to_string())
+            }
+            turborepo_api_client::Error::ReqwestError(e) if e.is_connect() => {
+                CacheError::ConnectError
+            }
+            turborepo_api_client::Error::UnknownStatus { code, .. } if code == "forbidden" => {
+                CacheError::ForbiddenRemoteCacheWrite
+            }
+            e => e.into(),
+        }
+    }
 }
 
 #[cfg(test)]
 mod test {
+    use std::{backtrace::Backtrace, time::Duration};
+
     use anyhow::Result;
     use futures::future::try_join_all;
+    use insta::assert_snapshot;
     use tempfile::tempdir;
     use turbopath::AbsoluteSystemPathBuf;
     use turborepo_analytics::start_analytics;
@@ -275,8 +330,19 @@ mod test {
         let files = &test_case.files;
         let duration = test_case.duration;
 
-        let api_client = APIClient::new(format!("http://localhost:{}", port), 200, "2.0.0", true)?;
-        let opts = CacheOpts::default();
+        let api_client = APIClient::new(
+            format!("http://localhost:{}", port),
+            Some(Duration::from_secs(200)),
+            None,
+            "2.0.0",
+            true,
+        )?;
+        let opts = CacheOpts {
+            cache_dir: ".turbo/cache".into(),
+            cache: Default::default(),
+            workers: 0,
+            remote_cache_opts: None,
+        };
         let api_auth = APIAuth {
             team_id: Some("my-team".to_string()),
             token: "my-token".to_string(),
@@ -324,5 +390,43 @@ mod test {
         analytics_handle.close_with_timeout().await;
 
         Ok(())
+    }
+
+    #[test]
+    fn test_forbidden_error() {
+        let err = HTTPCache::convert_api_error(
+            "hash",
+            turborepo_api_client::Error::UnknownStatus {
+                code: "forbidden".into(),
+                message: "Not authorized".into(),
+                backtrace: Backtrace::capture(),
+            },
+        );
+        assert_snapshot!(err.to_string(), @"Insufficient permissions to write to remote cache. Please verify that your role has write access for Remote Cache Artifact at https://vercel.com/docs/accounts/team-members-and-roles/access-roles/team-level-roles?resource=Remote+Cache+Artifact");
+    }
+
+    #[test]
+    fn test_unknown_status() {
+        let err = HTTPCache::convert_api_error(
+            "hash",
+            turborepo_api_client::Error::UnknownStatus {
+                code: "unknown".into(),
+                message: "Special message".into(),
+                backtrace: Backtrace::capture(),
+            },
+        );
+        assert_snapshot!(err.to_string(), @"failed to contact remote cache: unknown status unknown: Special message");
+    }
+
+    #[test]
+    fn test_cache_disabled() {
+        let err = HTTPCache::convert_api_error(
+            "hash",
+            turborepo_api_client::Error::CacheDisabled {
+                status: turborepo_vercel_api::CachingStatus::Disabled,
+                message: "Cache disabled".into(),
+            },
+        );
+        assert_snapshot!(err.to_string(), @"failed to contact remote cache: Cache disabled");
     }
 }

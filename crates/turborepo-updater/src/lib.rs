@@ -11,7 +11,7 @@ use serde::Deserialize;
 use thiserror::Error as ThisError;
 use update_informer::{
     http_client::{GenericHttpClient, HttpClient},
-    Check, Package, Registry, Result as UpdateResult,
+    Check, Package, Registry, Result as UpdateResult, Version,
 };
 
 mod ui;
@@ -30,6 +30,8 @@ pub enum UpdateNotifierError {
     RenderError(#[from] ui::utils::GetDisplayLengthError),
     #[error("Failed to parse current version")]
     VersionError(#[from] semver::Error),
+    #[error("Failed to check for updates")]
+    FetchError(#[from] Box<dyn std::error::Error>),
 }
 
 #[derive(Deserialize, Debug)]
@@ -94,7 +96,7 @@ fn should_skip_notification() -> bool {
         || !atty::is(atty::Stream::Stdout)
 }
 
-pub fn check_for_updates(
+pub fn display_update_check(
     package_name: &str,
     github_repo: &str,
     footer: Option<&str>,
@@ -107,20 +109,9 @@ pub fn check_for_updates(
         return Ok(());
     }
 
-    // we want notifications per channel (latest, canary, etc) so we need to ensure
-    // we have one cached latest version per channel. UpdateInformer does not
-    // support this out of the box, so we hack it into the name by overloading
-    // owner (in the supported owner/name format) to be channel/name.
-    let parsed_version = SemVerVersion::parse(current_version)?;
-    let tag = get_tag_from_version(&parsed_version.pre);
-    let package_name = format!("{}/{}", tag, package_name);
+    let version = check_for_updates(package_name, current_version, timeout, interval);
 
-    let timeout = timeout.unwrap_or(DEFAULT_TIMEOUT);
-    let interval = interval.unwrap_or(DEFAULT_INTERVAL);
-    let informer = update_informer::new(NPMRegistry, package_name, current_version)
-        .timeout(timeout)
-        .interval(interval);
-    if let Ok(Some(version)) = informer.check_version() {
+    if let Ok(Some(version)) = version {
         let latest_version = version.to_string();
         // TODO: make this package manager aware
         let update_cmd = style("npx @turbo/codemod@latest update").cyan().bold();
@@ -146,4 +137,31 @@ pub fn check_for_updates(
     }
 
     Ok(())
+}
+
+pub fn check_for_updates(
+    package_name: &str,
+    current_version: &str,
+    timeout: Option<Duration>,
+    interval: Option<Duration>,
+) -> Result<Option<Version>, UpdateNotifierError> {
+    // we want notifications per channel (latest, canary, etc) so we need to ensure
+    // we have one cached latest version per channel. UpdateInformer does not
+    // support this out of the box, so we hack it into the name by overloading
+    // owner (in the supported owner/name format) to be channel/name.
+    let parsed_version = SemVerVersion::parse(current_version)?;
+    let tag = get_tag_from_version(&parsed_version.pre);
+    let package_name = format!("{}/{}", tag, package_name);
+
+    let timeout = timeout.unwrap_or(DEFAULT_TIMEOUT);
+    let interval = interval.unwrap_or(DEFAULT_INTERVAL);
+    let informer = update_informer::new(NPMRegistry, package_name, current_version)
+        .timeout(timeout)
+        .interval(interval);
+
+    let data = informer
+        .check_version()
+        .map_err(UpdateNotifierError::FetchError)?;
+
+    Ok(data)
 }

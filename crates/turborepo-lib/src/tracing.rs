@@ -10,10 +10,10 @@ use tracing_appender::{non_blocking::NonBlocking, rolling::RollingFileAppender};
 use tracing_chrome::ChromeLayer;
 pub use tracing_subscriber::reload::Error;
 use tracing_subscriber::{
-    filter::{Filtered, Targets},
+    filter::Filtered,
     fmt::{
         self,
-        format::{DefaultFields, FmtSpan, Writer},
+        format::{DefaultFields, Writer},
         FmtContext, FormatEvent, FormatFields, MakeWriter,
     },
     layer,
@@ -22,7 +22,7 @@ use tracing_subscriber::{
     reload::{self, Handle},
     EnvFilter, Layer, Registry,
 };
-use turborepo_ui::UI;
+use turborepo_ui::ColorConfig;
 
 // a lot of types to make sure we record the right relationships
 
@@ -56,7 +56,7 @@ type DaemonReload = reload::Layer<Option<DaemonLog>, StdErrLogLayered>;
 /// We filter this using a custom filter that only logs events
 /// - with evel `TRACE` or higher for the `turborepo` target
 /// - with level `INFO` or higher for all other targets
-type DaemonLogFiltered = Filtered<DaemonReload, Targets, StdErrLogLayered>;
+type DaemonLogFiltered = Filtered<DaemonReload, EnvFilter, StdErrLogLayered>;
 /// When the `DaemonLogFiltered` is applied to the `StdErrLogLayered`, we get a
 /// `DaemonLogLayered`, which forms the base for the next layer.
 type DaemonLogLayered = layer::Layered<DaemonLogFiltered, StdErrLogLayered>;
@@ -93,16 +93,16 @@ impl TurboSubscriber {
     /// - If the `TURBO_LOG_VERBOSITY` env var is set, it will be used to set
     ///   the verbosity level. Otherwise, the default is `WARN`. See the
     ///   documentation on the RUST_LOG env var for syntax.
-    /// - If the verbosity argument (usually detemined by a flag) is provided,
+    /// - If the verbosity argument (usually determined by a flag) is provided,
     ///   it overrides the default global log level. This means it overrides the
     ///   `TURBO_LOG_VERBOSITY` global setting, but not per-module settings.
     ///
     /// `TurboSubscriber` has optional loggers that can be enabled later:
     /// - `set_daemon_logger` enables logging to a file, using the standard
-    ///  formatter.
+    ///   formatter.
     /// - `enable_chrome_tracing` enables logging to a file, using the chrome
-    ///  tracing formatter.
-    pub fn new_with_verbosity(verbosity: usize, ui: &UI) -> Self {
+    ///   tracing formatter.
+    pub fn new_with_verbosity(verbosity: usize, color_config: &ColorConfig) -> Self {
         let level_override = match verbosity {
             0 => None,
             1 => Some(LevelFilter::INFO),
@@ -110,12 +110,14 @@ impl TurboSubscriber {
             _ => Some(LevelFilter::TRACE),
         };
 
-        // we can't clone so make a new one as needed
-        let env_filter = || {
+        let env_filter = |level: LevelFilter| {
             let filter = EnvFilter::builder()
-                .with_default_directive(LevelFilter::WARN.into())
+                .with_default_directive(level.into())
                 .with_env_var("TURBO_LOG_VERBOSITY")
-                .from_env_lossy();
+                .from_env_lossy()
+                .add_directive("reqwest=error".parse().unwrap())
+                .add_directive("hyper=warn".parse().unwrap())
+                .add_directive("h2=warn".parse().unwrap());
 
             if let Some(max_level) = level_override {
                 filter.add_directive(max_level.into())
@@ -124,18 +126,16 @@ impl TurboSubscriber {
             }
         };
 
-        let daemon_filter = tracing_subscriber::filter::targets::Targets::new()
-            .with_default(Level::INFO)
-            .with_target("turborepo", Level::TRACE);
-
         let stderr = fmt::layer()
             .with_writer(StdErrWrapper {})
-            .event_format(TurboFormatter::new_with_ansi(!ui.should_strip_ansi))
-            .with_filter(env_filter());
+            .event_format(TurboFormatter::new_with_ansi(
+                !color_config.should_strip_ansi,
+            ))
+            .with_filter(env_filter(LevelFilter::WARN));
 
         // we set this layer to None to start with, effectively disabling it
         let (logrotate, daemon_update) = reload::Layer::new(Option::<DaemonLog>::None);
-        let logrotate: DaemonLogFiltered = logrotate.with_filter(daemon_filter);
+        let logrotate: DaemonLogFiltered = logrotate.with_filter(env_filter(LevelFilter::INFO));
 
         let (chrome, chrome_update) = reload::Layer::new(Option::<ChromeLog>::None);
 
@@ -172,7 +172,6 @@ impl TurboSubscriber {
         trace!("created non-blocking file writer");
 
         let layer: DaemonLog = tracing_subscriber::fmt::layer()
-            .with_span_events(FmtSpan::FULL)
             .with_writer(file_writer)
             .with_ansi(false);
 

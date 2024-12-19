@@ -11,7 +11,7 @@ use std::{
 };
 
 use de::Entry;
-use identifiers::{Descriptor, Locator};
+use identifiers::{Descriptor, Ident, Locator};
 use protocol_resolver::DescriptorResolver;
 use serde::Deserialize;
 use thiserror::Error;
@@ -98,6 +98,7 @@ struct BerryPackage {
 struct DependencyMeta {
     optional: Option<bool>,
     unplugged: Option<bool>,
+    built: Option<bool>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -520,6 +521,16 @@ impl Lockfile for BerryLockfile {
             true
         }
     }
+
+    fn turbo_version(&self) -> Option<String> {
+        let turbo_ident = Ident::try_from("turbo").expect("'turbo' is valid identifier");
+        let key = self
+            .locator_package
+            .keys()
+            .find(|key| turbo_ident == key.ident)?;
+        let entry = self.locator_package.get(key)?;
+        Some(entry.version.clone())
+    }
 }
 
 impl LockfileData {
@@ -774,6 +785,7 @@ mod test {
             &lockfile,
             "apps/docs",
             HashMap::from_iter(vec![("lodash".into(), "^4.17.21".into())]),
+            false,
         )
         .unwrap();
 
@@ -809,7 +821,7 @@ mod test {
                 key: "debug@npm:1.0.0".into(),
                 version: "1.0.0".into()
             }
-        )
+        );
     }
 
     #[test]
@@ -883,7 +895,7 @@ mod test {
         .map(|(k, v)| (k.to_string(), v.to_string()))
         .collect();
 
-        let closure = transitive_closure(&lockfile, "packages/ui", unresolved_deps).unwrap();
+        let closure = transitive_closure(&lockfile, "packages/ui", unresolved_deps, false).unwrap();
 
         assert!(closure.contains(&Package {
             key: "ajv@npm:8.11.2".into(),
@@ -893,6 +905,49 @@ mod test {
             key: "uri-js@npm:4.4.1".into(),
             version: "4.4.1".into()
         }));
+    }
+
+    #[test]
+    fn test_nonexistent_resolutions_dependencies() {
+        let data: LockfileData =
+            serde_yaml::from_str(include_str!("../../fixtures/yarn4-resolution.lock")).unwrap();
+        let manifest = BerryManifest {
+            resolutions: Some(
+                [("react@^18.2.0".to_string(), "18.1.0".to_string())]
+                    .iter()
+                    .cloned()
+                    .collect(),
+            ),
+        };
+        let lockfile = BerryLockfile::new(data, Some(manifest)).unwrap();
+
+        let actual = lockfile
+            .resolve_package("packages/something", "react", "^18.2.0")
+            .unwrap()
+            .unwrap();
+        let expected = Package {
+            key: "react@npm:18.1.0".into(),
+            version: "18.1.0".into(),
+        };
+        assert_eq!(actual, expected,);
+
+        let pruned = lockfile
+            .subgraph(
+                &["packages/something".into()],
+                &[
+                    "react@npm:18.1.0".into(),
+                    "loose-envify@npm:1.4.0".into(),
+                    "js-tokens@npm:4.0.0".into(),
+                ],
+            )
+            .unwrap();
+        assert_eq!(
+            pruned
+                .resolve_package("packages/something", "react", "^18.2.0")
+                .unwrap()
+                .unwrap(),
+            expected
+        );
     }
 
     #[test]
@@ -1020,6 +1075,7 @@ mod test {
             )]
             .into_iter()
             .collect(),
+            false,
         )
         .unwrap();
 
@@ -1102,5 +1158,12 @@ mod test {
                 "small-yarn4@workspace:.".to_string(),
             ]
         );
+    }
+
+    #[test]
+    fn test_turbo_version() {
+        let data = LockfileData::from_bytes(include_bytes!("../../fixtures/berry.lock")).unwrap();
+        let lockfile = BerryLockfile::new(data, None).unwrap();
+        assert_eq!(lockfile.turbo_version().as_deref(), Some("1.4.6"));
     }
 }

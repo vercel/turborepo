@@ -15,15 +15,16 @@
     "test": "jest"
   },
   "jest": {
-    "preset": "@repo/jest-presets/jest/node"
+    "preset": "@repo/jest-presets/node"
   },
   "devDependencies": {
-    "@types/jest": "^29.5.11",
-    "eslint": "^8.56.0",
+    "@jest/globals": "^29.7.0",
     "@repo/eslint-config": "*",
-    "jest": "^29.7.0",
     "@repo/jest-presets": "*",
     "@repo/typescript-config": "*",
-    "typescript": "^5.3.3"
+    "@types/node": "^20.11.24",
+    "eslint": "^8.57.0",
+    "jest": "^29.7.0",
+    "typescript": "5.5.4"
   }
 }

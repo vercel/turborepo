@@ -14,6 +14,7 @@ impl Git {
         let mut hashes = GitHashes::new();
         let mut git = Command::new(self.bin.as_std_path())
             .args(["ls-tree", "-r", "-z", "HEAD"])
+            .env("GIT_OPTIONAL_LOCKS", "0")
             .current_dir(root_path)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -71,7 +72,7 @@ fn nom_parse_ls_tree(i: &[u8]) -> nom::IResult<&[u8], LsTreeEntry<'_>> {
     let (i, _) = nom::bytes::complete::take(1usize)(i)?;
     let (i, filename) = nom::bytes::complete::is_not("\0")(i)?;
     // We explicitly support a missing terminator
-    let (i, _) = nom::combinator::opt(nom::bytes::complete::tag(&[b'\0']))(i)?;
+    let (i, _) = nom::combinator::opt(nom::bytes::complete::tag(b"\0"))(i)?;
     Ok((i, LsTreeEntry { filename, hash }))
 }
 

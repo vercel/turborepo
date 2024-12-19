@@ -18,7 +18,7 @@ impl Display for RelativeUnixPath {
 }
 
 impl RelativeUnixPath {
-    pub fn new<'a, P: AsRef<str> + 'a>(value: P) -> Result<&'a Self, PathError> {
+    pub fn new<P: AsRef<str> + ?Sized>(value: &P) -> Result<&Self, PathError> {
         let path = value.as_ref();
         if path.starts_with('/') {
             return Err(PathError::NotRelative(path.to_string()));
@@ -50,6 +50,10 @@ impl RelativeUnixPath {
 
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
     }
 
     pub fn to_owned(&self) -> RelativeUnixPathBuf {

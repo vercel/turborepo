@@ -1,7 +1,11 @@
 {
   "$schema": "../../docs/public/schema.json",
   "extends": ["//"],
-  "pipeline": {
+  "tasks": {
+    "build": {
+      "dependsOn": ["cli#rust-src"],
+      "env": ["NODE_VERSION"]
+    },
     "test": {
       "dependsOn": ["build"]
     }

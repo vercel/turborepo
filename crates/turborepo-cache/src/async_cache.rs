@@ -1,23 +1,22 @@
-use std::sync::{atomic::AtomicU8, Arc};
+use std::sync::{atomic::AtomicU8, Arc, Mutex};
 
 use futures::{stream::FuturesUnordered, StreamExt};
-use tokio::{
-    sync::{mpsc, Semaphore},
-    task::JoinHandle,
-};
+use tokio::sync::{mpsc, oneshot, Semaphore};
 use tracing::{warn, Instrument, Level};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 use turborepo_analytics::AnalyticsSender;
 use turborepo_api_client::{APIAuth, APIClient};
 
-use crate::{multiplexer::CacheMultiplexer, CacheError, CacheHitMetadata, CacheOpts};
+use crate::{
+    http::UploadMap, multiplexer::CacheMultiplexer, CacheError, CacheHitMetadata, CacheOpts,
+};
 
 const WARNING_CUTOFF: u8 = 4;
 
+#[derive(Clone)]
 pub struct AsyncCache {
     real_cache: Arc<CacheMultiplexer>,
     writer_sender: mpsc::Sender<WorkerRequest>,
-    writer_thread: JoinHandle<()>,
 }
 
 enum WorkerRequest {
@@ -27,7 +26,11 @@ enum WorkerRequest {
         duration: u64,
         files: Vec<AnchoredSystemPathBuf>,
     },
-    Flush(tokio::sync::oneshot::Sender<()>),
+    Flush(oneshot::Sender<()>),
+    /// Shutdown the cache. The first oneshot notifies when shutdown starts and
+    /// allows the user to inspect the status of the uploads. The second
+    /// oneshot notifies when the shutdown is complete.
+    Shutdown(oneshot::Sender<Arc<Mutex<UploadMap>>>, oneshot::Sender<()>),
 }
 
 impl AsyncCache {
@@ -50,12 +53,13 @@ impl AsyncCache {
 
         // start a task to manage workers
         let worker_real_cache = real_cache.clone();
-        let writer_thread = tokio::spawn(async move {
+        tokio::spawn(async move {
             let semaphore = Arc::new(Semaphore::new(max_workers));
             let mut workers = FuturesUnordered::new();
             let real_cache = worker_real_cache;
             let warnings = Arc::new(AtomicU8::new(0));
 
+            let mut shutdown_callback = None;
             while let Some(request) = write_consumer.recv().await {
                 match request {
                     WorkerRequest::WriteRequest {
@@ -96,19 +100,35 @@ impl AsyncCache {
                         }
                         drop(callback);
                     }
+                    WorkerRequest::Shutdown(closing, done) => {
+                        shutdown_callback = Some((closing, done));
+                        break;
+                    }
                 };
             }
+            // Drop write consumer to immediately notify callers that cache is shutting down
+            drop(write_consumer);
+
+            let shutdown_callback = if let Some((closing, done)) = shutdown_callback {
+                closing.send(real_cache.requests().unwrap_or_default()).ok();
+                Some(done)
+            } else {
+                None
+            };
 
             // wait for all writers to finish
             while let Some(worker) = workers.next().await {
                 let _ = worker;
+            }
+
+            if let Some(callback) = shutdown_callback {
+                callback.send(()).ok();
             }
         });
 
         Ok(AsyncCache {
             real_cache,
             writer_sender,
-            writer_thread,
         })
     }
 
@@ -154,27 +174,51 @@ impl AsyncCache {
     // Used for testing to ensure that the workers resolve
     // before checking the cache.
     #[tracing::instrument(skip_all)]
-    pub async fn wait(&self) {
-        let (tx, rx) = tokio::sync::oneshot::channel();
+    pub async fn wait(&self) -> Result<(), CacheError> {
+        let (tx, rx) = oneshot::channel();
         self.writer_sender
             .send(WorkerRequest::Flush(tx))
             .await
-            .expect("cache can only be shut down by consuming cache");
+            .map_err(|_| CacheError::CacheShuttingDown)?;
         // Wait until flush callback is finished
         rx.await.ok();
+        Ok(())
     }
 
-    pub async fn shutdown(self) {
-        let Self { writer_thread, .. } = self;
-        writer_thread.await.unwrap();
+    /// Shut down the cache, waiting for all workers to finish writing.
+    /// This function returns as soon as the shut down has started,
+    /// returning a channel through which workers can report on their
+    /// progress.
+    #[tracing::instrument(skip_all)]
+    pub async fn start_shutdown(
+        &self,
+    ) -> Result<(Arc<Mutex<UploadMap>>, oneshot::Receiver<()>), CacheError> {
+        let (closing_tx, closing_rx) = oneshot::channel::<Arc<Mutex<UploadMap>>>();
+        let (closed_tx, closed_rx) = oneshot::channel::<()>();
+        self.writer_sender
+            .send(WorkerRequest::Shutdown(closing_tx, closed_tx))
+            .await
+            .map_err(|_| CacheError::CacheShuttingDown)?;
+        Ok((closing_rx.await.unwrap(), closed_rx)) // todo
+    }
+
+    /// Shut down the cache, waiting for all workers to finish writing.
+    /// This function returns only when the last worker is complete.
+    /// It is a convenience wrapper around `start_shutdown`.
+    #[tracing::instrument(skip_all)]
+    pub async fn shutdown(&self) -> Result<(), CacheError> {
+        let (_, closed_rx) = self.start_shutdown().await?;
+        closed_rx.await.ok();
+        Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::assert_matches::assert_matches;
+    use std::{assert_matches::assert_matches, time::Duration};
 
     use anyhow::Result;
+    use camino::Utf8PathBuf;
     use futures::future::try_join_all;
     use tempfile::tempdir;
     use turbopath::AbsoluteSystemPathBuf;
@@ -183,7 +227,8 @@ mod tests {
 
     use crate::{
         test_cases::{get_test_cases, TestCase},
-        AsyncCache, CacheHitMetadata, CacheOpts, CacheSource, RemoteCacheOpts,
+        AsyncCache, CacheActions, CacheConfig, CacheHitMetadata, CacheOpts, CacheSource,
+        RemoteCacheOpts,
     };
 
     #[tokio::test]
@@ -210,10 +255,17 @@ mod tests {
         let hash = format!("{}-no-fs", test_case.hash);
 
         let opts = CacheOpts {
-            override_dir: None,
-            remote_cache_read_only: false,
-            skip_remote: false,
-            skip_filesystem: true,
+            cache_dir: Utf8PathBuf::from(".turbo/cache"),
+            cache: CacheConfig {
+                local: CacheActions {
+                    read: false,
+                    write: false,
+                },
+                remote: CacheActions {
+                    read: true,
+                    write: true,
+                },
+            },
             workers: 10,
             remote_cache_opts: Some(RemoteCacheOpts {
                 unused_team_id: Some("my-team".to_string()),
@@ -221,7 +273,13 @@ mod tests {
             }),
         };
 
-        let api_client = APIClient::new(format!("http://localhost:{}", port), 200, "2.0.0", true)?;
+        let api_client = APIClient::new(
+            format!("http://localhost:{}", port),
+            Some(Duration::from_secs(200)),
+            None,
+            "2.0.0",
+            true,
+        )?;
         let api_auth = Some(APIAuth {
             team_id: Some("my-team-id".to_string()),
             token: "my-token".to_string(),
@@ -250,14 +308,10 @@ mod tests {
             .unwrap();
 
         // Wait for async cache to process
-        async_cache.wait().await;
+        async_cache.wait().await.unwrap();
 
-        let fs_cache_path = repo_root_path.join_components(&[
-            "node_modules",
-            ".cache",
-            "turbo",
-            &format!("{}.tar.zst", hash),
-        ]);
+        let fs_cache_path =
+            repo_root_path.join_components(&[".turbo", "cache", &format!("{}.tar.zst", hash)]);
 
         // Confirm that fs cache file does *not* exist
         assert!(!fs_cache_path.exists());
@@ -273,6 +327,12 @@ mod tests {
             })
         );
 
+        async_cache.shutdown().await.unwrap();
+        assert!(
+            async_cache.shutdown().await.is_err(),
+            "second shutdown should error"
+        );
+
         Ok(())
     }
 
@@ -284,10 +344,17 @@ mod tests {
         let hash = format!("{}-no-remote", test_case.hash);
 
         let opts = CacheOpts {
-            override_dir: None,
-            remote_cache_read_only: false,
-            skip_remote: true,
-            skip_filesystem: false,
+            cache_dir: Utf8PathBuf::from(".turbo/cache"),
+            cache: CacheConfig {
+                local: CacheActions {
+                    read: true,
+                    write: true,
+                },
+                remote: CacheActions {
+                    read: false,
+                    write: false,
+                },
+            },
             workers: 10,
             remote_cache_opts: Some(RemoteCacheOpts {
                 unused_team_id: Some("my-team".to_string()),
@@ -297,7 +364,13 @@ mod tests {
 
         // Initialize client with invalid API url to ensure that we don't hit the
         // network
-        let api_client = APIClient::new("http://example.com", 200, "2.0.0", true)?;
+        let api_client = APIClient::new(
+            "http://example.com",
+            Some(Duration::from_secs(200)),
+            None,
+            "2.0.0",
+            true,
+        )?;
         let api_auth = Some(APIAuth {
             team_id: Some("my-team-id".to_string()),
             token: "my-token".to_string(),
@@ -326,14 +399,10 @@ mod tests {
             .unwrap();
 
         // Wait for async cache to process
-        async_cache.wait().await;
+        async_cache.wait().await.unwrap();
 
-        let fs_cache_path = repo_root_path.join_components(&[
-            "node_modules",
-            ".cache",
-            "turbo",
-            &format!("{}.tar.zst", hash),
-        ]);
+        let fs_cache_path =
+            repo_root_path.join_components(&[".turbo", "cache", &format!("{}.tar.zst", hash)]);
 
         // Confirm that fs cache file exists
         assert!(fs_cache_path.exists());
@@ -357,6 +426,12 @@ mod tests {
         // Confirm that we get a cache miss
         assert!(response.is_none());
 
+        async_cache.shutdown().await.unwrap();
+        assert!(
+            async_cache.shutdown().await.is_err(),
+            "second shutdown should error"
+        );
+
         Ok(())
     }
 
@@ -368,10 +443,17 @@ mod tests {
         let hash = format!("{}-both", test_case.hash);
 
         let opts = CacheOpts {
-            override_dir: None,
-            remote_cache_read_only: false,
-            skip_remote: false,
-            skip_filesystem: false,
+            cache_dir: Utf8PathBuf::from(".turbo/cache"),
+            cache: CacheConfig {
+                local: CacheActions {
+                    read: true,
+                    write: true,
+                },
+                remote: CacheActions {
+                    read: true,
+                    write: true,
+                },
+            },
             workers: 10,
             remote_cache_opts: Some(RemoteCacheOpts {
                 unused_team_id: Some("my-team".to_string()),
@@ -379,7 +461,13 @@ mod tests {
             }),
         };
 
-        let api_client = APIClient::new(format!("http://localhost:{}", port), 200, "2.0.0", true)?;
+        let api_client = APIClient::new(
+            format!("http://localhost:{}", port),
+            Some(Duration::from_secs(200)),
+            None,
+            "2.0.0",
+            true,
+        )?;
         let api_auth = Some(APIAuth {
             team_id: Some("my-team-id".to_string()),
             token: "my-token".to_string(),
@@ -408,14 +496,10 @@ mod tests {
             .unwrap();
 
         // Wait for async cache to process
-        async_cache.wait().await;
+        async_cache.wait().await.unwrap();
 
-        let fs_cache_path = repo_root_path.join_components(&[
-            "node_modules",
-            ".cache",
-            "turbo",
-            &format!("{}.tar.zst", hash),
-        ]);
+        let fs_cache_path =
+            repo_root_path.join_components(&[".turbo", "cache", &format!("{}.tar.zst", hash)]);
 
         // Confirm that fs cache file exists
         assert!(fs_cache_path.exists());
@@ -443,6 +527,12 @@ mod tests {
                 source: CacheSource::Remote,
                 time_saved: test_case.duration
             })
+        );
+
+        async_cache.shutdown().await.unwrap();
+        assert!(
+            async_cache.shutdown().await.is_err(),
+            "second shutdown should error"
         );
 
         Ok(())

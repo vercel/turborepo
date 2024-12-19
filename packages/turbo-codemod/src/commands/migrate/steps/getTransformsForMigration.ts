@@ -12,11 +12,21 @@ export function getTransformsForMigration({
   fromVersion: string;
   toVersion: string;
 }): Array<Transformer> {
+  const fromMajor = fromVersion.split(".")[0];
+  // if migrating "from" to "to" spans a major, floor "from" to ensure all required codemods are run
+  const isMajorBump = fromMajor !== toVersion.split(".")[0];
+  const resolvedFromVersion = isMajorBump ? `${fromMajor}.0.0` : fromVersion;
   const transforms = loadTransformers().filter((transformer) => {
-    return (
+    const inOriginalRange =
       gt(transformer.introducedIn, fromVersion) &&
-      lte(transformer.introducedIn, toVersion)
-    );
+      lte(transformer.introducedIn, toVersion);
+    // If a transform is only in the expanded range, then we should only perform it
+    // if it is idempotent.
+    const idempotentAndInExpandedRange =
+      (transformer.idempotent ?? true) &&
+      gt(transformer.introducedIn, resolvedFromVersion) &&
+      lte(transformer.introducedIn, toVersion);
+    return inOriginalRange || idempotentAndInExpandedRange;
   });
 
   // Sort the transforms from oldest (1.0) to newest (1.10).

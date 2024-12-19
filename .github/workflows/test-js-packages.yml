@@ -1,0 +1,122 @@
+name: JS Package Tests
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - package.json
+      - pnpm-workspace.yaml
+      - pnpm-lock.yaml
+      - "packages/**"
+      - ".github/actions/**"
+      - ".github/workflows/test-js-packages.yml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  actions: write
+  contents: read
+  pull-requests: read
+
+jobs:
+  js_packages:
+    name: "JS Package Tests (${{matrix.os.name}}, Node ${{matrix.node-version}})"
+    timeout-minutes: 30
+    runs-on: ${{ matrix.os.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - name: ubuntu
+            runner:
+              - "self-hosted"
+              - "linux"
+              - "x64"
+              - "metal"
+          - name: macos
+            runner: macos-13
+        node-version:
+          - 18
+          - 20
+    env:
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      TURBO_REMOTE_ONLY: true
+
+    steps:
+      # on main -> current + prev commit
+      # pr -> pr commits + base commit
+      - name: Determine fetch depth
+        id: fetch-depth
+        run: |
+          echo "depth=$(( ${{ github.event.pull_request.commits || 1 }} + 1 ))" >> $GITHUB_OUTPUT
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: ${{ steps.fetch-depth.outputs.depth  }}
+
+      - name: "Setup Node"
+        uses: ./.github/actions/setup-node
+        with:
+          extra-flags: --no-optional
+          node-version: ${{ matrix.node-version }}
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
+
+      - name: Install Global Turbo
+        uses: ./.github/actions/install-global-turbo
+
+      - name: Run tests
+        # We manually set TURBO_API to an empty string to override Hetzner env
+        # We filter out turborepo-repository because it's a native package and needs
+        # to run when turbo core changes. This job (`js_packages`) does not run on turborpeo core
+        # changes, and we don't want to enable that beahvior for _all_ our JS packages.
+        run: |
+          TURBO_API= turbo run check-types test --filter="!turborepo-repository" --filter={./packages/*}...[${{ github.event.pull_request.base.sha || 'HEAD^1' }}] --color --env-mode=strict
+        env:
+          NODE_VERSION: ${{ matrix.node-version }}
+
+  summary:
+    name: Turborepo JS Test Summary
+    runs-on: ubuntu-latest
+    if: always()
+    needs:
+      - js_packages
+    steps:
+      - name: Compute info
+        id: info
+        if: always()
+        run: |
+          cancelled=false
+          failure=false
+
+          subjob () {
+            local result=$1
+            if [ "$result" = "cancelled" ]; then
+              cancelled=true
+            elif [ "$result" != "success" ] && [ "$result" != "skipped" ]; then
+              failure=true
+            fi
+          }
+
+          subjob ${{needs.js_packages.result}}
+
+          if [ "$cancelled" = "true" ]; then
+              echo "cancelled=true" >> $GITHUB_OUTPUT
+          elif [ "$failure" = "true" ]; then
+            echo "failure=true" >> $GITHUB_OUTPUT
+          else
+            echo "success=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Failed
+        if: steps.info.outputs.failure == 'true'
+        run: exit 1
+
+      - name: Succeeded
+        if: steps.info.outputs.success == 'true'
+        run: echo Ok

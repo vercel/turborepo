@@ -1,6 +1,7 @@
 {
-  "$schema": "./docs/public/schema.json",
-  // The following are used by tools such as pnpm, gh actions to setup pnpm, and the Go toolchain
+  "$schema": "https://turbo.build/schema.json",
+  "ui": "tui",
+  // The following are used by tools such as pnpm, gh actions to setup pnpm, etc.
   "globalPassThroughEnv": [
     "Path",
     "APPDATA",
@@ -8,7 +9,6 @@
     "TMPDIR",
     "HOME",
     "TMP",
-    "GOROOT",
     "USERPROFILE",
     "SCCACHE_GHA_ENABLED",
     "SCCACHE_BUCKET",
@@ -23,9 +23,11 @@
   // This is probably overkill, but we do things per-platform often enough that we should segment
   // everything by OS and RUNNER_OS. This will segment between GH actions and everything else for now.
   "globalEnv": ["OS", "RUNNER_OS"],
-  "pipeline": {
+  "tasks": {
     "test": {
       "outputs": ["coverage/**/*"],
+
+      "env": ["NODE_VERSION"],
 
       // ^build is generically set here, we haven't fully enumerated which workspaces
       // actually need to build before running tests.

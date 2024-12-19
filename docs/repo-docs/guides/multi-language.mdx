@@ -1,0 +1,134 @@
+---
+title: Multi-language support
+description: Learn how to use multiple languages with Turborepo.
+---
+
+import { PackageManagerTabs, Tab } from '#/components/tabs';
+import { LinkToDocumentation } from '#/components/link-to-documentation';
+
+Turborepo is built on the conventions of the JavaScript ecosystem to find scripts and tasks to execute - but it doesn't care what those scripts do. Following [the guidance for specifying a package in a JavaScript workspace](/repo/docs/crafting-your-repository/structuring-a-repository#specifying-packages-in-a-monorepo), you can add any other language or toolchain to Turborepo.
+
+As an example, you may have a Rust project in the `./cli` directory in your repository. To add this directory as a package to your JavaScript package manager's workspace, add the directory to the workspace definition:
+
+<PackageManagerTabs>
+  <Tab>
+  ```json title="./package.json"
+  {
+    "workspaces": [
+      "apps/*"
+      "packages/*",
+      "cli" // [!code highlight]
+    ]
+  }
+  ```
+
+  <LinkToDocumentation href="https://docs.npmjs.com/cli/v7/using-npm/workspaces#defining-workspaces">npm workspace documentation</LinkToDocumentation>
+  </Tab>
+  <Tab >
+  ```json title="./package.json"
+  {
+    "workspaces": [
+      "apps/*"
+      "packages/*",
+      "cli" // [!code highlight]
+    ]
+  }
+  ```
+
+  <LinkToDocumentation href="https://yarnpkg.com/features/workspaces#how-are-workspaces-declared">yarn workspace documentation</LinkToDocumentation>
+   </Tab>
+  <Tab>
+  ```json title="pnpm-workspace.yaml"
+ packages:
+    - "apps/*"
+    - "packages/*"
+    - "cli" // [!code highlight]
+  ```
+  <LinkToDocumentation href="https://pnpm.io/pnpm-workspace_yaml">pnpm workspace documentation</LinkToDocumentation>
+
+  </Tab>
+</PackageManagerTabs>
+
+Then, add a `package.json` to the directory:
+
+```json title="./cli/package.json"
+{
+  "name": "@repo/rust-cli",
+  "scripts": {
+    "build": "cargo build --release"
+  }
+}
+```
+
+Now, when you use `turbo build`, the `"build"` script in `./cli/package.json` will be included into the tasks that `turbo` runs.
+
+## Caching build artifacts
+
+Ensure that the outputs for your builds are being cached with [the outputs key](/repo/docs/reference/configuration#outputs) in `turbo.json`. In the case of a Rust CLI being compiled with cargo, a release build would be created in the `target/release` directory and we can cache it using:
+
+```json title="./turbo.json"
+{
+  "tasks": {
+    "build": {
+      "outputs": ["target/release/**"] // [!code highlight]
+    }
+  }
+}
+```
+
+## Creating dependency relationships
+
+Because the directory is now a part of the package manager's workspace, you can create dependencies exactly the same as you do for your JavaScript packages.
+
+For instance, if you wanted to make sure that the `rust-cli` "package" from above is built before your `web` application, install it into the dependencies for the `web` application:
+
+<PackageManagerTabs>
+  <Tab>
+
+```diff title="./web/package.json"
+{
+  "devDependencies": {
++   "@repo/rust-cli": "*"
+  }
+}
+```
+
+  </Tab>
+  <Tab>
+
+```diff title="./web/package.json"
+{
+  "devDependencies": {
++   "@repo/rust-cli": "*"
+  }
+}
+```
+
+  </Tab>
+  <Tab>
+
+```diff title="./web/package.json"
+{
+  "devDependencies": {
++   "@repo/rust-cli": "workspace:*"
+  }
+}
+```
+
+  </Tab>
+</PackageManagerTabs>
+
+Given a `turbo.json` with a `build` task like:
+
+```json title="./turbo.json"
+{
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**", "target/release/**"]
+    }
+  }
+}
+```
+
+`turbo build` will first create the artifacts for the Rust CLI and then build the `web` application.

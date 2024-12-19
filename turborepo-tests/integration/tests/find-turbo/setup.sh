@@ -1,5 +1,6 @@
 #!/bin/bash
 
+export TURBO_DOWNLOAD_LOCAL_ENABLED=0
 SCRIPT_DIR=$(dirname ${BASH_SOURCE[0]})
 TARGET_DIR=$1
 FIXTURE_DIR=$2

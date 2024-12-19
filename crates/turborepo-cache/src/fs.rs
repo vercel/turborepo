@@ -32,22 +32,18 @@ impl CacheMetadata {
 impl FSCache {
     fn resolve_cache_dir(
         repo_root: &AbsoluteSystemPath,
-        override_dir: Option<&Utf8Path>,
+        cache_dir: &Utf8Path,
     ) -> AbsoluteSystemPathBuf {
-        if let Some(override_dir) = override_dir {
-            AbsoluteSystemPathBuf::from_unknown(repo_root, override_dir)
-        } else {
-            repo_root.join_components(&["node_modules", ".cache", "turbo"])
-        }
+        AbsoluteSystemPathBuf::from_unknown(repo_root, cache_dir)
     }
 
     #[tracing::instrument(skip_all)]
     pub fn new(
-        override_dir: Option<&Utf8Path>,
+        cache_dir: &Utf8Path,
         repo_root: &AbsoluteSystemPath,
         analytics_recorder: Option<AnalyticsSender>,
     ) -> Result<Self, CacheError> {
-        let cache_directory = Self::resolve_cache_dir(repo_root, override_dir);
+        let cache_directory = Self::resolve_cache_dir(repo_root, cache_dir);
         cache_directory.create_dir_all()?;
 
         Ok(FSCache {
@@ -182,6 +178,8 @@ impl FSCache {
 
 #[cfg(test)]
 mod test {
+    use std::time::Duration;
+
     use anyhow::Result;
     use futures::future::try_join_all;
     use tempfile::tempdir;
@@ -216,7 +214,13 @@ mod test {
         let repo_root_path = AbsoluteSystemPath::from_std_path(repo_root.path())?;
         test_case.initialize(repo_root_path)?;
 
-        let api_client = APIClient::new(format!("http://localhost:{}", port), 200, "2.0.0", true)?;
+        let api_client = APIClient::new(
+            format!("http://localhost:{}", port),
+            Some(Duration::from_secs(200)),
+            None,
+            "2.0.0",
+            true,
+        )?;
         let api_auth = APIAuth {
             team_id: Some("my-team".to_string()),
             token: "my-token".to_string(),
@@ -225,7 +229,11 @@ mod test {
         let (analytics_sender, analytics_handle) =
             start_analytics(api_auth.clone(), api_client.clone());
 
-        let cache = FSCache::new(None, repo_root_path, Some(analytics_sender.clone()))?;
+        let cache = FSCache::new(
+            Utf8Path::new(""),
+            repo_root_path,
+            Some(analytics_sender.clone()),
+        )?;
 
         let expected_miss = cache.fetch(repo_root_path, test_case.hash)?;
         assert!(expected_miss.is_none());

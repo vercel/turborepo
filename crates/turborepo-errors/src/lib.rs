@@ -1,15 +1,62 @@
 use std::{
+    fmt::Display,
     ops::{Deref, Range},
     sync::Arc,
 };
 
 use biome_deserialize::{Deserializable, DeserializableValue, DeserializationDiagnostic};
-use miette::SourceSpan;
-use serde::Serialize;
+use miette::{Diagnostic, NamedSource, SourceSpan};
+use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 pub const TURBO_SITE: &str = "https://turbo.build";
 
-#[derive(Debug, Default, Clone, PartialEq, Serialize)]
+/// A little helper to convert from biome's syntax errors to miette.
+#[derive(Debug, Error, Diagnostic)]
+#[error("{message}")]
+pub struct ParseDiagnostic {
+    message: String,
+    #[source_code]
+    source_code: NamedSource,
+    #[label]
+    label: Option<SourceSpan>,
+}
+
+struct BiomeMessage<'a>(&'a biome_diagnostics::Error);
+
+impl Display for BiomeMessage<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.description(f)
+    }
+}
+
+impl From<biome_diagnostics::Error> for ParseDiagnostic {
+    fn from(diagnostic: biome_diagnostics::Error) -> Self {
+        let location = diagnostic.location();
+        let message = BiomeMessage(&diagnostic).to_string();
+        let path = location
+            .resource
+            .and_then(|r| r.as_file().map(|p| p.to_string()))
+            .unwrap_or_default();
+        Self {
+            message,
+            source_code: NamedSource::new(
+                path,
+                location
+                    .source_code
+                    .map(|s| s.text.to_string())
+                    .unwrap_or_default(),
+            ),
+            label: location.span.map(|span| {
+                let start: usize = span.start().into();
+                let len: usize = span.len().into();
+                (start, len).into()
+            }),
+        }
+    }
+}
+
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize, Eq)]
 #[serde(transparent)]
 pub struct Spanned<T> {
     pub value: T,
@@ -73,13 +120,51 @@ impl<T> Spanned<T> {
         self.value
     }
 
+    pub fn as_ref(&self) -> Spanned<&T> {
+        Spanned {
+            value: &self.value,
+            range: self.range.clone(),
+            path: self.path.clone(),
+            text: self.text.clone(),
+        }
+    }
+
+    /// Splits out the span info from the value.
+    pub fn split(self) -> (T, Spanned<()>) {
+        (
+            self.value,
+            Spanned {
+                value: (),
+                range: self.range,
+                path: self.path,
+                text: self.text,
+            },
+        )
+    }
+
+    /// Gets a ref to the inner value
+    pub fn as_inner(&self) -> &T {
+        &self.value
+    }
+
+    /// Replaces the old value with a new one
+    pub fn to<U>(&self, value: U) -> Spanned<U> {
+        Spanned {
+            value,
+            range: self.range.clone(),
+            path: self.path.clone(),
+            text: self.text.clone(),
+        }
+    }
+
     /// Gets the span and the text if both exist. If either doesn't exist, we
     /// return `None` for the span and an empty string for the text, since
     /// miette doesn't accept an `Option<String>` for `#[source_code]`
-    pub fn span_and_text(&self) -> (Option<SourceSpan>, String) {
+    pub fn span_and_text(&self, default_path: &str) -> (Option<SourceSpan>, NamedSource) {
+        let path = self.path.as_ref().map_or(default_path, |p| p.as_ref());
         match self.range.clone().zip(self.text.as_ref()) {
-            Some((range, text)) => (Some(range.into()), text.to_string()),
-            None => (None, String::new()),
+            Some((range, text)) => (Some(range.into()), NamedSource::new(path, text.to_string())),
+            None => (None, NamedSource::new(path, String::new())),
         }
     }
 
@@ -90,6 +175,11 @@ impl<T> Spanned<T> {
             path: self.path,
             text: self.text,
         }
+    }
+
+    /// Gets a mutable ref to the inner value
+    pub fn as_inner_mut(&mut self) -> &mut T {
+        &mut self.value
     }
 }
 
@@ -106,7 +196,6 @@ impl<T> Deref for Spanned<T> {
         &self.value
     }
 }
-
 pub trait WithMetadata {
     fn add_text(&mut self, text: Arc<str>);
     fn add_path(&mut self, path: Arc<str>);
@@ -161,7 +250,7 @@ mod tests {
 
     #[test_case(Spanned { value: 10, range: Some(0..2), path: None, text: None }, "10")]
     #[test_case(Spanned { value: "hello world", range: None, path: None, text: Some(Arc::from("hello world")) }, "\"hello world\"")]
-    #[test_case(Spanned { value: json!({ "name": "George", "age": 100 }), range: None, path: None, text: Some(Arc::from("hello world")) }, "{\"age\":100,\"name\":\"George\"}")]
+    #[test_case(Spanned { value: json!({ "name": "George", "age": 100 }), range: None, path: None, text: Some(Arc::from("hello world")) }, "{\"name\":\"George\",\"age\":100}")]
     fn test_serialize_spanned<T>(spanned_value: Spanned<T>, expected: &str)
     where
         T: serde::Serialize,

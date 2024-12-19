@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --clearScreen false",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "lint": "eslint \"src/**/*.ts\""
@@ -15,8 +15,8 @@
   "devDependencies": {
     "@repo/eslint-config": "workspace:*",
     "@repo/typescript-config": "workspace:*",
-    "eslint": "^8.56.0",
-    "typescript": "^5.3.3",
-    "vite": "^5.0.10"
+    "eslint": "^8.57.0",
+    "typescript": "5.5.4",
+    "vite": "^5.1.4"
   }
 }

@@ -2,7 +2,7 @@
 name = "globwalk"
 version = "0.1.0"
 edition = "2021"
-license = "MPL-2.0"
+license = "MIT"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -14,6 +14,7 @@ camino = { workspace = true }
 itertools.workspace = true
 path-clean = "1.0.1"
 path-slash = "0.2.1"
+rayon = "1"
 regex.workspace = true
 thiserror.workspace = true
 tracing = "0.1.37"
@@ -22,5 +23,5 @@ walkdir = "2.3.3"
 wax.workspace = true
 
 [dev-dependencies]
-tempdir = "0.3.7"
+tempfile = { workspace = true }
 test-case = "3.1.0"

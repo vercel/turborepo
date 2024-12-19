@@ -1,10 +1,11 @@
 import supertest from "supertest";
+import { describe, it, expect } from "@jest/globals";
 import { createServer } from "../server";
 
 describe("server", () => {
-  it("health check returns 200", async () => {
+  it("status check returns 200", async () => {
     await supertest(createServer())
-      .get("/healthz")
+      .get("/status")
       .expect(200)
       .then((res) => {
         expect(res.body.ok).toBe(true);
@@ -16,7 +17,7 @@ describe("server", () => {
       .get("/message/jared")
       .expect(200)
       .then((res) => {
-        expect(res.body).toEqual({ message: "hello jared" });
+        expect(res.body.message).toBe("hello jared");
       });
   });
 });

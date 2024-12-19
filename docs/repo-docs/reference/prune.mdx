@@ -1,0 +1,201 @@
+---
+title: prune
+description: API reference for the `turbo prune` command
+---
+
+import { File, Folder, Files } from '#/components/files';
+
+Generate a partial monorepo for a target package. The output will be placed into a directory named `out` containing the following:
+
+- The full source code of all internal packages needed to build the target.
+- A pruned lockfile containing the subset of the original lockfile needed to build the target.
+- A copy of the root `package.json`.
+
+```bash title="Terminal"
+turbo prune [package]
+```
+
+### Example
+
+Starting with a repository with the following structure:
+
+<Files>
+  <File name="package.json" />
+  <File name="pnpm-lock.yaml" />
+  <Folder name="apps" defaultOpen>
+    <Folder name="admin">
+      <File name="package.json" />
+      <File name="next-env.d.ts" />
+      <File name="next.config.js" />
+      <Folder name="src">
+        <Folder name="app">
+          <File name="page.tsx" />
+        </Folder>
+      </Folder>
+      <File name="tsconfig.json" />
+    </Folder>
+    <Folder name="frontend">
+      <File name="package.json" />
+      <File name="next-env.d.ts" />
+      <File name="next.config.js" />
+      <Folder name="src">
+        <Folder name="app">
+          <File name="page.tsx" />
+        </Folder>
+      </Folder>
+      <File name="tsconfig.json" />
+    </Folder>
+  </Folder>
+  <Folder name="packages" defaultOpen>
+    <Folder name="scripts">
+      <File name="package.json" />
+      <Folder name="src">
+        <File name="index.tsx" />
+      </Folder>
+      <File name="tsconfig.json" />
+    </Folder>
+    <Folder name="shared">
+      <File name="package.json" />
+      <Folder name="src">
+        <Folder name="__tests__">
+          <File name="sum.test.ts" />
+          <File name="tsconfig.json" />
+        </Folder>
+        <File name="index.ts" />
+        <File name="sum.ts" />
+      </Folder>
+      <File name="tsconfig.json" />
+    </Folder>
+    <Folder name="ui">
+      <File name="package.json" />
+      <Folder name="src">
+        <File name="index.tsx" />
+      </Folder>
+      <File name="tsconfig.json" />
+    </Folder>
+    <Folder name="utils">
+      <File name="package.json" />
+      <Folder name="src">
+        <File name="index.tsx" />
+      </Folder>
+      <File name="tsconfig.json" />
+    </Folder>
+  </Folder>
+</Files>
+
+Run `turbo prune frontend` to generate a pruned workspace for the `frontend` application in an `out` directory:
+
+<Files>
+  <File name="package.json" />
+  <File name="pnpm-lock.yaml (partial)" />
+  <Folder name="apps" defaultOpen>
+    <Folder name="frontend">
+      <File name="package.json" />
+      <File name="next-env.d.ts" />
+      <File name="next.config.js" />
+      <Folder name="src">
+        <Folder name="app">
+          <File name="page.tsx" />
+        </Folder>
+      </Folder>
+      <File name="tsconfig.json" />
+    </Folder>
+  </Folder>
+  <Folder name="packages" defaultOpen>
+    <Folder name="shared">
+      <File name="package.json" />
+      <Folder name="src">
+        <Folder name="__tests__">
+          <File name="sum.test.ts" />
+          <File name="tsconfig.json" />
+        </Folder>
+        <File name="index.ts" />
+        <File name="sum.ts" />
+      </Folder>
+      <File name="tsconfig.json" />
+    </Folder>
+    <Folder name="ui">
+      <File name="package.json" />
+      <Folder name="src">
+        <File name="index.tsx" />
+      </Folder>
+      <File name="tsconfig.json" />
+    </Folder>
+  </Folder>
+</Files>
+
+### Options
+
+#### `--docker`
+
+Defaults to `false`.
+
+Alter the output directory to make it easier to use with [Docker best practices and layer caching](https://docs.docker.com/develop/develop-images/dockerfile_best-practices/). The directory will contain:
+
+- A folder named `json` with the pruned workspace's `package.json` files.
+- A folder named `full` with the pruned workspace's full source code for the internal packages needed to build the target.
+- A pruned lockfile containing the subset of the original lockfile needed to build the target.
+
+Using the same example from above, running `turbo prune frontend --docker` will generate the following:
+
+<Files>
+  <File name="pnpm-lock.yaml (partial)" />
+  <Folder name="full" defaultOpen>
+    <File name="package.json (from repo root)" />
+    <Folder name="apps">
+      <Folder name="frontend">
+        <File name="package.json" />
+        <File name="next-env.d.ts" />
+        <File name="next.config.js" />
+        <Folder name="src">
+          <Folder name="app">
+            <File name="page.tsx" />
+          </Folder>
+        </Folder>
+        <File name="tsconfig.json" />
+      </Folder>
+    </Folder>
+    <Folder name="packages">
+      <Folder name="shared">
+        <File name="package.json" />
+        <Folder name="src">
+          <Folder name="__tests__">
+            <File name="sum.test.ts" />
+            <File name="tsconfig.json" />
+          </Folder>
+          <File name="index.ts" />
+          <File name="sum.ts" />
+        </Folder>
+        <File name="tsconfig.json" />
+      </Folder>
+      <Folder name="ui">
+        <File name="package.json" />
+        <Folder name="src">
+          <File name="index.tsx" />
+        </Folder>
+        <File name="tsconfig.json" />
+      </Folder>
+    </Folder>
+  </Folder>
+  <Folder name="json" defaultOpen>
+    <File name="package.json (from repo root)" />
+    <Folder name="packages" defaultOpen>
+      <Folder name="ui" defaultOpen>
+        <File name="package.json" />
+      </Folder>
+      <Folder name="shared" defaultOpen>
+        <File name="package.json" />
+      </Folder>
+      <Folder name="frontend" defaultOpen>
+        <File name="package.json" />
+      </Folder>
+    </Folder>
+
+  </Folder>
+</Files>
+
+#### `--out-dir <path>`
+
+Defaults to `./out`.
+
+Customize the directory the pruned output is generated in.

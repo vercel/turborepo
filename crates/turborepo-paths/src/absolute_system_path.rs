@@ -31,7 +31,7 @@ pub enum PathRelation {
     Child,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub struct AbsoluteSystemPath(Utf8Path);
 
 impl ToOwned for AbsoluteSystemPath {
@@ -193,7 +193,7 @@ impl AbsoluteSystemPath {
 
     pub fn try_exists(&self) -> Result<bool, PathError> {
         // try_exists is an experimental API and not yet in fs_err
-        Ok(std::fs::try_exists(&self.0)?)
+        Ok(std::fs::exists(&self.0)?)
     }
 
     pub fn extension(&self) -> Option<&str> {
@@ -232,14 +232,20 @@ impl AbsoluteSystemPath {
         self.0.as_str()
     }
 
-    pub fn join_unix_path(
-        &self,
-        unix_path: impl AsRef<RelativeUnixPath>,
-    ) -> Result<AbsoluteSystemPathBuf, PathError> {
+    pub fn join_unix_path(&self, unix_path: impl AsRef<RelativeUnixPath>) -> AbsoluteSystemPathBuf {
         let tail = unix_path.as_ref().to_system_path_buf();
-        Ok(AbsoluteSystemPathBuf(
-            self.0.join(tail).as_std_path().clean().try_into()?,
-        ))
+        AbsoluteSystemPathBuf(
+            self.0
+                .join(tail)
+                .as_std_path()
+                .clean()
+                // The unwrap here should never panic as `try_into` will only panic if
+                // - path isn't absolute: self is already absolute, appending to it won't change
+                //   that
+                // - path isn't valid utf8: self and unix_path are both utf8 already
+                .try_into()
+                .expect("joined path is absolute and valid utf8"),
+        )
     }
 
     pub fn anchor(&self, path: &AbsoluteSystemPath) -> Result<AnchoredSystemPathBuf, PathError> {
@@ -401,6 +407,10 @@ impl AbsoluteSystemPath {
         self.0.parent().map(Self::new_unchecked)
     }
 
+    pub fn file_name(&self) -> Option<&str> {
+        self.0.file_name()
+    }
+
     /// Opens file and sets the `FILE_FLAG_SEQUENTIAL_SCAN` flag on Windows to
     /// help with performance
     pub fn open(&self) -> Result<File, io::Error> {
@@ -431,19 +441,12 @@ impl AbsoluteSystemPath {
         fs::read_to_string(&self.0)
     }
 
-    /// Attempts to read a file, and:
-    /// If the file does not exist it returns the default value.
+    /// Attempts to read a file returning None if the file does not exist
     /// For all other scenarios passes through the `read_to_string` results.
-    pub fn read_existing_to_string_or<I>(
-        &self,
-        default_value: Result<I, io::Error>,
-    ) -> Result<String, io::Error>
-    where
-        I: Into<String>,
-    {
-        fs::read_to_string(&self.0).or_else(|e| {
+    pub fn read_existing_to_string(&self) -> Result<Option<String>, io::Error> {
+        fs::read_to_string(&self.0).map(Some).or_else(|e| {
             if e.kind() == std::io::ErrorKind::NotFound {
-                default_value.map(|intoable| intoable.into())
+                Ok(None)
             } else {
                 Err(e)
             }
@@ -506,7 +509,6 @@ impl<'a> TryFrom<&'a Path> for &'a AbsoluteSystemPath {
 #[cfg(test)]
 mod tests {
     use anyhow::Result;
-    use tempdir::TempDir;
     use test_case::test_case;
 
     use super::*;
@@ -582,6 +584,28 @@ mod tests {
         assert_eq!(base.contains(&other), expected);
     }
 
+    #[test]
+    fn test_read_non_existing_to_string() -> Result<()> {
+        let test_dir = tempfile::TempDir::with_prefix("read-existing")?;
+        let test_path = test_dir.path().join("foo");
+        let path = AbsoluteSystemPathBuf::new(test_path.to_str().unwrap())?;
+        assert_eq!(path.read_existing_to_string()?, None);
+        Ok(())
+    }
+
+    #[test]
+    fn test_read_existing_to_string() -> Result<()> {
+        let test_dir = tempfile::TempDir::with_prefix("read-existing")?;
+        let test_path = test_dir.path().join("foo");
+        let path = AbsoluteSystemPathBuf::new(test_path.to_str().unwrap())?;
+        path.create_with_contents("hi there!")?;
+        assert_eq!(
+            path.read_existing_to_string()?.as_deref(),
+            Some("hi there!")
+        );
+        Ok(())
+    }
+
     // Constructing a windows permissions struct is only possible by calling
     // fs::metadata so we only run these tests on unix.
     #[cfg(unix)]
@@ -602,7 +626,7 @@ mod tests {
             mode: Option<Permissions>,
             expected: Permissions,
         ) -> Result<()> {
-            let test_dir = TempDir::new("mkdir-all")?;
+            let test_dir = tempfile::TempDir::with_prefix("mkdir-all")?;
 
             let test_path = test_dir.path().join("foo");
 

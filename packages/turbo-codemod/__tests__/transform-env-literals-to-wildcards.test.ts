@@ -1,4 +1,5 @@
 import { setupTestFixtures } from "@turbo/test-utils";
+import { describe, it, expect } from "@jest/globals";
 import { transformer } from "../src/transforms/transform-env-literals-to-wildcards";
 
 describe.only("transform-env-literals-to-wildcards", () => {
@@ -16,7 +17,7 @@ describe.only("transform-env-literals-to-wildcards", () => {
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dry: false, print: false },
+      options: { force: false, dryRun: false, print: false },
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
@@ -33,8 +34,8 @@ describe.only("transform-env-literals-to-wildcards", () => {
 
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toMatchInlineSnapshot(`
-      Object {
-        "turbo.json": Object {
+      {
+        "turbo.json": {
           "action": "unchanged",
           "additions": 0,
           "deletions": 0,
@@ -52,7 +53,7 @@ describe.only("transform-env-literals-to-wildcards", () => {
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dry: false, print: false },
+      options: { force: false, dryRun: false, print: false },
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
@@ -64,8 +65,8 @@ describe.only("transform-env-literals-to-wildcards", () => {
 
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toMatchInlineSnapshot(`
-      Object {
-        "turbo.json": Object {
+      {
+        "turbo.json": {
           "action": "unchanged",
           "additions": 0,
           "deletions": 0,
@@ -83,7 +84,7 @@ describe.only("transform-env-literals-to-wildcards", () => {
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dry: false, print: false },
+      options: { force: false, dryRun: false, print: false },
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
@@ -100,8 +101,8 @@ describe.only("transform-env-literals-to-wildcards", () => {
 
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toMatchInlineSnapshot(`
-      Object {
-        "turbo.json": Object {
+      {
+        "turbo.json": {
           "action": "modified",
           "additions": 4,
           "deletions": 4,
@@ -119,7 +120,7 @@ describe.only("transform-env-literals-to-wildcards", () => {
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dry: false, print: false },
+      options: { force: false, dryRun: false, print: false },
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
@@ -156,18 +157,18 @@ describe.only("transform-env-literals-to-wildcards", () => {
 
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toMatchInlineSnapshot(`
-      Object {
-        "apps/docs/turbo.json": Object {
+      {
+        "apps/docs/turbo.json": {
           "action": "modified",
           "additions": 2,
           "deletions": 2,
         },
-        "apps/website/turbo.json": Object {
+        "apps/website/turbo.json": {
           "action": "modified",
           "additions": 2,
           "deletions": 2,
         },
-        "turbo.json": Object {
+        "turbo.json": {
           "action": "modified",
           "additions": 4,
           "deletions": 4,
@@ -187,7 +188,7 @@ describe.only("transform-env-literals-to-wildcards", () => {
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dry: false, print: false },
+      options: { force: false, dryRun: false, print: false },
     });
 
     expect(read("turbo.json")).toBeUndefined();
@@ -206,7 +207,7 @@ describe.only("transform-env-literals-to-wildcards", () => {
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dry: false, print: false },
+      options: { force: false, dryRun: false, print: false },
     });
 
     expect(result.fatalError).toBeDefined();

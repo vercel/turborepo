@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { getTTFTData } from "../helpers";
+import { uploadAggregate } from "./build-vega";
 
 const runID = process.argv[2];
 
@@ -28,21 +29,28 @@ const windows = getTTFTData(
   runID
 );
 
-// For commitSha and runURL, we use the ubuntu data because it's the same for all platforms
-// In the future, we could modify getTTFTData to not include this data and augment it
-// ourselves here. This is currently matching ttft-send.ts
-const data = {
-  commitSha: ubuntu.commitSha,
-  runURL: ubuntu.url,
-  ubuntu: `${microToSeconds(ubuntu.durationMicroseconds)}s`,
-  windows: `${microToSeconds(windows.durationMicroseconds)}s`,
-  macos: `${microToSeconds(macos.durationMicroseconds)}s`,
-  "ubuntu-cpus": ubuntu.cpus,
-  "windows-cpus": windows.cpus,
-  "macos-cpus": macos.cpus,
-};
+uploadAggregate()
+  .then((url) => {
+    // For commitSha and runURL, we use the ubuntu data because it's the same for all platforms
+    // In the future, we could modify getTTFTData to not include this data and augment it
+    // ourselves here. This is currently matching ttft-send.ts
+    const data = {
+      commitSha: ubuntu.commitSha,
+      runURL: ubuntu.url,
+      ubuntu: `${microToSeconds(ubuntu.durationMicroseconds)}s`,
+      windows: `${microToSeconds(windows.durationMicroseconds)}s`,
+      macos: `${microToSeconds(macos.durationMicroseconds)}s`,
+      "ubuntu-cpus": ubuntu.cpus,
+      "windows-cpus": windows.cpus,
+      "macos-cpus": macos.cpus,
+      "aggregate-url": url,
+    };
 
-fs.writeFileSync(slackPayloadPath, JSON.stringify(data));
+    fs.writeFileSync(slackPayloadPath, JSON.stringify(data));
+  })
+  .catch((err) => {
+    console.error(err);
+  });
 
 function microToSeconds(micro: number) {
   const milli = micro / 1000;

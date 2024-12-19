@@ -6,10 +6,18 @@ import type { DryRun } from "@turbo/types";
 import { getComparison } from "./getComparison";
 import { getTask } from "./getTask";
 import { getWorkspace } from "./getWorkspace";
+import { getTurboVersion } from "./getTurboVersion";
 import { log, info, warn, error } from "./logger";
 import { shouldWarn } from "./errors";
 import type { TurboIgnoreArg, TurboIgnoreOptions } from "./types";
 import { checkCommit } from "./checkCommit";
+
+function trackOptions(opts: TurboIgnoreOptions) {
+  opts.telemetry?.trackOptionTask(opts.task);
+  opts.telemetry?.trackOptionFallback(opts.fallback);
+  opts.telemetry?.trackOptionDirectory(opts.directory);
+  opts.telemetry?.trackOptionMaxBuffer(opts.maxBuffer);
+}
 
 function ignoreBuild() {
   log("⏭ Ignoring the change");
@@ -25,6 +33,10 @@ export function turboIgnore(
   workspaceArg: TurboIgnoreArg,
   opts: TurboIgnoreOptions
 ) {
+  opts.telemetry?.trackCommandStatus({ command: "ignore", status: "start" });
+  opts.telemetry?.trackArgumentWorkspace(workspaceArg !== undefined);
+  trackOptions(opts);
+
   const inputs = {
     workspace: workspaceArg,
     ...opts,
@@ -68,6 +80,9 @@ export function turboIgnore(
     return continueBuild();
   }
 
+  // Find the version of turbo this project uses
+  const turboVersion = getTurboVersion(inputs, root);
+
   // Identify which task to execute from the command-line args
   const task = getTask(inputs);
 
@@ -92,8 +107,10 @@ export function turboIgnore(
     return continueBuild();
   }
 
+  // If we can't find a turbo version in package.json, don't specify a version
+  const turbo = turboVersion ? `turbo@${turboVersion}` : "turbo";
   // Build, and execute the command
-  const command = `npx turbo run ${task} --filter="${workspace}...[${comparison.ref}]" --dry=json`;
+  const command = `npx -y ${turbo} run ${task} --filter="${workspace}...[${comparison.ref}]" --dry=json`;
   info(`Analyzing results of \`${command}\``);
 
   const execOptions: { cwd: string; maxBuffer?: number } = {
@@ -108,6 +125,7 @@ export function turboIgnore(
     if (err) {
       const { level, code, message } = shouldWarn({ err: err.message });
       if (level === "warn") {
+        opts.telemetry?.trackCommandWarning(message);
         warn(message);
       } else {
         error(`${code}: ${err.message}`);
@@ -122,6 +140,11 @@ export function turboIgnore(
         return continueBuild();
       }
       const { packages } = parsed;
+      if (!packages) {
+        info(`Detected single package repo`);
+        return continueBuild();
+      }
+
       if (packages.length > 0) {
         if (packages.length === 1) {
           info(`This commit affects "${workspace}"`);
@@ -142,6 +165,8 @@ export function turboIgnore(
       error(`Failed to parse JSON output from \`${command}\`.`);
       error(e);
       return continueBuild();
+    } finally {
+      opts.telemetry?.trackCommandStatus({ command: "ignore", status: "end" });
     }
   });
 }

@@ -1,48 +1,65 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "pipeline": {
+  "tasks": {
     "add-keys-task": {},
     "add-keys-underlying-task": {},
-
     "omit-keys-task-with-deps": {
       "dependsOn": [
         "omit-keys-underlying-task",
         "^omit-keys-underlying-topo-task"
       ],
-      "outputs": ["out/**"]
+      "outputs": [
+        "out/**"
+      ]
     },
     "omit-keys-underlying-task": {},
     "omit-keys-underlying-topo-task": {},
-
     "omit-keys-task": {
-      "inputs": ["src/foo.txt"],
-      "outputs": ["out/**"],
-      "env": ["SOME_VAR"],
-      "outputMode": "new-only"
+      "inputs": [
+        "src/foo.txt"
+      ],
+      "outputs": [
+        "out/**"
+      ],
+      "env": [
+        "SOME_VAR"
+      ],
+      "outputLogs": "new-only"
     },
-
     "missing-workspace-config-task-with-deps": {
       "dependsOn": [
         "missing-workspace-config-underlying-task",
         "^missing-workspace-config-underlying-topo-task"
       ],
-      "outputs": ["out/**"]
+      "outputs": [
+        "out/**"
+      ]
     },
     "missing-workspace-config-underlying-task": {},
     "missing-workspace-config-underlying-topo-task": {},
-
     "missing-workspace-config-task": {
-      "inputs": ["src/foo.txt"],
-      "outputs": ["out/**"],
-      "env": ["SOME_VAR"],
-      "outputMode": "new-only"
+      "inputs": [
+        "src/foo.txt"
+      ],
+      "outputs": [
+        "out/**"
+      ],
+      "env": [
+        "SOME_VAR"
+      ],
+      "outputLogs": "new-only"
     },
-
     "override-values-task": {
-      "inputs": ["src/foo.txt"],
-      "outputs": ["out/**"],
-      "env": ["SOME_VAR"],
-      "outputMode": "new-only"
+      "inputs": [
+        "src/foo.txt"
+      ],
+      "outputs": [
+        "out/**"
+      ],
+      "env": [
+        "SOME_VAR"
+      ],
+      "outputLogs": "new-only"
     },
     "override-values-task-with-deps": {
       "dependsOn": [
@@ -51,11 +68,12 @@
       ]
     },
     "override-values-task-with-deps-2": {
-      "dependsOn": ["^override-values-underlying-topo-task"]
+      "dependsOn": [
+        "^override-values-underlying-topo-task"
+      ]
     },
     "override-values-underlying-task": {},
     "override-values-underlying-topo-task": {},
-
     "persistent-task-1": {
       "persistent": true
     },
@@ -67,36 +85,52 @@
     },
     "persistent-task-4": {},
     "persistent-task-1-parent": {
-      "dependsOn": ["persistent-task-1"]
+      "dependsOn": [
+        "persistent-task-1"
+      ]
     },
     "persistent-task-2-parent": {
-      "dependsOn": ["persistent-task-2"]
+      "dependsOn": [
+        "persistent-task-2"
+      ]
     },
     "persistent-task-3-parent": {
-      "dependsOn": ["persistent-task-3"]
+      "dependsOn": [
+        "persistent-task-3"
+      ]
     },
     "persistent-task-4-parent": {
-      "dependsOn": ["persistent-task-4"]
+      "dependsOn": [
+        "persistent-task-4"
+      ]
     },
-
     "cached-task-1": {
       "cache": false,
-      "outputs": ["out/**"]
+      "outputs": [
+        "out/**"
+      ]
     },
     "cached-task-2": {
       "cache": true,
-      "outputs": ["out/**"]
+      "outputs": [
+        "out/**"
+      ]
     },
     "cached-task-3": {
-      "outputs": ["out/**"]
+      "outputs": [
+        "out/**"
+      ]
     },
     "cached-task-4": {
       "cache": false,
-      "outputs": ["out/**"]
+      "outputs": [
+        "out/**"
+      ]
     },
-
     "config-change-task": {
-      "inputs": ["src/foo.txt"]
+      "inputs": [
+        "src/foo.txt"
+      ]
     }
   }
 }

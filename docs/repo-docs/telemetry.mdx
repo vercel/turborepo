@@ -1,0 +1,64 @@
+---
+title: Telemetry
+description: Learn more about Turborepo's anonymous telemetry.
+---
+
+Vercel Inc. (Vercel) may collect telemetry data about your use of Turborepo as explained below.
+Telemetry data allows us to monitor and improve Turborepo and the Vercel platform by
+collecting anonymous data about its usage and host information. The data may be used to broadly identify,
+troubleshoot, or respond to issues that impact users.
+
+Collection of telemetry data is optional. If you do not want telemetry data collected, you may [opt-out](#how-do-i-opt-out).
+
+## Why
+
+Telemetry allows us to accurately gauge Turborepo feature usage, pain points, and customization across all users.
+This data enables us to better tailor Turborepo to the masses, ensuring its continued growth, relevance, and best-in-class developer experience.
+Furthermore, this data allows us to verify if improvements are improving the baseline of all applications.
+
+## What is collected
+
+We track general usage information, specifically, we track the following with anonymized telemetry data using random identifiers:
+
+- Command invoked ([turbo run](/repo/docs/reference/run), [turbo prune](/repo/docs/reference/prune), [turbo gen](/repo/docs/reference/generate), etc.)
+- Version of `turbo`
+- General machine information (e.g. number of CPUs, macOS/Windows/Linux, whether or not the command was run within CI)
+- Size of application (total number of workspaces)
+- We **DO NOT** collect any metrics which may contain sensitive data. This includes, but is not limited to: task names, package names, sensitive argument or flag values, environment variables, file paths, or contents of files.
+
+**Note**: This list is regularly audited to ensure its accuracy.
+
+You can view exactly what is being collected by setting the following environment variable: `TURBO_TELEMETRY_DEBUG=1`.
+
+Additionally, all possible events can be viewed by browsing the [events](https://github.com/vercel/turborepo/blob/main/crates/turborepo-telemetry/src/events) file directly.
+
+## How do I opt out?
+
+### Disable
+
+You may opt out-by running:
+
+```bash title="Terminal"
+turbo telemetry disable
+```
+
+You can also opt out by setting any of the following environment variables:
+
+- `TURBO_TELEMETRY_DISABLED=1`
+- `DO_NOT_TRACK=1` (Learn more about [Console Do Not Track (DNT)](https://consoledonottrack.com/))
+
+### Status
+
+You may check the status of telemetry collection at any time by running:
+
+```sh title="Terminal"
+turbo telemetry status
+```
+
+### Enable
+
+You may re-enable telemetry if you'd like to re-join the program by running the following:
+
+```sh title="Terminal"
+turbo telemetry enable
+```

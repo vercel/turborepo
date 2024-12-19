@@ -24,9 +24,12 @@ impl<'a> PnpmDetector<'a> {
     }
 
     pub fn detect_pnpm6_or_pnpm(version: &Version) -> Result<PackageManager, Error> {
-        let pnpm6_constraint: Range = "<7.0.0".parse()?;
+        let pnpm6_constraint: Range = "<7.0.0".parse().expect("valid version");
+        let pnpm9_constraint: Range = ">=9.0.0-alpha.0".parse().expect("valid version");
         if pnpm6_constraint.satisfies(version) {
             Ok(PackageManager::Pnpm6)
+        } else if pnpm9_constraint.satisfies(version) {
+            Ok(PackageManager::Pnpm9)
         } else {
             Ok(PackageManager::Pnpm)
         }
@@ -67,18 +70,18 @@ pub(crate) fn prune_patches<R: AsRef<RelativeUnixPath>>(
 }
 
 #[cfg(test)]
-mod tests {
-    use std::fs::File;
+mod test {
+    use std::{collections::BTreeMap, fs::File};
 
-    use anyhow::Result;
+    use serde_json::json;
     use tempfile::tempdir;
-    use turbopath::AbsoluteSystemPathBuf;
+    use test_case::test_case;
+    use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPathBuf};
 
-    use super::LOCKFILE;
-    use crate::package_manager::PackageManager;
+    use super::*;
 
     #[test]
-    fn test_detect_pnpm() -> Result<()> {
+    fn test_detect_pnpm() -> Result<(), Error> {
         let repo_root = tempdir()?;
         let repo_root_path = AbsoluteSystemPathBuf::try_from(repo_root.path())?;
         let lockfile_path = repo_root.path().join(LOCKFILE);
@@ -88,20 +91,10 @@ mod tests {
 
         Ok(())
     }
-}
-
-#[cfg(test)]
-mod test {
-    use std::collections::BTreeMap;
-
-    use serde_json::json;
-    use turbopath::RelativeUnixPathBuf;
-
-    use super::*;
 
     #[test]
     fn test_patch_pruning() {
-        let package_json: PackageJson = serde_json::from_value(json!({
+        let package_json: PackageJson = PackageJson::from_value(json!({
             "name": "pnpm-patches",
             "pnpm": {
                 "patchedDependencies": {
@@ -125,6 +118,19 @@ mod test {
                     .collect::<BTreeMap<_, _>>()
             )
             .as_ref()
+        );
+    }
+
+    #[test_case("6.0.0", PackageManager::Pnpm6)]
+    #[test_case("7.0.0", PackageManager::Pnpm)]
+    #[test_case("8.0.0", PackageManager::Pnpm)]
+    #[test_case("9.0.0", PackageManager::Pnpm9)]
+    #[test_case("9.0.0-alpha.0", PackageManager::Pnpm9)]
+    fn test_version_detection(version: &str, expected: PackageManager) {
+        let version = Version::parse(version).unwrap();
+        assert_eq!(
+            PnpmDetector::detect_pnpm6_or_pnpm(&version).unwrap(),
+            expected
         );
     }
 }

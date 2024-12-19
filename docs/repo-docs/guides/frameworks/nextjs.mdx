@@ -1,0 +1,120 @@
+---
+title: Next.js
+description: Learn how to use Next.js in a monorepo.
+---
+
+import { PackageManagerTabs, Tab } from '#/components/tabs';
+import { Callout } from '#/components/callout';
+
+[Next.js](https://nextjs.org) is the React framework for the web. Used by some of the world's largest companies, Next.js enables you to create high-quality web applications with the power of React components.
+
+## Quickstart
+
+To get started with Next.js in a Turborepo quickly, follow the [quickstart](/repo/docs/getting-started/installation) to create a repository with two Next.js applications:
+
+<PackageManagerTabs>
+<Tab>
+
+```bash title="Terminal"
+npx create-turbo@latest
+```
+
+</Tab>
+
+<Tab>
+
+```bash title="Terminal"
+yarn dlx create-turbo@latest
+```
+
+</Tab>
+
+<Tab>
+
+```bash title="Terminal"
+pnpm dlx create-turbo@latest
+```
+
+</Tab>
+</PackageManagerTabs>
+
+## Adding a Next.js application to an existing repository
+
+Use [`create-next-app`](https://nextjs.org/docs/app/api-reference/create-next-app) to set up a new Next.js application in a package. From the root of your repository, run:
+
+<PackageManagerTabs>
+<Tab>
+
+```bash title="Terminal"
+npx create-next-app@latest apps/my-app
+```
+
+</Tab>
+
+<Tab>
+
+```bash title="Terminal"
+yarn dlx create-next-app@latest apps/my-app
+```
+
+</Tab>
+
+<Tab>
+
+```bash title="Terminal"
+pnpm dlx create-next-app@latest apps/my-app
+```
+
+</Tab>
+</PackageManagerTabs>
+
+## Integrating with your repository
+
+To add [Internal Packages](/repo/docs/core-concepts/internal-packages) to your new application, install them into the app with your package manager:
+
+<PackageManagerTabs>
+<Tab>
+
+```diff title="./apps/my-app/package.json"
+{
+ "name": "my-app",
+  "dependencies": {
++   "@repo/ui": "*"
+  }
+}
+```
+
+</Tab>
+
+<Tab>
+
+```diff title="./apps/my-app/package.json"
+{
+  "name": "my-app",
+  "dependencies": {
++   "@repo/ui": "*"
+  }
+}
+```
+
+</Tab>
+
+<Tab>
+
+```diff title="./apps/my-app/package.json"
+{
+  "name": "my-app",
+  "dependencies": {
++   "@repo/ui": "workspace:*"
+  }
+}
+```
+
+</Tab>
+</PackageManagerTabs>
+
+Make sure to run your package manager's install command. You also may need to update `scripts` in `package.json` to fit your use case in your repository.
+
+### Customizing tasks
+
+By default, the new application will use the tasks defined in the root `turbo.json`. If you'd like to configure tasks differently for the new application, use [Package Configurations](/repo/docs/reference/package-configurations).

@@ -4,13 +4,16 @@
   "sideEffects": [
     "**/*.css"
   ],
+  "files": [
+    "dist"
+  ],
   "exports": {
     "./styles.css": "./dist/index.css",
     "./card": "./src/card.tsx"
   },
   "license": "MIT",
   "scripts": {
-    "build": "tailwindcss -i ./src/styles.css -o dist/index.css",
+    "build": "tailwindcss -i ./src/styles.css -o ./dist/index.css",
     "lint": "eslint src/",
     "dev": "tailwindcss -i ./src/styles.css -o ./dist/index.css --watch",
     "type-check": "tsc --noEmit"
@@ -22,12 +25,10 @@
     "@repo/eslint-config": "workspace:*",
     "@repo/tailwind-config": "workspace:*",
     "@repo/typescript-config": "workspace:*",
-    "@types/react": "^18.2.46",
-    "autoprefixer": "^10.4.16",
-    "postcss": "^8.4.33",
-    "react": "^18.2.0",
-    "tailwindcss": "^3.4.0",
-    "tsup": "^8.0.1",
-    "typescript": "^5.3.3"
+    "@types/react": "^18.2.61",
+    "autoprefixer": "^10.4.18",
+    "postcss": "^8.4.35",
+    "tailwindcss": "^3.4.1",
+    "typescript": "5.5.4"
   }
 }

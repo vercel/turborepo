@@ -1,5 +1,7 @@
+// eslint-disable-next-line camelcase -- this is a good exception to this rule
 import child_process from "node:child_process";
 import { mockEnv } from "@turbo/test-utils";
+import { describe, it, expect, jest } from "@jest/globals";
 import { checkCommit } from "../src/checkCommit";
 
 describe("checkCommit()", () => {
@@ -7,7 +9,7 @@ describe("checkCommit()", () => {
     mockEnv();
 
     describe("for all workspaces", () => {
-      it("results in continue when no special commit messages are found", async () => {
+      it("results in continue when no special commit messages are found", () => {
         process.env.VERCEL = "1";
         process.env.VERCEL_GIT_COMMIT_MESSAGE = "fixing a test";
         expect(checkCommit({ workspace: "test-workspace" })).toEqual({
@@ -17,7 +19,7 @@ describe("checkCommit()", () => {
         });
       });
 
-      it("results in conflict when deploy and skip commit messages are found", async () => {
+      it("results in conflict when deploy and skip commit messages are found", () => {
         process.env.VERCEL = "1";
         process.env.VERCEL_GIT_COMMIT_MESSAGE =
           "deploying [vercel deploy] and skipping [vercel skip]";
@@ -29,7 +31,7 @@ describe("checkCommit()", () => {
         });
       });
 
-      it("results in deploy when deploy commit message is found", async () => {
+      it("results in deploy when deploy commit message is found", () => {
         process.env.VERCEL = "1";
         process.env.VERCEL_GIT_COMMIT_MESSAGE = "deploying [vercel deploy]";
         expect(checkCommit({ workspace: "test-workspace" })).toEqual({
@@ -39,7 +41,7 @@ describe("checkCommit()", () => {
         });
       });
 
-      it("results in skip when skip commit message is found", async () => {
+      it("results in skip when skip commit message is found", () => {
         process.env.VERCEL = "1";
         process.env.VERCEL_GIT_COMMIT_MESSAGE = "skip deployment [vercel skip]";
         expect(checkCommit({ workspace: "test-workspace" })).toEqual({
@@ -51,7 +53,7 @@ describe("checkCommit()", () => {
     });
 
     describe("for specific workspaces", () => {
-      it("results in continue when no special commit messages are found", async () => {
+      it("results in continue when no special commit messages are found", () => {
         process.env.VERCEL = "1";
         process.env.VERCEL_GIT_COMMIT_MESSAGE =
           "fixing a test in test-workspace";
@@ -62,7 +64,7 @@ describe("checkCommit()", () => {
         });
       });
 
-      it("results in conflict when deploy and skip commit messages are found", async () => {
+      it("results in conflict when deploy and skip commit messages are found", () => {
         process.env.VERCEL = "1";
         process.env.VERCEL_GIT_COMMIT_MESSAGE =
           "deploying [vercel deploy test-workspace] and skipping [vercel skip test-workspace]";
@@ -74,7 +76,7 @@ describe("checkCommit()", () => {
         });
       });
 
-      it("results in deploy when deploy commit message is found", async () => {
+      it("results in deploy when deploy commit message is found", () => {
         process.env.VERCEL = "1";
         process.env.VERCEL_GIT_COMMIT_MESSAGE =
           "deploying [vercel deploy test-workspace]";
@@ -85,7 +87,7 @@ describe("checkCommit()", () => {
         });
       });
 
-      it("results in skip when skip commit message is found", async () => {
+      it("results in skip when skip commit message is found", () => {
         process.env.VERCEL = "1";
         process.env.VERCEL_GIT_COMMIT_MESSAGE =
           "skip deployment [vercel skip test-workspace]";
@@ -96,7 +98,7 @@ describe("checkCommit()", () => {
         });
       });
 
-      it("results in deploy when deploy only is found", async () => {
+      it("results in deploy when deploy only is found", () => {
         process.env.VERCEL = "1";
         process.env.VERCEL_GIT_COMMIT_MESSAGE =
           "deploying [vercel only test-workspace]";
@@ -107,7 +109,7 @@ describe("checkCommit()", () => {
         });
       });
 
-      it("results in skip when deploy not match workspace", async () => {
+      it("results in skip when deploy not match workspace", () => {
         process.env.VERCEL = "1";
         process.env.VERCEL_GIT_COMMIT_MESSAGE =
           "deploying [vercel only test-workspace]";
@@ -121,7 +123,7 @@ describe("checkCommit()", () => {
   });
   describe("Not on Vercel", () => {
     describe("for all workspaces", () => {
-      it("results in continue when no special commit messages are found", async () => {
+      it("results in continue when no special commit messages are found", () => {
         const commitBody = "fixing a test";
         const mockExecSync = jest
           .spyOn(child_process, "execSync")
@@ -136,7 +138,7 @@ describe("checkCommit()", () => {
         mockExecSync.mockRestore();
       });
 
-      it("results in conflict when deploy and skip commit messages are found", async () => {
+      it("results in conflict when deploy and skip commit messages are found", () => {
         const commitBody =
           "deploying [vercel deploy] and skipping [vercel skip]";
         const mockExecSync = jest
@@ -153,7 +155,7 @@ describe("checkCommit()", () => {
         mockExecSync.mockRestore();
       });
 
-      it("results in deploy when deploy commit message is found", async () => {
+      it("results in deploy when deploy commit message is found", () => {
         const commitBody = "deploying [vercel deploy]";
         const mockExecSync = jest
           .spyOn(child_process, "execSync")
@@ -168,7 +170,7 @@ describe("checkCommit()", () => {
         mockExecSync.mockRestore();
       });
 
-      it("results in skip when skip commit message is found", async () => {
+      it("results in skip when skip commit message is found", () => {
         const commitBody = "skip deployment [vercel skip]";
         const mockExecSync = jest
           .spyOn(child_process, "execSync")
@@ -185,7 +187,7 @@ describe("checkCommit()", () => {
     });
 
     describe("for specific workspaces", () => {
-      it("results in continue when no special commit messages are found", async () => {
+      it("results in continue when no special commit messages are found", () => {
         const commitBody = "fixing a test in test-workspace";
         const mockExecSync = jest
           .spyOn(child_process, "execSync")
@@ -200,7 +202,7 @@ describe("checkCommit()", () => {
         mockExecSync.mockRestore();
       });
 
-      it("results in conflict when deploy and skip commit messages are found", async () => {
+      it("results in conflict when deploy and skip commit messages are found", () => {
         const commitBody =
           "deploying [vercel deploy test-workspace] and skipping [vercel skip test-workspace]";
         const mockExecSync = jest
@@ -217,7 +219,7 @@ describe("checkCommit()", () => {
         mockExecSync.mockRestore();
       });
 
-      it("results in deploy when deploy commit message is found", async () => {
+      it("results in deploy when deploy commit message is found", () => {
         const commitBody = "deploying [vercel deploy test-workspace]";
         const mockExecSync = jest
           .spyOn(child_process, "execSync")
@@ -232,7 +234,7 @@ describe("checkCommit()", () => {
         mockExecSync.mockRestore();
       });
 
-      it("results in skip when skip commit message is found", async () => {
+      it("results in skip when skip commit message is found", () => {
         const commitBody = "skip deployment [vercel skip test-workspace]";
         const mockExecSync = jest
           .spyOn(child_process, "execSync")
@@ -247,7 +249,7 @@ describe("checkCommit()", () => {
         mockExecSync.mockRestore();
       });
 
-      it("results in deploy when deploy only is found", async () => {
+      it("results in deploy when deploy only is found", () => {
         const commitBody = "deploying [vercel only test-workspace]";
         const mockExecSync = jest
           .spyOn(child_process, "execSync")
@@ -262,7 +264,7 @@ describe("checkCommit()", () => {
         mockExecSync.mockRestore();
       });
 
-      it("results in skip when deploy not match workspace", async () => {
+      it("results in skip when deploy not match workspace", () => {
         const commitBody = "deploying [vercel only test-workspace]";
         const mockExecSync = jest
           .spyOn(child_process, "execSync")

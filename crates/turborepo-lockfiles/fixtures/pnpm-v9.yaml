@@ -1,0 +1,125 @@
+lockfileVersion: "9.0"
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+  .:
+    devDependencies:
+      turbo:
+        specifier: canary
+        version: 1.13.3-canary.1
+
+  apps/apps-a:
+    dependencies:
+      pkg-a:
+        specifier: workspace:*
+        version: link:../../packages/pkg-a
+      tooling-config:
+        specifier: workspace:*
+        version: link:../../packages/tooling-config
+
+  apps/apps-b:
+    dependencies:
+      tooling-config:
+        specifier: workspace:*
+        version: link:../../packages/tooling-config
+
+  packages/pkg-a:
+    dependencies:
+      tooling-config:
+        specifier: workspace:*
+        version: link:../tooling-config
+
+  packages/pkg-b:
+    dependencies:
+      tooling-config:
+        specifier: workspace:*
+        version: link:../tooling-config
+
+  packages/tooling-config: {}
+
+packages:
+  turbo-darwin-64@1.13.3-canary.1:
+    resolution:
+      {
+        integrity: sha512-1xfKCf/d7mD7oGT1qBnD5pYsZfI43Wftlo/N0GTpBLDjKhfJifBvng9ns5grhs79wNiIdDxYYGt6pHOUzc+6YQ==,
+      }
+    cpu: [x64]
+    os: [darwin]
+
+  turbo-darwin-arm64@1.13.3-canary.1:
+    resolution:
+      {
+        integrity: sha512-uNK9QnlDJBLuaR7l4/68AoKByQ+q+rT9OyvizzUV2KZ8r2u/Sv+f3GiV48qxtG1duYlWLlLnDGuEnUPKEq0WZg==,
+      }
+    cpu: [arm64]
+    os: [darwin]
+
+  turbo-linux-64@1.13.3-canary.1:
+    resolution:
+      {
+        integrity: sha512-D/RRtqHch0I5q/Pod7mgLPGrvjcDpvBe95yp5hNy59+ZSyKHlkDrm/pQaA/+6mdjHEQB8eIL/18nrKx/B5qduA==,
+      }
+    cpu: [x64]
+    os: [linux]
+
+  turbo-linux-arm64@1.13.3-canary.1:
+    resolution:
+      {
+        integrity: sha512-FXwgkadDZr6mPLN7lmlc0ESRZFfXDONEKTQbDV9h4n/7I0HOehMM0CrWZsptoekKEKFEqQDxZo5QXFDZON0cww==,
+      }
+    cpu: [arm64]
+    os: [linux]
+
+  turbo-windows-64@1.13.3-canary.1:
+    resolution:
+      {
+        integrity: sha512-ce6TENLbCeFAWVrJtLMOjv7FkPCpfSNvczFpaolbOB9omPW3uO4hXMbpqk14hgsU8OsmMt61rLzI38L0miJuEw==,
+      }
+    cpu: [x64]
+    os: [win32]
+
+  turbo-windows-arm64@1.13.3-canary.1:
+    resolution:
+      {
+        integrity: sha512-7sm8tZRqcmWo/D3Mb513/diVZuFC6rwz/ZaW8IGsEcLrUdqq6qSRlW6e7ZsfOMR7cO6geeGhuFsJg8ILOETTgw==,
+      }
+    cpu: [arm64]
+    os: [win32]
+
+  turbo@1.13.3-canary.1:
+    resolution:
+      {
+        integrity: sha512-bxOFjIhBxwWiExjUyTV2KOP6P28M5TOHUaM6YKRR2oPtKoQpIGUmYP+DCxG+icjaLXviUJRHU4YxzEOaL9Bf6A==,
+      }
+    hasBin: true
+
+snapshots:
+  turbo-darwin-64@1.13.3-canary.1:
+    optional: true
+
+  turbo-darwin-arm64@1.13.3-canary.1:
+    optional: true
+
+  turbo-linux-64@1.13.3-canary.1:
+    optional: true
+
+  turbo-linux-arm64@1.13.3-canary.1:
+    optional: true
+
+  turbo-windows-64@1.13.3-canary.1:
+    optional: true
+
+  turbo-windows-arm64@1.13.3-canary.1:
+    optional: true
+
+  turbo@1.13.3-canary.1:
+    optionalDependencies:
+      turbo-darwin-64: 1.13.3-canary.1
+      turbo-darwin-arm64: 1.13.3-canary.1
+      turbo-linux-64: 1.13.3-canary.1
+      turbo-linux-arm64: 1.13.3-canary.1
+      turbo-windows-64: 1.13.3-canary.1
+      turbo-windows-arm64: 1.13.3-canary.1

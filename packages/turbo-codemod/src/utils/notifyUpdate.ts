@@ -1,4 +1,4 @@
-import chalk from "chalk";
+import { cyan, bold, yellow } from "picocolors";
 import checkForUpdate from "update-check";
 import { logger } from "@turbo/utils";
 import { getWorkspaceDetails } from "@turbo/workspaces";
@@ -23,9 +23,9 @@ export async function notifyUpdate(): Promise<void> {
 
       logger.log();
       logger.log(
-        chalk.yellow.bold("A new version of `@turbo/codemod` is available!")
+        yellow(bold("A new version of `@turbo/codemod` is available!"))
       );
-      logger.log(`You can update by running: ${chalk.cyan(upgradeCommand)}`);
+      logger.log(`You can update by running: ${cyan(upgradeCommand)}`);
       logger.log();
     }
     process.exit();

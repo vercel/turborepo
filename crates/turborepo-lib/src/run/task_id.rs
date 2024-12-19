@@ -1,7 +1,10 @@
-use std::{borrow::Cow, fmt};
+use std::{
+    borrow::{Borrow, Cow},
+    fmt,
+};
 
 use serde::{Deserialize, Serialize};
-use turborepo_repository::package_graph::{WorkspaceName, ROOT_PKG_NAME};
+use turborepo_repository::package_graph::{PackageName, ROOT_PKG_NAME};
 
 pub const TASK_DELIMITER: &str = "#";
 
@@ -13,13 +16,23 @@ pub struct TaskId<'a> {
     task: Cow<'a, str>,
 }
 
-/// A task name as it appears in in a `turbo.json` it might be for all
+/// A task name as it appears in a `turbo.json` it might be for all
 /// workspaces or just one.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Hash)]
 #[serde(try_from = "String", into = "String")]
 pub struct TaskName<'a> {
     package: Option<Cow<'a, str>>,
     task: Cow<'a, str>,
+}
+
+impl<'a> From<TaskId<'a>> for TaskName<'a> {
+    fn from(value: TaskId<'a>) -> Self {
+        let TaskId { package, task } = value;
+        TaskName {
+            package: Some(package),
+            task,
+        }
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -43,6 +56,15 @@ impl<'a> From<TaskId<'a>> for String {
     }
 }
 
+impl TaskId<'static> {
+    pub fn from_static(package: String, task: String) -> Self {
+        TaskId {
+            package: package.into(),
+            task: task.into(),
+        }
+    }
+}
+
 impl<'a> TaskId<'a> {
     pub fn new(package: &'a str, task: &'a str) -> Self {
         TaskId::try_from(task).unwrap_or_else(|_| Self {
@@ -51,12 +73,12 @@ impl<'a> TaskId<'a> {
         })
     }
 
-    pub fn from_graph(workspace: &WorkspaceName, task_name: &TaskName) -> TaskId<'static> {
+    pub fn from_graph(workspace: &PackageName, task_name: &TaskName) -> TaskId<'static> {
         task_name.task_id().map_or_else(
             || {
                 let package = match workspace {
-                    WorkspaceName::Root => ROOT_PKG_NAME.into(),
-                    WorkspaceName::Other(workspace) => static_cow(workspace.as_str().into()),
+                    PackageName::Root => ROOT_PKG_NAME.into(),
+                    PackageName::Other(workspace) => static_cow(workspace.as_str().into()),
                 };
                 TaskId {
                     package,
@@ -71,10 +93,10 @@ impl<'a> TaskId<'a> {
         &self.package
     }
 
-    pub fn to_workspace_name(&self) -> WorkspaceName {
+    pub fn to_workspace_name(&self) -> PackageName {
         match self.package.as_ref() {
-            ROOT_PKG_NAME => WorkspaceName::Root,
-            package => WorkspaceName::Other(package.into()),
+            ROOT_PKG_NAME => PackageName::Root,
+            package => PackageName::Other(package.into()),
         }
     }
 
@@ -105,6 +127,14 @@ impl<'a> TaskId<'a> {
             package: static_cow(package),
             task: static_cow(task),
         }
+    }
+
+    /// Borrows a TaskId reference as a TaskId
+    pub fn as_borrowed(&self) -> TaskId {
+        let TaskId { package, task } = self;
+        let package = shorten_cow(package);
+        let task = shorten_cow(task);
+        TaskId { package, task }
     }
 }
 
@@ -149,6 +179,16 @@ fn static_cow<'a, T: 'a + ToOwned + ?Sized>(cow: Cow<'a, T>) -> Cow<'static, T> 
     match cow {
         Cow::Borrowed(x) => Cow::Owned(x.to_owned()),
         Cow::Owned(x) => Cow::Owned(x),
+    }
+}
+
+// Utility method for changing &'a Cow<'b, T> to Cow<'a, T>
+// 'b must outlive 'a
+#[allow(clippy::ptr_arg)]
+fn shorten_cow<'a, 'b: 'a, T: ToOwned + ?Sized>(cow: &'a Cow<'b, T>) -> Cow<'a, T> {
+    match cow {
+        Cow::Borrowed(x) => Cow::Borrowed(x),
+        Cow::Owned(x) => Cow::Borrowed(x.borrow()),
     }
 }
 

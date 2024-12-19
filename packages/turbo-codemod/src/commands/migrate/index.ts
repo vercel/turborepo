@@ -1,6 +1,6 @@
 import os from "node:os";
 import { execSync } from "node:child_process";
-import chalk from "chalk";
+import { green, red, dim, bold } from "picocolors";
 import { prompt } from "inquirer";
 import { getWorkspaceDetails, type Project } from "@turbo/workspaces";
 import { logger } from "@turbo/utils";
@@ -24,14 +24,14 @@ function endMigration({
   success: boolean;
 }) {
   if (success) {
-    logger.bold(chalk.green("Migration completed"));
+    logger.bold(green("Migration completed"));
     if (message) {
       logger.log(message);
     }
     return process.exit(0);
   }
 
-  logger.bold(chalk.red("Migration failed"));
+  logger.bold(red("Migration failed"));
   if (message) {
     logger.log(message);
   }
@@ -53,7 +53,7 @@ export async function migrate(
   options: MigrateCommandOptions
 ) {
   // check git status
-  if (!options.dry) {
+  if (!options.dryRun) {
     checkGitStatus({ directory, force: options.force });
   }
 
@@ -71,7 +71,7 @@ export async function migrate(
         if (exists) {
           return true;
         }
-        return `Directory ${chalk.dim(`(${absolute})`)} does not exist`;
+        return `Directory ${dim(`(${absolute})`)} does not exist`;
       },
       filter: (d: string) => d.trim(),
     },
@@ -85,16 +85,14 @@ export async function migrate(
   if (!exists) {
     return endMigration({
       success: false,
-      message: `Directory ${chalk.dim(`(${root})`)} does not exist`,
+      message: `Directory ${dim(`(${root})`)} does not exist`,
     });
   }
 
   if (!looksLikeRepo({ directory: root })) {
     return endMigration({
       success: false,
-      message: `Directory (${chalk.dim(
-        root
-      )}) does not appear to be a repository`,
+      message: `Directory (${dim(root)}) does not appear to be a repository`,
     });
   }
 
@@ -104,7 +102,7 @@ export async function migrate(
   } catch (err) {
     return endMigration({
       success: false,
-      message: `Unable to read determine package manager details from ${chalk.dim(
+      message: `Unable to read determine package manager details from ${dim(
         root
       )}`,
     });
@@ -144,9 +142,9 @@ export async function migrate(
   if (fromVersion === toVersion) {
     return endMigration({
       success: true,
-      message: `Nothing to do, current version (${chalk.bold(
+      message: `Nothing to do, current version (${bold(
         fromVersion
-      )}) is the same as the requested version (${chalk.bold(toVersion)})`,
+      )}) is the same as the requested version (${bold(toVersion)})`,
     });
   }
 
@@ -161,15 +159,13 @@ export async function migrate(
 
   // shutdown the turbo daemon before running codemods and upgrading
   // the daemon can handle version mismatches, but we do this as an extra precaution
-  if (!options.dry) {
+  if (!options.dryRun) {
     shutdownDaemon({ project });
   }
 
   // step 4
   logger.log(
-    `Upgrading turbo from ${chalk.bold(fromVersion)} to ${chalk.bold(
-      toVersion
-    )} (${
+    `Upgrading turbo from ${bold(fromVersion)} to ${bold(toVersion)} (${
       codemods.length === 0
         ? "no codemods required"
         : `${codemods.length} required codemod${
@@ -182,7 +178,7 @@ export async function migrate(
   const results: Array<TransformerResults> = [];
   for (const [idx, codemod] of codemods.entries()) {
     logger.log(
-      `(${idx + 1}/${codemods.length}) ${chalk.bold(`Running ${codemod.name}`)}`
+      `(${idx + 1}/${codemods.length}) ${bold(`Running ${codemod.name}`)}`
     );
 
     // eslint-disable-next-line no-await-in-loop -- transforms have to run serially to avoid conflicts
@@ -224,15 +220,13 @@ export async function migrate(
 
   // install
   if (options.install) {
-    if (options.dry) {
+    if (options.dryRun) {
       logger.log(
-        `Upgrading turbo with ${chalk.bold(upgradeCommand)} ${chalk.dim(
-          "(dry run)"
-        )}`,
+        `Upgrading turbo with ${bold(upgradeCommand)} ${dim("(dry run)")}`,
         os.EOL
       );
     } else {
-      logger.log(`Upgrading turbo with ${chalk.bold(upgradeCommand)}`, os.EOL);
+      logger.log(`Upgrading turbo with ${bold(upgradeCommand)}`, os.EOL);
       try {
         execSync(upgradeCommand, { stdio: "pipe", cwd: project.paths.root });
       } catch (err: unknown) {
@@ -243,7 +237,7 @@ export async function migrate(
       }
     }
   } else {
-    logger.log(`Upgrade turbo with ${chalk.bold(upgradeCommand)}`, os.EOL);
+    logger.log(`Upgrade turbo with ${bold(upgradeCommand)}`, os.EOL);
   }
 
   endMigration({ success: true });

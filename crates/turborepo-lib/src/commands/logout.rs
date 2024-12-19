@@ -1,39 +1,18 @@
-use tracing::error;
-use turborepo_auth::logout as auth_logout;
+use turborepo_auth::{logout as auth_logout, LogoutOptions};
 use turborepo_telemetry::events::command::CommandEventBuilder;
 
-use crate::{cli::Error, commands::CommandBase, config, rewrite_json::unset_path};
+use crate::{cli::Error, commands::CommandBase};
 
-pub fn logout(base: &mut CommandBase, _telemetry: CommandEventBuilder) -> Result<(), Error> {
-    if let Err(err) = remove_token(base) {
-        error!("could not logout. Something went wrong: {}", err);
-        return Err(err);
-    }
-
-    auth_logout(&base.ui);
-
-    Ok(())
-}
-
-fn remove_token(base: &mut CommandBase) -> Result<(), Error> {
-    let global_config_path = base.global_config_path()?;
-    let before = global_config_path
-        .read_existing_to_string_or(Ok("{}"))
-        .map_err(|e| {
-            Error::Config(config::Error::FailedToReadConfig {
-                config_path: global_config_path.clone(),
-                error: e,
-            })
-        })?;
-
-    if let Some(after) = unset_path(&before, &["token"], true)? {
-        global_config_path.create_with_contents(after).map_err(|e| {
-            Error::Config(config::Error::FailedToSetConfig {
-                config_path: global_config_path.clone(),
-                error: e,
-            })
-        })
-    } else {
-        Ok(())
-    }
+pub async fn logout(
+    base: &mut CommandBase,
+    invalidate: bool,
+    _telemetry: CommandEventBuilder,
+) -> Result<(), Error> {
+    auth_logout(&LogoutOptions {
+        color_config: base.color_config,
+        api_client: base.api_client()?,
+        invalidate,
+    })
+    .await
+    .map_err(Error::from)
 }

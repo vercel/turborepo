@@ -6,6 +6,18 @@ use nom::{
     Finish, IResult,
 };
 
+use super::SupportedLockfileVersion;
+
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error(transparent)]
+    Nom(#[from] nom::error::Error<String>),
+    #[error("dependency path '{0}' contains no '@'")]
+    MissingAt(String),
+    #[error("dependency path '{0}' has an empty version following '@'")]
+    MissingVersion(String),
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct DepPath<'a> {
     // todo we possibly keep the full string here for 0-cost serialization
@@ -22,6 +34,16 @@ impl<'a> DepPath<'a> {
             version,
             host: None,
             peer_suffix: None,
+        }
+    }
+
+    pub fn parse(version: SupportedLockfileVersion, input: &'a str) -> Result<Self, Error> {
+        match version {
+            SupportedLockfileVersion::V7AndV9 => parse_dep_path_v9(input),
+            SupportedLockfileVersion::V5 | SupportedLockfileVersion::V6 => {
+                let (_, dep_path) = parse_dep_path(input).map_err(|e| e.to_owned()).finish()?;
+                Ok(dep_path)
+            }
         }
     }
 
@@ -52,15 +74,6 @@ impl<'a> DepPath<'a> {
     }
 }
 
-impl<'a> TryFrom<&'a str> for DepPath<'a> {
-    type Error = nom::error::Error<String>;
-
-    fn try_from(value: &'a str) -> Result<Self, Self::Error> {
-        let (_, dep_path) = parse_dep_path(value).map_err(|e| e.to_owned()).finish()?;
-        Ok(dep_path)
-    }
-}
-
 // See https://github.com/pnpm/pnpm/blob/185ab01adfc927ea23d2db08a14723bf51d0025f/packages/dependency-path/src/index.ts#L96
 // This diverges from the pnpm implementation that only parses <6 and in
 // order to parse 6+ it partially converts to the old format.
@@ -80,6 +93,32 @@ fn parse_dep_path(i: &str) -> IResult<&str, DepPath> {
             .with_host(host)
             .with_peer_suffix(peer_suffix),
     ))
+}
+
+fn parse_dep_path_v9(input: &str) -> Result<DepPath, Error> {
+    if input.is_empty() {
+        return Err(Error::MissingAt(input.to_owned()));
+    }
+    let sep_index = input[1..]
+        .find('@')
+        .ok_or_else(|| Error::MissingAt(input.to_owned()))?
+        + 1;
+    // Need to check if sep_index is valid index
+    if sep_index >= input.len() {
+        return Err(Error::MissingVersion(input.to_owned()));
+    }
+    let (name, version) = input.split_at(sep_index);
+    let version = &version[1..];
+
+    let (version, peer_suffix) = match version.find('(') {
+        Some(paren_index) if version.ends_with(')') => {
+            let (version, peer_suffix) = version.split_at(paren_index);
+            (version, Some(peer_suffix))
+        }
+        _ => (version, None),
+    };
+
+    Ok(DepPath::new(name, version).with_peer_suffix(peer_suffix))
 }
 
 fn parse_host(i: &str) -> IResult<&str, Option<&str>> {
@@ -149,12 +188,25 @@ mod tests {
         assert_eq!(actual, expected);
     }
 
+    #[test_case("foo@1.0.0", DepPath::new("foo", "1.0.0") ; "basic v7")]
+    #[test_case("@scope/foo@1.0.0", DepPath::new("@scope/foo", "1.0.0") ; "scope v7")]
+    #[test_case("foo@1.0.0(bar@1.2.3)", DepPath::new("foo", "1.0.0").with_peer_suffix(Some("(bar@1.2.3)")) ; "peer v7")]
+    #[test_case(
+        "eslint-module-utils@2.8.0(@typescript-eslint/parser@6.12.0(eslint@8.57.0)(typescript@5.3.3))",
+        DepPath::new("eslint-module-utils", "2.8.0").with_peer_suffix(Some("(@typescript-eslint/parser@6.12.0(eslint@8.57.0)(typescript@5.3.3))"))
+        ; "nested peer deps"
+    )]
+    fn dep_path_parse_v7_tests(s: &str, expected: DepPath) {
+        let actual = parse_dep_path_v9(s).unwrap();
+        assert_eq!(actual, expected);
+    }
+
     #[test_case("/@babel/helper-string-parser/7.19.4(patch_hash=wjhgmpzh47qmycrzgpeyoyh3ce)(@babel/core@7.21.0)", Some("wjhgmpzh47qmycrzgpeyoyh3ce"); "v6 patch")]
     #[test_case("/foo/1.0.0_patchHash_peerHash", Some("patchHash"); "pre v6 patch")]
     #[test_case("/foo/1.0.0", None; "no suffix")]
     #[test_case("/foo/1.0.0(bar@1.0.0)", None; "no patch")]
     fn dep_path_patch_hash(input: &str, expected: Option<&str>) {
-        let dep_path = DepPath::try_from(input).unwrap();
+        let dep_path = DepPath::parse(SupportedLockfileVersion::V5, input).unwrap();
         assert_eq!(dep_path.patch_hash(), expected);
     }
 }

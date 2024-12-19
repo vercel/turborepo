@@ -2,17 +2,19 @@
 
 set -e
 
-if [ $# != 1 ]; then
-  echo "Missing version"
-  exit 1
-fi
-TARGET=$1
-
 # Note: BASH_SOURCE[0] is a _relative_ path, so grab
 # the full realpath right away before manipulating.
 SCRIPT_FILE="$( realpath "${BASH_SOURCE[0]}" )"
 PKG_ROOT=$(realpath "${SCRIPT_FILE}/../..")
 JS_PACKAGE_JSON="${PKG_ROOT}/js/package.json"
+
+if [ $# != 1 ]; then
+  CURRENT_VERSION=$(jq -r .version "${JS_PACKAGE_JSON}")
+  echo "Missing version, current version is $CURRENT_VERSION"
+  exit 1
+fi
+
+TARGET=$1
 
 echo "Version: ${TARGET}"
 for dir in "${PKG_ROOT}"/npm/*; do

@@ -152,9 +152,11 @@ impl APIClient {
             .await?
             .json(&payload);
 
-        let response = retry::make_retryable_request(request_builder)
-            .await?
-            .error_for_status()?;
+        let response =
+            retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout)
+                .await?
+                .into_response()
+                .error_for_status()?;
 
         Ok(response.json().await?)
     }
@@ -176,8 +178,9 @@ impl APIClient {
             .await?
             .json(&task);
 
-        retry::make_retryable_request(request_builder)
+        retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout)
             .await?
+            .into_response()
             .error_for_status()?;
 
         Ok(())
@@ -201,8 +204,9 @@ impl APIClient {
             .await?
             .json(&payload);
 
-        retry::make_retryable_request(request_builder)
+        retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout)
             .await?
+            .into_response()
             .error_for_status()?;
 
         Ok(())

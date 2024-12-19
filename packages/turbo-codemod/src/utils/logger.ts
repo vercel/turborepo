@@ -1,4 +1,4 @@
-import chalk from "chalk";
+import { green, dim, bold, red, yellow, gray } from "picocolors";
 import type { UtilityArgs } from "../types";
 
 export class Logger {
@@ -7,7 +7,7 @@ export class Logger {
 
   constructor(args: UtilityArgs) {
     this.transform = args.transformer;
-    this.dry = args.dry;
+    this.dry = args.dryRun;
   }
 
   _log(...args: Array<unknown>) {
@@ -16,38 +16,18 @@ export class Logger {
   }
 
   modified(...args: Array<unknown>) {
-    this._log(
-      chalk.green(` MODIFIED `),
-      ...args,
-      this.dry ? chalk.dim(`(dry run)`) : ""
-    );
+    this._log(green(` MODIFIED `), ...args, this.dry ? dim(`(dry run)`) : "");
   }
   unchanged(...args: Array<unknown>) {
-    this._log(
-      chalk.gray(` UNCHANGED `),
-      ...args,
-      this.dry ? chalk.dim(`(dry run)`) : ""
-    );
+    this._log(gray(` UNCHANGED `), ...args, this.dry ? dim(`(dry run)`) : "");
   }
   skipped(...args: Array<unknown>) {
-    this._log(
-      chalk.yellow(` SKIPPED `),
-      ...args,
-      this.dry ? chalk.dim(`(dry run)`) : ""
-    );
+    this._log(yellow(` SKIPPED `), ...args, this.dry ? dim(`(dry run)`) : "");
   }
   error(...args: Array<unknown>) {
-    this._log(
-      chalk.red(` ERROR `),
-      ...args,
-      this.dry ? chalk.dim(`(dry run)`) : ""
-    );
+    this._log(red(` ERROR `), ...args, this.dry ? dim(`(dry run)`) : "");
   }
   info(...args: Array<unknown>) {
-    this._log(
-      chalk.bold(` INFO `),
-      ...args,
-      this.dry ? chalk.dim(`(dry run)`) : ""
-    );
+    this._log(bold(` INFO `), ...args, this.dry ? dim(`(dry run)`) : "");
   }
 }

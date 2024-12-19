@@ -3,29 +3,31 @@ CARGO_WORKSPACE_DIR = { value = "", relative = true }
 TURBO_PNPM_WORKSPACE_DIR = { value = "", relative = true }
 
 [build]
-rustflags = ["--cfg", "tokio_unstable"]
+rustflags = [
+  "--cfg",
+  "tokio_unstable",
+  "-Zshare-generics=y", # make the current crate share its generic instantiations
+  "-Zthreads=8", # parallel frontend https://blog.rust-lang.org/2023/11/09/parallel-rustc.html
+  "-Csymbol-mangling-version=v0",
+]
 rustdocflags = ["-Znormalize-docs"]
 
 [target.x86_64-pc-windows-msvc]
 linker = "rust-lld"
 
-[alias]
-xtask = "run --package xtask --"
-tr-build = "build -p turbo"
-tr-run = "run -p turbo"
-tr-test = "groups test turborepo"
-tr-check = "groups check turborepo"
-# Builds all test code to check for compiler errors before running
-tp-pre-test = "nextest run --no-run --workspace --release --exclude turbo --exclude turborepo-* --exclude turbopath --exclude wax --exclude globwalk --exclude globwatch --exclude pidlock"
-tp-test = "nextest run --workspace --release --no-fail-fast --exclude turbo --exclude turborepo-* --exclude turbopath --exclude wax --exclude globwalk --exclude globwatch --exclude pidlock"
-tp-bench-test = "test --benches --workspace --release --no-fail-fast --exclude turbopack-bench --exclude turbo --exclude turborepo-* --exclude turbopath --exclude wax --exclude globwalk --exclude globwatch --exclude pidlock"
-tp-check = "check --workspace --exclude turbo --exclude turborepo-* --exclude turbopath --exclude wax --exclude globwalk --exclude globwatch --exclude pidlock"
-tp-clippy = "clippy --workspace --exclude turbo --exclude turborepo-* --exclude turbopath --exclude wax --exclude globwalk --exclude globwatch --exclude pidlock"
+[target.aarch64-pc-windows-msvc]
+linker = "rust-lld"
 
-[target.'cfg(all())']
+[target.'cfg(target_os = "macos")']
+linker = "rust-lld"
+
+[target.'cfg(all(target_os = "linux", target_env = "gnu"))']
 rustflags = [
   "--cfg",
   "tokio_unstable",
   "-Zshare-generics=y",
+  "-Zthreads=8",
   "-Csymbol-mangling-version=v0",
+  "-Clink-arg=-fuse-ld=lld",
 ]
+

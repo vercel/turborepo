@@ -1,14 +1,22 @@
-use std::{env, fs, path::Path};
+/// Configuration for telemetry.
+///
+/// This module is responsible for reading and writing the telemetry
+/// configuration file.
+///
+/// NOTE: There is a port of this crate that is used to instrument node
+/// projects. Any changes made here should be reflected there as well.
+///
+/// https://github.com/vercel/turborepo/blob/main/packages/turbo-telemetry/src/config.ts
+use std::env;
 
 use chrono::{DateTime, Utc};
 pub use config::{Config, ConfigError, File, FileFormat};
-use hex;
 use serde::{Deserialize, Serialize};
-use serde_json;
 use sha2::{Digest, Sha256};
-use tracing::{debug, error};
+use tracing::{error, trace};
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_dirs::config_dir;
-use turborepo_ui::{color, BOLD, GREY, UI, UNDERLINE};
+use turborepo_ui::{color, ColorConfig, BOLD, GREY, UNDERLINE};
 use uuid::Uuid;
 
 static DEBUG_ENV_VAR: &str = "TURBO_TELEMETRY_DEBUG";
@@ -48,20 +56,24 @@ impl Default for TelemetryConfigContents {
 
 #[derive(Debug)]
 pub struct TelemetryConfig {
-    config_path: String,
+    config_path: AbsoluteSystemPathBuf,
     config: TelemetryConfigContents,
 }
 
 impl TelemetryConfig {
-    pub fn new() -> Result<TelemetryConfig, ConfigError> {
-        let file_path = &get_config_path()?;
-        debug!("Telemetry config path: {}", file_path);
-        if !Path::new(file_path).try_exists().unwrap_or(false) {
-            write_new_config()?;
+    pub fn with_default_config_path() -> Result<TelemetryConfig, ConfigError> {
+        let config_path = default_config_path()?;
+        TelemetryConfig::new(config_path)
+    }
+
+    pub fn new(config_path: AbsoluteSystemPathBuf) -> Result<TelemetryConfig, ConfigError> {
+        trace!("Telemetry config path: {}", config_path);
+        if !config_path.exists() {
+            write_new_config(&config_path)?;
         }
 
         let mut settings = Config::builder();
-        settings = settings.add_source(File::new(file_path, FileFormat::Json));
+        settings = settings.add_source(File::new(config_path.as_str(), FileFormat::Json));
         let settings = settings.build();
 
         // If this is a FileParse error, we assume something corrupted the file or
@@ -71,8 +83,10 @@ impl TelemetryConfig {
         let config = match settings {
             Ok(settings) => settings.try_deserialize::<TelemetryConfigContents>()?,
             Err(ConfigError::FileParse { .. }) => {
-                fs::remove_file(file_path).map_err(|e| ConfigError::Message(e.to_string()))?;
-                write_new_config()?;
+                config_path
+                    .remove_file()
+                    .map_err(|e| ConfigError::Message(e.to_string()))?;
+                write_new_config(&config_path)?;
                 return Err(settings.unwrap_err());
             }
             // Propagate other errors
@@ -80,7 +94,7 @@ impl TelemetryConfig {
         };
 
         let config = TelemetryConfig {
-            config_path: file_path.to_string(),
+            config_path,
             config,
         };
 
@@ -90,13 +104,14 @@ impl TelemetryConfig {
     fn write(&self) -> Result<(), ConfigError> {
         let serialized = serde_json::to_string_pretty(&self.config)
             .map_err(|e| ConfigError::Message(e.to_string()))?;
-        fs::write(&self.config_path, serialized)
+        self.config_path
+            .create_with_contents(serialized)
             .map_err(|e| ConfigError::Message(e.to_string()))?;
         Ok(())
     }
 
     pub fn one_way_hash(input: &str) -> String {
-        match TelemetryConfig::new() {
+        match TelemetryConfig::with_default_config_path() {
             Ok(config) => config.one_way_hash_with_config_salt(input),
             Err(_) => TelemetryConfig::one_way_hash_with_tmp_salt(input),
         }
@@ -119,36 +134,41 @@ impl TelemetryConfig {
         one_way_hash_with_salt(&tmp_salt, input)
     }
 
-    pub fn show_alert(&mut self, ui: UI) {
+    pub fn show_alert(&mut self, color_config: ColorConfig) {
         if !self.has_seen_alert() && self.is_enabled() && Self::is_telemetry_warning_enabled() {
             eprintln!(
                 "\n{}\n{}\n{}\n{}\n{}\n",
-                color!(ui, BOLD, "{}", "Attention:"),
+                color!(color_config, BOLD, "{}", "Attention:"),
                 color!(
-                    ui,
+                    color_config,
                     GREY,
                     "{}",
                     "Turborepo now collects completely anonymous telemetry regarding usage."
                 ),
                 color!(
-                    ui,
+                    color_config,
                     GREY,
                     "{}",
                     "This information is used to shape the Turborepo roadmap and prioritize \
                      features."
                 ),
                 color!(
-                    ui,
+                    color_config,
                     GREY,
                     "{}",
                     "You can learn more, including how to opt-out if you'd not like to \
                      participate in this anonymous program, by visiting the following URL:"
                 ),
                 color!(
-                    ui,
+                    color_config,
                     UNDERLINE,
                     "{}",
-                    color!(ui, GREY, "{}", "https://turbo.build/repo/docs/telemetry")
+                    color!(
+                        color_config,
+                        GREY,
+                        "{}",
+                        "https://turbo.build/repo/docs/telemetry"
+                    )
                 ),
             );
 
@@ -219,44 +239,29 @@ impl TelemetryConfig {
     }
 }
 
-fn get_config_path() -> Result<String, ConfigError> {
-    if cfg!(test) {
-        let tmp_dir = env::temp_dir();
-        let config_path = tmp_dir.join("test-telemetry.json");
-        Ok(config_path.to_str().unwrap().to_string())
-    } else {
-        let config_dir = config_dir().ok_or(ConfigError::Message(
+fn default_config_path() -> Result<AbsoluteSystemPathBuf, ConfigError> {
+    let config_dir = config_dir()
+        .map_err(|e| ConfigError::Message(format!("Invalid config directory: {}", e)))?
+        .ok_or(ConfigError::Message(
             "Unable to find telemetry config directory".to_string(),
         ))?;
-        // stored as a sibling to the turbo global config
-        let config_path = config_dir.join("turborepo").join("telemetry.json");
-        Ok(config_path.to_str().unwrap().to_string())
-    }
+    // stored as a sibling to the turbo global config
+    Ok(config_dir.join_components(&["turborepo", "telemetry.json"]))
 }
 
-fn write_new_config() -> Result<(), ConfigError> {
-    let file_path = get_config_path()?;
+fn write_new_config(file_path: &AbsoluteSystemPath) -> Result<(), ConfigError> {
     let serialized = serde_json::to_string_pretty(&TelemetryConfigContents::default())
         .map_err(|e| ConfigError::Message(e.to_string()))?;
 
-    // Extract the directory path from the file path
-    let dir_path = Path::new(&file_path).parent().ok_or_else(|| {
-        ConfigError::Message("Failed to extract directory path from file path".to_string())
-    })?;
-
     // Create the directory if it doesn't exist
-    if !dir_path.try_exists().unwrap_or(false) {
-        fs::create_dir_all(dir_path).map_err(|e| {
-            ConfigError::Message(format!(
-                "Failed to create directory {}: {}",
-                dir_path.display(),
-                e
-            ))
-        })?;
-    }
+    file_path
+        .ensure_dir()
+        .map_err(|_| ConfigError::Message("Failed to create directory".to_string()))?;
 
     // Write the file
-    fs::write(&file_path, serialized).map_err(|e| ConfigError::Message(e.to_string()))?;
+    file_path
+        .create_with_contents(serialized)
+        .map_err(|e| ConfigError::Message(e.to_string()))?;
     Ok(())
 }
 

@@ -1,26 +1,41 @@
+//! Turbo LSP server
+//!
+//! This is the main entry point for the LSP server. It is responsible for
+//! handling all LSP requests and responses.
+//!
+//! For more, see the [LSP specification](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/)
+//! as well as the architecture documentation in `packages/turbo-vsc`.
+
+#![feature(box_patterns)]
 #![deny(clippy::all)]
 #![warn(clippy::unwrap_used)]
 
 use std::{
+    borrow::Cow,
     collections::{HashMap, HashSet},
-    str::FromStr,
+    iter,
     sync::{Arc, Mutex},
 };
 
-use itertools::Itertools;
-use jsonc_parser::CollectOptions;
+use itertools::{chain, Itertools};
+use jsonc_parser::{
+    ast::{ObjectPropName, StringLit},
+    CollectOptions,
+};
 use serde_json::Value;
 use tokio::sync::watch::{Receiver, Sender};
 use tower_lsp::{
-    self,
     jsonrpc::{Error, Result as LspResult},
     lsp_types::*,
     Client, LanguageServer,
 };
 use turbopath::AbsoluteSystemPathBuf;
-use turborepo_lib::{DaemonClient, DaemonConnector, DaemonPackageDiscovery, DaemonRootHasher};
+use turborepo_lib::{
+    DaemonClient, DaemonConnector, DaemonConnectorError, DaemonError, DaemonPackageDiscovery,
+    DaemonPaths,
+};
 use turborepo_repository::{
-    discovery::{self, DiscoveryResponse, PackageDiscovery},
+    discovery::{self, DiscoveryResponse, PackageDiscovery, WorkspaceData},
     package_json::PackageJson,
 };
 
@@ -60,22 +75,18 @@ impl LanguageServer for Backend {
                 .expect("only fails if poisoned")
                 .replace(repo_root.clone());
 
-            let hasher = DaemonRootHasher::new(&repo_root);
+            let paths = DaemonPaths::from_repo_root(&repo_root);
 
             let (_, daemon) = tokio::join!(
-                self.client.log_message(
-                    MessageType::INFO,
-                    format!("root uri: {}", hasher.sock_path()),
-                ),
+                self.client
+                    .log_message(MessageType::INFO, format!("root uri: {}", paths.sock_file),),
                 tokio_retry::Retry::spawn(
                     tokio_retry::strategy::FixedInterval::from_millis(100).take(5),
                     || {
-                        let connector = DaemonConnector {
-                            can_start_server: true,
-                            can_kill_server: false,
-                            pid_file: hasher.lock_path(),
-                            sock_file: hasher.sock_path(),
-                        };
+                        let can_start_server = true;
+                        let can_kill_server = false;
+                        let connector =
+                            DaemonConnector::new(can_start_server, can_kill_server, &repo_root);
                         connector.connect()
                     },
                 )
@@ -83,6 +94,28 @@ impl LanguageServer for Backend {
 
             let daemon = match daemon {
                 Ok(daemon) => daemon,
+                Err(DaemonConnectorError::Handshake(box DaemonError::VersionMismatch(message))) => {
+                    self.client
+                        .show_message(
+                            MessageType::ERROR,
+                            "Pre-2.0 versions of turborepo are not compatible with 2.0 or later \
+                             of the extension. If you do not plan to update to turbo 2.0, please \
+                             ensure you install the latest 1.0 version of the extension in this \
+                             workspace.",
+                        )
+                        .await;
+                    self.client
+                        .log_message(
+                            MessageType::ERROR,
+                            format!("version mismatch when connecting to daemon: {}", message),
+                        )
+                        .await;
+
+                    // in this case, just say we don't support any features
+                    return Ok(InitializeResult {
+                        ..Default::default()
+                    });
+                }
                 Err(e) => {
                     self.client
                         .log_message(
@@ -98,7 +131,7 @@ impl LanguageServer for Backend {
                 .send(Some(daemon))
                 .expect("there is a receiver");
 
-            let mut lock = pidlock::Pidlock::new(hasher.lsp_path().as_std_path().to_owned());
+            let mut lock = pidlock::Pidlock::new(paths.lsp_pid_file.as_std_path().to_owned());
 
             if let Err(e) = lock.acquire() {
                 self.client
@@ -168,12 +201,13 @@ impl LanguageServer for Backend {
         })
     }
 
+    /// Find which projects / scripts are affected by a given pipeline item
     async fn references(&self, params: ReferenceParams) -> LspResult<Option<Vec<Location>>> {
         self.client
             .log_message(MessageType::INFO, "references!")
             .await;
 
-        let tasks: Vec<_> = {
+        let Some(referenced_task) = ({
             let rope = {
                 let map = self.files.lock().expect("only fails if poisoned");
                 match map.get(&params.text_document_position.text_document.uri) {
@@ -207,11 +241,11 @@ impl LanguageServer for Backend {
                 .value
                 .as_ref()
                 .and_then(|v| v.as_object())
-                .and_then(|o| o.get_object("pipeline"))
+                .and_then(|o| o.get_object("tasks"))
                 .map(|p| p.properties.iter())
                 .into_iter()
                 .flatten()
-                .filter_map(|task| {
+                .find_map(|task| {
                     let mut range = task.range;
                     range.start += 1; // account for quote
                     let key_range = range.start + task.name.as_str().len();
@@ -228,11 +262,16 @@ impl LanguageServer for Backend {
                         None
                     }
                 })
-                .collect()
+        }) else {
+            // no overlap with any task definitions, exit
+            return Ok(None);
         };
 
         self.client
-            .log_message(MessageType::INFO, format!("{:?}", tasks))
+            .log_message(
+                MessageType::INFO,
+                format!("finding references for {:?}", referenced_task),
+            )
             .await;
 
         let repo_root = self
@@ -257,7 +296,12 @@ impl LanguageServer for Backend {
                 self.client
                     .log_message(MessageType::WARNING, e.to_string())
                     .await;
-                return Err(Error::internal_error());
+
+                // there aren't really any other errors we can return here, other than
+                // an internal error
+                let mut error = Error::internal_error();
+                error.message = "failed to get package list from the daemon".into();
+                return Err(error);
             }
         };
 
@@ -269,7 +313,7 @@ impl LanguageServer for Backend {
                 // so we just skip it and do a best effort
                 Err(_) => continue,
             };
-            let package_json = match PackageJson::from_str(&data) {
+            let package_json = match PackageJson::load_from_str(&data, wd.package_json.as_str()) {
                 Ok(package_json) => package_json,
                 // if we can't parse a package.json, then we can't set up references to it
                 // so we just skip it and do a best effort
@@ -287,51 +331,49 @@ impl LanguageServer for Backend {
             // todo: use jsonc_ast instead of text search
             let rope = crop::Rope::from(data.clone());
 
-            for task in tasks.iter() {
-                let (package, task) = task
-                    .rsplit_once('#')
-                    .map(|(p, t)| (Some(p), t))
-                    .unwrap_or((None, task));
+            let (package, task) = referenced_task
+                .rsplit_once('#')
+                .map(|(p, t)| (Some(p), t))
+                .unwrap_or((None, &referenced_task));
 
-                if let (Some(package), Some(package_name)) = (package, package_json_name) {
-                    if package_name != package {
-                        continue;
-                    }
-                };
-
-                let Some(start) = data.find(&format!("\"{}\"", task)) else {
+            if let (Some(package), Some(package_name)) = (package, package_json_name) {
+                if package_name != package {
                     continue;
-                };
-                let end = start + task.len() + 2;
-
-                let start_line = rope.line_of_byte(start);
-                let end_line = rope.line_of_byte(end);
-
-                let range = Range {
-                    start: Position {
-                        line: start_line as u32,
-                        character: (start - rope.byte_of_line(start_line)) as u32,
-                    },
-                    end: Position {
-                        line: end_line as u32,
-                        character: (end - rope.byte_of_line(end_line)) as u32,
-                    },
-                };
-
-                if scripts.contains(task) {
-                    let location = Location::new(
-                        Url::from_file_path(&wd.package_json)
-                            .expect("only fails if path is relative"),
-                        range,
-                    );
-                    locations.push(location);
                 }
+            };
+
+            let Some(start) = data.find(&format!("\"{}\"", task)) else {
+                continue;
+            };
+            let end = start + task.len() + 2;
+
+            let start_line = rope.line_of_byte(start);
+            let end_line = rope.line_of_byte(end);
+
+            let range = Range {
+                start: Position {
+                    line: start_line as u32,
+                    character: (start - rope.byte_of_line(start_line)) as u32,
+                },
+                end: Position {
+                    line: end_line as u32,
+                    character: (end - rope.byte_of_line(end_line)) as u32,
+                },
+            };
+
+            if scripts.contains(task) {
+                let location = Location::new(
+                    Url::from_file_path(&wd.package_json).expect("only fails if path is relative"),
+                    range,
+                );
+                locations.push(location);
             }
         }
 
         Ok(Some(locations))
     }
 
+    /// Add code lens items for running a particular task in the turbo.json
     async fn code_lens(&self, params: CodeLensParams) -> LspResult<Option<Vec<CodeLens>>> {
         self.client
             .log_message(MessageType::INFO, "code lens!")
@@ -371,7 +413,7 @@ impl LanguageServer for Backend {
             .value
             .as_ref()
             .and_then(|v| v.as_object())
-            .and_then(|o| o.get_object("pipeline"))
+            .and_then(|o| o.get_object("tasks"))
             .map(|p| p.properties.iter())
             .into_iter()
             .flatten();
@@ -397,6 +439,8 @@ impl LanguageServer for Backend {
         Ok(Some(tasks))
     }
 
+    /// Given a list of diagnistics that we previously reported, produce code
+    /// actions that the user can run
     async fn code_action(&self, params: CodeActionParams) -> LspResult<Option<CodeActionResponse>> {
         self.client
             .log_message(MessageType::INFO, format!("{:#?}", params))
@@ -471,6 +515,7 @@ impl LanguageServer for Backend {
         Ok(None)
     }
 
+    /// Add an entry to the list of ropes for a newly opened file
     async fn did_open(&self, document: DidOpenTextDocumentParams) {
         self.client
             .log_message(MessageType::INFO, "file opened!")
@@ -487,6 +532,8 @@ impl LanguageServer for Backend {
             .await;
     }
 
+    /// Modify the rope that we have in memory to reflect the changes that were
+    /// made to the buffer in the editor
     async fn did_change(&self, document: DidChangeTextDocumentParams) {
         self.client
             .log_message(MessageType::INFO, "file changed!")
@@ -533,6 +580,13 @@ impl LanguageServer for Backend {
             .await;
     }
 
+    /// Provide intellisense completions for package / task names
+    ///
+    /// - get all packages
+    /// - get all package jsons
+    /// - produce all unique script names
+    /// - flatmap producing all package#script combos
+    /// - chain them
     async fn completion(&self, _: CompletionParams) -> LspResult<Option<CompletionResponse>> {
         let packages = self
             .package_discovery()
@@ -584,7 +638,7 @@ impl Backend {
     }
 
     pub async fn package_discovery(&self) -> Result<DiscoveryResponse, discovery::Error> {
-        let mut daemon = {
+        let daemon = {
             let mut daemon = self.daemon.clone();
             let daemon = daemon.wait_for(|d| d.is_some()).await;
             let daemon = daemon.as_ref().expect("only fails if self is dropped");
@@ -594,8 +648,8 @@ impl Backend {
                 .clone()
         };
 
-        DaemonPackageDiscovery::new(&mut daemon)
-            .discover_packages()
+        DaemonPackageDiscovery::new(daemon)
+            .discover_packages_blocking()
             .await
     }
 
@@ -630,12 +684,28 @@ impl Backend {
 
         let packages = self.package_discovery().await;
 
-        let tasks = packages.map(|p| {
-            p.workspaces
-                .into_iter()
+        // package discovery does not yield the root, so we must add it
+        let root_turbo_json = repo_root.join_component("turbo.json");
+        let workspaces = packages.map(|p| {
+            chain(
+                p.workspaces.into_iter(),
+                iter::once(WorkspaceData {
+                    package_json: repo_root.join_component("package.json"),
+                    turbo_json: root_turbo_json.exists().then_some(root_turbo_json),
+                }),
+            )
+        });
+
+        let tasks = workspaces.map(|workspaces| {
+            workspaces
                 .filter_map(|wd| {
                     let package_json = PackageJson::load(&wd.package_json).ok()?; // if we can't load a package.json, then we can't infer its tasks
-                    let package_json_name = if repo_root == wd.package_json {
+                    let package_json_name = if (&*repo_root)
+                        == wd
+                            .package_json
+                            .parent()
+                            .expect("package.json is always in a directory")
+                    {
                         Some("//".to_string())
                     } else {
                         package_json.name
@@ -691,89 +761,25 @@ impl Backend {
             );
 
             let pipeline = object
-                .and_then(|o| o.get_object("pipeline"))
+                .and_then(|o| o.get_object("tasks"))
                 .map(|p| p.properties.iter());
 
             for property in pipeline.into_iter().flatten() {
-                let (package, task) = property
-                    .name
-                    .as_str()
-                    .split_once('#') // turbo packages may not have # in them
-                    .map(|(p, t)| (Some(p), t))
-                    .unwrap_or((None, property.name.as_str()));
-
                 let mut object_range = property.range;
                 object_range.start += 1; // account for quote
                 let object_key_range = object_range.start + property.name.as_str().len();
                 object_range.end = object_key_range;
 
-                if let Ok((tasks, packages)) = &tasks_and_packages {
-                    match (tasks.get(task), package) {
-                        // we specified a package, but that package doesn't exist
-                        (_, Some(package)) if !packages.contains(&package) => {
-                            diagnostics.push(Diagnostic {
-                                message: format!("The package `{}` does not exist.", package),
-                                range: convert_ranges(&rope, object_range),
-                                severity: Some(DiagnosticSeverity::ERROR),
-                                code: Some(NumberOrString::String(
-                                    "turbo:no-such-package".to_string(),
-                                )),
-                                ..Default::default()
-                            });
-                        }
-                        // that task exists, and we have a package defined, but the task doesn't
-                        // exist in that package
-                        (Some(list), Some(package))
-                            if !list
-                                .iter()
-                                .filter_map(|s| s.as_ref().map(|s| s.as_str()))
-                                .contains(&package) =>
-                        {
-                            diagnostics.push(Diagnostic {
-                                message: format!(
-                                    "The task `{}` does not exist in the package `{}`.",
-                                    task, package
-                                ),
-                                range: convert_ranges(&rope, object_range),
-                                severity: Some(DiagnosticSeverity::ERROR),
-                                code: Some(NumberOrString::String(
-                                    "turbo:no-such-task-in-package".to_string(),
-                                )),
-                                ..Default::default()
-                            });
-                        }
-                        // the task doesn't exist anywhere, so we have a problem
-                        (None, None) => {
-                            diagnostics.push(Diagnostic {
-                                message: format!("The task `{}` does not exist.", task),
-                                range: convert_ranges(&rope, object_range),
-                                severity: Some(DiagnosticSeverity::WARNING),
-                                code: Some(NumberOrString::String(
-                                    "turbo:no-such-task".to_string(),
-                                )),
-                                ..Default::default()
-                            });
-                        }
-                        // we have specified a package, but the task doesn't exist at all
-                        (None, Some(package)) => {
-                            diagnostics.push(Diagnostic {
-                                message: format!(
-                                    "The task `{}` does not exist in the package `{}`.",
-                                    task, package
-                                ),
-                                range: convert_ranges(&rope, object_range),
-                                severity: Some(DiagnosticSeverity::ERROR),
-                                code: Some(NumberOrString::String(
-                                    "turbo:no-such-task".to_string(),
-                                )),
-                                ..Default::default()
-                            });
-                        }
-                        // task exists in a given package, so we're good
-                        (Some(_), Some(_)) => {}
-                        // the task exists and we haven't specified a package, so we're good
-                        (Some(_), None) => {}
-                    }
+                if let (Ok((tasks, packages)), ObjectPropName::String(name)) =
+                    (&tasks_and_packages, &property.name)
+                {
+                    report_invalid_packages_and_tasks(
+                        tasks,
+                        packages,
+                        &rope,
+                        &mut diagnostics,
+                        name,
+                    );
                 }
 
                 // inputs, outputs
@@ -797,30 +803,48 @@ impl Backend {
                     .and_then(|o| o.get_array("dependsOn"))
                 {
                     for depends_on in &array.elements {
-                        if let Some(string) = depends_on.as_string_lit() {
-                            if string.value.starts_with('^') {
+                        if let Some(string) = depends_on.as_string_lit().cloned() {
+                            let suffix = if let Some(suffix) = strip_lit_prefix(&string, "^") {
                                 diagnostics.push(Diagnostic {
                                     message: format!(
                                         "The '^' means \"run the `{}` task in the package's \
-                                         depencies before this one\"",
-                                        &string.value[1..],
+                                         dependencies before this one\"",
+                                        &suffix.value,
                                     ),
                                     range: convert_ranges(
                                         &rope,
                                         collapse_string_range(string.range),
                                     ),
-                                    severity: Some(DiagnosticSeverity::INFORMATION),
+                                    severity: Some(DiagnosticSeverity::HINT),
                                     ..Default::default()
                                 });
-                            }
-                            if string.value.starts_with('$') {
+                                suffix
+                            } else {
+                                // prevent task from depending on itself, if it is not a '^' task
+                                if string.value == property.name.as_str() {
+                                    diagnostics.push(Diagnostic {
+                                        message: "A task cannot depend on itself.".to_string(),
+                                        range: convert_ranges(&rope, string.range),
+                                        severity: Some(DiagnosticSeverity::ERROR),
+                                        code: Some(NumberOrString::String(
+                                            "turbo:self-dependency".to_string(),
+                                        )),
+                                        ..Default::default()
+                                    });
+                                    continue;
+                                }
+
+                                string
+                            };
+
+                            let suffix = if let Some(suffix) = strip_lit_prefix(&suffix, "$") {
                                 diagnostics.push(Diagnostic {
                                     message: "The $ syntax is deprecated. Please apply the \
                                               codemod."
                                         .to_string(),
                                     range: convert_ranges(
                                         &rope,
-                                        collapse_string_range(string.range),
+                                        collapse_string_range(suffix.range),
                                     ),
                                     severity: Some(DiagnosticSeverity::ERROR),
                                     code: Some(NumberOrString::String(
@@ -828,6 +852,19 @@ impl Backend {
                                     )),
                                     ..Default::default()
                                 });
+                                suffix
+                            } else {
+                                suffix
+                            };
+
+                            if let Ok((tasks, packages)) = &tasks_and_packages {
+                                report_invalid_packages_and_tasks(
+                                    tasks,
+                                    packages,
+                                    &rope,
+                                    &mut diagnostics,
+                                    &suffix,
+                                );
                             }
                         }
                     }
@@ -872,10 +909,103 @@ fn convert_ranges(rope: &crop::Rope, range: jsonc_parser::common::Range) -> Rang
     }
 }
 
+fn strip_lit_prefix<'a>(s: &'a StringLit<'a>, prefix: &str) -> Option<StringLit<'a>> {
+    s.value
+        .strip_prefix(prefix)
+        .map(Cow::Borrowed)
+        .map(|stripped| StringLit {
+            value: stripped,
+            range: jsonc_parser::common::Range {
+                start: s.range.start + prefix.len(),
+                end: s.range.end,
+            },
+        })
+}
+
 /// remove quotes from a string range
 fn collapse_string_range(range: jsonc_parser::common::Range) -> jsonc_parser::common::Range {
     jsonc_parser::common::Range {
         start: range.start + 1,
         end: range.end - 1,
+    }
+}
+
+fn report_invalid_packages_and_tasks(
+    tasks: &HashMap<String, Vec<Option<String>>>,
+    packages: &HashSet<&str>,
+    rope: &crop::Rope,
+    diagnostics: &mut Vec<Diagnostic>,
+    package_task: &StringLit,
+) {
+    let (package, task) = package_task
+        .value
+        .split_once('#') // turbo packages may not have # in them
+        .map(|(p, t)| (Some(p), t))
+        .unwrap_or((None, &package_task.value));
+
+    let range = convert_ranges(rope, collapse_string_range(package_task.range));
+
+    match (tasks.get(task), package) {
+        // we specified a package, but that package doesn't exist
+        (_, Some(package)) if !packages.contains(&package) => {
+            diagnostics.push(Diagnostic {
+                message: format!("The package `{}` does not exist in {:?}", package, packages),
+                range,
+                severity: Some(DiagnosticSeverity::ERROR),
+                code: Some(NumberOrString::String("turbo:no-such-package".to_string())),
+                ..Default::default()
+            });
+        }
+        // that task exists, and we have a package defined, but the task
+        // doesn't exist in that
+        // package
+        (Some(list), Some(package))
+            if !list
+                .iter()
+                .filter_map(|s| s.as_ref().map(|s| s.as_str()))
+                .contains(&package) =>
+        {
+            diagnostics.push(Diagnostic {
+                message: format!(
+                    "The task `{}` does not exist in the package `{}`.",
+                    task, package
+                ),
+                range,
+                severity: Some(DiagnosticSeverity::ERROR),
+                code: Some(NumberOrString::String(
+                    "turbo:no-such-task-in-package".to_string(),
+                )),
+                ..Default::default()
+            });
+        }
+        // the task doesn't exist anywhere, so we have a problem
+        (None, None) => {
+            diagnostics.push(Diagnostic {
+                message: format!("The task `{}` does not exist.", task),
+                range,
+                severity: Some(DiagnosticSeverity::ERROR),
+                code: Some(NumberOrString::String("turbo:no-such-task".to_string())),
+                ..Default::default()
+            });
+        }
+        // we have specified a package, but the task doesn't exist at
+        // all
+        (None, Some(package)) => {
+            diagnostics.push(Diagnostic {
+                message: format!(
+                    "The task `{}` does not exist in the package `{}`.",
+                    task, package
+                ),
+                range,
+                severity: Some(DiagnosticSeverity::ERROR),
+                code: Some(NumberOrString::String("turbo:no-such-task".to_string())),
+                ..Default::default()
+            });
+        }
+        // task exists in a given package, so we're good
+        (Some(_), Some(_)) => {}
+        // the task exists and we haven't specified a package, so we're
+        // good
+        (Some(_), None) => {}
     }
 }

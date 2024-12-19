@@ -1,0 +1,40 @@
+---
+title: Static Assets
+description: Learn more about static assets in Turbopack.
+---
+
+Part of bundling for the web is handling all the asset types the web supports - images, JSON, and much more. Turbopack offers familiar tools for these so you can immediately get productive.
+
+## Import static assets
+
+Importing static assets works out of the box with Turbopack:
+
+```ts title="my-file.ts"
+import img from './img.png';
+```
+
+### Next.js
+
+In webpack and some other frameworks, importing an image returns a string containing that image's URL.
+
+```ts title="my-file.ts"
+import img from './img.png';
+
+console.log(img); // /assets/static/1uahwd98h123.png
+```
+
+In Next.js, importing an image returns an object, containing various metadata about the image. This is so it can be fed into [Next.js's Image component](https://nextjs.org/docs/basic-features/image-optimization#local-images).
+
+## JSON
+
+Most frameworks allow you to import JSON directly into your application:
+
+```ts title="my-file.ts"
+import fixtures from './fixtures.json';
+```
+
+This is supported out of the box with Turbopack, as is performing a named import on that JSON:
+
+```ts title="my-file.ts"
+import { users, posts } from './fixtures.json';
+```

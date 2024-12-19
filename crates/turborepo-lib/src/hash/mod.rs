@@ -10,12 +10,11 @@ use std::collections::HashMap;
 
 use capnp::message::{Builder, HeapAllocator};
 pub use traits::TurboHash;
-use turborepo_env::{EnvironmentVariablePairs, ResolvedEnvMode};
+use turborepo_env::EnvironmentVariablePairs;
 
 use crate::{cli::EnvMode, task_graph::TaskOutputs};
 
 mod proto_capnp {
-    use turborepo_env::ResolvedEnvMode;
 
     use crate::cli::EnvMode;
 
@@ -24,18 +23,17 @@ mod proto_capnp {
     impl From<EnvMode> for global_hashable::EnvMode {
         fn from(value: EnvMode) -> Self {
             match value {
-                EnvMode::Infer => global_hashable::EnvMode::Infer,
                 EnvMode::Loose => global_hashable::EnvMode::Loose,
                 EnvMode::Strict => global_hashable::EnvMode::Strict,
             }
         }
     }
 
-    impl From<ResolvedEnvMode> for task_hashable::EnvMode {
-        fn from(value: ResolvedEnvMode) -> Self {
+    impl From<EnvMode> for task_hashable::EnvMode {
+        fn from(value: EnvMode) -> Self {
             match value {
-                ResolvedEnvMode::Loose => task_hashable::EnvMode::Loose,
-                ResolvedEnvMode::Strict => task_hashable::EnvMode::Strict,
+                EnvMode::Loose => task_hashable::EnvMode::Loose,
+                EnvMode::Strict => task_hashable::EnvMode::Strict,
             }
         }
     }
@@ -59,22 +57,22 @@ pub struct TaskHashable<'a> {
     pub(crate) env: &'a [String],
     pub(crate) resolved_env_vars: EnvVarPairs,
     pub(crate) pass_through_env: &'a [String],
-    pub(crate) env_mode: ResolvedEnvMode,
-    pub(crate) dot_env: &'a [turbopath::RelativeUnixPathBuf],
+    pub(crate) env_mode: EnvMode,
 }
 
 #[derive(Debug, Clone)]
 pub struct GlobalHashable<'a> {
     pub global_cache_key: &'static str,
     pub global_file_hash_map: &'a HashMap<turbopath::RelativeUnixPathBuf, String>,
-    // This is None in single package mode
+    // These are None in single package mode
     pub root_external_dependencies_hash: Option<&'a str>,
+    pub root_internal_dependencies_hash: Option<&'a str>,
+    pub engines: HashMap<&'a str, &'a str>,
     pub env: &'a [String],
     pub resolved_env_vars: EnvironmentVariablePairs,
     pub pass_through_env: &'a [String],
     pub env_mode: EnvMode,
     pub framework_inference: bool,
-    pub dot_env: &'a [turbopath::RelativeUnixPathBuf],
 }
 
 pub struct LockFilePackages(pub Vec<turborepo_lockfiles::Package>);
@@ -254,15 +252,6 @@ impl From<TaskHashable<'_>> for Builder<HeapAllocator> {
         }
 
         {
-            let mut dotenv_builder = builder
-                .reborrow()
-                .init_dot_env(task_hashable.dot_env.len() as u32);
-            for (i, env) in task_hashable.dot_env.iter().enumerate() {
-                dotenv_builder.set(i as u32, env.as_str());
-            }
-        }
-
-        {
             let mut resolved_env_vars_builder = builder
                 .reborrow()
                 .init_resolved_env_vars(task_hashable.resolved_env_vars.len() as u32);
@@ -315,8 +304,30 @@ impl From<GlobalHashable<'_>> for Builder<HeapAllocator> {
             }
         }
 
+        {
+            let mut entries = builder
+                .reborrow()
+                .init_engines(hashable.engines.len() as u32);
+
+            // get a sorted iterator over keys and values of the hashmap
+            // and set the entries in the capnp message
+
+            let mut hashable: Vec<_> = hashable.engines.iter().collect();
+            hashable.sort_by(|a, b| a.0.cmp(b.0));
+
+            for (i, (key, value)) in hashable.iter().enumerate() {
+                let mut entry = entries.reborrow().get(i as u32);
+                entry.set_key(key);
+                entry.set_value(value);
+            }
+        }
+
         if let Some(root_external_dependencies_hash) = hashable.root_external_dependencies_hash {
             builder.set_root_external_deps_hash(root_external_dependencies_hash);
+        }
+
+        if let Some(root_internal_dependencies_hash) = hashable.root_internal_dependencies_hash {
+            builder.set_root_internal_deps_hash(root_internal_dependencies_hash);
         }
 
         {
@@ -345,21 +356,11 @@ impl From<GlobalHashable<'_>> for Builder<HeapAllocator> {
         }
 
         builder.set_env_mode(match hashable.env_mode {
-            EnvMode::Infer => proto_capnp::global_hashable::EnvMode::Infer,
             EnvMode::Loose => proto_capnp::global_hashable::EnvMode::Loose,
             EnvMode::Strict => proto_capnp::global_hashable::EnvMode::Strict,
         });
 
         builder.set_framework_inference(hashable.framework_inference);
-
-        {
-            let mut dot_env = builder
-                .reborrow()
-                .init_dot_env(hashable.dot_env.len() as u32);
-            for (i, env) in hashable.dot_env.iter().enumerate() {
-                dot_env.set(i as u32, env.as_str());
-            }
-        }
 
         // We're okay to unwrap here because we haven't hit the nesting
         // limit and the message will not have cycles.
@@ -381,7 +382,6 @@ impl From<GlobalHashable<'_>> for Builder<HeapAllocator> {
 #[cfg(test)]
 mod test {
     use test_case::test_case;
-    use turborepo_env::ResolvedEnvMode;
     use turborepo_lockfiles::Package;
 
     use super::{
@@ -406,11 +406,10 @@ mod test {
             env: &["env".to_string()],
             resolved_env_vars: vec![],
             pass_through_env: &["pass_thru_env".to_string()],
-            env_mode: ResolvedEnvMode::Loose,
-            dot_env: &[turbopath::RelativeUnixPathBuf::new("dotenv".to_string()).unwrap()],
+            env_mode: EnvMode::Loose,
         };
 
-        assert_eq!(task_hashable.hash(), "ff765ee2f83bc034");
+        assert_eq!(task_hashable.hash(), "1f8b13161f57fca1");
     }
 
     #[test]
@@ -426,16 +425,16 @@ mod test {
             global_cache_key: "global_cache_key",
             global_file_hash_map: &global_file_hash_map,
             root_external_dependencies_hash: Some("0000000000000000"),
+            root_internal_dependencies_hash: Some("0000000000000001"),
+            engines: Default::default(),
             env: &["env".to_string()],
             resolved_env_vars: vec![],
             pass_through_env: &["pass_through_env".to_string()],
-            env_mode: EnvMode::Infer,
+            env_mode: EnvMode::Strict,
             framework_inference: true,
-
-            dot_env: &[turbopath::RelativeUnixPathBuf::new("dotenv".to_string()).unwrap()],
         };
 
-        assert_eq!(global_hash.hash(), "c0ddf8138bd686e8");
+        assert_eq!(global_hash.hash(), "5072bd005ec02799");
     }
 
     #[test_case(vec![], "459c029558afe716" ; "empty")]

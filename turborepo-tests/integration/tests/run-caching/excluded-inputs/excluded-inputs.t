@@ -9,7 +9,7 @@ Running build for my-app succeeds
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  my-app:build: cache miss, executing 2fa14ad1b3e50ac8
+  my-app:build: cache miss, executing e228bd94fd46352c
   my-app:build: 
   my-app:build: > build
   my-app:build: > echo building
@@ -20,13 +20,14 @@ Running build for my-app succeeds
   Cached:    0 cached, 1 total
     Time:\s*[\.0-9]+m?s  (re)
   
+   WARNING  no output files found for task my-app#build. Please check your `outputs` key in `turbo.json`
 Update exluded file and try again
   $ echo "new excluded value" > apps/my-app/excluded.txt
   $ ${TURBO} run build --filter=my-app
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  my-app:build: cache hit, replaying logs 2fa14ad1b3e50ac8
+  my-app:build: cache hit, replaying logs e228bd94fd46352c
   my-app:build: 
   my-app:build: > build
   my-app:build: > echo building

@@ -2,6 +2,10 @@ name: Turborepo Library Release
 
 on:
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Do a dry run, skipping the final publish step."
+        type: boolean
 
 jobs:
   build:
@@ -17,6 +21,7 @@ jobs:
             target: "aarch64-apple-darwin"
           - host: macos-latest
             target: "x86_64-apple-darwin"
+
           - host: ubuntu-latest
             target: "aarch64-unknown-linux-gnu"
             setup: |
@@ -25,6 +30,7 @@ jobs:
               echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
               echo "CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
               echo "CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++" >> $GITHUB_ENV
+
           - host: ubuntu-latest
             target: "x86_64-unknown-linux-gnu"
             container: amazon/aws-lambda-nodejs:18
@@ -34,8 +40,41 @@ jobs:
               npm i -g pnpm@8.9.0
             setup: |
               pnpm install
+
+          - host: ubuntu-latest
+            target: "x86_64-unknown-linux-musl"
+            container: ghcr.io/napi-rs/napi-rs/nodejs-rust:stable-2023-09-17-alpine
+            install: |
+              apk update && apk upgrade
+              apk add libc6-compat curl
+              echo /root/.cargo/bin >> ${GITHUB_PATH}
+              echo /usr/local/cargo/bin/rustup >> ${GITHUB_PATH}
+            setup: |
+              export PATH=/usr/local/cargo/bin/rustup:/root/.cargo/bin:${PATH}
+              rustup show active-toolchain
+              dirname $(rustup which cargo) >> ${GITHUB_PATH}
+              pnpm install
+
+          - host: ubuntu-latest
+            target: "aarch64-unknown-linux-musl"
+            container: ghcr.io/napi-rs/napi-rs/nodejs-rust:stable-2023-09-17-alpine
+            install: |
+              apk update && apk upgrade
+              apk add libc6-compat curl
+              echo /root/.cargo/bin >> ${GITHUB_PATH}
+              echo /usr/local/cargo/bin/rustup >> ${GITHUB_PATH}
+              echo /aarch64-linux-musl-cross/bin >> ${GITHUB_PATH}
+            setup: |
+              export PATH=/aarch64-linux-musl-cross/bin:/usr/local/cargo/bin/rustup:/root/.cargo/bin:${PATH}
+              rustup show active-toolchain
+              rustup target add aarch64-unknown-linux-musl
+              dirname $(rustup which cargo) >> ${GITHUB_PATH}
+              pnpm install
+            rust_env: CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc RUSTFLAGS="-Ctarget-feature=-crt-static"
+
           - host: windows-latest
             target: "aarch64-pc-windows-msvc"
+
           - host: windows-latest
             target: "x86_64-pc-windows-msvc"
 
@@ -56,6 +95,7 @@ jobs:
         uses: ./.github/actions/setup-rust
         with:
           targets: ${{ matrix.settings.target }}
+          github-token: ${{ github.token }}
         if: ${{ !matrix.settings.install }}
 
       - name: Setup Node
@@ -69,12 +109,15 @@ jobs:
         if: ${{ matrix.settings.setup }}
 
       - name: Build native library
+        # For some reason PATH modifications from Setup toolchain aren't populated
+        # when using the nodejs-rust alpine container.
         run: |
+          export PATH=/usr/local/cargo/bin/rustup:/root/.cargo/bin:${PATH}
           cd packages/turbo-repository
-          pnpm build:release --target=${{ matrix.settings.target }}
+          ${{ matrix.settings.rust_env }} pnpm build:release --target=${{ matrix.settings.target }}
 
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: turbo-library-${{ matrix.settings.target }}
           path: packages/turbo-repository/native
@@ -95,7 +138,7 @@ jobs:
           git config --global user.email 'turbobot@vercel.com'
 
       - name: Download Artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           path: native-packages
 
@@ -104,7 +147,9 @@ jobs:
           mv native-packages/turbo-library-aarch64-apple-darwin/@turbo/repository.darwin-arm64.node packages/turbo-repository/npm/darwin-arm64/
           mv native-packages/turbo-library-x86_64-apple-darwin/@turbo/repository.darwin-x64.node packages/turbo-repository/npm/darwin-x64/
           mv native-packages/turbo-library-aarch64-unknown-linux-gnu/@turbo/repository.linux-arm64-gnu.node packages/turbo-repository/npm/linux-arm64-gnu/
+          mv native-packages/turbo-library-aarch64-unknown-linux-musl/@turbo/repository.linux-arm64-musl.node packages/turbo-repository/npm/linux-arm64-musl/
           mv native-packages/turbo-library-x86_64-unknown-linux-gnu/@turbo/repository.linux-x64-gnu.node packages/turbo-repository/npm/linux-x64-gnu/
+          mv native-packages/turbo-library-x86_64-unknown-linux-musl/@turbo/repository.linux-x64-musl.node packages/turbo-repository/npm/linux-x64-musl/
           mv native-packages/turbo-library-aarch64-pc-windows-msvc/@turbo/repository.win32-arm64-msvc.node packages/turbo-repository/npm/win32-arm64-msvc/
           mv native-packages/turbo-library-x86_64-pc-windows-msvc/@turbo/repository.win32-x64-msvc.node packages/turbo-repository/npm/win32-x64-msvc/
 
@@ -119,14 +164,16 @@ jobs:
           npm pack packages/turbo-repository/npm/darwin-arm64
           npm pack packages/turbo-repository/npm/darwin-x64
           npm pack packages/turbo-repository/npm/linux-arm64-gnu
+          npm pack packages/turbo-repository/npm/linux-arm64-musl
           npm pack packages/turbo-repository/npm/linux-x64-gnu
+          npm pack packages/turbo-repository/npm/linux-x64-musl
           npm pack packages/turbo-repository/npm/win32-arm64-msvc
           npm pack packages/turbo-repository/npm/win32-x64-msvc
           npm pack packages/turbo-repository/js
           mv *.tgz tarballs/
 
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: Upload Tarballs
           path: tarballs
@@ -134,6 +181,7 @@ jobs:
       - name: Publish Artifacts
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        if: ${{ !inputs.dry_run }}
         run: |
           npm config set --location=project "//registry.npmjs.org/:_authToken" ${NPM_TOKEN}
           VERSION=$(jq -r .version packages/turbo-repository/js/package.json)
@@ -143,7 +191,9 @@ jobs:
           npm publish -ddd --tag ${TAG} --access public turbo-repository-darwin-arm64-${VERSION}.tgz
           npm publish -ddd --tag ${TAG} --access public turbo-repository-darwin-x64-${VERSION}.tgz
           npm publish -ddd --tag ${TAG} --access public turbo-repository-linux-arm64-gnu-${VERSION}.tgz
+          npm publish -ddd --tag ${TAG} --access public turbo-repository-linux-arm64-musl-${VERSION}.tgz
           npm publish -ddd --tag ${TAG} --access public turbo-repository-linux-x64-gnu-${VERSION}.tgz
+          npm publish -ddd --tag ${TAG} --access public turbo-repository-linux-x64-musl-${VERSION}.tgz
           npm publish -ddd --tag ${TAG} --access public turbo-repository-win32-arm64-msvc-${VERSION}.tgz
           npm publish -ddd --tag ${TAG} --access public turbo-repository-win32-x64-msvc-${VERSION}.tgz
           npm publish -ddd --tag ${TAG} --access public turbo-repository-${VERSION}.tgz

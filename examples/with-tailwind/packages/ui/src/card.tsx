@@ -1,4 +1,4 @@
-import * as React from "react";
+import { type ReactNode } from "react";
 
 export function Card({
   title,
@@ -6,7 +6,7 @@ export function Card({
   href,
 }: {
   title: string;
-  children: React.ReactNode;
+  children: ReactNode;
   href: string;
 }): JSX.Element {
   return (

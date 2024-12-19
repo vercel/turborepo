@@ -22,15 +22,16 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-node
 
-      - uses: ./.github/actions/setup-turborepo-environment
+      - name: Setup Turborepo Environment
+        uses: ./.github/actions/setup-turborepo-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Build
-        run: cd cli && make turbo-prod
+        run: pnpm -F cli build:release
 
       - name: Run benchmarks
         run: pnpm -F @turbo/benchmark benchmark
@@ -60,7 +61,7 @@ jobs:
             runner: windows-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Set filename for profile
         id: filename
         shell: bash
@@ -72,19 +73,13 @@ jobs:
         shell: bash
         run: echo "${{ steps.filename.outputs.filename }}"
 
-      # setup Rust on windows, because apparently setup-turborepo-environment doesn't do this
-      # TODO: put this logic in ./github/actions/setup-rust and use that instead
-      - name: Add rustup for windows
-        if: ${{ matrix.os.runner == 'windows-latest'}}
-        run: rustup target add x86_64-pc-windows-gnu
-
-      - uses: ./.github/actions/setup-turborepo-environment
+      - name: Setup Turborepo Environment
+        uses: ./.github/actions/setup-turborepo-environment
         with:
-          windows: ${{ matrix.os.name == 'windows' }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Build Turborepo from source
-        run: cd cli && make turbo-prod
+        run: pnpm -F cli build:release
 
       - name: Run benchmarks
         shell: bash
@@ -92,9 +87,9 @@ jobs:
         run: pnpm -F @turbo/benchmark ttft "${{ steps.filename.outputs.filename }}"
 
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: profiles # This name will be the folder each file gets downloaded to
+          name: profiles-${{ matrix.os.name }} # This name will be the folder each file gets downloaded to
           if-no-files-found: error
           # cwd is root of the repository, so we need the benchmark/ prefixed path
           path: |
@@ -111,16 +106,17 @@ jobs:
       TINYBIRD_TOKEN: ${{secrets.TINYBIRD_TOKEN}}
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Setup Node
         uses: ./.github/actions/setup-node
 
       - name: Download profiles
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
-          name: profiles
           path: packages/turbo-benchmark/profiles/
+          pattern: profiles-*
+          merge-multiple: true
 
       - name: Display TTFT Data
         shell: bash
@@ -140,19 +136,22 @@ jobs:
 
   send-to-slack:
     name: Send to Slack
-    needs: [time-to-first-task]
+    # Wait for send-to-tinybird so we can get aggregate data points
+    # before sending to slack.
+    needs: [send-to-tinybird]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Setup Node
         uses: ./.github/actions/setup-node
 
       - name: Download profiles
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
-          name: profiles
           path: packages/turbo-benchmark/profiles/
+          pattern: profiles-*
+          merge-multiple: true
 
       - name: Display TTFT Data
         shell: bash
@@ -165,6 +164,9 @@ jobs:
       # TODO: compare results to previous data and only post regressions
       - name: Create Slack payload
         shell: bash
+        env:
+          BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
+          TINYBIRD_TOKEN: ${{ secrets.TINYBIRD_TOKEN }}
         run: |
           cd packages/turbo-benchmark
           node -r esbuild-register ./src/ttft/slack.ts ${{github.run_id}}

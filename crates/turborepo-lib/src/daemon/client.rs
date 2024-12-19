@@ -1,16 +1,22 @@
-use std::io;
+use std::{io, time::Duration};
 
+use globwalk::ValidatedGlob;
+use miette::Diagnostic;
 use thiserror::Error;
-use tonic::{Code, Status};
+use tonic::{Code, IntoRequest, Status};
 use tracing::info;
-use turbopath::AbsoluteSystemPathBuf;
+use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath};
 
 use super::{
     connector::{DaemonConnector, DaemonConnectorError},
     endpoint::SocketOpenError,
-    proto::DiscoverPackagesResponse,
+    proto::{DiscoverPackagesResponse, GetFileHashesResponse},
+    Paths,
 };
-use crate::{daemon::proto, globwatcher::HashGlobSetupError};
+use crate::{
+    daemon::{proto, proto::PackageChangeEvent},
+    globwatcher::HashGlobSetupError,
+};
 
 #[derive(Debug, Clone)]
 pub struct DaemonClient<T> {
@@ -71,11 +77,11 @@ impl<T> DaemonClient<T> {
     pub async fn get_changed_outputs(
         &mut self,
         hash: String,
-        output_globs: Vec<String>,
+        output_globs: &[ValidatedGlob],
     ) -> Result<Vec<String>, DaemonError> {
         let output_globs = output_globs
             .iter()
-            .map(|raw_glob| format_repo_relative_glob(raw_glob))
+            .map(|validated_glob| validated_glob.as_str().to_string())
             .collect();
         Ok(self
             .client
@@ -88,17 +94,17 @@ impl<T> DaemonClient<T> {
     pub async fn notify_outputs_written(
         &mut self,
         hash: String,
-        output_globs: Vec<String>,
-        output_exclusion_globs: Vec<String>,
+        output_globs: &[ValidatedGlob],
+        output_exclusion_globs: &[ValidatedGlob],
         time_saved: u64,
     ) -> Result<(), DaemonError> {
         let output_globs = output_globs
             .iter()
-            .map(|raw_glob| format_repo_relative_glob(raw_glob))
+            .map(|validated_glob| validated_glob.as_str().to_string())
             .collect();
         let output_exclusion_globs = output_exclusion_globs
             .iter()
-            .map(|raw_glob| format_repo_relative_glob(raw_glob))
+            .map(|validated_glob| validated_glob.as_str().to_string())
             .collect();
         self.client
             .notify_outputs_written(proto::NotifyOutputsWrittenRequest {
@@ -123,12 +129,50 @@ impl<T> DaemonClient<T> {
     }
 
     pub async fn discover_packages(&mut self) -> Result<DiscoverPackagesResponse, DaemonError> {
+        let req = proto::DiscoverPackagesRequest {};
+        let mut req = req.into_request();
+        req.set_timeout(Duration::from_millis(30));
+        let response = self.client.discover_packages(req).await?.into_inner();
+
+        Ok(response)
+    }
+
+    pub async fn discover_packages_blocking(
+        &mut self,
+    ) -> Result<DiscoverPackagesResponse, DaemonError> {
         let response = self
             .client
-            .discover_packages(proto::DiscoverPackagesRequest {})
+            .discover_packages_blocking(proto::DiscoverPackagesRequest {})
             .await?
             .into_inner();
 
+        Ok(response)
+    }
+
+    pub async fn package_changes(
+        &mut self,
+    ) -> Result<tonic::codec::Streaming<PackageChangeEvent>, DaemonError> {
+        let response = self
+            .client
+            .package_changes(proto::PackageChangesRequest {})
+            .await?
+            .into_inner();
+        Ok(response)
+    }
+
+    pub async fn get_file_hashes(
+        &mut self,
+        package_path: &AnchoredSystemPath,
+        inputs: &[String],
+    ) -> Result<GetFileHashesResponse, DaemonError> {
+        let response = self
+            .client
+            .get_file_hashes(proto::GetFileHashesRequest {
+                package_path: package_path.to_string(),
+                input_globs: inputs.to_vec(),
+            })
+            .await?
+            .into_inner();
         Ok(response)
     }
 }
@@ -139,12 +183,8 @@ impl DaemonClient<DaemonConnector> {
         self.stop().await?.connect().await.map_err(Into::into)
     }
 
-    pub fn pid_file(&self) -> &turbopath::AbsoluteSystemPathBuf {
-        &self.connect_settings.pid_file
-    }
-
-    pub fn sock_file(&self) -> &turbopath::AbsoluteSystemPathBuf {
-        &self.connect_settings.sock_file
+    pub fn paths(&self) -> &Paths {
+        &self.connect_settings.paths
     }
 }
 
@@ -161,7 +201,7 @@ fn format_repo_relative_glob(glob: &str) -> String {
     glob.replace(':', "\\:")
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Diagnostic)]
 pub enum DaemonError {
     /// The server was connected but is now unavailable.
     #[error("server is unavailable: {0}")]
@@ -169,8 +209,9 @@ pub enum DaemonError {
     #[error("error opening socket: {0}")]
     SocketOpen(#[from] SocketOpenError),
     /// The server is running a different version of turborepo.
-    #[error("version mismatch: {0:?}")]
-    VersionMismatch(Option<String>),
+    #[error("version mismatch: {0}")]
+    #[diagnostic(help("try restarting the daemon with `turbo daemon restart`."))]
+    VersionMismatch(String),
     /// There is an issue with the underlying grpc transport.
     #[error("bad grpc transport: {0}")]
     GrpcTransport(#[from] tonic::transport::Error),
@@ -205,15 +246,21 @@ pub enum DaemonError {
 
     #[error("failed to determine package manager: {0}")]
     PackageManager(#[from] turborepo_repository::package_manager::Error),
+
+    #[error("`tail` is not installed. Please install it to use this feature.")]
+    TailNotInstalled,
+
+    #[error("could not find log file")]
+    LogFileNotFound,
 }
 
 impl From<Status> for DaemonError {
     fn from(status: Status) -> DaemonError {
         match status.code() {
-            Code::FailedPrecondition => {
-                DaemonError::VersionMismatch(Some(status.message().to_owned()))
+            Code::FailedPrecondition => DaemonError::VersionMismatch(status.message().to_owned()),
+            Code::Unimplemented => {
+                DaemonError::VersionMismatch("rpc not implemented on daemon".to_string())
             }
-            Code::Unimplemented => DaemonError::VersionMismatch(None),
             Code::Unavailable => DaemonError::Unavailable(status.message().to_string()),
             c => DaemonError::GrpcFailure(c),
         }

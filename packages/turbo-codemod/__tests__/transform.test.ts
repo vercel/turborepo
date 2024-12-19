@@ -1,12 +1,13 @@
 import * as turboWorkspaces from "@turbo/workspaces";
 import * as turboUtils from "@turbo/utils";
 import { setupTestFixtures, spyExit } from "@turbo/test-utils";
+import { describe, it, expect, jest } from "@jest/globals";
 import { transform } from "../src/commands/transform";
 import * as checkGitStatus from "../src/utils/checkGitStatus";
 import type { MigrateCommandArgument } from "../src/commands";
 import { getWorkspaceDetailsMockReturnValue } from "./test-utils";
 
-jest.mock("@turbo/workspaces", () => ({
+jest.mock<typeof import("@turbo/workspaces")>("@turbo/workspaces", () => ({
   __esModule: true,
   ...jest.requireActual("@turbo/workspaces"),
 }));
@@ -51,7 +52,7 @@ describe("transform", () => {
     await transform("add-package-manager", root as MigrateCommandArgument, {
       list: false,
       force: false,
-      dry: false,
+      dryRun: false,
       print: false,
     });
 
@@ -109,7 +110,7 @@ describe("transform", () => {
     await transform("add-package-manager", root, {
       list: false,
       force: false,
-      dry: true,
+      dryRun: true,
       print: true,
     });
 
@@ -141,7 +142,7 @@ describe("transform", () => {
     await transform("add-package-manager", root, {
       list: true,
       force: false,
-      dry: false,
+      dryRun: false,
       print: false,
     });
 
@@ -156,7 +157,7 @@ describe("transform", () => {
     await transform("not-a-real-option", root, {
       list: false,
       force: false,
-      dry: false,
+      dryRun: false,
       print: false,
     });
 
@@ -171,7 +172,7 @@ describe("transform", () => {
     await transform("add-package-manager", "~/path/that/does/not/exist", {
       list: false,
       force: false,
-      dry: false,
+      dryRun: false,
       print: false,
     });
 

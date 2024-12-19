@@ -12,7 +12,7 @@ pub mod task;
 /// These events must be added to the backend (telemetry.vercel.com)
 /// before they can be tracked - invalid or unknown events will be
 /// ignored.
-pub use turborepo_vercel_api::TelemetryEvent;
+pub use turborepo_vercel_api::telemetry::TelemetryEvent;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum EventType {
@@ -29,6 +29,7 @@ pub struct Event {
     key: String,
     value: String,
     is_sensitive: EventType,
+    send_in_ci: bool,
 }
 
 pub trait Identifiable {
@@ -55,6 +56,11 @@ pub enum TrackedErrors {
     ErrorFetchingFromCache,
     FailedToPipeOutputs,
     UnknownChildExit,
+    /// Yielded when package discovery yields a
+    /// list of packages that fails downstream.
+    /// Currently only indicates a package being
+    /// reported when it does not exist.
+    InvalidPackageDiscovery,
 }
 
 impl Display for TrackedErrors {
@@ -72,6 +78,7 @@ impl Display for TrackedErrors {
             TrackedErrors::ErrorFetchingFromCache => write!(f, "error_fetching_from_cache"),
             TrackedErrors::FailedToPipeOutputs => write!(f, "failed_to_pipe_outputs"),
             TrackedErrors::UnknownChildExit => write!(f, "unknown_child_exit"),
+            TrackedErrors::InvalidPackageDiscovery => write!(f, "invalid_package_discovery"),
         }
     }
 }

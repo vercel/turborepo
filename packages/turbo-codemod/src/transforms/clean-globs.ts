@@ -1,10 +1,10 @@
 import path from "node:path";
-import type { Schema as TurboJsonSchema } from "@turbo/types";
-import { readJsonSync } from "fs-extra";
+import type { SchemaV1 } from "@turbo/types";
 import { getTurboConfigs } from "@turbo/utils";
-import type { TransformerArgs } from "../types";
+import type { TransformerArgs, Transformer } from "../types";
 import type { TransformerResults } from "../runner";
 import { getTransformerHelpers } from "../utils/getTransformerHelpers";
+import { loadTurboJson } from "../utils/loadTurboJson";
 
 // transformer details
 const TRANSFORMER = "clean-globs";
@@ -24,7 +24,7 @@ export function transformer({
 
   const turboConfigPath = path.join(root, "turbo.json");
 
-  const turboJson = readJsonSync(turboConfigPath) as TurboJsonSchema;
+  const turboJson: SchemaV1 = loadTurboJson(turboConfigPath);
   runner.modifyFile({
     filePath: turboConfigPath,
     after: migrateConfig(turboJson),
@@ -34,16 +34,18 @@ export function transformer({
   const workspaceConfigs = getTurboConfigs(root);
   workspaceConfigs.forEach((workspaceConfig) => {
     const { config, turboConfigPath: filePath } = workspaceConfig;
-    runner.modifyFile({
-      filePath,
-      after: migrateConfig(config),
-    });
+    if ("pipeline" in config) {
+      runner.modifyFile({
+        filePath,
+        after: migrateConfig(config),
+      });
+    }
   });
 
   return runner.finish();
 }
 
-function migrateConfig(config: TurboJsonSchema) {
+function migrateConfig(config: SchemaV1) {
   const mapGlob = (glob: string) => fixGlobPattern(glob);
   for (const [_, taskDef] of Object.entries(config.pipeline)) {
     taskDef.inputs = taskDef.inputs?.map(mapGlob);
@@ -82,9 +84,9 @@ export function fixGlobPattern(pattern: string): string {
   return oldPattern;
 }
 
-const transformerMeta = {
-  name: `${TRANSFORMER}: ${DESCRIPTION}`,
-  value: TRANSFORMER,
+const transformerMeta: Transformer = {
+  name: TRANSFORMER,
+  description: DESCRIPTION,
   introducedIn: INTRODUCED_IN,
   transformer,
 };

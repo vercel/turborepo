@@ -30,21 +30,10 @@
 
 labeler:
   labels:
-    # owned-by
-    - label: "owned-by: turborepo"
+    # needs: triage when not any of the turborepo team
+    - label: "needs: triage"
       when:
-        isAnyFileOwnedByMatch: '@vercel\/turbo-oss'
-    - label: "owned-by: turbopack"
-      when:
-        isAnyFileOwnedByMatch: '@vercel\/turbopack'
-
-    # created-by
-    - label: "created-by: turbopack"
-      when:
-        isPRAuthorMatch: "^(ForsakenHarmony|jridgewell|kdy1|kwonoj|padmaia|sokra|wbinnssmith)$"
-    - label: "created-by: turborepo"
-      when:
-        isPRAuthorMatch: "^(gsoltis|anthonyshew|tknickman|mehulkar|chris-olszewski|NicholasLYang|arlyon|Zertsov)$"
+        isNotPRAuthorMatch: "^(padmaia|anthonyshew|dimitropoulos|tknickman|chris-olszewski|NicholasLYang)$"
 
     # areas
     - label: "area: ci"
@@ -79,6 +68,18 @@ labeler:
     - label: "pkg: turbo-workspaces"
       when:
         isAnyFilePathMatch: '^packages\/turbo-workspaces\/.*$'
+    - label: "pkg: turbo-repository"
+      when:
+        isAnyFilePathMatch: '^packages\/turbo-repository\/.*$'
+    - label: "pkg: turbo-telemetry"
+      when:
+        isAnyFilePathMatch: '^packages\/turbo-telemetry\/.*$'
+
+    # release
+    - label: "release: turborepo"
+      when:
+        isAnyFilePathMatch: '^version\.txt$'
+        isPRTitleMatch: '^release\(turborepo\):.*$'
 events:
   onPublish:
     turbo:

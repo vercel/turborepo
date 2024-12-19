@@ -1,4 +1,4 @@
-import { prisma } from ".";
+import { prisma } from "./client";
 
 import type { User } from "@prisma/client";
 

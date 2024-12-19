@@ -3,12 +3,13 @@ use std::os::unix::fs::PermissionsExt;
 use std::sync::OnceLock;
 
 use lazy_static::lazy_static;
+use miette::Diagnostic;
 use tracing::trace;
 use turbopath::{
     AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf, RelativeUnixPath,
 };
 use turborepo_repository::{
-    package_graph::{self, PackageGraph, WorkspaceName, WorkspaceNode},
+    package_graph::{self, PackageGraph, PackageName, PackageNode},
     package_json::PackageJson,
 };
 use turborepo_telemetry::events::command::CommandEventBuilder;
@@ -19,17 +20,18 @@ use crate::turbo_json::RawTurboJson;
 
 pub const DEFAULT_OUTPUT_DIR: &str = "out";
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error, Diagnostic)]
 pub enum Error {
     #[error("io error while pruning: {0}")]
     Io(#[from] std::io::Error),
-    #[error("fs error while pruning: {0}")]
+    #[error("File system error while pruning. The error from the operating system is: {0}")]
     Fs(#[from] turborepo_fs::Error),
     #[error("json error while pruning: {0}")]
     Json(#[from] serde_json::Error),
     #[error("path error while pruning: {0}")]
     Path(#[from] turbopath::PathError),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     TurboJsonParser(#[from] crate::turbo_json::parser::Error),
     #[error(transparent)]
     PackageJson(#[from] turborepo_repository::package_json::Error),
@@ -41,12 +43,14 @@ pub enum Error {
     WorkspaceAtFilesystemRoot,
     #[error("at least one target must be specified")]
     NoWorkspaceSpecified,
-    #[error("invalid scope: package {0} not found")]
-    MissingWorkspace(WorkspaceName),
+    #[error("invalid scope: package with name {0} in package.json not found")]
+    MissingWorkspace(PackageName),
     #[error("Cannot prune without parsed lockfile")]
     MissingLockfile,
     #[error("Prune is not supported for Bun")]
     BunUnsupported,
+    #[error("Unable to read config: {0}")]
+    Config(#[from] crate::config::Error),
 }
 
 // Files that should be copied from root and if they're required for install
@@ -94,7 +98,7 @@ pub async fn prune(
     telemetry.track_arg_usage("docker", docker);
     telemetry.track_arg_usage("out-dir", output_dir != DEFAULT_OUTPUT_DIR);
 
-    let prune = Prune::new(base, scope, docker, output_dir).await?;
+    let prune = Prune::new(base, scope, docker, output_dir, telemetry).await?;
 
     if matches!(
         prune.package_graph.package_manager(),
@@ -105,8 +109,8 @@ pub async fn prune(
 
     println!(
         "Generating pruned monorepo for {} in {}",
-        base.ui.apply(BOLD.apply_to(scope.join(", "))),
-        base.ui.apply(BOLD.apply_to(&prune.out_directory)),
+        base.color_config.apply(BOLD.apply_to(scope.join(", "))),
+        base.color_config.apply(BOLD.apply_to(&prune.out_directory)),
     );
 
     if let Some(workspace_config_path) = prune
@@ -132,11 +136,11 @@ pub async fn prune(
     for workspace in workspaces {
         let entry = prune
             .package_graph
-            .workspace_info(&workspace)
+            .package_info(&workspace)
             .ok_or_else(|| Error::MissingWorkspace(workspace.clone()))?;
 
         // We don't want to do any copying for the root workspace
-        if let WorkspaceName::Other(workspace) = workspace {
+        if let PackageName::Other(workspace) = workspace {
             prune.copy_workspace(entry.package_json_path())?;
             workspace_paths.push(
                 entry
@@ -257,7 +261,14 @@ impl<'a> Prune<'a> {
         scope: &'a [String],
         docker: bool,
         output_dir: &str,
+        telemetry: CommandEventBuilder,
     ) -> Result<Self, Error> {
+        let allow_missing_package_manager = base.opts().repo_opts.allow_no_package_manager;
+        telemetry.track_arg_usage(
+            "dangerously-allow-missing-package-manager",
+            allow_missing_package_manager,
+        );
+
         if scope.is_empty() {
             return Err(Error::NoWorkspaceSpecified);
         }
@@ -266,6 +277,7 @@ impl<'a> Prune<'a> {
         let root_package_json = PackageJson::load(&root_package_json_path)?;
 
         let package_graph = PackageGraph::builder(&base.repo_root, root_package_json)
+            .with_allow_no_package_manager(allow_missing_package_manager)
             .build()
             .await?;
 
@@ -281,8 +293,8 @@ impl<'a> Prune<'a> {
         trace!("out directory: {}", &out_directory);
 
         for target in scope {
-            let workspace = WorkspaceName::Other(target.clone());
-            let Some(info) = package_graph.workspace_info(&workspace) else {
+            let workspace = PackageName::Other(target.clone());
+            let Some(info) = package_graph.package_info(&workspace) else {
                 return Err(Error::MissingWorkspace(workspace));
             };
             trace!(
@@ -402,20 +414,21 @@ impl<'a> Prune<'a> {
         Ok(())
     }
 
-    fn internal_dependencies(&self) -> Vec<WorkspaceName> {
-        let workspaces =
-            std::iter::once(WorkspaceNode::Workspace(WorkspaceName::Root))
-                .chain(self.scope.iter().map(|workspace| {
-                    WorkspaceNode::Workspace(WorkspaceName::Other(workspace.clone()))
-                }))
-                .collect::<Vec<_>>();
+    fn internal_dependencies(&self) -> Vec<PackageName> {
+        let workspaces = std::iter::once(PackageNode::Workspace(PackageName::Root))
+            .chain(
+                self.scope
+                    .iter()
+                    .map(|workspace| PackageNode::Workspace(PackageName::Other(workspace.clone()))),
+            )
+            .collect::<Vec<_>>();
         let nodes = self.package_graph.transitive_closure(workspaces.iter());
 
         let mut names: Vec<_> = nodes
             .into_iter()
             .filter_map(|node| match node {
-                WorkspaceNode::Root => None,
-                WorkspaceNode::Workspace(workspace) => Some(workspace.clone()),
+                PackageNode::Root => None,
+                PackageNode::Workspace(workspace) => Some(workspace.clone()),
             })
             .collect();
         names.sort();
@@ -436,7 +449,7 @@ impl<'a> Prune<'a> {
             Err(e) => return Err(e.into()),
         };
 
-        let turbo_json = RawTurboJson::parse(&turbo_json_contents, anchored_turbo_path)?;
+        let turbo_json = RawTurboJson::parse(&turbo_json_contents, anchored_turbo_path.as_str())?;
 
         let pruned_turbo_json = turbo_json.prune_tasks(workspaces);
         new_turbo_path.create_with_contents(serde_json::to_string_pretty(&pruned_turbo_json)?)?;

@@ -1,84 +1,19 @@
 TURBO_VERSION = $(shell cat ../version.txt | sed -n '1 p')
 TURBO_TAG = $(shell cat ../version.txt | sed -n '2 p')
 
-EXT :=
-ifeq ($(OS),Windows_NT)
-	UNAME := Windows
-	EXT = .exe
-else
-	UNAME := $(shell uname -s)
-endif
-
 CLI_DIR = $(shell pwd)
 
-# We do not set go-turbo as a dependency because the Rust build.rs
-# script will call it for us and copy over the binary
-turbo:
-	cargo build -p turbo
-
-turbo-prod:
-	cargo build --release --manifest-path ../crates/turborepo/Cargo.toml
-
-turbo-capnp:
-	cd ../crates/turborepo-lib/src/hash && capnp compile -I std -ogo proto.capnp && mv ./proto.capnp.go ../../../../cli/internal/fs/hash/capnp
-
-install: | ./package.json
-	pnpm install --filter=cli
-
-corepack:
-	which corepack || npm install -g corepack@latest
-	corepack enable
-
-build: install
-	cd $(CLI_DIR)/../ && pnpm build:turbo
-	cd $(CLI_DIR)/../ && pnpm install --filter=create-turbo && pnpm turbo-prebuilt build --filter=create-turbo...
-	cd $(CLI_DIR)/../ && pnpm install --filter=@turbo/codemod && pnpm turbo-prebuilt build --filter=@turbo/codemod...
-	cd $(CLI_DIR)/../ && pnpm install --filter=turbo-ignore && pnpm turbo-prebuilt build --filter=turbo-ignore...
-	cd $(CLI_DIR)/../ && pnpm install --filter=@turbo/workspaces && pnpm turbo-prebuilt build --filter=@turbo/workspaces...
-	cd $(CLI_DIR)/../ && pnpm install --filter=@turbo/gen && pnpm turbo-prebuilt build --filter=@turbo/gen...
-	cd $(CLI_DIR)/../ && pnpm install --filter=eslint-plugin-turbo && pnpm turbo-prebuilt build --filter=eslint-plugin-turbo...
-	cd $(CLI_DIR)/../ && pnpm install --filter=eslint-config-turbo && pnpm turbo-prebuilt build --filter=eslint-config-turbo...
-	cd $(CLI_DIR)/../ && pnpm install --filter=@turbo/types && pnpm turbo-prebuilt build --filter=@turbo/types...
-
-.PHONY: publish-turbo-cross
-publish-turbo-cross: prepublish
-	goreleaser release --rm-dist -f cross-release.yml
-
-.PHONY: publish-turbo-darwin
-publish-turbo-darwin: prepublish
-	goreleaser release --rm-dist -f darwin-release.yml
-
-.PHONY: snapshot-turbo-cross
-snapshot-turbo-cross:
-	goreleaser release --snapshot --rm-dist -f cross-release.yml
-
-.PHONY: snapshot-turbo-darwin
-snapshot-turbo-darwin:
-	goreleaser release --snapshot --rm-dist -f darwin-release.yml
-
-.PHONY: snapshot-lib-turbo-darwin
-snapshot-lib-turbo-darwin:
-	goreleaser release --snapshot --rm-dist -f darwin-lib.yml
-
-.PHONY: snapshot-lib-turbo-cross
-snapshot-lib-turbo-cross:
-	goreleaser release --snapshot --rm-dist -f cross-lib.yml
-
-.PHONY: build-lib-turbo-darwin
-build-lib-turbo-darwin:
-	goreleaser release --rm-dist -f darwin-lib.yml
-
-.PHONY: build-go-turbo-darwin
-build-go-turbo-darwin:
-	goreleaser release --rm-dist -f darwin-release.yml
-
-.PHONY: build-go-turbo-cross
-build-go-turbo-cross:
-	goreleaser release --rm-dist -f cross-release.yml
-
-.PHONY: build-lib-turbo-cross
-build-lib-turbo-cross:
-	goreleaser release --rm-dist -f cross-lib.yml
+# This only builds JS packages
+build:
+	cd $(CLI_DIR)/../ && turbo build \
+		--filter=create-turbo \
+		--filter=@turbo/codemod \
+		--filter=turbo-ignore \
+		--filter=@turbo/workspaces \
+		--filter=@turbo/gen \
+		--filter=eslint-plugin-turbo \
+		--filter=eslint-config-turbo \
+		--filter=@turbo/types
 
 .PHONY: stage-release
 stage-release:
@@ -109,7 +44,7 @@ stage-release:
 	git push origin staging-$(TURBO_VERSION) --tags --force
 
 .PHONY: publish-turbo
-publish-turbo: clean build
+publish-turbo: build
 	echo "Version: $(TURBO_VERSION)"
 	echo "Tag: $(TURBO_TAG)"
 
@@ -119,6 +54,7 @@ publish-turbo: clean build
 	npm config set --location=project "//registry.npmjs.org/:_authToken" $(NPM_TOKEN)
 
 	# Publishes the native npm modules.
+	# TODO: do this without goreleaser.
 	goreleaser release --rm-dist -f combined-shim.yml $(SKIP_PUBLISH)
 
 	# Split packing from the publish step so that npm locates the correct .npmrc file.
@@ -145,46 +81,6 @@ ifneq ($(SKIP_PUBLISH),--skip-publish)
 	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../eslint-config-turbo-$(TURBO_VERSION).tgz
 	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-types-$(TURBO_VERSION).tgz
 endif
-
-demo/lage: install
-	node $(CLI_DIR)/scripts/generate.mjs lage
-
-demo/lerna: install
-	node $(CLI_DIR)/scripts/generate.mjs lerna
-
-demo/nx: install
-	node $(CLI_DIR)/scripts/generate.mjs nx
-
-demo/turbo: install
-	node $(CLI_DIR)/scripts/generate.mjs turbo
-
-demo: demo/lage demo/lerna demo/nx demo/turbo
-
-bench/lerna: demo/lerna
-	cd $(CLI_DIR)/demo/lerna && node_modules/.bin/lerna run build
-
-bench/lage: demo/lage
-	cd $(CLI_DIR)/demo/lage && node_modules/.bin/lage build
-
-bench/nx: demo/nx
-	cd $(CLI_DIR)/demo/nx && node_modules/.bin/nx run-many --target=build --all
-
-bench/turbo: demo/turbo turbo
-	cd $(CLI_DIR)/demo/turbo && $(CLI_DIR)/turbo run test
-
-bench: bench/lerna bench/lage bench/nx bench/turbo
-
-clean: clean-build clean-demo clean-rust
-
-clean-rust:
-	cargo clean
-
-clean-build:
-	rm -f turbo
-
-clean-demo:
-	rm -rf node_modules
-	rm -rf demo
 
 # use target fixture-<some directory under turborepo-tests/integration/fixtures> to set up the testbed directory
 .PHONY=fixture-%

@@ -4,35 +4,44 @@
   "private": true,
   "license": "MIT",
   "sideEffects": false,
-  "main": "./dist/index.js",
-  "module": "./dist/index.mjs",
-  "types": "./dist/index.d.ts",
   "files": [
     "dist/**"
   ],
+  "exports": {
+    "./counter-button": {
+      "types": "./src/counter-button/index.tsx",
+      "require": "./dist/counter-button/index.js",
+      "import": "./dist/counter-button/index.mjs"
+    },
+    "./link": {
+      "types": "./src/link/index.tsx",
+      "require": "./dist/link/index.js",
+      "import": "./dist/link/index.mjs"
+    }
+  },
   "scripts": {
-    "build": "tsup src/index.tsx --format esm,cjs --dts --external react",
+    "build": "tsup",
     "clean": "rm -rf dist",
-    "dev": "tsup src/index.tsx --format esm,cjs --watch --dts --external react",
+    "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/",
     "test": "jest"
   },
   "jest": {
-    "preset": "@repo/jest-presets/jest/browser"
+    "preset": "@repo/jest-presets/browser"
   },
   "devDependencies": {
+    "@jest/globals": "^29.7.0",
     "@repo/eslint-config": "workspace:*",
     "@repo/jest-presets": "workspace:*",
     "@repo/typescript-config": "workspace:*",
-    "@types/jest": "^29.5.11",
-    "@types/node": "^20.10.6",
-    "@types/react": "^18.2.46",
-    "@types/react-dom": "^18.2.18",
+    "@types/node": "^20.11.24",
+    "@types/react": "^18.2.62",
+    "@types/react-dom": "^18.2.19",
     "jest": "^29.7.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "tsup": "^8.0.1",
-    "typescript": "^5.3.3"
+    "tsup": "^8.0.2",
+    "typescript": "5.5.4"
   }
 }

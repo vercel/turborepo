@@ -11,12 +11,13 @@ use std::{
 
 pub use builder::{EngineBuilder, Error as BuilderError};
 pub use execute::{ExecuteError, ExecutionOptions, Message, StopExecution};
-use miette::Diagnostic;
+use miette::{Diagnostic, NamedSource, SourceSpan};
 use petgraph::Graph;
 use thiserror::Error;
-use turborepo_repository::package_graph::{PackageGraph, WorkspaceName};
+use turborepo_errors::Spanned;
+use turborepo_repository::package_graph::{PackageGraph, PackageName};
 
-use crate::{run::task_id::TaskId, task_graph::TaskDefinition};
+use crate::{run::task_id::TaskId, task_graph::TaskDefinition, turbo_json::UIMode};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum TaskNode {
@@ -27,6 +28,23 @@ pub enum TaskNode {
 impl From<TaskId<'static>> for TaskNode {
     fn from(value: TaskId<'static>) -> Self {
         Self::Task(value)
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error("expected a task node, got root")]
+    Root,
+}
+
+impl TryFrom<TaskNode> for TaskId<'static> {
+    type Error = Error;
+
+    fn try_from(node: TaskNode) -> Result<Self, Self::Error> {
+        match node {
+            TaskNode::Root => Err(Error::Root),
+            TaskNode::Task(id) => Ok(id),
+        }
     }
 }
 
@@ -42,6 +60,9 @@ pub struct Engine<S = Built> {
     root_index: petgraph::graph::NodeIndex,
     task_lookup: HashMap<TaskId<'static>, petgraph::graph::NodeIndex>,
     task_definitions: HashMap<TaskId<'static>, TaskDefinition>,
+    task_locations: HashMap<TaskId<'static>, Spanned<()>>,
+    package_tasks: HashMap<PackageName, Vec<petgraph::graph::NodeIndex>>,
+    pub(crate) has_non_interruptible_tasks: bool,
 }
 
 impl Engine<Building> {
@@ -54,6 +75,9 @@ impl Engine<Building> {
             root_index,
             task_lookup: HashMap::default(),
             task_definitions: HashMap::default(),
+            task_locations: HashMap::default(),
+            package_tasks: HashMap::default(),
+            has_non_interruptible_tasks: false,
         }
     }
 
@@ -61,6 +85,11 @@ impl Engine<Building> {
         self.task_lookup.get(task_id).copied().unwrap_or_else(|| {
             let index = self.task_graph.add_node(TaskNode::Task(task_id.clone()));
             self.task_lookup.insert(task_id.clone(), index);
+            self.package_tasks
+                .entry(PackageName::from(task_id.package()))
+                .or_default()
+                .push(index);
+
             index
         })
     }
@@ -75,7 +104,23 @@ impl Engine<Building> {
         task_id: TaskId<'static>,
         definition: TaskDefinition,
     ) -> Option<TaskDefinition> {
+        if definition.persistent && !definition.interruptible {
+            self.has_non_interruptible_tasks = true;
+        }
         self.task_definitions.insert(task_id, definition)
+    }
+
+    pub fn add_task_location(&mut self, task_id: TaskId<'static>, location: Spanned<()>) {
+        // If we don't have the location stored,
+        // or if the location stored is empty, we add it to the map.
+        let has_location = self
+            .task_locations
+            .get(&task_id)
+            .map_or(false, |existing| existing.range.is_some());
+
+        if !has_location {
+            self.task_locations.insert(task_id, location);
+        }
     }
 
     // Seals the task graph from being mutated
@@ -85,6 +130,9 @@ impl Engine<Building> {
             task_lookup,
             root_index,
             task_definitions,
+            task_locations,
+            package_tasks,
+            has_non_interruptible_tasks,
             ..
         } = self;
         Engine {
@@ -93,6 +141,9 @@ impl Engine<Building> {
             task_lookup,
             root_index,
             task_definitions,
+            task_locations,
+            package_tasks,
+            has_non_interruptible_tasks,
         }
     }
 }
@@ -104,12 +155,215 @@ impl Default for Engine<Building> {
 }
 
 impl Engine<Built> {
+    /// Creates an instance of `Engine` that only contains tasks that depend on
+    /// tasks from a given package. This is useful for watch mode, where we
+    /// need to re-run only a portion of the task graph.
+    pub fn create_engine_for_subgraph(
+        &self,
+        changed_packages: &HashSet<PackageName>,
+    ) -> Engine<Built> {
+        let entrypoint_indices: Vec<_> = changed_packages
+            .iter()
+            .flat_map(|pkg| self.package_tasks.get(pkg))
+            .flatten()
+            .collect();
+
+        // We reverse the graph because we want the *dependents* of entrypoint tasks
+        let mut reversed_graph = self.task_graph.clone();
+        reversed_graph.reverse();
+
+        // This is `O(V^3)`, so in theory a bottleneck. Running dijkstra's
+        // algorithm for each entrypoint task could potentially be faster.
+        let node_distances = petgraph::algo::floyd_warshall::floyd_warshall(&reversed_graph, |_| 1)
+            .expect("no negative cycles");
+
+        let new_graph = self.task_graph.filter_map(
+            |node_idx, node| {
+                if let TaskNode::Task(task) = &self.task_graph[node_idx] {
+                    // We only want to include tasks that are not persistent
+                    let def = self
+                        .task_definitions
+                        .get(task)
+                        .expect("task should have definition");
+
+                    if def.persistent && !def.interruptible {
+                        return None;
+                    }
+                }
+                // If the node is reachable from any of the entrypoint tasks, we include it
+                entrypoint_indices
+                    .iter()
+                    .any(|idx| {
+                        node_distances
+                            .get(&(**idx, node_idx))
+                            .map_or(false, |dist| *dist != i32::MAX)
+                    })
+                    .then_some(node.clone())
+            },
+            |_, _| Some(()),
+        );
+
+        let task_lookup: HashMap<_, _> = new_graph
+            .node_indices()
+            .filter_map(|index| {
+                let task = new_graph
+                    .node_weight(index)
+                    .expect("node index should be present");
+                match task {
+                    TaskNode::Root => None,
+                    TaskNode::Task(task) => Some((task.clone(), index)),
+                }
+            })
+            .collect();
+
+        Engine {
+            marker: std::marker::PhantomData,
+            root_index: self.root_index,
+            task_graph: new_graph,
+            task_lookup,
+            task_definitions: self.task_definitions.clone(),
+            task_locations: self.task_locations.clone(),
+            package_tasks: self.package_tasks.clone(),
+            // We've filtered out persistent tasks
+            has_non_interruptible_tasks: false,
+        }
+    }
+
+    /// Creates an `Engine` with only interruptible tasks, i.e. non-persistent
+    /// tasks and persistent tasks that are allowed to be interrupted
+    pub fn create_engine_for_interruptible_tasks(&self) -> Engine<Built> {
+        let new_graph = self.task_graph.filter_map(
+            |node_idx, node| match &self.task_graph[node_idx] {
+                TaskNode::Task(task) => {
+                    let def = self
+                        .task_definitions
+                        .get(task)
+                        .expect("task should have definition");
+
+                    if !def.persistent || def.interruptible {
+                        Some(node.clone())
+                    } else {
+                        None
+                    }
+                }
+                TaskNode::Root => Some(node.clone()),
+            },
+            |_, _| Some(()),
+        );
+
+        let root_index = new_graph
+            .node_indices()
+            .find(|index| new_graph[*index] == TaskNode::Root)
+            .expect("root node should be present");
+
+        let task_lookup: HashMap<_, _> = new_graph
+            .node_indices()
+            .filter_map(|index| {
+                let task = new_graph
+                    .node_weight(index)
+                    .expect("node index should be present");
+                match task {
+                    TaskNode::Root => None,
+                    TaskNode::Task(task) => Some((task.clone(), index)),
+                }
+            })
+            .collect();
+
+        Engine {
+            marker: std::marker::PhantomData,
+            root_index,
+            task_graph: new_graph,
+            task_lookup,
+            task_definitions: self.task_definitions.clone(),
+            task_locations: self.task_locations.clone(),
+            package_tasks: self.package_tasks.clone(),
+            has_non_interruptible_tasks: false,
+        }
+    }
+
+    /// Creates an `Engine` that is only the tasks that are not interruptible,
+    /// i.e. persistent and not allowed to be restarted
+    pub fn create_engine_for_non_interruptible_tasks(&self) -> Engine<Built> {
+        let mut new_graph = self.task_graph.filter_map(
+            |node_idx, node| match &self.task_graph[node_idx] {
+                TaskNode::Task(task) => {
+                    let def = self
+                        .task_definitions
+                        .get(task)
+                        .expect("task should have definition");
+
+                    if def.persistent && !def.interruptible {
+                        Some(node.clone())
+                    } else {
+                        None
+                    }
+                }
+                TaskNode::Root => Some(node.clone()),
+            },
+            |_, _| Some(()),
+        );
+
+        let root_index = new_graph
+            .node_indices()
+            .find(|index| new_graph[*index] == TaskNode::Root)
+            .expect("root node should be present");
+
+        // Connect persistent tasks to root
+        for index in new_graph.node_indices() {
+            if new_graph[index] == TaskNode::Root {
+                continue;
+            }
+
+            new_graph.add_edge(index, root_index, ());
+        }
+
+        let task_lookup: HashMap<_, _> = new_graph
+            .node_indices()
+            .filter_map(|index| {
+                let task = new_graph
+                    .node_weight(index)
+                    .expect("node index should be present");
+                match task {
+                    TaskNode::Root => None,
+                    TaskNode::Task(task) => Some((task.clone(), index)),
+                }
+            })
+            .collect();
+
+        Engine {
+            marker: std::marker::PhantomData,
+            root_index,
+            task_graph: new_graph,
+            task_lookup,
+            task_definitions: self.task_definitions.clone(),
+            task_locations: self.task_locations.clone(),
+            package_tasks: self.package_tasks.clone(),
+            has_non_interruptible_tasks: true,
+        }
+    }
+
     pub fn dependencies(&self, task_id: &TaskId) -> Option<HashSet<&TaskNode>> {
         self.neighbors(task_id, petgraph::Direction::Outgoing)
     }
 
     pub fn dependents(&self, task_id: &TaskId) -> Option<HashSet<&TaskNode>> {
         self.neighbors(task_id, petgraph::Direction::Incoming)
+    }
+
+    pub fn transitive_dependents(&self, task_id: &TaskId<'static>) -> HashSet<&TaskNode> {
+        turborepo_graph_utils::transitive_closure(
+            &self.task_graph,
+            self.task_lookup.get(task_id).cloned(),
+            petgraph::Direction::Incoming,
+        )
+    }
+
+    pub fn transitive_dependencies(&self, task_id: &TaskId<'static>) -> HashSet<&TaskNode> {
+        turborepo_graph_utils::transitive_closure(
+            &self.task_graph,
+            self.task_lookup.get(task_id).cloned(),
+            petgraph::Direction::Outgoing,
+        )
     }
 
     fn neighbors(
@@ -140,6 +394,24 @@ impl Engine<Built> {
         self.task_graph.node_weights()
     }
 
+    /// Return all tasks that have a command to be run
+    pub fn tasks_with_command(&self, pkg_graph: &PackageGraph) -> Vec<String> {
+        self.tasks()
+            .filter_map(|node| match node {
+                TaskNode::Root => None,
+                TaskNode::Task(task) => Some(task),
+            })
+            .filter_map(|task| {
+                let pkg_name = PackageName::from(task.package());
+                let json = pkg_graph.package_json(&pkg_name)?;
+                // TODO: delegate to command factory to filter down tasks to those that will
+                // have a runnable command.
+                (task.task() == "proxy" || json.command(task.task()).is_some())
+                    .then(|| task.to_string())
+            })
+            .collect()
+    }
+
     pub fn task_definitions(&self) -> &HashMap<TaskId<'static>, TaskDefinition> {
         &self.task_definitions
     }
@@ -148,6 +420,7 @@ impl Engine<Built> {
         &self,
         package_graph: &PackageGraph,
         concurrency: u32,
+        ui_mode: UIMode,
     ) -> Result<(), Vec<ValidateError>> {
         // TODO(olszewski) once this is hooked up to a real run, we should
         // see if using rayon to parallelize would provide a speedup
@@ -185,14 +458,22 @@ impl Engine<Built> {
                     })?;
 
                     let package_json = package_graph
-                        .package_json(&WorkspaceName::from(dep_id.package()))
+                        .package_json(&PackageName::from(dep_id.package()))
                         .ok_or_else(|| ValidateError::MissingPackageJson {
                             package: dep_id.package().to_string(),
                         })?;
                     if task_definition.persistent
                         && package_json.scripts.contains_key(dep_id.task())
                     {
+                        let (span, text) = self
+                            .task_locations
+                            .get(dep_id)
+                            .map(|spanned| spanned.span_and_text("turbo.json"))
+                            .unwrap_or((None, NamedSource::new("", "")));
+
                         return Err(ValidateError::DependencyOnPersistentTask {
+                            span,
+                            text,
                             persistent_task: dep_id.to_string(),
                             dependant: task_id.to_string(),
                         });
@@ -201,7 +482,7 @@ impl Engine<Built> {
 
                 // check if the package for the task has that task in its package.json
                 let info = package_graph
-                    .workspace_info(&WorkspaceName::from(task_id.package().to_string()))
+                    .package_info(&PackageName::from(task_id.package().to_string()))
                     .expect("package graph should contain workspace info for task package");
 
                 let package_has_task = info
@@ -236,10 +517,33 @@ impl Engine<Built> {
             })
         }
 
+        validation_errors.extend(self.validate_interactive(ui_mode));
+
         match validation_errors.is_empty() {
             true => Ok(()),
             false => Err(validation_errors),
         }
+    }
+
+    // Validates that UI is setup if any interactive tasks will be executed
+    fn validate_interactive(&self, ui_mode: UIMode) -> Vec<ValidateError> {
+        // If experimental_ui is being used, then we don't need check for interactive
+        // tasks
+        if matches!(ui_mode, UIMode::Tui) {
+            return Vec::new();
+        }
+        self.task_definitions
+            .iter()
+            .filter_map(|(task, definition)| {
+                if definition.interactive {
+                    Some(ValidateError::InteractiveNeedsUI {
+                        task: task.to_string(),
+                    })
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 }
 
@@ -254,6 +558,10 @@ pub enum ValidateError {
     MissingPackageJson { package: String },
     #[error("\"{persistent_task}\" is a persistent task, \"{dependant}\" cannot depend on it")]
     DependencyOnPersistentTask {
+        #[label("persistent task")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource,
         persistent_task: String,
         dependant: String,
     },
@@ -265,6 +573,11 @@ pub enum ValidateError {
         persistent_count: u32,
         concurrency: u32,
     },
+    #[error(
+        "Cannot run interactive task \"{task}\" without Terminal UI. Set `\"ui\": true` in \
+         `turbo.json`, use the `--ui=tui` flag, or set `TURBO_UI=true` as an environment variable."
+    )]
+    InteractiveNeedsUI { task: String },
 }
 
 impl fmt::Display for TaskNode {
@@ -281,7 +594,7 @@ mod test {
 
     use std::collections::BTreeMap;
 
-    use tempdir::TempDir;
+    use tempfile::TempDir;
     use turbopath::AbsoluteSystemPath;
     use turborepo_repository::{
         discovery::{DiscoveryResponse, PackageDiscovery, WorkspaceData},
@@ -289,12 +602,13 @@ mod test {
     };
 
     use super::*;
+    use crate::run::task_id::TaskName;
 
     struct DummyDiscovery<'a>(&'a TempDir);
 
     impl<'a> PackageDiscovery for DummyDiscovery<'a> {
         async fn discover_packages(
-            &mut self,
+            &self,
         ) -> Result<
             turborepo_repository::discovery::DiscoveryResponse,
             turborepo_repository::discovery::Error,
@@ -308,7 +622,14 @@ mod test {
 
                     let scripts = if had_build {
                         BTreeMap::from_iter(
-                            [("build".to_string(), "echo built!".to_string())].into_iter(),
+                            [
+                                ("build".to_string(), Spanned::new("echo built!".to_string())),
+                                (
+                                    "dev".to_string(),
+                                    Spanned::new("echo running dev!".to_string()),
+                                ),
+                            ]
+                            .into_iter(),
                         )
                     } else {
                         BTreeMap::default()
@@ -335,6 +656,15 @@ mod test {
                 workspaces,
             })
         }
+
+        async fn discover_packages_blocking(
+            &self,
+        ) -> Result<
+            turborepo_repository::discovery::DiscoveryResponse,
+            turborepo_repository::discovery::Error,
+        > {
+            self.discover_packages().await
+        }
     }
 
     #[tokio::test]
@@ -345,7 +675,7 @@ mod test {
         // set up a workspace with three packages, two of which have a persistent build
         // task. we expect concurrency limit 1 to fail, but 2 and 3 to pass.
 
-        let tmp = tempdir::TempDir::new("issue_4291").unwrap();
+        let tmp = tempfile::TempDir::with_prefix("issue_4291").unwrap();
 
         let mut engine = Engine::new();
 
@@ -373,16 +703,117 @@ mod test {
         let graph = graph_builder.build().await.unwrap();
 
         // if our limit is less than, it should fail
-        engine.validate(&graph, 1).expect_err("not enough");
+        engine
+            .validate(&graph, 1, UIMode::Stream)
+            .expect_err("not enough");
 
         // if our limit is less than, it should fail
-        engine.validate(&graph, 2).expect_err("not enough");
+        engine
+            .validate(&graph, 2, UIMode::Stream)
+            .expect_err("not enough");
 
         // we have two persistent tasks, and a slot for all other tasks, so this should
         // pass
-        engine.validate(&graph, 3).expect("ok");
+        engine.validate(&graph, 3, UIMode::Stream).expect("ok");
 
         // if our limit is greater, then it should pass
-        engine.validate(&graph, 4).expect("ok");
+        engine.validate(&graph, 4, UIMode::Stream).expect("ok");
+    }
+
+    #[tokio::test]
+    async fn test_prune_persistent_tasks() {
+        // Verifies that we can prune the `Engine` to include only the persistent tasks
+        // or only the non-persistent tasks.
+
+        let mut engine = Engine::new();
+
+        // add two packages with a persistent build task
+        for package in ["a", "b"] {
+            let build_task_id = TaskId::new(package, "build");
+            let dev_task_id = TaskId::new(package, "dev");
+
+            engine.get_index(&build_task_id);
+            engine.add_definition(build_task_id.clone(), TaskDefinition::default());
+
+            engine.get_index(&dev_task_id);
+            engine.add_definition(
+                dev_task_id,
+                TaskDefinition {
+                    persistent: true,
+                    task_dependencies: vec![Spanned::new(TaskName::from(build_task_id))],
+                    ..Default::default()
+                },
+            );
+        }
+
+        let engine = engine.seal();
+
+        let non_interruptible_tasks_engine = engine.create_engine_for_non_interruptible_tasks();
+        for node in non_interruptible_tasks_engine.tasks() {
+            if let TaskNode::Task(task_id) = node {
+                let def = non_interruptible_tasks_engine
+                    .task_definition(task_id)
+                    .expect("task should have definition");
+                assert!(def.persistent, "task should be persistent");
+            }
+        }
+
+        let interruptible_tasks_engine = engine.create_engine_for_interruptible_tasks();
+        for node in interruptible_tasks_engine.tasks() {
+            if let TaskNode::Task(task_id) = node {
+                let def = interruptible_tasks_engine
+                    .task_definition(task_id)
+                    .expect("task should have definition");
+                assert!(!def.persistent, "task should not be persistent");
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_get_subgraph_for_package() {
+        // Verifies that we can prune the `Engine` to include only the persistent tasks
+        // or only the non-persistent tasks.
+
+        let mut engine = Engine::new();
+
+        // Add two tasks in package `a`
+        let a_build_task_id = TaskId::new("a", "build");
+        let a_dev_task_id = TaskId::new("a", "dev");
+
+        let a_build_idx = engine.get_index(&a_build_task_id);
+        engine.add_definition(a_build_task_id.clone(), TaskDefinition::default());
+
+        engine.get_index(&a_dev_task_id);
+        engine.add_definition(a_dev_task_id.clone(), TaskDefinition::default());
+
+        // Add two tasks in package `b` where the `build` task depends
+        // on the `build` task from package `a`
+        let b_build_task_id = TaskId::new("b", "build");
+        let b_dev_task_id = TaskId::new("b", "dev");
+
+        let b_build_idx = engine.get_index(&b_build_task_id);
+        engine.add_definition(
+            b_build_task_id.clone(),
+            TaskDefinition {
+                task_dependencies: vec![Spanned::new(TaskName::from(a_build_task_id.clone()))],
+                ..Default::default()
+            },
+        );
+
+        engine.get_index(&b_dev_task_id);
+        engine.add_definition(b_dev_task_id.clone(), TaskDefinition::default());
+        engine.task_graph.add_edge(b_build_idx, a_build_idx, ());
+
+        let engine = engine.seal();
+        let subgraph =
+            engine.create_engine_for_subgraph(&[PackageName::from("a")].into_iter().collect());
+
+        // Verify that the subgraph only contains tasks from package `a` and the `build`
+        // task from package `b`
+        let tasks: Vec<_> = subgraph.tasks().collect();
+        assert_eq!(tasks.len(), 3);
+        assert!(tasks.contains(&&TaskNode::Task(a_build_task_id)));
+        assert!(tasks.contains(&&TaskNode::Task(a_dev_task_id)));
+        assert!(tasks.contains(&&TaskNode::Task(b_build_task_id)));
     }
 }

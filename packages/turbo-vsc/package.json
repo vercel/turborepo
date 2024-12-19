@@ -1,7 +1,7 @@
 {
   "name": "turbo-vsc",
   "displayName": "Turborepo LSP",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Tools and instant feedback for your build system",
   "main": "out/main.js",
   "publisher": "Vercel",
@@ -10,8 +10,14 @@
     "esbuild-base": "esbuild ./src/extension.ts --bundle --main-fields=module,main --outfile=out/main.js --external:vscode --format=cjs --platform=node",
     "esbuild": "npm run esbuild-base -- --sourcemap",
     "esbuild-watch": "npm run esbuild-base -- --sourcemap --watch",
-    "package": "pnpm vsce package --no-dependencies",
-    "publish": "pnpm vsce publish --no-dependencies",
+    "package": "pnpm vsce package --no-dependencies --baseContentUrl https://github.com/vercel/turborepo/raw/HEAD/packages/turbo-vsc",
+    "publish": "pnpm vsce publish --no-dependencies --baseContentUrl https://github.com/vercel/turborepo/raw/HEAD/packages/turbo-vsc",
+    "copy-darwin-arm64": "cp out/artifacts/turborepo-lsp-aarch64-apple-darwin/turborepo-lsp out/turborepo-lsp-darwin-arm64 && chmod +x out/turborepo-lsp-darwin-arm64",
+    "copy-darwin-x64": "cp out/artifacts/turborepo-lsp-x86_64-apple-darwin/turborepo-lsp out/turborepo-lsp-darwin-x64 && chmod +x out/turborepo-lsp-darwin-x64",
+    "copy-win32-x64": "cp out/artifacts/turborepo-lsp-x86_64-pc-windows-msvc/turborepo-lsp.exe out/turborepo-lsp-win32-x64.exe",
+    "copy-linux-arm64": "cp out/artifacts/turborepo-lsp-aarch64-unknown-linux-musl/turborepo-lsp out/turborepo-lsp-linux-arm64 && chmod +x out/turborepo-lsp-linux-arm64",
+    "copy-linux-x64": "cp out/artifacts/turborepo-lsp-x86_64-unknown-linux-musl/turborepo-lsp out/turborepo-lsp-linux-x64 && chmod +x out/turborepo-lsp-linux-x64",
+    "copy": "pnpm run copy-darwin-arm64 && pnpm run copy-darwin-x64 && pnpm run copy-win32-x64 && pnpm run copy-linux-arm64 && pnpm run copy-linux-x64",
     "test-compile": "tsc -p ./"
   },
   "keywords": [
@@ -26,15 +32,15 @@
   ],
   "icon": "resources/icon.png",
   "bugs": {
-    "url": "https://github.com/vercel/turbo/issues"
+    "url": "https://github.com/vercel/turborepo/issues"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/vercel/turbo",
+    "url": "https://github.com/vercel/turborepo",
     "directory": "packages/turbo-vsc"
   },
   "author": "Vercel",
-  "license": "MPL-2.0",
+  "license": "MIT",
   "dependencies": {
     "jsonc-parser": "^3.2.0",
     "vscode-languageclient": "^9.0.1"
@@ -74,6 +80,12 @@
           "required": false,
           "default": null,
           "description": "The path to your global `turbo` executable, if you'd rather not rely on auto-detection."
+        },
+        "turbo.useLocalTurbo": {
+          "type": "boolean",
+          "required": false,
+          "default": false,
+          "description": "Silence the 'install global turbo' prompt and always use local turbo."
         }
       }
     }

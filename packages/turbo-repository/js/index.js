@@ -26,7 +26,10 @@ function isMusl() {
       return true;
     }
   } else {
+    const orig = process.report.excludeNetwork;
+    process.report.excludeNetwork = true;
     const { glibcVersionRuntime } = process.report.getReport().header;
+    process.report.excludeNetwork = orig;
     if (typeof glibcVersionRuntime === "string") {
       try {
         // We support glibc v2.26+
@@ -86,7 +89,16 @@ switch (platform) {
     break;
   case "linux":
     if (isMusl()) {
-      throw new Error("musl not yet supported");
+      switch (arch) {
+        case "x64":
+          suffix = "linux-x64-musl";
+          break;
+        case "arm64":
+          suffix = "linux-arm64-musl";
+          break;
+        default:
+          throw new Error(`Unsupported architecture on Linux: ${arch}`);
+      }
     } else {
       switch (arch) {
         case "x64":

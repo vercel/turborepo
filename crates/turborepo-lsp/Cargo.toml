@@ -2,7 +2,7 @@
 name = "turborepo-lsp"
 version = "0.1.0"
 edition = "2021"
-license = "MPL-2.0"
+license = "MIT"
 
 [features]
 default = ["rustls-tls"]
@@ -13,19 +13,13 @@ rustls-tls = ["turborepo-lib/rustls-tls"]
 
 [dependencies]
 crop = "0.4.0"
-futures.workspace = true
 itertools.workspace = true
 jsonc-parser = "0.23.0"
 pidlock = { version = "0.1.4", path = "../turborepo-pidlock" }
 serde_json.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "io-std"] }
 tokio-retry = "0.3.0"
-tokio-util = { version = "0.7.10", features = ["codec"] }
-tower = "0.4.13"
 tower-lsp = "0.20.0"
-tower-uds = { version = "0.1.0", path = "../tower-uds" }
-tracing-subscriber = "0.3.18"
-tracing.workspace = true
 turbopath = { version = "0.1.0", path = "../turborepo-paths" }
 turborepo-lib = { version = "0.1.0", path = "../turborepo-lib" }
 turborepo-repository = { version = "0.1.0", path = "../turborepo-repository" }

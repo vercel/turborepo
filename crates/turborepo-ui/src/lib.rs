@@ -2,10 +2,16 @@
 //! and logging. Includes a `PrefixedUI` struct that can be used to prefix
 //! output, and a `ColorSelector` that lets multiple concurrent resources get
 //! an assigned color.
+#![feature(deadline_api)]
+
 mod color_selector;
+mod line;
 mod logs;
 mod output;
 mod prefixed;
+pub mod sender;
+pub mod tui;
+pub mod wui;
 
 use std::{borrow::Cow, env, f64::consts::PI, time::Duration};
 
@@ -16,13 +22,19 @@ use thiserror::Error;
 
 pub use crate::{
     color_selector::ColorSelector,
+    line::LineWriter,
     logs::{replay_logs, LogWriter},
     output::{OutputClient, OutputClientBehavior, OutputSink, OutputWriter},
     prefixed::{PrefixedUI, PrefixedWriter},
+    tui::{TaskTable, TerminalPane},
 };
 
 #[derive(Debug, Error)]
 pub enum Error {
+    #[error(transparent)]
+    Tui(#[from] tui::Error),
+    #[error(transparent)]
+    Wui(#[from] wui::Error),
     #[error("cannot read logs: {0}")]
     CannotReadLogs(#[source] std::io::Error),
     #[error("cannot write logs: {0}")]
@@ -108,13 +120,35 @@ macro_rules! cwriteln {
     }};
 }
 
+#[macro_export]
+macro_rules! ceprintln {
+    ($ui:expr, $color:expr, $format_string:expr $(, $arg:expr)*) => {{
+        let formatted_str = format!($format_string $(, $arg)*);
+
+        let colored_str = $color.apply_to(formatted_str);
+
+        eprintln!("{}", $ui.apply(colored_str))
+    }};
+}
+
+#[macro_export]
+macro_rules! ceprint {
+    ($ui:expr, $color:expr, $format_string:expr $(, $arg:expr)*) => {{
+        let formatted_str = format!($format_string $(, $arg)*);
+
+        let colored_str = $color.apply_to(formatted_str);
+
+        eprint!("{}", $ui.apply(colored_str))
+    }};
+}
+
 /// Helper struct to apply any necessary formatting to UI output
 #[derive(Debug, Clone, Copy)]
-pub struct UI {
+pub struct ColorConfig {
     pub should_strip_ansi: bool,
 }
 
-impl UI {
+impl ColorConfig {
     pub fn new(should_strip_ansi: bool) -> Self {
         Self { should_strip_ansi }
     }
@@ -196,21 +230,26 @@ lazy_static! {
 
 pub const RESET: &str = "\x1b[0m";
 
+pub use dialoguer::theme::ColorfulTheme as DialoguerTheme;
+
 #[cfg(test)]
 mod test {
     use super::*;
 
     #[test]
-    fn test_ui_strips_ansi() {
-        let ui = UI::new(true);
+    fn test_color_config_strips_ansi() {
+        let color_config = ColorConfig::new(true);
         let grey_str = GREY.apply_to("gray");
-        assert_eq!(format!("{}", ui.apply(grey_str)), "gray");
+        assert_eq!(format!("{}", color_config.apply(grey_str)), "gray");
     }
 
     #[test]
-    fn test_ui_resets_term() {
-        let ui = UI::new(false);
+    fn test_color_config_resets_term() {
+        let color_config = ColorConfig::new(false);
         let grey_str = GREY.apply_to("gray");
-        assert_eq!(format!("{}", ui.apply(grey_str)), "\u{1b}[2mgray\u{1b}[0m");
+        assert_eq!(
+            format!("{}", color_config.apply(grey_str)),
+            "\u{1b}[2mgray\u{1b}[0m"
+        );
     }
 }

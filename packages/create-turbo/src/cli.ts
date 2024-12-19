@@ -2,13 +2,21 @@
 
 import http from "node:http";
 import https from "node:https";
-import chalk from "chalk";
+import { bold } from "picocolors";
 import { Command, Option } from "commander";
 import { logger } from "@turbo/utils";
+import {
+  type CreateTurboTelemetry,
+  initTelemetry,
+  withTelemetryCommand,
+} from "@turbo/telemetry";
 import { ProxyAgent } from "proxy-agent";
 import cliPkg from "../package.json";
 import { notifyUpdate } from "./utils/notifyUpdate";
 import { create } from "./commands";
+
+// Global telemetry client
+let telemetryClient: CreateTurboTelemetry | undefined;
 
 // Support http proxy vars
 const agent = new ProxyAgent();
@@ -19,13 +27,27 @@ const createTurboCli = new Command();
 
 // create
 createTurboCli
-  .name(chalk.bold(logger.turboGradient("create-turbo")))
+  .name(bold(logger.turboGradient("create-turbo")))
   .description("Create a new Turborepo")
-  .usage(`${chalk.bold("<project-directory>")} [options]`)
+  .usage(`${bold("<project-directory>")} [options]`)
+  .hook("preAction", async (_, thisAction) => {
+    const { telemetry } = await initTelemetry<"create-turbo">({
+      packageInfo: {
+        name: "create-turbo",
+        version: cliPkg.version,
+      },
+    });
+    // inject telemetry into the action as an option
+    thisAction.addOption(
+      new Option("--telemetry").default(telemetry).hideHelp()
+    );
+    telemetryClient = telemetry;
+  })
+  .hook("postAction", async () => {
+    await telemetryClient?.close();
+  })
+
   .argument("[project-directory]")
-  // TODO: argument is still provided (but removed from help)
-  // for backwards compatibility, remove this in the next major
-  .argument("[package-manager]")
   .addOption(
     new Option(
       "-m, --package-manager <package-manager>",
@@ -47,7 +69,7 @@ createTurboCli
     "Use a specific version of turbo (default: latest)"
   )
   .option(
-    "-e, --example [name]|[github-url]",
+    "-e, --example <name>|<github-url>",
     `
   An example to bootstrap the app with. You can use an example name
   from the official Turborepo repo or a GitHub URL. The URL can use
@@ -66,6 +88,9 @@ createTurboCli
   .version(cliPkg.version, "-v, --version", "Output the current version")
   .helpOption("-h, --help", "Display help for command")
   .action(create);
+
+// Add telemetry command to the CLI
+withTelemetryCommand(createTurboCli);
 
 createTurboCli
   .parseAsync()

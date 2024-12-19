@@ -1,13 +1,13 @@
 name: "Setup Turborepo Environment"
 description: "Sets up development environment for turborepo"
 inputs:
-  windows:
-    description: 'Set to "true" if setting up for Windows'
-    required: false
-    default: "false"
   github-token:
     description: "GitHub token. You can pass secrets.GITHUB_TOKEN"
     required: true
+  node-version:
+    description: Node version
+    required: false
+    default: "18"
 
 runs:
   using: "composite"
@@ -16,11 +16,13 @@ runs:
       uses: ./.github/actions/setup-node
       with:
         extra-flags: --no-optional
+        node-version: ${{ inputs.node-version }}
+      env:
+        PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
 
     - name: "Setup Rust"
       uses: ./.github/actions/setup-rust
       with:
-        windows: ${{ inputs.windows }}
         shared-cache-key: turborepo-debug-build
         cache-key: ${{ inputs.target }}
         save-cache: true
@@ -28,10 +30,3 @@ runs:
 
     - name: "Setup capnproto"
       uses: ./.github/actions/setup-capnproto
-
-    - name: Install Turbo globally
-      shell: bash
-      run: |
-        VERSION=$(npm view turbo --json | jq -r '.versions | last')
-        echo "Latest published version: $VERSION"
-        npm i -g turbo@$VERSION

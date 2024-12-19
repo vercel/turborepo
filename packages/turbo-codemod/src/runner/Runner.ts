@@ -1,4 +1,4 @@
-import chalk from "chalk";
+import { bold, dim } from "picocolors";
 import { logger } from "@turbo/utils";
 import { Logger } from "../utils/logger";
 import type { UtilityArgs } from "../types";
@@ -21,7 +21,7 @@ export class Runner {
   constructor(options: UtilityArgs) {
     this.transform = options.transformer;
     this.rootPath = options.rootPath;
-    this.dry = options.dry;
+    this.dry = options.dryRun;
     this.print = options.print;
     this.logger = new Logger(options);
   }
@@ -57,12 +57,12 @@ export class Runner {
       if (mod.hasChanges()) {
         if (this.dry) {
           result.action = "skipped";
-          this.logger.skipped(chalk.dim(mod.fileName()));
+          this.logger.skipped(dim(mod.fileName()));
         } else {
           try {
             mod.write();
             result.action = "modified";
-            this.logger.modified(chalk.bold(mod.fileName()));
+            this.logger.modified(bold(mod.fileName()));
           } catch (err) {
             let message = "Unknown error";
             if (err instanceof Error) {
@@ -78,7 +78,7 @@ export class Runner {
           mod.log({ diff: true });
         }
       } else {
-        this.logger.unchanged(chalk.dim(mod.fileName()));
+        this.logger.unchanged(dim(mod.fileName()));
       }
 
       results.changes[mod.fileName()] = result;

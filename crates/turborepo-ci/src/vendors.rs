@@ -1,4 +1,10 @@
-use std::{collections::HashMap, sync::OnceLock};
+use std::{
+    collections::HashMap,
+    fmt::Debug,
+    sync::{Arc, OnceLock},
+};
+
+use crate::vendor_behavior::VendorBehavior;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct VendorEnvs {
@@ -16,6 +22,7 @@ pub struct Vendor {
     pub sha_env_var: Option<&'static str>,
     pub branch_env_var: Option<&'static str>,
     pub username_env_var: Option<&'static str>,
+    pub behavior: Option<VendorBehavior>,
 }
 
 static VENDORS: OnceLock<[Vendor; 45]> = OnceLock::new();
@@ -35,6 +42,7 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     sha_env_var: None,
                     branch_env_var: None,
                     username_env_var: None,
+                    behavior: None,
                 },
                 Vendor {
                     name: "AppVeyor",
@@ -47,6 +55,7 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     sha_env_var: None,
                     branch_env_var: None,
                     username_env_var: None,
+                    behavior: None,
                 },
                 Vendor {
                     name: "AWS CodeBuild",
@@ -59,6 +68,7 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     sha_env_var: None,
                     branch_env_var: None,
                     username_env_var: None,
+                    behavior: None,
                 },
                 Vendor {
                     name: "Azure Pipelines",
@@ -71,6 +81,10 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     sha_env_var: None,
                     branch_env_var: None,
                     username_env_var: None,
+                    behavior: Some(VendorBehavior::new(
+                        |group_name| Arc::new(move |_| format!("##[group]{group_name}\r\n")),
+                        |_| Arc::new(|_| String::from("##[endgroup]\r\n")),
+                    )),
                 },
                 Vendor {
                     name: "Bamboo",
@@ -83,6 +97,7 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     sha_env_var: None,
                     branch_env_var: None,
                     username_env_var: None,
+                    behavior: None,
                 },
                 Vendor {
                     name: "Bitbucket Pipelines",
@@ -95,6 +110,7 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     sha_env_var: None,
                     branch_env_var: None,
                     username_env_var: None,
+                    behavior: None,
                 },
                 Vendor {
                     name: "Bitrise",
@@ -107,6 +123,7 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     sha_env_var: None,
                     branch_env_var: None,
                     username_env_var: None,
+                    behavior: None,
                 },
                 Vendor {
                     name: "Buddy",
@@ -119,6 +136,7 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     sha_env_var: None,
                     branch_env_var: None,
                     username_env_var: None,
+                    behavior: None,
                 },
                 Vendor {
                     name: "Buildkite",
@@ -131,6 +149,7 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     sha_env_var: None,
                     branch_env_var: None,
                     username_env_var: None,
+                    behavior: None,
                 },
                 Vendor {
                     name: "CircleCI",
@@ -143,6 +162,7 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     sha_env_var: None,
                     branch_env_var: None,
                     username_env_var: None,
+                    behavior: None,
                 },
                 Vendor {
                     name: "Cirrus CI",
@@ -155,6 +175,7 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     sha_env_var: None,
                     branch_env_var: None,
                     username_env_var: None,
+                    behavior: None,
                 },
                 Vendor {
                     name: "Codefresh",
@@ -167,6 +188,7 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     sha_env_var: None,
                     branch_env_var: None,
                     username_env_var: None,
+                    behavior: None,
                 },
                 Vendor {
                     name: "Codemagic",
@@ -179,6 +201,7 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     sha_env_var: None,
                     branch_env_var: None,
                     username_env_var: None,
+                    behavior: None,
                 },
                 Vendor {
                     name: "Codeship",
@@ -195,6 +218,7 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     sha_env_var: None,
                     branch_env_var: None,
                     username_env_var: None,
+                    behavior: None,
                 },
                 Vendor {
                     name: "Drone",
@@ -207,6 +231,7 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     sha_env_var: None,
                     branch_env_var: None,
                     username_env_var: None,
+                    behavior: None,
                 },
                 Vendor {
                     name: "dsari",
@@ -219,6 +244,7 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     sha_env_var: None,
                     branch_env_var: None,
                     username_env_var: None,
+                    behavior: None,
                 },
                 Vendor {
                     name: "Expo Application Services",
@@ -231,6 +257,7 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     sha_env_var: None,
                     branch_env_var: None,
                     username_env_var: None,
+                    behavior: None,
                 },
                 Vendor {
                     name: "GitHub Actions",
@@ -243,6 +270,18 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     sha_env_var: Some("GITHUB_SHA"),
                     branch_env_var: Some("GITHUB_REF_NAME"),
                     username_env_var: Some("GITHUB_ACTOR"),
+                    behavior: Some(
+                        VendorBehavior::new(
+                            |group_name| Arc::new(move |_| format!("::group::{group_name}\n")),
+                            |_| Arc::new(move |_| String::from("::endgroup::\n")),
+                        )
+                        .with_error(
+                            |group_name| {
+                                Arc::new(move |_| format!("\x1B[;31m{group_name}\x1B[;0m\n"))
+                            },
+                            |_| Arc::new(|_| String::new()),
+                        ),
+                    ),
                 },
                 Vendor {
                     name: "GitLab CI",
@@ -255,6 +294,24 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     sha_env_var: None,
                     branch_env_var: None,
                     username_env_var: None,
+                    // https://docs.gitlab.com/ee/ci/jobs/#custom-collapsible-sections
+                    behavior: Some(VendorBehavior::new(
+                        |group_name| {
+                            Arc::new(move |start_time| {
+                                let timestamp = start_time.timestamp();
+                                format!(
+                                    "\\e[0Ksection_start:{timestamp}:{group_name}\\r\\
+                                     e[0K{group_name}"
+                                )
+                            })
+                        },
+                        |group_name| {
+                            Arc::new(move |end_time| {
+                                let timestamp = end_time.timestamp();
+                                format!("\\e[0Ksection_end:{timestamp}:{group_name}\\r\\e[0K")
+                            })
+                        },
+                    )),
                 },
                 Vendor {
                     name: "GoCD",
@@ -267,6 +324,7 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     sha_env_var: None,
                     branch_env_var: None,
                     username_env_var: None,
+                    behavior: None,
                 },
                 Vendor {
                     name: "Google Cloud Build",
@@ -279,6 +337,7 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     sha_env_var: None,
                     branch_env_var: None,
                     username_env_var: None,
+                    behavior: None,
                 },
                 Vendor {
                     name: "LayerCI",
@@ -291,6 +350,7 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     sha_env_var: None,
                     branch_env_var: None,
                     username_env_var: None,
+                    behavior: None,
                 },
                 Vendor {
                     name: "Gerrit",
@@ -303,6 +363,7 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     sha_env_var: None,
                     branch_env_var: None,
                     username_env_var: None,
+                    behavior: None,
                 },
                 Vendor {
                     name: "Hudson",
@@ -315,6 +376,7 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     sha_env_var: None,
                     branch_env_var: None,
                     username_env_var: None,
+                    behavior: None,
                 },
                 Vendor {
                     name: "Jenkins",
@@ -327,6 +389,7 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     sha_env_var: None,
                     branch_env_var: None,
                     username_env_var: None,
+                    behavior: None,
                 },
                 Vendor {
                     name: "Magnum CI",
@@ -339,6 +402,7 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     sha_env_var: None,
                     branch_env_var: None,
                     username_env_var: None,
+                    behavior: None,
                 },
                 Vendor {
                     name: "Netlify CI",
@@ -351,6 +415,7 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     sha_env_var: None,
                     branch_env_var: None,
                     username_env_var: None,
+                    behavior: None,
                 },
                 Vendor {
                     name: "Nevercode",
@@ -363,6 +428,7 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     sha_env_var: None,
                     branch_env_var: None,
                     username_env_var: None,
+                    behavior: None,
                 },
                 Vendor {
                     name: "ReleaseHub",
@@ -375,6 +441,7 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     sha_env_var: None,
                     branch_env_var: None,
                     username_env_var: None,
+                    behavior: None,
                 },
                 Vendor {
                     name: "Render",
@@ -387,6 +454,7 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     sha_env_var: None,
                     branch_env_var: None,
                     username_env_var: None,
+                    behavior: None,
                 },
                 Vendor {
                     name: "Sail CI",
@@ -399,6 +467,7 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     sha_env_var: None,
                     branch_env_var: None,
                     username_env_var: None,
+                    behavior: None,
                 },
                 Vendor {
                     name: "Screwdriver",
@@ -411,6 +480,7 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     sha_env_var: None,
                     branch_env_var: None,
                     username_env_var: None,
+                    behavior: None,
                 },
                 Vendor {
                     name: "Semaphore",
@@ -423,6 +493,7 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     sha_env_var: None,
                     branch_env_var: None,
                     username_env_var: None,
+                    behavior: None,
                 },
                 Vendor {
                     name: "Shippable",
@@ -435,6 +506,7 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     sha_env_var: None,
                     branch_env_var: None,
                     username_env_var: None,
+                    behavior: None,
                 },
                 Vendor {
                     name: "Solano CI",
@@ -447,6 +519,7 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     sha_env_var: None,
                     branch_env_var: None,
                     username_env_var: None,
+                    behavior: None,
                 },
                 Vendor {
                     name: "Sourcehut",
@@ -463,6 +536,7 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     sha_env_var: None,
                     branch_env_var: None,
                     username_env_var: None,
+                    behavior: None,
                 },
                 Vendor {
                     name: "Strider CD",
@@ -475,6 +549,7 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     sha_env_var: None,
                     branch_env_var: None,
                     username_env_var: None,
+                    behavior: None,
                 },
                 Vendor {
                     name: "TaskCluster",
@@ -487,6 +562,7 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     sha_env_var: None,
                     branch_env_var: None,
                     username_env_var: None,
+                    behavior: None,
                 },
                 Vendor {
                     name: "TeamCity",
@@ -499,6 +575,18 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     sha_env_var: None,
                     branch_env_var: None,
                     username_env_var: None,
+                    behavior: Some(VendorBehavior::new(
+                        |group_name| {
+                            Arc::new(move |_| {
+                                format!("##teamcity[blockOpened name='{group_name}']")
+                            })
+                        },
+                        |group_name| {
+                            Arc::new(move |_| {
+                                format!("##teamcity[blockClosed name='{group_name}']")
+                            })
+                        },
+                    )),
                 },
                 Vendor {
                     name: "Travis CI",
@@ -511,6 +599,12 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     sha_env_var: None,
                     branch_env_var: None,
                     username_env_var: None,
+                    behavior: Some(VendorBehavior::new(
+                        |group_name| {
+                            Arc::new(move |_| format!("travis_fold:start:{group_name}\r\n"))
+                        },
+                        |group_name| Arc::new(move |_| format!("travis_fold:end:{group_name}\r\n")),
+                    )),
                 },
                 Vendor {
                     name: "Vercel",
@@ -523,6 +617,7 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     sha_env_var: Some("VERCEL_GIT_COMMIT_SHA"),
                     branch_env_var: Some("VERCEL_GIT_COMMIT_REF"),
                     username_env_var: Some("VERCEL_GIT_COMMIT_AUTHOR_LOGIN"),
+                    behavior: None,
                 },
                 Vendor {
                     name: "Visual Studio App Center",
@@ -535,6 +630,7 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     sha_env_var: None,
                     branch_env_var: None,
                     username_env_var: None,
+                    behavior: None,
                 },
                 Vendor {
                     name: "Woodpecker",
@@ -551,6 +647,7 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     sha_env_var: None,
                     branch_env_var: None,
                     username_env_var: None,
+                    behavior: None,
                 },
                 Vendor {
                     name: "Xcode Cloud",
@@ -563,6 +660,7 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     sha_env_var: None,
                     branch_env_var: None,
                     username_env_var: None,
+                    behavior: None,
                 },
                 Vendor {
                     name: "Xcode Server",
@@ -575,6 +673,7 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     sha_env_var: None,
                     branch_env_var: None,
                     username_env_var: None,
+                    behavior: None,
                 },
             ]
         })

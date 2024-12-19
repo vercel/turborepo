@@ -1,5 +1,7 @@
 #![feature(trait_upcasting)]
 #![deny(clippy::all)]
+// the pest proc macro adds an empty doc comment.
+#![allow(clippy::empty_docs)]
 
 mod berry;
 mod bun;
@@ -60,6 +62,9 @@ pub trait Lockfile: Send + Sync + Any + std::fmt::Debug {
 
     /// Determine if there's a global change between two lockfiles
     fn global_change(&self, other: &dyn Lockfile) -> bool;
+
+    /// Return any turbo version found in the lockfile
+    fn turbo_version(&self) -> Option<String>;
 }
 
 /// Takes a lockfile, and a map of workspace directory paths -> (package name,
@@ -67,11 +72,17 @@ pub trait Lockfile: Send + Sync + Any + std::fmt::Debug {
 pub fn all_transitive_closures<L: Lockfile + ?Sized>(
     lockfile: &L,
     workspaces: HashMap<String, HashMap<String, String>>,
+    ignore_missing_packages: bool,
 ) -> Result<HashMap<String, HashSet<Package>>, Error> {
     workspaces
         .into_par_iter()
         .map(|(workspace, unresolved_deps)| {
-            let closure = transitive_closure(lockfile, &workspace, unresolved_deps)?;
+            let closure = transitive_closure(
+                lockfile,
+                &workspace,
+                unresolved_deps,
+                ignore_missing_packages,
+            )?;
             Ok((workspace, closure))
         })
         .collect()
@@ -83,6 +94,7 @@ pub fn transitive_closure<L: Lockfile + ?Sized>(
     lockfile: &L,
     workspace_path: &str,
     unresolved_deps: HashMap<String, String>,
+    ignore_missing_packages: bool,
 ) -> Result<HashSet<Package>, Error> {
     let mut transitive_deps = HashSet::new();
     transitive_closure_helper(
@@ -90,6 +102,7 @@ pub fn transitive_closure<L: Lockfile + ?Sized>(
         workspace_path,
         unresolved_deps,
         &mut transitive_deps,
+        ignore_missing_packages,
     )?;
 
     Ok(transitive_deps)
@@ -100,9 +113,16 @@ fn transitive_closure_helper<L: Lockfile + ?Sized>(
     workspace_path: &str,
     unresolved_deps: HashMap<String, impl AsRef<str>>,
     resolved_deps: &mut HashSet<Package>,
+    ignore_missing_packages: bool,
 ) -> Result<(), Error> {
     for (name, specifier) in unresolved_deps {
-        let pkg = lockfile.resolve_package(workspace_path, &name, specifier.as_ref())?;
+        let pkg = match lockfile.resolve_package(workspace_path, &name, specifier.as_ref()) {
+            Ok(pkg) => pkg,
+            Err(Error::MissingWorkspace(_)) if ignore_missing_packages => {
+                continue;
+            }
+            Err(e) => return Err(e),
+        };
 
         match pkg {
             None => {
@@ -115,7 +135,15 @@ fn transitive_closure_helper<L: Lockfile + ?Sized>(
                 let all_deps = lockfile.all_dependencies(&pkg.key)?;
                 resolved_deps.insert(pkg);
                 if let Some(deps) = all_deps {
-                    transitive_closure_helper(lockfile, workspace_path, deps, resolved_deps)?;
+                    // we've already found one unresolved dependency, so we can't ignore its set of
+                    // dependencies.
+                    transitive_closure_helper(
+                        lockfile,
+                        workspace_path,
+                        deps,
+                        resolved_deps,
+                        false,
+                    )?;
                 }
             }
         }

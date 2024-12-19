@@ -118,6 +118,10 @@ impl Lockfile for BunLockfile {
         // if the types don't match then we changed package managers
         any_other.downcast_ref::<Self>().is_none()
     }
+
+    fn turbo_version(&self) -> Option<String> {
+        None
+    }
 }
 
 impl Entry {

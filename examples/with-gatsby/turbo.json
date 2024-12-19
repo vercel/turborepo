@@ -1,8 +1,8 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "pipeline": {
+  "tasks": {
     "build": {
-      // outputs are set in workspace configs
+      "inputs": ["$TURBO_DEFAULT$", ".env*"],
       "dependsOn": ["^build"]
     },
     "lint": {},

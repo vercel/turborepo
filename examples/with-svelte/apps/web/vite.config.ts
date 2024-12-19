@@ -8,7 +8,7 @@ export default defineConfig({
   },
   build: {
     commonjsOptions: {
-      include: [/@repo-ui/, /node_modules/],
+      include: [/@repo\/ui/, /node_modules/],
     },
   },
 });
