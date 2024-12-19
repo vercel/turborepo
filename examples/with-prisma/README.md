@@ -88,6 +88,10 @@ To build all apps and packages, run the following command:
 
 ```bash
 yarn run build
+or
+pnpm run build
+or
+npm run build
 ```
 
 ### Develop
@@ -96,6 +100,10 @@ To develop all apps and packages, run the following command:
 
 ```bash
 yarn run dev
+or
+npm run dev
+or
+pnpm dev
 ```
 
 ## Useful Links
