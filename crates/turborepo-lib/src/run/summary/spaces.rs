@@ -5,18 +5,22 @@ use std::{
     time::Duration,
 };
 
+use camino::Utf8PathBuf;
 use chrono::{DateTime, Local};
 use futures::{stream::FuturesUnordered, StreamExt};
 use itertools::Itertools;
 use serde::Serialize;
-use tokio::{sync::mpsc::Sender, task::JoinHandle};
+use tokio::{join, sync::mpsc::Sender, task::JoinHandle};
 use tracing::debug;
+use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::{
     spaces::{CreateSpaceRunPayload, SpaceTaskSummary, SpacesCacheStatus},
     APIAuth, APIClient,
 };
 use turborepo_cache::CacheHitMetadata;
+use turborepo_db::DatabaseHandle;
 use turborepo_vercel_api::SpaceRun;
+use uuid::Uuid;
 
 use super::execution::TaskExecutionSummary;
 use crate::{
@@ -33,6 +37,8 @@ pub struct SpacesClient {
     space_id: String,
     api_client: APIClient,
     api_auth: APIAuth,
+    repo_root: AbsoluteSystemPathBuf,
+    cache_dir: Utf8PathBuf,
     request_timeout: Duration,
 }
 
@@ -143,10 +149,13 @@ impl SpacesClient {
         space_id: Option<String>,
         api_client: APIClient,
         api_auth: Option<APIAuth>,
+        repo_root: AbsoluteSystemPathBuf,
+        cache_dir: Utf8PathBuf,
     ) -> Option<Self> {
         // If space_id is empty, we don't build a client
         let space_id = space_id?;
         let is_linked = api_auth.as_ref().map_or(false, |auth| auth.is_linked());
+        println!("is_linked: {is_linked}");
         if !is_linked {
             // TODO: Add back spaces warning with new UI
             return None;
@@ -157,6 +166,8 @@ impl SpacesClient {
             space_id,
             api_client,
             api_auth,
+            repo_root,
+            cache_dir,
             request_timeout: Duration::from_secs(10),
         })
     }
@@ -167,9 +178,10 @@ impl SpacesClient {
     ) -> Result<SpacesClientHandle, Error> {
         let (tx, mut rx) = tokio::sync::mpsc::channel(100);
         let handle = tokio::spawn(async move {
+            let db_handle = DatabaseHandle::new(&self.cache_dir, &self.repo_root).await?;
             let mut errors = Vec::new();
-            let run = match self.create_run(create_run_payload).await {
-                Ok(run) => run,
+            let (run, db_id) = match self.create_run(db_handle.clone(), create_run_payload).await {
+                Ok((run, db_id)) => (run, db_id),
                 Err(e) => {
                     debug!("error creating space run: {}", e);
                     errors.push(e);
@@ -185,9 +197,11 @@ impl SpacesClient {
                     SpaceRequest::FinishedRun {
                         end_time,
                         exit_code,
-                    } => self.finish_run_handler(&run, end_time, exit_code),
+                    } => {
+                        self.finish_run_handler(db_handle.clone(), db_id, &run, end_time, exit_code)
+                    }
                     SpaceRequest::FinishedTask { summary } => {
-                        self.finish_task_handler(*summary, &run)
+                        self.finish_task_handler(db_handle.clone(), db_id, *summary, &run)
                     }
                 };
                 requests.push(request)
@@ -209,17 +223,27 @@ impl SpacesClient {
         Ok(SpacesClientHandle { handle, tx })
     }
 
-    async fn create_run(&self, payload: CreateSpaceRunPayload) -> Result<SpaceRun, Error> {
-        Ok(tokio::time::timeout(
-            self.request_timeout,
-            self.api_client
-                .create_space_run(&self.space_id, &self.api_auth, payload),
-        )
-        .await??)
+    async fn create_run(
+        &self,
+        db_handle: DatabaseHandle,
+        payload: CreateSpaceRunPayload,
+    ) -> Result<(SpaceRun, Uuid), Error> {
+        let (api_result, db_result) = join!(
+            tokio::time::timeout(
+                self.request_timeout,
+                self.api_client
+                    .create_space_run(&self.space_id, &self.api_auth, &payload),
+            ),
+            db_handle.create_run(&payload),
+        );
+
+        Ok((api_result??, db_result?))
     }
 
     fn finish_task_handler(
         &self,
+        db_handle: DatabaseHandle,
+        db_id: Uuid,
         task_summary: SpaceTaskSummary,
         run: &SpaceRun,
     ) -> JoinHandle<Result<(), Error>> {
@@ -230,17 +254,25 @@ impl SpacesClient {
         let run_id = run.id.clone();
         let api_auth = self.api_auth.clone();
         tokio::spawn(async move {
-            Ok(tokio::time::timeout(
-                timeout,
-                api_client.create_task_summary(&space_id, &run_id, &api_auth, task_summary),
-            )
-            .await??)
+            let (result1, result2) = join!(
+                tokio::time::timeout(
+                    timeout,
+                    api_client.create_task_summary(&space_id, &run_id, &api_auth, &task_summary),
+                ),
+                db_handle.finish_task(db_id, &task_summary)
+            );
+            result1??;
+            result2?;
+
+            Ok(())
         })
     }
 
     // Called by the worker thread upon receiving a SpaceRequest::FinishedRun
     fn finish_run_handler(
         &self,
+        db_handle: DatabaseHandle,
+        db_id: Uuid,
         run: &SpaceRun,
         end_time: i64,
         exit_code: i32,
@@ -251,11 +283,18 @@ impl SpacesClient {
         let run_id = run.id.clone();
         let api_auth = self.api_auth.clone();
         tokio::spawn(async move {
-            Ok(tokio::time::timeout(
-                timeout,
-                api_client.finish_space_run(&space_id, &run_id, &api_auth, end_time, exit_code),
-            )
-            .await??)
+            let (result1, result2) = join!(
+                tokio::time::timeout(
+                    timeout,
+                    api_client.finish_space_run(&space_id, &run_id, &api_auth, end_time, exit_code),
+                ),
+                db_handle.finish_run(db_id, end_time, exit_code)
+            );
+
+            result1??;
+            result2?;
+
+            Ok(())
         })
     }
 }
@@ -277,18 +316,23 @@ impl<'a> From<SpacesTaskInformation<'a>> for SpaceTaskSummary {
             exit_code,
             ..
         } = execution_summary;
-        fn stringify_nodes(deps: Option<HashSet<&crate::engine::TaskNode>>) -> Vec<String> {
-            deps.into_iter()
-                .flatten()
-                .filter_map(|node| match node {
-                    crate::engine::TaskNode::Root => None,
-                    crate::engine::TaskNode::Task(dependency) => Some(dependency.to_string()),
-                })
-                .sorted()
-                .collect()
+        fn convert_nodes(
+            deps: Option<HashSet<&crate::engine::TaskNode>>,
+        ) -> Option<HashSet<turborepo_api_client::spaces::TaskId>> {
+            let deps = deps?;
+            Some(
+                deps.into_iter()
+                    .filter_map(|node| match node {
+                        TaskNode::Root => None,
+                        TaskNode::Task(dependency) => Some(turborepo_api_client::spaces::TaskId {
+                            package: dependency.package().to_string(),
+                            task: dependency.task().to_string(),
+                        }),
+                    })
+                    .sorted()
+                    .collect(),
+            )
         }
-        let dependencies = stringify_nodes(dependencies);
-        let dependents = stringify_nodes(dependents);
 
         let cache = cache_status.map_or_else(
             SpacesCacheStatus::default,
@@ -317,8 +361,8 @@ impl<'a> From<SpacesTaskInformation<'a>> for SpaceTaskSummary {
             start_time,
             end_time,
             exit_code,
-            dependencies,
-            dependents,
+            dependencies: convert_nodes(dependencies),
+            dependents: convert_nodes(dependents),
             logs,
         }
     }
@@ -354,6 +398,7 @@ mod tests {
     use chrono::Local;
     use pretty_assertions::assert_eq;
     use test_case::test_case;
+    use turbopath::AbsoluteSystemPathBuf;
     use turborepo_api_client::{
         spaces::{CreateSpaceRunPayload, SpaceTaskSummary},
         APIAuth, APIClient,
@@ -364,7 +409,7 @@ mod tests {
     };
 
     use super::trim_logs;
-    use crate::run::summary::spaces::SpacesClient;
+    use crate::{opts::Opts, run::summary::spaces::SpacesClient};
 
     #[test_case(vec![] ; "empty")]
     #[test_case(vec![SpaceTaskSummary::default()] ; "one task summary")]
@@ -387,9 +432,16 @@ mod tests {
             team_id: Some(EXPECTED_TEAM_ID.to_string()),
             team_slug: Some(EXPECTED_TEAM_SLUG.to_string()),
         });
+        let temp_dir = tempfile::tempdir()?;
 
-        let spaces_client =
-            SpacesClient::new(Some(EXPECTED_SPACE_ID.to_string()), api_client, api_auth).unwrap();
+        let spaces_client = SpacesClient::new(
+            Some(EXPECTED_SPACE_ID.to_string()),
+            api_client,
+            api_auth,
+            AbsoluteSystemPathBuf::try_from(temp_dir.path()).unwrap(),
+            Opts::default(),
+        )
+        .unwrap();
 
         let start_time = Local::now();
         let spaces_client_handle = spaces_client.start(CreateSpaceRunPayload::new(
