@@ -219,4 +219,4 @@ To test out the experience of your example with `create-turbo`, run `create-turb
 npx create-turbo@latest --example https://github.com/your-org/your-repo/tree/your-branch/...
 ```
 
-This will allow you to use the example as a uesr would.
+This will allow you to use the example as a user would.
