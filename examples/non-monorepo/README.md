@@ -20,6 +20,11 @@ To build all apps and packages, run the following command:
 
 ```
 pnpm turbo build
+or
+yarn turbo run build
+or
+npx turbo run build
+
 ```
 
 ### Develop

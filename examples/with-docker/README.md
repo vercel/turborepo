@@ -33,6 +33,10 @@ This repo is configured to be built with Docker, and Docker compose. To build al
 ```
 # Install dependencies
 yarn install
+or
+npm install
+or
+pnpm install
 
 # Create a network, which allows containers to communicate
 # with each other, by using their container name as a hostname
