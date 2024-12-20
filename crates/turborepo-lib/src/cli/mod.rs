@@ -552,7 +552,10 @@ impl Args {
 pub enum Command {
     /// Get the path to the Turbo binary
     Bin,
-    Boundaries,
+    Boundaries {
+        #[clap(short = 'F', long, group = "scope-filter-group")]
+        filter: Vec<String>,
+    },
     /// Generate the autocompletion script for the specified shell
     Completion {
         shell: Shell,
@@ -1272,7 +1275,7 @@ pub async fn run(
 
             Ok(0)
         }
-        Command::Boundaries => {
+        Command::Boundaries { .. } => {
             let event = CommandEventBuilder::new("boundaries").with_parent(&root_telemetry);
 
             event.track_call();
