@@ -122,6 +122,13 @@ impl Lockfile for BunLockfile {
     fn turbo_version(&self) -> Option<String> {
         None
     }
+
+    fn human_name(&self, package: &crate::Package) -> Option<String> {
+        let entry = self.inner.get(&package.key)?;
+        let name = entry.name.as_deref()?;
+        let version = &entry.version;
+        Some(format!("{name}@{version}"))
+    }
 }
 
 impl Entry {
