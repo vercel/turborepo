@@ -1,3 +1,4 @@
+mod external_package;
 mod file;
 mod package;
 mod server;
@@ -11,6 +12,7 @@ use std::{
 
 use async_graphql::{http::GraphiQLSource, *};
 use axum::{response, response::IntoResponse};
+use external_package::ExternalPackage;
 use miette::Diagnostic;
 use package::Package;
 pub use server::run_server;
@@ -64,6 +66,82 @@ impl RepositoryQuery {
     pub fn new(run: Arc<Run>) -> Self {
         Self { run }
     }
+
+    fn convert_change_reason(
+        &self,
+        reason: turborepo_repository::change_mapper::PackageInclusionReason,
+    ) -> PackageChangeReason {
+        match reason {
+            turborepo_repository::change_mapper::PackageInclusionReason::All(
+                AllPackageChangeReason::GlobalDepsChanged { file },
+            ) => PackageChangeReason::GlobalDepsChanged(GlobalDepsChanged {
+                file_path: file.to_string(),
+            }),
+            turborepo_repository::change_mapper::PackageInclusionReason::All(
+                AllPackageChangeReason::DefaultGlobalFileChanged { file },
+            ) => PackageChangeReason::DefaultGlobalFileChanged(DefaultGlobalFileChanged {
+                file_path: file.to_string(),
+            }),
+            turborepo_repository::change_mapper::PackageInclusionReason::All(
+                AllPackageChangeReason::LockfileChangeDetectionFailed,
+            ) => {
+                PackageChangeReason::LockfileChangeDetectionFailed(LockfileChangeDetectionFailed {
+                    empty: false,
+                })
+            }
+            turborepo_repository::change_mapper::PackageInclusionReason::All(
+                AllPackageChangeReason::GitRefNotFound { from_ref, to_ref },
+            ) => PackageChangeReason::GitRefNotFound(GitRefNotFound { from_ref, to_ref }),
+            turborepo_repository::change_mapper::PackageInclusionReason::All(
+                AllPackageChangeReason::LockfileChangedWithoutDetails,
+            ) => {
+                PackageChangeReason::LockfileChangedWithoutDetails(LockfileChangedWithoutDetails {
+                    empty: false,
+                })
+            }
+            turborepo_repository::change_mapper::PackageInclusionReason::All(
+                AllPackageChangeReason::RootInternalDepChanged { root_internal_dep },
+            ) => PackageChangeReason::RootInternalDepChanged(RootInternalDepChanged {
+                root_internal_dep: root_internal_dep.to_string(),
+            }),
+            turborepo_repository::change_mapper::PackageInclusionReason::RootTask { task } => {
+                PackageChangeReason::RootTask(RootTask {
+                    task_name: task.to_string(),
+                })
+            }
+            turborepo_repository::change_mapper::PackageInclusionReason::ConservativeRootLockfileChanged => {
+                PackageChangeReason::ConservativeRootLockfileChanged(ConservativeRootLockfileChanged { empty: false })
+            }
+            turborepo_repository::change_mapper::PackageInclusionReason::LockfileChanged { removed, added } => {
+                let removed = removed.into_iter().map(|package| ExternalPackage::new(self.run.clone(), package)).collect::<Array<_>>();
+                let added = added.into_iter().map(|package| ExternalPackage::new(self.run.clone(), package)).collect::<Array<_>>();
+                PackageChangeReason::LockfileChanged(LockfileChanged { empty: false, removed, added })
+            }
+            turborepo_repository::change_mapper::PackageInclusionReason::DependencyChanged {
+                dependency,
+            } => PackageChangeReason::DependencyChanged(DependencyChanged {
+                dependency_name: dependency.to_string(),
+            }),
+            turborepo_repository::change_mapper::PackageInclusionReason::DependentChanged {
+                dependent,
+            } => PackageChangeReason::DependentChanged(DependentChanged {
+                dependent_name: dependent.to_string(),
+            }),
+            turborepo_repository::change_mapper::PackageInclusionReason::FileChanged { file } => {
+                PackageChangeReason::FileChanged(FileChanged {
+                    file_path: file.to_string(),
+                })
+            }
+            turborepo_repository::change_mapper::PackageInclusionReason::InFilteredDirectory {
+                directory,
+            } => PackageChangeReason::InFilteredDirectory(InFilteredDirectory {
+                directory_path: directory.to_string(),
+            }),
+            turborepo_repository::change_mapper::PackageInclusionReason::IncludedByFilter {
+                filters,
+            } => PackageChangeReason::IncludedByFilter(IncludedByFilter { filters }),
+        }
+    }
 }
 
 #[derive(Debug, SimpleObject)]
@@ -72,6 +150,7 @@ impl RepositoryQuery {
 #[graphql(concrete(name = "ChangedPackages", params(ChangedPackage)))]
 #[graphql(concrete(name = "Files", params(File)))]
 #[graphql(concrete(name = "TraceErrors", params(file::TraceError)))]
+#[graphql(concrete(name = "ExternalPackages", params(ExternalPackage)))]
 pub struct Array<T: OutputType> {
     items: Vec<T>,
     length: usize,
@@ -375,6 +454,8 @@ struct ConservativeRootLockfileChanged {
 struct LockfileChanged {
     /// This is a nothing field
     empty: bool,
+    removed: Array<ExternalPackage>,
+    added: Array<ExternalPackage>,
 }
 
 #[derive(SimpleObject)]
@@ -416,79 +497,6 @@ enum PackageChangeReason {
     InFilteredDirectory(InFilteredDirectory),
 }
 
-impl From<turborepo_repository::change_mapper::PackageInclusionReason> for PackageChangeReason {
-    fn from(value: turborepo_repository::change_mapper::PackageInclusionReason) -> Self {
-        match value {
-            turborepo_repository::change_mapper::PackageInclusionReason::All(
-                AllPackageChangeReason::GlobalDepsChanged { file },
-            ) => PackageChangeReason::GlobalDepsChanged(GlobalDepsChanged {
-                file_path: file.to_string(),
-            }),
-            turborepo_repository::change_mapper::PackageInclusionReason::All(
-                AllPackageChangeReason::DefaultGlobalFileChanged { file },
-            ) => PackageChangeReason::DefaultGlobalFileChanged(DefaultGlobalFileChanged {
-                file_path: file.to_string(),
-            }),
-            turborepo_repository::change_mapper::PackageInclusionReason::All(
-                AllPackageChangeReason::LockfileChangeDetectionFailed,
-            ) => {
-                PackageChangeReason::LockfileChangeDetectionFailed(LockfileChangeDetectionFailed {
-                    empty: false,
-                })
-            }
-            turborepo_repository::change_mapper::PackageInclusionReason::All(
-                AllPackageChangeReason::GitRefNotFound { from_ref, to_ref },
-            ) => PackageChangeReason::GitRefNotFound(GitRefNotFound { from_ref, to_ref }),
-            turborepo_repository::change_mapper::PackageInclusionReason::All(
-                AllPackageChangeReason::LockfileChangedWithoutDetails,
-            ) => {
-                PackageChangeReason::LockfileChangedWithoutDetails(LockfileChangedWithoutDetails {
-                    empty: false,
-                })
-            }
-            turborepo_repository::change_mapper::PackageInclusionReason::All(
-                AllPackageChangeReason::RootInternalDepChanged { root_internal_dep },
-            ) => PackageChangeReason::RootInternalDepChanged(RootInternalDepChanged {
-                root_internal_dep: root_internal_dep.to_string(),
-            }),
-            turborepo_repository::change_mapper::PackageInclusionReason::RootTask { task } => {
-                PackageChangeReason::RootTask(RootTask {
-                    task_name: task.to_string(),
-                })
-            }
-            turborepo_repository::change_mapper::PackageInclusionReason::ConservativeRootLockfileChanged => {
-                PackageChangeReason::ConservativeRootLockfileChanged(ConservativeRootLockfileChanged { empty: false })
-            }
-            turborepo_repository::change_mapper::PackageInclusionReason::LockfileChanged => {
-                PackageChangeReason::LockfileChanged(LockfileChanged { empty: false })
-            }
-            turborepo_repository::change_mapper::PackageInclusionReason::DependencyChanged {
-                dependency,
-            } => PackageChangeReason::DependencyChanged(DependencyChanged {
-                dependency_name: dependency.to_string(),
-            }),
-            turborepo_repository::change_mapper::PackageInclusionReason::DependentChanged {
-                dependent,
-            } => PackageChangeReason::DependentChanged(DependentChanged {
-                dependent_name: dependent.to_string(),
-            }),
-            turborepo_repository::change_mapper::PackageInclusionReason::FileChanged { file } => {
-                PackageChangeReason::FileChanged(FileChanged {
-                    file_path: file.to_string(),
-                })
-            }
-            turborepo_repository::change_mapper::PackageInclusionReason::InFilteredDirectory {
-                directory,
-            } => PackageChangeReason::InFilteredDirectory(InFilteredDirectory {
-                directory_path: directory.to_string(),
-            }),
-            turborepo_repository::change_mapper::PackageInclusionReason::IncludedByFilter {
-                filters,
-            } => PackageChangeReason::IncludedByFilter(IncludedByFilter { filters }),
-        }
-    }
-}
-
 #[derive(SimpleObject)]
 struct ChangedPackage {
     reason: PackageChangeReason,
@@ -518,7 +526,7 @@ impl RepositoryQuery {
         .map(|(package, reason)| {
             Ok(ChangedPackage {
                 package: Package::new(self.run.clone(), package)?,
-                reason: reason.into(),
+                reason: self.convert_change_reason(reason),
             })
         })
         .filter(|package: &Result<ChangedPackage, Error>| {
