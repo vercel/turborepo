@@ -414,17 +414,20 @@ impl crate::Lockfile for PnpmLockfile {
         &self,
         key: &str,
     ) -> Result<Option<std::collections::HashMap<String, String>>, crate::Error> {
+        println!("all_dependencies: {}", key);
         // Check snapshots for v7
         if let Some(snapshot) = self
             .snapshots
             .as_ref()
             .and_then(|snapshots| snapshots.get(key))
         {
+            println!("snapshot for {}: {:#?}", key, snapshot);
             return Ok(Some(snapshot.dependencies()));
         }
         let Some(entry) = self.packages.as_ref().and_then(|pkgs| pkgs.get(key)) else {
             return Ok(None);
         };
+        println!("snapshot: {:#?}", entry.snapshot);
         Ok(Some(entry.snapshot.dependencies()))
     }
 
