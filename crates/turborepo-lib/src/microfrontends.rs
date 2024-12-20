@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use itertools::Itertools;
 use tracing::warn;
-use turbopath::{AbsoluteSystemPath, RelativeUnixPathBuf};
+use turbopath::{AbsoluteSystemPath, RelativeUnixPath, RelativeUnixPathBuf};
 use turborepo_microfrontends::{Config as MFEConfig, Error, MICROFRONTENDS_PACKAGES};
 use turborepo_repository::package_graph::{PackageGraph, PackageName};
 
@@ -14,9 +14,15 @@ use crate::{
 
 #[derive(Debug, Clone)]
 pub struct MicrofrontendsConfigs {
-    configs: HashMap<String, HashSet<TaskId<'static>>>,
-    config_paths: HashMap<String, RelativeUnixPathBuf>,
+    configs: HashMap<String, ConfigInfo>,
     mfe_package: Option<&'static str>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq)]
+struct ConfigInfo {
+    tasks: HashSet<TaskId<'static>>,
+    version: &'static str,
+    path: Option<RelativeUnixPathBuf>,
 }
 
 impl MicrofrontendsConfigs {
@@ -39,7 +45,6 @@ impl MicrofrontendsConfigs {
     ) -> Result<Option<Self>, Error> {
         let PackageGraphResult {
             configs,
-            config_paths,
             missing_default_apps,
             unsupported_version,
             mfe_package,
@@ -58,7 +63,6 @@ impl MicrofrontendsConfigs {
 
         Ok((!configs.is_empty()).then_some(Self {
             configs,
-            config_paths,
             mfe_package,
         }))
     }
@@ -68,22 +72,24 @@ impl MicrofrontendsConfigs {
     }
 
     pub fn configs(&self) -> impl Iterator<Item = (&String, &HashSet<TaskId<'static>>)> {
-        self.configs.iter()
+        self.configs.iter().map(|(pkg, info)| (pkg, &info.tasks))
     }
 
     pub fn get(&self, package_name: &str) -> Option<&HashSet<TaskId<'static>>> {
-        self.configs.get(package_name)
+        let info = self.configs.get(package_name)?;
+        Some(&info.tasks)
     }
 
     pub fn task_has_mfe_proxy(&self, task_id: &TaskId) -> bool {
         self.configs
             .values()
-            .any(|dev_tasks| dev_tasks.contains(task_id))
+            .any(|info| info.tasks.contains(task_id))
     }
 
-    pub fn config_filename(&self, package_name: &str) -> Option<&str> {
-        let path = self.config_paths.get(package_name)?;
-        Some(path.as_str())
+    pub fn config_filename(&self, package_name: &str) -> Option<&RelativeUnixPath> {
+        let info = self.configs.get(package_name)?;
+        let path = info.path.as_ref()?;
+        Some(path)
     }
 
     pub fn update_turbo_json(
@@ -107,7 +113,7 @@ impl MicrofrontendsConfigs {
         // - contains the proxy task
         // - a member of one of the microfrontends
         // then we need to modify its task definitions
-        if let Some(FindResult { dev, proxy }) = self.package_turbo_json_update(package_name) {
+        if let Some(FindResult { dev, proxy, .. }) = self.package_turbo_json_update(package_name) {
             // We need to modify turbo.json, use default one if there isn't one present
             let mut turbo_json = turbo_json.or_else(|err| match err {
                 config::Error::NoTurboJSON => Ok(TurboJson::default()),
@@ -138,34 +144,40 @@ impl MicrofrontendsConfigs {
         &'a self,
         package_name: &PackageName,
     ) -> Option<FindResult<'a>> {
-        self.configs().find_map(|(config, tasks)| {
-            let dev_task = tasks.iter().find_map(|task| {
+        let results = self.configs.iter().filter_map(|(config, info)| {
+            let dev_task = info.tasks.iter().find_map(|task| {
                 (task.package() == package_name.as_str()).then(|| FindResult {
                     dev: Some(task.as_borrowed()),
                     proxy: TaskId::new(config, "proxy"),
+                    version: info.version,
                 })
             });
             let proxy_owner = (config.as_str() == package_name.as_str()).then(|| FindResult {
                 dev: None,
                 proxy: TaskId::new(config, "proxy"),
+                version: info.version,
             });
             dev_task.or(proxy_owner)
-        })
+        });
+        // We invert the standard comparing order so higher versions are prioritized
+        results.sorted_by(|a, b| b.version.cmp(a.version)).next()
     }
 
     // Returns a list of repo relative paths to all MFE configurations
     fn configuration_file_paths(&self) -> Vec<String> {
-        self.config_paths
+        self.configs
             .values()
-            .map(|config_path| config_path.as_str().to_string())
+            .filter_map(|info| {
+                let path = info.path.as_ref()?;
+                Some(path.as_str().to_string())
+            })
             .collect()
     }
 }
 
 // Internal struct used to capture the results of checking the package graph
 struct PackageGraphResult {
-    configs: HashMap<String, HashSet<TaskId<'static>>>,
-    config_paths: HashMap<String, RelativeUnixPathBuf>,
+    configs: HashMap<String, ConfigInfo>,
     missing_default_apps: Vec<String>,
     unsupported_version: Vec<(String, String)>,
     mfe_package: Option<&'static str>,
@@ -176,7 +188,6 @@ impl PackageGraphResult {
         packages: impl Iterator<Item = (&'a str, Result<Option<MFEConfig>, Error>)>,
     ) -> Result<Self, Error> {
         let mut configs = HashMap::new();
-        let mut config_paths = HashMap::new();
         let mut referenced_default_apps = HashSet::new();
         let mut unsupported_version = Vec::new();
         let mut mfe_package = None;
@@ -204,17 +215,11 @@ impl PackageGraphResult {
             else {
                 continue;
             };
-            let tasks = config
-                .development_tasks()
-                .map(|(application, options)| {
-                    let dev_task = options.unwrap_or("dev");
-                    TaskId::new(application, dev_task).into_owned()
-                })
-                .collect();
-            configs.insert(package_name.to_string(), tasks);
+            let mut info = ConfigInfo::new(&config);
             if let Some(path) = config.path() {
-                config_paths.insert(package_name.to_string(), path.to_unix());
+                info.path = Some(path.to_unix());
             }
+            configs.insert(package_name.to_string(), info);
         }
         let default_apps_found = configs.keys().cloned().collect();
         let mut missing_default_apps = referenced_default_apps
@@ -224,7 +229,6 @@ impl PackageGraphResult {
         missing_default_apps.sort();
         Ok(Self {
             configs,
-            config_paths,
             missing_default_apps,
             unsupported_version,
             mfe_package,
@@ -236,6 +240,26 @@ impl PackageGraphResult {
 struct FindResult<'a> {
     dev: Option<TaskId<'a>>,
     proxy: TaskId<'a>,
+    version: &'static str,
+}
+
+impl ConfigInfo {
+    fn new(config: &MFEConfig) -> Self {
+        let tasks = config
+            .development_tasks()
+            .map(|(application, options)| {
+                let dev_task = options.unwrap_or("dev");
+                TaskId::new(application, dev_task).into_owned()
+            })
+            .collect();
+        let version = config.version();
+
+        Self {
+            tasks,
+            version,
+            path: None,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -257,7 +281,7 @@ mod test {
                     for _dev_task in $dev_tasks.as_slice() {
                         _dev_tasks.insert(crate::run::task_id::TaskName::from(*_dev_task).task_id().unwrap().into_owned());
                     }
-                    _map.insert($config_owner.to_string(), _dev_tasks);
+                    _map.insert($config_owner.to_string(), ConfigInfo { tasks: _dev_tasks, version: "2", path: None });
                 )+
                 _map
             }
@@ -266,6 +290,7 @@ mod test {
 
     struct PackageUpdateTest {
         package_name: &'static str,
+        version: &'static str,
         result: Option<TestFindResult>,
     }
 
@@ -278,8 +303,14 @@ mod test {
         pub const fn new(package_name: &'static str) -> Self {
             Self {
                 package_name,
+                version: "2",
                 result: None,
             }
+        }
+
+        pub const fn v1(mut self) -> Self {
+            self.version = "1";
+            self
         }
 
         pub const fn dev(mut self, dev: &'static str, proxy: &'static str) -> Self {
@@ -307,10 +338,12 @@ mod test {
                 }) => Some(FindResult {
                     dev: Some(Self::str_to_task(dev)),
                     proxy: Self::str_to_task(proxy),
+                    version: self.version,
                 }),
                 Some(TestFindResult { dev: None, proxy }) => Some(FindResult {
                     dev: None,
                     proxy: Self::str_to_task(proxy),
+                    version: self.version,
                 }),
                 None => None,
             }
@@ -325,14 +358,15 @@ mod test {
     }
 
     const NON_MFE_PKG: PackageUpdateTest = PackageUpdateTest::new("other-pkg");
-    const MFE_CONFIG_PKG: PackageUpdateTest =
-        PackageUpdateTest::new("mfe-config-pkg").proxy_only("mfe-config-pkg#proxy");
+    const MFE_CONFIG_PKG: PackageUpdateTest = PackageUpdateTest::new("z-config-pkg")
+        .v1()
+        .proxy_only("z-config-pkg#proxy");
     const MFE_CONFIG_PKG_DEV_TASK: PackageUpdateTest =
-        PackageUpdateTest::new("web").dev("web#dev", "mfe-config-pkg#proxy");
+        PackageUpdateTest::new("web").dev("web#dev", "web#proxy");
     const DEFAULT_APP_PROXY: PackageUpdateTest =
-        PackageUpdateTest::new("mfe-docs").dev("mfe-docs#serve", "mfe-web#proxy");
+        PackageUpdateTest::new("docs").dev("docs#serve", "web#proxy");
     const DEFAULT_APP_PROXY_AND_DEV: PackageUpdateTest =
-        PackageUpdateTest::new("mfe-web").dev("mfe-web#dev", "mfe-web#proxy");
+        PackageUpdateTest::new("web").dev("web#dev", "web#proxy");
 
     #[test_case(NON_MFE_PKG)]
     #[test_case(MFE_CONFIG_PKG)]
@@ -340,13 +374,13 @@ mod test {
     #[test_case(DEFAULT_APP_PROXY)]
     #[test_case(DEFAULT_APP_PROXY_AND_DEV)]
     fn test_package_turbo_json_update(test: PackageUpdateTest) {
-        let configs = mfe_configs!(
-            "mfe-config-pkg" => ["web#dev", "docs#dev"],
-            "mfe-web" => ["mfe-web#dev", "mfe-docs#serve"]
+        let mut configs = mfe_configs!(
+            "z-config-pkg" => ["web#dev", "docs#dev"],
+            "web" => ["web#dev", "docs#serve"]
         );
+        configs.get_mut("z-config-pkg").unwrap().version = "1";
         let mfe = MicrofrontendsConfigs {
             configs,
-            config_paths: HashMap::new(),
             mfe_package: None,
         };
         assert_eq!(
@@ -456,12 +490,12 @@ mod test {
     #[test]
     fn test_configs_added_as_global_deps() {
         let configs = MicrofrontendsConfigs {
-            configs: vec![("web".to_owned(), Default::default())]
-                .into_iter()
-                .collect(),
-            config_paths: vec![(
+            configs: vec![(
                 "web".to_owned(),
-                RelativeUnixPathBuf::new("web/microfrontends.json").unwrap(),
+                ConfigInfo {
+                    path: Some(RelativeUnixPathBuf::new("web/microfrontends.json").unwrap()),
+                    ..Default::default()
+                },
             )]
             .into_iter()
             .collect(),
@@ -473,5 +507,57 @@ mod test {
             .update_turbo_json(&PackageName::Root, Ok(turbo_json))
             .unwrap();
         assert_eq!(actual.global_deps, &["web/microfrontends.json".to_owned()]);
+    }
+
+    #[test]
+    fn test_v2_and_v1() {
+        let config_v2 = MFEConfig::from_str(
+            &serde_json::to_string_pretty(&json!({
+                "version": "2",
+                "applications": {
+                    "web": {},
+                    "docs": {
+                        "development": {
+                            "task": "serve"
+                        }
+                    }
+                }
+            }))
+            .unwrap(),
+            "something.txt",
+        )
+        .unwrap();
+        let config_v1 = MFEConfig::from_str(
+            &serde_json::to_string_pretty(&json!({
+                "version": "1",
+                "applications": {
+                    "web": {},
+                    "docs": {
+                        "development": {
+                            "task": "serve"
+                        }
+                    }
+                }
+            }))
+            .unwrap(),
+            "something.txt",
+        )
+        .unwrap();
+        let result = PackageGraphResult::new(
+            vec![
+                ("web", Ok(Some(config_v2))),
+                ("docs", Ok(None)),
+                ("mfe-config", Ok(Some(config_v1))),
+            ]
+            .into_iter(),
+        )
+        .unwrap();
+        let mut expected = mfe_configs!(
+            "web" => ["web#dev", "docs#serve"],
+            "mfe-config" => ["web#dev", "docs#serve"]
+        );
+        expected.get_mut("mfe-config").unwrap().version = "1";
+
+        assert_eq!(result.configs, expected,)
     }
 }

@@ -9,7 +9,7 @@ Thank you for your interest in contributing to Turborepo!
 - [Manually testing `turbo`](#manually-testing-turbo)
   - [Repositories to test with](#repositories-to-test-with)
 - [Debugging tips](#debugging-tips)
-  - [Verbose logging](#verbose-logging)  
+  - [Verbose logging](#verbose-logging)
   - [Crash logs](#crash-logs)
   - [Terminal UI debugging](#terminal-ui-debugging)
 - [Publishing `turbo` to the npm registry](#publishing-turbo-to-the-npm-registry)
@@ -31,8 +31,8 @@ You will need to have these dependences installed on your machine to work on thi
 
 - For running tests locally, `jq` and `zstd` are also required.
   - macOS: `brew install jq zstd`
-  - Linux: ``sudo apt update && sudo apt install jq zstd`
-  - Windows: `choco install jq zstandard
+  - Linux: `sudo apt update && sudo apt install jq zstd`
+  - Windows: `choco install jq zstandard`
 - On Linux, ensure LLD (LLVM Linker) is installed, as it's not installed by default on many Linux distributions (e.g. `apt install lld`).
 
 ## Structure of the repository
@@ -64,7 +64,7 @@ out of the box. If you wish to select `native-tls`, you may do so by running `ca
 ## Running tests
 
 > [!IMPORTANT]
-> You will need to have `jq` and `zstd` installed on your system in order to run tests. See [General dDependencies](#general-dependencies) for instructions on how to install these tools.
+> You will need to have `jq` and `zstd` installed on your system in order to run tests. See [General dependencies](#general-dependencies) for instructions on how to install these tools.
 
 First, install Turborepo globally with your package manager of choice. For instance, with npm, `npm install -g turbo`. This will install the `turbo` binary in your system's `PATH`, making it globally available.
 
@@ -219,4 +219,4 @@ To test out the experience of your example with `create-turbo`, run `create-turb
 npx create-turbo@latest --example https://github.com/your-org/your-repo/tree/your-branch/...
 ```
 
-This will allow you to use the example as a uesr would.
+This will allow you to use the example as a user would.
