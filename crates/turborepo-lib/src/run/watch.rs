@@ -159,10 +159,6 @@ impl WatchClient {
 
         let mut events = client.package_changes().await?;
 
-        if !self.run.has_tui() {
-            self.run.print_run_prelude();
-        }
-
         let signal_subscriber = self.handler.subscribe().ok_or(Error::NoSignalHandler)?;
 
         // We explicitly use a tokio::sync::Mutex here to avoid deadlocks.
