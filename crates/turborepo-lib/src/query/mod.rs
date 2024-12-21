@@ -4,6 +4,7 @@ mod server;
 mod task;
 
 use std::{
+    collections::HashSet,
     io,
     ops::{Deref, DerefMut},
     sync::Arc,
@@ -16,9 +17,13 @@ use package::Package;
 pub use server::run_server;
 use thiserror::Error;
 use tokio::select;
+use tracing::debug;
 use turbo_trace::TraceError;
 use turbopath::AbsoluteSystemPathBuf;
-use turborepo_repository::{change_mapper::AllPackageChangeReason, package_graph::PackageName};
+use turborepo_repository::{
+    change_mapper::AllPackageChangeReason,
+    package_graph::{PackageName, PackageNode},
+};
 
 use crate::{
     get_version,
@@ -575,6 +580,42 @@ impl RepositoryQuery {
             .collect::<Result<Array<_>, _>>()?;
         packages.sort_by(|a, b| a.get_name().cmp(b.get_name()));
 
+        Ok(packages)
+    }
+
+    async fn dependant_packages(
+        &self,
+        key: String,
+        version: String,
+    ) -> Result<Array<Package>, Error> {
+        // find the packages
+        let external_pkg = turborepo_lockfiles::Package { key, version };
+        let packages_that_depend = self
+            .run
+            .pkg_dep_graph()
+            .packages()
+            .filter_map(|(pkg, info)| {
+                let deps = info.transitive_dependencies.as_ref()?;
+                debug!("we have deps");
+                deps.contains(&external_pkg).then_some(pkg)
+            })
+            .flat_map(|pkg| {
+                let mut deps = self
+                    .run
+                    .pkg_dep_graph()
+                    .ancestors(&PackageNode::Workspace(pkg.clone()))
+                    .into_iter()
+                    .map(|package| package.as_package_name().clone())
+                    .collect::<Vec<_>>();
+                deps.push(pkg.clone());
+                deps
+            })
+            .collect::<HashSet<_>>();
+        let mut packages = packages_that_depend
+            .into_iter()
+            .map(|pkg| Package::new(self.run.clone(), pkg))
+            .collect::<Result<Array<_>, _>>()?;
+        packages.sort_by(|a, b| a.get_name().cmp(b.get_name()));
         Ok(packages)
     }
 }
