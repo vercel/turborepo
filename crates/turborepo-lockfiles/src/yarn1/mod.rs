@@ -127,6 +127,13 @@ impl Lockfile for Yarn1Lockfile {
         let entry = self.inner.get(key)?;
         Some(entry.version.clone())
     }
+
+    fn human_name(&self, package: &crate::Package) -> Option<String> {
+        let entry = self.inner.get(&package.key)?;
+        let name = entry.name.as_deref()?;
+        let version = &entry.version;
+        Some(format!("{name}@{version}"))
+    }
 }
 
 pub fn yarn_subgraph(contents: &[u8], packages: &[String]) -> Result<Vec<u8>, crate::Error> {

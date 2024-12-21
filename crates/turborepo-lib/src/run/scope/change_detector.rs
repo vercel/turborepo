@@ -5,7 +5,7 @@ use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 use turborepo_repository::{
     change_mapper::{
         AllPackageChangeReason, ChangeMapper, DefaultPackageChangeMapper, Error,
-        GlobalDepsPackageChangeMapper, LockfileChange, PackageChanges, PackageInclusionReason,
+        GlobalDepsPackageChangeMapper, PackageChanges, PackageInclusionReason,
     },
     package_graph::{PackageGraph, PackageName},
 };
@@ -53,12 +53,12 @@ impl<'a> ScopeChangeDetector<'a> {
 
     /// Gets the lockfile content from SCM if it has changed.
     /// Does *not* error if cannot get content, instead just
-    /// returns an empty lockfile change
+    /// returns a Some(None)
     fn get_lockfile_contents(
         &self,
         from_ref: Option<&str>,
         changed_files: &HashSet<AnchoredSystemPathBuf>,
-    ) -> Option<LockfileChange> {
+    ) -> Option<Option<Vec<u8>>> {
         let lockfile_path = self
             .pkg_graph
             .package_manager()
@@ -79,10 +79,10 @@ impl<'a> ScopeChangeDetector<'a> {
             .lockfile_path(self.turbo_root);
 
         let Ok(content) = self.scm.previous_content(from_ref, &lockfile_path) else {
-            return Some(LockfileChange::Empty);
+            return Some(None);
         };
 
-        Some(LockfileChange::WithContent(content))
+        Some(Some(content))
     }
 }
 

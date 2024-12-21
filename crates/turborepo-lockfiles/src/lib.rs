@@ -65,6 +65,12 @@ pub trait Lockfile: Send + Sync + Any + std::fmt::Debug {
 
     /// Return any turbo version found in the lockfile
     fn turbo_version(&self) -> Option<String>;
+
+    /// A human friendly version of a lockfile key.
+    /// Usually of the form `package@version`, but version might include
+    /// additional information to convey difference from other packages in
+    /// the lockfile e.g. differing peer dependencies.
+    fn human_name(&self, package: &Package) -> Option<String>;
 }
 
 /// Takes a lockfile, and a map of workspace directory paths -> (package name,
