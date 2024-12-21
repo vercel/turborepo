@@ -1,0 +1,22 @@
+[package]
+name = "turborepo-db"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+async-graphql = "7.0.7"
+camino = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { version = "0.8.1", features = ["runtime-tokio", "sqlite"] }
+tempfile = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+turbopath = { workspace = true }
+turborepo-api-client = { workspace = true }
+uuid = { workspace = true, features = ["v4"] }
+
+[dev-dependencies]
+anyhow = { workspace = true }
+
+[lints]
+workspace = true
