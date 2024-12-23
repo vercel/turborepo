@@ -152,6 +152,13 @@ impl Lockfile for NpmLockfile {
         let turbo_entry = self.packages.get("node_modules/turbo")?;
         turbo_entry.version.clone()
     }
+
+    fn human_name(&self, package: &Package) -> Option<String> {
+        let npm_package = self.packages.get(&package.key)?;
+        let version = npm_package.version.as_deref()?;
+        let name = package.key.split("node_modules/").last()?;
+        Some(format!("{name}@{version}"))
+    }
 }
 
 impl NpmLockfile {
