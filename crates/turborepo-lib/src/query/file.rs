@@ -166,12 +166,12 @@ pub enum ImportType {
     Values,
 }
 
-impl From<ImportType> for turbo_trace::ImportType {
+impl From<ImportType> for turbo_trace::ImportTraceType {
     fn from(import_type: ImportType) -> Self {
         match import_type {
-            ImportType::All => turbo_trace::ImportType::All,
-            ImportType::Types => turbo_trace::ImportType::Types,
-            ImportType::Values => turbo_trace::ImportType::Values,
+            ImportType::All => turbo_trace::ImportTraceType::All,
+            ImportType::Types => turbo_trace::ImportTraceType::Types,
+            ImportType::Values => turbo_trace::ImportTraceType::Values,
         }
     }
 }
