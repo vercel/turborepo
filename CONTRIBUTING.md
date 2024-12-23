@@ -26,6 +26,7 @@ You will need to have these dependences installed on your machine to work on thi
 - [Rust](https://www.rust-lang.org/tools/install) ([Repository toolchain](https://github.com/vercel/turborepo/blob/main/rust-toolchain.toml))
 - [NodeJS](https://nodejs.org/en) v20
 - [pnpm](https://pnpm.io/) v8
+- [capnp](https://capnproto.org)
 
 ### Optional dependencies
 
