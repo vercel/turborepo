@@ -2,7 +2,6 @@ mod command;
 mod error;
 mod exec;
 mod output;
-
 use std::{
     borrow::Cow,
     collections::HashSet,
@@ -23,10 +22,7 @@ use tracing::{debug, error, warn, Span};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath};
 use turborepo_ci::{Vendor, VendorBehavior};
 use turborepo_env::{platform::PlatformEnv, EnvironmentVariableMap};
-use turborepo_repository::{
-    package_graph::{PackageGraph, PackageName, ROOT_PKG_NAME},
-    package_manager::PackageManager,
-};
+use turborepo_repository::package_graph::{PackageGraph, PackageName, ROOT_PKG_NAME};
 use turborepo_telemetry::events::{
     generic::GenericEventBuilder, task::PackageTaskEventBuilder, EventBuilder, TrackedErrors,
 };
@@ -82,9 +78,8 @@ pub enum Error {
     #[error(
         "Your `package.json` script looks like it invokes a Root Task ({task_name}), creating a \
          loop of `turbo` invocations. You likely have misconfigured the strategy for your scripts \
-         and tasks or your package manager's Workspace structure."
+         and tasks or your package manager's Workspace structure.\n\nMore information: https://test.com"
     )]
-    #[help("https://TODO.com")]
     RecursiveTurbo {
         task_name: String,
         command: String,
