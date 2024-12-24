@@ -2,7 +2,6 @@ mod command;
 mod error;
 mod exec;
 mod output;
-
 use std::{
     borrow::Cow,
     collections::HashSet,
@@ -77,12 +76,14 @@ pub enum Error {
         task_id: TaskId<'static>,
     },
     #[error(
-        "root task {task_name} ({command}) looks like it invokes turbo and might cause a loop"
+        "Your `package.json` script looks like it invokes a Root Task ({task_name}), creating a \
+         loop of `turbo` invocations. You likely have misconfigured the strategy for your scripts \
+         and tasks or your package manager's Workspace structure.\n\nMore information: https://test.com"
     )]
     RecursiveTurbo {
         task_name: String,
         command: String,
-        #[label("task found here")]
+        #[label("This script calls `turbo`, which calls the script, which calls `turbo`...")]
         span: Option<SourceSpan>,
         #[source_code]
         text: NamedSource,
@@ -215,6 +216,7 @@ impl<'a> Visitor<'a> {
                 Some(cmd) if info.package() == ROOT_PKG_NAME && turbo_regex().is_match(cmd) => {
                     package_task_event.track_error(TrackedErrors::RecursiveError);
                     let (span, text) = cmd.span_and_text("package.json");
+
                     return Err(Error::RecursiveTurbo {
                         task_name: info.to_string(),
                         command: cmd.to_string(),
