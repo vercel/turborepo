@@ -357,7 +357,6 @@ impl<'a> Visitor<'a> {
 
     /// Finishes visiting the tasks, creates the run summary, and either
     /// prints, saves, or sends it to spaces.
-
     #[allow(clippy::too_many_arguments)]
     #[tracing::instrument(skip(
         self,

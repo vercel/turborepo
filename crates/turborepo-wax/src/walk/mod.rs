@@ -111,7 +111,8 @@ where
     // `AsRef<TreeEntry>` or       similar. This does not require dynamic
     // dispatch, but places more restrictive       constraints on entry types.
     // Revisit this.
-    type Substituent<'a> = &'a dyn Entry
+    type Substituent<'a>
+        = &'a dyn Entry
     where
         Self: 'a;
 

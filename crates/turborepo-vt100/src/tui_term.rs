@@ -16,7 +16,7 @@ impl tui_term::widget::Screen for crate::Screen {
     }
 }
 
-impl<'a> tui_term::widget::Screen for crate::EntireScreen<'a> {
+impl tui_term::widget::Screen for crate::EntireScreen<'_> {
     type C = crate::Cell;
 
     fn cell(&self, row: u16, col: u16) -> Option<&Self::C> {

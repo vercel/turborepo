@@ -41,7 +41,7 @@ impl SCMResource {
     }
 }
 
-impl<'a> Deref for SCMPermit<'a> {
+impl Deref for SCMPermit<'_> {
     type Target = SCM;
 
     fn deref(&self) -> &Self::Target {
