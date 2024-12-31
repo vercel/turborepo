@@ -10,6 +10,7 @@ use std::{
 };
 
 use console::{Style, StyledObject};
+use convert_case::{Case, Casing};
 use error::{TaskError, TaskWarning};
 use exec::ExecContextFactory;
 use futures::{stream::FuturesUnordered, StreamExt};
@@ -22,6 +23,7 @@ use tracing::{debug, error, warn, Span};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath};
 use turborepo_ci::{Vendor, VendorBehavior};
 use turborepo_env::{platform::PlatformEnv, EnvironmentVariableMap};
+use turborepo_errors::TURBO_SITE;
 use turborepo_repository::package_graph::{PackageGraph, PackageName, ROOT_PKG_NAME};
 use turborepo_telemetry::events::{
     generic::GenericEventBuilder, task::PackageTaskEventBuilder, EventBuilder, TrackedErrors,
@@ -78,7 +80,14 @@ pub enum Error {
     #[error(
         "Your `package.json` script looks like it invokes a Root Task ({task_name}), creating a \
          loop of `turbo` invocations. You likely have misconfigured the strategy for your scripts \
-         and tasks or your package manager's Workspace structure.\n\nMore information: https://test.com"
+         and tasks or your package manager's Workspace structure."
+    )]
+    #[diagnostic(
+        code(recursive_turbo_invocations),
+        url(
+            "{}/messages/{}",
+            TURBO_SITE, self.code().unwrap().to_string().to_case(Case::Kebab)
+        )
     )]
     RecursiveTurbo {
         task_name: String,
