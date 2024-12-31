@@ -144,6 +144,16 @@ There are many open-source Turborepos out in the community that you can test wit
 
 ## Debugging tips
 
+### Links in error messages
+
+Many of Turborepo's error messages include links to information or documentation to help end users.
+
+The base URL for the links can be set to a value of your choosing by providing a `TURBO_SITE` environment variable at compilation time.
+
+```bash
+TURBO_SITE="http://localhost:3000" cargo build
+```
+
 ### Verbose logging
 
 Verbose logging can be enabled by using the `-v`, `-vv`, or `-vvv` flag on your `turbo` command, depending on the level of logging you're looking for.
