@@ -8,7 +8,7 @@ const _has = (key: string, target: object): boolean =>
   Reflect.hasMetadata(key, target);
 
 export const reflectFactory = <Value = unknown, Target extends object = object>(
-  key: string
+  key: string,
 ) => ({
   get: (target: Target, defaultValue?: Value) =>
     _get<Value>(key, target) ?? defaultValue,

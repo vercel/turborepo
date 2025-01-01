@@ -14,7 +14,7 @@ const ProxyForDatabaseInitialize = <T extends object>(obj: T): T => {
           const result = fn.apply(self, args);
           if (!AppDataSource.isInitialized && result instanceof Promise)
             return result.catch(() =>
-              AppDataSource.initialize().then(() => fn.apply(self, args))
+              AppDataSource.initialize().then(() => fn.apply(self, args)),
             );
           return result;
         },
@@ -33,7 +33,7 @@ export const inject = <T>(Target: Class<T>): T => {
   const dependencise: Class[] =
     Reflect.getMetadata("design:paramtypes", Target) || [];
   const args: unknown[] = dependencise.map(
-    (C: Class) => Container.get(C) ?? inject(C)
+    (C: Class) => Container.get(C) ?? inject(C),
   );
   const Component = new Target(...args);
   Container.set(Target, typeof use == "function" ? use(Component) : Component);
