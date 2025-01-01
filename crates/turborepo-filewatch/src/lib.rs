@@ -65,6 +65,7 @@ pub mod globwatcher;
 pub mod hash_watcher;
 mod optional_watch;
 pub mod package_watcher;
+mod scm_resource;
 
 pub use optional_watch::OptionalWatch;
 
@@ -271,8 +272,18 @@ async fn watch_events(
                             if event.kind == EventKind::Create(CreateKind::Folder) {
                                 for new_path in &event.paths {
                                     if let Err(err) = manually_add_recursive_watches(new_path, &mut watcher, Some(&broadcast_sender)) {
-                                        warn!("encountered error watching filesystem {}", err);
-                                        break 'outer;
+                                        match err {
+                                            WatchError::WalkDir(err) => {
+                                                // Likely the path no longer exists
+                                                debug!("encountered error watching filesystem {}", err);
+                                                continue;
+                                            },
+                                            _ => {
+                                                warn!("encountered error watching filesystem {}", err);
+                                                break 'outer;
+                                            }
+
+                                        }
                                     }
                                 }
                             }

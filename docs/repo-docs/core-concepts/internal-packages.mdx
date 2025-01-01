@@ -95,8 +95,9 @@ There are a few important things to notice in this `package.json`:
 #### Limitations and tradeoffs
 
 - **Only applicable when consumers do transpiling**: This strategy can only be used when the package is going to be used in tooling that uses a bundler or natively understands TypeScript. The consumer's bundler is responsible for transpiling the TypeScript packages to JavaScript. If your builds or other usages of the package are not able to consume TypeScript, you will need to move to the [Compiled Packages](#compiled-packages) strategy.
-- **No TypeScript `paths`**: A library that is being transpiled by its consumer cannot use the `compilerOptions.paths` configuration because TypeScript assumes that source code is being transpiled in the package where it is written. If you're using Typescript 5.4 or later, we recommend [using Node.js subpath imports](https://devblogs.microsoft.com/typescript/announcing-typescript-5-4/#auto-import-support-for-subpath-imports).
+- **No TypeScript `paths`**: A library that is being transpiled by its consumer cannot use the `compilerOptions.paths` configuration because TypeScript assumes that source code is being transpiled in the package where it is written. If you're using TypeScript 5.4 or later, we recommend [using Node.js subpath imports](https://devblogs.microsoft.com/typescript/announcing-typescript-5-4/#auto-import-support-for-subpath-imports). To learn how, visit [our TypeScript page](/repo/docs/guides/tools/typescript#use-nodejs-subpath-imports-instead-of-typescript-compiler-paths).
 - **Turborepo cannot cache a build for a Just-in-Time Package**: Because the package doesn't have its own `build` step, it can't be cached by Turborepo. This tradeoff may make sense for you if you want to keep configuration to a minimum and are okay with the build times for your applications.
+- **Errors in internal dependencies will be reported**: When directly exporting TypeScript, type-checking in a dependent package will fail if code in an internal dependency has TypeScript errors. You may find this confusing or problematic in some situations.
 
 ### Compiled Packages
 
@@ -126,7 +127,7 @@ Compiling your library produces compiled JavaScript outputs into a directory (`d
 #### Limitations and tradeoffs
 
 - **Using the TypeScript compiler**: The majority of Compiled Packages should use `tsc`. Since the package is highly likely to be consumed by an application that is using a bundler, the application's bundler will prepare the library package for distribution in the application's final bundles, handling polyfilling, downleveling, and other concerns. A bundler should only be used if you have a specific use case that requires it, like bundling static assets into your package's outputs.
-- **More configuration**: Compiled Packages require deeper knowledge and configuration to create build outputs. There are [many configurations for the TypeScript compiler](https://www.typescriptlang.org/docs/handbook/compiler-options.html#compiler-options) that can be difficult to manage and understand. You can find some of our recommendations in [our dedicated TypeScript guide](/repo/docs/guides/tools/typescript).
+- **More configuration**: Compiled Packages require deeper knowledge and configuration to create build outputs. There are [many configurations for the TypeScript compiler](https://www.typescriptlang.org/docs/handbook/compiler-options.html#compiler-options) that can be difficult to manage and understand, and further configuration to optimize for bundlers, like [the `sideEffects` key in `package.json`](https://webpack.js.org/guides/tree-shaking/#mark-the-file-as-side-effect-free). You can find some of our recommendations in [our dedicated TypeScript guide](/repo/docs/guides/tools/typescript).
 
 ### Publishable packages
 

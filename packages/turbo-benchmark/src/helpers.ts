@@ -3,7 +3,8 @@ import fs from "node:fs";
 import path from "node:path";
 
 export const REPO_ROOT = "large-monorepo";
-export const REPO_ORIGIN = "https://github.com/gsoltis/large-monorepo.git";
+export const REPO_ORIGIN =
+  "https://github.com/curated-tests/large-monorepo.git";
 export const REPO_PATH = path.join(process.cwd(), REPO_ROOT);
 export const DEFAULT_EXEC_OPTS = { stdio: "ignore" as const, cwd: REPO_PATH };
 
@@ -34,8 +35,8 @@ export function setup(): void {
   }
 
   // Run install so we aren't benchmarking node_modules
-  console.log("running yarn install");
-  cp.execSync("yarn install", DEFAULT_EXEC_OPTS);
+  console.log("running npm install");
+  cp.execSync("npm install", DEFAULT_EXEC_OPTS);
 }
 
 export function getCommitDetails(): {
@@ -78,6 +79,6 @@ export function getTTFTData(filePath: string, runID: string): TTFTData {
   const commitDetails = getCommitDetails();
   data.commitSha = commitDetails.commitSha;
   data.commitTimestamp = commitDetails.commitTimestamp;
-  data.url = `https://github.com/vercel/turbo/actions/runs/${runID}`;
+  data.url = `https://github.com/vercel/turborepo/actions/runs/${runID}`;
   return data;
 }

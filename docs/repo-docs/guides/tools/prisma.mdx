@@ -18,7 +18,7 @@ This guide shows you how to:
 2. Handle migration and code generation scripts
 3. Ensure that they're always run whenever `dev` or `build` is run
 
-If you've already got Prisma set up in your database, you can skip to [step 4](#4-setting-up-the-scripts).
+If you've already got Prisma set up in your database, you can skip to [step 4](#create-scripts).
 
 <Steps>
 <Step>
@@ -50,6 +50,7 @@ Run your package manager's install step to install the new dependencies.
 
 </Step>
 <Step>
+
 ## Run `prisma init`
 
 `cd` into `packages/database`:
@@ -72,6 +73,7 @@ Once you've got a database connected and have a few data tables to work with, yo
 
 </Step>
 <Step>
+
 ## Create scripts
 
 Let's add some scripts to the `package.json` inside `packages/database`:
@@ -111,6 +113,7 @@ Now, run `turbo db:push db:generate` from the root of our repository to automati
 </Step>
 
 <Step>
+
 ## Exporting your client
 
 Next, export the `@prisma/client` so it can used in your applications. Let's add an `index.ts` file to `packages/database`:

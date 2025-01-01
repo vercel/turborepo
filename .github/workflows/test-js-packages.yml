@@ -3,6 +3,13 @@ on:
   push:
     branches: [main]
   pull_request:
+    paths:
+      - package.json
+      - pnpm-workspace.yaml
+      - pnpm-lock.yaml
+      - "packages/**"
+      - ".github/actions/**"
+      - ".github/workflows/test-js-packages.yml"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
@@ -14,48 +21,9 @@ permissions:
   pull-requests: read
 
 jobs:
-  determine_jobs:
-    name: Determine jobs to run
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-
-      - name: CI related changes
-        id: ci
-        uses: technote-space/get-diff-action@v6
-        with:
-          PATTERNS: |
-            .github/actions/**
-            .github/workflows/test-js-packages.yml
-
-      - name: /packages related changes
-        id: packages
-        uses: technote-space/get-diff-action@v6
-        with:
-          PATTERNS: |
-            packages/**
-
-      - name: Docs related changes
-        id: docs
-        uses: technote-space/get-diff-action@v6
-        with:
-          PATTERNS: |
-            docs/**
-
-    outputs:
-      ci: ${{ steps.ci.outputs.diff != ''}}
-      packages: ${{ steps.packages.outputs.diff != '' }}
-      docs: ${{ steps.docs.outputs.diff != '' }}
-
   js_packages:
-    name: JS Package Tests
+    name: "JS Package Tests (${{matrix.os.name}}, Node ${{matrix.node-version}})"
     timeout-minutes: 30
-    if: needs.determine_jobs.outputs.ci == 'true' || needs.determine_jobs.outputs.packages == 'true' || needs.determine_jobs.outputs.docs == 'true'
-    needs: [determine_jobs]
     runs-on: ${{ matrix.os.runner }}
     strategy:
       fail-fast: false
@@ -68,7 +36,10 @@ jobs:
               - "x64"
               - "metal"
           - name: macos
-            runner: macos-12
+            runner: macos-13
+        node-version:
+          - 18
+          - 20
     env:
       TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
       TURBO_TEAM: ${{ vars.TURBO_TEAM }}
@@ -83,16 +54,18 @@ jobs:
           echo "depth=$(( ${{ github.event.pull_request.commits || 1 }} + 1 ))" >> $GITHUB_OUTPUT
 
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: ${{ github.ref }}
           fetch-depth: ${{ steps.fetch-depth.outputs.depth  }}
 
-      - name: Setup Turborepo Environment
-        uses: ./.github/actions/setup-turborepo-environment
+      - name: "Setup Node"
+        uses: ./.github/actions/setup-node
         with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-          node-version: "20"
+          extra-flags: --no-optional
+          node-version: ${{ matrix.node-version }}
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
 
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
@@ -104,13 +77,14 @@ jobs:
         # changes, and we don't want to enable that beahvior for _all_ our JS packages.
         run: |
           TURBO_API= turbo run check-types test --filter="!turborepo-repository" --filter={./packages/*}...[${{ github.event.pull_request.base.sha || 'HEAD^1' }}] --color --env-mode=strict
+        env:
+          NODE_VERSION: ${{ matrix.node-version }}
 
   summary:
     name: Turborepo JS Test Summary
     runs-on: ubuntu-latest
     if: always()
     needs:
-      - determine_jobs
       - js_packages
     steps:
       - name: Compute info
@@ -129,7 +103,6 @@ jobs:
             fi
           }
 
-          subjob ${{needs.determine_jobs.result}}
           subjob ${{needs.js_packages.result}}
 
           if [ "$cancelled" = "true" ]; then

@@ -1,9 +1,12 @@
 mod walker;
 
-use std::fmt::Display;
+use std::{collections::HashSet, fmt::Display, hash::Hash};
 
 use itertools::Itertools;
-use petgraph::prelude::*;
+use petgraph::{
+    prelude::*,
+    visit::{depth_first_search, Reversed},
+};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -12,6 +15,31 @@ pub enum Error {
     CyclicDependencies(String),
     #[error("{0} depends on itself")]
     SelfDependency(String),
+}
+
+pub fn transitive_closure<N: Hash + Eq + PartialEq, I: IntoIterator<Item = NodeIndex>>(
+    graph: &Graph<N, ()>,
+    indices: I,
+    direction: petgraph::Direction,
+) -> HashSet<&N> {
+    let mut visited = HashSet::new();
+
+    let visitor = |event| {
+        if let petgraph::visit::DfsEvent::Discover(n, _) = event {
+            visited.insert(
+                graph
+                    .node_weight(n)
+                    .expect("node index found during dfs doesn't exist"),
+            );
+        }
+    };
+
+    match direction {
+        petgraph::Direction::Outgoing => depth_first_search(&graph, indices, visitor),
+        petgraph::Direction::Incoming => depth_first_search(Reversed(&graph), indices, visitor),
+    };
+
+    visited
 }
 
 pub fn validate_graph<G: Display>(graph: &Graph<G, ()>) -> Result<(), Error> {
@@ -42,3 +70,41 @@ pub fn validate_graph<G: Display>(graph: &Graph<G, ()>) -> Result<(), Error> {
 }
 
 pub use walker::{WalkMessage, Walker};
+
+#[cfg(test)]
+mod test {
+    use insta::assert_snapshot;
+    use petgraph::graph::Graph;
+
+    use super::*;
+
+    #[test]
+    fn test_cycle_err_message() {
+        /*
+         a -> b --> c -> d
+         |    |\____/    |
+         |     \_______/ |
+          \_____________/
+        */
+        let mut g = Graph::new();
+        let a = g.add_node("a");
+        let b = g.add_node("b");
+        let c = g.add_node("c");
+        let d = g.add_node("d");
+
+        g.add_edge(a, b, ());
+        g.add_edge(b, c, ());
+        g.add_edge(c, b, ());
+        g.add_edge(c, d, ());
+        g.add_edge(d, b, ());
+        g.add_edge(d, a, ());
+
+        let result = validate_graph(&g);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_snapshot!(err.to_string(), @r###"
+        cyclic dependency detected:
+        	d, c, b, a
+        "###);
+    }
+}

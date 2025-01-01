@@ -14,11 +14,11 @@ futures = { version = "0.3.26" }
 itertools = { workspace = true }
 nibble_vec = "0.1.0"
 notify = { workspace = true }
+num_cpus = { workspace = true }
 radix_trie = { workspace = true }
 thiserror = "1.0.38"
 tokio = { workspace = true, features = ["full", "time"] }
 tracing = "0.1.37"
-tracing-test = "0.2.4"
 turbopath = { workspace = true }
 turborepo-repository = { version = "0.1.0", path = "../turborepo-repository" }
 turborepo-scm = { workspace = true }
@@ -39,6 +39,7 @@ version = "0.2.4"
 git2 = { version = "0.16.1", default-features = false }
 tempfile = { workspace = true }
 tokio-scoped = "0.2.0"
+tracing-test = "0.2.4"
 
 [features]
 default = ["macos_fsevent"]

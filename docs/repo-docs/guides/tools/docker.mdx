@@ -96,7 +96,9 @@ First, we want to copy over only what we need to install the packages. When runn
   <Folder name="out" defaultOpen>
     <Folder name="json" defaultOpen>
       <Folder name="apps" defaultOpen>
-        <File name="package.json" />
+        <Folder name="api" defaultOpen>
+          <File name="package.json" />
+        </Folder>
       </Folder>
       <File name="package.json" />
     </Folder>
@@ -124,7 +126,13 @@ Splitting up **dependencies** and **source files** in this way lets us **only ru
 
 ### Example
 
-Our detailed [`with-docker` example](https://github.com/vercel/turbo/tree/main/examples/with-docker) goes into depth on how to use `prune` to its full potential. Here's the Dockerfile, copied over for convenience.
+Our detailed [`with-docker` example](https://github.com/vercel/turborepo/tree/main/examples/with-docker) goes into depth on how to use `prune` to its full potential. Here's the Dockerfile, copied over for convenience.
+
+Build the Dockerfile from the root of your monorepo:
+
+```bash title="Terminal"
+docker build -f apps/web/Dockerfile .
+```
 
 <Callout type="info">
   This Dockerfile is written for a [Next.js](https://nextjs.org/) app that is
@@ -156,14 +164,12 @@ RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
 # First install the dependencies (as they change less often)
-COPY .gitignore .gitignore
 COPY --from=builder /app/out/json/ .
-COPY --from=builder /app/out/yarn.lock ./yarn.lock
 RUN yarn install
 
 # Build the project
 COPY --from=builder /app/out/full/ .
-RUN yarn turbo run build --filter=web...
+RUN yarn turbo run build
 
 FROM base AS runner
 WORKDIR /app
@@ -172,9 +178,6 @@ WORKDIR /app
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 USER nextjs
-
-COPY --from=installer /app/apps/web/next.config.js .
-COPY --from=installer /app/apps/web/package.json .
 
 # Automatically leverage output traces to reduce image size
 # https://nextjs.org/docs/advanced-features/output-file-tracing
@@ -200,7 +203,7 @@ ENV TURBO_TEAM=$TURBO_TEAM
 ARG TURBO_TOKEN
 ENV TURBO_TOKEN=$TURBO_TOKEN
 
-RUN yarn turbo run build --filter=web...
+RUN yarn turbo run build
 ```
 
 `turbo` will now be able to hit your Remote Cache. To see a Turborepo cache hit for a non-cached Docker build image, run a command like this one from your project root:

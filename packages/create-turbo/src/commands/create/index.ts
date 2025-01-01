@@ -1,5 +1,5 @@
 import path from "node:path";
-import chalk from "chalk";
+import { bold, red, cyan, green } from "picocolors";
 import type { Project } from "@turbo/workspaces";
 import {
   getWorkspaceDetails,
@@ -39,18 +39,18 @@ function handleErrors(
   telemetry?.trackCommandStatus({ command: "create", status: "error" });
   // handle errors from ../../transforms
   if (err instanceof TransformError) {
-    error(chalk.bold(err.transform), chalk.red(err.message));
+    error(bold(err.transform), red(err.message));
     if (err.fatal) {
       process.exit(1);
     }
     // handle errors from @turbo/workspaces
   } else if (err instanceof ConvertError && err.type !== "unknown") {
-    error(chalk.red(err.message));
+    error(red(err.message));
     process.exit(1);
     // handle download errors from @turbo/utils
   } else if (err instanceof DownloadError) {
-    error(chalk.red("Unable to download template from Github"));
-    error(chalk.red(err.message));
+    error(red("Unable to download template from GitHub"));
+    error(red(err.message));
     process.exit(1);
   }
 
@@ -77,9 +77,6 @@ export async function create(
   trackOptions(opts);
 
   const { packageManager, skipInstall, skipTransforms } = opts;
-  logger.log(chalk.bold(turboGradient(`\n>>> TURBOREPO\n`)));
-  info(`Welcome to Turborepo! Let's get you set up with a new codebase.`);
-  logger.log();
 
   const [online, availablePackageManagers] = await Promise.all([
     isOnline(),
@@ -177,30 +174,43 @@ export async function create(
         }
       : selectedPackageManagerDetails;
 
-  info("Created a new Turborepo with the following:");
+  info("Creating a new Turborepo with:");
   logger.log();
   if (project.workspaceData.workspaces.length > 0) {
     const workspacesForDisplay = project.workspaceData.workspaces
-      .map((w) => ({
-        group: path.relative(root, w.paths.root).split(path.sep)[0] || "",
-        title: path.relative(root, w.paths.root),
-        description: w.description,
-      }))
+      .map((w) => {
+        const assignGroupTitle = (relPath: string): string => {
+          if (relPath === "apps") {
+            return "Application packages";
+          }
+
+          if (relPath === "packages") {
+            return "Library packages";
+          }
+
+          return relPath;
+        };
+        return {
+          group: assignGroupTitle(
+            path.relative(root, w.paths.root).split(path.sep)[0] || ""
+          ),
+          title: path.relative(root, w.paths.root),
+          description: w.description,
+        };
+      })
       .sort((a, b) => a.title.localeCompare(b.title));
 
     let lastGroup: string | undefined;
     workspacesForDisplay.forEach(({ group, title, description }, idx) => {
       if (idx === 0 || group !== lastGroup) {
-        logger.log(chalk.cyan(group));
+        logger.log(cyan(group));
       }
-      logger.log(
-        ` - ${chalk.bold(title)}${description ? `: ${description}` : ""}`
-      );
+      logger.log(` - ${bold(title)}${description ? `: ${description}` : ""}`);
       lastGroup = group;
     });
   } else {
-    logger.log(chalk.cyan("apps"));
-    logger.log(` - ${chalk.bold(projectName)}`);
+    logger.log(cyan("apps"));
+    logger.log(` - ${bold(projectName)}`);
   }
 
   // run install
@@ -220,9 +230,6 @@ export async function create(
       );
       logger.log();
     } else if (projectPackageManager.version) {
-      logger.log("Installing packages. This might take a couple of minutes.");
-      logger.log();
-
       const loader = turboLoader("Installing dependencies...").start();
       await install({
         project,
@@ -239,47 +246,44 @@ export async function create(
 
   if (projectDirIsCurrentDir) {
     logger.log(
-      `${chalk.bold(
-        turboGradient(">>> Success!")
-      )} Your new Turborepo is ready.`
+      `${bold(turboGradient(">>> Success!"))} Your new Turborepo is ready.`
     );
   } else {
     logger.log(
-      `${chalk.bold(
-        turboGradient(">>> Success!")
-      )} Created a new Turborepo at "${relativeProjectDir}".`
+      `${bold(turboGradient(">>> Success!"))} Created your Turborepo at ${green(
+        relativeProjectDir
+      )}`
     );
   }
 
   // get the package manager details so we display the right commands to the user in log messages
   const packageManagerMeta = getPackageManagerMeta(projectPackageManager);
   if (packageManagerMeta && hasPackageJson) {
-    logger.log(
-      `Inside ${
-        projectDirIsCurrentDir ? "this" : "that"
-      } directory, you can run several commands:`
-    );
     logger.log();
+    logger.log(bold("To get started:"));
+    if (!projectDirIsCurrentDir) {
+      logger.log(
+        `- Change to the directory: ${cyan(`cd ${relativeProjectDir}`)}`
+      );
+    }
+    logger.log(
+      `- Enable Remote Caching (recommended): ${cyan(
+        `${packageManagerMeta.executable} turbo login`
+      )}`
+    );
+    logger.log(`   - Learn more: https://turbo.build/repo/remote-cache`);
+    logger.log();
+    logger.log("- Run commands with Turborepo:");
     availableScripts
       .filter((script) => SCRIPTS_TO_DISPLAY[script])
       .forEach((script) => {
-        logger.log(chalk.cyan(`  ${packageManagerMeta.command} run ${script}`));
-        logger.log(`     ${SCRIPTS_TO_DISPLAY[script]} all apps and packages`);
-        logger.log();
+        logger.log(
+          `   - ${cyan(`${packageManagerMeta.command} run ${script}`)}: ${
+            SCRIPTS_TO_DISPLAY[script]
+          } all apps and packages`
+        );
       });
-    logger.log(`Turborepo will cache locally by default. For an additional`);
-    logger.log(`speed boost, enable Remote Caching with Vercel by`);
-    logger.log(`entering the following command:`);
-    logger.log();
-    logger.log(chalk.cyan(`  ${packageManagerMeta.executable} turbo login`));
-    logger.log();
-    logger.log(`We suggest that you begin by typing:`);
-    logger.log();
-    if (!projectDirIsCurrentDir) {
-      logger.log(`  ${chalk.cyan("cd")} ${relativeProjectDir}`);
-    }
-    logger.log(chalk.cyan(`  ${packageManagerMeta.executable} turbo login`));
-    logger.log();
+    logger.log("- Run a command twice to hit cache");
   }
   opts.telemetry?.trackCommandStatus({ command: "create", status: "end" });
 }

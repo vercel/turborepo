@@ -10,9 +10,17 @@ workspace = true
 [dependencies]
 anyhow = { workspace = true }
 async-once-cell = "0.5.3"
+
+biome_deserialize = { workspace = true }
+biome_deserialize_macros = { workspace = true }
+biome_diagnostics = { workspace = true }
+biome_json_parser = { workspace = true }
+biome_json_syntax = { workspace = true }
+
 globwalk = { version = "0.1.0", path = "../turborepo-globwalk" }
 itertools = { workspace = true }
 lazy-regex = "2.5.0"
+miette = { workspace = true }
 node-semver = "2.1.0"
 petgraph = { workspace = true }
 regex = { workspace = true }
@@ -24,9 +32,11 @@ thiserror = "1.0.38"
 tokio-stream = "0.1.14"
 tokio.workspace = true
 tracing.workspace = true
-turbopath = { workspace = true }
+turbopath = { workspace = true, features = ["biome"] }
+turborepo-errors = { workspace = true }
 turborepo-graph-utils = { path = "../turborepo-graph-utils" }
 turborepo-lockfiles = { workspace = true }
+turborepo-unescape = { workspace = true }
 wax = { workspace = true }
 which = { workspace = true }
 

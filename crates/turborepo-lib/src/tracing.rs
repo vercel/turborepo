@@ -22,7 +22,7 @@ use tracing_subscriber::{
     reload::{self, Handle},
     EnvFilter, Layer, Registry,
 };
-use turborepo_ui::UI;
+use turborepo_ui::ColorConfig;
 
 // a lot of types to make sure we record the right relationships
 
@@ -93,7 +93,7 @@ impl TurboSubscriber {
     /// - If the `TURBO_LOG_VERBOSITY` env var is set, it will be used to set
     ///   the verbosity level. Otherwise, the default is `WARN`. See the
     ///   documentation on the RUST_LOG env var for syntax.
-    /// - If the verbosity argument (usually detemined by a flag) is provided,
+    /// - If the verbosity argument (usually determined by a flag) is provided,
     ///   it overrides the default global log level. This means it overrides the
     ///   `TURBO_LOG_VERBOSITY` global setting, but not per-module settings.
     ///
@@ -102,7 +102,7 @@ impl TurboSubscriber {
     ///   formatter.
     /// - `enable_chrome_tracing` enables logging to a file, using the chrome
     ///   tracing formatter.
-    pub fn new_with_verbosity(verbosity: usize, ui: &UI) -> Self {
+    pub fn new_with_verbosity(verbosity: usize, color_config: &ColorConfig) -> Self {
         let level_override = match verbosity {
             0 => None,
             1 => Some(LevelFilter::INFO),
@@ -128,7 +128,9 @@ impl TurboSubscriber {
 
         let stderr = fmt::layer()
             .with_writer(StdErrWrapper {})
-            .event_format(TurboFormatter::new_with_ansi(!ui.should_strip_ansi))
+            .event_format(TurboFormatter::new_with_ansi(
+                !color_config.should_strip_ansi,
+            ))
             .with_filter(env_filter(LevelFilter::WARN));
 
         // we set this layer to None to start with, effectively disabling it

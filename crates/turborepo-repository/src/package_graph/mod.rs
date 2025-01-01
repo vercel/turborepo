@@ -4,8 +4,8 @@ use std::{
 };
 
 use itertools::Itertools;
-use petgraph::visit::{depth_first_search, Reversed};
 use serde::Serialize;
+use tracing::debug;
 use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
 };
@@ -19,7 +19,6 @@ use crate::{
 
 pub mod builder;
 mod dep_splitter;
-mod npmrc;
 
 pub use builder::{Error, PackageGraphBuilder};
 
@@ -36,7 +35,9 @@ pub struct PackageGraph {
     repo_root: AbsoluteSystemPathBuf,
 }
 
-/// The WorkspacePackage follows the Vercel glossary of terms where "Workspace"
+/// The WorkspacePackage.
+///
+/// It follows the Vercel glossary of terms where "Workspace"
 /// is the collection of packages and "Package" is a single package within the
 /// workspace. https://vercel.com/docs/vercel-platform/glossary
 /// There are other structs in this module that have "Workspace" in the name,
@@ -107,6 +108,15 @@ impl Serialize for PackageName {
     }
 }
 
+impl PackageName {
+    pub fn as_str(&self) -> &str {
+        match self {
+            PackageName::Root => ROOT_PKG_NAME,
+            PackageName::Other(name) => name,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
 pub enum PackageNode {
     Root,
@@ -132,11 +142,17 @@ impl PackageGraph {
 
     #[tracing::instrument(skip(self))]
     pub fn validate(&self) -> Result<(), Error> {
-        for info in self.packages.values() {
+        for (package_name, info) in self.packages.iter() {
+            if matches!(package_name, PackageName::Root) {
+                continue;
+            }
             let name = info.package_json.name.as_deref();
-            if matches!(name, None | Some("")) {
-                let package_json_path = self.repo_root.resolve(info.package_json_path());
-                return Err(Error::PackageJsonMissingName(package_json_path));
+            match name {
+                Some("") | None => {
+                    let package_json_path = self.repo_root.resolve(info.package_json_path());
+                    return Err(Error::PackageJsonMissingName(package_json_path));
+                }
+                Some(_) => continue,
             }
         }
         graph::validate_graph(&self.graph).map_err(Error::InvalidPackageGraph)?;
@@ -258,8 +274,11 @@ impl PackageGraph {
     /// dependencies(a) = {b, c}
     #[allow(dead_code)]
     pub fn dependencies<'a>(&'a self, node: &PackageNode) -> HashSet<&'a PackageNode> {
-        let mut dependencies =
-            self.transitive_closure_inner(Some(node), petgraph::Direction::Outgoing);
+        let mut dependencies = turborepo_graph_utils::transitive_closure(
+            &self.graph,
+            self.node_lookup.get(node).cloned(),
+            petgraph::Direction::Outgoing,
+        );
         // Add in all root dependencies as they're implied dependencies for every
         // package in the graph.
         dependencies.extend(self.root_internal_dependencies());
@@ -280,7 +299,11 @@ impl PackageGraph {
         let mut dependents = if self.root_internal_dependencies().contains(node) {
             return self.graph.node_weights().collect();
         } else {
-            self.transitive_closure_inner(Some(node), petgraph::Direction::Incoming)
+            turborepo_graph_utils::transitive_closure(
+                &self.graph,
+                self.node_lookup.get(node).cloned(),
+                petgraph::Direction::Incoming,
+            )
         };
         dependents.remove(node);
         dependents
@@ -320,11 +343,48 @@ impl PackageGraph {
             .collect()
     }
 
+    /// Provides a path from the root package to package
+    ///
+    /// Currently only provides the shortest path as calculating all paths can
+    /// be O(n!)
+    pub fn root_internal_dependency_explanation(
+        &self,
+        package: &WorkspacePackage,
+    ) -> Option<String> {
+        let from = *self
+            .node_lookup
+            .get(&PackageNode::Workspace(PackageName::Root))
+            .expect("all graphs should have a root");
+        let to = *self
+            .node_lookup
+            .get(&PackageNode::Workspace(package.name.clone()))?;
+        let (_cost, path) =
+            petgraph::algo::astar(&self.graph, from, |node| node == to, |_| 1, |_| 1)?;
+        Some(
+            self.path_display(&path)
+                .expect("path should only contain valid node indices"),
+        )
+    }
+
+    fn path_display(&self, path: &[petgraph::graph::NodeIndex]) -> Option<String> {
+        let mut package_names = Vec::with_capacity(path.len());
+        for index in path {
+            let node = self.graph.node_weight(*index)?;
+            let name = node.as_package_name().to_string();
+            package_names.push(name);
+        }
+
+        Some(package_names.join(" -> "))
+    }
+
     fn root_internal_dependencies(&self) -> HashSet<&PackageNode> {
         // We cannot call self.dependencies(&PackageNode::Workspace(PackageName::Root))
         // as it will infinitely recurse.
-        let mut dependencies = self.transitive_closure_inner(
-            Some(&PackageNode::Workspace(PackageName::Root)),
+        let mut dependencies = turborepo_graph_utils::transitive_closure(
+            &self.graph,
+            self.node_lookup
+                .get(&PackageNode::Workspace(PackageName::Root))
+                .cloned(),
             petgraph::Direction::Outgoing,
         );
         dependencies.remove(&PackageNode::Workspace(PackageName::Root));
@@ -340,39 +400,13 @@ impl PackageGraph {
         &'a self,
         nodes: I,
     ) -> HashSet<&'a PackageNode> {
-        self.transitive_closure_inner(nodes, petgraph::Direction::Outgoing)
-    }
-
-    fn transitive_closure_inner<'a, 'b, I: IntoIterator<Item = &'b PackageNode>>(
-        &'a self,
-        nodes: I,
-        direction: petgraph::Direction,
-    ) -> HashSet<&'a PackageNode> {
-        let indices = nodes
-            .into_iter()
-            .filter_map(|node| self.node_lookup.get(node))
-            .copied();
-
-        let mut visited = HashSet::new();
-
-        let visitor = |event| {
-            if let petgraph::visit::DfsEvent::Discover(n, _) = event {
-                visited.insert(
-                    self.graph
-                        .node_weight(n)
-                        .expect("node index found during dfs doesn't exist"),
-                );
-            }
-        };
-
-        match direction {
-            petgraph::Direction::Outgoing => depth_first_search(&self.graph, indices, visitor),
-            petgraph::Direction::Incoming => {
-                depth_first_search(Reversed(&self.graph), indices, visitor)
-            }
-        };
-
-        visited
+        turborepo_graph_utils::transitive_closure(
+            &self.graph,
+            nodes
+                .into_iter()
+                .flat_map(|node| self.node_lookup.get(node).cloned()),
+            petgraph::Direction::Outgoing,
+        )
     }
 
     pub fn transitive_external_dependencies<'a, I: IntoIterator<Item = &'a PackageName>>(
@@ -424,9 +458,20 @@ impl PackageGraph {
         } else {
             self.packages
                 .iter()
-                .filter(|(_name, info)| {
-                    closures.get(info.package_path().to_unix().as_str())
-                        != info.transitive_dependencies.as_ref()
+                .filter(|(name, info)| {
+                    let previous_closure = closures.get(info.package_path().to_unix().as_str());
+                    let not_equal = previous_closure != info.transitive_dependencies.as_ref();
+                    if not_equal {
+                        if let (Some(prev), Some(curr)) =
+                            (previous_closure, info.transitive_dependencies.as_ref())
+                        {
+                            debug!(
+                                "package {name} has differing closure: {:?}",
+                                prev.symmetric_difference(curr)
+                            );
+                        }
+                    }
+                    not_equal
                 })
                 .map(|(name, info)| match name {
                     PackageName::Other(n) => {
@@ -861,5 +906,18 @@ mod test {
                 graph::Error::SelfDependency(_)
             ))
         );
+    }
+
+    #[tokio::test]
+    async fn test_does_not_require_name_for_root_package_json() {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        let pkg_graph = PackageGraph::builder(&root, PackageJson::from_value(json!({})).unwrap())
+            .with_package_discovery(MockDiscovery)
+            .build()
+            .await
+            .unwrap();
+
+        assert!(pkg_graph.validate().is_ok());
     }
 }

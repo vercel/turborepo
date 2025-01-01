@@ -77,7 +77,32 @@ Only root and b should be rebuilt since only the deps for b had a version bump
     "//",
     "b"
   ]
- 
+
+This should be annotated as a `ConservativeRootLockfileChanged` because the root package may pull from the workspace packages' dependencies (even though this is cursed)
+  $ ${TURBO} query "query { affectedPackages(base: \"HEAD~1\") { items { name reason { __typename } } } }" | jq
+   WARNING  query command is experimental and may change in the future
+  {
+    "data": {
+      "affectedPackages": {
+        "items": [
+          {
+            "name": "//",
+            "reason": {
+              "__typename": "ConservativeRootLockfileChanged"
+            }
+          },
+          {
+            "name": "b",
+            "reason": {
+              "__typename": "LockfileChanged"
+            }
+          }
+        ]
+      }
+    }
+  }
+
+
 Bump of root workspace invalidates all packages
   $ patch pnpm-lock.yaml turbo-bump.patch
   patching file pnpm-lock.yaml

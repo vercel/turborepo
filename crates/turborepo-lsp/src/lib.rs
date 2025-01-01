@@ -6,6 +6,7 @@
 //! For more, see the [LSP specification](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/)
 //! as well as the architecture documentation in `packages/turbo-vsc`.
 
+#![feature(box_patterns)]
 #![deny(clippy::all)]
 #![warn(clippy::unwrap_used)]
 
@@ -13,7 +14,6 @@ use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
     iter,
-    str::FromStr,
     sync::{Arc, Mutex},
 };
 
@@ -30,7 +30,10 @@ use tower_lsp::{
     Client, LanguageServer,
 };
 use turbopath::AbsoluteSystemPathBuf;
-use turborepo_lib::{DaemonClient, DaemonConnector, DaemonPackageDiscovery, DaemonPaths};
+use turborepo_lib::{
+    DaemonClient, DaemonConnector, DaemonConnectorError, DaemonError, DaemonPackageDiscovery,
+    DaemonPaths,
+};
 use turborepo_repository::{
     discovery::{self, DiscoveryResponse, PackageDiscovery, WorkspaceData},
     package_json::PackageJson,
@@ -91,6 +94,28 @@ impl LanguageServer for Backend {
 
             let daemon = match daemon {
                 Ok(daemon) => daemon,
+                Err(DaemonConnectorError::Handshake(box DaemonError::VersionMismatch(message))) => {
+                    self.client
+                        .show_message(
+                            MessageType::ERROR,
+                            "Pre-2.0 versions of turborepo are not compatible with 2.0 or later \
+                             of the extension. If you do not plan to update to turbo 2.0, please \
+                             ensure you install the latest 1.0 version of the extension in this \
+                             workspace.",
+                        )
+                        .await;
+                    self.client
+                        .log_message(
+                            MessageType::ERROR,
+                            format!("version mismatch when connecting to daemon: {}", message),
+                        )
+                        .await;
+
+                    // in this case, just say we don't support any features
+                    return Ok(InitializeResult {
+                        ..Default::default()
+                    });
+                }
                 Err(e) => {
                     self.client
                         .log_message(
@@ -288,7 +313,7 @@ impl LanguageServer for Backend {
                 // so we just skip it and do a best effort
                 Err(_) => continue,
             };
-            let package_json = match PackageJson::from_str(&data) {
+            let package_json = match PackageJson::load_from_str(&data, wd.package_json.as_str()) {
                 Ok(package_json) => package_json,
                 // if we can't parse a package.json, then we can't set up references to it
                 // so we just skip it and do a best effort

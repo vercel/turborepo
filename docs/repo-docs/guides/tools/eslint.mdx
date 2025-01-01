@@ -12,131 +12,174 @@ ESLint is a static analysis tool for quickly finding and fixing problems in your
 
 <CreateTurboCallout />
 
-<Callout type="info">
-  This page is written for ESLint v8. If you'd like to contribute to add a
-  version for v9, the core team is happy to review your pull request.
-</Callout>
+In this guide, we'll cover:
 
-## Installing ESLint
+- [ESLint v9 with Flat Configuration](#eslint-v9-flat-configs)
+- [ESLint v8 with legacy configuration](#eslint-v8-legacy)
+- [How to set up a `lint` task (applies to both versions)](#setting-up-a-lint-task)
 
-Install ESLint into each package where you'd like to run it:
+We will share configurations across the monorepo's Workspace, ensuring configuration is consistent across packages and composable to maintain high cache hit ratios.
 
-<PackageManagerTabs>
-<Tab>
+## ESLint v9 (Flat Configs)
 
-```bash title="Terminal"
-npm install eslint --workspace=web --workspace=docs --workspace=@repo/ui --save-dev
-```
-
-<Callout type="good-to-know">
-  You can keep ESLint versions in sync using a tool like
-  [syncpack](https://jamiemason.github.io/syncpack).
-</Callout>
-
-</Tab>
-
-<Tab>
-
-```bash title="Terminal"
-yarn workspace web add eslint --dev
-yarn workspace docs add eslint --dev
-yarn workspace @repo/ui add eslint --dev
-```
-
-</Tab>
-
-<Tab>
-
-```bash title="Terminal"
-pnpm install eslint --save-dev --recursive --filter=ui --filter=docs --filter=web
-```
-
-</Tab>
-</PackageManagerTabs>
-
-## Sharing configuration
-
-Sharing an ESLint config across packages makes their source code more consistent. Let's imagine a Workspace like this:
+Using ESLint v9's Flat Configs, we will end up with a file structure like this:
 
 <Files>
   <Folder name="apps" defaultOpen>
     <Folder name="docs" defaultOpen>
      <File name="package.json" />
-     <File name=".eslintrc.js" />
+     <File name="eslint.config.js" green />
     </Folder>
 
     <Folder name="web" defaultOpen>
      <File name="package.json" />
-     <File name=".eslintrc.js" />
+     <File name="eslint.config.js" green />
     </Folder>
 
   </Folder>
 
-  <Folder name="packages">
-    <Folder name="eslint-config">
-     <File name="next.js" />
-     <File name="library.js" />
+  <Folder name="packages" defaultOpen>
+    <Folder name="eslint-config" defaultOpen>
+     <File name="base.js" green />
+     <File name="next.js" green />
+     <File name="react-internal.js" green />
      <File name="package.json" />
     </Folder>
+
+    <Folder name="ui" defaultOpen>
+     <File name="eslint.config.js" green />
+     <File name="package.json" />
+    </Folder>
+
   </Folder>
 </Files>
 
-We've got a package called `@repo/eslint-config`, and two applications, each with their own `.eslintrc.js`.
+This structure includes:
 
-### Our `@repo/eslint-config` package
+- A package called `@repo/eslint-config` in `./packages/eslint-config` that holds all ESLint configuration
+- Two applications, each with their own `eslint.config.js`
+- A `ui` package that also has its own `eslint.config.js`
 
-Our `@repo/eslint-config` file contains two files, `next.js`, and `library.js`. These are two different ESLint configs, which we can use in different workspaces, depending on our needs.
+### About the configuration package
 
-Let's investigate the `next.js` lint configuration:
+The `@repo/eslint-config` package has three configuration files, `base.js`, `next.js`, and `react-internal.js`. They are [exported from `package.json`](https://github.com/vercel/turborepo/blob/main/examples/basic/packages/eslint-config/package.json#L6) so that they can be used by other packages, according to needs. Examples of the configurations can be found [in the Turborepo GitHub repository](https://github.com/vercel/turborepo/tree/main/examples/basic/packages/eslint-config) and are available in `npx create-turbo@latest`.
 
-```js title="./packages/eslint-config/next.js"
-const { resolve } = require('node:path');
+Notably, the `next.js` and `react-internal.js` configurations use the `base.js` configuration for consistency, extending it with more configuration for their respective requirements. Additionally, notice that [the `package.json` for `eslint-config`](https://github.com/vercel/turborepo/blob/main/examples/basic/packages/eslint-config/package.json) has all of the ESLint dependencies for the repository. This is useful, since it means we don't need to re-specify the dependencies in the packages that import `@repo/eslint-config`.
 
-const project = resolve(process.cwd(), 'tsconfig.json');
+### Using the configuration package
 
-/*
- * This is a custom ESLint configuration for use with
- * Next.js apps.
- *
- * This config extends the Vercel Engineering Style Guide.
- * For more information, see https://github.com/vercel/style-guide
- *
- */
+In our `web` app, we first need to add `@repo/eslint-config` as a dependency.
 
-module.exports = {
-  extends: [
-    '@vercel/style-guide/eslint/node',
-    '@vercel/style-guide/eslint/typescript',
-    '@vercel/style-guide/eslint/browser',
-    '@vercel/style-guide/eslint/react',
-    '@vercel/style-guide/eslint/next',
-    // Turborepo custom eslint configuration configures the following rules:
-    //  - https://github.com/vercel/turbo/blob/main/packages/eslint-plugin-turbo/docs/rules/no-undeclared-env-vars.md
-    'eslint-config-turbo',
-  ].map(require.resolve),
-  parserOptions: {
-    project,
-  },
-  globals: {
-    React: true,
-    JSX: true,
-  },
-  settings: {
-    'import/resolver': {
-      typescript: {
-        project,
-      },
-    },
-  },
-  ignorePatterns: ['node_modules/', 'dist/'],
-  // add rules configurations here
-  rules: {
-    'import/no-default-export': 'off',
-  },
-};
+<PackageManagerTabs>
+  <Tab>
+```jsonc title="./apps/web/package.json"
+{
+  "devDependencies": {
+    "@repo/eslint-config": "*"
+  }
+}
+```
+  </Tab>
+  <Tab>
+```jsonc title="./apps/web/package.json"
+{
+  "devDependencies": {
+    "@repo/eslint-config": "*"
+  }
+}
+```
+  </Tab>
+  <Tab>
+```jsonc title="./apps/web/package.json"
+{
+  "devDependencies": {
+    "@repo/eslint-config": "workspace:*"
+  }
+}
+```
+  </Tab>
+</PackageManagerTabs>
+
+We can then import the configuration like this:
+
+```js title="./apps/web/eslint.config.js"
+import { nextJsConfig } from '@repo/eslint-config/next-js';
+
+/** @type {import("eslint").Linter.Config} */
+export default nextJsConfig;
 ```
 
-It's a typical ESLint config that extends the [Vercel style guide](https://github.com/vercel/style-guide), nothing fancy.
+Additionally, you can add configuration specific to the package like this:
+
+```js title="./apps/web/eslint.config.js"
+import { nextJsConfig } from "@repo/eslint-config/next-js";
+
+/** @type {import("eslint").Linter.Config} */
+export default [
+  ...nextJsConfig;
+  // Other configurations
+]
+```
+
+## ESLint v8 (Legacy)
+
+<Callout type="warn">
+  ESLint v8 is end-of-life as of October 5, 2024. We encourage you to upgrade to
+  ESLint v9 or later. This documentation is here to help with existing projects
+  that have not yet upgraded.
+</Callout>
+
+Using legacy configuration from ESLint v8 and lower, we will end up with a file structure like this:
+
+<Files>
+  <Folder name="apps" defaultOpen>
+    <Folder name="docs" defaultOpen>
+     <File name="package.json" />
+     <File name=".eslintrc.js" green />
+    </Folder>
+
+    <Folder name="web" defaultOpen>
+     <File name="package.json" />
+     <File name=".eslintrc.js" green />
+    </Folder>
+
+  </Folder>
+
+  <Folder name="packages" defaultOpen>
+    <Folder name="eslint-config" defaultOpen>
+     <File name="base.js" green />
+     <File name="next.js" green />
+     <File name="react-internal.js" green />
+     <File name="package.json" />
+    </Folder>
+
+    <Folder name="ui" defaultOpen>
+     <File name=".eslintrc.js" green />
+     <File name="package.json" />
+    </Folder>
+
+  </Folder>
+</Files>
+
+There's a package called `@repo/eslint-config`, and two applications, each with their own `.eslintrc.js`.
+
+### The `@repo/eslint-config` package
+
+The `@repo/eslint-config` file contains two files, `next.js`, and `library.js`. These are two different ESLint configurations, which we can use in different packages, depending on our needs.
+
+A configuration for Next.js may look like this:
+
+```js title="./packages/eslint-config/next.js"
+/* Custom ESLint configuration for use with Next.js apps. */
+module.exports = {
+  extends: [
+    'eslint-config-turbo',
+    'eslint-config-next',
+    // ...your other ESLint configurations
+  ].map(require.resolve),
+  // ...your other configuration
+};
+```
 
 The `package.json` looks like this:
 
@@ -146,8 +189,9 @@ The `package.json` looks like this:
   "version": "0.0.0",
   "private": true,
   "devDependencies": {
-    "@vercel/style-guide": "latest",
-    "eslint-config-turbo": "latest"
+    "eslint": "^8",
+    "eslint-config-turbo": "latest",
+    "eslint-config-next": "latest"
   }
 }
 ```
@@ -198,10 +242,6 @@ module.exports = {
 ```
 
 By adding `@repo/eslint-config/next.js` to our `extends` array, we're telling ESLint to look for a package called `@repo/eslint-config`, and reference the file `next.js`.
-
-### Summary
-
-This setup ships by default when you [create a new monorepo](/repo/docs/getting-started/create-new) with `npx create-turbo@latest`. You can also look at [our basic example](https://github.com/vercel/turbo/tree/main/examples/basic) to see a working version.
 
 ## Setting up a `lint` task
 

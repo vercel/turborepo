@@ -1,43 +1,58 @@
-use std::time::Duration;
+use crossterm::event::{EventStream, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use futures::StreamExt;
+use tokio::{sync::mpsc, task::JoinHandle};
+use tracing::debug;
 
-use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
-
-use super::{event::Event, Error};
+use super::{
+    app::LayoutSections,
+    event::{Direction, Event},
+};
 
 #[derive(Debug, Clone, Copy)]
-pub struct InputOptions {
-    pub interact: bool,
-    pub tty_stdin: bool,
+pub struct InputOptions<'a> {
+    pub focus: &'a LayoutSections,
+    pub has_selection: bool,
+    pub is_help_popup_open: bool,
 }
-/// Return any immediately available event
-pub fn input(options: InputOptions) -> Result<Option<Event>, Error> {
-    let InputOptions {
-        interact,
-        tty_stdin,
-    } = options;
-    // If stdin is not a tty, then we do not attempt to read from it
-    if !tty_stdin {
-        return Ok(None);
+
+pub fn start_crossterm_stream(tx: mpsc::Sender<crossterm::event::Event>) -> Option<JoinHandle<()>> {
+    // quick check if stdin is tty
+    if !atty::is(atty::Stream::Stdin) {
+        return None;
     }
-    // poll with 0 duration will only return true if event::read won't need to wait
-    // for input
-    if crossterm::event::poll(Duration::from_millis(0))? {
-        match crossterm::event::read()? {
-            crossterm::event::Event::Key(k) => Ok(translate_key_event(interact, k)),
-            crossterm::event::Event::Mouse(m) => match m.kind {
-                crossterm::event::MouseEventKind::ScrollDown => Ok(Some(Event::ScrollDown)),
-                crossterm::event::MouseEventKind::ScrollUp => Ok(Some(Event::ScrollUp)),
-                _ => Ok(None),
-            },
-            _ => Ok(None),
+
+    let mut events = EventStream::new();
+    Some(tokio::spawn(async move {
+        while let Some(Ok(event)) = events.next().await {
+            if tx.send(event).await.is_err() {
+                break;
+            }
         }
-    } else {
-        Ok(None)
+    }))
+}
+
+impl<'a> InputOptions<'a> {
+    /// Maps a crossterm::event::Event to a tui::Event
+    pub fn handle_crossterm_event(self, event: crossterm::event::Event) -> Option<Event> {
+        match event {
+            crossterm::event::Event::Key(k) => translate_key_event(self, k),
+            crossterm::event::Event::Mouse(m) => match m.kind {
+                crossterm::event::MouseEventKind::ScrollDown => Some(Event::ScrollDown),
+                crossterm::event::MouseEventKind::ScrollUp => Some(Event::ScrollUp),
+                crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left)
+                | crossterm::event::MouseEventKind::Drag(crossterm::event::MouseButton::Left) => {
+                    Some(Event::Mouse(m))
+                }
+                _ => None,
+            },
+            crossterm::event::Event::Resize(cols, rows) => Some(Event::Resize { rows, cols }),
+            _ => None,
+        }
     }
 }
 
 /// Converts a crossterm key event into a TUI interaction event
-fn translate_key_event(interact: bool, key_event: KeyEvent) -> Option<Event> {
+fn translate_key_event(options: InputOptions, key_event: KeyEvent) -> Option<Event> {
     // On Windows events for releasing a key are produced
     // We skip these to avoid emitting 2 events per key press.
     // There is still a `Repeat` event for when a key is held that will pass through
@@ -47,26 +62,61 @@ fn translate_key_event(interact: bool, key_event: KeyEvent) -> Option<Event> {
     }
     match key_event.code {
         KeyCode::Char('c') if key_event.modifiers == crossterm::event::KeyModifiers::CONTROL => {
-            ctrl_c()
+            ctrl_c();
+            Some(Event::InternalStop)
         }
+        KeyCode::Char('c') if options.has_selection => Some(Event::CopySelection),
         // Interactive branches
         KeyCode::Char('z')
-            if interact && key_event.modifiers == crossterm::event::KeyModifiers::CONTROL =>
+            if matches!(options.focus, LayoutSections::Pane)
+                && key_event.modifiers == crossterm::event::KeyModifiers::CONTROL =>
         {
             Some(Event::ExitInteractive)
         }
         // If we're in interactive mode, convert the key event to bytes to send to stdin
-        _ if interact => Some(Event::Input {
+        _ if matches!(options.focus, LayoutSections::Pane) => Some(Event::Input {
             bytes: encode_key(key_event),
         }),
-        // Fall through if we aren't in interactive mode
-        KeyCode::Char('p') if key_event.modifiers == KeyModifiers::CONTROL => Some(Event::ScrollUp),
-        KeyCode::Char('n') if key_event.modifiers == KeyModifiers::CONTROL => {
-            Some(Event::ScrollDown)
+        // If we're on the list and user presses `/` enter search mode
+        KeyCode::Char('/') if matches!(options.focus, LayoutSections::TaskList) => {
+            Some(Event::SearchEnter)
         }
-        KeyCode::Up => Some(Event::Up),
-        KeyCode::Down => Some(Event::Down),
-        KeyCode::Enter => Some(Event::EnterInteractive),
+        KeyCode::Esc if options.is_help_popup_open => Some(Event::ToggleHelpPopup),
+        KeyCode::Esc if matches!(options.focus, LayoutSections::Search { .. }) => {
+            Some(Event::SearchExit {
+                restore_scroll: true,
+            })
+        }
+        KeyCode::Enter if matches!(options.focus, LayoutSections::Search { .. }) => {
+            Some(Event::SearchExit {
+                restore_scroll: false,
+            })
+        }
+        KeyCode::Up if matches!(options.focus, LayoutSections::Search { .. }) => {
+            Some(Event::SearchScroll {
+                direction: Direction::Up,
+            })
+        }
+        KeyCode::Down if matches!(options.focus, LayoutSections::Search { .. }) => {
+            Some(Event::SearchScroll {
+                direction: Direction::Down,
+            })
+        }
+        KeyCode::Backspace if matches!(options.focus, LayoutSections::Search { .. }) => {
+            Some(Event::SearchBackspace)
+        }
+        KeyCode::Char(c) if matches!(options.focus, LayoutSections::Search { .. }) => {
+            Some(Event::SearchEnterChar(c))
+        }
+        // Fall through if we aren't in interactive mode
+        KeyCode::Char('h') => Some(Event::ToggleSidebar),
+        KeyCode::Char('u') => Some(Event::ScrollUp),
+        KeyCode::Char('d') => Some(Event::ScrollDown),
+        KeyCode::Char('m') => Some(Event::ToggleHelpPopup),
+        KeyCode::Char('p') => Some(Event::TogglePinnedTask),
+        KeyCode::Up | KeyCode::Char('k') => Some(Event::Up),
+        KeyCode::Down | KeyCode::Char('j') => Some(Event::Down),
+        KeyCode::Enter | KeyCode::Char('i') => Some(Event::EnterInteractive),
         _ => None,
     }
 }
@@ -77,7 +127,10 @@ fn ctrl_c() -> Option<Event> {
     match signal::raise(signal::SIGINT) {
         Ok(_) => None,
         // We're unable to send the signal, stop rendering to force shutdown
-        Err(_) => Some(Event::Stop),
+        Err(_) => {
+            debug!("unable to send sigint, shutting down");
+            Some(Event::InternalStop)
+        }
     }
 }
 
@@ -101,7 +154,8 @@ fn ctrl_c() -> Option<Event> {
         None
     } else {
         // We're unable to send the Ctrl-C event, stop rendering to force shutdown
-        Some(Event::Stop)
+        debug!("unable to send sigint, shutting down");
+        Some(Event::InternalStop)
     }
 }
 
@@ -367,4 +421,50 @@ fn encode_modifiers(mods: KeyModifiers) -> u8 {
         number |= 4;
     }
     number
+}
+
+#[cfg(test)]
+mod test {
+    use std::{mem, sync::OnceLock};
+
+    use crossterm::event::{KeyCode, KeyEvent};
+    use test_case::test_case;
+
+    use super::*;
+    use crate::tui::{search::SearchResults, task::TasksByStatus};
+
+    fn search() -> &'static LayoutSections {
+        static SEARCH: OnceLock<LayoutSections> = OnceLock::new();
+        SEARCH.get_or_init(|| LayoutSections::Search {
+            previous_selection: "".into(),
+            results: SearchResults::new(&TasksByStatus::new()),
+        })
+    }
+
+    fn in_find() -> InputOptions<'static> {
+        InputOptions {
+            focus: search(),
+            has_selection: false,
+            is_help_popup_open: false,
+        }
+    }
+
+    const H: KeyEvent = KeyEvent::new(KeyCode::Char('h'), KeyModifiers::empty());
+
+    #[test_case(in_find(), H, Some(Event::SearchEnterChar('h')) ; "h while searching")]
+    // Note: This only checks event variants not any data contained in the variant
+    fn test_translate_key_event_variant(
+        opts: InputOptions,
+        key_event: crossterm::event::KeyEvent,
+        expected: Option<Event>,
+    ) {
+        match (translate_key_event(opts, key_event), expected) {
+            (Some(actual), Some(expected)) => {
+                assert_eq!(mem::discriminant(&actual), mem::discriminant(&expected));
+            }
+            (None, None) => (),
+            (None, Some(_)) => panic!("expected event, got None"),
+            (Some(_), None) => panic!("expected no event, got an event"),
+        }
+    }
 }

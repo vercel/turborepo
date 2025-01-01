@@ -9,11 +9,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/vercel/turbo",
+    "url": "https://github.com/vercel/turborepo",
     "directory": "packages/turbo-telemetry"
   },
   "bugs": {
-    "url": "https://github.com/vercel/turbo/issues"
+    "url": "https://github.com/vercel/turborepo/issues"
   },
   "module": "src/index.ts",
   "main": "src/index.ts",
@@ -25,10 +25,9 @@
     "lint:prettier": "prettier -c . --cache --ignore-path=../../.prettierignore"
   },
   "dependencies": {
-    "chalk": "^4.1.2",
     "ci-info": "^4.0.0",
     "got": "^11.8.6",
-    "uuid": "^9.0.1",
+    "picocolors": "1.0.1",
     "zod": "^3.22.4"
   },
   "devDependencies": {
@@ -37,14 +36,10 @@
     "@turbo/tsconfig": "workspace:*",
     "@turbo/types": "workspace:*",
     "@turbo/utils": "workspace:*",
-    "@types/jest": "^27.4.0",
     "@types/node": "^20.11.30",
-    "@types/uuid": "^9.0.0",
     "dirs-next": "0.0.1-canary.1",
-    "jest": "^27.4.3",
-    "ts-jest": "^27.1.1",
-    "tsx": "^4.7.2",
-    "typescript": "5.3.3"
+    "tsx": "4.19.1",
+    "typescript": "5.5.4"
   },
   "peerDependencies": {
     "commander": "^11.0.0"

@@ -19,13 +19,15 @@ if [ -z "$package_manager" ]; then
   exit 1
 fi
 
+echo "node --version: $(node --version)"
+
 # Use the right command for each package manager
 if [ "$package_manager" == "npm" ]; then
-  package_manager_command="npm install"
+  package_manager_command="node ../../../packages/turbo-workspaces/dist/cli.js convert . npm --ignore-unchanged-package-manager && npm install"
 elif [ "$package_manager" == "pnpm" ]; then
-  package_manager_command="pnpm install"
+  package_manager_command="node ../../../packages/turbo-workspaces/dist/cli.js convert . pnpm --ignore-unchanged-package-manager && pnpm install"
 elif [ "$package_manager" == "yarn" ]; then
-  package_manager_command="yarn"
+  package_manager_command="node ../../../packages/turbo-workspaces/dist/cli.js convert . yarn --ignore-unchanged-package-manager && yarn"
 fi
 
 # All examples implement these two tasks
@@ -37,42 +39,46 @@ mkdir -p ../../examples-tests-tmp
 cd ../../examples-tests-tmp
 
 # Start up a fresh directory for the test
-rm -rf "$example_path" || true
+rm -rf "$example_path-$package_manager" || true
 rsync -avq \
---exclude='node_modules' \
---exclude="dist" \
---exclude=".turbo" \
---exclude=".expo" \
---exclude=".cache" \
---exclude=".next" \
-"../examples/$example_path" "."
+  --exclude='node_modules' \
+  --exclude="dist" \
+  --exclude=".turbo" \
+  --exclude=".expo" \
+  --exclude=".cache" \
+  --exclude=".next" \
+  "../examples/$example_path" "$example_path-$package_manager"
 
-cd "$example_path"
-"../../turborepo-tests/helpers/setup_git.sh" .
+cd "$example_path-$package_manager/$example_path"
+"../../../turborepo-tests/helpers/setup_git.sh" .
 
 # Make /tmp dir for writing dump logs
 mkdir -p ./tmp
-echo "/tmp/" >> ".gitignore"
+echo "/tmp/" >>".gitignore"
+
+$package_manager_command
 
 # Simulating the user's first run and dumping logs to a file
-$package_manager_command >./tmp/install.txt 2>&1
-$turbo_command >./tmp/grep-me-for-miss.txt
+$turbo_command >>./tmp/run-1.txt 2>&1
 
 # We don't want to hit cache on first run because we're acting like a user.
 # A user would never hit cache on first run. Why should we?
-if grep -q ">>> FULL TURBO" ./tmp/grep-me-for-miss.txt; then
-  echo "A FULL TURBO was found. This test is misconfigured (since it can hit a cache)."
+if grep -q ">>> FULL TURBO" ./tmp/run-1.txt; then
+  echo "[ERROR] A 'FULL TURBO' was found. This test must be misconfigured since it hit a cache on what was expected to be the very first run."
   echo "Dumping logs:"
-  cat ./tmp/grep-me-for-miss.txt >&2
+  echo ""
+  cat ./tmp/run-1.txt >&2
   exit 1
 fi
 
-# Simulating the user's second run
-$turbo_command >./tmp/grep-me-for-hit.txt
+# Simulating the user's second run and dumping logs to a file
+$turbo_command >>./tmp/run-2.txt 2>&1
 
 # Make sure the user hits FULL TURBO on the second go
-if ! grep -q ">>> FULL TURBO" ./tmp/grep-me-for-hit.txt; then
-  echo "No FULL TURBO was found. Dumping logs:"
-  cat ./tmp/grep-me-for-hit.txt >&2
+if ! grep -q ">>> FULL TURBO" ./tmp/run-2.txt; then
+  echo "[ERROR] No 'FULL TURBO' was found.  This indicateds that at least one 'cache miss' occurred on the second run when all tasks were expected to be 'cache hit'."
+  echo "Dumping logs:"
+  echo ""
+  cat ./tmp/run-2.txt >&2
   exit 1
 fi

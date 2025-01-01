@@ -3,7 +3,8 @@ use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 
 use crate::{
     package_json::PackageJson,
-    package_manager::{self, PackageManager, WorkspaceGlobs},
+    package_manager::{self, PackageManager},
+    workspaces::WorkspaceGlobs,
 };
 
 #[derive(Debug, PartialEq)]
@@ -80,7 +81,8 @@ impl RepoState {
                     .ok()
                     .map(|package_json| {
                         // FIXME: We should save this package manager that we detected
-                        let package_manager = PackageManager::get_package_manager(&package_json);
+                        let package_manager =
+                            PackageManager::read_or_detect_package_manager(&package_json, path);
                         let workspace_globs = package_manager
                             .as_ref()
                             .ok()
@@ -224,7 +226,7 @@ mod test {
                 Some(RepoState {
                     root: monorepo_root.clone(),
                     mode: RepoMode::MultiPackage,
-                    package_manager: Ok(pnpm),
+                    package_manager: Ok(pnpm.clone()),
                     root_package_json: PackageJson::load(&monorepo_pkg_json).unwrap(),
                 }),
             ),
@@ -233,7 +235,7 @@ mod test {
                 Some(RepoState {
                     root: monorepo_root.clone(),
                     mode: RepoMode::MultiPackage,
-                    package_manager: Ok(pnpm),
+                    package_manager: Ok(pnpm.clone()),
                     root_package_json: PackageJson::load(&monorepo_pkg_json).unwrap(),
                 }),
             ),
@@ -242,7 +244,7 @@ mod test {
                 Some(RepoState {
                     root: monorepo_root.clone(),
                     mode: RepoMode::MultiPackage,
-                    package_manager: Ok(pnpm),
+                    package_manager: Ok(pnpm.clone()),
                     root_package_json: PackageJson::load(&monorepo_pkg_json).unwrap(),
                 }),
             ),
@@ -251,7 +253,7 @@ mod test {
                 Some(RepoState {
                     root: single_root.clone(),
                     mode: RepoMode::SinglePackage,
-                    package_manager: Ok(pnpm),
+                    package_manager: Ok(pnpm.clone()),
                     root_package_json: PackageJson::load(&single_root_package_json).unwrap(),
                 }),
             ),
@@ -260,7 +262,7 @@ mod test {
                 Some(RepoState {
                     root: single_root.clone(),
                     mode: RepoMode::SinglePackage,
-                    package_manager: Ok(pnpm),
+                    package_manager: Ok(pnpm.clone()),
                     root_package_json: PackageJson::load(&single_root_package_json).unwrap(),
                 }),
             ),
@@ -270,7 +272,7 @@ mod test {
                 Some(RepoState {
                     root: standalone.clone(),
                     mode: RepoMode::SinglePackage,
-                    package_manager: Ok(pnpm),
+                    package_manager: Ok(pnpm.clone()),
                     root_package_json: PackageJson::load(&standalone_pkg_json).unwrap(),
                 }),
             ),
@@ -279,7 +281,7 @@ mod test {
                 Some(RepoState {
                     root: standalone_monorepo.clone(),
                     mode: RepoMode::MultiPackage,
-                    package_manager: Ok(pnpm),
+                    package_manager: Ok(pnpm.clone()),
                     root_package_json: PackageJson::load(&standalone_monorepo_package_json)
                         .unwrap(),
                 }),
@@ -305,5 +307,70 @@ mod test {
                 assert!(repo_state.is_err(), "Expected to fail inference");
             }
         }
+    }
+
+    #[test]
+    fn test_allows_missing_package_manager() {
+        let (_tmp, tmp_dir) = tmp_dir();
+
+        let monorepo_root = tmp_dir.join_component("monorepo_root");
+        let monorepo_pkg_json = monorepo_root.join_component("package.json");
+        let monorepo_contents = "{\"workspaces\": [\"packages/*\"]}";
+        monorepo_pkg_json.ensure_dir().unwrap();
+        monorepo_pkg_json
+            .create_with_contents(monorepo_contents)
+            .unwrap();
+        monorepo_root
+            .join_component("package-lock.json")
+            .create_with_contents("")
+            .unwrap();
+
+        let app_1 = monorepo_root.join_components(&["packages", "app-1"]);
+        let app_1_pkg_json = app_1.join_component("package.json");
+        app_1_pkg_json.ensure_dir().unwrap();
+        app_1_pkg_json
+            .create_with_contents("{\"name\": \"app_1\"}")
+            .unwrap();
+
+        let repo_state_from_root = RepoState::infer(&monorepo_root).unwrap();
+        let repo_state_from_app = RepoState::infer(&app_1).unwrap();
+
+        assert_eq!(&repo_state_from_root.root, &monorepo_root);
+        assert_eq!(&repo_state_from_app.root, &monorepo_root);
+        assert_eq!(repo_state_from_root.mode, RepoMode::MultiPackage);
+        assert_eq!(repo_state_from_app.mode, RepoMode::MultiPackage);
+        assert_eq!(
+            repo_state_from_root.package_manager.unwrap(),
+            PackageManager::Npm
+        );
+        assert_eq!(
+            repo_state_from_app.package_manager.unwrap(),
+            PackageManager::Npm
+        );
+    }
+
+    #[test]
+    fn test_gh_8599() {
+        // TODO: this test documents existing broken behavior, when we have time we
+        // should fix this and update the assertions
+        let (_tmp, tmp_dir) = tmp_dir();
+        let monorepo_root = tmp_dir.join_component("monorepo_root");
+        let monorepo_pkg_json = monorepo_root.join_component("package.json");
+        monorepo_pkg_json.ensure_dir().unwrap();
+        monorepo_pkg_json.create_with_contents(r#"{"name": "mono", "packageManager": "npm@10.2.4", "workspaces": ["./packages/*"]}"#.as_bytes()).unwrap();
+        let package_foo = monorepo_root.join_components(&["packages", "foo"]);
+        let foo_package_json = package_foo.join_component("package.json");
+        foo_package_json.ensure_dir().unwrap();
+        foo_package_json
+            .create_with_contents(r#"{"name": "foo"}"#.as_bytes())
+            .unwrap();
+
+        let repo_state = RepoState::infer(&package_foo).unwrap();
+        // These assertions are the buggy behavior
+        assert_eq!(repo_state.root, package_foo);
+        assert_eq!(repo_state.mode, RepoMode::SinglePackage);
+        // TODO: the following assertions are the correct behavior
+        // assert_eq!(repo_state.root, monorepo_root);
+        // assert_eq!(repo_state.mode, RepoMode::MultiPackage);
     }
 }

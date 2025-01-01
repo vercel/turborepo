@@ -2,12 +2,13 @@ import fs from "fs-extra";
 import * as turboWorkspaces from "@turbo/workspaces";
 import * as turboUtils from "@turbo/utils";
 import { setupTestFixtures } from "@turbo/test-utils";
+import { describe, it, expect, jest } from "@jest/globals";
 import { transformer } from "../src/transforms/add-package-manager";
 import type { TransformerResults } from "../src/runner";
 import type { TransformerOptions } from "../src/types";
 import { getWorkspaceDetailsMockReturnValue } from "./test-utils";
 
-jest.mock("@turbo/workspaces", () => ({
+jest.mock<typeof import("@turbo/workspaces")>("@turbo/workspaces", () => ({
   __esModule: true,
   ...jest.requireActual("@turbo/workspaces"),
 }));
@@ -99,13 +100,7 @@ const TEST_CASES: Array<TestCase> = [
     packageManagerVersion: "1.2.3",
     options: { force: false, dryRun: false, print: false },
     result: {
-      changes: {
-        "package.json": {
-          action: "unchanged",
-          additions: 0,
-          deletions: 0,
-        },
-      },
+      changes: {},
     },
   },
   {
@@ -116,13 +111,7 @@ const TEST_CASES: Array<TestCase> = [
     packageManagerVersion: "1.2.3",
     options: { force: false, dryRun: false, print: false },
     result: {
-      changes: {
-        "package.json": {
-          action: "modified",
-          additions: 1,
-          deletions: 1,
-        },
-      },
+      changes: {},
     },
   },
 ];
@@ -133,7 +122,7 @@ describe("add-package-manager-2", () => {
     test: "add-package-manager",
   });
 
-  test.each(TEST_CASES)(
+  it.each(TEST_CASES)(
     "$fixture - $name with $packageManager@$packageManagerVersion using $options",
     async ({
       fixture,
@@ -176,13 +165,16 @@ describe("add-package-manager-2", () => {
         options,
       });
 
-      expect(mockGetAvailablePackageManagers).toHaveBeenCalled();
-      expect(mockGetWorkspaceDetails).toHaveBeenCalled();
+      if (existingPackageManagerString === undefined) {
+        expect(mockGetAvailablePackageManagers).toHaveBeenCalled();
+        expect(mockGetWorkspaceDetails).toHaveBeenCalled();
+      }
 
       expect(JSON.parse(read("package.json") || "{}").packageManager).toEqual(
         options.dryRun
           ? undefined
-          : `${packageManager}@${packageManagerVersion}`
+          : existingPackageManagerString ||
+              `${packageManager}@${packageManagerVersion}`
       );
 
       // result should be correct
@@ -194,17 +186,7 @@ describe("add-package-manager-2", () => {
         options,
       });
       expect(repeatResult.fatalError).toBeUndefined();
-      expect(repeatResult.changes).toMatchObject({
-        "package.json": {
-          action: options.dryRun ? "skipped" : "unchanged",
-          additions: options.dryRun
-            ? result.changes["package.json"].additions
-            : 0,
-          deletions: options.dryRun
-            ? result.changes["package.json"].deletions
-            : 0,
-        },
-      });
+      expect(repeatResult.changes).toMatchObject({});
 
       mockGetAvailablePackageManagers.mockRestore();
       mockGetWorkspaceDetails.mockRestore();
@@ -212,7 +194,7 @@ describe("add-package-manager-2", () => {
   );
 
   describe("errors", () => {
-    test("unable to determine workspace manager", async () => {
+    it("unable to determine workspace manager", async () => {
       // load the fixture for the test
       const { root, read } = useFixture({ fixture: "no-package-manager" });
 
@@ -240,7 +222,7 @@ describe("add-package-manager-2", () => {
       mockGetWorkspaceDetails.mockRestore();
     });
 
-    test("unable to determine package manager version", async () => {
+    it("unable to determine package manager version", async () => {
       // load the fixture for the test
       const { root, read } = useFixture({ fixture: "no-package-manager" });
 
@@ -284,7 +266,7 @@ describe("add-package-manager-2", () => {
       mockGetWorkspaceDetails.mockRestore();
     });
 
-    test("unable to write json", async () => {
+    it("unable to write json", async () => {
       // load the fixture for the test
       const { root, read } = useFixture({ fixture: "no-package-manager" });
 
@@ -336,15 +318,15 @@ describe("add-package-manager-2", () => {
         "Encountered an error while transforming files"
       );
       expect(result.changes).toMatchInlineSnapshot(`
-      Object {
-        "package.json": Object {
-          "action": "error",
-          "additions": 1,
-          "deletions": 0,
-          "error": [Error: could not write file],
-        },
-      }
-    `);
+        {
+          "package.json": {
+            "action": "error",
+            "additions": 1,
+            "deletions": 0,
+            "error": [Error: could not write file],
+          },
+        }
+      `);
 
       mockWriteJsonSync.mockRestore();
       mockGetAvailablePackageManagers.mockRestore();

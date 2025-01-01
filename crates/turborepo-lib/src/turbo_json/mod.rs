@@ -6,26 +6,29 @@ use std::{
 
 use biome_deserialize_macros::Deserializable;
 use camino::Utf8Path;
+use clap::ValueEnum;
 use miette::{NamedSource, SourceSpan};
 use serde::{Deserialize, Serialize};
 use struct_iterable::Iterable;
-use tracing::debug;
-use turbopath::{AbsoluteSystemPath, AnchoredSystemPath};
+use turbopath::AbsoluteSystemPath;
 use turborepo_errors::Spanned;
-use turborepo_repository::{package_graph::ROOT_PKG_NAME, package_json::PackageJson};
+use turborepo_repository::package_graph::ROOT_PKG_NAME;
+use turborepo_unescape::UnescapedString;
 
 use crate::{
-    cli::OutputLogsMode,
+    cli::{EnvMode, OutputLogsMode},
     config::{ConfigurationOptions, Error, InvalidEnvPrefixError},
     run::{
-        task_access::{TaskAccessTraceFile, TASK_ACCESS_CONFIG_PATH},
+        task_access::TaskAccessTraceFile,
         task_id::{TaskId, TaskName},
     },
     task_graph::{TaskDefinition, TaskOutputs},
-    unescape::UnescapedString,
 };
 
+mod loader;
 pub mod parser;
+
+pub use loader::TurboJsonLoader;
 
 #[derive(Serialize, Deserialize, Debug, Default, PartialEq, Clone, Deserializable)]
 #[serde(rename_all = "camelCase")]
@@ -74,6 +77,8 @@ pub(crate) struct RawRemoteCacheOptions {
     timeout: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     enabled: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    upload_timeout: Option<u64>,
 }
 
 impl From<&RawRemoteCacheOptions> for ConfigurationOptions {
@@ -86,6 +91,7 @@ impl From<&RawRemoteCacheOptions> for ConfigurationOptions {
             signature: remote_cache_opts.signature,
             preflight: remote_cache_opts.preflight,
             timeout: remote_cache_opts.timeout,
+            upload_timeout: remote_cache_opts.upload_timeout,
             enabled: remote_cache_opts.enabled,
             ..Self::default()
         }
@@ -124,7 +130,18 @@ pub struct RawTurboJson {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) remote_cache: Option<RawRemoteCacheOptions>,
     #[serde(skip_serializing_if = "Option::is_none", rename = "ui")]
-    pub ui: Option<UI>,
+    pub ui: Option<UIMode>,
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        rename = "dangerouslyDisablePackageManagerCheck"
+    )]
+    pub allow_no_package_manager: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub daemon: Option<Spanned<bool>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub env_mode: Option<EnvMode>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cache_dir: Option<Spanned<UnescapedString>>,
 
     #[deserializable(rename = "//")]
     #[serde(skip)]
@@ -159,22 +176,32 @@ impl DerefMut for Pipeline {
     }
 }
 
-#[derive(Serialize, Debug, Copy, Clone, Deserializable, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Copy, Clone, Deserializable, PartialEq, Eq, ValueEnum)]
 #[serde(rename_all = "camelCase")]
-pub enum UI {
+pub enum UIMode {
+    /// Use the terminal user interface
     Tui,
+    /// Use the standard output stream
     Stream,
+    /// Use the web user interface (experimental)
+    Web,
 }
 
-impl Default for UI {
+impl Default for UIMode {
     fn default() -> Self {
         Self::Tui
     }
 }
 
-impl UI {
+impl UIMode {
     pub fn use_tui(&self) -> bool {
         matches!(self, Self::Tui)
+    }
+
+    /// Returns true if the UI mode has a sender,
+    /// i.e. web or tui but not stream
+    pub fn has_sender(&self) -> bool {
+        matches!(self, Self::Tui | Self::Web)
     }
 }
 
@@ -195,11 +222,20 @@ pub struct RawTaskDefinition {
     #[serde(skip_serializing_if = "Option::is_none")]
     persistent: Option<Spanned<bool>>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    interruptible: Option<Spanned<bool>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     outputs: Option<Vec<Spanned<UnescapedString>>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     output_logs: Option<Spanned<OutputLogsMode>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     interactive: Option<Spanned<bool>>,
+    // TODO: Remove this once we have the ability to load task definitions directly
+    // instead of deriving them from a TurboJson
+    #[serde(skip)]
+    env_mode: Option<EnvMode>,
+    // This can currently only be set internally and isn't a part of turbo.json
+    #[serde(skip)]
+    siblings: Option<Vec<Spanned<UnescapedString>>>,
 }
 
 macro_rules! set_field {
@@ -229,13 +265,16 @@ impl RawTaskDefinition {
         set_field!(self, other, inputs);
         set_field!(self, other, output_logs);
         set_field!(self, other, persistent);
+        set_field!(self, other, interruptible);
         set_field!(self, other, env);
         set_field!(self, other, pass_through_env);
         set_field!(self, other, interactive);
+        set_field!(self, other, env_mode);
+        set_field!(self, other, siblings);
     }
 }
 
-const CONFIG_FILE: &str = "turbo.json";
+pub const CONFIG_FILE: &str = "turbo.json";
 const ENV_PIPELINE_DELIMITER: &str = "$";
 const TOPOLOGICAL_PIPELINE_DELIMITER: &str = "^";
 
@@ -299,6 +338,13 @@ impl TryFrom<RawTaskDefinition> for TaskDefinition {
             if cache && interactive.value {
                 return Err(Error::InteractiveNoCacheable { span, text });
             }
+        }
+
+        let persistent = *raw_task.persistent.unwrap_or_default();
+        let interruptible = raw_task.interruptible.unwrap_or_default();
+        if *interruptible && !persistent {
+            let (span, text) = interruptible.span_and_text("turbo.json");
+            return Err(Error::InterruptibleButNotPersistent { span, text });
         }
 
         let mut env_var_dependencies = HashSet::new();
@@ -369,6 +415,16 @@ impl TryFrom<RawTaskDefinition> for TaskDefinition {
             })
             .transpose()?;
 
+        let siblings = raw_task.siblings.map(|siblings| {
+            siblings
+                .into_iter()
+                .map(|sibling| {
+                    let (sibling, span) = sibling.split();
+                    span.to(TaskName::from(String::from(sibling)))
+                })
+                .collect()
+        });
+
         Ok(TaskDefinition {
             outputs,
             cache,
@@ -378,8 +434,11 @@ impl TryFrom<RawTaskDefinition> for TaskDefinition {
             inputs,
             pass_through_env,
             output_logs: *raw_task.output_logs.unwrap_or_default(),
-            persistent: *raw_task.persistent.unwrap_or_default(),
+            persistent,
+            interruptible: *interruptible,
             interactive,
+            env_mode: raw_task.env_mode,
+            siblings,
         })
     }
 }
@@ -387,11 +446,16 @@ impl TryFrom<RawTaskDefinition> for TaskDefinition {
 impl RawTurboJson {
     pub(crate) fn read(
         repo_root: &AbsoluteSystemPath,
-        path: &AnchoredSystemPath,
+        path: &AbsoluteSystemPath,
     ) -> Result<RawTurboJson, Error> {
-        let absolute_path = repo_root.resolve(path);
-        let contents = absolute_path.read_to_string()?;
-        let raw_turbo_json = RawTurboJson::parse(&contents, path)?;
+        let contents = path.read_to_string()?;
+        // Anchoring the path can fail if the path resides outside of the repository
+        // Just display absolute path in that case.
+        let root_relative_path = repo_root.anchor(path).map_or_else(
+            |_| path.as_str().to_owned(),
+            |relative| relative.to_string(),
+        );
+        let raw_turbo_json = RawTurboJson::parse(&contents, &root_relative_path)?;
 
         Ok(raw_turbo_json)
     }
@@ -522,85 +586,6 @@ impl TryFrom<RawTurboJson> for TurboJson {
 }
 
 impl TurboJson {
-    /// Loads turbo.json by reading the file at `dir` and optionally combining
-    /// with synthesized information from the provided package.json
-    pub fn load(
-        repo_root: &AbsoluteSystemPath,
-        dir: &AnchoredSystemPath,
-        root_package_json: &PackageJson,
-        include_synthesized_from_root_package_json: bool,
-    ) -> Result<TurboJson, Error> {
-        let turbo_from_files = Self::read(repo_root, &dir.join_component(CONFIG_FILE));
-        let turbo_from_trace =
-            Self::read(repo_root, &dir.join_components(&TASK_ACCESS_CONFIG_PATH));
-
-        // check the zero config case (turbo trace file, but no turbo.json file)
-        if let Ok(turbo_from_trace) = turbo_from_trace {
-            if turbo_from_files.is_err() {
-                debug!("Using turbo.json synthesized from trace file");
-                return Ok(turbo_from_trace);
-            }
-        }
-
-        let mut turbo_json = match (include_synthesized_from_root_package_json, turbo_from_files) {
-            // If the file didn't exist, throw a custom error here instead of propagating
-            (false, Err(Error::Io(_))) => return Err(Error::NoTurboJSON),
-            // There was an error, and we don't have any chance of recovering
-            // because we aren't synthesizing anything
-            (false, Err(e)) => return Err(e),
-            // We're not synthesizing anything and there was no error, we're done
-            (false, Ok(turbo)) => return Ok(turbo),
-            // turbo.json doesn't exist, but we're going try to synthesize something
-            (true, Err(Error::Io(_))) => TurboJson::default(),
-            // some other happened, we can't recover
-            (true, Err(e)) => return Err(e),
-            // we're synthesizing, but we have a starting point
-            // Note: this will have to change to support task inference in a monorepo
-            // for now, we're going to error on any "root" tasks and turn non-root tasks into root
-            // tasks
-            (true, Ok(mut turbo_from_files)) => {
-                let mut pipeline = Pipeline::default();
-                for (task_name, task_definition) in turbo_from_files.tasks {
-                    if task_name.is_package_task() {
-                        let (span, text) = task_definition.span_and_text("turbo.json");
-
-                        return Err(Error::PackageTaskInSinglePackageMode {
-                            task_id: task_name.to_string(),
-                            span,
-                            text,
-                        });
-                    }
-
-                    pipeline.insert(task_name.into_root_task(), task_definition);
-                }
-
-                turbo_from_files.tasks = pipeline;
-
-                turbo_from_files
-            }
-        };
-
-        // TODO: Add location info from package.json
-        for script_name in root_package_json.scripts.keys() {
-            let task_name = TaskName::from(script_name.as_str());
-            if !turbo_json.has_task(&task_name) {
-                let task_name = task_name.into_root_task();
-                // Explicitly set cache to Some(false) in this definition
-                // so we can pretend it was set on purpose. That way it
-                // won't get clobbered by the merge function.
-                turbo_json.tasks.insert(
-                    task_name,
-                    Spanned::new(RawTaskDefinition {
-                        cache: Some(Spanned::new(false)),
-                        ..RawTaskDefinition::default()
-                    }),
-                );
-            }
-        }
-
-        Ok(turbo_json)
-    }
-
     fn has_task(&self, task_name: &TaskName) -> bool {
         for key in self.tasks.keys() {
             if key == task_name || (key.task() == task_name.task() && !task_name.is_package_task())
@@ -616,7 +601,7 @@ impl TurboJson {
     /// and then converts it into `TurboJson`
     pub(crate) fn read(
         repo_root: &AbsoluteSystemPath,
-        path: &AnchoredSystemPath,
+        path: &AbsoluteSystemPath,
     ) -> Result<TurboJson, Error> {
         let raw_turbo_json = RawTurboJson::read(repo_root, path)?;
         raw_turbo_json.try_into()
@@ -640,6 +625,42 @@ impl TurboJson {
         self.tasks
             .iter()
             .any(|(task_name, _)| task_name.package() == Some(ROOT_PKG_NAME))
+    }
+
+    /// Adds a local proxy task to a workspace TurboJson
+    pub fn with_proxy(&mut self, mfe_package_name: Option<&str>) {
+        if self.extends.is_empty() {
+            self.extends = Spanned::new(vec!["//".into()]);
+        }
+
+        self.tasks.insert(
+            TaskName::from("proxy"),
+            Spanned::new(RawTaskDefinition {
+                cache: Some(Spanned::new(false)),
+                depends_on: mfe_package_name.map(|mfe_package_name| {
+                    Spanned::new(vec![Spanned::new(UnescapedString::from(format!(
+                        "{mfe_package_name}#build"
+                    )))])
+                }),
+                ..Default::default()
+            }),
+        );
+    }
+
+    /// Adds a sibling relationship from task to sibling
+    pub fn with_sibling(&mut self, task: TaskName<'static>, sibling: &TaskName) {
+        if self.extends.is_empty() {
+            self.extends = Spanned::new(vec!["//".into()]);
+        }
+
+        let task_definition = self.tasks.entry(task).or_default();
+
+        let siblings = task_definition
+            .as_inner_mut()
+            .siblings
+            .get_or_insert_default();
+
+        siblings.push(Spanned::new(UnescapedString::from(sibling.to_string())))
     }
 }
 
@@ -724,141 +745,21 @@ fn gather_env_vars(
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
-
     use anyhow::Result;
     use biome_deserialize::json::deserialize_from_json_str;
     use biome_json_parser::JsonParserOptions;
     use pretty_assertions::assert_eq;
     use serde_json::json;
-    use tempfile::tempdir;
     use test_case::test_case;
-    use turbopath::{AbsoluteSystemPath, AnchoredSystemPath};
-    use turborepo_repository::package_json::PackageJson;
+    use turborepo_unescape::UnescapedString;
 
-    use super::{Pipeline, RawTurboJson, Spanned, UI};
+    use super::{RawTurboJson, Spanned, TurboJson, UIMode};
     use crate::{
         cli::OutputLogsMode,
         run::task_id::TaskName,
         task_graph::{TaskDefinition, TaskOutputs},
-        turbo_json::{RawTaskDefinition, TurboJson},
-        unescape::UnescapedString,
+        turbo_json::RawTaskDefinition,
     };
-
-    #[test_case(r"{}", TurboJson::default() ; "empty")]
-    #[test_case(r#"{ "globalDependencies": ["tsconfig.json", "jest.config.js"] }"#,
-        TurboJson {
-            global_deps: vec!["jest.config.js".to_string(), "tsconfig.json".to_string()],
-            ..TurboJson::default()
-        }
-    ; "global dependencies (sorted)")]
-    #[test_case(r#"{ "globalPassThroughEnv": ["GITHUB_TOKEN", "AWS_SECRET_KEY"] }"#,
-        TurboJson {
-            global_pass_through_env: Some(vec!["AWS_SECRET_KEY".to_string(), "GITHUB_TOKEN".to_string()]),
-            ..TurboJson::default()
-        }
-    )]
-    #[test_case(r#"{ "//": "A comment"}"#, TurboJson::default() ; "faux comment")]
-    #[test_case(r#"{ "//": "A comment", "//": "Another comment" }"#, TurboJson::default() ; "two faux comments")]
-    fn test_get_root_turbo_no_synthesizing(
-        turbo_json_content: &str,
-        expected_turbo_json: TurboJson,
-    ) -> Result<()> {
-        let root_dir = tempdir()?;
-        let root_package_json = PackageJson::default();
-        let repo_root = AbsoluteSystemPath::from_std_path(root_dir.path())?;
-        fs::write(repo_root.join_component("turbo.json"), turbo_json_content)?;
-
-        let mut turbo_json = TurboJson::load(
-            repo_root,
-            AnchoredSystemPath::empty(),
-            &root_package_json,
-            false,
-        )?;
-
-        turbo_json.text = None;
-        turbo_json.path = None;
-        assert_eq!(turbo_json, expected_turbo_json);
-
-        Ok(())
-    }
-
-    #[test_case(
-        None,
-        PackageJson {
-             scripts: [("build".to_string(), "echo build".to_string())].into_iter().collect(),
-             ..PackageJson::default()
-        },
-        TurboJson {
-            tasks: Pipeline([(
-                "//#build".into(),
-                Spanned::new(RawTaskDefinition {
-                    cache: Some(Spanned::new(false)),
-                    ..RawTaskDefinition::default()
-                })
-              )].into_iter().collect()
-            ),
-            ..TurboJson::default()
-        }
-    )]
-    #[test_case(
-        Some(r#"{
-            "tasks": {
-                "build": {
-                    "cache": true
-                }
-            }
-        }"#),
-        PackageJson {
-             scripts: [("test".to_string(), "echo test".to_string())].into_iter().collect(),
-             ..PackageJson::default()
-        },
-        TurboJson {
-            tasks: Pipeline([(
-                "//#build".into(),
-                Spanned::new(RawTaskDefinition {
-                    cache: Some(Spanned::new(true).with_range(81..85)),
-                    ..RawTaskDefinition::default()
-                }).with_range(50..103)
-            ),
-            (
-                "//#test".into(),
-                Spanned::new(RawTaskDefinition {
-                     cache: Some(Spanned::new(false)),
-                    ..RawTaskDefinition::default()
-                })
-            )].into_iter().collect()),
-            ..TurboJson::default()
-        }
-    )]
-    fn test_get_root_turbo_with_synthesizing(
-        turbo_json_content: Option<&str>,
-        root_package_json: PackageJson,
-        expected_turbo_json: TurboJson,
-    ) -> Result<()> {
-        let root_dir = tempdir()?;
-        let repo_root = AbsoluteSystemPath::from_std_path(root_dir.path())?;
-
-        if let Some(content) = turbo_json_content {
-            fs::write(repo_root.join_component("turbo.json"), content)?;
-        }
-
-        let mut turbo_json = TurboJson::load(
-            repo_root,
-            AnchoredSystemPath::empty(),
-            &root_package_json,
-            true,
-        )?;
-        turbo_json.text = None;
-        turbo_json.path = None;
-        for (_, task_definition) in turbo_json.tasks.iter_mut() {
-            task_definition.path = None;
-            task_definition.text = None;
-        }
-        assert_eq!(turbo_json, expected_turbo_json);
-
-        Ok(())
-    }
 
     #[test_case(
         "{}",
@@ -884,7 +785,8 @@ mod tests {
           "inputs": ["package/a/src/**"],
           "outputLogs": "full",
           "persistent": true,
-          "interactive": true
+          "interactive": true,
+          "interruptible": true
         }"#,
         RawTaskDefinition {
             depends_on: Some(Spanned::new(vec![Spanned::<UnescapedString>::new("cli#build".into()).with_range(26..37)]).with_range(25..38)),
@@ -896,6 +798,9 @@ mod tests {
             output_logs: Some(Spanned::new(OutputLogsMode::Full).with_range(246..252)),
             persistent: Some(Spanned::new(true).with_range(278..282)),
             interactive: Some(Spanned::new(true).with_range(309..313)),
+            interruptible: Some(Spanned::new(true).with_range(342..346)),
+            env_mode: None,
+            siblings: None,
         },
         TaskDefinition {
           env: vec!["OS".to_string()],
@@ -911,6 +816,9 @@ mod tests {
           topological_dependencies: vec![],
           persistent: true,
           interactive: true,
+          interruptible: true,
+          env_mode: None,
+          siblings: None,
         }
       ; "full"
     )]
@@ -923,7 +831,8 @@ mod tests {
               "cache": false,
               "inputs": ["package\\a\\src\\**"],
               "outputLogs": "full",
-              "persistent": true
+              "persistent": true,
+              "interruptible": true
             }"#,
         RawTaskDefinition {
             depends_on: Some(Spanned::new(vec![Spanned::<UnescapedString>::new("cli#build".into()).with_range(30..41)]).with_range(29..42)),
@@ -934,7 +843,10 @@ mod tests {
             inputs: Some(vec![Spanned::<UnescapedString>::new("package\\a\\src\\**".into()).with_range(227..248)]),
             output_logs: Some(Spanned::new(OutputLogsMode::Full).with_range(279..285)),
             persistent: Some(Spanned::new(true).with_range(315..319)),
+            interruptible: Some(Spanned::new(true).with_range(352..356)),
             interactive: None,
+            env_mode: None,
+            siblings: None,
         },
         TaskDefinition {
             env: vec!["OS".to_string()],
@@ -949,7 +861,10 @@ mod tests {
             task_dependencies: vec![Spanned::<TaskName<'_>>::new("cli#build".into()).with_range(30..41)],
             topological_dependencies: vec![],
             persistent: true,
+            interruptible: true,
             interactive: false,
+            env_mode: None,
+            siblings: None,
         }
       ; "full (windows)"
     )]
@@ -1067,19 +982,111 @@ mod tests {
         assert_eq!(actual, expected);
     }
 
-    #[test_case(r#"{ "ui": "tui" }"#, Some(UI::Tui) ; "tui")]
-    #[test_case(r#"{ "ui": "stream" }"#, Some(UI::Stream) ; "stream")]
+    #[test_case(r#"{ "ui": "tui" }"#, Some(UIMode::Tui) ; "tui")]
+    #[test_case(r#"{ "ui": "stream" }"#, Some(UIMode::Stream) ; "stream")]
     #[test_case(r#"{}"#, None ; "missing")]
-    fn test_ui(json: &str, expected: Option<UI>) {
-        let json = RawTurboJson::parse(json, AnchoredSystemPath::new("").unwrap()).unwrap();
+    fn test_ui(json: &str, expected: Option<UIMode>) {
+        let json = RawTurboJson::parse(json, "").unwrap();
         assert_eq!(json.ui, expected);
+    }
+
+    #[test_case(r#"{ "daemon": true }"#, r#"{"daemon":true}"# ; "daemon_on")]
+    #[test_case(r#"{ "daemon": false }"#, r#"{"daemon":false}"# ; "daemon_off")]
+    fn test_daemon(json: &str, expected: &str) {
+        let parsed = RawTurboJson::parse(json, "").unwrap();
+        let actual = serde_json::to_string(&parsed).unwrap();
+        assert_eq!(actual, expected);
     }
 
     #[test_case(r#"{ "ui": "tui" }"#, r#"{"ui":"tui"}"# ; "tui")]
     #[test_case(r#"{ "ui": "stream" }"#, r#"{"ui":"stream"}"# ; "stream")]
     fn test_ui_serialization(input: &str, expected: &str) {
-        let parsed = RawTurboJson::parse(input, AnchoredSystemPath::new("").unwrap()).unwrap();
+        let parsed = RawTurboJson::parse(input, "").unwrap();
         let actual = serde_json::to_string(&parsed).unwrap();
         assert_eq!(actual, expected);
+    }
+
+    #[test_case(r#"{"dangerouslyDisablePackageManagerCheck":true}"#, Some(true) ; "t")]
+    #[test_case(r#"{"dangerouslyDisablePackageManagerCheck":false}"#, Some(false) ; "f")]
+    #[test_case(r#"{}"#, None ; "missing")]
+    fn test_allow_no_package_manager_serde(json_str: &str, expected: Option<bool>) {
+        let json = RawTurboJson::parse(json_str, "").unwrap();
+        assert_eq!(json.allow_no_package_manager, expected);
+        let serialized = serde_json::to_string(&json).unwrap();
+        assert_eq!(serialized, json_str);
+    }
+
+    #[test]
+    fn test_with_proxy_empty() {
+        let mut json = TurboJson::default();
+        json.with_proxy(None);
+        assert_eq!(json.extends.as_inner().as_slice(), &["//".to_string()]);
+        assert!(json.tasks.contains_key(&TaskName::from("proxy")));
+    }
+
+    #[test]
+    fn test_with_proxy_existing() {
+        let mut json = TurboJson::default();
+        json.tasks.insert(
+            TaskName::from("build"),
+            Spanned::new(RawTaskDefinition::default()),
+        );
+        json.with_proxy(None);
+        assert_eq!(json.extends.as_inner().as_slice(), &["//".to_string()]);
+        assert!(json.tasks.contains_key(&TaskName::from("proxy")));
+        assert!(json.tasks.contains_key(&TaskName::from("build")));
+    }
+
+    #[test]
+    fn test_with_proxy_with_proxy_build() {
+        let mut json = TurboJson::default();
+        json.with_proxy(Some("my-proxy"));
+        assert_eq!(json.extends.as_inner().as_slice(), &["//".to_string()]);
+        let proxy_task = json.tasks.get(&TaskName::from("proxy"));
+        assert!(proxy_task.is_some());
+        let proxy_task = proxy_task.unwrap().as_inner();
+        assert_eq!(
+            proxy_task
+                .depends_on
+                .as_ref()
+                .unwrap()
+                .as_inner()
+                .as_slice(),
+            &[Spanned::new(UnescapedString::from("my-proxy#build"))]
+        );
+    }
+
+    #[test]
+    fn test_with_sibling_empty() {
+        let mut json = TurboJson::default();
+        json.with_sibling(TaskName::from("dev"), &TaskName::from("api#server"));
+        let dev_task = json.tasks.get(&TaskName::from("dev"));
+        assert!(dev_task.is_some());
+        let dev_task = dev_task.unwrap().as_inner();
+        assert_eq!(
+            dev_task.siblings.as_ref().unwrap().as_slice(),
+            &[Spanned::new(UnescapedString::from("api#server"))]
+        );
+    }
+
+    #[test]
+    fn test_with_sibling_existing() {
+        let mut json = TurboJson::default();
+        json.tasks.insert(
+            TaskName::from("dev"),
+            Spanned::new(RawTaskDefinition {
+                persistent: Some(Spanned::new(true)),
+                ..Default::default()
+            }),
+        );
+        json.with_sibling(TaskName::from("dev"), &TaskName::from("api#server"));
+        let dev_task = json.tasks.get(&TaskName::from("dev"));
+        assert!(dev_task.is_some());
+        let dev_task = dev_task.unwrap().as_inner();
+        assert_eq!(dev_task.persistent, Some(Spanned::new(true)));
+        assert_eq!(
+            dev_task.siblings.as_ref().unwrap().as_slice(),
+            &[Spanned::new(UnescapedString::from("api#server"))]
+        );
     }
 }

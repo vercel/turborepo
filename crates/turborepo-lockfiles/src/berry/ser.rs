@@ -51,6 +51,7 @@ impl fmt::Display for Metadata {
 
 const SPACE: char = ' ';
 const NEWLINE: char = '\n';
+const INDENT: &str = "  ";
 
 impl fmt::Display for BerryPackage {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -144,34 +145,58 @@ where
     I: Iterator<Item = (S, &'a DependencyMeta)>,
     S: AsRef<str>,
 {
-    let mut string = String::new();
-    let mut first = true;
+    struct Builder {
+        s: String,
+    }
 
-    let mut add_line = |dependency: &str, field: &str| {
-        if !first {
-            string.push('\n');
+    impl Builder {
+        fn new() -> Self {
+            Self { s: String::new() }
         }
 
-        string.push_str(&format!(
-            "    {}:\n      {}: true",
-            wrap_string(dependency),
-            wrap_string(field)
-        ));
-
-        first = false;
-    };
-
-    for (dependency, meta) in metadata {
-        let dependency = dependency.as_ref();
-        if meta.optional.unwrap_or_default() {
-            add_line(dependency, "optional");
+        fn add_field(&mut self, field: &str, value: bool) {
+            if !self.s.is_empty() {
+                self.s.push('\n');
+            }
+            self.s.push_str(&format!(
+                "{INDENT}{INDENT}{INDENT}{}: {value}",
+                wrap_string(field)
+            ));
         }
-        if meta.unplugged.unwrap_or_default() {
-            add_line(dependency, "unplugged");
+
+        fn add_dependency(&mut self, dependency: &str) {
+            if !self.s.is_empty() {
+                self.s.push('\n');
+            }
+            self.s
+                .push_str(&format!("{INDENT}{INDENT}{}:", wrap_string(dependency),));
         }
     }
 
-    string
+    let mut builder = Builder::new();
+
+    for (dependency, meta) in metadata {
+        let dependency = dependency.as_ref();
+        let mut first = true;
+        let mut add_line = |field: &str, value: bool| {
+            if first {
+                builder.add_dependency(dependency);
+            }
+            builder.add_field(field, value);
+            first = false;
+        };
+        if let Some(optional) = meta.optional {
+            add_line("optional", optional);
+        }
+        if let Some(unplugged) = meta.unplugged {
+            add_line("unplugged", unplugged);
+        }
+        if let Some(built) = meta.built {
+            add_line("built", built);
+        }
+    }
+
+    builder.s
 }
 
 fn wrap_string(s: &str) -> Cow<str> {
@@ -237,7 +262,51 @@ mod test {
             .cloned()
             .collect(),
         };
-        let serailized = lockfile.to_string();
-        assert!(serailized.contains(&format!("? {long_key}\n")));
+        let serialized = lockfile.to_string();
+        assert!(serialized.contains(&format!("? {long_key}\n")));
+    }
+
+    #[test]
+    fn test_stringify_dependencies_meta() {
+        let metadata = DependencyMeta {
+            optional: Some(false),
+            unplugged: None,
+            built: Some(true),
+        };
+        assert_eq!(
+            stringify_dependencies_meta(Some(("turbo", &metadata)).into_iter()),
+            "    turbo:\n      optional: false\n      built: true"
+        );
+    }
+
+    #[test]
+    fn test_stringify_dependencies_meta_multi() {
+        let foo = DependencyMeta {
+            optional: Some(true),
+            unplugged: None,
+            built: None,
+        };
+        let bar = DependencyMeta {
+            optional: None,
+            unplugged: None,
+            built: Some(true),
+        };
+        assert_eq!(
+            stringify_dependencies_meta(vec![("foo", &foo), ("bar", &bar)].into_iter()),
+            "    foo:\n      optional: true\n    bar:\n      built: true"
+        );
+    }
+
+    #[test]
+    fn test_empty_dep_meta() {
+        let metadata = DependencyMeta {
+            optional: None,
+            unplugged: None,
+            built: None,
+        };
+        assert_eq!(
+            stringify_dependencies_meta(Some(("turbo", &metadata)).into_iter()),
+            ""
+        );
     }
 }

@@ -47,7 +47,7 @@ pub enum Error {
     #[error("link cancelled")]
     NotLinking,
     #[error("canceled")]
-    UserCanceled(#[source] io::Error),
+    UserCanceled(#[source] dialoguer::Error),
     #[error("could not get user information {0}")]
     UserNotFound(#[source] turborepo_api_client::Error),
     // We failed to fetch the team for whatever reason
@@ -163,27 +163,34 @@ pub(crate) async fn verify_caching_enabled<'a>(
 
 pub async fn link(
     base: &mut CommandBase,
+    scope: Option<String>,
     modify_gitignore: bool,
+    yes: bool,
     target: LinkTarget,
 ) -> Result<(), Error> {
     let homedir_path = home_dir().ok_or_else(|| Error::HomeDirectoryNotFound)?;
     let homedir = homedir_path.to_string_lossy();
     let repo_root_with_tilde = base.repo_root.to_string().replacen(&*homedir, "~", 1);
     let api_client = base.api_client()?;
-    let token = base.config()?.token().ok_or_else(|| Error::TokenNotFound {
-        command: base.ui.apply(BOLD.apply_to("`npx turbo login`")),
-    })?;
+    let token = base
+        .opts()
+        .api_client_opts
+        .token
+        .as_deref()
+        .ok_or_else(|| Error::TokenNotFound {
+            command: base.color_config.apply(BOLD.apply_to("`npx turbo login`")),
+        })?;
 
     match target {
         LinkTarget::RemoteCache => {
             println!(
                 "\n{}\n\n{}\n\nFor more information, visit: {}\n",
-                base.ui.rainbow(">>> Remote Caching"),
+                base.color_config.rainbow(">>> Remote Caching"),
                 REMOTE_CACHING_INFO,
                 REMOTE_CACHING_URL
             );
 
-            if !should_link_remote_cache(base, &repo_root_with_tilde)? {
+            if !yes && !should_link_remote_cache(base, &repo_root_with_tilde)? {
                 return Err(Error::NotLinking);
             }
 
@@ -203,7 +210,17 @@ pub async fn link(
                 .await
                 .map_err(Error::TeamsRequest)?;
 
-            let selected_team = select_team(base, &teams_response.teams)?;
+            let selected_team = if let Some(team_slug) = scope {
+                SelectedTeam::Team(
+                    teams_response
+                        .teams
+                        .iter()
+                        .find(|team| team.slug == team_slug)
+                        .ok_or_else(|| Error::TeamNotFound(team_slug.to_string()))?,
+                )
+            } else {
+                select_team(base, &teams_response.teams)?
+            };
 
             let team_id = match selected_team {
                 SelectedTeam::User => user_response.user.id.as_str(),
@@ -215,11 +232,12 @@ pub async fn link(
 
             let local_config_path = base.local_config_path();
             let before = local_config_path
-                .read_existing_to_string_or(Ok("{}"))
+                .read_existing_to_string()
                 .map_err(|e| config::Error::FailedToReadConfig {
                     config_path: local_config_path.clone(),
                     error: e,
-                })?;
+                })?
+                .unwrap_or_else(|| String::from("{}"));
 
             let no_preexisting_id = unset_path(&before, &["teamid"], false)?.unwrap_or(before);
             let no_preexisting_slug =
@@ -264,8 +282,8 @@ pub async fn link(
 
     {}
         ",
-                base.ui.rainbow(">>> Success!"),
-                base.ui.apply(BOLD.apply_to(chosen_team_name)),
+                base.color_config.rainbow(">>> Success!"),
+                base.color_config.apply(BOLD.apply_to(chosen_team_name)),
                 GREY.apply_to("To disable Remote Caching, run `npx turbo unlink`")
             );
             Ok(())
@@ -314,11 +332,12 @@ pub async fn link(
 
             let local_config_path = base.local_config_path();
             let before = local_config_path
-                .read_existing_to_string_or(Ok("{}"))
+                .read_existing_to_string()
                 .map_err(|error| config::Error::FailedToReadConfig {
                     config_path: local_config_path.clone(),
                     error,
-                })?;
+                })?
+                .unwrap_or_else(|| String::from("{}"));
 
             let no_preexisting_id = unset_path(&before, &["teamid"], false)?.unwrap_or(before);
             let no_preexisting_slug =
@@ -349,9 +368,10 @@ pub async fn link(
 
     {}
         ",
-                base.ui.rainbow(">>> Success!"),
-                base.ui.apply(BOLD.apply_to(&repo_root_with_tilde)),
-                base.ui.apply(BOLD.apply_to(&space.name)),
+                base.color_config.rainbow(">>> Success!"),
+                base.color_config
+                    .apply(BOLD.apply_to(&repo_root_with_tilde)),
+                base.color_config.apply(BOLD.apply_to(&space.name)),
                 GREY.apply_to(
                     "To remove Spaces integration, run `npx turbo unlink --target spaces`"
                 )
@@ -399,10 +419,10 @@ fn select_team<'a>(base: &CommandBase, teams: &'a [Team]) -> Result<SelectedTeam
 
     let prompt = format!(
         "{}\n  {}",
-        base.ui.apply(BOLD.apply_to(
+        base.color_config.apply(BOLD.apply_to(
             "Which Vercel scope (and Remote Cache) do you want associated with this Turborepo?",
         )),
-        base.ui
+        base.color_config
             .apply(CYAN.apply_to("[Use arrows to move, type to filter]"))
     );
 
@@ -440,10 +460,10 @@ fn select_space<'a>(base: &CommandBase, spaces: &'a [Space]) -> Result<SelectedS
 
     let prompt = format!(
         "{}\n  {}",
-        base.ui.apply(
+        base.color_config.apply(
             BOLD.apply_to("Which Vercel space do you want associated with this Turborepo?",)
         ),
-        base.ui
+        base.color_config
             .apply(CYAN.apply_to("[Use arrows to move, type to filter]"))
     );
 
@@ -466,11 +486,12 @@ fn should_link_remote_cache(_: &CommandBase, _: &str) -> Result<bool, Error> {
 fn should_link_remote_cache(base: &CommandBase, location: &str) -> Result<bool, Error> {
     let prompt = format!(
         "{}{} {}{}",
-        base.ui.apply(BOLD.apply_to(GREY.apply_to("? "))),
-        base.ui
+        base.color_config.apply(BOLD.apply_to(GREY.apply_to("? "))),
+        base.color_config
             .apply(BOLD.apply_to("Enable Vercel Remote Cache for")),
-        base.ui.apply(BOLD.apply_to(CYAN.apply_to(location))),
-        base.ui.apply(BOLD.apply_to(" ?"))
+        base.color_config
+            .apply(BOLD.apply_to(CYAN.apply_to(location))),
+        base.color_config.apply(BOLD.apply_to(" ?"))
     );
 
     Confirm::new()
@@ -488,10 +509,12 @@ fn should_link_spaces(_: &CommandBase, _: &str) -> Result<bool, Error> {
 fn should_link_spaces(base: &CommandBase, location: &str) -> Result<bool, Error> {
     let prompt = format!(
         "{}{} {} {}",
-        base.ui.apply(BOLD.apply_to(GREY.apply_to("? "))),
-        base.ui.apply(BOLD.apply_to("Would you like to link")),
-        base.ui.apply(BOLD.apply_to(CYAN.apply_to(location))),
-        base.ui.apply(BOLD.apply_to("to Vercel Spaces")),
+        base.color_config.apply(BOLD.apply_to(GREY.apply_to("? "))),
+        base.color_config
+            .apply(BOLD.apply_to("Would you like to link")),
+        base.color_config
+            .apply(BOLD.apply_to(CYAN.apply_to(location))),
+        base.color_config.apply(BOLD.apply_to("to Vercel Spaces")),
     );
 
     Confirm::new()
@@ -537,11 +560,12 @@ fn add_turbo_to_gitignore(base: &CommandBase) -> Result<(), io::Error> {
 fn add_space_id_to_turbo_json(base: &CommandBase, space_id: &str) -> Result<(), Error> {
     let turbo_json_path = base.repo_root.join_component("turbo.json");
     let turbo_json = turbo_json_path
-        .read_existing_to_string_or(Ok("{}"))
+        .read_existing_to_string()
         .map_err(|error| config::Error::FailedToReadConfig {
             config_path: turbo_json_path.clone(),
             error,
-        })?;
+        })?
+        .unwrap_or_else(|| String::from("{}"));
 
     let space_id_json_value = format!("\"{}\"", space_id);
 
@@ -561,18 +585,19 @@ fn add_space_id_to_turbo_json(base: &CommandBase, space_id: &str) -> Result<(), 
 
 #[cfg(test)]
 mod test {
-    use std::{cell::OnceCell, fs};
+    use std::fs;
 
     use anyhow::Result;
     use tempfile::{NamedTempFile, TempDir};
-    use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath};
-    use turborepo_ui::UI;
+    use turbopath::AbsoluteSystemPathBuf;
+    use turborepo_ui::ColorConfig;
     use turborepo_vercel_api_mock::start_test_server;
 
     use crate::{
         cli::LinkTarget,
         commands::{link, CommandBase},
         config::TurborepoConfigBuilder,
+        opts::Opts,
         turbo_json::RawTurboJson,
         Args,
     };
@@ -604,35 +629,31 @@ mod test {
 
         let port = port_scanner::request_open_port().unwrap();
         let handle = tokio::spawn(start_test_server(port));
-        let mut base = CommandBase {
-            global_config_path: Some(
-                AbsoluteSystemPathBuf::try_from(user_config_file.path().to_path_buf()).unwrap(),
-            ),
-            repo_root: repo_root.clone(),
-            ui: UI::new(false),
-            config: OnceCell::new(),
-            args: Args::default(),
-            version: "",
-        };
-        base.config
-            .set(
-                TurborepoConfigBuilder::new(&base)
-                    .with_api_url(Some(format!("http://localhost:{}", port)))
-                    .with_login_url(Some(format!("http://localhost:{}", port)))
-                    .with_token(Some("token".to_string()))
-                    .build()
-                    .unwrap(),
-            )
-            .unwrap();
+        let override_global_config_path =
+            AbsoluteSystemPathBuf::try_from(user_config_file.path().to_path_buf())?;
 
-        link::link(&mut base, false, LinkTarget::RemoteCache)
-            .await
-            .unwrap();
+        let config = TurborepoConfigBuilder::new(&repo_root)
+            .with_global_config_path(override_global_config_path.clone())
+            .with_api_url(Some(format!("http://localhost:{}", port)))
+            .with_login_url(Some(format!("http://localhost:{}", port)))
+            .with_token(Some("token".to_string()))
+            .build()?;
+
+        let mut base = CommandBase::from_opts(
+            Opts::new(&repo_root, &Args::default(), config)?,
+            repo_root.clone(),
+            "1.0.0",
+            ColorConfig::new(false),
+        );
+
+        link::link(&mut base, None, false, false, LinkTarget::RemoteCache).await?;
 
         handle.abort();
 
         // read the config
-        let updated_config = TurborepoConfigBuilder::new(&base).build().unwrap();
+        let updated_config = TurborepoConfigBuilder::new(&base.repo_root)
+            .with_global_config_path(override_global_config_path)
+            .build()?;
         let team_id = updated_config.team_id();
 
         assert!(
@@ -644,7 +665,7 @@ mod test {
     }
 
     #[tokio::test]
-    async fn test_link_spaces() {
+    async fn test_link_spaces() -> Result<()> {
         // user config
         let user_config_file = NamedTempFile::new().unwrap();
         fs::write(user_config_file.path(), r#"{ "token": "hello" }"#).unwrap();
@@ -670,26 +691,22 @@ mod test {
 
         let port = port_scanner::request_open_port().unwrap();
         let handle = tokio::spawn(start_test_server(port));
-        let mut base = CommandBase {
-            global_config_path: Some(
-                AbsoluteSystemPathBuf::try_from(user_config_file.path().to_path_buf()).unwrap(),
-            ),
-            repo_root: repo_root.clone(),
-            ui: UI::new(false),
-            config: OnceCell::new(),
-            args: Args::default(),
-            version: "",
-        };
-        base.config
-            .set(
-                TurborepoConfigBuilder::new(&base)
-                    .with_api_url(Some(format!("http://localhost:{}", port)))
-                    .with_login_url(Some(format!("http://localhost:{}", port)))
-                    .with_token(Some("token".to_string()))
-                    .build()
-                    .unwrap(),
-            )
-            .unwrap();
+        let override_global_config_path =
+            AbsoluteSystemPathBuf::try_from(user_config_file.path().to_path_buf())?;
+
+        let config = TurborepoConfigBuilder::new(&repo_root)
+            .with_global_config_path(override_global_config_path.clone())
+            .with_api_url(Some(format!("http://localhost:{}", port)))
+            .with_login_url(Some(format!("http://localhost:{}", port)))
+            .with_token(Some("token".to_string()))
+            .build()?;
+
+        let mut base = CommandBase::from_opts(
+            Opts::new(&repo_root, &Args::default(), config)?,
+            repo_root.clone(),
+            "",
+            ColorConfig::new(false),
+        );
 
         // turbo config
         let turbo_json_file = base.repo_root.join_component("turbo.json");
@@ -700,7 +717,7 @@ mod test {
         )
         .unwrap();
 
-        link::link(&mut base, false, LinkTarget::Spaces)
+        link::link(&mut base, None, false, false, LinkTarget::Spaces)
             .await
             .unwrap();
 
@@ -708,14 +725,12 @@ mod test {
 
         // verify space id is added to turbo.json
         let turbo_json_contents = fs::read_to_string(&turbo_json_file).unwrap();
-        let turbo_json = RawTurboJson::parse(
-            &turbo_json_contents,
-            AnchoredSystemPath::new("turbo.json").unwrap(),
-        )
-        .unwrap();
+        let turbo_json = RawTurboJson::parse(&turbo_json_contents, "turbo.json").unwrap();
         assert_eq!(
             turbo_json.experimental_spaces.unwrap().id.unwrap(),
             turborepo_vercel_api_mock::EXPECTED_SPACE_ID.into()
         );
+
+        Ok(())
     }
 }

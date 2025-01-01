@@ -26,13 +26,16 @@ pub enum Error {
     #[error(transparent)]
     Opts(#[from] opts::Error),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     PackageJson(#[from] turborepo_repository::package_json::Error),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     PackageManager(#[from] turborepo_repository::package_manager::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Config(#[from] config::Error),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     PackageGraphBuilder(#[from] package_graph::builder::Error),
     #[error(transparent)]
     DaemonConnector(#[from] daemon::DaemonConnectorError),
@@ -47,11 +50,16 @@ pub enum Error {
     #[error(transparent)]
     TaskHash(#[from] task_hash::Error),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Visitor(#[from] task_graph::VisitorError),
     #[error("error registering signal handler: {0}")]
     SignalHandler(std::io::Error),
     #[error(transparent)]
     Daemon(#[from] daemon::DaemonError),
     #[error(transparent)]
+    UI(#[from] turborepo_ui::Error),
+    #[error(transparent)]
     Tui(#[from] tui::Error),
+    #[error("Error reading micro frontends configuration: {0}")]
+    MicroFrontends(#[from] turborepo_microfrontends::Error),
 }
