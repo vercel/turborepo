@@ -163,9 +163,11 @@ mod test {
 
     const MINIMAL: &str = include_str!("../../fixtures/yarn1.lock");
     const FULL: &str = include_str!("../../fixtures/yarn1full.lock");
+    const GH_8849: &str = include_str!("../../fixtures/gh_8849.lock");
 
     #[test_case(MINIMAL ; "minimal lockfile")]
     #[test_case(FULL ; "full lockfile")]
+    #[test_case(GH_8849 ; "gh 8849")]
     fn test_roundtrip(input: &str) {
         let lockfile = Yarn1Lockfile::from_str(input).unwrap();
         assert_eq!(input, lockfile.to_string());
