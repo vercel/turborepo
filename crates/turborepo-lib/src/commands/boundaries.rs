@@ -7,7 +7,7 @@ use crate::{
     signal::SignalHandler,
 };
 
-pub async fn run(base: CommandBase, telemetry: CommandEventBuilder) -> Result<(), cli::Error> {
+pub async fn run(base: CommandBase, telemetry: CommandEventBuilder) -> Result<i32, cli::Error> {
     let signal = get_signal()?;
     let handler = SignalHandler::new(signal);
 
@@ -20,5 +20,9 @@ pub async fn run(base: CommandBase, telemetry: CommandEventBuilder) -> Result<()
 
     result.emit();
 
-    Ok(())
+    if result.is_ok() {
+        Ok(0)
+    } else {
+        Ok(1)
+    }
 }
