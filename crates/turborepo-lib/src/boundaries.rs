@@ -176,10 +176,7 @@ impl Run {
                 "**/*.vue".parse().unwrap(),
                 "**/*.svelte".parse().unwrap(),
             ],
-            &[
-                "**/node_modules/**".parse().unwrap(),
-                "**/examples/**".parse().unwrap(),
-            ],
+            &["**/node_modules/**".parse().unwrap()],
             globwalk::WalkType::Files,
         )?;
 
