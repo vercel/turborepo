@@ -79,8 +79,8 @@ pub enum Error {
     },
     #[error(
         "Your `package.json` script looks like it invokes a Root Task ({task_name}), creating a \
-         loop of `turbo` invocations. You likely have misconfigured your scripts \
-         and tasks or your package manager's Workspace structure."
+         loop of `turbo` invocations. You likely have misconfigured your scripts and tasks or \
+         your package manager's Workspace structure."
     )]
     #[diagnostic(
         code(recursive_turbo_invocations),
