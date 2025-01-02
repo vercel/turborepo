@@ -16,7 +16,9 @@ pub async fn run(base: CommandBase, telemetry: CommandEventBuilder) -> Result<()
         .build(&handler, telemetry)
         .await?;
 
-    run.check_boundaries().await?;
+    let result = run.check_boundaries().await?;
+
+    result.emit();
 
     Ok(())
 }
