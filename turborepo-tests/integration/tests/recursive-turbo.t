@@ -13,7 +13,6 @@ sed replaces the square brackets with parentheses so prysk can parse the file pa
     | misconfigured your scripts and tasks or your package manager's Workspace
     | structure.
      ,-\(.*package.json:3:1\) (re)
-
    3 |   "scripts": {
    4 |     "something": "turbo run build"
      :                  ^^^^^^^^|^^^^^^^^
