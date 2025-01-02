@@ -1281,8 +1281,7 @@ pub async fn run(
             event.track_call();
             let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
 
-            boundaries::run(base, event).await?;
-            Ok(0)
+            Ok(boundaries::run(base, event).await?)
         }
         #[allow(unused_variables)]
         Command::Daemon { command, idle_time } => {

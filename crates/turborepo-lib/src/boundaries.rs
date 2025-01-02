@@ -85,6 +85,10 @@ pub struct BoundariesResult {
 }
 
 impl BoundariesResult {
+    pub fn is_ok(&self) -> bool {
+        self.diagnostics.is_empty()
+    }
+
     pub fn emit(&self) {
         let handler = Handler::with_tty_emitter(
             ColorConfig::Auto,
