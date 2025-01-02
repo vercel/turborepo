@@ -10,7 +10,7 @@ use turbo_trace::Tracer;
 use turbopath::AbsoluteSystemPathBuf;
 
 use crate::{
-    query::{Array, Error},
+    query::{Array, Diagnostic, Error},
     run::Run,
 };
 
@@ -73,40 +73,30 @@ impl File {
     }
 }
 
-#[derive(SimpleObject, Debug, Default)]
-pub struct TraceError {
-    message: String,
-    reason: String,
-    path: Option<String>,
-    import: Option<String>,
-    start: Option<usize>,
-    end: Option<usize>,
-}
-
-impl From<turbo_trace::TraceError> for TraceError {
+impl From<turbo_trace::TraceError> for Diagnostic {
     fn from(error: turbo_trace::TraceError) -> Self {
         let message = error.to_string();
         match error {
-            turbo_trace::TraceError::FileNotFound(file) => TraceError {
+            turbo_trace::TraceError::FileNotFound(file) => Diagnostic {
                 message,
                 path: Some(file.to_string()),
                 ..Default::default()
             },
-            turbo_trace::TraceError::PathEncoding(_) => TraceError {
+            turbo_trace::TraceError::PathEncoding(_) => Diagnostic {
                 message,
                 ..Default::default()
             },
-            turbo_trace::TraceError::RootFile(path) => TraceError {
+            turbo_trace::TraceError::RootFile(path) => Diagnostic {
                 message,
                 path: Some(path.to_string()),
                 ..Default::default()
             },
-            turbo_trace::TraceError::ParseError(path, e) => TraceError {
+            turbo_trace::TraceError::ParseError(path, e) => Diagnostic {
                 message: format!("failed to parse file: {:?}", e),
                 path: Some(path.to_string()),
                 ..Default::default()
             },
-            turbo_trace::TraceError::GlobError(err) => TraceError {
+            turbo_trace::TraceError::GlobError(err) => Diagnostic {
                 message: format!("failed to glob files: {}", err),
                 ..Default::default()
             },
@@ -122,10 +112,10 @@ impl From<turbo_trace::TraceError> for TraceError {
                     .ok()
                     .map(|s| String::from_utf8_lossy(s.data()).to_string());
 
-                TraceError {
+                Diagnostic {
                     message,
                     import,
-                    reason,
+                    reason: Some(reason.to_string()),
                     path: Some(file_path),
                     start: Some(span.offset()),
                     end: Some(span.offset() + span.len()),
@@ -138,7 +128,7 @@ impl From<turbo_trace::TraceError> for TraceError {
 #[derive(SimpleObject)]
 struct TraceResult {
     files: Array<File>,
-    errors: Array<TraceError>,
+    errors: Array<Diagnostic>,
 }
 
 impl TraceResult {

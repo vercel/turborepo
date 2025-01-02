@@ -1,6 +1,6 @@
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
-    sync::LazyLock,
+    collections::{BTreeMap, HashSet},
+    sync::{Arc, LazyLock, Mutex},
 };
 
 use git2::Repository;
@@ -8,7 +8,12 @@ use itertools::Itertools;
 use miette::{Diagnostic, NamedSource, Report, SourceSpan};
 use oxc_resolver::{ResolveError, Resolver};
 use regex::Regex;
-use swc_common::{comments::SingleThreadedComments, input::StringInput, FileName, SourceMap};
+use swc_common::{
+    comments::SingleThreadedComments,
+    errors::{ColorConfig, Handler},
+    input::StringInput,
+    FileName, SourceMap,
+};
 use swc_ecma_ast::EsVersion;
 use swc_ecma_parser::{lexer::Lexer, Capturing, EsSyntax, Parser, Syntax, TsSyntax};
 use swc_ecma_visit::VisitWith;
@@ -22,18 +27,19 @@ use turborepo_repository::{
 
 use crate::run::Run;
 
-#[derive(Debug, Error, Diagnostic)]
-pub enum Error {
+#[derive(Clone, Debug, Error, Diagnostic)]
+pub enum BoundariesDiagnostic {
     #[error(
         "importing from a type declaration package, but import is not declared as a type-only \
          import"
     )]
     #[help("add `type` to the import declaration")]
     NotTypeOnlyImport {
+        import: String,
         #[label("package imported here")]
         span: SourceSpan,
         #[source_code]
-        text: NamedSource,
+        text: Arc<NamedSource>,
     },
     #[error("cannot import package `{name}` because it is not a dependency")]
     PackageNotFound {
@@ -41,7 +47,7 @@ pub enum Error {
         #[label("package imported here")]
         span: SourceSpan,
         #[source_code]
-        text: NamedSource,
+        text: Arc<NamedSource>,
     },
     #[error("cannot import file `{import}` because it leaves the package")]
     ImportLeavesPackage {
@@ -49,8 +55,14 @@ pub enum Error {
         #[label("file imported here")]
         span: SourceSpan,
         #[source_code]
-        text: NamedSource,
+        text: Arc<NamedSource>,
     },
+    #[error("failed to parse file {0}")]
+    ParseError(AbsoluteSystemPathBuf, swc_ecma_parser::error::Error),
+}
+
+#[derive(Debug, Error, Diagnostic)]
+pub enum Error {
     #[error("file `{0}` does not have a parent directory")]
     NoParentDir(AbsoluteSystemPathBuf),
     #[error(transparent)]
@@ -61,19 +73,45 @@ pub enum Error {
     GlobWalk(#[from] globwalk::WalkError),
     #[error("failed to read file: {0}")]
     FileNotFound(AbsoluteSystemPathBuf),
-    #[error("failed to parse file {0}")]
-    ParseError(AbsoluteSystemPathBuf, swc_ecma_parser::error::Error),
 }
 
 static PACKAGE_NAME_REGEX: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"^(@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$").unwrap()
 });
 
-impl Run {
-    pub async fn check_boundaries(&self) -> Result<(), Error> {
-        let packages = self.pkg_dep_graph().packages();
-        let repo = Repository::discover(&self.repo_root()).ok();
+pub struct BoundariesResult {
+    pub source_map: Arc<SourceMap>,
+    pub diagnostics: Vec<BoundariesDiagnostic>,
+}
 
+impl BoundariesResult {
+    pub fn emit(&self) {
+        let handler = Handler::with_tty_emitter(
+            ColorConfig::Auto,
+            true,
+            false,
+            Some(self.source_map.clone()),
+        );
+
+        for diagnostic in self.diagnostics.clone() {
+            match diagnostic {
+                BoundariesDiagnostic::ParseError(_, e) => {
+                    e.clone().into_diagnostic(&handler).emit();
+                }
+                e => {
+                    eprintln!("{:?}", Report::new(e.to_owned()));
+                }
+            }
+        }
+    }
+}
+
+impl Run {
+    pub async fn check_boundaries(&self) -> Result<BoundariesResult, Error> {
+        let packages = self.pkg_dep_graph().packages();
+        let repo = Repository::discover(&self.repo_root()).ok().map(Mutex::new);
+        let mut diagnostics = vec![];
+        let source_map = SourceMap::default();
         for (package_name, package_info) in packages {
             if !self.filtered_pkgs().contains(package_name)
                 || matches!(package_name, PackageName::Root)
@@ -90,42 +128,40 @@ impl Run {
             let unresolved_external_dependencies =
                 package_info.unresolved_external_dependencies.as_ref();
 
-            let resolved_external_dependencies = self
-                .pkg_dep_graph()
-                .lockfile()
-                .map(|l| l.all_dependencies(&format!("{}@*", package_name)))
-                .transpose()?
-                .flatten();
+            let package_diagnostics = self
+                .check_package(
+                    &repo,
+                    &package_root,
+                    &package_info.package_json,
+                    internal_dependencies,
+                    unresolved_external_dependencies,
+                    &source_map,
+                )
+                .await?;
 
-            // println!("internal: {:?}", internal_dependencies);
-            // println!("resolved: {:#?}", resolved_external_dependencies);
-            // println!("unresolved: {:#?}", unresolved_external_dependencies);
-            self.check_package(
-                &repo,
-                &package_root,
-                &package_info.package_json,
-                internal_dependencies,
-                resolved_external_dependencies,
-                unresolved_external_dependencies,
-            )
-            .await?;
+            diagnostics.extend(package_diagnostics);
         }
-        Ok(())
+
+        Ok(BoundariesResult {
+            source_map: Arc::new(source_map),
+            diagnostics,
+        })
     }
 
     fn is_potential_package_name(import: &str) -> bool {
         PACKAGE_NAME_REGEX.is_match(import)
     }
 
+    /// Either returns a list of errors or a single, fatal error
     async fn check_package(
         &self,
-        repo: &Option<Repository>,
+        repo: &Option<Mutex<Repository>>,
         package_root: &AbsoluteSystemPath,
         package_json: &PackageJson,
         internal_dependencies: HashSet<&PackageNode>,
-        resolved_external_dependencies: Option<HashMap<String, String>>,
         unresolved_external_dependencies: Option<&BTreeMap<String, String>>,
-    ) -> Result<(), Error> {
+        source_map: &SourceMap,
+    ) -> Result<Vec<BoundariesDiagnostic>, Error> {
         let files = globwalk::globwalk(
             package_root,
             &[
@@ -143,8 +179,7 @@ impl Run {
             globwalk::WalkType::Files,
         )?;
 
-        let source_map = SourceMap::default();
-        let mut errors: Vec<Error> = Vec::new();
+        let mut diagnostics: Vec<BoundariesDiagnostic> = Vec::new();
         // We assume the tsconfig.json is at the root of the package
         let tsconfig_path = package_root.join_component("tsconfig.json");
 
@@ -154,14 +189,14 @@ impl Run {
 
         for file_path in files {
             if let Some(repo) = repo {
+                let repo = repo.lock().expect("lock poisoned");
                 if matches!(repo.status_should_ignore(file_path.as_std_path()), Ok(true)) {
                     continue;
                 }
             };
             // Read the file content
             let Ok(file_content) = tokio::fs::read_to_string(&file_path).await else {
-                errors.push(Error::FileNotFound(file_path.to_owned()));
-                continue;
+                return Err(Error::FileNotFound(file_path.to_owned()));
             };
 
             let comments = SingleThreadedComments::default();
@@ -197,7 +232,7 @@ impl Run {
             let module = match parser.parse_module() {
                 Ok(module) => module,
                 Err(err) => {
-                    errors.push(Error::ParseError(file_path.to_owned(), err));
+                    diagnostics.push(BoundariesDiagnostic::ParseError(file_path.to_owned(), err));
                     continue;
                 }
             };
@@ -213,7 +248,7 @@ impl Run {
 
                 // We have a file import
                 let check_result = if import.starts_with(".") {
-                    self.check_file_import(&file_path, &package_root, &import, span, &file_content)
+                    self.check_file_import(&file_path, &package_root, &import, span, &file_content)?
                 } else if Self::is_potential_package_name(&import) {
                     self.check_package_import(
                         &import,
@@ -223,25 +258,20 @@ impl Run {
                         &file_content,
                         package_json,
                         &internal_dependencies,
-                        &resolved_external_dependencies,
                         unresolved_external_dependencies,
                         &resolver,
                     )
                 } else {
-                    Ok(())
+                    None
                 };
 
-                if let Err(err) = check_result {
-                    errors.push(err);
+                if let Some(diagnostic) = check_result {
+                    diagnostics.push(diagnostic);
                 }
             }
         }
 
-        for error in errors {
-            println!("{:?}", Report::new(error));
-        }
-
-        Ok(())
+        Ok(diagnostics)
     }
 
     fn check_file_import(
@@ -251,7 +281,7 @@ impl Run {
         import: &str,
         source_span: SourceSpan,
         file_content: &str,
-    ) -> Result<(), Error> {
+    ) -> Result<Option<BoundariesDiagnostic>, Error> {
         let import_path = AnchoredSystemPath::new(import)?;
         let dir_path = file_path
             .parent()
@@ -261,7 +291,7 @@ impl Run {
         // the paths are equal and there's nothing wrong with importing the
         // package you're in.
         if resolved_import_path.as_str() == package_path.as_str() {
-            return Ok(());
+            return Ok(None);
         }
         // We use `relation_to_path` and not `contains` because `contains`
         // panics on invalid paths with too many `..` components
@@ -269,13 +299,16 @@ impl Run {
             package_path.relation_to_path(&resolved_import_path),
             PathRelation::Divergent | PathRelation::Child
         ) {
-            Err(Error::ImportLeavesPackage {
+            Ok(Some(BoundariesDiagnostic::ImportLeavesPackage {
                 import: import.to_string(),
                 span: source_span,
-                text: NamedSource::new(file_path.as_str(), file_content.to_string()),
-            })
+                text: Arc::new(NamedSource::new(
+                    file_path.as_str(),
+                    file_content.to_string(),
+                )),
+            }))
         } else {
-            Ok(())
+            Ok(None)
         }
     }
 
@@ -285,16 +318,10 @@ impl Run {
     fn is_dependency(
         internal_dependencies: &HashSet<&PackageNode>,
         package_json: &PackageJson,
-        resolved_external_dependencies: Option<&BTreeMap<String, String>>,
-        unresolved_external_dependencies: Option<&HashMap<String, String>>,
+        unresolved_external_dependencies: Option<&BTreeMap<String, String>>,
         package_name: &PackageNode,
     ) -> bool {
         internal_dependencies.contains(&package_name)
-            || resolved_external_dependencies
-                .as_ref()
-                .map_or(false, |external_dependencies| {
-                    external_dependencies.contains_key(package_name.as_package_name().as_str())
-                })
             || unresolved_external_dependencies.map_or(false, |external_dependencies| {
                 external_dependencies.contains_key(package_name.as_package_name().as_str())
             })
@@ -333,10 +360,9 @@ impl Run {
         file_content: &str,
         package_json: &PackageJson,
         internal_dependencies: &HashSet<&PackageNode>,
-        resolved_external_dependencies: &Option<HashMap<String, String>>,
         unresolved_external_dependencies: Option<&BTreeMap<String, String>>,
         resolver: &Resolver,
-    ) -> Result<(), Error> {
+    ) -> Option<BoundariesDiagnostic> {
         let package_name = if import.starts_with("@") {
             import.split('/').take(2).join("/")
         } else {
@@ -346,13 +372,23 @@ impl Run {
                 .unwrap_or(import)
                 .to_string()
         };
+
+        if package_name.starts_with("@types/") && matches!(import_type, ImportType::Value) {
+            return Some(BoundariesDiagnostic::NotTypeOnlyImport {
+                import: import.to_string(),
+                span,
+                text: Arc::new(NamedSource::new(
+                    file_path.as_str(),
+                    file_content.to_string(),
+                )),
+            });
+        }
         let package_name = PackageNode::Workspace(PackageName::Other(package_name));
         let folder = file_path.parent().expect("file_path should have a parent");
         let is_valid_dependency = Self::is_dependency(
             internal_dependencies,
             package_json,
             unresolved_external_dependencies,
-            resolved_external_dependencies.as_ref(),
             &package_name,
         );
 
@@ -371,27 +407,33 @@ impl Run {
                 internal_dependencies,
                 package_json,
                 unresolved_external_dependencies,
-                resolved_external_dependencies.as_ref(),
                 &types_package_name,
             );
 
             if is_types_dependency {
                 return match import_type {
-                    ImportType::Type => Ok(()),
-                    ImportType::Value => Err(Error::NotTypeOnlyImport {
+                    ImportType::Type => None,
+                    ImportType::Value => Some(BoundariesDiagnostic::NotTypeOnlyImport {
+                        import: import.to_string(),
                         span,
-                        text: NamedSource::new(file_path.as_str(), file_content.to_string()),
+                        text: Arc::new(NamedSource::new(
+                            file_path.as_str(),
+                            file_content.to_string(),
+                        )),
                     }),
                 };
             }
 
-            return Err(Error::PackageNotFound {
+            return Some(BoundariesDiagnostic::PackageNotFound {
                 name: package_name.to_string(),
                 span,
-                text: NamedSource::new(file_path.as_str(), file_content.to_string()),
+                text: Arc::new(NamedSource::new(
+                    file_path.as_str(),
+                    file_content.to_string(),
+                )),
             });
         }
 
-        Ok(())
+        None
     }
 }
