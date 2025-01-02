@@ -96,7 +96,9 @@ First, we want to copy over only what we need to install the packages. When runn
   <Folder name="out" defaultOpen>
     <Folder name="json" defaultOpen>
       <Folder name="apps" defaultOpen>
-        <File name="package.json" />
+        <Folder name="api" defaultOpen>
+          <File name="package.json" />
+        </Folder>
       </Folder>
       <File name="package.json" />
     </Folder>
@@ -125,6 +127,12 @@ Splitting up **dependencies** and **source files** in this way lets us **only ru
 ### Example
 
 Our detailed [`with-docker` example](https://github.com/vercel/turborepo/tree/main/examples/with-docker) goes into depth on how to use `prune` to its full potential. Here's the Dockerfile, copied over for convenience.
+
+Build the Dockerfile from the root of your monorepo:
+
+```bash title="Terminal"
+docker build -f apps/web/Dockerfile .
+```
 
 <Callout type="info">
   This Dockerfile is written for a [Next.js](https://nextjs.org/) app that is
@@ -161,7 +169,7 @@ RUN yarn install
 
 # Build the project
 COPY --from=builder /app/out/full/ .
-RUN yarn turbo run build --filter=web...
+RUN yarn turbo run build
 
 FROM base AS runner
 WORKDIR /app
@@ -195,7 +203,7 @@ ENV TURBO_TEAM=$TURBO_TEAM
 ARG TURBO_TOKEN
 ENV TURBO_TOKEN=$TURBO_TOKEN
 
-RUN yarn turbo run build --filter=web...
+RUN yarn turbo run build
 ```
 
 `turbo` will now be able to hit your Remote Cache. To see a Turborepo cache hit for a non-cached Docker build image, run a command like this one from your project root:

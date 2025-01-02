@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../helpers/setup_integration_test.sh framework_inference
+  $ . ${TESTDIR}/../../helpers/setup_integration_test.sh framework_inference --no-install
 
 Prove that we start with no inferred variables
   $ ${TURBO} run build --dry=json | jq -r '.tasks[].environmentVariables.inferred'

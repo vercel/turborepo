@@ -1,0 +1,21 @@
+---
+source: crates/turborepo/tests/query.rs
+expression: query_output
+---
+{
+  "data": null,
+  "errors": [
+    {
+      "message": "package not found: doesnotexist",
+      "locations": [
+        {
+          "line": 1,
+          "column": 9
+        }
+      ],
+      "path": [
+        "package"
+      ]
+    }
+  ]
+}

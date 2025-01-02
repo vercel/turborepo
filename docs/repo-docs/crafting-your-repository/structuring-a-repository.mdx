@@ -155,7 +155,7 @@ First, your package manager needs to describe the locations of your packages. We
 Using this configuration, every directory **with a `package.json`** in the `apps` or `packages` directories will be considered a package.
 
 <Callout type="error">
-Turborepo does not support nested packages like `apps/**` or `packages/**`. Using a structure that would put a package at `apps/a` and another at `apps/a/b` will result in an error.
+Turborepo does not support nested packages like `apps/**` or `packages/**` due to ambiguous behavior among package managers in the JavaScript ecosystem. Using a structure that would put a package at `apps/a` and another at `apps/a/b` will result in an error.
 
 If you'd like to group packages by directory, you can do this using globs like `packages/*` and `packages/group/*` and **not** creating a `packages/group/package.json` file.
 
@@ -318,7 +318,7 @@ Using exports this way provides three major benefits:
 [The `imports` field](https://nodejs.org/api/packages.html#imports) gives you a way to create subpaths to other modules within your package. You can think of these like "shortcuts" to write simpler import paths that are more resilient to refactors that move files. To learn how, visit [the TypeScript page](/repo/docs/guides/tools/typescript#use-nodejs-subpath-imports-instead-of-typescript-compiler-paths).
 
 <Callout type="info">
-You may be more familiar with TypeScript's `compilerOptions#paths` option, which accomplishes a similar goal. As of Typescript 5.4, TypeScript can infer subpaths from `imports`, making it a better option since you'll be working with Node.js conventions. For more information, visit [our Typescript guide](/repo/docs/guides/tools/typescript#use-nodejs-subpath-imports-instead-of-typescript-compiler-paths).
+You may be more familiar with TypeScript's `compilerOptions#paths` option, which accomplishes a similar goal. As of TypeScript 5.4, TypeScript can infer subpaths from `imports`, making it a better option since you'll be working with Node.js conventions. For more information, visit [our TypeScript guide](/repo/docs/guides/tools/typescript#use-nodejs-subpath-imports-instead-of-typescript-compiler-paths).
 
 </Callout>
 

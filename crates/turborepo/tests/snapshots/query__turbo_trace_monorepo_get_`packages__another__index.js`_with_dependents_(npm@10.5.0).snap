@@ -1,0 +1,26 @@
+---
+source: crates/turborepo/tests/query.rs
+expression: query_output
+---
+{
+  "data": {
+    "file": {
+      "path": "packages/another/index.jsx",
+      "dependents": {
+        "files": {
+          "items": [
+            {
+              "path": "apps/my-app/index.ts"
+            },
+            {
+              "path": "apps/my-app/types.ts"
+            }
+          ]
+        },
+        "errors": {
+          "items": []
+        }
+      }
+    }
+  }
+}

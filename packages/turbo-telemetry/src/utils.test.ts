@@ -1,10 +1,10 @@
-import { describe, test } from "node:test";
+import { describe, it } from "node:test";
 import { strict as assert } from "node:assert";
 import utils from "./utils";
 
 describe("utils", () => {
   describe("oneWayHashWithSalt", () => {
-    test("should return the hashed value with salt", () => {
+    it("should return the hashed value with salt", () => {
       const input = "a-sensitive-value";
       const salt = "private-salt";
 
@@ -15,7 +15,7 @@ describe("utils", () => {
       );
     });
 
-    test("should return consistent length", () => {
+    it("should return consistent length", () => {
       const input = "a-sensitive-value";
       const salt = "private-salt";
 
@@ -30,7 +30,7 @@ describe("utils", () => {
   });
 
   describe("defaultConfigPath", () => {
-    test("supports overriding by env var", async () => {
+    it("supports overriding by env var", async () => {
       process.env.TURBO_CONFIG_DIR_PATH = "/tmp";
       const result = await utils.defaultConfigPath();
       assert.equal(result, "/tmp/turborepo/telemetry.json");

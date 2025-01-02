@@ -179,13 +179,34 @@ Add `.turbo` to your `.gitignore` file. The `turbo` CLI uses these folders for p
 
 </Step>
 <Step>
-### Run the `build` and `check-types` tasks with `turbo`
+### Add a `packageManager` field to root `package.json`
+
+Turborepo optimizes your repository using information from your package manager. To declare which package manager you're using, add a [`packageManager`](https://nodejs.org/api/packages.html#packagemanager) field to your root `package.json` if you don't have one already.
+
+```diff title="package.json"
+{
++  "packageManager": "npm@8.5.0"
+}
+```
+
+<Callout type="good-to-know">
+  Depending on your repository, you may need to use the
+  [dangerouslyDisablePackageManagerCheck](`/repo/docs/reference/configuration#dangerouslydisablepackagemanagercheck`)
+  while migrating or in situations where you can't use the `packageManager` key
+  yet.
+</Callout>
+
+</Step>
+<Step>
+### Run tasks with `turbo`
+
+You can now run the tasks you added to `turbo.json` earlier using Turborepo. Using the example tasks from above:
 
 ```bash title="Terminal"
 turbo build check-types
 ```
 
-This runs `build` and `check-types` at the same time.
+This runs the `build` and `check-types` tasks at the same time. The dependency graph of your [Workspace](/repo/docs/crafting-your-repository/structuring-a-repository#anatomy-of-a-workspace) will be used to run tasks in the right order.
 
 </Step>
 <Step>

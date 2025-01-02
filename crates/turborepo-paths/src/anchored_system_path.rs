@@ -45,12 +45,12 @@ impl AsRef<Path> for AnchoredSystemPath {
 const EMPTY: &str = "";
 
 impl AnchoredSystemPath {
-    pub(crate) unsafe fn new_unchecked<'a>(path: impl AsRef<Path> + 'a) -> &'a Self {
+    pub(crate) unsafe fn new_unchecked(path: &(impl AsRef<Path> + ?Sized)) -> &Self {
         let path = path.as_ref();
         unsafe { &*(path as *const Path as *const Self) }
     }
 
-    pub fn new<'a>(path: impl AsRef<str> + 'a) -> Result<&'a Self, PathError> {
+    pub fn new(path: &(impl AsRef<str> + ?Sized)) -> Result<&Self, PathError> {
         let path_str = path.as_ref();
         let path = Path::new(path_str);
         if path.is_absolute() {

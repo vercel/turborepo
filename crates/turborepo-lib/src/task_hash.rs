@@ -466,6 +466,7 @@ impl<'a> TaskHasher<'a> {
                 let default_env_var_pass_through_map =
                     self.env_at_execution_start.from_wildcards(&[
                         "HOME",
+                        "USER",
                         "TZ",
                         "LANG",
                         "SHELL",
@@ -479,6 +480,7 @@ impl<'a> TaskHasher<'a> {
                         "COLORTERM",
                         "TERM",
                         "TERM_PROGRAM",
+                        "DISPLAY",
                         "TMP",
                         "TEMP",
                         // VSCode IDE - https://github.com/microsoft/vscode-js-debug/blob/5b0f41dbe845d693a541c1fae30cec04c878216f/src/targets/node/nodeLauncherBase.ts#L320
@@ -505,12 +507,6 @@ impl<'a> TaskHasher<'a> {
                         "PROGRAMDATA",
                         "SYSTEMROOT",
                         "SYSTEMDRIVE",
-                        // Powershell casing of env variables
-                        "Path",
-                        "ProgramData",
-                        "SystemRoot",
-                        "AppData",
-                        "SystemDrive",
                     ])?;
                 let tracker_env = self
                     .task_hash_tracker

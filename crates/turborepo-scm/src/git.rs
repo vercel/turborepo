@@ -16,10 +16,10 @@ use turborepo_ci::Vendor;
 
 use crate::{Error, Git, SCM};
 
-#[derive(Debug)]
-pub enum ChangedFiles {
-    All,
-    Some(HashSet<AnchoredSystemPathBuf>),
+#[derive(Debug, PartialEq, Eq)]
+pub struct InvalidRange {
+    pub from_ref: Option<String>,
+    pub to_ref: Option<String>,
 }
 
 impl SCM {
@@ -45,13 +45,17 @@ impl SCM {
         include_uncommitted: bool,
         allow_unknown_objects: bool,
         merge_base: bool,
-    ) -> Result<ChangedFiles, Error> {
-        fn unable_to_detect_range(error: impl std::error::Error) -> Result<ChangedFiles, Error> {
+    ) -> Result<Result<HashSet<AnchoredSystemPathBuf>, InvalidRange>, Error> {
+        fn unable_to_detect_range(
+            error: impl std::error::Error,
+            from_ref: Option<String>,
+            to_ref: Option<String>,
+        ) -> Result<Result<HashSet<AnchoredSystemPathBuf>, InvalidRange>, Error> {
             warn!(
                 "unable to detect git range, assuming all files have changed: {}",
                 error
             );
-            Ok(ChangedFiles::All)
+            Ok(Err(InvalidRange { from_ref, to_ref }))
         }
         match self {
             Self::Git(git) => {
@@ -62,17 +66,23 @@ impl SCM {
                     include_uncommitted,
                     merge_base,
                 ) {
-                    Ok(files) => Ok(ChangedFiles::Some(files)),
+                    Ok(files) => Ok(Ok(files)),
                     Err(ref error @ Error::Git(ref message, _))
                         if allow_unknown_objects
                             && (message.contains("no merge base")
                                 || message.contains("bad object")) =>
                     {
-                        unable_to_detect_range(error)
+                        unable_to_detect_range(
+                            error,
+                            from_commit.map(|c| c.to_string()),
+                            to_commit.map(|c| c.to_string()),
+                        )
                     }
-                    Err(Error::UnableToResolveRef) => {
-                        unable_to_detect_range(Error::UnableToResolveRef)
-                    }
+                    Err(Error::UnableToResolveRef) => unable_to_detect_range(
+                        Error::UnableToResolveRef,
+                        from_commit.map(|c| c.to_string()),
+                        to_commit.map(|c| c.to_string()),
+                    ),
                     Err(e) => Err(e),
                 }
             }
@@ -233,15 +243,18 @@ impl Git {
             // because at this point we know we're in a GITHUB CI environment
             // and we should really know by now what the base ref is
             // so it's better to just error if something went wrong
-            return if self
-                .execute_git_command(&["rev-parse", &github_base_ref], "")
-                .is_ok()
-            {
-                eprintln!("Resolved base ref from GitHub Actions event: {github_base_ref}");
-                Ok(github_base_ref)
-            } else {
-                eprintln!("Failed to resolve base ref from GitHub Actions event");
-                Err(Error::UnableToResolveRef)
+            return match self.execute_git_command(&["rev-parse", &github_base_ref], "") {
+                Ok(_) => {
+                    eprintln!("Resolved base ref from GitHub Actions event: {github_base_ref}");
+                    Ok(github_base_ref)
+                }
+                Err(e) => {
+                    eprintln!(
+                        "Failed to resolve base ref '{github_base_ref}' from GitHub Actions \
+                         event: {e}"
+                    );
+                    Err(Error::UnableToResolveRef)
+                }
             };
         }
 
@@ -272,11 +285,17 @@ impl Git {
 
         let valid_from = self.resolve_base(from_commit, CIEnv::new())?;
 
-        let mut args = if let Some(to_commit) = to_commit {
-            vec!["diff", "--name-only", &valid_from, to_commit]
-        } else {
-            vec!["diff", "--name-only", &valid_from]
-        };
+        // If a to commit is not specified for `diff-tree` it will change the comparison
+        // to be between the provided commit and it's parent
+        let to_commit = to_commit.unwrap_or("HEAD");
+        let mut args = vec![
+            "diff-tree",
+            "-r",
+            "--name-only",
+            "--no-commit-id",
+            &valid_from,
+            to_commit,
+        ];
 
         if merge_base {
             args.push("--merge-base");
@@ -288,10 +307,17 @@ impl Git {
         // We only care about non-tracked files if we haven't specified both ends up the
         // comparison
         if include_uncommitted {
-            // Add untracked files, i.e. files that are not in git at all
-            let output = self
-                .execute_git_command(&["ls-files", "--others", "--exclude-standard"], pathspec)?;
-            self.add_files_from_stdout(&mut files, turbo_root, output);
+            // Add untracked files or unstaged changes, i.e. files that are not in git at
+            // all
+            let ls_files_output = self.execute_git_command(
+                &["ls-files", "--others", "--modified", "--exclude-standard"],
+                pathspec,
+            )?;
+            self.add_files_from_stdout(&mut files, turbo_root, ls_files_output);
+            // Include any files that have been staged, but not committed
+            let diff_output =
+                self.execute_git_command(&["diff", "--name-only", "--cached"], pathspec)?;
+            self.add_files_from_stdout(&mut files, turbo_root, diff_output);
         }
 
         Ok(files)
@@ -402,7 +428,7 @@ mod tests {
     use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError};
     use which::which;
 
-    use super::{previous_content, CIEnv, ChangedFiles};
+    use super::{previous_content, CIEnv, InvalidRange};
     use crate::{
         git::{GitHubCommit, GitHubEvent},
         Error, Git, SCM,
@@ -438,7 +464,7 @@ mod tests {
         // Replicating the `--filter` behavior where we only do a merge base
         // if both ends of the git range are specified.
         let merge_base = to_commit.is_some();
-        let ChangedFiles::Some(files) = scm.changed_files(
+        let Ok(files) = scm.changed_files(
             &turbo_root,
             from_commit,
             to_commit,
@@ -485,6 +511,26 @@ mod tests {
     fn commit_delete(repo: &Repository, path: &Path, previous_commit: Oid) -> Oid {
         let mut index = repo.index().unwrap();
         index.remove_path(path).unwrap();
+        let tree_oid = index.write_tree().unwrap();
+        index.write().unwrap();
+        let tree = repo.find_tree(tree_oid).unwrap();
+        let previous_commit = repo.find_commit(previous_commit).unwrap();
+
+        repo.commit(
+            Some("HEAD"),
+            &repo.signature().unwrap(),
+            &repo.signature().unwrap(),
+            "Commit",
+            &tree,
+            std::slice::from_ref(&&previous_commit),
+        )
+        .unwrap()
+    }
+
+    fn commit_rename(repo: &Repository, source: &Path, dest: &Path, previous_commit: Oid) -> Oid {
+        let mut index = repo.index().unwrap();
+        index.remove_path(source).unwrap();
+        index.add_path(dest).unwrap();
         let tree_oid = index.write_tree().unwrap();
         index.write().unwrap();
         let tree = repo.find_tree(tree_oid).unwrap();
@@ -567,6 +613,38 @@ mod tests {
     }
 
     #[test]
+    fn test_renamed_files() -> Result<(), Error> {
+        let (repo_root, repo) = setup_repository(None)?;
+
+        let file = repo_root.path().join("foo.js");
+        let file_path = Path::new("foo.js");
+        fs::write(&file, "let z = 0;")?;
+
+        let first_commit_oid = commit_file(&repo, file_path, None);
+
+        fs::rename(file, repo_root.path().join("bar.js")).unwrap();
+
+        let new_file_path = Path::new("bar.js");
+        let _second_commit_oid = commit_rename(&repo, file_path, new_file_path, first_commit_oid);
+
+        let first_commit_sha = first_commit_oid.to_string();
+        let git_root = repo_root.path().to_owned();
+        let turborepo_root = repo_root.path().to_owned();
+        let files = changed_files(
+            git_root,
+            turborepo_root,
+            Some(&first_commit_sha),
+            Some("HEAD"),
+            false,
+        )?;
+
+        assert_eq!(
+            files,
+            HashSet::from(["foo.js".to_string(), "bar.js".to_string()])
+        );
+        Ok(())
+    }
+    #[test]
     fn test_merge_base() -> Result<(), Error> {
         let (repo_root, repo) = setup_repository(None)?;
         let first_file = repo_root.path().join("foo.js");
@@ -639,9 +717,42 @@ mod tests {
         )?;
         assert_eq!(files, HashSet::from(["bar.js".to_string()]));
 
+        // Test that uncommitted file in index is not marked as changed when not
+        // checking uncommitted
+        let files = changed_files(
+            repo_root.path().to_path_buf(),
+            turbo_root.to_path_buf(),
+            Some("HEAD"),
+            None,
+            false,
+        )?;
+        assert_eq!(files, HashSet::new());
+
+        // Test that uncommitted file in index is marked as changed when
+        // checking uncommitted
+        let files = changed_files(
+            repo_root.path().to_path_buf(),
+            turbo_root.to_path_buf(),
+            Some("HEAD"),
+            None,
+            true,
+        )?;
+        assert_eq!(files, HashSet::from(["bar.js".to_string()]));
+
         // Add file to index
         index.add_path(Path::new("bar.js")).unwrap();
         index.write().unwrap();
+
+        // Test that uncommitted file in index is not marked as changed when not
+        // checking uncommitted
+        let files = changed_files(
+            repo_root.path().to_path_buf(),
+            turbo_root.to_path_buf(),
+            Some("HEAD"),
+            None,
+            false,
+        )?;
+        assert_eq!(files, HashSet::new());
 
         // Test that uncommitted file in index is still marked as changed
         let files = changed_files(
@@ -1010,7 +1121,13 @@ mod tests {
             .changed_files(&root, None, Some("HEAD"), true, true, false)
             .unwrap();
 
-        assert_matches!(actual, ChangedFiles::All);
+        assert_eq!(
+            actual,
+            Err(InvalidRange {
+                from_ref: None,
+                to_ref: Some("HEAD".to_string()),
+            })
+        );
 
         Ok(())
     }

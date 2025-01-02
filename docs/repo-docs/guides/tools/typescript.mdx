@@ -292,15 +292,15 @@ In [Compiled packages](https://turbo.build/repo/docs/core-concepts/internal-pack
 </Tab>
 
   <Tab value="Source code">
+
 ```tsx title="./packages/ui/button.tsx"
-import { MY_STRING } from "#utils.js" // Uses .js extension // [!code highlight]
+import { MY_STRING } from "#utils.js"; // Uses .js extension // [!code highlight]
 
 export const Button = () => {
-  return (
-    <button>{MY_STRING}</button>
-  )
-}
+  return <button>{MY_STRING}</button>;
+};
 ```
+
 </Tab>
 
 </Tabs>
@@ -321,7 +321,7 @@ We don't recommend using TypeScript Project References as they introduce both an
 
 ### Your editor won't use a package's TypeScript version
 
-`tsserver` is not able to use different Typescript versions for different packages in your code editor. Instead, it will discover a specific version and use that everywhere.
+`tsserver` is not able to use different TypeScript versions for different packages in your code editor. Instead, it will discover a specific version and use that everywhere.
 
 This can result in differences between the linting errors that show in your editor and when you run `tsc` scripts to check types. If this is an issue for you, consider [keeping the TypeScript dependency on the same version](/repo/docs/crafting-your-repository/managing-dependencies#keeping-dependencies-on-the-same-version).
 

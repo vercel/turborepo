@@ -1,20 +1,23 @@
 use ratatui::{
-    style::Style,
+    style::{Modifier, Style, Stylize},
     text::Line,
-    widgets::{Block, Borders, Widget},
+    widgets::{Block, Widget},
 };
 use tui_term::widget::PseudoTerminal;
 
 use super::{app::LayoutSections, TerminalOutput};
 
-const FOOTER_TEXT_ACTIVE: &str = "Press`Ctrl-Z` to stop interacting.";
-const FOOTER_TEXT_INACTIVE: &str = "Press `Enter` to interact.";
-const HAS_SELECTION: &str = "Press `c` to copy selection";
+const EXIT_INTERACTIVE_HINT: &str = "Ctrl-z - Stop interacting";
+const ENTER_INTERACTIVE_HINT: &str = "i - Interact";
+const HAS_SELECTION: &str = "c - Copy selection";
+const SCROLL_LOGS: &str = "u/d - Scroll logs";
+const TASK_LIST_HIDDEN: &str = "h - Show task list";
 
 pub struct TerminalPane<'a, W> {
     terminal_output: &'a TerminalOutput<W>,
     task_name: &'a str,
     section: &'a LayoutSections,
+    has_sidebar: bool,
 }
 
 impl<'a, W> TerminalPane<'a, W> {
@@ -22,28 +25,42 @@ impl<'a, W> TerminalPane<'a, W> {
         terminal_output: &'a TerminalOutput<W>,
         task_name: &'a str,
         section: &'a LayoutSections,
+        has_sidebar: bool,
     ) -> Self {
         Self {
             terminal_output,
             section,
             task_name,
+            has_sidebar,
         }
     }
 
-    fn highlight(&self) -> bool {
-        matches!(self.section, LayoutSections::Pane)
-    }
-
     fn footer(&self) -> Line {
+        let build_message_vec = |footer_text: &[&str]| -> Line {
+            let mut messages = Vec::new();
+            messages.extend_from_slice(footer_text);
+
+            if !self.has_sidebar {
+                messages.push(TASK_LIST_HIDDEN);
+            }
+
+            if self.terminal_output.has_selection() {
+                messages.push(HAS_SELECTION);
+            }
+
+            // Spaces are used to pad the footer text for aesthetics
+            let formatted_messages = format!("   {}", messages.join("   "));
+
+            Line::styled(
+                formatted_messages.to_string(),
+                Style::default().add_modifier(Modifier::DIM),
+            )
+            .left_aligned()
+        };
+
         match self.section {
-            LayoutSections::Pane if self.terminal_output.has_selection() => {
-                Line::from(format!("{FOOTER_TEXT_ACTIVE} {HAS_SELECTION}")).centered()
-            }
-            LayoutSections::Pane => Line::from(FOOTER_TEXT_ACTIVE.to_owned()).centered(),
-            LayoutSections::TaskList if self.terminal_output.has_selection() => {
-                Line::from(format!("{FOOTER_TEXT_INACTIVE} {HAS_SELECTION}")).centered()
-            }
-            LayoutSections::TaskList => Line::from(FOOTER_TEXT_INACTIVE.to_owned()).centered(),
+            LayoutSections::Pane => build_message_vec(&[EXIT_INTERACTIVE_HINT]),
+            LayoutSections::TaskList => build_message_vec(&[ENTER_INTERACTIVE_HINT, SCROLL_LOGS]),
             LayoutSections::Search { results, .. } => {
                 Line::from(format!("/ {}", results.query())).left_aligned()
             }
@@ -58,14 +75,12 @@ impl<'a, W> Widget for &TerminalPane<'a, W> {
     {
         let screen = self.terminal_output.parser.screen();
         let block = Block::default()
-            .borders(Borders::LEFT)
-            .title(self.terminal_output.title(self.task_name))
-            .title_bottom(self.footer())
-            .style(if self.highlight() {
-                Style::new().fg(ratatui::style::Color::Yellow)
-            } else {
-                Style::new()
-            });
+            .title(
+                self.terminal_output
+                    .title(self.task_name)
+                    .add_modifier(Modifier::DIM),
+            )
+            .title_bottom(self.footer());
 
         let term = PseudoTerminal::new(screen).block(block);
         term.render(area, buf)

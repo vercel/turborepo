@@ -18,8 +18,10 @@ Test help flag
     link        Link your local directory to a Vercel organization and enable remote caching
     login       Login to your Vercel account
     logout      Logout to your Vercel account
+    info        Print debugging information
     prune       Prepare a subset of your monorepo
     run         Run tasks across projects in your monorepo
+    query       Query your monorepo using GraphQL. If no query is provided, spins up a GraphQL server with GraphiQL
     watch       Arguments used in run and watch
     unlink      Unlink the current directory from your Vercel organization and disable Remote Caching
   
@@ -64,14 +66,22 @@ Test help flag
             Print help (see more with '--help')
   
   Run Arguments:
+        --cache <CACHE>
+            Set the cache behavior for this run. Pass a list of comma-separated key, value pairs to enable reading and writing to either the local or remote cache
+        --force [<FORCE>]
+            Ignore the existing cache (to force execution). Equivalent to `--cache=local:w,remote:w` [possible values: true, false]
+        --remote-only [<REMOTE_ONLY>]
+            Ignore the local filesystem cache for all tasks. Only allow reading and caching artifacts using the remote cache. Equivalent to `--cache=remote:rw` [possible values: true, false]
+        --remote-cache-read-only [<REMOTE_CACHE_READ_ONLY>]
+            Treat remote cache as read only. Equivalent to `--cache=remote:r;local:rw` [possible values: true, false]
+        --no-cache
+            Avoid saving task results to the cache. Useful for development/watch tasks. Equivalent to `--cache=local:r,remote:r`
         --cache-workers <CACHE_WORKERS>
             Set the number of concurrent cache operations (default 10) [default: 10]
         --dry-run [<DRY_RUN>]
             [possible values: text, json]
         --graph [<GRAPH>]
             Generate a graph of the task execution and output to a file when a filename is specified (.svg, .png, .jpg, .pdf, .json, .html, .mermaid, .dot). Outputs dot graph to stdout when if no filename is provided
-        --no-cache
-            Avoid saving task results to the cache. Useful for development/watch tasks
         --daemon
             Force turbo to use the local daemon. If unset turbo will use the default detection logic
         --no-daemon
@@ -80,8 +90,6 @@ Test help flag
             File to write turbo's performance profile output into. You can load the file up in chrome://tracing to see which parts of your build were slow
         --anon-profile <ANON_PROFILE>
             File to write turbo's performance profile output into. All identifying data omitted from the profile
-        --remote-cache-read-only [<REMOTE_CACHE_READ_ONLY>]
-            Treat remote cache as read only [possible values: true, false]
         --summarize [<SUMMARIZE>]
             Generate a summary of the turbo run [possible values: true, false]
         --parallel
@@ -94,8 +102,6 @@ Test help flag
             Continue execution even if a task exits with an error or non-zero exit code. The default behavior is to bail
         --single-package
             Run turbo in single-package mode
-        --force [<FORCE>]
-            Ignore the existing cache (to force execution) [possible values: true, false]
         --framework-inference [<BOOL>]
             Specify whether or not to do framework inference for tasks [default: true] [possible values: true, false]
         --global-deps <GLOBAL_DEPS>
@@ -112,8 +118,6 @@ Test help flag
             Set type of task output order. Use "stream" to show output as soon as it is available. Use "grouped" to show output when a command has finished execution. Use "auto" to let turbo decide based on its own heuristics. (default auto) [possible values: auto, stream, grouped]
         --only
             Only executes the tasks specified, does not execute parent tasks
-        --remote-only [<REMOTE_ONLY>]
-            Ignore the local filesystem cache for all tasks. Only allow reading and caching artifacts using the remote cache [possible values: true, false]
         --log-prefix <LOG_PREFIX>
             Use "none" to remove prefixes from task logs. Use "task" to get task id prefixing. Use "auto" to let turbo decide how to prefix the logs based on the execution environment. In most cases this will be the same as "task". Note that tasks running in parallel interleave their logs, so removing prefixes can make it difficult to associate logs with tasks. Use --log-order=grouped to prevent interleaving. (default auto) [default: auto] [possible values: auto, none, task]
 
@@ -138,8 +142,10 @@ Test help flag
     link        Link your local directory to a Vercel organization and enable remote caching
     login       Login to your Vercel account
     logout      Logout to your Vercel account
+    info        Print debugging information
     prune       Prepare a subset of your monorepo
     run         Run tasks across projects in your monorepo
+    query       Query your monorepo using GraphQL. If no query is provided, spins up a GraphQL server with GraphiQL
     watch       Arguments used in run and watch
     unlink      Unlink the current directory from your Vercel organization and disable Remote Caching
   
@@ -209,6 +215,27 @@ Test help flag
             Print help (see a summary with '-h')
   
   Run Arguments:
+        --cache <CACHE>
+            Set the cache behavior for this run. Pass a list of comma-separated key, value pairs to enable reading and writing to either the local or remote cache
+  
+        --force [<FORCE>]
+            Ignore the existing cache (to force execution). Equivalent to `--cache=local:w,remote:w`
+            
+            [possible values: true, false]
+  
+        --remote-only [<REMOTE_ONLY>]
+            Ignore the local filesystem cache for all tasks. Only allow reading and caching artifacts using the remote cache. Equivalent to `--cache=remote:rw`
+            
+            [possible values: true, false]
+  
+        --remote-cache-read-only [<REMOTE_CACHE_READ_ONLY>]
+            Treat remote cache as read only. Equivalent to `--cache=remote:r;local:rw`
+            
+            [possible values: true, false]
+  
+        --no-cache
+            Avoid saving task results to the cache. Useful for development/watch tasks. Equivalent to `--cache=local:r,remote:r`
+  
         --cache-workers <CACHE_WORKERS>
             Set the number of concurrent cache operations (default 10)
             
@@ -219,9 +246,6 @@ Test help flag
   
         --graph [<GRAPH>]
             Generate a graph of the task execution and output to a file when a filename is specified (.svg, .png, .jpg, .pdf, .json, .html, .mermaid, .dot). Outputs dot graph to stdout when if no filename is provided
-  
-        --no-cache
-            Avoid saving task results to the cache. Useful for development/watch tasks
   
         --daemon
             Force turbo to use the local daemon. If unset turbo will use the default detection logic
@@ -234,11 +258,6 @@ Test help flag
   
         --anon-profile <ANON_PROFILE>
             File to write turbo's performance profile output into. All identifying data omitted from the profile
-  
-        --remote-cache-read-only [<REMOTE_CACHE_READ_ONLY>]
-            Treat remote cache as read only
-            
-            [possible values: true, false]
   
         --summarize [<SUMMARIZE>]
             Generate a summary of the turbo run
@@ -259,11 +278,6 @@ Test help flag
   
         --single-package
             Run turbo in single-package mode
-  
-        --force [<FORCE>]
-            Ignore the existing cache (to force execution)
-            
-            [possible values: true, false]
   
         --framework-inference [<BOOL>]
             Specify whether or not to do framework inference for tasks
@@ -298,11 +312,6 @@ Test help flag
         --only
             Only executes the tasks specified, does not execute parent tasks
   
-        --remote-only [<REMOTE_ONLY>]
-            Ignore the local filesystem cache for all tasks. Only allow reading and caching artifacts using the remote cache
-            
-            [possible values: true, false]
-  
         --log-prefix <LOG_PREFIX>
             Use "none" to remove prefixes from task logs. Use "task" to get task id prefixing. Use "auto" to let turbo decide how to prefix the logs based on the execution environment. In most cases this will be the same as "task". Note that tasks running in parallel interleave their logs, so removing prefixes can make it difficult to associate logs with tasks. Use --log-order=grouped to prevent interleaving. (default auto)
             
@@ -320,14 +329,18 @@ Test help flag for link command
             Do not create or modify .gitignore (default false)
         --version
             
+        --scope <SCOPE>
+            The scope, i.e. Vercel team, to which you are linking
         --skip-infer
             Skip any attempts to infer which version of Turbo the project is configured to use
-        --target <TARGET>
-            Specify what should be linked (default "remote cache") [default: remote-cache] [possible values: remote-cache, spaces]
         --no-update-notifier
             Disable the turbo update notification
+    -y, --yes
+            Answer yes to all prompts (default false)
         --api <API>
             Override the endpoint for API calls
+        --target <TARGET>
+            Specify what should be linked (default "remote cache") [default: remote-cache] [possible values: remote-cache, spaces]
         --color
             Force color usage in the terminal
         --cwd <CWD>

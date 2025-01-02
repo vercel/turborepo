@@ -5,6 +5,8 @@ pub mod event;
 mod handle;
 mod input;
 mod pane;
+mod popup;
+mod preferences;
 mod search;
 mod size;
 mod spinner;
@@ -17,7 +19,7 @@ use clipboard::copy_to_clipboard;
 use debouncer::Debouncer;
 use event::{Event, TaskResult};
 pub use handle::{AppReceiver, TuiSender};
-use input::{input, InputOptions};
+use input::InputOptions;
 pub use pane::TerminalPane;
 use size::SizeInfo;
 pub use table::TaskTable;
@@ -35,4 +37,6 @@ pub enum Error {
     Stdin { name: String, e: std::io::Error },
     #[error(transparent)]
     Io(#[from] std::io::Error),
+    #[error("Unable to persist preferences.")]
+    Preferences(#[from] preferences::Error),
 }

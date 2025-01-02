@@ -63,14 +63,14 @@ impl Workspace {
             })?;
         let workspace_state = WorkspaceState::infer(&reference_dir)?;
         let is_multi_package = workspace_state.mode == WorkspaceType::MultiPackage;
-        let package_manager_name =
-            *workspace_state
-                .package_manager
-                .as_ref()
-                .map_err(|error| Error::PackageManager {
-                    error: error.to_string(),
-                    path: workspace_state.root.clone(),
-                })?;
+        let package_manager_name = workspace_state
+            .package_manager
+            .as_ref()
+            .map_err(|error| Error::PackageManager {
+                error: error.to_string(),
+                path: workspace_state.root.clone(),
+            })?
+            .name();
 
         let workspace_root = &workspace_state.root;
         let root_package_json = PackageJson::load(&workspace_root.join_component("package.json"))?;
@@ -104,7 +104,7 @@ impl Workspace {
                 path: self.workspace_state.root.clone(),
             })?;
 
-        let package_manager = *package_manager;
+        let package_manager = package_manager.clone();
         let workspace_root = self.workspace_state.root.clone();
 
         let package_json_paths =

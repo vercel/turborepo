@@ -58,6 +58,38 @@ TURBO_SCM_HEAD=your-branch turbo run build --affected
   changed.
 </Callout>
 
+### `--cache <options>`
+
+Default: `local:rw,remote:rw`
+
+Specify caching sources for the run. Accepts a comma-separated list of options:
+
+- `local`: Use the local filesystem cache
+- `remote`: Use the Remote Cache
+
+When an a caching source is omitted, reading and writing are both disabled.
+
+Cache sources use the following values:
+
+- `rw`: Read and write
+- `r`: Read only
+- `w`: Write only
+- None (`local:`) : Does not use cache. Equivalent to omitting the cache source option.
+
+```bash title="Terminal"
+# Read from and write to local cache. Only read from Remote Cache.
+turbo run build --cache=local:rw,remote:r
+
+# Only read from local cache. Read from and write to Remote Cache.
+turbo run build --cache=local:r,remote:rw
+
+# Read from and write to local cache. No Remote Cache activity.
+turbo run build --cache=local:rw
+
+# Do not use local cache. Only read from Remote Cache.
+turbo run build --cache=local:,remote:r
+```
+
 ### `--cache-dir <path>`
 
 Default: `.turbo/cache`
@@ -220,6 +252,19 @@ Filters can be combined to create combinations of packages, directories, and git
 
 For in-depth discussion and practical use cases of filtering, visit [the Running Tasks page](/repo/docs/crafting-your-repository/running-tasks).
 
+#### Using a task identifier
+
+You can also run a specific task for a specific package in the format of `package-name#task-name`.
+
+```bash title="Terminal"
+turbo run web#lint
+```
+
+<Callout type="good-to-know">
+  This will also run the task's dependencies. To run a task without its
+  dependencies, use [the `--only` flag](#--only).
+</Callout>
+
 #### Advanced filtering examples
 
 You can combine multiple filters to further refine your targets. Multiple filters are combined as a union, with negated filters removing packages from the result of the union.
@@ -283,7 +328,7 @@ Specify glob of global filesystem dependencies to be hashed. Useful for `.env` a
 
 ```bash title="Terminal"
 turbo run build --global-deps=".env"
-turbo run build --global-deps=".env.*" --global-deps=".eslintrc" --global-deps="jest.config.js"
+turbo run build --global-deps=".env.*" --global-deps=".eslintrc" --global-deps="jest.config.ts"
 ```
 
 <Callout type="info">
@@ -348,6 +393,11 @@ turbo run dev --log-prefix=none
 
 ### `--no-cache`
 
+<Callout type="warn" title="Deprecated">
+  This flag is deprecated and will be removed in a future major release. Please
+  use the [`--cache`](#--cache-options) flag instead.
+</Callout>
+
 Default `false`
 
 Do not cache results of the task.
@@ -360,7 +410,7 @@ turbo run dev --no-cache
 
 `turbo` can run a background process to pre-calculate values used for determining work that needs to be done. This standalone process (daemon) is an optimization, and not required for proper functioning of `turbo`.
 
-Passing `--daemon` instructs `turbo` to use the standalone process, while `--no-daemon` instructs `turbo` to avoid using or creating the standalone process.
+The default daemon usage is set for your repository using [the `daemon` field in `turbo.json`](/repo/docs/reference/configuration#daemon). Passing `--daemon` requires `turbo` to use the standalone process, while `--no-daemon` instructs `turbo` to avoid using or creating the standalone process.
 
 The same behavior can also be set via the `TURBO_DAEMON=true` system variable.
 
@@ -465,6 +515,11 @@ turbo run build --remote-cache-timeout=60
 ```
 
 ### `--remote-only`
+
+<Callout type="warn" title="Deprecated">
+  This flag is deprecated and will be removed in a future major release. Please
+  use the [`--cache`](#--cache-options) flag instead.
+</Callout>
 
 Default: `false`
 
