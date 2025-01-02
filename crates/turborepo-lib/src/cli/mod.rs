@@ -552,6 +552,7 @@ impl Args {
 pub enum Command {
     /// Get the path to the Turbo binary
     Bin,
+    #[clap(hide = true)]
     Boundaries {
         #[clap(short = 'F', long, group = "scope-filter-group")]
         filter: Vec<String>,
