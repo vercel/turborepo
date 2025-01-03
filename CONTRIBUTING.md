@@ -98,14 +98,14 @@ cargo test -p <module>
 
 - Updating integration tests
 
-  ```
+  ```bash
   turbo run build --filter=cli
   pnpm --filter turborepo-tests-integration test:interactive
   ```
 
   You can pass a test name to run a single test, or a directory to run all tests in that directory.
 
-  ```
+  ```bash
   pnpm --filter turborepo-tests-integration test:interactive tests/turbo-help.t
   ```
 
@@ -226,7 +226,7 @@ Once you've created your example (with prior approval, as discussed above), you 
 
 To test out the experience of your example with `create-turbo`, run `create-turbo` with the `--example` flag pointed to a URL to your example's source code:
 
-```
+```bash
 npx create-turbo@latest --example https://github.com/your-org/your-repo/tree/your-branch/...
 ```
 
