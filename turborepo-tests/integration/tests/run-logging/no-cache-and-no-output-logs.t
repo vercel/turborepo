@@ -9,5 +9,5 @@ Setup
   
    Tasks:    1 successful, 1 total
   Cached:    0 cached, 1 total
-    Time:    187ms 
+    Time:\s*[\.0-9]+m?s  (re)
   
