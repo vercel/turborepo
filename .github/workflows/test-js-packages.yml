@@ -88,8 +88,6 @@ jobs:
       - js_packages
     steps:
       - name: Compute info
-        id: info
-        if: always()
         run: |
           cancelled=false
           failure=false
@@ -106,17 +104,12 @@ jobs:
           subjob ${{needs.js_packages.result}}
 
           if [ "$cancelled" = "true" ]; then
-              echo "cancelled=true" >> $GITHUB_OUTPUT
+            echo "Job was cancelled."
+            exit 0
           elif [ "$failure" = "true" ]; then
-            echo "failure=true" >> $GITHUB_OUTPUT
+            echo "Job failed."
+            exit 1
           else
-            echo "success=true" >> $GITHUB_OUTPUT
+            echo "Job succeeded."
+            exit 0
           fi
-
-      - name: Failed
-        if: steps.info.outputs.failure == 'true'
-        run: exit 1
-
-      - name: Succeeded
-        if: steps.info.outputs.success == 'true'
-        run: echo Ok
