@@ -531,6 +531,14 @@ impl Lockfile for BerryLockfile {
         let entry = self.locator_package.get(key)?;
         Some(entry.version.clone())
     }
+
+    fn human_name(&self, package: &crate::Package) -> Option<String> {
+        let locator = Locator::try_from(package.key.as_str()).ok()?;
+        let berry_package = self.locator_package.get(&locator)?;
+        let name = locator.ident.to_string();
+        let version = &berry_package.version;
+        Some(format!("{name}@{version}"))
+    }
 }
 
 impl LockfileData {

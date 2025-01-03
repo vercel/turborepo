@@ -98,14 +98,14 @@ cargo test -p <module>
 
 - Updating integration tests
 
-  ```
+  ```bash
   turbo run build --filter=cli
   pnpm --filter turborepo-tests-integration test:interactive
   ```
 
   You can pass a test name to run a single test, or a directory to run all tests in that directory.
 
-  ```
+  ```bash
   pnpm --filter turborepo-tests-integration test:interactive tests/turbo-help.t
   ```
 
@@ -143,6 +143,16 @@ There are many open-source Turborepos out in the community that you can test wit
 - This repository! Keep in mind that you'll be building and running `turbo` in the same repository, which can be confusing at times.
 
 ## Debugging tips
+
+### Links in error messages
+
+Many of Turborepo's error messages include links to information or documentation to help end users.
+
+The base URL for the links can be set to a value of your choosing by providing a `TURBO_SITE` environment variable at compilation time.
+
+```bash
+TURBO_SITE="http://localhost:3000" cargo build
+```
 
 ### Verbose logging
 
@@ -216,7 +226,7 @@ Once you've created your example (with prior approval, as discussed above), you 
 
 To test out the experience of your example with `create-turbo`, run `create-turbo` with the `--example` flag pointed to a URL to your example's source code:
 
-```
+```bash
 npx create-turbo@latest --example https://github.com/your-org/your-repo/tree/your-branch/...
 ```
 
