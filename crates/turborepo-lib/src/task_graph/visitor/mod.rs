@@ -105,7 +105,7 @@ pub enum Error {
     TaskHash(#[from] task_hash::Error),
     #[error(transparent)]
     RunSummary(#[from] summary::Error),
-    #[error("Internal errors encountered: {0}")]
+    #[error("internal errors encountered: {0}")]
     InternalErrors(String),
     #[error("unable to find package manager binary: {0}")]
     Which(#[from] which::Error),
