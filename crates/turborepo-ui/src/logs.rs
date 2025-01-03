@@ -63,7 +63,7 @@ impl<W: Write> Write for LogWriter<W> {
                      both caching is disabled and output logs are set to none."
                 );
 
-                Ok(1)
+                Ok(buf.len())
             }
         }
     }
