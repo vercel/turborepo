@@ -201,9 +201,7 @@ impl TaskCache {
         }
 
         match self.task_output_logs {
-            OutputLogsMode::None => {
-                log_writer.with_writer(writer);
-            }
+            OutputLogsMode::None => {}
             _ => {
                 log_writer.with_writer(writer);
             }
