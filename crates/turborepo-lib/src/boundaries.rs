@@ -352,6 +352,18 @@ impl Run {
                 })
     }
 
+    fn get_package_name(import: &str) -> String {
+        if import.starts_with("@") {
+            import.split('/').take(2).join("/")
+        } else {
+            import
+                .split_once("/")
+                .map(|(import, _)| import)
+                .unwrap_or(import)
+                .to_string()
+        }
+    }
+
     fn check_package_import(
         &self,
         import: &str,
@@ -364,15 +376,7 @@ impl Run {
         unresolved_external_dependencies: Option<&BTreeMap<String, String>>,
         resolver: &Resolver,
     ) -> Option<BoundariesDiagnostic> {
-        let package_name = if import.starts_with("@") {
-            import.split('/').take(2).join("/")
-        } else {
-            import
-                .split_once("/")
-                .map(|(import, _)| import)
-                .unwrap_or(import)
-                .to_string()
-        };
+        let package_name = Self::get_package_name(import);
 
         if package_name.starts_with("@types/") && matches!(import_type, ImportType::Value) {
             return Some(BoundariesDiagnostic::NotTypeOnlyImport {
@@ -436,5 +440,24 @@ impl Run {
         }
 
         None
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use test_case::test_case;
+
+    use super::*;
+
+    #[test_case("", ""; "empty")]
+    #[test_case("ship", "ship"; "basic")]
+    #[test_case("@types/ship", "@types/ship"; "types")]
+    #[test_case("@scope/ship", "@scope/ship"; "scoped")]
+    #[test_case("@scope/foo/bar", "@scope/foo"; "scoped with path")]
+    #[test_case("foo/bar", "foo"; "regular with path")]
+    #[test_case("foo/", "foo"; "trailing slash")]
+    #[test_case("foo/bar/baz", "foo"; "multiple slashes")]
+    fn test_get_package_name(import: &str, expected: &str) {
+        assert_eq!(Run::get_package_name(import), expected);
     }
 }
