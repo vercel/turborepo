@@ -197,7 +197,9 @@ impl TaskCache {
         let mut log_writer = LogWriter::default();
 
         if self.caching_disabled || self.run_cache.writes_disabled {
-            log_writer.with_writer(writer);
+            if self.task_output_logs != OutputLogsMode::None {
+                log_writer.with_writer(writer);
+            }
             return Ok(log_writer);
         }
 
