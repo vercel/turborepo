@@ -184,7 +184,6 @@ impl Run {
         // We assume the tsconfig.json is at the root of the package
         let tsconfig_path = package_root.join_component("tsconfig.json");
 
-        // TODO: Load tsconfig.json
         let resolver =
             Tracer::create_resolver(tsconfig_path.exists().then(|| tsconfig_path.as_ref()));
 
@@ -296,9 +295,9 @@ impl Run {
         }
         // We use `relation_to_path` and not `contains` because `contains`
         // panics on invalid paths with too many `..` components
-        if matches!(
+        if !matches!(
             package_path.relation_to_path(&resolved_import_path),
-            PathRelation::Divergent | PathRelation::Child
+            PathRelation::Parent
         ) {
             Ok(Some(BoundariesDiagnostic::ImportLeavesPackage {
                 import: import.to_string(),

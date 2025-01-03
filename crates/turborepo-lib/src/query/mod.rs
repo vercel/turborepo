@@ -1,6 +1,5 @@
-
-mod external_package;
 mod boundaries;
+mod external_package;
 mod file;
 mod package;
 mod server;
@@ -15,7 +14,6 @@ use std::{
 use async_graphql::{http::GraphiQLSource, *};
 use axum::{response, response::IntoResponse};
 use external_package::ExternalPackage;
-use miette::Diagnostic;
 use package::Package;
 pub use server::run_server;
 use thiserror::Error;
@@ -153,7 +151,6 @@ impl RepositoryQuery {
 #[graphql(concrete(name = "Packages", params(Package)))]
 #[graphql(concrete(name = "ChangedPackages", params(ChangedPackage)))]
 #[graphql(concrete(name = "Files", params(File)))]
-#[graphql(concrete(name = "TraceErrors", params(file::TraceError)))]
 #[graphql(concrete(name = "ExternalPackages", params(ExternalPackage)))]
 #[graphql(concrete(name = "Diagnostics", params(Diagnostic)))]
 pub struct Array<T: OutputType> {
