@@ -519,7 +519,9 @@ impl Args {
         if self.run_args.is_some()
             && !matches!(
                 self.command,
-                None | Some(Command::Run { .. }) | Some(Command::Config)
+                None | Some(Command::Run { .. })
+                    | Some(Command::Config)
+                    | Some(Command::Boundaries { .. })
             )
         {
             let mut cmd = Self::command();
@@ -540,6 +542,14 @@ impl Args {
             Err(cmd.error(
                 clap::error::ErrorKind::ArgumentConflict,
                 "Cannot use run arguments before `run` subcommand",
+            ))
+        } else if matches!(self.command, Some(Command::Boundaries { .. }))
+            && (self.run_args.is_some() || self.execution_args.is_some())
+        {
+            let mut cmd = Self::command();
+            Err(cmd.error(
+                clap::error::ErrorKind::ArgumentConflict,
+                "Cannot use run arguments before `boundaries` subcommand",
             ))
         } else {
             Ok(())
@@ -3015,6 +3025,19 @@ mod test {
     #[test_case::test_case(&["turbo", "build", "run"], true; "task")]
     #[test_case::test_case(&["turbo", "--filter=web", "watch", "build"], false; "execution before watch")]
     fn test_no_run_args_before_run(args: &[&str], is_okay: bool) {
+        let os_args = args.iter().map(|s| OsString::from(*s)).collect();
+        let cli = Args::parse(os_args);
+        if is_okay {
+            cli.unwrap();
+        } else {
+            let err = cli.unwrap_err();
+            assert_snapshot!(args.join("-").as_str(), err);
+        }
+    }
+
+    #[test_case::test_case(&["turbo", "--filter=foo", "boundaries"], false; "execution args")]
+    #[test_case::test_case(&["turbo", "--no-daemon", "boundaries"], false; "run args")]
+    fn test_no_run_args_before_boundaries(args: &[&str], is_okay: bool) {
         let os_args = args.iter().map(|s| OsString::from(*s)).collect();
         let cli = Args::parse(os_args);
         if is_okay {
