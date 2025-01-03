@@ -58,9 +58,12 @@ impl<W: Write> Write for LogWriter<W> {
             (Some(log_file), None) => log_file.write(buf),
             (None, Some(prefixed_writer)) => prefixed_writer.write(buf),
             (None, None) => {
-                // Should this be an error or even a panic?
-                debug!("no log file or prefixed writer");
-                Ok(0)
+                debug!(
+                    "No log file or prefixed writer to write to. This should only happen when \
+                     both caching is disabled and output logs are set to none."
+                );
+
+                Ok(1)
             }
         }
     }
