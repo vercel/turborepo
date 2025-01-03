@@ -45,7 +45,7 @@ impl<'a> DefaultPackageChangeMapper<'a> {
     }
 }
 
-impl<'a> PackageChangeMapper for DefaultPackageChangeMapper<'a> {
+impl PackageChangeMapper for DefaultPackageChangeMapper<'_> {
     fn detect_package(&self, file: &AnchoredSystemPath) -> PackageMapping {
         for (name, entry) in self.pkg_dep_graph.packages() {
             if name == &PackageName::Root {
@@ -105,7 +105,7 @@ impl<'a> GlobalDepsPackageChangeMapper<'a> {
     }
 }
 
-impl<'a> PackageChangeMapper for GlobalDepsPackageChangeMapper<'a> {
+impl PackageChangeMapper for GlobalDepsPackageChangeMapper<'_> {
     fn detect_package(&self, path: &AnchoredSystemPath) -> PackageMapping {
         // If we have a lockfile change, we consider this as a root package change,
         // since there's a chance that the root package uses a workspace package

@@ -237,8 +237,8 @@ impl<'a, T: crate::callbacks::Callbacks> WrappedScreenWithCallbacks<'a, T> {
     }
 }
 
-impl<'a, T: crate::callbacks::Callbacks> vte::Perform
-    for WrappedScreenWithCallbacks<'a, T>
+impl<T: crate::callbacks::Callbacks> vte::Perform
+    for WrappedScreenWithCallbacks<'_, T>
 {
     fn print(&mut self, c: char) {
         if c == '\u{fffd}' || ('\u{80}'..'\u{a0}').contains(&c) {
@@ -272,7 +272,7 @@ impl<'a, T: crate::callbacks::Callbacks> vte::Perform
         ignore: bool,
         c: char,
     ) {
-        if intermediates.first().is_none() && c == 't' {
+        if intermediates.is_empty() && c == 't' {
             let mut iter = params.iter();
             let op = iter.next().and_then(|x| x.first().copied());
             if op == Some(8) {

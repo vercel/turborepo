@@ -158,7 +158,7 @@ impl<W> App<W> {
         let active_task = self.active_task()?.to_owned();
         self.tasks
             .get_mut(&active_task)
-            .ok_or_else(|| Error::TaskNotFound { name: active_task })
+            .ok_or(Error::TaskNotFound { name: active_task })
     }
 
     fn persist_active_task(&mut self) -> Result<(), Error> {

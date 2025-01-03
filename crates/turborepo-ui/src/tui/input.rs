@@ -31,7 +31,7 @@ pub fn start_crossterm_stream(tx: mpsc::Sender<crossterm::event::Event>) -> Opti
     }))
 }
 
-impl<'a> InputOptions<'a> {
+impl InputOptions<'_> {
     /// Maps a crossterm::event::Event to a tui::Event
     pub fn handle_crossterm_event(self, event: crossterm::event::Event) -> Option<Event> {
         match event {

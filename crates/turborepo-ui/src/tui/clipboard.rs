@@ -86,6 +86,8 @@ fn copy_impl(s: &str, provider: &Provider) -> std::io::Result<()> {
         }
 
         Provider::Exec(prog, args) => {
+            // Child::wait is run after writing `s` into stdin
+            #[allow(clippy::zombie_processes)]
             let mut child = std::process::Command::new(prog)
                 .args(args)
                 .stdin(Stdio::piped())
