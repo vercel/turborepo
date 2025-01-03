@@ -19,7 +19,7 @@ use swc_ecma_parser::{lexer::Lexer, Capturing, EsSyntax, Parser, Syntax, TsSynta
 use swc_ecma_visit::VisitWith;
 use thiserror::Error;
 use turbo_trace::{ImportFinder, ImportType, Tracer};
-use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, PathRelation};
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathRelation, RelativeUnixPath};
 use turborepo_repository::{
     package_graph::{PackageName, PackageNode},
     package_json::PackageJson,
@@ -283,11 +283,11 @@ impl Run {
         source_span: SourceSpan,
         file_content: &str,
     ) -> Result<Option<BoundariesDiagnostic>, Error> {
-        let import_path = AnchoredSystemPath::new(import)?;
+        let import_path = RelativeUnixPath::new(import)?;
         let dir_path = file_path
             .parent()
             .ok_or_else(|| Error::NoParentDir(file_path.to_owned()))?;
-        let resolved_import_path = dir_path.resolve(&import_path).clean()?;
+        let resolved_import_path = dir_path.join_unix_path(&import_path).clean()?;
         // We have to check for this case because `relation_to_path` returns `Parent` if
         // the paths are equal and there's nothing wrong with importing the
         // package you're in.
