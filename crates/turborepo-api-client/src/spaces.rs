@@ -1,6 +1,9 @@
+use std::{backtrace::Backtrace, collections::HashSet, str::FromStr};
+
+use async_graphql::{Enum, SimpleObject};
 use chrono::{DateTime, Local};
 use reqwest::Method;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use turbopath::AnchoredSystemPath;
 use turborepo_vercel_api::SpaceRun;
 
@@ -13,6 +16,15 @@ pub enum RunStatus {
     Completed,
 }
 
+impl AsRef<str> for RunStatus {
+    fn as_ref(&self) -> &str {
+        match self {
+            RunStatus::Running => "RUNNING",
+            RunStatus::Completed => "COMPLETED",
+        }
+    }
+}
+
 #[derive(Serialize)]
 pub struct SpaceClientSummary {
     pub id: &'static str,
@@ -20,7 +32,7 @@ pub struct SpaceClientSummary {
     pub version: String,
 }
 
-#[derive(Debug, Serialize, Default)]
+#[derive(Debug, Serialize, Default, SimpleObject)]
 #[serde(rename_all = "camelCase")]
 pub struct SpacesCacheStatus {
     pub status: CacheStatus,
@@ -29,21 +41,60 @@ pub struct SpacesCacheStatus {
     pub time_saved: u64,
 }
 
-#[derive(Debug, Serialize, Copy, Clone)]
+#[derive(Debug, Serialize, Copy, Clone, PartialEq, Eq, Enum)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum CacheStatus {
     Hit,
     Miss,
 }
 
-#[derive(Debug, Serialize, Copy, Clone)]
+impl FromStr for CacheStatus {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "HIT" => Ok(Self::Hit),
+            "MISS" => Ok(Self::Miss),
+            _ => Err(Error::UnknownCachingStatus(
+                s.to_string(),
+                Backtrace::capture(),
+            )),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Copy, Clone, PartialEq, Eq, Enum)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum CacheSource {
     Local,
     Remote,
 }
 
-#[derive(Default, Debug, Serialize)]
+#[derive(Debug, Deserialize, Serialize, SimpleObject, PartialEq, Eq, Hash)]
+pub struct TaskId {
+    pub package: String,
+    pub task: String,
+}
+
+impl PartialOrd for TaskId {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(
+            self.package
+                .cmp(&other.package)
+                .then_with(|| self.task.cmp(&other.task)),
+        )
+    }
+}
+
+impl Ord for TaskId {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.package
+            .cmp(&other.package)
+            .then_with(|| self.task.cmp(&other.task))
+    }
+}
+
+#[derive(Default, Debug, Serialize, SimpleObject)]
 #[serde(rename_all = "camelCase")]
 pub struct SpaceTaskSummary {
     pub key: String,
@@ -54,8 +105,8 @@ pub struct SpaceTaskSummary {
     pub end_time: i64,
     pub cache: SpacesCacheStatus,
     pub exit_code: Option<i32>,
-    pub dependencies: Vec<String>,
-    pub dependents: Vec<String>,
+    pub dependencies: Option<HashSet<TaskId>>,
+    pub dependents: Option<HashSet<TaskId>>,
     #[serde(rename = "log")]
     pub logs: String,
 }
@@ -144,13 +195,13 @@ impl APIClient {
         &self,
         space_id: &str,
         api_auth: &APIAuth,
-        payload: CreateSpaceRunPayload,
+        payload: &CreateSpaceRunPayload,
     ) -> Result<SpaceRun, Error> {
         let url = format!("/v0/spaces/{}/runs", space_id);
         let request_builder = self
             .create_request_builder(&url, api_auth, Method::POST)
             .await?
-            .json(&payload);
+            .json(payload);
 
         let response =
             retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout)
@@ -167,7 +218,7 @@ impl APIClient {
         space_id: &str,
         run_id: &str,
         api_auth: &APIAuth,
-        task: SpaceTaskSummary,
+        task: &SpaceTaskSummary,
     ) -> Result<(), Error> {
         let request_builder = self
             .create_request_builder(
@@ -176,7 +227,7 @@ impl APIClient {
                 Method::POST,
             )
             .await?
-            .json(&task);
+            .json(task);
 
         retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout)
             .await?
