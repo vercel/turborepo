@@ -68,6 +68,7 @@ impl Lockfile for BunLockfile {
                 return Ok(Some(crate::Package {
                     key,
                     version: entry.version.clone(),
+                    is_dev: false,
                 }));
             }
         }
