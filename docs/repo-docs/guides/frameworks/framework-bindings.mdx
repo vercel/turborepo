@@ -31,6 +31,8 @@ Add a `peerDependency` to your library for the dependency that you intend to cre
 <Callout type="good-to-know">
   In the example above, the `peerDependency` for `next` accepts any version. You
   may want to specify a range (for example, `">=15"`) according to your needs.
+  
+  Additionally, for older package managers, you may need to instruct your package manager to install peer dependencies with configuration, or add the dependency to `devDependencies` as a workaround.
 </Callout>
 
 This will make the dependency available in your library, allowing you to write code like below. Note the `className` prop, which sets a default styling for this component in the monorepo and can be overridden in the `props` object.
