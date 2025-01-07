@@ -289,17 +289,19 @@ impl<'a> TaskHasher<'a> {
         // See if we infer a framework
         let framework = do_framework_inference
             .then(|| infer_framework(workspace, is_monorepo))
-            .flatten();
+            .flatten()
+            .inspect(|framework| {
+                debug!("auto detected framework for {}", task_id.package());
+                debug!(
+                    "framework: {}, env_prefix: {:?}",
+                    framework.slug(),
+                    framework.env_wildcards()
+                );
+                telemetry.track_framework(framework.slug());
+            });
         let framework_slug = framework.map(|f| f.slug().to_string());
 
         if let Some(framework) = framework {
-            debug!("auto detected framework for {}", task_id.package());
-            debug!(
-                "framework: {}, env_prefix: {:?}",
-                framework.slug(),
-                framework.env_wildcards()
-            );
-            telemetry.track_framework(framework.slug());
             let mut computed_wildcards = framework
                 .env_wildcards()
                 .iter()
