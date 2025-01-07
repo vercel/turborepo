@@ -286,70 +286,62 @@ impl<'a> TaskHasher<'a> {
         let mut explicit_env_var_map = EnvironmentVariableMap::default();
         let mut all_env_var_map = EnvironmentVariableMap::default();
         let mut matching_env_var_map = EnvironmentVariableMap::default();
+        // See if we infer a framework
+        let framework = do_framework_inference
+            .then(|| infer_framework(workspace, is_monorepo))
+            .flatten();
+        let framework_slug = framework.map(|f| f.slug().to_string());
 
-        let framework_slug = if do_framework_inference {
-            // See if we infer a framework
-            if let Some(framework) = infer_framework(workspace, is_monorepo) {
-                debug!("auto detected framework for {}", task_id.package());
-                debug!(
-                    "framework: {}, env_prefix: {:?}",
-                    framework.slug(),
-                    framework.env_wildcards()
-                );
-                telemetry.track_framework(framework.slug());
-                let mut computed_wildcards = framework
-                    .env_wildcards()
-                    .iter()
-                    .map(|s| s.to_string())
-                    .collect::<Vec<_>>();
+        if let Some(framework) = framework {
+            debug!("auto detected framework for {}", task_id.package());
+            debug!(
+                "framework: {}, env_prefix: {:?}",
+                framework.slug(),
+                framework.env_wildcards()
+            );
+            telemetry.track_framework(framework.slug());
+            let mut computed_wildcards = framework
+                .env_wildcards()
+                .iter()
+                .map(|s| s.to_string())
+                .collect::<Vec<_>>();
 
-                if let Some(exclude_prefix) =
-                    self.env_at_execution_start.get("TURBO_CI_VENDOR_ENV_KEY")
-                {
-                    if !exclude_prefix.is_empty() {
-                        let computed_exclude = format!("!{}*", exclude_prefix);
-                        debug!(
-                            "excluding environment variables matching wildcard {}",
-                            computed_exclude
-                        );
-                        computed_wildcards.push(computed_exclude);
-                    }
+            if let Some(exclude_prefix) = self.env_at_execution_start.get("TURBO_CI_VENDOR_ENV_KEY")
+            {
+                if !exclude_prefix.is_empty() {
+                    let computed_exclude = format!("!{}*", exclude_prefix);
+                    debug!(
+                        "excluding environment variables matching wildcard {}",
+                        computed_exclude
+                    );
+                    computed_wildcards.push(computed_exclude);
                 }
-
-                let inference_env_var_map = self
-                    .env_at_execution_start
-                    .from_wildcards(&computed_wildcards)?;
-
-                let user_env_var_set = self
-                    .env_at_execution_start
-                    .wildcard_map_from_wildcards_unresolved(&task_definition.env)?;
-
-                all_env_var_map.union(&user_env_var_set.inclusions);
-                all_env_var_map.union(&inference_env_var_map);
-                all_env_var_map.difference(&user_env_var_set.exclusions);
-
-                explicit_env_var_map.union(&user_env_var_set.inclusions);
-                explicit_env_var_map.difference(&user_env_var_set.exclusions);
-
-                matching_env_var_map.union(&inference_env_var_map);
-                matching_env_var_map.difference(&user_env_var_set.exclusions);
-                Some(framework.slug().to_string())
-            } else {
-                all_env_var_map = self
-                    .env_at_execution_start
-                    .from_wildcards(&task_definition.env)?;
-
-                explicit_env_var_map.union(&all_env_var_map);
-                None
             }
+
+            let inference_env_var_map = self
+                .env_at_execution_start
+                .from_wildcards(&computed_wildcards)?;
+
+            let user_env_var_set = self
+                .env_at_execution_start
+                .wildcard_map_from_wildcards_unresolved(&task_definition.env)?;
+
+            all_env_var_map.union(&user_env_var_set.inclusions);
+            all_env_var_map.union(&inference_env_var_map);
+            all_env_var_map.difference(&user_env_var_set.exclusions);
+
+            explicit_env_var_map.union(&user_env_var_set.inclusions);
+            explicit_env_var_map.difference(&user_env_var_set.exclusions);
+
+            matching_env_var_map.union(&inference_env_var_map);
+            matching_env_var_map.difference(&user_env_var_set.exclusions);
         } else {
             all_env_var_map = self
                 .env_at_execution_start
                 .from_wildcards(&task_definition.env)?;
 
             explicit_env_var_map.union(&all_env_var_map);
-            None
-        };
+        }
 
         let env_vars = DetailedMap {
             all: all_env_var_map,
