@@ -302,22 +302,19 @@ impl<'a> TaskHasher<'a> {
         let framework_slug = framework.map(|f| f.slug().to_string());
 
         if let Some(framework) = framework {
-            let mut computed_wildcards = framework
-                .env_wildcards()
-                .iter()
-                .map(|s| s.to_string())
-                .collect::<Vec<_>>();
+            let mut computed_wildcards = framework.env_wildcards().to_vec();
 
-            if let Some(exclude_prefix) = self.env_at_execution_start.get("TURBO_CI_VENDOR_ENV_KEY")
+            if let Some(exclude_prefix) = self
+                .env_at_execution_start
+                .get("TURBO_CI_VENDOR_ENV_KEY")
+                .filter(|prefix| !prefix.is_empty())
             {
-                if !exclude_prefix.is_empty() {
-                    let computed_exclude = format!("!{}*", exclude_prefix);
-                    debug!(
-                        "excluding environment variables matching wildcard {}",
-                        computed_exclude
-                    );
-                    computed_wildcards.push(computed_exclude);
-                }
+                let computed_exclude = format!("!{}*", exclude_prefix);
+                debug!(
+                    "excluding environment variables matching wildcard {}",
+                    computed_exclude
+                );
+                computed_wildcards.push(computed_exclude);
             }
 
             let inference_env_var_map = self
