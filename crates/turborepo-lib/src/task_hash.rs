@@ -283,9 +283,6 @@ impl<'a> TaskHasher<'a> {
             .hashes
             .get(task_id)
             .ok_or_else(|| Error::MissingPackageFileHash(task_id.to_string()))?;
-        let mut explicit_env_var_map = EnvironmentVariableMap::default();
-        let mut all_env_var_map = EnvironmentVariableMap::default();
-        let mut matching_env_var_map = EnvironmentVariableMap::default();
         // See if we infer a framework
         let framework = do_framework_inference
             .then(|| infer_framework(workspace, is_monorepo))
@@ -301,7 +298,7 @@ impl<'a> TaskHasher<'a> {
             });
         let framework_slug = framework.map(|f| f.slug().to_string());
 
-        if let Some(framework) = framework {
+        let env_vars = if let Some(framework) = framework {
             let mut computed_wildcards = framework.env_wildcards().to_vec();
 
             if let Some(exclude_prefix) = self
@@ -317,37 +314,20 @@ impl<'a> TaskHasher<'a> {
                 computed_wildcards.push(computed_exclude);
             }
 
-            let inference_env_var_map = self
-                .env_at_execution_start
-                .from_wildcards(&computed_wildcards)?;
-
-            let user_env_var_set = self
-                .env_at_execution_start
-                .wildcard_map_from_wildcards_unresolved(&task_definition.env)?;
-
-            all_env_var_map.union(&user_env_var_set.inclusions);
-            all_env_var_map.union(&inference_env_var_map);
-            all_env_var_map.difference(&user_env_var_set.exclusions);
-
-            explicit_env_var_map.union(&user_env_var_set.inclusions);
-            explicit_env_var_map.difference(&user_env_var_set.exclusions);
-
-            matching_env_var_map.union(&inference_env_var_map);
-            matching_env_var_map.difference(&user_env_var_set.exclusions);
+            self.env_at_execution_start
+                .hashable_task_env(&computed_wildcards, &task_definition.env)?
         } else {
-            all_env_var_map = self
+            let all_env_var_map = self
                 .env_at_execution_start
                 .from_wildcards(&task_definition.env)?;
 
-            explicit_env_var_map.union(&all_env_var_map);
-        }
-
-        let env_vars = DetailedMap {
-            all: all_env_var_map,
-            by_source: BySource {
-                explicit: explicit_env_var_map,
-                matching: matching_env_var_map,
-            },
+            DetailedMap {
+                all: all_env_var_map.clone(),
+                by_source: BySource {
+                    explicit: all_env_var_map,
+                    matching: EnvironmentVariableMap::default(),
+                },
+            }
         };
 
         let hashable_env_pairs = env_vars.all.to_hashable();
