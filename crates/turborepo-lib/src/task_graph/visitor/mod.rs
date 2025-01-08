@@ -52,7 +52,6 @@ use crate::{
 pub struct Visitor<'a> {
     color_cache: ColorSelector,
     dry: bool,
-    global_env: EnvironmentVariableMap,
     global_env_mode: EnvMode,
     manager: ProcessManager,
     run_opts: &'a RunOpts,
@@ -146,6 +145,7 @@ impl<'a> Visitor<'a> {
             run_opts,
             env_at_execution_start,
             global_hash,
+            global_env,
         );
 
         let sink = Self::sink(run_opts);
@@ -172,7 +172,6 @@ impl<'a> Visitor<'a> {
             sink,
             task_hasher,
             color_config,
-            global_env,
             ui_sender,
             is_watch,
             warnings: Default::default(),
@@ -259,9 +258,9 @@ impl<'a> Visitor<'a> {
             // We do this calculation earlier than we do in Go due to the `task_hasher`
             // being !Send. In the future we can look at doing this right before
             // task execution instead.
-            let execution_env =
-                self.task_hasher
-                    .env(&info, task_env_mode, task_definition, &self.global_env)?;
+            let execution_env = self
+                .task_hasher
+                .env(&info, task_env_mode, task_definition)?;
 
             let task_cache = self.run_cache.task_cache(
                 task_definition,

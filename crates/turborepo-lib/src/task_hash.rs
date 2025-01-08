@@ -242,6 +242,7 @@ pub struct TaskHasher<'a> {
     hashes: HashMap<TaskId<'static>, String>,
     run_opts: &'a RunOpts,
     env_at_execution_start: &'a EnvironmentVariableMap,
+    global_env: EnvironmentVariableMap,
     global_hash: &'a str,
     task_hash_tracker: TaskHashTracker,
 }
@@ -252,6 +253,7 @@ impl<'a> TaskHasher<'a> {
         run_opts: &'a RunOpts,
         env_at_execution_start: &'a EnvironmentVariableMap,
         global_hash: &'a str,
+        global_env: EnvironmentVariableMap,
     ) -> Self {
         let PackageInputsHashes {
             hashes,
@@ -262,6 +264,7 @@ impl<'a> TaskHasher<'a> {
             run_opts,
             env_at_execution_start,
             global_hash,
+            global_env,
             task_hash_tracker: TaskHashTracker::new(expanded_hashes),
         }
     }
@@ -429,7 +432,6 @@ impl<'a> TaskHasher<'a> {
         task_id: &TaskId,
         task_env_mode: EnvMode,
         task_definition: &TaskDefinition,
-        global_env: &EnvironmentVariableMap,
     ) -> Result<EnvironmentVariableMap, Error> {
         match task_env_mode {
             EnvMode::Strict => {
@@ -480,7 +482,7 @@ impl<'a> TaskHasher<'a> {
                 ];
                 let pass_through_env_vars = self.env_at_execution_start.pass_through_env(
                     builtin_pass_through,
-                    global_env,
+                    &self.global_env,
                     task_definition
                         .pass_through_env
                         .as_deref()
