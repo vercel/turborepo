@@ -433,70 +433,69 @@ impl<'a> TaskHasher<'a> {
     ) -> Result<EnvironmentVariableMap, Error> {
         match task_env_mode {
             EnvMode::Strict => {
-                let mut pass_through_env = EnvironmentVariableMap::default();
-                let default_env_var_pass_through_map =
-                    self.env_at_execution_start.from_wildcards(&[
-                        "HOME",
-                        "USER",
-                        "TZ",
-                        "LANG",
-                        "SHELL",
-                        "PWD",
-                        "CI",
-                        "NODE_OPTIONS",
-                        "COREPACK_HOME",
-                        "LD_LIBRARY_PATH",
-                        "DYLD_FALLBACK_LIBRARY_PATH",
-                        "LIBPATH",
-                        "COLORTERM",
-                        "TERM",
-                        "TERM_PROGRAM",
-                        "DISPLAY",
-                        "TMP",
-                        "TEMP",
-                        // VSCode IDE - https://github.com/microsoft/vscode-js-debug/blob/5b0f41dbe845d693a541c1fae30cec04c878216f/src/targets/node/nodeLauncherBase.ts#L320
-                        "VSCODE_*",
-                        "ELECTRON_RUN_AS_NODE",
-                        // Docker - https://docs.docker.com/engine/reference/commandline/cli/#environment-variables
-                        "DOCKER_*",
-                        "BUILDKIT_*",
-                        // Docker compose - https://docs.docker.com/compose/environment-variables/envvars/
-                        "COMPOSE_*",
-                        // Jetbrains IDE
-                        "JB_IDE_*",
-                        "JB_INTERPRETER",
-                        "_JETBRAINS_TEST_RUNNER_RUN_SCOPE_TYPE",
-                        // Vercel specific
-                        "VERCEL",
-                        "VERCEL_*",
-                        "NEXT_*",
-                        "USE_OUTPUT_FOR_EDGE_FUNCTIONS",
-                        "NOW_BUILDER",
-                        // Command Prompt casing of env variables
-                        "APPDATA",
-                        "PATH",
-                        "PROGRAMDATA",
-                        "SYSTEMROOT",
-                        "SYSTEMDRIVE",
-                    ])?;
-                let tracker_env = self
-                    .task_hash_tracker
-                    .env_vars(task_id)
-                    .ok_or_else(|| Error::MissingEnvVars(task_id.clone().into_owned()))?;
-
-                pass_through_env.union(&default_env_var_pass_through_map);
-                pass_through_env.union(global_env);
-                pass_through_env.union(&tracker_env.all);
-
-                let env_var_pass_through_map = self.env_at_execution_start.from_wildcards(
+                let mut full_task_env = EnvironmentVariableMap::default();
+                let builtin_pass_through = &[
+                    "HOME",
+                    "USER",
+                    "TZ",
+                    "LANG",
+                    "SHELL",
+                    "PWD",
+                    "CI",
+                    "NODE_OPTIONS",
+                    "COREPACK_HOME",
+                    "LD_LIBRARY_PATH",
+                    "DYLD_FALLBACK_LIBRARY_PATH",
+                    "LIBPATH",
+                    "COLORTERM",
+                    "TERM",
+                    "TERM_PROGRAM",
+                    "DISPLAY",
+                    "TMP",
+                    "TEMP",
+                    // VSCode IDE - https://github.com/microsoft/vscode-js-debug/blob/5b0f41dbe845d693a541c1fae30cec04c878216f/src/targets/node/nodeLauncherBase.ts#L320
+                    "VSCODE_*",
+                    "ELECTRON_RUN_AS_NODE",
+                    // Docker - https://docs.docker.com/engine/reference/commandline/cli/#environment-variables
+                    "DOCKER_*",
+                    "BUILDKIT_*",
+                    // Docker compose - https://docs.docker.com/compose/environment-variables/envvars/
+                    "COMPOSE_*",
+                    // Jetbrains IDE
+                    "JB_IDE_*",
+                    "JB_INTERPRETER",
+                    "_JETBRAINS_TEST_RUNNER_RUN_SCOPE_TYPE",
+                    // Vercel specific
+                    "VERCEL",
+                    "VERCEL_*",
+                    "NEXT_*",
+                    "USE_OUTPUT_FOR_EDGE_FUNCTIONS",
+                    "NOW_BUILDER",
+                    // Command Prompt casing of env variables
+                    "APPDATA",
+                    "PATH",
+                    "PROGRAMDATA",
+                    "SYSTEMROOT",
+                    "SYSTEMDRIVE",
+                ];
+                let pass_through_env_vars = self.env_at_execution_start.pass_through_env(
+                    builtin_pass_through,
+                    global_env,
                     task_definition
                         .pass_through_env
                         .as_deref()
                         .unwrap_or_default(),
                 )?;
-                pass_through_env.union(&env_var_pass_through_map);
 
-                Ok(pass_through_env)
+                let tracker_env = self
+                    .task_hash_tracker
+                    .env_vars(task_id)
+                    .ok_or_else(|| Error::MissingEnvVars(task_id.clone().into_owned()))?;
+
+                full_task_env.union(&pass_through_env_vars);
+                full_task_env.union(&tracker_env.all);
+
+                Ok(full_task_env)
             }
             EnvMode::Loose => Ok(self.env_at_execution_start.clone()),
         }
