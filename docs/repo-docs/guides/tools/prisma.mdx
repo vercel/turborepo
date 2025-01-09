@@ -116,10 +116,23 @@ Now, run `turbo db:push db:generate` from the root of our repository to automati
 
 ## Exporting your client
 
-Next, export the `@prisma/client` so it can used in your applications. Let's add an `index.ts` file to `packages/database`:
+Set up the Prisma client for the package.
+
+```ts title="packages/database/src/client.ts"
+import { PrismaClient } from '../generated/client';
+
+const globalForPrisma = global as unknown as { prisma: PrismaClient };
+
+export const prisma = globalForPrisma.prisma || new PrismaClient();
+
+if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
+```
+
+Next, export the `@prisma/client` and types so it can used in your applications. Let's add an `index.ts` file to `packages/database`:
 
 ```ts title="packages/database/src/index.ts"
-export * from '@prisma/client';
+export { prisma } from './client'; // exports instance of prisma
+export * from '../generated/client'; // exports generated types from prisma
 ```
 
 Following the [Just-in-Time packaging pattern](/repo/docs/core-concepts/internal-packages#just-in-time-packages), you'll also create an entrypoint to the package inside `packages/database/package.json`.
@@ -127,9 +140,8 @@ Following the [Just-in-Time packaging pattern](/repo/docs/core-concepts/internal
 ```json title="packages/database/package.json"
 {
   "exports": {
-    // [!code highlight]
     ".": "./src/index.ts" // [!code highlight]
-  } // [!code highlight]
+  }
 }
 ```
 
