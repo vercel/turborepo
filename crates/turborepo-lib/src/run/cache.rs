@@ -202,7 +202,7 @@ impl TaskCache {
 
         match self.task_output_logs {
             OutputLogsMode::None | OutputLogsMode::HashOnly | OutputLogsMode::ErrorsOnly => {}
-            _ => {
+            OutputLogsMode::Full | OutputLogsMode::NewOnly => {
                 log_writer.with_writer(writer);
             }
         }
