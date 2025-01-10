@@ -280,12 +280,14 @@ For example, if you had a `@repo/math` package, you might have the following `ex
 ```json title="./packages/math/package.json"
 {
   "exports": {
-    ".": "./dist/constants.ts",
-    "./add": "./dist/add.ts",
-    "./subtract": "./dist/subtract.ts"
+    ".": "./src/constants.ts",
+    "./add": "./src/add.ts",
+    "./subtract": "./src/subtract.ts"
   }
 }
 ```
+
+Note that this example uses the [Just-in-Time Package](/repo/docs/core-concepts/internal-packages#just-in-time-packages) pattern for simplicity. It exports TypeScript directly, but you might choose to use the [Compiled Package](/repo/docs/core-concepts/internal-packages#compiled-packages) pattern instead.
 
 <Callout type="info">
   The `exports` field in this example requires modern versions of Node.js and
@@ -307,9 +309,9 @@ Using exports this way provides three major benefits:
 - **IDE autocompletion**: By specifying the entrypoints for your package using `exports`, you can ensure that your code editor can provide auto-completion for the package's exports.
 
 <Callout type="good-to-know">
-  You may also specify `exports` using a wildcard. However, you will lose IDE
-  autocompletion due to performance tradeoffs with the TypeScript compiler. For
-  more information, visit [the TypeScript
+  You may also specify `exports` using a wildcard. However, you will lose some 
+  IDE autocompletion due to performance tradeoffs with the TypeScript compiler.
+  For more information, visit [the TypeScript
   guide](/repo/docs/guides/tools/typescript#package-entrypoint-wildcards).
 </Callout>
 
