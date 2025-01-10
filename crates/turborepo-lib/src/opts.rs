@@ -462,6 +462,7 @@ impl<'a> TryFrom<OptsInputs<'a>> for CacheOpts {
             return Err(Error::OverlappingCacheOptions);
         }
 
+        // defaults to fully enabled cache
         let mut cache = cache.unwrap_or_default();
 
         if inputs.config.remote_only() {
@@ -482,11 +483,10 @@ impl<'a> TryFrom<OptsInputs<'a>> for CacheOpts {
         if !is_linked {
             cache.remote.read = false;
             cache.remote.write = false;
-        } else if let Some(enabled) = inputs.config.enabled {
-            // We're linked, but if the user has explicitly enabled or disabled, use that
-            // value
-            cache.remote.read = enabled;
-            cache.remote.write = enabled;
+        } else if let Some(false) = inputs.config.enabled {
+            // We're linked, but if the user has explicitly disabled remote cache
+            cache.remote.read = false;
+            cache.remote.write = false;
         };
 
         if inputs.config.remote_cache_read_only() {
