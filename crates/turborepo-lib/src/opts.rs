@@ -529,9 +529,10 @@ impl ScopeOpts {
 
 #[cfg(test)]
 mod test {
+    use tempfile::TempDir;
     use test_case::test_case;
     use turbopath::AbsoluteSystemPathBuf;
-    use turborepo_cache::CacheOpts;
+    use turborepo_cache::{CacheActions, CacheConfig, CacheOpts};
     use turborepo_ui::ColorConfig;
 
     use super::{APIClientOpts, RepoOpts, RunOpts};
@@ -770,6 +771,50 @@ mod test {
         .map(|base| base.opts().cache_opts.cache);
 
         insta::assert_debug_snapshot!(name, cache_config);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_cache_config_force_remote_enable() -> Result<(), anyhow::Error> {
+        let tmpdir = TempDir::new()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(tmpdir.path())?;
+
+        repo_root
+            .join_component("turbo.json")
+            .create_with_contents(serde_json::to_string_pretty(&serde_json::json!({
+                "remoteCache": { "enabled": true }
+            }))?)?;
+
+        let mut args = Args::default();
+        args.command = Some(Command::Run {
+            execution_args: Box::default(),
+            run_args: Box::new(RunArgs {
+                force: Some(Some(true)),
+                ..Default::default()
+            }),
+        });
+
+        // set token and team to simulate a logged in/linked user
+        args.token = Some("token".to_string());
+        args.team = Some("team".to_string());
+
+        let base = CommandBase::new(args, repo_root, "1.0.0", ColorConfig::new(false))?;
+        let actual = base.opts().cache_opts.cache;
+
+        assert_eq!(
+            actual,
+            CacheConfig {
+                remote: CacheActions {
+                    read: false,
+                    write: true
+                },
+                local: CacheActions {
+                    read: false,
+                    write: true
+                }
+            }
+        );
 
         Ok(())
     }
