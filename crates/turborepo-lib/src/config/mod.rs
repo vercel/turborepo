@@ -59,7 +59,7 @@ pub enum Error {
     #[error(transparent)]
     PackageJson(#[from] turborepo_repository::package_json::Error),
     #[error(
-        "Could not find `turbo.json`.\nFollow directions at https://turbo.build/repo/docs to \
+        "Could not find turbo.json.\nFollow directions at https://turbo.build/repo/docs to \
          create one."
     )]
     NoTurboJSON,
@@ -192,7 +192,7 @@ pub enum Error {
         #[source_code]
         text: NamedSource,
     },
-    #[error("Cannot load `turbo.json` for {0} in single package mode.")]
+    #[error("Cannot load turbo.json for {0} in single package mode.")]
     InvalidTurboJsonLoad(PackageName),
 }
 

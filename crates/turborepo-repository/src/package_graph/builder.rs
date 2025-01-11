@@ -49,7 +49,7 @@ pub enum Error {
     #[diagnostic(transparent)]
     #[error(transparent)]
     PackageJson(#[from] crate::package_json::Error),
-    #[error("Package.json must have a name field:\n{0}")]
+    #[error("package.json must have a name field:\n{0}")]
     PackageJsonMissingName(AbsoluteSystemPathBuf),
     #[error("Invalid package dependency graph: {0}")]
     InvalidPackageGraph(#[source] graph::Error),

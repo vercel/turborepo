@@ -67,7 +67,7 @@ pub enum Error {
     #[error("Please re-run `link` after enabling caching.")]
     EnableCaching,
     #[error(
-        "Could not persist selected space ({space_id}) to `experimentalSpaces.id` in `turbo.json`."
+        "Could not persist selected space ({space_id}) to `experimentalSpaces.id` in turbo.json."
     )]
     WriteToTurboJson {
         space_id: String,
