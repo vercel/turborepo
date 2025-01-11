@@ -7,7 +7,7 @@
 # app-a#dev
 # └── pkg-a#dev
   $ ${TURBO} run dev
-    x invalid task configuration
+    x Invalid task configuration
   
   Error:   x "pkg-a#dev" is a persistent task, "app-a#dev" cannot depend on it
      ,-[turbo.json:4:1]
