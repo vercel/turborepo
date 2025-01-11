@@ -51,23 +51,23 @@ use crate::{
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("failed to write run summary {0}")]
+    #[error("Failed to write run summary. Reason: {0}")]
     IO(#[from] io::Error),
-    #[error("failed to serialize run summary to JSON")]
+    #[error("Failed to serialize run summary to JSON.")]
     Serde(#[from] serde_json::Error),
-    #[error("missing workspace {0}")]
+    #[error("Missing workspace: {0}")]
     MissingWorkspace(PackageName),
-    #[error("request took too long to resolve: {0}")]
+    #[error("Request took too long to resolve: {0}")]
     Timeout(#[from] tokio::time::error::Elapsed),
-    #[error("failed to send spaces request: {0}")]
+    #[error("Failed to send spaces request: {0}")]
     SpacesRequest(#[from] turborepo_api_client::Error),
-    #[error("failed to close spaces client")]
+    #[error("Failed to close spaces client.")]
     SpacesClientClose(#[from] tokio::task::JoinError),
-    #[error("failed to contact spaces client")]
+    #[error("Failed to contact spaces client.")]
     SpacesClientSend(#[from] tokio::sync::mpsc::error::SendError<SpaceRequest>),
-    #[error("failed to parse environment variables")]
+    #[error("Failed to parse environment variables.")]
     Env(#[source] turborepo_env::Error),
-    #[error("failed to construct task summary: {0}")]
+    #[error("Failed to construct task summary: {0}")]
     TaskSummary(#[from] task_factory::Error),
 }
 

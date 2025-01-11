@@ -32,7 +32,7 @@ pub enum Error {
     Env(#[from] turborepo_env::Error),
     #[error(transparent)]
     Globwalk(#[from] globwalk::WalkError),
-    #[error("invalid glob for globwalking: {0}")]
+    #[error("Invalid glob for globwalking: {0}")]
     Glob(#[from] globwalk::GlobError),
     #[error(transparent)]
     Scm(#[from] turborepo_scm::Error),

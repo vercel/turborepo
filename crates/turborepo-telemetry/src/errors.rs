@@ -7,7 +7,7 @@ use thiserror::Error;
 pub enum Error {
     #[error("Error making HTTP request: {0}")]
     ReqwestError(#[from] reqwest::Error),
-    #[error("skipping HTTP Request, too many failures have occurred.\nLast error: {0}")]
+    #[error("Skipping HTTP Request. Too many failures have occurred.\nLast error: {0}")]
     TooManyFailures(#[from] Box<reqwest::Error>),
     #[error("Unable to set up TLS.")]
     TlsError(#[source] reqwest::Error),
@@ -15,7 +15,7 @@ pub enum Error {
     InvalidHeader(#[from] ToStrError),
     #[error("Error parsing URL: {0}")]
     InvalidUrl(#[from] url::ParseError),
-    #[error("unknown status {code}: {message}")]
+    #[error("Unknown status {code}: {message}")]
     UnknownStatus {
         code: String,
         message: String,

@@ -31,17 +31,17 @@ use crate::{
 
 #[derive(Error, Debug, Diagnostic)]
 pub enum Error {
-    #[error("failed to get file dependencies")]
+    #[error("Failed to get file dependencies.")]
     Trace(#[related] Vec<TraceError>),
-    #[error("no signal handler")]
+    #[error("No signal handler.")]
     NoSignalHandler,
-    #[error("file `{0}` not found")]
+    #[error("File `{0}` not found.")]
     FileNotFound(String),
-    #[error("failed to start GraphQL server")]
+    #[error("Failed to start GraphQL server.")]
     Server(#[from] io::Error),
-    #[error("package not found: {0}")]
+    #[error("Package not found: {0}")]
     PackageNotFound(PackageName),
-    #[error("failed to serialize result: {0}")]
+    #[error("Failed to serialize result: {0}")]
     Serde(#[from] serde_json::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
@@ -54,7 +54,7 @@ pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Resolution(#[from] crate::run::scope::filter::ResolutionError),
-    #[error("failed to parse file: {0:?}")]
+    #[error("Failed to parse file: {0:?}")]
     Parse(swc_ecma_parser::error::Error),
 }
 

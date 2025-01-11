@@ -18,23 +18,23 @@ use crate::{
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("Expected run command")]
+    #[error("Expected `run` command.")]
     ExpectedRun(#[backtrace] backtrace::Backtrace),
     #[error(transparent)]
     ParseFloat(#[from] std::num::ParseFloatError),
     #[error(
-        "invalid percentage value for --concurrency CLI flag. This should be a percentage of CPU \
-         cores, between 1% and 100% : {1}"
+        "Invalid percentage value for `--concurrency` flag. This should be a percentage of CPU \
+         cores, between 1% and 100%: {1}"
     )]
     InvalidConcurrencyPercentage(#[backtrace] backtrace::Backtrace, f64),
     #[error(
-        "invalid value for --concurrency CLI flag. This should be a positive integer greater than \
+        "Invalid value for `--concurrency` flag. This should be a positive integer greater than \
          or equal to 1: {1}"
     )]
     ConcurrencyOutOfBounds(#[backtrace] backtrace::Backtrace, String),
     #[error(
         "Cannot set `cache` config and other cache options (`force`, `remoteOnly`, \
-         `remoteCacheReadOnly`) at the same time"
+         `remoteCacheReadOnly`) at the same time."
     )]
     OverlappingCacheOptions,
     #[error(transparent)]

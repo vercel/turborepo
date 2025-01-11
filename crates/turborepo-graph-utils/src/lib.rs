@@ -11,7 +11,7 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("cyclic dependency detected:\n{0}")]
+    #[error("Cyclic dependency detected:\n{0}")]
     CyclicDependencies(String),
     #[error("{0} depends on itself")]
     SelfDependency(String),

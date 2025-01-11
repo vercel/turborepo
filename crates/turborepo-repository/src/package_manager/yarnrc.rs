@@ -8,9 +8,9 @@ pub const YARNRC_FILENAME: &str = ".yarnrc.yml";
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("encountered error opening yarnrc.yml: {0}")]
+    #[error("Encountered error opening yarnrc.yml: {0}")]
     Io(#[from] std::io::Error),
-    #[error("encountered error parsing yarnrc.yml: {0}")]
+    #[error("Encountered error parsing yarnrc.yml: {0}")]
     SerdeYaml(#[from] serde_yaml::Error),
 }
 

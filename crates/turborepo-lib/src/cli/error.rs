@@ -19,7 +19,7 @@ use crate::{
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
-    #[error("No command specified")]
+    #[error("No command specified.")]
     NoCommand(#[backtrace] backtrace::Backtrace),
     #[error("{0}")]
     Bin(#[from] bin::Error, #[backtrace] backtrace::Backtrace),

@@ -50,17 +50,17 @@ pub struct InvalidEnvPrefixError {
 pub enum Error {
     #[error("Authentication error: {0}")]
     Auth(#[from] turborepo_auth::Error),
-    #[error("Global config path not found")]
+    #[error("Global config path not found.")]
     NoGlobalConfigPath,
-    #[error("Global auth file path not found")]
+    #[error("Global authentication file path not found.")]
     NoGlobalAuthFilePath,
-    #[error("Global config directory not found")]
+    #[error("Global config directory not found.")]
     NoGlobalConfigDir,
     #[error(transparent)]
     PackageJson(#[from] turborepo_repository::package_json::Error),
     #[error(
-        "Could not find turbo.json.\nFollow directions at https://turbo.build/repo/docs to create \
-         one"
+        "Could not find `turbo.json`.\nFollow directions at https://turbo.build/repo/docs to \
+         create one."
     )]
     NoTurboJSON,
     #[error(transparent)]
@@ -71,12 +71,12 @@ pub enum Error {
     Camino(#[from] camino::FromPathBufError),
     #[error(transparent)]
     Reqwest(#[from] reqwest::Error),
-    #[error("Encountered an IO error while attempting to read {config_path}: {error}")]
+    #[error("Encountered an I/O error while attempting to read {config_path}: {error}")]
     FailedToReadConfig {
         config_path: AbsoluteSystemPathBuf,
         error: io::Error,
     },
-    #[error("Encountered an IO error while attempting to set {config_path}: {error}")]
+    #[error("Encountered an I/O error while attempting to set {config_path}: {error}")]
     FailedToSetConfig {
         config_path: AbsoluteSystemPathBuf,
         error: io::Error,
@@ -95,7 +95,7 @@ pub enum Error {
         #[label("package task found here")]
         span: Option<SourceSpan>,
     },
-    #[error("interruptible tasks must be persistent")]
+    #[error("Interruptible tasks must be persistent.")]
     InterruptibleButNotPersistent {
         #[source_code]
         text: NamedSource,
@@ -111,7 +111,7 @@ pub enum Error {
         code(unnecessary_package_task_syntax),
         url("{}/messages/{}", TURBO_SITE, self.code().unwrap().to_string().to_case(Case::Kebab))
     )]
-    #[error("\"{actual}\". Use \"{wanted}\" instead")]
+    #[error("\"{actual}\". Use \"{wanted}\" instead.")]
     UnnecessaryPackageTaskSyntax {
         actual: String,
         wanted: String,
@@ -120,14 +120,14 @@ pub enum Error {
         #[source_code]
         text: NamedSource,
     },
-    #[error("You can only extend from the root workspace")]
+    #[error("You can only extend from the root of the workspace.")]
     ExtendFromNonRoot {
         #[label("non-root workspace found here")]
         span: Option<SourceSpan>,
         #[source_code]
         text: NamedSource,
     },
-    #[error("`{field}` cannot contain an environment variable")]
+    #[error("`{field}` cannot contain an environment variable.")]
     InvalidDependsOnValue {
         field: &'static str,
         #[label("environment variable found here")]
@@ -135,7 +135,7 @@ pub enum Error {
         #[source_code]
         text: NamedSource,
     },
-    #[error("`{field}` cannot contain an absolute path")]
+    #[error("`{field}` cannot contain an absolute path.")]
     AbsolutePathInConfig {
         field: &'static str,
         #[label("absolute path found here")]
@@ -143,24 +143,24 @@ pub enum Error {
         #[source_code]
         text: NamedSource,
     },
-    #[error("No \"extends\" key found")]
+    #[error("No \"extends\" key found.")]
     NoExtends {
         #[label("add extends key here")]
         span: Option<SourceSpan>,
         #[source_code]
         text: NamedSource,
     },
-    #[error("Tasks cannot be marked as interactive and cacheable")]
+    #[error("Tasks cannot be marked as interactive and cacheable.")]
     InteractiveNoCacheable {
         #[label("marked interactive here")]
         span: Option<SourceSpan>,
         #[source_code]
         text: NamedSource,
     },
-    #[error("found `pipeline` field instead of `tasks`")]
-    #[diagnostic(help("changed in 2.0: `pipeline` has been renamed to `tasks`"))]
+    #[error("Found `pipeline` field instead of `tasks`.")]
+    #[diagnostic(help("Changed in 2.0: `pipeline` has been renamed to `tasks`."))]
     PipelineField {
-        #[label("rename `pipeline` field to `tasks`")]
+        #[label("Rename `pipeline` field to `tasks`")]
         span: Option<SourceSpan>,
         #[source_code]
         text: NamedSource,
@@ -173,9 +173,9 @@ pub enum Error {
     InvalidSignature,
     #[error("TURBO_REMOTE_CACHE_ENABLED should be either 1 or 0.")]
     InvalidRemoteCacheEnabled,
-    #[error("TURBO_REMOTE_CACHE_TIMEOUT: error parsing timeout.")]
+    #[error("TURBO_REMOTE_CACHE_TIMEOUT: Error parsing timeout.")]
     InvalidRemoteCacheTimeout(#[source] std::num::ParseIntError),
-    #[error("TURBO_REMOTE_CACHE_UPLOAD_TIMEOUT: error parsing timeout.")]
+    #[error("TURBO_REMOTE_CACHE_UPLOAD_TIMEOUT: Error parsing timeout.")]
     InvalidUploadTimeout(#[source] std::num::ParseIntError),
     #[error("TURBO_PREFLIGHT should be either 1 or 0.")]
     InvalidPreflight,
@@ -185,14 +185,14 @@ pub enum Error {
     #[diagnostic(transparent)]
     TurboJsonParseError(#[from] crate::turbo_json::parser::Error),
     #[error("found absolute path in `cacheDir`")]
-    #[diagnostic(help("if absolute paths are required, use `--cache-dir` or `TURBO_CACHE_DIR`"))]
+    #[diagnostic(help("If absolute paths are required, use `--cache-dir` or `TURBO_CACHE_DIR`."))]
     AbsoluteCacheDir {
-        #[label("make `cacheDir` value a relative unix path")]
+        #[label("Make `cacheDir` value a relative unix path.")]
         span: Option<SourceSpan>,
         #[source_code]
         text: NamedSource,
     },
-    #[error("Cannot load turbo.json for in {0} single package mode")]
+    #[error("Cannot load `turbo.json` for {0} in single package mode.")]
     InvalidTurboJsonLoad(PackageName),
 }
 
