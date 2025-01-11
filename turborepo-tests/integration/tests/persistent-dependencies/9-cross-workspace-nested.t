@@ -12,7 +12,7 @@
 // 		 		 └── workspace-z#dev // this one is persistent
 //
   $ ${TURBO} run build
-    x Invalid task configuration
+    x invalid task configuration
   
   Error:   x "app-z#dev" is a persistent task, "app-c#build" cannot depend on it
       ,-[turbo.json:12:1]
