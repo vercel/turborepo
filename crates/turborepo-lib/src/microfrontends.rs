@@ -466,7 +466,9 @@ mod test {
                     "docs": {
                         "development": {
                             "task": "serve",
-                            "port": 3030,
+                            "local": {
+                                "port": 3030
+                            }
                         }
                     }
                 }
@@ -483,7 +485,7 @@ mod test {
         );
         assert_eq!(
             web_ports.get(&TaskId::new("web", "dev")).copied(),
-            Some(6955)
+            Some(5588)
         );
     }
 
