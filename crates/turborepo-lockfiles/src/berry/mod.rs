@@ -456,6 +456,7 @@ impl Lockfile for BerryLockfile {
         Ok(Some(crate::Package {
             key: locator.to_string(),
             version: package.version.clone(),
+            is_dev: false,
         }))
     }
 
@@ -650,7 +651,8 @@ mod test {
                 .unwrap(),
             Some(Package {
                 key: "js-tokens@npm:4.0.0".into(),
-                version: "4.0.0".into()
+                version: "4.0.0".into(),
+                is_dev: false,
             }),
         );
         assert_eq!(
@@ -659,7 +661,8 @@ mod test {
                 .unwrap(),
             Some(Package {
                 key: "js-tokens@npm:4.0.0".into(),
-                version: "4.0.0".into()
+                version: "4.0.0".into(),
+                is_dev: false,
             }),
         );
         assert_eq!(
@@ -668,7 +671,8 @@ mod test {
                 .unwrap(),
             Some(Package {
                 key: "eslint-config-custom@workspace:packages/eslint-config-custom".into(),
-                version: "0.0.0-use.local".into()
+                version: "0.0.0-use.local".into(),
+                is_dev: false,
             }),
         );
         assert_eq!(
@@ -799,7 +803,8 @@ mod test {
 
         assert!(closure.contains(&Package {
             key: "lodash@npm:4.17.21".into(),
-            version: "4.17.21".into()
+            version: "4.17.21".into(),
+            is_dev: false,
         }));
     }
 
@@ -827,7 +832,8 @@ mod test {
             pkg,
             Package {
                 key: "debug@npm:1.0.0".into(),
-                version: "1.0.0".into()
+                version: "1.0.0".into(),
+                is_dev: false,
             }
         );
     }
@@ -871,7 +877,8 @@ mod test {
             pkg,
             Package {
                 key: "ms@npm:0.6.0".into(),
-                version: "0.6.0".into()
+                version: "0.6.0".into(),
+                is_dev: false,
             }
         );
     }
@@ -907,11 +914,13 @@ mod test {
 
         assert!(closure.contains(&Package {
             key: "ajv@npm:8.11.2".into(),
-            version: "8.11.2".into()
+            version: "8.11.2".into(),
+            is_dev: false,
         }));
         assert!(closure.contains(&Package {
             key: "uri-js@npm:4.4.1".into(),
-            version: "4.4.1".into()
+            version: "4.4.1".into(),
+            is_dev: false,
         }));
     }
 
@@ -936,6 +945,7 @@ mod test {
         let expected = Package {
             key: "react@npm:18.1.0".into(),
             version: "18.1.0".into(),
+            is_dev: false,
         };
         assert_eq!(actual, expected,);
 
@@ -1070,6 +1080,7 @@ mod test {
             crate::Package {
                 key: expected_key.into(),
                 version: "3.0.1".into(),
+                is_dev: false,
             }
         );
 
@@ -1092,11 +1103,13 @@ mod test {
             vec![
                 crate::Package {
                     key: expected_key.into(),
-                    version: "3.0.1".into()
+                    version: "3.0.1".into(),
+                    is_dev: false,
                 },
                 crate::Package {
                     key: "is-number@npm:6.0.0".into(),
-                    version: "6.0.0".into()
+                    version: "6.0.0".into(),
+                    is_dev: false,
                 }
             ]
             .into_iter()
