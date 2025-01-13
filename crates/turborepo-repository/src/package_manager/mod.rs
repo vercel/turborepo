@@ -535,14 +535,14 @@ impl PackageManager {
         turbo_root.join_component(self.lockfile_name())
     }
 
-    pub fn arg_separator(&self, user_args: &[String]) -> Option<&str> {
+    pub fn arg_separator(&self, user_args: &[impl AsRef<str>]) -> Option<&str> {
         match self {
             PackageManager::Yarn | PackageManager::Bun => {
                 // Yarn and bun warn and swallows a "--" token. If the user is passing "--", we
                 // need to prepend our own so that the user's doesn't get
                 // swallowed. If they are not passing their own, we don't need
                 // the "--" token and can avoid the warning.
-                if user_args.iter().any(|arg| arg == "--") {
+                if user_args.iter().any(|arg| arg.as_ref() == "--") {
                     Some("--")
                 } else {
                     None
