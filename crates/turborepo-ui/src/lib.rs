@@ -35,9 +35,9 @@ pub enum Error {
     Tui(#[from] tui::Error),
     #[error(transparent)]
     Wui(#[from] wui::Error),
-    #[error("cannot read logs: {0}")]
+    #[error("Cannot read logs: {0}")]
     CannotReadLogs(#[source] std::io::Error),
-    #[error("cannot write logs: {0}")]
+    #[error("Cannot write logs: {0}")]
     CannotWriteLogs(#[source] std::io::Error),
 }
 

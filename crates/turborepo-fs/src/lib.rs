@@ -15,7 +15,7 @@ pub enum Error {
     Path(#[from] turbopath::PathError),
     #[error(transparent)]
     Io(#[from] io::Error),
-    #[error("error walking directory during recursive copy: {0}")]
+    #[error("Error walking directory during recursive copy: {0}")]
     Walk(#[from] walkdir::Error),
 }
 

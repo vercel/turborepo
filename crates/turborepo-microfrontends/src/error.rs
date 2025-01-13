@@ -9,13 +9,13 @@ pub enum Error {
     #[error("Unable to parse JSON: {0}")]
     JsonParse(String),
     #[error(
-        "Unsupported micro-frontends configuration version: {0}. Supported versions: \
+        "Unsupported microfrontends configuration version: {0}. Supported versions: \
          {SUPPORTED_VERSIONS:?}"
     )]
     UnsupportedVersion(String),
-    #[error("Configuration references config located in package {reference}")]
+    #[error("Configuration references config located in package {reference}.")]
     ChildConfig { reference: String },
-    #[error("Cannot parse config with version '{actual}' as version '{expected}'")]
+    #[error("Cannot parse config with version '{actual}' as version '{expected}'.")]
     InvalidVersion {
         expected: &'static str,
         actual: String,

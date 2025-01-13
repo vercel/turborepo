@@ -154,13 +154,13 @@ impl GlobSet {
 pub enum Error {
     #[error(transparent)]
     CookieError(#[from] CookieError),
-    #[error("failed to send query to globwatcher: {0}")]
+    #[error("Failed to send query to glob watcher: {0}")]
     SendError(#[from] mpsc::error::SendError<CookiedRequest<Query>>),
-    #[error("globwatcher has closed")]
+    #[error("Glob watcher has closed.")]
     Closed,
-    #[error("globwatcher request timed out")]
+    #[error("Glob watcher request timed out.")]
     Timeout(#[from] tokio::time::error::Elapsed),
-    #[error("glob watching is unavailable")]
+    #[error("Glob watching is unavailable.")]
     Unavailable,
 }
 

@@ -29,17 +29,17 @@ use crate::{
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("Error replaying logs: {0}")]
+    #[error("Failed to replay logs: {0}")]
     Ui(#[from] turborepo_ui::Error),
-    #[error("Error accessing cache: {0}")]
+    #[error("Failed to access cache: {0}")]
     Cache(#[from] turborepo_cache::CacheError),
-    #[error("Error finding outputs to save: {0}")]
+    #[error("Failed to find outputs to save: {0}")]
     Globwalk(#[from] globwalk::WalkError),
     #[error("Invalid globwalk pattern: {0}")]
     Glob(#[from] globwalk::GlobError),
     #[error("Error with daemon: {0}")]
     Daemon(#[from] crate::daemon::DaemonError),
-    #[error("no connection to daemon")]
+    #[error("No connection to daemon")]
     NoDaemon,
     #[error(transparent)]
     Scm(#[from] turborepo_scm::Error),

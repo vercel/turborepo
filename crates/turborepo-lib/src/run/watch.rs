@@ -63,48 +63,48 @@ struct RunHandle {
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
-    #[error("failed to connect to daemon")]
+    #[error("Failed to connect to daemon.")]
     #[diagnostic(transparent)]
     Daemon(#[from] DaemonError),
-    #[error("failed to connect to daemon")]
+    #[error("Failed to connect to daemon.")]
     DaemonConnector(#[from] DaemonConnectorError),
-    #[error("failed to decode message from daemon")]
+    #[error("Failed to decode message from daemon.")]
     Decode(#[from] prost::DecodeError),
-    #[error("could not get current executable")]
+    #[error("Could not get current executable.")]
     CurrentExe(std::io::Error),
-    #[error("could not start turbo")]
+    #[error("Could not start `turbo`.")]
     Start(std::io::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Run(#[from] run::Error),
-    #[error("`--since` is not supported in watch mode")]
+    #[error("`--since` is not supported in Watch Mode.")]
     SinceNotSupported,
     #[error(transparent)]
     Opts(#[from] opts::Error),
-    #[error("invalid filter pattern")]
+    #[error("Invalid filter pattern")]
     InvalidSelector(#[from] InvalidSelectorError),
-    #[error("filter cannot contain a git range in watch mode")]
+    #[error("Filter cannot contain a git range in Watch Mode.")]
     GitRangeInFilter {
         #[source_code]
         filter: String,
         #[label]
         span: SourceSpan,
     },
-    #[error("daemon connection closed")]
+    #[error("Daemon connection closed.")]
     ConnectionClosed,
-    #[error("failed to subscribe to signal handler, shutting down")]
+    #[error("Failed to subscribe to signal handler. Shutting down.")]
     NoSignalHandler,
-    #[error("watch interrupted due to signal")]
+    #[error("Watch interrupted due to signal.")]
     SignalInterrupt,
-    #[error("package change error")]
+    #[error("Package change error.")]
     PackageChange(#[from] tonic::Status),
     #[error(transparent)]
     UI(#[from] turborepo_ui::Error),
-    #[error("could not connect to UI thread: {0}")]
+    #[error("Could not connect to UI thread: {0}")]
     UISend(String),
-    #[error("cannot use root turbo.json at {0} with watch mode")]
+    #[error("Cannot use root turbo.json at {0} with Watch Mode.")]
     NonStandardTurboJsonPath(String),
-    #[error("invalid config: {0}")]
+    #[error("Invalid config: {0}")]
     Config(#[from] crate::config::Error),
 }
 

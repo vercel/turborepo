@@ -4,7 +4,7 @@ Setup
 Run fails if not configured to allow missing turbo.json
   $ ${TURBO} test
     x Could not find turbo.json.
-    | Follow directions at https://turbo.build/repo/docs to create one
+    | Follow directions at https://turbo.build/repo/docs to create one.
   
   [1]
 Runs test tasks

@@ -22,13 +22,13 @@ pub const DEFAULT_OUTPUT_DIR: &str = "out";
 
 #[derive(Debug, thiserror::Error, Diagnostic)]
 pub enum Error {
-    #[error("io error while pruning: {0}")]
+    #[error("I/O error while pruning: {0}")]
     Io(#[from] std::io::Error),
     #[error("File system error while pruning. The error from the operating system is: {0}")]
     Fs(#[from] turborepo_fs::Error),
-    #[error("json error while pruning: {0}")]
+    #[error("JSON error while pruning: {0}")]
     Json(#[from] serde_json::Error),
-    #[error("path error while pruning: {0}")]
+    #[error("Path error while pruning: {0}")]
     Path(#[from] turbopath::PathError),
     #[error(transparent)]
     #[diagnostic(transparent)]
@@ -39,15 +39,15 @@ pub enum Error {
     PackageGraph(#[from] package_graph::Error),
     #[error(transparent)]
     Lockfile(#[from] turborepo_lockfiles::Error),
-    #[error("turbo doesn't support workspaces at file system root")]
+    #[error("`turbo` does not support workspaces at file system root.")]
     WorkspaceAtFilesystemRoot,
-    #[error("at least one target must be specified")]
+    #[error("At least one target must be specified.")]
     NoWorkspaceSpecified,
-    #[error("invalid scope: package with name {0} in package.json not found")]
+    #[error("Invalid scope. Package with name {0} in `package.json` not found.")]
     MissingWorkspace(PackageName),
-    #[error("Cannot prune without parsed lockfile")]
+    #[error("Cannot prune without parsed lockfile.")]
     MissingLockfile,
-    #[error("Prune is not supported for Bun")]
+    #[error("`prune` is not supported for Bun.")]
     BunUnsupported,
     #[error("Unable to read config: {0}")]
     Config(#[from] crate::config::Error),

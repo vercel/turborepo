@@ -9,11 +9,11 @@ use crate::Lockfile;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("error parsing dependency path: {0}")]
+    #[error("Error parsing dependency path: {0}")]
     DependencyPath(#[from] dep_path::Error),
-    #[error("Unable to find '{0}' other than reference in dependenciesMeta")]
+    #[error("Unable to find '{0}' other than reference in `dependenciesMeta`")]
     MissingInjectedPackage(String),
-    #[error("unsupported lockfile version: {0}")]
+    #[error("Unsupported lockfile version: {0}")]
     UnsupportedVersion(String),
 }
 

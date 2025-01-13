@@ -138,15 +138,15 @@ impl From<wax::BuildError> for Error {
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
-    #[error("io error: {0}")]
+    #[error("I/O error: {0}")]
     Io(#[from] std::io::Error, #[backtrace] backtrace::Backtrace),
     #[error(transparent)]
     Workspace(#[from] MissingWorkspaceError),
-    #[error("yaml parsing error: {0}")]
+    #[error("YAML parsing error: {0}")]
     ParsingYaml(#[from] serde_yaml::Error, #[backtrace] backtrace::Backtrace),
-    #[error("json parsing error: {0}")]
+    #[error("JSON parsing error: {0}")]
     ParsingJson(#[from] serde_json::Error, #[backtrace] backtrace::Backtrace),
-    #[error("globbing error: {0}")]
+    #[error("Globbing error: {0}")]
     Wax(Box<wax::BuildError>, #[backtrace] backtrace::Backtrace),
     #[error(transparent)]
     PackageJson(#[from] package_json::Error),
@@ -154,10 +154,9 @@ pub enum Error {
     Other(#[from] anyhow::Error),
     #[error(transparent)]
     NoPackageManager(#[from] NoPackageManager),
-    #[error("We detected multiple package managers in your repository: {}. Please remove one \
-    of them.", managers.join(", "))]
+    #[error("Multiple package managers in your repository: {}. Please use one package manager.", managers.join(", "))]
     MultiplePackageManagers { managers: Vec<String> },
-    #[error("invalid semantic version: {explanation}")]
+    #[error("Invalid semantic version: {explanation}")]
     #[diagnostic(code(invalid_semantic_version))]
     InvalidVersion {
         explanation: String,
@@ -169,18 +168,18 @@ pub enum Error {
     #[error("{0}: {1}")]
     // this will be something like "cannot find binary: <thing we tried to find>"
     Which(which::Error, String),
-    #[error("invalid utf8: {0}")]
+    #[error("Invalid utf8: {0}")]
     Utf8Error(#[from] std::string::FromUtf8Error),
     #[error(transparent)]
     Path(#[from] turbopath::PathError),
     #[error(
-        "could not parse the packageManager field in package.json, expected to match regular \
-         expression {pattern}"
+        "Could not parse the `packageManager` field in package.json, expected to match regular \
+         expression `{pattern}`."
     )]
     #[diagnostic(code(invalid_package_manager_field))]
     InvalidPackageManager {
         pattern: String,
-        #[label("invalid `packageManager` field")]
+        #[label("Invalid `packageManager` field")]
         span: Option<SourceSpan>,
         #[source_code]
         text: NamedSource,
@@ -189,11 +188,11 @@ pub enum Error {
     WorkspaceGlob(#[from] crate::workspaces::Error),
     #[error(transparent)]
     Lockfile(#[from] turborepo_lockfiles::Error),
-    #[error("lockfile not found at {0}")]
+    #[error("Lockfile not found at {0}")]
     LockfileMissing(AbsoluteSystemPathBuf),
-    #[error("discovering workspace: {0}")]
+    #[error("Discovering workspace: {0}")]
     WorkspaceDiscovery(#[from] discovery::Error),
-    #[error("missing packageManager field in package.json")]
+    #[error("Missing `packageManager` field in package.json")]
     MissingPackageManager,
     #[error(transparent)]
     Yarnrc(#[from] yarnrc::Error),

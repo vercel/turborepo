@@ -34,13 +34,13 @@ static REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("Failed to initialize telemetry")]
+    #[error("Failed to initialize telemetry.")]
     InitError(#[from] ConfigError),
-    #[error("Failed to send telemetry event")]
+    #[error("Failed to send telemetry event.")]
     SendError(#[from] mpsc::error::SendError<TelemetryEvent>),
-    #[error("Failed to record telemetry")]
+    #[error("Failed to record telemetry.")]
     Join(#[from] JoinError),
-    #[error("Telemetry already initialized")]
+    #[error("Telemetry already initialized.")]
     AlreadyInitialized(),
 }
 

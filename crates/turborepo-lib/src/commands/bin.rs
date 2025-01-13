@@ -4,7 +4,7 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("could not get path to turbo binary: {0}")]
+    #[error("Could not get path to `turbo` binary: {0}")]
     NoCurrentExe(#[from] io::Error),
 }
 

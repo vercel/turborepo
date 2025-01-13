@@ -15,14 +15,14 @@ fn tag_regex() -> &'static Regex {
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("unable to parse: {0}")]
+    #[error("Unable to parse: {0}")]
     // Boxed due to this enum variant being much larger than the others
     Pest(#[from] Box<pest::error::Error<Rule>>),
-    #[error("unexpected end of input")]
+    #[error("Unexpected end of input.")]
     UnexpectedEOI,
-    #[error("unexpected token")]
+    #[error("Unexpected token.")]
     UnexpectedToken(Rule),
-    #[error("invalid identifier used as specifier: {0}")]
+    #[error("Invalid identifier used as specifier: {0}")]
     InvalidSpecifier(#[from] super::identifiers::Error),
 }
 

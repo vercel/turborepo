@@ -11,11 +11,11 @@ type Map<K, V> = std::collections::BTreeMap<K, V>;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("unable to parse: {0}")]
+    #[error("Unable to parse: {0}")]
     SymlParse(String),
-    #[error("unable to convert to structured syml: {0}")]
+    #[error("Unable to convert to structured syml: {0}")]
     SymlStructure(#[from] serde_json::Error),
-    #[error("unexpected non-utf8 yarn.lock")]
+    #[error("Unexpected non-utf8 yarn.lock")]
     NonUTF8(#[from] std::str::Utf8Error),
 }
 

@@ -28,9 +28,9 @@ pub struct TaskSummaryFactory<'a> {
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("no workspace found for {0}")]
+    #[error("No workspace found for {0}")]
     MissingWorkspace(String),
-    #[error("no task definition found for {0}")]
+    #[error("No task definition found for {0}")]
     MissingTask(TaskId<'static>),
 }
 

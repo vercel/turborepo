@@ -27,9 +27,9 @@ static REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("Failed to send analytics event")]
+    #[error("Failed to send analytics event.")]
     SendError(#[from] mpsc::error::SendError<AnalyticsEvent>),
-    #[error("Failed to record analytics")]
+    #[error("Failed to record analytics.")]
     Join(#[from] JoinError),
 }
 

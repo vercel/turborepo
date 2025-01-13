@@ -32,7 +32,7 @@ pub struct PackageGraphBuilder<'a, T> {
 
 #[derive(Debug, Diagnostic, thiserror::Error)]
 pub enum Error {
-    #[error("could not resolve workspaces")]
+    #[error("Could not resolve workspaces.")]
     #[diagnostic(transparent)]
     PackageManager(#[from] crate::package_manager::Error),
     #[error(
@@ -44,7 +44,7 @@ pub enum Error {
         path: String,
         existing_path: String,
     },
-    #[error("path error: {0}")]
+    #[error("Path error: {0}")]
     Path(#[from] turbopath::PathError),
     #[diagnostic(transparent)]
     #[error(transparent)]

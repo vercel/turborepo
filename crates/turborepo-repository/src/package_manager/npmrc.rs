@@ -7,9 +7,9 @@ pub const NPMRC_FILENAME: &str = ".npmrc";
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("encountered error reading .npmrc: {0}")]
+    #[error("Encountered error reading .npmrc: {0}")]
     Io(#[from] std::io::Error),
-    #[error("encountered error parsing .npmrc: {0}")]
+    #[error("Encountered error parsing .npmrc: {0}")]
     Ini(#[from] ini::Error),
 }
 
