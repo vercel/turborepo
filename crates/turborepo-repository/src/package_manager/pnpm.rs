@@ -36,7 +36,7 @@ impl<'a> PnpmDetector<'a> {
     }
 }
 
-impl<'a> Iterator for PnpmDetector<'a> {
+impl Iterator for PnpmDetector<'_> {
     type Item = Result<PackageManager, Error>;
 
     fn next(&mut self) -> Option<Self::Item> {

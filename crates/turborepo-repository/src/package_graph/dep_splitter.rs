@@ -192,7 +192,7 @@ impl<'a> DependencyVersion<'a> {
     }
 }
 
-impl<'a> fmt::Display for DependencyVersion<'a> {
+impl fmt::Display for DependencyVersion<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.protocol {
             Some(protocol) => f.write_fmt(format_args!("{}:{}", protocol, self.version)),

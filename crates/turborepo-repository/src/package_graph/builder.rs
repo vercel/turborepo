@@ -163,7 +163,7 @@ enum ResolvedWorkspaces {}
 // Allows us to collect all transitive deps
 enum ResolvedLockfile {}
 
-impl<'a, S, T> BuildState<'a, S, T> {
+impl<S, T> BuildState<'_, S, T> {
     fn add_node(&mut self, node: PackageNode) -> NodeIndex {
         let idx = self.workspace_graph.add_node(node.clone());
         self.node_lookup.insert(node, idx);

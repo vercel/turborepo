@@ -108,7 +108,9 @@ impl Config {
         })
     }
 
-    pub fn development_tasks<'a>(&'a self) -> Box<dyn Iterator<Item = (&str, Option<&str>)> + 'a> {
+    pub fn development_tasks<'a>(
+        &'a self,
+    ) -> Box<dyn Iterator<Item = (&'a str, Option<&'a str>)> + 'a> {
         match &self.inner {
             ConfigInner::V1(config_v1) => Box::new(config_v1.development_tasks()),
             ConfigInner::V2(config_v2) => Box::new(config_v2.development_tasks()),
