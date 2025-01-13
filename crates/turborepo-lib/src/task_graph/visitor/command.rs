@@ -1,5 +1,6 @@
 use std::{collections::HashSet, path::PathBuf};
 
+use tracing::debug;
 use turbopath::AbsoluteSystemPath;
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_microfrontends::MICROFRONTENDS_PACKAGE;
@@ -136,6 +137,13 @@ impl<'a> CommandProvider for PackageGraphCommandProvider<'a> {
             .is_some_and(|mfe_configs| mfe_configs.task_has_mfe_proxy(task_id))
         {
             cmd.env("TURBO_TASK_HAS_MFE_PROXY", "true");
+        }
+        if let Some(port) = self
+            .mfe_configs
+            .and_then(|mfe_configs| mfe_configs.dev_task_port(task_id))
+        {
+            debug!("Found port {port} for {task_id}");
+            cmd.env("TURBO_PORT", port.to_string());
         }
 
         // We always open stdin and the visitor will close it depending on task
