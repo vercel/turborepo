@@ -229,6 +229,58 @@ impl EnvironmentVariableMap {
 
         self.wildcard_map_from_wildcards(wildcard_patterns)
     }
+
+    /// Return a detailed map for which environment variables are factored into
+    /// the task's hash
+    pub fn hashable_task_env(
+        &self,
+        computed_wildcards: &[String],
+        task_env: &[String],
+    ) -> Result<DetailedMap, Error> {
+        let mut explicit_env_var_map = EnvironmentVariableMap::default();
+        let mut all_env_var_map = EnvironmentVariableMap::default();
+        let mut matching_env_var_map = EnvironmentVariableMap::default();
+        let inference_env_var_map = self.from_wildcards(computed_wildcards)?;
+
+        let user_env_var_set = self.wildcard_map_from_wildcards_unresolved(task_env)?;
+
+        all_env_var_map.union(&user_env_var_set.inclusions);
+        all_env_var_map.union(&inference_env_var_map);
+        all_env_var_map.difference(&user_env_var_set.exclusions);
+
+        explicit_env_var_map.union(&user_env_var_set.inclusions);
+        explicit_env_var_map.difference(&user_env_var_set.exclusions);
+
+        matching_env_var_map.union(&inference_env_var_map);
+        matching_env_var_map.difference(&user_env_var_set.exclusions);
+
+        Ok(DetailedMap {
+            all: all_env_var_map,
+            by_source: BySource {
+                explicit: explicit_env_var_map,
+                matching: matching_env_var_map,
+            },
+        })
+    }
+
+    /// Constructs an environment map that contains pass through environment
+    /// variables
+    pub fn pass_through_env(
+        &self,
+        builtins: &[&str],
+        global_env: &Self,
+        task_pass_through: &[impl AsRef<str>],
+    ) -> Result<Self, Error> {
+        let mut pass_through_env = EnvironmentVariableMap::default();
+        let default_env_var_pass_through_map = self.from_wildcards(builtins)?;
+        let task_pass_through_env = self.from_wildcards(task_pass_through)?;
+
+        pass_through_env.union(&default_env_var_pass_through_map);
+        pass_through_env.union(global_env);
+        pass_through_env.union(&task_pass_through_env);
+
+        Ok(pass_through_env)
+    }
 }
 
 const WILDCARD: char = '*';
@@ -355,6 +407,59 @@ mod tests {
         let inputs = inputs.iter().map(|s| s.to_string()).collect::<Vec<_>>();
         let actual = get_global_hashable_env_vars(&env_at_start, &inputs).unwrap();
         let mut actual = actual.all.keys().map(|s| s.as_str()).collect::<Vec<_>>();
+        actual.sort();
+        assert_eq!(actual, expected);
+    }
+
+    #[test_case(&["FOO*"], &["BAR"], &["BAR", "FOO", "FOOBAR", "FOOD"] ; "wildcard")]
+    #[test_case(&["FOO*", "!FOOBAR"], &["BAR"], &["BAR", "FOO", "FOOD"] ; "omit wild")]
+    #[test_case(&["FOO*"], &["!FOOBAR"], &["FOO", "FOOD"] ; "omit task")]
+    fn test_hashable_env(wildcards: &[&str], task: &[&str], expected: &[&str]) {
+        let env_at_start = EnvironmentVariableMap(
+            vec![
+                ("FOO", "bar"),
+                ("FOOBAR", "baz"),
+                ("FOOD", "cheese"),
+                ("BAR", "nuts"),
+            ]
+            .into_iter()
+            .map(|(k, v)| (k.to_owned(), v.to_owned()))
+            .collect(),
+        );
+        let wildcards: Vec<_> = wildcards.iter().map(|s| s.to_string()).collect();
+        let task: Vec<_> = task.iter().map(|s| s.to_string()).collect();
+        let output = env_at_start.hashable_task_env(&wildcards, &task).unwrap();
+        let mut actual: Vec<_> = output.all.keys().map(|s| s.as_str()).collect();
+        actual.sort();
+        assert_eq!(actual, expected);
+    }
+
+    #[test_case(&["FOO*"], &["FOO", "FOOBAR", "FOOD", "PATH"] ; "folds 3 sources")]
+    #[test_case(&["!FOO"], &["FOO", "PATH"] ; "remove global")]
+    #[test_case(&["!PATH"], &["FOO", "PATH"] ; "remove builtin")]
+    fn test_pass_through_env(task: &[&str], expected: &[&str]) {
+        let env_at_start = EnvironmentVariableMap(
+            vec![
+                ("PATH", "of"),
+                ("FOO", "bar"),
+                ("FOOBAR", "baz"),
+                ("FOOD", "cheese"),
+                ("BAR", "nuts"),
+            ]
+            .into_iter()
+            .map(|(k, v)| (k.to_owned(), v.to_owned()))
+            .collect(),
+        );
+        let global_env = EnvironmentVariableMap(
+            vec![("FOO", "bar")]
+                .into_iter()
+                .map(|(k, v)| (k.to_owned(), v.to_owned()))
+                .collect(),
+        );
+        let output = env_at_start
+            .pass_through_env(&["PATH"], &global_env, task)
+            .unwrap();
+        let mut actual: Vec<_> = output.keys().map(|s| s.as_str()).collect();
         actual.sort();
         assert_eq!(actual, expected);
     }
