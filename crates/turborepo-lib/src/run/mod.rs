@@ -448,6 +448,7 @@ impl Run {
             self.api_auth.clone(),
             Vendor::get_user(),
             &self.scm,
+            self.opts.cache_opts.cache_dir.clone(),
         );
 
         let mut visitor = Visitor::new(
