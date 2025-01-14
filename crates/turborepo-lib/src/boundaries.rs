@@ -113,7 +113,7 @@ impl BoundariesResult {
 impl Run {
     pub async fn check_boundaries(&self) -> Result<BoundariesResult, Error> {
         let packages = self.pkg_dep_graph().packages();
-        let repo = Repository::discover(&self.repo_root()).ok().map(Mutex::new);
+        let repo = Repository::discover(self.repo_root()).ok().map(Mutex::new);
         let mut diagnostics = vec![];
         let source_map = SourceMap::default();
         for (package_name, package_info) in packages {
@@ -248,10 +248,10 @@ impl Run {
 
                 // We have a file import
                 let check_result = if import.starts_with(".") {
-                    self.check_file_import(&file_path, &package_root, &import, span, &file_content)?
-                } else if Self::is_potential_package_name(&import) {
+                    self.check_file_import(&file_path, package_root, import, span, &file_content)?
+                } else if Self::is_potential_package_name(import) {
                     self.check_package_import(
-                        &import,
+                        import,
                         *import_type,
                         span,
                         &file_path,
@@ -286,7 +286,7 @@ impl Run {
         let dir_path = file_path
             .parent()
             .ok_or_else(|| Error::NoParentDir(file_path.to_owned()))?;
-        let resolved_import_path = dir_path.join_unix_path(&import_path).clean()?;
+        let resolved_import_path = dir_path.join_unix_path(import_path).clean()?;
         // We have to check for this case because `relation_to_path` returns `Parent` if
         // the paths are equal and there's nothing wrong with importing the
         // package you're in.
@@ -363,6 +363,7 @@ impl Run {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn check_package_import(
         &self,
         import: &str,

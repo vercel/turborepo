@@ -4,9 +4,11 @@ use swc_ecma_visit::{Visit, VisitWith};
 
 use crate::tracer::ImportTraceType;
 
-/// The type of import that we find, either an import with a `type` keyword
-/// (indicating that it is importing only types) or an import without the `type`
-/// keyword (indicating that it is importing values and possibly types).
+/// The type of import that we find.
+///
+/// Either an import with a `type` keyword (indicating that it is importing only
+/// types) or an import without the `type` keyword (indicating that it is
+/// importing values and possibly types).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ImportType {
     Type,
