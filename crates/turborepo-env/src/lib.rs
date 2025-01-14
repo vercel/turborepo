@@ -218,7 +218,7 @@ impl EnvironmentVariableMap {
     // that user exclusions have primacy over inferred inclusions.
     pub fn wildcard_map_from_wildcards_unresolved(
         &self,
-        wildcard_patterns: &[String],
+        wildcard_patterns: &[impl AsRef<str>],
     ) -> Result<WildcardMaps, Error> {
         if wildcard_patterns.is_empty() {
             return Ok(WildcardMaps {
@@ -273,11 +273,13 @@ impl EnvironmentVariableMap {
     ) -> Result<Self, Error> {
         let mut pass_through_env = EnvironmentVariableMap::default();
         let default_env_var_pass_through_map = self.from_wildcards(builtins)?;
-        let task_pass_through_env = self.from_wildcards(task_pass_through)?;
+        let task_pass_through_env =
+            self.wildcard_map_from_wildcards_unresolved(task_pass_through)?;
 
         pass_through_env.union(&default_env_var_pass_through_map);
         pass_through_env.union(global_env);
-        pass_through_env.union(&task_pass_through_env);
+        pass_through_env.union(&task_pass_through_env.inclusions);
+        pass_through_env.difference(&task_pass_through_env.exclusions);
 
         Ok(pass_through_env)
     }
@@ -435,8 +437,9 @@ mod tests {
     }
 
     #[test_case(&["FOO*"], &["FOO", "FOOBAR", "FOOD", "PATH"] ; "folds 3 sources")]
-    #[test_case(&["!FOO"], &["FOO", "PATH"] ; "remove global")]
-    #[test_case(&["!PATH"], &["FOO", "PATH"] ; "remove builtin")]
+    #[test_case(&["!FOO"], &["PATH"] ; "remove global")]
+    #[test_case(&["!PATH"], &["FOO"] ; "remove builtin")]
+    #[test_case(&["FOO*", "!FOOD"], &["FOO", "FOOBAR", "PATH"] ; "mixing negations")]
     fn test_pass_through_env(task: &[&str], expected: &[&str]) {
         let env_at_start = EnvironmentVariableMap(
             vec![
