@@ -276,7 +276,7 @@ Add the artifacts for the new `@repo/math` library to the `outputs` for the `bui
 
 If you've [installed `turbo` globally](/repo/docs/getting-started/installation#global-installation), run `turbo build` in your terminal at the root of your Workspace. You can also run the `build` script from `package.json` with your package manager, which will use `turbo run build`.
 
-The `@repo/math` package built before the `web` application built so that the runtime code in `./packages/math/dist` is available to the `web` application when it bundles.
+The `@repo/math` package is built before the `web` application is built so that the runtime code in `./packages/math/dist` is available to the `web` application when it bundles.
 
 <Callout type="info">
   You can run `turbo build` again to see your `web` application rebuild in
