@@ -391,7 +391,7 @@ impl Args {
             if run_args.remote_cache_read_only.is_some() {
                 warn!(
                     "--remote-cache-read-only is deprecated and will be removed in a future major \
-                     version. Use --cache=remote:r"
+                     version. Use --cache=local:rw,remote:r"
                 );
             }
         }
