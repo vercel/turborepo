@@ -1,5 +1,7 @@
 # Turborepo Design System Starter
 
+This is a community-maintained example. If you experience a problem, please submit a pull request with a fix. GitHub Issues will be closed.
+
 This guide explains how to use a React design system starter powered by:
 
 - 🏎 [Turborepo](https://turbo.build/repo) — High-performance build system for Monorepos
