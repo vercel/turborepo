@@ -18,9 +18,10 @@ export async function transform(args: TransformInput): TransformResult {
   const { prompts, example, opts } = args;
 
   const defaultExample = isDefaultExample(example.name);
-  const isOfficialStarter =
-    !example.repo ||
-    (example.repo.username === "vercel" && example.repo.name === "turborepo");
+  const isThisRepo =
+    example.repo &&
+    (example.repo.name === "turborepo" || example.repo.name === "turbo");
+  const isOfficialStarter = example.repo?.username === "vercel" && isThisRepo;
 
   if (!isOfficialStarter) {
     return { result: "not-applicable", ...meta };
@@ -40,8 +41,6 @@ export async function transform(args: TransformInput): TransformResult {
   } catch (_err) {
     // do nothing
   }
-
-  console.log("meta.json", metaJson);
 
   if (hasPackageJson) {
     let packageJsonContent;
