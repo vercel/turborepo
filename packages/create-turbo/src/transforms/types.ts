@@ -22,7 +22,12 @@ export interface TransformInput {
 }
 
 export interface MetaJson {
-  maintainedByCoreTeam: string;
+  maintainedByCoreTeam?: string;
+  name?: string;
+  description?: string;
+  featured?: boolean;
+  boost?: boolean;
+  template?: boolean;
 }
 
 export interface TransformResponse {

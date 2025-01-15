@@ -295,7 +295,7 @@ export async function create(
   if (!isMaintainedByCoreTeam) {
     logger.log();
     logger.log(
-      "Note: This example is maintained by the community. If you experience an issue, please submit a pull request with a fix. Issues created for community-supported examples will be closed."
+      "Note: This example is maintained by the community. If you experience an issue, please submit a pull request with a fix. GitHub Issues created for community-supported examples will be closed."
     );
   }
   opts.telemetry?.trackCommandStatus({ command: "create", status: "end" });
