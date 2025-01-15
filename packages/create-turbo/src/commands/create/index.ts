@@ -285,5 +285,8 @@ export async function create(
       });
     logger.log("- Run a command twice to hit cache");
   }
+
+  logger.log();
+  logger.log("Note: ");
   opts.telemetry?.trackCommandStatus({ command: "create", status: "end" });
 }
