@@ -2,7 +2,6 @@ mod command;
 mod error;
 mod exec;
 mod output;
-
 use std::{
     borrow::Cow,
     collections::HashSet,
@@ -11,6 +10,7 @@ use std::{
 };
 
 use console::{Style, StyledObject};
+use convert_case::{Case, Casing};
 use error::{TaskError, TaskWarning};
 use exec::ExecContextFactory;
 use futures::{stream::FuturesUnordered, StreamExt};
@@ -23,7 +23,7 @@ use tracing::{debug, error, warn, Span};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath};
 use turborepo_ci::{Vendor, VendorBehavior};
 use turborepo_env::{platform::PlatformEnv, EnvironmentVariableMap};
-use turborepo_micro_frontend::DEFAULT_MICRO_FRONTENDS_CONFIG;
+use turborepo_errors::TURBO_SITE;
 use turborepo_repository::package_graph::{PackageGraph, PackageName, ROOT_PKG_NAME};
 use turborepo_telemetry::events::{
     generic::GenericEventBuilder, task::PackageTaskEventBuilder, EventBuilder, TrackedErrors,
@@ -35,7 +35,7 @@ use turborepo_ui::{
 use crate::{
     cli::EnvMode,
     engine::{Engine, ExecutionOptions},
-    micro_frontends::MicroFrontendsConfigs,
+    microfrontends::MicrofrontendsConfigs,
     opts::RunOpts,
     process::ProcessManager,
     run::{
@@ -67,7 +67,7 @@ pub struct Visitor<'a> {
     is_watch: bool,
     ui_sender: Option<UISender>,
     warnings: Arc<Mutex<Vec<TaskWarning>>>,
-    micro_frontends_configs: Option<&'a MicroFrontendsConfigs>,
+    micro_frontends_configs: Option<&'a MicrofrontendsConfigs>,
 }
 
 #[derive(Debug, thiserror::Error, Diagnostic)]
@@ -78,12 +78,21 @@ pub enum Error {
         task_id: TaskId<'static>,
     },
     #[error(
-        "root task {task_name} ({command}) looks like it invokes turbo and might cause a loop"
+        "Your `package.json` script looks like it invokes a Root Task ({task_name}), creating a \
+         loop of `turbo` invocations. You likely have misconfigured your scripts and tasks or \
+         your package manager's Workspace structure."
+    )]
+    #[diagnostic(
+        code(recursive_turbo_invocations),
+        url(
+            "{}/messages/{}",
+            TURBO_SITE, self.code().unwrap().to_string().to_case(Case::Kebab)
+        )
     )]
     RecursiveTurbo {
         task_name: String,
         command: String,
-        #[label("task found here")]
+        #[label("This script calls `turbo`, which calls the script, which calls `turbo`...")]
         span: Option<SourceSpan>,
         #[source_code]
         text: NamedSource,
@@ -101,10 +110,13 @@ pub enum Error {
     #[error("unable to find package manager binary: {0}")]
     Which(#[from] which::Error),
     #[error(
-        "'{package}' is configured with a {DEFAULT_MICRO_FRONTENDS_CONFIG}, but doesn't have \
+        "'{package}' is configured with a {mfe_config_filename}, but doesn't have \
          '@vercel/microfrontends' listed as a dependency"
     )]
-    MissingMFEDependency { package: String },
+    MissingMFEDependency {
+        package: String,
+        mfe_config_filename: String,
+    },
 }
 
 impl<'a> Visitor<'a> {
@@ -127,7 +139,7 @@ impl<'a> Visitor<'a> {
         global_env: EnvironmentVariableMap,
         ui_sender: Option<UISender>,
         is_watch: bool,
-        micro_frontends_configs: Option<&'a MicroFrontendsConfigs>,
+        micro_frontends_configs: Option<&'a MicrofrontendsConfigs>,
     ) -> Self {
         let task_hasher = TaskHasher::new(
             package_inputs_hashes,
@@ -213,6 +225,7 @@ impl<'a> Visitor<'a> {
                 Some(cmd) if info.package() == ROOT_PKG_NAME && turbo_regex().is_match(cmd) => {
                     package_task_event.track_error(TrackedErrors::RecursiveError);
                     let (span, text) = cmd.span_and_text("package.json");
+
                     return Err(Error::RecursiveTurbo {
                         task_name: info.to_string(),
                         command: cmd.to_string(),

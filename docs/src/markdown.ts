@@ -2,8 +2,10 @@ import fs from "fs/promises";
 import { unified } from "unified";
 import remarkParse from "remark-parse";
 import remarkRehype from "remark-rehype";
+import rehypeParse from "rehype-parse";
 import rehypeRaw from "rehype-raw";
 import { visit } from "unist-util-visit";
+import { selectAll } from "hast-util-select";
 import GitHubSlugger from "github-slugger";
 import matter from "gray-matter";
 
@@ -102,6 +104,16 @@ const validateFrontmatter = (path: string, data: Record<string, unknown>) => {
   };
 };
 
+const getIdsFromHhtmlNodes = (tree: any) => {
+  const htmlNodes = tree.children
+    .filter((node: any) => node.type === "html")
+    .map((node: any) => unified().use(rehypeParse).parse(node.value));
+
+  return selectAll("[id]", htmlNodes[0]).map(
+    (node) => node.properties.id as string
+  );
+};
+
 /**
  * Create a map of documents with their paths as keys and
  * document content and metadata as values
@@ -118,7 +130,10 @@ const prepareDocumentMapEntry = async (
     const frontMatter = validateFrontmatter(path, data);
 
     const tree = markdownProcessor.parse(content);
-    const headings = getHeadingsFromMarkdownTree(tree);
+
+    const ids = getIdsFromHhtmlNodes(tree);
+    const headings = [...getHeadingsFromMarkdownTree(tree), ...ids];
+
     const normalizedUrlPath = filePathToUrl(path);
 
     return [normalizedUrlPath, { content, path, headings, frontMatter }];

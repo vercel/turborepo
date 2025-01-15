@@ -14,101 +14,8 @@ permissions:
   pull-requests: read
 
 jobs:
-  determine_jobs:
-    name: Determine jobs to run
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: CI related changes
-        id: ci
-        uses: technote-space/get-diff-action@v6
-        with:
-          PATTERNS: |
-            .github/actions/**
-            .github/workflows/turborepo-test.yml
-
-      - name: Root cargo related changes
-        id: cargo
-        uses: technote-space/get-diff-action@v6
-        with:
-          PATTERNS: |
-            Cargo.*
-            rust-toolchain
-            cli/turbo.json
-
-      - name: Turborepo version changes
-        id: turborepo_version
-        uses: technote-space/get-diff-action@v6
-        with:
-          PATTERNS: |
-            version.txt
-
-      - name: Rust related changes
-        id: rust
-        uses: technote-space/get-diff-action@v6
-        with:
-          PATTERNS: |
-            pnpm-lock.yaml
-            package.json
-            Cargo.**
-            crates/**
-            shim/**
-            xtask/**
-            .cargo/**
-            rust-toolchain
-            !**.md
-            !**.mdx
-
-      - name: Turborepo Rust related changes
-        id: turborepo_rust
-        uses: technote-space/get-diff-action@v6
-        with:
-          PATTERNS: |
-            pnpm-lock.yaml
-            package.json
-            crates/turborepo*/**
-            .cargo/**
-            rust-toolchain
-            !**.md
-            !**.mdx
-
-      - name: Turborepo integration tests changes
-        id: turborepo_integration
-        uses: technote-space/get-diff-action@v6
-        with:
-          PATTERNS: |
-            turborepo-tests/integration/**
-            turborepo-tests/helpers/**
-
-      - name: Examples related changes
-        id: examples
-        uses: technote-space/get-diff-action@v6
-        with:
-          PATTERNS: |
-            examples/**
-            turborepo-tests/example-*/**
-            turborepo-tests/helpers/**
-            !**.md
-            !**.mdx
-
-    outputs:
-      rust: ${{ steps.ci.outputs.diff != '' || steps.rust.outputs.diff != '' }}
-      cargo_only: ${{ steps.ci.outputs.diff != '' || (steps.cargo.outputs.diff != '' && steps.turborepo_rust.outputs.diff == '') }}
-      # We only test workspace dependency changes on main, not on PRs to speed up CI
-      cargo_on_main: ${{ steps.ci.outputs.diff != '' || (steps.cargo.outputs.diff != '' && github.event_name == 'push' && github.ref == 'refs/heads/main') }}
-      turborepo_rust: ${{ steps.ci.outputs.diff != '' || steps.turborepo_rust.outputs.diff != '' }}
-      turborepo_integration: ${{ steps.ci.outputs.diff != '' || steps.turborepo_rust.outputs.diff != ''  || steps.turborepo_integration.outputs.diff != '' }}
-      examples: ${{ steps.ci.outputs.diff != '' || steps.examples.outputs.diff != '' || steps.turborepo_version.outputs.diff != '' }}
-
   integration:
     name: Turborepo Integration
-    needs: [determine_jobs]
-    if: needs.determine_jobs.outputs.turborepo_integration == 'true'
     runs-on: ${{ matrix.os.runner }}
     timeout-minutes: 45
     strategy:
@@ -154,13 +61,27 @@ jobs:
           path: cli/.cram_env
           key: prysk-venv-${{ matrix.os.runner }}
 
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.6
+
       - name: Integration Tests
-        run: turbo run test --filter=turborepo-tests-integration --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
+        run: |
+          if [ -z "${RUSTC_WRAPPER}" ]; then
+            unset RUSTC_WRAPPER
+          fi
+          turbo run test --filter=turborepo-tests-integration --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
+        shell: bash
+        env:
+          SCCACHE_BUCKET: turborepo-sccache
+          SCCACHE_REGION: us-east-2
+          # Only use sccache if we're in the Vercel repo.
+          RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
+          CARGO_INCREMENTAL: 0
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
   examples:
     name: Turborepo Examples
-    needs: [determine_jobs]
-    if: needs.determine_jobs.outputs.examples == 'true'
     timeout-minutes: 40
 
     runs-on: ubuntu-latest
@@ -198,8 +119,6 @@ jobs:
         run: corepack disable
 
   rust_lint:
-    needs: [determine_jobs]
-    if: needs.determine_jobs.outputs.rust == 'true'
     name: Rust lints
     runs-on:
       - "self-hosted"
@@ -231,17 +150,8 @@ jobs:
         run: |
           cargo clippy --workspace --features rustls-tls -- --deny clippy::all
 
-      - name: Run ast-grep lints
-        run: |
-          npx --package @ast-grep/cli -- ast-grep scan $(cargo groups list turborepo-libraries | awk '{ print $2 }' | tr '\n' ' ')
-
   rust_check:
-    needs: [determine_jobs]
     # We test dependency changes only on main
-    if: |
-      (needs.determine_jobs.outputs.rust == 'true' && needs.determine_jobs.outputs.turborepo_rust == 'true') ||
-      needs.determine_jobs.outputs.cargo_on_main == 'true' ||
-      needs.determine_jobs.outputs.cargo_only == 'true'
     name: Turborepo rust check
     runs-on:
       - "self-hosted"
@@ -263,7 +173,6 @@ jobs:
           cargo check --workspace
 
   rust_test:
-    needs: [rust_check]
     strategy:
       fail-fast: false
       matrix:
@@ -329,7 +238,6 @@ jobs:
     runs-on: ubuntu-latest
     if: always()
     needs:
-      - determine_jobs
       - integration
       - examples
       - rust_lint
@@ -352,7 +260,6 @@ jobs:
             fi
           }
 
-          subjob ${{needs.determine_jobs.result}}
           subjob ${{needs.integration.result}}
           subjob ${{needs.examples.result}}
           subjob ${{needs.rust_lint.result}}

@@ -2,12 +2,12 @@ use std::{collections::HashSet, path::PathBuf};
 
 use turbopath::AbsoluteSystemPath;
 use turborepo_env::EnvironmentVariableMap;
-use turborepo_micro_frontend::MICRO_FRONTENDS_PACKAGES;
+use turborepo_microfrontends::MICROFRONTENDS_PACKAGES;
 use turborepo_repository::package_graph::{PackageGraph, PackageInfo, PackageName};
 
 use super::Error;
 use crate::{
-    engine::Engine, micro_frontends::MicroFrontendsConfigs, opts::TaskArgs, process::Command,
+    engine::Engine, microfrontends::MicrofrontendsConfigs, opts::TaskArgs, process::Command,
     run::task_id::TaskId,
 };
 
@@ -61,7 +61,7 @@ pub struct PackageGraphCommandProvider<'a> {
     package_graph: &'a PackageGraph,
     package_manager_binary: Result<PathBuf, which::Error>,
     task_args: TaskArgs<'a>,
-    mfe_configs: Option<&'a MicroFrontendsConfigs>,
+    mfe_configs: Option<&'a MicrofrontendsConfigs>,
 }
 
 impl<'a> PackageGraphCommandProvider<'a> {
@@ -69,7 +69,7 @@ impl<'a> PackageGraphCommandProvider<'a> {
         repo_root: &'a AbsoluteSystemPath,
         package_graph: &'a PackageGraph,
         task_args: TaskArgs<'a>,
-        mfe_configs: Option<&'a MicroFrontendsConfigs>,
+        mfe_configs: Option<&'a MicrofrontendsConfigs>,
     ) -> Self {
         let package_manager_binary = which::which(package_graph.package_manager().command());
         Self {
@@ -151,7 +151,7 @@ pub struct MicroFrontendProxyProvider<'a> {
     repo_root: &'a AbsoluteSystemPath,
     package_graph: &'a PackageGraph,
     tasks_in_graph: HashSet<TaskId<'a>>,
-    mfe_configs: &'a MicroFrontendsConfigs,
+    mfe_configs: &'a MicrofrontendsConfigs,
 }
 
 impl<'a> MicroFrontendProxyProvider<'a> {
@@ -159,7 +159,7 @@ impl<'a> MicroFrontendProxyProvider<'a> {
         repo_root: &'a AbsoluteSystemPath,
         package_graph: &'a PackageGraph,
         engine: &Engine,
-        micro_frontends_configs: &'a MicroFrontendsConfigs,
+        micro_frontends_configs: &'a MicrofrontendsConfigs,
     ) -> Self {
         let tasks_in_graph = engine
             .tasks()
@@ -206,10 +206,14 @@ impl<'a> CommandProvider for MicroFrontendProxyProvider<'a> {
         let has_mfe_dependency = package_info
             .package_json
             .all_dependencies()
-            .any(|(package, _version)| MICRO_FRONTENDS_PACKAGES.contains(&package.as_str()));
+            .any(|(package, _version)| MICROFRONTENDS_PACKAGES.contains(&package.as_str()));
         if !has_mfe_dependency {
+            let mfe_config_filename = self.mfe_configs.config_filename(task_id.package());
             return Err(Error::MissingMFEDependency {
                 package: task_id.package().into(),
+                mfe_config_filename: mfe_config_filename
+                    .map(|p| p.to_string())
+                    .unwrap_or_default(),
             });
         }
         let local_apps = dev_tasks
@@ -217,12 +221,16 @@ impl<'a> CommandProvider for MicroFrontendProxyProvider<'a> {
             .filter(|task| self.tasks_in_graph.contains(task))
             .map(|task| task.package());
         let package_dir = self.repo_root.resolve(package_info.package_path());
-        let mfe_path = package_dir.join_component("micro-frontends.jsonc");
+        let mfe_config_filename = self
+            .mfe_configs
+            .config_filename(task_id.package())
+            .expect("every microfrontends default application should have configuration path");
+        let mfe_path = self.repo_root.join_unix_path(mfe_config_filename);
         let mut args = vec!["proxy", mfe_path.as_str(), "--names"];
         args.extend(local_apps);
 
         // TODO: leverage package manager to find the local proxy
-        let program = package_dir.join_components(&["node_modules", ".bin", "micro-frontends"]);
+        let program = package_dir.join_components(&["node_modules", ".bin", "microfrontends"]);
         let mut cmd = Command::new(program.as_std_path());
         cmd.current_dir(package_dir).args(args).open_stdin();
 

@@ -1,5 +1,5 @@
 use ratatui::{
-    style::Style,
+    style::{Modifier, Style, Stylize},
     text::Line,
     widgets::{Block, Widget},
 };
@@ -7,9 +7,10 @@ use tui_term::widget::PseudoTerminal;
 
 use super::{app::LayoutSections, TerminalOutput};
 
-const FOOTER_TEXT_ACTIVE: &str = "Ctrl-z - Stop interacting";
-const FOOTER_TEXT_INACTIVE: &str = "i - Interact";
+const EXIT_INTERACTIVE_HINT: &str = "Ctrl-z - Stop interacting";
+const ENTER_INTERACTIVE_HINT: &str = "i - Interact";
 const HAS_SELECTION: &str = "c - Copy selection";
+const SCROLL_LOGS: &str = "u/d - Scroll logs";
 const TASK_LIST_HIDDEN: &str = "h - Show task list";
 
 pub struct TerminalPane<'a, W> {
@@ -34,13 +35,10 @@ impl<'a, W> TerminalPane<'a, W> {
         }
     }
 
-    fn highlight(&self) -> bool {
-        matches!(self.section, LayoutSections::Pane)
-    }
-
     fn footer(&self) -> Line {
-        let build_message_vec = |footer_text: &str| -> String {
-            let mut messages = vec![footer_text];
+        let build_message_vec = |footer_text: &[&str]| -> Line {
+            let mut messages = Vec::new();
+            messages.extend_from_slice(footer_text);
 
             if !self.has_sidebar {
                 messages.push(TASK_LIST_HIDDEN);
@@ -51,18 +49,18 @@ impl<'a, W> TerminalPane<'a, W> {
             }
 
             // Spaces are used to pad the footer text for aesthetics
-            format!("   {}", messages.join(", "))
+            let formatted_messages = format!("   {}", messages.join("   "));
+
+            Line::styled(
+                formatted_messages.to_string(),
+                Style::default().add_modifier(Modifier::DIM),
+            )
+            .left_aligned()
         };
 
         match self.section {
-            LayoutSections::Pane => {
-                let messages = build_message_vec(FOOTER_TEXT_ACTIVE);
-                Line::from(messages).left_aligned()
-            }
-            LayoutSections::TaskList => {
-                let messages = build_message_vec(FOOTER_TEXT_INACTIVE);
-                Line::from(messages).left_aligned()
-            }
+            LayoutSections::Pane => build_message_vec(&[EXIT_INTERACTIVE_HINT]),
+            LayoutSections::TaskList => build_message_vec(&[ENTER_INTERACTIVE_HINT, SCROLL_LOGS]),
             LayoutSections::Search { results, .. } => {
                 Line::from(format!("/ {}", results.query())).left_aligned()
             }
@@ -77,13 +75,12 @@ impl<'a, W> Widget for &TerminalPane<'a, W> {
     {
         let screen = self.terminal_output.parser.screen();
         let block = Block::default()
-            .title(self.terminal_output.title(self.task_name))
-            .title_bottom(self.footer())
-            .style(if self.highlight() {
-                Style::new().fg(ratatui::style::Color::Yellow)
-            } else {
-                Style::new()
-            });
+            .title(
+                self.terminal_output
+                    .title(self.task_name)
+                    .add_modifier(Modifier::DIM),
+            )
+            .title_bottom(self.footer());
 
         let term = PseudoTerminal::new(screen).block(block);
         term.render(area, buf)
