@@ -20,7 +20,7 @@ export async function transform(args: TransformInput): TransformResult {
   const defaultExample = isDefaultExample(example.name);
   const isOfficialStarter =
     !example.repo ||
-    (example.repo.username === "vercel" && example.repo.name === "turbo");
+    (example.repo.username === "vercel" && example.repo.name === "turborepo");
 
   if (!isOfficialStarter) {
     return { result: "not-applicable", ...meta };
