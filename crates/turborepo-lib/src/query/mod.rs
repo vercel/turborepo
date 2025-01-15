@@ -158,6 +158,15 @@ pub struct Array<T: OutputType> {
     length: usize,
 }
 
+impl<T: ObjectType> From<Vec<T>> for Array<T> {
+    fn from(value: Vec<T>) -> Self {
+        Self {
+            length: value.len(),
+            items: value,
+        }
+    }
+}
+
 impl<T: OutputType> Deref for Array<T> {
     type Target = [T];
     fn deref(&self) -> &Self::Target {

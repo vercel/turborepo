@@ -133,14 +133,14 @@ struct TraceResult {
 
 impl TraceResult {
     fn new(result: turbo_trace::TraceResult, run: Arc<Run>) -> Result<Self, Error> {
+        let mut files = result
+            .files
+            .into_iter()
+            .map(|(path, file)| Ok(File::new(run.clone(), path)?.with_ast(file.ast)))
+            .collect::<Result<Vec<_>, Error>>()?;
+        files.sort_by(|a, b| a.path.cmp(&b.path));
         Ok(Self {
-            files: result
-                .files
-                .into_iter()
-                .sorted_by_cached_key(|(path, _)| run.repo_root().anchor(path).unwrap())
-                // .sorted_by(|a, b| a.0.cmp(&b.0))
-                .map(|(path, file)| Ok(File::new(run.clone(), path)?.with_ast(file.ast)))
-                .collect::<Result<_, Error>>()?,
+            files: Array::from(files),
             errors: result.errors.into_iter().map(|e| e.into()).collect(),
         })
     }
