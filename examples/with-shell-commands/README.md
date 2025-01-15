@@ -1,6 +1,6 @@
 # Turborepo starter with shell commands
 
-This is an official starter Turborepo meant for debugging, learning, and exploring.
+This is Turborepo starter is maintained by the Turborepo core team. This template is great for issue reproductions and exploring building task graphs without frameworks.
 
 ## Using this example
 

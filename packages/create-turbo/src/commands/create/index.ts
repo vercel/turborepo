@@ -1,5 +1,5 @@
 import path from "node:path";
-import { bold, red, cyan, green } from "picocolors";
+import { bold, red, cyan, green, dim } from "picocolors";
 import type { Project } from "@turbo/workspaces";
 import {
   getWorkspaceDetails,
@@ -262,6 +262,15 @@ export async function create(
     );
   }
 
+  if (!isMaintainedByCoreTeam) {
+    logger.log();
+    logger.log(
+      dim(
+        "Note: This is a community-maintained example. If you experience a problem, please submit a pull request with a fix. GitHub Issues will be closed."
+      )
+    );
+  }
+
   // get the package manager details so we display the right commands to the user in log messages
   const packageManagerMeta = getPackageManagerMeta(projectPackageManager);
   if (packageManagerMeta && hasPackageJson) {
@@ -292,11 +301,5 @@ export async function create(
     logger.log("- Run a command twice to hit cache");
   }
 
-  if (!isMaintainedByCoreTeam) {
-    logger.log();
-    logger.log(
-      "Note: This example is maintained by the community. If you experience an issue, please submit a pull request with a fix. GitHub Issues created for community-supported examples will be closed."
-    );
-  }
   opts.telemetry?.trackCommandStatus({ command: "create", status: "end" });
 }
