@@ -1,6 +1,6 @@
 use crate::term::BufWrite as _;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Row {
     cells: Vec<crate::Cell>,
     wrapped: bool,
