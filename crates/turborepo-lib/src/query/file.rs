@@ -137,7 +137,8 @@ impl TraceResult {
             files: result
                 .files
                 .into_iter()
-                .sorted_by(|a, b| a.0.cmp(&b.0))
+                .sorted_by_cached_key(|(path, _)| run.repo_root().anchor(path).unwrap())
+                // .sorted_by(|a, b| a.0.cmp(&b.0))
                 .map(|(path, file)| Ok(File::new(run.clone(), path)?.with_ast(file.ast)))
                 .collect::<Result<_, Error>>()?,
             errors: result.errors.into_iter().map(|e| e.into()).collect(),
