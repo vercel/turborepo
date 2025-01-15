@@ -76,6 +76,8 @@ export async function create(
   opts.telemetry?.trackArgumentDirectory(Boolean(directory));
   trackOptions(opts);
 
+  let isMaintainedByCoreTeam = false;
+
   const { packageManager, skipInstall, skipTransforms } = opts;
 
   const [online, availablePackageManagers] = await Promise.all([
@@ -158,6 +160,10 @@ export async function create(
           tryGitCommit(
             `feat(create-turbo): apply ${transformResult.name} transform`
           );
+        }
+
+        if (transformResult.metaJson?.maintainedByCoreTeam) {
+          isMaintainedByCoreTeam = true;
         }
       } catch (err) {
         handleErrors(err, opts.telemetry);
@@ -286,7 +292,11 @@ export async function create(
     logger.log("- Run a command twice to hit cache");
   }
 
-  logger.log();
-  logger.log("Note: ");
+  if (!isMaintainedByCoreTeam) {
+    logger.log();
+    logger.log(
+      "Note: This example is maintained by the community. If you experience an issue, please submit a pull request with a fix. Issues created for community-supported examples will be closed."
+    );
+  }
   opts.telemetry?.trackCommandStatus({ command: "create", status: "end" });
 }

@@ -2,7 +2,7 @@ import path from "node:path";
 import { readJsonSync, writeJsonSync, rmSync, existsSync } from "fs-extra";
 import type { PackageJson } from "@turbo/utils";
 import { isDefaultExample } from "../utils/isDefaultExample";
-import type { TransformInput, TransformResult } from "./types";
+import type { TransformInput, TransformResult, MetaJson } from "./types";
 import { TransformError } from "./errors";
 
 const meta = {
@@ -20,7 +20,7 @@ export async function transform(args: TransformInput): TransformResult {
   const defaultExample = isDefaultExample(example.name);
   const isOfficialStarter =
     !example.repo ||
-    (example.repo.username === "vercel" && example.repo.name === "turbo");
+    (example.repo.username === "vercel" && example.repo.name === "turborepo");
 
   if (!isOfficialStarter) {
     return { result: "not-applicable", ...meta };
@@ -31,12 +31,17 @@ export async function transform(args: TransformInput): TransformResult {
   const rootMetaJsonPath = path.join(prompts.root, "meta.json");
   const hasPackageJson = existsSync(rootPackageJsonPath);
 
+  let metaJson: MetaJson | undefined;
+
   // 1. remove meta file (used for generating the examples page on turbo.build)
   try {
+    metaJson = readJsonSync(rootMetaJsonPath) as MetaJson;
     rmSync(rootMetaJsonPath, { force: true });
   } catch (_err) {
     // do nothing
   }
+
+  console.log("meta.json", metaJson);
 
   if (hasPackageJson) {
     let packageJsonContent;
@@ -83,5 +88,5 @@ export async function transform(args: TransformInput): TransformResult {
     }
   }
 
-  return { result: "success", ...meta };
+  return { result: "success", metaJson, ...meta };
 }
