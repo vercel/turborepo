@@ -6,8 +6,8 @@ use std::{
 };
 
 use fs_err as fs;
+use ignore::WalkBuilder;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
-use walkdir::WalkDir;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -28,22 +28,31 @@ pub fn recursive_copy(
     let src_metadata = src.symlink_metadata()?;
 
     if src_metadata.is_dir() {
-        let walker = WalkDir::new(src.as_path()).follow_links(false);
-        for entry in walker.into_iter() {
+        let walker = WalkBuilder::new(src.as_path())
+            .hidden(false)
+            .git_ignore(true)
+            .git_global(false)
+            .git_exclude(true)
+            .build();
+
+        for entry in walker {
             match entry {
                 Err(e) => {
-                    if e.io_error().is_some() {
-                        // Matches go behavior where we translate path errors
-                        // into skipping the path we're currently walking
+                    // Convert ignore::Error to io::Error for consistency
+                    let io_error = io::Error::new(io::ErrorKind::Other, e);
+                    // Keep existing behavior of skipping IO errors
+                    if io_error.kind() == io::ErrorKind::NotFound {
                         continue;
                     } else {
-                        return Err(e.into());
+                        return Err(Error::Io(io_error));
                     }
                 }
                 Ok(entry) => {
                     let path = entry.path();
                     let path = AbsoluteSystemPath::from_std_path(path)?;
-                    let file_type = entry.file_type();
+                    let file_type = entry.file_type().ok_or_else(|| {
+                        io::Error::new(io::ErrorKind::Other, "Could not determine file type")
+                    })?;
 
                     // Note that we also don't currently copy broken symlinks
                     if file_type.is_symlink() && path.stat().is_err() {
@@ -54,7 +63,7 @@ pub fn recursive_copy(
                     let suffix = AnchoredSystemPathBuf::new(src, path)?;
                     let target = dst.resolve(&suffix);
                     if file_type.is_dir() {
-                        let src_metadata = entry.metadata()?;
+                        let src_metadata = path.symlink_metadata()?;
                         make_dir_copy(&target, &src_metadata)?;
                     } else {
                         copy_file_with_type(path, file_type, &target)?;
