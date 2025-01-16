@@ -16,7 +16,7 @@ pub enum Error {
     #[error(transparent)]
     Io(#[from] io::Error),
     #[error("error walking directory during recursive copy: {0}")]
-    Walk(#[from] walkdir::Error),
+    Walk(#[from] ignore::Error),
 }
 
 pub fn recursive_copy(
@@ -38,19 +38,20 @@ pub fn recursive_copy(
         for entry in walker {
             match entry {
                 Err(e) => {
-                    // Convert ignore::Error to io::Error for consistency
-                    let io_error = io::Error::new(io::ErrorKind::Other, e);
-                    // Keep existing behavior of skipping IO errors
-                    if io_error.kind() == io::ErrorKind::NotFound {
+                    if e.io_error().is_some() {
+                        // Matches go behavior where we translate path errors
+                        // into skipping the path we're currently walking
                         continue;
                     } else {
-                        return Err(Error::Io(io_error));
+                        return Err(e.into());
                     }
                 }
                 Ok(entry) => {
                     let path = entry.path();
                     let path = AbsoluteSystemPath::from_std_path(path)?;
-                    let file_type = entry.file_type().expect("all dir entries aside from stdin should have a file type");
+                    let file_type = entry
+                        .file_type()
+                        .expect("all dir entries aside from stdin should have a file type");
 
                     // Note that we also don't currently copy broken symlinks
                     if file_type.is_symlink() && path.stat().is_err() {
