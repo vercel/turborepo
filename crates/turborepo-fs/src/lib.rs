@@ -50,9 +50,7 @@ pub fn recursive_copy(
                 Ok(entry) => {
                     let path = entry.path();
                     let path = AbsoluteSystemPath::from_std_path(path)?;
-                    let file_type = entry.file_type().ok_or_else(|| {
-                        io::Error::new(io::ErrorKind::Other, "Could not determine file type")
-                    })?;
+                    let file_type = entry.file_type().expect("all dir entries aside from stdin should have a file type");
 
                     // Note that we also don't currently copy broken symlinks
                     if file_type.is_symlink() && path.stat().is_err() {
