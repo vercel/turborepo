@@ -129,11 +129,7 @@ jobs:
     needs:
       - find-changes
     if: ${{ needs.find-changes.outputs.rest == 'true' }}
-    runs-on:
-      - "self-hosted"
-      - "linux"
-      - "x64"
-      - "metal"
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -165,11 +161,7 @@ jobs:
     needs:
       - find-changes
     if: ${{ needs.find-changes.outputs.rest == 'true' }}
-    runs-on:
-      - "self-hosted"
-      - "linux"
-      - "x64"
-      - "metal"
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -190,18 +182,11 @@ jobs:
       matrix:
         os:
           - name: ubuntu
-            runner:
-              - "self-hosted"
-              - "linux"
-              - "x64"
-              - "metal"
-            nextest: linux
+            runner: ubuntu-latest
           - name: macos
             runner: macos-13
-            nextest: mac
           - name: windows
             runner: windows-latest
-            nextest: windows-tar
     runs-on: ${{ matrix.os.runner }}
     needs:
       - find-changes
