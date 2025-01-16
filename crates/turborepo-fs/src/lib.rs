@@ -319,6 +319,51 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn test_recursive_copy_gitignore() -> Result<(), Error> {
+        // Directory layout:
+        //
+        // <src>/
+        //   .gitignore
+        //   invisible.txt <- ignored
+        //   dist/ <- ignored
+        //     output.txt
+        //   child/
+        //     seen.txt
+        //     .hidden
+        let (_src_tmp, src_dir) = tmp_dir()?;
+        // Need to create this for `.gitignore` to be respected
+        src_dir.join_component(".git").create_dir_all()?;
+        src_dir
+            .join_component(".gitignore")
+            .create_with_contents("invisible.txt\ndist/\n")?;
+        src_dir
+            .join_component("invisible.txt")
+            .create_with_contents("not here")?;
+        let output = src_dir.join_components(&["dist", "output.txt"]);
+        output.ensure_dir()?;
+        output.create_with_contents("hi!")?;
+
+        let child = src_dir.join_component("child");
+        let seen = child.join_component("seen.txt");
+        seen.ensure_dir()?;
+        seen.create_with_contents("here")?;
+        let hidden = child.join_component(".hidden");
+        hidden.create_with_contents("polo")?;
+
+        let (_dst_tmp, dst_dir) = tmp_dir()?;
+        recursive_copy(&src_dir, &dst_dir)?;
+
+        assert!(dst_dir.join_component(".gitignore").exists());
+        assert!(!dst_dir.join_component("invisible.txt").exists());
+        assert!(!dst_dir.join_component("dist").exists());
+        assert!(dst_dir.join_component("child").exists());
+        assert!(dst_dir.join_components(&["child", "seen.txt"]).exists());
+        assert!(dst_dir.join_components(&["child", ".hidden"]).exists());
+
+        Ok(())
+    }
+
     fn assert_file_matches(a: impl AsRef<AbsoluteSystemPath>, b: impl AsRef<AbsoluteSystemPath>) {
         let a = a.as_ref();
         let b = b.as_ref();
