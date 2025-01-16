@@ -238,7 +238,7 @@ impl<W: Write> OutputClient<W> {
     }
 }
 
-impl<'a, W: Write> Write for OutputWriter<'a, W> {
+impl<W: Write> Write for OutputWriter<'_, W> {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         for line in buf.split_inclusive(|b| *b == b'\n') {
             self.buffer.extend_from_slice(line);
