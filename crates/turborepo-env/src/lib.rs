@@ -13,7 +13,7 @@ use thiserror::Error;
 
 pub mod platform;
 
-const DEFAULT_ENV_VARS: &[&str] = ["VERCEL_ANALYTICS_ID", "VERCEL_ENV"].as_slice();
+const DEFAULT_ENV_VARS: &[&str] = ["VERCEL_ANALYTICS_ID", "VERCEL_TARGET_ENV"].as_slice();
 
 #[derive(Clone, Debug, Error)]
 pub enum Error {
@@ -336,13 +336,13 @@ mod tests {
         }
     }
 
-    #[test_case(&[], &["VERCEL_ANALYTICS_ID", "VERCEL_ENV"] ; "defaults")]
+    #[test_case(&[], &["VERCEL_ANALYTICS_ID", "VERCEL_TARGET_ENV"] ; "defaults")]
     #[test_case(&["!VERCEL*"], &[] ; "removing defaults")]
-    #[test_case(&["FOO*", "!FOOD"], &["FOO", "FOOBAR", "VERCEL_ANALYTICS_ID", "VERCEL_ENV"] ; "intersecting globs")]
+    #[test_case(&["FOO*", "!FOOD"], &["FOO", "FOOBAR", "VERCEL_ANALYTICS_ID", "VERCEL_TARGET_ENV"] ; "intersecting globs")]
     fn test_global_env(inputs: &[&str], expected: &[&str]) {
         let env_at_start = EnvironmentVariableMap(
             vec![
-                ("VERCEL_ENV", "prod"),
+                ("VERCEL_TARGET_ENV", "prod"),
                 ("VERCEL_ANALYTICS_ID", "1"),
                 ("FOO", "bar"),
                 ("FOOBAR", "baz"),
