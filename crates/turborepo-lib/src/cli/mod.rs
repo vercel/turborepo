@@ -391,7 +391,7 @@ impl Args {
             if run_args.remote_cache_read_only.is_some() {
                 warn!(
                     "--remote-cache-read-only is deprecated and will be removed in a future major \
-                     version. Use --cache=remote:r"
+                     version. Use --cache=local:rw,remote:r"
                 );
             }
         }
@@ -1273,10 +1273,10 @@ pub async fn run(
         }
         #[allow(unused_variables)]
         Command::Daemon { command, idle_time } => {
-            CommandEventBuilder::new("daemon")
-                .with_parent(&root_telemetry)
-                .track_call();
+            let event = CommandEventBuilder::new("daemon").with_parent(&root_telemetry);
+            event.track_call();
             let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
+            event.track_ui_mode(base.opts.run_opts.ui_mode);
 
             match command {
                 Some(command) => daemon::daemon_client(command, &base).await,
@@ -1307,10 +1307,11 @@ pub async fn run(
             Ok(0)
         }
         Command::Info => {
-            CommandEventBuilder::new("info")
-                .with_parent(&root_telemetry)
-                .track_call();
+            let event = CommandEventBuilder::new("info").with_parent(&root_telemetry);
+
+            event.track_call();
             let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
+            event.track_ui_mode(base.opts.run_opts.ui_mode);
 
             info::run(base).await;
             Ok(0)
@@ -1319,12 +1320,16 @@ pub async fn run(
             let event = CommandEventBuilder::new("telemetry").with_parent(&root_telemetry);
             event.track_call();
             let mut base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
+            event.track_ui_mode(base.opts.run_opts.ui_mode);
             let child_event = event.child();
             telemetry::configure(command, &mut base, child_event);
             Ok(0)
         }
         Command::Scan {} => {
+            let event = CommandEventBuilder::new("scan").with_parent(&root_telemetry);
+            event.track_call();
             let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
+            event.track_ui_mode(base.opts.run_opts.ui_mode);
             if scan::run(base).await {
                 Ok(0)
             } else {
@@ -1332,6 +1337,9 @@ pub async fn run(
             }
         }
         Command::Config => {
+            CommandEventBuilder::new("config")
+                .with_parent(&root_telemetry)
+                .track_call();
             config::run(repo_root, cli_args).await?;
             Ok(0)
         }
@@ -1345,7 +1353,7 @@ pub async fn run(
             let output = *output;
             let packages = packages.clone();
             let base = CommandBase::new(cli_args, repo_root, version, color_config)?;
-
+            event.track_ui_mode(base.opts.run_opts.ui_mode);
             ls::run(base, packages, event, output).await?;
 
             Ok(0)
@@ -1356,9 +1364,8 @@ pub async fn run(
             yes,
             target,
         } => {
-            CommandEventBuilder::new("link")
-                .with_parent(&root_telemetry)
-                .track_call();
+            let event = CommandEventBuilder::new("link").with_parent(&root_telemetry);
+            event.track_call();
 
             if cli_args.team.is_some() {
                 warn!("team flag does not set the scope for linking. Use --scope instead.");
@@ -1374,6 +1381,7 @@ pub async fn run(
             let yes = *yes;
             let scope = scope.clone();
             let mut base = CommandBase::new(cli_args, repo_root, version, color_config)?;
+            event.track_ui_mode(base.opts.run_opts.ui_mode);
 
             link::link(&mut base, scope, modify_gitignore, yes, to).await?;
 
@@ -1385,6 +1393,7 @@ pub async fn run(
             let invalidate = *invalidate;
 
             let mut base = CommandBase::new(cli_args, repo_root, version, color_config)?;
+            event.track_ui_mode(base.opts.run_opts.ui_mode);
             let event_child = event.child();
 
             logout::logout(&mut base, invalidate, event_child).await?;
@@ -1403,6 +1412,7 @@ pub async fn run(
             let force = *force;
 
             let mut base = CommandBase::new(cli_args, repo_root, version, color_config)?;
+            event.track_ui_mode(base.opts.run_opts.ui_mode);
             let event_child = event.child();
 
             if let Some(sso_team) = sso_team {
@@ -1414,9 +1424,8 @@ pub async fn run(
             Ok(0)
         }
         Command::Unlink { target } => {
-            CommandEventBuilder::new("unlink")
-                .with_parent(&root_telemetry)
-                .track_call();
+            let event = CommandEventBuilder::new("unlink").with_parent(&root_telemetry);
+            event.track_call();
             if cli_args.test_run {
                 println!("Unlink test run successful");
                 return Ok(0);
@@ -1424,6 +1433,7 @@ pub async fn run(
 
             let from = *target;
             let mut base = CommandBase::new(cli_args, repo_root, version, color_config)?;
+            event.track_ui_mode(base.opts.run_opts.ui_mode);
 
             unlink::unlink(&mut base, from)?;
 
@@ -1437,6 +1447,7 @@ pub async fn run(
             event.track_call();
 
             let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
+            event.track_ui_mode(base.opts.run_opts.ui_mode);
 
             if execution_args.tasks.is_empty() {
                 print_potential_tasks(base, event).await?;
@@ -1464,6 +1475,7 @@ pub async fn run(
             event.track_call();
 
             let base = CommandBase::new(cli_args, repo_root, version, color_config)?;
+            event.track_ui_mode(base.opts.run_opts.ui_mode);
 
             let query = query::run(base, event, query, variables.as_deref()).await?;
 
@@ -1473,6 +1485,7 @@ pub async fn run(
             let event = CommandEventBuilder::new("watch").with_parent(&root_telemetry);
             event.track_call();
             let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
+            event.track_ui_mode(base.opts.run_opts.ui_mode);
 
             if execution_args.tasks.is_empty() {
                 print_potential_tasks(base, event).await?;
@@ -1503,6 +1516,7 @@ pub async fn run(
             let docker = *docker;
             let output_dir = output_dir.clone();
             let base = CommandBase::new(cli_args, repo_root, version, color_config)?;
+            event.track_ui_mode(base.opts.run_opts.ui_mode);
             let event_child = event.child();
             prune::prune(&base, &scope, docker, &output_dir, event_child).await?;
             Ok(0)

@@ -127,6 +127,13 @@ impl Lockfile for Yarn1Lockfile {
         let entry = self.inner.get(key)?;
         Some(entry.version.clone())
     }
+
+    fn human_name(&self, package: &crate::Package) -> Option<String> {
+        let entry = self.inner.get(&package.key)?;
+        let name = entry.name.as_deref()?;
+        let version = &entry.version;
+        Some(format!("{name}@{version}"))
+    }
 }
 
 pub fn yarn_subgraph(contents: &[u8], packages: &[String]) -> Result<Vec<u8>, crate::Error> {
@@ -163,9 +170,11 @@ mod test {
 
     const MINIMAL: &str = include_str!("../../fixtures/yarn1.lock");
     const FULL: &str = include_str!("../../fixtures/yarn1full.lock");
+    const GH_8849: &str = include_str!("../../fixtures/gh_8849.lock");
 
     #[test_case(MINIMAL ; "minimal lockfile")]
     #[test_case(FULL ; "full lockfile")]
+    #[test_case(GH_8849 ; "gh 8849")]
     fn test_roundtrip(input: &str) {
         let lockfile = Yarn1Lockfile::from_str(input).unwrap();
         assert_eq!(input, lockfile.to_string());

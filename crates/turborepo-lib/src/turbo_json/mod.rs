@@ -1,5 +1,6 @@
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
+    fmt::Display,
     ops::{Deref, DerefMut},
     sync::Arc,
 };
@@ -190,6 +191,16 @@ pub enum UIMode {
 impl Default for UIMode {
     fn default() -> Self {
         Self::Tui
+    }
+}
+
+impl Display for UIMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            UIMode::Tui => write!(f, "tui"),
+            UIMode::Stream => write!(f, "stream"),
+            UIMode::Web => write!(f, "web"),
+        }
     }
 }
 

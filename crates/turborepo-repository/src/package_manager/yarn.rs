@@ -75,7 +75,7 @@ pub(crate) fn prune_patches<R: AsRef<RelativeUnixPath>>(
     pruned_json
 }
 
-impl<'a> Iterator for YarnDetector<'a> {
+impl Iterator for YarnDetector<'_> {
     type Item = Result<PackageManager, Error>;
 
     fn next(&mut self) -> Option<Self::Item> {

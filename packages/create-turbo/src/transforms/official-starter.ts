@@ -18,9 +18,10 @@ export async function transform(args: TransformInput): TransformResult {
   const { prompts, example, opts } = args;
 
   const defaultExample = isDefaultExample(example.name);
-  const isOfficialStarter =
-    !example.repo ||
-    (example.repo.username === "vercel" && example.repo.name === "turbo");
+  const isThisRepo =
+    example.repo &&
+    (example.repo.name === "turborepo" || example.repo.name === "turbo");
+  const isOfficialStarter = example.repo?.username === "vercel" && isThisRepo;
 
   if (!isOfficialStarter) {
     return { result: "not-applicable", ...meta };

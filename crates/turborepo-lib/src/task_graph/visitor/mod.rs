@@ -2,7 +2,6 @@ mod command;
 mod error;
 mod exec;
 mod output;
-
 use std::{
     borrow::Cow,
     collections::HashSet,
@@ -11,6 +10,7 @@ use std::{
 };
 
 use console::{Style, StyledObject};
+use convert_case::{Case, Casing};
 use error::{TaskError, TaskWarning};
 use exec::ExecContextFactory;
 use futures::{stream::FuturesUnordered, StreamExt};
@@ -23,6 +23,7 @@ use tracing::{debug, error, warn, Span};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath};
 use turborepo_ci::{Vendor, VendorBehavior};
 use turborepo_env::{platform::PlatformEnv, EnvironmentVariableMap};
+use turborepo_errors::TURBO_SITE;
 use turborepo_repository::package_graph::{PackageGraph, PackageName, ROOT_PKG_NAME};
 use turborepo_telemetry::events::{
     generic::GenericEventBuilder, task::PackageTaskEventBuilder, EventBuilder, TrackedErrors,
@@ -77,12 +78,21 @@ pub enum Error {
         task_id: TaskId<'static>,
     },
     #[error(
-        "root task {task_name} ({command}) looks like it invokes turbo and might cause a loop"
+        "Your `package.json` script looks like it invokes a Root Task ({task_name}), creating a \
+         loop of `turbo` invocations. You likely have misconfigured your scripts and tasks or \
+         your package manager's Workspace structure."
+    )]
+    #[diagnostic(
+        code(recursive_turbo_invocations),
+        url(
+            "{}/messages/{}",
+            TURBO_SITE, self.code().unwrap().to_string().to_case(Case::Kebab)
+        )
     )]
     RecursiveTurbo {
         task_name: String,
         command: String,
-        #[label("task found here")]
+        #[label("This script calls `turbo`, which calls the script, which calls `turbo`...")]
         span: Option<SourceSpan>,
         #[source_code]
         text: NamedSource,
@@ -215,6 +225,7 @@ impl<'a> Visitor<'a> {
                 Some(cmd) if info.package() == ROOT_PKG_NAME && turbo_regex().is_match(cmd) => {
                     package_task_event.track_error(TrackedErrors::RecursiveError);
                     let (span, text) = cmd.span_and_text("package.json");
+
                     return Err(Error::RecursiveTurbo {
                         task_name: info.to_string(),
                         command: cmd.to_string(),
@@ -357,7 +368,6 @@ impl<'a> Visitor<'a> {
 
     /// Finishes visiting the tasks, creates the run summary, and either
     /// prints, saves, or sends it to spaces.
-
     #[allow(clippy::too_many_arguments)]
     #[tracing::instrument(skip(
         self,
