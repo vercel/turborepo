@@ -1,6 +1,6 @@
 # Turborepo starter
 
-This is an official starter Turborepo.
+This Turborepo starter is maintained by the Turborepo core team.
 
 ## Using this example
 
