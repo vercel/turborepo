@@ -5,7 +5,7 @@ CLI_DIR = $(shell pwd)
 
 # This only builds JS packages
 build:
-	cd $(CLI_DIR)/../ && turbo build \
+	cd $(CLI_DIR)/../ && turbo build copy-schema \
 		--filter=create-turbo \
 		--filter=@turbo/codemod \
 		--filter=turbo-ignore \
