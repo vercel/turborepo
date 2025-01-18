@@ -400,7 +400,7 @@ impl<'a> ChangeTitle<'a> {
     }
 }
 
-impl<'a> BufWrite for ChangeTitle<'a> {
+impl BufWrite for ChangeTitle<'_> {
     fn write_buf(&self, buf: &mut Vec<u8>) {
         if self.icon_name == self.title
             && (self.icon_name != self.prev_icon_name

@@ -213,6 +213,10 @@ mod test {
     )]
     #[test_case("local:r", Ok(CacheConfig { local: CacheActions { read: true, write: false }, remote: CacheActions { read: false, write: false } }) ; "local:r"
     )]
+    #[test_case("remote:r", Ok(CacheConfig { local: CacheActions { read: false, write: false }, remote: CacheActions { read: true, write: false } }) ; "remote:r"
+    )]
+    #[test_case("local:rw,remote:r", Ok(CacheConfig { local: CacheActions { read: true, write: true }, remote: CacheActions { read: true, write: false } }) ; "local:rw,remote:r"
+    )]
     #[test_case("local:", Ok(CacheConfig { local: CacheActions { read: false, write: false }, remote: CacheActions { read: false, write: false } }) ; "empty action"
     )]
     #[test_case("local:,remote:", Ok(CacheConfig { local: CacheActions { read: false, write: false }, remote: CacheActions { read: false, write: false } }) ; "multiple empty actions"

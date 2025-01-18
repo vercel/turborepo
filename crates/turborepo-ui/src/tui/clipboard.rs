@@ -93,8 +93,13 @@ fn copy_impl(s: &str, provider: &Provider) -> std::io::Result<()> {
                 .stderr(Stdio::null())
                 .spawn()
                 .unwrap();
-            std::io::Write::write_all(&mut child.stdin.as_ref().unwrap(), s.as_bytes())?;
-            child.wait()?;
+            // Do not exit early if we fail to write to the clipboard, make sure we attempt
+            // to wait on the clipboard to exit to avoid a zombie process.
+            let write_result =
+                std::io::Write::write_all(&mut child.stdin.as_ref().unwrap(), s.as_bytes());
+            let wait_result = child.wait();
+            write_result?;
+            wait_result?;
         }
 
         #[cfg(windows)]

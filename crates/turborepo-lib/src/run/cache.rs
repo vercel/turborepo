@@ -196,18 +196,15 @@ impl TaskCache {
     pub fn output_writer<W: Write>(&self, writer: W) -> Result<LogWriter<W>, Error> {
         let mut log_writer = LogWriter::default();
 
-        if self.caching_disabled || self.run_cache.writes_disabled {
-            log_writer.with_writer(writer);
-            return Ok(log_writer);
+        if !self.caching_disabled && !self.run_cache.writes_disabled {
+            log_writer.with_log_file(&self.log_file_path)?;
         }
 
-        log_writer.with_log_file(&self.log_file_path)?;
-
-        if !matches!(
-            self.task_output_logs,
-            OutputLogsMode::None | OutputLogsMode::HashOnly | OutputLogsMode::ErrorsOnly
-        ) {
-            log_writer.with_writer(writer);
+        match self.task_output_logs {
+            OutputLogsMode::None | OutputLogsMode::HashOnly | OutputLogsMode::ErrorsOnly => {}
+            OutputLogsMode::Full | OutputLogsMode::NewOnly => {
+                log_writer.with_writer(writer);
+            }
         }
 
         Ok(log_writer)

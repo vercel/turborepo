@@ -93,11 +93,6 @@ impl ResolvedConfigurationOptions for EnvVars {
             .map(|c| c.parse())
             .transpose()?;
 
-        // If TURBO_FORCE is set it wins out over TURBO_CACHE
-        if force.is_some_and(|t| t) {
-            cache = None;
-        }
-
         if remote_only.is_some_and(|t| t) {
             if let Some(cache) = cache {
                 // If TURBO_REMOTE_ONLY and TURBO_CACHE result in the same behavior, remove
@@ -117,6 +112,11 @@ impl ResolvedConfigurationOptions for EnvVars {
                     remote_cache_read_only = None;
                 }
             }
+        }
+
+        // If TURBO_FORCE is set it wins out over TURBO_CACHE
+        if force.is_some_and(|t| t) {
+            cache = None;
         }
 
         if remote_only.is_some() {
