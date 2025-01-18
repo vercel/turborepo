@@ -40,7 +40,7 @@ Can't depend on unknown tasks
 Can't depend on tasks from unknown packages
   $ ${TURBO} run build3 > BUILD3 2>&1
   [1]
-  $ cat BUILD3 | grep --only-match 'x Could not find package "unknown" from task "unknown#custom" in project'
+  $ cat BUILD3 | grep --only-match 'x Could not find package "unknown" referenced by task "unknown#custom" in project'
   x Could not find package "unknown" from task "unknown#custom" in project
 
 Complex dependency chain
