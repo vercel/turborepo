@@ -8,7 +8,7 @@ use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_ui::{color, BOLD, GREY};
 
 use crate::{
-    commands::{bin, generate, ls, prune, run::get_signal, CommandBase},
+    commands::{bin, generate, link, ls, prune, run::get_signal, CommandBase},
     daemon::DaemonError,
     query,
     rewrite_json::RewriteError,
@@ -45,6 +45,8 @@ pub enum Error {
     #[diagnostic(transparent)]
     Ls(#[from] ls::Error),
     #[error(transparent)]
+    Link(#[from] link::Error),
+    #[error(transparent)]
     #[diagnostic(transparent)]
     Prune(#[from] prune::Error),
     #[error(transparent)]
@@ -62,6 +64,8 @@ pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Watch(#[from] watch::Error),
+    #[error(transparent)]
+    Opts(#[from] crate::opts::Error),
 }
 
 const MAX_CHARS_PER_TASK_LINE: usize = 100;
@@ -78,7 +82,7 @@ pub async fn print_potential_tasks(
     let run = run_builder.build(&handler, telemetry).await?;
     let potential_tasks = run.get_potential_tasks()?;
 
-    println!("No tasks provided, here are some potential ones to run\n",);
+    println!("No tasks provided, here are some potential ones\n",);
 
     for (task, packages) in potential_tasks
         .into_iter()

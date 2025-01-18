@@ -38,14 +38,14 @@ runs:
     - name: Set Up Protoc
       id: set-up-protoc
       continue-on-error: true
-      uses: arduino/setup-protoc@v2.1.0
+      uses: arduino/setup-protoc@v3
       with:
         version: "26.x"
         repo-token: ${{ inputs.github-token }}
 
     - name: Set Up Protoc (second try)
       if: steps.set-up-protoc.outcome == 'failure'
-      uses: arduino/setup-protoc@v2.1.0
+      uses: arduino/setup-protoc@v3
       with:
         version: "26.x"
         repo-token: ${{ inputs.github-token }}

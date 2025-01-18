@@ -4,6 +4,7 @@ description: Learn how to configure Turborepo through `turbo.json`.
 ---
 
 import { Callout } from '#/components/callout';
+import { InVersion } from '#/components/in-version';
 import Link from 'next/link';
 
 Configure the behavior of `turbo` by adding a `turbo.json` file in your Workspace's root directory.
@@ -532,6 +533,14 @@ Default: `30`
 Sets a timeout for remote cache operations.
 Value is given in seconds and only whole values are accepted.
 If `0` is passed, then there is no timeout for any cache operations.
+
+### `uploadTimeout`
+
+Default: `60`
+
+Sets a timeout for remote cache uploads.
+Value is given in seconds and only whole values are accepted.
+If `0` is passed, then there is no timeout for any remote cache uploads.
 
 ### `apiUrl`
 

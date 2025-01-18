@@ -26,7 +26,10 @@ function isMusl() {
       return true;
     }
   } else {
+    const orig = process.report.excludeNetwork;
+    process.report.excludeNetwork = true;
     const { glibcVersionRuntime } = process.report.getReport().header;
+    process.report.excludeNetwork = orig;
     if (typeof glibcVersionRuntime === "string") {
       try {
         // We support glibc v2.26+

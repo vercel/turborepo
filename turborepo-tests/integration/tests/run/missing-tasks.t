@@ -30,11 +30,15 @@ Setup
   $ ${TURBO} run something --dry > OUTPUT 2>&1
   [1]
   $ grep --quiet -E "root task (//#)?something \(turbo run build\) looks like it invokes turbo and" OUTPUT
+  [1]
   $ grep --quiet -E "might cause a loop" OUTPUT
+  [1]
 
 # Bad command
 
   $ ${TURBO} run something > OUTPUT2 2>&1
   [1]
   $ grep --quiet -E "root task (//#)?something \(turbo run build\) looks like it invokes turbo and" OUTPUT
+  [1]
   $ grep --quiet -E "might cause a loop" OUTPUT
+  [1]

@@ -67,23 +67,27 @@ Specify caching sources for the run. Accepts a comma-separated list of options:
 - `local`: Use the local filesystem cache
 - `remote`: Use the Remote Cache
 
-When an option is omitted, reading and writing are both disabled
+When an a caching source is omitted, reading and writing are both disabled.
 
-Each option must be followed by one of:
+Cache sources use the following values:
 
 - `rw`: Read and write
 - `r`: Read only
 - `w`: Write only
+- None (`local:`) : Does not use cache. Equivalent to omitting the cache source option.
 
 ```bash title="Terminal"
-# Read and write to local cache, read only to Remote Cache
+# Read from and write to local cache. Only read from Remote Cache.
 turbo run build --cache=local:rw,remote:r
 
-# Read-only to local cache, read write to Remote Cache
+# Only read from local cache. Read from and write to Remote Cache.
 turbo run build --cache=local:r,remote:rw
 
-# Read and write to local cache, no Remote Cache activity
+# Read from and write to local cache. No Remote Cache activity.
 turbo run build --cache=local:rw
+
+# Do not use local cache. Only read from Remote Cache.
+turbo run build --cache=local:,remote:r
 ```
 
 ### `--cache-dir <path>`
@@ -389,6 +393,11 @@ turbo run dev --log-prefix=none
 
 ### `--no-cache`
 
+<Callout type="warn" title="Deprecated">
+  This flag is deprecated and will be removed in a future major release. Please
+  use the [`--cache`](#--cache-options) flag instead.
+</Callout>
+
 Default `false`
 
 Do not cache results of the task.
@@ -401,7 +410,7 @@ turbo run dev --no-cache
 
 `turbo` can run a background process to pre-calculate values used for determining work that needs to be done. This standalone process (daemon) is an optimization, and not required for proper functioning of `turbo`.
 
-Passing `--daemon` instructs `turbo` to use the standalone process, while `--no-daemon` instructs `turbo` to avoid using or creating the standalone process.
+The default daemon usage is set for your repository using [the `daemon` field in `turbo.json`](/repo/docs/reference/configuration#daemon). Passing `--daemon` requires `turbo` to use the standalone process, while `--no-daemon` instructs `turbo` to avoid using or creating the standalone process.
 
 The same behavior can also be set via the `TURBO_DAEMON=true` system variable.
 
@@ -507,6 +516,11 @@ turbo run build --remote-cache-timeout=60
 
 ### `--remote-only`
 
+<Callout type="warn" title="Deprecated">
+  This flag is deprecated and will be removed in a future major release. Please
+  use the [`--cache`](#--cache-options) flag instead.
+</Callout>
+
 Default: `false`
 
 Ignore the local filesystem cache for all tasks, using Remote Cache for reading and caching task outputs.
@@ -532,6 +546,13 @@ This flag can be helpful for debugging to determine things like:
 - How `turbo` interpreted your glob syntax for `inputs` and `outputs`
 - What inputs changed between two task runs to produce a cache miss
 - How task timings changed over time
+
+<Callout type="info" title="Summaries viewer">
+  While there is not a Turborepo-native Run Summaries UI viewer, we encourage
+  you to use the community-built
+  [https://turbo.nullvoxpopuli.com](https://turbo.nullvoxpopuli.com) if you would
+  like to view your Run Summaries as a web view.
+</Callout>
 
 ### `--token`
 

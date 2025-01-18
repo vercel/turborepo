@@ -12,7 +12,7 @@ import { Files, File, Folder } from '#/components/files';
 
 ![Visual representation of a Package Graph in a Turborepo.](/images/docs/package-graph.png)
 
-Let's create your first Internal Package to share math utilities in your repo using the guidance in the [Anatomy of a package](/repo/docs/crafting-your-repository/structuring-a-repository#anatomy-of-a-package) section. In the steps below, we assume you've [created a new repository using `create-turbo`](/repo/docs/getting-started/installation) or are using a similarly structured repository.
+Let's create your first Internal Package to share math utilities in your repo using the guidance in the [Anatomy of a package](/repo/docs/crafting-your-repository/structuring-a-repository#anatomy-of-a-package) section and the [Compiled Packages](/repo/docs/core-concepts/internal-packages#compiled-packages) pattern. In the steps below, we assume you've [created a new repository using `create-turbo`](/repo/docs/getting-started/installation) or are using a similarly structured repository.
 
 <Steps>
 <Step>
@@ -255,7 +255,7 @@ export default Page;
 <Step>
 ### Edit `turbo.json`
 
-Add the artifacts for the new `@repo/math` library to the `outputs` for the `build` task in `turbo.json`. This ensure that its build outputs will be cached by Turborepo, so they can be restored instantly when you start running builds.
+Add the artifacts for the new `@repo/math` library to the `outputs` for the `build` task in `turbo.json`. This ensures that its build outputs will be cached by Turborepo, so they can be restored instantly when you start running builds.
 
 ```json title="./turbo.json"
 // [!code word:"dist/**"]

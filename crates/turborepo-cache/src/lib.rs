@@ -172,7 +172,7 @@ impl Default for CacheActions {
     }
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CacheOpts {
     pub cache_dir: Utf8PathBuf,
     pub cache: CacheConfig,

@@ -8,7 +8,6 @@ use turbopath::AbsoluteSystemPathBuf;
 use turborepo_telemetry::events::command::CommandEventBuilder;
 
 use crate::{
-    cli::Command,
     commands::{run::get_signal, CommandBase},
     query,
     query::{Error, RepositoryQuery},
@@ -56,19 +55,13 @@ impl QueryError {
 }
 
 pub async fn run(
-    mut base: CommandBase,
+    base: CommandBase,
     telemetry: CommandEventBuilder,
     query: Option<String>,
     variables_path: Option<&Utf8Path>,
 ) -> Result<i32, Error> {
     let signal = get_signal()?;
     let handler = SignalHandler::new(signal);
-
-    // We fake a run command, so we can construct a `Run` type
-    base.args_mut().command = Some(Command::Run {
-        run_args: Box::default(),
-        execution_args: Box::default(),
-    });
 
     let run_builder = RunBuilder::new(base)?
         .add_all_tasks()

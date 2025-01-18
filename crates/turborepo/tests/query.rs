@@ -62,7 +62,7 @@ fn test_trace() -> Result<(), anyhow::Error> {
             "get `import_value_and_type.ts` with all dependencies" => "query { file(path: \"import_value_and_type.ts\") { path dependencies(importType: ALL) { files { items { path } } } } }",
             "get `import_value_and_type.ts` with type dependencies" => "query { file(path: \"import_value_and_type.ts\") { path dependencies(importType: TYPES) { files { items { path } } } } }",
             "get `import_value_and_type.ts` with value dependencies" => "query { file(path: \"import_value_and_type.ts\") { path dependencies(importType: VALUES) { files { items { path } } } } }",
-            "get `export_conditions` with dependencies" => "query { file(path: \"export_conditions.js\") { path dependencies(depth: 1) { files { items { path } } } } }",
+            "get `incorrect_extension.mjs` with dependencies" =>  "query { file(path: \"incorrect_extension.mjs\") { path dependencies(depth: 1) { files { items { path } } } } }",
         );
 
         Ok(())
@@ -78,7 +78,7 @@ fn test_trace_on_monorepo() -> Result<(), anyhow::Error> {
             "query",
             "get `apps/my-app/index.ts` with dependencies" => "query { file(path: \"apps/my-app/index.ts\") { path dependencies { files { items { path } } errors { items { message } } } } }",
             "get `packages/utils/index.ts` with dependents" => "query { file(path: \"packages/utils/index.ts\") { path dependents { files { items { path } } errors { items { message } } } } }",
-            "get `packages/another/index.js` with dependents" => "query { file(path: \"packages/another/index.js\") { path dependents { files { items { path } } errors { items { message } } } } }",
+            "get `packages/another/index.js` with dependents" => "query { file(path: \"packages/another/index.jsx\") { path dependents { files { items { path } } errors { items { message } } } } }",
         );
 
         Ok(())

@@ -12,6 +12,7 @@ use super::{
 pub struct InputOptions<'a> {
     pub focus: &'a LayoutSections,
     pub has_selection: bool,
+    pub is_help_popup_open: bool,
 }
 
 pub fn start_crossterm_stream(tx: mpsc::Sender<crossterm::event::Event>) -> Option<JoinHandle<()>> {
@@ -30,7 +31,7 @@ pub fn start_crossterm_stream(tx: mpsc::Sender<crossterm::event::Event>) -> Opti
     }))
 }
 
-impl<'a> InputOptions<'a> {
+impl InputOptions<'_> {
     /// Maps a crossterm::event::Event to a tui::Event
     pub fn handle_crossterm_event(self, event: crossterm::event::Event) -> Option<Event> {
         match event {
@@ -80,12 +81,12 @@ fn translate_key_event(options: InputOptions, key_event: KeyEvent) -> Option<Eve
         KeyCode::Char('/') if matches!(options.focus, LayoutSections::TaskList) => {
             Some(Event::SearchEnter)
         }
+        KeyCode::Esc if options.is_help_popup_open => Some(Event::ToggleHelpPopup),
         KeyCode::Esc if matches!(options.focus, LayoutSections::Search { .. }) => {
             Some(Event::SearchExit {
                 restore_scroll: true,
             })
         }
-        KeyCode::Char('h') => Some(Event::ToggleSidebar),
         KeyCode::Enter if matches!(options.focus, LayoutSections::Search { .. }) => {
             Some(Event::SearchExit {
                 restore_scroll: false,
@@ -108,13 +109,14 @@ fn translate_key_event(options: InputOptions, key_event: KeyEvent) -> Option<Eve
             Some(Event::SearchEnterChar(c))
         }
         // Fall through if we aren't in interactive mode
-        KeyCode::Char('p') if key_event.modifiers == KeyModifiers::CONTROL => Some(Event::ScrollUp),
-        KeyCode::Char('n') if key_event.modifiers == KeyModifiers::CONTROL => {
-            Some(Event::ScrollDown)
-        }
-        KeyCode::Up => Some(Event::Up),
-        KeyCode::Down => Some(Event::Down),
-        KeyCode::Enter => Some(Event::EnterInteractive),
+        KeyCode::Char('h') => Some(Event::ToggleSidebar),
+        KeyCode::Char('u') => Some(Event::ScrollUp),
+        KeyCode::Char('d') => Some(Event::ScrollDown),
+        KeyCode::Char('m') => Some(Event::ToggleHelpPopup),
+        KeyCode::Char('p') => Some(Event::TogglePinnedTask),
+        KeyCode::Up | KeyCode::Char('k') => Some(Event::Up),
+        KeyCode::Down | KeyCode::Char('j') => Some(Event::Down),
+        KeyCode::Enter | KeyCode::Char('i') => Some(Event::EnterInteractive),
         _ => None,
     }
 }
@@ -419,4 +421,50 @@ fn encode_modifiers(mods: KeyModifiers) -> u8 {
         number |= 4;
     }
     number
+}
+
+#[cfg(test)]
+mod test {
+    use std::{mem, sync::OnceLock};
+
+    use crossterm::event::{KeyCode, KeyEvent};
+    use test_case::test_case;
+
+    use super::*;
+    use crate::tui::{search::SearchResults, task::TasksByStatus};
+
+    fn search() -> &'static LayoutSections {
+        static SEARCH: OnceLock<LayoutSections> = OnceLock::new();
+        SEARCH.get_or_init(|| LayoutSections::Search {
+            previous_selection: "".into(),
+            results: SearchResults::new(&TasksByStatus::new()),
+        })
+    }
+
+    fn in_find() -> InputOptions<'static> {
+        InputOptions {
+            focus: search(),
+            has_selection: false,
+            is_help_popup_open: false,
+        }
+    }
+
+    const H: KeyEvent = KeyEvent::new(KeyCode::Char('h'), KeyModifiers::empty());
+
+    #[test_case(in_find(), H, Some(Event::SearchEnterChar('h')) ; "h while searching")]
+    // Note: This only checks event variants not any data contained in the variant
+    fn test_translate_key_event_variant(
+        opts: InputOptions,
+        key_event: crossterm::event::KeyEvent,
+        expected: Option<Event>,
+    ) {
+        match (translate_key_event(opts, key_event), expected) {
+            (Some(actual), Some(expected)) => {
+                assert_eq!(mem::discriminant(&actual), mem::discriminant(&expected));
+            }
+            (None, None) => (),
+            (None, Some(_)) => panic!("expected event, got None"),
+            (Some(_), None) => panic!("expected no event, got an event"),
+        }
+    }
 }

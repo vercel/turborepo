@@ -31,7 +31,7 @@ pub async fn run(base: CommandBase) {
         .and_then(|package_json| {
             PackageManager::read_or_detect_package_manager(&package_json, &base.repo_root).ok()
         })
-        .map_or_else(|| "Not found".to_owned(), |pm| pm.to_string());
+        .map_or_else(|| "Not found".to_owned(), |pm| pm.name().to_string());
 
     println!("CLI:");
     println!("   Version: {}", base.version);

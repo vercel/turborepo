@@ -1,4 +1,10 @@
-use std::{backtrace::Backtrace, env, fmt, fmt::Display, io, mem, process};
+use std::{
+    backtrace::Backtrace,
+    env,
+    ffi::OsString,
+    fmt::{self, Display},
+    io, mem, process,
+};
 
 use biome_deserialize_macros::Deserializable;
 use camino::{Utf8Path, Utf8PathBuf};
@@ -154,6 +160,9 @@ impl fmt::Display for EnvMode {
     }
 }
 
+/// The parsed arguments from the command line. In general we should avoid using
+/// or mutating this directly, and instead use the fully canonicalized `Opts`
+/// struct.
 #[derive(Parser, Clone, Default, Debug, PartialEq)]
 #[clap(author, about = "The build system that makes ship happen", long_about = None)]
 #[clap(disable_help_subcommand = true)]
@@ -329,52 +338,9 @@ pub enum LinkTarget {
 }
 
 impl Args {
-    pub fn new() -> Self {
-        // We always pass --single-package in from the shim.
-        // We need to omit it, and then add it in for run.
-        let arg_separator_position = env::args_os().position(|input_token| input_token == "--");
-
-        let single_package_position =
-            env::args_os().position(|input_token| input_token == "--single-package");
-
-        let is_single_package = match (arg_separator_position, single_package_position) {
-            (_, None) => false,
-            (None, Some(_)) => true,
-            (Some(arg_separator_position), Some(single_package_position)) => {
-                single_package_position < arg_separator_position
-            }
-        };
-
-        // Clap supports arbitrary iterators as input.
-        // We can remove all instances of --single-package
-        let single_package_free = std::env::args_os()
-            .enumerate()
-            .filter(|(index, input_token)| {
-                arg_separator_position
-                    .is_some_and(|arg_separator_position| index > &arg_separator_position)
-                    || input_token != "--single-package"
-            })
-            .map(|(_, input_token)| input_token);
-
-        let mut clap_args = match Args::try_parse_from(single_package_free) {
-            Ok(mut args) => {
-                // And then only add them back in when we're in `run`.
-                // The value can appear in two places in the struct.
-                // We defensively attempt to set both.
-                if let Some(ref mut execution_args) = args.execution_args {
-                    execution_args.single_package = is_single_package
-                }
-
-                if let Some(Command::Run {
-                    run_args: _,
-                    ref mut execution_args,
-                }) = args.command
-                {
-                    execution_args.single_package = is_single_package;
-                }
-
-                args
-            }
+    pub fn new(os_args: Vec<OsString>) -> Self {
+        let clap_args = match Args::parse(os_args) {
+            Ok(args) => args,
             // Don't use error logger when displaying help text
             Err(e)
                 if matches!(
@@ -409,10 +375,6 @@ impl Args {
             process::exit(0);
         }
 
-        if env::var("TEST_RUN").is_ok() {
-            clap_args.test_run = true;
-        }
-
         if let Some(run_args) = clap_args.run_args() {
             if run_args.no_cache {
                 warn!(
@@ -429,12 +391,39 @@ impl Args {
             if run_args.remote_cache_read_only.is_some() {
                 warn!(
                     "--remote-cache-read-only is deprecated and will be removed in a future major \
-                     version. Use --cache=remote:r"
+                     version. Use --cache=local:rw,remote:r"
                 );
             }
         }
 
         clap_args
+    }
+
+    fn parse(os_args: Vec<OsString>) -> Result<Self, clap::Error> {
+        let (is_single_package, single_package_free) = Self::remove_single_package(os_args);
+        let mut args = Args::try_parse_from(single_package_free)?;
+        // And then only add them back in when we're in `run`.
+        // The value can appear in two places in the struct.
+        // We defensively attempt to set both.
+        if let Some(ref mut execution_args) = args.execution_args {
+            execution_args.single_package = is_single_package
+        }
+
+        if let Some(Command::Run {
+            run_args: _,
+            ref mut execution_args,
+        }) = args.command
+        {
+            execution_args.single_package = is_single_package;
+        }
+
+        if env::var("TEST_RUN").is_ok() {
+            args.test_run = true;
+        }
+
+        args.validate()?;
+
+        Ok(args)
     }
 
     pub fn track(&self, tel: &GenericEventBuilder) {
@@ -491,6 +480,69 @@ impl Args {
             Some(execution_args)
         } else {
             self.execution_args.as_ref()
+        }
+    }
+
+    fn remove_single_package(args: Vec<OsString>) -> (bool, impl Iterator<Item = OsString>) {
+        // We always pass --single-package in from the shim.
+        // We need to omit it, and then add it in for run.
+        let arg_separator_position = args.iter().position(|input_token| input_token == "--");
+
+        let single_package_position = args
+            .iter()
+            .position(|input_token| input_token == "--single-package");
+
+        let is_single_package = match (arg_separator_position, single_package_position) {
+            (_, None) => false,
+            (None, Some(_)) => true,
+            (Some(arg_separator_position), Some(single_package_position)) => {
+                single_package_position < arg_separator_position
+            }
+        };
+
+        // Clap supports arbitrary iterators as input.
+        // We can remove all instances of --single-package
+        let single_package_free = args
+            .into_iter()
+            .enumerate()
+            .filter(move |(index, input_token)| {
+                arg_separator_position
+                    .is_some_and(|arg_separator_position| index > &arg_separator_position)
+                    || input_token != "--single-package"
+            })
+            .map(|(_, input_token)| input_token);
+
+        (is_single_package, single_package_free)
+    }
+
+    fn validate(&self) -> Result<(), clap::Error> {
+        if self.run_args.is_some()
+            && !matches!(
+                self.command,
+                None | Some(Command::Run { .. }) | Some(Command::Config)
+            )
+        {
+            let mut cmd = Self::command();
+            Err(cmd.error(
+                clap::error::ErrorKind::UnknownArgument,
+                "Cannot use run arguments outside of run command",
+            ))
+        } else if self.execution_args.is_some() && matches!(self.command, Some(Command::Watch(_))) {
+            let mut cmd = Self::command();
+            Err(cmd.error(
+                clap::error::ErrorKind::ArgumentConflict,
+                "Cannot use watch arguments before `watch` subcommand",
+            ))
+        } else if matches!(self.command, Some(Command::Run { .. }))
+            && (self.run_args.is_some() || self.execution_args.is_some())
+        {
+            let mut cmd = Self::command();
+            Err(cmd.error(
+                clap::error::ErrorKind::ArgumentConflict,
+                "Cannot use run arguments before `run` subcommand",
+            ))
+        } else {
+            Ok(())
         }
     }
 }
@@ -569,6 +621,13 @@ pub enum Command {
         #[clap(long)]
         no_gitignore: bool,
 
+        /// The scope, i.e. Vercel team, to which you are linking
+        #[clap(long)]
+        scope: Option<String>,
+
+        /// Answer yes to all prompts (default false)
+        #[clap(long, short)]
+        yes: bool,
         /// Specify what should be linked (default "remote cache")
         #[clap(long, value_enum, default_value_t = LinkTarget::RemoteCache)]
         target: LinkTarget,
@@ -1071,7 +1130,7 @@ pub async fn run(
     color_config: ColorConfig,
 ) -> Result<i32, Error> {
     // TODO: remove mutability from this function
-    let mut cli_args = Args::new();
+    let mut cli_args = Args::new(env::args_os().collect());
     let version = get_version();
 
     // track telemetry handle to close at the end of the run
@@ -1214,10 +1273,10 @@ pub async fn run(
         }
         #[allow(unused_variables)]
         Command::Daemon { command, idle_time } => {
-            CommandEventBuilder::new("daemon")
-                .with_parent(&root_telemetry)
-                .track_call();
-            let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config);
+            let event = CommandEventBuilder::new("daemon").with_parent(&root_telemetry);
+            event.track_call();
+            let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
+            event.track_ui_mode(base.opts.run_opts.ui_mode);
 
             match command {
                 Some(command) => daemon::daemon_client(command, &base).await,
@@ -1248,10 +1307,11 @@ pub async fn run(
             Ok(0)
         }
         Command::Info => {
-            CommandEventBuilder::new("info")
-                .with_parent(&root_telemetry)
-                .track_call();
-            let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config);
+            let event = CommandEventBuilder::new("info").with_parent(&root_telemetry);
+
+            event.track_call();
+            let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
+            event.track_ui_mode(base.opts.run_opts.ui_mode);
 
             info::run(base).await;
             Ok(0)
@@ -1259,13 +1319,17 @@ pub async fn run(
         Command::Telemetry { command } => {
             let event = CommandEventBuilder::new("telemetry").with_parent(&root_telemetry);
             event.track_call();
-            let mut base = CommandBase::new(cli_args.clone(), repo_root, version, color_config);
+            let mut base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
+            event.track_ui_mode(base.opts.run_opts.ui_mode);
             let child_event = event.child();
             telemetry::configure(command, &mut base, child_event);
             Ok(0)
         }
         Command::Scan {} => {
-            let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config);
+            let event = CommandEventBuilder::new("scan").with_parent(&root_telemetry);
+            event.track_call();
+            let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
+            event.track_ui_mode(base.opts.run_opts.ui_mode);
             if scan::run(base).await {
                 Ok(0)
             } else {
@@ -1273,37 +1337,40 @@ pub async fn run(
             }
         }
         Command::Config => {
-            let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config);
-            config::run(base).await?;
+            CommandEventBuilder::new("config")
+                .with_parent(&root_telemetry)
+                .track_call();
+            config::run(repo_root, cli_args).await?;
             Ok(0)
         }
         Command::Ls {
-            affected,
-            filter,
-            packages,
-            output,
+            packages, output, ..
         } => {
             warn!("ls command is experimental and may change in the future");
             let event = CommandEventBuilder::new("info").with_parent(&root_telemetry);
 
             event.track_call();
-            let affected = *affected;
             let output = *output;
-            let filter = filter.clone();
             let packages = packages.clone();
-            let base = CommandBase::new(cli_args, repo_root, version, color_config);
-
-            ls::run(base, packages, event, filter, affected, output).await?;
+            let base = CommandBase::new(cli_args, repo_root, version, color_config)?;
+            event.track_ui_mode(base.opts.run_opts.ui_mode);
+            ls::run(base, packages, event, output).await?;
 
             Ok(0)
         }
         Command::Link {
             no_gitignore,
+            scope,
+            yes,
             target,
         } => {
-            CommandEventBuilder::new("link")
-                .with_parent(&root_telemetry)
-                .track_call();
+            let event = CommandEventBuilder::new("link").with_parent(&root_telemetry);
+            event.track_call();
+
+            if cli_args.team.is_some() {
+                warn!("team flag does not set the scope for linking. Use --scope instead.");
+            }
+
             if cli_args.test_run {
                 println!("Link test run successful");
                 return Ok(0);
@@ -1311,11 +1378,12 @@ pub async fn run(
 
             let modify_gitignore = !*no_gitignore;
             let to = *target;
-            let mut base = CommandBase::new(cli_args, repo_root, version, color_config);
+            let yes = *yes;
+            let scope = scope.clone();
+            let mut base = CommandBase::new(cli_args, repo_root, version, color_config)?;
+            event.track_ui_mode(base.opts.run_opts.ui_mode);
 
-            if let Err(err) = link::link(&mut base, modify_gitignore, to).await {
-                error!("error: {}", err.to_string())
-            }
+            link::link(&mut base, scope, modify_gitignore, yes, to).await?;
 
             Ok(0)
         }
@@ -1324,7 +1392,8 @@ pub async fn run(
             event.track_call();
             let invalidate = *invalidate;
 
-            let mut base = CommandBase::new(cli_args, repo_root, version, color_config);
+            let mut base = CommandBase::new(cli_args, repo_root, version, color_config)?;
+            event.track_ui_mode(base.opts.run_opts.ui_mode);
             let event_child = event.child();
 
             logout::logout(&mut base, invalidate, event_child).await?;
@@ -1342,7 +1411,8 @@ pub async fn run(
             let sso_team = sso_team.clone();
             let force = *force;
 
-            let mut base = CommandBase::new(cli_args, repo_root, version, color_config);
+            let mut base = CommandBase::new(cli_args, repo_root, version, color_config)?;
+            event.track_ui_mode(base.opts.run_opts.ui_mode);
             let event_child = event.child();
 
             if let Some(sso_team) = sso_team {
@@ -1354,16 +1424,16 @@ pub async fn run(
             Ok(0)
         }
         Command::Unlink { target } => {
-            CommandEventBuilder::new("unlink")
-                .with_parent(&root_telemetry)
-                .track_call();
+            let event = CommandEventBuilder::new("unlink").with_parent(&root_telemetry);
+            event.track_call();
             if cli_args.test_run {
                 println!("Unlink test run successful");
                 return Ok(0);
             }
 
             let from = *target;
-            let mut base = CommandBase::new(cli_args, repo_root, version, color_config);
+            let mut base = CommandBase::new(cli_args, repo_root, version, color_config)?;
+            event.track_ui_mode(base.opts.run_opts.ui_mode);
 
             unlink::unlink(&mut base, from)?;
 
@@ -1376,7 +1446,8 @@ pub async fn run(
             let event = CommandEventBuilder::new("run").with_parent(&root_telemetry);
             event.track_call();
 
-            let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config);
+            let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
+            event.track_ui_mode(base.opts.run_opts.ui_mode);
 
             if execution_args.tasks.is_empty() {
                 print_potential_tasks(base, event).await?;
@@ -1403,16 +1474,23 @@ pub async fn run(
             let event = CommandEventBuilder::new("query").with_parent(&root_telemetry);
             event.track_call();
 
-            let base = CommandBase::new(cli_args, repo_root, version, color_config);
+            let base = CommandBase::new(cli_args, repo_root, version, color_config)?;
+            event.track_ui_mode(base.opts.run_opts.ui_mode);
 
             let query = query::run(base, event, query, variables.as_deref()).await?;
 
             Ok(query)
         }
-        Command::Watch(_) => {
+        Command::Watch(execution_args) => {
             let event = CommandEventBuilder::new("watch").with_parent(&root_telemetry);
             event.track_call();
-            let base = CommandBase::new(cli_args, repo_root, version, color_config);
+            let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
+            event.track_ui_mode(base.opts.run_opts.ui_mode);
+
+            if execution_args.tasks.is_empty() {
+                print_potential_tasks(base, event).await?;
+                return Ok(1);
+            }
 
             let mut client = WatchClient::new(base, event).await?;
             if let Err(e) = client.start().await {
@@ -1437,7 +1515,8 @@ pub async fn run(
                 .unwrap_or_default();
             let docker = *docker;
             let output_dir = output_dir.clone();
-            let base = CommandBase::new(cli_args, repo_root, version, color_config);
+            let base = CommandBase::new(cli_args, repo_root, version, color_config)?;
+            event.track_ui_mode(base.opts.run_opts.ui_mode);
             let event_child = event.child();
             prune::prune(&base, &scope, docker, &output_dir, event_child).await?;
             Ok(0)
@@ -1462,14 +1541,15 @@ pub async fn run(
 
 #[cfg(test)]
 mod test {
-    use std::assert_matches::assert_matches;
+    use std::{assert_matches::assert_matches, ffi::OsString};
 
     use camino::Utf8PathBuf;
     use clap::Parser;
+    use insta::assert_snapshot;
     use itertools::Itertools;
     use pretty_assertions::assert_eq;
 
-    use crate::cli::{ExecutionArgs, RunArgs};
+    use crate::cli::{ExecutionArgs, LinkTarget, RunArgs};
 
     struct CommandTestCase {
         command: &'static str,
@@ -2301,6 +2381,90 @@ mod test {
     }
 
     #[test]
+    fn test_parse_link() {
+        assert_eq!(
+            Args::try_parse_from(["turbo", "link"]).unwrap(),
+            Args {
+                command: Some(Command::Link {
+                    no_gitignore: false,
+                    scope: None,
+                    yes: false,
+                    target: LinkTarget::RemoteCache,
+                }),
+                ..Args::default()
+            }
+        );
+
+        CommandTestCase {
+            command: "link",
+            command_args: vec![],
+            global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
+            expected_output: Args {
+                command: Some(Command::Link {
+                    no_gitignore: false,
+                    scope: None,
+                    yes: false,
+                    target: LinkTarget::RemoteCache,
+                }),
+                cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
+                ..Args::default()
+            },
+        }
+        .test();
+
+        CommandTestCase {
+            command: "link",
+            command_args: vec![vec!["--yes"]],
+            global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
+            expected_output: Args {
+                command: Some(Command::Link {
+                    yes: true,
+                    no_gitignore: false,
+                    scope: None,
+                    target: LinkTarget::RemoteCache,
+                }),
+                cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
+                ..Args::default()
+            },
+        }
+        .test();
+
+        CommandTestCase {
+            command: "link",
+            command_args: vec![vec!["--scope", "foo"]],
+            global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
+            expected_output: Args {
+                command: Some(Command::Link {
+                    yes: false,
+                    no_gitignore: false,
+                    scope: Some("foo".to_string()),
+                    target: LinkTarget::RemoteCache,
+                }),
+                cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
+                ..Args::default()
+            },
+        }
+        .test();
+
+        CommandTestCase {
+            command: "link",
+            command_args: vec![vec!["--no-gitignore"]],
+            global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
+            expected_output: Args {
+                command: Some(Command::Link {
+                    yes: false,
+                    no_gitignore: true,
+                    scope: None,
+                    target: LinkTarget::RemoteCache,
+                }),
+                cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
+                ..Args::default()
+            },
+        }
+        .test();
+    }
+
+    #[test]
     fn test_parse_login() {
         assert_eq!(
             Args::try_parse_from(["turbo", "login"]).unwrap(),
@@ -2724,5 +2888,127 @@ mod test {
         assert!(Args::try_parse_from(["turbo", "build", "--affected", "--filter", "foo"]).is_err(),);
         assert!(Args::try_parse_from(["turbo", "build", "--filter", "foo", "--affected"]).is_err(),);
         assert!(Args::try_parse_from(["turbo", "ls", "--filter", "foo", "--affected"]).is_err(),);
+    }
+
+    struct SinglePackageTestCase {
+        args: &'static [&'static str],
+        expected_is_single: bool,
+        expected: &'static [&'static str],
+    }
+
+    impl SinglePackageTestCase {
+        pub const fn new<const N: usize>(args: &'static [&'static str; N]) -> Self {
+            let args = args.as_slice();
+            Self {
+                args,
+                expected_is_single: false,
+                expected: args,
+            }
+        }
+
+        pub const fn expected<const N: usize>(
+            mut self,
+            expected: &'static [&'static str; N],
+        ) -> Self {
+            self.expected_is_single = true;
+            self.expected = expected.as_slice();
+            self
+        }
+
+        pub fn os_args(&self) -> Vec<OsString> {
+            self.args.iter().map(|s| OsString::from(*s)).collect()
+        }
+
+        pub fn assert_actual(&self, actual: (bool, impl Iterator<Item = OsString>)) {
+            let (is_single, args) = actual;
+            assert_eq!(is_single, self.expected_is_single);
+            assert_eq!(
+                args.map(|s| s.to_str().unwrap().to_string())
+                    .collect::<Vec<_>>()
+                    .as_slice(),
+                self.expected
+            );
+        }
+    }
+
+    const NO_SINGLE_PKG: SinglePackageTestCase =
+        SinglePackageTestCase::new(&["turbo", "--version"]);
+    const SINGLE_PKG_AFTER_PASS: SinglePackageTestCase =
+        SinglePackageTestCase::new(&["turbo", "--", "--single-package"]);
+    const SINGLE_PKG: SinglePackageTestCase =
+        SinglePackageTestCase::new(&["turbo", "--single-package", "run", "build"])
+            .expected(&["turbo", "run", "build"]);
+    const SINGLE_PKG_BEFORE_AFTER: SinglePackageTestCase = SinglePackageTestCase::new(&[
+        "turbo",
+        "--single-package",
+        "run",
+        "build",
+        "--",
+        "--single-package",
+    ])
+    .expected(&["turbo", "run", "build", "--", "--single-package"]);
+
+    #[test_case::test_case(NO_SINGLE_PKG)]
+    #[test_case::test_case(SINGLE_PKG_AFTER_PASS)]
+    #[test_case::test_case(SINGLE_PKG)]
+    #[test_case::test_case(SINGLE_PKG_BEFORE_AFTER)]
+    fn test_single_package_removal(test: SinglePackageTestCase) {
+        let os_args = test.os_args();
+        let actual = Args::remove_single_package(os_args);
+        test.assert_actual(actual);
+    }
+
+    #[test]
+    fn test_set_single_package() {
+        let inferred_run = Args::parse(
+            ["turbo", "--single-package", "build"]
+                .iter()
+                .map(|s| OsString::from(*s))
+                .collect(),
+        )
+        .unwrap();
+        let explicit_run = Args::parse(
+            ["turbo", "run", "--single-package", "build"]
+                .iter()
+                .map(|s| OsString::from(*s))
+                .collect(),
+        )
+        .unwrap();
+        assert!(inferred_run
+            .execution_args
+            .as_ref()
+            .map_or(false, |e| e.single_package));
+        assert!(explicit_run
+            .command
+            .as_ref()
+            .and_then(|cmd| if let Command::Run { execution_args, .. } = cmd {
+                Some(execution_args.single_package)
+            } else {
+                None
+            })
+            .unwrap_or(false));
+    }
+
+    #[test_case::test_case(&["turbo", "watch", "build", "--no-daemon"]; "after watch")]
+    #[test_case::test_case(&["turbo", "--no-daemon", "watch", "build"]; "before watch")]
+    fn test_no_run_args_outside_of_run(args: &[&str]) {
+        let os_args = args.iter().map(|s| OsString::from(*s)).collect();
+        let err = Args::parse(os_args).unwrap_err();
+        assert_snapshot!(args.join("-").as_str(), err);
+    }
+
+    #[test_case::test_case(&["turbo", "--filter=foo", "run", "build"], false; "execution args")]
+    #[test_case::test_case(&["turbo", "--no-daemon", "run", "build"], false; "run args")]
+    #[test_case::test_case(&["turbo", "build", "run"], true; "task")]
+    #[test_case::test_case(&["turbo", "--filter=web", "watch", "build"], false; "execution before watch")]
+    fn test_no_run_args_before_run(args: &[&str], is_okay: bool) {
+        let os_args = args.iter().map(|s| OsString::from(*s)).collect();
+        let cli = Args::parse(os_args);
+        if is_okay {
+            cli.unwrap();
+        } else {
+            let err = cli.unwrap_err();
+            assert_snapshot!(args.join("-").as_str(), err);
+        }
     }
 }
