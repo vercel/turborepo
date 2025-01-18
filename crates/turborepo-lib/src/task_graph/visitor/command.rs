@@ -306,7 +306,7 @@ mod test {
         let cmd = factory
             .command(&task_id, EnvironmentVariableMap::default())
             .unwrap_err();
-        assert_snapshot!(cmd.to_string(), @"internal errors encountered: oops!");
+        assert_snapshot!(cmd.to_string(), @"Internal errors encountered: oops!");
     }
 
     #[test]

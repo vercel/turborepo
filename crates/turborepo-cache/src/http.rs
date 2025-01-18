@@ -415,7 +415,7 @@ mod test {
                 backtrace: Backtrace::capture(),
             },
         );
-        assert_snapshot!(err.to_string(), @"failed to contact remote cache: unknown status unknown: Special message");
+        assert_snapshot!(err.to_string(), @"failed to contact remote cache: Unknown status unknown: Special message");
     }
 
     #[test]

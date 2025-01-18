@@ -103,7 +103,7 @@ mod test {
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert_snapshot!(err.to_string(), @r###"
-        cyclic dependency detected:
+        Cyclic dependency detected:
         	d, c, b, a
         "###);
     }

@@ -205,7 +205,7 @@ mod test {
     fn test_unsupported_version() {
         let input = r#"{"version": "yolo"}"#;
         let err = Config::from_str(input, "something.json").unwrap_err();
-        assert_snapshot!(err, @r###"Unsupported micro-frontends configuration version: yolo. Supported versions: ["1", "2"]"###);
+        assert_snapshot!(err, @r###"Unsupported microfrontends configuration version: yolo. Supported versions: ["1", "2"]"###);
     }
 
     fn add_v1_config(dir: &AbsoluteSystemPath) -> Result<(), std::io::Error> {
