@@ -8,11 +8,11 @@ Run build with package task in non-root turbo.json
   $ ${TURBO} build 2> error.txt
   [1]
   $ sed  's/\[\([^]]*\)\]/\(\1)/g' < error.txt
-    x invalid turbo json
+    x Invalid turbo.json configuration
   
   Error: unnecessary_package_task_syntax (https://turbo.build/messages/unnecessary-package-task-syntax)
   
-    x "my-app#build". Use "build" instead
+    x "my-app#build". Use "build" instead.
       ,-\(apps[\\/]my-app[\\/]turbo.json:7:1\) (re)
     7 |         // this comment verifies that turbo can read .json files with comments
     8 | ,->     "my-app#build": {
@@ -73,7 +73,7 @@ Use our custom turbo config which has interruptible: true
 
 Build should fail
   $ ${TURBO} run build
-    x interruptible tasks must be persistent
+    x Interruptible tasks must be persistent.
       ,-[turbo.json:14:1]
    14 |       ],
    15 |       "interruptible": true,
@@ -91,7 +91,7 @@ Run build with syntax errors in turbo.json
   $ ${TURBO} build
   turbo_json_parse_error
   
-    x failed to parse turbo json
+    x Failed to parse turbo.json.
   
   Error:   x Expected a property but instead found ','.
      ,-[turbo.json:1:1]

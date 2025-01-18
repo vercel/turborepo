@@ -33,7 +33,7 @@ impl From<TaskId<'static>> for TaskNode {
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("expected a task node, got root")]
+    #[error("Expected a task node, but got workspace root.")]
     Root,
 }
 

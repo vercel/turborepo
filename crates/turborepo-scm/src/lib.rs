@@ -27,43 +27,41 @@ mod status;
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("git error on {1}: {0}")]
+    #[error("Git error on {1}: {0}")]
     Git2(
         #[source] git2::Error,
         String,
         #[backtrace] backtrace::Backtrace,
     ),
-    #[error("git error: {0}")]
+    #[error("Git error: {0}")]
     Git(String, #[backtrace] backtrace::Backtrace),
     #[error(
-        "{0} is not part of a git repository. git is required for operations based on source \
+        "{0} is not part of a Git repository. Git is required for operations based on source \
          control"
     )]
     GitRequired(AbsoluteSystemPathBuf),
-    #[error(
-        "git command failed due to unsupported git version. Upgrade to git 2.18 or newer: {0}"
-    )]
+    #[error("Git command failed due to unsupported version. Upgrade to git 2.18 or newer: {0}")]
     GitVersion(String),
-    #[error("io error: {0}")]
+    #[error("I/O error: {0}")]
     Io(#[from] std::io::Error, #[backtrace] backtrace::Backtrace),
-    #[error("path error: {0}")]
+    #[error("Path error: {0}")]
     Path(#[from] PathError, #[backtrace] backtrace::Backtrace),
-    #[error("could not find git binary")]
+    #[error("Could not find git binary")]
     GitBinaryNotFound(#[from] which::Error),
     #[error("encoding error: {0}")]
     Encoding(
         #[from] std::string::FromUtf8Error,
         #[backtrace] backtrace::Backtrace,
     ),
-    #[error("package traversal error: {0}")]
+    #[error("Package traversal error: {0}")]
     Ignore(#[from] ignore::Error, #[backtrace] backtrace::Backtrace),
-    #[error("invalid glob: {0}")]
+    #[error("Invalid glob: {0}")]
     Glob(#[source] Box<wax::BuildError>, backtrace::Backtrace),
-    #[error("invalid globwalk pattern: {0}")]
+    #[error("Invalid globwalk pattern: {0}")]
     Globwalk(#[from] globwalk::GlobError),
     #[error(transparent)]
     Walk(#[from] globwalk::WalkError),
-    #[error("unable to resolve base branch, please set with TURBO_SCM_BASE")]
+    #[error("Unable to resolve base branch. Please set with `TURBO_SCM_BASE`.")]
     UnableToResolveRef,
 }
 

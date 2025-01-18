@@ -39,35 +39,35 @@ pub enum Error {
     UsageLimit,
     #[error("spending paused")]
     SpendingPaused,
-    #[error("could not find home directory.")]
+    #[error("Could not find home directory.")]
     HomeDirectoryNotFound,
     #[error("User not found. Please login to Turborepo first by running {command}.")]
     TokenNotFound { command: StyledObject<&'static str> },
     // User decided to not link the remote cache
-    #[error("link cancelled")]
+    #[error("Link cancelled.")]
     NotLinking,
-    #[error("canceled")]
+    #[error("Canceled.")]
     UserCanceled(#[source] dialoguer::Error),
-    #[error("could not get user information {0}")]
+    #[error("Could not get user information: {0}")]
     UserNotFound(#[source] turborepo_api_client::Error),
     // We failed to fetch the team for whatever reason
-    #[error("could not get information for team {1}")]
+    #[error("Could not get information for team: {1}")]
     TeamRequest(#[source] turborepo_api_client::Error, String),
     // We fetched the team, but it doesn't exist.
-    #[error("could not find team {0}")]
+    #[error("Could not find team: {0}")]
     TeamNotFound(String),
-    #[error("could not get teams information")]
+    #[error("Could not get teams information.")]
     TeamsRequest(#[source] turborepo_api_client::Error),
-    #[error("could not get spaces information")]
+    #[error("Could not get spaces information.")]
     SpacesRequest(#[source] turborepo_api_client::Error),
-    #[error("could not get caching status")]
+    #[error("Could not get caching status.")]
     CachingStatusNotFound(#[source] turborepo_api_client::Error),
     #[error("Failed to open browser. Please visit {0} to enable Remote Caching")]
     OpenBrowser(String, #[source] io::Error),
-    #[error("please re-run `link` after enabling caching")]
+    #[error("Please re-run `link` after enabling caching.")]
     EnableCaching,
     #[error(
-        "Could not persist selected space ({space_id}) to `experimentalSpaces.id` in turbo.json"
+        "Could not persist selected space ({space_id}) to `experimentalSpaces.id` in turbo.json."
     )]
     WriteToTurboJson {
         space_id: String,

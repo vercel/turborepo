@@ -11,7 +11,7 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("cyclic dependency detected:\n{0}")]
+    #[error("Cyclic dependency detected:\n{0}")]
     CyclicDependencies(String),
     #[error("{0} depends on itself")]
     SelfDependency(String),
@@ -103,7 +103,7 @@ mod test {
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert_snapshot!(err.to_string(), @r###"
-        cyclic dependency detected:
+        Cyclic dependency detected:
         	d, c, b, a
         "###);
     }

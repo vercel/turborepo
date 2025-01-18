@@ -29,17 +29,17 @@ use crate::{
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("missing pipeline entry {0}")]
+    #[error("Missing pipeline entry: {0}")]
     MissingPipelineEntry(TaskId<'static>),
-    #[error("missing package.json for {0}")]
+    #[error("Missing package.json for {0}.")]
     MissingPackageJson(String),
-    #[error("cannot find package-file hash for {0}")]
+    #[error("Cannot find package-file hash for {0}.")]
     MissingPackageFileHash(String),
-    #[error("missing hash for dependent task {0}")]
+    #[error("Missing hash for dependent task {0}.")]
     MissingDependencyTaskHash(String),
-    #[error("cannot acquire lock for task hash tracker")]
+    #[error("Cannot acquire lock for task hash tracker.")]
     Mutex,
-    #[error("missing environment variables for {0}")]
+    #[error("Missing environment variables for {0}.")]
     MissingEnvVars(TaskId<'static>),
     #[error(transparent)]
     Scm(#[from] turborepo_scm::Error),

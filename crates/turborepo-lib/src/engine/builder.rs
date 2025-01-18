@@ -20,7 +20,7 @@ use crate::{
 
 #[derive(Debug, thiserror::Error, Diagnostic)]
 pub enum MissingTaskError {
-    #[error("could not find task `{name}` in project")]
+    #[error("Could not find task `{name}` in project")]
     MissingTaskDefinition {
         name: String,
         #[label]
@@ -28,19 +28,19 @@ pub enum MissingTaskError {
         #[source_code]
         text: NamedSource,
     },
-    #[error("could not find package `{name}` in project")]
+    #[error("Could not find package `{name}` in project")]
     MissingPackage { name: String },
 }
 
 #[derive(Debug, thiserror::Error, Diagnostic)]
 pub enum Error {
-    #[error("missing tasks in project")]
+    #[error("Missing tasks in project")]
     MissingTasks(#[related] Vec<MissingTaskError>),
-    #[error("No package.json for {workspace}")]
+    #[error("No package.json found for {workspace}")]
     MissingPackageJson { workspace: PackageName },
     #[error(
-        "{task_id} needs an entry in turbo.json before it can be depended on because it is a task \
-         declared in the root package.json"
+        "{task_id} requires an entry in turbo.json before it can be depended on because it is a \
+         task declared in the root package.json"
     )]
     #[diagnostic(
         code(missing_root_task_in_turbo_json),
@@ -51,12 +51,12 @@ pub enum Error {
     )]
     MissingRootTaskInTurboJson {
         task_id: String,
-        #[label("add an entry in turbo.json for this task")]
+        #[label("Add an entry in turbo.json for this task")]
         span: Option<SourceSpan>,
         #[source_code]
         text: NamedSource,
     },
-    #[error("Could not find package \"{package}\" from task \"{task_id}\" in project")]
+    #[error("Could not find package \"{package}\" referenced by task \"{task_id}\" in project")]
     MissingPackageFromTask {
         #[label]
         span: Option<SourceSpan>,
@@ -77,14 +77,14 @@ pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Config(#[from] crate::config::Error),
-    #[error("invalid turbo json")]
+    #[error("Invalid turbo.json configuration")]
     Validation {
         #[related]
         errors: Vec<config::Error>,
     },
     #[error(transparent)]
     Graph(#[from] graph::Error),
-    #[error("invalid task name: {reason}")]
+    #[error("Invalid task name: {reason}")]
     InvalidTaskName {
         #[label]
         span: Option<SourceSpan>,

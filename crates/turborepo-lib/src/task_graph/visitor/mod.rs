@@ -71,7 +71,7 @@ pub struct Visitor<'a> {
 
 #[derive(Debug, thiserror::Error, Diagnostic)]
 pub enum Error {
-    #[error("cannot find package {package_name} for task {task_id}")]
+    #[error("Cannot find package {package_name} for task {task_id}.")]
     MissingPackage {
         package_name: PackageName,
         task_id: TaskId<'static>,
@@ -98,19 +98,19 @@ pub enum Error {
     },
     #[error("Could not find definition for task")]
     MissingDefinition,
-    #[error("error while executing engine: {0}")]
+    #[error("Error while executing engine: {0}")]
     Engine(#[from] crate::engine::ExecuteError),
     #[error(transparent)]
     TaskHash(#[from] task_hash::Error),
     #[error(transparent)]
     RunSummary(#[from] summary::Error),
-    #[error("internal errors encountered: {0}")]
+    #[error("Internal errors encountered: {0}")]
     InternalErrors(String),
-    #[error("unable to find package manager binary: {0}")]
+    #[error("Unable to find package manager binary: {0}")]
     Which(#[from] which::Error),
     #[error(
         "'{package}' is configured with a {mfe_config_filename}, but doesn't have \
-         '@vercel/microfrontends' listed as a dependency"
+         '@vercel/microfrontends' listed as a dependency."
     )]
     MissingMFEDependency {
         package: String,

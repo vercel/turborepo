@@ -901,7 +901,7 @@ mod test {
                 .unwrap(),
         );
         let err = APIClient::handle_403(response).await;
-        assert_snapshot!(err.to_string(), @"unknown status forbidden: Not authorized");
+        assert_snapshot!(err.to_string(), @"Unknown status forbidden: Not authorized");
     }
 
     #[tokio::test]
