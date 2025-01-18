@@ -8,7 +8,7 @@ Run build with package task in non-root turbo.json
   $ ${TURBO} build 2> error.txt
   [1]
   $ sed  's/\[\([^]]*\)\]/\(\1)/g' < error.txt
-    x Invalid turbo json configuration
+    x Invalid turbo.json configuration
   
   Error: unnecessary_package_task_syntax (https://turbo.build/messages/unnecessary-package-task-syntax)
   
@@ -91,7 +91,7 @@ Run build with syntax errors in turbo.json
   $ ${TURBO} build
   turbo_json_parse_error
   
-    x failed to parse turbo json
+    x Failed to parse turbo.json.
   
   Error:   x Expected a property but instead found ','.
      ,-[turbo.json:1:1]
@@ -115,4 +115,3 @@ Run build with syntax errors in turbo.json
    15 | 
       `----
   
-  [1]
