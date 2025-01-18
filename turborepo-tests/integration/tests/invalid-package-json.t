@@ -22,15 +22,15 @@ Build should fail due to invalid packageManager field (sed removes the square br
   $ sed  's/\[\([^]]*\)\]/\\1/g' < ERR
   invalid_package_manager_field
   
-    x could not resolve workspaces
-    `-> could not parse the packageManager field in package.json, expected to
+    x Could not resolve workspaces
+    `-> Could not parse the `packageManager` field in package.json, expected to
         match regular expression (?P<manager>bun|npm|pnpm|yarn)@(?P<version>\d+
         \.\d+\.\d+(-.+)?|https?://.+)
      ,-\1
    5 |   },
    6 |   "packageManager": "bower@8.19.4",
      :                     ^^^^^^^|^^^^^^
-     :                            `-- invalid `packageManager` field
+     :                            `-- Invalid `packageManager` field
    7 |   "workspaces": [
      `----
   
@@ -44,8 +44,8 @@ Add invalid packageManager field that passes the regex.
   $ sed  's/\[\([^]]*\)\]/\(\1)/g' < ERR
   invalid_semantic_version
   
-    x could not resolve workspaces
-    `-> invalid semantic version: Failed to parse an integer component of a
+    x Could not resolve workspaces
+    `-> Invalid semantic version: Failed to parse an integer component of a
         semver string: number too large to fit in target type
      ,-\(.*package.json:5:1\) (re)
    5 |   },
@@ -68,7 +68,7 @@ Build should fail due to trailing comma (sed replaces square brackets with paren
   $ sed  's/\[\([^]]*\)\]/\(\1)/g' < ERR
   package_json_parse_error
   
-    x unable to parse package.json
+    x Unable to parse package.json
   
   Error:   x Expected a property but instead found '}'.
      ,-\(.*package.json:1:1\) (re)
