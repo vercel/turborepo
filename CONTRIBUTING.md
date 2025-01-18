@@ -189,7 +189,7 @@ See [the publishing guide](./release.md).
 Contributing to examples helps the Turborepo community by showcasing how to use Turborepo in real-world scenarios with other tools and frameworks. They can be found in [the examples directory](https://github.com/vercel/turborepo/tree/main/examples) of this repository.
 
 > [!IMPORTANT]
-> As Turborepo usage has grown, the community has contribute more and more examples to the repository. While this is exciting for us on the core team, we're unable to maintain the full surface area of every example, given the constant updates across the breath of tooling that Turborepo works with in the examples.
+> As Turborepo usage has grown, the community has contributed more and more examples to the repository. While this is exciting for us on the core team, we're unable to maintain the full surface area of every example, given the constant updates across the breadth of tooling that Turborepo works with in the examples.
 >
 > Because of this, a handful of the examples are explictly marked as maintained by the core team. For the rest, we work with the community to keep them as up to date and correct as possible. If you find a problem with a community-supported template, we ask that you do not open a GitHub Issue for it. Instead, please open a pull request with the needed fixes.
 
