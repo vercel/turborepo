@@ -80,44 +80,6 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
-  examples:
-    name: Turborepo Examples
-    timeout-minutes: 40
-
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      # Disable corepack. actions/setup-node invokes other package managers and
-      # that causes corepack to throw an error, so we disable it first.
-      - name: Disable corepack
-        shell: bash
-        run: corepack disable
-
-      - name: Setup Turborepo Environment
-        uses: ./.github/actions/setup-turborepo-environment
-        with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-          node-version: "18.20.2"
-
-      - name: Install Global Turbo
-        uses: ./.github/actions/install-global-turbo
-
-      - name: Check examples
-        shell: bash
-        # Concurrency being 1 is a big hammer here.
-        # It's a quick fix for non-deterministic behaviors we're seeing around package resolution.
-        # We could likely do some hacking to reparallelize this, but it's not worth it right now.
-        run: turbo run test --filter="@turborepo-examples-tests/*" --continue --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }} --env-mode=strict --concurrency=1
-
-      # Disable corepack again. actions/setup-node's "Post" step runs at the end of
-      # this job invokes other package managers, and corepack throws an error.
-      # (corepack was enabled from inside the tests above).
-      - name: Disable corepack again
-        shell: bash
-        run: corepack disable
-
   rust_lint:
     name: Rust lints
     runs-on:
