@@ -38,4 +38,4 @@ jobs:
 
       - name: Check non-monorepo example
         shell: bash
-        run: turbo run test --filter="@turborepo-examples-tests/non-monorepo-*" --continue --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }} --env-mode=strict
+        run: turbo run test --filter="@turborepo-examples-tests/non-monorepo-*" --continue --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }} --env-mode=strict --concurrency=1
