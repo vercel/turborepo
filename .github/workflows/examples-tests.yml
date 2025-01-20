@@ -10,9 +10,9 @@ concurrency:
 
 jobs:
   basic-example:
-    name: "`basic` example tests"
+    name: "`basic`"
     timeout-minutes: 40
-    if: ${{ contains(github.event.pull_request.files.*.path, 'examples/basic/') }}
+    if: ${{ contains(github.event.pull_request.files.*.path, 'examples/basic/**') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
