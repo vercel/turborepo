@@ -47,14 +47,14 @@ jobs:
         uses: ./.github/actions/install-global-turbo
 
       - name: Check examples
-        if: ${{ outputs.changes.basic }}
+        if: ${{ steps.outputs.changes.basic }}
         shell: bash
         run: turbo run test --filter="@turborepo-examples-tests/basic-*" --continue --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }} --env-mode=strict --concurrency=1
 
   kitchen-sink:
     name: "`kitchen-sink` example tests"
     timeout-minutes: 40
-    if: ${{ outputs.changes.kitchen-sink }}
+    if: ${{ steps.outputs.changes.kitchen-sink }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
