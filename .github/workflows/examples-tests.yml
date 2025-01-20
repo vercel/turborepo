@@ -20,11 +20,11 @@ jobs:
       - name: Check for file changes
         id: changes
         run: |
-          if git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep -q "^examples/basic/"; then
+          if git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha  }} | grep -q "^examples/basic/"; then
             echo "yes in examples/basic"
             echo "frontend=true" >> $GITHUB_OUTPUT
           fi
-          if git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep -q "^examples/kitchen-sink/"; then
+          if git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha  }} | grep -q "^examples/kitchen-sink/"; then
             echo "yes in examples/kitchen-sink"
             echo "backend=true" >> $GITHUB_OUTPUT
           fi
