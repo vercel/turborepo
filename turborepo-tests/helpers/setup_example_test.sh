@@ -32,7 +32,7 @@ fi
 
 # All examples implement these two tasks
 # and it's reasonable to assume that they will continue to do so
-turbo_command="turbo build lint"
+turbo_command="turbo build lint --continue"
 
 # Head into a temporary directory
 mkdir -p ../../examples-tests-tmp
