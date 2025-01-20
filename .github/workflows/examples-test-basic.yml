@@ -38,4 +38,4 @@ jobs:
 
       - name: Check examples
         shell: bash
-        run: turbo run test --filter="@turborepo-examples-tests/basic-*" --continue --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }} --env-mode=strict --concurrency=1
+        run: turbo run test --filter="@turborepo-examples-tests/basic-*" --continue --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }} --env-mode=strict
