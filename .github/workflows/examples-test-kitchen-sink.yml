@@ -36,6 +36,6 @@ jobs:
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
 
-      - name: Check examples
+      - name: Check kitchen-sink example
         shell: bash
         run: turbo run test --filter="@turborepo-examples-tests/kitchen-sink-*" --continue --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }} --env-mode=strict
