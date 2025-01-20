@@ -5,8 +5,8 @@ on:
   pull_request:
     paths:
       - examples/with-svelte/**
-      - examples/turborepo-tests/example-with-svelte-*/**
-      - examples/turborepo-tests/helpers/**
+      - turborepo-tests/example-with-svelte-*/**
+      - turborepo-tests/helpers/**
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}

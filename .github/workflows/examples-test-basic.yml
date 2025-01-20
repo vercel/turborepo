@@ -5,8 +5,8 @@ on:
   pull_request:
     paths:
       - examples/basic/**
-      - examples/turborepo-tests/example-basic-*/**
-      - examples/turborepo-tests/helpers/**
+      - turborepo-tests/example-basic-*/**
+      - turborepo-tests/helpers/**
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
