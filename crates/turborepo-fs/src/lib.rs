@@ -6,8 +6,8 @@ use std::{
 };
 
 use fs_err as fs;
+use ignore::WalkBuilder;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
-use walkdir::WalkDir;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -15,8 +15,8 @@ pub enum Error {
     Path(#[from] turbopath::PathError),
     #[error(transparent)]
     Io(#[from] io::Error),
-    #[error("error walking directory during recursive copy: {0}")]
-    Walk(#[from] walkdir::Error),
+    #[error("Error walking directory during recursive copy: {0}")]
+    Walk(#[from] ignore::Error),
 }
 
 pub fn recursive_copy(
@@ -28,8 +28,14 @@ pub fn recursive_copy(
     let src_metadata = src.symlink_metadata()?;
 
     if src_metadata.is_dir() {
-        let walker = WalkDir::new(src.as_path()).follow_links(false);
-        for entry in walker.into_iter() {
+        let walker = WalkBuilder::new(src.as_path())
+            .hidden(false)
+            .git_ignore(true)
+            .git_global(false)
+            .git_exclude(true)
+            .build();
+
+        for entry in walker {
             match entry {
                 Err(e) => {
                     if e.io_error().is_some() {
@@ -43,7 +49,9 @@ pub fn recursive_copy(
                 Ok(entry) => {
                     let path = entry.path();
                     let path = AbsoluteSystemPath::from_std_path(path)?;
-                    let file_type = entry.file_type();
+                    let file_type = entry
+                        .file_type()
+                        .expect("all dir entries aside from stdin should have a file type");
 
                     // Note that we also don't currently copy broken symlinks
                     if file_type.is_symlink() && path.stat().is_err() {
@@ -306,6 +314,51 @@ mod tests {
         let dst_c_path = dst_other_path.join_component("c");
 
         assert_file_matches(&c_path, dst_c_path);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_recursive_copy_gitignore() -> Result<(), Error> {
+        // Directory layout:
+        //
+        // <src>/
+        //   .gitignore
+        //   invisible.txt <- ignored
+        //   dist/ <- ignored
+        //     output.txt
+        //   child/
+        //     seen.txt
+        //     .hidden
+        let (_src_tmp, src_dir) = tmp_dir()?;
+        // Need to create this for `.gitignore` to be respected
+        src_dir.join_component(".git").create_dir_all()?;
+        src_dir
+            .join_component(".gitignore")
+            .create_with_contents("invisible.txt\ndist/\n")?;
+        src_dir
+            .join_component("invisible.txt")
+            .create_with_contents("not here")?;
+        let output = src_dir.join_components(&["dist", "output.txt"]);
+        output.ensure_dir()?;
+        output.create_with_contents("hi!")?;
+
+        let child = src_dir.join_component("child");
+        let seen = child.join_component("seen.txt");
+        seen.ensure_dir()?;
+        seen.create_with_contents("here")?;
+        let hidden = child.join_component(".hidden");
+        hidden.create_with_contents("polo")?;
+
+        let (_dst_tmp, dst_dir) = tmp_dir()?;
+        recursive_copy(&src_dir, &dst_dir)?;
+
+        assert!(dst_dir.join_component(".gitignore").exists());
+        assert!(!dst_dir.join_component("invisible.txt").exists());
+        assert!(!dst_dir.join_component("dist").exists());
+        assert!(dst_dir.join_component("child").exists());
+        assert!(dst_dir.join_components(&["child", "seen.txt"]).exists());
+        assert!(dst_dir.join_components(&["child", ".hidden"]).exists());
 
         Ok(())
     }

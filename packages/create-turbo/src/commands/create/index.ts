@@ -1,5 +1,5 @@
 import path from "node:path";
-import { bold, red, cyan, green } from "picocolors";
+import { bold, red, cyan, green, dim } from "picocolors";
 import type { Project } from "@turbo/workspaces";
 import {
   getWorkspaceDetails,
@@ -75,6 +75,8 @@ export async function create(
   opts.telemetry?.trackCommandStatus({ command: "create", status: "start" });
   opts.telemetry?.trackArgumentDirectory(Boolean(directory));
   trackOptions(opts);
+
+  let isMaintainedByCoreTeam = false;
 
   const { packageManager, skipInstall, skipTransforms } = opts;
 
@@ -158,6 +160,10 @@ export async function create(
           tryGitCommit(
             `feat(create-turbo): apply ${transformResult.name} transform`
           );
+        }
+
+        if (transformResult.metaJson?.maintainedByCoreTeam) {
+          isMaintainedByCoreTeam = true;
         }
       } catch (err) {
         handleErrors(err, opts.telemetry);
@@ -256,6 +262,15 @@ export async function create(
     );
   }
 
+  if (!isMaintainedByCoreTeam) {
+    logger.log();
+    logger.log(
+      dim(
+        "Note: This is a community-maintained example. If you experience a problem, please submit a pull request with a fix. GitHub Issues will be closed."
+      )
+    );
+  }
+
   // get the package manager details so we display the right commands to the user in log messages
   const packageManagerMeta = getPackageManagerMeta(projectPackageManager);
   if (packageManagerMeta && hasPackageJson) {
@@ -285,5 +300,6 @@ export async function create(
       });
     logger.log("- Run a command twice to hit cache");
   }
+
   opts.telemetry?.trackCommandStatus({ command: "create", status: "end" });
 }

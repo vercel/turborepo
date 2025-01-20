@@ -32,7 +32,7 @@ pub struct PackageGraphBuilder<'a, T> {
 
 #[derive(Debug, Diagnostic, thiserror::Error)]
 pub enum Error {
-    #[error("could not resolve workspaces")]
+    #[error("Could not resolve workspaces.")]
     #[diagnostic(transparent)]
     PackageManager(#[from] crate::package_manager::Error),
     #[error(
@@ -44,7 +44,7 @@ pub enum Error {
         path: String,
         existing_path: String,
     },
-    #[error("path error: {0}")]
+    #[error("Path error: {0}")]
     Path(#[from] turbopath::PathError),
     #[diagnostic(transparent)]
     #[error(transparent)]
@@ -163,7 +163,7 @@ enum ResolvedWorkspaces {}
 // Allows us to collect all transitive deps
 enum ResolvedLockfile {}
 
-impl<'a, S, T> BuildState<'a, S, T> {
+impl<S, T> BuildState<'_, S, T> {
     fn add_node(&mut self, node: PackageNode) -> NodeIndex {
         let idx = self.workspace_graph.add_node(node.clone());
         self.node_lookup.insert(node, idx);

@@ -108,7 +108,9 @@ impl Config {
         })
     }
 
-    pub fn development_tasks<'a>(&'a self) -> Box<dyn Iterator<Item = (&str, Option<&str>)> + 'a> {
+    pub fn development_tasks<'a>(
+        &'a self,
+    ) -> Box<dyn Iterator<Item = (&'a str, Option<&'a str>)> + 'a> {
         match &self.inner {
             ConfigInner::V1(config_v1) => Box::new(config_v1.development_tasks()),
             ConfigInner::V2(config_v2) => Box::new(config_v2.development_tasks()),
@@ -203,7 +205,7 @@ mod test {
     fn test_unsupported_version() {
         let input = r#"{"version": "yolo"}"#;
         let err = Config::from_str(input, "something.json").unwrap_err();
-        assert_snapshot!(err, @r###"Unsupported micro-frontends configuration version: yolo. Supported versions: ["1", "2"]"###);
+        assert_snapshot!(err, @r###"Unsupported microfrontends configuration version: yolo. Supported versions: ["1", "2"]"###);
     }
 
     fn add_v1_config(dir: &AbsoluteSystemPath) -> Result<(), std::io::Error> {

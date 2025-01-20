@@ -68,7 +68,7 @@ impl<'a, W> TerminalPane<'a, W> {
     }
 }
 
-impl<'a, W> Widget for &TerminalPane<'a, W> {
+impl<W> Widget for &TerminalPane<'_, W> {
     fn render(self, area: ratatui::prelude::Rect, buf: &mut ratatui::prelude::Buffer)
     where
         Self: Sized,

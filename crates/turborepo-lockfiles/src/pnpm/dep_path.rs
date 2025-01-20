@@ -12,9 +12,9 @@ use super::SupportedLockfileVersion;
 pub enum Error {
     #[error(transparent)]
     Nom(#[from] nom::error::Error<String>),
-    #[error("dependency path '{0}' contains no '@'")]
+    #[error("Dependency path '{0}' contains no '@'.")]
     MissingAt(String),
-    #[error("dependency path '{0}' has an empty version following '@'")]
+    #[error("Dependency path '{0}' has an empty version following '@'.")]
     MissingVersion(String),
 }
 
