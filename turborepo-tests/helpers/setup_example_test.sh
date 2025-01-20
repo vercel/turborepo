@@ -21,13 +21,24 @@ fi
 
 echo "node --version: $(node --version)"
 
+# Convert to the right package manager
+if [ "$package_manager" == "npm" ]; then
+  package_manager_command="node ../../../packages/turbo-workspaces/dist/cli.js convert . npm --ignore-unchanged-package-manager"
+elif [ "$package_manager" == "pnpm" ]; then
+  package_manager_command="node ../../../packages/turbo-workspaces/dist/cli.js convert . pnpm --ignore-unchanged-package-manager"
+elif [ "$package_manager" == "yarn" ]; then
+  package_manager_command="node ../../../packages/turbo-workspaces/dist/cli.js convert . yarn --ignore-unchanged-package-manager"
+fi
+
 # Use the right command for each package manager
 if [ "$package_manager" == "npm" ]; then
-  package_manager_command="node ../../../packages/turbo-workspaces/dist/cli.js convert . npm --ignore-unchanged-package-manager && npm install"
+  package_manager_command="npm ci"
+elif [ "$package_manager" == "pnpm" ] && [ "$example_path" == "non-monorepo" ]; then
+  package_manager_command="pnpm install --ignore-workspace"
 elif [ "$package_manager" == "pnpm" ]; then
-  package_manager_command="node ../../../packages/turbo-workspaces/dist/cli.js convert . pnpm --ignore-unchanged-package-manager && pnpm install"
+  package_manager_command="pnpm install"
 elif [ "$package_manager" == "yarn" ]; then
-  package_manager_command="node ../../../packages/turbo-workspaces/dist/cli.js convert . yarn --ignore-unchanged-package-manager && yarn"
+  package_manager_command="yarn install"
 fi
 
 # All examples implement these two tasks
