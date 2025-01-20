@@ -12,7 +12,6 @@ jobs:
   basic-example:
     name: "`basic`"
     timeout-minutes: 40
-    if: ${{ contains(github.event.pull_request.files.*.path, 'examples/basic/**') }}
     runs-on: ubuntu-latest
     steps:
       - name: Check for file changes
