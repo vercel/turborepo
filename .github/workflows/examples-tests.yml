@@ -24,11 +24,11 @@ jobs:
         run: |
           if git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha  }} | grep -q "^examples/basic/"; then
             echo "yes in examples/basic"
-            echo "frontend=true" >> $GITHUB_OUTPUT
+            echo "basic=true" >> $GITHUB_OUTPUT
           fi
           if git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha  }} | grep -q "^examples/kitchen-sink/"; then
             echo "yes in examples/kitchen-sink"
-            echo "backend=true" >> $GITHUB_OUTPUT
+            echo "kitchen-sink=true" >> $GITHUB_OUTPUT
           fi
 
       # Disable corepack. actions/setup-node invokes other package managers and
@@ -47,14 +47,14 @@ jobs:
         uses: ./.github/actions/install-global-turbo
 
       - name: Check examples
-        if: ${{ contains(github.event.pull_request.files.*.path, 'examples/basic/') }}
+        if: ${{ outputs.changes.basic }}
         shell: bash
         run: turbo run test --filter="@turborepo-examples-tests/basic-*" --continue --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }} --env-mode=strict --concurrency=1
 
   kitchen-sink:
     name: "`kitchen-sink` example tests"
     timeout-minutes: 40
-    if: ${{ contains(github.event.pull_request.files.*.path, 'examples/kitchen-sink/') }}
+    if: ${{ outputs.changes.kitchen-sink }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
