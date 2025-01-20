@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
 
-echo "test"
-
 THIS_DIR=$(dirname "${BASH_SOURCE[0]}")
 MONOREPO_ROOT_DIR="${THIS_DIR}/../.."
 
