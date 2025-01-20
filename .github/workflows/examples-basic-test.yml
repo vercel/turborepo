@@ -41,7 +41,7 @@ jobs:
   kitchen-sink:
     name: "`kitchen-sink` example tests"
     timeout-minutes: 40
-    if: ${{ contains(github.event.pull_request.files.*.path, 'examples/basic/') }}
+    if: ${{ contains(github.event.pull_request.files.*.path, 'examples/kitchen-sink/') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
