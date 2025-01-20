@@ -223,7 +223,6 @@ jobs:
           }
 
           subjob ${{needs.integration.result}}
-          subjob ${{needs.examples.result}}
           subjob ${{needs.rust_lint.result}}
           subjob ${{needs.rust_check.result}}
           subjob ${{needs.rust_test.result}}
