@@ -22,7 +22,7 @@ jobs:
       - name: Check for file changes
         id: changes
         run: |
-          if git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha  }} | grep -q -e "^examples/basic/" -e "^turborepo-tests/example-basic-*" -e "^turborepo-tests/helpers/ ; then
+          if git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha  }} | grep -q -e "^examples/basic/" -e "^turborepo-tests/example-basic-*" -e "^turborepo-tests/helpers/" ; then
             echo "yes in examples/basic"
             echo "basic=true" >> $GITHUB_OUTPUT
           fi
