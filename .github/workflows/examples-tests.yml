@@ -2,6 +2,10 @@ name: Examples tests
 on:
   push:
     branches: [main]
+    paths:
+      - examples/basic/**
+      - examples/turborepo-tests/example-basic-*/**
+      - examples/turborepo-tests/helpers/**
   pull_request:
 
 concurrency:
@@ -16,17 +20,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: $(( ${{ github.event_name == 'pull_request' && github.event.pull_request.commits || 0 }} + 1 ))
-
-      - name: Check for file changes
-        id: changes
-        run: |
-          echo  ${{ github.event.pull_request.commits }}
-          if git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha  }} | grep -q -e "^examples/basic/" -e "^turborepo-tests/example-basic-*" -e "^turborepo-tests/helpers/" ; then
-            echo "yes in examples/basic"
-            echo "basic=true" >> $GITHUB_OUTPUT
-          fi
 
       # Disable corepack. actions/setup-node invokes other package managers and
       # that causes corepack to throw an error, so we disable it first.
@@ -44,35 +37,5 @@ jobs:
         uses: ./.github/actions/install-global-turbo
 
       - name: Check examples
-        if: ${{ steps.changes.outputs.changes.basic }}
         shell: bash
         run: turbo run test --filter="@turborepo-examples-tests/basic-*" --continue --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }} --env-mode=strict --concurrency=1
-
-  # kitchen-sink:
-  #   name: "`kitchen-sink` example tests"
-  #   timeout-minutes: 40
-  #   if: ${{ steps.outputs.changes.kitchen-sink }}
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: Checkout
-  #       uses: actions/checkout@v4
-  #
-  #     # Disable corepack. actions/setup-node invokes other package managers and
-  #     # that causes corepack to throw an error, so we disable it first.
-  #     - name: Disable corepack
-  #       shell: bash
-  #       run: corepack disable
-  #
-  #     - name: Setup Turborepo Environment
-  #       uses: ./.github/actions/setup-turborepo-environment
-  #       with:
-  #         github-token: "${{ secrets.GITHUB_TOKEN }}"
-  #         node-version: "22"
-  #
-  #     - name: Install Global Turbo
-  #       uses: ./.github/actions/install-global-turbo
-  #
-  #     - name: Check examples
-  #       if: ${{ contains(github.event.pull_request.files.*.path, 'examples/kitchen-sink/') }}
-  #       shell: bash
-  #       run: turbo run test --filter="@turborepo-examples-tests/kitchen-sink-*" --continue --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }} --env-mode=strict --concurrency=1
