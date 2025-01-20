@@ -2,11 +2,11 @@ name: Example tests
 on:
   push:
     branches: [main]
+  pull_request:
     paths:
       - examples/kitchen-sink/**
       - examples/turborepo-tests/example-kitchen-sink-*/**
       - examples/turborepo-tests/helpers/**
-  pull_request:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
