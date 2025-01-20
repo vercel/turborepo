@@ -2,19 +2,19 @@ name: Example tests
 on:
   push:
     branches: [main]
-    paths:
-      - examples/kitchen-sink/**
-      - examples/turborepo-tests/example-kitchen-sink-*/**
-      - examples/turborepo-tests/helpers/**
   pull_request:
+    paths:
+      - examples/non-monorepo/**
+      - examples/turborepo-tests/example-non-monorepo-*/**
+      - examples/turborepo-tests/helpers/**
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  kitchen-sink:
-    name: "kitchen-sink"
+  non-monorepo-example:
+    name: "non-monorepo"
     timeout-minutes: 40
     runs-on: ubuntu-latest
     steps:
@@ -36,6 +36,6 @@ jobs:
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
 
-      - name: Check kitchen-sink example
+      - name: Check non-monorepo example
         shell: bash
-        run: turbo run test --filter="@turborepo-examples-tests/kitchen-sink-*" --continue --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }} --env-mode=strict
+        run: turbo run test --filter="@turborepo-examples-tests/non-monorepo-*" --continue --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }} --env-mode=strict
