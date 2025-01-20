@@ -14,6 +14,9 @@ jobs:
     timeout-minutes: 40
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Check for file changes
         id: changes
         run: |
@@ -25,9 +28,6 @@ jobs:
             echo "yes in examples/kitchen-sink"
             echo "backend=true" >> $GITHUB_OUTPUT
           fi
-
-      - name: Checkout
-        uses: actions/checkout@v4
 
       # Disable corepack. actions/setup-node invokes other package managers and
       # that causes corepack to throw an error, so we disable it first.
