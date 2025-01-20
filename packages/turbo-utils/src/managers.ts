@@ -24,7 +24,9 @@ export async function getAvailablePackageManagers(): Promise<
   Record<PackageManager, string | undefined>
 > {
   const [yarn, npm, pnpm, bun] = await Promise.all([
-    exec("yarnpkg", ["--version"]),
+    // Yarn berry doesn't have a global bin so this checks from the repo root
+    // If the repo uses berry, it will return it's specified version
+    exec("yarnpkg", ["--version"], { cwd: "." }),
     exec("npm", ["--version"]),
     exec("pnpm", ["--version"]),
     exec("bun", ["--version"]),
@@ -42,7 +44,15 @@ export async function getPackageManagersBinPaths(): Promise<
   Record<PackageManager, string | undefined>
 > {
   const [yarn, npm, pnpm, bun] = await Promise.all([
-    exec("yarnpkg", ["global", "bin"]),
+    // yarn berry doesn't have a global bin so we check from within the repo
+    exec("yarnpkg", ["--version"], { cwd: "." }).then((version) => {
+      if (version && !version.startsWith("1.")) {
+        return `.yarn/releases/yarn-${version}.cjs`;
+        // yarn 1
+      } else if (version) {
+        return exec("yarn", ["global", "bin"]);
+      }
+    }),
     exec("npm", ["config", "get", "prefix"]),
     exec("pnpm", ["bin", "--global"]),
     exec("bun", ["pm", "--g", "bin"]),
