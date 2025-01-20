@@ -201,7 +201,6 @@ jobs:
     if: always()
     needs:
       - integration
-      - examples
       - rust_lint
       - rust_check
       - rust_test
