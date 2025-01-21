@@ -14,28 +14,15 @@ concurrency:
 
 jobs:
   basic-example:
-    name: "basic"
+    name: basic
     timeout-minutes: 40
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      # Disable corepack. actions/setup-node invokes other package managers and
-      # that causes corepack to throw an error, so we disable it first.
-      - name: Disable corepack
-        shell: bash
-        run: corepack disable
-
-      - name: Setup Turborepo Environment
-        uses: ./.github/actions/setup-turborepo-environment
+      - name: "Run `basic` example tests"
+        uses: ./.github/actions/examples-tests
         with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
           node-version: "22"
-
-      - name: Install Global Turbo
-        uses: ./.github/actions/install-global-turbo
-
-      - name: Check basic example
-        shell: bash
-        run: turbo run test --filter="@turborepo-examples-tests/basic-*" --continue --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }} --env-mode=strict --concurrency=1
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          turbo-token: "${{ secrets.TURBO_TOKEN }}"
+          turbo-team: "${{ vars.TURBO_TEAM }}"
+          test-filter: "@turborepo-examples-tests/kitchen-sink-*"
