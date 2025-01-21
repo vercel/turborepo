@@ -37,7 +37,7 @@ fi
 
 # All examples implement these two tasks
 # and it's reasonable to assume that they will continue to do so
-turbo_command="turbo build lint --continue"
+turbo_command="turbo build lint --continue --output-logs=errors-only"
 
 # Head into a temporary directory
 mkdir -p ../../examples-tests-tmp
@@ -81,7 +81,7 @@ $turbo_command >>./tmp/run-2.txt 2>&1
 
 # Make sure the user hits FULL TURBO on the second go
 if ! grep -q ">>> FULL TURBO" ./tmp/run-2.txt; then
-  echo "[ERROR] No 'FULL TURBO' was found.  This indicateds that at least one 'cache miss' occurred on the second run when all tasks were expected to be 'cache hit'."
+  echo "[ERROR] No 'FULL TURBO' was found.  This indicates that at least one 'cache miss' occurred on the second run when all tasks were expected to be 'cache hit'."
   echo "Dumping logs:"
   echo ""
   cat ./tmp/run-2.txt >&2
