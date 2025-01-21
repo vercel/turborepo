@@ -18,6 +18,9 @@ jobs:
     timeout-minutes: 40
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: "Run `non-monorepo` example tests"
         uses: ./.github/actions/examples-tests
         with:
