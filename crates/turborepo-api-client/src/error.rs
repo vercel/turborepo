@@ -39,8 +39,8 @@ pub enum Error {
         text: String,
     },
     #[error(
-        "[HTTP {status}] request to {url} returned \"{message}\" \ntry logging in again, or force \
-         a new token (turbo login <--sso-team your_team> -f)."
+        "[HTTP {status}] request to {url} returned \"{message}\" \nTry logging in again, or force \
+         a refresh of your token (turbo login --sso-team=your-team --force)."
     )]
     InvalidToken {
         status: u16,
