@@ -21,18 +21,23 @@ fi
 
 echo "node --version: $(node --version)"
 
-# Use the right command for each package manager
+# Convert to the right package manager
 if [ "$package_manager" == "npm" ]; then
-  package_manager_command="node ../../../packages/turbo-workspaces/dist/cli.js convert . npm --ignore-unchanged-package-manager && npm install"
+  package_manager_command="node ../../../packages/turbo-workspaces/dist/cli.js convert . npm --ignore-unchanged-package-manager"
 elif [ "$package_manager" == "pnpm" ]; then
-  package_manager_command="node ../../../packages/turbo-workspaces/dist/cli.js convert . pnpm --ignore-unchanged-package-manager && pnpm install"
+  package_manager_command="node ../../../packages/turbo-workspaces/dist/cli.js convert . pnpm --ignore-unchanged-package-manager"
 elif [ "$package_manager" == "yarn" ]; then
-  package_manager_command="node ../../../packages/turbo-workspaces/dist/cli.js convert . yarn --ignore-unchanged-package-manager && yarn"
+  package_manager_command="node ../../../packages/turbo-workspaces/dist/cli.js convert . yarn --ignore-unchanged-package-manager"
+fi
+
+# Special case for non-monorepo since it isn't a pnpm workspace itself
+if [ "$package_manager" == "pnpm" ] && [ "$example_path" == "non-monorepo" ]; then
+  package_manager_command="pnpm install --ignore-workspace"
 fi
 
 # All examples implement these two tasks
 # and it's reasonable to assume that they will continue to do so
-turbo_command="turbo build lint"
+turbo_command="turbo build lint --continue --output-logs=errors-only"
 
 # Head into a temporary directory
 mkdir -p ../../examples-tests-tmp
@@ -61,6 +66,8 @@ $package_manager_command
 # Simulating the user's first run and dumping logs to a file
 $turbo_command >>./tmp/run-1.txt 2>&1
 
+cat ./tmp/run-1.txt
+
 # We don't want to hit cache on first run because we're acting like a user.
 # A user would never hit cache on first run. Why should we?
 if grep -q ">>> FULL TURBO" ./tmp/run-1.txt; then
@@ -74,9 +81,11 @@ fi
 # Simulating the user's second run and dumping logs to a file
 $turbo_command >>./tmp/run-2.txt 2>&1
 
+cat ./tmp/run-2.txt
+
 # Make sure the user hits FULL TURBO on the second go
 if ! grep -q ">>> FULL TURBO" ./tmp/run-2.txt; then
-  echo "[ERROR] No 'FULL TURBO' was found.  This indicateds that at least one 'cache miss' occurred on the second run when all tasks were expected to be 'cache hit'."
+  echo "[ERROR] No 'FULL TURBO' was found.  This indicates that at least one 'cache miss' occurred on the second run when all tasks were expected to be 'cache hit'."
   echo "Dumping logs:"
   echo ""
   cat ./tmp/run-2.txt >&2

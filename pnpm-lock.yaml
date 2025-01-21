@@ -900,7 +900,7 @@ importers:
         specifier: workspace:*
         version: link:../helpers
 
-  turborepo-tests/example-design-system:
+  turborepo-tests/example-kitchen-sink-npm:
     dependencies:
       turborepo-examples:
         specifier: workspace:*
@@ -909,7 +909,7 @@ importers:
         specifier: workspace:*
         version: link:../helpers
 
-  turborepo-tests/example-kitchen-sink:
+  turborepo-tests/example-kitchen-sink-pnpm:
     dependencies:
       turborepo-examples:
         specifier: workspace:*
@@ -918,7 +918,7 @@ importers:
         specifier: workspace:*
         version: link:../helpers
 
-  turborepo-tests/example-non-monorepo:
+  turborepo-tests/example-kitchen-sink-yarn:
     dependencies:
       turborepo-examples:
         specifier: workspace:*
@@ -927,7 +927,7 @@ importers:
         specifier: workspace:*
         version: link:../helpers
 
-  turborepo-tests/example-with-svelte:
+  turborepo-tests/example-non-monorepo-npm:
     dependencies:
       turborepo-examples:
         specifier: workspace:*
@@ -936,7 +936,70 @@ importers:
         specifier: workspace:*
         version: link:../helpers
 
-  turborepo-tests/example-with-tailwind:
+  turborepo-tests/example-non-monorepo-pnpm:
+    dependencies:
+      turborepo-examples:
+        specifier: workspace:*
+        version: link:../../examples
+      turborepo-tests-helpers:
+        specifier: workspace:*
+        version: link:../helpers
+
+  turborepo-tests/example-non-monorepo-yarn:
+    dependencies:
+      turborepo-examples:
+        specifier: workspace:*
+        version: link:../../examples
+      turborepo-tests-helpers:
+        specifier: workspace:*
+        version: link:../helpers
+
+  turborepo-tests/example-with-svelte-npm:
+    dependencies:
+      turborepo-examples:
+        specifier: workspace:*
+        version: link:../../examples
+      turborepo-tests-helpers:
+        specifier: workspace:*
+        version: link:../helpers
+
+  turborepo-tests/example-with-svelte-pnpm:
+    dependencies:
+      turborepo-examples:
+        specifier: workspace:*
+        version: link:../../examples
+      turborepo-tests-helpers:
+        specifier: workspace:*
+        version: link:../helpers
+
+  turborepo-tests/example-with-svelte-yarn:
+    dependencies:
+      turborepo-examples:
+        specifier: workspace:*
+        version: link:../../examples
+      turborepo-tests-helpers:
+        specifier: workspace:*
+        version: link:../helpers
+
+  turborepo-tests/example-with-tailwind-npm:
+    dependencies:
+      turborepo-examples:
+        specifier: workspace:*
+        version: link:../../examples
+      turborepo-tests-helpers:
+        specifier: workspace:*
+        version: link:../helpers
+
+  turborepo-tests/example-with-tailwind-pnpm:
+    dependencies:
+      turborepo-examples:
+        specifier: workspace:*
+        version: link:../../examples
+      turborepo-tests-helpers:
+        specifier: workspace:*
+        version: link:../helpers
+
+  turborepo-tests/example-with-tailwind-yarn:
     dependencies:
       turborepo-examples:
         specifier: workspace:*

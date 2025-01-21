@@ -1,0 +1,31 @@
+name: Examples tests - with-tailwind
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - examples/with-tailwind/**
+      - turborepo-tests/example-with-tailwind-*/**
+      - turborepo-tests/helpers/**
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  with-tailwind-example:
+    name: with-tailwind
+    timeout-minutes: 40
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: "Run `with-tailwind` example tests"
+        uses: ./.github/actions/examples-tests
+        with:
+          node-version: "22"
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          turbo-token: "${{ secrets.TURBO_TOKEN }}"
+          turbo-team: "${{ vars.TURBO_TEAM }}"
+          test-filter: "@turborepo-examples-tests/with-tailwind-*"
