@@ -81,7 +81,7 @@ fi
 # Simulating the user's second run and dumping logs to a file
 $turbo_command >>./tmp/run-2.txt 2>&1
 
-cat ./tmp/run-1.txt
+cat ./tmp/run-2.txt
 
 # Make sure the user hits FULL TURBO on the second go
 if ! grep -q ">>> FULL TURBO" ./tmp/run-2.txt; then
