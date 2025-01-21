@@ -27,6 +27,24 @@ updates:
           - "*"
 
   - package-ecosystem: "npm"
+    directory: "/examples/design-system"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "area: examples"
+    open-pull-requests-limit: 1
+    versioning-strategy: "increase"
+    allow:
+      - dependency-type: "direct"
+    assignees:
+      - "anthonyshew"
+    target-branch: dependabot-updates
+    groups:
+      design-system-example-dependencies:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
     directory: "/examples/kitchen-sink"
     schedule:
       interval: "weekly"
@@ -59,6 +77,150 @@ updates:
     target-branch: dependabot-updates
     groups:
       non-monorepo-example-dependencies:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/examples/with-berry"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "area: examples"
+    open-pull-requests-limit: 1
+    versioning-strategy: "increase"
+    allow:
+      - dependency-type: "direct"
+    assignees:
+      - "anthonyshew"
+    target-branch: dependabot-updates
+    groups:
+      with-berry-example-dependencies:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/examples/with-changesets"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "area: examples"
+    open-pull-requests-limit: 1
+    versioning-strategy: "increase"
+    allow:
+      - dependency-type: "direct"
+    assignees:
+      - "anthonyshew"
+    target-branch: dependabot-updates
+    groups:
+      with-changesets-example-dependencies:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/examples/with-docker"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "area: examples"
+    open-pull-requests-limit: 1
+    versioning-strategy: "increase"
+    allow:
+      - dependency-type: "direct"
+    assignees:
+      - "anthonyshew"
+    target-branch: dependabot-updates
+    groups:
+      with-docker-example-dependencies:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/examples/with-gatsby"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "area: examples"
+    open-pull-requests-limit: 1
+    versioning-strategy: "increase"
+    allow:
+      - dependency-type: "direct"
+    assignees:
+      - "anthonyshew"
+    target-branch: dependabot-updates
+    groups:
+      with-gatsby-example-dependencies:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/examples/with-npm"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "area: examples"
+    open-pull-requests-limit: 1
+    versioning-strategy: "increase"
+    allow:
+      - dependency-type: "direct"
+    assignees:
+      - "anthonyshew"
+    target-branch: dependabot-updates
+    groups:
+      with-npm-example-dependencies:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/examples/with-prisma"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "area: examples"
+    open-pull-requests-limit: 1
+    versioning-strategy: "increase"
+    allow:
+      - dependency-type: "direct"
+    assignees:
+      - "anthonyshew"
+    target-branch: dependabot-updates
+    groups:
+      with-prisma-example-dependencies:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/examples/with-react-native-web"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "area: examples"
+    open-pull-requests-limit: 1
+    versioning-strategy: "increase"
+    allow:
+      - dependency-type: "direct"
+    assignees:
+      - "anthonyshew"
+    target-branch: dependabot-updates
+    groups:
+      react-native-example-dependencies:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/examples/with-rollup"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "area: examples"
+    open-pull-requests-limit: 1
+    versioning-strategy: "increase"
+    allow:
+      - dependency-type: "direct"
+    assignees:
+      - "anthonyshew"
+    target-branch: dependabot-updates
+    groups:
+      with-rollup-example-dependencies:
         patterns:
           - "*"
 
@@ -113,5 +275,59 @@ updates:
     target-branch: dependabot-updates
     groups:
       with-tailwind-example-dependencies:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/examples/with-vite"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "area: examples"
+    open-pull-requests-limit: 1
+    versioning-strategy: "increase"
+    allow:
+      - dependency-type: "direct"
+    assignees:
+      - "anthonyshew"
+    target-branch: dependabot-updates
+    groups:
+      with-vite-example-dependencies:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/examples/with-vue-nuxt"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "area: examples"
+    open-pull-requests-limit: 1
+    versioning-strategy: "increase"
+    allow:
+      - dependency-type: "direct"
+    assignees:
+      - "anthonyshew"
+    target-branch: dependabot-updates
+    groups:
+      with-vue-nuxt-example-dependencies:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/examples/with-yarn"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "area: examples"
+    open-pull-requests-limit: 1
+    versioning-strategy: "increase"
+    allow:
+      - dependency-type: "direct"
+    assignees:
+      - "anthonyshew"
+    target-branch: dependabot-updates
+    groups:
+      with-yarn-example-dependencies:
         patterns:
           - "*"
