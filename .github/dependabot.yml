@@ -11,7 +11,7 @@ updates:
   - package-ecosystem: "npm"
     directory: "/examples/basic"
     schedule:
-      interval: "daily"
+      interval: "weekly"
     labels:
       - "area: examples"
     open-pull-requests-limit: 1
@@ -20,15 +20,16 @@ updates:
       - dependency-type: "direct"
     assignees:
       - "anthonyshew"
+    target-branch: dependabot-updates
     groups:
-      example-dependencies:
+      basic-example-dependencies:
         patterns:
           - "*"
 
   - package-ecosystem: "npm"
     directory: "/examples/design-system"
     schedule:
-      interval: "daily"
+      interval: "weekly"
     labels:
       - "area: examples"
     open-pull-requests-limit: 1
@@ -37,15 +38,16 @@ updates:
       - dependency-type: "direct"
     assignees:
       - "anthonyshew"
+    target-branch: dependabot-updates
     groups:
-      example-dependencies:
+      design-system-example-dependencies:
         patterns:
           - "*"
 
   - package-ecosystem: "npm"
     directory: "/examples/kitchen-sink"
     schedule:
-      interval: "daily"
+      interval: "weekly"
     labels:
       - "area: examples"
     open-pull-requests-limit: 1
@@ -54,15 +56,16 @@ updates:
       - dependency-type: "direct"
     assignees:
       - "anthonyshew"
+    target-branch: dependabot-updates
     groups:
-      example-dependencies:
+      kitchen-sink-example-dependencies:
         patterns:
           - "*"
 
   - package-ecosystem: "npm"
     directory: "/examples/non-monorepo"
     schedule:
-      interval: "daily"
+      interval: "weekly"
     labels:
       - "area: examples"
     open-pull-requests-limit: 1
@@ -71,15 +74,16 @@ updates:
       - dependency-type: "direct"
     assignees:
       - "anthonyshew"
+    target-branch: dependabot-updates
     groups:
-      example-dependencies:
+      non-monorepo-example-dependencies:
         patterns:
           - "*"
 
   - package-ecosystem: "npm"
     directory: "/examples/with-berry"
     schedule:
-      interval: "daily"
+      interval: "weekly"
     labels:
       - "area: examples"
     open-pull-requests-limit: 1
@@ -88,15 +92,16 @@ updates:
       - dependency-type: "direct"
     assignees:
       - "anthonyshew"
+    target-branch: dependabot-updates
     groups:
-      example-dependencies:
+      with-berry-example-dependencies:
         patterns:
           - "*"
 
   - package-ecosystem: "npm"
     directory: "/examples/with-changesets"
     schedule:
-      interval: "daily"
+      interval: "weekly"
     labels:
       - "area: examples"
     open-pull-requests-limit: 1
@@ -105,15 +110,16 @@ updates:
       - dependency-type: "direct"
     assignees:
       - "anthonyshew"
+    target-branch: dependabot-updates
     groups:
-      example-dependencies:
+      with-changesets-example-dependencies:
         patterns:
           - "*"
 
   - package-ecosystem: "npm"
     directory: "/examples/with-docker"
     schedule:
-      interval: "daily"
+      interval: "weekly"
     labels:
       - "area: examples"
     open-pull-requests-limit: 1
@@ -122,15 +128,16 @@ updates:
       - dependency-type: "direct"
     assignees:
       - "anthonyshew"
+    target-branch: dependabot-updates
     groups:
-      example-dependencies:
+      with-docker-example-dependencies:
         patterns:
           - "*"
 
   - package-ecosystem: "npm"
     directory: "/examples/with-gatsby"
     schedule:
-      interval: "daily"
+      interval: "weekly"
     labels:
       - "area: examples"
     open-pull-requests-limit: 1
@@ -139,15 +146,16 @@ updates:
       - dependency-type: "direct"
     assignees:
       - "anthonyshew"
+    target-branch: dependabot-updates
     groups:
-      example-dependencies:
+      with-gatsby-example-dependencies:
         patterns:
           - "*"
 
   - package-ecosystem: "npm"
     directory: "/examples/with-npm"
     schedule:
-      interval: "daily"
+      interval: "weekly"
     labels:
       - "area: examples"
     open-pull-requests-limit: 1
@@ -156,15 +164,16 @@ updates:
       - dependency-type: "direct"
     assignees:
       - "anthonyshew"
+    target-branch: dependabot-updates
     groups:
-      example-dependencies:
+      with-npm-example-dependencies:
         patterns:
           - "*"
 
   - package-ecosystem: "npm"
     directory: "/examples/with-prisma"
     schedule:
-      interval: "daily"
+      interval: "weekly"
     labels:
       - "area: examples"
     open-pull-requests-limit: 1
@@ -173,15 +182,16 @@ updates:
       - dependency-type: "direct"
     assignees:
       - "anthonyshew"
+    target-branch: dependabot-updates
     groups:
-      example-dependencies:
+      with-prisma-example-dependencies:
         patterns:
           - "*"
 
   - package-ecosystem: "npm"
     directory: "/examples/with-react-native-web"
     schedule:
-      interval: "daily"
+      interval: "weekly"
     labels:
       - "area: examples"
     open-pull-requests-limit: 1
@@ -190,15 +200,16 @@ updates:
       - dependency-type: "direct"
     assignees:
       - "anthonyshew"
+    target-branch: dependabot-updates
     groups:
-      example-dependencies:
+      react-native-example-dependencies:
         patterns:
           - "*"
 
   - package-ecosystem: "npm"
     directory: "/examples/with-rollup"
     schedule:
-      interval: "daily"
+      interval: "weekly"
     labels:
       - "area: examples"
     open-pull-requests-limit: 1
@@ -207,15 +218,16 @@ updates:
       - dependency-type: "direct"
     assignees:
       - "anthonyshew"
+    target-branch: dependabot-updates
     groups:
-      example-dependencies:
+      with-rollup-example-dependencies:
         patterns:
           - "*"
 
   - package-ecosystem: "npm"
     directory: "/examples/with-shell-commands"
     schedule:
-      interval: "daily"
+      interval: "weekly"
     labels:
       - "area: examples"
     open-pull-requests-limit: 1
@@ -224,15 +236,16 @@ updates:
       - dependency-type: "direct"
     assignees:
       - "anthonyshew"
+    target-branch: dependabot-updates
     groups:
-      example-dependencies:
+      with-shell-commands-example-dependencies:
         patterns:
           - "*"
 
   - package-ecosystem: "npm"
     directory: "/examples/with-svelte"
     schedule:
-      interval: "daily"
+      interval: "weekly"
     labels:
       - "area: examples"
     open-pull-requests-limit: 1
@@ -241,15 +254,16 @@ updates:
       - dependency-type: "direct"
     assignees:
       - "anthonyshew"
+    target-branch: dependabot-updates
     groups:
-      example-dependencies:
+      with-svelte-example-dependencies:
         patterns:
           - "*"
 
   - package-ecosystem: "npm"
     directory: "/examples/with-tailwind"
     schedule:
-      interval: "daily"
+      interval: "weekly"
     labels:
       - "area: examples"
     open-pull-requests-limit: 1
@@ -258,15 +272,16 @@ updates:
       - dependency-type: "direct"
     assignees:
       - "anthonyshew"
+    target-branch: dependabot-updates
     groups:
-      example-dependencies:
+      with-tailwind-example-dependencies:
         patterns:
           - "*"
 
   - package-ecosystem: "npm"
     directory: "/examples/with-vite"
     schedule:
-      interval: "daily"
+      interval: "weekly"
     labels:
       - "area: examples"
     open-pull-requests-limit: 1
@@ -275,15 +290,16 @@ updates:
       - dependency-type: "direct"
     assignees:
       - "anthonyshew"
+    target-branch: dependabot-updates
     groups:
-      example-dependencies:
+      with-vite-example-dependencies:
         patterns:
           - "*"
 
   - package-ecosystem: "npm"
     directory: "/examples/with-vue-nuxt"
     schedule:
-      interval: "daily"
+      interval: "weekly"
     labels:
       - "area: examples"
     open-pull-requests-limit: 1
@@ -292,15 +308,16 @@ updates:
       - dependency-type: "direct"
     assignees:
       - "anthonyshew"
+    target-branch: dependabot-updates
     groups:
-      example-dependencies:
+      with-vue-nuxt-example-dependencies:
         patterns:
           - "*"
 
   - package-ecosystem: "npm"
     directory: "/examples/with-yarn"
     schedule:
-      interval: "daily"
+      interval: "weekly"
     labels:
       - "area: examples"
     open-pull-requests-limit: 1
@@ -309,7 +326,8 @@ updates:
       - dependency-type: "direct"
     assignees:
       - "anthonyshew"
+    target-branch: dependabot-updates
     groups:
-      example-dependencies:
+      with-yarn-example-dependencies:
         patterns:
           - "*"
