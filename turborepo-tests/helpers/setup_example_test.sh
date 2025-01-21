@@ -30,15 +30,9 @@ elif [ "$package_manager" == "yarn" ]; then
   package_manager_command="node ../../../packages/turbo-workspaces/dist/cli.js convert . yarn --ignore-unchanged-package-manager"
 fi
 
-# Use the right command for each package manager
-if [ "$package_manager" == "npm" ]; then
-  package_manager_command="npm ci"
-elif [ "$package_manager" == "pnpm" ] && [ "$example_path" == "non-monorepo" ]; then
+# Special case for non-monorepo since it isn't a pnpm workspace itself
+if [ "$package_manager" == "pnpm" ] && [ "$example_path" == "non-monorepo" ]; then
   package_manager_command="pnpm install --ignore-workspace"
-elif [ "$package_manager" == "pnpm" ]; then
-  package_manager_command="pnpm install"
-elif [ "$package_manager" == "yarn" ]; then
-  package_manager_command="yarn install"
 fi
 
 # All examples implement these two tasks
