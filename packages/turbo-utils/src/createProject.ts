@@ -1,7 +1,7 @@
 import path from "node:path";
 import retry from "async-retry";
 import { dim, red } from "picocolors";
-import { mkdir, readJsonSync, existsSync } from "fs-extra";
+import fs from "fs-extra";
 import * as logger from "./logger";
 import {
   downloadAndExtractExample,
@@ -104,7 +104,7 @@ export async function createProject({
           `1. Your spelling of example ${red(
             `"${example}"`
           )} might be incorrect.\n`,
-          `2. You might not be connected to the internet or you are behind a proxy.`
+          "2. You might not be connected to the internet or you are behind a proxy."
         );
         process.exit(1);
       }
@@ -125,7 +125,7 @@ export async function createProject({
 
   const appName = path.basename(root);
   try {
-    await mkdir(root, { recursive: true });
+    await fs.mkdir(root, { recursive: true });
   } catch (err) {
     logger.error("Unable to create project directory");
     logger.error(err);
@@ -172,13 +172,13 @@ export async function createProject({
   }
 
   const rootPackageJsonPath = path.join(root, "package.json");
-  const hasPackageJson = existsSync(rootPackageJsonPath);
+  const hasPackageJson = fs.existsSync(rootPackageJsonPath);
   const availableScripts = [];
 
   if (hasPackageJson) {
     let packageJsonContent;
     try {
-      packageJsonContent = readJsonSync(rootPackageJsonPath) as PackageJson;
+      packageJsonContent = fs.readJsonSync(rootPackageJsonPath) as PackageJson;
     } catch {
       // ignore
     }

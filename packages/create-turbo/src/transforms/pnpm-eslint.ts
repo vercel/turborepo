@@ -1,4 +1,4 @@
-import { writeJson, mkdir } from "fs-extra";
+import fs from "fs-extra";
 import type { TransformInput, TransformResult } from "./types";
 
 const meta = {
@@ -15,9 +15,9 @@ export async function transform(args: TransformInput): TransformResult {
 
   if (packageManager?.name === "pnpm") {
     // write the settings directory
-    await mkdir(`${project.paths.root}/.vscode`, { recursive: true });
+    await fs.mkdir(`${project.paths.root}/.vscode`, { recursive: true });
     // write .vscode settings =- required for eslint plugin for work with pnpm workspaces
-    await writeJson(
+    await fs.writeJson(
       `${project.paths.root}/.vscode/settings.json`,
       VSCODE_ESLINT_CONFIG,
       {

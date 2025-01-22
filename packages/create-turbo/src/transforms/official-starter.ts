@@ -1,5 +1,5 @@
 import path from "node:path";
-import { readJsonSync, writeJsonSync, rmSync, existsSync } from "fs-extra";
+import fs from "fs-extra";
 import type { PackageJson } from "@turbo/utils";
 import { isDefaultExample } from "../utils/isDefaultExample";
 import type { TransformInput, TransformResult, MetaJson } from "./types";
@@ -30,14 +30,14 @@ export async function transform(args: TransformInput): TransformResult {
   // paths
   const rootPackageJsonPath = path.join(prompts.root, "package.json");
   const rootMetaJsonPath = path.join(prompts.root, "meta.json");
-  const hasPackageJson = existsSync(rootPackageJsonPath);
+  const hasPackageJson = fs.existsSync(rootPackageJsonPath);
 
   let metaJson: MetaJson | undefined;
 
   // 1. remove meta file (used for generating the examples page on turbo.build)
   try {
-    metaJson = readJsonSync(rootMetaJsonPath) as MetaJson;
-    rmSync(rootMetaJsonPath, { force: true });
+    metaJson = fs.readJsonSync(rootMetaJsonPath) as MetaJson;
+    fs.rmSync(rootMetaJsonPath, { force: true });
   } catch (_err) {
     // do nothing
   }
@@ -45,7 +45,7 @@ export async function transform(args: TransformInput): TransformResult {
   if (hasPackageJson) {
     let packageJsonContent;
     try {
-      packageJsonContent = readJsonSync(rootPackageJsonPath) as
+      packageJsonContent = fs.readJsonSync(rootPackageJsonPath) as
         | PackageJson
         | undefined;
     } catch {
@@ -75,7 +75,7 @@ export async function transform(args: TransformInput): TransformResult {
       }
 
       try {
-        writeJsonSync(rootPackageJsonPath, packageJsonContent, {
+        fs.writeJsonSync(rootPackageJsonPath, packageJsonContent, {
           spaces: 2,
         });
       } catch (err) {
