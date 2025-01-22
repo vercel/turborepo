@@ -14,12 +14,12 @@
   "license": "MIT",
   "scripts": {
     "build": "tailwindcss -i ./src/styles.css -o ./dist/index.css",
-    "lint": "eslint src/",
+    "check-types": "tsc --noEmit",
     "dev": "tailwindcss -i ./src/styles.css -o ./dist/index.css --watch",
-    "type-check": "tsc --noEmit"
+    "lint": "eslint src/"
   },
   "peerDependencies": {
-    "react": "^18.2.0"
+    "react": "^19"
   },
   "devDependencies": {
     "@repo/eslint-config": "workspace:*",
