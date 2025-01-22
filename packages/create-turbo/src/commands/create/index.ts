@@ -299,9 +299,9 @@ export async function create(
       .filter((script) => SCRIPTS_TO_DISPLAY[script])
       .forEach((script) => {
         logger.log(
-          `   - ${cyan(`${packageManagerMeta.command} run ${script}`)}: ${
-            SCRIPTS_TO_DISPLAY[script]
-          } all apps and packages`
+          `   - ${picocolors.cyan(
+            `${packageManagerMeta.command} run ${script}`
+          )}: ${SCRIPTS_TO_DISPLAY[script]} all apps and packages`
         );
       });
     logger.log("- Run a command twice to hit cache");

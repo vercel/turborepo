@@ -114,7 +114,9 @@ describe("create-turbo", () => {
 
       availableScripts.forEach((script) => {
         expect(mockConsole.log).toHaveBeenCalledWith(
-          expect.stringContaining(cyan(`${packageManager} run ${script}`))
+          expect.stringContaining(
+            picocolors.cyan(`${packageManager} run ${script}`)
+          )
         );
       });
 
@@ -201,7 +203,9 @@ describe("create-turbo", () => {
 
       availableScripts.forEach((script) => {
         expect(mockConsole.log).toHaveBeenCalledWith(
-          expect.stringContaining(cyan(`${packageManager} run ${script}`))
+          expect.stringContaining(
+            picocolors.cyan(`${packageManager} run ${script}`)
+          )
         );
       });
 
