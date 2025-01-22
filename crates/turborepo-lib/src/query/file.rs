@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use async_graphql::{Enum, Object, SimpleObject};
 use camino::Utf8PathBuf;
-use itertools::Itertools;
 use miette::SourceCode;
 use swc_ecma_ast::EsVersion;
 use swc_ecma_parser::{EsSyntax, Syntax, TsSyntax};

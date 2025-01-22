@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, fmt, sync::Arc};
 
 use camino::{Utf8Path, Utf8PathBuf};
 use globwalk::WalkType;
@@ -93,6 +93,15 @@ pub struct TraceResult {
     source_map: Arc<SourceMap>,
     pub errors: Vec<TraceError>,
     pub files: HashMap<AbsoluteSystemPathBuf, SeenFile>,
+}
+
+impl fmt::Debug for TraceResult {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("TraceResult")
+            .field("files", &self.files)
+            .field("errors", &self.errors)
+            .finish()
+    }
 }
 
 /// The type of imports to trace.
