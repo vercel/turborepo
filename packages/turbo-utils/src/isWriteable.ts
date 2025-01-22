@@ -1,8 +1,8 @@
-import { access, constants } from "fs-extra";
+import fs from "fs-extra";
 
 export async function isWriteable(directory: string): Promise<boolean> {
   try {
-    await access(directory, constants.W_OK);
+    await fs.access(directory, fs.constants.W_OK);
     return true;
   } catch (err) {
     return false;

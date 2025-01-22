@@ -1,5 +1,5 @@
 import path from "node:path";
-import { writeJSONSync } from "fs-extra";
+import fs from "fs-extra";
 import { green } from "picocolors";
 import type { DependencyList, DependencyGroups } from "@turbo/utils";
 import type {
@@ -131,7 +131,7 @@ export function updateDependencies({
   }
 
   if (!options?.dry) {
-    writeJSONSync(workspace.paths.packageJson, workspacePackageJson, {
+    fs.writeJSONSync(workspace.paths.packageJson, workspacePackageJson, {
       spaces: 2,
     });
   }

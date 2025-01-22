@@ -1,5 +1,5 @@
 import path from "node:path";
-import { readJsonSync } from "fs-extra";
+import fs from "fs-extra";
 import { getWorkspaceDetails, type Project } from "@turbo/workspaces";
 import { type PackageJson, getAvailablePackageManagers } from "@turbo/utils";
 import { getTransformerHelpers } from "../utils/getTransformerHelpers";
@@ -22,7 +22,7 @@ export async function transformer({
   });
 
   const rootPackageJsonPath = path.join(root, "package.json");
-  const rootPackageJson = readJsonSync(rootPackageJsonPath) as PackageJson;
+  const rootPackageJson = fs.readJsonSync(rootPackageJsonPath) as PackageJson;
   if ("packageManager" in rootPackageJson) {
     log.info(`"packageManager" already set in root "package.json"`);
     return runner.finish();
