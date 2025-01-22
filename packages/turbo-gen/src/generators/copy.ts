@@ -1,7 +1,7 @@
 import path from "node:path";
 import type { CopyFilterAsync } from "fs-extra";
 import fs from "fs-extra";
-import { bold } from "picocolors";
+import picocolors from "picocolors";
 import {
   createProject,
   logger,
@@ -92,8 +92,8 @@ export async function generate({ project, opts }: TurboGeneratorArguments) {
 
   logger.log();
   logger.log(
-    `${bold(logger.turboGradient(">>> Success!"))} Created ${name} at "${
-      location.relative
-    }"`
+    `${picocolors.bold(
+      logger.turboGradient(">>> Success!")
+    )} Created ${name} at "${location.relative}"`
   );
 }
