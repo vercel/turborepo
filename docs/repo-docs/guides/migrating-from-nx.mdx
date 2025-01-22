@@ -222,13 +222,41 @@ module.exports = nextConfig;
 
 ### Step 5: Add the `packageManager` field
 
-The root package.json needs to have the packageManager field. This ensures developers in the repository use the correct package manager, and that Turborepo can optimize your package graph based on your lockfile.
+The root package.json needs to have the `packageManager` field. This ensures developers in the repository use the correct package manager, and that Turborepo can optimize your package graph based on your lockfile.
+
+<PackageManagerTabs>
+
+<Tab>
+
+```json title="./package.json"
+{
+  "packageManager": "npm@10.0.0"
+}
+```
+
+</Tab>
+
+<Tab>
+
+```json title="./package.json"
+{
+  "packageManager": "yarn@1.22.19"
+}
+```
+
+</Tab>
+
+<Tab>
 
 ```json title="./package.json"
 {
   "packageManager": "pnpm@9.0.0"
 }
 ```
+
+</Tab>
+
+</PackageManagerTabs>
 
 ### Step 6: Run you package manager's install command
 
