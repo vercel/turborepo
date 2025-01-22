@@ -28,8 +28,8 @@ use turborepo_ui::{ColorConfig, GREY};
 use crate::{
     cli::error::print_potential_tasks,
     commands::{
-        bin, config, daemon, generate, info, link, login, logout, ls, prune, query, run, scan,
-        telemetry, unlink, CommandBase,
+        bin, boundaries, config, daemon, generate, info, link, login, logout, ls, prune, query,
+        run, scan, telemetry, unlink, CommandBase,
     },
     get_version,
     run::watch::WatchClient,
@@ -519,7 +519,9 @@ impl Args {
         if self.run_args.is_some()
             && !matches!(
                 self.command,
-                None | Some(Command::Run { .. }) | Some(Command::Config)
+                None | Some(Command::Run { .. })
+                    | Some(Command::Config)
+                    | Some(Command::Boundaries { .. })
             )
         {
             let mut cmd = Self::command();
@@ -541,6 +543,14 @@ impl Args {
                 clap::error::ErrorKind::ArgumentConflict,
                 "Cannot use run arguments before `run` subcommand",
             ))
+        } else if matches!(self.command, Some(Command::Boundaries { .. }))
+            && (self.run_args.is_some() || self.execution_args.is_some())
+        {
+            let mut cmd = Self::command();
+            Err(cmd.error(
+                clap::error::ErrorKind::ArgumentConflict,
+                "Cannot use run arguments before `boundaries` subcommand",
+            ))
         } else {
             Ok(())
         }
@@ -552,6 +562,11 @@ impl Args {
 pub enum Command {
     /// Get the path to the Turbo binary
     Bin,
+    #[clap(hide = true)]
+    Boundaries {
+        #[clap(short = 'F', long, group = "scope-filter-group")]
+        filter: Vec<String>,
+    },
     /// Generate the autocompletion script for the specified shell
     Completion {
         shell: Shell,
@@ -1270,6 +1285,14 @@ pub async fn run(
             bin::run()?;
 
             Ok(0)
+        }
+        Command::Boundaries { .. } => {
+            let event = CommandEventBuilder::new("boundaries").with_parent(&root_telemetry);
+
+            event.track_call();
+            let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
+
+            Ok(boundaries::run(base, event).await?)
         }
         #[allow(unused_variables)]
         Command::Daemon { command, idle_time } => {
@@ -3002,6 +3025,19 @@ mod test {
     #[test_case::test_case(&["turbo", "build", "run"], true; "task")]
     #[test_case::test_case(&["turbo", "--filter=web", "watch", "build"], false; "execution before watch")]
     fn test_no_run_args_before_run(args: &[&str], is_okay: bool) {
+        let os_args = args.iter().map(|s| OsString::from(*s)).collect();
+        let cli = Args::parse(os_args);
+        if is_okay {
+            cli.unwrap();
+        } else {
+            let err = cli.unwrap_err();
+            assert_snapshot!(args.join("-").as_str(), err);
+        }
+    }
+
+    #[test_case::test_case(&["turbo", "--filter=foo", "boundaries"], false; "execution args")]
+    #[test_case::test_case(&["turbo", "--no-daemon", "boundaries"], false; "run args")]
+    fn test_no_run_args_before_boundaries(args: &[&str], is_okay: bool) {
         let os_args = args.iter().map(|s| OsString::from(*s)).collect();
         let cli = Args::parse(os_args);
         if is_okay {

@@ -1,3 +1,4 @@
+mod boundaries;
 mod external_package;
 mod file;
 mod package;
@@ -13,7 +14,6 @@ use std::{
 use async_graphql::{http::GraphiQLSource, *};
 use axum::{response, response::IntoResponse};
 use external_package::ExternalPackage;
-use miette::Diagnostic;
 use package::Package;
 pub use server::run_server;
 use thiserror::Error;
@@ -29,9 +29,11 @@ use crate::{
     signal::SignalHandler,
 };
 
-#[derive(Error, Debug, Diagnostic)]
+#[derive(Error, Debug, miette::Diagnostic)]
 pub enum Error {
-    #[error("Failed to get file dependencies.")]
+    #[error(transparent)]
+    Boundaries(#[from] crate::boundaries::Error),
+    #[error("Failed to get file dependencies")]
     Trace(#[related] Vec<TraceError>),
     #[error("No signal handler.")]
     NoSignalHandler,
@@ -149,11 +151,20 @@ impl RepositoryQuery {
 #[graphql(concrete(name = "Packages", params(Package)))]
 #[graphql(concrete(name = "ChangedPackages", params(ChangedPackage)))]
 #[graphql(concrete(name = "Files", params(File)))]
-#[graphql(concrete(name = "TraceErrors", params(file::TraceError)))]
 #[graphql(concrete(name = "ExternalPackages", params(ExternalPackage)))]
+#[graphql(concrete(name = "Diagnostics", params(Diagnostic)))]
 pub struct Array<T: OutputType> {
     items: Vec<T>,
     length: usize,
+}
+
+impl<T: ObjectType> From<Vec<T>> for Array<T> {
+    fn from(value: Vec<T>) -> Self {
+        Self {
+            length: value.len(),
+            items: value,
+        }
+    }
 }
 
 impl<T: OutputType> Deref for Array<T> {
@@ -551,6 +562,18 @@ impl RepositoryQuery {
         get_version()
     }
 
+    /// Check boundaries for all packages.
+    async fn boundaries(&self) -> Result<Array<Diagnostic>, Error> {
+        match self.run.check_boundaries().await {
+            Ok(result) => {
+                result.emit();
+
+                Ok(result.diagnostics.into_iter().map(|b| b.into()).collect())
+            }
+            Err(err) => Err(Error::Boundaries(err)),
+        }
+    }
+
     async fn file(&self, path: String) -> Result<File, Error> {
         let abs_path = AbsoluteSystemPathBuf::from_unknown(self.run.repo_root(), path);
 
@@ -607,4 +630,14 @@ pub async fn run_query_server(run: Run, signal: SignalHandler) -> Result<(), Err
     }
 
     Ok(())
+}
+
+#[derive(SimpleObject, Debug, Default)]
+pub struct Diagnostic {
+    pub message: String,
+    pub reason: Option<String>,
+    pub path: Option<String>,
+    pub import: Option<String>,
+    pub start: Option<usize>,
+    pub end: Option<usize>,
 }
