@@ -1,6 +1,6 @@
 import path from "node:path";
 import retry from "async-retry";
-import { dim, red } from "picocolors";
+import picocolors from "picocolors";
 import fs from "fs-extra";
 import * as logger from "./logger";
 import {
@@ -65,7 +65,7 @@ export async function createProject({
     if (repoUrl) {
       if (repoUrl.origin !== "https://github.com") {
         logger.error(
-          `Invalid URL: ${red(
+          `Invalid URL: ${picocolors.red(
             `"${example}"`
           )}. Only GitHub repositories are supported. Please use a GitHub URL and try again.`
         );
@@ -76,7 +76,7 @@ export async function createProject({
 
       if (!repoInfo) {
         logger.error(
-          `Unable to fetch repository information from: ${red(
+          `Unable to fetch repository information from: ${picocolors.red(
             `"${example}"`
           )}. Please fix the URL and try again.`
         );
@@ -87,7 +87,7 @@ export async function createProject({
 
       if (!found) {
         logger.error(
-          `Could not locate the repository for ${red(
+          `Could not locate the repository for ${picocolors.red(
             `"${example}"`
           )}. Please check that the repository exists and try again.`
         );
@@ -98,10 +98,10 @@ export async function createProject({
 
       if (!found) {
         logger.error(
-          `Could not locate an example named ${red(
+          `Could not locate an example named ${picocolors.red(
             `"${example}"`
           )}. It could be due to the following:\n`,
-          `1. Your spelling of example ${red(
+          `1. Your spelling of example ${picocolors.red(
             `"${example}"`
           )} might be incorrect.\n`,
           "2. You might not be connected to the internet or you are behind a proxy."
@@ -134,7 +134,7 @@ export async function createProject({
   const { isEmpty, conflicts } = isFolderEmpty(root);
   if (!isEmpty) {
     logger.error(
-      `${dim(root)} has ${conflicts.length} conflicting ${
+      `${picocolors.dim(root)} has ${conflicts.length} conflicting ${
         conflicts.length === 1 ? "file" : "files"
       } - please try a different location`
     );
