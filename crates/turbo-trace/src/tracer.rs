@@ -439,6 +439,8 @@ impl Tracer {
             futures.spawn(async move {
                 let file_resolver = Self::infer_resolver_with_ts_config(&file, &resolver);
                 let resolver = file_resolver.as_ref().unwrap_or(&resolver);
+                eprintln!("file: {:?}", file);
+                eprintln!("resolver: {:?}", resolver);
                 let mut errors = Vec::new();
 
                 let Some((imported_files, seen_file)) = Self::get_imports_from_file(
@@ -450,10 +452,12 @@ impl Tracer {
                 )
                 .await
                 else {
+                    eprintln!("failed to get imports from file");
                     return (errors, None);
                 };
 
                 for import in imported_files {
+                    eprintln!("import: {:?}", import);
                     if shared_self
                         .files
                         .iter()
