@@ -34,7 +34,7 @@ jobs:
       - changes
     runs-on: ${{ matrix.os.runner }}
     timeout-minutes: 45
-    if: needs.changes.outputs.docs-or-examples == 'false'
+    if: needs.find-changes.outputs.docs-or-examples == 'false'
     strategy:
       fail-fast: false
       matrix:
@@ -101,7 +101,7 @@ jobs:
     name: Rust lints
     needs:
       - changes
-    if: needs.changes.outputs.docs-or-examples == 'false'
+    if: needs.find-changes.outputs.docs-or-examples == 'false'
     runs-on:
       - "self-hosted"
       - "linux"
@@ -137,7 +137,7 @@ jobs:
     name: Turborepo rust check
     needs:
       - changes
-    if: needs.changes.outputs.docs-or-examples == 'false'
+    if: needs.find-changes.outputs.docs-or-examples == 'false'
     runs-on:
       - "self-hosted"
       - "linux"
@@ -178,7 +178,7 @@ jobs:
     runs-on: ${{ matrix.os.runner }}
     needs:
       - changes
-    if: needs.changes.outputs.docs-or-examples == 'false'
+    if: needs.find-changes.outputs.docs-or-examples == 'false'
     name: Turborepo Rust testing on ${{ matrix.os.name }}
     steps:
       - name: Set git to use LF line endings
