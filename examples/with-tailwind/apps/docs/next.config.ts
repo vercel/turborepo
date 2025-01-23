@@ -1,7 +1,6 @@
-/** @type {import('next').NextConfig} */
-module.exports = {
-  reactStrictMode: true,
-  transpilePackages: ["@repo/ui"],
+import type { NextConfig } from "next";
+
+const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
@@ -9,3 +8,5 @@ module.exports = {
     ignoreDuringBuilds: true,
   },
 };
+
+export default nextConfig;
