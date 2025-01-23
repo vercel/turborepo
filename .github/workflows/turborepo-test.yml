@@ -272,7 +272,7 @@ jobs:
     needs:
       - find-changes
     timeout-minutes: 40
-    if: ${{ needs.find-changes.outputs.kitchen-sink-example == 'true' }} || ${{ needs.find-changes.outputs.examples-utils == 'true' }}
+    if: ${{ needs.find-changes.outputs.kitchen-sink-example == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
