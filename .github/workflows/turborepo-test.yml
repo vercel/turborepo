@@ -248,7 +248,7 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
   basic-example:
-    name: basic
+    name: "`basic` example"
     timeout-minutes: 40
     if: needs.find-changes.outputs.basic-example == 'true'
     runs-on: ubuntu-latest
@@ -265,7 +265,7 @@ jobs:
           test-filter: "@turborepo-examples-tests/kitchen-sink-*"
 
   kitchen-sink-example:
-    name: kitchen-sink
+    name: "`kitchen-sink` example"
     timeout-minutes: 40
     if: needs.find-changes.outputs.kitchen-sink-example == 'true'
     runs-on: ubuntu-latest
@@ -282,7 +282,7 @@ jobs:
           test-filter: "@turborepo-examples-tests/kitchen-sink-*"
 
   non-monorepo-example:
-    name: non-monorepo
+    name: "`non-monorepo` example"
     timeout-minutes: 40
     if: needs.find-changes.outputs.non-monorepo-example == 'true'
     runs-on: ubuntu-latest
@@ -299,7 +299,7 @@ jobs:
           test-filter: "@turborepo-examples-tests/non-monorepo-*"
 
   with-svelte-example:
-    name: with-svelte
+    name: "`with-svelte` example"
     timeout-minutes: 40
     if: needs.find-changes.outputs.with-svelte-example == 'true'
     runs-on: ubuntu-latest
@@ -316,7 +316,7 @@ jobs:
           test-filter: "@turborepo-examples-tests/with-svelte-*"
 
   with-tailwind-example:
-    name: with-tailwind
+    name: "`with-tailwind` example"
     timeout-minutes: 40
     if: needs.find-changes.outputs.with-tailwind-example == 'true'
     runs-on: ubuntu-latest
