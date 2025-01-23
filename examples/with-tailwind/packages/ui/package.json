@@ -13,10 +13,10 @@
   },
   "license": "MIT",
   "scripts": {
-    "build": "npx @tailwindcss/cli -i ./src/styles.css -o ./dist/index.css",
+    "build": "tailwindcss -i ./src/styles.css -o ./dist/index.css",
     "check-types": "tsc --noEmit",
-    "dev": "npx @tailwindcss/cli -i ./src/styles.css -o ./dist/index.css --watch",
-    "lint": "eslint src/"
+    "dev": "tailwindcss -i ./src/styles.css -o ./dist/index.css --watch",
+    "lint": "eslint src --max-warnings 0"
   },
   "peerDependencies": {
     "react": "^19"
