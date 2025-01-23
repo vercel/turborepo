@@ -3,9 +3,6 @@ on:
   push:
     branches: [main]
   pull_request:
-    paths:
-      - "!docs/**"
-      - "!examples/**"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
@@ -17,10 +14,24 @@ permissions:
   pull-requests: read
 
 jobs:
+  find-changes:
+    name: Find path changes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: dorny/paths-filter@v3
+        id: changes
+        with:
+          filters: |
+            docs-or-examples:
+              - "docs/**"
+              - "examples/**"
   integration:
     name: Turborepo Integration
+    needs:
+      - changes
     runs-on: ${{ matrix.os.runner }}
     timeout-minutes: 45
+    if: steps.changes.outputs.docs-or-examples == 'false'
     strategy:
       fail-fast: false
       matrix:
@@ -85,6 +96,9 @@ jobs:
 
   rust_lint:
     name: Rust lints
+    if: steps.changes.outputs.docs-or-examples == 'false'
+    needs:
+      - changes
     runs-on:
       - "self-hosted"
       - "linux"
@@ -118,6 +132,9 @@ jobs:
   rust_check:
     # We test dependency changes only on main
     name: Turborepo rust check
+    needs:
+      - changes
+    if: steps.changes.outputs.docs-or-examples == 'false'
     runs-on:
       - "self-hosted"
       - "linux"
@@ -156,6 +173,9 @@ jobs:
             runner: windows-latest
             nextest: windows-tar
     runs-on: ${{ matrix.os.runner }}
+    needs:
+      - changes
+    if: steps.changes.outputs.docs-or-examples == 'false'
     name: Turborepo Rust testing on ${{ matrix.os.name }}
     steps:
       - name: Set git to use LF line endings
