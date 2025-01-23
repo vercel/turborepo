@@ -18,15 +18,41 @@ jobs:
     name: Find path changes
     runs-on: ubuntu-latest
     outputs:
-      docs-or-examples: ${{ steps.filter.outputs.docs-or-examples }}
+      docs: ${{ steps.filter.outputs.docs }}
+      examples-utils: ${{ steps.filter.outputs.examples-utils }}
+      basic-example: ${{ steps.filter.outputs.basic-example }}
+      kitchen-sink-example: ${{ steps.filter.outputs.kitchen-sink-example }}
+      non-monorepo-example: ${{ steps.filter.outputs.non-monorepo-example }}
+      with-svelte-example: ${{ steps.filter.outputs.with-svelte-example }}
+      with-tailwind-example: ${{ steps.filter.outputs.with-tailwind-example }}
+      rest: ${{ steps.filter.outputs.rest }}
     steps:
       - uses: dorny/paths-filter@v3
         id: filter
         with:
           filters: |
-            docs-or-examples:
+            docs:
               - "docs/**"
-              - "examples/**"
+            examples-utils:
+              - "turborepo-tests/helpers/**"
+            basic-example:
+              - examples/basic/**
+              - turborepo-tests/example-basic-*/**
+            kitchen-sink-example:
+              - examples/kitchen-sink/**
+              - turborepo-tests/example-kitchen-sink-*/**
+            non-monorepo-example:
+              - examples/non-monorepo/**
+              - turborepo-tests/example-non-monorepo-*/**
+            with-svelte-example:
+              - examples/with-svelte/**
+              - turborepo-tests/example-with-svelte-*/**
+            with-tailwind-example:
+              - examples/with-tailwind/**
+              - turborepo-tests/example-with-svelte-*/**
+            rest:
+              - "!examples/**"
+              - "!docs/**"
 
   integration:
     name: Turborepo Integration
@@ -34,7 +60,7 @@ jobs:
       - find-changes
     runs-on: ${{ matrix.os.runner }}
     timeout-minutes: 45
-    if: needs.find-changes.outputs.docs-or-examples == 'false'
+    if: needs.find-changes.outputs.rest == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -101,7 +127,7 @@ jobs:
     name: Rust lints
     needs:
       - find-changes
-    if: needs.find-changes.outputs.docs-or-examples == 'false'
+    if: needs.find-changes.outputs.rest == 'true'
     runs-on:
       - "self-hosted"
       - "linux"
@@ -137,7 +163,7 @@ jobs:
     name: Turborepo rust check
     needs:
       - find-changes
-    if: needs.find-changes.outputs.docs-or-examples == 'false'
+    if: needs.find-changes.outputs.rest == 'true'
     runs-on:
       - "self-hosted"
       - "linux"
@@ -178,7 +204,7 @@ jobs:
     runs-on: ${{ matrix.os.runner }}
     needs:
       - find-changes
-    if: needs.find-changes.outputs.docs-or-examples == 'false'
+    if: needs.find-changes.outputs.rest == 'true'
     name: Turborepo Rust testing on ${{ matrix.os.name }}
     steps:
       - name: Set git to use LF line endings
@@ -220,6 +246,95 @@ jobs:
           CARGO_INCREMENTAL: 0
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+  basic-example:
+    name: basic
+    timeout-minutes: 40
+    if: needs.find-changes.outputs.basic-example == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: "Run `basic` example tests"
+        uses: ./.github/actions/examples-tests
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          turbo-token: "${{ secrets.TURBO_TOKEN }}"
+          turbo-team: "${{ vars.TURBO_TEAM }}"
+          test-filter: "@turborepo-examples-tests/kitchen-sink-*"
+
+  kitchen-sink:
+    name: kitchen-sink
+    timeout-minutes: 40
+    if: needs.find-changes.outputs.kitchen-sink-example == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: "Run `kitchen-sink` example tests"
+        uses: ./.github/actions/examples-tests
+        with:
+          node-version: "22"
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          turbo-token: "${{ secrets.TURBO_TOKEN }}"
+          turbo-team: "${{ vars.TURBO_TEAM }}"
+          test-filter: "@turborepo-examples-tests/kitchen-sink-*"
+
+  non-monorepo-example:
+    name: non-monorepo
+    timeout-minutes: 40
+    if: needs.find-changes.outputs.non-monorepo-example == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: "Run `non-monorepo` example tests"
+        uses: ./.github/actions/examples-tests
+        with:
+          node-version: "22"
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          turbo-token: "${{ secrets.TURBO_TOKEN }}"
+          turbo-team: "${{ vars.TURBO_TEAM }}"
+          test-filter: "@turborepo-examples-tests/non-monorepo-*"
+
+  with-svelte-example:
+    name: with-svelte
+    timeout-minutes: 40
+    if: needs.find-changes.outputs.with-svelte-example == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: "Run `with-svelte` example tests"
+        uses: ./.github/actions/examples-tests
+        with:
+          node-version: "22"
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          turbo-token: "${{ secrets.TURBO_TOKEN }}"
+          turbo-team: "${{ vars.TURBO_TEAM }}"
+          test-filter: "@turborepo-examples-tests/with-svelte-*"
+
+  with-tailwind-example:
+    name: with-tailwind
+    timeout-minutes: 40
+    if: needs.find-changes.outputs.with-tailwind-example == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: "Run `with-tailwind` example tests"
+        uses: ./.github/actions/examples-tests
+        with:
+          node-version: "22"
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          turbo-token: "${{ secrets.TURBO_TOKEN }}"
+          turbo-team: "${{ vars.TURBO_TEAM }}"
+          test-filter: "@turborepo-examples-tests/with-tailwind-*"
 
   summary:
     name: Turborepo Test Summary

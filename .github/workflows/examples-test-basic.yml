@@ -24,7 +24,6 @@ jobs:
       - name: "Run `basic` example tests"
         uses: ./.github/actions/examples-tests
         with:
-          node-version: "22"
           github-token: "${{ secrets.GITHUB_TOKEN }}"
           turbo-token: "${{ secrets.TURBO_TOKEN }}"
           turbo-team: "${{ vars.TURBO_TEAM }}"
