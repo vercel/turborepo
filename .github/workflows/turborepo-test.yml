@@ -53,7 +53,7 @@ jobs:
               - "turborepo-tests/example-with-svelte-*/**"
               - "turborepo-tests/helpers/**"
             rest:
-              - "!(examples|docs)/**"
+              - "!(examples/**|docs/**)/**"
 
   integration:
     name: Turborepo Integration
