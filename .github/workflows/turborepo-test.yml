@@ -264,7 +264,7 @@ jobs:
           turbo-team: "${{ vars.TURBO_TEAM }}"
           test-filter: "@turborepo-examples-tests/kitchen-sink-*"
 
-  kitchen-sink:
+  kitchen-sink-example:
     name: kitchen-sink
     timeout-minutes: 40
     if: needs.find-changes.outputs.kitchen-sink-example == 'true'
@@ -374,7 +374,7 @@ jobs:
           subjob ${{needs.with-tailwind-example.result}}
 
           if [ "$cancelled" = "true" ]; then
-              echo "cancelled=true" >> $GITHUB_OUTPUT
+            echo "cancelled=true" >> $GITHUB_OUTPUT
           elif [ "$failure" = "true" ]; then
             echo "failure=true" >> $GITHUB_OUTPUT
           else
