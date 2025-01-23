@@ -17,9 +17,11 @@ jobs:
   find-changes:
     name: Find path changes
     runs-on: ubuntu-latest
+    outputs:
+      docs-or-examples: ${{ steps.filter.outputs.docs-or-examples }}
     steps:
       - uses: dorny/paths-filter@v3
-        id: changes
+        id: filter
         with:
           filters: |
             docs-or-examples:
