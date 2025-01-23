@@ -19,7 +19,6 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       docs: ${{ steps.filter.outputs.docs }}
-      examples-utils: ${{ steps.filter.outputs.examples-utils }}
       basic-example: ${{ steps.filter.outputs.basic-example }}
       kitchen-sink-example: ${{ steps.filter.outputs.kitchen-sink-example }}
       non-monorepo-example: ${{ steps.filter.outputs.non-monorepo-example }}
@@ -33,23 +32,26 @@ jobs:
           filters: |
             docs:
               - "docs/**"
-            examples-utils:
-              - "turborepo-tests/helpers/**"
             basic-example:
               - "examples/basic/**"
               - "turborepo-tests/example-basic-*/**"
+              - "turborepo-tests/helpers/**"
             kitchen-sink-example:
               - "examples/kitchen-sink/**"
               - "turborepo-tests/example-kitchen-sink-*/**"
+              - "turborepo-tests/helpers/**"
             non-monorepo-example:
               - "examples/non-monorepo/**"
               - "turborepo-tests/example-non-monorepo-*/**"
+              - "turborepo-tests/helpers/**"
             with-svelte-example:
               - "examples/with-svelte/**"
               - "turborepo-tests/example-with-svelte-*/**"
+              - "turborepo-tests/helpers/**"
             with-tailwind-example:
               - "examples/with-tailwind/**"
               - "turborepo-tests/example-with-svelte-*/**"
+              - "turborepo-tests/helpers/**"
             rest:
               - '!(examples/**|docs/**)'
 
@@ -251,7 +253,7 @@ jobs:
     timeout-minutes: 40
     needs:
       - find-changes
-    if: ${{ needs.find-changes.outputs.basic-example == 'true' }} || ${{ needs.find-changes.outputs.examples-utils == 'true' }}
+    if: ${{ needs.find-changes.outputs.basic-example == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -270,7 +272,7 @@ jobs:
     needs:
       - find-changes
     timeout-minutes: 40
-    if: ${{ needs.find-changes.outputs.kitchen-sink-example == 'true' }} || ${{ needs.find-changes.outputs.examples-utils == 'true' }}
+    if: ${{ needs.find-changes.outputs.kitchen-sink-example == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -289,7 +291,7 @@ jobs:
     timeout-minutes: 40
     needs:
       - find-changes
-    if: ${{ needs.find-changes.outputs.non-monorepo-example == 'true' }} || ${{ needs.find-changes.outputs.examples-utils == 'true' }}
+    if: ${{ needs.find-changes.outputs.non-monorepo-example == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -308,7 +310,7 @@ jobs:
     timeout-minutes: 40
     needs:
       - find-changes
-    if: ${{ needs.find-changes.outputs.with-svelte-example == 'true' }} || ${{ needs.find-changes.outputs.examples-utils == 'true' }}
+    if: ${{ needs.find-changes.outputs.with-svelte-example == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -327,7 +329,7 @@ jobs:
     timeout-minutes: 40
     needs:
       - find-changes
-    if: ${{ needs.find-changes.outputs.with-tailwind-example == 'true' }} || ${{ needs.find-changes.outputs.examples-utils == 'true' }}
+    if: ${{ needs.find-changes.outputs.with-tailwind-example == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
