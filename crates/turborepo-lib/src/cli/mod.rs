@@ -126,7 +126,7 @@ impl LogOrder {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, ValueEnum)]
+#[derive(Copy, Clone, Debug, PartialEq, ValueEnum, Serialize)]
 pub enum DryRunMode {
     Text,
     Json,
@@ -399,7 +399,7 @@ impl Args {
         clap_args
     }
 
-    fn parse(os_args: Vec<OsString>) -> Result<Self, clap::Error> {
+    pub(crate) fn parse(os_args: Vec<OsString>) -> Result<Self, clap::Error> {
         let (is_single_package, single_package_free) = Self::remove_single_package(os_args);
         let mut args = Args::try_parse_from(single_package_free)?;
         // And then only add them back in when we're in `run`.
