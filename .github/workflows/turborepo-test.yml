@@ -53,7 +53,8 @@ jobs:
             rest:
               - "!examples/**"
               - "!docs/**"
-
+              - "!.github/**"
+  # THE PREVIOUS LINE IS ONLY THERE FOR TESTING PLEASE REMOVE
   integration:
     name: Turborepo Integration
     needs:
