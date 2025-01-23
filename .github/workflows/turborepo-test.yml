@@ -36,20 +36,20 @@ jobs:
             examples-utils:
               - "turborepo-tests/helpers/**"
             basic-example:
-              - examples/basic/**
-              - turborepo-tests/example-basic-*/**
+              - "examples/basic/**"
+              - "turborepo-tests/example-basic-*/**"
             kitchen-sink-example:
-              - examples/kitchen-sink/**
-              - turborepo-tests/example-kitchen-sink-*/**
+              - "examples/kitchen-sink/**"
+              - "turborepo-tests/example-kitchen-sink-*/**"
             non-monorepo-example:
-              - examples/non-monorepo/**
-              - turborepo-tests/example-non-monorepo-*/**
+              - "examples/non-monorepo/**"
+              - "turborepo-tests/example-non-monorepo-*/**"
             with-svelte-example:
-              - examples/with-svelte/**
-              - turborepo-tests/example-with-svelte-*/**
+              - "examples/with-svelte/**"
+              - "turborepo-tests/example-with-svelte-*/**"
             with-tailwind-example:
-              - examples/with-tailwind/**
-              - turborepo-tests/example-with-svelte-*/**
+              - "examples/with-tailwind/**"
+              - "turborepo-tests/example-with-svelte-*/**"
             rest:
               - "!examples/**"
               - "!docs/**"
@@ -122,6 +122,15 @@ jobs:
           CARGO_INCREMENTAL: 0
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+  echo:
+    name: echo
+    needs: find-changes
+    runs-on: ubuntu-latest
+    steps:
+      - name: echo
+        run: |
+          echo ${{ needs.find-changes.outputs }}
 
   rust_lint:
     name: Rust lints
