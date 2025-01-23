@@ -420,6 +420,12 @@ You may also configure a self-hosted Remote Cache, which does not require a lice
 
 While the migration guide above is a good starting point, the breadth of possibilities and capabilities of monorepos means that its difficult to create generalized instructions for all cases. Below, we’ve listed some common next steps that you may be thinking about.
 
+### Installing dependencies where they're used
+
+Turborepo recommends [installing packages where they're used](/repo/docs/crafting-your-repository/managing-dependencies#best-practices-for-dependency-installation) to improve cache hit ratios, help dependency pruning capability, and clarify for developers which dependencies are meant for which packages. This is different from the Nx strategy, where all dependencies are installed at the root of the repository, making all dependencies available to all packages in the workspace.
+
+Once you have tasks running through Turborepo, we highly recommend that you move dependencies to the `package.json`'s for packages and applications that need them. [Visit our documentation on managing dependencies](/repo/docs/crafting-your-repository/managing-dependencies) to learn more.
+
 ### Creating shared packages
 
 You’ll follow roughly the same set of steps as above to add a package to your package manager’s workspace.
