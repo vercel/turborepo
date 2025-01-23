@@ -31,7 +31,7 @@ jobs:
   integration:
     name: Turborepo Integration
     needs:
-      - changes
+      - find-changes
     runs-on: ${{ matrix.os.runner }}
     timeout-minutes: 45
     if: needs.find-changes.outputs.docs-or-examples == 'false'
@@ -100,7 +100,7 @@ jobs:
   rust_lint:
     name: Rust lints
     needs:
-      - changes
+      - find-changes
     if: needs.find-changes.outputs.docs-or-examples == 'false'
     runs-on:
       - "self-hosted"
@@ -136,7 +136,7 @@ jobs:
     # We test dependency changes only on main
     name: Turborepo rust check
     needs:
-      - changes
+      - find-changes
     if: needs.find-changes.outputs.docs-or-examples == 'false'
     runs-on:
       - "self-hosted"
@@ -177,7 +177,7 @@ jobs:
             nextest: windows-tar
     runs-on: ${{ matrix.os.runner }}
     needs:
-      - changes
+      - find-changes
     if: needs.find-changes.outputs.docs-or-examples == 'false'
     name: Turborepo Rust testing on ${{ matrix.os.name }}
     steps:
