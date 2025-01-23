@@ -36,20 +36,20 @@ jobs:
             examples-utils:
               - "turborepo-tests/helpers/**"
             basic-example:
-              - examples/basic/**
-              - turborepo-tests/example-basic-*/**
+              - "examples/basic/**"
+              - "turborepo-tests/example-basic-*/**"
             kitchen-sink-example:
-              - examples/kitchen-sink/**
-              - turborepo-tests/example-kitchen-sink-*/**
+              - "examples/kitchen-sink/**"
+              - "turborepo-tests/example-kitchen-sink-*/**"
             non-monorepo-example:
-              - examples/non-monorepo/**
-              - turborepo-tests/example-non-monorepo-*/**
+              - "examples/non-monorepo/**"
+              - "turborepo-tests/example-non-monorepo-*/**"
             with-svelte-example:
-              - examples/with-svelte/**
-              - turborepo-tests/example-with-svelte-*/**
+              - "examples/with-svelte/**"
+              - "turborepo-tests/example-with-svelte-*/**"
             with-tailwind-example:
-              - examples/with-tailwind/**
-              - turborepo-tests/example-with-svelte-*/**
+              - "examples/with-tailwind/**"
+              - "turborepo-tests/example-with-svelte-*/**"
             rest:
               - "!examples/**"
               - "!docs/**"
@@ -250,6 +250,8 @@ jobs:
   basic-example:
     name: "`basic` example"
     timeout-minutes: 40
+    needs:
+      - find-changes
     if: ${{ needs.find-changes.outputs.basic-example == 'true' }}
     runs-on: ubuntu-latest
     steps:
@@ -266,6 +268,8 @@ jobs:
 
   kitchen-sink-example:
     name: "`kitchen-sink` example"
+    needs:
+      - find-changes
     timeout-minutes: 40
     if: ${{ needs.find-changes.outputs.kitchen-sink-example == 'true' }}
     runs-on: ubuntu-latest
@@ -284,6 +288,8 @@ jobs:
   non-monorepo-example:
     name: "`non-monorepo` example"
     timeout-minutes: 40
+    needs:
+      - find-changes
     if: ${{ needs.find-changes.outputs.non-monorepo-example == 'true' }}
     runs-on: ubuntu-latest
     steps:
@@ -301,6 +307,8 @@ jobs:
   with-svelte-example:
     name: "`with-svelte` example"
     timeout-minutes: 40
+    needs:
+      - find-changes
     if: ${{ needs.find-changes.outputs.with-svelte-example == 'true' }}
     runs-on: ubuntu-latest
     steps:
@@ -318,6 +326,8 @@ jobs:
   with-tailwind-example:
     name: "`with-tailwind` example"
     timeout-minutes: 40
+    needs:
+      - find-changes
     if: ${{ needs.find-changes.outputs.with-tailwind-example == 'true' }}
     runs-on: ubuntu-latest
     steps:
