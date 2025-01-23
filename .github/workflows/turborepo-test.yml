@@ -51,9 +51,7 @@ jobs:
               - "examples/with-tailwind/**"
               - "turborepo-tests/example-with-svelte-*/**"
             rest:
-              - "**"
-              - "!examples/**"
-              - "!docs/**"
+              - '!(examples/**|docs/**)'
 
   integration:
     name: Turborepo Integration
