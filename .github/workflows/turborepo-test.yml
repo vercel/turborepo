@@ -25,13 +25,14 @@ jobs:
             docs-or-examples:
               - "docs/**"
               - "examples/**"
+
   integration:
     name: Turborepo Integration
     needs:
       - changes
     runs-on: ${{ matrix.os.runner }}
     timeout-minutes: 45
-    if: steps.changes.outputs.docs-or-examples == 'false'
+    # if: steps.changes.outputs.docs-or-examples == 'false'
     strategy:
       fail-fast: false
       matrix:
