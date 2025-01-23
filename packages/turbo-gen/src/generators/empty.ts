@@ -1,6 +1,6 @@
 import path from "node:path";
 import fs from "fs-extra";
-import { bold } from "picocolors";
+import picocolors from "picocolors";
 import { logger, type PackageJson, type DependencyGroups } from "@turbo/utils";
 import { gatherAddRequirements } from "../utils/gatherAddRequirements";
 import type { TurboGeneratorArguments } from "./types";
@@ -45,8 +45,8 @@ export async function generate({ project, opts }: TurboGeneratorArguments) {
 
   logger.log();
   logger.log(
-    `${bold(logger.turboGradient(">>> Success!"))} Created ${name} at "${
-      location.relative
-    }"`
+    `${picocolors.bold(
+      logger.turboGradient(">>> Success!")
+    )} Created ${name} at "${location.relative}"`
   );
 }

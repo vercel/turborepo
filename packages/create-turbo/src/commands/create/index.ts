@@ -1,5 +1,5 @@
 import path from "node:path";
-import { bold, red, cyan, green, dim } from "picocolors";
+import picocolors from "picocolors";
 import type { Project } from "@turbo/workspaces";
 import {
   getWorkspaceDetails,
@@ -39,18 +39,18 @@ function handleErrors(
   telemetry?.trackCommandStatus({ command: "create", status: "error" });
   // handle errors from ../../transforms
   if (err instanceof TransformError) {
-    error(bold(err.transform), red(err.message));
+    error(picocolors.bold(err.transform), picocolors.red(err.message));
     if (err.fatal) {
       process.exit(1);
     }
     // handle errors from @turbo/workspaces
   } else if (err instanceof ConvertError && err.type !== "unknown") {
-    error(red(err.message));
+    error(picocolors.red(err.message));
     process.exit(1);
     // handle download errors from @turbo/utils
   } else if (err instanceof DownloadError) {
-    error(red("Unable to download template from GitHub"));
-    error(red(err.message));
+    error(picocolors.red("Unable to download template from GitHub"));
+    error(picocolors.red(err.message));
     process.exit(1);
   }
 
@@ -209,14 +209,16 @@ export async function create(
     let lastGroup: string | undefined;
     workspacesForDisplay.forEach(({ group, title, description }, idx) => {
       if (idx === 0 || group !== lastGroup) {
-        logger.log(cyan(group));
+        logger.log(picocolors.cyan(group));
       }
-      logger.log(` - ${bold(title)}${description ? `: ${description}` : ""}`);
+      logger.log(
+        ` - ${picocolors.bold(title)}${description ? `: ${description}` : ""}`
+      );
       lastGroup = group;
     });
   } else {
-    logger.log(cyan("apps"));
-    logger.log(` - ${bold(projectName)}`);
+    logger.log(picocolors.cyan("apps"));
+    logger.log(` - ${picocolors.bold(projectName)}`);
   }
 
   // run install
@@ -252,20 +254,22 @@ export async function create(
 
   if (projectDirIsCurrentDir) {
     logger.log(
-      `${bold(turboGradient(">>> Success!"))} Your new Turborepo is ready.`
+      `${picocolors.bold(
+        turboGradient(">>> Success!")
+      )} Your new Turborepo is ready.`
     );
   } else {
     logger.log(
-      `${bold(turboGradient(">>> Success!"))} Created your Turborepo at ${green(
-        relativeProjectDir
-      )}`
+      `${picocolors.bold(
+        turboGradient(">>> Success!")
+      )} Created your Turborepo at ${picocolors.green(relativeProjectDir)}`
     );
   }
 
   if (!isMaintainedByCoreTeam) {
     logger.log();
     logger.log(
-      dim(
+      picocolors.dim(
         "Note: This is a community-maintained example. If you experience a problem, please submit a pull request with a fix. GitHub Issues will be closed."
       )
     );
@@ -275,27 +279,29 @@ export async function create(
   const packageManagerMeta = getPackageManagerMeta(projectPackageManager);
   if (packageManagerMeta && hasPackageJson) {
     logger.log();
-    logger.log(bold("To get started:"));
+    logger.log(picocolors.bold("To get started:"));
     if (!projectDirIsCurrentDir) {
       logger.log(
-        `- Change to the directory: ${cyan(`cd ${relativeProjectDir}`)}`
+        `- Change to the directory: ${picocolors.cyan(
+          `cd ${relativeProjectDir}`
+        )}`
       );
     }
     logger.log(
-      `- Enable Remote Caching (recommended): ${cyan(
+      `- Enable Remote Caching (recommended): ${picocolors.cyan(
         `${packageManagerMeta.executable} turbo login`
       )}`
     );
-    logger.log(`   - Learn more: https://turbo.build/repo/remote-cache`);
+    logger.log("   - Learn more: https://turbo.build/repo/remote-cache");
     logger.log();
     logger.log("- Run commands with Turborepo:");
     availableScripts
       .filter((script) => SCRIPTS_TO_DISPLAY[script])
       .forEach((script) => {
         logger.log(
-          `   - ${cyan(`${packageManagerMeta.command} run ${script}`)}: ${
-            SCRIPTS_TO_DISPLAY[script]
-          } all apps and packages`
+          `   - ${picocolors.cyan(
+            `${packageManagerMeta.command} run ${script}`
+          )}: ${SCRIPTS_TO_DISPLAY[script]} all apps and packages`
         );
       });
     logger.log("- Run a command twice to hit cache");

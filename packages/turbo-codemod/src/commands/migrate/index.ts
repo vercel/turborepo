@@ -1,6 +1,6 @@
 import os from "node:os";
 import { execSync } from "node:child_process";
-import { green, red, dim, bold } from "picocolors";
+import picocolors from "picocolors";
 import { prompt } from "inquirer";
 import { getWorkspaceDetails, type Project } from "@turbo/workspaces";
 import { logger } from "@turbo/utils";
@@ -24,14 +24,14 @@ function endMigration({
   success: boolean;
 }) {
   if (success) {
-    logger.bold(green("Migration completed"));
+    logger.bold(picocolors.green("Migration completed"));
     if (message) {
       logger.log(message);
     }
     return process.exit(0);
   }
 
-  logger.bold(red("Migration failed"));
+  logger.bold(picocolors.red("Migration failed"));
   if (message) {
     logger.log(message);
   }
@@ -71,7 +71,7 @@ export async function migrate(
         if (exists) {
           return true;
         }
-        return `Directory ${dim(`(${absolute})`)} does not exist`;
+        return `Directory ${picocolors.dim(`(${absolute})`)} does not exist`;
       },
       filter: (d: string) => d.trim(),
     },
@@ -85,14 +85,16 @@ export async function migrate(
   if (!exists) {
     return endMigration({
       success: false,
-      message: `Directory ${dim(`(${root})`)} does not exist`,
+      message: `Directory ${picocolors.dim(`(${root})`)} does not exist`,
     });
   }
 
   if (!looksLikeRepo({ directory: root })) {
     return endMigration({
       success: false,
-      message: `Directory (${dim(root)}) does not appear to be a repository`,
+      message: `Directory (${picocolors.dim(
+        root
+      )}) does not appear to be a repository`,
     });
   }
 
@@ -102,7 +104,7 @@ export async function migrate(
   } catch (err) {
     return endMigration({
       success: false,
-      message: `Unable to read determine package manager details from ${dim(
+      message: `Unable to read determine package manager details from ${picocolors.dim(
         root
       )}`,
     });
@@ -135,16 +137,16 @@ export async function migrate(
   if (!toVersion) {
     return endMigration({
       success: false,
-      message: `Unable to fetch the latest version of turbo`,
+      message: "Unable to fetch the latest version of turbo",
     });
   }
 
   if (fromVersion === toVersion) {
     return endMigration({
       success: true,
-      message: `Nothing to do, current version (${bold(
+      message: `Nothing to do, current version (${picocolors.bold(
         fromVersion
-      )}) is the same as the requested version (${bold(toVersion)})`,
+      )}) is the same as the requested version (${picocolors.bold(toVersion)})`,
     });
   }
 
@@ -165,7 +167,9 @@ export async function migrate(
 
   // step 4
   logger.log(
-    `Upgrading turbo from ${bold(fromVersion)} to ${bold(toVersion)} (${
+    `Upgrading turbo from ${picocolors.bold(fromVersion)} to ${picocolors.bold(
+      toVersion
+    )} (${
       codemods.length === 0
         ? "no codemods required"
         : `${codemods.length} required codemod${
@@ -178,7 +182,9 @@ export async function migrate(
   const results: Array<TransformerResults> = [];
   for (const [idx, codemod] of codemods.entries()) {
     logger.log(
-      `(${idx + 1}/${codemods.length}) ${bold(`Running ${codemod.name}`)}`
+      `(${idx + 1}/${codemods.length}) ${picocolors.bold(
+        `Running ${codemod.name}`
+      )}`
     );
 
     // eslint-disable-next-line no-await-in-loop -- transforms have to run serially to avoid conflicts
@@ -199,7 +205,8 @@ export async function migrate(
   if (hasTransformError) {
     return endMigration({
       success: false,
-      message: `Could not complete migration due to codemod errors. Please fix the errors and try again.`,
+      message:
+        "Could not complete migration due to codemod errors. Please fix the errors and try again.",
     });
   }
 
@@ -222,11 +229,16 @@ export async function migrate(
   if (options.install) {
     if (options.dryRun) {
       logger.log(
-        `Upgrading turbo with ${bold(upgradeCommand)} ${dim("(dry run)")}`,
+        `Upgrading turbo with ${picocolors.bold(
+          upgradeCommand
+        )} ${picocolors.dim("(dry run)")}`,
         os.EOL
       );
     } else {
-      logger.log(`Upgrading turbo with ${bold(upgradeCommand)}`, os.EOL);
+      logger.log(
+        `Upgrading turbo with ${picocolors.bold(upgradeCommand)}`,
+        os.EOL
+      );
       try {
         execSync(upgradeCommand, { stdio: "pipe", cwd: project.paths.root });
       } catch (err: unknown) {
@@ -237,7 +249,7 @@ export async function migrate(
       }
     }
   } else {
-    logger.log(`Upgrade turbo with ${bold(upgradeCommand)}`, os.EOL);
+    logger.log(`Upgrade turbo with ${picocolors.bold(upgradeCommand)}`, os.EOL);
   }
 
   endMigration({ success: true });

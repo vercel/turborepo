@@ -1,4 +1,4 @@
-import { yellow } from "picocolors";
+import picocolors from "picocolors";
 import { MANAGERS } from "./managers";
 import type {
   Project,
@@ -73,7 +73,7 @@ export async function convertProject({
     await MANAGERS[to.name].convertLock({ project, to, logger, options });
     await install({ project, to, logger, options });
   } else {
-    logger.subStep(yellow("Skipping install"));
+    logger.subStep(picocolors.yellow("Skipping install"));
   }
 
   logger.mainStep(`Cleaning up ${project.packageManager} workspaces`);
