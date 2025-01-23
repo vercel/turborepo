@@ -130,7 +130,7 @@ jobs:
     steps:
       - name: echo
         run: |
-          echo ${{ needs.find-changes.outputs }}
+          echo ${{ fromJson(needs.find-changes.outputs) }}
 
   rust_lint:
     name: Rust lints
