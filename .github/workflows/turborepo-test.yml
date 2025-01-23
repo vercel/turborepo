@@ -51,8 +51,7 @@ jobs:
               - "examples/with-tailwind/**"
               - "turborepo-tests/example-with-svelte-*/**"
             rest:
-              - "!examples/**"
-              - "!docs/**"
+              - '!(examples/**|docs/**)'
 
   integration:
     name: Turborepo Integration
@@ -252,7 +251,7 @@ jobs:
     timeout-minutes: 40
     needs:
       - find-changes
-    if: ${{ needs.find-changes.outputs.basic-example == 'true' }}
+    if: ${{ needs.find-changes.outputs.basic-example == 'true' }} || ${{ needs.find-changes.outputs.examples-utils == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -271,7 +270,7 @@ jobs:
     needs:
       - find-changes
     timeout-minutes: 40
-    if: ${{ needs.find-changes.outputs.kitchen-sink-example == 'true' }}
+    if: ${{ needs.find-changes.outputs.kitchen-sink-example == 'true' }} || ${{ needs.find-changes.outputs.examples-utils == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -290,7 +289,7 @@ jobs:
     timeout-minutes: 40
     needs:
       - find-changes
-    if: ${{ needs.find-changes.outputs.non-monorepo-example == 'true' }}
+    if: ${{ needs.find-changes.outputs.non-monorepo-example == 'true' }} || ${{ needs.find-changes.outputs.examples-utils == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -309,7 +308,7 @@ jobs:
     timeout-minutes: 40
     needs:
       - find-changes
-    if: ${{ needs.find-changes.outputs.with-svelte-example == 'true' }}
+    if: ${{ needs.find-changes.outputs.with-svelte-example == 'true' }} || ${{ needs.find-changes.outputs.examples-utils == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -328,7 +327,7 @@ jobs:
     timeout-minutes: 40
     needs:
       - find-changes
-    if: ${{ needs.find-changes.outputs.with-tailwind-example == 'true' }}
+    if: ${{ needs.find-changes.outputs.with-tailwind-example == 'true' }} || ${{ needs.find-changes.outputs.examples-utils == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
