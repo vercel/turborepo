@@ -133,7 +133,7 @@ impl<'a> CommandProvider for PackageGraphCommandProvider<'a> {
         // task via an env var
         if self
             .mfe_configs
-            .map_or(false, |mfe_configs| mfe_configs.task_has_mfe_proxy(task_id))
+            .is_some_and(|mfe_configs| mfe_configs.task_has_mfe_proxy(task_id))
         {
             cmd.env("TURBO_TASK_HAS_MFE_PROXY", "true");
         }

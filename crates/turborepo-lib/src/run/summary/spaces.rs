@@ -146,7 +146,7 @@ impl SpacesClient {
     ) -> Option<Self> {
         // If space_id is empty, we don't build a client
         let space_id = space_id?;
-        let is_linked = api_auth.as_ref().map_or(false, |auth| auth.is_linked());
+        let is_linked = api_auth.as_ref().is_some_and(|auth| auth.is_linked());
         if !is_linked {
             // TODO: Add back spaces warning with new UI
             return None;
@@ -328,13 +328,13 @@ fn trim_logs(logs: &[u8], limit: usize) -> String {
     // Go JSON encoding automatically did a lossy conversion for us when
     // encoding Golang strings into JSON.
     let lossy_logs = String::from_utf8_lossy(logs);
-    if lossy_logs.as_bytes().len() <= limit {
+    if lossy_logs.len() <= limit {
         lossy_logs.into_owned()
     } else {
         // We try to trim down the logs so that it is valid utf8
         // We attempt to parse it at every byte starting from the limit until we get a
         // valid utf8 which means we aren't cutting in the middle of a cluster.
-        for start_index in (lossy_logs.as_bytes().len() - limit)..lossy_logs.as_bytes().len() {
+        for start_index in (lossy_logs.len() - limit)..lossy_logs.len() {
             let log_bytes = &lossy_logs.as_bytes()[start_index..];
             if let Ok(log_str) = std::str::from_utf8(log_bytes) {
                 return log_str.to_string();

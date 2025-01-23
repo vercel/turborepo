@@ -602,7 +602,7 @@ impl RepositoryQuery {
             .pkg_dep_graph()
             .packages()
             .map(|(name, _)| Package::new(self.run.clone(), name.clone()))
-            .filter(|pkg| pkg.as_ref().map_or(false, |pkg| filter.check(pkg)))
+            .filter(|pkg| pkg.as_ref().is_ok_and(|pkg| filter.check(pkg)))
             .collect::<Result<Array<_>, _>>()?;
         packages.sort_by(|a, b| a.get_name().cmp(b.get_name()));
 

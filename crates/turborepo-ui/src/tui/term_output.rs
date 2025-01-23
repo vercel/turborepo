@@ -129,7 +129,7 @@ impl<W> TerminalOutput<W> {
         self.parser
             .screen()
             .selected_text()
-            .map_or(false, |s| !s.is_empty())
+            .is_some_and(|s| !s.is_empty())
     }
 
     pub fn handle_mouse(&mut self, event: crossterm::event::MouseEvent) -> Result<(), Error> {
