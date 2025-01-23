@@ -53,8 +53,7 @@ jobs:
             rest:
               - "!examples/**"
               - "!docs/**"
-              - "!.github/**"
-  # THE PREVIOUS LINE IS ONLY THERE FOR TESTING PLEASE REMOVE
+
   integration:
     name: Turborepo Integration
     needs:
@@ -277,7 +276,6 @@ jobs:
       - name: "Run `kitchen-sink` example tests"
         uses: ./.github/actions/examples-tests
         with:
-          node-version: "22"
           github-token: "${{ secrets.GITHUB_TOKEN }}"
           turbo-token: "${{ secrets.TURBO_TOKEN }}"
           turbo-team: "${{ vars.TURBO_TEAM }}"
@@ -295,7 +293,6 @@ jobs:
       - name: "Run `non-monorepo` example tests"
         uses: ./.github/actions/examples-tests
         with:
-          node-version: "22"
           github-token: "${{ secrets.GITHUB_TOKEN }}"
           turbo-token: "${{ secrets.TURBO_TOKEN }}"
           turbo-team: "${{ vars.TURBO_TEAM }}"
@@ -313,7 +310,6 @@ jobs:
       - name: "Run `with-svelte` example tests"
         uses: ./.github/actions/examples-tests
         with:
-          node-version: "22"
           github-token: "${{ secrets.GITHUB_TOKEN }}"
           turbo-token: "${{ secrets.TURBO_TOKEN }}"
           turbo-team: "${{ vars.TURBO_TEAM }}"
@@ -331,7 +327,6 @@ jobs:
       - name: "Run `with-tailwind` example tests"
         uses: ./.github/actions/examples-tests
         with:
-          node-version: "22"
           github-token: "${{ secrets.GITHUB_TOKEN }}"
           turbo-token: "${{ secrets.TURBO_TOKEN }}"
           turbo-team: "${{ vars.TURBO_TEAM }}"
@@ -346,6 +341,11 @@ jobs:
       - rust_lint
       - rust_check
       - rust_test
+      - basic-example
+      - kitchen-sink-example
+      - non-monorepo-example
+      - with-svelte-example
+      - with-tailwind-example
     steps:
       - name: Compute info
         id: info
@@ -367,6 +367,11 @@ jobs:
           subjob ${{needs.rust_lint.result}}
           subjob ${{needs.rust_check.result}}
           subjob ${{needs.rust_test.result}}
+          subjob ${{needs.basic-example.result}}
+          subjob ${{needs.kitchen-sink-example.result}}
+          subjob ${{needs.non-monorepo-example.result}}
+          subjob ${{needs.with-svelte-example.result}}
+          subjob ${{needs.with-tailwind-example.result}}
 
           if [ "$cancelled" = "true" ]; then
               echo "cancelled=true" >> $GITHUB_OUTPUT
