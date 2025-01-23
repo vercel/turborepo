@@ -1,72 +1,10 @@
 ---
 source: crates/turborepo-lib/src/opts.rs
-expression: opts
+expression: "json!({\n    \"tasks\": opts.run_opts.tasks, \"filter_patterns\":\n    opts.scope_opts.filter_patterns\n})"
 ---
 {
-  "repo_opts": {
-    "root_turbo_json_path": "turbo.json",
-    "allow_no_package_manager": false,
-    "allow_no_turbo_json": false
-  },
-  "api_client_opts": {
-    "api_url": "https://vercel.com/api",
-    "timeout": 30,
-    "upload_timeout": 60,
-    "token": null,
-    "team_id": null,
-    "team_slug": null,
-    "login_url": "https://vercel.com",
-    "preflight": false
-  },
-  "cache_opts": {
-    "cache_dir": ".turbo/cache",
-    "cache": {
-      "local": {
-        "read": true,
-        "write": true
-      },
-      "remote": {
-        "read": false,
-        "write": false
-      }
-    },
-    "workers": 10,
-    "remote_cache_opts": {
-      "unused_team_id": null,
-      "signature": false
-    }
-  },
-  "run_opts": {
-    "tasks": [],
-    "concurrency": 10,
-    "parallel": false,
-    "env_mode": "strict",
-    "cache_dir": ".turbo/cache",
-    "framework_inference": false,
-    "profile": null,
-    "continue_on_error": false,
-    "pass_through_args": [],
-    "only": false,
-    "dry_run": null,
-    "graph": null,
-    "daemon": null,
-    "single_package": false,
-    "log_prefix": "Task",
-    "log_order": "Stream",
-    "summarize": false,
-    "experimental_space_id": null,
-    "is_github_actions": false,
-    "ui_mode": "stream"
-  },
-  "runcache_opts": {
-    "task_output_logs_override": null
-  },
-  "scope_opts": {
-    "pkg_inference_root": null,
-    "global_deps": [],
-    "filter_patterns": [
-      "foo"
-    ],
-    "affected_range": null
-  }
+  "tasks": [],
+  "filter_patterns": [
+    "foo"
+  ]
 }

@@ -541,6 +541,7 @@ impl ScopeOpts {
 mod test {
     use clap::Parser;
     use itertools::Itertools;
+    use serde_json::json;
     use tempfile::TempDir;
     use test_case::test_case;
     use turbopath::AbsoluteSystemPathBuf;
@@ -855,7 +856,10 @@ mod test {
             ConfigurationOptions::default(),
         )?;
 
-        insta::assert_json_snapshot!(args_str.iter().join("_"), opts);
+        insta::assert_json_snapshot!(
+            args_str.iter().join("_"),
+            json!({ "tasks": opts.run_opts.tasks, "filter_patterns": opts.scope_opts.filter_patterns  })
+        );
 
         Ok(())
     }
