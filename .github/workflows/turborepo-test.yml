@@ -60,7 +60,7 @@ jobs:
       - find-changes
     runs-on: ${{ matrix.os.runner }}
     timeout-minutes: 45
-    if: needs.find-changes.outputs.rest == 'true'
+    if: ${{ needs.find-changes.outputs.rest == 'true' }}
     strategy:
       fail-fast: false
       matrix:
@@ -127,7 +127,7 @@ jobs:
     name: Rust lints
     needs:
       - find-changes
-    if: needs.find-changes.outputs.rest == 'true'
+    if: ${{ needs.find-changes.outputs.rest == 'true' }}
     runs-on:
       - "self-hosted"
       - "linux"
@@ -163,7 +163,7 @@ jobs:
     name: Turborepo rust check
     needs:
       - find-changes
-    if: needs.find-changes.outputs.rest == 'true'
+    if: ${{ needs.find-changes.outputs.rest == 'true' }}
     runs-on:
       - "self-hosted"
       - "linux"
@@ -204,7 +204,7 @@ jobs:
     runs-on: ${{ matrix.os.runner }}
     needs:
       - find-changes
-    if: needs.find-changes.outputs.rest == 'true'
+    if: ${{ needs.find-changes.outputs.rest == 'true' }}
     name: Turborepo Rust testing on ${{ matrix.os.name }}
     steps:
       - name: Set git to use LF line endings
@@ -250,7 +250,7 @@ jobs:
   basic-example:
     name: "`basic` example"
     timeout-minutes: 40
-    if: needs.find-changes.outputs.basic-example == 'true'
+    if: ${{ needs.find-changes.outputs.basic-example == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -267,7 +267,7 @@ jobs:
   kitchen-sink-example:
     name: "`kitchen-sink` example"
     timeout-minutes: 40
-    if: needs.find-changes.outputs.kitchen-sink-example == 'true'
+    if: ${{ needs.find-changes.outputs.kitchen-sink-example == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -284,7 +284,7 @@ jobs:
   non-monorepo-example:
     name: "`non-monorepo` example"
     timeout-minutes: 40
-    if: needs.find-changes.outputs.non-monorepo-example == 'true'
+    if: ${{ needs.find-changes.outputs.non-monorepo-example == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -301,7 +301,7 @@ jobs:
   with-svelte-example:
     name: "`with-svelte` example"
     timeout-minutes: 40
-    if: needs.find-changes.outputs.with-svelte-example == 'true'
+    if: ${{ needs.find-changes.outputs.with-svelte-example == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -318,7 +318,7 @@ jobs:
   with-tailwind-example:
     name: "`with-tailwind` example"
     timeout-minutes: 40
-    if: needs.find-changes.outputs.with-tailwind-example == 'true'
+    if: ${{ needs.find-changes.outputs.with-tailwind-example == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
