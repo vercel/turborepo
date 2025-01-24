@@ -755,7 +755,7 @@ mod test {
                 (
                     "web",
                     turborepo_microfrontends::Config::from_str(
-                        r#"{"version": "2", "applications": {"web": {}, "docs": {}}}"#,
+                        r#"{"version": "1", "applications": {"web": {}, "docs": {}}}"#,
                         "mfe.json",
                     )
                     .map(Some),

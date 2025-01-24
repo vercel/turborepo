@@ -543,7 +543,7 @@ fn add_turbo_to_gitignore(base: &CommandBase) -> Result<(), io::Error> {
     } else {
         let gitignore = File::open(&gitignore_path)?;
         let mut lines = io::BufReader::new(gitignore).lines();
-        let has_turbo = lines.any(|line| line.map_or(false, |line| line.trim() == ".turbo"));
+        let has_turbo = lines.any(|line| line.is_ok_and(|line| line.trim() == ".turbo"));
         if !has_turbo {
             let mut gitignore = OpenOptions::new()
                 .read(true)

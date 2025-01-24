@@ -137,7 +137,7 @@ impl std::fmt::Debug for APIAuth {
 pub fn is_linked(api_auth: &Option<APIAuth>) -> bool {
     api_auth
         .as_ref()
-        .map_or(false, |api_auth| api_auth.is_linked())
+        .is_some_and(|api_auth| api_auth.is_linked())
 }
 
 impl Client for APIClient {
