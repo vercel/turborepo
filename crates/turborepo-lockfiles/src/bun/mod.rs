@@ -3,8 +3,10 @@ use std::{any::Any, collections::HashMap, str::FromStr};
 use biome_json_formatter::context::JsonFormatOptions;
 use biome_json_parser::JsonParserOptions;
 use id::PossibleKeyIter;
+use itertools::Itertools as _;
 use serde::Deserialize;
 use serde_json::Value;
+use turborepo_errors::ParseDiagnostic;
 
 use crate::Lockfile;
 
@@ -200,7 +202,12 @@ impl FromStr for BunLockfile {
             JsonParserOptions::default().with_allow_trailing_commas(),
         );
         if parsed_json.has_errors() {
-            // TODO
+            let diags = parsed_json
+                .into_diagnostics()
+                .into_iter()
+                .map(|diagnostic| ParseDiagnostic::from(&diagnostic).to_string())
+                .join("\n");
+            return Err(super::Error::BiomeJsonError(diags));
         }
         let syntax_tree = parsed_json.syntax();
         let format = biome_json_formatter::format_node(
