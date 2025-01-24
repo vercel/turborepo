@@ -380,7 +380,7 @@ impl Subscriber {
                             let has_root_tasks = repo_state
                                 .root_turbo_json
                                 .as_ref()
-                                .map_or(false, |turbo| turbo.has_root_tasks());
+                                .is_some_and(|turbo| turbo.has_root_tasks());
                             if !has_root_tasks {
                                 filtered_pkgs.remove(&root_pkg);
                             }

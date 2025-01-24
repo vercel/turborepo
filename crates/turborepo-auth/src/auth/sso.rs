@@ -24,7 +24,7 @@ fn make_token_name() -> Result<String, Error> {
 /// Perform an SSO login flow. If an existing token is present, and the token
 /// has access to the provided `sso_team`, we do not overwrite it and instead
 /// log that we found an existing token.
-pub async fn sso_login<'a, T: Client + TokenClient + CacheClient>(
+pub async fn sso_login<T: Client + TokenClient + CacheClient>(
     options: &LoginOptions<'_, T>,
 ) -> Result<Token, Error> {
     let LoginOptions {

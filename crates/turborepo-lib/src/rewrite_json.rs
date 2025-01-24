@@ -280,7 +280,7 @@ fn find_all_paths<'a>(
             let should_rewrite = if match_case_sensitive {
                 target_path[0] == current_property_name
             } else {
-                target_path[0].to_ascii_lowercase() == current_property_name.to_ascii_lowercase()
+                target_path[0].eq_ignore_ascii_case(current_property_name)
             };
 
             if should_rewrite {
