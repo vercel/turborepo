@@ -276,7 +276,7 @@ mod test {
                     for _dev_task in $dev_tasks.as_slice() {
                         _dev_tasks.insert(crate::run::task_id::TaskName::from(*_dev_task).task_id().unwrap().into_owned());
                     }
-                    _map.insert($config_owner.to_string(), ConfigInfo { tasks: _dev_tasks, version: "2", path: None });
+                    _map.insert($config_owner.to_string(), ConfigInfo { tasks: _dev_tasks, version: "1", path: None });
                 )+
                 _map
             }
@@ -298,7 +298,7 @@ mod test {
         pub const fn new(package_name: &'static str) -> Self {
             Self {
                 package_name,
-                version: "2",
+                version: "1",
                 result: None,
             }
         }
@@ -451,7 +451,7 @@ mod test {
     fn test_dev_task_collection() {
         let config = MFEConfig::from_str(
             &serde_json::to_string_pretty(&json!({
-                "version": "2",
+                "version": "1",
                 "applications": {
                     "web": {},
                     "docs": {
@@ -494,57 +494,5 @@ mod test {
             .update_turbo_json(&PackageName::Root, Ok(turbo_json))
             .unwrap();
         assert_eq!(actual.global_deps, &["web/microfrontends.json".to_owned()]);
-    }
-
-    #[test]
-    fn test_v2_and_v1() {
-        let config_v2 = MFEConfig::from_str(
-            &serde_json::to_string_pretty(&json!({
-                "version": "2",
-                "applications": {
-                    "web": {},
-                    "docs": {
-                        "development": {
-                            "task": "serve"
-                        }
-                    }
-                }
-            }))
-            .unwrap(),
-            "something.txt",
-        )
-        .unwrap();
-        let config_v1 = MFEConfig::from_str(
-            &serde_json::to_string_pretty(&json!({
-                "version": "1",
-                "applications": {
-                    "web": {},
-                    "docs": {
-                        "development": {
-                            "task": "serve"
-                        }
-                    }
-                }
-            }))
-            .unwrap(),
-            "something.txt",
-        )
-        .unwrap();
-        let result = PackageGraphResult::new(
-            vec![
-                ("web", Ok(Some(config_v2))),
-                ("docs", Ok(None)),
-                ("mfe-config", Ok(Some(config_v1))),
-            ]
-            .into_iter(),
-        )
-        .unwrap();
-        let mut expected = mfe_configs!(
-            "web" => ["web#dev", "docs#serve"],
-            "mfe-config" => ["web#dev", "docs#serve"]
-        );
-        expected.get_mut("mfe-config").unwrap().version = "1";
-
-        assert_eq!(result.configs, expected,)
     }
 }
