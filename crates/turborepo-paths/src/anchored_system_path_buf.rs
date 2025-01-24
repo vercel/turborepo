@@ -73,6 +73,8 @@ impl<'a> From<&'a AnchoredSystemPathBuf> for wax::CandidatePath<'a> {
 }
 
 impl AnchoredSystemPathBuf {
+    /// Note: This does not handle resolutions, so `../` in a path won't
+    /// resolve.
     pub fn new(
         root: impl AsRef<AbsoluteSystemPath>,
         path: impl AsRef<AbsoluteSystemPath>,

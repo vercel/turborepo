@@ -1,13 +1,28 @@
 lockfileVersion: '6.0'
 
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
 importers:
 
   .: {}
 
-  app:
+  apps/app:
     dependencies:
+      microdiff:
+        specifier: ^1.4.0
+        version: 1.4.0
       ui:
-        specifier: '*'
-        version: link:../ui
+        specifier: workspace:*
+        version: link:../../packages/ui
 
-  ui: {}
+  packages/blank: {}
+
+  packages/ui: {}
+
+packages:
+
+  /microdiff@1.4.0:
+    resolution: {integrity: sha512-OBKBOa1VBznvLPb/3ljeJaENVe0fO0lnWl77lR4vhPlQD71UpjEoRV5P0KdQkcjbFlBu1Oy2mEUBMU3wxcBAGg==}
+    dev: false
