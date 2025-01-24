@@ -460,7 +460,7 @@ mod test {
     fn test_port_collection() {
         let config = MFEConfig::from_str(
             &serde_json::to_string_pretty(&json!({
-                "version": "2",
+                "version": "1",
                 "applications": {
                     "web": {},
                     "docs": {
