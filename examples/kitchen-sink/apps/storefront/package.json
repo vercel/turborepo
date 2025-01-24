@@ -4,7 +4,6 @@
   "private": true,
   "scripts": {
     "build": "next build",
-    "clean": "rm -rf .next",
     "dev": "next dev -p 3002",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
@@ -12,18 +11,18 @@
   },
   "dependencies": {
     "@repo/logger": "workspace:*",
-    "next": "^14.1.1",
+    "@repo/ui": "workspace:*",
+    "next": "^15.1.6",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "@repo/ui": "workspace:*"
+    "react-dom": "^19.0.0"
   },
   "devDependencies": {
-    "@next/eslint-plugin-next": "^14.1.1",
-    "@types/node": "^20.11.24",
-    "@types/react": "^19.0.8",
-    "@types/react-dom": "^19.0.3",
+    "@next/eslint-plugin-next": "^15.1.6",
     "@repo/eslint-config": "workspace:*",
     "@repo/typescript-config": "workspace:*",
+    "@types/node": "^22.10.10",
+    "@types/react": "^19.0.8",
+    "@types/react-dom": "^19.0.3",
     "typescript": "5.7.3"
   }
 }

@@ -1,9 +1,10 @@
 {
   "name": "@repo/logger",
   "version": "0.0.0",
+  "type": "module",
   "private": true,
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "main": "./dist/index.cjs",
+  "types": "./dist/index.d.cts",
   "files": [
     "dist/**"
   ],
@@ -22,10 +23,10 @@
     "@repo/eslint-config": "workspace:*",
     "@repo/jest-presets": "workspace:*",
     "@repo/typescript-config": "workspace:*",
-    "@types/node": "^20.11.24",
-    "eslint": "^9.18.0",
+    "@types/node": "^22.10.10",
+    "eslint": "^9.19.0",
     "jest": "^29.7.0",
-    "tsup": "^8.0.2",
+    "tsup": "^8.3.5",
     "typescript": "5.7.3"
   }
 }
