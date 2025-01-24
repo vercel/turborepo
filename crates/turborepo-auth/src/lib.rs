@@ -176,10 +176,10 @@ impl Token {
     /// Checks if the token has access to the cache. This is a separate check
     /// from `is_active` because it's possible for a token to be active but not
     /// have access to the cache.
-    pub async fn has_cache_access<'a, T: CacheClient>(
+    pub async fn has_cache_access<T: CacheClient>(
         &self,
         client: &T,
-        team_info: Option<TeamInfo<'a>>,
+        team_info: Option<TeamInfo<'_>>,
     ) -> Result<bool, Error> {
         let (team_id, team_slug) = match team_info {
             Some(TeamInfo { id, slug }) => (Some(id), Some(slug)),

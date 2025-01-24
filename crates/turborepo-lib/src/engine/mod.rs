@@ -116,7 +116,7 @@ impl Engine<Building> {
         let has_location = self
             .task_locations
             .get(&task_id)
-            .map_or(false, |existing| existing.range.is_some());
+            .is_some_and(|existing| existing.range.is_some());
 
         if !has_location {
             self.task_locations.insert(task_id, location);
@@ -196,7 +196,7 @@ impl Engine<Built> {
                     .any(|idx| {
                         node_distances
                             .get(&(**idx, node_idx))
-                            .map_or(false, |dist| *dist != i32::MAX)
+                            .is_some_and(|dist| *dist != i32::MAX)
                     })
                     .then_some(node.clone())
             },
@@ -490,12 +490,12 @@ impl Engine<Built> {
                     .scripts
                     .get(task_id.task())
                     // handle legacy behaviour from go where an empty string may appear
-                    .map_or(false, |script| !script.is_empty());
+                    .is_some_and(|script| !script.is_empty());
 
                 let task_is_persistent = self
                     .task_definitions
                     .get(task_id)
-                    .map_or(false, |task_def| task_def.persistent);
+                    .is_some_and(|task_def| task_def.persistent);
 
                 Ok(task_is_persistent && package_has_task)
             })

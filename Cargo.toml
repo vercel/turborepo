@@ -14,6 +14,9 @@ members = [
 turborepo-libraries = ["path:crates/turborepo-*"]
 turborepo = ["path:crates/turborepo*"]
 
+[workspace.lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(debug_assert)'] }
+
 [workspace.lints.clippy]
 too_many_arguments = "allow"
 
