@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use itertools::Itertools;
 use tracing::warn;
 use turbopath::{AbsoluteSystemPath, RelativeUnixPath, RelativeUnixPathBuf};
-use turborepo_microfrontends::{Config as MFEConfig, Error, MICROFRONTENDS_PACKAGES};
+use turborepo_microfrontends::{Config as MFEConfig, Error, MICROFRONTENDS_PACKAGE};
 use turborepo_repository::package_graph::{PackageGraph, PackageName};
 
 use crate::{
@@ -194,11 +194,8 @@ impl PackageGraphResult {
         // We sort packages to ensure deterministic behavior
         let sorted_packages = packages.sorted_by(|(a, _), (b, _)| a.cmp(b));
         for (package_name, config) in sorted_packages {
-            if let Some(pkg) = MICROFRONTENDS_PACKAGES
-                .iter()
-                .find(|static_pkg| package_name == **static_pkg)
-            {
-                mfe_package = Some(*pkg);
+            if package_name == MICROFRONTENDS_PACKAGE {
+                mfe_package = Some(MICROFRONTENDS_PACKAGE);
             }
 
             let Some(config) = config.or_else(|err| match err {
@@ -266,9 +263,7 @@ impl ConfigInfo {
 mod test {
     use serde_json::json;
     use test_case::test_case;
-    use turborepo_microfrontends::{
-        MICROFRONTENDS_PACKAGE_EXTERNAL, MICROFRONTENDS_PACKAGE_INTERNAL,
-    };
+    use turborepo_microfrontends::MICROFRONTENDS_PACKAGE;
 
     use super::*;
 
@@ -391,17 +386,9 @@ mod test {
 
     #[test]
     fn test_mfe_package_is_found() {
-        let result = PackageGraphResult::new(
-            vec![
-                // These should never be present in the same graph, but if for some reason they
-                // are, we defer to the external variant.
-                (MICROFRONTENDS_PACKAGE_EXTERNAL, Ok(None)),
-                (MICROFRONTENDS_PACKAGE_INTERNAL, Ok(None)),
-            ]
-            .into_iter(),
-        )
-        .unwrap();
-        assert_eq!(result.mfe_package, Some(MICROFRONTENDS_PACKAGE_EXTERNAL));
+        let result =
+            PackageGraphResult::new(vec![(MICROFRONTENDS_PACKAGE, Ok(None))].into_iter()).unwrap();
+        assert_eq!(result.mfe_package, Some(MICROFRONTENDS_PACKAGE));
     }
 
     #[test]
