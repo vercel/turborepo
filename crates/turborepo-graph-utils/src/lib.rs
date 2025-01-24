@@ -125,7 +125,7 @@ pub fn validate_graph<N: Display + Clone + Hash + Eq>(graph: &Graph<N, ()>) -> R
             let workspaces = nodes.into_iter().map(|id| graph.node_weight(id).unwrap());
             let cuts = cuts.into_iter().map(format_cut).format("\n\t");
             format!(
-                "\t{}\n\tThe cycle can be broken by removing any of these sets of \
+                "\t{}\nThe cycle can be broken by removing any of these sets of \
                  dependencies:\n\t{cuts}",
                 workspaces.format(", ")
             )
@@ -194,7 +194,7 @@ mod test {
         assert_snapshot!(err.to_string(), @r###"
         Cyclic dependency detected:
         	d, c, b, a
-        	The cycle can be broken by removing any of these sets of dependencies:
+        The cycle can be broken by removing any of these sets of dependencies:
         	{b -> c}
         "###);
     }
