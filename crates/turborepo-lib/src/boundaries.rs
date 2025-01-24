@@ -322,31 +322,31 @@ impl Run {
         package_name: &PackageNode,
     ) -> bool {
         internal_dependencies.contains(&package_name)
-            || unresolved_external_dependencies.map_or(false, |external_dependencies| {
+            || unresolved_external_dependencies.is_some_and(|external_dependencies| {
                 external_dependencies.contains_key(package_name.as_package_name().as_str())
             })
             || package_json
                 .dependencies
                 .as_ref()
-                .map_or(false, |dependencies| {
+                .is_some_and(|dependencies| {
                     dependencies.contains_key(package_name.as_package_name().as_str())
                 })
             || package_json
                 .dev_dependencies
                 .as_ref()
-                .map_or(false, |dev_dependencies| {
+                .is_some_and(|dev_dependencies| {
                     dev_dependencies.contains_key(package_name.as_package_name().as_str())
                 })
             || package_json
                 .peer_dependencies
                 .as_ref()
-                .map_or(false, |peer_dependencies| {
+                .is_some_and(|peer_dependencies| {
                     peer_dependencies.contains_key(package_name.as_package_name().as_str())
                 })
             || package_json
                 .optional_dependencies
                 .as_ref()
-                .map_or(false, |optional_dependencies| {
+                .is_some_and(|optional_dependencies| {
                     optional_dependencies.contains_key(package_name.as_package_name().as_str())
                 })
     }

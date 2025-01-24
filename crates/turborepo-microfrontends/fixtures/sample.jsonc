@@ -2,7 +2,6 @@
   "version": "1",
   "applications": {
     "main-site": {
-      "default": true,
       "development": {
         "local": {
           "protocol": "http",
@@ -19,40 +18,35 @@
         "host": "main.com"
       },
       "vercel": {
-        "projectId": "id1",
-        "projectName": "main-site"
+        "projectId": "id1"
       }
     },
     "vercel-marketing": {
-      "default": false,
-      "routing": {
-        "assetPrefix": "market-site",
-        "matches": [
-          {
-            "group": "blog",
-            "paths": [
-              "/blog",
-              "/blog/:slug*",
-              "/press",
-              "/changelog",
-              "/changelog/:slug*",
-              "/customers/:slug*"
-            ]
-          },
-          {
-            "group": "navbar",
-            "paths": [
-              "/",
-              "/contact",
-              "/pricing",
-              "/enterprise",
-              // Resources
-              "/customers",
-              "/solutions/composable-commerce"
-            ]
-          }
-        ]
-      },
+      "routing": [
+        {
+          "group": "blog",
+          "paths": [
+            "/blog",
+            "/blog/:slug*",
+            "/press",
+            "/changelog",
+            "/changelog/:slug*",
+            "/customers/:slug*"
+          ]
+        },
+        {
+          "group": "navbar",
+          "paths": [
+            "/",
+            "/contact",
+            "/pricing",
+            "/enterprise",
+            // Resources
+            "/customers",
+            "/solutions/composable-commerce"
+          ]
+        }
+      ],
       "development": {
         "local": {
           "protocol": "http",
@@ -69,20 +63,15 @@
         "host": "market.main.com"
       },
       "vercel": {
-        "projectId": "id2",
-        "projectName": "market-site"
+        "projectId": "id2"
       }
     },
     "foo-docs": {
-      "default": false,
-      "routing": {
-        "assetPrefix": "foo",
-        "matches": [
-          {
-            "paths": ["/foo/:path*"]
-          }
-        ]
-      },
+      "routing": [
+        {
+          "paths": ["/foo/:path*"]
+        }
+      ],
       "development": {
         "fallback": {
           "protocol": "https",
@@ -99,16 +88,11 @@
         "host": "foo.main.com"
       },
       "vercel": {
-        "projectId": "id3",
-        "projectName": "foo-docs"
+        "projectId": "id3"
       }
     },
     "docs": {
-      "default": false,
-      "routing": {
-        "assetPrefix": "docs",
-        "matches": []
-      },
+      "routing": [],
       "development": {
         "fallback": {
           "protocol": "https",
@@ -125,8 +109,7 @@
         "host": "docs.main.com"
       },
       "vercel": {
-        "projectId": "id4",
-        "projectName": "docs-site"
+        "projectId": "id4"
       }
     }
   }

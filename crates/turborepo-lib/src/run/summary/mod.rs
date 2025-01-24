@@ -787,7 +787,7 @@ impl<'a> RunSummary<'a> {
                 task.shared
                     .execution
                     .as_ref()
-                    .map_or(false, |e| e.is_failure())
+                    .is_some_and(|e| e.is_failure())
             })
             .collect()
     }

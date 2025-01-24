@@ -143,7 +143,7 @@ impl<'a> DependencyVersion<'a> {
         // behavior before this additional logic was added.
 
         // TODO: extend this to support the `enableTransparentWorkspaces` yarn option
-        self.protocol.map_or(false, |p| p != "npm")
+        self.protocol.is_some_and(|p| p != "npm")
     }
 
     fn matches_workspace_package(

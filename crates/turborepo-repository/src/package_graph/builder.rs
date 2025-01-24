@@ -119,7 +119,7 @@ impl<'a, P> PackageGraphBuilder<'a, P> {
     }
 }
 
-impl<'a, T> PackageGraphBuilder<'a, T>
+impl<T> PackageGraphBuilder<'_, T>
 where
     T: PackageDiscoveryBuilder,
     T::Output: Send + Sync,
@@ -469,7 +469,7 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
     }
 }
 
-impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedLockfile, T> {
+impl<T: PackageDiscovery> BuildState<'_, ResolvedLockfile, T> {
     fn all_external_dependencies(&self) -> Result<HashMap<String, HashMap<String, String>>, Error> {
         self.workspaces
             .values()
