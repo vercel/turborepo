@@ -93,12 +93,13 @@ pub async fn prune(
     scope: &[String],
     docker: bool,
     output_dir: &str,
+    use_gitignore: bool,
     telemetry: CommandEventBuilder,
 ) -> Result<(), Error> {
     telemetry.track_arg_usage("docker", docker);
     telemetry.track_arg_usage("out-dir", output_dir != DEFAULT_OUTPUT_DIR);
 
-    let prune = Prune::new(base, scope, docker, output_dir, telemetry).await?;
+    let prune = Prune::new(base, scope, docker, output_dir, use_gitignore, telemetry).await?;
 
     if matches!(
         prune.package_graph.package_manager(),
@@ -244,6 +245,7 @@ struct Prune<'a> {
     full_directory: AbsoluteSystemPathBuf,
     docker: bool,
     scope: &'a [String],
+    use_gitignore: bool,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -261,6 +263,7 @@ impl<'a> Prune<'a> {
         scope: &'a [String],
         docker: bool,
         output_dir: &str,
+        use_gitignore: bool,
         telemetry: CommandEventBuilder,
     ) -> Result<Self, Error> {
         let allow_missing_package_manager = base.opts().repo_opts.allow_no_package_manager;
@@ -327,6 +330,7 @@ impl<'a> Prune<'a> {
             full_directory,
             docker,
             scope,
+            use_gitignore,
         })
     }
 
@@ -373,10 +377,10 @@ impl<'a> Prune<'a> {
             return Ok(());
         }
         let full_to = self.full_directory.resolve(path);
-        turborepo_fs::recursive_copy(&from_path, full_to, true)?;
+        turborepo_fs::recursive_copy(&from_path, full_to, self.use_gitignore)?;
         if matches!(destination, Some(CopyDestination::All)) {
             let out_to = self.out_directory.resolve(path);
-            turborepo_fs::recursive_copy(&from_path, out_to, true)?;
+            turborepo_fs::recursive_copy(&from_path, out_to, self.use_gitignore)?;
         }
         if self.docker
             && matches!(
@@ -385,7 +389,7 @@ impl<'a> Prune<'a> {
             )
         {
             let docker_to = self.docker_directory().resolve(path);
-            turborepo_fs::recursive_copy(&from_path, docker_to, true)?;
+            turborepo_fs::recursive_copy(&from_path, docker_to, self.use_gitignore)?;
         }
         Ok(())
     }
@@ -400,7 +404,7 @@ impl<'a> Prune<'a> {
         let target_dir = self.full_directory.resolve(&relative_workspace_dir);
         target_dir.create_dir_all_with_permissions(metadata.permissions())?;
 
-        turborepo_fs::recursive_copy(original_dir, &target_dir, true)?;
+        turborepo_fs::recursive_copy(original_dir, &target_dir, self.use_gitignore)?;
 
         if self.docker {
             let docker_workspace_dir = self.docker_directory().resolve(&relative_workspace_dir);
