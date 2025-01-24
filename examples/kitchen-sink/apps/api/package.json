@@ -1,13 +1,14 @@
 {
   "name": "api",
   "version": "0.0.0",
+  "type": "module",
   "private": true,
   "scripts": {
     "start": "node dist/index.js",
     "dev": "tsup --watch --onSuccess \"node dist/index.js\"",
     "build": "tsup",
     "clean": "rm -rf dist",
-    "typecheck": "tsc --noEmit",
+    "check-types": "tsc --noEmit",
     "lint": "eslint src/",
     "test": "jest --detectOpenHandles"
   },
