@@ -44,10 +44,11 @@ cd my-turborepo
 docker-compose up -d
 ```
 
-Once deployed you will need to copy the `.env.example` file to `.env` in order for Prisma to have a `DATABASE_URL` environment variable to access.
+Once deployed you will need to copy the `.env.example` file to the [`/packages/database`](./packages/database/) and [`/apps/web`](./apps/web/) directories as `.env `in order for Prisma to have a `DATABASE_URL` environment variable to access.
 
 ```bash
-cp .env.example .env
+cp .env.example ./packages/database/.env
+cp .env.example ./apps/web/.env
 ```
 
 If you added a custom database name, or use a cloud based database, you will need to update the `DATABASE_URL` in your `.env` accordingly.
