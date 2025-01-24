@@ -7,8 +7,8 @@
     "build": "vite build",
     "clean": "rm -rf dist",
     "dev": "vite --host 0.0.0.0 --port 3001 --clearScreen false",
-    "typecheck": "tsc --noEmit",
-    "lint": "eslint src/"
+    "check-types": "tsc --noEmit",
+    "lint": "eslint src/ --max-warnings 0"
   },
   "dependencies": {
     "@repo/ui": "workspace:*",

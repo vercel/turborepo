@@ -9,7 +9,7 @@
     "build": "tsup",
     "clean": "rm -rf dist",
     "check-types": "tsc --noEmit",
-    "lint": "eslint src/",
+    "lint": "eslint src/ --max-warnings 0",
     "test": "jest --detectOpenHandles"
   },
   "jest": {
@@ -19,7 +19,7 @@
     "@repo/logger": "workspace:*",
     "body-parser": "^1.20.3",
     "cors": "^2.8.5",
-    "express": "^4.21.2",
+    "express": "^5.0.1",
     "morgan": "^1.10.0"
   },
   "devDependencies": {

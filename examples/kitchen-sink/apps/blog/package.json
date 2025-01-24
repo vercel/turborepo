@@ -7,7 +7,8 @@
   "scripts": {
     "build": "remix vite:build",
     "dev": "remix vite:dev",
-    "typecheck": "tsc"
+    "check-types": "tsc --noEmit",
+    "lint": "eslint app/ --max-warnings 0"
   },
   "dependencies": {
     "@remix-run/node": "^2.15.2",
