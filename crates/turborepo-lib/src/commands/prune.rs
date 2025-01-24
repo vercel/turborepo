@@ -373,10 +373,10 @@ impl<'a> Prune<'a> {
             return Ok(());
         }
         let full_to = self.full_directory.resolve(path);
-        turborepo_fs::recursive_copy(&from_path, full_to)?;
+        turborepo_fs::recursive_copy(&from_path, full_to, true)?;
         if matches!(destination, Some(CopyDestination::All)) {
             let out_to = self.out_directory.resolve(path);
-            turborepo_fs::recursive_copy(&from_path, out_to)?;
+            turborepo_fs::recursive_copy(&from_path, out_to, true)?;
         }
         if self.docker
             && matches!(
@@ -385,7 +385,7 @@ impl<'a> Prune<'a> {
             )
         {
             let docker_to = self.docker_directory().resolve(path);
-            turborepo_fs::recursive_copy(&from_path, docker_to)?;
+            turborepo_fs::recursive_copy(&from_path, docker_to, true)?;
         }
         Ok(())
     }
@@ -400,7 +400,7 @@ impl<'a> Prune<'a> {
         let target_dir = self.full_directory.resolve(&relative_workspace_dir);
         target_dir.create_dir_all_with_permissions(metadata.permissions())?;
 
-        turborepo_fs::recursive_copy(original_dir, &target_dir)?;
+        turborepo_fs::recursive_copy(original_dir, &target_dir, true)?;
 
         if self.docker {
             let docker_workspace_dir = self.docker_directory().resolve(&relative_workspace_dir);
