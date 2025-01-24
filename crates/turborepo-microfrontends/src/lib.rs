@@ -1,6 +1,5 @@
 #![deny(clippy::all)]
 mod configv1;
-mod configv2;
 mod error;
 
 use std::io;
@@ -8,7 +7,6 @@ use std::io;
 use biome_deserialize_macros::Deserializable;
 use biome_json_parser::JsonParserOptions;
 use configv1::ConfigV1;
-use configv2::ConfigV2;
 pub use error::Error;
 use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
@@ -17,17 +15,10 @@ use turbopath::{
 /// Currently the default path for a package that provides a configuration.
 ///
 /// This is subject to change at any time.
-pub const DEFAULT_MICROFRONTENDS_CONFIG_V1: &str = "micro-frontends.jsonc";
-pub const DEFAULT_MICROFRONTENDS_CONFIG_V2: &str = "microfrontends.json";
-pub const DEFAULT_MICROFRONTENDS_CONFIG_V2_ALT: &str = "microfrontends.jsonc";
-pub const MICROFRONTENDS_PACKAGES: &[&str] = [
-    MICROFRONTENDS_PACKAGE_EXTERNAL,
-    MICROFRONTENDS_PACKAGE_INTERNAL,
-]
-.as_slice();
-pub const MICROFRONTENDS_PACKAGE_INTERNAL: &str = "@vercel/micro-frontends-internal";
-pub const MICROFRONTENDS_PACKAGE_EXTERNAL: &str = "@vercel/microfrontends";
-pub const SUPPORTED_VERSIONS: &[&str] = ["1", "2"].as_slice();
+pub const DEFAULT_MICROFRONTENDS_CONFIG_V1: &str = "microfrontends.json";
+pub const DEFAULT_MICROFRONTENDS_CONFIG_V1_ALT: &str = "microfrontends.jsonc";
+pub const MICROFRONTENDS_PACKAGE: &str = "@vercel/microfrontends";
+pub const SUPPORTED_VERSIONS: &[&str] = ["1"].as_slice();
 
 /// The minimal amount of information Turborepo needs to correctly start a local
 /// proxy server for microfrontends
@@ -41,7 +32,6 @@ pub struct Config {
 #[derive(Debug, PartialEq, Eq)]
 enum ConfigInner {
     V1(ConfigV1),
-    V2(ConfigV2),
 }
 
 impl Config {
@@ -62,7 +52,7 @@ impl Config {
         package_dir: &AnchoredSystemPath,
     ) -> Result<Option<Self>, Error> {
         let absolute_dir = repo_root.resolve(package_dir);
-        let mut config = if let Some(config) = Self::load_v2_dir(&absolute_dir)? {
+        let mut config = if let Some(config) = Self::load_v1_dir(&absolute_dir)? {
             Ok(Some(config))
         } else {
             Self::load_v1_dir(&absolute_dir)
@@ -87,15 +77,14 @@ impl Config {
 
         let version = match version_only {
             Some(VersionOnly { version }) => version,
-            // Default to version 2 if no version found
-            None => "2".to_string(),
+            // Default to version 1 if no version found
+            None => "1".to_string(),
         };
 
         let inner = match version.as_str() {
-            "1" => ConfigV1::from_str(input, source).map(ConfigInner::V1),
-            "2" => ConfigV2::from_str(input, source).and_then(|result| match result {
-                configv2::ParseResult::Actual(config_v2) => Ok(ConfigInner::V2(config_v2)),
-                configv2::ParseResult::Reference(default_app) => Err(Error::ChildConfig {
+            "1" => ConfigV1::from_str(input, source).and_then(|result| match result {
+                configv1::ParseResult::Actual(config_v1) => Ok(ConfigInner::V1(config_v1)),
+                configv1::ParseResult::Reference(default_app) => Err(Error::ChildConfig {
                     reference: default_app,
                 }),
             }),
@@ -108,10 +97,11 @@ impl Config {
         })
     }
 
-    pub fn development_tasks<'a>(&'a self) -> Box<dyn Iterator<Item = (&str, Option<&str>)> + 'a> {
+    pub fn development_tasks<'a>(
+        &'a self,
+    ) -> Box<dyn Iterator<Item = (&'a str, Option<&'a str>)> + 'a> {
         match &self.inner {
             ConfigInner::V1(config_v1) => Box::new(config_v1.development_tasks()),
-            ConfigInner::V2(config_v2) => Box::new(config_v2.development_tasks()),
         }
     }
 
@@ -128,52 +118,36 @@ impl Config {
     pub fn version(&self) -> &'static str {
         match &self.inner {
             ConfigInner::V1(_) => "1",
-            ConfigInner::V2(_) => "2",
         }
     }
 
-    fn load_v2_dir(dir: &AbsoluteSystemPath) -> Result<Option<Self>, Error> {
+    fn load_v1_dir(dir: &AbsoluteSystemPath) -> Result<Option<Self>, Error> {
         let load_config =
             |filename: &str| -> Option<(Result<String, io::Error>, AbsoluteSystemPathBuf)> {
                 let path = dir.join_component(filename);
                 let contents = path.read_existing_to_string().transpose()?;
                 Some((contents, path))
             };
-        let Some((contents, path)) = load_config(DEFAULT_MICROFRONTENDS_CONFIG_V2)
-            .or_else(|| load_config(DEFAULT_MICROFRONTENDS_CONFIG_V2_ALT))
+        let Some((contents, path)) = load_config(DEFAULT_MICROFRONTENDS_CONFIG_V1)
+            .or_else(|| load_config(DEFAULT_MICROFRONTENDS_CONFIG_V1_ALT))
         else {
             return Ok(None);
         };
         let contents = contents?;
 
-        ConfigV2::from_str(&contents, path.as_str())
+        ConfigV1::from_str(&contents, path.as_str())
             .and_then(|result| match result {
-                configv2::ParseResult::Actual(config_v2) => Ok(Config {
-                    inner: ConfigInner::V2(config_v2),
+                configv1::ParseResult::Actual(config_v1) => Ok(Config {
+                    inner: ConfigInner::V1(config_v1),
                     filename: path
                         .file_name()
                         .expect("microfrontends config should not be root")
                         .to_owned(),
                     path: None,
                 }),
-                configv2::ParseResult::Reference(default_app) => Err(Error::ChildConfig {
+                configv1::ParseResult::Reference(default_app) => Err(Error::ChildConfig {
                     reference: default_app,
                 }),
-            })
-            .map(Some)
-    }
-
-    fn load_v1_dir(dir: &AbsoluteSystemPath) -> Result<Option<Self>, Error> {
-        let path = dir.join_component(DEFAULT_MICROFRONTENDS_CONFIG_V1);
-        let Some(contents) = path.read_existing_to_string()? else {
-            return Ok(None);
-        };
-
-        ConfigV1::from_str(&contents, path.as_str())
-            .map(|config_v1| Self {
-                inner: ConfigInner::V1(config_v1),
-                filename: DEFAULT_MICROFRONTENDS_CONFIG_V1.to_owned(),
-                path: None,
             })
             .map(Some)
     }
@@ -203,7 +177,7 @@ mod test {
     fn test_unsupported_version() {
         let input = r#"{"version": "yolo"}"#;
         let err = Config::from_str(input, "something.json").unwrap_err();
-        assert_snapshot!(err, @r###"Unsupported micro-frontends configuration version: yolo. Supported versions: ["1", "2"]"###);
+        assert_snapshot!(err, @r###"Unsupported microfrontends configuration version: yolo. Supported versions: ["1"]"###);
     }
 
     fn add_v1_config(dir: &AbsoluteSystemPath) -> Result<(), std::io::Error> {
@@ -212,22 +186,15 @@ mod test {
         path.create_with_contents(r#"{"version": "1", "applications": {"web": {"development": {"task": "serve"}}, "docs": {}}}"#)
     }
 
-    fn add_v2_config(dir: &AbsoluteSystemPath) -> Result<(), std::io::Error> {
-        let path = dir.join_component(DEFAULT_MICROFRONTENDS_CONFIG_V2);
+    fn add_v1_alt_config(dir: &AbsoluteSystemPath) -> Result<(), std::io::Error> {
+        let path = dir.join_component(DEFAULT_MICROFRONTENDS_CONFIG_V1_ALT);
         path.ensure_dir()?;
-        path.create_with_contents(r#"{"version": "2", "applications": {"web": {"development": {"task": "serve"}}, "docs": {}}}"#)
-    }
-
-    fn add_v2_alt_config(dir: &AbsoluteSystemPath) -> Result<(), std::io::Error> {
-        let path = dir.join_component(DEFAULT_MICROFRONTENDS_CONFIG_V2_ALT);
-        path.ensure_dir()?;
-        path.create_with_contents(r#"{"version": "2", "applications": {"web": {"development": {"task": "serve"}}, "docs": {}}}"#)
+        path.create_with_contents(r#"{"version": "1", "applications": {"web": {"development": {"task": "serve"}}, "docs": {}}}"#)
     }
 
     struct LoadDirTest {
         has_v1: bool,
-        has_v2: bool,
-        has_alt_v2: bool,
+        has_alt_v1: bool,
         pkg_dir: &'static str,
         expected_version: Option<FoundConfig>,
         expected_filename: Option<&'static str>,
@@ -236,7 +203,6 @@ mod test {
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     enum FoundConfig {
         V1,
-        V2,
     }
 
     impl LoadDirTest {
@@ -244,8 +210,7 @@ mod test {
             Self {
                 pkg_dir,
                 has_v1: false,
-                has_v2: false,
-                has_alt_v2: false,
+                has_alt_v1: false,
                 expected_version: None,
                 expected_filename: None,
             }
@@ -256,23 +221,13 @@ mod test {
             self
         }
 
-        pub const fn has_v2(mut self) -> Self {
-            self.has_v2 = true;
-            self
-        }
-
-        pub const fn has_alt_v2(mut self) -> Self {
-            self.has_alt_v2 = true;
+        pub const fn has_alt_v1(mut self) -> Self {
+            self.has_alt_v1 = true;
             self
         }
 
         pub const fn expects_v1(mut self) -> Self {
             self.expected_version = Some(FoundConfig::V1);
-            self
-        }
-
-        pub const fn expects_v2(mut self) -> Self {
-            self.expected_version = Some(FoundConfig::V2);
             self
         }
 
@@ -296,27 +251,14 @@ mod test {
         .expects_v1()
         .with_filename(DEFAULT_MICROFRONTENDS_CONFIG_V1);
 
-    const LOAD_V2: LoadDirTest = LoadDirTest::new("web")
-        .has_v2()
-        .expects_v2()
-        .with_filename(DEFAULT_MICROFRONTENDS_CONFIG_V2);
-
-    const LOAD_BOTH: LoadDirTest = LoadDirTest::new("web")
-        .has_v1()
-        .has_v2()
-        .expects_v2()
-        .with_filename(DEFAULT_MICROFRONTENDS_CONFIG_V2);
-
-    const LOAD_V2_ALT: LoadDirTest = LoadDirTest::new("web")
-        .has_alt_v2()
-        .expects_v2()
-        .with_filename(DEFAULT_MICROFRONTENDS_CONFIG_V2_ALT);
+    const LOAD_V1_ALT: LoadDirTest = LoadDirTest::new("web")
+        .has_alt_v1()
+        .expects_v1()
+        .with_filename(DEFAULT_MICROFRONTENDS_CONFIG_V1_ALT);
 
     const LOAD_NONE: LoadDirTest = LoadDirTest::new("web");
     #[test_case(LOAD_V1)]
-    #[test_case(LOAD_V2)]
-    #[test_case(LOAD_BOTH)]
-    #[test_case(LOAD_V2_ALT)]
+    #[test_case(LOAD_V1_ALT)]
     #[test_case(LOAD_NONE)]
     fn test_load_dir(case: LoadDirTest) {
         let dir = TempDir::new().unwrap();
@@ -326,17 +268,13 @@ mod test {
         if case.has_v1 {
             add_v1_config(&pkg_path).unwrap();
         }
-        if case.has_v2 {
-            add_v2_config(&pkg_path).unwrap();
-        }
-        if case.has_alt_v2 {
-            add_v2_alt_config(&pkg_path).unwrap();
+        if case.has_alt_v1 {
+            add_v1_alt_config(&pkg_path).unwrap();
         }
 
         let config = Config::load_from_dir(repo_root, pkg_dir).unwrap();
         let actual_version = config.as_ref().map(|config| match &config.inner {
             ConfigInner::V1(_) => FoundConfig::V1,
-            ConfigInner::V2(_) => FoundConfig::V2,
         });
         let actual_path = config.as_ref().and_then(|config| config.path());
         assert_eq!(actual_version, case.expected_version);

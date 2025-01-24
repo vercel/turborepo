@@ -6,6 +6,7 @@ mod handle;
 mod input;
 mod pane;
 mod popup;
+mod preferences;
 mod search;
 mod size;
 mod spinner;
@@ -26,14 +27,16 @@ pub use term_output::TerminalOutput;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("failed to send event to TUI: {0}")]
+    #[error("Failed to send event to TUI: {0}")]
     Mpsc(String),
-    #[error("No task found with name '{name}'")]
+    #[error("No task found with name '{name}'.")]
     TaskNotFound { name: String },
-    #[error("No task at index {index} (only {len} tasks) ")]
+    #[error("No task at index {index} (only {len} tasks)")]
     TaskNotFoundIndex { index: usize, len: usize },
     #[error("Unable to write to stdin for '{name}': {e}")]
     Stdin { name: String, e: std::io::Error },
     #[error(transparent)]
     Io(#[from] std::io::Error),
+    #[error("Unable to persist preferences.")]
+    Preferences(#[from] preferences::Error),
 }

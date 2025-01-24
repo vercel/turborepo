@@ -1,6 +1,6 @@
 import path from "node:path";
 import { getWorkspaceDetails, type Project } from "@turbo/workspaces";
-import { readJson } from "fs-extra";
+import fs from "fs-extra";
 import type { Transformer, TransformerArgs } from "../types";
 import type { TransformerResults } from "../runner";
 import { getTransformerHelpers } from "../utils/getTransformerHelpers";
@@ -18,7 +18,7 @@ async function readPkgJson(
   pkgJsonPath: string
 ): Promise<PartialPackageJson | null> {
   try {
-    return (await readJson(pkgJsonPath)) as { name?: string };
+    return (await fs.readJson(pkgJsonPath)) as { name?: string };
   } catch (e) {
     return null;
   }

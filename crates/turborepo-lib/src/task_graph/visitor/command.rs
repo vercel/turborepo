@@ -2,7 +2,7 @@ use std::{collections::HashSet, path::PathBuf};
 
 use turbopath::AbsoluteSystemPath;
 use turborepo_env::EnvironmentVariableMap;
-use turborepo_microfrontends::MICROFRONTENDS_PACKAGES;
+use turborepo_microfrontends::MICROFRONTENDS_PACKAGE;
 use turborepo_repository::package_graph::{PackageGraph, PackageInfo, PackageName};
 
 use super::Error;
@@ -133,7 +133,7 @@ impl<'a> CommandProvider for PackageGraphCommandProvider<'a> {
         // task via an env var
         if self
             .mfe_configs
-            .map_or(false, |mfe_configs| mfe_configs.task_has_mfe_proxy(task_id))
+            .is_some_and(|mfe_configs| mfe_configs.task_has_mfe_proxy(task_id))
         {
             cmd.env("TURBO_TASK_HAS_MFE_PROXY", "true");
         }
@@ -206,7 +206,8 @@ impl<'a> CommandProvider for MicroFrontendProxyProvider<'a> {
         let has_mfe_dependency = package_info
             .package_json
             .all_dependencies()
-            .any(|(package, _version)| MICROFRONTENDS_PACKAGES.contains(&package.as_str()));
+            .any(|(package, _version)| package.as_str() == MICROFRONTENDS_PACKAGE);
+
         if !has_mfe_dependency {
             let mfe_config_filename = self.mfe_configs.config_filename(task_id.package());
             return Err(Error::MissingMFEDependency {
@@ -230,7 +231,7 @@ impl<'a> CommandProvider for MicroFrontendProxyProvider<'a> {
         args.extend(local_apps);
 
         // TODO: leverage package manager to find the local proxy
-        let program = package_dir.join_components(&["node_modules", ".bin", "micro-frontends"]);
+        let program = package_dir.join_components(&["node_modules", ".bin", "microfrontends"]);
         let mut cmd = Command::new(program.as_std_path());
         cmd.current_dir(package_dir).args(args).open_stdin();
 
@@ -306,7 +307,7 @@ mod test {
         let cmd = factory
             .command(&task_id, EnvironmentVariableMap::default())
             .unwrap_err();
-        assert_snapshot!(cmd.to_string(), @"internal errors encountered: oops!");
+        assert_snapshot!(cmd.to_string(), @"Internal errors encountered: oops!");
     }
 
     #[test]

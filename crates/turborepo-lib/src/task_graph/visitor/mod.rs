@@ -2,7 +2,6 @@ mod command;
 mod error;
 mod exec;
 mod output;
-
 use std::{
     borrow::Cow,
     collections::HashSet,
@@ -11,6 +10,7 @@ use std::{
 };
 
 use console::{Style, StyledObject};
+use convert_case::{Case, Casing};
 use error::{TaskError, TaskWarning};
 use exec::ExecContextFactory;
 use futures::{stream::FuturesUnordered, StreamExt};
@@ -23,6 +23,7 @@ use tracing::{debug, error, warn, Span};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath};
 use turborepo_ci::{Vendor, VendorBehavior};
 use turborepo_env::{platform::PlatformEnv, EnvironmentVariableMap};
+use turborepo_errors::TURBO_SITE;
 use turborepo_repository::package_graph::{PackageGraph, PackageName, ROOT_PKG_NAME};
 use turborepo_telemetry::events::{
     generic::GenericEventBuilder, task::PackageTaskEventBuilder, EventBuilder, TrackedErrors,
@@ -51,7 +52,6 @@ use crate::{
 pub struct Visitor<'a> {
     color_cache: ColorSelector,
     dry: bool,
-    global_env: EnvironmentVariableMap,
     global_env_mode: EnvMode,
     manager: ProcessManager,
     run_opts: &'a RunOpts,
@@ -71,37 +71,46 @@ pub struct Visitor<'a> {
 
 #[derive(Debug, thiserror::Error, Diagnostic)]
 pub enum Error {
-    #[error("cannot find package {package_name} for task {task_id}")]
+    #[error("Cannot find package {package_name} for task {task_id}.")]
     MissingPackage {
         package_name: PackageName,
         task_id: TaskId<'static>,
     },
     #[error(
-        "root task {task_name} ({command}) looks like it invokes turbo and might cause a loop"
+        "Your `package.json` script looks like it invokes a Root Task ({task_name}), creating a \
+         loop of `turbo` invocations. You likely have misconfigured your scripts and tasks or \
+         your package manager's Workspace structure."
+    )]
+    #[diagnostic(
+        code(recursive_turbo_invocations),
+        url(
+            "{}/messages/{}",
+            TURBO_SITE, self.code().unwrap().to_string().to_case(Case::Kebab)
+        )
     )]
     RecursiveTurbo {
         task_name: String,
         command: String,
-        #[label("task found here")]
+        #[label("This script calls `turbo`, which calls the script, which calls `turbo`...")]
         span: Option<SourceSpan>,
         #[source_code]
         text: NamedSource,
     },
     #[error("Could not find definition for task")]
     MissingDefinition,
-    #[error("error while executing engine: {0}")]
+    #[error("Error while executing engine: {0}")]
     Engine(#[from] crate::engine::ExecuteError),
     #[error(transparent)]
     TaskHash(#[from] task_hash::Error),
     #[error(transparent)]
     RunSummary(#[from] summary::Error),
-    #[error("internal errors encountered: {0}")]
+    #[error("Internal errors encountered: {0}")]
     InternalErrors(String),
-    #[error("unable to find package manager binary: {0}")]
+    #[error("Unable to find package manager binary: {0}")]
     Which(#[from] which::Error),
     #[error(
         "'{package}' is configured with a {mfe_config_filename}, but doesn't have \
-         '@vercel/microfrontends' listed as a dependency"
+         '@vercel/microfrontends' listed as a dependency."
     )]
     MissingMFEDependency {
         package: String,
@@ -136,6 +145,7 @@ impl<'a> Visitor<'a> {
             run_opts,
             env_at_execution_start,
             global_hash,
+            global_env,
         );
 
         let sink = Self::sink(run_opts);
@@ -162,7 +172,6 @@ impl<'a> Visitor<'a> {
             sink,
             task_hasher,
             color_config,
-            global_env,
             ui_sender,
             is_watch,
             warnings: Default::default(),
@@ -215,6 +224,7 @@ impl<'a> Visitor<'a> {
                 Some(cmd) if info.package() == ROOT_PKG_NAME && turbo_regex().is_match(cmd) => {
                     package_task_event.track_error(TrackedErrors::RecursiveError);
                     let (span, text) = cmd.span_and_text("package.json");
+
                     return Err(Error::RecursiveTurbo {
                         task_name: info.to_string(),
                         command: cmd.to_string(),
@@ -248,9 +258,9 @@ impl<'a> Visitor<'a> {
             // We do this calculation earlier than we do in Go due to the `task_hasher`
             // being !Send. In the future we can look at doing this right before
             // task execution instead.
-            let execution_env =
-                self.task_hasher
-                    .env(&info, task_env_mode, task_definition, &self.global_env)?;
+            let execution_env = self
+                .task_hasher
+                .env(&info, task_env_mode, task_definition)?;
 
             let task_cache = self.run_cache.task_cache(
                 task_definition,
@@ -357,7 +367,6 @@ impl<'a> Visitor<'a> {
 
     /// Finishes visiting the tasks, creates the run summary, and either
     /// prints, saves, or sends it to spaces.
-
     #[allow(clippy::too_many_arguments)]
     #[tracing::instrument(skip(
         self,

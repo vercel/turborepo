@@ -61,11 +61,11 @@ impl Matcher {
             Strategy::All => self
                 .dependencies
                 .iter()
-                .all(|dep| deps.map_or(false, |deps| deps.contains_key(dep))),
+                .all(|dep| deps.is_some_and(|deps| deps.contains_key(dep))),
             Strategy::Some => self
                 .dependencies
                 .iter()
-                .any(|dep| deps.map_or(false, |deps| deps.contains_key(dep))),
+                .any(|dep| deps.is_some_and(|deps| deps.contains_key(dep))),
         }
     }
 }

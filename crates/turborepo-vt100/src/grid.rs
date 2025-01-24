@@ -198,7 +198,21 @@ impl Grid {
     }
 
     pub fn visible_row(&self, row: u16) -> Option<&crate::row::Row> {
-        self.visible_rows().nth(usize::from(row))
+        // The number of rows that are in scrollback before the current screen
+        let scrollback_rows_before_screen =
+            self.scrollback.len().saturating_sub(self.scrollback_offset);
+        // The index for row if it is in the scrollback
+        let scrollback_idx = scrollback_rows_before_screen + usize::from(row);
+        // If this is a valid scrollback index, then return that row
+        if scrollback_idx < self.scrollback.len() {
+            self.scrollback.get(scrollback_idx)
+        } else {
+            // Need to subtract scrollback offset
+            // e.g. if we are showing 1 row of scrollback, and user requests 3rd visible row
+            // we should return the second row in self.rows
+            self.rows
+                .get(usize::from(row).saturating_sub(self.scrollback_offset))
+        }
     }
 
     pub fn drawing_row(&self, row: u16) -> Option<&crate::row::Row> {

@@ -1,6 +1,7 @@
 use std::backtrace;
 
 use camino::Utf8PathBuf;
+use serde::Serialize;
 use thiserror::Error;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 use turborepo_api_client::APIAuth;
@@ -18,23 +19,23 @@ use crate::{
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("Expected run command")]
+    #[error("Expected `run` command.")]
     ExpectedRun(#[backtrace] backtrace::Backtrace),
     #[error(transparent)]
     ParseFloat(#[from] std::num::ParseFloatError),
     #[error(
-        "invalid percentage value for --concurrency CLI flag. This should be a percentage of CPU \
-         cores, between 1% and 100% : {1}"
+        "Invalid percentage value for `--concurrency` flag. This should be a percentage of CPU \
+         cores, between 1% and 100%: {1}"
     )]
     InvalidConcurrencyPercentage(#[backtrace] backtrace::Backtrace, f64),
     #[error(
-        "invalid value for --concurrency CLI flag. This should be a positive integer greater than \
+        "Invalid value for `--concurrency` flag. This should be a positive integer greater than \
          or equal to 1: {1}"
     )]
     ConcurrencyOutOfBounds(#[backtrace] backtrace::Backtrace, String),
     #[error(
         "Cannot set `cache` config and other cache options (`force`, `remoteOnly`, \
-         `remoteCacheReadOnly`) at the same time"
+         `remoteCacheReadOnly`) at the same time."
     )]
     OverlappingCacheOptions,
     #[error(transparent)]
@@ -43,7 +44,7 @@ pub enum Error {
     Config(#[from] crate::config::Error),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct APIClientOpts {
     pub api_url: String,
     pub timeout: u64,
@@ -55,7 +56,7 @@ pub struct APIClientOpts {
     pub preflight: bool,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct RepoOpts {
     pub root_turbo_json_path: AbsoluteSystemPathBuf,
     pub allow_no_package_manager: bool,
@@ -65,7 +66,7 @@ pub struct RepoOpts {
 /// The fully resolved options for Turborepo. This is the combination of config,
 /// including all the layers (env, args, defaults, etc.), and the command line
 /// arguments.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct Opts {
     pub repo_opts: RepoOpts,
     pub api_client_opts: APIClientOpts,
@@ -135,12 +136,21 @@ impl Opts {
                 run_args,
                 execution_args,
             }) => (execution_args, run_args),
+            Some(Command::Watch(execution_args)) => (execution_args, &Box::default()),
             Some(Command::Ls {
                 affected, filter, ..
             }) => {
                 let execution_args = ExecutionArgs {
                     filter: filter.clone(),
                     affected: *affected,
+                    ..Default::default()
+                };
+
+                (&Box::new(execution_args), &Box::default())
+            }
+            Some(Command::Boundaries { filter }) => {
+                let execution_args = ExecutionArgs {
+                    filter: filter.clone(),
                     ..Default::default()
                 };
 
@@ -183,7 +193,7 @@ struct OptsInputs<'a> {
     api_auth: &'a Option<APIAuth>,
 }
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, Serialize)]
 pub struct RunCacheOpts {
     pub(crate) task_output_logs_override: Option<OutputLogsMode>,
 }
@@ -196,7 +206,7 @@ impl<'a> From<OptsInputs<'a>> for RunCacheOpts {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub struct RunOpts {
     pub(crate) tasks: Vec<String>,
     pub(crate) concurrency: u32,
@@ -253,19 +263,19 @@ impl<'a> TaskArgs<'a> {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub enum GraphOpts {
     Stdout,
     File(String),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 pub enum ResolvedLogOrder {
     Stream,
     Grouped,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize)]
 pub enum ResolvedLogPrefix {
     Task,
     None,
@@ -387,7 +397,7 @@ impl From<LogPrefix> for ResolvedLogPrefix {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub struct ScopeOpts {
     pub pkg_inference_root: Option<AnchoredSystemPathBuf>,
     pub global_deps: Vec<String>,
@@ -462,6 +472,7 @@ impl<'a> TryFrom<OptsInputs<'a>> for CacheOpts {
             return Err(Error::OverlappingCacheOptions);
         }
 
+        // defaults to fully enabled cache
         let mut cache = cache.unwrap_or_default();
 
         if inputs.config.remote_only() {
@@ -482,11 +493,10 @@ impl<'a> TryFrom<OptsInputs<'a>> for CacheOpts {
         if !is_linked {
             cache.remote.read = false;
             cache.remote.write = false;
-        } else if let Some(enabled) = inputs.config.enabled {
-            // We're linked, but if the user has explicitly enabled or disabled, use that
-            // value
-            cache.remote.read = enabled;
-            cache.remote.write = enabled;
+        } else if let Some(false) = inputs.config.enabled {
+            // We're linked, but if the user has explicitly disabled remote cache
+            cache.remote.read = false;
+            cache.remote.write = false;
         };
 
         if inputs.config.remote_cache_read_only() {
@@ -529,9 +539,13 @@ impl ScopeOpts {
 
 #[cfg(test)]
 mod test {
+    use clap::Parser;
+    use itertools::Itertools;
+    use serde_json::json;
+    use tempfile::TempDir;
     use test_case::test_case;
     use turbopath::AbsoluteSystemPathBuf;
-    use turborepo_cache::CacheOpts;
+    use turborepo_cache::{CacheActions, CacheConfig, CacheOpts};
     use turborepo_ui::ColorConfig;
 
     use super::{APIClientOpts, RepoOpts, RunOpts};
@@ -770,6 +784,82 @@ mod test {
         .map(|base| base.opts().cache_opts.cache);
 
         insta::assert_debug_snapshot!(name, cache_config);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_cache_config_force_remote_enable() -> Result<(), anyhow::Error> {
+        let tmpdir = TempDir::new()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(tmpdir.path())?;
+
+        repo_root
+            .join_component("turbo.json")
+            .create_with_contents(serde_json::to_string_pretty(&serde_json::json!({
+                "remoteCache": { "enabled": true }
+            }))?)?;
+
+        let mut args = Args::default();
+        args.command = Some(Command::Run {
+            execution_args: Box::default(),
+            run_args: Box::new(RunArgs {
+                force: Some(Some(true)),
+                ..Default::default()
+            }),
+        });
+
+        // set token and team to simulate a logged in/linked user
+        args.token = Some("token".to_string());
+        args.team = Some("team".to_string());
+
+        let base = CommandBase::new(args, repo_root, "1.0.0", ColorConfig::new(false))?;
+        let actual = base.opts().cache_opts.cache;
+
+        assert_eq!(
+            actual,
+            CacheConfig {
+                remote: CacheActions {
+                    read: false,
+                    write: true
+                },
+                local: CacheActions {
+                    read: false,
+                    write: true
+                }
+            }
+        );
+
+        Ok(())
+    }
+
+    #[test_case(
+        vec!["turbo", "watch", "build"];
+        "watch"
+    )]
+    #[test_case(
+        vec!["turbo", "run", "build"];
+        "run"
+    )]
+    #[test_case(
+        vec!["turbo", "ls", "--filter", "foo"];
+        "ls"
+    )]
+    #[test_case(
+        vec!["turbo", "boundaries", "--filter", "foo"];
+        "boundaries"
+    )]
+    fn test_derive_opts_from_args(args_str: Vec<&str>) -> Result<(), anyhow::Error> {
+        let args = Args::try_parse_from(&args_str)?;
+        let opts = Opts::new(
+            &AbsoluteSystemPathBuf::default(),
+            &args,
+            ConfigurationOptions::default(),
+        )?;
+
+        insta::assert_json_snapshot!(
+            args_str.iter().join("_"),
+            json!({ "tasks": opts.run_opts.tasks, "filter_patterns": opts.scope_opts.filter_patterns  })
+        );
 
         Ok(())
     }

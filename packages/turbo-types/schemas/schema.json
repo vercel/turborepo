@@ -164,6 +164,11 @@
           "type": "boolean",
           "description": "Mark a task as interactive allowing it to receive input from stdin. Interactive tasks must be marked with \"cache\": false as the input they receive from stdin can change the outcome of the task.\n\nDocumentation: https://turbo.build/repo/docs/reference/configuration#interactive",
           "default": false
+        },
+        "interruptible": {
+          "type": "boolean",
+          "description": "Label a persistent task as interruptible to allow it to be restarted by `turbo watch`. `turbo watch` watches for changes to your packages and automatically restarts tasks that are affected. However, if a task is persistent, it will not be restarted by default. To enable restarting persistent tasks, set `interruptible` to true.\n\nDocumentation: https://turbo.build/repo/docs/reference/configuration#interruptible",
+          "default": false
         }
       },
       "additionalProperties": false

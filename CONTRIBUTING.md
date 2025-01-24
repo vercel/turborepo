@@ -9,7 +9,7 @@ Thank you for your interest in contributing to Turborepo!
 - [Manually testing `turbo`](#manually-testing-turbo)
   - [Repositories to test with](#repositories-to-test-with)
 - [Debugging tips](#debugging-tips)
-  - [Verbose logging](#verbose-logging)  
+  - [Verbose logging](#verbose-logging)
   - [Crash logs](#crash-logs)
   - [Terminal UI debugging](#terminal-ui-debugging)
 - [Publishing `turbo` to the npm registry](#publishing-turbo-to-the-npm-registry)
@@ -26,13 +26,15 @@ You will need to have these dependences installed on your machine to work on thi
 - [Rust](https://www.rust-lang.org/tools/install) ([Repository toolchain](https://github.com/vercel/turborepo/blob/main/rust-toolchain.toml))
 - [NodeJS](https://nodejs.org/en) v20
 - [pnpm](https://pnpm.io/) v8
+- [protoc](https://grpc.io/docs/protoc-installation/)
+- [capnp](https://capnproto.org)
 
 ### Optional dependencies
 
 - For running tests locally, `jq` and `zstd` are also required.
   - macOS: `brew install jq zstd`
-  - Linux: ``sudo apt update && sudo apt install jq zstd`
-  - Windows: `choco install jq zstandard
+  - Linux: `sudo apt update && sudo apt install jq zstd`
+  - Windows: `choco install jq zstandard`
 - On Linux, ensure LLD (LLVM Linker) is installed, as it's not installed by default on many Linux distributions (e.g. `apt install lld`).
 
 ## Structure of the repository
@@ -64,7 +66,7 @@ out of the box. If you wish to select `native-tls`, you may do so by running `ca
 ## Running tests
 
 > [!IMPORTANT]
-> You will need to have `jq` and `zstd` installed on your system in order to run tests. See [General dDependencies](#general-dependencies) for instructions on how to install these tools.
+> You will need to have `jq` and `zstd` installed on your system in order to run tests. See [General dependencies](#general-dependencies) for instructions on how to install these tools.
 
 First, install Turborepo globally with your package manager of choice. For instance, with npm, `npm install -g turbo`. This will install the `turbo` binary in your system's `PATH`, making it globally available.
 
@@ -97,14 +99,14 @@ cargo test -p <module>
 
 - Updating integration tests
 
-  ```
+  ```bash
   turbo run build --filter=cli
   pnpm --filter turborepo-tests-integration test:interactive
   ```
 
   You can pass a test name to run a single test, or a directory to run all tests in that directory.
 
-  ```
+  ```bash
   pnpm --filter turborepo-tests-integration test:interactive tests/turbo-help.t
   ```
 
@@ -143,6 +145,16 @@ There are many open-source Turborepos out in the community that you can test wit
 
 ## Debugging tips
 
+### Links in error messages
+
+Many of Turborepo's error messages include links to information or documentation to help end users.
+
+The base URL for the links can be set to a value of your choosing by providing a `TURBO_SITE` environment variable at compilation time.
+
+```bash
+TURBO_SITE="http://localhost:3000" cargo build
+```
+
 ### Verbose logging
 
 Verbose logging can be enabled by using the `-v`, `-vv`, or `-vvv` flag on your `turbo` command, depending on the level of logging you're looking for.
@@ -176,6 +188,11 @@ See [the publishing guide](./release.md).
 ## Contributing to examples
 
 Contributing to examples helps the Turborepo community by showcasing how to use Turborepo in real-world scenarios with other tools and frameworks. They can be found in [the examples directory](https://github.com/vercel/turborepo/tree/main/examples) of this repository.
+
+> [!IMPORTANT]
+> As Turborepo usage has grown, the community has contributed more and more examples to the repository. While this is exciting for us on the core team, we're unable to maintain the full surface area of every example, given the constant updates across the breadth of tooling that Turborepo works with in the examples.
+>
+> Because of this, a handful of the examples are explictly marked as maintained by the core team. For the rest, we work with the community to keep them as up to date and correct as possible. If you find a problem with a community-supported template, we ask that you do not open a GitHub Issue for it. Instead, please open a pull request with the needed fixes.
 
 The `basic` example is the default used by `create-turbo`.
 
@@ -215,8 +232,8 @@ Once you've created your example (with prior approval, as discussed above), you 
 
 To test out the experience of your example with `create-turbo`, run `create-turbo` with the `--example` flag pointed to a URL to your example's source code:
 
-```
+```bash
 npx create-turbo@latest --example https://github.com/your-org/your-repo/tree/your-branch/...
 ```
 
-This will allow you to use the example as a uesr would.
+This will allow you to use the example as a user would.

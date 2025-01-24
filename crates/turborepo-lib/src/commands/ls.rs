@@ -18,7 +18,7 @@ use crate::{
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
-    #[error("package `{package}` not found")]
+    #[error("Package `{package}` not found.")]
     PackageNotFound { package: String },
 }
 

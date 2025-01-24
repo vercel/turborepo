@@ -1,4 +1,4 @@
-import { bold, dim } from "picocolors";
+import picocolors from "picocolors";
 import { logger } from "@turbo/utils";
 import { Logger } from "../utils/logger";
 import type { UtilityArgs } from "../types";
@@ -57,12 +57,12 @@ export class Runner {
       if (mod.hasChanges()) {
         if (this.dry) {
           result.action = "skipped";
-          this.logger.skipped(dim(mod.fileName()));
+          this.logger.skipped(picocolors.dim(mod.fileName()));
         } else {
           try {
             mod.write();
             result.action = "modified";
-            this.logger.modified(bold(mod.fileName()));
+            this.logger.modified(picocolors.bold(mod.fileName()));
           } catch (err) {
             let message = "Unknown error";
             if (err instanceof Error) {
@@ -78,7 +78,7 @@ export class Runner {
           mod.log({ diff: true });
         }
       } else {
-        this.logger.unchanged(dim(mod.fileName()));
+        this.logger.unchanged(picocolors.dim(mod.fileName()));
       }
 
       results.changes[mod.fileName()] = result;
@@ -102,7 +102,7 @@ export class Runner {
     const changedFiles = Object.keys(results.changes);
     logger.log();
     if (changedFiles.length > 0) {
-      logger.bold(`Results:`);
+      logger.bold("Results:");
       const table: Record<
         string,
         {

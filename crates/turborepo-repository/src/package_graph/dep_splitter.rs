@@ -5,7 +5,7 @@ use turbopath::{
     RelativeUnixPathBuf,
 };
 
-use super::{npmrc::NpmRc, PackageInfo, PackageName};
+use super::{PackageInfo, PackageName};
 use crate::package_manager::PackageManager;
 
 pub struct DependencySplitter<'a> {
@@ -21,15 +21,13 @@ impl<'a> DependencySplitter<'a> {
         workspace_dir: &'a AbsoluteSystemPath,
         workspaces: &'a HashMap<PackageName, PackageInfo>,
         package_manager: &PackageManager,
-        npmrc: Option<&'a NpmRc>,
     ) -> Self {
+        let link_workspace_packages = package_manager.link_workspace_packages(repo_root);
         Self {
             repo_root,
             workspace_dir,
             workspaces,
-            link_workspace_packages: npmrc
-                .and_then(|npmrc| npmrc.link_workspace_packages)
-                .unwrap_or(!matches!(package_manager, PackageManager::Pnpm9)),
+            link_workspace_packages,
         }
     }
 
@@ -145,7 +143,7 @@ impl<'a> DependencyVersion<'a> {
         // behavior before this additional logic was added.
 
         // TODO: extend this to support the `enableTransparentWorkspaces` yarn option
-        self.protocol.map_or(false, |p| p != "npm")
+        self.protocol.is_some_and(|p| p != "npm")
     }
 
     fn matches_workspace_package(
@@ -194,7 +192,7 @@ impl<'a> DependencyVersion<'a> {
     }
 }
 
-impl<'a> fmt::Display for DependencyVersion<'a> {
+impl fmt::Display for DependencyVersion<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.protocol {
             Some(protocol) => f.write_fmt(format_args!("{}:{}", protocol, self.version)),

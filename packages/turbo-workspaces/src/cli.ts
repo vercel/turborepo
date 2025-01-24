@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { red } from "picocolors";
+import picocolors from "picocolors";
 import { Command } from "commander";
 import { logger } from "@turbo/utils";
 import cliPkg from "../package.json";
@@ -48,9 +48,9 @@ workspacesCli
 workspacesCli.parseAsync().catch((error) => {
   logger.log();
   if (error instanceof ConvertError) {
-    logger.log(red(error.message));
+    logger.log(picocolors.red(error.message));
   } else {
-    logger.log(red("Unexpected error. Please report it as a bug:"));
+    logger.log(picocolors.red("Unexpected error. Please report it as a bug:"));
     logger.log(error);
   }
   logger.log();

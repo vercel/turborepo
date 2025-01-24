@@ -37,8 +37,9 @@ pub fn setup_fixture(
     Ok(())
 }
 
-/// Executes a command with different arguments in a specific fixture and
-/// package manager and snapshots the output as JSON.
+/// Executes a command and snapshots the output as JSON.
+///
+/// Takes fixture, package manager, and command, and sets of arguments.
 /// Creates a snapshot file for each set of arguments.
 /// Note that the command must return valid JSON
 #[macro_export]
@@ -46,7 +47,7 @@ macro_rules! check_json {
     ($fixture:expr, $package_manager:expr, $command:expr, $($name:expr => $query:expr,)*) => {
         {
             let tempdir = tempfile::tempdir()?;
-            crate::common::setup_fixture($fixture, $package_manager, tempdir.path())?;
+            $crate::common::setup_fixture($fixture, $package_manager, tempdir.path())?;
             $(
                 println!("Running command: `turbo {} {}` in {}", $command, $query, $fixture);
                 let output = assert_cmd::Command::cargo_bin("turbo")?

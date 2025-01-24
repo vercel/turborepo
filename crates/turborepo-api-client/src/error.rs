@@ -11,7 +11,7 @@ pub enum Error {
     ReadError(#[from] std::io::Error),
     #[error("Error making HTTP request: {0}")]
     ReqwestError(#[from] reqwest::Error),
-    #[error("skipping HTTP Request, too many failures have occurred.\nLast error: {0}")]
+    #[error("Skipping HTTP Request. Too many failures have occurred.\nLast error: {0}")]
     TooManyFailures(#[from] Box<reqwest::Error>),
     #[error("Unable to set up TLS.")]
     TlsError(#[source] reqwest::Error),
@@ -19,9 +19,9 @@ pub enum Error {
     InvalidHeader(#[from] ToStrError),
     #[error("Error parsing '{url}' as URL: {err}")]
     InvalidUrl { url: String, err: url::ParseError },
-    #[error("unknown caching status: {0}")]
+    #[error("Unknown caching status: {0}")]
     UnknownCachingStatus(String, #[backtrace] Backtrace),
-    #[error("unknown status {code}: {message}")]
+    #[error("Unknown status {code}: {message}")]
     UnknownStatus {
         code: String,
         message: String,
@@ -39,8 +39,8 @@ pub enum Error {
         text: String,
     },
     #[error(
-        "[HTTP {status}] request to {url} returned \"{message}\" \ntry logging in again, or force \
-         a new token (turbo login <--sso-team your_team> -f)."
+        "[HTTP {status}] request to {url} returned \"{message}\" \nTry logging in again, or force \
+         a refresh of your token (turbo login --sso-team=your-team --force)."
     )]
     InvalidToken {
         status: u16,

@@ -14,7 +14,7 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "lint": "eslint . --max-warnings 0",
-    "clean": "rm -rf .turbo && rm -rf node_modules && rm -rf dist"
+    "clean": "rm -rf .turbo node_modules dist"
   },
   "devDependencies": {
     "@repo/eslint-config": "workspace:*",

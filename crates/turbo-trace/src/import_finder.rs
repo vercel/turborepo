@@ -2,22 +2,39 @@ use swc_common::{Span, Spanned};
 use swc_ecma_ast::{Decl, ModuleDecl, Stmt};
 use swc_ecma_visit::{Visit, VisitWith};
 
-use crate::tracer::ImportType;
+use crate::tracer::ImportTraceType;
+
+/// The type of import that we find.
+///
+/// Either an import with a `type` keyword (indicating that it is importing only
+/// types) or an import without the `type` keyword (indicating that it is
+/// importing values and possibly types).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ImportType {
+    Type,
+    Value,
+}
 
 pub struct ImportFinder {
-    import_type: ImportType,
-    imports: Vec<(String, Span)>,
+    import_type: ImportTraceType,
+    imports: Vec<(String, Span, ImportType)>,
+}
+
+impl Default for ImportFinder {
+    fn default() -> Self {
+        Self::new(ImportTraceType::All)
+    }
 }
 
 impl ImportFinder {
-    pub fn new(import_type: ImportType) -> Self {
+    pub fn new(import_type: ImportTraceType) -> Self {
         Self {
             import_type,
             imports: Vec::new(),
         }
     }
 
-    pub fn imports(&self) -> &[(String, Span)] {
+    pub fn imports(&self) -> &[(String, Span, ImportType)] {
         &self.imports
     }
 }
@@ -25,18 +42,23 @@ impl ImportFinder {
 impl Visit for ImportFinder {
     fn visit_module_decl(&mut self, decl: &ModuleDecl) {
         if let ModuleDecl::Import(import) = decl {
+            let import_type = if import.type_only {
+                ImportType::Type
+            } else {
+                ImportType::Value
+            };
             match self.import_type {
-                ImportType::All => {
+                ImportTraceType::All => {
                     self.imports
-                        .push((import.src.value.to_string(), import.span));
+                        .push((import.src.value.to_string(), import.span, import_type));
                 }
-                ImportType::Types if import.type_only => {
+                ImportTraceType::Types if import.type_only => {
                     self.imports
-                        .push((import.src.value.to_string(), import.span));
+                        .push((import.src.value.to_string(), import.span, import_type));
                 }
-                ImportType::Values if !import.type_only => {
+                ImportTraceType::Values if !import.type_only => {
                     self.imports
-                        .push((import.src.value.to_string(), import.span));
+                        .push((import.src.value.to_string(), import.span, import_type));
                 }
                 _ => {}
             }
@@ -56,8 +78,11 @@ impl Visit for ImportFinder {
                                             lit_str,
                                         )) = &*arg.expr
                                         {
-                                            self.imports
-                                                .push((lit_str.value.to_string(), expr.span()));
+                                            self.imports.push((
+                                                lit_str.value.to_string(),
+                                                expr.span(),
+                                                ImportType::Value,
+                                            ));
                                         }
                                     }
                                 }
