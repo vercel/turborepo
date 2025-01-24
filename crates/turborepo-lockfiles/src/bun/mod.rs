@@ -32,6 +32,8 @@ pub struct BunLockfile {
     lockfile_version: i32,
     workspaces: Map<String, WorkspaceEntry>,
     packages: Map<String, PackageEntry>,
+    #[serde(default)]
+    patched_dependencies: Map<String, String>,
 }
 
 #[derive(Debug, Deserialize, PartialEq, Default)]
@@ -94,7 +96,12 @@ impl Lockfile for BunLockfile {
         let workspace_name = &workspace_entry.name;
         let workspace_key = format!("{workspace_name}/{name}");
         if let Some((key, entry)) = self.package_entry(&workspace_key) {
-            let version = entry.version().to_string();
+            let mut version = entry.version().to_string();
+            // Check for any patches
+            if let Some(patch) = self.patched_dependencies.get(&entry.key) {
+                version.push('+');
+                version.push_str(patch);
+            }
             Ok(Some(crate::Package {
                 key: key.to_string(),
                 version,
@@ -227,6 +234,7 @@ mod test {
     use super::*;
 
     const BASIC_LOCKFILE: &str = include_str!("../../fixtures/basic-bun.lock");
+    const PATCH_LOCKFILE: &str = include_str!("../../fixtures/bun-patch.lock");
 
     #[test_case("", "turbo", "^2.3.3", "turbo" ; "root")]
     #[test_case("apps/docs", "is-odd", "3.0.1", "is-odd" ; "docs is odd")]
@@ -279,5 +287,18 @@ mod test {
             .collect::<Vec<_>>();
         actual.sort();
         assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_patch_is_captured_in_package() {
+        let lockfile = BunLockfile::from_str(PATCH_LOCKFILE).unwrap();
+        let pkg = lockfile
+            .resolve_package("apps/b", "is-odd", "3.0.0")
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            pkg,
+            crate::Package::new("b/is-odd", "3.0.0+patches/is-odd@3.0.0.patch")
+        );
     }
 }

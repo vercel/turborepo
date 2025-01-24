@@ -156,4 +156,11 @@ mod test {
         let result = BunLockfile::from_str(contents);
         assert!(result.is_ok(), "{}", result.unwrap_err());
     }
+
+    #[test]
+    fn test_patch() {
+        let contents = include_str!("../../fixtures/bun-patch.lock");
+        let result = BunLockfile::from_str(contents);
+        assert!(result.is_ok(), "{}", result.unwrap_err());
+    }
 }
