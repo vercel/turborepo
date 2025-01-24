@@ -679,6 +679,9 @@ pub enum Command {
         docker: bool,
         #[clap(long = "out-dir", default_value_t = String::from(prune::DEFAULT_OUTPUT_DIR), value_parser)]
         output_dir: String,
+        /// Respect `.gitignore` when copying files to <OUT-DIR>
+        #[clap(long, default_missing_value = "true", num_args = 0..=1, require_equals = true)]
+        use_gitignore: Option<bool>,
     },
 
     /// Run tasks across projects in your monorepo
@@ -1528,6 +1531,7 @@ pub async fn run(
             scope_arg,
             docker,
             output_dir,
+            use_gitignore,
         } => {
             let event = CommandEventBuilder::new("prune").with_parent(&root_telemetry);
             event.track_call();
@@ -1538,10 +1542,19 @@ pub async fn run(
                 .unwrap_or_default();
             let docker = *docker;
             let output_dir = output_dir.clone();
+            let use_gitignore = use_gitignore.unwrap_or(true);
             let base = CommandBase::new(cli_args, repo_root, version, color_config)?;
             event.track_ui_mode(base.opts.run_opts.ui_mode);
             let event_child = event.child();
-            prune::prune(&base, &scope, docker, &output_dir, event_child).await?;
+            prune::prune(
+                &base,
+                &scope,
+                docker,
+                &output_dir,
+                use_gitignore,
+                event_child,
+            )
+            .await?;
             Ok(0)
         }
         Command::Completion { shell } => {
@@ -2588,6 +2601,7 @@ mod test {
             scope_arg: Some(vec!["foo".into()]),
             docker: false,
             output_dir: "out".to_string(),
+            use_gitignore: None,
         };
 
         assert_eq!(
@@ -2618,6 +2632,7 @@ mod test {
                     scope_arg: None,
                     docker: false,
                     output_dir: "out".to_string(),
+                    use_gitignore: None,
                 }),
                 ..Args::default()
             }
@@ -2631,6 +2646,7 @@ mod test {
                     scope_arg: Some(vec!["foo".to_string(), "bar".to_string()]),
                     docker: false,
                     output_dir: "out".to_string(),
+                    use_gitignore: None,
                 }),
                 ..Args::default()
             }
@@ -2644,6 +2660,7 @@ mod test {
                     scope_arg: Some(vec!["foo".into()]),
                     docker: true,
                     output_dir: "out".to_string(),
+                    use_gitignore: None,
                 }),
                 ..Args::default()
             }
@@ -2657,6 +2674,7 @@ mod test {
                     scope_arg: Some(vec!["foo".into()]),
                     docker: false,
                     output_dir: "dist".to_string(),
+                    use_gitignore: None,
                 }),
                 ..Args::default()
             }
@@ -2672,6 +2690,7 @@ mod test {
                     scope_arg: Some(vec!["foo".into()]),
                     docker: true,
                     output_dir: "dist".to_string(),
+                    use_gitignore: None,
                 }),
                 ..Args::default()
             },
@@ -2688,6 +2707,7 @@ mod test {
                     scope_arg: Some(vec!["foo".into()]),
                     docker: true,
                     output_dir: "dist".to_string(),
+                    use_gitignore: None,
                 }),
                 cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
@@ -2709,6 +2729,58 @@ mod test {
                     scope_arg: None,
                     docker: true,
                     output_dir: "dist".to_string(),
+                    use_gitignore: None,
+                }),
+                ..Args::default()
+            },
+        }
+        .test();
+
+        CommandTestCase {
+            command: "prune",
+            command_args: vec![vec!["foo"], vec!["--use-gitignore"]],
+            global_args: vec![],
+            expected_output: Args {
+                command: Some(Command::Prune {
+                    scope: None,
+                    scope_arg: Some(vec!["foo".to_string()]),
+                    docker: false,
+                    output_dir: "out".to_string(),
+                    use_gitignore: Some(true),
+                }),
+                ..Args::default()
+            },
+        }
+        .test();
+
+        CommandTestCase {
+            command: "prune",
+            command_args: vec![vec!["foo"], vec!["--use-gitignore=true"]],
+            global_args: vec![],
+            expected_output: Args {
+                command: Some(Command::Prune {
+                    scope: None,
+                    scope_arg: Some(vec!["foo".to_string()]),
+                    docker: false,
+                    output_dir: "out".to_string(),
+                    use_gitignore: Some(true),
+                }),
+                ..Args::default()
+            },
+        }
+        .test();
+
+        CommandTestCase {
+            command: "prune",
+            command_args: vec![vec!["foo"], vec!["--use-gitignore=false"]],
+            global_args: vec![],
+            expected_output: Args {
+                command: Some(Command::Prune {
+                    scope: None,
+                    scope_arg: Some(vec!["foo".to_string()]),
+                    docker: false,
+                    output_dir: "out".to_string(),
+                    use_gitignore: Some(false),
                 }),
                 ..Args::default()
             },
@@ -3000,7 +3072,7 @@ mod test {
         assert!(inferred_run
             .execution_args
             .as_ref()
-            .map_or(false, |e| e.single_package));
+            .is_some_and(|e| e.single_package));
         assert!(explicit_run
             .command
             .as_ref()

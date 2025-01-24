@@ -22,6 +22,7 @@ pub enum Error {
 pub fn recursive_copy(
     src: impl AsRef<AbsoluteSystemPath>,
     dst: impl AsRef<AbsoluteSystemPath>,
+    use_gitignore: bool,
 ) -> Result<(), Error> {
     let src = src.as_ref();
     let dst = dst.as_ref();
@@ -30,9 +31,9 @@ pub fn recursive_copy(
     if src_metadata.is_dir() {
         let walker = WalkBuilder::new(src.as_path())
             .hidden(false)
-            .git_ignore(true)
+            .git_ignore(use_gitignore)
             .git_global(false)
-            .git_exclude(true)
+            .git_exclude(use_gitignore)
             .build();
 
         for entry in walker {
@@ -127,6 +128,7 @@ fn copy_file_with_type(
 mod tests {
     use std::path::Path;
 
+    use test_case::test_case;
     use turbopath::AbsoluteSystemPathBuf;
 
     use super::*;
@@ -277,10 +279,10 @@ mod tests {
 
         let (_dst_tmp, dst_dir) = tmp_dir()?;
 
-        recursive_copy(&src_dir, &dst_dir)?;
+        recursive_copy(&src_dir, &dst_dir, true)?;
 
         // Ensure double copy doesn't error
-        recursive_copy(&src_dir, &dst_dir)?;
+        recursive_copy(&src_dir, &dst_dir, true)?;
 
         let dst_child_path = dst_dir.join_component("child");
         let dst_a_path = dst_child_path.join_component("a");
@@ -318,8 +320,9 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn test_recursive_copy_gitignore() -> Result<(), Error> {
+    #[test_case(true)]
+    #[test_case(false)]
+    fn test_recursive_copy_gitignore(use_gitignore: bool) -> Result<(), Error> {
         // Directory layout:
         //
         // <src>/
@@ -351,11 +354,14 @@ mod tests {
         hidden.create_with_contents("polo")?;
 
         let (_dst_tmp, dst_dir) = tmp_dir()?;
-        recursive_copy(&src_dir, &dst_dir)?;
+        recursive_copy(&src_dir, &dst_dir, use_gitignore)?;
 
         assert!(dst_dir.join_component(".gitignore").exists());
-        assert!(!dst_dir.join_component("invisible.txt").exists());
-        assert!(!dst_dir.join_component("dist").exists());
+        assert_eq!(
+            !dst_dir.join_component("invisible.txt").exists(),
+            use_gitignore
+        );
+        assert_eq!(!dst_dir.join_component("dist").exists(), use_gitignore);
         assert!(dst_dir.join_component("child").exists());
         assert!(dst_dir.join_components(&["child", "seen.txt"]).exists());
         assert!(dst_dir.join_components(&["child", ".hidden"]).exists());

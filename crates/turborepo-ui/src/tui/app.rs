@@ -681,8 +681,8 @@ async fn run_app_inner<B: Backend + std::io::Write>(
 
 /// Blocking poll for events, will only return None if app handle has been
 /// dropped
-async fn poll<'a>(
-    input_options: InputOptions<'a>,
+async fn poll(
+    input_options: InputOptions<'_>,
     receiver: &mut AppReceiver,
     crossterm_rx: &mut mpsc::Receiver<crossterm::event::Event>,
 ) -> Option<Event> {

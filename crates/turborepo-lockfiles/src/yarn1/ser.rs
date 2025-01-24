@@ -49,7 +49,7 @@ impl fmt::Display for Yarn1Lockfile {
         let mut added_keys: HashSet<&str> = HashSet::with_capacity(self.inner.len());
         for (key, entry) in self.inner.iter() {
             let seen_key = seen_keys.get(key.as_str());
-            let seen_pattern = seen_key.map_or(false, |key| added_keys.contains(key.as_str()));
+            let seen_pattern = seen_key.is_some_and(|key| added_keys.contains(key.as_str()));
             if seen_pattern {
                 continue;
             }
@@ -243,7 +243,7 @@ fn should_wrap_key(s: &str) -> bool {
     s.starts_with("true") ||
     s.starts_with("false") ||
     // Wrap if it doesn't start with a-zA-Z
-    s.chars().next().map_or(false, |c| !c.is_ascii_alphabetic()) ||
+    s.chars().next().is_some_and(|c| !c.is_ascii_alphabetic()) ||
     // Wrap if it contains any unwanted chars
     s.chars().any(|c| matches!(
         c,

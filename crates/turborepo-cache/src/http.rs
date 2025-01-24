@@ -44,7 +44,7 @@ impl HTTPCache {
         let signer_verifier = if opts
             .remote_cache_opts
             .as_ref()
-            .map_or(false, |remote_cache_opts| remote_cache_opts.signature)
+            .is_some_and(|remote_cache_opts| remote_cache_opts.signature)
         {
             Some(ArtifactSignatureAuthenticator {
                 team_id: api_auth
