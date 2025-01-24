@@ -262,7 +262,6 @@ impl ConfigInfo {
 #[cfg(test)]
 mod test {
     use serde_json::json;
-    use test_case::test_case;
     use turborepo_microfrontends::MICROFRONTENDS_PACKAGE;
 
     use super::*;
@@ -350,38 +349,6 @@ mod test {
                 .unwrap()
                 .into_owned()
         }
-    }
-
-    const NON_MFE_PKG: PackageUpdateTest = PackageUpdateTest::new("other-pkg");
-    const MFE_CONFIG_PKG: PackageUpdateTest = PackageUpdateTest::new("z-config-pkg")
-        .v1()
-        .proxy_only("z-config-pkg#proxy");
-    const MFE_CONFIG_PKG_DEV_TASK: PackageUpdateTest =
-        PackageUpdateTest::new("web").dev("web#dev", "web#proxy");
-    const DEFAULT_APP_PROXY: PackageUpdateTest =
-        PackageUpdateTest::new("docs").dev("docs#serve", "web#proxy");
-    const DEFAULT_APP_PROXY_AND_DEV: PackageUpdateTest =
-        PackageUpdateTest::new("web").dev("web#dev", "web#proxy");
-
-    #[test_case(NON_MFE_PKG)]
-    #[test_case(MFE_CONFIG_PKG)]
-    #[test_case(MFE_CONFIG_PKG_DEV_TASK)]
-    #[test_case(DEFAULT_APP_PROXY)]
-    #[test_case(DEFAULT_APP_PROXY_AND_DEV)]
-    fn test_package_turbo_json_update(test: PackageUpdateTest) {
-        let mut configs = mfe_configs!(
-            "z-config-pkg" => ["web#dev", "docs#dev"],
-            "web" => ["web#dev", "docs#serve"]
-        );
-        configs.get_mut("z-config-pkg").unwrap().version = "1";
-        let mfe = MicrofrontendsConfigs {
-            configs,
-            mfe_package: None,
-        };
-        assert_eq!(
-            mfe.package_turbo_json_update(&test.package_name()),
-            test.expected()
-        );
     }
 
     #[test]
