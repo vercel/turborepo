@@ -50,7 +50,7 @@ struct WorkspaceEntry {
 
 #[derive(Debug, PartialEq)]
 struct PackageEntry {
-    key: String,
+    ident: String,
     registry: Option<String>,
     // Present except for workspace & root deps
     info: Option<PackageInfo>,
@@ -95,15 +95,27 @@ impl Lockfile for BunLockfile {
             .ok_or_else(|| crate::Error::MissingWorkspace(workspace_path.into()))?;
         let workspace_name = &workspace_entry.name;
         let workspace_key = format!("{workspace_name}/{name}");
-        if let Some((key, entry)) = self.package_entry(&workspace_key) {
+        if let Some((_key, entry)) = self.package_entry(&workspace_key) {
             let mut version = entry.version().to_string();
             // Check for any patches
-            if let Some(patch) = self.patched_dependencies.get(&entry.key) {
+            if let Some(patch) = self.patched_dependencies.get(&entry.ident) {
                 version.push('+');
                 version.push_str(patch);
             }
+            // Bun's keys include how a package is imported that can result in
+            // faulty cache miss if used by turbo to calculate a hash.
+            // We instead use the ident (the first element of the entry) as it omits this
+            // information.
+            // Note: Entries are not deduplicated in `bun.lock` if
+            // they need to be qualified e.g. packages a and b -> shared@1.0.0
+            // and packages c and d -> shared@2.0.0 will result in one of the
+            // shared entries having an unqualified key (`shared`) and the other will have
+            // qualified keys of `a/shared` and `b/shared` where both will have
+            // the same entry with ident of `shared@1.0.0`. Because they are
+            // identical entries we do not differentiate between them even though they are
+            // different entries in the map.
             Ok(Some(crate::Package {
-                key: key.to_string(),
+                key: entry.ident.to_string(),
                 version,
             }))
         } else {
@@ -160,7 +172,7 @@ impl Lockfile for BunLockfile {
 
     fn human_name(&self, package: &crate::Package) -> Option<String> {
         let entry = self.packages.get(&package.key)?;
-        Some(entry.key.clone())
+        Some(entry.ident.clone())
     }
 }
 
@@ -205,10 +217,10 @@ impl FromStr for BunLockfile {
 impl PackageEntry {
     // Extracts version from key
     fn version(&self) -> &str {
-        self.key
+        self.ident
             .rsplit_once('@')
             .map(|(_, version)| version)
-            .unwrap_or(&self.key)
+            .unwrap_or(&self.ident)
     }
 }
 
@@ -236,10 +248,10 @@ mod test {
     const BASIC_LOCKFILE: &str = include_str!("../../fixtures/basic-bun.lock");
     const PATCH_LOCKFILE: &str = include_str!("../../fixtures/bun-patch.lock");
 
-    #[test_case("", "turbo", "^2.3.3", "turbo" ; "root")]
-    #[test_case("apps/docs", "is-odd", "3.0.1", "is-odd" ; "docs is odd")]
-    #[test_case("apps/web", "is-odd", "3.0.0", "web/is-odd" ; "web is odd")]
-    #[test_case("packages/ui", "node-plop/inquirer/rxjs/tslib", "^1.14.0", "node-plop/inquirer/rxjs/tslib" ; "full key")]
+    #[test_case("", "turbo", "^2.3.3", "turbo@2.3.3" ; "root")]
+    #[test_case("apps/docs", "is-odd", "3.0.1", "is-odd@3.0.1" ; "docs is odd")]
+    #[test_case("apps/web", "is-odd", "3.0.0", "is-odd@3.0.0" ; "web is odd")]
+    #[test_case("packages/ui", "node-plop/inquirer/rxjs/tslib", "^1.14.0", "tslib@1.14.1" ; "full key")]
     fn test_resolve_package(workspace: &str, name: &str, version: &str, expected: &str) {
         let lockfile = BunLockfile::from_str(BASIC_LOCKFILE).unwrap();
         let result = lockfile
@@ -298,7 +310,7 @@ mod test {
             .unwrap();
         assert_eq!(
             pkg,
-            crate::Package::new("b/is-odd", "3.0.0+patches/is-odd@3.0.0.patch")
+            crate::Package::new("is-odd@3.0.0", "3.0.0+patches/is-odd@3.0.0.patch")
         );
     }
 }

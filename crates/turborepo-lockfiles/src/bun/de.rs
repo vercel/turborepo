@@ -51,7 +51,7 @@ impl<'de> Deserialize<'de> for PackageEntry {
             .and_then(val_to_info)
             .or_else(|| vals.pop_front().and_then(val_to_info));
         Ok(Self {
-            key,
+            ident: key,
             info,
             // The rest are only necessary for serializing a lockfile and aren't needed until adding
             // `prune` support
@@ -109,7 +109,7 @@ mod test {
         registry_pkg,
         PackageEntry,
         PackageEntry {
-            key: "is-odd@3.0.1".into(),
+            ident: "is-odd@3.0.1".into(),
             registry: None,
             info: Some(PackageInfo {
                 dependencies: Some(("is-number".into(), "^6.0.0".into()))
@@ -126,7 +126,7 @@ mod test {
         workspace_pkg,
         PackageEntry,
         PackageEntry {
-            key: "docs".into(),
+            ident: "docs".into(),
             info: Some(PackageInfo {
                 dependencies: Some(("is-odd".into(), "3.0.1".into()))
                     .into_iter()
