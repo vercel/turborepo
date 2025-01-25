@@ -2,10 +2,11 @@ mod walker;
 
 use std::{collections::HashSet, fmt::Display, hash::Hash};
 
+use fixedbitset::FixedBitSet;
 use itertools::Itertools;
 use petgraph::{
     prelude::*,
-    visit::{depth_first_search, EdgeFiltered, IntoNeighbors, Reversed, Visitable},
+    visit::{depth_first_search, EdgeFiltered, IntoNeighbors, Reversed, VisitMap, Visitable},
 };
 use thiserror::Error;
 
@@ -80,6 +81,9 @@ fn edges_to_break_cycle<N: Clone + Hash + Eq, E: Clone>(
     let edge_sets = edges.iter().copied().powerset();
     let mut breaking_edge_sets = Vec::new();
 
+    // For each DFS
+    let mut cycle_detector = CycleDetector::new(graph);
+
     let mut minimal_break_point = usize::MAX;
     for edge_set in edge_sets {
         let set_size = edge_set.len();
@@ -88,7 +92,7 @@ fn edges_to_break_cycle<N: Clone + Hash + Eq, E: Clone>(
         }
         let trimmed_graph = EdgeFiltered::from_fn(graph, |edge| !edge_set.contains(&edge.id()));
 
-        let is_cyclic = has_cycle(&trimmed_graph, trimmed_graph.0.node_indices());
+        let is_cyclic = cycle_detector.has_cycle(&trimmed_graph, trimmed_graph.0.node_indices());
         if !is_cyclic {
             minimal_break_point = set_size;
             breaking_edge_sets.push(
@@ -151,20 +155,56 @@ fn format_cut<N: Display>(edges: impl IntoIterator<Item = (N, N)>) -> String {
     format!("{{{edges}}}")
 }
 
-// A fast failing DFS approach to detecting if there is a cycle left in the
-// graph
-fn has_cycle<G, I>(graph: G, starts: I) -> bool
-where
-    G: IntoNeighbors + Visitable,
-    I: IntoIterator<Item = G::NodeId>,
-{
-    let result = petgraph::visit::depth_first_search(graph, starts, |event| match event {
-        petgraph::visit::DfsEvent::BackEdge(_, _) => Err(()),
-        _ => Ok(()),
-    });
-    match result {
-        Ok(()) => false,
-        Err(()) => true,
+struct CycleDetector {
+    visited: FixedBitSet,
+    finished: FixedBitSet,
+}
+
+impl CycleDetector {
+    fn new<N, E>(graph: &Graph<N, E>) -> CycleDetector {
+        let visited = graph.visit_map();
+        let finished = graph.visit_map();
+        Self { visited, finished }
+    }
+
+    // A fast failing DFS approach to detecting if there is a cycle left in the
+    // graph
+    // Used over `petgraph::visit::depth_first_search` as it allows us to reuse
+    // visit maps.
+    fn has_cycle<G, I>(&mut self, graph: G, starts: I) -> bool
+    where
+        G: IntoNeighbors + Visitable<Map = FixedBitSet>,
+        I: IntoIterator<Item = G::NodeId>,
+    {
+        self.visited.clear();
+        self.finished.clear();
+        for start in starts {
+            if Self::dfs(graph, start, &mut self.visited, &mut self.finished) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    fn dfs<G>(graph: G, u: G::NodeId, visited: &mut G::Map, finished: &mut G::Map) -> bool
+    where
+        G: IntoNeighbors + Visitable,
+    {
+        // We have already completed a DFS from this node
+        if finished.is_visited(&u) {
+            return false;
+        }
+        // If not the first visit we have a cycle
+        if !visited.visit(u) {
+            return true;
+        }
+        for v in graph.neighbors(u) {
+            if Self::dfs(graph, v, visited, finished) {
+                return true;
+            }
+        }
+        finished.visit(u);
+        return false;
     }
 }
 
