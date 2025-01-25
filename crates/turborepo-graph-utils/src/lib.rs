@@ -57,11 +57,9 @@ pub struct Cycle<N> {
 pub fn cycles_and_cut_candidates<N: Clone + Hash + Eq, E: Clone>(
     graph: &Graph<N, E>,
 ) -> Vec<Cycle<N>> {
-    let sccs = petgraph::algo::tarjan_scc(graph)
+    petgraph::algo::tarjan_scc(graph)
         .into_iter()
         .filter(|cycle| cycle.len() > 1)
-        .collect::<Vec<_>>();
-    sccs.into_iter()
         .map(|nodes| {
             let mut subgraph = graph.clone();
             subgraph.retain_nodes(|_, node| nodes.contains(&node));
