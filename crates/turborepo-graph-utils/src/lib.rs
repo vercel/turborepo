@@ -5,7 +5,7 @@ use std::{collections::HashSet, fmt::Display, hash::Hash};
 use itertools::Itertools;
 use petgraph::{
     prelude::*,
-    visit::{depth_first_search, IntoNeighbors, Reversed, Visitable},
+    visit::{depth_first_search, EdgeFiltered, IntoNeighbors, Reversed, Visitable},
 };
 use thiserror::Error;
 
@@ -88,10 +88,9 @@ fn edges_to_break_cycle<N: Clone + Hash + Eq, E: Clone>(
         if set_size > minimal_break_point {
             break;
         }
-        let mut trimmed_graph = graph.clone();
-        trimmed_graph.retain_edges(|_, edge| !edge_set.contains(&edge));
+        let trimmed_graph = EdgeFiltered::from_fn(graph, |edge| !edge_set.contains(&edge.id()));
 
-        let is_cyclic = has_cycle(&trimmed_graph, trimmed_graph.node_indices());
+        let is_cyclic = has_cycle(&trimmed_graph, trimmed_graph.0.node_indices());
         if !is_cyclic {
             minimal_break_point = set_size;
             breaking_edge_sets.push(
