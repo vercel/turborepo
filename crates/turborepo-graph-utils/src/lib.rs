@@ -5,7 +5,7 @@ use std::{collections::HashSet, fmt::Display, hash::Hash};
 use itertools::Itertools;
 use petgraph::{
     prelude::*,
-    visit::{depth_first_search, Reversed},
+    visit::{depth_first_search, IntoNeighbors, Reversed, Visitable},
 };
 use thiserror::Error;
 
@@ -91,11 +91,7 @@ fn edges_to_break_cycle<N: Clone + Hash + Eq, E: Clone>(
         let mut trimmed_graph = graph.clone();
         trimmed_graph.retain_edges(|_, edge| !edge_set.contains(&edge));
 
-        let is_cyclic = petgraph::algo::tarjan_scc(&trimmed_graph)
-            .into_iter()
-            .filter(|scc| scc.len() > 1)
-            .count()
-            > 0;
+        let is_cyclic = has_cycle(&trimmed_graph, trimmed_graph.node_indices());
         if !is_cyclic {
             minimal_break_point = set_size;
             breaking_edge_sets.push(
@@ -156,6 +152,23 @@ fn format_cut<N: Display>(edges: impl IntoIterator<Item = (N, N)>) -> String {
         .format(", ");
 
     format!("{{{edges}}}")
+}
+
+// A fast failing DFS approach to detecting if there is a cycle left in the
+// graph
+fn has_cycle<G, I>(graph: G, starts: I) -> bool
+where
+    G: IntoNeighbors + Visitable,
+    I: IntoIterator<Item = G::NodeId>,
+{
+    let result = petgraph::visit::depth_first_search(graph, starts, |event| match event {
+        petgraph::visit::DfsEvent::BackEdge(_, _) => Err(()),
+        _ => Ok(()),
+    });
+    match result {
+        Ok(()) => false,
+        Err(()) => true,
+    }
 }
 
 pub use walker::{WalkMessage, Walker};
