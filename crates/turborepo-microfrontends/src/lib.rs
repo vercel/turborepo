@@ -105,6 +105,12 @@ impl Config {
         }
     }
 
+    pub fn port(&self, name: &str) -> Option<u16> {
+        match &self.inner {
+            ConfigInner::V1(config_v1) => config_v1.port(name),
+        }
+    }
+
     /// Filename of the loaded configuration
     pub fn filename(&self) -> &str {
         &self.filename
