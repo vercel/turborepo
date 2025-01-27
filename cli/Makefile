@@ -38,6 +38,9 @@ stage-release:
 	cd $(CLI_DIR)/../packages/eslint-config-turbo && pnpm version "$(TURBO_VERSION)" --allow-same-version
 	cd $(CLI_DIR)/../packages/turbo-types && pnpm version "$(TURBO_VERSION)" --allow-same-version
 
+	# Update examples in `../examples` to the new version
+	find $(CLI_DIR)/../examples -maxdepth 2 -name "package.json" -execdir pnpm update turbo@"$(TURBO_VERSION)" --allow-same-version
+
 	git checkout -b staging-$(TURBO_VERSION)
 	git commit -anm "publish $(TURBO_VERSION) to registry"
 	git tag "v$(TURBO_VERSION)"
@@ -90,4 +93,3 @@ fixture-%:
 	rm -rf testbed
 	mkdir -p testbed
 	../turborepo-tests/helpers/setup_integration_test.sh ./testbed $($@_FIXTURE)
-
