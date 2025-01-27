@@ -21,6 +21,7 @@ pub struct MicrofrontendsConfigs {
 #[derive(Debug, Clone, Default, PartialEq)]
 struct ConfigInfo {
     tasks: HashSet<TaskId<'static>>,
+    ports: HashMap<TaskId<'static>, u16>,
     version: &'static str,
     path: Option<RelativeUnixPathBuf>,
 }
@@ -90,6 +91,12 @@ impl MicrofrontendsConfigs {
         let info = self.configs.get(package_name)?;
         let path = info.path.as_ref()?;
         Some(path)
+    }
+
+    pub fn dev_task_port(&self, task_id: &TaskId) -> Option<u16> {
+        self.configs
+            .values()
+            .find_map(|config| config.ports.get(task_id).copied())
     }
 
     pub fn update_turbo_json(
@@ -242,18 +249,21 @@ struct FindResult<'a> {
 
 impl ConfigInfo {
     fn new(config: &MFEConfig) -> Self {
-        let tasks = config
-            .development_tasks()
-            .map(|(application, options)| {
-                let dev_task = options.unwrap_or("dev");
-                TaskId::new(application, dev_task).into_owned()
-            })
-            .collect();
+        let mut ports = HashMap::new();
+        let mut tasks = HashSet::new();
+        for (application, dev_task) in config.development_tasks() {
+            let task = TaskId::new(application, dev_task.unwrap_or("dev")).into_owned();
+            if let Some(port) = config.port(application) {
+                ports.insert(task.clone(), port);
+            }
+            tasks.insert(task);
+        }
         let version = config.version();
 
         Self {
             tasks,
             version,
+            ports,
             path: None,
         }
     }
@@ -275,7 +285,7 @@ mod test {
                     for _dev_task in $dev_tasks.as_slice() {
                         _dev_tasks.insert(crate::run::task_id::TaskName::from(*_dev_task).task_id().unwrap().into_owned());
                     }
-                    _map.insert($config_owner.to_string(), ConfigInfo { tasks: _dev_tasks, version: "1", path: None });
+                    _map.insert($config_owner.to_string(), ConfigInfo { tasks: _dev_tasks, version: "1", path: None, ports: std::collections::HashMap::new() });
                 )+
                 _map
             }
@@ -432,13 +442,51 @@ mod test {
             "something.txt",
         )
         .unwrap();
-        let result = PackageGraphResult::new(vec![("web", Ok(Some(config)))].into_iter()).unwrap();
+        let mut result =
+            PackageGraphResult::new(vec![("web", Ok(Some(config)))].into_iter()).unwrap();
+        result
+            .configs
+            .values_mut()
+            .for_each(|config| config.ports.clear());
         assert_eq!(
             result.configs,
             mfe_configs!(
                 "web" => ["web#dev", "docs#serve"]
             )
         )
+    }
+
+    #[test]
+    fn test_port_collection() {
+        let config = MFEConfig::from_str(
+            &serde_json::to_string_pretty(&json!({
+                "version": "1",
+                "applications": {
+                    "web": {},
+                    "docs": {
+                        "development": {
+                            "task": "serve",
+                            "local": {
+                                "port": 3030
+                            }
+                        }
+                    }
+                }
+            }))
+            .unwrap(),
+            "something.txt",
+        )
+        .unwrap();
+        let result = PackageGraphResult::new(vec![("web", Ok(Some(config)))].into_iter()).unwrap();
+        let web_ports = result.configs["web"].ports.clone();
+        assert_eq!(
+            web_ports.get(&TaskId::new("docs", "serve")).copied(),
+            Some(3030)
+        );
+        assert_eq!(
+            web_ports.get(&TaskId::new("web", "dev")).copied(),
+            Some(5588)
+        );
     }
 
     #[test]
