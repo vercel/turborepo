@@ -16,12 +16,12 @@ updates:
       - dependency-type: "direct"
     assignees:
       - "anthonyshew"
-    update-types:
-      - "minor"
     groups:
       basic:
         patterns:
           - "*"
+        update-types:
+          - "minor"
 
   - package-ecosystem: "npm"
     directory: "/examples/kitchen-sink"
@@ -35,12 +35,12 @@ updates:
       - dependency-type: "direct"
     assignees:
       - "anthonyshew"
-    update-types:
-      - "minor"
     groups:
       kitchen-sink:
         patterns:
           - "*"
+        update-types:
+          - "minor"
     ignore:
       - dependency-name: "@types/express"
 
@@ -56,12 +56,12 @@ updates:
       - dependency-type: "direct"
     assignees:
       - "anthonyshew"
-    update-types:
-      - "minor"
     groups:
       non-monorepo:
         patterns:
           - "*"
+        update-types:
+          - "minor"
 
   - package-ecosystem: "npm"
     directory: "/examples/with-shell-commands"
@@ -75,12 +75,12 @@ updates:
       - dependency-type: "direct"
     assignees:
       - "anthonyshew"
-    update-types:
-      - "minor"
     groups:
       with-shell-commands:
         patterns:
           - "*"
+        update-types:
+          - "minor"
 
   - package-ecosystem: "npm"
     directory: "/examples/with-svelte"
@@ -94,12 +94,12 @@ updates:
       - dependency-type: "direct"
     assignees:
       - "anthonyshew"
-    update-types:
-      - "minor"
     groups:
       with-svelte:
         patterns:
           - "*"
+        update-types:
+          - "minor"
 
   - package-ecosystem: "npm"
     directory: "/examples/with-tailwind"
@@ -113,9 +113,9 @@ updates:
       - dependency-type: "direct"
     assignees:
       - "anthonyshew"
-    update-types:
-      - "minor"
     groups:
       with-tailwind:
         patterns:
           - "*"
+        update-types:
+          - "minor"
