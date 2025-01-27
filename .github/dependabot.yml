@@ -42,7 +42,14 @@ updates:
         update-types:
           - "minor"
     ignore:
+      # Types are just...broken?
       - dependency-name: "@types/express"
+      # Remix is behind on updating these peer deps and npm doesn't like it
+      - dependency-name: "react"
+      - dependency-name: "react-dom"
+      - dependency-name: "@types/react"
+      - dependency-name: "@types/react-dom"
+      - dependency-name: ""
 
   - package-ecosystem: "npm"
     directory: "/examples/non-monorepo"
