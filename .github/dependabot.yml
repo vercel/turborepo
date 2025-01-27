@@ -2,10 +2,6 @@
 # From what I can tell, we are forced into approaching it this way
 # because of the many workspace roots.
 
-# The GHA at .github/workflows/examples-autoaprove-and-automerge.yml
-# is responsible for merging them all to one umbrella PR
-# on the branch #dependabot-updates.
-
 version: 2
 updates:
   - package-ecosystem: "npm"
@@ -20,6 +16,8 @@ updates:
       - dependency-type: "direct"
     assignees:
       - "anthonyshew"
+    update-types:
+      - "minor"
     groups:
       basic:
         patterns:
@@ -37,10 +35,14 @@ updates:
       - dependency-type: "direct"
     assignees:
       - "anthonyshew"
+    update-types:
+      - "minor"
     groups:
       kitchen-sink:
         patterns:
           - "*"
+    ignore:
+      - dependency-name: "@types/express"
 
   - package-ecosystem: "npm"
     directory: "/examples/non-monorepo"
@@ -54,6 +56,8 @@ updates:
       - dependency-type: "direct"
     assignees:
       - "anthonyshew"
+    update-types:
+      - "minor"
     groups:
       non-monorepo:
         patterns:
@@ -71,6 +75,8 @@ updates:
       - dependency-type: "direct"
     assignees:
       - "anthonyshew"
+    update-types:
+      - "minor"
     groups:
       with-shell-commands:
         patterns:
@@ -88,6 +94,8 @@ updates:
       - dependency-type: "direct"
     assignees:
       - "anthonyshew"
+    update-types:
+      - "minor"
     groups:
       with-svelte:
         patterns:
@@ -105,6 +113,8 @@ updates:
       - dependency-type: "direct"
     assignees:
       - "anthonyshew"
+    update-types:
+      - "minor"
     groups:
       with-tailwind:
         patterns:
