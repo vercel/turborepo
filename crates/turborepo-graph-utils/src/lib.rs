@@ -77,8 +77,7 @@ pub fn cycles_and_cut_candidates<N: Clone + Hash + Eq, E: Clone>(
 fn edges_to_break_cycle<N: Clone + Hash + Eq, E: Clone>(
     graph: &Graph<N, E>,
 ) -> Vec<HashSet<(N, N)>> {
-    let edges = graph.edge_indices().collect::<HashSet<_>>();
-    let edge_sets = edges.iter().copied().powerset();
+    let edge_sets = graph.edge_indices().powerset();
     let mut breaking_edge_sets = Vec::new();
 
     // For each DFS
