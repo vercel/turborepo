@@ -284,9 +284,7 @@ impl WatchClient {
                     })
                     .collect();
 
-                let mut opts = self.base.opts().clone();
-                opts.cache_opts.cache.remote.write = false;
-                opts.cache_opts.cache.local.write = false;
+                let opts = self.base.opts().clone();
 
                 let new_base = CommandBase::from_opts(
                     opts,
@@ -318,9 +316,7 @@ impl WatchClient {
                 })
             }
             ChangedPackages::All => {
-                let mut opts = self.base.opts().clone();
-                opts.cache_opts.cache.remote.write = false;
-                opts.cache_opts.cache.local.write = false;
+                let opts = self.base.opts().clone();
 
                 let base = CommandBase::from_opts(
                     opts,
