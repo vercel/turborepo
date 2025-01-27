@@ -18,7 +18,7 @@ latest_version=$(npm show $package version)
 echo "Upgrading $package to version $latest_version in all examples..."
 
 # Get the list of example directories
-examples="/Users/anthonyshew/projects/open/turbo/examples"
+examples="../examples"
 
 for dir in "$examples"/*; do
   if [ -d "$dir" ]; then
