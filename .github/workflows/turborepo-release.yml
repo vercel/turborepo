@@ -267,3 +267,19 @@ jobs:
           head: ${{ needs.stage.outputs.stage-branch }}
           base: main
           title: "release(turborepo): ${{ steps.getVersion.outputs.version }}"
+
+  update-examples-pr:
+    name: "Update examples PR"
+    needs: [stage, npm-publish]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run upgrade script
+        run: bash ./scripts/update-examples-dep.sh
+      - name: Create pull request
+        uses: thomaseizinger/create-pull-request@master
+        if: ${{ !inputs.dry_run }}
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          head: ${{ needs.stage.outputs.stage-branch }}
+          base: main
+          title: "release(turborepo): update examples to latest(${{ steps.getVersion.outputs.version }})"
