@@ -136,7 +136,7 @@ impl Opts {
                 run_args,
                 execution_args,
             }) => (execution_args, run_args),
-            Some(Command::Watch(execution_args)) => (execution_args, &Box::default()),
+            Some(Command::Watch { execution_args, .. }) => (execution_args, &Box::default()),
             Some(Command::Ls {
                 affected, filter, ..
             }) => {

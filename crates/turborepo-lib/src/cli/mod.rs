@@ -529,7 +529,9 @@ impl Args {
                 clap::error::ErrorKind::UnknownArgument,
                 "Cannot use run arguments outside of run command",
             ))
-        } else if self.execution_args.is_some() && matches!(self.command, Some(Command::Watch(_))) {
+        } else if self.execution_args.is_some()
+            && matches!(self.command, Some(Command::Watch { .. }))
+        {
             let mut cmd = Self::command();
             Err(cmd.error(
                 clap::error::ErrorKind::ArgumentConflict,
@@ -568,9 +570,7 @@ pub enum Command {
         filter: Vec<String>,
     },
     /// Generate the autocompletion script for the specified shell
-    Completion {
-        shell: Shell,
-    },
+    Completion { shell: Shell },
     /// Runs the Turborepo background daemon
     Daemon {
         /// Set the idle timeout for turbod
@@ -708,7 +708,13 @@ pub enum Command {
         /// The query to run, either a file path or a query string
         query: Option<String>,
     },
-    Watch(Box<ExecutionArgs>),
+    Watch {
+        #[clap(flatten)]
+        execution_args: Box<ExecutionArgs>,
+        /// EXPERIMENTAL: Write to cache in watch mode.
+        #[clap(long)]
+        experimental_write_cache: bool,
+    },
     /// Unlink the current directory from your Vercel organization and disable
     /// Remote Caching
     Unlink {
@@ -1209,7 +1215,7 @@ pub async fn run(
             run_args: _,
             execution_args,
         }
-        | Command::Watch(execution_args) => {
+        | Command::Watch { execution_args, .. } => {
             // Don't overwrite the flag if it's already been set for whatever reason
             execution_args.single_package = execution_args.single_package
                 || repo_state
@@ -1507,7 +1513,10 @@ pub async fn run(
 
             Ok(query)
         }
-        Command::Watch(execution_args) => {
+        Command::Watch {
+            execution_args,
+            experimental_write_cache,
+        } => {
             let event = CommandEventBuilder::new("watch").with_parent(&root_telemetry);
             event.track_call();
             let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
@@ -1518,7 +1527,7 @@ pub async fn run(
                 return Ok(1);
             }
 
-            let mut client = WatchClient::new(base, event).await?;
+            let mut client = WatchClient::new(base, *experimental_write_cache, event).await?;
             if let Err(e) = client.start().await {
                 client.shutdown().await;
                 return Err(e.into());
@@ -2331,10 +2340,13 @@ mod test {
     #[test_case::test_case(
         &["turbo", "watch", "build"],
         Args {
-            command: Some(Command::Watch(Box::new(ExecutionArgs {
-                tasks: vec!["build".to_string()],
-                ..get_default_execution_args()
-            }))),
+            command: Some(Command::Watch {
+                execution_args: Box::new(ExecutionArgs {
+                    tasks: vec!["build".to_string()],
+                    ..get_default_execution_args()
+                }),
+                experimental_write_cache: false
+            }),
             ..Args::default()
         };
         "default watch"
@@ -2342,11 +2354,14 @@ mod test {
     #[test_case::test_case(
         &["turbo", "watch", "build", "--cache-dir", "foobar"],
         Args {
-            command: Some(Command::Watch(Box::new(ExecutionArgs {
-                tasks: vec!["build".to_string()],
-                cache_dir: Some(Utf8PathBuf::from("foobar")),
-                ..get_default_execution_args()
-            }))),
+            command: Some(Command::Watch {
+                execution_args: Box::new(ExecutionArgs {
+                    tasks: vec!["build".to_string()],
+                    cache_dir: Some(Utf8PathBuf::from("foobar")),
+                    ..get_default_execution_args()
+                }),
+                experimental_write_cache: false
+            }),
             ..Args::default()
         };
         "with cache-dir"
@@ -2354,13 +2369,30 @@ mod test {
     #[test_case::test_case(
         &["turbo", "watch", "build", "lint", "check"],
         Args {
-            command: Some(Command::Watch(Box::new(ExecutionArgs {
-                tasks: vec!["build".to_string(), "lint".to_string(), "check".to_string()],
-                ..get_default_execution_args()
-            }))),
+            command: Some(Command::Watch {
+                execution_args: Box::new(ExecutionArgs {
+                  tasks: vec!["build".to_string(), "lint".to_string(), "check".to_string()],
+                  ..get_default_execution_args()
+                }),
+                experimental_write_cache: false
+            }),
             ..Args::default()
         };
         "with multiple tasks"
+    )]
+    #[test_case::test_case(
+        &["turbo", "watch", "build", "--experimental-write-cache"],
+        Args {
+            command: Some(Command::Watch {
+                execution_args: Box::new(ExecutionArgs {
+                  tasks: vec!["build".to_string()],
+                  ..get_default_execution_args()
+                }),
+                experimental_write_cache: true
+            }),
+            ..Args::default()
+        };
+        "with experimental-write-cache"
     )]
     fn test_parse_watch(args: &[&str], expected: Args) {
         assert_eq!(Args::try_parse_from(args).unwrap(), expected);
