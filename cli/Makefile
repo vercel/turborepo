@@ -38,8 +38,13 @@ stage-release:
 	cd $(CLI_DIR)/../packages/eslint-config-turbo && pnpm version "$(TURBO_VERSION)" --allow-same-version
 	cd $(CLI_DIR)/../packages/turbo-types && pnpm version "$(TURBO_VERSION)" --allow-same-version
 
-	# Update examples in `../examples` to the new version
-	find $(CLI_DIR)/../examples -maxdepth 2 -name "package.json" -execdir pnpm update turbo@"$(TURBO_VERSION)" --allow-same-version
+	# Update examples in `../examples` to the new version when it isn't a canary
+	@if ! echo "$(TURBO_VERSION)" | grep -q -- "-canary."; then \
+		echo "Updating examples to version $(TURBO_VERSION)"; \
+		find $(CLI_DIR)/../examples -maxdepth 2 -name "package.json" -execdir pnpm update turbo@"$(TURBO_VERSION)" --allow-same-version \; ; \
+	else \
+		echo "Skipping example updates for canary release"; \
+	fi
 
 	git checkout -b staging-$(TURBO_VERSION)
 	git commit -anm "publish $(TURBO_VERSION) to registry"
