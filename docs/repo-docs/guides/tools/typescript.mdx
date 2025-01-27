@@ -175,7 +175,7 @@ Setting up `exports` this way has several advantages:
 
 - Using the `types` field allows `tsserver` to use the code in `src` as the source of truth for your code's types. Your editor will always be up-to-date with the latest interfaces from your code.
 - You can quickly add new entrypoints to your package without creating [dangerous barrel files](https://vercel.com/blog/how-we-optimized-package-imports-in-next-js#what's-the-problem-with-barrel-files).
-- You'll receive auto-importing suggestions for your imports across package boundaries in your editor. For more information about why you may not want to wildcard the entrypoints, see the [limitations section](#package-entrypoint-wildcards).
+- You'll receive auto-importing suggestions for your imports across package boundaries in your editor.
 
 <Callout type="warn">
   If you're publishing the package, you cannot use references to source code in
@@ -226,7 +226,7 @@ For [Internal Packages](/repo/docs/core-concepts/internal-packages), we recommen
 
 #### Just-in-Time Packages
 
-Exports from [Just-in-Time Packages](/repo/docs/core-concepts/internal-packages#just-in-time-packages) will automatically bring you to the original TypeScript source code as long as you aren't using [entrypoint wildcards](#package-entrypoint-wildcards). Go-to-definition will work as expected.
+Exports from [Just-in-Time Packages](/repo/docs/core-concepts/internal-packages#just-in-time-packages) will automatically bring you to the original TypeScript source code. Go-to-definition will work as expected.
 
 #### Compiled Packages
 
@@ -341,5 +341,3 @@ We recommend [listing the entrypoints to your package explicitly](/repo/docs/gui
   }
 }
 ```
-
-While this will work, it comes with the tradeoff of not being able to auto-import across package boundaries [due to performance reasons with the TypeScript compiler](https://github.com/microsoft/TypeScript/issues/53116#issuecomment-1458887175). This tradeoff may or may not be worth it to you depending on your use case.
