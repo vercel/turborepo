@@ -29,7 +29,10 @@ importers:
         version: 1.50.0
       '@repo/eslint-config':
         specifier: workspace:*
-        version: link:../../packages/config-eslint
+        version: link:../../packages/eslint-config
+      '@repo/typescript-config':
+        specifier: workspace:*
+        version: link:../../packages/typescript-config
       '@sveltejs/adapter-auto':
         specifier: ^4.0.0
         version: 4.0.0(@sveltejs/kit@2.16.1(@sveltejs/vite-plugin-svelte@5.0.3(svelte@5.19.3)(vite@6.0.11))(svelte@5.19.3)(vite@6.0.11))
@@ -84,7 +87,10 @@ importers:
         version: 1.50.0
       '@repo/eslint-config':
         specifier: workspace:*
-        version: link:../../packages/config-eslint
+        version: link:../../packages/eslint-config
+      '@repo/typescript-config':
+        specifier: workspace:*
+        version: link:../../packages/typescript-config
       '@sveltejs/adapter-auto':
         specifier: ^4.0.0
         version: 4.0.0(@sveltejs/kit@2.16.1(@sveltejs/vite-plugin-svelte@5.0.3(svelte@5.19.3)(vite@6.0.11))(svelte@5.19.3)(vite@6.0.11))
@@ -128,7 +134,7 @@ importers:
         specifier: ^3.0.4
         version: 3.0.4
 
-  packages/config-eslint:
+  packages/eslint-config:
     devDependencies:
       '@eslint/eslintrc':
         specifier: ^3.2.0
@@ -152,11 +158,13 @@ importers:
         specifier: ^8.21.0
         version: 8.22.0(eslint@9.19.0)(typescript@5.7.3)
 
+  packages/typescript-config: {}
+
   packages/ui:
     devDependencies:
       '@repo/eslint-config':
         specifier: workspace:*
-        version: link:../config-eslint
+        version: link:../eslint-config
       svelte:
         specifier: ^5.19.3
         version: 5.19.3
