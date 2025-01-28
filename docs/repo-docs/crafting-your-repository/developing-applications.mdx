@@ -42,16 +42,6 @@ You can now run your `dev` task to start your development scripts in parallel:
 turbo dev
 ```
 
-### Interacting with tasks
-
-Some scripts allow you to type into them using `stdin` for interactive inputs. Using [the terminal ui](https://turbo.build/repo/docs/reference/configuration#ui), you can select a task, enter it, and use `stdin` as you typically would.
-
-<Callout type="good-to-know">
-  A task must be
-  [interactive](https://turbo.build/repo/docs/reference/configuration#interactive)
-  to enable this functionality.
-</Callout>
-
 ### Running setup tasks before `dev`
 
 You may also want to run scripts that set up your development environment or pre-build packages. You can make sure those tasks run before the `dev` task with `dependsOn`:
@@ -80,6 +70,35 @@ The `--filter` flag allows you to pick a subset of your [Package Graph](/repo/do
 ```bash title="Terminal"
 turbo dev --filter=web
 ```
+
+## Using the terminal UI
+
+Turborepo's terminal UI enables a number of features that create a highly interactive experience around your tasks.
+
+### Customizing your view
+
+You can quickly adjust the UI to your needs using keybinds.
+
+| Keybind | Action                                                            |
+| ------- | ----------------------------------------------------------------- |
+| `m`     | Toggle popup listing keybinds                                     |
+| `↑`/`↓` | Select the next/previous task in the task list                    |
+| `j`/`k` | Select the next/previous task in the task list                    |
+| `p`     | Toggle selection pinning for selected task                        |
+| `h`     | Toggle visibility of the task list                                |
+| `c`     | When logs are highlighted, copy selection to the system clipboard |
+| `u`/`d` | Scroll logs `u`p and `d`own                                       |
+
+### Interacting with tasks
+
+Some of your tools may allow you to type input into them. Examples of this include Drizzle ORM's interactive migrations or Jest's filtering and re-running of test suites.
+
+You can interact with tasks that are [marked as interactive](/repo/docs/reference/configuration#interactive) to give them input.
+
+| Keybind  | Action            |
+| -------- | ----------------- |
+| `i`      | Begin interacting |
+| `Ctrl+z` | Stop interacting  |
 
 ## Watch Mode
 
