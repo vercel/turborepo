@@ -182,7 +182,7 @@ impl CycleDetector {
                 return true;
             }
         }
-        return false;
+        false
     }
 
     fn dfs<G>(graph: G, u: G::NodeId, visited: &mut G::Map, finished: &mut G::Map) -> bool
@@ -203,7 +203,7 @@ impl CycleDetector {
             }
         }
         finished.visit(u);
-        return false;
+        false
     }
 }
 
