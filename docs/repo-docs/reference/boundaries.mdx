@@ -1,0 +1,28 @@
+---
+title: boundaries
+description: API reference for the `turbo boundaries` command
+---
+
+import { ExperimentalBadge } from '#/components/experimental-badge';
+import { Callout } from '#/components/callout';
+
+<ExperimentalBadge>Experimental</ExperimentalBadge>
+
+Boundaries ensure that caching and other Turborepo features work correctly by checking for package manager Workspace violations.
+
+```bash title="Terminal"
+turbo boundaries
+```
+
+This command will notify for three types of violations:
+
+- Importing a file outside of the package's directory
+- Importing a type without declaring the import as a type
+- Importing a package that is not specified in dependencies
+
+<Callout title="Boundaries RFC">
+  This feature is experimental, and we're looking for your feedback on [the
+  Boundaries RFC](https://github.com/vercel/turborepo/discussions/9435).
+  Additionally, please provide your use cases for user-defined Boundaries to
+  help inform the next iteration of our design.
+</Callout>
