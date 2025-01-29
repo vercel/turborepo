@@ -284,13 +284,17 @@ pub struct GlobError {
 
 #[derive(Debug, Default, Copy, Clone)]
 pub struct Settings {
-    /// Don't recurse into a directory if it contains a `package.json` file
-    ignore_nested_workspaces: bool,
+    /// Don't recurse into a directory if it contains a `package.json` file.
+    /// NOTE: If globbing from the root of a workspace, this setting will cause
+    /// us to not recurse into the individual packages. Therefore, only use this
+    /// setting if you are globbing in an individual package at not at the
+    /// workspace root.
+    ignore_nested_packages: bool,
 }
 
 impl Settings {
-    pub fn ignore_nested_workspaces(mut self) -> Self {
-        self.ignore_nested_workspaces = true;
+    pub fn ignore_nested_packages(mut self) -> Self {
+        self.ignore_nested_packages = true;
         self
     }
 }
@@ -431,7 +435,7 @@ fn walk_glob(
             panic!("Failed to compile exclusion globs: {}", e,)
         });
 
-    if settings.ignore_nested_workspaces {
+    if settings.ignore_nested_packages {
         iter.filter_entry(|entry| {
             let path = entry.path();
             if path.is_dir() && path != base_path_new && path.join("package.json").exists() {
@@ -915,7 +919,7 @@ mod test {
         &[],
         &["/repos/some-app/package.json"],
         &["/repos/some-app/package.json"],
-        Settings::default().ignore_nested_workspaces()
+        Settings::default().ignore_nested_packages()
         ; "ignore nested workspaces setting only matches top level package")]
     #[test_case(&[
             "/external/file.txt",
