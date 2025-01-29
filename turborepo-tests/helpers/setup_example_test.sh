@@ -35,8 +35,6 @@ if [ "$package_manager" == "pnpm" ] && [ "$example_path" == "non-monorepo" ]; th
   package_manager_command="pnpm install --ignore-workspace"
 fi
 
-echo $example_path
-
 # with-svelte is flaky when building and check types at the same time, because the build process of Svelte involves type generation
 # If the types are generating while the type checking happens, it can cause flakes.
 # We'll have to accept this gap in our coverage.
