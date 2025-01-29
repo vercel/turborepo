@@ -35,10 +35,12 @@ if [ "$package_manager" == "pnpm" ] && [ "$example_path" == "non-monorepo" ]; th
   package_manager_command="pnpm install --ignore-workspace"
 fi
 
+echo $example_path
+
 # with-svelte is flaky when building and check types at the same time, because the build process of Svelte involves type generation
 # If the types are generating while the type checking happens, it can cause flakes.
 # We'll have to accept this gap in our coverage.
-if ["$example_path" == "with-svelte"]; then
+if [ "$example_path" == "with-svelte" ]; then
   turbo_command="turbo build lint --continue --output-logs=errors-only"
 else
   # The rest of the examples implement these three tasks and look safe to test in parallel
