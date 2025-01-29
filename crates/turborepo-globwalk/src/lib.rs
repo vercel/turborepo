@@ -27,7 +27,7 @@ pub enum WalkType {
 }
 
 pub use walkdir::Error as WalkDirError;
-use wax::walk::Entry;
+use wax::walk::{Entry, EntryResidue};
 
 #[derive(Debug, thiserror::Error)]
 pub enum WalkError {
@@ -282,6 +282,19 @@ pub struct GlobError {
     reason: String,
 }
 
+#[derive(Debug, Default, Copy, Clone)]
+pub struct Settings {
+    /// Don't recurse into a directory if it contains a `package.json` file
+    ignore_nested_workspaces: bool,
+}
+
+impl Settings {
+    pub fn ignore_nested_workspaces(mut self) -> Self {
+        self.ignore_nested_workspaces = true;
+        self
+    }
+}
+
 /// ValidatedGlob.
 ///
 /// Represents an input string that we have either validated or
@@ -340,6 +353,18 @@ impl FromStr for ValidatedGlob {
     }
 }
 
+pub fn globwalk_with_settings(
+    base_path: &AbsoluteSystemPath,
+    include: &[ValidatedGlob],
+    exclude: &[ValidatedGlob],
+    walk_type: WalkType,
+    settings: Settings,
+) -> Result<HashSet<AbsoluteSystemPathBuf>, WalkError> {
+    let include = include.iter().map(|i| i.inner.clone()).collect::<Vec<_>>();
+    let exclude = exclude.iter().map(|e| e.inner.clone()).collect::<Vec<_>>();
+    globwalk_internal(base_path, &include, &exclude, walk_type, settings)
+}
+
 pub fn globwalk(
     base_path: &AbsoluteSystemPath,
     include: &[ValidatedGlob],
@@ -348,7 +373,7 @@ pub fn globwalk(
 ) -> Result<HashSet<AbsoluteSystemPathBuf>, WalkError> {
     let include = include.iter().map(|i| i.inner.clone()).collect::<Vec<_>>();
     let exclude = exclude.iter().map(|e| e.inner.clone()).collect::<Vec<_>>();
-    globwalk_internal(base_path, &include, &exclude, walk_type)
+    globwalk_internal(base_path, &include, &exclude, walk_type, Default::default())
 }
 
 #[tracing::instrument]
@@ -357,6 +382,7 @@ pub fn globwalk_internal(
     include: &[String],
     exclude: &[String],
     walk_type: WalkType,
+    settings: Settings,
 ) -> Result<HashSet<AbsoluteSystemPathBuf>, WalkError> {
     let (base_path_new, include_paths, exclude_paths) =
         preprocess_paths_and_globs(base_path, include, exclude)?;
@@ -376,7 +402,15 @@ pub fn globwalk_internal(
         // Use flat_map_iter as we only want parallelism for walking the globs and not iterating
         // over the results.
         // See https://docs.rs/rayon/latest/rayon/iter/trait.ParallelIterator.html#method.flat_map_iter
-        .flat_map_iter(|glob| walk_glob(walk_type, &base_path_new, ex_patterns.clone(), glob))
+        .flat_map_iter(|glob| {
+            walk_glob(
+                walk_type,
+                &base_path_new,
+                ex_patterns.clone(),
+                glob,
+                settings,
+            )
+        })
         .collect()
 }
 
@@ -386,16 +420,32 @@ fn walk_glob(
     base_path_new: &Path,
     ex_patterns: Vec<Glob>,
     glob: Glob,
+    settings: Settings,
 ) -> Vec<Result<AbsoluteSystemPathBuf, WalkError>> {
-    glob.walk(base_path_new)
+    let iter = glob
+        .walk(base_path_new)
         .not(ex_patterns)
         .unwrap_or_else(|e| {
             // Per docs, only fails if exclusion list is too large, since we're using
             // pre-compiled globs
             panic!("Failed to compile exclusion globs: {}", e,)
+        });
+
+    if settings.ignore_nested_workspaces {
+        iter.filter_entry(|entry| {
+            let path = entry.path();
+            if path.is_dir() && path != base_path_new && path.join("package.json").exists() {
+                return Some(EntryResidue::Tree);
+            }
+
+            None
         })
         .filter_map(|entry| visit_file(walk_type, entry))
         .collect::<Vec<_>>()
+    } else {
+        iter.filter_map(|entry| visit_file(walk_type, entry))
+            .collect::<Vec<_>>()
+    }
 }
 
 #[tracing::instrument]

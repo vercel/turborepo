@@ -4,6 +4,7 @@ use std::{
 };
 
 use git2::Repository;
+use globwalk::Settings;
 use itertools::Itertools;
 use miette::{Diagnostic, NamedSource, Report, SourceSpan};
 use oxc_resolver::{ResolveError, Resolver};
@@ -189,7 +190,7 @@ impl Run {
         unresolved_external_dependencies: Option<&BTreeMap<String, String>>,
         source_map: &SourceMap,
     ) -> Result<(usize, Vec<BoundariesDiagnostic>), Error> {
-        let files = globwalk::globwalk(
+        let files = globwalk::globwalk_with_settings(
             package_root,
             &[
                 "**/*.js".parse().unwrap(),
@@ -201,6 +202,7 @@ impl Run {
             ],
             &["**/node_modules/**".parse().unwrap()],
             globwalk::WalkType::Files,
+            Settings::default().ignore_nested_workspaces(),
         )?;
 
         let files_checked = files.len();
