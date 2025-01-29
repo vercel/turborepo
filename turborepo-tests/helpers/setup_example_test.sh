@@ -35,9 +35,12 @@ if [ "$package_manager" == "pnpm" ] && [ "$example_path" == "non-monorepo" ]; th
   package_manager_command="pnpm install --ignore-workspace"
 fi
 
-# All examples implement these two tasks
-# and it's reasonable to assume that they will continue to do so
-turbo_command="turbo build lint --continue --output-logs=errors-only"
+# with-svelte is flaky when building and check types at the same time, because the build process of Svelte involves type generation
+if ["$example_path" == "with-svelte"]; then
+  turbo_command="turbo build lint --continue --output-logs=errors-only"
+elif
+  turbo_command="turbo build lint check-types --continue --output-logs=errors-only"
+fi
 
 # Head into a temporary directory
 mkdir -p ../../examples-tests-tmp
@@ -50,7 +53,7 @@ rsync -avq \
   --exclude="dist" \
   --exclude=".turbo" \
   --exclude=".expo" \
-  --exclude=".cache" \
+--exclude=".cache" \
   --exclude=".next" \
   "../examples/$example_path" "$example_path-$package_manager"
 
