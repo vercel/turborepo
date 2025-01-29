@@ -47,7 +47,7 @@ export async function createProject({
   if (isDefaultExample) {
     repoInfo = {
       username: "vercel",
-      name: "turbo",
+      name: "turborepo",
       branch: "main",
       filePath: "examples/basic",
     };
