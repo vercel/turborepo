@@ -40,8 +40,8 @@ fi
 # We'll have to accept this gap in our coverage.
 if ["$example_path" == "with-svelte"]; then
   turbo_command="turbo build lint --continue --output-logs=errors-only"
-elif
-# The rest of the examples implement these three tasks and look safe to test in parallel
+else
+  # The rest of the examples implement these three tasks and look safe to test in parallel
   turbo_command="turbo build lint check-types --continue --output-logs=errors-only"
 fi
 
@@ -56,7 +56,7 @@ rsync -avq \
   --exclude="dist" \
   --exclude=".turbo" \
   --exclude=".expo" \
---exclude=".cache" \
+  --exclude=".cache" \
   --exclude=".next" \
   "../examples/$example_path" "$example_path-$package_manager"
 
