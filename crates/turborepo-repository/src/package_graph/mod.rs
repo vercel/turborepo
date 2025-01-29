@@ -906,7 +906,7 @@ mod test {
         assert_matches!(
             pkg_graph.validate(),
             Err(builder::Error::InvalidPackageGraph(
-                graph::Error::CyclicDependencies(_)
+                graph::Error::CyclicDependencies { .. }
             ))
         );
     }

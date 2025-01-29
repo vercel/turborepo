@@ -1,38 +1,46 @@
 #!/bin/bash
 
-# This script updates a dependency in all examples that are using pnpm.
+# This script updates the turbo dependency in all examples that are using any package manager.
 
-# Usage: ./scripts/update-examples-dep.sh <package> <version>
-# Example: ./scripts/update-examples-dep.sh typescript
+# Usage: ./scripts/update-examples-dep.sh
+# Example: ./scripts/update-examples-dep.sh
 
 set -e
 
 # Change directory to the script's directory
 cd "$(dirname "$0")"
 
-package="$1"
-version=${2:-latest}
+package="turbo"
 
-echo "Upgrading $package to $version in all examples..."
+# Fetch the latest version of the package from npm
+latest_version=$(npm show $package version)
 
-# Get the list of top-level directories
-examples=$(find ../examples -depth 1 -type d)
-lock="pnpm-lock.yaml"
+echo "Upgrading $package to version $latest_version in all examples..."
 
-for dir in $examples; do
-  if [ "$dir" != "." ]; then
+# Get the list of example directories
+examples="../examples"
+
+for dir in "$examples"/*; do
+  if [ -d "$dir" ]; then
     cd "$dir"
     example=$(basename "$(pwd)")
     echo $example
-    if [ -e "$lock" ]; then
-      echo "• Updating all workspaces to $package@$version"
-      # pnpm upgrade $package@latest -r
-      pnpm install
+    if [ -e "pnpm-lock.yaml" ]; then
+      echo "• Updating to $package@$latest_version using pnpm"
+      pnpm up $package@$latest_version 2>&1 >/dev/null
+    elif [ -e ".yarn" ]; then
+      echo "• Updating to $package@$latest_version using yarn"
+      yarn add $package@$latest_version 2>&1 >/dev/null
+    elif [ -e "yarn.lock" ]; then
+      echo "• Updating to $package@$latest_version using yarn"
+      yarn upgrade $package@$latest_version --ignore-workspace-root-check 2>&1 >/dev/null
+    elif [ -e "package-lock.json" ]; then
+      echo "• Updating to $package@$latest_version using npm"
+      npm install $package@$latest_version 2>&1 >/dev/null
     else
-    # yarn doesn't have a nice recursive upgrade command, so we do those manually for now
-      echo "• Not using pnpm - skipping."
+      echo "• No recognized package manager - skipping."
     fi
-    cd - > /dev/null
+    cd - >/dev/null
     echo ""
   fi
 done
