@@ -478,7 +478,7 @@ mod test {
 
     use crate::{
         add_doublestar_to_dir, collapse_path, escape_glob_literals, fix_glob_pattern, globwalk,
-        ValidatedGlob, WalkError, WalkType,
+        Settings, ValidatedGlob, WalkError, WalkType,
     };
 
     #[cfg(unix)]
@@ -762,7 +762,8 @@ mod test {
         &["*.txt"],
         &[],
         &["/test.txt"],
-        &["/test.txt"]
+        &["/test.txt"],
+        Default::default()
         ; "hello world"
     )]
     #[test_case(
@@ -771,7 +772,8 @@ mod test {
         &["subdir/test.txt", "test.txt"],
         &[],
         &["/subdir/test.txt", "/test.txt"],
-        &["/subdir/test.txt", "/test.txt"]
+        &["/subdir/test.txt", "/test.txt"],
+        Default::default()
         ; "bullet files"
     )]
     #[test_case(&[
@@ -804,7 +806,8 @@ mod test {
             "/repos/some-app/packages/colors/package.json",
             "/repos/some-app/packages/faker/package.json",
             "/repos/some-app/packages/left-pad/package.json",
-        ]
+        ],
+        Default::default()
         ; "finding workspace package.json files"
     )]
     #[test_case(&[
@@ -842,7 +845,8 @@ mod test {
             "/repos/some-app/packages/colors/package.json",
             "/repos/some-app/packages/faker/package.json",
             "/repos/some-app/packages/left-pad/package.json",
-        ]
+        ],
+        Default::default()
         ; "excludes unexpected workspace package.json files"
     )]
     #[test_case(&[
@@ -882,8 +886,37 @@ mod test {
             "/repos/some-app/packages/left-pad/package.json",
             "/repos/some-app/packages/xzibit/package.json",
             "/repos/some-app/packages/xzibit/packages/yo-dawg/package.json",
-        ]
+        ],
+        Default::default()
         ; "nested packages work")]
+    #[test_case(&[
+            "/external/file.txt",
+            "/repos/some-app/apps/docs/package.json",
+            "/repos/some-app/apps/web/package.json",
+            "/repos/some-app/bower_components/readline/package.json",
+            "/repos/some-app/examples/package.json",
+            "/repos/some-app/node_modules/gulp/bower_components/readline/package.json",
+            "/repos/some-app/node_modules/react/package.json",
+            "/repos/some-app/package.json",
+            "/repos/some-app/packages/xzibit/package.json",
+            "/repos/some-app/packages/xzibit/node_modules/street-legal/package.json",
+            "/repos/some-app/packages/xzibit/node_modules/paint-colors/package.json",
+            "/repos/some-app/packages/xzibit/packages/yo-dawg/package.json",
+            "/repos/some-app/packages/xzibit/packages/yo-dawg/node_modules/meme/package.json",
+            "/repos/some-app/packages/xzibit/packages/yo-dawg/node_modules/yo-dawg/package.json",
+            "/repos/some-app/packages/colors/package.json",
+            "/repos/some-app/packages/faker/package.json",
+            "/repos/some-app/packages/left-pad/package.json",
+            "/repos/some-app/test/mocks/spanish-inquisition/package.json",
+            "/repos/some-app/tests/mocks/spanish-inquisition/package.json",
+        ],
+        "/repos/some-app/",
+        &["**/package.json"],
+        &[],
+        &["/repos/some-app/package.json"],
+        &["/repos/some-app/package.json"],
+        Settings::default().ignore_nested_workspaces()
+        ; "ignore nested workspaces setting only matches top level package")]
     #[test_case(&[
             "/external/file.txt",
             "/repos/some-app/apps/docs/package.json",
@@ -921,7 +954,8 @@ mod test {
             "/repos/some-app/packages/left-pad/package.json",
             "/repos/some-app/packages/xzibit/package.json",
             "/repos/some-app/packages/xzibit/packages/yo-dawg/package.json",
-        ]
+        ],
+        Default::default()
         ; "includes do not override excludes")]
     #[test_case(&[
             "/external/file.txt",
@@ -970,7 +1004,8 @@ mod test {
             "/repos/some-app/dist/js/node_modules/browserify.js",
             "/repos/some-app/public/dist/css/index.css",
             "/repos/some-app/public/dist/images/rick_astley.jpg",
-        ]
+        ],
+        Default::default()
         ; "output globbing grabs the desired content"
     )]
     #[test_case(&[
@@ -995,7 +1030,8 @@ mod test {
             "/repos/some-app/dist/js/index.js",
             "/repos/some-app/dist/js/lib.js",
             "/repos/some-app/dist/js/node_modules/browserify.js",
-        ]
+        ],
+        Default::default()
         ; "passing ** captures all children")]
     #[test_case(&[
             "/repos/some-app/dist/index.html",
@@ -1020,7 +1056,8 @@ mod test {
             "/repos/some-app/dist/js/index.js",
             "/repos/some-app/dist/js/lib.js",
             "/repos/some-app/dist/js/node_modules/browserify.js",
-        ]
+        ],
+        Default::default()
         ; "passing just a directory captures no children")]
     #[test_case(&[
             "/repos/some-app/dist/index.html",
@@ -1040,13 +1077,16 @@ mod test {
             "/repos/some-app/dist/js/index.js",
             "/repos/some-app/dist/js/lib.js",
             "/repos/some-app/dist/js/node_modules/browserify.js",
-        ] ; "redundant includes do not duplicate")]
+        ],
+        Default::default()
+        ; "redundant includes do not duplicate"
+    )]
     #[test_case(&[
             "/repos/some-app/dist/index.html",
             "/repos/some-app/dist/js/index.js",
             "/repos/some-app/dist/js/lib.js",
             "/repos/some-app/dist/js/node_modules/browserify.js",
-        ], "/repos/some-app/", &["**"], &["**"], &[ ], &[ ] ; "exclude everything, include everything")]
+        ], "/repos/some-app/", &["**"], &["**"], &[ ], &[ ], Default::default() ; "exclude everything, include everything")]
     #[test_case(&[
             "/repos/some-app/dist/index.html",
             "/repos/some-app/dist/js/index.js",
@@ -1062,7 +1102,8 @@ mod test {
         ],
         &[
             "/repos/some-app/dist/index.html",
-        ]
+        ],
+        Default::default()
         ; "passing just a directory to exclude prevents capture of children")]
     #[test_case(&[
             "/repos/some-app/dist/index.html",
@@ -1078,7 +1119,8 @@ mod test {
             "/repos/some-app/dist/index.html",
             // "/repos/some-app/dist/js",
         ],
-        &["/repos/some-app/dist/index.html",]
+        &["/repos/some-app/dist/index.html",],
+        Default::default()
         ; "passing ** to exclude prevents capture of children")]
     #[test_case(&[
             "/repos/some-app/dist/index.html",
@@ -1090,7 +1132,8 @@ mod test {
         &["**"],
         &["./"],
         &[],
-        &[]
+        &[],
+        Default::default()
         ; "exclude everything with folder . applies at base path"
     )]
     #[test_case(&[
@@ -1103,7 +1146,8 @@ mod test {
         &["**"],
         &["./dist"],
         &["repos/some-app"],
-        &[]
+        &[],
+        Default::default()
         ; "exclude everything with traversal applies at a non-base path"
     )]
     #[test_case(&[
@@ -1116,7 +1160,8 @@ mod test {
         &["**"],
         &["dist/../"],
         &[],
-        &[]
+        &[],
+        Default::default()
         ; "exclude everything with folder traversal (..) applies at base path"
     )]
     #[test_case(&[
@@ -1141,7 +1186,8 @@ mod test {
             "/repos/some-app/dist/js/index.js",
             "/repos/some-app/dist/js/lib.js",
             "/repos/some-app/dist/js/node_modules/browserify.js",
-        ]
+        ],
+        Default::default()
         ; "traversal works within base path"
     )]
     #[test_case(&[
@@ -1167,7 +1213,8 @@ mod test {
             "/repos/some-app/dist/js/index.js",
             "/repos/some-app/dist/js/lib.js",
             "/repos/some-app/dist/js/node_modules/browserify.js",
-        ]
+        ],
+        Default::default()
         ; "self references work (.)"
     )]
     #[test_case(&[
@@ -1179,7 +1226,7 @@ mod test {
         ], "/repos/some-app/", &["*"], &[ ], &[
             "/repos/some-app/dist",
             "/repos/some-app/package.json",
-        ], &["/repos/some-app/package.json"] ; "depth of 1 includes handles folders properly")]
+        ], &["/repos/some-app/package.json"], Default::default() ; "depth of 1 includes handles folders properly")]
     #[test_case(&[
             "/repos/some-app/package.json",
             "/repos/some-app/dist/index.html",
@@ -1195,7 +1242,8 @@ mod test {
             "/repos/some-app/dist",
             "/repos/some-app/package.json",
         ],
-        &["/repos/some-app/package.json"]
+        &["/repos/some-app/package.json"],
+        Default::default()
         ; "depth of 1 excludes prevents capturing folders")]
     #[test_case(&[
             "/repos/some-app/dist/index.html",
@@ -1220,7 +1268,8 @@ mod test {
             "/repos/some-app/dist/js/index.js",
             "/repos/some-app/dist/js/lib.js",
             "/repos/some-app/dist/js/node_modules/browserify.js",
-        ]
+        ],
+        Default::default()
         ; "No-trailing slash basePath works")]
     #[test_case(&[
             "/repos/some-app/included.txt",
@@ -1229,7 +1278,7 @@ mod test {
             "/repos/some-app/included.txt",
         ], &[
             "/repos/some-app/included.txt",
-        ] ; "exclude single file")]
+        ], Default::default() ; "exclude single file")]
     #[test_case(&[
             "/repos/some-app/one/included.txt",
             "/repos/some-app/one/two/included.txt",
@@ -1253,7 +1302,7 @@ mod test {
             "/repos/some-app/one/included.txt",
             "/repos/some-app/one/two/included.txt",
             "/repos/some-app/one/two/three/included.txt",
-        ] ; "exclude nested single file")]
+        ], Default::default() ; "exclude nested single file")]
     #[test_case(&[
             "/repos/some-app/one/included.txt",
             "/repos/some-app/one/two/included.txt",
@@ -1261,7 +1310,7 @@ mod test {
             "/repos/some-app/one/excluded.txt",
             "/repos/some-app/one/two/excluded.txt",
             "/repos/some-app/one/two/three/excluded.txt",
-        ], "/repos/some-app", &["**"], &["**"], &[], &[] ; "exclude everything")]
+        ], "/repos/some-app", &["**"], &["**"], &[], &[], Default::default() ; "exclude everything")]
     #[test_case(&[
             "/repos/some-app/one/included.txt",
             "/repos/some-app/one/two/included.txt",
@@ -1269,7 +1318,7 @@ mod test {
             "/repos/some-app/one/excluded.txt",
             "/repos/some-app/one/two/excluded.txt",
             "/repos/some-app/one/two/three/excluded.txt",
-        ], "/repos/some-app", &["**"], &["**/"], &[], &[] ; "exclude everything with slash")]
+        ], "/repos/some-app", &["**"], &["**/"], &[], &[], Default::default() ; "exclude everything with slash")]
     #[test_case(&[
             "/repos/some-app/foo/bar",
             "/repos/some-app/some-foo/bar",
@@ -1284,7 +1333,8 @@ mod test {
         ],
         &[
             "/repos/some-app/included",
-        ]
+        ],
+        Default::default()
         ; "exclude everything with leading star"
     )]
     #[test_case(&[
@@ -1302,7 +1352,8 @@ mod test {
         ],
         &[
             "/repos/some-app/included",
-        ]
+        ],
+        Default::default()
         ; "exclude everything with trailing star"
     )]
     fn glob_walk_files(
@@ -1312,6 +1363,7 @@ mod test {
         exclude: &[&str],
         expected: &[&str],
         expected_files: &[&str],
+        settings: Settings,
     ) {
         let dir = setup_files(files);
         let base_path = base_path.trim_start_matches('/');
@@ -1329,7 +1381,9 @@ mod test {
             (crate::WalkType::Files, expected_files),
             (crate::WalkType::All, expected),
         ] {
-            let success = super::globwalk(&path, &include, &exclude, walk_type).unwrap();
+            let success =
+                super::globwalk_with_settings(&path, &include, &exclude, walk_type, settings)
+                    .unwrap();
 
             let success = success
                 .iter()
