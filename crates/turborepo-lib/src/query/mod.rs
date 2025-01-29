@@ -385,7 +385,8 @@ impl PackagePredicate {
         let less_than = self
             .less_than
             .as_ref()
-            .map(|pair| Self::check_greater_than(pkg, &pair.field, &pair.value));
+            .map(|pair| Self::check_less_than(pkg, &pair.field, &pair.value));
+
         let not = self.not.as_ref().map(|predicate| !predicate.check(pkg));
         let has = self
             .has
