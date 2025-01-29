@@ -37,7 +37,7 @@ fi
 
 # All examples implement these two tasks
 # and it's reasonable to assume that they will continue to do so
-turbo_command="turbo build lint check-types --continue --output-logs=errors-only"
+turbo_command="turbo build lint check-types --continue --output-logs=errors-only --concurrency=1"
 
 # Head into a temporary directory
 mkdir -p ../../examples-tests-tmp
