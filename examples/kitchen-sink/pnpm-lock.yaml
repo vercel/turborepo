@@ -293,6 +293,19 @@ importers:
         version: 5.7.3
 
   packages/ui:
+    dependencies:
+      '@types/react':
+        specifier: '>=18'
+        version: 18.3.18
+      '@types/react-dom':
+        specifier: '>=18'
+        version: 18.3.5(@types/react@18.3.18)
+      react:
+        specifier: '>=18'
+        version: 18.3.1
+      react-dom:
+        specifier: '>=18'
+        version: 18.3.1(react@18.3.1)
     devDependencies:
       '@jest/globals':
         specifier: ^29.7.0
@@ -309,24 +322,12 @@ importers:
       '@types/node':
         specifier: ^22.12.0
         version: 22.12.0
-      '@types/react':
-        specifier: ^18.3.18
-        version: 18.3.18
-      '@types/react-dom':
-        specifier: ^18.3.5
-        version: 18.3.5(@types/react@18.3.18)
       bunchee:
         specifier: ^6.3.2
         version: 6.3.2(typescript@5.7.3)
       jest:
         specifier: ^29.7.0
         version: 29.7.0(@types/node@22.12.0)
-      react:
-        specifier: ^18.3.1
-        version: 18.3.1
-      react-dom:
-        specifier: ^18.3.1
-        version: 18.3.1(react@18.3.1)
       typescript:
         specifier: 5.7.3
         version: 5.7.3
