@@ -1,8 +1,11 @@
+mod config;
+
 use std::{
     collections::{BTreeMap, HashSet},
     sync::{Arc, LazyLock, Mutex},
 };
 
+pub use config::{BoundariesConfig, Permissions};
 use git2::Repository;
 use globwalk::Settings;
 use itertools::Itertools;

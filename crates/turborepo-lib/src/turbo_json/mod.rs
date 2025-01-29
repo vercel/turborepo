@@ -32,6 +32,7 @@ pub mod parser;
 pub use loader::TurboJsonLoader;
 
 use crate::config::UnnecessaryPackageTaskSyntaxError;
+use crate::boundaries::BoundariesConfig;
 
 #[derive(Serialize, Deserialize, Debug, Default, PartialEq, Clone, Deserializable)]
 #[serde(rename_all = "camelCase")]
@@ -53,6 +54,7 @@ pub struct SpacesJson {
 pub struct TurboJson {
     text: Option<Arc<str>>,
     path: Option<Arc<str>>,
+    boundaries: Option<Spanned<BoundariesConfig>>,
     pub(crate) extends: Spanned<Vec<String>>,
     pub(crate) global_deps: Vec<String>,
     pub(crate) global_env: Vec<String>,
@@ -145,6 +147,9 @@ pub struct RawTurboJson {
     pub env_mode: Option<EnvMode>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cache_dir: Option<Spanned<UnescapedString>>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub boundaries: Option<Spanned<BoundariesConfig>>,
 
     #[deserializable(rename = "//")]
     #[serde(skip)]
@@ -593,6 +598,7 @@ impl TryFrom<RawTurboJson> for TurboJson {
                 .extends
                 .unwrap_or_default()
                 .map(|s| s.into_iter().map(|s| s.into()).collect()),
+            boundaries: raw_turbo.boundaries,
             // Spaces and Remote Cache config is handled through layered config
         })
     }
