@@ -7,6 +7,8 @@ fn test_query() -> Result<(), anyhow::Error> {
         "npm@10.5.0",
         "query",
         "get package that doesn't exist" => "query { package(name: \"doesnotexist\") { path } }",
+        "get packages with less than 1 dependents" => "query { packages(filter: {lessThan: {field: DIRECT_DEPENDENT_COUNT, value: 1}}) { items { name directDependents { length } } } }",
+        "get packages with more than 0 dependents" => "query { packages(filter: {greaterThan: {field: DIRECT_DEPENDENT_COUNT, value: 0}}) { items { name directDependents { length } } } }",
     );
 
     Ok(())
