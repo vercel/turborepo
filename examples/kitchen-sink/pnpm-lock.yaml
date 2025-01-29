@@ -66,12 +66,6 @@ importers:
       morgan:
         specifier: ^1.10.0
         version: 1.10.0
-      react:
-        specifier: ^18.2.0
-        version: 18.3.1
-      vite:
-        specifier: ^5.4.14
-        version: 5.4.14(@types/node@22.10.10)
     devDependencies:
       '@jest/globals':
         specifier: ^29.7.0
@@ -100,21 +94,12 @@ importers:
       '@types/node':
         specifier: ^22.10.10
         version: 22.10.10
-      '@types/react':
-        specifier: ^18.2.20
-        version: 18.3.18
-      '@types/react-dom':
-        specifier: ^18.2.7
-        version: 18.3.5(@types/react@18.3.18)
       '@types/supertest':
         specifier: ^6.0.2
         version: 6.0.2
       jest:
         specifier: ^29.7.0
         version: 29.7.0(@types/node@22.10.10)
-      react-dom:
-        specifier: ^18.2.0
-        version: 18.3.1(react@18.3.1)
       supertest:
         specifier: ^7.0.0
         version: 7.0.0
@@ -230,13 +215,6 @@ importers:
         version: 5.7.3
 
   packages/config-eslint:
-    dependencies:
-      react:
-        specifier: ^18.2.0
-        version: 18.3.1
-      vite:
-        specifier: ^5.4.14
-        version: 5.4.14(@types/node@22.10.10)
     devDependencies:
       '@eslint/js':
         specifier: ^9.19.0
@@ -244,12 +222,6 @@ importers:
       '@next/eslint-plugin-next':
         specifier: ^15.1.6
         version: 15.1.6
-      '@types/react':
-        specifier: ^18.2.20
-        version: 18.3.18
-      '@types/react-dom':
-        specifier: ^18.2.7
-        version: 18.3.5(@types/react@18.3.18)
       eslint:
         specifier: ^9.19.0
         version: 9.19.0
@@ -281,61 +253,22 @@ importers:
         specifier: ^8.22.0
         version: 8.22.0(eslint@9.19.0)(typescript@5.7.3)
 
-  packages/config-typescript:
-    dependencies:
-      react:
-        specifier: ^18.2.0
-        version: 18.3.1
-      vite:
-        specifier: ^5.4.14
-        version: 5.4.14(@types/node@22.10.10)
-    devDependencies:
-      '@types/react':
-        specifier: ^18.2.20
-        version: 18.3.18
-      '@types/react-dom':
-        specifier: ^18.2.7
-        version: 18.3.5(@types/react@18.3.18)
-      react-dom:
-        specifier: ^18.2.0
-        version: 18.3.1(react@18.3.1)
+  packages/config-typescript: {}
 
   packages/jest-presets:
     dependencies:
       jest:
         specifier: ^29.7.0
         version: 29.7.0(@types/node@22.10.10)
-      react:
-        specifier: ^18.2.0
-        version: 18.3.1
       ts-jest:
         specifier: ^29.2.5
-        version: 29.2.5(@babel/core@7.26.7)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.26.7))(jest@29.7.0(@types/node@22.10.10))(typescript@5.7.3)
-      vite:
-        specifier: ^5.4.14
-        version: 5.4.14(@types/node@22.10.10)
+        version: 29.2.5(@babel/core@7.26.7)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.26.7))(jest@29.7.0)(typescript@5.7.3)
     devDependencies:
-      '@types/react':
-        specifier: ^18.2.20
-        version: 18.3.18
-      '@types/react-dom':
-        specifier: ^18.2.7
-        version: 18.3.5(@types/react@18.3.18)
       jest-environment-jsdom:
         specifier: ^29.7.0
         version: 29.7.0
-      react-dom:
-        specifier: ^18.2.0
-        version: 18.3.1(react@18.3.1)
 
   packages/logger:
-    dependencies:
-      react:
-        specifier: ^18.2.0
-        version: 18.3.1
-      vite:
-        specifier: ^5.4.14
-        version: 5.4.14(@types/node@22.10.10)
     devDependencies:
       '@jest/globals':
         specifier: ^29.7.0
@@ -352,21 +285,12 @@ importers:
       '@types/node':
         specifier: ^22.10.10
         version: 22.10.10
-      '@types/react':
-        specifier: ^18.2.20
-        version: 18.3.18
-      '@types/react-dom':
-        specifier: ^18.2.7
-        version: 18.3.5(@types/react@18.3.18)
       eslint:
         specifier: ^9.19.0
         version: 9.19.0
       jest:
         specifier: ^29.7.0
         version: 29.7.0(@types/node@22.10.10)
-      react-dom:
-        specifier: ^18.2.0
-        version: 18.3.1(react@18.3.1)
       tsup:
         specifier: ^8.3.6
         version: 8.3.6(postcss@8.5.1)(typescript@5.7.3)(yaml@2.7.0)
@@ -375,10 +299,6 @@ importers:
         version: 5.7.3
 
   packages/ui:
-    dependencies:
-      vite:
-        specifier: ^5.4.14
-        version: 5.4.14(@types/node@22.10.10)
     devDependencies:
       '@jest/globals':
         specifier: ^29.7.0
@@ -10538,7 +10458,7 @@ snapshots:
 
   ts-interface-checker@0.1.13: {}
 
-  ts-jest@29.2.5(@babel/core@7.26.7)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.26.7))(jest@29.7.0(@types/node@22.10.10))(typescript@5.7.3):
+  ts-jest@29.2.5(@babel/core@7.26.7)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.26.7))(jest@29.7.0)(typescript@5.7.3):
     dependencies:
       bs-logger: 0.2.6
       ejs: 3.1.10
