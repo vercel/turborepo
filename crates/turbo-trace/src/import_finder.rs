@@ -41,27 +41,43 @@ impl ImportFinder {
 
 impl Visit for ImportFinder {
     fn visit_module_decl(&mut self, decl: &ModuleDecl) {
-        if let ModuleDecl::Import(import) = decl {
-            let import_type = if import.type_only {
-                ImportType::Type
-            } else {
-                ImportType::Value
-            };
-            match self.import_type {
-                ImportTraceType::All => {
-                    self.imports
-                        .push((import.src.value.to_string(), import.span, import_type));
+        match decl {
+            ModuleDecl::Import(import) => {
+                let import_type = if import.type_only {
+                    ImportType::Type
+                } else {
+                    ImportType::Value
+                };
+                match self.import_type {
+                    ImportTraceType::All => {
+                        self.imports
+                            .push((import.src.value.to_string(), import.span, import_type));
+                    }
+                    ImportTraceType::Types if import.type_only => {
+                        self.imports
+                            .push((import.src.value.to_string(), import.span, import_type));
+                    }
+                    ImportTraceType::Values if !import.type_only => {
+                        self.imports
+                            .push((import.src.value.to_string(), import.span, import_type));
+                    }
+                    _ => {}
                 }
-                ImportTraceType::Types if import.type_only => {
-                    self.imports
-                        .push((import.src.value.to_string(), import.span, import_type));
-                }
-                ImportTraceType::Values if !import.type_only => {
-                    self.imports
-                        .push((import.src.value.to_string(), import.span, import_type));
-                }
-                _ => {}
             }
+            ModuleDecl::ExportNamed(named_export) => {
+                if let Some(decl) = &named_export.src {
+                    self.imports
+                        .push((decl.value.to_string(), decl.span, ImportType::Value));
+                }
+            }
+            ModuleDecl::ExportAll(export_all) => {
+                self.imports.push((
+                    export_all.src.value.to_string(),
+                    export_all.span,
+                    ImportType::Value,
+                ));
+            }
+            _ => {}
         }
     }
 
