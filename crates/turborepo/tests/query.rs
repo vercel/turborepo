@@ -65,6 +65,8 @@ fn test_trace() -> Result<(), anyhow::Error> {
             "get `import_value_and_type.ts` with type dependencies" => "query { file(path: \"import_value_and_type.ts\") { path dependencies(importType: TYPES) { files { items { path } } } } }",
             "get `import_value_and_type.ts` with value dependencies" => "query { file(path: \"import_value_and_type.ts\") { path dependencies(importType: VALUES) { files { items { path } } } } }",
             "get `incorrect_extension.mjs` with dependencies" =>  "query { file(path: \"incorrect_extension.mjs\") { path dependencies(depth: 1) { files { items { path } } } } }",
+            "get `export_all.js` with dependencies" => "query { file(path: \"export_all.js\") { path dependencies { files { items { path } } } } }",
+            "get `export_named.js` with dependencies" => "query { file(path: \"export_named.js\") { path dependencies { files { items { path } } } } }",
         );
 
         Ok(())
