@@ -179,14 +179,16 @@ Using the same example from above, running `turbo prune frontend --docker` will 
   </Folder>
   <Folder name="json" defaultOpen>
     <File name="package.json (from repo root)" />
+    <Folder name="apps" defaultOpen>
+      <Folder name="frontend" defaultOpen>
+        <File name="package.json" />
+      </Folder>
+    </Folder>
     <Folder name="packages" defaultOpen>
       <Folder name="ui" defaultOpen>
         <File name="package.json" />
       </Folder>
       <Folder name="shared" defaultOpen>
-        <File name="package.json" />
-      </Folder>
-      <Folder name="frontend" defaultOpen>
         <File name="package.json" />
       </Folder>
     </Folder>
@@ -199,3 +201,9 @@ Using the same example from above, running `turbo prune frontend --docker` will 
 Defaults to `./out`.
 
 Customize the directory the pruned output is generated in.
+
+#### `--use-gitignore[=<bool>]`
+
+Default: `true`
+
+Respect `.gitignore` file(s) when copying files to the output directory.

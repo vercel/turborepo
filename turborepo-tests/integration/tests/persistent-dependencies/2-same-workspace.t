@@ -13,7 +13,7 @@
 // └── app-a#dev
 //
   $ ${TURBO} run build
-    x invalid task configuration
+    x Invalid task configuration
   
   Error:   x "app-a#dev" is a persistent task, "app-a#build" cannot depend on it
      ,-[turbo.json:4:1]

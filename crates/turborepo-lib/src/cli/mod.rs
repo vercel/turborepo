@@ -28,8 +28,8 @@ use turborepo_ui::{ColorConfig, GREY};
 use crate::{
     cli::error::print_potential_tasks,
     commands::{
-        bin, config, daemon, generate, info, link, login, logout, ls, prune, query, run, scan,
-        telemetry, unlink, CommandBase,
+        bin, boundaries, config, daemon, generate, info, link, login, logout, ls, prune, query,
+        run, scan, telemetry, unlink, CommandBase,
     },
     get_version,
     run::watch::WatchClient,
@@ -126,7 +126,7 @@ impl LogOrder {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, ValueEnum)]
+#[derive(Copy, Clone, Debug, PartialEq, ValueEnum, Serialize)]
 pub enum DryRunMode {
     Text,
     Json,
@@ -391,7 +391,7 @@ impl Args {
             if run_args.remote_cache_read_only.is_some() {
                 warn!(
                     "--remote-cache-read-only is deprecated and will be removed in a future major \
-                     version. Use --cache=remote:r"
+                     version. Use --cache=local:rw,remote:r"
                 );
             }
         }
@@ -399,7 +399,7 @@ impl Args {
         clap_args
     }
 
-    fn parse(os_args: Vec<OsString>) -> Result<Self, clap::Error> {
+    pub(crate) fn parse(os_args: Vec<OsString>) -> Result<Self, clap::Error> {
         let (is_single_package, single_package_free) = Self::remove_single_package(os_args);
         let mut args = Args::try_parse_from(single_package_free)?;
         // And then only add them back in when we're in `run`.
@@ -519,7 +519,9 @@ impl Args {
         if self.run_args.is_some()
             && !matches!(
                 self.command,
-                None | Some(Command::Run { .. }) | Some(Command::Config)
+                None | Some(Command::Run { .. })
+                    | Some(Command::Config)
+                    | Some(Command::Boundaries { .. })
             )
         {
             let mut cmd = Self::command();
@@ -527,7 +529,9 @@ impl Args {
                 clap::error::ErrorKind::UnknownArgument,
                 "Cannot use run arguments outside of run command",
             ))
-        } else if self.execution_args.is_some() && matches!(self.command, Some(Command::Watch(_))) {
+        } else if self.execution_args.is_some()
+            && matches!(self.command, Some(Command::Watch { .. }))
+        {
             let mut cmd = Self::command();
             Err(cmd.error(
                 clap::error::ErrorKind::ArgumentConflict,
@@ -541,6 +545,14 @@ impl Args {
                 clap::error::ErrorKind::ArgumentConflict,
                 "Cannot use run arguments before `run` subcommand",
             ))
+        } else if matches!(self.command, Some(Command::Boundaries { .. }))
+            && (self.run_args.is_some() || self.execution_args.is_some())
+        {
+            let mut cmd = Self::command();
+            Err(cmd.error(
+                clap::error::ErrorKind::ArgumentConflict,
+                "Cannot use run arguments before `boundaries` subcommand",
+            ))
         } else {
             Ok(())
         }
@@ -552,10 +564,13 @@ impl Args {
 pub enum Command {
     /// Get the path to the Turbo binary
     Bin,
-    /// Generate the autocompletion script for the specified shell
-    Completion {
-        shell: Shell,
+    #[clap(hide = true)]
+    Boundaries {
+        #[clap(short = 'F', long, group = "scope-filter-group")]
+        filter: Vec<String>,
     },
+    /// Generate the autocompletion script for the specified shell
+    Completion { shell: Shell },
     /// Runs the Turborepo background daemon
     Daemon {
         /// Set the idle timeout for turbod
@@ -664,6 +679,9 @@ pub enum Command {
         docker: bool,
         #[clap(long = "out-dir", default_value_t = String::from(prune::DEFAULT_OUTPUT_DIR), value_parser)]
         output_dir: String,
+        /// Respect `.gitignore` when copying files to <OUT-DIR>
+        #[clap(long, default_missing_value = "true", num_args = 0..=1, require_equals = true)]
+        use_gitignore: Option<bool>,
     },
 
     /// Run tasks across projects in your monorepo
@@ -690,7 +708,13 @@ pub enum Command {
         /// The query to run, either a file path or a query string
         query: Option<String>,
     },
-    Watch(Box<ExecutionArgs>),
+    Watch {
+        #[clap(flatten)]
+        execution_args: Box<ExecutionArgs>,
+        /// EXPERIMENTAL: Write to cache in watch mode.
+        #[clap(long)]
+        experimental_write_cache: bool,
+    },
     /// Unlink the current directory from your Vercel organization and disable
     /// Remote Caching
     Unlink {
@@ -1191,7 +1215,7 @@ pub async fn run(
             run_args: _,
             execution_args,
         }
-        | Command::Watch(execution_args) => {
+        | Command::Watch { execution_args, .. } => {
             // Don't overwrite the flag if it's already been set for whatever reason
             execution_args.single_package = execution_args.single_package
                 || repo_state
@@ -1271,12 +1295,20 @@ pub async fn run(
 
             Ok(0)
         }
+        Command::Boundaries { .. } => {
+            let event = CommandEventBuilder::new("boundaries").with_parent(&root_telemetry);
+
+            event.track_call();
+            let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
+
+            Ok(boundaries::run(base, event).await?)
+        }
         #[allow(unused_variables)]
         Command::Daemon { command, idle_time } => {
-            CommandEventBuilder::new("daemon")
-                .with_parent(&root_telemetry)
-                .track_call();
+            let event = CommandEventBuilder::new("daemon").with_parent(&root_telemetry);
+            event.track_call();
             let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
+            event.track_ui_mode(base.opts.run_opts.ui_mode);
 
             match command {
                 Some(command) => daemon::daemon_client(command, &base).await,
@@ -1307,10 +1339,11 @@ pub async fn run(
             Ok(0)
         }
         Command::Info => {
-            CommandEventBuilder::new("info")
-                .with_parent(&root_telemetry)
-                .track_call();
+            let event = CommandEventBuilder::new("info").with_parent(&root_telemetry);
+
+            event.track_call();
             let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
+            event.track_ui_mode(base.opts.run_opts.ui_mode);
 
             info::run(base).await;
             Ok(0)
@@ -1319,12 +1352,16 @@ pub async fn run(
             let event = CommandEventBuilder::new("telemetry").with_parent(&root_telemetry);
             event.track_call();
             let mut base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
+            event.track_ui_mode(base.opts.run_opts.ui_mode);
             let child_event = event.child();
             telemetry::configure(command, &mut base, child_event);
             Ok(0)
         }
         Command::Scan {} => {
+            let event = CommandEventBuilder::new("scan").with_parent(&root_telemetry);
+            event.track_call();
             let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
+            event.track_ui_mode(base.opts.run_opts.ui_mode);
             if scan::run(base).await {
                 Ok(0)
             } else {
@@ -1332,6 +1369,9 @@ pub async fn run(
             }
         }
         Command::Config => {
+            CommandEventBuilder::new("config")
+                .with_parent(&root_telemetry)
+                .track_call();
             config::run(repo_root, cli_args).await?;
             Ok(0)
         }
@@ -1345,7 +1385,7 @@ pub async fn run(
             let output = *output;
             let packages = packages.clone();
             let base = CommandBase::new(cli_args, repo_root, version, color_config)?;
-
+            event.track_ui_mode(base.opts.run_opts.ui_mode);
             ls::run(base, packages, event, output).await?;
 
             Ok(0)
@@ -1356,9 +1396,8 @@ pub async fn run(
             yes,
             target,
         } => {
-            CommandEventBuilder::new("link")
-                .with_parent(&root_telemetry)
-                .track_call();
+            let event = CommandEventBuilder::new("link").with_parent(&root_telemetry);
+            event.track_call();
 
             if cli_args.team.is_some() {
                 warn!("team flag does not set the scope for linking. Use --scope instead.");
@@ -1374,6 +1413,7 @@ pub async fn run(
             let yes = *yes;
             let scope = scope.clone();
             let mut base = CommandBase::new(cli_args, repo_root, version, color_config)?;
+            event.track_ui_mode(base.opts.run_opts.ui_mode);
 
             link::link(&mut base, scope, modify_gitignore, yes, to).await?;
 
@@ -1385,6 +1425,7 @@ pub async fn run(
             let invalidate = *invalidate;
 
             let mut base = CommandBase::new(cli_args, repo_root, version, color_config)?;
+            event.track_ui_mode(base.opts.run_opts.ui_mode);
             let event_child = event.child();
 
             logout::logout(&mut base, invalidate, event_child).await?;
@@ -1403,6 +1444,7 @@ pub async fn run(
             let force = *force;
 
             let mut base = CommandBase::new(cli_args, repo_root, version, color_config)?;
+            event.track_ui_mode(base.opts.run_opts.ui_mode);
             let event_child = event.child();
 
             if let Some(sso_team) = sso_team {
@@ -1414,9 +1456,8 @@ pub async fn run(
             Ok(0)
         }
         Command::Unlink { target } => {
-            CommandEventBuilder::new("unlink")
-                .with_parent(&root_telemetry)
-                .track_call();
+            let event = CommandEventBuilder::new("unlink").with_parent(&root_telemetry);
+            event.track_call();
             if cli_args.test_run {
                 println!("Unlink test run successful");
                 return Ok(0);
@@ -1424,6 +1465,7 @@ pub async fn run(
 
             let from = *target;
             let mut base = CommandBase::new(cli_args, repo_root, version, color_config)?;
+            event.track_ui_mode(base.opts.run_opts.ui_mode);
 
             unlink::unlink(&mut base, from)?;
 
@@ -1437,6 +1479,7 @@ pub async fn run(
             event.track_call();
 
             let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
+            event.track_ui_mode(base.opts.run_opts.ui_mode);
 
             if execution_args.tasks.is_empty() {
                 print_potential_tasks(base, event).await?;
@@ -1464,17 +1507,27 @@ pub async fn run(
             event.track_call();
 
             let base = CommandBase::new(cli_args, repo_root, version, color_config)?;
+            event.track_ui_mode(base.opts.run_opts.ui_mode);
 
             let query = query::run(base, event, query, variables.as_deref()).await?;
 
             Ok(query)
         }
-        Command::Watch(_) => {
+        Command::Watch {
+            execution_args,
+            experimental_write_cache,
+        } => {
             let event = CommandEventBuilder::new("watch").with_parent(&root_telemetry);
             event.track_call();
-            let base = CommandBase::new(cli_args, repo_root, version, color_config)?;
+            let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
+            event.track_ui_mode(base.opts.run_opts.ui_mode);
 
-            let mut client = WatchClient::new(base, event).await?;
+            if execution_args.tasks.is_empty() {
+                print_potential_tasks(base, event).await?;
+                return Ok(1);
+            }
+
+            let mut client = WatchClient::new(base, *experimental_write_cache, event).await?;
             if let Err(e) = client.start().await {
                 client.shutdown().await;
                 return Err(e.into());
@@ -1487,6 +1540,7 @@ pub async fn run(
             scope_arg,
             docker,
             output_dir,
+            use_gitignore,
         } => {
             let event = CommandEventBuilder::new("prune").with_parent(&root_telemetry);
             event.track_call();
@@ -1497,9 +1551,19 @@ pub async fn run(
                 .unwrap_or_default();
             let docker = *docker;
             let output_dir = output_dir.clone();
+            let use_gitignore = use_gitignore.unwrap_or(true);
             let base = CommandBase::new(cli_args, repo_root, version, color_config)?;
+            event.track_ui_mode(base.opts.run_opts.ui_mode);
             let event_child = event.child();
-            prune::prune(&base, &scope, docker, &output_dir, event_child).await?;
+            prune::prune(
+                &base,
+                &scope,
+                docker,
+                &output_dir,
+                use_gitignore,
+                event_child,
+            )
+            .await?;
             Ok(0)
         }
         Command::Completion { shell } => {
@@ -2276,10 +2340,13 @@ mod test {
     #[test_case::test_case(
         &["turbo", "watch", "build"],
         Args {
-            command: Some(Command::Watch(Box::new(ExecutionArgs {
-                tasks: vec!["build".to_string()],
-                ..get_default_execution_args()
-            }))),
+            command: Some(Command::Watch {
+                execution_args: Box::new(ExecutionArgs {
+                    tasks: vec!["build".to_string()],
+                    ..get_default_execution_args()
+                }),
+                experimental_write_cache: false
+            }),
             ..Args::default()
         };
         "default watch"
@@ -2287,11 +2354,14 @@ mod test {
     #[test_case::test_case(
         &["turbo", "watch", "build", "--cache-dir", "foobar"],
         Args {
-            command: Some(Command::Watch(Box::new(ExecutionArgs {
-                tasks: vec!["build".to_string()],
-                cache_dir: Some(Utf8PathBuf::from("foobar")),
-                ..get_default_execution_args()
-            }))),
+            command: Some(Command::Watch {
+                execution_args: Box::new(ExecutionArgs {
+                    tasks: vec!["build".to_string()],
+                    cache_dir: Some(Utf8PathBuf::from("foobar")),
+                    ..get_default_execution_args()
+                }),
+                experimental_write_cache: false
+            }),
             ..Args::default()
         };
         "with cache-dir"
@@ -2299,13 +2369,30 @@ mod test {
     #[test_case::test_case(
         &["turbo", "watch", "build", "lint", "check"],
         Args {
-            command: Some(Command::Watch(Box::new(ExecutionArgs {
-                tasks: vec!["build".to_string(), "lint".to_string(), "check".to_string()],
-                ..get_default_execution_args()
-            }))),
+            command: Some(Command::Watch {
+                execution_args: Box::new(ExecutionArgs {
+                  tasks: vec!["build".to_string(), "lint".to_string(), "check".to_string()],
+                  ..get_default_execution_args()
+                }),
+                experimental_write_cache: false
+            }),
             ..Args::default()
         };
         "with multiple tasks"
+    )]
+    #[test_case::test_case(
+        &["turbo", "watch", "build", "--experimental-write-cache"],
+        Args {
+            command: Some(Command::Watch {
+                execution_args: Box::new(ExecutionArgs {
+                  tasks: vec!["build".to_string()],
+                  ..get_default_execution_args()
+                }),
+                experimental_write_cache: true
+            }),
+            ..Args::default()
+        };
+        "with experimental-write-cache"
     )]
     fn test_parse_watch(args: &[&str], expected: Args) {
         assert_eq!(Args::try_parse_from(args).unwrap(), expected);
@@ -2546,6 +2633,7 @@ mod test {
             scope_arg: Some(vec!["foo".into()]),
             docker: false,
             output_dir: "out".to_string(),
+            use_gitignore: None,
         };
 
         assert_eq!(
@@ -2576,6 +2664,7 @@ mod test {
                     scope_arg: None,
                     docker: false,
                     output_dir: "out".to_string(),
+                    use_gitignore: None,
                 }),
                 ..Args::default()
             }
@@ -2589,6 +2678,7 @@ mod test {
                     scope_arg: Some(vec!["foo".to_string(), "bar".to_string()]),
                     docker: false,
                     output_dir: "out".to_string(),
+                    use_gitignore: None,
                 }),
                 ..Args::default()
             }
@@ -2602,6 +2692,7 @@ mod test {
                     scope_arg: Some(vec!["foo".into()]),
                     docker: true,
                     output_dir: "out".to_string(),
+                    use_gitignore: None,
                 }),
                 ..Args::default()
             }
@@ -2615,6 +2706,7 @@ mod test {
                     scope_arg: Some(vec!["foo".into()]),
                     docker: false,
                     output_dir: "dist".to_string(),
+                    use_gitignore: None,
                 }),
                 ..Args::default()
             }
@@ -2630,6 +2722,7 @@ mod test {
                     scope_arg: Some(vec!["foo".into()]),
                     docker: true,
                     output_dir: "dist".to_string(),
+                    use_gitignore: None,
                 }),
                 ..Args::default()
             },
@@ -2646,6 +2739,7 @@ mod test {
                     scope_arg: Some(vec!["foo".into()]),
                     docker: true,
                     output_dir: "dist".to_string(),
+                    use_gitignore: None,
                 }),
                 cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
@@ -2667,6 +2761,58 @@ mod test {
                     scope_arg: None,
                     docker: true,
                     output_dir: "dist".to_string(),
+                    use_gitignore: None,
+                }),
+                ..Args::default()
+            },
+        }
+        .test();
+
+        CommandTestCase {
+            command: "prune",
+            command_args: vec![vec!["foo"], vec!["--use-gitignore"]],
+            global_args: vec![],
+            expected_output: Args {
+                command: Some(Command::Prune {
+                    scope: None,
+                    scope_arg: Some(vec!["foo".to_string()]),
+                    docker: false,
+                    output_dir: "out".to_string(),
+                    use_gitignore: Some(true),
+                }),
+                ..Args::default()
+            },
+        }
+        .test();
+
+        CommandTestCase {
+            command: "prune",
+            command_args: vec![vec!["foo"], vec!["--use-gitignore=true"]],
+            global_args: vec![],
+            expected_output: Args {
+                command: Some(Command::Prune {
+                    scope: None,
+                    scope_arg: Some(vec!["foo".to_string()]),
+                    docker: false,
+                    output_dir: "out".to_string(),
+                    use_gitignore: Some(true),
+                }),
+                ..Args::default()
+            },
+        }
+        .test();
+
+        CommandTestCase {
+            command: "prune",
+            command_args: vec![vec!["foo"], vec!["--use-gitignore=false"]],
+            global_args: vec![],
+            expected_output: Args {
+                command: Some(Command::Prune {
+                    scope: None,
+                    scope_arg: Some(vec!["foo".to_string()]),
+                    docker: false,
+                    output_dir: "out".to_string(),
+                    use_gitignore: Some(false),
                 }),
                 ..Args::default()
             },
@@ -2958,7 +3104,7 @@ mod test {
         assert!(inferred_run
             .execution_args
             .as_ref()
-            .map_or(false, |e| e.single_package));
+            .is_some_and(|e| e.single_package));
         assert!(explicit_run
             .command
             .as_ref()
@@ -2983,6 +3129,19 @@ mod test {
     #[test_case::test_case(&["turbo", "build", "run"], true; "task")]
     #[test_case::test_case(&["turbo", "--filter=web", "watch", "build"], false; "execution before watch")]
     fn test_no_run_args_before_run(args: &[&str], is_okay: bool) {
+        let os_args = args.iter().map(|s| OsString::from(*s)).collect();
+        let cli = Args::parse(os_args);
+        if is_okay {
+            cli.unwrap();
+        } else {
+            let err = cli.unwrap_err();
+            assert_snapshot!(args.join("-").as_str(), err);
+        }
+    }
+
+    #[test_case::test_case(&["turbo", "--filter=foo", "boundaries"], false; "execution args")]
+    #[test_case::test_case(&["turbo", "--no-daemon", "boundaries"], false; "run args")]
+    fn test_no_run_args_before_boundaries(args: &[&str], is_okay: bool) {
         let os_args = args.iter().map(|s| OsString::from(*s)).collect();
         let cli = Args::parse(os_args);
         if is_okay {

@@ -32,9 +32,9 @@ pub struct DiscoveryResponse {
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
-    #[error("discovery unavailable")]
+    #[error("Discovery unavailable")]
     Unavailable,
-    #[error("discovery failed: {0}")]
+    #[error("Discovery failed: {0}")]
     Failed(Box<dyn std::error::Error + Send + Sync>),
 }
 
@@ -120,7 +120,7 @@ impl PackageDiscoveryBuilder for LocalPackageDiscoveryBuilder {
                 if self.allow_missing_package_manager {
                     PackageManager::read_or_detect_package_manager(&package_json, &self.repo_root)?
                 } else {
-                    PackageManager::get_package_manager(&package_json)?
+                    PackageManager::get_package_manager(&self.repo_root, &package_json)?
                 }
             }
         };

@@ -1,7 +1,9 @@
 mod bun;
 mod npm;
+mod npmrc;
 mod pnpm;
 mod yarn;
+mod yarnrc;
 
 use std::{
     backtrace,
@@ -16,13 +18,16 @@ use lazy_regex::{lazy_regex, Lazy};
 use miette::{Diagnostic, NamedSource, SourceSpan};
 use node_semver::SemverError;
 use npm::NpmDetector;
+use npmrc::NpmRc;
 use regex::Regex;
 use serde::Deserialize;
 use thiserror::Error;
+use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, RelativeUnixPath};
 use turborepo_errors::Spanned;
 use turborepo_lockfiles::Lockfile;
 use which::which;
+use yarnrc::YarnRc;
 
 use crate::{
     discovery,
@@ -133,15 +138,15 @@ impl From<wax::BuildError> for Error {
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
-    #[error("io error: {0}")]
+    #[error("I/O error: {0}")]
     Io(#[from] std::io::Error, #[backtrace] backtrace::Backtrace),
     #[error(transparent)]
     Workspace(#[from] MissingWorkspaceError),
-    #[error("yaml parsing error: {0}")]
+    #[error("YAML parsing error: {0}")]
     ParsingYaml(#[from] serde_yaml::Error, #[backtrace] backtrace::Backtrace),
-    #[error("json parsing error: {0}")]
+    #[error("JSON parsing error: {0}")]
     ParsingJson(#[from] serde_json::Error, #[backtrace] backtrace::Backtrace),
-    #[error("globbing error: {0}")]
+    #[error("Globbing error: {0}")]
     Wax(Box<wax::BuildError>, #[backtrace] backtrace::Backtrace),
     #[error(transparent)]
     PackageJson(#[from] package_json::Error),
@@ -149,10 +154,9 @@ pub enum Error {
     Other(#[from] anyhow::Error),
     #[error(transparent)]
     NoPackageManager(#[from] NoPackageManager),
-    #[error("We detected multiple package managers in your repository: {}. Please remove one \
-    of them.", managers.join(", "))]
+    #[error("Multiple package managers in your repository: {}. Please use one package manager.", managers.join(", "))]
     MultiplePackageManagers { managers: Vec<String> },
-    #[error("invalid semantic version: {explanation}")]
+    #[error("Invalid semantic version: {explanation}")]
     #[diagnostic(code(invalid_semantic_version))]
     InvalidVersion {
         explanation: String,
@@ -164,18 +168,18 @@ pub enum Error {
     #[error("{0}: {1}")]
     // this will be something like "cannot find binary: <thing we tried to find>"
     Which(which::Error, String),
-    #[error("invalid utf8: {0}")]
+    #[error("Invalid utf8: {0}")]
     Utf8Error(#[from] std::string::FromUtf8Error),
     #[error(transparent)]
     Path(#[from] turbopath::PathError),
     #[error(
-        "could not parse the packageManager field in package.json, expected to match regular \
-         expression {pattern}"
+        "Could not parse the `packageManager` field in package.json, expected to match regular \
+         expression `{pattern}`."
     )]
     #[diagnostic(code(invalid_package_manager_field))]
     InvalidPackageManager {
         pattern: String,
-        #[label("invalid `packageManager` field")]
+        #[label("Invalid `packageManager` field")]
         span: Option<SourceSpan>,
         #[source_code]
         text: NamedSource,
@@ -184,12 +188,14 @@ pub enum Error {
     WorkspaceGlob(#[from] crate::workspaces::Error),
     #[error(transparent)]
     Lockfile(#[from] turborepo_lockfiles::Error),
-    #[error("lockfile not found at {0}")]
+    #[error("Lockfile not found at {0}")]
     LockfileMissing(AbsoluteSystemPathBuf),
-    #[error("discovering workspace: {0}")]
+    #[error("Discovering workspace: {0}")]
     WorkspaceDiscovery(#[from] discovery::Error),
-    #[error("missing packageManager field in package.json")]
+    #[error("Missing `packageManager` field in package.json")]
     MissingPackageManager,
+    #[error(transparent)]
+    Yarnrc(#[from] yarnrc::Error),
 }
 
 impl From<std::convert::Infallible> for Error {
@@ -199,7 +205,7 @@ impl From<std::convert::Infallible> for Error {
 }
 
 static PACKAGE_MANAGER_PATTERN: Lazy<Regex> =
-    lazy_regex!(r"(?P<manager>bun|npm|pnpm|yarn)@(?P<version>\d+\.\d+\.\d+(-.+)?)");
+    lazy_regex!(r"(?P<manager>bun|npm|pnpm|yarn)@(?P<version>\d+\.\d+\.\d+(-.+)?|https?://.+)");
 
 impl PackageManager {
     pub fn supported_managers() -> &'static [Self] {
@@ -321,34 +327,59 @@ impl PackageManager {
     }
 
     /// Try to extract the package manager from package.json.
-    pub fn get_package_manager(package_json: &PackageJson) -> Result<Self, Error> {
-        Self::read_package_manager(package_json)
+    /// Package Manager will be read from package.json only using the file
+    /// system if the version is a URL and we need to invoke the binary it
+    /// points to for version information.
+    pub fn get_package_manager(
+        repo_root: &AbsoluteSystemPath,
+        package_json: &PackageJson,
+    ) -> Result<Self, Error> {
+        Self::read_package_manager(repo_root, package_json)
     }
 
     // Attempts to read the package manager from the package.json
-    fn read_package_manager(pkg: &PackageJson) -> Result<Self, Error> {
+    fn read_package_manager(
+        repo_root: &AbsoluteSystemPath,
+        pkg: &PackageJson,
+    ) -> Result<Self, Error> {
         let Some(package_manager) = &pkg.package_manager else {
             return Err(Error::MissingPackageManager);
         };
 
         let (manager, version) = Self::parse_package_manager_string(package_manager)?;
-        let version = version.parse().map_err(|err: SemverError| {
-            let (span, text) = package_manager.span_and_text("package.json");
-            Error::InvalidVersion {
-                explanation: err.to_string(),
-                span,
-                text,
+        // if version is a https attempt to check that instead
+        if version.starts_with("http") {
+            match manager {
+                "npm" => Ok(PackageManager::Npm),
+                "bun" => Ok(PackageManager::Bun),
+                "yarn" => Ok(YarnDetector::new(repo_root)
+                    .next()
+                    .ok_or_else(|| Error::MissingPackageManager)??),
+                "pnpm" => Ok(PnpmDetector::new(repo_root)
+                    .next()
+                    .ok_or_else(|| Error::MissingPackageManager)??),
+                _ => unreachable!(
+                    "found invalid package manager even though regex should have caught it"
+                ),
             }
-        })?;
-
-        match manager {
-            "npm" => Ok(PackageManager::Npm),
-            "bun" => Ok(PackageManager::Bun),
-            "yarn" => Ok(YarnDetector::detect_berry_or_yarn(&version)?),
-            "pnpm" => Ok(PnpmDetector::detect_pnpm6_or_pnpm(&version)?),
-            _ => unreachable!(
-                "found invalid package manager even though regex should have caught it"
-            ),
+        } else {
+            let version = version.parse().map_err(|err: SemverError| {
+                let (span, text) = package_manager.span_and_text("package.json");
+                Error::InvalidVersion {
+                    explanation: err.to_string(),
+                    span,
+                    text,
+                }
+            })?;
+            match manager {
+                "npm" => Ok(PackageManager::Npm),
+                "bun" => Ok(PackageManager::Bun),
+                "yarn" => Ok(YarnDetector::detect_berry_or_yarn(&version)?),
+                "pnpm" => Ok(PnpmDetector::detect_pnpm6_or_pnpm(&version)?),
+                _ => unreachable!(
+                    "found invalid package manager even though regex should have caught it"
+                ),
+            }
         }
     }
 
@@ -380,7 +411,8 @@ impl PackageManager {
         package_json: &PackageJson,
         repo_root: &AbsoluteSystemPath,
     ) -> Result<Self, Error> {
-        Self::get_package_manager(package_json).or_else(|_| Self::detect_package_manager(repo_root))
+        Self::get_package_manager(repo_root, package_json)
+            .or_else(|_| Self::detect_package_manager(repo_root))
     }
 
     pub(crate) fn parse_package_manager_string(
@@ -502,14 +534,14 @@ impl PackageManager {
         turbo_root.join_component(self.lockfile_name())
     }
 
-    pub fn arg_separator(&self, user_args: &[String]) -> Option<&str> {
+    pub fn arg_separator(&self, user_args: &[impl AsRef<str>]) -> Option<&str> {
         match self {
             PackageManager::Yarn | PackageManager::Bun => {
                 // Yarn and bun warn and swallows a "--" token. If the user is passing "--", we
                 // need to prepend our own so that the user's doesn't get
                 // swallowed. If they are not passing their own, we don't need
                 // the "--" token and can avoid the warning.
-                if user_args.iter().any(|arg| arg == "--") {
+                if user_args.iter().any(|arg| arg.as_ref() == "--") {
                     Some("--")
                 } else {
                     None
@@ -519,6 +551,34 @@ impl PackageManager {
             PackageManager::Pnpm | PackageManager::Pnpm9 | PackageManager::Berry => None,
         }
     }
+
+    /// Returns whether or not the package manager will select a package in the
+    /// workspace as a dependency if the `workspace:` protocol isn't used.
+    /// For example if a package in the workspace has `"lib": "1.2.3"` and
+    /// there's a package in the workspace with the name of `lib` and
+    /// version `1.2.3` if this is true, then the local `lib` package will
+    /// be used where `false` would use a `lib` package from the registry.
+    pub fn link_workspace_packages(&self, repo_root: &AbsoluteSystemPath) -> bool {
+        match self {
+            PackageManager::Berry => {
+                let yarnrc = YarnRc::from_file(repo_root)
+                    .inspect_err(|e| debug!("unable to read yarnrc: {e}"))
+                    .unwrap_or_default();
+                yarnrc.enable_transparent_workspaces
+            }
+            PackageManager::Pnpm9 | PackageManager::Pnpm | PackageManager::Pnpm6 => {
+                let npmrc = NpmRc::from_file(repo_root)
+                    .inspect_err(|e| debug!("unable to read npmrc: {e}"))
+                    .unwrap_or_default();
+                npmrc
+                    .link_workspace_packages
+                    // The default for pnpm 9 is false if not explicitly set
+                    // All previous versions had a default of true
+                    .unwrap_or(!matches!(self, PackageManager::Pnpm9))
+            }
+            PackageManager::Yarn | PackageManager::Bun | PackageManager::Npm => true,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -526,6 +586,8 @@ mod tests {
     use std::collections::HashSet;
 
     use pretty_assertions::assert_eq;
+    use tempfile::TempDir;
+    use test_case::test_case;
 
     use super::*;
 
@@ -697,6 +759,13 @@ mod tests {
                 expected_version: "1.0.1".to_owned(),
                 expected_error: false,
             },
+            TestCase {
+                name: "supports custom URL".to_owned(),
+                package_manager: Spanned::new("npm@https://some-npm-fork".to_owned()),
+                expected_manager: "npm".to_owned(),
+                expected_version: "https://some-npm-fork".to_owned(),
+                expected_error: false,
+            },
         ];
 
         for case in tests {
@@ -713,31 +782,33 @@ mod tests {
 
     #[test]
     fn test_read_package_manager() -> Result<(), Error> {
+        let dir = TempDir::new()?;
+        let repo_root = AbsoluteSystemPath::from_std_path(dir.path())?;
         let mut package_json = PackageJson {
             package_manager: Some(Spanned::new("npm@8.19.4".to_string())),
             ..Default::default()
         };
-        let package_manager = PackageManager::read_package_manager(&package_json)?;
+        let package_manager = PackageManager::read_package_manager(repo_root, &package_json)?;
         assert_eq!(package_manager, PackageManager::Npm);
 
         package_json.package_manager = Some(Spanned::new("yarn@2.0.0".to_string()));
-        let package_manager = PackageManager::read_package_manager(&package_json)?;
+        let package_manager = PackageManager::read_package_manager(repo_root, &package_json)?;
         assert_eq!(package_manager, PackageManager::Berry);
 
         package_json.package_manager = Some(Spanned::new("yarn@1.9.0".to_string()));
-        let package_manager = PackageManager::read_package_manager(&package_json)?;
+        let package_manager = PackageManager::read_package_manager(repo_root, &package_json)?;
         assert_eq!(package_manager, PackageManager::Yarn);
 
         package_json.package_manager = Some(Spanned::new("pnpm@6.0.0".to_string()));
-        let package_manager = PackageManager::read_package_manager(&package_json)?;
+        let package_manager = PackageManager::read_package_manager(repo_root, &package_json)?;
         assert_eq!(package_manager, PackageManager::Pnpm6);
 
         package_json.package_manager = Some(Spanned::new("pnpm@7.2.0".to_string()));
-        let package_manager = PackageManager::read_package_manager(&package_json)?;
+        let package_manager = PackageManager::read_package_manager(repo_root, &package_json)?;
         assert_eq!(package_manager, PackageManager::Pnpm);
 
         package_json.package_manager = Some(Spanned::new("bun@1.0.1".to_string()));
-        let package_manager = PackageManager::read_package_manager(&package_json)?;
+        let package_manager = PackageManager::read_package_manager(repo_root, &package_json)?;
         assert_eq!(package_manager, PackageManager::Bun);
 
         Ok(())
@@ -786,5 +857,35 @@ mod tests {
             serde_json::from_str("{ \"workspaces\": {\"packages\": [\"packages/**\"]}}")?;
         assert_eq!(nested.workspaces.as_ref(), vec!["packages/**"]);
         Ok(())
+    }
+
+    #[test_case(PackageManager::Npm, None, true)]
+    #[test_case(PackageManager::Yarn, None, true)]
+    #[test_case(PackageManager::Bun, None, true)]
+    #[test_case(PackageManager::Pnpm6, None, true)]
+    #[test_case(PackageManager::Pnpm, None, true)]
+    #[test_case(PackageManager::Pnpm, Some(false), false)]
+    #[test_case(PackageManager::Pnpm, Some(true), true)]
+    #[test_case(PackageManager::Pnpm9, None, false)]
+    #[test_case(PackageManager::Pnpm9, Some(true), true)]
+    #[test_case(PackageManager::Pnpm9, Some(false), false)]
+    #[test_case(PackageManager::Berry, None, true)]
+    #[test_case(PackageManager::Berry, Some(false), false)]
+    #[test_case(PackageManager::Berry, Some(true), true)]
+    fn test_link_workspace_packages(pm: PackageManager, enabled: Option<bool>, expected: bool) {
+        let tmpdir = tempfile::tempdir().unwrap();
+        let repo_root = AbsoluteSystemPath::from_std_path(tmpdir.path()).unwrap();
+        if let Some(enabled) = enabled {
+            repo_root
+                .join_component(npmrc::NPMRC_FILENAME)
+                .create_with_contents(format!("link-workspace-packages={enabled}"))
+                .unwrap();
+            repo_root
+                .join_component(yarnrc::YARNRC_FILENAME)
+                .create_with_contents(format!("enableTransparentWorkspaces: {enabled}"))
+                .unwrap();
+        }
+        let actual = pm.link_workspace_packages(repo_root);
+        assert_eq!(actual, expected);
     }
 }

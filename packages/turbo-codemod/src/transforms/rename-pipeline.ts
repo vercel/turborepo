@@ -1,5 +1,5 @@
 import path from "node:path";
-import { existsSync } from "fs-extra";
+import fs from "fs-extra";
 import { getTurboConfigs } from "@turbo/utils";
 import type { SchemaV2, SchemaV1 } from "@turbo/types";
 import type { Transformer, TransformerArgs } from "../types";
@@ -28,9 +28,9 @@ export function transformer({
     options,
   });
 
-  log.info(`Renaming \`pipeline\` key in turbo.json to \`tasks\``);
+  log.info("Renaming `pipeline` key in turbo.json to `tasks`");
   const turboConfigPath = path.join(root, "turbo.json");
-  if (!existsSync(turboConfigPath)) {
+  if (!fs.existsSync(turboConfigPath)) {
     return runner.abortTransform({
       reason: `No turbo.json found at ${root}. Is the path correct?`,
     });

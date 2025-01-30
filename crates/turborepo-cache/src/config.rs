@@ -7,7 +7,7 @@ use crate::{CacheActions, CacheConfig};
 
 #[derive(Debug, Error, Diagnostic, PartialEq)]
 pub enum Error {
-    #[error("keys cannot be duplicated, found `{key}` multiple times")]
+    #[error("Keys cannot be duplicated. Found `{key}` multiple times.")]
     DuplicateKeys {
         #[source_code]
         text: String,
@@ -15,7 +15,7 @@ pub enum Error {
         #[label]
         span: Option<SourceSpan>,
     },
-    #[error("actions cannot be duplicated, found `{action}` multiple times")]
+    #[error("Actions cannot be duplicated. Found `{action}` multiple times.")]
     DuplicateActions {
         #[source_code]
         text: String,
@@ -23,7 +23,9 @@ pub enum Error {
         #[label]
         span: Option<SourceSpan>,
     },
-    #[error("invalid cache type and action pair, found `{pair}`, expected colon separated pair")]
+    #[error(
+        "Invalid cache type and action pair. Found `{pair}`, but expected colon separated pair."
+    )]
     InvalidCacheTypeAndAction {
         #[source_code]
         text: String,
@@ -31,7 +33,7 @@ pub enum Error {
         #[label]
         span: Option<SourceSpan>,
     },
-    #[error("invalid cache action `{c}`")]
+    #[error("Invalid cache action: `{c}`")]
     InvalidCacheAction {
         #[source_code]
         text: String,
@@ -39,7 +41,7 @@ pub enum Error {
         #[label]
         span: Option<SourceSpan>,
     },
-    #[error("invalid cache type `{s}`, expected `local` or `remote`")]
+    #[error("Invalid cache type `{s}`. Expected `local` or `remote`")]
     InvalidCacheType {
         #[source_code]
         text: String,
@@ -210,6 +212,10 @@ mod test {
     #[test_case("local:r,remote:w", Ok(CacheConfig { local: CacheActions { read: true, write: false }, remote: CacheActions { read: false, write: true } }) ; "local:r,remote:w"
     )]
     #[test_case("local:r", Ok(CacheConfig { local: CacheActions { read: true, write: false }, remote: CacheActions { read: false, write: false } }) ; "local:r"
+    )]
+    #[test_case("remote:r", Ok(CacheConfig { local: CacheActions { read: false, write: false }, remote: CacheActions { read: true, write: false } }) ; "remote:r"
+    )]
+    #[test_case("local:rw,remote:r", Ok(CacheConfig { local: CacheActions { read: true, write: true }, remote: CacheActions { read: true, write: false } }) ; "local:rw,remote:r"
     )]
     #[test_case("local:", Ok(CacheConfig { local: CacheActions { read: false, write: false }, remote: CacheActions { read: false, write: false } }) ; "empty action"
     )]

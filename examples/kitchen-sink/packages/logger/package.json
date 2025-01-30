@@ -1,9 +1,10 @@
 {
   "name": "@repo/logger",
   "version": "0.0.0",
+  "type": "module",
   "private": true,
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "main": "./dist/index.cjs",
+  "types": "./dist/index.d.cts",
   "files": [
     "dist/**"
   ],
@@ -11,7 +12,7 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "lint": "eslint src/",
-    "typecheck": "tsc --noEmit",
+    "check-types": "tsc --noEmit",
     "test": "jest"
   },
   "jest": {
@@ -22,9 +23,10 @@
     "@repo/eslint-config": "workspace:*",
     "@repo/jest-presets": "workspace:*",
     "@repo/typescript-config": "workspace:*",
-    "@types/node": "^20.11.24",
+    "@types/node": "^22.12.0",
+    "eslint": "^9.19.0",
     "jest": "^29.7.0",
-    "tsup": "^8.0.2",
-    "typescript": "5.5.4"
+    "tsup": "^8.3.6",
+    "typescript": "5.7.3"
   }
 }

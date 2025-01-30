@@ -1,4 +1,4 @@
-import { bold, green, red, underline, yellow } from "picocolors";
+import picocolors from "picocolors";
 import gradient from "gradient-string";
 
 const INDENTATION = 2;
@@ -30,12 +30,12 @@ export class Logger {
 
   header(title: string) {
     this.blankLine();
-    this.logger(bold(title));
+    this.logger(picocolors.bold(title));
   }
 
   installerFrames() {
     const prefix = `${" ".repeat(INDENTATION)} - ${
-      this.dry ? yellow("SKIPPED | ") : green("OK | ")
+      this.dry ? picocolors.yellow("SKIPPED | ") : picocolors.green("OK | ")
     }`;
     return [`${prefix}   `, `${prefix}>  `, `${prefix}>> `, `${prefix}>>>`];
   }
@@ -46,7 +46,7 @@ export class Logger {
   }
 
   hero() {
-    this.logger(bold(this.gradient(`\n>>> TURBOREPO\n`)));
+    this.logger(picocolors.bold(this.gradient("\n>>> TURBOREPO\n")));
   }
 
   info(...args: Array<unknown>) {
@@ -55,21 +55,26 @@ export class Logger {
 
   mainStep(title: string) {
     this.blankLine();
-    this.logger(`${this.step}. ${underline(title)}`);
+    this.logger(`${this.step}. ${picocolors.underline(title)}`);
     this.step += 1;
   }
 
   subStep(...args: Array<unknown>) {
     this.logger(
       " ".repeat(INDENTATION),
-      `-`,
-      this.dry ? yellow("SKIPPED |") : green("OK |"),
+      "-",
+      this.dry ? picocolors.yellow("SKIPPED |") : picocolors.green("OK |"),
       ...args
     );
   }
 
   subStepFailure(...args: Array<unknown>) {
-    this.logger(" ".repeat(INDENTATION), `-`, red("ERROR |"), ...args);
+    this.logger(
+      " ".repeat(INDENTATION),
+      "-",
+      picocolors.red("ERROR |"),
+      ...args
+    );
   }
 
   rootHeader() {
@@ -80,8 +85,8 @@ export class Logger {
   rootStep(...args: Array<unknown>) {
     this.logger(
       " ".repeat(INDENTATION * 3),
-      `-`,
-      this.dry ? yellow("SKIPPED |") : green("OK |"),
+      "-",
+      this.dry ? picocolors.yellow("SKIPPED |") : picocolors.green("OK |"),
       ...args
     );
   }
@@ -94,8 +99,8 @@ export class Logger {
   workspaceStep(...args: Array<unknown>) {
     this.logger(
       " ".repeat(INDENTATION * 3),
-      `-`,
-      this.dry ? yellow("SKIPPED |") : green("OK |"),
+      "-",
+      this.dry ? picocolors.yellow("SKIPPED |") : picocolors.green("OK |"),
       ...args
     );
   }

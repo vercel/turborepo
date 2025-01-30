@@ -5,12 +5,15 @@ set -e
 # Note: BASH_SOURCE[0] is a _relative_ path, so grab
 # the full realpath right away before manipulating.
 SCRIPT_FILE="$( realpath "${BASH_SOURCE[0]}" )"
-PKG_ROOT=$(realpath "${SCRIPT_FILE}/../..")
+echo "SCRIPT_FILE: ${SCRIPT_FILE}"
+PKG_ROOT=$(realpath "$(dirname "${SCRIPT_FILE}")/..")
+echo "PKG_ROOT: ${PKG_ROOT}"
 JS_PACKAGE_JSON="${PKG_ROOT}/js/package.json"
+echo "JS_PACKAGE_JSON: ${JS_PACKAGE_JSON}"
 
 if [ $# != 1 ]; then
   CURRENT_VERSION=$(jq -r .version "${JS_PACKAGE_JSON}")
-  echo "Missing version, current version is $CURRENT_VERSION"
+  echo "Missing version, current version is $CURRENT_VERSION.  Please provide a new version as an argument to this script."
   exit 1
 fi
 

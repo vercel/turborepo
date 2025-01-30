@@ -91,13 +91,13 @@ impl HashSpec {
 
 #[derive(Error, Debug)]
 pub enum Error {
-    #[error("package hashing encountered an error: {0}")]
+    #[error("Package hashing encountered an error: {0}")]
     HashingError(String),
-    #[error("file hashing is not available: {0}")]
+    #[error("File hashing is not available: {0}")]
     Unavailable(String),
-    #[error("package not found: {} {:?}", .0.package_path, .0.inputs)]
+    #[error("Package not found: {} {:?}", .0.package_path, .0.inputs)]
     UnknownPackage(HashSpec),
-    #[error("unsupported: glob traverses out of the package")]
+    #[error("Unsupported: glob traverses out of the package")]
     UnsupportedGlob,
 }
 

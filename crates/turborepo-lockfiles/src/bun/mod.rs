@@ -10,13 +10,13 @@ type Map<K, V> = std::collections::BTreeMap<K, V>;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("unable to parse: {0}")]
+    #[error("Unable to parse: {0}")]
     SymlParse(String),
-    #[error("unable to convert to structured syml: {0}")]
+    #[error("Unable to convert to structured syml: {0}")]
     SymlStructure(#[from] serde_json::Error),
-    #[error("unexpected non-utf8 yarn.lock")]
+    #[error("Unexpected non-utf8 yarn.lock")]
     NonUTF8(#[from] std::str::Utf8Error),
-    #[error("Turborepo cannot serialize Bun lockfiles.")]
+    #[error("Turborepo cannot serialize Bun binary lockfiles.")]
     NotImplemented(),
 }
 
@@ -121,6 +121,13 @@ impl Lockfile for BunLockfile {
 
     fn turbo_version(&self) -> Option<String> {
         None
+    }
+
+    fn human_name(&self, package: &crate::Package) -> Option<String> {
+        let entry = self.inner.get(&package.key)?;
+        let name = entry.name.as_deref()?;
+        let version = &entry.version;
+        Some(format!("{name}@{version}"))
     }
 }
 

@@ -1,5 +1,6 @@
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
+    fmt::Display,
     ops::{Deref, DerefMut},
     sync::Arc,
 };
@@ -193,6 +194,16 @@ impl Default for UIMode {
     }
 }
 
+impl Display for UIMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            UIMode::Tui => write!(f, "tui"),
+            UIMode::Stream => write!(f, "stream"),
+            UIMode::Web => write!(f, "web"),
+        }
+    }
+}
+
 impl UIMode {
     pub fn use_tui(&self) -> bool {
         matches!(self, Self::Tui)
@@ -252,8 +263,8 @@ impl RawTaskDefinition {
     pub fn merge(&mut self, other: RawTaskDefinition) {
         set_field!(self, other, outputs);
 
-        let other_has_range = other.cache.as_ref().map_or(false, |c| c.range.is_some());
-        let self_does_not_have_range = self.cache.as_ref().map_or(false, |c| c.range.is_none());
+        let other_has_range = other.cache.as_ref().is_some_and(|c| c.range.is_some());
+        let self_does_not_have_range = self.cache.as_ref().is_some_and(|c| c.range.is_none());
 
         if other.cache.is_some()
             // If other has range info and we're missing it, carry it over

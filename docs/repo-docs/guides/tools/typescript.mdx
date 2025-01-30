@@ -59,17 +59,19 @@ pnpm dlx create-turbo@latest
 Inside `packages/typescript-config`, you have a few `json` files which represent different ways you might want to configure TypeScript in various packages. The `base.json` file is extended by every other `tsconfig.json` in the workspace and looks like this:
 
 ```json title="./packages/typescript-config/base.json"
-"compilerOptions": {
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "target": "es2022",
-    "allowJs": true,
-    "resolveJsonModule": true,
-    "moduleDetection": "force",
-    "isolatedModules": true,
-    "strict": true,
-    "noUncheckedIndexedAccess": true,
-    "module": "NodeNext"
+{
+    "compilerOptions": {
+        "esModuleInterop": true,
+        "skipLibCheck": true,
+        "target": "es2022",
+        "allowJs": true,
+        "resolveJsonModule": true,
+        "moduleDetection": "force",
+        "isolatedModules": true,
+        "strict": true,
+        "noUncheckedIndexedAccess": true,
+        "module": "NodeNext"
+    }
 }
 ```
 
@@ -81,7 +83,7 @@ The other `tsconfig` files in this package use the `extends` key to start with t
 
 Inside `package.json`, name the package so it can be referenced in the rest of the Workspace:
 
-```json title="packages/tsconfig/package.json"
+```json title="packages/typescript-config/package.json"
 {
   "name": "@repo/typescript-config"
 }

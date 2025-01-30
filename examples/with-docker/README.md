@@ -1,6 +1,6 @@
 # Turborepo Docker starter
 
-This is an official Docker starter Turborepo.
+This is a community-maintained example. If you experience a problem, please submit a pull request with a fix. GitHub Issues will be closed.
 
 ## Using this example
 
@@ -55,6 +55,9 @@ docker kill $(docker ps -q) && docker rm $(docker ps -a -q)
 ```
 
 ### Remote Caching
+
+> [!TIP]
+> Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
 
 This example includes optional remote caching. In the Dockerfiles of the apps, uncomment the build arguments for `TURBO_TEAM` and `TURBO_TOKEN`. Then, pass these build arguments to your Docker build.
 

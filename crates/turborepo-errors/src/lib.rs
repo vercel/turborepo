@@ -9,7 +9,15 @@ use miette::{Diagnostic, NamedSource, SourceSpan};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-pub const TURBO_SITE: &str = "https://turbo.build";
+/// Base URL for links supplied in error messages. You can use the TURBO_SITE
+/// environment variable at compile time to set a base URL for easier debugging.
+///
+/// When TURBO_SITE is not provided at compile time, the production site will be
+/// used.
+pub const TURBO_SITE: &str = match option_env!("TURBO_SITE") {
+    Some(url) => url,
+    None => "https://turbo.build",
+};
 
 /// A little helper to convert from biome's syntax errors to miette.
 #[derive(Debug, Error, Diagnostic)]

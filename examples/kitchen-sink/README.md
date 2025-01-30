@@ -1,6 +1,6 @@
 # Turborepo kitchen sink starter
 
-This is an official starter Turborepo with multiple meta-frameworks all working in harmony and sharing packages.
+This Turborepo starter is maintained by the Turborepo core team.
 
 This example also shows how to use [Workspace Configurations](https://turbo.build/repo/docs/core-concepts/monorepos/configuring-workspaces).
 

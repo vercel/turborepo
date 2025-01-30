@@ -38,7 +38,7 @@ impl FixtureCell {
     #[allow(dead_code)]
     pub fn from_cell(cell: &vt100::Cell) -> Self {
         Self {
-            contents: cell.contents(),
+            contents: cell.contents().to_string(),
             is_wide: cell.is_wide(),
             is_wide_continuation: cell.is_wide_continuation(),
             fgcolor: cell.fgcolor(),

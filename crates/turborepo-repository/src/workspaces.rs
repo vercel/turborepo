@@ -7,13 +7,13 @@ use wax::{Any, Glob, Program as _};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("invalid workspace glob {fixed}: {err}")]
+    #[error("Invalid workspace glob {fixed}: {err}")]
     Glob {
         fixed: String,
         #[source]
         err: Box<wax::BuildError>,
     },
-    #[error("invalid globwalk pattern {0}")]
+    #[error("Invalid globwalk pattern {0}")]
     Globwalk(#[from] globwalk::GlobError),
     #[error(transparent)]
     WalkError(#[from] globwalk::WalkError),

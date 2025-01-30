@@ -12,6 +12,7 @@ use super::{
 pub struct InputOptions<'a> {
     pub focus: &'a LayoutSections,
     pub has_selection: bool,
+    pub is_help_popup_open: bool,
 }
 
 pub fn start_crossterm_stream(tx: mpsc::Sender<crossterm::event::Event>) -> Option<JoinHandle<()>> {
@@ -30,7 +31,7 @@ pub fn start_crossterm_stream(tx: mpsc::Sender<crossterm::event::Event>) -> Opti
     }))
 }
 
-impl<'a> InputOptions<'a> {
+impl InputOptions<'_> {
     /// Maps a crossterm::event::Event to a tui::Event
     pub fn handle_crossterm_event(self, event: crossterm::event::Event) -> Option<Event> {
         match event {
@@ -80,6 +81,7 @@ fn translate_key_event(options: InputOptions, key_event: KeyEvent) -> Option<Eve
         KeyCode::Char('/') if matches!(options.focus, LayoutSections::TaskList) => {
             Some(Event::SearchEnter)
         }
+        KeyCode::Esc if options.is_help_popup_open => Some(Event::ToggleHelpPopup),
         KeyCode::Esc if matches!(options.focus, LayoutSections::Search { .. }) => {
             Some(Event::SearchExit {
                 restore_scroll: true,
@@ -108,10 +110,10 @@ fn translate_key_event(options: InputOptions, key_event: KeyEvent) -> Option<Eve
         }
         // Fall through if we aren't in interactive mode
         KeyCode::Char('h') => Some(Event::ToggleSidebar),
-        KeyCode::Char('p') if key_event.modifiers == KeyModifiers::CONTROL => Some(Event::ScrollUp),
-        KeyCode::Char('n') if key_event.modifiers == KeyModifiers::CONTROL => {
-            Some(Event::ScrollDown)
-        }
+        KeyCode::Char('u') => Some(Event::ScrollUp),
+        KeyCode::Char('d') => Some(Event::ScrollDown),
+        KeyCode::Char('m') => Some(Event::ToggleHelpPopup),
+        KeyCode::Char('p') => Some(Event::TogglePinnedTask),
         KeyCode::Up | KeyCode::Char('k') => Some(Event::Up),
         KeyCode::Down | KeyCode::Char('j') => Some(Event::Down),
         KeyCode::Enter | KeyCode::Char('i') => Some(Event::EnterInteractive),
@@ -134,19 +136,19 @@ fn ctrl_c() -> Option<Event> {
 
 #[cfg(windows)]
 fn ctrl_c() -> Option<Event> {
-    use winapi::{
-        shared::minwindef::{BOOL, DWORD, TRUE},
-        um::wincon,
+    use windows_sys::Win32::{
+        Foundation::{BOOL, TRUE},
+        System::Console::GenerateConsoleCtrlEvent,
     };
     // First parameter corresponds to what event to generate, 0 is a Ctrl-C
-    let ctrl_c_event: DWORD = 0x0;
+    let ctrl_c_event = 0x0;
     // Second parameter corresponds to which process group to send the event to.
     // If 0 is passed the event gets sent to every process connected to the current
     // Console.
-    let process_group_id: DWORD = 0x0;
+    let process_group_id = 0x0;
     let success: BOOL = unsafe {
         // See docs https://learn.microsoft.com/en-us/windows/console/generateconsolectrlevent
-        wincon::GenerateConsoleCtrlEvent(ctrl_c_event, process_group_id)
+        GenerateConsoleCtrlEvent(ctrl_c_event, process_group_id)
     };
     if success == TRUE {
         None
@@ -443,6 +445,7 @@ mod test {
         InputOptions {
             focus: search(),
             has_selection: false,
+            is_help_popup_open: false,
         }
     }
 

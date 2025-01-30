@@ -282,6 +282,19 @@ export interface Pipeline {
    * @defaultValue `false`
    */
   interactive?: boolean;
+
+  /**
+   * Label a persistent task as interruptible to allow it to be restarted by `turbo watch`.
+   * `turbo watch` watches for changes to your packages and automatically
+   * restarts tasks that are affected. However, if a task is persistent, it will
+   * not be restarted by default. To enable restarting persistent tasks, set
+   * `interruptible` to true.
+   *
+   * Documentation: https://turbo.build/repo/docs/reference/configuration#interruptible
+   *
+   * @defaultValue `false`
+   */
+  interruptible?: boolean;
 }
 
 export interface RemoteCache {

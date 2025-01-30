@@ -55,5 +55,8 @@ export class Workspace {
    * of strings relative to the monorepo root and use the current system's
    * path separator.
    */
-  affectedPackages(files: Array<string>): Promise<Array<Package>>;
+  affectedPackages(
+    files: Array<string>,
+    changedLockfile?: string | undefined | null
+  ): Promise<Array<Package>>;
 }

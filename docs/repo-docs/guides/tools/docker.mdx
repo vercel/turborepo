@@ -96,7 +96,9 @@ First, we want to copy over only what we need to install the packages. When runn
   <Folder name="out" defaultOpen>
     <Folder name="json" defaultOpen>
       <Folder name="apps" defaultOpen>
-        <File name="package.json" />
+        <Folder name="api" defaultOpen>
+          <File name="package.json" />
+        </Folder>
       </Folder>
       <File name="package.json" />
     </Folder>
@@ -163,7 +165,7 @@ WORKDIR /app
 
 # First install the dependencies (as they change less often)
 COPY --from=builder /app/out/json/ .
-RUN yarn install
+RUN yarn install --frozen-lockfile
 
 # Build the project
 COPY --from=builder /app/out/full/ .

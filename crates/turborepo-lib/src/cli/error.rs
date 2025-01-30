@@ -19,10 +19,12 @@ use crate::{
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
-    #[error("No command specified")]
+    #[error("No command specified.")]
     NoCommand(#[backtrace] backtrace::Backtrace),
     #[error("{0}")]
     Bin(#[from] bin::Error, #[backtrace] backtrace::Backtrace),
+    #[error(transparent)]
+    Boundaries(#[from] crate::boundaries::Error),
     #[error(transparent)]
     Path(#[from] turbopath::PathError),
     #[error(transparent)]
@@ -82,7 +84,7 @@ pub async fn print_potential_tasks(
     let run = run_builder.build(&handler, telemetry).await?;
     let potential_tasks = run.get_potential_tasks()?;
 
-    println!("No tasks provided, here are some potential ones to run\n",);
+    println!("No tasks provided, here are some potential ones\n",);
 
     for (task, packages) in potential_tasks
         .into_iter()

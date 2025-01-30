@@ -4,11 +4,11 @@
 datasource db {
   provider = "mysql"
   url      = env("DATABASE_URL")
-  relationMode = "prisma"
 }
 
 generator client {
   provider = "prisma-client-js"
+  output = "../generated/client"
 }
 
 model User {
