@@ -770,11 +770,35 @@ mod tests {
 
     use super::{RawTurboJson, Spanned, TurboJson, UIMode};
     use crate::{
+        boundaries::BoundariesConfig,
         cli::OutputLogsMode,
         run::task_id::TaskName,
         task_graph::{TaskDefinition, TaskOutputs},
         turbo_json::RawTaskDefinition,
     };
+
+    #[test_case("{}", "empty")]
+    #[test_case(r#"{"tags": ["my-tag"] }"#, "just tags")]
+    #[test_case(
+        r#"{"tags": ["my-tag"], "dependencies": { "allow": ["my-package"] } }"#,
+        "tags and dependencies"
+    )]
+    #[test_case(r#"{"tags": ["my-tag"], "dependencies": { "allow": ["my-package"], "deny": ["my-other-package"] } }"#, "tags and dependencies 2")]
+    #[test_case(r#"{"tags": ["my-tag"], "dependents": { "allow": ["my-package"], "deny": ["my-other-package"] } }"#, "tags and dependents")]
+    #[test_case(
+        r#"{ "dependents": { "allow": ["my-package"], "deny": ["my-other-package"] } }"#,
+        "dependents"
+    )]
+    fn test_deserialize_boundaries(json: &str, name: &str) {
+        let deserialized_result = deserialize_from_json_str(
+            json,
+            JsonParserOptions::default().with_allow_comments(),
+            "turbo.json",
+        );
+        let raw_task_definition: BoundariesConfig =
+            deserialized_result.into_deserialized().unwrap();
+        insta::assert_json_snapshot!(name.replace(' ', "_"), raw_task_definition);
+    }
 
     #[test_case(
         "{}",
