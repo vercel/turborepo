@@ -39,6 +39,12 @@
     "slug": "nextjs",
     "name": "Next.js",
     "envWildcards": ["NEXT_PUBLIC_*"],
+    "envConditionals": [
+      {
+        "when": { "key": "VERCEL_SKEW_PROTECTION_ENABLED", "value": "1" },
+        "include": ["VERCEL_DEPLOYMENT_ID"]
+      }
+    ],
     "dependencyMatch": {
       "strategy": "all",
       "dependencies": ["next"]
