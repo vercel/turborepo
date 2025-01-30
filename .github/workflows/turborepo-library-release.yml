@@ -33,7 +33,7 @@ jobs:
 
           - host: ubuntu-latest
             target: "x86_64-unknown-linux-gnu"
-            container: amazon/aws-lambda-nodejs:18
+            container: amazon/aws-lambda-nodejs:20
             install: |
               yum install -y gcc gcc-c++ git
               curl https://sh.rustup.rs -sSf | bash -s -- -y
