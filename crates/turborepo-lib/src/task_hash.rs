@@ -303,6 +303,9 @@ impl<'a> TaskHasher<'a> {
 
         let env_vars = if let Some(framework) = framework {
             let mut computed_wildcards = framework.env_wildcards().to_vec();
+            let conditional_env_vars =
+                framework.resolved_env_conditionals(&self.env_at_execution_start);
+            computed_wildcards.extend(conditional_env_vars);
 
             if let Some(exclude_prefix) = self
                 .env_at_execution_start
