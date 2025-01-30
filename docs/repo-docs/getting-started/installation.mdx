@@ -5,7 +5,6 @@ description: Learn how to get started with Turborepo.
 
 import { Callout } from '#/components/callout';
 import { PackageManagerTabs, Tabs, Tab } from '#/components/tabs';
-import { ExamplesTable } from '#/components/examples-table';
 
 Get started with Turborepo in a few moments using:
 
@@ -38,7 +37,7 @@ The starter repository will have:
 - Two deployable applications
 - Three shared libraries for use in the rest of the monorepo
 
-For more details on the starter, [visit the README for the basic starter on GitHub](https://github.com/vercel/turborepo/tree/main/examples/basic). You can also [use an example](/repo/docs/getting-started/installation#start-with-an-example) that more closely fits your tooling interests.
+For more details on the starter, [visit the README for the basic starter on GitHub](https://github.com/vercel/turborepo/tree/main/examples/basic). You can also [use an example](/repo/docs/getting-started/examples) that more closely fits your tooling interests.
 
 ## Installing `turbo`
 
@@ -120,51 +119,3 @@ When collaborating with other developers in a repository, it's a good idea to pi
 You can continue to use your global installation of `turbo` to run commands. Global `turbo` will defer to the local version of your repository if it exists.
 
 This lets you to get the best of both installations: easily run commands in your terminal while maintaining a pinned version for consistent usage for all developers in the repository.
-
-## Start with an example
-
-The community curates a set of examples to showcase ways to use common tools and libraries with Turborepo. To bootstrap your monorepo with one of the examples, use the `--example` flag:
-
-<PackageManagerTabs>
-<Tab>
-```bash title="Terminal"
-# Use an example listed below
-npx create-turbo@latest --example [example-name]
-
-# Use a GitHub repository from the community
-
-npx create-turbo@latest --example [github-url]
-
-```
-
-</Tab>
-
-<Tab>
-```bash title="Terminal"
-# Use an example listed below
-yarn dlx create-turbo@latest --example [example-name]
-
-# Use a GitHub repository from the community
-yarn dlx create-turbo@latest --example [github-url]
-```
-
-</Tab>
-
-<Tab>
-```bash title="Terminal"
-# Use an example listed below
-pnpm dlx create-turbo@latest --example [example-name]
-
-# Use a GitHub repository from the community
-
-pnpm dlx create-turbo@latest --example [github-url]
-
-```
-
-</Tab>
-
-</PackageManagerTabs>
-
-Use any of the example's names below:
-
-<ExamplesTable />
