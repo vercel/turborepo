@@ -26,11 +26,7 @@ permissions:
 jobs:
   rust_lint:
     name: Rust lints
-    runs-on:
-      - "self-hosted"
-      - "linux"
-      - "x64"
-      - "metal"
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -54,11 +50,7 @@ jobs:
 
   format_lint:
     name: Formatting
-    runs-on:
-      - "self-hosted"
-      - "linux"
-      - "x64"
-      - "metal"
+    runs-on: ubuntu-latest
     env:
       TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
       TURBO_TEAM: ${{ vars.TURBO_TEAM }}
