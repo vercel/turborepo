@@ -134,10 +134,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Rust
-        uses: ./.github/actions/setup-rust
+      - name: Setup Turborepo Environment
+        uses: ./.github/actions/setup-turborepo-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
+          node-version: "18.20.2"
 
       - name: Run cargo fmt check
         run: |
