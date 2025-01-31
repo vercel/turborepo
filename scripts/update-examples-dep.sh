@@ -44,5 +44,3 @@ for dir in "$examples"/*; do
     echo ""
   fi
 done
-
-git diff

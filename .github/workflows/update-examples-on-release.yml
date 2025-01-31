@@ -26,11 +26,13 @@ jobs:
           git checkout -b post-release-bump-examples
           echo "STAGE_BRANCH=$(git branch --show-current)" >> $GITHUB_OUTPUT
 
-      - name: echo branch
-        run: echo ${{ steps.branch.outputs.STAGE_BRANCH }}
-
       - name: Run upgrade script
         run: bash scripts/update-examples-dep.sh
+
+      - name: Commit and push
+        run: |
+          git commit -am "release(turborepo): update examples to latest"
+          git push origin ${{ steps.branch.outputs.STAGE_BRANCH }}
 
       - name: Create pull request
         id: pr
