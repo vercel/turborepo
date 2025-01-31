@@ -20,9 +20,12 @@ jobs:
       - name: Run upgrade script
         run: bash scripts/update-examples-dep.sh
       - name: Create pull request
+        id: pr
         uses: thomaseizinger/create-pull-request@master
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           head: ${{ github.ref }}
           base: main
           title: "release(turborepo): update examples to latest"
+      - name: PR link
+        run: echo ${{ pr.outputs.html_url }}
