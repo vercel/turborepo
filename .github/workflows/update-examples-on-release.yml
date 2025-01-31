@@ -9,16 +9,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+
       - name: Upgrade corepack
         shell: bash
         run: |
           npm install --force --global corepack@latest
           npm config get prefix >> $GITHUB_PATH
-      - name: Run upgrade script
-        run: bash scripts/update-examples-dep.sh
 
       - name: Make branch
         id: branch
@@ -28,6 +28,9 @@ jobs:
 
       - name: echo branch
         run: echo ${{ steps.branch.outputs.STAGE_BRANCH }}
+
+      - name: Run upgrade script
+        run: bash scripts/update-examples-dep.sh
 
       - name: Create pull request
         id: pr
