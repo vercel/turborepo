@@ -21,13 +21,17 @@ jobs:
         run: bash scripts/update-examples-dep.sh
 
       - name: Make branch
-        run: git checkout -b post-release-bump-examples
+        id: branch
+        run: |
+          git checkout -b post-release-bump-examples
+          echo "STAGE_BRANCH=$(git branch --show-current)" >> $GITHUB_OUTPUT
+
       - name: Create pull request
         id: pr
         uses: thomaseizinger/create-pull-request@master
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          head: post-release-bump-examples
+          head: ${{ steps.branch.outputs.STAGE_BRANCH }}
           base: main
           title: "release(turborepo): update examples to latest"
       - name: PR link
