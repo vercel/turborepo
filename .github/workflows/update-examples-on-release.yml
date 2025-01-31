@@ -8,13 +8,9 @@ jobs:
     name: "Update examples PR"
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - name: Run upgrade script
-        run: |
-          echo $PWD
-          ls -la
-          cd scripts
-          ls -la
-          bash scripts/update-examples-dep.sh
+        run: bash scripts/update-examples-dep.sh
       - name: Create pull request
         uses: thomaseizinger/create-pull-request@master
         with:
