@@ -6,7 +6,6 @@ on:
 jobs:
   update-examples-pr:
     name: "Update examples PR"
-    needs: [stage, npm-publish]
     runs-on: ubuntu-latest
     steps:
       - name: Run upgrade script
