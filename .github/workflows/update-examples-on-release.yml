@@ -26,6 +26,6 @@ jobs:
         uses: thomaseizinger/create-pull-request@master
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          head: ${{ needs.stage.outputs.stage-branch }}
+          head: ${{ github.ref }}
           base: main
           title: "release(turborepo): update examples to latest(${{ steps.getVersion.outputs.version }})"
