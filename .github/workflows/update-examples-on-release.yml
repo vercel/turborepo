@@ -27,7 +27,7 @@ jobs:
         uses: thomaseizinger/create-pull-request@master
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          head: ${{ github.ref }}
+          head: post-release-bump-examples
           base: main
           title: "release(turborepo): update examples to latest"
       - name: PR link
