@@ -20,6 +20,11 @@ jobs:
           npm install --force --global corepack@latest
           npm config get prefix >> $GITHUB_PATH
 
+      - name: Configure git
+        run: |
+          git config --global user.name 'Turbobot'
+          git config --global user.email 'turbobot@vercel.com'
+
       - name: Make branch
         id: branch
         run: |
