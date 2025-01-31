@@ -17,9 +17,7 @@ for flag in $user_provided_flags; do
   fi
 done
 
-flags="$script_provided_flags $user_provided_flags"
-echo $flags
-node_modules/.bin/napi build "$flags"
+node_modules/.bin/napi build $script_provided_flags $user_provided_flags
 
 # Unfortunately, when napi generates a .d.ts file, it doesn't match our formatting rules (it doesn't have semicolons).
 # Since there's now way to configure this from napi itself, so we need to run prettier on it after generating it.
