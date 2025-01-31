@@ -436,7 +436,7 @@ impl RunBuilder {
             &pkg_dep_graph,
             &root_turbo_json,
             filtered_pkgs.keys(),
-            turbo_json_loader.clone(),
+            &mut turbo_json_loader,
         )?;
 
         if self.opts.run_opts.parallel {
@@ -445,7 +445,7 @@ impl RunBuilder {
                 &pkg_dep_graph,
                 &root_turbo_json,
                 filtered_pkgs.keys(),
-                turbo_json_loader,
+                &mut turbo_json_loader,
             )?;
         }
 
@@ -480,6 +480,7 @@ impl RunBuilder {
             env_at_execution_start,
             filtered_pkgs: filtered_pkgs.keys().cloned().collect(),
             pkg_dep_graph: Arc::new(pkg_dep_graph),
+            turbo_json_loader,
             root_turbo_json,
             scm,
             engine: Arc::new(engine),
@@ -496,7 +497,7 @@ impl RunBuilder {
         pkg_dep_graph: &PackageGraph,
         root_turbo_json: &TurboJson,
         filtered_pkgs: impl Iterator<Item = &'a PackageName>,
-        turbo_json_loader: TurboJsonLoader,
+        turbo_json_loader: &mut TurboJsonLoader,
     ) -> Result<Engine, Error> {
         let tasks = self.opts.run_opts.tasks.iter().map(|task| {
             // TODO: Pull span info from command

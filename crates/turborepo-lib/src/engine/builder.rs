@@ -118,7 +118,7 @@ pub enum Error {
 pub struct EngineBuilder<'a> {
     repo_root: &'a AbsoluteSystemPath,
     package_graph: &'a PackageGraph,
-    turbo_json_loader: Option<TurboJsonLoader>,
+    turbo_json_loader: Option<&'a mut TurboJsonLoader>,
     is_single: bool,
     workspaces: Vec<PackageName>,
     tasks: Vec<Spanned<TaskName<'static>>>,
@@ -132,7 +132,7 @@ impl<'a> EngineBuilder<'a> {
     pub fn new(
         repo_root: &'a AbsoluteSystemPath,
         package_graph: &'a PackageGraph,
-        turbo_json_loader: TurboJsonLoader,
+        turbo_json_loader: &'a mut TurboJsonLoader,
         is_single: bool,
     ) -> Self {
         Self {

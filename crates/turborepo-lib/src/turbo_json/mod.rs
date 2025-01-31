@@ -54,7 +54,7 @@ pub struct SpacesJson {
 pub struct TurboJson {
     text: Option<Arc<str>>,
     path: Option<Arc<str>>,
-    boundaries: Option<Spanned<BoundariesConfig>>,
+    pub(crate) boundaries: Option<Spanned<BoundariesConfig>>,
     pub(crate) extends: Spanned<Vec<String>>,
     pub(crate) global_deps: Vec<String>,
     pub(crate) global_env: Vec<String>,

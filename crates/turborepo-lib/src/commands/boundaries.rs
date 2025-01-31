@@ -11,7 +11,7 @@ pub async fn run(base: CommandBase, telemetry: CommandEventBuilder) -> Result<i3
     let signal = get_signal()?;
     let handler = SignalHandler::new(signal);
 
-    let run = RunBuilder::new(base)?
+    let mut run = RunBuilder::new(base)?
         .do_not_validate_engine()
         .build(&handler, telemetry)
         .await?;

@@ -1,5 +1,7 @@
 use std::{
     fmt::Display,
+    iter,
+    iter::Once,
     ops::{Deref, Range},
     sync::Arc,
 };
@@ -74,6 +76,23 @@ pub struct Spanned<T> {
     pub path: Option<Arc<str>>,
     #[serde(skip)]
     pub text: Option<Arc<str>>,
+}
+
+impl<T> IntoIterator for Spanned<T> {
+    type Item = T;
+    type IntoIter = Once<T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        iter::once(self.value)
+    }
+}
+
+impl<'a, T> Iterator for &'a Spanned<T> {
+    type Item = &'a T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        Some(&self.value)
+    }
 }
 
 impl<T: Deserializable> Deserializable for Spanned<T> {
