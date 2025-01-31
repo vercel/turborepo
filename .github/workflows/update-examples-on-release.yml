@@ -12,6 +12,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+      - name: Upgrade corepack
+        if: ${{ inputs.enable-corepack == 'true' && inputs.node-version == '16' }}
+        shell: bash
+        # Forcibly upgrade our available version of corepack.
+        # The bundled version in node 16 has known issues.
+        # Prepends the npm bin dir so that it is always first.
+        run: |
+          npm install --force --global corepack@latest
+          npm config get prefix >> $GITHUB_PATH
       - name: Run upgrade script
         run: bash scripts/update-examples-dep.sh
       - name: Create pull request
