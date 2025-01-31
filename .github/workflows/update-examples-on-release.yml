@@ -26,6 +26,9 @@ jobs:
           git checkout -b post-release-bump-examples
           echo "STAGE_BRANCH=$(git branch --show-current)" >> $GITHUB_OUTPUT
 
+      - name: echo branch
+        run: echo ${{ steps.branch.outputs.STAGE_BRANCH }}
+
       - name: Create pull request
         id: pr
         uses: thomaseizinger/create-pull-request@master
