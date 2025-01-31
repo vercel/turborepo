@@ -13,7 +13,6 @@ jobs:
         with:
           node-version: 20
       - name: Upgrade corepack
-        if: ${{ inputs.enable-corepack == 'true' && inputs.node-version == '16' }}
         shell: bash
         # Forcibly upgrade our available version of corepack.
         # The bundled version in node 16 has known issues.
