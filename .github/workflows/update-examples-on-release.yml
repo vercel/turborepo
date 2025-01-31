@@ -28,4 +28,4 @@ jobs:
           base: main
           title: "release(turborepo): update examples to latest"
       - name: PR link
-        run: echo ${{ pr.outputs.html_url }}
+        run: echo ${{ steps.pr.outputs.html_url }}
