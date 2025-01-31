@@ -8,17 +8,16 @@ import { Callout } from '#/components/callout';
 
 <ExperimentalBadge>Experimental</ExperimentalBadge>
 
-Boundaries ensure that caching and other Turborepo features work correctly by checking for package manager Workspace violations.
+Boundaries ensure that Turborepo features work correctly by checking for package manager Workspace violations.
 
 ```bash title="Terminal"
 turbo boundaries
 ```
 
-This command will notify for three types of violations:
+This command will notify for two types of violations:
 
 - Importing a file outside of the package's directory
-- Importing a type without declaring the import as a type
-- Importing a package that is not specified in dependencies
+- Importing a package that is not specified as a dependency in the package's `package.json`
 
 <Callout title="Boundaries RFC">
   This feature is experimental, and we're looking for your feedback on [the
