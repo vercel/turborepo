@@ -11,6 +11,9 @@ jobs:
       - name: Run upgrade script
         run: |
           echo $PWD
+          ls -la
+          cd scripts
+          ls -la
           bash scripts/update-examples-dep.sh
       - name: Create pull request
         uses: thomaseizinger/create-pull-request@master
