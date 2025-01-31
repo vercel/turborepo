@@ -1092,9 +1092,9 @@ mod test {
         if let Some(pid) = child.pid() {
             unsafe {
                 println!("killing");
-                winapi::um::processthreadsapi::TerminateProcess(
-                    winapi::um::processthreadsapi::OpenProcess(
-                        winapi::um::winnt::PROCESS_TERMINATE,
+                windows_sys::Win32::System::Threading::TerminateProcess(
+                    windows_sys::Win32::System::Threading::OpenProcess(
+                        windows_sys::Win32::System::Threading::PROCESS_TERMINATE,
                         0,
                         pid,
                     ),

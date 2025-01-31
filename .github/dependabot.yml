@@ -49,6 +49,8 @@ updates:
       - dependency-name: "react-dom"
       - dependency-name: "@types/react"
       - dependency-name: "@types/react-dom"
+      # We can't upgrade versions of this due to npm
+      - dependency-name: "vite"
 
   - package-ecosystem: "npm"
     directory: "/examples/non-monorepo"

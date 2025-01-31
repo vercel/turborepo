@@ -74,7 +74,7 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     name: "Azure Pipelines",
                     constant: "AZURE_PIPELINES",
                     env: VendorEnvs {
-                        any: vec!["SYSTEM_TEAMFOUNDATIONCOLLECTIONURI"],
+                        any: vec!["SYSTEM_TEAMFOUNDATIONCOLLECTIONURI", "TF_BUILD"],
                         all: vec![],
                     },
                     eval_env: None,

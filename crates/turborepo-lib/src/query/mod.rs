@@ -385,7 +385,8 @@ impl PackagePredicate {
         let less_than = self
             .less_than
             .as_ref()
-            .map(|pair| Self::check_greater_than(pkg, &pair.field, &pair.value));
+            .map(|pair| Self::check_less_than(pkg, &pair.field, &pair.value));
+
         let not = self.not.as_ref().map(|predicate| !predicate.check(pkg));
         let has = self
             .has
@@ -565,11 +566,7 @@ impl RepositoryQuery {
     /// Check boundaries for all packages.
     async fn boundaries(&self) -> Result<Array<Diagnostic>, Error> {
         match self.run.check_boundaries().await {
-            Ok(result) => {
-                result.emit();
-
-                Ok(result.diagnostics.into_iter().map(|b| b.into()).collect())
-            }
+            Ok(result) => Ok(result.diagnostics.into_iter().map(|b| b.into()).collect()),
             Err(err) => Err(Error::Boundaries(err)),
         }
     }
