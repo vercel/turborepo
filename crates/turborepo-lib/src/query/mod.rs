@@ -566,11 +566,7 @@ impl RepositoryQuery {
     /// Check boundaries for all packages.
     async fn boundaries(&self) -> Result<Array<Diagnostic>, Error> {
         match self.run.check_boundaries().await {
-            Ok(result) => {
-                result.emit();
-
-                Ok(result.diagnostics.into_iter().map(|b| b.into()).collect())
-            }
+            Ok(result) => Ok(result.diagnostics.into_iter().map(|b| b.into()).collect()),
             Err(err) => Err(Error::Boundaries(err)),
         }
     }
