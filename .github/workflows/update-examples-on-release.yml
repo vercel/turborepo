@@ -9,7 +9,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Run upgrade script
-        run: bash ../../scripts/update-examples-dep.sh
+        run: |
+          cd $(git rev-parse --show-toplevel)
+          bash ../../scripts/update-examples-dep.sh
       - name: Create pull request
         uses: thomaseizinger/create-pull-request@master
         with:
