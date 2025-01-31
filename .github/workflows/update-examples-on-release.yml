@@ -14,9 +14,6 @@ jobs:
           node-version: 20
       - name: Upgrade corepack
         shell: bash
-        # Forcibly upgrade our available version of corepack.
-        # The bundled version in node 16 has known issues.
-        # Prepends the npm bin dir so that it is always first.
         run: |
           npm install --force --global corepack@latest
           npm config get prefix >> $GITHUB_PATH
@@ -28,4 +25,4 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           head: ${{ github.ref }}
           base: main
-          title: "release(turborepo): update examples to latest(${{ steps.getVersion.outputs.version }})"
+          title: "release(turborepo): update examples to latest"
