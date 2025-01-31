@@ -5,8 +5,8 @@
   "bugs": "https://github.com/vercel/turborepo/issues",
   "homepage": "https://turbo.build/repo",
   "scripts": {
-    "build": "bash scripts/build.sh",
-    "build:release": "bash scripts/build.sh release",
+    "build": "bash scripts/build.sh --dts ../js/index.d.ts",
+    "build:release": "bash scripts/build.sh --release",
     "package": "node scripts/publish.mjs",
     "test": "node --import tsx --test __tests__/*.test.ts"
   },
