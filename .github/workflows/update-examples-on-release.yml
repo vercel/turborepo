@@ -19,6 +19,9 @@ jobs:
           npm config get prefix >> $GITHUB_PATH
       - name: Run upgrade script
         run: bash scripts/update-examples-dep.sh
+
+      - name: Make branch
+        run: git checkout -b post-release-bump-examples
       - name: Create pull request
         id: pr
         uses: thomaseizinger/create-pull-request@master
