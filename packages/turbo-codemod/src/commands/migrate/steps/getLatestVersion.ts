@@ -1,7 +1,7 @@
 import axios from "axios";
 import type { MigrateCommandOptions } from "../types";
 
-const REGISTRY = "https://registry.npmjs.org";
+const DEFAULT_REGISTRY = "https://registry.npmjs.org";
 
 interface PackageDetailsResponse {
   "dist-tags": {
@@ -12,9 +12,12 @@ interface PackageDetailsResponse {
 }
 
 async function getPackageDetails({ packageName }: { packageName: string }) {
+  const registry =
+    process.env.npm_config_registry?.replace(/\/$/, "") || DEFAULT_REGISTRY;
+
   try {
     const result = await axios.get<PackageDetailsResponse>(
-      `${REGISTRY}/${packageName}`
+      `${registry}/${packageName}`
     );
     return result.data;
   } catch (err) {
