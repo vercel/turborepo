@@ -1,27 +1,42 @@
-use std::sync::OnceLock;
+use std::{collections::HashMap, sync::OnceLock};
 
 use serde::Deserialize;
 use turborepo_repository::package_graph::PackageInfo;
 
-#[derive(Debug, PartialEq, Deserialize)]
+#[derive(Debug, PartialEq, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 enum Strategy {
     All,
     Some,
 }
 
-#[derive(Debug, PartialEq, Deserialize)]
+#[derive(Debug, PartialEq, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 struct Matcher {
     strategy: Strategy,
     dependencies: Vec<String>,
 }
 
-#[derive(Debug, PartialEq, Deserialize)]
+#[derive(Debug, PartialEq, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct EnvConditionKey {
+    key: String,
+    value: Option<String>,
+}
+
+#[derive(Debug, PartialEq, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct EnvConditional {
+    when: EnvConditionKey,
+    include: Vec<String>,
+}
+
+#[derive(Debug, PartialEq, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Framework {
     slug: String,
     env_wildcards: Vec<String>,
+    env_conditionals: Option<Vec<EnvConditional>>,
     dependency_match: Matcher,
 }
 
@@ -32,6 +47,27 @@ impl Framework {
 
     pub fn env_wildcards(&self) -> &[String] {
         &self.env_wildcards
+    }
+
+    pub fn resolved_env_conditionals(
+        &self,
+        env_at_execution_start: &HashMap<String, String>,
+    ) -> Vec<String> {
+        let mut conditional_env_vars = Vec::new();
+
+        if let Some(env_conditionals) = &self.env_conditionals {
+            for conditional in env_conditionals {
+                let (key, expected_value) = (&conditional.when.key, &conditional.when.value);
+
+                if let Some(actual_value) = env_at_execution_start.get(key) {
+                    if expected_value.is_none() || expected_value.as_ref() == Some(actual_value) {
+                        conditional_env_vars.extend(conditional.include.iter().cloned());
+                    }
+                }
+            }
+        }
+
+        conditional_env_vars
     }
 }
 
@@ -80,6 +116,8 @@ pub fn infer_framework(workspace: &PackageInfo, is_monorepo: bool) -> Option<&Fr
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use test_case::test_case;
     use turborepo_repository::{package_graph::PackageInfo, package_json::PackageJson};
 
@@ -198,5 +236,65 @@ mod tests {
     ) {
         let framework = infer_framework(&workspace_info, is_monorepo);
         assert_eq!(framework, expected);
+    }
+
+    #[test]
+    fn test_resolved_env_conditionals_for_nextjs() {
+        let framework = get_framework_by_slug("nextjs");
+
+        // Case 1: Condition NOT met (no env var set)
+        let env_at_execution_start = HashMap::new();
+        let resolved_vars = framework.resolved_env_conditionals(&env_at_execution_start);
+        assert!(
+            resolved_vars.is_empty(),
+            "Expected no conditional env vars when condition is not met"
+        );
+
+        // Case 2: Condition met with correct value
+        let mut env_at_execution_start = HashMap::new();
+        env_at_execution_start.insert(
+            "VERCEL_SKEW_PROTECTION_ENABLED".to_string(),
+            "1".to_string(),
+        );
+
+        let resolved_vars = framework.resolved_env_conditionals(&env_at_execution_start);
+        assert_eq!(
+            resolved_vars,
+            vec!["VERCEL_DEPLOYMENT_ID".to_string()],
+            "Expected VERCEL_DEPLOYMENT_ID to be included when condition is met"
+        );
+
+        // Case 3: Condition NOT met (wrong value)
+        let mut env_at_execution_start = HashMap::new();
+        env_at_execution_start.insert(
+            "VERCEL_SKEW_PROTECTION_ENABLED".to_string(),
+            "0".to_string(),
+        );
+
+        let resolved_vars = framework.resolved_env_conditionals(&env_at_execution_start);
+        assert!(
+            resolved_vars.is_empty(),
+            "Expected no conditional env vars when condition has wrong value"
+        );
+
+        // Case 4: Condition met (no value required)
+        let mut framework_no_value = framework.clone();
+        if let Some(env_conditionals) = framework_no_value.env_conditionals.as_mut() {
+            env_conditionals[0].when.value = None;
+        }
+
+        let mut env_at_execution_start = HashMap::new();
+        env_at_execution_start.insert(
+            "VERCEL_SKEW_PROTECTION_ENABLED".to_string(),
+            "any".to_string(),
+        );
+
+        let resolved_vars = framework_no_value.resolved_env_conditionals(&env_at_execution_start);
+        assert_eq!(
+            resolved_vars,
+            vec!["VERCEL_DEPLOYMENT_ID".to_string()],
+            "Expected VERCEL_DEPLOYMENT_ID to be included when condition key exists, regardless \
+             of value"
+        );
     }
 }
