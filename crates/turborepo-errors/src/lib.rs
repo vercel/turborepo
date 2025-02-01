@@ -30,18 +30,18 @@ pub struct ParseDiagnostic {
     label: Option<SourceSpan>,
 }
 
-struct BiomeMessage<'a>(&'a biome_diagnostics::Error);
+struct BiomeMessage<'a, T: ?Sized>(&'a T);
 
-impl Display for BiomeMessage<'_> {
+impl<T: biome_diagnostics::Diagnostic + ?Sized> Display for BiomeMessage<'_, T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.0.description(f)
     }
 }
 
-impl From<biome_diagnostics::Error> for ParseDiagnostic {
-    fn from(diagnostic: biome_diagnostics::Error) -> Self {
+impl<T: biome_diagnostics::Diagnostic + ?Sized> From<&'_ T> for ParseDiagnostic {
+    fn from(diagnostic: &T) -> Self {
         let location = diagnostic.location();
-        let message = BiomeMessage(&diagnostic).to_string();
+        let message = BiomeMessage(diagnostic).to_string();
         let path = location
             .resource
             .and_then(|r| r.as_file().map(|p| p.to_string()))

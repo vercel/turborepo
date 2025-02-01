@@ -174,6 +174,7 @@ impl PackageJson {
                     .map(|d| {
                         d.with_file_source_code(contents)
                             .with_file_path(path)
+                            .as_ref()
                             .into()
                     })
                     .collect(),
