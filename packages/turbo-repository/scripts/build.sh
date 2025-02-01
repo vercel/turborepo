@@ -1,21 +1,23 @@
 #!/bin/bash
 
-flags="\
+user_provided_flags="$@"
+script_provided_flags="\
   --platform \
-  -p turborepo-napi \
-  --cargo-cwd ../../ \
-  --cargo-name turborepo_napi \
+  -p=turborepo-napi \
+  --cargo-cwd=../../ \
+  --cargo-name=turborepo_napi \
   native \
-  --js false \
+  --js=false \
 "
 
-if [ "$1" == "release" ]; then
-  flags+=" --release"
-else
-  flags+=" --dts ../js/index.d.ts"
-fi
+for flag in $user_provided_flags; do
+  if [[ $flag == --target=* ]]; then
+    target=${flag#*=}
+    rustup target add "$target"
+  fi
+done
 
-node_modules/.bin/napi build $flags
+node_modules/.bin/napi build $script_provided_flags $user_provided_flags
 
 # Unfortunately, when napi generates a .d.ts file, it doesn't match our formatting rules (it doesn't have semicolons).
 # Since there's now way to configure this from napi itself, so we need to run prettier on it after generating it.
