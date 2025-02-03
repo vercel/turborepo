@@ -31,7 +31,7 @@ runs:
         cache: pnpm
 
     - name: Upgrade corepack
-      if: ${{ inputs.enable-corepack == 'true' && inputs.node-version == '16' }}
+      if: ${{ inputs.enable-corepack == 'true' }}
       shell: bash
       # Forcibly upgrade our available version of corepack.
       # The bundled version in node 16 has known issues.
