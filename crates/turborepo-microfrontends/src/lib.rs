@@ -1,3 +1,4 @@
+#![feature(assert_matches)]
 #![deny(clippy::all)]
 mod configv1;
 mod error;
@@ -52,15 +53,18 @@ impl Config {
         package_dir: &AnchoredSystemPath,
     ) -> Result<Option<Self>, Error> {
         let absolute_dir = repo_root.resolve(package_dir);
-        let mut config = if let Some(config) = Self::load_v1_dir(&absolute_dir)? {
-            Ok(Some(config))
-        } else {
-            Self::load_v1_dir(&absolute_dir)
+        // we want to try different paths and then do `from_str`
+        let Some((contents, path)) = Self::load_v1_dir(&absolute_dir) else {
+            return Ok(None);
         };
-        if let Ok(Some(config)) = &mut config {
-            config.set_path(package_dir);
-        }
-        config
+        let contents = contents?;
+        let mut config = Config::from_str(&contents, path.as_str())?;
+        config.filename = path
+            .file_name()
+            .expect("microfrontends config should not be root")
+            .to_owned();
+        config.set_path(package_dir);
+        Ok(Some(config))
     }
 
     pub fn from_str(input: &str, source: &str) -> Result<Self, Error> {
@@ -127,35 +131,17 @@ impl Config {
         }
     }
 
-    fn load_v1_dir(dir: &AbsoluteSystemPath) -> Result<Option<Self>, Error> {
+    fn load_v1_dir(
+        dir: &AbsoluteSystemPath,
+    ) -> Option<(Result<String, io::Error>, AbsoluteSystemPathBuf)> {
         let load_config =
             |filename: &str| -> Option<(Result<String, io::Error>, AbsoluteSystemPathBuf)> {
                 let path = dir.join_component(filename);
                 let contents = path.read_existing_to_string().transpose()?;
                 Some((contents, path))
             };
-        let Some((contents, path)) = load_config(DEFAULT_MICROFRONTENDS_CONFIG_V1)
+        load_config(DEFAULT_MICROFRONTENDS_CONFIG_V1)
             .or_else(|| load_config(DEFAULT_MICROFRONTENDS_CONFIG_V1_ALT))
-        else {
-            return Ok(None);
-        };
-        let contents = contents?;
-
-        ConfigV1::from_str(&contents, path.as_str())
-            .and_then(|result| match result {
-                configv1::ParseResult::Actual(config_v1) => Ok(Config {
-                    inner: ConfigInner::V1(config_v1),
-                    filename: path
-                        .file_name()
-                        .expect("microfrontends config should not be root")
-                        .to_owned(),
-                    path: None,
-                }),
-                configv1::ParseResult::Reference(default_app) => Err(Error::ChildConfig {
-                    reference: default_app,
-                }),
-            })
-            .map(Some)
     }
 
     /// Sets the path the configuration was loaded from
@@ -166,6 +152,8 @@ impl Config {
 
 #[cfg(test)]
 mod test {
+    use std::assert_matches::assert_matches;
+
     use insta::assert_snapshot;
     use tempfile::TempDir;
     use test_case::test_case;
@@ -190,6 +178,12 @@ mod test {
         let path = dir.join_component(DEFAULT_MICROFRONTENDS_CONFIG_V1);
         path.ensure_dir()?;
         path.create_with_contents(r#"{"version": "1", "applications": {"web": {"development": {"task": "serve"}}, "docs": {}}}"#)
+    }
+
+    fn add_v2_config(dir: &AbsoluteSystemPath) -> Result<(), std::io::Error> {
+        let path = dir.join_component(DEFAULT_MICROFRONTENDS_CONFIG_V1);
+        path.ensure_dir()?;
+        path.create_with_contents(r#"{"version": "2", "applications": {"web": {"development": {"task": "serve"}}, "docs": {}}}"#)
     }
 
     fn add_v1_alt_config(dir: &AbsoluteSystemPath) -> Result<(), std::io::Error> {
@@ -285,5 +279,17 @@ mod test {
         let actual_path = config.as_ref().and_then(|config| config.path());
         assert_eq!(actual_version, case.expected_version);
         assert_eq!(actual_path, case.expected_path().as_deref());
+    }
+
+    #[test]
+    fn test_unsupported_version_from_dir() {
+        let dir = TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPath::new(dir.path().to_str().unwrap()).unwrap();
+        let pkg_dir = AnchoredSystemPath::new("web").unwrap();
+        let pkg_path = repo_root.resolve(pkg_dir);
+        add_v2_config(&pkg_path).unwrap();
+        let config = Config::load_from_dir(repo_root, pkg_dir);
+
+        assert_matches!(config, Err(Error::UnsupportedVersion(..)));
     }
 }
