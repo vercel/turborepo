@@ -67,6 +67,7 @@ impl ConfigV1 {
                 Err(Error::InvalidVersion {
                     expected: "1",
                     actual: version,
+                    path: source.to_string(),
                 })
             }
         } else {
