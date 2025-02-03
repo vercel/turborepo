@@ -85,3 +85,5 @@ events:
     turbo:
       - runWorkflow: bench-turborepo.yml
         when: any
+      - runWorkflow: update-examples-on-release.yml
+        when: latest

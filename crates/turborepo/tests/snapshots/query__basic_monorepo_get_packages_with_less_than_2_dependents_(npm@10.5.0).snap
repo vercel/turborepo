@@ -1,0 +1,36 @@
+---
+source: crates/turborepo/tests/query.rs
+expression: query_output
+---
+{
+  "data": {
+    "packages": {
+      "items": [
+        {
+          "name": "//",
+          "directDependents": {
+            "length": 0
+          }
+        },
+        {
+          "name": "another",
+          "directDependents": {
+            "length": 0
+          }
+        },
+        {
+          "name": "my-app",
+          "directDependents": {
+            "length": 0
+          }
+        },
+        {
+          "name": "util",
+          "directDependents": {
+            "length": 1
+          }
+        }
+      ]
+    }
+  }
+}

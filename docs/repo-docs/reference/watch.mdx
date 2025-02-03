@@ -37,7 +37,11 @@ restart the task when relevant changes are detected.
 
 ### Caching
 
-All cache operations are disabled when executing tasks with `turbo watch`.
+Caching tasks with Watch Mode is currently experimental, under the `--experimental-write-cache` flag.
+
+```bash title="Terminal"
+turbo run your-tasks --experimental-write-cache
+```
 
 ### Task outputs
 

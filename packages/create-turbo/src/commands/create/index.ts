@@ -252,6 +252,15 @@ export async function create(
     }
   }
 
+  if (!isMaintainedByCoreTeam) {
+    logger.log(
+      picocolors.dim(
+        "Note: This is a community-maintained example.\nIf you experience a problem, please submit a pull request with a fix.\nGitHub Issues will be closed."
+      )
+    );
+    logger.log();
+  }
+
   if (projectDirIsCurrentDir) {
     logger.log(
       `${picocolors.bold(
@@ -263,15 +272,6 @@ export async function create(
       `${picocolors.bold(
         turboGradient(">>> Success!")
       )} Created your Turborepo at ${picocolors.green(relativeProjectDir)}`
-    );
-  }
-
-  if (!isMaintainedByCoreTeam) {
-    logger.log();
-    logger.log(
-      picocolors.dim(
-        "Note: This is a community-maintained example. If you experience a problem, please submit a pull request with a fix. GitHub Issues will be closed."
-      )
     );
   }
 

@@ -2,10 +2,6 @@
 # From what I can tell, we are forced into approaching it this way
 # because of the many workspace roots.
 
-# The GHA at .github/workflows/examples-autoaprove-and-automerge.yml
-# is responsible for merging them all to one umbrella PR
-# on the branch #dependabot-updates.
-
 version: 2
 updates:
   - package-ecosystem: "npm"
@@ -24,6 +20,8 @@ updates:
       basic:
         patterns:
           - "*"
+        update-types:
+          - "minor"
 
   - package-ecosystem: "npm"
     directory: "/examples/kitchen-sink"
@@ -41,6 +39,18 @@ updates:
       kitchen-sink:
         patterns:
           - "*"
+        update-types:
+          - "minor"
+    ignore:
+      # Types are just...broken?
+      - dependency-name: "@types/express"
+      # Remix is behind on updating these peer deps and npm doesn't like it
+      - dependency-name: "react"
+      - dependency-name: "react-dom"
+      - dependency-name: "@types/react"
+      - dependency-name: "@types/react-dom"
+      # We can't upgrade versions of this due to npm
+      - dependency-name: "vite"
 
   - package-ecosystem: "npm"
     directory: "/examples/non-monorepo"
@@ -58,6 +68,8 @@ updates:
       non-monorepo:
         patterns:
           - "*"
+        update-types:
+          - "minor"
 
   - package-ecosystem: "npm"
     directory: "/examples/with-shell-commands"
@@ -75,6 +87,8 @@ updates:
       with-shell-commands:
         patterns:
           - "*"
+        update-types:
+          - "minor"
 
   - package-ecosystem: "npm"
     directory: "/examples/with-svelte"
@@ -92,6 +106,8 @@ updates:
       with-svelte:
         patterns:
           - "*"
+        update-types:
+          - "minor"
 
   - package-ecosystem: "npm"
     directory: "/examples/with-tailwind"
@@ -109,3 +125,5 @@ updates:
       with-tailwind:
         patterns:
           - "*"
+        update-types:
+          - "minor"

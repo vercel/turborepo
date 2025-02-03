@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, fmt, sync::Arc};
 
 use async_graphql::Object;
 use itertools::Itertools;
@@ -14,6 +14,12 @@ use crate::{
 pub struct Package {
     run: Arc<Run>,
     name: PackageName,
+}
+
+impl fmt::Debug for Package {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Package").field("name", &self.name).finish()
+    }
 }
 
 impl Package {

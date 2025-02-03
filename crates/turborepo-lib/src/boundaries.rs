@@ -4,15 +4,13 @@ use std::{
 };
 
 use git2::Repository;
+use globwalk::Settings;
 use itertools::Itertools;
 use miette::{Diagnostic, NamedSource, Report, SourceSpan};
 use oxc_resolver::{ResolveError, Resolver};
 use regex::Regex;
 use swc_common::{
-    comments::SingleThreadedComments,
-    errors::{ColorConfig, Handler},
-    input::StringInput,
-    FileName, SourceMap,
+    comments::SingleThreadedComments, errors::Handler, input::StringInput, FileName, SourceMap,
 };
 use swc_ecma_ast::EsVersion;
 use swc_ecma_parser::{lexer::Lexer, Capturing, EsSyntax, Parser, Syntax, TsSyntax};
@@ -24,6 +22,7 @@ use turborepo_repository::{
     package_graph::{PackageName, PackageNode},
     package_json::PackageJson,
 };
+use turborepo_ui::{color, ColorConfig, BOLD_GREEN, BOLD_RED};
 
 use crate::run::Run;
 
@@ -80,6 +79,8 @@ static PACKAGE_NAME_REGEX: LazyLock<Regex> = LazyLock::new(|| {
 });
 
 pub struct BoundariesResult {
+    files_checked: usize,
+    packages_checked: usize,
     pub source_map: Arc<SourceMap>,
     pub diagnostics: Vec<BoundariesDiagnostic>,
 }
@@ -89,13 +90,15 @@ impl BoundariesResult {
         self.diagnostics.is_empty()
     }
 
-    pub fn emit(&self) {
-        let handler = Handler::with_tty_emitter(
-            ColorConfig::Auto,
-            true,
-            false,
-            Some(self.source_map.clone()),
-        );
+    pub fn emit(&self, color_config: ColorConfig) {
+        let swc_color_config = if color_config.should_strip_ansi {
+            swc_common::errors::ColorConfig::Never
+        } else {
+            swc_common::errors::ColorConfig::Always
+        };
+
+        let handler =
+            Handler::with_tty_emitter(swc_color_config, true, false, Some(self.source_map.clone()));
 
         for diagnostic in self.diagnostics.clone() {
             match diagnostic {
@@ -107,6 +110,21 @@ impl BoundariesResult {
                 }
             }
         }
+        let result_message = if self.diagnostics.is_empty() {
+            color!(color_config, BOLD_GREEN, "no issues found")
+        } else {
+            color!(
+                color_config,
+                BOLD_RED,
+                "{} issues found",
+                self.diagnostics.len()
+            )
+        };
+
+        println!(
+            "Checked {} files in {} packages, {}",
+            self.files_checked, self.packages_checked, result_message
+        );
     }
 }
 
@@ -116,6 +134,7 @@ impl Run {
         let repo = Repository::discover(self.repo_root()).ok().map(Mutex::new);
         let mut diagnostics = vec![];
         let source_map = SourceMap::default();
+        let mut total_files_checked = 0;
         for (package_name, package_info) in packages {
             if !self.filtered_pkgs().contains(package_name)
                 || matches!(package_name, PackageName::Root)
@@ -132,7 +151,7 @@ impl Run {
             let unresolved_external_dependencies =
                 package_info.unresolved_external_dependencies.as_ref();
 
-            let package_diagnostics = self
+            let (files_checked, package_diagnostics) = self
                 .check_package(
                     &repo,
                     &package_root,
@@ -143,10 +162,14 @@ impl Run {
                 )
                 .await?;
 
+            total_files_checked += files_checked;
             diagnostics.extend(package_diagnostics);
         }
 
         Ok(BoundariesResult {
+            files_checked: total_files_checked,
+            // Subtract 1 for the root package
+            packages_checked: self.pkg_dep_graph().len() - 1,
             source_map: Arc::new(source_map),
             diagnostics,
         })
@@ -156,7 +179,8 @@ impl Run {
         PACKAGE_NAME_REGEX.is_match(import)
     }
 
-    /// Either returns a list of errors or a single, fatal error
+    /// Either returns a list of errors and number of files checked or a single,
+    /// fatal error
     async fn check_package(
         &self,
         repo: &Option<Mutex<Repository>>,
@@ -165,8 +189,8 @@ impl Run {
         internal_dependencies: HashSet<&PackageNode>,
         unresolved_external_dependencies: Option<&BTreeMap<String, String>>,
         source_map: &SourceMap,
-    ) -> Result<Vec<BoundariesDiagnostic>, Error> {
-        let files = globwalk::globwalk(
+    ) -> Result<(usize, Vec<BoundariesDiagnostic>), Error> {
+        let files = globwalk::globwalk_with_settings(
             package_root,
             &[
                 "**/*.js".parse().unwrap(),
@@ -178,7 +202,10 @@ impl Run {
             ],
             &["**/node_modules/**".parse().unwrap()],
             globwalk::WalkType::Files,
+            Settings::default().ignore_nested_packages(),
         )?;
+
+        let files_checked = files.len();
 
         let mut diagnostics: Vec<BoundariesDiagnostic> = Vec::new();
         // We assume the tsconfig.json is at the root of the package
@@ -271,7 +298,7 @@ impl Run {
             }
         }
 
-        Ok(diagnostics)
+        Ok((files_checked, diagnostics))
     }
 
     fn check_file_import(
