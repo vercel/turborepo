@@ -113,7 +113,19 @@ jobs:
         run: ${{ matrix.settings.setup }}
         if: ${{ matrix.settings.setup }}
 
+      # For x86_64-unknown-linux-gnu, we need to cross-compile with zig.
+      # Fortunately, napi comes with a `--zig` flag
+      - name: Build native library (cross-compile with zig)
+        if: ${{ matrix.host.target == 'x86_64-unknown-linux-gnu' }}
+        # For some reason PATH modifications from Setup toolchain aren't populated
+        # when using the nodejs-rust alpine container.
+        run: |
+          export PATH=/usr/local/cargo/bin/rustup:/root/.cargo/bin:${PATH}
+          cd packages/turbo-repository
+          ${{ matrix.settings.rust_env }} pnpm build:release --target=${{ matrix.settings.target }} --zig
+
       - name: Build native library
+        if: ${{ matrix.host.target != 'x86_64-unknown-linux-gnu' }}
         # For some reason PATH modifications from Setup toolchain aren't populated
         # when using the nodejs-rust alpine container.
         run: |
