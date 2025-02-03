@@ -27,7 +27,7 @@ impl Error {
     pub fn biome_error(errors: Vec<biome_diagnostics::Error>) -> Self {
         let error_messages = errors
             .into_iter()
-            .map(|err| ParseDiagnostic::from(err).to_string())
+            .map(|err| ParseDiagnostic::from(err.as_ref()).to_string())
             .collect::<Vec<_>>();
         Self::JsonParse(error_messages.join("\n"))
     }
