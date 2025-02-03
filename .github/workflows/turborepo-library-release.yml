@@ -120,7 +120,7 @@ jobs:
       # For x86_64-unknown-linux-gnu and aarch64-unknown-linux-gnu, we need to cross-compile with zig
       # Fortunately, napi comes with a `--zig` flag
       - name: Build native library (cross-compile with zig)
-        if: ${{ matrix.host.target == 'x86_64-unknown-linux-gnu' || matrix.host.target == 'aarch64-unknown-linux-gnu' }}
+        if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' || matrix.settings.target == 'aarch64-unknown-linux-gnu' }}
         # For some reason PATH modifications from Setup toolchain aren't populated
         # when using the nodejs-rust alpine container.
         run: |
@@ -129,7 +129,7 @@ jobs:
           ${{ matrix.settings.rust_env }} pnpm build:release --target=${{ matrix.settings.target }} --zig
 
       - name: Build native library
-        if: ${{ matrix.host.target != 'x86_64-unknown-linux-gnu' && matrix.host.target != 'aarch64-unknown-linux-gnu' }}
+        if: ${{ matrix.settings.target != 'x86_64-unknown-linux-gnu' && matrix.settings.target != 'aarch64-unknown-linux-gnu' }}
         # For some reason PATH modifications from Setup toolchain aren't populated
         # when using the nodejs-rust alpine container.
         run: |
