@@ -36,7 +36,7 @@ jobs:
             target: x86_64-unknown-linux-gnu
             container: amazon/aws-lambda-nodejs:20
             install: |
-              microdnf install -y gcc gcc-c++ git
+              microdnf install -y gcc gcc-c++ git tar
               curl https://sh.rustup.rs -sSf | bash -s -- -y
               npm i -g pnpm@8.9.0
               mkdir ../zig
