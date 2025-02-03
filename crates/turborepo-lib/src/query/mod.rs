@@ -16,7 +16,7 @@ use async_graphql::{http::GraphiQLSource, *};
 use axum::{response, response::IntoResponse};
 use external_package::ExternalPackage;
 use package::Package;
-use package_graph::{Edge, Node, PackageGraph};
+use package_graph::{Edge, PackageGraph};
 pub use server::run_server;
 use thiserror::Error;
 use tokio::select;
@@ -155,7 +155,6 @@ impl RepositoryQuery {
 #[graphql(concrete(name = "Files", params(File)))]
 #[graphql(concrete(name = "ExternalPackages", params(ExternalPackage)))]
 #[graphql(concrete(name = "Diagnostics", params(Diagnostic)))]
-#[graphql(concrete(name = "Nodes", params(Node)))]
 #[graphql(concrete(name = "Edges", params(Edge)))]
 pub struct Array<T: OutputType> {
     items: Vec<T>,

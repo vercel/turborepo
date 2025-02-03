@@ -6,7 +6,7 @@ use petgraph::graph::NodeIndex;
 use turborepo_repository::package_graph::{PackageName, PackageNode};
 
 use crate::{
-    query::{package::Package, Array, PackagePredicate},
+    query::{package::Package, Array, Error, PackagePredicate},
     run::Run,
 };
 
@@ -42,11 +42,12 @@ pub(crate) struct Edge {
 
 #[Object]
 impl PackageGraph {
-    async fn nodes(&self) -> Array<Package> {
+    async fn nodes(&self) -> Result<Array<Package>, Error> {
         let direct_dependencies = self
             .center
             .as_ref()
             .and_then(|center| self.run.pkg_dep_graph().immediate_dependencies(center));
+
         self.run
             .pkg_dep_graph()
             .node_indices()
@@ -54,10 +55,10 @@ impl PackageGraph {
                 let package_node = self.run.pkg_dep_graph().get_package_by_index(idx)?;
                 if let Some(center) = &self.center {
                     if center == package_node {
-                        return Some(Package {
-                            run: self.run.clone(),
-                            name: package_node.as_package_name().clone(),
-                        });
+                        return Some(Package::new(
+                            self.run.clone(),
+                            package_node.as_package_name().clone(),
+                        ));
                     }
                 }
 
@@ -72,10 +73,13 @@ impl PackageGraph {
                     }
                 }
 
-                let package = Package {
-                    run: self.run.clone(),
-                    name: package_node.as_package_name().clone(),
-                };
+                let package =
+                    match Package::new(self.run.clone(), package_node.as_package_name().clone()) {
+                        Ok(package) => package,
+                        Err(err) => {
+                            return Some(Err(err.into()));
+                        }
+                    };
 
                 if let Some(filter) = &self.filter {
                     if !filter.check(&package) {
@@ -83,9 +87,9 @@ impl PackageGraph {
                     }
                 }
 
-                Some(package)
+                Some(Ok(package))
             })
-            .collect()
+            .collect::<Result<Array<_>, _>>()
     }
 
     async fn edges(&self) -> Array<Edge> {

@@ -4,11 +4,7 @@ use std::{
 };
 
 use itertools::Itertools;
-
-use petgraph::{
-    graph::{Edge, NodeIndex},
-    visit::{depth_first_search, Reversed},
-};
+use petgraph::graph::{Edge, NodeIndex};
 use serde::Serialize;
 use tracing::debug;
 use turbopath::{
