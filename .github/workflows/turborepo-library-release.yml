@@ -27,7 +27,7 @@ jobs:
             target: aarch64-unknown-linux-gnu
             setup: |
               sudo apt update
-              sudo apt install -y g++-aarch64-linux-gnu libc6-dev-arm64-cross
+              sudo apt install -y g++-aarch64-linux-gnu libc6-dev-arm64-cross xz-utils
               echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
               echo "CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
               echo "CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++" >> $GITHUB_ENV
