@@ -197,8 +197,6 @@ impl Run {
                 "**/*.jsx".parse().unwrap(),
                 "**/*.ts".parse().unwrap(),
                 "**/*.tsx".parse().unwrap(),
-                "**/*.vue".parse().unwrap(),
-                "**/*.svelte".parse().unwrap(),
             ],
             &["**/node_modules/**".parse().unwrap()],
             globwalk::WalkType::Files,
