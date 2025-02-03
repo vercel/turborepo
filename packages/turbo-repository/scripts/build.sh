@@ -6,6 +6,7 @@ script_provided_flags="\
   -p=turborepo-napi \
   --cargo-cwd=../../ \
   --cargo-name=turborepo_napi \
+  --zig \
   native \
   --js=false \
 "
