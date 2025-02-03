@@ -28,13 +28,11 @@ jobs:
             setup: |
               sudo apt update
               sudo apt install -y g++-aarch64-linux-gnu libc6-dev-arm64-cross xz-utils
-              echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
-              echo "CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
-              echo "CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++" >> $GITHUB_ENV
-              mkdir ../zig
-              curl --show-error --location https://ziglang.org/builds/zig-linux-aarch64-0.14.0-dev.3028+cdc9d65b0.tar.xz | tar -J -xf - -C ../zig --strip-components 1
-              export PATH=$PATH:$(pwd)/../zig
-              echo "$(pwd)/../zig" >> $GITHUB_PATH
+              mkdir zig
+              curl --show-error --location https://ziglang.org/builds/zig-linux-aarch64-0.14.0-dev.3028+cdc9d65b0.tar.xz | tar -J -xf - -C zig --strip-components 1
+              export PATH=$PATH:$(pwd)/zig
+              echo "$(pwd)/zig" >> $GITHUB_PATH
+              zig
 
           - host: ubuntu-latest
             target: x86_64-unknown-linux-gnu
