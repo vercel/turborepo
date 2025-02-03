@@ -39,6 +39,10 @@ jobs:
               microdnf install -y gcc gcc-c++ git
               curl https://sh.rustup.rs -sSf | bash -s -- -y
               npm i -g pnpm@8.9.0
+              mkdir ../zig
+              curl --show-error --location https://ziglang.org/builds/zig-linux-x86_64-0.11.0-dev.1908+06b263825.tar.xz | tar -J -xf - -C ../zig --strip-components 1
+              export PATH=$PATH:$(pwd)/../zig
+              echo "$(pwd)/../zig" >> $GITHUB_PATH
             setup: |
               pnpm install
 
