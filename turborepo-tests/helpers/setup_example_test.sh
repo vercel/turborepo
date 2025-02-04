@@ -20,6 +20,7 @@ if [ -z "$package_manager" ]; then
 fi
 
 echo "node --version: $(node --version)"
+npm i -g corepack@latest && corepack enable && pnpm --version
 
 # Convert to the right package manager
 if [ "$package_manager" == "npm" ]; then
