@@ -1,11 +1,11 @@
 mod config;
 
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     sync::{Arc, LazyLock, Mutex},
 };
 
-pub use config::{BoundariesConfig, Permissions};
+pub use config::BoundariesConfig;
 use git2::Repository;
 use globwalk::Settings;
 use itertools::Itertools;
@@ -152,7 +152,8 @@ impl BoundariesResult {
 }
 
 impl Run {
-    pub async fn check_boundaries(&mut self) -> Result<BoundariesResult, Error> {
+    pub async fn check_boundaries(&self) -> Result<BoundariesResult, Error> {
+        let boundaries_configs = self.get_boundaries_configs();
         let packages = self.pkg_dep_graph().packages();
         let repo = Repository::discover(self.repo_root()).ok().map(Mutex::new);
         let mut diagnostics = vec![];
@@ -165,7 +166,6 @@ impl Run {
                 continue;
             }
 
-            let turbo_json = self.turbo_json_loader().uncached_load(package_name)?;
             let package_root = self.repo_root().resolve(package_info.package_path());
             let internal_dependencies = self
                 .pkg_dep_graph()
@@ -178,11 +178,12 @@ impl Run {
                 .check_package(
                     &repo,
                     &package_root,
+                    package_name,
                     &package_info.package_json,
-                    &turbo_json,
                     internal_dependencies,
                     unresolved_external_dependencies,
                     &source_map,
+                    &boundaries_configs,
                 )
                 .await?;
 
@@ -199,33 +200,47 @@ impl Run {
         })
     }
 
+    fn get_boundaries_configs(&self) -> HashMap<PackageName, BoundariesConfig> {
+        let mut boundaries_configs = HashMap::new();
+        for (package, _) in self.pkg_dep_graph().packages() {
+            if let Ok(TurboJson {
+                boundaries: Some(boundaries_config),
+                ..
+            }) = self.turbo_json_loader().uncached_load(package)
+            {
+                boundaries_configs.insert(package.clone(), boundaries_config.into_inner());
+            }
+        }
+
+        boundaries_configs
+    }
+
     fn is_potential_package_name(import: &str) -> bool {
         PACKAGE_NAME_REGEX.is_match(import)
     }
 
     fn validate_relation(
-        &mut self,
+        &self,
         dependency: &PackageName,
         allow_list: &Option<HashSet<String>>,
         deny_list: &Option<HashSet<String>>,
+        boundaries_config: Option<&BoundariesConfig>,
     ) -> Result<Vec<BoundariesDiagnostic>, Error> {
-        let dep_turbo_json = match self.turbo_json_loader().load(dependency) {
-            Ok(turbo_json) => turbo_json,
-            // If there is no turbo.json, then there are no rules to check
-            Err(crate::config::Error::NoTurboJSON) => &TurboJson::default(),
-            Err(e) => return Err(e.into()),
-        };
-
-        let dep_tags = dep_turbo_json
-            .boundaries
-            .as_ref()
-            .and_then(|b| b.tags.as_ref())
-            .unwrap_or_default();
-
         // If there is no allow list, then we allow all tags
         let mut is_allowed = allow_list.is_none();
         let mut diagnostics = Vec::new();
-        for tag in dep_tags.as_inner() {
+        let dep_tags = boundaries_config
+            .and_then(|b| b.tags.as_ref())
+            .map(|tags| tags.as_inner())
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
+
+        let dep_tags_span = boundaries_config
+            .and_then(|b| b.tags.as_ref())
+            .map_or(Default::default(), |b| b.to(()));
+
+        for tag in dep_tags {
             if let Some(allow_list) = allow_list {
                 if allow_list.contains(tag.as_inner()) {
                     is_allowed = true;
@@ -246,7 +261,7 @@ impl Run {
         }
 
         if !is_allowed {
-            let (span, text) = dep_tags.span_and_text("turbo.json");
+            let (span, text) = dep_tags_span.span_and_text("turbo.json");
             diagnostics.push(BoundariesDiagnostic::NotAllowedTag {
                 package_name: dependency.clone(),
                 span,
@@ -257,27 +272,28 @@ impl Run {
         Ok(diagnostics)
     }
 
-    async fn check_package_tags(
-        &mut self,
-        repo: &Option<Mutex<Repository>>,
-        package_name: &PackageName,
-        package_root: &AbsoluteSystemPath,
-        package_json: &PackageJson,
-        boundaries_config: &BoundariesConfig,
+    fn check_package_tags(
+        &self,
+        pkg: PackageNode,
+        package_boundaries_config: BoundariesConfig,
+        boundaries_configs: &HashMap<PackageName, BoundariesConfig>,
     ) -> Result<Vec<BoundariesDiagnostic>, Error> {
         let (dependency_allow_list, dependency_deny_list) =
-            if let Some(dependency_rules) = boundaries_config.dependencies.as_ref() {
+            if let Some(mut dependency_rules) = package_boundaries_config.dependencies {
+                let allow_rules = dependency_rules.allow.take();
+                let deny_rules = dependency_rules.deny.take();
                 // If list is `None`, we allow all dependencies. If it's `Some`, we allow only
                 // the listed dependencies.
-                let allow_list = dependency_rules
-                    .allow
-                    .as_ref()
-                    .map(|allow| allow.iter().flatten().collect::<HashSet<_>>());
+                let allow_list = allow_rules.map(|allow| {
+                    allow
+                        .into_iter()
+                        .flatten()
+                        .flatten()
+                        .collect::<HashSet<_>>()
+                });
 
-                let deny_list = dependency_rules
-                    .deny
-                    .as_ref()
-                    .map(|deny| deny.iter().flatten().collect::<HashSet<_>>());
+                let deny_list = deny_rules
+                    .map(|deny| deny.into_iter().flatten().flatten().collect::<HashSet<_>>());
 
                 (allow_list, deny_list)
             } else {
@@ -285,28 +301,52 @@ impl Run {
             };
 
         let (dependent_allow_list, dependent_deny_list) =
-            if let Some(dependent_rules) = boundaries_config.dependents.as_ref() {
+            if let Some(mut dependent_rules) = package_boundaries_config.dependents {
+                let allow_rules = dependent_rules.allow.take();
+                let deny_rules = dependent_rules.deny.take();
+
                 // If list is `None`, we allow all dependentes. If it's `Some`, we allow only
                 // the listed dependentes.
-                let allow_list = dependent_rules
-                    .allow
-                    .as_ref()
-                    .map(|allow| allow.iter().flatten().collect::<HashSet<String>>());
+                let allow_list = allow_rules.map(|allow| {
+                    allow
+                        .into_iter()
+                        .flatten()
+                        .flatten()
+                        .collect::<HashSet<String>>()
+                });
 
-                let deny_list = dependent_rules
-                    .deny
-                    .as_ref()
-                    .map(|deny| deny.iter().flatten().collect::<HashSet<String>>());
+                let deny_list = deny_rules.map(|deny| {
+                    deny.into_iter()
+                        .flatten()
+                        .flatten()
+                        .collect::<HashSet<String>>()
+                });
 
                 (allow_list, deny_list)
             } else {
                 (None, None)
             };
 
-        for dependency in self.pkg_dep_graph().dependencies(package_name) {
-            let diagnostics =
-                self.validate_relation(&dependency, &dependency_allow_list, &dependency_deny_list);
+        let mut diagnostics = Vec::new();
+        for dependency in self.pkg_dep_graph().dependencies(&pkg) {
+            diagnostics.extend(self.validate_relation(
+                dependency.as_package_name(),
+                &dependency_allow_list,
+                &dependency_deny_list,
+                boundaries_configs.get(dependency.as_package_name()),
+            )?);
         }
+
+        for dependent in self.pkg_dep_graph().ancestors(&pkg) {
+            diagnostics.extend(self.validate_relation(
+                dependent.as_package_name(),
+                &dependent_allow_list,
+                &dependent_deny_list,
+                boundaries_configs.get(dependent.as_package_name()),
+            )?);
+        }
+
+        Ok(diagnostics)
     }
 
     /// Either returns a list of errors and number of files checked or a single,
@@ -315,8 +355,40 @@ impl Run {
         &self,
         repo: &Option<Mutex<Repository>>,
         package_root: &AbsoluteSystemPath,
+        package_name: &PackageName,
         package_json: &PackageJson,
-        turbo_json: &TurboJson,
+        internal_dependencies: HashSet<&PackageNode>,
+        unresolved_external_dependencies: Option<&BTreeMap<String, String>>,
+        source_map: &SourceMap,
+        boundaries_configs: &HashMap<PackageName, BoundariesConfig>,
+    ) -> Result<Vec<BoundariesDiagnostic>, Error> {
+        let mut diagnostics = self
+            .check_package_files(
+                repo,
+                package_root,
+                package_json,
+                internal_dependencies,
+                unresolved_external_dependencies,
+                source_map,
+            )
+            .await?;
+
+        if let Some(boundaries_config) = boundaries_configs.get(package_name) {
+            diagnostics.extend(self.check_package_tags(
+                PackageNode::Workspace(package_name.clone()),
+                boundaries_config.clone(),
+                boundaries_configs,
+            )?);
+        }
+
+        Ok(diagnostics)
+    }
+
+    async fn check_package_files(
+        &self,
+        repo: &Option<Mutex<Repository>>,
+        package_root: &AbsoluteSystemPath,
+        package_json: &PackageJson,
         internal_dependencies: HashSet<&PackageNode>,
         unresolved_external_dependencies: Option<&BTreeMap<String, String>>,
         source_map: &SourceMap,

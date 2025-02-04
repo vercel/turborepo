@@ -2,7 +2,7 @@ use std::{
     fmt::Display,
     iter,
     iter::Once,
-    ops::{Deref, Range},
+    ops::{Deref, DerefMut, Range},
     sync::Arc,
 };
 
@@ -223,6 +223,13 @@ impl<T> Deref for Spanned<T> {
         &self.value
     }
 }
+
+impl<T> DerefMut for Spanned<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.value
+    }
+}
+
 pub trait WithMetadata {
     fn add_text(&mut self, text: Arc<str>);
     fn add_path(&mut self, path: Arc<str>);
