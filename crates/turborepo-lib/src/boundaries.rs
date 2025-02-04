@@ -219,12 +219,9 @@ impl Run {
 
         let mut not_supported_extensions = HashSet::new();
         for file_path in files {
-            match file_path.extension() {
-                Some(ext @ ("svelte" | "vue")) => {
-                    not_supported_extensions.insert(ext.to_string());
-                    continue;
-                }
-                _ => {}
+            if let Some(ext @ ("svelte" | "vue")) = file_path.extension() {
+                not_supported_extensions.insert(ext.to_string());
+                continue;
             }
 
             if let Some(repo) = repo {
