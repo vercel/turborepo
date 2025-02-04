@@ -21,8 +21,6 @@ fi
 
 echo "node --version: $(node --version)"
 
-echo $PWD
-
 # Convert to the right package manager
 if [ "$package_manager" == "npm" ]; then
   package_manager_command="node ../../../packages/turbo-workspaces/dist/cli.js convert . npm --ignore-unchanged-package-manager"
@@ -69,6 +67,7 @@ cd "$example_path-$package_manager/$example_path"
 mkdir -p ./tmp
 echo "/tmp/" >>".gitignore"
 
+echo $PWD
 $package_manager_command
 
 git diff
