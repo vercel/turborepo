@@ -42,10 +42,10 @@ fi
 # If the types are generating while the type checking happens, it can cause flakes.
 # We'll have to accept this gap in our coverage.
 if [ "$example_path" == "with-svelte" ]; then
-  turbo_command="turbo build lint --continue"
+  turbo_command="turbo build lint --continue --output-logs=errors-only"
 else
   # The rest of the examples implement these three tasks and look safe to test in parallel
-  turbo_command="turbo build lint check-types --continue"
+  turbo_command="turbo build lint check-types --continue --output-logs=errors-only"
 fi
 
 rsync -avq \
