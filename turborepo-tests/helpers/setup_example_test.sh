@@ -66,6 +66,7 @@ echo "/tmp-logs/" >>".gitignore"
 # Run package manager conversion
 $package_manager_command
 
+echo $PWD
 # Simulating the user's first run and dumping logs to a file
 $turbo_command 2>&1 | tee ../run-1.txt
 
