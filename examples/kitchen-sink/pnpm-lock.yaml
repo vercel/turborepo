@@ -152,6 +152,12 @@ importers:
       '@types/react-dom':
         specifier: ^18.3.5
         version: 18.3.5(@types/react@18.3.18)
+      '@typescript-eslint/eslint-plugin':
+        specifier: ^8.22.0
+        version: 8.22.0(@typescript-eslint/parser@8.22.0)(eslint@9.19.0)(typescript@5.7.3)
+      '@typescript-eslint/parser':
+        specifier: ^8.22.0
+        version: 8.22.0(eslint@9.19.0)(typescript@5.7.3)
       autoprefixer:
         specifier: ^10.4.20
         version: 10.4.20(postcss@8.5.1)
@@ -8899,7 +8905,6 @@ packages:
 
   /turbo@2.4.0:
     resolution: {integrity: sha512-ah/yQp2oMif1X0u7fBJ4MLMygnkbKnW5O8SG6pJvloPCpHfFoZctkSVQiJ3VnvNTq71V2JJIdwmOeu1i34OQyg==}
-    hasBin: true
     optionalDependencies:
       turbo-darwin-64: 2.4.0
       turbo-darwin-arm64: 2.4.0
