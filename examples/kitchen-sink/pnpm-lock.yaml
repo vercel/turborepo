@@ -149,6 +149,9 @@ importers:
       '@remix-run/dev':
         specifier: ^2.15.2
         version: 2.15.3(@remix-run/react@2.15.3)(typescript@5.7.3)(vite@5.4.14)
+      '@repo/eslint-config':
+        specifier: workspace:*
+        version: link:../../packages/config-eslint
       '@types/react':
         specifier: ^18.3.18
         version: 18.3.18
@@ -213,6 +216,9 @@ importers:
       '@types/react-dom':
         specifier: ^18.3.5
         version: 18.3.5(@types/react@18.3.18)
+      eslint:
+        specifier: ^9.19.0
+        version: 9.19.0
       typescript:
         specifier: 5.7.3
         version: 5.7.3
