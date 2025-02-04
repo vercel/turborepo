@@ -67,7 +67,6 @@ cd "$example_path-$package_manager/$example_path"
 mkdir -p ./tmp
 echo "/tmp/" >>".gitignore"
 
-echo $PWD
 $package_manager_command
 
 # Simulating the user's first run and dumping logs to a file
