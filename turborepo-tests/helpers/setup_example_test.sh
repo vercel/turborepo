@@ -70,8 +70,6 @@ echo "/tmp/" >>".gitignore"
 echo $PWD
 $package_manager_command
 
-git diff
-
 # Simulating the user's first run and dumping logs to a file
 $turbo_command 2>&1 | tee ./tmp/run-1.txt
 
