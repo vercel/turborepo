@@ -397,8 +397,8 @@ impl Run {
         unresolved_external_dependencies: Option<&BTreeMap<String, String>>,
         source_map: &SourceMap,
         boundaries_configs: &HashMap<PackageName, Spanned<BoundariesConfig>>,
-    ) -> Result<Vec<BoundariesDiagnostic>, Error> {
-        let mut diagnostics = self
+    ) -> Result<(usize, Vec<BoundariesDiagnostic>), Error> {
+        let (files_checked, mut diagnostics) = self
             .check_package_files(
                 repo,
                 package_root,
@@ -417,7 +417,7 @@ impl Run {
             )?);
         }
 
-        Ok(diagnostics)
+        Ok((files_checked, diagnostics))
     }
 
     async fn check_package_files(

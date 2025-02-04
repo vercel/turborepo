@@ -21,6 +21,14 @@ expression: query_output
         {
           "message": "cannot import package `module-package` because it is not a dependency",
           "import": "module-package"
+        },
+        {
+          "message": "Package `module-package` found without any tag listed in allowlist for `my-app`",
+          "import": "module-package"
+        },
+        {
+          "message": "Package `@vercel/unsafe-package` found with tag listed in denylist for `my-app`: `unsafe`",
+          "import": "@vercel/unsafe-package"
         }
       ]
     }
