@@ -59,14 +59,9 @@ rsync -avq \
 
 cd "$temp_dir/$example_path-$package_manager/$example_path"
 
-# Make a place for dumping logs so we can inspect them later
-mkdir -p ./tmp-logs
-echo "/tmp-logs/" >>".gitignore"
-
 # Run package manager conversion
 $package_manager_command
 
-echo $PWD
 # Simulating the user's first run and dumping logs to a file
 $turbo_command 2>&1 | tee ../run-1.txt
 
