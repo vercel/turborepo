@@ -43,6 +43,10 @@ on:
       dry_run:
         description: "Do a dry run, skipping the final publish step."
         type: boolean
+      tag-override:
+        description: "Override default npm dist-tag for the release. Should only be used for backporting"
+        required: false
+        type: string
 
 jobs:
   stage:
@@ -58,7 +62,7 @@ jobs:
           git config --global user.email 'turbobot@vercel.com'
       - name: Version
         run: |
-          ./scripts/version.js ${{ inputs.increment }}
+          ./scripts/version.js ${{ inputs.increment }} ${{ inputs.tag-override }}
           cat version.txt
       - name: Stage Commit
         id: stage

@@ -6,6 +6,7 @@ const semver = require("semver");
 
 // These values come from the invocation of release.
 const increment = process.argv[2];
+const tagOverride = process.argv[3];
 
 // Now we get the current version of the package.
 const versionFilePath = path.join(__dirname, "..", "version.txt");
@@ -19,6 +20,6 @@ const newVersion = semver.inc(currentVersion, increment, identifier);
 
 // Parse the output semver identifier to identify which npm tag to publish to.
 const parsed = semver.parse(newVersion);
-const tag = parsed?.prerelease[0] || "latest";
+const tag = tagOverride || parsed?.prerelease[0] || "latest";
 
 fs.writeFileSync(versionFilePath, `${newVersion}\n${tag}\n`);
