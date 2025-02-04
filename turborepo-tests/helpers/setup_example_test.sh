@@ -70,7 +70,7 @@ echo "/tmp/" >>".gitignore"
 $package_manager_command
 
 # Simulating the user's first run and dumping logs to a file
-$turbo_command >>./tmp/run-1.txt 2>&1
+$turbo_command 2>&1 | tee ./tmp/run-1.txt
 
 cat ./tmp/run-1.txt
 
@@ -85,7 +85,7 @@ if grep -q ">>> FULL TURBO" ./tmp/run-1.txt; then
 fi
 
 # Simulating the user's second run and dumping logs to a file
-$turbo_command >>./tmp/run-2.txt 2>&1
+$turbo_command 2>&1 | tee ./tmp/run-2.txt
 
 cat ./tmp/run-2.txt
 
