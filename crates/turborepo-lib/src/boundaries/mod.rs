@@ -5,7 +5,7 @@ use std::{
     sync::{Arc, LazyLock, Mutex},
 };
 
-pub use config::BoundariesConfig;
+pub use config::{BoundariesConfig, Permissions};
 use git2::Repository;
 use globwalk::Settings;
 use itertools::Itertools;
@@ -22,6 +22,7 @@ use thiserror::Error;
 use tracing::log::warn;
 use turbo_trace::{ImportFinder, ImportType, Tracer};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathRelation, RelativeUnixPath};
+use turborepo_errors::Spanned;
 use turborepo_repository::{
     package_graph::{PackageName, PackageNode},
     package_json::PackageJson,
@@ -32,16 +33,28 @@ use crate::{run::Run, turbo_json::TurboJson};
 
 #[derive(Clone, Debug, Error, Diagnostic)]
 pub enum BoundariesDiagnostic {
-    #[error("Package `{package_name}` found without any tag listed in allowlist")]
+    #[error(
+        "Package `{package_name}` found without any tag listed in allowlist for \
+         `{source_package_name}`"
+    )]
     NotAllowedTag {
+        // The package that is declaring the allowlist
+        source_package_name: PackageName,
+        // The package that is either a dependency or dependent of the source package
         package_name: PackageName,
         #[label("tag not found here")]
         span: Option<SourceSpan>,
+        #[help]
+        help: Option<String>,
         #[source_code]
         text: Arc<NamedSource>,
     },
-    #[error("Package `{package_name}` found with tag listed in denylist: `{tag}`")]
+    #[error(
+        "Package `{package_name}` found with tag listed in denylist for `{source_package_name}`: \
+         `{tag}`"
+    )]
     DeniedTag {
+        source_package_name: PackageName,
         package_name: PackageName,
         tag: String,
         #[label("tag found here")]
@@ -200,7 +213,7 @@ impl Run {
         })
     }
 
-    fn get_boundaries_configs(&self) -> HashMap<PackageName, BoundariesConfig> {
+    fn get_boundaries_configs(&self) -> HashMap<PackageName, Spanned<BoundariesConfig>> {
         let mut boundaries_configs = HashMap::new();
         for (package, _) in self.pkg_dep_graph().packages() {
             if let Ok(TurboJson {
@@ -208,7 +221,7 @@ impl Run {
                 ..
             }) = self.turbo_json_loader().uncached_load(package)
             {
-                boundaries_configs.insert(package.clone(), boundaries_config.into_inner());
+                boundaries_configs.insert(package.clone(), boundaries_config);
             }
         }
 
@@ -221,14 +234,15 @@ impl Run {
 
     fn validate_relation(
         &self,
+        package_name: &PackageName,
         dependency: &PackageName,
         allow_list: &Option<HashSet<String>>,
         deny_list: &Option<HashSet<String>>,
-        boundaries_config: Option<&BoundariesConfig>,
-    ) -> Result<Vec<BoundariesDiagnostic>, Error> {
+        boundaries_config: Option<&Spanned<BoundariesConfig>>,
+    ) -> Result<Option<BoundariesDiagnostic>, Error> {
         // If there is no allow list, then we allow all tags
         let mut is_allowed = allow_list.is_none();
-        let mut diagnostics = Vec::new();
+
         let dep_tags = boundaries_config
             .and_then(|b| b.tags.as_ref())
             .map(|tags| tags.as_inner())
@@ -238,7 +252,9 @@ impl Run {
 
         let dep_tags_span = boundaries_config
             .and_then(|b| b.tags.as_ref())
-            .map_or(Default::default(), |b| b.to(()));
+            .map(|b| b.to(()))
+            .or_else(|| boundaries_config.map(|b| b.to(())))
+            .unwrap_or_default();
 
         for tag in dep_tags {
             if let Some(allow_list) = allow_list {
@@ -250,33 +266,43 @@ impl Run {
             if let Some(deny_list) = deny_list {
                 if deny_list.contains(tag.as_inner()) {
                     let (span, text) = tag.span_and_text("turbo.json");
-                    diagnostics.push(BoundariesDiagnostic::DeniedTag {
+                    return Ok(Some(BoundariesDiagnostic::DeniedTag {
+                        source_package_name: package_name.clone(),
                         package_name: dependency.clone(),
                         tag: tag.as_inner().to_string(),
                         span,
                         text: Arc::new(text),
-                    });
+                    }));
                 }
             }
         }
 
         if !is_allowed {
             let (span, text) = dep_tags_span.span_and_text("turbo.json");
-            diagnostics.push(BoundariesDiagnostic::NotAllowedTag {
+            let help = span.is_none().then(|| {
+                format!(
+                    "`{}` doesn't any boundaries config in its `turbo.json` file",
+                    dependency
+                )
+            });
+
+            return Ok(Some(BoundariesDiagnostic::NotAllowedTag {
+                source_package_name: package_name.clone(),
                 package_name: dependency.clone(),
+                help,
                 span,
                 text: Arc::new(text),
-            });
+            }));
         }
 
-        Ok(diagnostics)
+        Ok(None)
     }
 
     fn check_package_tags(
         &self,
         pkg: PackageNode,
         package_boundaries_config: BoundariesConfig,
-        boundaries_configs: &HashMap<PackageName, BoundariesConfig>,
+        boundaries_configs: &HashMap<PackageName, Spanned<BoundariesConfig>>,
     ) -> Result<Vec<BoundariesDiagnostic>, Error> {
         let (dependency_allow_list, dependency_deny_list) =
             if let Some(mut dependency_rules) = package_boundaries_config.dependencies {
@@ -329,7 +355,12 @@ impl Run {
 
         let mut diagnostics = Vec::new();
         for dependency in self.pkg_dep_graph().dependencies(&pkg) {
+            if matches!(dependency, PackageNode::Root) {
+                continue;
+            }
+
             diagnostics.extend(self.validate_relation(
+                pkg.as_package_name(),
                 dependency.as_package_name(),
                 &dependency_allow_list,
                 &dependency_deny_list,
@@ -338,7 +369,12 @@ impl Run {
         }
 
         for dependent in self.pkg_dep_graph().ancestors(&pkg) {
+            if matches!(dependent, PackageNode::Root) {
+                continue;
+            }
+
             diagnostics.extend(self.validate_relation(
+                pkg.as_package_name(),
                 dependent.as_package_name(),
                 &dependent_allow_list,
                 &dependent_deny_list,
@@ -360,7 +396,7 @@ impl Run {
         internal_dependencies: HashSet<&PackageNode>,
         unresolved_external_dependencies: Option<&BTreeMap<String, String>>,
         source_map: &SourceMap,
-        boundaries_configs: &HashMap<PackageName, BoundariesConfig>,
+        boundaries_configs: &HashMap<PackageName, Spanned<BoundariesConfig>>,
     ) -> Result<Vec<BoundariesDiagnostic>, Error> {
         let mut diagnostics = self
             .check_package_files(
@@ -376,7 +412,7 @@ impl Run {
         if let Some(boundaries_config) = boundaries_configs.get(package_name) {
             diagnostics.extend(self.check_package_tags(
                 PackageNode::Workspace(package_name.clone()),
-                boundaries_config.clone(),
+                boundaries_config.as_inner().clone(),
                 boundaries_configs,
             )?);
         }
