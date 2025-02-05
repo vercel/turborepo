@@ -39,6 +39,10 @@
         "AWS_ACCESS_KEY_ID",
         "AWS_SECRET_ACCESS_KEY"
       ]
+    },
+    "release-native": {
+      "dependsOn": ["@turbo/releaser#build"],
+      "cache": false
     }
   }
 }
