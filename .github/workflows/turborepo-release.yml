@@ -224,9 +224,9 @@ jobs:
           mv rust-artifacts/turbo-aarch64-apple-darwin cli/dist-darwin-arm64
           mv rust-artifacts/turbo-aarch64-unknown-linux-musl cli/dist-linux-arm64
           cp -r rust-artifacts/turbo-x86_64-pc-windows-msvc cli/dist-windows-arm64
-          mv rust-artifacts/turbo-x86_64-unknown-linux-musl cli/dist-linux-amd64
-          mv rust-artifacts/turbo-x86_64-apple-darwin cli/dist-darwin-amd64
-          mv rust-artifacts/turbo-x86_64-pc-windows-msvc cli/dist-windows-amd64
+          mv rust-artifacts/turbo-x86_64-unknown-linux-musl cli/dist-linux-x64
+          mv rust-artifacts/turbo-x86_64-apple-darwin cli/dist-darwin-x64
+          mv rust-artifacts/turbo-x86_64-pc-windows-msvc cli/dist-windows-x64
 
       - name: Perform Release
         run: cd cli && make publish-turbo SKIP_PUBLISH=${{ inputs.dry_run && '--skip-publish' || '' }}
