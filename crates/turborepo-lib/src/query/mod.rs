@@ -15,6 +15,7 @@ use std::{
 use async_graphql::{http::GraphiQLSource, *};
 use axum::{response, response::IntoResponse};
 use external_package::ExternalPackage;
+use itertools::Itertools;
 use package::Package;
 use package_graph::{Edge, PackageGraph};
 pub use server::run_server;
@@ -569,7 +570,12 @@ impl RepositoryQuery {
     /// Check boundaries for all packages.
     async fn boundaries(&self) -> Result<Array<Diagnostic>, Error> {
         match self.run.check_boundaries().await {
-            Ok(result) => Ok(result.diagnostics.into_iter().map(|b| b.into()).collect()),
+            Ok(result) => Ok(result
+                .diagnostics
+                .into_iter()
+                .map(|b| b.into())
+                .sorted_by(|a: &Diagnostic, b: &Diagnostic| a.message.cmp(&b.message))
+                .collect()),
             Err(err) => Err(Error::Boundaries(err)),
         }
     }

@@ -250,6 +250,8 @@ impl Run {
             .flatten()
             .collect::<Vec<_>>();
 
+        // Try our best to find a span for the tags. If the tags exist, we use that
+        // span, if they don't exist, we use the boundaries config span.
         let dep_tags_span = boundaries_config
             .and_then(|b| b.tags.as_ref())
             .map(|b| b.to(()))
