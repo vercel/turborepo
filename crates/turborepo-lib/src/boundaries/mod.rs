@@ -389,6 +389,7 @@ impl Run {
 
     /// Either returns a list of errors and number of files checked or a single,
     /// fatal error
+    #[allow(clippy::too_many_arguments)]
     async fn check_package(
         &self,
         repo: &Option<Mutex<Repository>>,

@@ -105,9 +105,9 @@ impl WithMetadata for RawTurboJson {
         self.global_env.add_text(text.clone());
         self.global_pass_through_env.add_text(text.clone());
         self.boundaries.add_text(text.clone());
-        self.boundaries
-            .as_mut()
-            .map(|boundaries| boundaries.value.add_text(text.clone()));
+        if let Some(boundaries) = &mut self.boundaries {
+            boundaries.value.add_text(text.clone());
+        }
 
         self.tasks.add_text(text.clone());
         self.cache_dir.add_text(text.clone());
@@ -121,9 +121,9 @@ impl WithMetadata for RawTurboJson {
         self.global_env.add_path(path.clone());
         self.global_pass_through_env.add_path(path.clone());
         self.boundaries.add_path(path.clone());
-        self.boundaries
-            .as_mut()
-            .map(|boundaries| boundaries.value.add_path(path.clone()));
+        if let Some(boundaries) = &mut self.boundaries {
+            boundaries.value.add_path(path.clone());
+        }
         self.tasks.add_path(path.clone());
         self.cache_dir.add_path(path.clone());
         self.pipeline.add_path(path);
@@ -149,48 +149,62 @@ impl WithMetadata for Pipeline {
 impl WithMetadata for BoundariesConfig {
     fn add_text(&mut self, text: Arc<str>) {
         self.tags.add_text(text.clone());
-        self.tags
-            .as_mut()
-            .map(|tags| tags.value.add_text(text.clone()));
+        if let Some(tags) = &mut self.tags {
+            tags.value.add_text(text.clone());
+        }
+
         self.dependencies.add_text(text.clone());
-        self.dependencies
-            .as_mut()
-            .map(|dependencies| dependencies.value.add_text(text.clone()));
+        if let Some(dependencies) = &mut self.dependencies {
+            dependencies.value.add_text(text.clone());
+        }
+
         self.dependents.add_text(text.clone());
-        self.dependents
-            .as_mut()
-            .map(|dependents| dependents.value.add_text(text.clone()));
+        if let Some(dependents) = &mut self.dependents {
+            dependents.value.add_text(text.clone());
+        }
     }
 
     fn add_path(&mut self, path: Arc<str>) {
         self.tags.add_path(path.clone());
-        self.tags
-            .as_mut()
-            .map(|tags| tags.value.add_path(path.clone()));
+        if let Some(tags) = &mut self.tags {
+            tags.value.add_path(path.clone());
+        }
+
         self.dependencies.add_path(path.clone());
-        self.dependencies
-            .as_mut()
-            .map(|dependencies| dependencies.value.add_path(path.clone()));
+        if let Some(dependencies) = &mut self.dependencies {
+            dependencies.value.add_path(path.clone());
+        }
+
         self.dependents.add_path(path.clone());
-        self.dependents
-            .as_mut()
-            .map(|dependents| dependents.value.add_path(path.clone()));
+        if let Some(dependents) = &mut self.dependents {
+            dependents.value.add_path(path);
+        }
     }
 }
 
 impl WithMetadata for Permissions {
     fn add_text(&mut self, text: Arc<str>) {
         self.allow.add_text(text.clone());
-        self.allow.as_mut().map(|s| s.value.add_text(text.clone()));
+        if let Some(allow) = &mut self.allow {
+            allow.value.add_text(text.clone());
+        }
+
         self.deny.add_text(text.clone());
-        self.deny.as_mut().map(|s| s.value.add_text(text));
+        if let Some(deny) = &mut self.deny {
+            deny.value.add_text(text.clone());
+        }
     }
 
     fn add_path(&mut self, path: Arc<str>) {
         self.allow.add_path(path.clone());
-        self.allow.as_mut().map(|s| s.value.add_path(path.clone()));
+        if let Some(allow) = &mut self.allow {
+            allow.value.add_path(path.clone());
+        }
+
         self.deny.add_path(path.clone());
-        self.deny.as_mut().map(|s| s.value.add_path(path));
+        if let Some(deny) = &mut self.deny {
+            deny.value.add_path(path.clone());
+        }
     }
 }
 
