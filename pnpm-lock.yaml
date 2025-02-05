@@ -46,7 +46,11 @@ importers:
         specifier: ^0.36.0
         version: 0.36.0
 
-  cli: {}
+  cli:
+    dependencies:
+      '@turbo/releaser':
+        specifier: workspace:*
+        version: link:../packages/turbo-releaser
 
   docs:
     dependencies:
