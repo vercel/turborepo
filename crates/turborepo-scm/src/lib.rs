@@ -19,6 +19,7 @@ use thiserror::Error;
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError, RelativeUnixPathBuf};
 
+pub mod clone;
 pub mod git;
 mod hash_object;
 mod ls_tree;
