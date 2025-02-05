@@ -9,6 +9,7 @@ fn test_query() -> Result<(), anyhow::Error> {
         "get package that doesn't exist" => "query { package(name: \"doesnotexist\") { path } }",
         "get packages with less than 1 dependents" => "query { packages(filter: {lessThan: {field: DIRECT_DEPENDENT_COUNT, value: 1}}) { items { name directDependents { length } } } }",
         "get packages with more than 0 dependents" => "query { packages(filter: {greaterThan: {field: DIRECT_DEPENDENT_COUNT, value: 0}}) { items { name directDependents { length } } } }",
+        "get package graph" => "query { packageGraph { nodes { items { name } } edges { items { source target } } } }",
     );
 
     Ok(())
