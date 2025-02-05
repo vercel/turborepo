@@ -87,14 +87,6 @@ impl<T> IntoIterator for Spanned<T> {
     }
 }
 
-impl<'a, T> Iterator for &'a Spanned<T> {
-    type Item = &'a T;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        Some(&self.value)
-    }
-}
-
 impl<T: Deserializable> Deserializable for Spanned<T> {
     fn deserialize(
         value: &impl DeserializableValue,

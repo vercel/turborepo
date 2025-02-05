@@ -240,8 +240,8 @@ impl Run {
         deny_list: &Option<HashSet<String>>,
         boundaries_config: Option<&Spanned<BoundariesConfig>>,
     ) -> Result<Option<BoundariesDiagnostic>, Error> {
-        // If there is no allow list, then we allow all tags
-        let mut is_allowed = allow_list.is_none();
+        // If there is no allow list, then we vacuously have a tag in the allow list
+        let mut has_tag_in_allowlist = allow_list.is_none();
 
         let dep_tags = boundaries_config
             .and_then(|b| b.tags.as_ref())
@@ -259,7 +259,7 @@ impl Run {
         for tag in dep_tags {
             if let Some(allow_list) = allow_list {
                 if allow_list.contains(tag.as_inner()) {
-                    is_allowed = true;
+                    has_tag_in_allowlist = true;
                 }
             }
 
@@ -277,7 +277,7 @@ impl Run {
             }
         }
 
-        if !is_allowed {
+        if !has_tag_in_allowlist {
             let (span, text) = dep_tags_span.span_and_text("turbo.json");
             let help = span.is_none().then(|| {
                 format!(
