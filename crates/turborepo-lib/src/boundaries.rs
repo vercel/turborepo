@@ -16,6 +16,7 @@ use swc_ecma_ast::EsVersion;
 use swc_ecma_parser::{lexer::Lexer, Capturing, EsSyntax, Parser, Syntax, TsSyntax};
 use swc_ecma_visit::VisitWith;
 use thiserror::Error;
+use tracing::log::warn;
 use turbo_trace::{ImportFinder, ImportType, Tracer};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathRelation, RelativeUnixPath};
 use turborepo_repository::{
@@ -197,8 +198,10 @@ impl Run {
                 "**/*.jsx".parse().unwrap(),
                 "**/*.ts".parse().unwrap(),
                 "**/*.tsx".parse().unwrap(),
-                "**/*.vue".parse().unwrap(),
+                "**/*.cjs".parse().unwrap(),
+                "**/*.mjs".parse().unwrap(),
                 "**/*.svelte".parse().unwrap(),
+                "**/*.vue".parse().unwrap(),
             ],
             &["**/node_modules/**".parse().unwrap()],
             globwalk::WalkType::Files,
@@ -214,7 +217,13 @@ impl Run {
         let resolver =
             Tracer::create_resolver(tsconfig_path.exists().then(|| tsconfig_path.as_ref()));
 
+        let mut not_supported_extensions = HashSet::new();
         for file_path in files {
+            if let Some(ext @ ("svelte" | "vue")) = file_path.extension() {
+                not_supported_extensions.insert(ext.to_string());
+                continue;
+            }
+
             if let Some(repo) = repo {
                 let repo = repo.lock().expect("lock poisoned");
                 if matches!(repo.status_should_ignore(file_path.as_std_path()), Ok(true)) {
@@ -296,6 +305,16 @@ impl Run {
                     diagnostics.push(diagnostic);
                 }
             }
+        }
+
+        for ext in &not_supported_extensions {
+            warn!(
+                "{} files are currently not supported, boundaries checks will not apply to them",
+                ext
+            );
+        }
+        if !not_supported_extensions.is_empty() {
+            println!();
         }
 
         Ok((files_checked, diagnostics))
