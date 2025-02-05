@@ -48,7 +48,8 @@ impl PackageGraph {
             .as_ref()
             .and_then(|center| self.run.pkg_dep_graph().immediate_dependencies(center));
 
-        self.run
+        let mut nodes = self
+            .run
             .pkg_dep_graph()
             .node_indices()
             .filter_map(|idx| {
@@ -77,7 +78,7 @@ impl PackageGraph {
                     match Package::new(self.run.clone(), package_node.as_package_name().clone()) {
                         Ok(package) => package,
                         Err(err) => {
-                            return Some(Err(err.into()));
+                            return Some(Err(err));
                         }
                     };
 
@@ -89,7 +90,11 @@ impl PackageGraph {
 
                 Some(Ok(package))
             })
-            .collect::<Result<Array<_>, _>>()
+            .collect::<Result<Array<_>, _>>()?;
+
+        nodes.sort_by(|a, b| a.get_name().cmp(b.get_name()));
+
+        Ok(nodes)
     }
 
     async fn edges(&self) -> Array<Edge> {
