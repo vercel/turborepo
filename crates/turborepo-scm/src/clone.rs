@@ -7,6 +7,10 @@ pub enum CloneMode {
     CI,
 }
 
+// Provide a sane maximum depth for cloning. If a user needs more history than
+// this, they can override or fetch it themselves.
+const MAX_CLONE_DEPTH: usize = 64;
+
 impl Git {
     pub fn clone(
         &self,
@@ -14,8 +18,10 @@ impl Git {
         dir: Option<&str>,
         branch: Option<&str>,
         mode: CloneMode,
+        depth: Option<usize>,
     ) -> Result<(), Error> {
-        let mut args = vec!["clone"];
+        let depth = depth.unwrap_or(MAX_CLONE_DEPTH).to_string();
+        let mut args = vec!["clone", "--depth", &depth];
         if let Some(branch) = branch {
             args.push("--branch");
             args.push(branch);

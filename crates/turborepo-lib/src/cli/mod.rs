@@ -596,6 +596,8 @@ pub enum Command {
         ci: bool,
         #[clap(long, conflicts_with = "ci")]
         local: bool,
+        #[clap(long)]
+        depth: Option<usize>,
     },
     /// Generate the autocompletion script for the specified shell
     Completion { shell: Shell },
@@ -1403,11 +1405,20 @@ pub async fn run(
             dir,
             ci,
             local,
+            depth,
         } => {
             let event = CommandEventBuilder::new("clone").with_parent(&root_telemetry);
             event.track_call();
             let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
-            Ok(clone::run(base, event, url, dir.as_deref(), *ci, *local)?)
+            Ok(clone::run(
+                base,
+                event,
+                url,
+                dir.as_deref(),
+                *ci,
+                *local,
+                *depth,
+            )?)
         }
         #[allow(unused_variables)]
         Command::Daemon { command, idle_time } => {

@@ -21,6 +21,7 @@ pub fn run(
     dir: Option<&str>,
     ci: bool,
     local: bool,
+    depth: Option<usize>,
 ) -> Result<i32, Error> {
     let clone_mode = if ci {
         CloneMode::CI
@@ -36,7 +37,7 @@ pub fn run(
         return Err(Error::GitBinaryNotFound);
     };
 
-    git.clone(url, dir, None, clone_mode)?;
+    git.clone(url, dir, None, clone_mode, depth)?;
 
     Ok(0)
 }
