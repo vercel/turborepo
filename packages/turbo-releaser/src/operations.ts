@@ -11,7 +11,9 @@ async function packPlatform(
 ): Promise<string> {
   const { os, arch } = platform;
   console.log(`Packing platform: ${os}-${arch}`);
-  const scaffoldDir = path.join("dist", `${os}-${arch}-${version}`);
+  const npmDirName = `turbo-${os}-${arch}`;
+  const tarballDir = path.join("dist", `${os}-${arch}-${version}`);
+  const scaffoldDir = path.join(tarballDir, npmDirName);
 
   console.log("Generating native package...");
   await native.generateNativePackage({
@@ -34,9 +36,9 @@ async function packPlatform(
     {
       gzip: true,
       file: tarPath,
-      cwd: scaffoldDir,
+      cwd: tarballDir,
     },
-    ["package.json", "README.md", "bin"]
+    [npmDirName]
   );
 
   console.log(`Artifact created: ${tarPath}`);
