@@ -70,32 +70,37 @@ pub struct Visitor<'a> {
 }
 
 #[derive(Debug, thiserror::Error, Diagnostic)]
+#[error(
+    "Your `package.json` script looks like it invokes a Root Task ({task_name}), creating a loop \
+     of `turbo` invocations. You likely have misconfigured your scripts and tasks or your package \
+     manager's Workspace structure."
+)]
+#[diagnostic(
+    code(recursive_turbo_invocations),
+    url(
+            "{}/messages/{}",
+            TURBO_SITE, self.code().unwrap().to_string().to_case(Case::Kebab)
+    )
+)]
+pub struct RecursiveTurboError {
+    pub task_name: String,
+    pub command: String,
+    #[label("This script calls `turbo`, which calls the script, which calls `turbo`...")]
+    pub span: Option<SourceSpan>,
+    #[source_code]
+    pub text: NamedSource<String>,
+}
+
+#[derive(Debug, thiserror::Error, Diagnostic)]
 pub enum Error {
     #[error("Cannot find package {package_name} for task {task_id}.")]
     MissingPackage {
         package_name: PackageName,
         task_id: TaskId<'static>,
     },
-    #[error(
-        "Your `package.json` script looks like it invokes a Root Task ({task_name}), creating a \
-         loop of `turbo` invocations. You likely have misconfigured your scripts and tasks or \
-         your package manager's Workspace structure."
-    )]
-    #[diagnostic(
-        code(recursive_turbo_invocations),
-        url(
-            "{}/messages/{}",
-            TURBO_SITE, self.code().unwrap().to_string().to_case(Case::Kebab)
-        )
-    )]
-    RecursiveTurbo {
-        task_name: String,
-        command: String,
-        #[label("This script calls `turbo`, which calls the script, which calls `turbo`...")]
-        span: Option<SourceSpan>,
-        #[source_code]
-        text: NamedSource<String>,
-    },
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    RecursiveTurbo(Box<RecursiveTurboError>),
     #[error("Could not find definition for task")]
     MissingDefinition,
     #[error("Error while executing engine: {0}")]
@@ -225,12 +230,12 @@ impl<'a> Visitor<'a> {
                     package_task_event.track_error(TrackedErrors::RecursiveError);
                     let (span, text) = cmd.span_and_text("package.json");
 
-                    return Err(Error::RecursiveTurbo {
+                    return Err(Error::RecursiveTurbo(Box::new(RecursiveTurboError {
                         task_name: info.to_string(),
                         command: cmd.to_string(),
                         span,
                         text,
-                    });
+                    })));
                 }
                 _ => (),
             }

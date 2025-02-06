@@ -105,7 +105,7 @@ impl FromStr for CacheConfig {
                 .ok_or(Error::InvalidCacheTypeAndAction {
                     text: s.to_string(),
                     pair: action.to_string(),
-                    span: Some(SourceSpan::new(idx.into(), action.len().into())),
+                    span: Some(SourceSpan::new(idx.into(), action.len())),
                 })?;
 
             match key {
@@ -114,16 +114,14 @@ impl FromStr for CacheConfig {
                         return Err(Error::DuplicateKeys {
                             text: s.to_string(),
                             key: "local",
-                            span: Some(SourceSpan::new(idx.into(), key.len().into())),
+                            span: Some(SourceSpan::new(idx.into(), key.len())),
                         });
                     }
 
                     seen_local = true;
                     cache.local = CacheActions::from_str(value).map_err(|err| {
-                        err.add_text(s).add_span(SourceSpan::new(
-                            (idx + key.len() + 1).into(),
-                            key.len().into(),
-                        ))
+                        err.add_text(s)
+                            .add_span(SourceSpan::new((idx + key.len() + 1).into(), key.len()))
                     })?;
                 }
                 "remote" => {
@@ -131,23 +129,21 @@ impl FromStr for CacheConfig {
                         return Err(Error::DuplicateKeys {
                             text: s.to_string(),
                             key: "remote",
-                            span: Some(SourceSpan::new(idx.into(), key.len().into())),
+                            span: Some(SourceSpan::new(idx.into(), key.len())),
                         });
                     }
 
                     seen_remote = true;
                     cache.remote = CacheActions::from_str(value).map_err(|err| {
-                        err.add_text(s).add_span(SourceSpan::new(
-                            (idx + key.len() + 1).into(),
-                            value.len().into(),
-                        ))
+                        err.add_text(s)
+                            .add_span(SourceSpan::new((idx + key.len() + 1).into(), value.len()))
                     })?
                 }
                 ty => {
                     return Err(Error::InvalidCacheType {
                         text: s.to_string(),
                         s: ty.to_string(),
-                        span: Some(SourceSpan::new(idx.into(), ty.len().into())),
+                        span: Some(SourceSpan::new(idx.into(), ty.len())),
                     })
                 }
             }

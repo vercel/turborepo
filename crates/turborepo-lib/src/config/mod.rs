@@ -45,6 +45,21 @@ pub struct InvalidEnvPrefixError {
     pub env_pipeline_delimiter: &'static str,
 }
 
+#[derive(Debug, Error, Diagnostic)]
+#[diagnostic(
+    code(unnecessary_package_task_syntax),
+    url("{}/messages/{}", TURBO_SITE, self.code().unwrap().to_string().to_case(Case::Kebab))
+)]
+#[error("\"{actual}\". Use \"{wanted}\" instead.")]
+pub struct UnnecessaryPackageTaskSyntaxError {
+    pub actual: String,
+    pub wanted: String,
+    #[label("unnecessary package syntax found here")]
+    pub span: Option<SourceSpan>,
+    #[source_code]
+    pub text: NamedSource<String>,
+}
+
 #[allow(clippy::enum_variant_names)]
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
@@ -107,19 +122,9 @@ pub enum Error {
     InvalidEnvPrefix(Box<InvalidEnvPrefixError>),
     #[error(transparent)]
     PathError(#[from] turbopath::PathError),
-    #[diagnostic(
-        code(unnecessary_package_task_syntax),
-        url("{}/messages/{}", TURBO_SITE, self.code().unwrap().to_string().to_case(Case::Kebab))
-    )]
-    #[error("\"{actual}\". Use \"{wanted}\" instead.")]
-    UnnecessaryPackageTaskSyntax {
-        actual: String,
-        wanted: String,
-        #[label("unnecessary package syntax found here")]
-        span: Option<SourceSpan>,
-        #[source_code]
-        text: NamedSource<String>,
-    },
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    UnnecessaryPackageTaskSyntax(Box<UnnecessaryPackageTaskSyntaxError>),
     #[error("You can only extend from the root of the workspace.")]
     ExtendFromNonRoot {
         #[label("non-root workspace found here")]

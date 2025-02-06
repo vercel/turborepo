@@ -3217,18 +3217,6 @@ dependencies = [
 
 [[package]]
 name = "miette"
-version = "5.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "59bb584eaeeab6bd0226ccf3509a69d7936d148cf3d036ad350abe35e8c6856e"
-dependencies = [
- "miette-derive 5.10.0",
- "once_cell",
- "thiserror",
- "unicode-width",
-]
-
-[[package]]
-name = "miette"
 version = "7.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1a955165f87b37fd1862df2a59547ac542c77ef6d17c666f619d1ad22dd89484"
@@ -3236,7 +3224,7 @@ dependencies = [
  "backtrace",
  "backtrace-ext",
  "cfg-if",
- "miette-derive 7.5.0",
+ "miette-derive",
  "owo-colors 4.1.0",
  "supports-color",
  "supports-hyperlinks",
@@ -3245,17 +3233,6 @@ dependencies = [
  "textwrap",
  "thiserror",
  "unicode-width",
-]
-
-[[package]]
-name = "miette-derive"
-version = "5.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "49e7bc1560b95a3c4a25d03de42fe76ca718ab92d1a22a55b9b4cf67b3ae635c"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.58",
 ]
 
 [[package]]
@@ -3497,12 +3474,11 @@ dependencies = [
 
 [[package]]
 name = "node-semver"
-version = "2.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "84f390c1756333538f2aed01cf280a56bc683e199b9804a504df6e7320d40116"
+version = "2.1.1-alpha.0"
+source = "git+https://github.com/nicholaslyang/node-semver-rs?branch=upgrade-miette#44d36146bedb7a152b130b777b3e967ebeebd5b1"
 dependencies = [
  "bytecount",
- "miette 5.10.0",
+ "miette",
  "nom",
  "serde",
  "thiserror",
@@ -5545,7 +5521,7 @@ version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "23441d4791e5f309275356b69aacd760208ea2ce07d85930768fab187bb93d15"
 dependencies = [
- "miette 7.5.0",
+ "miette",
  "mitsein",
 ]
 
@@ -6218,7 +6194,7 @@ dependencies = [
  "camino",
  "insta",
  "itertools 0.10.5",
- "miette 7.5.0",
+ "miette",
  "pretty_assertions",
  "serde_json",
  "tempfile",
@@ -6235,7 +6211,7 @@ dependencies = [
  "clap",
  "futures",
  "globwalk",
- "miette 7.5.0",
+ "miette",
  "oxc_resolver 2.1.1",
  "swc_common",
  "swc_ecma_ast",
@@ -6273,7 +6249,7 @@ dependencies = [
  "camino",
  "dunce",
  "fs-err",
- "miette 7.5.0",
+ "miette",
  "path-clean",
  "serde",
  "serde_json",
@@ -6368,7 +6344,7 @@ dependencies = [
  "hmac",
  "insta",
  "libc",
- "miette 7.5.0",
+ "miette",
  "os_str_bytes",
  "path-clean",
  "petgraph",
@@ -6433,7 +6409,7 @@ dependencies = [
  "biome_deserialize 0.6.0",
  "biome_diagnostics",
  "biome_json_parser",
- "miette 7.5.0",
+ "miette",
  "serde",
  "serde_json",
  "test-case",
@@ -6545,7 +6521,7 @@ dependencies = [
  "lazy_static",
  "libc",
  "merge",
- "miette 7.5.0",
+ "miette",
  "nix 0.26.2",
  "notify",
  "num_cpus",
@@ -6717,7 +6693,7 @@ dependencies = [
  "globwalk",
  "itertools 0.10.5",
  "lazy-regex",
- "miette 7.5.0",
+ "miette",
  "node-semver",
  "petgraph",
  "pretty_assertions",
@@ -7282,7 +7258,7 @@ dependencies = [
  "const_format",
  "dunce",
  "itertools 0.11.0",
- "miette 7.5.0",
+ "miette",
  "nom",
  "path-slash",
  "pori",

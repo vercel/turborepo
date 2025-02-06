@@ -31,6 +31,8 @@ pub mod parser;
 
 pub use loader::TurboJsonLoader;
 
+use crate::config::UnnecessaryPackageTaskSyntaxError;
+
 #[derive(Serialize, Deserialize, Debug, Default, PartialEq, Clone, Deserializable)]
 #[serde(rename_all = "camelCase")]
 pub struct SpacesJson {
@@ -684,12 +686,12 @@ pub fn validate_no_package_task_syntax(turbo_json: &TurboJson) -> Vec<Error> {
         .filter(|(task_name, _)| task_name.is_package_task())
         .map(|(task_name, entry)| {
             let (span, text) = entry.span_and_text("turbo.json");
-            Error::UnnecessaryPackageTaskSyntax {
+            Error::UnnecessaryPackageTaskSyntax(Box::new(UnnecessaryPackageTaskSyntaxError {
                 actual: task_name.to_string(),
                 wanted: task_name.task().to_string(),
                 span,
                 text,
-            }
+            }))
         })
         .collect()
 }

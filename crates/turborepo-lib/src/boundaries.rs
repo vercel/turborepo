@@ -280,7 +280,7 @@ impl Run {
                 let (start, end) = source_map.span_to_char_offset(&source_file, *span);
                 let start = start as usize;
                 let end = end as usize;
-                let span = SourceSpan::new(start.into(), (end - start).into());
+                let span = SourceSpan::new(start.into(), end - start);
 
                 // We have a file import
                 let check_result = if import.starts_with(".") {
