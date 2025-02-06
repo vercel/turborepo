@@ -25,19 +25,20 @@ async function generateNativePackage({
   await rm(outputDir, { recursive: true, force: true });
   await mkdir(path.join(outputDir, "bin"), { recursive: true });
 
-  if (os === "windows") {
-    console.log("Copying Windows-specific files...");
+  const copyFromTemplate = async (part: string, ...parts: Array<string>) => {
+    console.log("Copying ", path.join(part, ...parts));
     await copyFile(
-      path.join(templateDir, "bin", "turbo"),
-      path.join(outputDir, "bin", "turbo")
+      path.join(templateDir, part, ...parts),
+      path.join(outputDir, part, ...parts)
     );
+  };
+
+  if (os === "windows") {
+    await copyFromTemplate("bin", "turbo");
   }
 
-  console.log("Copying README.md...");
-  await copyFile(
-    path.join(templateDir, "README.md"),
-    path.join(outputDir, "README.md")
-  );
+  await copyFromTemplate("README.md");
+  await copyFromTemplate("LICENSE");
 
   console.log("Generating package.json...");
   const packageJson = {
