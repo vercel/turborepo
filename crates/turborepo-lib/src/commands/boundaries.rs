@@ -18,7 +18,7 @@ pub async fn run(base: CommandBase, telemetry: CommandEventBuilder) -> Result<i3
 
     let result = run.check_boundaries().await?;
 
-    result.emit();
+    result.emit(run.color_config());
 
     if result.is_ok() {
         Ok(0)

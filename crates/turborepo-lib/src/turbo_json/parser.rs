@@ -199,6 +199,7 @@ impl RawTurboJson {
                 .map(|d| {
                     d.with_file_source_code(text)
                         .with_file_path(file_path)
+                        .as_ref()
                         .into()
                 })
                 .collect();

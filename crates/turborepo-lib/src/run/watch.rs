@@ -54,6 +54,7 @@ pub struct WatchClient {
     handler: SignalHandler,
     ui_sender: Option<UISender>,
     ui_handle: Option<JoinHandle<Result<(), turborepo_ui::Error>>>,
+    experimental_write_cache: bool,
 }
 
 struct RunHandle {
@@ -109,7 +110,11 @@ pub enum Error {
 }
 
 impl WatchClient {
-    pub async fn new(base: CommandBase, telemetry: CommandEventBuilder) -> Result<Self, Error> {
+    pub async fn new(
+        base: CommandBase,
+        experimental_write_cache: bool,
+        telemetry: CommandEventBuilder,
+    ) -> Result<Self, Error> {
         let signal = commands::run::get_signal()?;
         let handler = SignalHandler::new(signal);
 
@@ -147,6 +152,7 @@ impl WatchClient {
             connector,
             handler,
             telemetry,
+            experimental_write_cache,
             persistent_tasks_handle: None,
             ui_sender,
             ui_handle,
@@ -285,8 +291,10 @@ impl WatchClient {
                     .collect();
 
                 let mut opts = self.base.opts().clone();
-                opts.cache_opts.cache.remote.write = false;
-                opts.cache_opts.cache.local.write = false;
+                if !self.experimental_write_cache {
+                    opts.cache_opts.cache.remote.write = false;
+                    opts.cache_opts.cache.remote.read = false;
+                }
 
                 let new_base = CommandBase::from_opts(
                     opts,
@@ -319,8 +327,10 @@ impl WatchClient {
             }
             ChangedPackages::All => {
                 let mut opts = self.base.opts().clone();
-                opts.cache_opts.cache.remote.write = false;
-                opts.cache_opts.cache.local.write = false;
+                if !self.experimental_write_cache {
+                    opts.cache_opts.cache.remote.write = false;
+                    opts.cache_opts.cache.remote.read = false;
+                }
 
                 let base = CommandBase::from_opts(
                     opts,

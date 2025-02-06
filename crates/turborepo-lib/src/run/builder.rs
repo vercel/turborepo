@@ -6,7 +6,7 @@ use std::{
 };
 
 use chrono::Local;
-use tracing::debug;
+use tracing::{debug, warn};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_analytics::{start_analytics, AnalyticsHandle, AnalyticsSender};
 use turborepo_api_client::{APIAuth, APIClient};
@@ -363,7 +363,12 @@ impl RunBuilder {
         repo_telemetry.track_size(pkg_dep_graph.len());
         run_telemetry.track_run_type(self.opts.run_opts.dry_run.is_some());
         let micro_frontend_configs =
-            MicrofrontendsConfigs::from_disk(&self.repo_root, &pkg_dep_graph)?;
+            MicrofrontendsConfigs::from_disk(&self.repo_root, &pkg_dep_graph)
+                .inspect_err(|err| {
+                    warn!("Ignoring invalid microfrontends configuration: {err}");
+                })
+                .ok()
+                .flatten();
 
         let scm = scm.await.expect("detecting scm panicked");
         let async_cache = AsyncCache::new(

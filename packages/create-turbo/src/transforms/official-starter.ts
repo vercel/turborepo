@@ -5,6 +5,8 @@ import { isDefaultExample } from "../utils/isDefaultExample";
 import type { TransformInput, TransformResult, MetaJson } from "./types";
 import { TransformError } from "./errors";
 
+const REPO_NAMES = ["turbo", "turborepo"];
+
 const meta = {
   name: "official-starter",
 };
@@ -18,10 +20,10 @@ export async function transform(args: TransformInput): TransformResult {
   const { prompts, example, opts } = args;
 
   const defaultExample = isDefaultExample(example.name);
-  const isThisRepo =
-    example.repo &&
-    (example.repo.name === "turborepo" || example.repo.name === "turbo");
-  const isOfficialStarter = example.repo?.username === "vercel" && isThisRepo;
+  const isOfficialStarter =
+    !example.repo ||
+    (example.repo.username === "vercel" &&
+      REPO_NAMES.includes(example.repo.name));
 
   if (!isOfficialStarter) {
     return { result: "not-applicable", ...meta };
@@ -43,7 +45,7 @@ export async function transform(args: TransformInput): TransformResult {
   }
 
   if (hasPackageJson) {
-    let packageJsonContent;
+    let packageJsonContent: PackageJson | undefined;
     try {
       packageJsonContent = fs.readJsonSync(rootPackageJsonPath) as
         | PackageJson

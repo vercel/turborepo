@@ -30,6 +30,12 @@ struct Application {
 #[derive(Debug, PartialEq, Eq, Serialize, Deserializable, Default)]
 struct Development {
     task: Option<String>,
+    local: Option<LocalHost>,
+}
+
+#[derive(Debug, PartialEq, Eq, Serialize, Deserializable, Default)]
+struct LocalHost {
+    port: Option<u16>,
 }
 
 impl ConfigV1 {
@@ -61,6 +67,7 @@ impl ConfigV1 {
                 Err(Error::InvalidVersion {
                     expected: "1",
                     actual: version,
+                    path: source.to_string(),
                 })
             }
         } else {
@@ -73,17 +80,57 @@ impl ConfigV1 {
             .iter()
             .map(|(application, config)| (application.as_str(), config.task()))
     }
+
+    pub fn port(&self, name: &str) -> Option<u16> {
+        let application = self.applications.get(name)?;
+        Some(application.port(name))
+    }
 }
 
 impl Application {
     fn task(&self) -> Option<&str> {
         self.development.as_ref()?.task.as_deref()
     }
+
+    fn user_port(&self) -> Option<u16> {
+        self.development.as_ref()?.local.as_ref()?.port
+    }
+
+    fn port(&self, name: &str) -> u16 {
+        self.user_port()
+            .unwrap_or_else(|| generate_port_from_name(name))
+    }
+}
+
+const MIN_PORT: u16 = 3000;
+const MAX_PORT: u16 = 8000;
+const PORT_RANGE: u16 = MAX_PORT - MIN_PORT;
+
+fn generate_port_from_name(name: &str) -> u16 {
+    let mut hash: i32 = 0;
+    for c in name.chars() {
+        let code = i32::try_from(u32::from(c)).expect("char::MAX is less than 2^31");
+        hash = (hash << 5).overflowing_sub(hash).0.overflowing_add(code).0;
+    }
+    let hash = hash.abs_diff(0);
+    let port = hash % u32::from(PORT_RANGE);
+    MIN_PORT + u16::try_from(port).expect("u32 modulo a u16 number will be a valid u16")
 }
 
 #[cfg(test)]
 mod test {
+    use std::char;
+
     use super::*;
+
+    #[test]
+    fn test_char_as_i32() {
+        let max_char = u32::from(char::MAX);
+        assert!(
+            i32::try_from(max_char).is_ok(),
+            "max char should fit in i32"
+        );
+    }
 
     #[test]
     fn test_child_config_parse() {
@@ -138,5 +185,10 @@ mod test {
             }
             ParseResult::Reference(_) => panic!("expected to get main config"),
         }
+    }
+
+    #[test]
+    fn test_generate_port() {
+        assert_eq!(generate_port_from_name("test-450"), 7724);
     }
 }

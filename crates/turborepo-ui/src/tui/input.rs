@@ -136,19 +136,19 @@ fn ctrl_c() -> Option<Event> {
 
 #[cfg(windows)]
 fn ctrl_c() -> Option<Event> {
-    use winapi::{
-        shared::minwindef::{BOOL, DWORD, TRUE},
-        um::wincon,
+    use windows_sys::Win32::{
+        Foundation::{BOOL, TRUE},
+        System::Console::GenerateConsoleCtrlEvent,
     };
     // First parameter corresponds to what event to generate, 0 is a Ctrl-C
-    let ctrl_c_event: DWORD = 0x0;
+    let ctrl_c_event = 0x0;
     // Second parameter corresponds to which process group to send the event to.
     // If 0 is passed the event gets sent to every process connected to the current
     // Console.
-    let process_group_id: DWORD = 0x0;
+    let process_group_id = 0x0;
     let success: BOOL = unsafe {
         // See docs https://learn.microsoft.com/en-us/windows/console/generateconsolectrlevent
-        wincon::GenerateConsoleCtrlEvent(ctrl_c_event, process_group_id)
+        GenerateConsoleCtrlEvent(ctrl_c_event, process_group_id)
     };
     if success == TRUE {
         None
