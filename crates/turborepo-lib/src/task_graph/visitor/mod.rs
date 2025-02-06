@@ -94,7 +94,7 @@ pub enum Error {
         #[label("This script calls `turbo`, which calls the script, which calls `turbo`...")]
         span: Option<SourceSpan>,
         #[source_code]
-        text: NamedSource,
+        text: NamedSource<String>,
     },
     #[error("Could not find definition for task")]
     MissingDefinition,

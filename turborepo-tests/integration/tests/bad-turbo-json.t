@@ -13,7 +13,7 @@ Run build with package task in non-root turbo.json
   Error: unnecessary_package_task_syntax (https://turbo.build/messages/unnecessary-package-task-syntax)
   
     x "my-app#build". Use "build" instead.
-      ,-\(apps[\\/]my-app[\\/]turbo.json:7:1\) (re)
+      ,-(apps/my-app/turbo.json:8:21)
     7 |         // this comment verifies that turbo can read .json files with comments
     8 | ,->     "my-app#build": {
     9 | |         "outputs": ("banana.txt", "apple.json"),
@@ -40,7 +40,7 @@ Run build with invalid env var
   invalid_env_prefix (https://turbo.build/messages/invalid-env-prefix)
   
     x Environment variables should not be prefixed with "$"
-     ,-\(turbo.json:6:1\) (re)
+     ,-(turbo.json:7:27)
    6 |     "build": {
    7 |       "env": ("NODE_ENV", "$FOOBAR"),
      :                           ^^^^|^^^^
@@ -59,7 +59,7 @@ Run in single package mode even though we have a task with package syntax
   
     x Package tasks (<package>#<task>) are not allowed in single-package
     | repositories: found //#something
-      ,-(turbo.json:16:1)
+      ,-(turbo.json:17:21)
    16 |     "something": {},
    17 |     "//#something": {},
       :                     ^|
@@ -74,7 +74,7 @@ Use our custom turbo config which has interruptible: true
 Build should fail
   $ ${TURBO} run build
     x Interruptible tasks must be persistent.
-      ,-[turbo.json:14:1]
+      ,-[turbo.json:15:24]
    14 |       ],
    15 |       "interruptible": true,
       :                        ^^|^
@@ -93,22 +93,27 @@ Run build with syntax errors in turbo.json
   
     x Failed to parse turbo.json.
   
-  Error:   x Expected a property but instead found ','.
-     ,-[turbo.json:1:1]
+  Error: 
+    x Expected a property but instead found ','.
+     ,-[turbo.json:2:48]
    1 | {
    2 |   "$schema": "https://turbo.build/schema.json",,
      :                                                ^
    3 |   "globalDependencies": ["foo.txt"],
      `----
-  Error:   x expected `,` but instead found `42`
-      ,-[turbo.json:11:1]
+  
+  Error: 
+    x expected `,` but instead found `42`
+      ,-[turbo.json:12:46]
    11 |     "my-app#build": {
    12 |       "outputs": ["banana.txt", "apple.json"]42,
       :                                              ^^
    13 |       "inputs": [".env.local"
       `----
-  Error:   x expected `,` but instead found `}`
-      ,-[turbo.json:13:1]
+  
+  Error: 
+    x expected `,` but instead found `}`
+      ,-[turbo.json:14:5]
    13 |       "inputs": [".env.local"
    14 |     },
       :     ^

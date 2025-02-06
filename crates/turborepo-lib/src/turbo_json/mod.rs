@@ -735,15 +735,11 @@ fn gather_env_vars(
             let (span, text) = value.span_and_text("turbo.json");
             // Hard error to help people specify this correctly during migration.
             // TODO: Remove this error after we have run summary.
-            let path = value
-                .path
-                .as_ref()
-                .map_or_else(|| "turbo.json".to_string(), |p| p.to_string());
             return Err(Error::InvalidEnvPrefix(Box::new(InvalidEnvPrefixError {
                 key: key.to_string(),
                 value: value.into_inner(),
                 span,
-                text: NamedSource::new(path, text),
+                text,
                 env_pipeline_delimiter: ENV_PIPELINE_DELIMITER,
             })));
         }

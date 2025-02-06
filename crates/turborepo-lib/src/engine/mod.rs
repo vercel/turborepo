@@ -469,7 +469,7 @@ impl Engine<Built> {
                             .task_locations
                             .get(dep_id)
                             .map(|spanned| spanned.span_and_text("turbo.json"))
-                            .unwrap_or((None, NamedSource::new("", "")));
+                            .unwrap_or((None, NamedSource::new("", String::new())));
 
                         return Err(ValidateError::DependencyOnPersistentTask {
                             span,
@@ -561,7 +561,7 @@ pub enum ValidateError {
         #[label("persistent task")]
         span: Option<SourceSpan>,
         #[source_code]
-        text: NamedSource,
+        text: NamedSource<String>,
         persistent_task: String,
         dependant: String,
     },

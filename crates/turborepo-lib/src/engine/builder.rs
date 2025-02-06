@@ -26,7 +26,7 @@ pub enum MissingTaskError {
         #[label]
         span: Option<SourceSpan>,
         #[source_code]
-        text: NamedSource,
+        text: NamedSource<String>,
     },
     #[error("Could not find package `{name}` in project")]
     MissingPackage { name: String },
@@ -54,14 +54,14 @@ pub enum Error {
         #[label("Add an entry in turbo.json for this task")]
         span: Option<SourceSpan>,
         #[source_code]
-        text: NamedSource,
+        text: NamedSource<String>,
     },
     #[error("Could not find package \"{package}\" referenced by task \"{task_id}\" in project")]
     MissingPackageFromTask {
         #[label]
         span: Option<SourceSpan>,
         #[source_code]
-        text: NamedSource,
+        text: NamedSource<String>,
         package: String,
         task_id: String,
     },
@@ -70,7 +70,7 @@ pub enum Error {
         #[label]
         span: Option<SourceSpan>,
         #[source_code]
-        text: NamedSource,
+        text: NamedSource<String>,
         task_id: String,
         task_name: String,
     },
@@ -89,7 +89,7 @@ pub enum Error {
         #[label]
         span: Option<SourceSpan>,
         #[source_code]
-        text: NamedSource,
+        text: NamedSource<String>,
         task_name: String,
         reason: String,
     },

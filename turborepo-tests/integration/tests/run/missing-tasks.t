@@ -5,7 +5,8 @@ Setup
   $ ${TURBO} run doesnotexist
     x Missing tasks in project
   
-  Error:   x Could not find task `doesnotexist` in project
+  Error: 
+    x Could not find task `doesnotexist` in project
   
   [1]
 
@@ -13,8 +14,11 @@ Setup
   $ ${TURBO} run doesnotexist alsono
     x Missing tasks in project
   
-  Error:   x Could not find task `alsono` in project
-  Error:   x Could not find task `doesnotexist` in project
+  Error: 
+    x Could not find task `alsono` in project
+  
+  Error: 
+    x Could not find task `doesnotexist` in project
   
   [1]
 
@@ -22,7 +26,8 @@ Setup
   $ ${TURBO} run build doesnotexist
     x Missing tasks in project
   
-  Error:   x Could not find task `doesnotexist` in project
+  Error: 
+    x Could not find task `doesnotexist` in project
   
   [1]
 

@@ -39,7 +39,7 @@ pub enum BoundariesDiagnostic {
         #[label("package imported here")]
         span: SourceSpan,
         #[source_code]
-        text: Arc<NamedSource>,
+        text: NamedSource<String>,
     },
     #[error("cannot import package `{name}` because it is not a dependency")]
     PackageNotFound {
@@ -47,7 +47,7 @@ pub enum BoundariesDiagnostic {
         #[label("package imported here")]
         span: SourceSpan,
         #[source_code]
-        text: Arc<NamedSource>,
+        text: NamedSource<String>,
     },
     #[error("cannot import file `{import}` because it leaves the package")]
     ImportLeavesPackage {
@@ -55,7 +55,7 @@ pub enum BoundariesDiagnostic {
         #[label("file imported here")]
         span: SourceSpan,
         #[source_code]
-        text: Arc<NamedSource>,
+        text: NamedSource<String>,
     },
     #[error("failed to parse file {0}")]
     ParseError(AbsoluteSystemPathBuf, swc_ecma_parser::error::Error),
@@ -348,10 +348,7 @@ impl Run {
             Ok(Some(BoundariesDiagnostic::ImportLeavesPackage {
                 import: import.to_string(),
                 span: source_span,
-                text: Arc::new(NamedSource::new(
-                    file_path.as_str(),
-                    file_content.to_string(),
-                )),
+                text: NamedSource::new(file_path.as_str(), file_content.to_string()),
             }))
         } else {
             Ok(None)
@@ -428,10 +425,7 @@ impl Run {
             return Some(BoundariesDiagnostic::NotTypeOnlyImport {
                 import: import.to_string(),
                 span,
-                text: Arc::new(NamedSource::new(
-                    file_path.as_str(),
-                    file_content.to_string(),
-                )),
+                text: NamedSource::new(file_path.as_str(), file_content.to_string()),
             });
         }
         let package_name = PackageNode::Workspace(PackageName::Other(package_name));
@@ -467,10 +461,7 @@ impl Run {
                     ImportType::Value => Some(BoundariesDiagnostic::NotTypeOnlyImport {
                         import: import.to_string(),
                         span,
-                        text: Arc::new(NamedSource::new(
-                            file_path.as_str(),
-                            file_content.to_string(),
-                        )),
+                        text: NamedSource::new(file_path.as_str(), file_content.to_string()),
                     }),
                 };
             }
@@ -478,10 +469,7 @@ impl Run {
             return Some(BoundariesDiagnostic::PackageNotFound {
                 name: package_name.to_string(),
                 span,
-                text: Arc::new(NamedSource::new(
-                    file_path.as_str(),
-                    file_content.to_string(),
-                )),
+                text: NamedSource::new(file_path.as_str(), file_content.to_string()),
             });
         }
 

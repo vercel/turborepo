@@ -25,7 +25,7 @@ pub const TURBO_SITE: &str = match option_env!("TURBO_SITE") {
 pub struct ParseDiagnostic {
     message: String,
     #[source_code]
-    source_code: NamedSource,
+    source_code: NamedSource<String>,
     #[label]
     label: Option<SourceSpan>,
 }
@@ -168,7 +168,7 @@ impl<T> Spanned<T> {
     /// Gets the span and the text if both exist. If either doesn't exist, we
     /// return `None` for the span and an empty string for the text, since
     /// miette doesn't accept an `Option<String>` for `#[source_code]`
-    pub fn span_and_text(&self, default_path: &str) -> (Option<SourceSpan>, NamedSource) {
+    pub fn span_and_text(&self, default_path: &str) -> (Option<SourceSpan>, NamedSource<String>) {
         let path = self.path.as_ref().map_or(default_path, |p| p.as_ref());
         match self.range.clone().zip(self.text.as_ref()) {
             Some((range, text)) => (Some(range.into()), NamedSource::new(path, text.to_string())),
