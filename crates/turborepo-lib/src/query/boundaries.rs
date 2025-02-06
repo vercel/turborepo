@@ -38,9 +38,10 @@ impl From<BoundariesDiagnostic> for Diagnostic {
                 reason: None,
             },
 
-            BoundariesDiagnostic::NotAllowedTag {
+            BoundariesDiagnostic::NoTagInAllowlist {
                 source_package_name: _,
                 help: _,
+                secondary: _,
                 package_name,
                 span,
                 text,
@@ -54,6 +55,7 @@ impl From<BoundariesDiagnostic> for Diagnostic {
             },
             BoundariesDiagnostic::DeniedTag {
                 source_package_name: _,
+                secondary: _,
                 package_name,
                 tag,
                 span,

@@ -15,7 +15,7 @@ use turborepo_errors::{ParseDiagnostic, WithMetadata};
 use turborepo_unescape::UnescapedString;
 
 use crate::{
-    boundaries::{BoundariesConfig, Permissions},
+    boundaries::{Permissions, RootBoundariesConfig, Rule},
     run::task_id::TaskName,
     turbo_json::{Pipeline, RawTaskDefinition, RawTurboJson, Spanned},
 };
@@ -101,6 +101,10 @@ impl WithMetadata for RawTurboJson {
     fn add_text(&mut self, text: Arc<str>) {
         self.span.add_text(text.clone());
         self.extends.add_text(text.clone());
+        self.tags.add_text(text.clone());
+        if let Some(tags) = &mut self.tags {
+            tags.value.add_text(text.clone());
+        }
         self.global_dependencies.add_text(text.clone());
         self.global_env.add_text(text.clone());
         self.global_pass_through_env.add_text(text.clone());
@@ -117,6 +121,10 @@ impl WithMetadata for RawTurboJson {
     fn add_path(&mut self, path: Arc<str>) {
         self.span.add_path(path.clone());
         self.extends.add_path(path.clone());
+        self.tags.add_path(path.clone());
+        if let Some(tags) = &mut self.tags {
+            tags.value.add_path(path.clone());
+        }
         self.global_dependencies.add_path(path.clone());
         self.global_env.add_path(path.clone());
         self.global_pass_through_env.add_path(path.clone());
@@ -146,13 +154,30 @@ impl WithMetadata for Pipeline {
     }
 }
 
-impl WithMetadata for BoundariesConfig {
+impl WithMetadata for RootBoundariesConfig {
     fn add_text(&mut self, text: Arc<str>) {
         self.tags.add_text(text.clone());
         if let Some(tags) = &mut self.tags {
-            tags.value.add_text(text.clone());
+            for rule in tags.as_inner_mut().values_mut() {
+                rule.add_text(text.clone());
+                rule.value.add_text(text.clone());
+            }
         }
+    }
 
+    fn add_path(&mut self, path: Arc<str>) {
+        self.tags.add_path(path.clone());
+        if let Some(tags) = &mut self.tags {
+            for rule in tags.as_inner_mut().values_mut() {
+                rule.add_path(path.clone());
+                rule.value.add_path(path.clone());
+            }
+        }
+    }
+}
+
+impl WithMetadata for Rule {
+    fn add_text(&mut self, text: Arc<str>) {
         self.dependencies.add_text(text.clone());
         if let Some(dependencies) = &mut self.dependencies {
             dependencies.value.add_text(text.clone());
@@ -165,11 +190,6 @@ impl WithMetadata for BoundariesConfig {
     }
 
     fn add_path(&mut self, path: Arc<str>) {
-        self.tags.add_path(path.clone());
-        if let Some(tags) = &mut self.tags {
-            tags.value.add_path(path.clone());
-        }
-
         self.dependencies.add_path(path.clone());
         if let Some(dependencies) = &mut self.dependencies {
             dependencies.value.add_path(path.clone());

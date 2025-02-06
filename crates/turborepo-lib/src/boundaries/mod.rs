@@ -1,16 +1,16 @@
 mod config;
+mod imports;
+mod tags;
 
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     sync::{Arc, LazyLock, Mutex},
 };
 
-pub use config::{BoundariesConfig, Permissions};
+pub use config::{Permissions, RootBoundariesConfig, Rule};
 use git2::Repository;
 use globwalk::Settings;
-use itertools::Itertools;
 use miette::{Diagnostic, NamedSource, Report, SourceSpan};
-use oxc_resolver::{ResolveError, Resolver};
 use regex::Regex;
 use swc_common::{
     comments::SingleThreadedComments, errors::Handler, input::StringInput, FileName, SourceMap,
@@ -20,8 +20,8 @@ use swc_ecma_parser::{lexer::Lexer, Capturing, EsSyntax, Parser, Syntax, TsSynta
 use swc_ecma_visit::VisitWith;
 use thiserror::Error;
 use tracing::log::warn;
-use turbo_trace::{ImportFinder, ImportType, Tracer};
-use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathRelation, RelativeUnixPath};
+use turbo_trace::{ImportFinder, Tracer};
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_errors::Spanned;
 use turborepo_repository::{
     package_graph::{PackageName, PackageNode},
@@ -29,7 +29,25 @@ use turborepo_repository::{
 };
 use turborepo_ui::{color, ColorConfig, BOLD_GREEN, BOLD_RED};
 
-use crate::{run::Run, turbo_json::TurboJson};
+use crate::{boundaries::tags::ProcessedRulesMap, run::Run};
+
+#[derive(Clone, Debug, Error, Diagnostic)]
+pub enum SecondaryDiagnostic {
+    #[error("consider adding one of the following tags listed here")]
+    Allowlist {
+        #[label]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource<String>,
+    },
+    #[error("denylist defined here")]
+    Denylist {
+        #[label]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource<String>,
+    },
+}
 
 #[derive(Clone, Debug, Error, Diagnostic)]
 pub enum BoundariesDiagnostic {
@@ -37,7 +55,7 @@ pub enum BoundariesDiagnostic {
         "Package `{package_name}` found without any tag listed in allowlist for \
          `{source_package_name}`"
     )]
-    NotAllowedTag {
+    NoTagInAllowlist {
         // The package that is declaring the allowlist
         source_package_name: PackageName,
         // The package that is either a dependency or dependent of the source package
@@ -47,7 +65,9 @@ pub enum BoundariesDiagnostic {
         #[help]
         help: Option<String>,
         #[source_code]
-        text: Arc<NamedSource>,
+        text: NamedSource<String>,
+        #[related]
+        secondary: [SecondaryDiagnostic; 1],
     },
     #[error(
         "Package `{package_name}` found with tag listed in denylist for `{source_package_name}`: \
@@ -60,7 +80,9 @@ pub enum BoundariesDiagnostic {
         #[label("tag found here")]
         span: Option<SourceSpan>,
         #[source_code]
-        text: Arc<NamedSource>,
+        text: NamedSource<String>,
+        #[related]
+        secondary: [SecondaryDiagnostic; 1],
     },
     #[error(
         "importing from a type declaration package, but import is not declared as a type-only \
@@ -166,7 +188,8 @@ impl BoundariesResult {
 
 impl Run {
     pub async fn check_boundaries(&self) -> Result<BoundariesResult, Error> {
-        let boundaries_configs = self.get_boundaries_configs();
+        let package_tags = self.get_package_tags();
+        let rules_map = self.get_processed_rules_map();
         let packages = self.pkg_dep_graph().packages();
         let repo = Repository::discover(self.repo_root()).ok().map(Mutex::new);
         let mut diagnostics = vec![];
@@ -196,7 +219,8 @@ impl Run {
                     internal_dependencies,
                     unresolved_external_dependencies,
                     &source_map,
-                    &boundaries_configs,
+                    &package_tags,
+                    &rules_map,
                 )
                 .await?;
 
@@ -213,180 +237,6 @@ impl Run {
         })
     }
 
-    fn get_boundaries_configs(&self) -> HashMap<PackageName, Spanned<BoundariesConfig>> {
-        let mut boundaries_configs = HashMap::new();
-        for (package, _) in self.pkg_dep_graph().packages() {
-            if let Ok(TurboJson {
-                boundaries: Some(boundaries_config),
-                ..
-            }) = self.turbo_json_loader().uncached_load(package)
-            {
-                boundaries_configs.insert(package.clone(), boundaries_config);
-            }
-        }
-
-        boundaries_configs
-    }
-
-    fn is_potential_package_name(import: &str) -> bool {
-        PACKAGE_NAME_REGEX.is_match(import)
-    }
-
-    fn validate_relation(
-        &self,
-        package_name: &PackageName,
-        dependency: &PackageName,
-        allow_list: &Option<HashSet<String>>,
-        deny_list: &Option<HashSet<String>>,
-        boundaries_config: Option<&Spanned<BoundariesConfig>>,
-    ) -> Result<Option<BoundariesDiagnostic>, Error> {
-        // If there is no allow list, then we vacuously have a tag in the allow list
-        let mut has_tag_in_allowlist = allow_list.is_none();
-
-        let dep_tags = boundaries_config
-            .and_then(|b| b.tags.as_ref())
-            .map(|tags| tags.as_inner())
-            .into_iter()
-            .flatten()
-            .collect::<Vec<_>>();
-
-        // Try our best to find a span for the tags. If the tags exist, we use that
-        // span, if they don't exist, we use the boundaries config span.
-        let dep_tags_span = boundaries_config
-            .and_then(|b| b.tags.as_ref())
-            .map(|b| b.to(()))
-            .or_else(|| boundaries_config.map(|b| b.to(())))
-            .unwrap_or_default();
-
-        for tag in dep_tags {
-            if let Some(allow_list) = allow_list {
-                if allow_list.contains(tag.as_inner()) {
-                    has_tag_in_allowlist = true;
-                }
-            }
-
-            if let Some(deny_list) = deny_list {
-                if deny_list.contains(tag.as_inner()) {
-                    let (span, text) = tag.span_and_text("turbo.json");
-                    return Ok(Some(BoundariesDiagnostic::DeniedTag {
-                        source_package_name: package_name.clone(),
-                        package_name: dependency.clone(),
-                        tag: tag.as_inner().to_string(),
-                        span,
-                        text: Arc::new(text),
-                    }));
-                }
-            }
-        }
-
-        if !has_tag_in_allowlist {
-            let (span, text) = dep_tags_span.span_and_text("turbo.json");
-            let help = span.is_none().then(|| {
-                format!(
-                    "`{}` doesn't any boundaries config in its `turbo.json` file",
-                    dependency
-                )
-            });
-
-            return Ok(Some(BoundariesDiagnostic::NotAllowedTag {
-                source_package_name: package_name.clone(),
-                package_name: dependency.clone(),
-                help,
-                span,
-                text: Arc::new(text),
-            }));
-        }
-
-        Ok(None)
-    }
-
-    fn check_package_tags(
-        &self,
-        pkg: PackageNode,
-        package_boundaries_config: BoundariesConfig,
-        boundaries_configs: &HashMap<PackageName, Spanned<BoundariesConfig>>,
-    ) -> Result<Vec<BoundariesDiagnostic>, Error> {
-        let (dependency_allow_list, dependency_deny_list) =
-            if let Some(mut dependency_rules) = package_boundaries_config.dependencies {
-                let allow_rules = dependency_rules.allow.take();
-                let deny_rules = dependency_rules.deny.take();
-                // If list is `None`, we allow all dependencies. If it's `Some`, we allow only
-                // the listed dependencies.
-                let allow_list = allow_rules.map(|allow| {
-                    allow
-                        .into_iter()
-                        .flatten()
-                        .flatten()
-                        .collect::<HashSet<_>>()
-                });
-
-                let deny_list = deny_rules
-                    .map(|deny| deny.into_iter().flatten().flatten().collect::<HashSet<_>>());
-
-                (allow_list, deny_list)
-            } else {
-                (None, None)
-            };
-
-        let (dependent_allow_list, dependent_deny_list) =
-            if let Some(mut dependent_rules) = package_boundaries_config.dependents {
-                let allow_rules = dependent_rules.allow.take();
-                let deny_rules = dependent_rules.deny.take();
-
-                // If list is `None`, we allow all dependentes. If it's `Some`, we allow only
-                // the listed dependentes.
-                let allow_list = allow_rules.map(|allow| {
-                    allow
-                        .into_iter()
-                        .flatten()
-                        .flatten()
-                        .collect::<HashSet<String>>()
-                });
-
-                let deny_list = deny_rules.map(|deny| {
-                    deny.into_iter()
-                        .flatten()
-                        .flatten()
-                        .collect::<HashSet<String>>()
-                });
-
-                (allow_list, deny_list)
-            } else {
-                (None, None)
-            };
-
-        let mut diagnostics = Vec::new();
-        for dependency in self.pkg_dep_graph().dependencies(&pkg) {
-            if matches!(dependency, PackageNode::Root) {
-                continue;
-            }
-
-            diagnostics.extend(self.validate_relation(
-                pkg.as_package_name(),
-                dependency.as_package_name(),
-                &dependency_allow_list,
-                &dependency_deny_list,
-                boundaries_configs.get(dependency.as_package_name()),
-            )?);
-        }
-
-        for dependent in self.pkg_dep_graph().ancestors(&pkg) {
-            if matches!(dependent, PackageNode::Root) {
-                continue;
-            }
-
-            diagnostics.extend(self.validate_relation(
-                pkg.as_package_name(),
-                dependent.as_package_name(),
-                &dependent_allow_list,
-                &dependent_deny_list,
-                boundaries_configs.get(dependent.as_package_name()),
-            )?);
-        }
-
-        Ok(diagnostics)
-    }
-
     /// Either returns a list of errors and number of files checked or a single,
     /// fatal error
     #[allow(clippy::too_many_arguments)]
@@ -399,7 +249,8 @@ impl Run {
         internal_dependencies: HashSet<&PackageNode>,
         unresolved_external_dependencies: Option<&BTreeMap<String, String>>,
         source_map: &SourceMap,
-        boundaries_configs: &HashMap<PackageName, Spanned<BoundariesConfig>>,
+        all_package_tags: &HashMap<PackageName, Spanned<Vec<Spanned<String>>>>,
+        tag_rules: &Option<ProcessedRulesMap>,
     ) -> Result<(usize, Vec<BoundariesDiagnostic>), Error> {
         let (files_checked, mut diagnostics) = self
             .check_package_files(
@@ -411,16 +262,29 @@ impl Run {
                 source_map,
             )
             .await?;
-
-        if let Some(boundaries_config) = boundaries_configs.get(package_name) {
-            diagnostics.extend(self.check_package_tags(
-                PackageNode::Workspace(package_name.clone()),
-                boundaries_config.as_inner().clone(),
-                boundaries_configs,
-            )?);
+        if let Some(current_package_tags) = all_package_tags.get(package_name) {
+            if let Some(tag_rules) = tag_rules {
+                diagnostics.extend(self.check_package_tags(
+                    PackageNode::Workspace(package_name.clone()),
+                    current_package_tags,
+                    all_package_tags,
+                    tag_rules,
+                )?);
+            } else {
+                // NOTE: if we use tags for something other than boundaries, we should remove
+                // this warning
+                warn!(
+                    "No boundaries rules found, but package {} has tags",
+                    package_name
+                );
+            }
         }
 
         Ok((files_checked, diagnostics))
+    }
+
+    fn is_potential_package_name(import: &str) -> bool {
+        PACKAGE_NAME_REGEX.is_match(import)
     }
 
     async fn check_package_files(
@@ -559,180 +423,5 @@ impl Run {
         }
 
         Ok((files_checked, diagnostics))
-    }
-
-    fn check_file_import(
-        &self,
-        file_path: &AbsoluteSystemPath,
-        package_path: &AbsoluteSystemPath,
-        import: &str,
-        source_span: SourceSpan,
-        file_content: &str,
-    ) -> Result<Option<BoundariesDiagnostic>, Error> {
-        let import_path = RelativeUnixPath::new(import)?;
-        let dir_path = file_path
-            .parent()
-            .ok_or_else(|| Error::NoParentDir(file_path.to_owned()))?;
-        let resolved_import_path = dir_path.join_unix_path(import_path).clean()?;
-        // We have to check for this case because `relation_to_path` returns `Parent` if
-        // the paths are equal and there's nothing wrong with importing the
-        // package you're in.
-        if resolved_import_path.as_str() == package_path.as_str() {
-            return Ok(None);
-        }
-        // We use `relation_to_path` and not `contains` because `contains`
-        // panics on invalid paths with too many `..` components
-        if !matches!(
-            package_path.relation_to_path(&resolved_import_path),
-            PathRelation::Parent
-        ) {
-            Ok(Some(BoundariesDiagnostic::ImportLeavesPackage {
-                import: import.to_string(),
-                span: source_span,
-                text: NamedSource::new(file_path.as_str(), file_content.to_string()),
-            }))
-        } else {
-            Ok(None)
-        }
-    }
-
-    /// Go through all the possible places a package could be declared to see if
-    /// it's a valid import. We don't use `oxc_resolver` because there are some
-    /// cases where you can resolve a package that isn't declared properly.
-    fn is_dependency(
-        internal_dependencies: &HashSet<&PackageNode>,
-        package_json: &PackageJson,
-        unresolved_external_dependencies: Option<&BTreeMap<String, String>>,
-        package_name: &PackageNode,
-    ) -> bool {
-        internal_dependencies.contains(&package_name)
-            || unresolved_external_dependencies.is_some_and(|external_dependencies| {
-                external_dependencies.contains_key(package_name.as_package_name().as_str())
-            })
-            || package_json
-                .dependencies
-                .as_ref()
-                .is_some_and(|dependencies| {
-                    dependencies.contains_key(package_name.as_package_name().as_str())
-                })
-            || package_json
-                .dev_dependencies
-                .as_ref()
-                .is_some_and(|dev_dependencies| {
-                    dev_dependencies.contains_key(package_name.as_package_name().as_str())
-                })
-            || package_json
-                .peer_dependencies
-                .as_ref()
-                .is_some_and(|peer_dependencies| {
-                    peer_dependencies.contains_key(package_name.as_package_name().as_str())
-                })
-            || package_json
-                .optional_dependencies
-                .as_ref()
-                .is_some_and(|optional_dependencies| {
-                    optional_dependencies.contains_key(package_name.as_package_name().as_str())
-                })
-    }
-
-    fn get_package_name(import: &str) -> String {
-        if import.starts_with("@") {
-            import.split('/').take(2).join("/")
-        } else {
-            import
-                .split_once("/")
-                .map(|(import, _)| import)
-                .unwrap_or(import)
-                .to_string()
-        }
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn check_package_import(
-        &self,
-        import: &str,
-        import_type: ImportType,
-        span: SourceSpan,
-        file_path: &AbsoluteSystemPath,
-        file_content: &str,
-        package_json: &PackageJson,
-        internal_dependencies: &HashSet<&PackageNode>,
-        unresolved_external_dependencies: Option<&BTreeMap<String, String>>,
-        resolver: &Resolver,
-    ) -> Option<BoundariesDiagnostic> {
-        let package_name = Self::get_package_name(import);
-
-        if package_name.starts_with("@types/") && matches!(import_type, ImportType::Value) {
-            return Some(BoundariesDiagnostic::NotTypeOnlyImport {
-                import: import.to_string(),
-                span,
-                text: NamedSource::new(file_path.as_str(), file_content.to_string()),
-            });
-        }
-        let package_name = PackageNode::Workspace(PackageName::Other(package_name));
-        let folder = file_path.parent().expect("file_path should have a parent");
-        let is_valid_dependency = Self::is_dependency(
-            internal_dependencies,
-            package_json,
-            unresolved_external_dependencies,
-            &package_name,
-        );
-
-        if !is_valid_dependency
-            && !matches!(
-                resolver.resolve(folder, import),
-                Err(ResolveError::Builtin { .. })
-            )
-        {
-            // Check the @types package
-            let types_package_name = PackageNode::Workspace(PackageName::Other(format!(
-                "@types/{}",
-                package_name.as_package_name().as_str()
-            )));
-            let is_types_dependency = Self::is_dependency(
-                internal_dependencies,
-                package_json,
-                unresolved_external_dependencies,
-                &types_package_name,
-            );
-
-            if is_types_dependency {
-                return match import_type {
-                    ImportType::Type => None,
-                    ImportType::Value => Some(BoundariesDiagnostic::NotTypeOnlyImport {
-                        import: import.to_string(),
-                        span,
-                        text: NamedSource::new(file_path.as_str(), file_content.to_string()),
-                    }),
-                };
-            }
-
-            return Some(BoundariesDiagnostic::PackageNotFound {
-                name: package_name.to_string(),
-                span,
-                text: NamedSource::new(file_path.as_str(), file_content.to_string()),
-            });
-        }
-
-        None
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use test_case::test_case;
-
-    use super::*;
-
-    #[test_case("", ""; "empty")]
-    #[test_case("ship", "ship"; "basic")]
-    #[test_case("@types/ship", "@types/ship"; "types")]
-    #[test_case("@scope/ship", "@scope/ship"; "scoped")]
-    #[test_case("@scope/foo/bar", "@scope/foo"; "scoped with path")]
-    #[test_case("foo/bar", "foo"; "regular with path")]
-    #[test_case("foo/", "foo"; "trailing slash")]
-    #[test_case("foo/bar/baz", "foo"; "multiple slashes")]
-    fn test_get_package_name(import: &str, expected: &str) {
-        assert_eq!(Run::get_package_name(import), expected);
     }
 }

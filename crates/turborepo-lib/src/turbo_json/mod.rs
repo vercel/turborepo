@@ -31,8 +31,7 @@ pub mod parser;
 
 pub use loader::TurboJsonLoader;
 
-use crate::config::UnnecessaryPackageTaskSyntaxError;
-use crate::boundaries::BoundariesConfig;
+use crate::{boundaries::RootBoundariesConfig, config::UnnecessaryPackageTaskSyntaxError};
 
 #[derive(Serialize, Deserialize, Debug, Default, PartialEq, Clone, Deserializable)]
 #[serde(rename_all = "camelCase")]
@@ -54,7 +53,8 @@ pub struct SpacesJson {
 pub struct TurboJson {
     text: Option<Arc<str>>,
     path: Option<Arc<str>>,
-    pub(crate) boundaries: Option<Spanned<BoundariesConfig>>,
+    pub(crate) tags: Option<Spanned<Vec<Spanned<String>>>>,
+    pub(crate) boundaries: Option<Spanned<RootBoundariesConfig>>,
     pub(crate) extends: Spanned<Vec<String>>,
     pub(crate) global_deps: Vec<String>,
     pub(crate) global_env: Vec<String>,
@@ -149,7 +149,10 @@ pub struct RawTurboJson {
     pub cache_dir: Option<Spanned<UnescapedString>>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub boundaries: Option<Spanned<BoundariesConfig>>,
+    pub tags: Option<Spanned<Vec<Spanned<String>>>>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub boundaries: Option<Spanned<RootBoundariesConfig>>,
 
     #[deserializable(rename = "//")]
     #[serde(skip)]
@@ -570,6 +573,7 @@ impl TryFrom<RawTurboJson> for TurboJson {
         Ok(TurboJson {
             text: raw_turbo.span.text,
             path: raw_turbo.span.path,
+            tags: raw_turbo.tags,
             global_env: {
                 let mut global_env: Vec<_> = global_env.into_iter().collect();
                 global_env.sort();
@@ -770,7 +774,7 @@ mod tests {
 
     use super::{RawTurboJson, Spanned, TurboJson, UIMode};
     use crate::{
-        boundaries::BoundariesConfig,
+        boundaries::RootBoundariesConfig,
         cli::OutputLogsMode,
         run::task_id::TaskName,
         task_graph::{TaskDefinition, TaskOutputs},
@@ -795,7 +799,7 @@ mod tests {
             JsonParserOptions::default().with_allow_comments(),
             "turbo.json",
         );
-        let raw_task_definition: BoundariesConfig =
+        let raw_task_definition: RootBoundariesConfig =
             deserialized_result.into_deserialized().unwrap();
         insta::assert_json_snapshot!(name.replace(' ', "_"), raw_task_definition);
     }

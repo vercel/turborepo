@@ -87,6 +87,15 @@ impl<T> IntoIterator for Spanned<T> {
     }
 }
 
+impl<'a, T> IntoIterator for &'a Spanned<T> {
+    type Item = &'a T;
+    type IntoIter = Once<&'a T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        iter::once(&self.value)
+    }
+}
+
 impl<T: Deserializable> Deserializable for Spanned<T> {
     fn deserialize(
         value: &impl DeserializableValue,
@@ -183,7 +192,7 @@ impl<T> Spanned<T> {
         let path = self.path.as_ref().map_or(default_path, |p| p.as_ref());
         match self.range.clone().zip(self.text.as_ref()) {
             Some((range, text)) => (Some(range.into()), NamedSource::new(path, text.to_string())),
-            None => (None, NamedSource::new(path, String::new())),
+            None => (None, NamedSource::new(path, Default::default())),
         }
     }
 
