@@ -71,7 +71,8 @@ pub(crate) struct SharedTaskSummary<T> {
     pub cli_arguments: Vec<String>,
     pub outputs: Option<Vec<String>>,
     pub excluded_outputs: Option<Vec<String>>,
-    pub log_file: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub log_file: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub directory: Option<String>,
     pub dependencies: Vec<T>,

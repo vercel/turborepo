@@ -629,7 +629,7 @@ impl<'a> RunSummary<'a> {
                 ui,
                 GREY,
                 "  Log File\t=\t{}",
-                task.shared.log_file
+                task.shared.log_file.as_deref().unwrap_or_default()
             )?;
 
             let dependencies = if !self.monorepo {
