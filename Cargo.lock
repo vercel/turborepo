@@ -137,6 +137,9 @@ name = "arrayvec"
 version = "0.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "96d30a06541fbafbc7f82ed10c06164cfbd2c401138f6addd8404629c4b16711"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "ascii_utils"
@@ -2848,6 +2851,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "itertools"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "413ee7dfc52ee1a4949ceeb7dbc8a33f2d6c088194d9f922fb8318faf1f01186"
+dependencies = [
+ "either",
+]
+
+[[package]]
 name = "itoa"
 version = "1.0.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3309,6 +3321,18 @@ dependencies = [
  "libc",
  "wasi",
  "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "mitsein"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ab3270bb79f678415dd22d6c619ba7654cb400cb56f8b5dc65c78253d3fb7fa7"
+dependencies = [
+ "arrayvec",
+ "itertools 0.13.0",
+ "serde",
+ "serde_derive",
 ]
 
 [[package]]
@@ -5517,12 +5541,12 @@ dependencies = [
 
 [[package]]
 name = "tardar"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "900c942f83b6a8b9998cc8f74ad3ffa24b7ff3c4279ea1c1c52d95dced9f3516"
+checksum = "23441d4791e5f309275356b69aacd760208ea2ce07d85930768fab187bb93d15"
 dependencies = [
- "miette 5.10.0",
- "vec1",
+ "miette 7.5.0",
+ "mitsein",
 ]
 
 [[package]]
@@ -7104,12 +7128,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
 
 [[package]]
-name = "vec1"
-version = "1.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2bda7c41ca331fe9a1c278a9e7ee055f4be7f5eb1c2b72f079b4ff8b5fce9d5c"
-
-[[package]]
 name = "version_check"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7264,7 +7282,7 @@ dependencies = [
  "const_format",
  "dunce",
  "itertools 0.11.0",
- "miette 5.10.0",
+ "miette 7.5.0",
  "nom",
  "path-slash",
  "pori",
