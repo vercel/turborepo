@@ -39,13 +39,20 @@ describe("generateNativePackage", () => {
     );
 
     // Assert copyFile was called correctly
-    assert.equal(mockCopyFile.mock.calls.length, 1);
+    assert.equal(mockCopyFile.mock.calls.length, 2);
     assert.ok(
       mockCopyFile.mock.calls[0].arguments[0].endsWith("template/README.md")
     );
     assert.equal(
       mockCopyFile.mock.calls[0].arguments[1],
       path.join(outputDir, "README.md")
+    );
+    assert.ok(
+      mockCopyFile.mock.calls[1].arguments[0].endsWith("template/LICENSE")
+    );
+    assert.equal(
+      mockCopyFile.mock.calls[1].arguments[1],
+      path.join(outputDir, "LICENSE")
     );
 
     // Assert writeFile was called correctly
@@ -91,7 +98,7 @@ describe("generateNativePackage", () => {
       outputDir,
     });
 
-    assert.equal(mockCopyFile.mock.calls.length, 2);
+    assert.equal(mockCopyFile.mock.calls.length, 3);
     assert.ok(
       mockCopyFile.mock.calls[0].arguments[0].endsWith("template/bin/turbo")
     );
