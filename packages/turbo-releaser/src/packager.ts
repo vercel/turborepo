@@ -20,7 +20,7 @@ export async function packAndPublish({
   for (const platform of platforms) {
     console.log(`Processing platform: ${platform.os}-${platform.arch}`);
     // eslint-disable-next-line no-await-in-loop -- We trade of slightly faster releases with more legible logging
-    const artifact = await operations.packPlatform(platform, version);
+    const artifact = await operations.packPlatform({ platform, version });
     artifacts.push(artifact);
   }
 

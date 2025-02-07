@@ -106,6 +106,11 @@ describe("generateNativePackage", () => {
       mockCopyFile.mock.calls[0].arguments[1],
       path.join(outputDir, "bin", "turbo")
     );
+    const actualPackageJsonContents = mockWriteFile.mock.calls[0].arguments[1];
+    const actualPackageJson = JSON.parse(actualPackageJsonContents) as {
+      os: Array<string>;
+    };
+    assert.equal(actualPackageJson.os[0], "win32");
   });
 
   it("should propagate errors", async (t) => {

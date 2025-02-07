@@ -1,10 +1,22 @@
 import { rm, mkdir, copyFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { SupportedArch, HumanArch, Platform } from "./types";
+import type {
+  SupportedArch,
+  HumanArch,
+  Platform,
+  SupportedOS,
+  NpmOs,
+} from "./types";
 
 export const archToHuman: Record<SupportedArch, HumanArch> = {
   x64: "64",
   arm64: "arm64",
+};
+
+export const nodeOSLookup: Record<SupportedOS, NpmOs> = {
+  darwin: "darwin",
+  linux: "linux",
+  windows: "win32",
 };
 
 const templateDir = path.join(__dirname, "..", "template");
@@ -49,7 +61,7 @@ async function generateNativePackage({
     bugs: "https://github.com/vercel/turborepo/issues",
     homepage: "https://turbo.build/repo",
     license: "MIT",
-    os: [os],
+    os: [nodeOSLookup[os]],
     cpu: [arch],
     preferUnplugged: true,
   };
