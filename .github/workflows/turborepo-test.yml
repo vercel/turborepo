@@ -334,6 +334,7 @@ jobs:
     runs-on: ubuntu-latest
     if: always()
     needs:
+      - find-changes
       - integration
       - rust_lint
       - rust_check
