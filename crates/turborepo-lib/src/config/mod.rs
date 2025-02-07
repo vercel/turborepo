@@ -39,10 +39,25 @@ pub struct InvalidEnvPrefixError {
     pub value: String,
     pub key: String,
     #[source_code]
-    pub text: NamedSource,
+    pub text: NamedSource<String>,
     #[label("variable with invalid prefix declared here")]
     pub span: Option<SourceSpan>,
     pub env_pipeline_delimiter: &'static str,
+}
+
+#[derive(Debug, Error, Diagnostic)]
+#[diagnostic(
+    code(unnecessary_package_task_syntax),
+    url("{}/messages/{}", TURBO_SITE, self.code().unwrap().to_string().to_case(Case::Kebab))
+)]
+#[error("\"{actual}\". Use \"{wanted}\" instead.")]
+pub struct UnnecessaryPackageTaskSyntaxError {
+    pub actual: String,
+    pub wanted: String,
+    #[label("unnecessary package syntax found here")]
+    pub span: Option<SourceSpan>,
+    #[source_code]
+    pub text: NamedSource<String>,
 }
 
 #[allow(clippy::enum_variant_names)]
@@ -91,14 +106,14 @@ pub enum Error {
     PackageTaskInSinglePackageMode {
         task_id: String,
         #[source_code]
-        text: NamedSource,
+        text: NamedSource<String>,
         #[label("package task found here")]
         span: Option<SourceSpan>,
     },
     #[error("Interruptible tasks must be persistent.")]
     InterruptibleButNotPersistent {
         #[source_code]
-        text: NamedSource,
+        text: NamedSource<String>,
         #[label("`interruptible` set here")]
         span: Option<SourceSpan>,
     },
@@ -107,25 +122,15 @@ pub enum Error {
     InvalidEnvPrefix(Box<InvalidEnvPrefixError>),
     #[error(transparent)]
     PathError(#[from] turbopath::PathError),
-    #[diagnostic(
-        code(unnecessary_package_task_syntax),
-        url("{}/messages/{}", TURBO_SITE, self.code().unwrap().to_string().to_case(Case::Kebab))
-    )]
-    #[error("\"{actual}\". Use \"{wanted}\" instead.")]
-    UnnecessaryPackageTaskSyntax {
-        actual: String,
-        wanted: String,
-        #[label("unnecessary package syntax found here")]
-        span: Option<SourceSpan>,
-        #[source_code]
-        text: NamedSource,
-    },
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    UnnecessaryPackageTaskSyntax(Box<UnnecessaryPackageTaskSyntaxError>),
     #[error("You can only extend from the root of the workspace.")]
     ExtendFromNonRoot {
         #[label("non-root workspace found here")]
         span: Option<SourceSpan>,
         #[source_code]
-        text: NamedSource,
+        text: NamedSource<String>,
     },
     #[error("`{field}` cannot contain an environment variable.")]
     InvalidDependsOnValue {
@@ -133,7 +138,7 @@ pub enum Error {
         #[label("environment variable found here")]
         span: Option<SourceSpan>,
         #[source_code]
-        text: NamedSource,
+        text: NamedSource<String>,
     },
     #[error("`{field}` cannot contain an absolute path.")]
     AbsolutePathInConfig {
@@ -141,21 +146,21 @@ pub enum Error {
         #[label("absolute path found here")]
         span: Option<SourceSpan>,
         #[source_code]
-        text: NamedSource,
+        text: NamedSource<String>,
     },
     #[error("No \"extends\" key found.")]
     NoExtends {
         #[label("add extends key here")]
         span: Option<SourceSpan>,
         #[source_code]
-        text: NamedSource,
+        text: NamedSource<String>,
     },
     #[error("Tasks cannot be marked as interactive and cacheable.")]
     InteractiveNoCacheable {
         #[label("marked interactive here")]
         span: Option<SourceSpan>,
         #[source_code]
-        text: NamedSource,
+        text: NamedSource<String>,
     },
     #[error("Found `pipeline` field instead of `tasks`.")]
     #[diagnostic(help("Changed in 2.0: `pipeline` has been renamed to `tasks`."))]
@@ -163,7 +168,7 @@ pub enum Error {
         #[label("Rename `pipeline` field to `tasks`")]
         span: Option<SourceSpan>,
         #[source_code]
-        text: NamedSource,
+        text: NamedSource<String>,
     },
     #[error("Failed to create APIClient: {0}")]
     ApiClient(#[source] turborepo_api_client::Error),
@@ -190,7 +195,7 @@ pub enum Error {
         #[label("Make `cacheDir` value a relative unix path.")]
         span: Option<SourceSpan>,
         #[source_code]
-        text: NamedSource,
+        text: NamedSource<String>,
     },
     #[error("Cannot load turbo.json for {0} in single package mode.")]
     InvalidTurboJsonLoad(PackageName),

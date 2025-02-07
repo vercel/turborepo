@@ -262,7 +262,7 @@ impl Tracer {
                     errors.push(TraceError::Resolve {
                         import: import.to_string(),
                         file_path: file_path.to_string(),
-                        span: SourceSpan::new(start.into(), (end - start).into()),
+                        span: SourceSpan::new(start.into(), end - start),
                         text: file_content.clone(),
                         reason: err.to_string(),
                     });

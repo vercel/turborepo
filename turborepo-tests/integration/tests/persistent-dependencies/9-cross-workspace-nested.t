@@ -14,8 +14,9 @@
   $ ${TURBO} run build
     x Invalid task configuration
   
-  Error:   x "app-z#dev" is a persistent task, "app-c#build" cannot depend on it
-      ,-[turbo.json:12:1]
+  Error: 
+    x "app-z#dev" is a persistent task, "app-c#build" cannot depend on it
+      ,-[turbo.json:13:21]
    12 |     "app-c#build": {
    13 |       "dependsOn": ["app-z#dev"]
       :                     ^^^^^|^^^^^

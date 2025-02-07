@@ -21,8 +21,9 @@
   $ ${TURBO} run build
     x Invalid task configuration
   
-  Error:   x "pkg-z#dev" is a persistent task, "pkg-b#build" cannot depend on it
-     ,-[turbo.json:7:1]
+  Error: 
+    x "pkg-z#dev" is a persistent task, "pkg-b#build" cannot depend on it
+     ,-[turbo.json:8:21]
    7 |     "pkg-b#build": {
    8 |       "dependsOn": ["pkg-z#dev"]
      :                     ^^^^^|^^^^^

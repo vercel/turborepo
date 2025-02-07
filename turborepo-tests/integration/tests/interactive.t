@@ -4,7 +4,7 @@ Setup
 Verify we error on interactive task that hasn't been marked as cache: false
   $ ${TURBO} build
     x Tasks cannot be marked as interactive and cacheable.
-     ,-[turbo.json:6:1]
+     ,-[turbo.json:7:22]
    6 |     "build": {
    7 |       "interactive": true
      :                      ^^|^

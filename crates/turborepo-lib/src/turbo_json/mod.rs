@@ -31,6 +31,8 @@ pub mod parser;
 
 pub use loader::TurboJsonLoader;
 
+use crate::config::UnnecessaryPackageTaskSyntaxError;
+
 #[derive(Serialize, Deserialize, Debug, Default, PartialEq, Clone, Deserializable)]
 #[serde(rename_all = "camelCase")]
 pub struct SpacesJson {
@@ -684,12 +686,12 @@ pub fn validate_no_package_task_syntax(turbo_json: &TurboJson) -> Vec<Error> {
         .filter(|(task_name, _)| task_name.is_package_task())
         .map(|(task_name, entry)| {
             let (span, text) = entry.span_and_text("turbo.json");
-            Error::UnnecessaryPackageTaskSyntax {
+            Error::UnnecessaryPackageTaskSyntax(Box::new(UnnecessaryPackageTaskSyntaxError {
                 actual: task_name.to_string(),
                 wanted: task_name.task().to_string(),
                 span,
                 text,
-            }
+            }))
         })
         .collect()
 }
@@ -735,15 +737,11 @@ fn gather_env_vars(
             let (span, text) = value.span_and_text("turbo.json");
             // Hard error to help people specify this correctly during migration.
             // TODO: Remove this error after we have run summary.
-            let path = value
-                .path
-                .as_ref()
-                .map_or_else(|| "turbo.json".to_string(), |p| p.to_string());
             return Err(Error::InvalidEnvPrefix(Box::new(InvalidEnvPrefixError {
                 key: key.to_string(),
                 value: value.into_inner(),
                 span,
-                text: NamedSource::new(path, text),
+                text,
                 env_pipeline_delimiter: ENV_PIPELINE_DELIMITER,
             })));
         }

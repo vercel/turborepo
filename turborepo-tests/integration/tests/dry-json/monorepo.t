@@ -181,6 +181,7 @@ Tasks that don't exist throw an error
   $ ${TURBO} run doesnotexist --dry=json
     x Missing tasks in project
   
-  Error:   x Could not find task `doesnotexist` in project
+  Error: 
+    x Could not find task `doesnotexist` in project
   
   [1]

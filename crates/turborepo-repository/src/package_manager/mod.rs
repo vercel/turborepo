@@ -161,7 +161,7 @@ pub enum Error {
         #[label("version found here")]
         span: Option<SourceSpan>,
         #[source_code]
-        text: NamedSource,
+        text: NamedSource<String>,
     },
     #[error("{0}: {1}")]
     // this will be something like "cannot find binary: <thing we tried to find>"
@@ -180,7 +180,7 @@ pub enum Error {
         #[label("Invalid `packageManager` field")]
         span: Option<SourceSpan>,
         #[source_code]
-        text: NamedSource,
+        text: NamedSource<String>,
     },
     #[error(transparent)]
     WorkspaceGlob(#[from] crate::workspaces::Error),

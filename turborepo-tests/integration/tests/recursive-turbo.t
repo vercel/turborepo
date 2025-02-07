@@ -12,7 +12,7 @@ sed replaces the square brackets with parentheses so prysk can parse the file pa
     | #something), creating a loop of `turbo` invocations. You likely have
     | misconfigured your scripts and tasks or your package manager's Workspace
     | structure.
-     ,-\(.*package.json:3:1\) (re)
+     ,-\(.*package.json:4:18\) (re)
    3 |   "scripts": {
    4 |     "something": "turbo run build"
      :                  ^^^^^^^^|^^^^^^^^
