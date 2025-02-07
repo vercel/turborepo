@@ -295,14 +295,14 @@ impl<'a> TaskHasher<'a> {
                 debug!(
                     "framework: {}, env_prefix: {:?}",
                     framework.slug(),
-                    framework.env(&self.env_at_execution_start)
+                    framework.env(self.env_at_execution_start)
                 );
                 telemetry.track_framework(framework.slug());
             });
         let framework_slug = framework.map(|f| f.slug().to_string());
 
         let env_vars = if let Some(framework) = framework {
-            let mut computed_wildcards = framework.env(&self.env_at_execution_start);
+            let mut computed_wildcards = framework.env(self.env_at_execution_start);
 
             if let Some(exclude_prefix) = self
                 .env_at_execution_start
