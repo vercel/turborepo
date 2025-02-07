@@ -214,7 +214,7 @@ jobs:
           enable-corepack: false
 
       - name: Install Global Turbo
-        uses: ./.github/actions/
+        uses: ./.github/actions/install-global-turbo
         with:
           turbo-version: "${{ github.event.inputs.ci-tag-override }}"
 
