@@ -3,7 +3,7 @@ mod imports;
 mod tags;
 
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{HashMap, HashSet},
     sync::{Arc, LazyLock, Mutex},
 };
 
@@ -21,12 +21,9 @@ use swc_ecma_visit::VisitWith;
 use thiserror::Error;
 use tracing::log::warn;
 use turbo_trace::{ImportFinder, Tracer};
-use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
+use turbopath::AbsoluteSystemPathBuf;
 use turborepo_errors::Spanned;
-use turborepo_repository::{
-    package_graph::{PackageName, PackageNode},
-    package_json::PackageJson,
-};
+use turborepo_repository::package_graph::{PackageInfo, PackageName, PackageNode};
 use turborepo_ui::{color, ColorConfig, BOLD_GREEN, BOLD_RED};
 
 use crate::{boundaries::tags::ProcessedRulesMap, run::Run};
@@ -202,22 +199,11 @@ impl Run {
                 continue;
             }
 
-            let package_root = self.repo_root().resolve(package_info.package_path());
-            let internal_dependencies = self
-                .pkg_dep_graph()
-                .immediate_dependencies(&PackageNode::Workspace(package_name.to_owned()))
-                .unwrap_or_default();
-            let unresolved_external_dependencies =
-                package_info.unresolved_external_dependencies.as_ref();
-
             let (files_checked, package_diagnostics) = self
                 .check_package(
                     &repo,
-                    &package_root,
                     package_name,
-                    &package_info.package_json,
-                    internal_dependencies,
-                    unresolved_external_dependencies,
+                    package_info,
                     &source_map,
                     &package_tags,
                     &rules_map,
@@ -239,29 +225,19 @@ impl Run {
 
     /// Either returns a list of errors and number of files checked or a single,
     /// fatal error
-    #[allow(clippy::too_many_arguments)]
     async fn check_package(
         &self,
         repo: &Option<Mutex<Repository>>,
-        package_root: &AbsoluteSystemPath,
         package_name: &PackageName,
-        package_json: &PackageJson,
-        internal_dependencies: HashSet<&PackageNode>,
-        unresolved_external_dependencies: Option<&BTreeMap<String, String>>,
+        package_info: &PackageInfo,
         source_map: &SourceMap,
         all_package_tags: &HashMap<PackageName, Spanned<Vec<Spanned<String>>>>,
         tag_rules: &Option<ProcessedRulesMap>,
     ) -> Result<(usize, Vec<BoundariesDiagnostic>), Error> {
         let (files_checked, mut diagnostics) = self
-            .check_package_files(
-                repo,
-                package_root,
-                package_json,
-                internal_dependencies,
-                unresolved_external_dependencies,
-                source_map,
-            )
+            .check_package_files(repo, package_name, package_info, source_map)
             .await?;
+
         if let Some(current_package_tags) = all_package_tags.get(package_name) {
             if let Some(tag_rules) = tag_rules {
                 diagnostics.extend(self.check_package_tags(
@@ -290,14 +266,20 @@ impl Run {
     async fn check_package_files(
         &self,
         repo: &Option<Mutex<Repository>>,
-        package_root: &AbsoluteSystemPath,
-        package_json: &PackageJson,
-        internal_dependencies: HashSet<&PackageNode>,
-        unresolved_external_dependencies: Option<&BTreeMap<String, String>>,
+        package_name: &PackageName,
+        package_info: &PackageInfo,
         source_map: &SourceMap,
     ) -> Result<(usize, Vec<BoundariesDiagnostic>), Error> {
+        let package_root = self.repo_root().resolve(package_info.package_path());
+        let internal_dependencies = self
+            .pkg_dep_graph()
+            .immediate_dependencies(&PackageNode::Workspace(package_name.to_owned()))
+            .unwrap_or_default();
+        let unresolved_external_dependencies =
+            package_info.unresolved_external_dependencies.as_ref();
+
         let files = globwalk::globwalk_with_settings(
-            package_root,
+            &package_root,
             &[
                 "**/*.js".parse().unwrap(),
                 "**/*.jsx".parse().unwrap(),
@@ -389,7 +371,7 @@ impl Run {
 
                 // We have a file import
                 let check_result = if import.starts_with(".") {
-                    self.check_file_import(&file_path, package_root, import, span, &file_content)?
+                    self.check_file_import(&file_path, &package_root, import, span, &file_content)?
                 } else if Self::is_potential_package_name(import) {
                     self.check_package_import(
                         import,
@@ -397,7 +379,7 @@ impl Run {
                         span,
                         &file_path,
                         &file_content,
-                        package_json,
+                        &package_info.package_json,
                         &internal_dependencies,
                         unresolved_external_dependencies,
                         &resolver,

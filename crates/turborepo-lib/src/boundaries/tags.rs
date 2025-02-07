@@ -69,7 +69,7 @@ impl Run {
             .and_then(|boundaries| boundaries.tags.as_ref())
             .map(|tags| {
                 tags.as_inner()
-                    .into_iter()
+                    .iter()
                     .map(|(k, v)| (k.clone(), v.as_inner().clone().into()))
                     .collect()
             })
