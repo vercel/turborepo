@@ -519,6 +519,8 @@ impl Engine<Built> {
 
         validation_errors.extend(self.validate_interactive(ui_mode));
 
+        validation_errors.sort();
+
         match validation_errors.is_empty() {
             true => Ok(()),
             false => Err(validation_errors),
@@ -547,7 +549,7 @@ impl Engine<Built> {
     }
 }
 
-#[derive(Debug, Error, Diagnostic)]
+#[derive(Debug, Error, Diagnostic, PartialEq, PartialOrd, Eq, Ord)]
 pub enum ValidateError {
     #[error("Cannot find task definition for {task_id} in package {package_name}")]
     MissingTask {

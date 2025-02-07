@@ -13,7 +13,7 @@ Run build with package task in non-root turbo.json
   Error: unnecessary_package_task_syntax (https://turbo.build/messages/unnecessary-package-task-syntax)
   
     x "my-app#build". Use "build" instead.
-      ,-(apps/my-app/turbo.json:8:21)
+      ,-\(apps(\/|\\)my-app(\/|\\)turbo.json:8:21\) (re)
     7 |         // this comment verifies that turbo can read .json files with comments
     8 | ,->     "my-app#build": {
     9 | |         "outputs": ("banana.txt", "apple.json"),
