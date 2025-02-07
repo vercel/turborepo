@@ -286,7 +286,7 @@ impl<'a> TaskHasher<'a> {
             .hashes
             .get(task_id)
             .ok_or_else(|| Error::MissingPackageFileHash(task_id.to_string()))?;
-        // See if we infer a framework
+        // See if we can infer a framework
         let framework = do_framework_inference
             .then(|| infer_framework(workspace, is_monorepo))
             .flatten()
@@ -295,14 +295,14 @@ impl<'a> TaskHasher<'a> {
                 debug!(
                     "framework: {}, env_prefix: {:?}",
                     framework.slug(),
-                    framework.env_wildcards()
+                    framework.env(self.env_at_execution_start)
                 );
                 telemetry.track_framework(framework.slug());
             });
         let framework_slug = framework.map(|f| f.slug().to_string());
 
         let env_vars = if let Some(framework) = framework {
-            let mut computed_wildcards = framework.env_wildcards().to_vec();
+            let mut computed_wildcards = framework.env(self.env_at_execution_start);
 
             if let Some(exclude_prefix) = self
                 .env_at_execution_start
