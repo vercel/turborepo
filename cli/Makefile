@@ -54,7 +54,8 @@ publish-turbo: build
 	npm config set --location=project "//registry.npmjs.org/:_authToken" $(NPM_TOKEN)
 
 	# Publishes the native npm modules.
-	turbo release-native -- $(SKIP_PUBLISH)
+	# TODO: do this without goreleaser.
+	goreleaser release --rm-dist -f combined-shim.yml $(SKIP_PUBLISH)
 
 	# Split packing from the publish step so that npm locates the correct .npmrc file.
 	cd $(CLI_DIR)/../packages/turbo && pnpm pack --pack-destination=$(CLI_DIR)/../
