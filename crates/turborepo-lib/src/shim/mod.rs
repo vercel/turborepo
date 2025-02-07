@@ -288,8 +288,17 @@ pub fn run() -> Result<i32, Error> {
         let _ = miette::set_hook(Box::new(|_| {
             Box::new(
                 miette::MietteHandlerOpts::new()
+                    .show_related_errors_as_nested()
                     .color(false)
                     .unicode(false)
+                    .build(),
+            )
+        }));
+    } else {
+        let _ = miette::set_hook(Box::new(|_| {
+            Box::new(
+                miette::MietteHandlerOpts::new()
+                    .show_related_errors_as_nested()
                     .build(),
             )
         }));

@@ -1,6 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet},
-};
+use std::collections::{HashMap, HashSet};
 
 use turborepo_errors::Spanned;
 use turborepo_repository::package_graph::{PackageName, PackageNode};
