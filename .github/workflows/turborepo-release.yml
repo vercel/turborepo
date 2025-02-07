@@ -47,6 +47,11 @@ on:
         description: "Override default npm dist-tag for the release. Should only be used for backporting"
         required: false
         type: string
+      ci-tag-override:
+        description: "Override default npm dist-tag to use for running tests. Should only be used when the most recent release was faulty"
+        required: false
+        type: string
+        default: ""
 
 jobs:
   stage:
@@ -107,6 +112,8 @@ jobs:
           node-version: "20"
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
+        with:
+          turbo-version: "${{ github.event.inputs.ci-tag-override }}"
       - name: Run JS Package Tests
         run: turbo run check-types test --filter="./packages/*" --color
 
@@ -207,7 +214,9 @@ jobs:
           enable-corepack: false
 
       - name: Install Global Turbo
-        uses: ./.github/actions/install-global-turbo
+        uses: ./.github/actions/
+        with:
+          turbo-version: "${{ github.event.inputs.ci-tag-override }}"
 
       - name: Configure git
         run: |
