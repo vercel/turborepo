@@ -781,7 +781,7 @@ mod tests {
         turbo_json::RawTaskDefinition,
     };
 
-    #[test_case("{}", "empty")]
+    #[test_case("{}", "empty boundaries")]
     #[test_case(r#"{"tags": {} }"#, "empty tags")]
     #[test_case(
         r#"{"tags": { "my-tag": { "dependencies": { "allow": ["my-package"] } } } }"#,
@@ -828,7 +828,7 @@ mod tests {
         "{}",
         RawTaskDefinition::default(),
         TaskDefinition::default()
-    ; "empty")]
+    ; "empty task definition")]
     #[test_case(
         r#"{ "persistent": false }"#,
         RawTaskDefinition {
@@ -1045,7 +1045,7 @@ mod tests {
         assert_eq!(actual, expected);
     }
 
-    #[test_case(r#"{ "tags": [] }"#, "empty")]
+    #[test_case(r#"{ "tags": [] }"#, "empty tags in package")]
     #[test_case(r#"{ "tags": ["my-tag"] }"#, "one tag")]
     #[test_case(r#"{ "tags": ["my-tag", "my-other-tag"] }"#, "two tags")]
     fn test_tags(json: &str, name: &str) {
