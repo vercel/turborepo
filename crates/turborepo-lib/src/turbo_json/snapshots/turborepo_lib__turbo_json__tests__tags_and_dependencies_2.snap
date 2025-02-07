@@ -3,16 +3,17 @@ source: crates/turborepo-lib/src/turbo_json/mod.rs
 expression: raw_task_definition
 ---
 {
-  "tags": [
-    "my-tag"
-  ],
-  "dependencies": {
-    "allow": [
-      "my-package"
-    ],
-    "deny": [
-      "my-other-package"
-    ]
-  },
-  "dependents": null
+  "tags": {
+    "my-tag": {
+      "dependencies": {
+        "allow": [
+          "my-package"
+        ],
+        "deny": [
+          "my-other-package"
+        ]
+      },
+      "dependents": null
+    }
+  }
 }

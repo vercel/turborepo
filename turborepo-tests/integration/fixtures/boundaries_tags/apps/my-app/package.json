@@ -1,11 +1,11 @@
 {
-  "name": "my-app",
+  "name": "@vercel/my-app",
   "scripts": {
     "build": "echo building",
     "maybefails": "exit 4"
   },
   "dependencies": {
-    "@vercel/empty-allowlist": "*",
-    "@vercel/no-allowlist": "*"
+    "@vercel/allowed-tag": "*",
+    "@vercel/allowed-and-denied-tag": "*"
   }
 }

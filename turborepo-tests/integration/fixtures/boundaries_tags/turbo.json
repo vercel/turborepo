@@ -1,1 +1,26 @@
-{}
+{
+  "boundaries": {
+    "tags": {
+      "web": {
+        "dependencies": {
+          "allow": [
+            "types"
+          ],
+          "deny": [
+            "unsafe"
+          ]
+        },
+        "dependents": {
+          "allow": []
+        }
+      },
+      "types": {
+        "dependents": {
+          "allow": [
+            "web"
+          ]
+        }
+      }
+    }
+  }
+}

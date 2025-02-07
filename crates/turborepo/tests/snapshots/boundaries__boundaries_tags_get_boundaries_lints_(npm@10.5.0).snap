@@ -7,16 +7,20 @@ expression: query_output
     "boundaries": {
       "items": [
         {
-          "message": "Package `@vercel/no-allowlist` found with tag listed in denylist for `my-app`: `unsafe`",
-          "import": "@vercel/no-allowlist"
+          "message": "Package `@vercel/allowed-and-denied-tag` found with tag listed in denylist for `@vercel/my-app`: `unsafe`",
+          "import": "@vercel/allowed-and-denied-tag"
         },
         {
-          "message": "Package `@vercel/no-allowlist` found without any tag listed in allowlist for `@vercel/empty-allowlist`",
-          "import": "@vercel/no-allowlist"
+          "message": "Package `@vercel/not-allowed-dependent` found without any tag listed in allowlist for `@vercel/allowed-and-denied-tag`",
+          "import": "@vercel/not-allowed-dependent"
         },
         {
-          "message": "Package `my-app` found without any tag listed in allowlist for `@vercel/empty-allowlist`",
-          "import": "my-app"
+          "message": "Package `@vercel/not-allowed-dependent` found without any tag listed in allowlist for `@vercel/allowed-tag`",
+          "import": "@vercel/not-allowed-dependent"
+        },
+        {
+          "message": "Package `@vercel/not-allowed-dependent` found without any tag listed in allowlist for `@vercel/my-app`",
+          "import": "@vercel/not-allowed-dependent"
         }
       ]
     }
