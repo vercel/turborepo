@@ -45,15 +45,8 @@ impl Framework {
         self.slug.clone()
     }
 
-    pub fn env_wildcards(&self) -> &[String] {
-        &self.env_wildcards
-    }
-
-    pub fn resolved_env_conditionals(
-        &self,
-        env_at_execution_start: &HashMap<String, String>,
-    ) -> Vec<String> {
-        let mut conditional_env_vars = Vec::new();
+    pub fn env(&self, env_at_execution_start: &HashMap<String, String>) -> Vec<String> {
+        let mut env_vars = self.env_wildcards.clone();
 
         if let Some(env_conditionals) = &self.env_conditionals {
             for conditional in env_conditionals {
@@ -61,13 +54,13 @@ impl Framework {
 
                 if let Some(actual_value) = env_at_execution_start.get(key) {
                     if expected_value.is_none() || expected_value.as_ref() == Some(actual_value) {
-                        conditional_env_vars.extend(conditional.include.iter().cloned());
+                        env_vars.extend(conditional.include.iter().cloned());
                     }
                 }
             }
         }
 
-        conditional_env_vars
+        env_vars
     }
 }
 
@@ -239,62 +232,116 @@ mod tests {
     }
 
     #[test]
-    fn test_resolved_env_conditionals_for_nextjs() {
+    fn test_env_with_no_conditions() {
         let framework = get_framework_by_slug("nextjs");
 
-        // Case 1: Condition NOT met (no env var set)
         let env_at_execution_start = HashMap::new();
-        let resolved_vars = framework.resolved_env_conditionals(&env_at_execution_start);
-        assert!(
-            resolved_vars.is_empty(),
-            "Expected no conditional env vars when condition is not met"
-        );
+        let env_vars = framework.env(&env_at_execution_start);
 
-        // Case 2: Condition met with correct value
+        assert_eq!(
+            env_vars,
+            framework.env_wildcards.clone(),
+            "Expected env_wildcards when no conditionals exist"
+        );
+    }
+
+    #[test]
+    fn test_env_with_matching_condition() {
+        let framework = get_framework_by_slug("nextjs");
+
         let mut env_at_execution_start = HashMap::new();
         env_at_execution_start.insert(
             "VERCEL_SKEW_PROTECTION_ENABLED".to_string(),
             "1".to_string(),
         );
 
-        let resolved_vars = framework.resolved_env_conditionals(&env_at_execution_start);
+        let env_vars = framework.env(&env_at_execution_start);
+
+        let mut expected_vars = framework.env_wildcards.clone();
+        expected_vars.push("VERCEL_DEPLOYMENT_ID".to_string());
+
         assert_eq!(
-            resolved_vars,
-            vec!["VERCEL_DEPLOYMENT_ID".to_string()],
+            env_vars, expected_vars,
             "Expected VERCEL_DEPLOYMENT_ID to be included when condition is met"
         );
+    }
 
-        // Case 3: Condition NOT met (wrong value)
+    #[test]
+    fn test_env_with_non_matching_condition() {
+        let framework = get_framework_by_slug("nextjs");
+
         let mut env_at_execution_start = HashMap::new();
         env_at_execution_start.insert(
             "VERCEL_SKEW_PROTECTION_ENABLED".to_string(),
             "0".to_string(),
         );
 
-        let resolved_vars = framework.resolved_env_conditionals(&env_at_execution_start);
-        assert!(
-            resolved_vars.is_empty(),
-            "Expected no conditional env vars when condition has wrong value"
-        );
+        let env_vars = framework.env(&env_at_execution_start);
 
-        // Case 4: Condition met (no value required)
-        let mut framework_no_value = framework.clone();
-        if let Some(env_conditionals) = framework_no_value.env_conditionals.as_mut() {
+        assert_eq!(
+            env_vars,
+            framework.env_wildcards.clone(),
+            "Expected only env_wildcards when condition is not met"
+        );
+    }
+
+    #[test]
+    fn test_env_with_condition_without_value_requirement() {
+        let mut framework = get_framework_by_slug("nextjs").clone();
+
+        if let Some(env_conditionals) = framework.env_conditionals.as_mut() {
             env_conditionals[0].when.value = None;
         }
 
         let mut env_at_execution_start = HashMap::new();
         env_at_execution_start.insert(
             "VERCEL_SKEW_PROTECTION_ENABLED".to_string(),
-            "any".to_string(),
+            "random".to_string(),
         );
 
-        let resolved_vars = framework_no_value.resolved_env_conditionals(&env_at_execution_start);
+        let env_vars = framework.env(&env_at_execution_start);
+
+        let mut expected_vars = framework.env_wildcards.clone();
+        expected_vars.push("VERCEL_DEPLOYMENT_ID".to_string());
+
         assert_eq!(
-            resolved_vars,
-            vec!["VERCEL_DEPLOYMENT_ID".to_string()],
+            env_vars, expected_vars,
             "Expected VERCEL_DEPLOYMENT_ID to be included when condition key exists, regardless \
              of value"
+        );
+    }
+
+    #[test]
+    fn test_env_with_multiple_conditions() {
+        let mut framework = get_framework_by_slug("nextjs").clone();
+
+        if let Some(env_conditionals) = framework.env_conditionals.as_mut() {
+            env_conditionals.push(crate::framework::EnvConditional {
+                when: crate::framework::EnvConditionKey {
+                    key: "ANOTHER_CONDITION".to_string(),
+                    value: Some("true".to_string()),
+                },
+                include: vec!["ADDITIONAL_ENV_VAR".to_string()],
+            });
+        }
+
+        let mut env_at_execution_start = HashMap::new();
+        env_at_execution_start.insert(
+            "VERCEL_SKEW_PROTECTION_ENABLED".to_string(),
+            "1".to_string(),
+        );
+        env_at_execution_start.insert("ANOTHER_CONDITION".to_string(), "true".to_string());
+
+        let env_vars = framework.env(&env_at_execution_start);
+
+        let mut expected_vars = framework.env_wildcards.clone();
+        expected_vars.push("VERCEL_DEPLOYMENT_ID".to_string());
+        expected_vars.push("ADDITIONAL_ENV_VAR".to_string());
+
+        assert_eq!(
+            env_vars, expected_vars,
+            "Expected both VERCEL_DEPLOYMENT_ID and ADDITIONAL_ENV_VAR when both conditions are \
+             met"
         );
     }
 }
