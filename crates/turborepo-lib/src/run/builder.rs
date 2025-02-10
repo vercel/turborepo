@@ -436,7 +436,7 @@ impl RunBuilder {
             &pkg_dep_graph,
             &root_turbo_json,
             filtered_pkgs.keys(),
-            &mut turbo_json_loader,
+            turbo_json_loader.clone(),
         )?;
 
         if self.opts.run_opts.parallel {
@@ -445,7 +445,7 @@ impl RunBuilder {
                 &pkg_dep_graph,
                 &root_turbo_json,
                 filtered_pkgs.keys(),
-                &mut turbo_json_loader,
+                turbo_json_loader.clone(),
             )?;
         }
 
@@ -497,7 +497,7 @@ impl RunBuilder {
         pkg_dep_graph: &PackageGraph,
         root_turbo_json: &TurboJson,
         filtered_pkgs: impl Iterator<Item = &'a PackageName>,
-        turbo_json_loader: &mut TurboJsonLoader,
+        turbo_json_loader: TurboJsonLoader,
     ) -> Result<Engine, Error> {
         let tasks = self.opts.run_opts.tasks.iter().map(|task| {
             // TODO: Pull span info from command

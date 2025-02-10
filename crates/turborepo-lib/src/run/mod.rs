@@ -66,7 +66,7 @@ pub struct Run {
     env_at_execution_start: EnvironmentVariableMap,
     filtered_pkgs: HashSet<PackageName>,
     pkg_dep_graph: Arc<PackageGraph>,
-    pub(crate) turbo_json_loader: TurboJsonLoader,
+    turbo_json_loader: TurboJsonLoader,
     root_turbo_json: TurboJson,
     scm: SCM,
     run_cache: Arc<RunCache>,
@@ -123,8 +123,8 @@ impl Run {
         }
     }
 
-    pub fn turbo_json_loader(&self) -> &TurboJsonLoader {
-        &self.turbo_json_loader
+    pub fn turbo_json_loader(&self) -> TurboJsonLoader {
+        self.turbo_json_loader.clone()
     }
 
     pub fn opts(&self) -> &Opts {
