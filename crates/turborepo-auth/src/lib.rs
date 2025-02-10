@@ -547,7 +547,7 @@ mod tests {
     impl TokenClient for MockTokenClient {
         async fn get_metadata(
             &self,
-            token: &str,
+            _token: &str,
         ) -> turborepo_api_client::Result<ResponseTokenMetadata> {
             if self.should_fail {
                 return Err(turborepo_api_client::Error::UnknownStatus {
