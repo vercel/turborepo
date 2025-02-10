@@ -46,15 +46,12 @@ impl Vendor {
     }
 
     /// Gets user from CI environment variables
-    /// We return an empty String instead of None because
-    /// the Spaces API expects some sort of string in the user field.
-    pub fn get_user() -> String {
+    pub fn get_user() -> Option<String> {
         let vendor = Vendor::infer();
 
         vendor
             .and_then(|v| v.username_env_var)
             .and_then(|v| env::var(v).ok())
-            .unwrap_or_default()
     }
 
     fn infer_inner() -> Option<&'static Vendor> {

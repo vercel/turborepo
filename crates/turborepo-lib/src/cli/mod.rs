@@ -997,10 +997,6 @@ pub struct RunArgs {
     #[clap(long, default_missing_value = "true")]
     pub summarize: Option<Option<bool>>,
 
-    // Pass a string to enable posting Run Summaries to Vercel
-    #[clap(long, hide = true)]
-    pub experimental_space_id: Option<String>,
-
     /// Execute all tasks in parallel.
     #[clap(long)]
     pub parallel: bool,
@@ -1022,7 +1018,6 @@ impl Default for RunArgs {
             anon_profile: None,
             remote_cache_read_only: None,
             summarize: None,
-            experimental_space_id: None,
             parallel: false,
         }
     }
@@ -1083,7 +1078,6 @@ impl RunArgs {
         track_usage!(telemetry, &self.profile, Option::is_some);
         track_usage!(telemetry, &self.anon_profile, Option::is_some);
         track_usage!(telemetry, &self.summarize, Option::is_some);
-        track_usage!(telemetry, &self.experimental_space_id, Option::is_some);
 
         // track values
         if let Some(dry_run) = &self.dry_run {

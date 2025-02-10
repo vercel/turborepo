@@ -22,12 +22,7 @@ use crate::{
     config::UIMode,
     engine::{Engine, StopExecution},
     process::{ChildExit, Command, ProcessManager},
-    run::{
-        summary::{SpacesTaskClient, SpacesTaskInformation, TaskExecutionSummary, TaskTracker},
-        task_access::TaskAccess,
-        task_id::TaskId,
-        CacheOutput, TaskCache,
-    },
+    run::{summary::TaskTracker, task_access::TaskAccess, task_id::TaskId, CacheOutput, TaskCache},
     task_hash::TaskHashTracker,
 };
 
@@ -210,46 +205,21 @@ impl ExecContext {
         tracker: TaskTracker<()>,
         output_client: TaskOutput<impl Write>,
         callback: oneshot::Sender<Result<(), StopExecution>>,
-        spaces_client: Option<SpacesTaskClient>,
         telemetry: &PackageTaskEventBuilder,
     ) -> Result<(), InternalError> {
         let tracker = tracker.start().await;
         let span = tracing::debug_span!("execute_task", task = %self.task_id.task());
         span.follows_from(parent_span_id);
-        let mut result = self
+        let result = self
             .execute_inner(&output_client, telemetry)
             .instrument(span)
             .await;
 
-        // If the task resulted in an error, do not group in order to better highlight
-        // the error.
-        let is_error = matches!(result, Ok(ExecOutcome::Task { .. }));
-        let is_cache_hit = matches!(result, Ok(ExecOutcome::Success(SuccessOutcome::CacheHit)));
-        let logs = match output_client.finish(is_error, is_cache_hit) {
-            Ok(logs) => logs,
-            Err(e) => {
-                telemetry.track_error(TrackedErrors::DaemonFailedToMarkOutputsAsCached);
-                error!("unable to flush output client: {e}");
-                result = Err(InternalError::Io(e));
-                None
-            }
-        };
-
         match result {
-            Ok(ExecOutcome::Success(outcome)) => {
-                let task_summary = match outcome {
-                    SuccessOutcome::CacheHit => tracker.cached().await,
-                    SuccessOutcome::Run => tracker.build_succeeded(0).await,
-                };
+            Ok(ExecOutcome::Success(_)) => {
                 callback.send(Ok(())).ok();
-                if let Some(client) = spaces_client {
-                    let logs = logs.expect("spaces enabled logs should be collected");
-                    let info = self.spaces_task_info(self.task_id.clone(), task_summary, logs);
-                    client.finish_task(info).await.ok();
-                }
             }
-            Ok(ExecOutcome::Task { exit_code, message }) => {
-                let task_summary = tracker.build_failed(exit_code, message).await;
+            Ok(ExecOutcome::Task { .. }) => {
                 callback
                     .send(match self.continue_on_error {
                         true => Ok(()),
@@ -257,26 +227,8 @@ impl ExecContext {
                     })
                     .ok();
 
-                match (spaces_client, self.continue_on_error) {
-                    // Nothing to do
-                    (None, true) => (),
-                    // Shut down manager
-                    (None, false) => self.manager.stop().await,
-                    // Send task
-                    (Some(client), true) => {
-                        let logs = logs.expect("spaced enabled logs should be collected");
-                        let info = self.spaces_task_info(self.task_id.clone(), task_summary, logs);
-                        client.finish_task(info).await.ok();
-                    }
-                    // Send task and shut down manager
-                    (Some(client), false) => {
-                        let logs = logs.unwrap_or_default();
-                        let info = self.spaces_task_info(self.task_id.clone(), task_summary, logs);
-                        // Ignore spaces result as that indicates handler is shut down and we are
-                        // unable to send information to spaces
-                        let (_spaces_result, _) =
-                            tokio::join!(client.finish_task(info), self.manager.stop());
-                    }
+                if !self.continue_on_error {
+                    self.manager.stop().await
                 }
             }
             Ok(ExecOutcome::Shutdown) => {
@@ -480,26 +432,6 @@ impl ExecContext {
             ChildExit::KilledExternal => Err(InternalError::ExternalKill),
             // The child was killed by turbo indicating a shutdown
             ChildExit::Killed => Ok(ExecOutcome::Shutdown),
-        }
-    }
-
-    fn spaces_task_info(
-        &self,
-        task_id: TaskId<'static>,
-        execution_summary: TaskExecutionSummary,
-        logs: Vec<u8>,
-    ) -> SpacesTaskInformation {
-        let dependencies = self.engine.dependencies(&task_id);
-        let dependents = self.engine.dependents(&task_id);
-        let cache_status = self.hash_tracker.cache_status(&task_id);
-        SpacesTaskInformation {
-            task_id,
-            execution_summary,
-            logs,
-            hash: self.task_hash.clone(),
-            cache_status,
-            dependencies,
-            dependents,
         }
     }
 }

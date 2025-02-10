@@ -226,7 +226,6 @@ pub struct RunOpts {
     pub log_prefix: ResolvedLogPrefix,
     pub log_order: ResolvedLogOrder,
     pub summarize: bool,
-    pub(crate) experimental_space_id: Option<String>,
     pub is_github_actions: bool,
     pub ui_mode: UIMode,
 }
@@ -342,11 +341,6 @@ impl<'a> TryFrom<OptsInputs<'a>> for RunOpts {
             log_prefix,
             log_order,
             summarize: inputs.config.run_summary(),
-            experimental_space_id: inputs
-                .run_args
-                .experimental_space_id
-                .clone()
-                .or(inputs.config.spaces_id().map(|s| s.to_owned())),
             framework_inference: inputs.execution_args.framework_inference,
             concurrency,
             parallel: inputs.run_args.parallel,

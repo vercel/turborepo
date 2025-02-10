@@ -23,7 +23,6 @@ pub use crate::error::{Error, Result};
 pub mod analytics;
 mod error;
 mod retry;
-pub mod spaces;
 pub mod telemetry;
 
 pub use bytes::Bytes;
