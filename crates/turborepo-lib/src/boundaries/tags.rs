@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
+use tracing::warn;
 use turborepo_errors::Spanned;
 use turborepo_repository::package_graph::{PackageName, PackageNode};
 
@@ -53,9 +54,17 @@ impl Run {
         let mut turbo_json_loader = self.turbo_json_loader();
         for (package, _) in self.pkg_dep_graph().packages() {
             if let Ok(TurboJson {
-                tags: Some(tags), ..
+                tags: Some(tags),
+                boundaries,
+                ..
             }) = turbo_json_loader.load(package)
             {
+                if boundaries.is_some() && !matches!(package, PackageName::Root) {
+                    warn!(
+                        "Boundaries rules can only be defined in the root turbo.json. Any rules \
+                         defined in a package's turbo.json will be ignored."
+                    )
+                }
                 package_tags.insert(package.clone(), tags.clone());
             }
         }
