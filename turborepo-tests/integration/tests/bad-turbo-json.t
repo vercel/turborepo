@@ -9,19 +9,20 @@ Run build with package task in non-root turbo.json
   [1]
   $ sed  's/\[\([^]]*\)\]/\(\1)/g' < error.txt
     x Invalid turbo.json configuration
-  
-  Error: unnecessary_package_task_syntax (https://turbo.build/messages/unnecessary-package-task-syntax)
-  
-    x "my-app#build". Use "build" instead.
-      ,-\(apps(\/|\\)my-app(\/|\\)turbo.json:8:21\) (re)
-    7 |         // this comment verifies that turbo can read .json files with comments
-    8 | ,->     "my-app#build": {
-    9 | |         "outputs": ("banana.txt", "apple.json"),
-   10 | |         "inputs": ("$TURBO_DEFAULT$", ".env.local")
-   11 | |->     }
-      : `---- unnecessary package syntax found here
-   12 |       }
-      `----
+    `-> unnecessary_package_task_syntax (https://turbo.build/messages/
+        unnecessary-package-task-syntax)
+        
+          x "my-app#build". Use "build" instead.
+            ,-\(apps(\/|\\)my-app(\/|\\)turbo.json:8:21\) (re)
+          7 |         // this comment verifies that turbo can read .json files
+        with comments
+          8 | ,->     "my-app#build": {
+          9 | |         "outputs": ("banana.txt", "apple.json"),
+         10 | |         "inputs": ("$TURBO_DEFAULT$", ".env.local")
+         11 | |->     }
+            : `---- unnecessary package syntax found here
+         12 |       }
+            `----
   
 
 
@@ -92,32 +93,26 @@ Run build with syntax errors in turbo.json
   turbo_json_parse_error
   
     x Failed to parse turbo.json.
-  
-  Error: 
-    x Expected a property but instead found ','.
-     ,-[turbo.json:2:48]
-   1 | {
-   2 |   "$schema": "https://turbo.build/schema.json",,
-     :                                                ^
-   3 |   "globalDependencies": ["foo.txt"],
-     `----
-  
-  Error: 
-    x expected `,` but instead found `42`
-      ,-[turbo.json:12:46]
-   11 |     "my-app#build": {
-   12 |       "outputs": ["banana.txt", "apple.json"]42,
-      :                                              ^^
-   13 |       "inputs": [".env.local"
-      `----
-  
-  Error: 
-    x expected `,` but instead found `}`
-      ,-[turbo.json:14:5]
-   13 |       "inputs": [".env.local"
-   14 |     },
-      :     ^
-   15 | 
-      `----
+    |->   x Expected a property but instead found ','.
+    |      ,-[turbo.json:2:48]
+    |    1 | {
+    |    2 |   "$schema": "https://turbo.build/schema.json",,
+    |      :                                                ^
+    |    3 |   "globalDependencies": ["foo.txt"],
+    |      `----
+    |->   x expected `,` but instead found `42`
+    |       ,-[turbo.json:12:46]
+    |    11 |     "my-app#build": {
+    |    12 |       "outputs": ["banana.txt", "apple.json"]42,
+    |       :                                              ^^
+    |    13 |       "inputs": [".env.local"
+    |       `----
+    `->   x expected `,` but instead found `}`
+            ,-[turbo.json:14:5]
+         13 |       "inputs": [".env.local"
+         14 |     },
+            :     ^
+         15 |
+            `----
   
   [1]

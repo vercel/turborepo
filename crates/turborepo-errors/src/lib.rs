@@ -1,6 +1,8 @@
 use std::{
     fmt::Display,
-    ops::{Deref, Range},
+    iter,
+    iter::Once,
+    ops::{Deref, DerefMut, Range},
     sync::Arc,
 };
 
@@ -74,6 +76,24 @@ pub struct Spanned<T> {
     pub path: Option<Arc<str>>,
     #[serde(skip)]
     pub text: Option<Arc<str>>,
+}
+
+impl<T> IntoIterator for Spanned<T> {
+    type Item = T;
+    type IntoIter = Once<T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        iter::once(self.value)
+    }
+}
+
+impl<'a, T> IntoIterator for &'a Spanned<T> {
+    type Item = &'a T;
+    type IntoIter = Once<&'a T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        iter::once(&self.value)
+    }
 }
 
 impl<T: Deserializable> Deserializable for Spanned<T> {
@@ -172,7 +192,7 @@ impl<T> Spanned<T> {
         let path = self.path.as_ref().map_or(default_path, |p| p.as_ref());
         match self.range.clone().zip(self.text.as_ref()) {
             Some((range, text)) => (Some(range.into()), NamedSource::new(path, text.to_string())),
-            None => (None, NamedSource::new(path, String::new())),
+            None => (None, NamedSource::new(path, Default::default())),
         }
     }
 
@@ -204,6 +224,13 @@ impl<T> Deref for Spanned<T> {
         &self.value
     }
 }
+
+impl<T> DerefMut for Spanned<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.value
+    }
+}
+
 pub trait WithMetadata {
     fn add_text(&mut self, text: Arc<str>);
     fn add_path(&mut self, path: Arc<str>);

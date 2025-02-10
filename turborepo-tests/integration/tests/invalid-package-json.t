@@ -69,13 +69,12 @@ Build should fail due to trailing comma (sed replaces square brackets with paren
   package_json_parse_error
   
     x Unable to parse package.json.
-  
-  Error: 
-    x Expected a property but instead found '}'.
-     ,-\(.*package.json:1:21\) (re)
-   1 | { "name": "foobar", }
-     :                     ^
-     `----
+    `->   x Expected a property but instead found '}'.
+           ,-\[.* (re)
+        .*package.json:1:21\] (re)
+         1 | { "name": "foobar", }
+           :                     ^
+           `----
   
 
 
