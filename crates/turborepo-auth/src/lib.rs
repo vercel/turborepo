@@ -538,4 +538,140 @@ mod tests {
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), Error::APIError(_)));
     }
+
+    struct MockTokenClient {
+        metadata_response: Option<ResponseTokenMetadata>,
+        should_fail: bool,
+    }
+
+    impl TokenClient for MockTokenClient {
+        async fn get_metadata(
+            &self,
+            token: &str,
+        ) -> turborepo_api_client::Result<ResponseTokenMetadata> {
+            if self.should_fail {
+                return Err(turborepo_api_client::Error::UnknownStatus {
+                    code: "error".to_string(),
+                    message: "Failed to get metadata".to_string(),
+                    backtrace: Backtrace::capture(),
+                });
+            }
+
+            if let Some(metadata) = &self.metadata_response {
+                Ok(metadata.clone())
+            } else {
+                Ok(ResponseTokenMetadata {
+                    id: "test".to_string(),
+                    name: "test".to_string(),
+                    token_type: "test".to_string(),
+                    origin: "test".to_string(),
+                    scopes: vec![],
+                    active_at: current_unix_time() - 100,
+                    created_at: 0,
+                })
+            }
+        }
+
+        async fn delete_token(&self, _token: &str) -> turborepo_api_client::Result<()> {
+            if self.should_fail {
+                return Err(turborepo_api_client::Error::UnknownStatus {
+                    code: "error".to_string(),
+                    message: "Failed to delete token".to_string(),
+                    backtrace: Backtrace::capture(),
+                });
+            }
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn test_token_invalidate() {
+        let token = Token::new("test-token".to_string());
+
+        // Test successful invalidation
+        let client = MockTokenClient {
+            metadata_response: None,
+            should_fail: false,
+        };
+        assert!(token.invalidate(&client).await.is_ok());
+
+        // Test failed invalidation
+        let client = MockTokenClient {
+            metadata_response: None,
+            should_fail: true,
+        };
+        assert!(token.invalidate(&client).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_token_is_active() {
+        let token = Token::new("test-token".to_string());
+        let current_time = current_unix_time();
+
+        // Test active token
+        let client = MockTokenClient {
+            metadata_response: Some(ResponseTokenMetadata {
+                id: "test".to_string(),
+                name: "test".to_string(),
+                token_type: "test".to_string(),
+                origin: "test".to_string(),
+                scopes: vec![],
+                active_at: current_time - 100,
+                created_at: 0,
+            }),
+            should_fail: false,
+        };
+        assert!(token.is_active(&client).await.unwrap());
+
+        // Test inactive token (future active_at)
+        let client = MockTokenClient {
+            metadata_response: Some(ResponseTokenMetadata {
+                active_at: current_time + 1000,
+                ..ResponseTokenMetadata {
+                    id: "test".to_string(),
+                    name: "test".to_string(),
+                    token_type: "test".to_string(),
+                    origin: "test".to_string(),
+                    scopes: vec![],
+                    created_at: 0,
+                    active_at: 0,
+                }
+            }),
+            should_fail: false,
+        };
+        assert!(!token.is_active(&client).await.unwrap());
+
+        // Test failed metadata fetch
+        let client = MockTokenClient {
+            metadata_response: None,
+            should_fail: true,
+        };
+        assert!(token.is_active(&client).await.is_err());
+    }
+
+    #[test]
+    fn test_from_file_with_empty_token() {
+        let tmp_dir = tempdir().expect("Failed to create temp dir");
+        let tmp_path = tmp_dir.path().join("empty_token.json");
+        let file_path = AbsoluteSystemPathBuf::try_from(tmp_path)
+            .expect("Failed to create AbsoluteSystemPathBuf");
+        file_path.create_with_contents(r#"{"token": ""}"#).unwrap();
+
+        let result = Token::from_file(&file_path).expect("Failed to read token from file");
+        assert!(matches!(result, Token::Existing(ref t) if t.is_empty()));
+    }
+
+    #[test]
+    fn test_from_file_with_missing_token_field() {
+        let tmp_dir = tempdir().expect("Failed to create temp dir");
+        let tmp_path = tmp_dir.path().join("missing_token.json");
+        let file_path = AbsoluteSystemPathBuf::try_from(tmp_path)
+            .expect("Failed to create AbsoluteSystemPathBuf");
+        file_path
+            .create_with_contents(r#"{"other_field": "value"}"#)
+            .unwrap();
+
+        let result = Token::from_file(&file_path);
+        assert!(matches!(result, Err(Error::TokenNotFound)));
+    }
 }

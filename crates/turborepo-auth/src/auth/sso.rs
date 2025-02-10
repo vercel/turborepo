@@ -142,18 +142,19 @@ pub async fn sso_login<T: Client + TokenClient + CacheClient>(
 
 #[cfg(test)]
 mod tests {
-    use std::sync::atomic::AtomicUsize;
+    use std::{assert_matches::assert_matches, sync::atomic::AtomicUsize};
 
     use async_trait::async_trait;
     use reqwest::{Method, RequestBuilder, Response};
     use turborepo_vercel_api::{
+        token::{ResponseTokenMetadata, Scope},
         CachingStatus, CachingStatusResponse, Membership, Role, SpacesResponse, Team,
         TeamsResponse, User, UserResponse, VerifiedSsoUser,
     };
     use turborepo_vercel_api_mock::start_test_server;
 
     use super::*;
-    use crate::{LoginServer, LoginType};
+    use crate::{current_unix_time, LoginServer, LoginType};
     const EXPECTED_VERIFICATION_TOKEN: &str = "expected_verification_token";
 
     lazy_static::lazy_static! {
@@ -229,12 +230,12 @@ mod tests {
         async fn get_team(
             &self,
             _token: &str,
-            _team_id: &str,
+            team_id: &str,
         ) -> turborepo_api_client::Result<Option<Team>> {
             Ok(Some(Team {
-                id: "id".to_string(),
-                slug: "something".to_string(),
-                name: "name".to_string(),
+                id: team_id.to_string(),
+                slug: team_id.to_string(),
+                name: "Test Team".to_string(),
                 created_at: 0,
                 created: chrono::Utc::now(),
                 membership: Membership::new(Role::Member),
@@ -272,26 +273,22 @@ mod tests {
     impl TokenClient for MockApiClient {
         async fn get_metadata(
             &self,
-            token: &str,
-        ) -> turborepo_api_client::Result<turborepo_vercel_api::token::ResponseTokenMetadata>
-        {
-            if token.is_empty() {
-                return Err(MockApiError::EmptyToken.into());
-            }
-            Ok(turborepo_vercel_api::token::ResponseTokenMetadata {
-                id: "id".to_string(),
-                name: "name".to_string(),
-                token_type: "token".to_string(),
-                origin: "github".to_string(),
-                scopes: vec![turborepo_vercel_api::token::Scope {
+            _token: &str,
+        ) -> turborepo_api_client::Result<ResponseTokenMetadata> {
+            Ok(ResponseTokenMetadata {
+                id: "test".to_string(),
+                name: "test".to_string(),
+                token_type: "test".to_string(),
+                origin: "test".to_string(),
+                scopes: vec![Scope {
                     scope_type: "team".to_string(),
                     origin: "saml".to_string(),
-                    team_id: Some("team_vozisthebest".to_string()),
-                    created_at: 1111111111111,
-                    expires_at: Some(9999999990000),
+                    team_id: Some("my-team".to_string()),
+                    created_at: 0,
+                    expires_at: None,
                 }],
-                active_at: 0,
-                created_at: 123456,
+                active_at: current_unix_time() - 100,
+                created_at: 0,
             })
         }
         async fn delete_token(&self, _token: &str) -> turborepo_api_client::Result<()> {
@@ -416,5 +413,81 @@ mod tests {
             login_server.hits.load(std::sync::atomic::Ordering::SeqCst),
             1
         );
+    }
+
+    #[tokio::test]
+    async fn test_sso_login_missing_team() {
+        let color_config = ColorConfig::new(false);
+        let api_client = MockApiClient {
+            base_url: String::new(),
+        };
+        let login_server = MockSSOLoginServer {
+            hits: Arc::new(0.into()),
+        };
+
+        let options = LoginOptions {
+            color_config: &color_config,
+            login_url: "https://api.vercel.com",
+            api_client: &api_client,
+            login_server: &login_server,
+            existing_token: None,
+            sso_team: None,
+            force: false,
+        };
+
+        let result = sso_login(&options).await;
+        assert_matches!(result, Err(Error::EmptySSOTeam));
+    }
+
+    #[tokio::test]
+    async fn test_sso_login_with_existing_token() {
+        let color_config = ColorConfig::new(false);
+        let api_client = MockApiClient {
+            base_url: String::new(),
+        };
+        let login_server = MockSSOLoginServer {
+            hits: Arc::new(0.into()),
+        };
+
+        let options = LoginOptions {
+            color_config: &color_config,
+            login_url: "https://api.vercel.com",
+            api_client: &api_client,
+            login_server: &login_server,
+            existing_token: Some("existing-token"),
+            sso_team: Some("my-team"),
+            force: false,
+        };
+
+        let result = sso_login(&options).await.unwrap();
+        assert_matches!(result, Token::Existing(token) if token == "existing-token");
+    }
+
+    #[tokio::test]
+    async fn test_sso_login_force_new_token() {
+        let port = port_scanner::request_open_port().unwrap();
+        let api_server = tokio::spawn(start_test_server(port));
+        let color_config = ColorConfig::new(false);
+        let mut api_client = MockApiClient::new();
+        api_client.set_base_url(&format!("http://localhost:{port}"));
+
+        let login_server = MockSSOLoginServer {
+            hits: Arc::new(0.into()),
+        };
+
+        let options = LoginOptions {
+            color_config: &color_config,
+            login_url: &format!("http://localhost:{port}"),
+            api_client: &api_client,
+            login_server: &login_server,
+            existing_token: Some("existing-token"),
+            sso_team: Some("my-team"),
+            force: true,
+        };
+
+        let result = sso_login(&options).await.unwrap();
+        assert_matches!(result, Token::New(token) if token == EXPECTED_VERIFICATION_TOKEN);
+
+        api_server.abort();
     }
 }
