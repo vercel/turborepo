@@ -1,0 +1,32 @@
+{
+  "name": "@turbo/releaser",
+  "private": true,
+  "version": "0.0.1",
+  "bin": {
+    "turboreleaser": "cli/index.cjs"
+  },
+  "files": [
+    "dist",
+    "template"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "check-types": "tsc --noEmit",
+    "test": "node --import tsx --test src/*.test.ts",
+    "lint": "eslint src/",
+    "lint:prettier": "prettier -c . --cache --ignore-path=../../.prettierignore"
+  },
+  "dependencies": {
+    "commander": "^11.0.0",
+    "tar": "6.1.13"
+  },
+  "devDependencies": {
+    "@turbo/eslint-config": "workspace:*",
+    "@turbo/tsconfig": "workspace:*",
+    "@types/node": "^20",
+    "@types/tar": "^6.1.4",
+    "typescript": "5.5.4",
+    "tsup": "^6.7.0",
+    "tsx": "4.19.1"
+  }
+}
