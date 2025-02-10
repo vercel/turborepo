@@ -26,6 +26,9 @@ jobs:
       with-tailwind-example: ${{ steps.filter.outputs.with-tailwind-example }}
       rest: ${{ steps.filter.outputs.rest }}
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - uses: dorny/paths-filter@v3
         id: filter
         with:
