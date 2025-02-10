@@ -227,15 +227,11 @@ mod tests {
                 }],
             })
         }
-        async fn get_team(
-            &self,
-            _token: &str,
-            team_id: &str,
-        ) -> turborepo_api_client::Result<Option<Team>> {
+        async fn get_team(&self, _token: &str) -> turborepo_api_client::Result<Option<Team>> {
             Ok(Some(Team {
-                id: team_id.to_string(),
-                slug: team_id.to_string(),
-                name: "Test Team".to_string(),
+                id: "id".to_string(),
+                slug: "something".to_string(),
+                name: "name".to_string(),
                 created_at: 0,
                 created: chrono::Utc::now(),
                 membership: Membership::new(Role::Member),
