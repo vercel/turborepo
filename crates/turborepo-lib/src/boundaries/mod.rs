@@ -13,7 +13,10 @@ use globwalk::Settings;
 use miette::{Diagnostic, NamedSource, Report, SourceSpan};
 use regex::Regex;
 use swc_common::{
-    comments::SingleThreadedComments, errors::Handler, input::StringInput, FileName, SourceMap,
+    comments::{Comments, SingleThreadedComments},
+    errors::Handler,
+    input::StringInput,
+    FileName, SourceMap, Span,
 };
 use swc_ecma_ast::EsVersion;
 use swc_ecma_parser::{lexer::Lexer, Capturing, EsSyntax, Parser, Syntax, TsSyntax};
@@ -133,6 +136,9 @@ static PACKAGE_NAME_REGEX: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"^(@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$").unwrap()
 });
 
+/// Maximum number of ignored import warnings to show
+const MAX_IGNORE_WARNINGS: usize = 10;
+
 pub struct BoundariesResult {
     files_checked: usize,
     packages_checked: usize,
@@ -223,6 +229,19 @@ impl Run {
         })
     }
 
+    /// Returns the underlying reason if an import has been marked as ignored
+    fn get_ignored_comment(comments: &SingleThreadedComments, span: Span) -> Option<String> {
+        if let Some(import_comments) = comments.get_leading(span.lo()) {
+            for comment in import_comments {
+                if let Some(reason) = comment.text.trim().strip_prefix("@boundaries-ignore") {
+                    return Some(reason.to_string());
+                }
+            }
+        }
+
+        None
+    }
+
     /// Either returns a list of errors and number of files checked or a single,
     /// fatal error
     async fn check_package(
@@ -295,8 +314,6 @@ impl Run {
             Settings::default().ignore_nested_packages(),
         )?;
 
-        let files_checked = files.len();
-
         let mut diagnostics: Vec<BoundariesDiagnostic> = Vec::new();
         // We assume the tsconfig.json is at the root of the package
         let tsconfig_path = package_root.join_component("tsconfig.json");
@@ -305,7 +322,9 @@ impl Run {
             Tracer::create_resolver(tsconfig_path.exists().then(|| tsconfig_path.as_ref()));
 
         let mut not_supported_extensions = HashSet::new();
-        for file_path in files {
+        let mut warning_count = 0;
+
+        for file_path in &files {
             if let Some(ext @ ("svelte" | "vue")) = file_path.extension() {
                 not_supported_extensions.insert(ext.to_string());
                 continue;
@@ -364,6 +383,36 @@ impl Run {
             let mut finder = ImportFinder::default();
             module.visit_with(&mut finder);
             for (import, span, import_type) in finder.imports() {
+                // If the import is prefixed with `@boundaries-ignore`, we ignore it, but print
+                // a warning
+                match Self::get_ignored_comment(&comments, *span) {
+                    Some(reason) if reason.is_empty() => {
+                        if warning_count <= MAX_IGNORE_WARNINGS {
+                            warn!(
+                                "@boundaries-ignore requires a reason, e.g. `// \
+                                 @boundaries-ignore implicit dependency`"
+                            );
+                        }
+
+                        warning_count += 1;
+                    }
+                    Some(_) => {
+                        if warning_count <= MAX_IGNORE_WARNINGS {
+                            // Try to get the line number for warning
+                            let line = source_map.lookup_line(span.lo()).map(|l| l.line);
+                            if let Ok(line) = line {
+                                warn!("ignoring import on line {} in {}", line, file_path);
+                            } else {
+                                warn!("ignoring import in {}", file_path);
+                            }
+                        }
+                        warning_count += 1;
+
+                        continue;
+                    }
+                    None => {}
+                }
+
                 let (start, end) = source_map.span_to_char_offset(&source_file, *span);
                 let start = start as usize;
                 let end = end as usize;
@@ -394,16 +443,25 @@ impl Run {
             }
         }
 
+        if warning_count > MAX_IGNORE_WARNINGS {
+            warn!(
+                "and {} more ignored imports",
+                warning_count - MAX_IGNORE_WARNINGS
+            );
+        }
+
         for ext in &not_supported_extensions {
             warn!(
                 "{} files are currently not supported, boundaries checks will not apply to them",
                 ext
             );
         }
-        if !not_supported_extensions.is_empty() {
+
+        let printed_warnings = warning_count > 0 || !not_supported_extensions.is_empty();
+        if !printed_warnings {
             println!();
         }
 
-        Ok((files_checked, diagnostics))
+        Ok((files.len(), diagnostics))
     }
 }
