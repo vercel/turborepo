@@ -616,6 +616,18 @@ impl RepositoryQuery {
 
         Ok(packages)
     }
+
+    async fn external_dependencies(&self) -> Result<Array<ExternalPackage>, Error> {
+        let mut packages = self
+            .run
+            .pkg_dep_graph()
+            .external_to_internal()
+            .keys()
+            .map(|pkg| ExternalPackage::new(self.run.clone(), pkg.clone()))
+            .collect::<Array<_>>();
+        packages.sort_by_key(|pkg| pkg.human_name());
+        Ok(packages)
+    }
 }
 
 pub async fn graphiql() -> impl IntoResponse {
