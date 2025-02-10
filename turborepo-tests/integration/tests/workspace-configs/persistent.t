@@ -11,17 +11,15 @@ This test covers:
 # persistent-task-1 is persistent:true in the root workspace, and does NOT get overriden in the workspace
   $ ${TURBO} run persistent-task-1-parent --filter=persistent
     x Invalid task configuration
-  
-  Error: 
-    x "persistent#persistent-task-1" is a persistent task,
-    | "persistent#persistent-task-1-parent" cannot depend on it
-      ,-[turbo.json:89:9]
-   88 |       "dependsOn": [
-   89 |         "persistent-task-1"
-      :         ^^^^^^^^^|^^^^^^^^^
-      :                  `-- persistent task
-   90 |       ]
-      `----
+    `->   x "persistent#persistent-task-1" is a persistent task,
+          | "persistent#persistent-task-1-parent" cannot depend on it
+            ,-[turbo.json:89:9]
+         88 |       "dependsOn": [
+         89 |         "persistent-task-1"
+            :         ^^^^^^^^^|^^^^^^^^^
+            :                  `-- persistent task
+         90 |       ]
+            `----
   
   [1]
 
@@ -53,17 +51,15 @@ This test covers:
 # persistent-task-3 is defined in workspace, but does NOT have the persistent flag
   $ ${TURBO} run persistent-task-3-parent --filter=persistent
     x Invalid task configuration
-  
-  Error: 
-    x "persistent#persistent-task-3" is a persistent task,
-    | "persistent#persistent-task-3-parent" cannot depend on it
-       ,-[turbo.json:99:9]
-    98 |       "dependsOn": [
-    99 |         "persistent-task-3"
-       :         ^^^^^^^^^|^^^^^^^^^
-       :                  `-- persistent task
-   100 |       ]
-       `----
+    `->   x "persistent#persistent-task-3" is a persistent task,
+          | "persistent#persistent-task-3-parent" cannot depend on it
+             ,-[turbo.json:99:9]
+          98 |       "dependsOn": [
+          99 |         "persistent-task-3"
+             :         ^^^^^^^^^|^^^^^^^^^
+             :                  `-- persistent task
+         100 |       ]
+             `----
   
   [1]
 
@@ -71,16 +67,14 @@ This test covers:
 # persistent-task-4 has no config in the root workspace, and is set to true in the workspace
   $ ${TURBO} run persistent-task-4-parent --filter=persistent
     x Invalid task configuration
-  
-  Error: 
-    x "persistent#persistent-task-4" is a persistent task,
-    | "persistent#persistent-task-4-parent" cannot depend on it
-       ,-[turbo.json:104:9]
-   103 |       "dependsOn": [
-   104 |         "persistent-task-4"
-       :         ^^^^^^^^^|^^^^^^^^^
-       :                  `-- persistent task
-   105 |       ]
-       `----
+    `->   x "persistent#persistent-task-4" is a persistent task,
+          | "persistent#persistent-task-4-parent" cannot depend on it
+             ,-[turbo.json:104:9]
+         103 |       "dependsOn": [
+         104 |         "persistent-task-4"
+             :         ^^^^^^^^^|^^^^^^^^^
+             :                  `-- persistent task
+         105 |       ]
+             `----
   
   [1]

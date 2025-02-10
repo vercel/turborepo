@@ -31,7 +31,7 @@ pub mod parser;
 
 pub use loader::TurboJsonLoader;
 
-use crate::config::UnnecessaryPackageTaskSyntaxError;
+use crate::{boundaries::RootBoundariesConfig, config::UnnecessaryPackageTaskSyntaxError};
 
 #[derive(Serialize, Deserialize, Debug, Default, PartialEq, Clone, Deserializable)]
 #[serde(rename_all = "camelCase")]
@@ -53,6 +53,8 @@ pub struct SpacesJson {
 pub struct TurboJson {
     text: Option<Arc<str>>,
     path: Option<Arc<str>>,
+    pub(crate) tags: Option<Spanned<Vec<Spanned<String>>>>,
+    pub(crate) boundaries: Option<Spanned<RootBoundariesConfig>>,
     pub(crate) extends: Spanned<Vec<String>>,
     pub(crate) global_deps: Vec<String>,
     pub(crate) global_env: Vec<String>,
@@ -145,6 +147,12 @@ pub struct RawTurboJson {
     pub env_mode: Option<EnvMode>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cache_dir: Option<Spanned<UnescapedString>>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tags: Option<Spanned<Vec<Spanned<String>>>>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub boundaries: Option<Spanned<RootBoundariesConfig>>,
 
     #[deserializable(rename = "//")]
     #[serde(skip)]
@@ -565,6 +573,7 @@ impl TryFrom<RawTurboJson> for TurboJson {
         Ok(TurboJson {
             text: raw_turbo.span.text,
             path: raw_turbo.span.path,
+            tags: raw_turbo.tags,
             global_env: {
                 let mut global_env: Vec<_> = global_env.into_iter().collect();
                 global_env.sort();
@@ -593,6 +602,7 @@ impl TryFrom<RawTurboJson> for TurboJson {
                 .extends
                 .unwrap_or_default()
                 .map(|s| s.into_iter().map(|s| s.into()).collect()),
+            boundaries: raw_turbo.boundaries,
             // Spaces and Remote Cache config is handled through layered config
         })
     }
@@ -764,17 +774,61 @@ mod tests {
 
     use super::{RawTurboJson, Spanned, TurboJson, UIMode};
     use crate::{
+        boundaries::RootBoundariesConfig,
         cli::OutputLogsMode,
         run::task_id::TaskName,
         task_graph::{TaskDefinition, TaskOutputs},
         turbo_json::RawTaskDefinition,
     };
 
+    #[test_case("{}", "empty boundaries")]
+    #[test_case(r#"{"tags": {} }"#, "empty tags")]
+    #[test_case(
+        r#"{"tags": { "my-tag": { "dependencies": { "allow": ["my-package"] } } } }"#,
+        "tags and dependencies"
+    )]
+    #[test_case(
+        r#"{
+        "tags": {
+            "my-tag": {
+                "dependencies": {
+                    "allow": ["my-package"],
+                    "deny": ["my-other-package"]
+                }
+            }
+        }
+    }"#,
+        "tags and dependencies 2"
+    )]
+    #[test_case(
+        r#"{
+        "tags": {
+            "my-tag": {
+                "dependents": {
+                    "allow": ["my-package"],
+                    "deny": ["my-other-package"]
+                }
+            }
+        }
+    }"#,
+        "tags and dependents"
+    )]
+    fn test_deserialize_boundaries(json: &str, name: &str) {
+        let deserialized_result = deserialize_from_json_str(
+            json,
+            JsonParserOptions::default().with_allow_comments(),
+            "turbo.json",
+        );
+        let raw_task_definition: RootBoundariesConfig =
+            deserialized_result.into_deserialized().unwrap();
+        insta::assert_json_snapshot!(name.replace(' ', "_"), raw_task_definition);
+    }
+
     #[test_case(
         "{}",
         RawTaskDefinition::default(),
         TaskDefinition::default()
-    ; "empty")]
+    ; "empty task definition")]
     #[test_case(
         r#"{ "persistent": false }"#,
         RawTaskDefinition {
@@ -989,6 +1043,14 @@ mod tests {
             .and_then(|build| build.value.output_logs.clone())
             .map(|mode| mode.into_inner());
         assert_eq!(actual, expected);
+    }
+
+    #[test_case(r#"{ "tags": [] }"#, "empty tags in package")]
+    #[test_case(r#"{ "tags": ["my-tag"] }"#, "one tag")]
+    #[test_case(r#"{ "tags": ["my-tag", "my-other-tag"] }"#, "two tags")]
+    fn test_tags(json: &str, name: &str) {
+        let json = RawTurboJson::parse(json, "").unwrap();
+        insta::assert_json_snapshot!(name.replace(' ', "_"), json.tags);
     }
 
     #[test_case(r#"{ "ui": "tui" }"#, Some(UIMode::Tui) ; "tui")]

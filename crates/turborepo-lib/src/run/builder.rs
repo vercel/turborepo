@@ -445,7 +445,7 @@ impl RunBuilder {
                 &pkg_dep_graph,
                 &root_turbo_json,
                 filtered_pkgs.keys(),
-                turbo_json_loader,
+                turbo_json_loader.clone(),
             )?;
         }
 
@@ -480,6 +480,7 @@ impl RunBuilder {
             env_at_execution_start,
             filtered_pkgs: filtered_pkgs.keys().cloned().collect(),
             pkg_dep_graph: Arc::new(pkg_dep_graph),
+            turbo_json_loader,
             root_turbo_json,
             scm,
             engine: Arc::new(engine),
