@@ -417,13 +417,13 @@ impl Run {
 
                 // We have a file import
                 let check_result = if import.starts_with(".") {
-                    self.check_file_import(&file_path, &package_root, import, span, &file_content)?
+                    self.check_file_import(file_path, &package_root, import, span, &file_content)?
                 } else if Self::is_potential_package_name(import) {
                     self.check_package_import(
                         import,
                         *import_type,
                         span,
-                        &file_path,
+                        file_path,
                         &file_content,
                         &package_info.package_json,
                         &internal_dependencies,
