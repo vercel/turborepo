@@ -655,6 +655,7 @@ mod tests {
         let tmp_path = tmp_dir.path().join("empty_token.json");
         let file_path = AbsoluteSystemPathBuf::try_from(tmp_path)
             .expect("Failed to create AbsoluteSystemPathBuf");
+        // TODO: This should probably be failing. An empty string is an empty token.
         file_path.create_with_contents(r#"{"token": ""}"#).unwrap();
 
         let result = Token::from_file(&file_path).expect("Failed to read token from file");

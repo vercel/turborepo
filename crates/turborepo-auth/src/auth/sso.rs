@@ -78,7 +78,7 @@ pub async fn sso_login<T: Client + TokenClient + CacheClient>(
                         api_client,
                         sso_team,
                         Some(valid_token_callback(
-                            "Existing Vercel token found!",
+                            "Existing Vercel token for {sso_team} found!",
                             color_config,
                         )),
                     )
@@ -466,7 +466,6 @@ mod tests {
     #[tokio::test]
     async fn test_sso_login_force_new_token() {
         let port = port_scanner::request_open_port().unwrap();
-        let api_server = tokio::spawn(start_test_server(port));
         let color_config = ColorConfig::new(false);
         let mut api_client = MockApiClient::new();
         api_client.set_base_url(&format!("http://localhost:{port}"));
@@ -487,7 +486,5 @@ mod tests {
 
         let result = sso_login(&options).await.unwrap();
         assert_matches!(result, Token::New(token) if token == EXPECTED_VERIFICATION_TOKEN);
-
-        api_server.abort();
     }
 }
