@@ -126,26 +126,18 @@ jobs:
         settings:
           - host: macos-latest
             target: "x86_64-apple-darwin"
-            container-options: "--rm"
           - host: macos-latest
             target: "aarch64-apple-darwin"
-            container-options: "--rm"
           - host: ubuntu-latest
-            container-options: "--platform=linux/amd64 --rm"
             target: "x86_64-unknown-linux-musl"
             setup: "sudo apt-get update && sudo apt-get install -y build-essential clang lldb llvm libclang-dev curl musl-tools sudo unzip"
           - host: ubuntu-latest
-            container-options: "--rm"
             target: "aarch64-unknown-linux-musl"
             rust-build-env: 'CC_aarch64_unknown_linux_musl=clang AR_aarch64_unknown_linux_musl=llvm-ar RUSTFLAGS="-Clink-self-contained=yes -Clinker=rust-lld"'
             setup: "sudo apt-get update && sudo apt-get install -y build-essential musl-tools clang llvm gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu"
           - host: windows-latest
             target: x86_64-pc-windows-msvc
-            container-options: "--rm"
     runs-on: ${{ matrix.settings.host }}
-    container:
-      image: ${{ matrix.settings.container }}
-      options: ${{ matrix.settings.container-options }}
     steps:
       - name: Show Stage Commit
         run: echo "${{ needs.stage.outputs.stage-branch }}"
@@ -153,10 +145,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: "${{ needs.stage.outputs.stage-branch }}"
-
-      - name: Setup Container
-        if: ${{ matrix.settings.container-setup }}
-        run: ${{ matrix.settings.container-setup }}
 
       - name: Setup Protoc
         uses: arduino/setup-protoc@v3
@@ -166,14 +154,6 @@ jobs:
 
       - name: Setup capnproto
         uses: ./.github/actions/setup-capnproto
-
-      - name: Setup Rust Up
-        if: ${{ matrix.settings.container-setup }}
-        # setup-rust-toolchain uses the --retry-connrefused flag with curl to install rustup
-        # this flag was added in curl 7.52.0, but the Ubuntu version we use only has 7.47.0
-        run: |
-          curl --proto '=https' --tlsv1.2 --retry 10 --location --silent --show-error --fail "https://sh.rustup.rs" | sh -s -- --default-toolchain none -y
-          echo "${CARGO_HOME:-$HOME/.cargo}/bin" >> $GITHUB_PATH
 
       - name: Rust Setup
         uses: actions-rust-lang/setup-rust-toolchain@v1
