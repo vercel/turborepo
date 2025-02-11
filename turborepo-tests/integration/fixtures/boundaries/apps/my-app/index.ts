@@ -7,18 +7,18 @@ import { Ship } from "@types/ship";
 import { walkThePlank } from "module-package";
 
 // Import from a package that is not specified, but we have `@boundaries-ignore` on it
-// @boundaries-ignore
+// @boundaries-ignore this is a test
 import { walkThePlank } from "module-package";
 
 // Import also works with other ignore directives
-// @boundaries-ignore
+// @boundaries-ignore this is a test
 // @ts-ignore
 import { walkThePlank } from "module-package";
 
 // import also works with whitespace
-//                      @boundaries-ignore
+//                      @boundaries-ignore here's another reason
 import { walkThePlank } from "module-package";
 
-// @boundaries-ignore
+// @boundaries-ignore one more reason
 
 import { walkThePlank } from "module-package";
