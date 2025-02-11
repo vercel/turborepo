@@ -119,7 +119,7 @@ jobs:
 
   build-rust:
     name: "Build Rust"
-    needs: [stage, rust-smoke-test, js-smoke-test]
+    needs: [stage]
     strategy:
       fail-fast: false
       matrix:
@@ -201,7 +201,7 @@ jobs:
   npm-publish:
     name: "Publish To NPM"
     runs-on: ubuntu-latest
-    needs: [stage, build-rust]
+    needs: [stage, build-rust, rust-smoke-test, js-smoke-test]
     steps:
       - name: Show Stage Commit
         run: echo "${{ needs.stage.outputs.stage-branch }}"
