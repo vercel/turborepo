@@ -70,7 +70,7 @@ impl Config {
     pub fn from_str(input: &str, source: &str) -> Result<Self, Error> {
         #[derive(Deserializable, Default)]
         struct VersionOnly {
-            version: String,
+            version: Option<String>,
         }
         let (version_only, _errs) = biome_deserialize::json::deserialize_from_json_str(
             input,
@@ -80,9 +80,11 @@ impl Config {
         .consume();
 
         let version = match version_only {
-            Some(VersionOnly { version }) => version,
+            Some(VersionOnly {
+                version: Some(version),
+            }) => version,
             // Default to version 1 if no version found
-            None => "1".to_string(),
+            Some(VersionOnly { version: None }) | None => "1".to_string(),
         };
 
         let inner = match version.as_str() {
