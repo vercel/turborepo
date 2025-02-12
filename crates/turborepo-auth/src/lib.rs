@@ -158,7 +158,33 @@ impl Token {
 
                 Ok(true)
             }
-            (Err(e), _) | (_, Err(e)) => Err(Error::APIError(e)),
+            (Err(e), _) | (_, Err(e)) => match e {
+                turborepo_api_client::Error::ReqwestError(e) => {
+                    if e.status() == Some(reqwest::StatusCode::FORBIDDEN) {
+                        let metadata = self.fetch_metadata(client).await?;
+                        if !metadata.token_type.is_empty() {
+                            return Err(Error::APIError(
+                                turborepo_api_client::Error::InvalidToken {
+                                    status: e
+                                        .status()
+                                        .unwrap_or(reqwest::StatusCode::FORBIDDEN)
+                                        .as_u16(),
+                                    url: e
+                                        .url()
+                                        .map(|u| u.to_string())
+                                        .unwrap_or("Unknown url".to_string()),
+                                    message: e.to_string(),
+                                },
+                            ));
+                        }
+                    }
+
+                    Err(Error::APIError(turborepo_api_client::Error::ReqwestError(
+                        e,
+                    )))
+                }
+                e => Err(Error::APIError(e)),
+            },
         }
     }
 
