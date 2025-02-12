@@ -1409,15 +1409,7 @@ pub async fn run(
             let event = CommandEventBuilder::new("clone").with_parent(&root_telemetry);
             event.track_call();
 
-            Ok(clone::run(
-                cwd,
-                event,
-                url,
-                dir.as_deref(),
-                *ci,
-                *local,
-                *depth,
-            )?)
+            Ok(clone::run(cwd, url, dir.as_deref(), *ci, *local, *depth)?)
         }
         #[allow(unused_variables)]
         Command::Daemon { command, idle_time } => {

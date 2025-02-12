@@ -21,7 +21,6 @@ pub enum Error {
 
 pub fn run(
     cwd: Option<&Utf8Path>,
-    _telemetry: CommandEventBuilder,
     url: &str,
     dir: Option<&str>,
     ci: bool,
