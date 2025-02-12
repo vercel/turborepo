@@ -180,6 +180,14 @@ mod test {
         path.create_with_contents(r#"{"version": "1", "applications": {"web": {"development": {"task": "serve"}}, "docs": {}}}"#)
     }
 
+    fn add_no_version_config(dir: &AbsoluteSystemPath) -> Result<(), std::io::Error> {
+        let path = dir.join_component(DEFAULT_MICROFRONTENDS_CONFIG_V1);
+        path.ensure_dir()?;
+        path.create_with_contents(
+            r#"{"applications": {"web": {"development": {"task": "serve"}}, "docs": {}}}"#,
+        )
+    }
+
     fn add_v2_config(dir: &AbsoluteSystemPath) -> Result<(), std::io::Error> {
         let path = dir.join_component(DEFAULT_MICROFRONTENDS_CONFIG_V1);
         path.ensure_dir()?;
@@ -195,6 +203,7 @@ mod test {
     struct LoadDirTest {
         has_v1: bool,
         has_alt_v1: bool,
+        has_versionless: bool,
         pkg_dir: &'static str,
         expected_version: Option<FoundConfig>,
         expected_filename: Option<&'static str>,
@@ -211,6 +220,7 @@ mod test {
                 pkg_dir,
                 has_v1: false,
                 has_alt_v1: false,
+                has_versionless: false,
                 expected_version: None,
                 expected_filename: None,
             }
@@ -223,6 +233,11 @@ mod test {
 
         pub const fn has_alt_v1(mut self) -> Self {
             self.has_alt_v1 = true;
+            self
+        }
+
+        pub const fn has_versionless(mut self) -> Self {
+            self.has_versionless = true;
             self
         }
 
@@ -257,9 +272,16 @@ mod test {
         .with_filename(DEFAULT_MICROFRONTENDS_CONFIG_V1_ALT);
 
     const LOAD_NONE: LoadDirTest = LoadDirTest::new("web");
+
+    const LOAD_VERSIONLESS: LoadDirTest = LoadDirTest::new("web")
+        .has_versionless()
+        .expects_v1()
+        .with_filename(DEFAULT_MICROFRONTENDS_CONFIG_V1);
+
     #[test_case(LOAD_V1)]
     #[test_case(LOAD_V1_ALT)]
     #[test_case(LOAD_NONE)]
+    #[test_case(LOAD_VERSIONLESS)]
     fn test_load_dir(case: LoadDirTest) {
         let dir = TempDir::new().unwrap();
         let repo_root = AbsoluteSystemPath::new(dir.path().to_str().unwrap()).unwrap();
@@ -270,6 +292,9 @@ mod test {
         }
         if case.has_alt_v1 {
             add_v1_alt_config(&pkg_path).unwrap();
+        }
+        if case.has_versionless {
+            add_no_version_config(&pkg_path).unwrap();
         }
 
         let config = Config::load_from_dir(repo_root, pkg_dir).unwrap();
