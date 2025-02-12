@@ -5,7 +5,6 @@ use thiserror::Error;
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_ci::is_ci;
 use turborepo_scm::clone::{CloneMode, Git};
-use turborepo_telemetry::events::command::CommandEventBuilder;
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -16,7 +15,7 @@ pub enum Error {
     Turbopath(#[from] turbopath::PathError),
 
     #[error("failed to clone repository")]
-    SCM(#[from] turborepo_scm::Error),
+    Scm(#[from] turborepo_scm::Error),
 }
 
 pub fn run(
