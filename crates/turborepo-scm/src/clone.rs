@@ -1,4 +1,8 @@
-use crate::{Error, Git};
+use std::{backtrace::Backtrace, process::Command};
+
+use turbopath::AbsoluteSystemPathBuf;
+
+use crate::{Error, GitRepo};
 
 pub enum CloneMode {
     /// Cloning locally, do a blobless clone (good UX and reasonably fast)
@@ -11,10 +15,48 @@ pub enum CloneMode {
 // this, they can override or fetch it themselves.
 const MAX_CLONE_DEPTH: usize = 64;
 
+/// A wrapper around the git binary that is not tied to a specific repo.
+pub struct Git {
+    bin: AbsoluteSystemPathBuf,
+}
+
 impl Git {
+    pub fn find() -> Result<Self, Error> {
+        Ok(Self {
+            bin: GitRepo::find_bin()?,
+        })
+    }
+
+    pub fn spawn_git_command(
+        &self,
+        cwd: &AbsoluteSystemPathBuf,
+        args: &[&str],
+        pathspec: &str,
+    ) -> Result<(), Error> {
+        let mut command = Command::new(self.bin.as_std_path());
+        command
+            .args(args)
+            .current_dir(cwd)
+            .env("GIT_OPTIONAL_LOCKS", "0");
+
+        if !pathspec.is_empty() {
+            command.arg("--").arg(pathspec);
+        }
+
+        let output = command.spawn()?.wait_with_output()?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+            Err(Error::Git(stderr, Backtrace::capture()))
+        } else {
+            Ok(())
+        }
+    }
+
     pub fn clone(
         &self,
         url: &str,
+        cwd: AbsoluteSystemPathBuf,
         dir: Option<&str>,
         branch: Option<&str>,
         mode: CloneMode,
@@ -39,7 +81,7 @@ impl Git {
             args.push(dir);
         }
 
-        self.spawn_git_command(&args, "")?;
+        self.spawn_git_command(&cwd, &args, "")?;
 
         Ok(())
     }

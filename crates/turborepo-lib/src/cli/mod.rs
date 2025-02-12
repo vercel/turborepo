@@ -1371,7 +1371,6 @@ pub async fn run(
     };
 
     cli_args.command = Some(command);
-    cli_args.cwd = Some(repo_root.as_path().to_owned());
 
     let root_telemetry = GenericEventBuilder::new();
     root_telemetry.track_start();
@@ -1409,9 +1408,9 @@ pub async fn run(
         } => {
             let event = CommandEventBuilder::new("clone").with_parent(&root_telemetry);
             event.track_call();
-            let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
+
             Ok(clone::run(
-                base,
+                cwd,
                 event,
                 url,
                 dir.as_deref(),

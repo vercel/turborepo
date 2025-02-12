@@ -1,21 +1,26 @@
-use thiserror::Error;
-use turborepo_ci::is_ci;
-use turborepo_scm::{clone::CloneMode, SCM};
-use turborepo_telemetry::events::command::CommandEventBuilder;
+use std::env::current_dir;
 
-use crate::commands::CommandBase;
+use camino::Utf8Path;
+use thiserror::Error;
+use turbopath::AbsoluteSystemPathBuf;
+use turborepo_ci::is_ci;
+use turborepo_scm::clone::{CloneMode, Git};
+use turborepo_telemetry::events::command::CommandEventBuilder;
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("failed to find git binary")]
-    GitBinaryNotFound,
+    #[error("path is not valid UTF-8")]
+    Path(#[from] camino::FromPathBufError),
+
+    #[error(transparent)]
+    Turbopath(#[from] turbopath::PathError),
 
     #[error("failed to clone repository")]
     SCM(#[from] turborepo_scm::Error),
 }
 
 pub fn run(
-    base: CommandBase,
+    cwd: Option<&Utf8Path>,
     _telemetry: CommandEventBuilder,
     url: &str,
     dir: Option<&str>,
@@ -23,6 +28,16 @@ pub fn run(
     local: bool,
     depth: Option<usize>,
 ) -> Result<i32, Error> {
+    // We do *not* want to use the repo root but the actual, literal cwd for clone
+    let cwd = if let Some(cwd) = cwd {
+        cwd.to_owned()
+    } else {
+        current_dir()
+            .expect("could not get current directory")
+            .try_into()?
+    };
+    let abs_cwd = AbsoluteSystemPathBuf::from_cwd(cwd)?;
+
     let clone_mode = if ci {
         CloneMode::CI
     } else if local {
@@ -33,11 +48,8 @@ pub fn run(
         CloneMode::Local
     };
 
-    let SCM::Git(git) = SCM::new(&base.repo_root) else {
-        return Err(Error::GitBinaryNotFound);
-    };
-
-    git.clone(url, dir, None, clone_mode, depth)?;
+    let git = Git::find()?;
+    git.clone(url, abs_cwd, dir, None, clone_mode, depth)?;
 
     Ok(0)
 }
