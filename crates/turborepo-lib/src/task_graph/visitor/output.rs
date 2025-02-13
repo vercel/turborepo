@@ -94,7 +94,7 @@ impl<W: Write> CacheOutput for TaskCacheOutput<W> {
                 let writer = direct.output_prefixed_writer();
                 turborepo_ui::replay_logs(writer, log_file)
             }
-            TaskCacheOutput::UI(task) => turborepo_ui::replay_logs(task, log_file),
+            TaskCacheOutput::UI(task) => turborepo_ui::replay_logs_with_crlf(task, log_file),
         }
     }
 }
