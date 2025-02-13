@@ -846,7 +846,7 @@ pub struct ExecutionArgs {
     #[clap(short = 'F', long, group = "scope-filter-group")]
     pub filter: Vec<String>,
 
-    /// Run only tasks that are affected by changes between
+    /// Filter to only packages that are affected by changes between
     /// the current branch and `main`
     #[clap(long, group = "scope-filter-group", conflicts_with = "filter")]
     pub affected: bool,
