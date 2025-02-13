@@ -115,7 +115,7 @@ impl PackageChangeMapper for GlobalDepsPackageChangeMapper<'_> {
         // workspace package dependencies
         if matches!(
             path.as_str(),
-            "package.json" | "pnpm-lock.yaml" | "yarn.lock"
+            "package-lock.json" | "pnpm-lock.yaml" | "yarn.lock"
         ) {
             return PackageMapping::Package((
                 WorkspacePackage {
@@ -159,10 +159,10 @@ mod tests {
     use super::{DefaultPackageChangeMapper, GlobalDepsPackageChangeMapper};
     use crate::{
         change_mapper::{
-            AllPackageChangeReason, ChangeMapper, PackageChanges, PackageInclusionReason,
+            AllPackageChangeReason, ChangeMapper, LockfileContents, PackageChanges,
+            PackageInclusionReason,
         },
-        discovery,
-        discovery::PackageDiscovery,
+        discovery::{self, PackageDiscovery},
         package_graph::{PackageGraphBuilder, WorkspacePackage},
         package_json::PackageJson,
     };
@@ -207,7 +207,7 @@ mod tests {
             [AnchoredSystemPathBuf::from_raw("README.md")?]
                 .into_iter()
                 .collect(),
-            None,
+            LockfileContents::Unknown,
         )?;
 
         // We should return All because we don't have global deps and
@@ -227,7 +227,7 @@ mod tests {
             [AnchoredSystemPathBuf::from_raw("README.md")?]
                 .into_iter()
                 .collect(),
-            None,
+            LockfileContents::Unknown,
         )?;
 
         // We only get a root workspace change since we have global deps specified and
