@@ -181,7 +181,6 @@ const INVALIDATION_PATHS: &[&str] = &[
     "package-lock.json",
     "yarn.lock",
     "bun.lockb",
-    // "bun.lock", // Not yet.
 ];
 
 impl Subscriber {
