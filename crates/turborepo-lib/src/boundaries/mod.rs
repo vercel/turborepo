@@ -13,7 +13,10 @@ use globwalk::Settings;
 use miette::{Diagnostic, NamedSource, Report, SourceSpan};
 use regex::Regex;
 use swc_common::{
-    comments::SingleThreadedComments, errors::Handler, input::StringInput, FileName, SourceMap,
+    comments::{Comments, SingleThreadedComments},
+    errors::Handler,
+    input::StringInput,
+    FileName, SourceMap, Span,
 };
 use swc_ecma_ast::EsVersion;
 use swc_ecma_parser::{lexer::Lexer, Capturing, EsSyntax, Parser, Syntax, TsSyntax};
@@ -133,9 +136,14 @@ static PACKAGE_NAME_REGEX: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"^(@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$").unwrap()
 });
 
+/// Maximum number of warnings to show
+const MAX_WARNINGS: usize = 16;
+
+#[derive(Default)]
 pub struct BoundariesResult {
     files_checked: usize,
     packages_checked: usize,
+    warnings: Vec<String>,
     pub source_map: Arc<SourceMap>,
     pub diagnostics: Vec<BoundariesDiagnostic>,
 }
@@ -176,6 +184,13 @@ impl BoundariesResult {
             )
         };
 
+        for warning in self.warnings.iter().take(MAX_WARNINGS) {
+            warn!("{}", warning);
+        }
+        if !self.warnings.is_empty() {
+            eprintln!();
+        }
+
         println!(
             "Checked {} files in {} packages, {}",
             self.files_checked, self.packages_checked, result_message
@@ -187,11 +202,10 @@ impl Run {
     pub async fn check_boundaries(&self) -> Result<BoundariesResult, Error> {
         let package_tags = self.get_package_tags();
         let rules_map = self.get_processed_rules_map();
-        let packages = self.pkg_dep_graph().packages();
+        let packages: Vec<_> = self.pkg_dep_graph().packages().collect();
         let repo = Repository::discover(self.repo_root()).ok().map(Mutex::new);
-        let mut diagnostics = vec![];
-        let source_map = SourceMap::default();
-        let mut total_files_checked = 0;
+        let mut result = BoundariesResult::default();
+
         for (package_name, package_info) in packages {
             if !self.filtered_pkgs().contains(package_name)
                 || matches!(package_name, PackageName::Root)
@@ -199,28 +213,31 @@ impl Run {
                 continue;
             }
 
-            let (files_checked, package_diagnostics) = self
-                .check_package(
-                    &repo,
-                    package_name,
-                    package_info,
-                    &source_map,
-                    &package_tags,
-                    &rules_map,
-                )
-                .await?;
-
-            total_files_checked += files_checked;
-            diagnostics.extend(package_diagnostics);
+            self.check_package(
+                &repo,
+                package_name,
+                package_info,
+                &package_tags,
+                &rules_map,
+                &mut result,
+            )
+            .await?;
         }
 
-        Ok(BoundariesResult {
-            files_checked: total_files_checked,
-            // Subtract 1 for the root package
-            packages_checked: self.pkg_dep_graph().len() - 1,
-            source_map: Arc::new(source_map),
-            diagnostics,
-        })
+        Ok(result)
+    }
+
+    /// Returns the underlying reason if an import has been marked as ignored
+    fn get_ignored_comment(comments: &SingleThreadedComments, span: Span) -> Option<String> {
+        if let Some(import_comments) = comments.get_leading(span.lo()) {
+            for comment in import_comments {
+                if let Some(reason) = comment.text.trim().strip_prefix("@boundaries-ignore") {
+                    return Some(reason.to_string());
+                }
+            }
+        }
+
+        None
     }
 
     /// Either returns a list of errors and number of files checked or a single,
@@ -230,17 +247,16 @@ impl Run {
         repo: &Option<Mutex<Repository>>,
         package_name: &PackageName,
         package_info: &PackageInfo,
-        source_map: &SourceMap,
         all_package_tags: &HashMap<PackageName, Spanned<Vec<Spanned<String>>>>,
         tag_rules: &Option<ProcessedRulesMap>,
-    ) -> Result<(usize, Vec<BoundariesDiagnostic>), Error> {
-        let (files_checked, mut diagnostics) = self
-            .check_package_files(repo, package_name, package_info, source_map)
+        result: &mut BoundariesResult,
+    ) -> Result<(), Error> {
+        self.check_package_files(repo, package_name, package_info, result)
             .await?;
 
         if let Some(current_package_tags) = all_package_tags.get(package_name) {
             if let Some(tag_rules) = tag_rules {
-                diagnostics.extend(self.check_package_tags(
+                result.diagnostics.extend(self.check_package_tags(
                     PackageNode::Workspace(package_name.clone()),
                     current_package_tags,
                     all_package_tags,
@@ -256,7 +272,9 @@ impl Run {
             }
         }
 
-        Ok((files_checked, diagnostics))
+        result.packages_checked += 1;
+
+        Ok(())
     }
 
     fn is_potential_package_name(import: &str) -> bool {
@@ -268,8 +286,8 @@ impl Run {
         repo: &Option<Mutex<Repository>>,
         package_name: &PackageName,
         package_info: &PackageInfo,
-        source_map: &SourceMap,
-    ) -> Result<(usize, Vec<BoundariesDiagnostic>), Error> {
+        result: &mut BoundariesResult,
+    ) -> Result<(), Error> {
         let package_root = self.repo_root().resolve(package_info.package_path());
         let internal_dependencies = self
             .pkg_dep_graph()
@@ -295,9 +313,6 @@ impl Run {
             Settings::default().ignore_nested_packages(),
         )?;
 
-        let files_checked = files.len();
-
-        let mut diagnostics: Vec<BoundariesDiagnostic> = Vec::new();
         // We assume the tsconfig.json is at the root of the package
         let tsconfig_path = package_root.join_component("tsconfig.json");
 
@@ -305,7 +320,8 @@ impl Run {
             Tracer::create_resolver(tsconfig_path.exists().then(|| tsconfig_path.as_ref()));
 
         let mut not_supported_extensions = HashSet::new();
-        for file_path in files {
+
+        for file_path in &files {
             if let Some(ext @ ("svelte" | "vue")) = file_path.extension() {
                 not_supported_extensions.insert(ext.to_string());
                 continue;
@@ -324,7 +340,7 @@ impl Run {
 
             let comments = SingleThreadedComments::default();
 
-            let source_file = source_map.new_source_file(
+            let source_file = result.source_map.new_source_file(
                 FileName::Custom(file_path.to_string()).into(),
                 file_content.clone(),
             );
@@ -355,7 +371,9 @@ impl Run {
             let module = match parser.parse_module() {
                 Ok(module) => module,
                 Err(err) => {
-                    diagnostics.push(BoundariesDiagnostic::ParseError(file_path.to_owned(), err));
+                    result
+                        .diagnostics
+                        .push(BoundariesDiagnostic::ParseError(file_path.to_owned(), err));
                     continue;
                 }
             };
@@ -364,20 +382,48 @@ impl Run {
             let mut finder = ImportFinder::default();
             module.visit_with(&mut finder);
             for (import, span, import_type) in finder.imports() {
-                let (start, end) = source_map.span_to_char_offset(&source_file, *span);
+                // If the import is prefixed with `@boundaries-ignore`, we ignore it, but print
+                // a warning
+                match Self::get_ignored_comment(&comments, *span) {
+                    Some(reason) if reason.is_empty() => {
+                        result.warnings.push(
+                            "@boundaries-ignore requires a reason, e.g. `// @boundaries-ignore \
+                             implicit dependency`"
+                                .to_string(),
+                        );
+                    }
+                    Some(_) => {
+                        // Try to get the line number for warning
+                        let line = result.source_map.lookup_line(span.lo()).map(|l| l.line);
+                        if let Ok(line) = line {
+                            result
+                                .warnings
+                                .push(format!("ignoring import on line {} in {}", line, file_path));
+                        } else {
+                            result
+                                .warnings
+                                .push(format!("ignoring import in {}", file_path));
+                        }
+
+                        continue;
+                    }
+                    None => {}
+                }
+
+                let (start, end) = result.source_map.span_to_char_offset(&source_file, *span);
                 let start = start as usize;
                 let end = end as usize;
                 let span = SourceSpan::new(start.into(), end - start);
 
                 // We have a file import
                 let check_result = if import.starts_with(".") {
-                    self.check_file_import(&file_path, &package_root, import, span, &file_content)?
+                    self.check_file_import(file_path, &package_root, import, span, &file_content)?
                 } else if Self::is_potential_package_name(import) {
                     self.check_package_import(
                         import,
                         *import_type,
                         span,
-                        &file_path,
+                        file_path,
                         &file_content,
                         &package_info.package_json,
                         &internal_dependencies,
@@ -389,21 +435,20 @@ impl Run {
                 };
 
                 if let Some(diagnostic) = check_result {
-                    diagnostics.push(diagnostic);
+                    result.diagnostics.push(diagnostic);
                 }
             }
         }
 
         for ext in &not_supported_extensions {
-            warn!(
+            result.warnings.push(format!(
                 "{} files are currently not supported, boundaries checks will not apply to them",
                 ext
-            );
-        }
-        if !not_supported_extensions.is_empty() {
-            println!();
+            ));
         }
 
-        Ok((files_checked, diagnostics))
+        result.files_checked += files.len();
+
+        Ok(())
     }
 }
