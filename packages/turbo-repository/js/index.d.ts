@@ -57,6 +57,7 @@ export class Workspace {
    */
   affectedPackages(
     files: Array<string>,
-    changedLockfile?: string | undefined | null
+    comparison?: string | undefined | null,
+    optimizeGlobalInvalidations?: boolean | undefined | null
   ): Promise<Array<Package>>;
 }

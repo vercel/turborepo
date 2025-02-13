@@ -160,7 +160,8 @@ mod tests {
     use super::{DefaultPackageChangeMapper, GlobalDepsPackageChangeMapper};
     use crate::{
         change_mapper::{
-            AllPackageChangeReason, ChangeMapper, PackageChanges, PackageInclusionReason,
+            AllPackageChangeReason, ChangeMapper, LockfileContents, PackageChanges,
+            PackageInclusionReason,
         },
         discovery::{self, PackageDiscovery},
         package_graph::{PackageGraphBuilder, WorkspacePackage},
@@ -208,7 +209,7 @@ mod tests {
             [AnchoredSystemPathBuf::from_raw("README.md")?]
                 .into_iter()
                 .collect(),
-            None,
+            LockfileContents::Unknown,
         )?;
 
         // We should return All because we don't have global deps and
@@ -228,7 +229,7 @@ mod tests {
             [AnchoredSystemPathBuf::from_raw("README.md")?]
                 .into_iter()
                 .collect(),
-            None,
+            LockfileContents::Unknown,
         )?;
 
         // We only get a root workspace change since we have global deps specified and
