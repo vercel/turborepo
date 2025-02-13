@@ -389,7 +389,6 @@ mod test {
     use turborepo_vercel_api_mock::start_test_server;
 
     use crate::{
-        cli::LinkTarget,
         commands::{link, CommandBase},
         config::TurborepoConfigBuilder,
         opts::Opts,
@@ -440,7 +439,7 @@ mod test {
             ColorConfig::new(false),
         );
 
-        link::link(&mut base, None, false, false, LinkTarget::RemoteCache).await?;
+        link::link(&mut base, None, false, false).await?;
 
         handle.abort();
 

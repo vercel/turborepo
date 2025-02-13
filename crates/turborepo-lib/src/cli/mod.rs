@@ -1572,7 +1572,7 @@ mod test {
     use itertools::Itertools;
     use pretty_assertions::assert_eq;
 
-    use crate::cli::{ExecutionArgs, LinkTarget, RunArgs};
+    use crate::cli::{ExecutionArgs, RunArgs};
 
     struct CommandTestCase {
         command: &'static str,
@@ -2435,7 +2435,6 @@ mod test {
                     no_gitignore: false,
                     scope: None,
                     yes: false,
-                    target: LinkTarget::RemoteCache,
                 }),
                 ..Args::default()
             }
@@ -2450,7 +2449,6 @@ mod test {
                     no_gitignore: false,
                     scope: None,
                     yes: false,
-                    target: LinkTarget::RemoteCache,
                 }),
                 cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
@@ -2467,7 +2465,6 @@ mod test {
                     yes: true,
                     no_gitignore: false,
                     scope: None,
-                    target: LinkTarget::RemoteCache,
                 }),
                 cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
@@ -2484,7 +2481,6 @@ mod test {
                     yes: false,
                     no_gitignore: false,
                     scope: Some("foo".to_string()),
-                    target: LinkTarget::RemoteCache,
                 }),
                 cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
@@ -2501,7 +2497,6 @@ mod test {
                     yes: false,
                     no_gitignore: true,
                     scope: None,
-                    target: LinkTarget::RemoteCache,
                 }),
                 cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
