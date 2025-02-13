@@ -157,6 +157,13 @@ When you're working on a specific package, you might want to run tasks for the p
 turbo build --filter=...ui
 ```
 
+### Filtering to include dependencies
+If you want to narrow the scope down to only an app and its dependencies, you can use the ... microsyntax in reverse. This ensures that only the specified package and the dependencies it relies on are included in the task.
+
+```bash title="Terminal"
+turbo dev --filter=web...
+```
+
 ### Filtering by source control changes
 
 Using filters to run tasks based on changes in source control is a great way to run only the tasks for packages that are affected by your changes. **Source control filters must be wrapped in `[]`**.
