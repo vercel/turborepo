@@ -4,6 +4,7 @@ description: Learn how to use Package Configurations to bring greater task flexi
 ---
 
 import { Callout } from '#/components/callout';
+import { ExperimentalBadge } from '#/components/experimental-badge';
 
 Many monorepos can declare a `turbo.json` in the root directory with a
 [task description](/repo/docs/reference/configuration#tasks) that applies to all packages. But, sometimes, a monorepo can contain packages that need to configure their tasks differently.
@@ -182,9 +183,9 @@ you don't need to duplicate them. You only need to override `outputs` in
   expect that Package Configurations can be used for most use cases instead.
 </Callout>
 
-## Boundaries Tags
+## Boundaries Tags <ExperimentalBadge>Experimental</ExperimentalBadge>
 
-Package configuration is also used to declare tags for boundaries. To do so, add a `tags` field to your `turbo.json`:
+Package Configurations are also used to declare Tags for Boundaries. To do so, add a `tags` field to your `turbo.json`:
 
 ```diff title="./apps/my-app/turbo.json"
 {
@@ -199,7 +200,7 @@ Package configuration is also used to declare tags for boundaries. To do so, add
 }
 ```
 
-From there, you can define rules for which dependencies or dependents a tag can have. Check out the [Boundaries documentation](/repo/docs/reference/boundaries) for more details
+From there, you can define rules for which dependencies or dependents a tag can have. Check out the [Boundaries documentation](/repo/docs/reference/boundaries#tags) for more details.
 
 ## Limitations
 
