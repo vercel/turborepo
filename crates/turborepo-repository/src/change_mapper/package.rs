@@ -115,7 +115,7 @@ impl PackageChangeMapper for GlobalDepsPackageChangeMapper<'_> {
         // workspace package dependencies
         if matches!(
             path.as_str(),
-            "package-lock.json" | "pnpm-lock.yaml" | "yarn.lock"
+            "package.json" | "pnpm-lock.yaml" | "yarn.lock"
         ) {
             return PackageMapping::Package((
                 WorkspacePackage {
