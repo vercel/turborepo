@@ -493,6 +493,73 @@ Label a `persistent` task as `interruptible` to allow it to be restarted by `tur
 that are affected. However, if a task is persistent, it will not be restarted by default.
 To enable restarting persistent tasks, set `interruptible` to `true`.
 
+## Boundaries
+
+The `boundaries` tag allows you to define rules for the [`boundaries` command](<(/repo/docs/reference/boundaries)>).
+
+```jsonc title="./turbo.json"
+{
+  "boundaries": {}
+}
+```
+
+### `tags`
+
+Each key in the `tags` object is the name of a tag that can be checked with [`turbo boundaries`](/repo/docs/reference/boundaries).
+
+In the configuration object for a tag, you can define rules for dependencies and dependents.
+
+#### `dependencies` and `dependents`
+
+Rules for a tag's dependencies and dependents.
+
+You can add an allowlist and a denylist:
+
+```jsonc title="./turbo.json"
+{
+  "boundaries": {
+    "utils": {
+      "dependencies": {
+        // permit only packages with the `ui` tag
+        "allow": ["ui"],
+        // and ban packages with the `unsafe` tag
+        "deny": ["unsafe"]
+      }
+    }
+  }
+}
+```
+
+Both the allowlist and the denylist can be omitted.
+
+```jsonc title="./turbo.json"
+{
+  "boundaries": {
+    "utils": {
+      "dependencies": {
+        // only packages with the `unsafe` tag are banned, all other packages permitted
+        "deny": ["unsafe"]
+      }
+    }
+  }
+}
+```
+
+Rules can also be added for a tag's dependents, i.e. packages that import this tag.
+
+```jsonc title="./turbo.json"
+{
+  "boundaries": {
+    "utils": {
+      "dependents": {
+        // only packages with the `web` tag can import packages with the `utils` tag
+        "allow": ["web"]
+      }
+    }
+  }
+}
+```
+
 ## Remote caching
 
 The global `remoteCache` option has a variety of fields for configuring remote cache usage
