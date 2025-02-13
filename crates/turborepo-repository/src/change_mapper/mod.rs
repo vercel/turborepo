@@ -194,8 +194,7 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
 
                     // We don't have the actual contents, so just invalidate everything
                     LockfileContents::UnknownChange => {
-                        // this can happen in a blobless checkout ((TODO check whether this is
-                        // treeless))
+                        // this can happen in a blobless checkout
                         debug!(
                             "we know the lockfile changed but we don't have the contents so we \
                              have to assume all packages changed and rebuild everything"
