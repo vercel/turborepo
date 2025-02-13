@@ -444,13 +444,9 @@ impl Run {
         let run_tracker = RunTracker::new(
             self.start_at,
             self.opts.synthesize_command(),
-            self.opts.scope_opts.pkg_inference_root.as_deref(),
             &self.env_at_execution_start,
             &self.repo_root,
             self.version,
-            self.opts.run_opts.experimental_space_id.clone(),
-            self.api_client.clone(),
-            self.api_auth.clone(),
             Vendor::get_user(),
             &self.scm,
         );
