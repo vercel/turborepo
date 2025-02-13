@@ -5,6 +5,7 @@ use std::{
 
 use napi::Error;
 use napi_derive::napi;
+use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
 use turborepo_repository::{
     change_mapper::{
@@ -193,12 +194,15 @@ impl Workspace {
     ) -> LockfileContents {
         let lockfile_name = self.graph.package_manager().lockfile_name();
         changed_files
-            .get(AnchoredSystemPath::new(&lockfile_name).unwrap())
-            .and_then(|_| {
+            .contains(AnchoredSystemPath::new(&lockfile_name).unwrap())
+            .then(|| {
                 let git = SCM::new(workspace_root);
-                let anchored_path = workspace_root.join_component(&lockfile_name);
-                let contents = git.previous_content(from_commit, &anchored_path).unwrap();
-                Some(LockfileContents::Changed(contents))
+                let anchored_path = workspace_root.join_component(lockfile_name);
+                git.previous_content(from_commit, &anchored_path)
+                    .map(LockfileContents::Changed)
+                    .inspect_err(|e| debug!("{e}"))
+                    .ok()
+                    .unwrap_or(LockfileContents::UnknownChange)
             })
             .unwrap_or(LockfileContents::Unknown)
     }
