@@ -170,7 +170,7 @@ function getBinaryPath() {
 
   // Has the wrong platform's binaries available.
   const availableBinaries = availablePlatforms.map(platform => availableArchs.map(arch => `turbo-${platform}-${arch}/bin/turbo${platform === 'windows' ? '.exe' : ''}`)).flat();
-  const definitelyWrongBinaries = availableBinaries.filter(binary => binary !== correctBinary || binary !== correctBinary);;
+  const definitelyWrongBinaries = availableBinaries.filter(binary => binary !== correctBinary && binary !== alternateBinary);
   const otherInstalled = definitelyWrongBinaries.filter(binaryPath => {
     try {
       return require.resolve(binaryPath);
