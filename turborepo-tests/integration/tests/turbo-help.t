@@ -339,8 +339,6 @@ Test help flag for link command
             Answer yes to all prompts (default false)
         --api <API>
             Override the endpoint for API calls
-        --target <TARGET>
-            Specify what should be linked (default "remote cache") [default: remote-cache] [possible values: remote-cache, spaces]
         --color
             Force color usage in the terminal
         --cwd <CWD>
