@@ -6,9 +6,9 @@ use std::{
 use nom::Finish;
 use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPathBuf};
 
-use crate::{package_deps::GitHashes, wait_for_success, Error, Git};
+use crate::{package_deps::GitHashes, wait_for_success, Error, GitRepo};
 
-impl Git {
+impl GitRepo {
     #[tracing::instrument(skip(self))]
     pub fn git_ls_tree(&self, root_path: &AbsoluteSystemPathBuf) -> Result<GitHashes, Error> {
         let mut hashes = GitHashes::new();

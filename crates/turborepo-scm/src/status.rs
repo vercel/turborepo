@@ -6,9 +6,9 @@ use std::{
 use nom::Finish;
 use turbopath::{AbsoluteSystemPath, RelativeUnixPathBuf};
 
-use crate::{package_deps::GitHashes, wait_for_success, Error, Git};
+use crate::{package_deps::GitHashes, wait_for_success, Error, GitRepo};
 
-impl Git {
+impl GitRepo {
     #[tracing::instrument(skip(self, root_path, hashes))]
     pub(crate) fn append_git_status(
         &self,
