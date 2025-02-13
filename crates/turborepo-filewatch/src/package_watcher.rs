@@ -181,6 +181,7 @@ const INVALIDATION_PATHS: &[&str] = &[
     package_manager::npm::LOCKFILE,
     package_manager::yarn::LOCKFILE,
     package_manager::bun::LOCKFILE_BINARY,
+    package_manager::bun::LOCKFILE,
 ];
 
 impl Subscriber {
