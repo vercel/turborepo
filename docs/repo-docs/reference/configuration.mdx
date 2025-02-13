@@ -5,6 +5,7 @@ description: Learn how to configure Turborepo through `turbo.json`.
 
 import { Callout } from '#/components/callout';
 import { InVersion } from '#/components/in-version';
+import { ExperimentalBadge } from '#/components/experimental-badge';
 import Link from 'next/link';
 
 Configure the behavior of `turbo` by adding a `turbo.json` file in your Workspace's root directory.
@@ -156,13 +157,25 @@ Turborepo's Environment Modes allow you to control which environment variables a
 - `"strict"`: Filter environment variables to only those that are specified in the `env` and `globalEnv` keys in `turbo.json`.
 - `"loose"`: Allow all environment variables for the process to be available.
 
-Read more about [Environment Modes](/repo/docs/crafting-your-repository/using-environment-variables#environment-modes).
-
 ```jsonc title="./turbo.json"
 {
   "envMode": "strict"
 }
 ```
+
+Read more about [Environment Modes](/repo/docs/crafting-your-repository/using-environment-variables#environment-modes).
+
+### `tags` <ExperimentalBadge>Experimental</ExperimentalBadge>
+
+```jsonc title="./apps/web/turbo.json"
+{
+  "tags": ["utils"]
+}
+```
+
+Adds a tag to a package for use with [Boundaries](/repo/docs/reference/boundaries).
+
+This key only works in [Package Configurations](/repo/docs/reference/package-configurations). Using this key in a root `turbo.json` will result in an error.
 
 ## Defining tasks
 
@@ -492,6 +505,73 @@ Label a `persistent` task as `interruptible` to allow it to be restarted by `tur
 `turbo watch` watches for changes to your packages and automatically restarts tasks
 that are affected. However, if a task is persistent, it will not be restarted by default.
 To enable restarting persistent tasks, set `interruptible` to `true`.
+
+## Boundaries
+
+The `boundaries` tag allows you to define rules for the [`boundaries` command](/repo/docs/reference/boundaries).
+
+```jsonc title="./turbo.json"
+{
+  "boundaries": {}
+}
+```
+
+### `tags`
+
+Each key in the `tags` object is the name of a tag that can be checked with [`turbo boundaries`](/repo/docs/reference/boundaries).
+
+In the configuration object for a tag, you can define rules for dependencies and dependents.
+
+#### `dependencies` and `dependents`
+
+Rules for a tag's dependencies and dependents.
+
+You can add an allowlist and a denylist:
+
+```jsonc title="./turbo.json"
+{
+  "boundaries": {
+    "utils": {
+      "dependencies": {
+        // permit only packages with the `ui` tag
+        "allow": ["ui"],
+        // and ban packages with the `unsafe` tag
+        "deny": ["unsafe"]
+      }
+    }
+  }
+}
+```
+
+Both the allowlist and the denylist can be omitted.
+
+```jsonc title="./turbo.json"
+{
+  "boundaries": {
+    "utils": {
+      "dependencies": {
+        // only packages with the `unsafe` tag are banned, all other packages permitted
+        "deny": ["unsafe"]
+      }
+    }
+  }
+}
+```
+
+Rules can also be added for a tag's dependents, i.e. packages that import this tag.
+
+```jsonc title="./turbo.json"
+{
+  "boundaries": {
+    "utils": {
+      "dependents": {
+        // only packages with the `web` tag can import packages with the `utils` tag
+        "allow": ["web"]
+      }
+    }
+  }
+}
+```
 
 ## Remote caching
 
