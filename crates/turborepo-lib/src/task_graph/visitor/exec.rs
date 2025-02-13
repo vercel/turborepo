@@ -210,10 +210,20 @@ impl ExecContext {
         let tracker = tracker.start().await;
         let span = tracing::debug_span!("execute_task", task = %self.task_id.task());
         span.follows_from(parent_span_id);
-        let result = self
+        let mut result = self
             .execute_inner(&output_client, telemetry)
             .instrument(span)
             .await;
+
+        // If the task resulted in an error, do not group in order to better highlight
+        // the error.
+        let is_error = matches!(result, Ok(ExecOutcome::Task { .. }));
+        let is_cache_hit = matches!(result, Ok(ExecOutcome::Success(SuccessOutcome::CacheHit)));
+        if let Err(e) = output_client.finish(is_error, is_cache_hit) {
+            telemetry.track_error(TrackedErrors::DaemonFailedToMarkOutputsAsCached);
+            error!("unable to flush output client: {e}");
+            result = Err(InternalError::Io(e));
+        }
 
         match result {
             Ok(ExecOutcome::Success(outcome)) => {

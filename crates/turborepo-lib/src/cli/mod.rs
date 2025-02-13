@@ -331,11 +331,6 @@ pub enum TelemetryCommand {
     Status,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, ValueEnum)]
-pub enum LinkTarget {
-    RemoteCache,
-}
-
 impl Args {
     pub fn new(os_args: Vec<OsString>) -> Self {
         let clap_args = match Args::parse(os_args) {
@@ -642,9 +637,6 @@ pub enum Command {
         /// Answer yes to all prompts (default false)
         #[clap(long, short)]
         yes: bool,
-        /// Specify what should be linked (default "remote cache")
-        #[clap(long, value_enum, default_value_t = LinkTarget::RemoteCache)]
-        target: LinkTarget,
     },
     /// Login to your Vercel account
     Login {
@@ -1383,7 +1375,6 @@ pub async fn run(
             no_gitignore,
             scope,
             yes,
-            target,
         } => {
             let event = CommandEventBuilder::new("link").with_parent(&root_telemetry);
             event.track_call();
@@ -1398,13 +1389,12 @@ pub async fn run(
             }
 
             let modify_gitignore = !*no_gitignore;
-            let to = *target;
             let yes = *yes;
             let scope = scope.clone();
             let mut base = CommandBase::new(cli_args, repo_root, version, color_config)?;
             event.track_ui_mode(base.opts.run_opts.ui_mode);
 
-            link::link(&mut base, scope, modify_gitignore, yes, to).await?;
+            link::link(&mut base, scope, modify_gitignore, yes).await?;
 
             Ok(0)
         }
