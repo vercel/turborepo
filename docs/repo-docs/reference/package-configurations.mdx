@@ -182,6 +182,25 @@ you don't need to duplicate them. You only need to override `outputs` in
   expect that Package Configurations can be used for most use cases instead.
 </Callout>
 
+## Boundaries Tags
+
+Package configuration is also used to declare tags for boundaries. To do so, add a `tags` field to your `turbo.json`:
+
+```diff title="./apps/my-app/turbo.json"
+{
++ "tags": ["my-tag"],
+  "extends": ["//"],
+  "tasks": {
+    "build": {
+      "dependsOn": ["compile"]
+    },
+    "compile": {}
+  }
+}
+```
+
+From there, you can define rules for which dependencies or dependents a tag can have. Check out the [Boundaries documentation](/repo/docs/reference/boundaries) for more details
+
 ## Limitations
 
 Although the general idea is the same as the root `turbo.json`, Package

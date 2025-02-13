@@ -20,6 +20,16 @@ Configure the behavior of `turbo` by adding a `turbo.json` file in your Workspac
 
 ## Global options
 
+### `tags`
+
+```jsonc title="./apps/web/turbo.json"
+{
+  "tags": ["utils"]
+}
+```
+
+Adds a tag to a package. Does not work on the root `turbo.json`, only in package configuration. Currently only used for [`turbo boundaries`](/repo/docs/reference/boundaries).
+
 ### `extends`
 
 ```jsonc title="./apps/web/turbo.json"
@@ -495,7 +505,7 @@ To enable restarting persistent tasks, set `interruptible` to `true`.
 
 ## Boundaries
 
-The `boundaries` tag allows you to define rules for the [`boundaries` command](<(/repo/docs/reference/boundaries)>).
+The `boundaries` tag allows you to define rules for the [`boundaries` command](/repo/docs/reference/boundaries).
 
 ```jsonc title="./turbo.json"
 {
