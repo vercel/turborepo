@@ -216,10 +216,15 @@ impl ExecContext {
             .await;
 
         match result {
-            Ok(ExecOutcome::Success(_)) => {
+            Ok(ExecOutcome::Success(outcome)) => {
+                match outcome {
+                    SuccessOutcome::CacheHit => tracker.cached().await,
+                    SuccessOutcome::Run => tracker.build_succeeded(0).await,
+                };
                 callback.send(Ok(())).ok();
             }
-            Ok(ExecOutcome::Task { .. }) => {
+            Ok(ExecOutcome::Task { exit_code, message }) => {
+                tracker.build_failed(exit_code, message).await;
                 callback
                     .send(match self.continue_on_error {
                         true => Ok(()),

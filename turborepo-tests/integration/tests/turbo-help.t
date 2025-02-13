@@ -379,8 +379,6 @@ Test help flag for unlink command
   Usage: turbo(\.exe)? unlink \[OPTIONS\] (re)
   
   Options:
-        --target <TARGET>
-            Specify what should be unlinked (default "remote cache") [default: remote-cache] [possible values: remote-cache, spaces]
         --version
             
         --skip-infer

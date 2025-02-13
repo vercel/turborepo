@@ -660,7 +660,6 @@ mod test {
             log_prefix: crate::opts::ResolvedLogPrefix::Task,
             log_order: crate::opts::ResolvedLogOrder::Stream,
             summarize: false,
-            experimental_space_id: None,
             is_github_actions: false,
             daemon: None,
         };

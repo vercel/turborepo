@@ -53,8 +53,8 @@ pub enum Error {
     Serde(#[from] serde_json::Error),
     #[error("Missing workspace: {0}")]
     MissingWorkspace(PackageName),
-    #[error("Failed to close spaces client.")]
-    SpacesClientClose(#[from] tokio::task::JoinError),
+    #[error("Failed to close state thread.")]
+    StateThread(#[from] tokio::task::JoinError),
     #[error("Request took too long to resolve: {0}")]
     Timeout(#[from] tokio::time::error::Elapsed),
     #[error("Failed to parse environment variables.")]

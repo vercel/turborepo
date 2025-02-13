@@ -193,11 +193,6 @@ impl ResolvedConfigurationOptions for EnvVars {
                 )
             })?;
 
-        // We currently don't pick up a Spaces ID via env var, we likely won't
-        // continue using the Spaces name, we can add an env var when we have the
-        // name we want to stick with.
-        let spaces_id = None;
-
         let output = ConfigurationOptions {
             api_url: self.output_map.get("api_url").cloned(),
             login_url: self.output_map.get("login_url").cloned(),
@@ -223,7 +218,6 @@ impl ResolvedConfigurationOptions for EnvVars {
             // Processed numbers
             timeout,
             upload_timeout,
-            spaces_id,
             env_mode,
             cache_dir,
             root_turbo_json_path,

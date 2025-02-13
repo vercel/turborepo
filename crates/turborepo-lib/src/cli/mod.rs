@@ -334,7 +334,6 @@ pub enum TelemetryCommand {
 #[derive(Copy, Clone, Debug, PartialEq, ValueEnum)]
 pub enum LinkTarget {
     RemoteCache,
-    Spaces,
 }
 
 impl Args {
@@ -717,11 +716,7 @@ pub enum Command {
     },
     /// Unlink the current directory from your Vercel organization and disable
     /// Remote Caching
-    Unlink {
-        /// Specify what should be unlinked (default "remote cache")
-        #[clap(long, value_enum, default_value_t = LinkTarget::RemoteCache)]
-        target: LinkTarget,
-    },
+    Unlink,
 }
 
 #[derive(Parser, Clone, Debug, Default, Serialize, PartialEq)]
@@ -1449,7 +1444,7 @@ pub async fn run(
 
             Ok(0)
         }
-        Command::Unlink { target } => {
+        Command::Unlink => {
             let event = CommandEventBuilder::new("unlink").with_parent(&root_telemetry);
             event.track_call();
             if cli_args.test_run {
@@ -1457,11 +1452,10 @@ pub async fn run(
                 return Ok(0);
             }
 
-            let from = *target;
             let mut base = CommandBase::new(cli_args, repo_root, version, color_config)?;
             event.track_ui_mode(base.opts.run_opts.ui_mode);
 
-            unlink::unlink(&mut base, from)?;
+            unlink::unlink(&mut base)?;
 
             Ok(0)
         }
@@ -2598,9 +2592,7 @@ mod test {
         assert_eq!(
             Args::try_parse_from(["turbo", "unlink"]).unwrap(),
             Args {
-                command: Some(Command::Unlink {
-                    target: crate::cli::LinkTarget::RemoteCache
-                }),
+                command: Some(Command::Unlink),
                 ..Args::default()
             }
         );
@@ -2610,9 +2602,7 @@ mod test {
             command_args: vec![],
             global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
             expected_output: Args {
-                command: Some(Command::Unlink {
-                    target: crate::cli::LinkTarget::RemoteCache,
-                }),
+                command: Some(Command::Unlink),
                 cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
             },

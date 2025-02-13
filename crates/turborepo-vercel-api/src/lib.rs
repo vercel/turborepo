@@ -85,25 +85,8 @@ impl Team {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Space {
-    pub id: String,
-    pub name: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TeamsResponse {
     pub teams: Vec<Team>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SpacesResponse {
-    pub spaces: Vec<Space>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SpaceRun {
-    pub id: String,
-    pub url: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
