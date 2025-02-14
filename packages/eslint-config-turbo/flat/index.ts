@@ -1,6 +1,7 @@
 import plugin from "eslint-plugin-turbo";
 
-const thing = [
+// eslint-disable-next-line import/no-default-export -- Matching old module.exports
+export default [
   {
     plugins: {
       turbo: plugin,
@@ -10,6 +11,3 @@ const thing = [
     },
   },
 ];
-
-// eslint-disable-next-line import/no-default-export -- Matching old module.exports
-export default thing;
