@@ -11,7 +11,8 @@
     "url": "https://github.com/vercel/turborepo/issues"
   },
   "scripts": {
-    "lint": "eslint ./index.js",
+    "build": "tsup",
+    "lint": "eslint .",
     "lint:prettier": "prettier -c . --cache --ignore-path=../../.prettierignore"
   },
   "keywords": [
@@ -23,7 +24,10 @@
   ],
   "main": "index.js",
   "exports": {
-    "./flat": "./flat/index.js",
+    "./flat": {
+      "types": "./dist/flat/index.d.ts",
+      "default": "./flat/index.js"
+    },
     ".": "./index.js"
   },
   "author": "Vercel",
@@ -37,6 +41,8 @@
   "license": "MIT",
   "devDependencies": {
     "@turbo/eslint-config": "workspace:*",
-    "@types/eslint": "^8.44.2"
+    "@turbo/tsconfig": "workspace:*",
+    "@types/eslint": "^8.56.10",
+    "tsup": "^6.2.0"
   }
 }
