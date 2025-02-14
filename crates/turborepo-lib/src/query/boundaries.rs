@@ -37,6 +37,37 @@ impl From<BoundariesDiagnostic> for Diagnostic {
                 path: None,
                 reason: None,
             },
+
+            BoundariesDiagnostic::NoTagInAllowlist {
+                source_package_name: _,
+                help: _,
+                secondary: _,
+                package_name,
+                span,
+                text,
+            } => Diagnostic {
+                message,
+                path: Some(text.name().to_string()),
+                start: span.map(|span| span.offset()),
+                end: span.map(|span| span.offset() + span.len()),
+                import: Some(package_name.to_string()),
+                reason: None,
+            },
+            BoundariesDiagnostic::DeniedTag {
+                source_package_name: _,
+                secondary: _,
+                package_name,
+                tag,
+                span,
+                text,
+            } => Diagnostic {
+                message,
+                path: Some(text.name().to_string()),
+                start: span.map(|span| span.offset()),
+                end: span.map(|span| span.offset() + span.len()),
+                import: Some(package_name.to_string()),
+                reason: Some(tag),
+            },
         }
     }
 }

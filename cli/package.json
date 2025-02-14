@@ -5,6 +5,10 @@
   "scripts": {
     "clean": "cargo clean --package turbo",
     "build": "cargo build --package turbo",
-    "build:release": "cargo build --package turbo --profile release-turborepo"
+    "build:release": "cargo build --package turbo --profile release-turborepo",
+    "release-native": "turboreleaser --version-path ../version.txt"
+  },
+  "dependencies": {
+    "@turbo/releaser": "workspace:*"
   }
 }

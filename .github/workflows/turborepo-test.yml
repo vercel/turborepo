@@ -26,6 +26,9 @@ jobs:
       with-tailwind-example: ${{ steps.filter.outputs.with-tailwind-example }}
       rest: ${{ steps.filter.outputs.rest }}
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - uses: dorny/paths-filter@v3
         id: filter
         with:
@@ -129,19 +132,16 @@ jobs:
     needs:
       - find-changes
     if: ${{ needs.find-changes.outputs.rest == 'true' }}
-    runs-on:
-      - "self-hosted"
-      - "linux"
-      - "x64"
-      - "metal"
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Rust
-        uses: ./.github/actions/setup-rust
+      - name: Setup Turborepo Environment
+        uses: ./.github/actions/setup-turborepo-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
+          node-version: "18.20.2"
 
       - name: Run cargo fmt check
         run: |
@@ -165,11 +165,7 @@ jobs:
     needs:
       - find-changes
     if: ${{ needs.find-changes.outputs.rest == 'true' }}
-    runs-on:
-      - "self-hosted"
-      - "linux"
-      - "x64"
-      - "metal"
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -190,18 +186,11 @@ jobs:
       matrix:
         os:
           - name: ubuntu
-            runner:
-              - "self-hosted"
-              - "linux"
-              - "x64"
-              - "metal"
-            nextest: linux
+            runner: ubuntu-latest
           - name: macos
             runner: macos-13
-            nextest: mac
           - name: windows
             runner: windows-latest
-            nextest: windows-tar
     runs-on: ${{ matrix.os.runner }}
     needs:
       - find-changes
@@ -265,7 +254,7 @@ jobs:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
           turbo-token: "${{ secrets.TURBO_TOKEN }}"
           turbo-team: "${{ vars.TURBO_TEAM }}"
-          test-filter: "@turborepo-examples-tests/kitchen-sink-*"
+          test-filter: "@turborepo-examples-tests/basic-*"
 
   kitchen-sink-example:
     name: "`kitchen-sink` example"
@@ -348,6 +337,7 @@ jobs:
     runs-on: ubuntu-latest
     if: always()
     needs:
+      - find-changes
       - integration
       - rust_lint
       - rust_check

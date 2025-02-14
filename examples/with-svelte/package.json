@@ -5,12 +5,13 @@
     "build": "turbo run build",
     "dev": "turbo run dev",
     "lint": "turbo run lint",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "check-types": "turbo run check-types"
   },
   "devDependencies": {
-    "prettier": "^3.4.2",
+    "prettier": "^3.5.0",
     "prettier-plugin-svelte": "^3.3.3",
-    "turbo": "^2.3.4"
+    "turbo": "^2.4.0"
   },
   "packageManager": "pnpm@8.15.6",
   "engines": {

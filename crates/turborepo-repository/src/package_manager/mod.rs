@@ -1,15 +1,14 @@
-mod bun;
-mod npm;
-mod npmrc;
-mod pnpm;
-mod yarn;
-mod yarnrc;
+pub mod bun;
+pub mod npm;
+pub mod npmrc;
+pub mod pnpm;
+pub mod yarn;
+pub mod yarnrc;
 
 use std::{
     backtrace,
     fmt::{self, Display},
     fs,
-    process::Command,
 };
 
 use bun::BunDetector;
@@ -26,7 +25,6 @@ use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, RelativeUnixPath};
 use turborepo_errors::Spanned;
 use turborepo_lockfiles::Lockfile;
-use which::which;
 use yarnrc::YarnRc;
 
 use crate::{
@@ -163,7 +161,7 @@ pub enum Error {
         #[label("version found here")]
         span: Option<SourceSpan>,
         #[source_code]
-        text: NamedSource,
+        text: NamedSource<String>,
     },
     #[error("{0}: {1}")]
     // this will be something like "cannot find binary: <thing we tried to find>"
@@ -182,7 +180,7 @@ pub enum Error {
         #[label("Invalid `packageManager` field")]
         span: Option<SourceSpan>,
         #[source_code]
-        text: NamedSource,
+        text: NamedSource<String>,
     },
     #[error(transparent)]
     WorkspaceGlob(#[from] crate::workspaces::Error),
@@ -196,6 +194,8 @@ pub enum Error {
     MissingPackageManager,
     #[error(transparent)]
     Yarnrc(#[from] yarnrc::Error),
+    #[error("Only found bun.lockb, please run `bun install --save-text-lockfile`")]
+    BunBinaryLockfile,
 }
 
 impl From<std::convert::Infallible> for Error {
@@ -468,19 +468,9 @@ impl PackageManager {
         root_package_json: &PackageJson,
     ) -> Result<Box<dyn Lockfile>, Error> {
         let lockfile_path = self.lockfile_path(root_path);
-        let contents = match self {
-            PackageManager::Bun => {
-                let binary = "bun";
-                Command::new(which(binary).map_err(|e| Error::Which(e, binary.to_string()))?)
-                    .arg(lockfile_path.to_string())
-                    .current_dir(root_path.to_string())
-                    .output()?
-                    .stdout
-            }
-            _ => lockfile_path
-                .read()
-                .map_err(|_| Error::LockfileMissing(lockfile_path.clone()))?,
-        };
+        let contents = lockfile_path
+            .read()
+            .map_err(|_| Error::LockfileMissing(lockfile_path.clone()))?;
         self.parse_lockfile(root_package_json, &contents)
     }
 

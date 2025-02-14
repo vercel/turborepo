@@ -3,17 +3,15 @@
 
   $ ${TURBO} run build --concurrency=1
     x Invalid task configuration
-  
-  Error:   x You have 2 persistent tasks but `turbo` is configured for concurrency of
-    | 1. Set --concurrency to at least 3
+    `->   x You have 2 persistent tasks but `turbo` is configured for
+          | concurrency of 1. Set --concurrency to at least 3
   
   [1]
 
   $ ${TURBO} run build --concurrency=2
     x Invalid task configuration
-  
-  Error:   x You have 2 persistent tasks but `turbo` is configured for concurrency of
-    | 2. Set --concurrency to at least 3
+    `->   x You have 2 persistent tasks but `turbo` is configured for
+          | concurrency of 2. Set --concurrency to at least 3
   
   [1]
 

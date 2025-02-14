@@ -15,6 +15,7 @@ use turborepo_errors::{ParseDiagnostic, WithMetadata};
 use turborepo_unescape::UnescapedString;
 
 use crate::{
+    boundaries::{Permissions, RootBoundariesConfig, Rule},
     run::task_id::TaskName,
     turbo_json::{Pipeline, RawTaskDefinition, RawTurboJson, Spanned},
 };
@@ -100,9 +101,18 @@ impl WithMetadata for RawTurboJson {
     fn add_text(&mut self, text: Arc<str>) {
         self.span.add_text(text.clone());
         self.extends.add_text(text.clone());
+        self.tags.add_text(text.clone());
+        if let Some(tags) = &mut self.tags {
+            tags.value.add_text(text.clone());
+        }
         self.global_dependencies.add_text(text.clone());
         self.global_env.add_text(text.clone());
         self.global_pass_through_env.add_text(text.clone());
+        self.boundaries.add_text(text.clone());
+        if let Some(boundaries) = &mut self.boundaries {
+            boundaries.value.add_text(text.clone());
+        }
+
         self.tasks.add_text(text.clone());
         self.cache_dir.add_text(text.clone());
         self.pipeline.add_text(text);
@@ -111,9 +121,17 @@ impl WithMetadata for RawTurboJson {
     fn add_path(&mut self, path: Arc<str>) {
         self.span.add_path(path.clone());
         self.extends.add_path(path.clone());
+        self.tags.add_path(path.clone());
+        if let Some(tags) = &mut self.tags {
+            tags.value.add_path(path.clone());
+        }
         self.global_dependencies.add_path(path.clone());
         self.global_env.add_path(path.clone());
         self.global_pass_through_env.add_path(path.clone());
+        self.boundaries.add_path(path.clone());
+        if let Some(boundaries) = &mut self.boundaries {
+            boundaries.value.add_path(path.clone());
+        }
         self.tasks.add_path(path.clone());
         self.cache_dir.add_path(path.clone());
         self.pipeline.add_path(path);
@@ -132,6 +150,80 @@ impl WithMetadata for Pipeline {
         for (_, entry) in self.0.iter_mut() {
             entry.add_path(path.clone());
             entry.value.add_path(path.clone());
+        }
+    }
+}
+
+impl WithMetadata for RootBoundariesConfig {
+    fn add_text(&mut self, text: Arc<str>) {
+        self.tags.add_text(text.clone());
+        if let Some(tags) = &mut self.tags {
+            for rule in tags.as_inner_mut().values_mut() {
+                rule.add_text(text.clone());
+                rule.value.add_text(text.clone());
+            }
+        }
+    }
+
+    fn add_path(&mut self, path: Arc<str>) {
+        self.tags.add_path(path.clone());
+        if let Some(tags) = &mut self.tags {
+            for rule in tags.as_inner_mut().values_mut() {
+                rule.add_path(path.clone());
+                rule.value.add_path(path.clone());
+            }
+        }
+    }
+}
+
+impl WithMetadata for Rule {
+    fn add_text(&mut self, text: Arc<str>) {
+        self.dependencies.add_text(text.clone());
+        if let Some(dependencies) = &mut self.dependencies {
+            dependencies.value.add_text(text.clone());
+        }
+
+        self.dependents.add_text(text.clone());
+        if let Some(dependents) = &mut self.dependents {
+            dependents.value.add_text(text.clone());
+        }
+    }
+
+    fn add_path(&mut self, path: Arc<str>) {
+        self.dependencies.add_path(path.clone());
+        if let Some(dependencies) = &mut self.dependencies {
+            dependencies.value.add_path(path.clone());
+        }
+
+        self.dependents.add_path(path.clone());
+        if let Some(dependents) = &mut self.dependents {
+            dependents.value.add_path(path);
+        }
+    }
+}
+
+impl WithMetadata for Permissions {
+    fn add_text(&mut self, text: Arc<str>) {
+        self.allow.add_text(text.clone());
+        if let Some(allow) = &mut self.allow {
+            allow.value.add_text(text.clone());
+        }
+
+        self.deny.add_text(text.clone());
+        if let Some(deny) = &mut self.deny {
+            deny.value.add_text(text.clone());
+        }
+    }
+
+    fn add_path(&mut self, path: Arc<str>) {
+        self.allow.add_path(path.clone());
+        if let Some(allow) = &mut self.allow {
+            allow.value.add_path(path.clone());
+        }
+
+        self.deny.add_path(path.clone());
+        if let Some(deny) = &mut self.deny {
+            deny.value.add_path(path.clone());
         }
     }
 }
@@ -199,6 +291,7 @@ impl RawTurboJson {
                 .map(|d| {
                     d.with_file_source_code(text)
                         .with_file_path(file_path)
+                        .as_ref()
                         .into()
                 })
                 .collect();

@@ -48,7 +48,7 @@ use crate::{
     signal::SignalHandler,
     task_graph::Visitor,
     task_hash::{get_external_deps_hash, get_internal_deps_hash, PackageInputsHashes},
-    turbo_json::{TurboJson, UIMode},
+    turbo_json::{TurboJson, TurboJsonLoader, UIMode},
     DaemonClient, DaemonConnector,
 };
 
@@ -66,6 +66,7 @@ pub struct Run {
     env_at_execution_start: EnvironmentVariableMap,
     filtered_pkgs: HashSet<PackageName>,
     pkg_dep_graph: Arc<PackageGraph>,
+    turbo_json_loader: TurboJsonLoader,
     root_turbo_json: TurboJson,
     scm: SCM,
     run_cache: Arc<RunCache>,
@@ -120,6 +121,10 @@ impl Run {
         } else {
             cprintln!(self.color_config, GREY, "• Remote caching disabled");
         }
+    }
+
+    pub fn turbo_json_loader(&self) -> TurboJsonLoader {
+        self.turbo_json_loader.clone()
     }
 
     pub fn opts(&self) -> &Opts {

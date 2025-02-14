@@ -5,7 +5,7 @@
   "private": true,
   "scripts": {
     "start": "node dist/index.js",
-    "dev": "tsup --watch --onSuccess \"node dist/index.js\"",
+    "dev": "tsup --watch --onSuccess \"node dist/index.cjs\"",
     "build": "tsup",
     "check-types": "tsc --noEmit",
     "lint": "eslint src/ --max-warnings 0",
@@ -32,6 +32,7 @@
     "@types/morgan": "^1.9.9",
     "@types/node": "^22.12.0",
     "@types/supertest": "^6.0.2",
+    "eslint": "^9.20.0",
     "jest": "^29.7.0",
     "supertest": "^7.0.0",
     "tsup": "^8.3.6",

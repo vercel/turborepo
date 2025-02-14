@@ -47,7 +47,7 @@ Add invalid packageManager field that passes the regex.
     x Could not resolve workspaces.
     `-> Invalid semantic version: Failed to parse an integer component of a
         semver string: number too large to fit in target type
-     ,-\(.*package.json:5:1\) (re)
+     ,-\(.*package.json:6:21\) (re)
    5 |   },
    6 |   "packageManager": "npm@0.3.211111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111",
      :                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^|^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -69,12 +69,12 @@ Build should fail due to trailing comma (sed replaces square brackets with paren
   package_json_parse_error
   
     x Unable to parse package.json.
-  
-  Error:   x Expected a property but instead found '}'.
-     ,-\(.*package.json:1:1\) (re)
-   1 | { "name": "foobar", }
-     :                     ^
-     `----
+    `->   x Expected a property but instead found '}'.
+           ,-\[.* (re)
+        .*package.json:1:21\] (re)
+         1 | { "name": "foobar", }
+           :                     ^
+           `----
   
 
 

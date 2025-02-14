@@ -26,10 +26,63 @@ pub enum MissingTaskError {
         #[label]
         span: Option<SourceSpan>,
         #[source_code]
-        text: NamedSource,
+        text: NamedSource<String>,
     },
     #[error("Could not find package `{name}` in project")]
     MissingPackage { name: String },
+}
+
+#[derive(Debug, thiserror::Error, Diagnostic)]
+#[error("Could not find \"{task_id}\" in root turbo.json or \"{task_name}\" in package")]
+pub struct MissingPackageTaskError {
+    #[label]
+    pub span: Option<SourceSpan>,
+    #[source_code]
+    pub text: NamedSource<String>,
+    pub task_id: String,
+    pub task_name: String,
+}
+
+#[derive(Debug, thiserror::Error, Diagnostic)]
+#[error("Could not find package \"{package}\" referenced by task \"{task_id}\" in project")]
+pub struct MissingPackageFromTaskError {
+    #[label]
+    pub span: Option<SourceSpan>,
+    #[source_code]
+    pub text: NamedSource<String>,
+    pub package: String,
+    pub task_id: String,
+}
+
+#[derive(Debug, thiserror::Error, Diagnostic)]
+#[error("Invalid task name: {reason}")]
+pub struct InvalidTaskNameError {
+    #[label]
+    span: Option<SourceSpan>,
+    #[source_code]
+    text: NamedSource<String>,
+    task_name: String,
+    reason: String,
+}
+
+#[derive(Debug, thiserror::Error, Diagnostic)]
+#[error(
+    "{task_id} requires an entry in turbo.json before it can be depended on because it is a task \
+     declared in the root package.json"
+)]
+#[diagnostic(
+    code(missing_root_task_in_turbo_json),
+    url(
+            "{}/messages/{}",
+            TURBO_SITE, self.code().unwrap().to_string().to_case(Case::Kebab)
+    )
+)]
+pub struct MissingRootTaskInTurboJsonError {
+    task_id: String,
+    #[label("Add an entry in turbo.json for this task")]
+    span: Option<SourceSpan>,
+    #[source_code]
+    text: NamedSource<String>,
 }
 
 #[derive(Debug, thiserror::Error, Diagnostic)]
@@ -38,42 +91,15 @@ pub enum Error {
     MissingTasks(#[related] Vec<MissingTaskError>),
     #[error("No package.json found for {workspace}")]
     MissingPackageJson { workspace: PackageName },
-    #[error(
-        "{task_id} requires an entry in turbo.json before it can be depended on because it is a \
-         task declared in the root package.json"
-    )]
-    #[diagnostic(
-        code(missing_root_task_in_turbo_json),
-        url(
-            "{}/messages/{}",
-            TURBO_SITE, self.code().unwrap().to_string().to_case(Case::Kebab)
-        )
-    )]
-    MissingRootTaskInTurboJson {
-        task_id: String,
-        #[label("Add an entry in turbo.json for this task")]
-        span: Option<SourceSpan>,
-        #[source_code]
-        text: NamedSource,
-    },
-    #[error("Could not find package \"{package}\" referenced by task \"{task_id}\" in project")]
-    MissingPackageFromTask {
-        #[label]
-        span: Option<SourceSpan>,
-        #[source_code]
-        text: NamedSource,
-        package: String,
-        task_id: String,
-    },
-    #[error("Could not find \"{task_id}\" in root turbo.json or \"{task_name}\" in package")]
-    MissingPackageTask {
-        #[label]
-        span: Option<SourceSpan>,
-        #[source_code]
-        text: NamedSource,
-        task_id: String,
-        task_name: String,
-    },
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    MissingRootTaskInTurboJson(Box<MissingRootTaskInTurboJsonError>),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    MissingPackageFromTask(Box<MissingPackageFromTaskError>),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    MissingPackageTask(Box<MissingPackageTaskError>),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Config(#[from] crate::config::Error),
@@ -84,15 +110,9 @@ pub enum Error {
     },
     #[error(transparent)]
     Graph(#[from] graph::Error),
-    #[error("Invalid task name: {reason}")]
-    InvalidTaskName {
-        #[label]
-        span: Option<SourceSpan>,
-        #[source_code]
-        text: NamedSource,
-        task_name: String,
-        reason: String,
-    },
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    InvalidTaskName(Box<InvalidTaskNameError>),
 }
 
 pub struct EngineBuilder<'a> {
@@ -306,11 +326,13 @@ impl<'a> EngineBuilder<'a> {
                     .contains(&task_id.as_non_workspace_task_name())
             {
                 let (span, text) = task_id.span_and_text("turbo.json");
-                return Err(Error::MissingRootTaskInTurboJson {
-                    span,
-                    text,
-                    task_id: task_id.to_string(),
-                });
+                return Err(Error::MissingRootTaskInTurboJson(Box::new(
+                    MissingRootTaskInTurboJsonError {
+                        span,
+                        text,
+                        task_id: task_id.to_string(),
+                    },
+                )));
             }
 
             validate_task_name(task_id.to(task_id.task()))?;
@@ -326,12 +348,14 @@ impl<'a> EngineBuilder<'a> {
                 // PackageGraph or the package really doesn't exist and
                 // turbo.json is misconfigured.
                 let (span, text) = task_id.span_and_text("turbo.json");
-                return Err(Error::MissingPackageFromTask {
-                    span,
-                    text,
-                    package: task_id.package().to_string(),
-                    task_id: task_id.to_string(),
-                });
+                return Err(Error::MissingPackageFromTask(Box::new(
+                    MissingPackageFromTaskError {
+                        span,
+                        text,
+                        package: task_id.package().to_string(),
+                        task_id: task_id.to_string(),
+                    },
+                )));
             }
 
             let task_definition = self.task_definition(
@@ -517,11 +541,13 @@ impl<'a> EngineBuilder<'a> {
             return match task_definitions.is_empty() {
                 true => {
                     let (span, text) = task_id.span_and_text("turbo.json");
-                    Err(Error::MissingRootTaskInTurboJson {
-                        span,
-                        text,
-                        task_id: task_id.to_string(),
-                    })
+                    Err(Error::MissingRootTaskInTurboJson(Box::new(
+                        MissingRootTaskInTurboJsonError {
+                            span,
+                            text,
+                            task_id: task_id.to_string(),
+                        },
+                    )))
                 }
                 false => Ok(task_definitions),
             };
@@ -551,12 +577,14 @@ impl<'a> EngineBuilder<'a> {
 
         if task_definitions.is_empty() && self.should_validate_engine {
             let (span, text) = task_id.span_and_text("turbo.json");
-            return Err(Error::MissingPackageTask {
-                span,
-                text,
-                task_id: task_id.to_string(),
-                task_name: task_name.to_string(),
-            });
+            return Err(Error::MissingPackageTask(Box::new(
+                MissingPackageTaskError {
+                    span,
+                    text,
+                    task_id: task_id.to_string(),
+                    task_name: task_name.to_string(),
+                },
+            )));
         }
 
         Ok(task_definitions)
@@ -579,12 +607,12 @@ fn validate_task_name(task: Spanned<&str>) -> Result<(), Error> {
         .find(|token| task.contains(**token))
         .map(|found_token| {
             let (span, text) = task.span_and_text("turbo.json");
-            Err(Error::InvalidTaskName {
+            Err(Error::InvalidTaskName(Box::new(InvalidTaskNameError {
                 span,
                 text,
                 task_name: task.to_string(),
                 reason: format!("task contains invalid string '{found_token}'"),
-            })
+            })))
         })
         .unwrap_or(Ok(()))
 }
@@ -1062,7 +1090,7 @@ mod test {
             .with_root_tasks(vec![TaskName::from("libA#build"), TaskName::from("build")])
             .build();
 
-        assert_matches!(engine, Err(Error::MissingRootTaskInTurboJson { .. }));
+        assert_matches!(engine, Err(Error::MissingRootTaskInTurboJson(_)));
     }
 
     #[test]
@@ -1146,7 +1174,7 @@ mod test {
             ])
             .build();
 
-        assert_matches!(engine, Err(Error::MissingRootTaskInTurboJson { .. }));
+        assert_matches!(engine, Err(Error::MissingRootTaskInTurboJson(_)));
     }
 
     #[test]
@@ -1283,7 +1311,7 @@ mod test {
     fn test_validate_task_name(task_name: &str, reason: Option<&str>) {
         let result = validate_task_name(Spanned::new(task_name))
             .map_err(|e| {
-                if let Error::InvalidTaskName { reason, .. } = e {
+                if let Error::InvalidTaskName(box InvalidTaskNameError { reason, .. }) = e {
                     reason
                 } else {
                     panic!("invalid error encountered {e:?}")

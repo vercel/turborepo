@@ -163,7 +163,7 @@ impl TurboJsonLoader {
             .expect("just inserted value for this key"))
     }
 
-    fn uncached_load(&self, package: &PackageName) -> Result<TurboJson, Error> {
+    pub fn uncached_load(&self, package: &PackageName) -> Result<TurboJson, Error> {
         match &self.strategy {
             Strategy::SinglePackage {
                 package_json,

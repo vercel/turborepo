@@ -30,11 +30,7 @@ jobs:
       matrix:
         os:
           - name: ubuntu
-            runner:
-              - "self-hosted"
-              - "linux"
-              - "x64"
-              - "metal"
+            runner: ubuntu-latest
           - name: macos
             runner: macos-13
         node-version:
