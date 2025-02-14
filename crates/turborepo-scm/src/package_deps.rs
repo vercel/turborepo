@@ -5,7 +5,7 @@ use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, PathError, RelativeUnixPathBuf};
 use turborepo_telemetry::events::task::{FileHashMethod, PackageTaskEventBuilder};
 
-use crate::{hash_object::hash_objects, Error, Git, SCM};
+use crate::{hash_object::hash_objects, Error, GitRepo, SCM};
 
 pub type GitHashes = HashMap<RelativeUnixPathBuf, String>;
 
@@ -111,7 +111,7 @@ impl SCM {
     }
 }
 
-impl Git {
+impl GitRepo {
     fn get_package_file_hashes<S: AsRef<str>>(
         &self,
         turbo_root: &AbsoluteSystemPath,
