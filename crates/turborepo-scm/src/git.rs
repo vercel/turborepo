@@ -37,6 +37,7 @@ impl SCM {
         }
     }
 
+    /// get the actual changed files between two git refs
     pub fn changed_files(
         &self,
         turbo_root: &AbsoluteSystemPath,
