@@ -1,5 +1,4 @@
 import plugin from "eslint-plugin-turbo";
-import {} from "eslint";
 
 const thing = [
   {
