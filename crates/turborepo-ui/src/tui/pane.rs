@@ -35,6 +35,10 @@ impl<'a, W> TerminalPane<'a, W> {
         }
     }
 
+    fn has_stdin(&self) -> bool {
+        self.terminal_output.stdin.is_some()
+    }
+
     fn footer(&self) -> Line {
         let build_message_vec = |footer_text: &[&str]| -> Line {
             let mut messages = Vec::new();
@@ -60,7 +64,10 @@ impl<'a, W> TerminalPane<'a, W> {
 
         match self.section {
             LayoutSections::Pane => build_message_vec(&[EXIT_INTERACTIVE_HINT]),
-            LayoutSections::TaskList => build_message_vec(&[ENTER_INTERACTIVE_HINT, SCROLL_LOGS]),
+            LayoutSections::TaskList if self.has_stdin() => {
+                build_message_vec(&[ENTER_INTERACTIVE_HINT, SCROLL_LOGS])
+            }
+            LayoutSections::TaskList => build_message_vec(&[SCROLL_LOGS]),
             LayoutSections::Search { results, .. } => {
                 Line::from(format!("/ {}", results.query())).left_aligned()
             }
@@ -84,5 +91,27 @@ impl<W> Widget for &TerminalPane<'_, W> {
 
         let term = PseudoTerminal::new(screen).block(block);
         term.render(area, buf)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_footer_interactive() {
+        let term: TerminalOutput<Vec<u8>> = TerminalOutput::new(16, 16, Some(Vec::new()));
+        let pane = TerminalPane::new(&term, "foo", &LayoutSections::TaskList, true);
+        assert_eq!(
+            String::from(pane.footer()),
+            "   i - Interact   u/d - Scroll logs"
+        );
+    }
+
+    #[test]
+    fn test_footer_non_interactive() {
+        let term: TerminalOutput<Vec<u8>> = TerminalOutput::new(16, 16, None);
+        let pane = TerminalPane::new(&term, "foo", &LayoutSections::TaskList, true);
+        assert_eq!(String::from(pane.footer()), "   u/d - Scroll logs");
     }
 }
