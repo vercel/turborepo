@@ -1,6 +1,6 @@
 {
   "name": "eslint-plugin-turbo",
-  "version": "2.4.3-canary.0",
+  "version": "2.4.3-canary.2",
   "description": "ESLint plugin for Turborepo",
   "keywords": [
     "turbo",
@@ -24,7 +24,6 @@
     "dist/**"
   ],
   "scripts": {
-    "release": "pnpm build && pnpm publish",
     "test": "jest",
     "build": "tsup",
     "check-types": "tsc --noEmit",
