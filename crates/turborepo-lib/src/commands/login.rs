@@ -6,7 +6,19 @@ use turborepo_telemetry::events::command::{CommandEventBuilder, LoginMethod};
 
 use crate::{cli::Error, commands::CommandBase, config, rewrite_json::set_path};
 
-pub async fn sso_login(
+pub async fn login(
+    base: &mut CommandBase,
+    telemetry: CommandEventBuilder,
+    sso_team: Option<&str>,
+    force: bool,
+) -> Result<(), Error> {
+    match sso_team {
+        Some(sso_team) => sso_login(base, sso_team, telemetry, force).await,
+        None => login_no_sso(base, telemetry, force).await,
+    }
+}
+
+async fn sso_login(
     base: &mut CommandBase,
     sso_team: &str,
     telemetry: CommandEventBuilder,
@@ -63,7 +75,7 @@ pub async fn sso_login(
     Ok(())
 }
 
-pub async fn login(
+async fn login_no_sso(
     base: &mut CommandBase,
     telemetry: CommandEventBuilder,
     force: bool,
