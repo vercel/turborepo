@@ -147,8 +147,8 @@ mod tests {
     use async_trait::async_trait;
     use reqwest::{Method, RequestBuilder, Response};
     use turborepo_vercel_api::{
-        CachingStatus, CachingStatusResponse, Membership, Role, SpacesResponse, Team,
-        TeamsResponse, User, UserResponse, VerifiedSsoUser,
+        CachingStatus, CachingStatusResponse, Membership, Role, Team, TeamsResponse, User,
+        UserResponse, VerifiedSsoUser,
     };
     use turborepo_vercel_api_mock::start_test_server;
 
@@ -246,13 +246,6 @@ mod tests {
         }
         fn add_ci_header(_request_builder: RequestBuilder) -> RequestBuilder {
             unimplemented!("add_ci_header")
-        }
-        async fn get_spaces(
-            &self,
-            _token: &str,
-            _team_id: Option<&str>,
-        ) -> turborepo_api_client::Result<SpacesResponse> {
-            unimplemented!("get_spaces")
         }
         async fn verify_sso_token(
             &self,
