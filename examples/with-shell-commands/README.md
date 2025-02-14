@@ -36,7 +36,7 @@ This Turborepo includes the following packages:
 
 If you haven't yet, [install global `turbo`](https://turbo.build/repo/docs/installing#install-globally) to run tasks.
 
-- `turbo build lint type-check`: Runs all tasks in the default graph.
+- `turbo build lint check-types`: Runs all tasks in the default graph.
 - `turbo build`: A basic command to build `app-a` and `app-b` in parallel.
 - `turbo build --filter=app-a`: Building only `app-a` and its dependencies.
 - `turbo lint`: A basic command for running lints in all packages in parallel.
