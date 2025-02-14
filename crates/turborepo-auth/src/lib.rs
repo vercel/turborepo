@@ -111,6 +111,33 @@ impl Token {
         Ok(true)
     }
 
+    async fn handle_sso_token_error<T: TokenClient>(
+        &self,
+        client: &T,
+        error: reqwest::Error,
+    ) -> Result<bool, Error> {
+        if error.status() == Some(reqwest::StatusCode::FORBIDDEN) {
+            let metadata = self.fetch_metadata(client).await?;
+            if !metadata.token_type.is_empty() {
+                return Err(Error::APIError(turborepo_api_client::Error::InvalidToken {
+                    status: error
+                        .status()
+                        .unwrap_or(reqwest::StatusCode::FORBIDDEN)
+                        .as_u16(),
+                    url: error
+                        .url()
+                        .map(|u| u.to_string())
+                        .unwrap_or("Unknown url".to_string()),
+                    message: error.to_string(),
+                }));
+            }
+        }
+
+        Err(Error::APIError(turborepo_api_client::Error::ReqwestError(
+            error,
+        )))
+    }
+
     /// This is the same as `is_valid`, but also checks if the token is valid
     /// for SSO.
     ///
@@ -158,7 +185,12 @@ impl Token {
 
                 Ok(true)
             }
-            (Err(e), _) | (_, Err(e)) => Err(Error::APIError(e)),
+            (Err(e), _) | (_, Err(e)) => match e {
+                turborepo_api_client::Error::ReqwestError(e) => {
+                    self.handle_sso_token_error(client, e).await
+                }
+                e => Err(Error::APIError(e)),
+            },
         }
     }
 
@@ -674,5 +706,125 @@ mod tests {
 
         let result = Token::from_file(&file_path);
         assert!(matches!(result, Err(Error::TokenNotFound)));
+    }
+
+    struct MockSSOTokenClient {
+        metadata_response: Option<ResponseTokenMetadata>,
+    }
+
+    impl TokenClient for MockSSOTokenClient {
+        async fn get_metadata(
+            &self,
+            _token: &str,
+        ) -> turborepo_api_client::Result<ResponseTokenMetadata> {
+            if let Some(metadata) = &self.metadata_response {
+                Ok(metadata.clone())
+            } else {
+                Ok(ResponseTokenMetadata {
+                    id: "test".to_string(),
+                    name: "test".to_string(),
+                    token_type: "".to_string(),
+                    origin: "test".to_string(),
+                    scopes: vec![],
+                    active_at: current_unix_time() - 100,
+                    created_at: 0,
+                })
+            }
+        }
+
+        async fn delete_token(&self, _token: &str) -> turborepo_api_client::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn test_handle_sso_token_error_forbidden_with_invalid_token_error() {
+        let token = Token::new("test-token".to_string());
+        let client = MockSSOTokenClient {
+            metadata_response: Some(ResponseTokenMetadata {
+                id: "test".to_string(),
+                name: "test".to_string(),
+                token_type: "sso".to_string(),
+                origin: "test".to_string(),
+                scopes: vec![],
+                active_at: current_unix_time() - 100,
+                created_at: 0,
+            }),
+        };
+
+        let errorful_response = reqwest::Response::from(
+            http::Response::builder()
+                .status(reqwest::StatusCode::FORBIDDEN)
+                .body("")
+                .unwrap(),
+        );
+
+        let result = token
+            .handle_sso_token_error(&client, errorful_response.error_for_status().unwrap_err())
+            .await;
+        assert!(matches!(
+            result,
+            Err(Error::APIError(
+                turborepo_api_client::Error::InvalidToken { .. }
+            ))
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_handle_sso_token_error_forbidden_without_token_type() {
+        let token = Token::new("test-token".to_string());
+        let client = MockSSOTokenClient {
+            metadata_response: Some(ResponseTokenMetadata {
+                id: "test".to_string(),
+                name: "test".to_string(),
+                token_type: "".to_string(),
+                origin: "test".to_string(),
+                scopes: vec![],
+                active_at: current_unix_time() - 100,
+                created_at: 0,
+            }),
+        };
+
+        let errorful_response = reqwest::Response::from(
+            http::Response::builder()
+                .status(reqwest::StatusCode::FORBIDDEN)
+                .body("")
+                .unwrap(),
+        );
+
+        let result = token
+            .handle_sso_token_error(&client, errorful_response.error_for_status().unwrap_err())
+            .await;
+        assert!(matches!(
+            result,
+            Err(Error::APIError(turborepo_api_client::Error::ReqwestError(
+                _
+            )))
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_handle_sso_token_error_non_forbidden() {
+        let token = Token::new("test-token".to_string());
+        let client = MockSSOTokenClient {
+            metadata_response: None,
+        };
+
+        let errorful_response = reqwest::Response::from(
+            http::Response::builder()
+                .status(reqwest::StatusCode::INTERNAL_SERVER_ERROR)
+                .body("")
+                .unwrap(),
+        );
+
+        let result = token
+            .handle_sso_token_error(&client, errorful_response.error_for_status().unwrap_err())
+            .await;
+        assert!(matches!(
+            result,
+            Err(Error::APIError(turborepo_api_client::Error::ReqwestError(
+                _
+            )))
+        ));
     }
 }
