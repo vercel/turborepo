@@ -31,7 +31,7 @@ Verify turbo can read the produced turbo.json
 
 Modify turbo.json to add some fields to remoteCache and add a spaceId
   $ rm -rf out
-  $ cat turbo.json | jq '.remoteCache.enabled = true | .remoteCache.timeout = 1000 | .remoteCache.apiUrl = "my-domain.com/cache" | .experimentalSpaces.id = "my-space-id"' > turbo.json.tmp
+  $ cat turbo.json | jq '.remoteCache.enabled = true | .remoteCache.timeout = 1000 | .remoteCache.apiUrl = "my-domain.com/cache"' > turbo.json.tmp
   $ mv turbo.json.tmp turbo.json
   $ ${TURBO} prune docs > /dev/null
   $ cat out/turbo.json | jq '.remoteCache | keys'
@@ -42,8 +42,6 @@ Modify turbo.json to add some fields to remoteCache and add a spaceId
   ]
   $ cat out/turbo.json | jq '.remoteCache.enabled'
   true
-  $ cat out/turbo.json | jq '.experimentalSpaces.id'
-  "my-space-id"
   $ cat out/turbo.json | jq '.remoteCache.timeout'
   1000
   $ cat out/turbo.json | jq '.remoteCache.apiUrl'

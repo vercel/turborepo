@@ -88,8 +88,7 @@ mod tests {
     use turborepo_api_client::Client;
     use turborepo_ui::ColorConfig;
     use turborepo_vercel_api::{
-        token::ResponseTokenMetadata, SpacesResponse, Team, TeamsResponse, UserResponse,
-        VerifiedSsoUser,
+        token::ResponseTokenMetadata, Team, TeamsResponse, UserResponse, VerifiedSsoUser,
     };
     use url::Url;
 
@@ -115,13 +114,6 @@ mod tests {
         }
         fn add_ci_header(_request_builder: RequestBuilder) -> RequestBuilder {
             unimplemented!("add_ci_header")
-        }
-        async fn get_spaces(
-            &self,
-            _token: &str,
-            _team_id: Option<&str>,
-        ) -> turborepo_api_client::Result<SpacesResponse> {
-            unimplemented!("get_spaces")
         }
         async fn verify_sso_token(
             &self,
