@@ -111,7 +111,7 @@ impl Token {
         Ok(true)
     }
 
-    async fn handle_sso_token_error<T: Client + TokenClient + CacheClient>(
+    async fn handle_sso_token_error<T: TokenClient>(
         &self,
         client: &T,
         error: reqwest::Error,
