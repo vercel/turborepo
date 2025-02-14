@@ -18,23 +18,22 @@ execSync(`python3 -m venv ${VENV_NAME}`);
 execSync(`${getVenvBin("python3")} -m pip install --quiet --upgrade pip`);
 
 // Install prysk
-execSync(`${getVenvBin("pip")} install "prysk==0.15.2"`);
-
-// Which tests do we want to run?
-const testArg = process.argv[3] ? process.argv[3] : process.argv[2];
-const tests = isWindows ? testArg.replaceAll("/", path.sep) : testArg;
-
-if (!tests) {
-  throw new Error("No tests specified");
-}
+execSync(
+  `${getVenvBin(
+    "pip"
+  )} install "pytest==8.3.3" "prysk[pytest-plugin]==0.15.2" "pytest-prysk==0.4.0" "pytest-xdist==3.6.1"`
+);
 
 const flags = [
-  "--shell=bash",
+  isWindows
+    ? "--prysk-shell=C:\\Program Files\\Git\\bin\\bash.EXE"
+    : "--prysk-shell=bash",
   process.env.PRYSK_INTERACTIVE === "true" ? "--interactive" : "",
-  isWindows ? "--dos2unix" : "",
+  isWindows ? "--prysk-dos2unix=true" : "",
+  "--capture=fd",
 ].join(" ");
 
-const cmd = [getVenvBin("prysk"), flags, tests].join(" ");
+const cmd = [getVenvBin("pytest"), flags].join(" ");
 console.log(`Running ${cmd}`);
 
 try {
@@ -47,7 +46,7 @@ try {
 }
 
 function getVenvBin(tool) {
-  const allowedVenvTools = ["python3", "pip", "prysk"];
+  const allowedVenvTools = ["python3", "pip", "pytest"];
   if (!allowedVenvTools.includes(tool)) {
     throw new Error(`Tool not allowed: ${tool}`);
   }
