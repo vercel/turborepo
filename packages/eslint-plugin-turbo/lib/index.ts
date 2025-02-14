@@ -5,6 +5,9 @@ import noUndeclaredEnvVars from "./rules/no-undeclared-env-vars";
 import recommended from "./configs/recommended";
 import flatRecommended from "./configs/flat/recommended";
 
+export type { RuleContextWithOptions } from "./rules/no-undeclared-env-vars";
+export type { ProjectKey } from "./utils/calculate-inputs";
+
 const plugin = {
   meta: { name, version },
   rules: {
