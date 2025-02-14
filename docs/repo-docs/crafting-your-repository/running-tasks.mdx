@@ -158,7 +158,7 @@ turbo build --filter=...ui
 ```
 
 ### Filtering to include dependencies
-If you want to narrow the scope down to only an app and its dependencies, you can use the ... microsyntax in reverse. This ensures that only the specified package and the dependencies it relies on are included in the task.
+To limit the scope to a package and its dependencies, append `...` to the package name. This runs the task for the specified package and all packages it depends on.
 
 ```bash title="Terminal"
 turbo dev --filter=web...
