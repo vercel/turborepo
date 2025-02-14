@@ -2,10 +2,10 @@
   "name": "with-tailwind",
   "private": true,
   "scripts": {
-    "build": "turbo build",
+    "build": "turbo run build",
     "dev": "turbo run dev",
     "lint": "turbo run lint",
-    "check-types": "turbo check-types",
+    "check-types": "turbo run check-types",
     "format": "prettier --write \"**/*.{ts,tsx,md}\""
   },
   "devDependencies": {
