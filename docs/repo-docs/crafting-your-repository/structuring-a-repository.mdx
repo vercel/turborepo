@@ -308,13 +308,6 @@ Using exports this way provides three major benefits:
 - **More powerful features**: `exports` also has other powerful features compared to [the `main` field](https://nodejs.org/api/packages.html#main) like [Conditional Exports](https://nodejs.org/api/packages.html#conditional-exports). In general, we recommend using `exports` over `main` whenever possible as it is the more modern option.
 - **IDE autocompletion**: By specifying the entrypoints for your package using `exports`, you can ensure that your code editor can provide auto-completion for the package's exports.
 
-<Callout type="good-to-know">
-  You may also specify `exports` using a wildcard. However, you will lose some 
-  IDE autocompletion due to performance tradeoffs with the TypeScript compiler.
-  For more information, visit [the TypeScript
-  guide](/repo/docs/guides/tools/typescript#package-entrypoint-wildcards).
-</Callout>
-
 #### `imports` (optional)
 
 [The `imports` field](https://nodejs.org/api/packages.html#imports) gives you a way to create subpaths to other modules within your package. You can think of these like "shortcuts" to write simpler import paths that are more resilient to refactors that move files. To learn how, visit [the TypeScript page](/repo/docs/guides/tools/typescript#use-nodejs-subpath-imports-instead-of-typescript-compiler-paths).
