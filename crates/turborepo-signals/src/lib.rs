@@ -1,6 +1,8 @@
 #![deny(clippy::all)]
 #![feature(assert_matches)]
 
+//! A crate for registering listeners for a given signal
+
 use std::{
     fmt::Debug,
     future::Future,
@@ -28,7 +30,9 @@ pub struct SignalSubscriber(oneshot::Receiver<oneshot::Sender<()>>);
 
 /// SubscriberGuard should be kept until a subscriber is done processing the
 /// signal
-pub struct SubscriberGuard(oneshot::Sender<()>);
+pub struct SubscriberGuard {
+    _guard: oneshot::Sender<()>,
+}
 
 impl SignalHandler {
     /// Construct a new SignalHandler that will alert any subscribers when
@@ -111,11 +115,11 @@ impl SignalHandler {
 impl SignalSubscriber {
     /// Wait until signal is received by the signal handler
     pub async fn listen(self) -> SubscriberGuard {
-        let callback = self
+        let _guard = self
             .0
             .await
             .expect("signal handler worker thread exited without alerting subscribers");
-        SubscriberGuard(callback)
+        SubscriberGuard { _guard }
     }
 }
 
