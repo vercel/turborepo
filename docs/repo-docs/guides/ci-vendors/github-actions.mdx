@@ -290,7 +290,7 @@ Example `ci` yaml with `.turbo` as chosen cache folder:
           uses: actions/cache@v4 // [!code highlight]
           with: // [!code highlight]
             path: .turbo // [!code highlight]
-            key: ${{ runner.os }}-turbo-${{ github.sha }} // [!code highlight]
+            key: ${{ runner.os }}-turbo-${{ github.ref_name }} // [!code highlight]
             restore-keys: | // [!code highlight]
               ${{ runner.os }}-turbo- // [!code highlight]
 
