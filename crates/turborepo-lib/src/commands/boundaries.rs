@@ -1,10 +1,10 @@
+use turborepo_signals::SignalHandler;
 use turborepo_telemetry::events::command::CommandEventBuilder;
 
 use crate::{
     cli,
     commands::{run::get_signal, CommandBase},
     run::builder::RunBuilder,
-    signal::SignalHandler,
 };
 
 pub async fn run(base: CommandBase, telemetry: CommandEventBuilder) -> Result<i32, cli::Error> {

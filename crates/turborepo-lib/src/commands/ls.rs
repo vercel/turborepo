@@ -5,6 +5,7 @@ use serde::Serialize;
 use thiserror::Error;
 use turbopath::AnchoredSystemPath;
 use turborepo_repository::package_graph::{PackageName, PackageNode};
+use turborepo_signals::SignalHandler;
 use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_ui::{color, cprint, cprintln, ColorConfig, BOLD, BOLD_GREEN, GREY};
 
@@ -13,7 +14,6 @@ use crate::{
     cli::OutputFormat,
     commands::{run::get_signal, CommandBase},
     run::{builder::RunBuilder, Run},
-    signal::SignalHandler,
 };
 
 #[derive(Debug, Error, Diagnostic)]

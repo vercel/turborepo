@@ -4,6 +4,7 @@ use itertools::Itertools;
 use miette::Diagnostic;
 use thiserror::Error;
 use turborepo_repository::package_graph;
+use turborepo_signals::SignalHandler;
 use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_ui::{color, BOLD, GREY};
 
@@ -14,7 +15,6 @@ use crate::{
     rewrite_json::RewriteError,
     run,
     run::{builder::RunBuilder, watch},
-    signal::SignalHandler,
 };
 
 #[derive(Debug, Error, Diagnostic)]

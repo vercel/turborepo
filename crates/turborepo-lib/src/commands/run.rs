@@ -1,10 +1,11 @@
 use std::{future::Future, sync::Arc};
 
 use tracing::error;
+use turborepo_signals::SignalHandler;
 use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_ui::sender::UISender;
 
-use crate::{commands::CommandBase, run, run::builder::RunBuilder, signal::SignalHandler};
+use crate::{commands::CommandBase, run, run::builder::RunBuilder};
 
 #[cfg(windows)]
 pub fn get_signal() -> Result<impl Future<Output = Option<()>>, run::Error> {

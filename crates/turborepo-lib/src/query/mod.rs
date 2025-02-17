@@ -24,12 +24,12 @@ use tokio::select;
 use turbo_trace::TraceError;
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_repository::{change_mapper::AllPackageChangeReason, package_graph::PackageName};
+use turborepo_signals::SignalHandler;
 
 use crate::{
     get_version,
     query::{file::File, task::RepositoryTask},
     run::{builder::RunBuilder, Run},
-    signal::SignalHandler,
 };
 
 #[derive(Error, Debug, miette::Diagnostic)]

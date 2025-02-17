@@ -10,6 +10,7 @@ use thiserror::Error;
 use tokio::{select, sync::Notify, task::JoinHandle};
 use tracing::{instrument, trace, warn};
 use turborepo_repository::package_graph::PackageName;
+use turborepo_signals::SignalHandler;
 use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_ui::sender::UISender;
 
@@ -18,7 +19,6 @@ use crate::{
     daemon::{proto, DaemonConnectorError, DaemonError},
     get_version, opts,
     run::{self, builder::RunBuilder, scope::target_selector::InvalidSelectorError, Run},
-    signal::SignalHandler,
     turbo_json::CONFIG_FILE,
     DaemonConnector, DaemonPaths,
 };

@@ -5,6 +5,7 @@ use camino::Utf8Path;
 use miette::{Diagnostic, Report, SourceSpan};
 use thiserror::Error;
 use turbopath::AbsoluteSystemPathBuf;
+use turborepo_signals::SignalHandler;
 use turborepo_telemetry::events::command::CommandEventBuilder;
 
 use crate::{
@@ -12,7 +13,6 @@ use crate::{
     query,
     query::{Error, RepositoryQuery},
     run::builder::RunBuilder,
-    signal::SignalHandler,
 };
 
 const SCHEMA_QUERY: &str = "query IntrospectionQuery {

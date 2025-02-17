@@ -1,3 +1,6 @@
+#![deny(clippy::all)]
+#![feature(assert_matches)]
+
 use std::{
     fmt::Debug,
     future::Future,
