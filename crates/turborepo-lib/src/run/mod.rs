@@ -31,7 +31,7 @@ use turborepo_ci::Vendor;
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_repository::package_graph::{PackageGraph, PackageName, PackageNode};
 use turborepo_scm::SCM;
-use turborepo_signals::SignalHandler;
+use turborepo_signals::{listeners::get_signal, SignalHandler};
 use turborepo_telemetry::events::generic::GenericEventBuilder;
 use turborepo_ui::{
     cprint, cprintln, sender::UISender, tui, tui::TuiSender, wui::sender::WebUISender, ColorConfig,
@@ -336,7 +336,7 @@ impl Run {
                     };
 
                     let interrupt = async {
-                        if let Ok(fut) = crate::commands::run::get_signal() {
+                        if let Ok(fut) = get_signal() {
                             fut.await;
                         } else {
                             tracing::warn!("could not register ctrl-c handler");

@@ -5,11 +5,11 @@ use camino::Utf8Path;
 use miette::{Diagnostic, Report, SourceSpan};
 use thiserror::Error;
 use turbopath::AbsoluteSystemPathBuf;
-use turborepo_signals::SignalHandler;
+use turborepo_signals::{listeners::get_signal, SignalHandler};
 use turborepo_telemetry::events::command::CommandEventBuilder;
 
 use crate::{
-    commands::{run::get_signal, CommandBase},
+    commands::CommandBase,
     query,
     query::{Error, RepositoryQuery},
     run::builder::RunBuilder,

@@ -1,40 +1,14 @@
-use std::{future::Future, sync::Arc};
+use std::sync::Arc;
 
 use tracing::error;
-use turborepo_signals::SignalHandler;
+use turborepo_signals::{listeners::get_signal, SignalHandler};
 use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_ui::sender::UISender;
 
 use crate::{commands::CommandBase, run, run::builder::RunBuilder};
 
-#[cfg(windows)]
-pub fn get_signal() -> Result<impl Future<Output = Option<()>>, run::Error> {
-    let mut ctrl_c = tokio::signal::windows::ctrl_c().map_err(run::Error::SignalHandler)?;
-    Ok(async move { ctrl_c.recv().await })
-}
-
-#[cfg(not(windows))]
-pub fn get_signal() -> Result<impl Future<Output = Option<()>>, run::Error> {
-    use tokio::signal::unix;
-    let mut sigint =
-        unix::signal(unix::SignalKind::interrupt()).map_err(run::Error::SignalHandler)?;
-    let mut sigterm =
-        unix::signal(unix::SignalKind::terminate()).map_err(run::Error::SignalHandler)?;
-
-    Ok(async move {
-        tokio::select! {
-            res = sigint.recv() => {
-                res
-            }
-            res = sigterm.recv() => {
-                res
-            }
-        }
-    })
-}
-
 pub async fn run(base: CommandBase, telemetry: CommandEventBuilder) -> Result<i32, run::Error> {
-    let signal = get_signal()?;
+    let signal = get_signal().map_err(crate::run::Error::SignalHandler)?;
     let handler = SignalHandler::new(signal);
 
     let run_builder = RunBuilder::new(base)?;

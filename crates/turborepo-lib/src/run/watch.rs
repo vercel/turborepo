@@ -10,12 +10,12 @@ use thiserror::Error;
 use tokio::{select, sync::Notify, task::JoinHandle};
 use tracing::{instrument, trace, warn};
 use turborepo_repository::package_graph::PackageName;
-use turborepo_signals::SignalHandler;
+use turborepo_signals::{listeners::get_signal, SignalHandler};
 use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_ui::sender::UISender;
 
 use crate::{
-    commands::{self, CommandBase},
+    commands::CommandBase,
     daemon::{proto, DaemonConnectorError, DaemonError},
     get_version, opts,
     run::{self, builder::RunBuilder, scope::target_selector::InvalidSelectorError, Run},
@@ -115,7 +115,7 @@ impl WatchClient {
         experimental_write_cache: bool,
         telemetry: CommandEventBuilder,
     ) -> Result<Self, Error> {
-        let signal = commands::run::get_signal()?;
+        let signal = get_signal().map_err(crate::run::Error::SignalHandler)?;
         let handler = SignalHandler::new(signal);
 
         if base.opts.repo_opts.root_turbo_json_path != base.repo_root.join_component(CONFIG_FILE) {

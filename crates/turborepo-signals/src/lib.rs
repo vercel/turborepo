@@ -3,6 +3,8 @@
 
 //! A crate for registering listeners for a given signal
 
+pub mod listeners;
+
 use std::{
     fmt::Debug,
     future::Future,
