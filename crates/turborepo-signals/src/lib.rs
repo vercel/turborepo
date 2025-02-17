@@ -8,13 +8,15 @@ pub mod signals;
 
 use std::{
     fmt::Debug,
-    future::Future,
     sync::{Arc, Mutex},
 };
 
-use futures::{stream::FuturesUnordered, StreamExt};
+use futures::{stream::FuturesUnordered, Stream, StreamExt};
 use signals::Signal;
-use tokio::sync::{mpsc, oneshot};
+use tokio::{
+    pin,
+    sync::{mpsc, oneshot},
+};
 
 /// SignalHandler provides a mechanism to subscribe to a future and get alerted
 /// whenever the future completes or the handler gets a close message.
@@ -41,16 +43,17 @@ pub struct SubscriberGuard {
 impl SignalHandler {
     /// Construct a new SignalHandler that will alert any subscribers when
     /// `signal_source` completes or `close` is called on it.
-    pub fn new(signal_source: impl Future<Output = Option<Signal>> + Send + 'static) -> Self {
+    pub fn new(signal_source: impl Stream<Item = Option<Signal>> + Send + 'static) -> Self {
         // think about channel size
         let state = Arc::new(Mutex::new(HandlerState::default()));
         let worker_state = state.clone();
         let (close, mut rx) = mpsc::channel::<()>(1);
         tokio::spawn(async move {
+            pin!(signal_source);
             tokio::select! {
                 // We don't care if we get a signal or if we are unable to receive signals
                 // Either way we start the shutdown.
-                _ = signal_source => {},
+                _ = signal_source.next() => {},
                 // We don't care if a close message was sent or if all handlers are dropped.
                 // Either way start the shutdown process.
                 _ = rx.recv() => {}
@@ -141,12 +144,22 @@ impl HandlerState {
 mod test {
     use std::{assert_matches::assert_matches, time::Duration};
 
+    use futures::stream;
+
     use super::*;
+
+    #[cfg(windows)]
+    const DEFAULT_SIGNAL: Signal = Signal::CtrlC;
+    #[cfg(not(windows))]
+    const DEFAULT_SIGNAL: Signal = Signal::Interrupt;
 
     #[tokio::test]
     async fn test_subscribers_triggered_from_signal() {
         let (tx, rx) = oneshot::channel();
-        let handler = SignalHandler::new(async move { rx.await.ok() });
+        let handler = SignalHandler::new(stream::once(async move {
+            rx.await.ok();
+            Some(DEFAULT_SIGNAL)
+        }));
         let subscriber = handler.subscribe().unwrap();
         // Send mocked SIGINT
         tx.send(Signal::Interrupt).unwrap();
@@ -172,7 +185,10 @@ mod test {
     #[tokio::test]
     async fn test_subscribers_triggered_from_close() {
         let (_tx, rx) = oneshot::channel::<()>();
-        let handler = SignalHandler::new(async move { rx.await.ok().map(|_| Signal::Interrupt) });
+        let handler = SignalHandler::new(stream::once(async move {
+            rx.await.ok();
+            Some(DEFAULT_SIGNAL)
+        }));
         let subscriber = handler.subscribe().unwrap();
         let (close_done, mut is_close_done) = oneshot::channel();
 
@@ -195,7 +211,10 @@ mod test {
     #[tokio::test]
     async fn test_close_idempotent() {
         let (_tx, rx) = oneshot::channel::<()>();
-        let handler = SignalHandler::new(async move { rx.await.ok().map(|_| Signal::Interrupt) });
+        let handler = SignalHandler::new(stream::once(async move {
+            rx.await.ok();
+            Some(DEFAULT_SIGNAL)
+        }));
         handler.close().await;
         handler.close().await;
     }
@@ -203,7 +222,10 @@ mod test {
     #[tokio::test]
     async fn test_subscribe_after_close() {
         let (tx, rx) = oneshot::channel();
-        let handler = SignalHandler::new(async move { rx.await.ok() });
+        let handler = SignalHandler::new(stream::once(async move {
+            rx.await.ok();
+            Some(DEFAULT_SIGNAL)
+        }));
         let subscriber = handler.subscribe().unwrap();
 
         // Send SIGINT

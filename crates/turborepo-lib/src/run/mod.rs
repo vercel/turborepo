@@ -22,8 +22,9 @@ use std::{
 
 pub use cache::{CacheOutput, ConfigCache, Error as CacheError, RunCache, TaskCache};
 use chrono::{DateTime, Local};
+use futures::StreamExt;
 use rayon::iter::ParallelBridge;
-use tokio::{select, task::JoinHandle};
+use tokio::{pin, select, task::JoinHandle};
 use tracing::{debug, instrument};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_api_client::{APIAuth, APIClient};
@@ -337,7 +338,8 @@ impl Run {
 
                     let interrupt = async {
                         if let Ok(fut) = get_signal() {
-                            fut.await;
+                            pin!(fut);
+                            fut.next().await;
                         } else {
                             tracing::warn!("could not register ctrl-c handler");
                             // wait forever
