@@ -98,8 +98,10 @@ impl Token {
         // passed in a user's email if the token is valid.
         valid_message_fn: Option<impl FnOnce(&str)>,
     ) -> Result<bool, Error> {
-        let (is_active, has_cache_access) =
-            tokio::try_join!(self.is_active(client), self.has_cache_access(client, None))?;
+        let (is_active, has_cache_access) = tokio::try_join!(
+            self.is_active(client),
+            self.has_cache_access(client, None, None)
+        )?;
         if !is_active || !has_cache_access {
             return Ok(false);
         }
@@ -147,7 +149,9 @@ impl Token {
                     return Err(Error::SSOTeamNotFound(sso_team.to_owned()));
                 }
 
-                let has_cache_access = self.has_cache_access(client, Some(info)).await?;
+                let has_cache_access = self
+                    .has_cache_access(client, Some(info.id), Some(info.slug))
+                    .await?;
                 if !is_active || !has_cache_access {
                     return Ok(false);
                 }
@@ -179,13 +183,9 @@ impl Token {
     pub async fn has_cache_access<T: CacheClient>(
         &self,
         client: &T,
-        team_info: Option<TeamInfo<'_>>,
+        team_id: Option<&str>,
+        team_slug: Option<&str>,
     ) -> Result<bool, Error> {
-        let (team_id, team_slug) = match team_info {
-            Some(TeamInfo { id, slug }) => (Some(id), Some(slug)),
-            None => (None, None),
-        };
-
         match client
             .get_caching_status(self.into_inner(), team_id, team_slug)
             .await
@@ -495,12 +495,14 @@ mod tests {
         };
 
         let token = Token::Existing("existing_token".to_string());
-        let team_info = Some(TeamInfo {
+        let team_info = TeamInfo {
             id: "team_id",
             slug: "team_slug",
-        });
+        };
 
-        let result = token.has_cache_access(&mock, team_info).await;
+        let result = token
+            .has_cache_access(&mock, Some(team_info.id), Some(team_info.slug))
+            .await;
         assert!(result.is_ok());
         assert!(result.unwrap());
     }
@@ -512,12 +514,14 @@ mod tests {
         };
 
         let token = Token::Existing("existing_token".to_string());
-        let team_info = Some(TeamInfo {
+        let team_info = TeamInfo {
             id: "team_id",
             slug: "team_slug",
-        });
+        };
 
-        let result = token.has_cache_access(&mock, team_info).await;
+        let result = token
+            .has_cache_access(&mock, Some(team_info.id), Some(team_info.slug))
+            .await;
         assert!(result.is_ok());
         assert!(!result.unwrap());
     }
@@ -529,12 +533,14 @@ mod tests {
         };
 
         let token = Token::Existing("existing_token".to_string());
-        let team_info = Some(TeamInfo {
+        let team_info = TeamInfo {
             id: "team_id",
             slug: "team_slug",
-        });
+        };
 
-        let result = token.has_cache_access(&mock, team_info).await;
+        let result = token
+            .has_cache_access(&mock, Some(team_info.id), Some(team_info.slug))
+            .await;
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), Error::APIError(_)));
     }

@@ -1,21 +1,47 @@
+mod manual;
+
+use manual::login_manual;
 use turborepo_api_client::APIClient;
 use turborepo_auth::{
     login as auth_login, sso_login as auth_sso_login, DefaultLoginServer, LoginOptions, Token,
 };
 use turborepo_telemetry::events::command::{CommandEventBuilder, LoginMethod};
 
-use crate::{cli::Error, commands::CommandBase, config, rewrite_json::set_path};
+use crate::{commands::CommandBase, config, rewrite_json::set_path};
+
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error("Failed to read user input. {0}")]
+    UserInput(#[from] dialoguer::Error),
+    #[error(transparent)]
+    Config(#[from] crate::config::Error),
+    #[error(transparent)]
+    Auth(#[from] turborepo_auth::Error),
+    #[error("Unable to edit `turbo.json`. {0}")]
+    JsonEdit(#[from] crate::rewrite_json::RewriteError),
+    #[error("The provided credentials do not have cache access. Please double check them.")]
+    NoCacheAccess,
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
+    #[error(transparent)]
+    TurboJsonParse(#[from] crate::turbo_json::parser::Error),
+}
 
 pub async fn login(
     base: &mut CommandBase,
     telemetry: CommandEventBuilder,
     sso_team: Option<&str>,
     force: bool,
+    manual: bool,
 ) -> Result<(), Error> {
     match sso_team {
         Some(sso_team) => {
             telemetry.track_login_method(LoginMethod::SSO);
             sso_login(base, sso_team, force).await
+        }
+        None if manual => {
+            telemetry.track_login_method(LoginMethod::Manual);
+            login_manual(base, force).await
         }
         None => {
             let mut login_telemetry = LoginTelemetry::new(&telemetry, LoginMethod::Standard);
@@ -49,32 +75,7 @@ async fn sso_login(base: &mut CommandBase, sso_team: &str, force: bool) -> Resul
         return Ok(());
     }
 
-    let global_config_path = base.global_config_path()?;
-    let before = global_config_path
-        .read_existing_to_string()
-        .map_err(|e| config::Error::FailedToReadConfig {
-            config_path: global_config_path.clone(),
-            error: e,
-        })?
-        .unwrap_or_else(|| String::from("{}"));
-
-    let after = set_path(&before, &["token"], &format!("\"{}\"", token.into_inner()))?;
-
-    global_config_path
-        .ensure_dir()
-        .map_err(|e| config::Error::FailedToSetConfig {
-            config_path: global_config_path.clone(),
-            error: e,
-        })?;
-
-    global_config_path
-        .create_with_contents(after)
-        .map_err(|e| config::Error::FailedToSetConfig {
-            config_path: global_config_path.clone(),
-            error: e,
-        })?;
-
-    Ok(())
+    write_token(base, token)
 }
 
 async fn login_no_sso(base: &mut CommandBase, force: bool) -> Result<(), Error> {
@@ -101,31 +102,7 @@ async fn login_no_sso(base: &mut CommandBase, force: bool) -> Result<(), Error> 
         return Ok(());
     }
 
-    let global_config_path = base.global_config_path()?;
-    let before = global_config_path
-        .read_existing_to_string()
-        .map_err(|e| config::Error::FailedToReadConfig {
-            config_path: global_config_path.clone(),
-            error: e,
-        })?
-        .unwrap_or_else(|| String::from("{}"));
-    let after = set_path(&before, &["token"], &format!("\"{}\"", token.into_inner()))?;
-
-    global_config_path
-        .ensure_dir()
-        .map_err(|e| config::Error::FailedToSetConfig {
-            config_path: global_config_path.clone(),
-            error: e,
-        })?;
-
-    global_config_path
-        .create_with_contents(after)
-        .map_err(|e| config::Error::FailedToSetConfig {
-            config_path: global_config_path.clone(),
-            error: e,
-        })?;
-
-    Ok(())
+    write_token(base, token)
 }
 
 struct LoginTelemetry<'a> {
@@ -152,4 +129,33 @@ impl<'a> Drop for LoginTelemetry<'a> {
         self.telemetry.track_login_method(self.method);
         self.telemetry.track_login_success(self.success);
     }
+}
+
+// Writes a given token to the global turbo configuration file
+fn write_token(base: &CommandBase, token: Token) -> Result<(), Error> {
+    let global_config_path = base.global_config_path()?;
+    let before = global_config_path
+        .read_existing_to_string()
+        .map_err(|e| config::Error::FailedToReadConfig {
+            config_path: global_config_path.clone(),
+            error: e,
+        })?
+        .unwrap_or_else(|| String::from("{}"));
+    let after = set_path(&before, &["token"], &format!("\"{}\"", token.into_inner()))?;
+
+    global_config_path
+        .ensure_dir()
+        .map_err(|e| config::Error::FailedToSetConfig {
+            config_path: global_config_path.clone(),
+            error: e,
+        })?;
+
+    global_config_path
+        .create_with_contents(after)
+        .map_err(|e| config::Error::FailedToSetConfig {
+            config_path: global_config_path.clone(),
+            error: e,
+        })?;
+
+    Ok(())
 }
