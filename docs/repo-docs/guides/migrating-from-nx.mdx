@@ -12,19 +12,21 @@ This guide will help you migrate an existing Nx repository to Turborepo.
 
 ## Why switch?
 
-There are several reasons why you might want to switch from from Nx to Turborepo.
+### Specific Focus
 
-### Ecosystem standards
+Turborepo is focused on TypeScript and JavaScript packages [built on top of package manager workspaces](/repo/docs/crafting-your-repository/structuring-a-repository). If this matches your focus, you may find it easier to navigate Turborepo's set of features and documentation to find what you are looking for.
 
-Turborepo is [built on top of package manager workspaces](/repo/docs/crafting-your-repository/structuring-a-repository), meaning more tools and workflows are likely to work without plugins or other workarounds. By comparison, the default Nx starter uses conventions and strategies unique to Nx, and you can expect to write more Nx-only code as your codebase grows.
+### Vercel Interoperability
 
-### More control of source code
+If you are already a part of the Vercel ecosystem, for example using the infrastructure provided by us, then you will feel right at home with Turborepo.
 
-Nx’s philosophy involves wrapping your code with layers of plugins, other dependencies, and Nx-specific code. Instead, Turborepo infers your repository’s needs from its structure and source code. Since your source code goes through fewer layers of abstraction to be analyzed, you maintain greater control of your repository.
+We provide dedicated [Remote Caching](/repo/docs/core-concepts/remote-caching) options for all Turborepo users, where we store the results of your task on a cloud server. This saves enormous amounts of time by **preventing duplicated work across your entire organization**. [Vercel Remote Cache](https://vercel.com/docs/monorepos/remote-caching) has saved teams over 500 years of compute so far.
 
-### Less configuration
+### Less global configuration
 
-Migrating to Turborepo will likely require deleting previous configuration needed for Nx. Turborepo will automatically infer much of what your repository needs. For example, here are the tool-specific configurations you'll find in the default starters for Turborepo and Nx.
+Nx maintains explicit global configuration (i.e. entries in `nx.json`) in cases where Turborepo prefers implicit defaults. This is again applicable because of Turborepo's narrower focus on TypeScript and JavaScript packages and often means that `turbo.json` files have fewer lines in them than `nx.json` files. This preference for less explicit configuration is not mirrored at the package level, however, where explicit npm scripts are required by Turborepo, whereas Nx infers them via its plugins that are wired up at the global level (in `nx.json`).
+
+For example, here are the tool-specific configurations you'll find in the default starter for Turborepo, and the equivalent Nx preset for developing Next.js applications (with inferred tasks for building, typechecking with TypeScript project references, serving and linting). Nx does not need this level of configuration to work like Turborepo does, but this is the way Nx is recommended to be configured.
 
 <Tabs items={["Turborepo", "Nx"]}>
 
@@ -66,30 +68,34 @@ Migrating to Turborepo will likely require deleting previous configuration neede
     "production": [
       "default",
       "!{projectRoot}/.eslintrc.json",
-      "!{projectRoot}/eslint.config.cjs",
-      "!{projectRoot}/**/?(*.)+(spec|test).[jt]s?(x)?(.snap)",
-      "!{projectRoot}/tsconfig.spec.json",
-      "!{projectRoot}/jest.config.[jt]s",
-      "!{projectRoot}/src/test-setup.[jt]s",
-      "!{projectRoot}/test-setup.[jt]s"
+      "!{projectRoot}/eslint.config.mjs"
     ],
-    "sharedGlobals": ["{workspaceRoot}/.github/workflows/ci.yml"]
+    "sharedGlobals": []
   },
-  "nxCloudId": "6789ec521d90a2165398f39a",
   "plugins": [
+    {
+      "plugin": "@nx/js/typescript",
+      "options": {
+        "typecheck": {
+          "targetName": "typecheck"
+        },
+        "build": {
+          "targetName": "build",
+          "configName": "tsconfig.lib.json",
+          "buildDepsName": "build-deps",
+          "watchDepsName": "watch-deps"
+        }
+      }
+    },
     {
       "plugin": "@nx/next/plugin",
       "options": {
         "startTargetName": "start",
         "buildTargetName": "build",
         "devTargetName": "dev",
-        "serveStaticTargetName": "serve-static"
-      }
-    },
-    {
-      "plugin": "@nx/playwright/plugin",
-      "options": {
-        "targetName": "e2e"
+        "serveStaticTargetName": "serve-static",
+        "buildDepsTargetName": "build-deps",
+        "watchDepsTargetName": "watch-deps"
       }
     },
     {
@@ -97,19 +103,8 @@ Migrating to Turborepo will likely require deleting previous configuration neede
       "options": {
         "targetName": "lint"
       }
-    },
-    {
-      "plugin": "@nx/jest/plugin",
-      "options": {
-        "targetName": "test"
-      }
     }
   ],
-  "targetDefaults": {
-    "e2e-ci--**/*": {
-      "dependsOn": ["^build"]
-    }
-  },
   "generators": {
     "@nx/next": {
       "application": {
@@ -121,34 +116,12 @@ Migrating to Turborepo will likely require deleting previous configuration neede
 }
 ```
 
-```json title="project.json"
-{
-  "name": "starter",
-  "$schema": "../../node_modules/nx/schemas/project-schema.json",
-  "sourceRoot": "apps/starter",
-  "projectType": "application",
-  "tags": [],
-  "// targets": "to see all targets run: nx show project starter --web",
-  "targets": {}
-}
-```
-
-</Tab>
-
-</Tabs>
-
-### Free Remote Caching
-
-Turborepo’s [Remote Caching](/repo/docs/core-concepts/remote-caching) stores the results of your task on a cloud server. This saves enormous amounts of time by **preventing duplicated work across your entire organization**. [Vercel Remote Cache](https://vercel.com/docs/monorepos/remote-caching) has saved teams over 500 years of compute so far.
-
-Since Nx 19.7, similar functionality is a paid-for feature, even when self-hosting. Remote Caching with Turborepo is free when [self-hosting](/repo/docs/core-concepts/remote-caching#self-hosting) or using [Vercel Remote Cache](https://vercel.com/docs/monorepos/remote-caching).
-
 ## Migration steps
 
 Our goal for this migration is to get a working Turborepo task as quickly as possible, so that you can adopt Turborepo features incrementally. We’ll start by using the Nx scaffolder to create a repository with a Next.js app.
 
 ```bash title="Terminal"
-npx create-nx-workspace --preset=next --ci=skip --e2eTestRunner=none --style=tailwind --nextAppDir=true --nextSrcDir=false --packageManager=pnpm --appName=starter
+npx create-nx-workspace --workspaces --preset=next --ci=skip --e2eTestRunner=none --unitTestRunner=none --style=tailwind --nextAppDir=true --nextSrcDir=false --appName=starter
 ```
 
 ### Step 1: Update .gitignore
@@ -159,60 +132,7 @@ Turborepo uses the .turbo directory to hold local caches and other information a
 .turbo
 ```
 
-### Step 2: Add a workspace definition
-
-Turborepo is built on top of package manager workspaces, a JavaScript ecosystem standard. Add the directory paths to the workspace that will contain packages.
-
-<PackageManagerTabs>
-
-<Tab>
-
-```json title="package.json"
-{
-  "workspaces": ["apps/*"]
-}
-```
-
-</Tab>
-
-<Tab>
-
-```json title="package.json"
-{
-  "workspaces": ["apps/*"]
-}
-```
-
-</Tab>
-
-<Tab>
-
-```yml title="pnpm-workspace.yaml"
-packages:
-  - apps/*
-```
-
-</Tab>
-
-</PackageManagerTabs>
-
-### Step 3: Add a package.json to the application
-
-Rather than adding additional configuration files like `project.json`, Turborepo uses the standard `package.json` file.
-
-Add a `package.json` to the `starter` application. Create a `package.json` at `./apps/starter/package.json` that contains a `dev` and `build` script.
-
-```json title="./apps/starter/package.json"
-{
-  "name": "starter",
-  "scripts": {
-    "dev": "next dev",
-    "build": "next build"
-  }
-}
-```
-
-### Step 4: Remove Nx plugin
+### Step 2: Remove Nx plugin
 
 Remove the Nx plugin from ./apps/starter/next.config.js. The example file below doesn’t have configuration, though your existing Next.js application may need some.
 
@@ -223,7 +143,20 @@ const nextConfig = {};
 module.exports = nextConfig;
 ```
 
-### Step 5: Add the `packageManager` field
+### Step 3: Add explicit scripts to the package.json of the application
+
+Nx's Next.js plugin inferred the scripts for the application, but Turborepo uses explicit npm scripts, so we add them like so:
+
+```json title="./apps/starter/package.json"
+{
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build"
+  }
+}
+```
+
+### Step 4: Add the `packageManager` field
 
 The root package.json needs to have the `packageManager` field. This ensures developers in the repository use the correct package manager, and that Turborepo can optimize your package graph based on your lockfile.
 
@@ -261,7 +194,7 @@ The root package.json needs to have the `packageManager` field. This ensures dev
 
 </PackageManagerTabs>
 
-### Step 6: Run you package manager's install command
+### Step 5: Run you package manager's install command
 
 Update your lockfile by running your installation command.
 
@@ -295,7 +228,7 @@ pnpm install
 
 Once you've done this, you should see a lockfile diff, indicating that the package has been added to the package manager's workspace.
 
-### Step 7: Install Turborepo
+### Step 6: Install Turborepo
 
 Add Turborepo to the root `package.json` of the workspace.
 
@@ -357,9 +290,9 @@ pnpm install turbo --global
 
 </PackageManagerTabs>
 
-### Step 8: Add a `turbo.json`
+### Step 7: Add a `turbo.json`
 
-Create a `turbo.json` at the root to register your tasks and describe their task dependencies.
+Create a `turbo.json` at the root to register your tasks and describe their task dependencies. Note, this does not yet cover the same functionality as was in the original `nx.json` and is an example of getting started quickly with a subset of capabilities.
 
 ```json title="./turbo.json"
 {
@@ -376,7 +309,7 @@ Create a `turbo.json` at the root to register your tasks and describe their task
 }
 ```
 
-### Step 9: Run `turbo build`
+### Step 8: Run `turbo build`
 
 Build the application with Turborepo. Using global `turbo`, this would be `turbo build`. You can also run the command through your package manager:
 
@@ -408,7 +341,7 @@ pnpm exec turbo build
 
 </PackageManagerTabs>
 
-### Step 10: Enable Remote Caching (optional)
+### Step 9: Enable Remote Caching (optional)
 
 By default, Turborepo will connect to the free-to-use Vercel Remote Cache when you run:
 
@@ -433,7 +366,7 @@ We encourage incremental migration, meaning you will have both of Nx and Turbore
 
 ### Installing dependencies where they're used
 
-Turborepo recommends [installing packages where they're used](/repo/docs/crafting-your-repository/managing-dependencies#best-practices-for-dependency-installation) to improve cache hit ratios, help dependency pruning capability, and clarify for developers which dependencies are meant for which packages. This is different from the Nx strategy, where all dependencies are installed at the root of the repository, making all dependencies available to all packages in the workspace.
+Turborepo recommends [installing packages where they're used](/repo/docs/crafting-your-repository/managing-dependencies#best-practices-for-dependency-installation) to improve cache hit ratios, help dependency pruning capability, and clarify for developers which dependencies are meant for which packages.
 
 Once you have tasks running through Turborepo, we highly recommend that you move dependencies to the `package.json`'s for packages and applications that need them. [Visit our documentation on managing dependencies](/repo/docs/crafting-your-repository/managing-dependencies) to learn more.
 
