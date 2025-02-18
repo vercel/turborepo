@@ -6592,6 +6592,7 @@ dependencies = [
  "turborepo-microfrontends",
  "turborepo-repository",
  "turborepo-scm",
+ "turborepo-signals",
  "turborepo-telemetry",
  "turborepo-ui",
  "turborepo-unescape",
@@ -6742,6 +6743,14 @@ dependencies = [
  "turborepo-telemetry",
  "wax",
  "which",
+]
+
+[[package]]
+name = "turborepo-signals"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "tokio",
 ]
 
 [[package]]

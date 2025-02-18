@@ -20,6 +20,7 @@ use turborepo_repository::{
     package_json::PackageJson,
 };
 use turborepo_scm::SCM;
+use turborepo_signals::{SignalHandler, SignalSubscriber};
 use turborepo_telemetry::events::{
     command::CommandEventBuilder,
     generic::{DaemonInitStatus, GenericEventBuilder},
@@ -46,7 +47,6 @@ use crate::{
     process::ProcessManager,
     run::{scope, task_access::TaskAccess, task_id::TaskName, Error, Run, RunCache},
     shim::TurboState,
-    signal::{SignalHandler, SignalSubscriber},
     turbo_json::{TurboJson, TurboJsonLoader, UIMode},
     DaemonConnector,
 };
