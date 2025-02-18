@@ -435,6 +435,8 @@ Test help flag for login command
             Force a login to receive a new token. Will overwrite any existing tokens for the given login url
         --skip-infer
             Skip any attempts to infer which version of Turbo the project is configured to use
+        --manual
+            Manually enter token instead of requesting one from the login service
         --no-update-notifier
             Disable the turbo update notification
         --api <API>
