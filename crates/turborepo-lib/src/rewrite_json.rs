@@ -59,14 +59,23 @@ pub fn set_path(
         jsonc_parser::ast::Value::Array(literal) => (0, literal.range),
         jsonc_parser::ast::Value::NullKeyword(literal) => (0, literal.range),
     };
+    let is_closest_node_obj = matches!(closest_node, jsonc_parser::ast::Value::Object(_));
 
     // Figure out what we should be generating:
     // - An object to be assigned to an existing member. ("object")
     // - A member to add to an existing object. ("member")
-    let generate_type: GenerateType = if !closest_path.is_empty() {
-        GenerateType::Object
-    } else {
-        GenerateType::Member
+    assert!(
+        path.len() >= closest_path.len(),
+        "closest path should never be greater than requested path"
+    );
+    let missing_path_elements = path.len() - closest_path.len();
+    let generate_type: GenerateType = match missing_path_elements {
+        // We just replace the current node with the json_value
+        0 => GenerateType::Object,
+        // We just need to add a member to the current object with json_value
+        _ if is_closest_node_obj => GenerateType::Member,
+        // Closest node isn't an object and must be replaced
+        _ => GenerateType::Object,
     };
 
     // Identify the token replacement metadata: start, end, and possible trailing
@@ -341,6 +350,8 @@ fn find_all_paths<'a>(
 
 #[cfg(test)]
 mod test {
+    use pretty_assertions::assert_str_eq;
+
     use crate::rewrite_json::{set_path, unset_path};
 
     macro_rules! set_tests {
@@ -349,7 +360,7 @@ mod test {
             #[test]
             fn $name() {
                 let (json_document_string, expected) = $value;
-                assert_eq!(expected, set_path(json_document_string, &["parent", "child"], "\"Junior\"").unwrap());
+                assert_str_eq!(expected, set_path(json_document_string, &["parent", "child"], "\"Junior\"").unwrap());
             }
         )*
         }
@@ -399,7 +410,7 @@ mod test {
         ),
         existing_sibling: (
             "{ \"parent\": { \"sibling\": \"Jerry\" } }",
-            "{ \"parent\": {\"child\":\"Junior\"} }"
+            "{ \"parent\": {\"child\":\"Junior\", \"sibling\": \"Jerry\" } }"
         ),
     }
 
