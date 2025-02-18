@@ -397,6 +397,10 @@ mod test {
             "{ \"parent\": { \"child\": { \"grandchild\": \"Morty\" } } }",
             "{ \"parent\": { \"child\": \"Junior\" } }"
         ),
+        existing_sibling: (
+            "{ \"parent\": { \"sibling\": \"Jerry\" } }",
+            "{ \"parent\": {\"child\":\"Junior\"} }"
+        ),
     }
 
     unset_tests! {
