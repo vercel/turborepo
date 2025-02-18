@@ -33,12 +33,6 @@ pub use loader::TurboJsonLoader;
 
 use crate::{boundaries::RootBoundariesConfig, config::UnnecessaryPackageTaskSyntaxError};
 
-#[derive(Serialize, Deserialize, Debug, Default, PartialEq, Clone, Deserializable)]
-#[serde(rename_all = "camelCase")]
-pub struct SpacesJson {
-    pub id: Option<UnescapedString>,
-}
-
 // A turbo.json config that is synthesized but not yet resolved.
 // This means that we've done the work to synthesize the config from
 // package.json, but we haven't yet resolved the workspace
@@ -113,8 +107,6 @@ pub struct RawTurboJson {
     #[serde(rename = "$schema", skip_serializing_if = "Option::is_none")]
     schema: Option<UnescapedString>,
 
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub experimental_spaces: Option<SpacesJson>,
     #[serde(skip_serializing_if = "Option::is_none")]
     extends: Option<Spanned<Vec<UnescapedString>>>,
     // Global root filesystem dependencies
@@ -603,7 +595,7 @@ impl TryFrom<RawTurboJson> for TurboJson {
                 .unwrap_or_default()
                 .map(|s| s.into_iter().map(|s| s.into()).collect()),
             boundaries: raw_turbo.boundaries,
-            // Spaces and Remote Cache config is handled through layered config
+            // Remote Cache config is handled through layered config
         })
     }
 }

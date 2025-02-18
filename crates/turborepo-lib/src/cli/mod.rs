@@ -331,12 +331,6 @@ pub enum TelemetryCommand {
     Status,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, ValueEnum)]
-pub enum LinkTarget {
-    RemoteCache,
-    Spaces,
-}
-
 impl Args {
     pub fn new(os_args: Vec<OsString>) -> Self {
         let clap_args = match Args::parse(os_args) {
@@ -643,9 +637,6 @@ pub enum Command {
         /// Answer yes to all prompts (default false)
         #[clap(long, short)]
         yes: bool,
-        /// Specify what should be linked (default "remote cache")
-        #[clap(long, value_enum, default_value_t = LinkTarget::RemoteCache)]
-        target: LinkTarget,
     },
     /// Login to your Vercel account
     Login {
@@ -717,11 +708,7 @@ pub enum Command {
     },
     /// Unlink the current directory from your Vercel organization and disable
     /// Remote Caching
-    Unlink {
-        /// Specify what should be unlinked (default "remote cache")
-        #[clap(long, value_enum, default_value_t = LinkTarget::RemoteCache)]
-        target: LinkTarget,
-    },
+    Unlink,
 }
 
 #[derive(Parser, Clone, Debug, Default, Serialize, PartialEq)]
@@ -997,10 +984,6 @@ pub struct RunArgs {
     #[clap(long, default_missing_value = "true")]
     pub summarize: Option<Option<bool>>,
 
-    // Pass a string to enable posting Run Summaries to Vercel
-    #[clap(long, hide = true)]
-    pub experimental_space_id: Option<String>,
-
     /// Execute all tasks in parallel.
     #[clap(long)]
     pub parallel: bool,
@@ -1022,7 +1005,6 @@ impl Default for RunArgs {
             anon_profile: None,
             remote_cache_read_only: None,
             summarize: None,
-            experimental_space_id: None,
             parallel: false,
         }
     }
@@ -1083,7 +1065,6 @@ impl RunArgs {
         track_usage!(telemetry, &self.profile, Option::is_some);
         track_usage!(telemetry, &self.anon_profile, Option::is_some);
         track_usage!(telemetry, &self.summarize, Option::is_some);
-        track_usage!(telemetry, &self.experimental_space_id, Option::is_some);
 
         // track values
         if let Some(dry_run) = &self.dry_run {
@@ -1394,7 +1375,6 @@ pub async fn run(
             no_gitignore,
             scope,
             yes,
-            target,
         } => {
             let event = CommandEventBuilder::new("link").with_parent(&root_telemetry);
             event.track_call();
@@ -1409,13 +1389,12 @@ pub async fn run(
             }
 
             let modify_gitignore = !*no_gitignore;
-            let to = *target;
             let yes = *yes;
             let scope = scope.clone();
             let mut base = CommandBase::new(cli_args, repo_root, version, color_config)?;
             event.track_ui_mode(base.opts.run_opts.ui_mode);
 
-            link::link(&mut base, scope, modify_gitignore, yes, to).await?;
+            link::link(&mut base, scope, modify_gitignore, yes).await?;
 
             Ok(0)
         }
@@ -1455,7 +1434,7 @@ pub async fn run(
 
             Ok(0)
         }
-        Command::Unlink { target } => {
+        Command::Unlink => {
             let event = CommandEventBuilder::new("unlink").with_parent(&root_telemetry);
             event.track_call();
             if cli_args.test_run {
@@ -1463,11 +1442,10 @@ pub async fn run(
                 return Ok(0);
             }
 
-            let from = *target;
             let mut base = CommandBase::new(cli_args, repo_root, version, color_config)?;
             event.track_ui_mode(base.opts.run_opts.ui_mode);
 
-            unlink::unlink(&mut base, from)?;
+            unlink::unlink(&mut base)?;
 
             Ok(0)
         }
@@ -1594,7 +1572,7 @@ mod test {
     use itertools::Itertools;
     use pretty_assertions::assert_eq;
 
-    use crate::cli::{ExecutionArgs, LinkTarget, RunArgs};
+    use crate::cli::{ExecutionArgs, RunArgs};
 
     struct CommandTestCase {
         command: &'static str,
@@ -2457,7 +2435,6 @@ mod test {
                     no_gitignore: false,
                     scope: None,
                     yes: false,
-                    target: LinkTarget::RemoteCache,
                 }),
                 ..Args::default()
             }
@@ -2472,7 +2449,6 @@ mod test {
                     no_gitignore: false,
                     scope: None,
                     yes: false,
-                    target: LinkTarget::RemoteCache,
                 }),
                 cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
@@ -2489,7 +2465,6 @@ mod test {
                     yes: true,
                     no_gitignore: false,
                     scope: None,
-                    target: LinkTarget::RemoteCache,
                 }),
                 cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
@@ -2506,7 +2481,6 @@ mod test {
                     yes: false,
                     no_gitignore: false,
                     scope: Some("foo".to_string()),
-                    target: LinkTarget::RemoteCache,
                 }),
                 cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
@@ -2523,7 +2497,6 @@ mod test {
                     yes: false,
                     no_gitignore: true,
                     scope: None,
-                    target: LinkTarget::RemoteCache,
                 }),
                 cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
@@ -2604,9 +2577,7 @@ mod test {
         assert_eq!(
             Args::try_parse_from(["turbo", "unlink"]).unwrap(),
             Args {
-                command: Some(Command::Unlink {
-                    target: crate::cli::LinkTarget::RemoteCache
-                }),
+                command: Some(Command::Unlink),
                 ..Args::default()
             }
         );
@@ -2616,9 +2587,7 @@ mod test {
             command_args: vec![],
             global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
             expected_output: Args {
-                command: Some(Command::Unlink {
-                    target: crate::cli::LinkTarget::RemoteCache,
-                }),
+                command: Some(Command::Unlink),
                 cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
             },
