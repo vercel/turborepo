@@ -339,6 +339,8 @@ Test help flag for link command
             Answer yes to all prompts (default false)
         --api <API>
             Override the endpoint for API calls
+        --target <TARGET>
+            DEPRECATED: Specify what should be linked (default "remote cache") [possible values: remote-cache, spaces]
         --color
             Force color usage in the terminal
         --cwd <CWD>
@@ -377,6 +379,8 @@ Test help flag for unlink command
   Usage: turbo(\.exe)? unlink \[OPTIONS\] (re)
   
   Options:
+        --target <TARGET>
+            DEPRECATED: Specify what should be unlinked (default "remote cache") [possible values: remote-cache, spaces]
         --version
             
         --skip-infer

@@ -331,6 +331,12 @@ pub enum TelemetryCommand {
     Status,
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, ValueEnum)]
+pub enum LinkTarget {
+    RemoteCache,
+    Spaces,
+}
+
 impl Args {
     pub fn new(os_args: Vec<OsString>) -> Self {
         let clap_args = match Args::parse(os_args) {
@@ -637,6 +643,10 @@ pub enum Command {
         /// Answer yes to all prompts (default false)
         #[clap(long, short)]
         yes: bool,
+
+        /// DEPRECATED: Specify what should be linked (default "remote cache")
+        #[clap(long, value_enum)]
+        target: Option<LinkTarget>,
     },
     /// Login to your Vercel account
     Login {
@@ -708,7 +718,11 @@ pub enum Command {
     },
     /// Unlink the current directory from your Vercel organization and disable
     /// Remote Caching
-    Unlink,
+    Unlink {
+        /// DEPRECATED: Specify what should be unlinked (default "remote cache")
+        #[clap(long, value_enum)]
+        target: Option<LinkTarget>,
+    },
 }
 
 #[derive(Parser, Clone, Debug, Default, Serialize, PartialEq)]
@@ -1375,7 +1389,11 @@ pub async fn run(
             no_gitignore,
             scope,
             yes,
+            target,
         } => {
+            if target.is_some() {
+                warn!("`--target` flag is deprecated and does not do anything")
+            }
             let event = CommandEventBuilder::new("link").with_parent(&root_telemetry);
             event.track_call();
 
@@ -1434,7 +1452,11 @@ pub async fn run(
 
             Ok(0)
         }
-        Command::Unlink => {
+        Command::Unlink { target } => {
+            if target.is_some() {
+                warn!("`--target` flag is deprecated and does not do anything");
+            }
+
             let event = CommandEventBuilder::new("unlink").with_parent(&root_telemetry);
             event.track_call();
             if cli_args.test_run {
@@ -1572,7 +1594,7 @@ mod test {
     use itertools::Itertools;
     use pretty_assertions::assert_eq;
 
-    use crate::cli::{ExecutionArgs, RunArgs};
+    use crate::cli::{ExecutionArgs, LinkTarget, RunArgs};
 
     struct CommandTestCase {
         command: &'static str,
@@ -2435,6 +2457,7 @@ mod test {
                     no_gitignore: false,
                     scope: None,
                     yes: false,
+                    target: None,
                 }),
                 ..Args::default()
             }
@@ -2449,6 +2472,7 @@ mod test {
                     no_gitignore: false,
                     scope: None,
                     yes: false,
+                    target: None,
                 }),
                 cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
@@ -2465,6 +2489,7 @@ mod test {
                     yes: true,
                     no_gitignore: false,
                     scope: None,
+                    target: None,
                 }),
                 cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
@@ -2481,6 +2506,7 @@ mod test {
                     yes: false,
                     no_gitignore: false,
                     scope: Some("foo".to_string()),
+                    target: None,
                 }),
                 cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
@@ -2497,6 +2523,24 @@ mod test {
                     yes: false,
                     no_gitignore: true,
                     scope: None,
+                    target: None,
+                }),
+                cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
+                ..Args::default()
+            },
+        }
+        .test();
+
+        CommandTestCase {
+            command: "link",
+            command_args: vec![vec!["--target", "spaces"]],
+            global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
+            expected_output: Args {
+                command: Some(Command::Link {
+                    yes: false,
+                    no_gitignore: false,
+                    scope: None,
+                    target: Some(LinkTarget::Spaces),
                 }),
                 cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
@@ -2577,7 +2621,7 @@ mod test {
         assert_eq!(
             Args::try_parse_from(["turbo", "unlink"]).unwrap(),
             Args {
-                command: Some(Command::Unlink),
+                command: Some(Command::Unlink { target: None }),
                 ..Args::default()
             }
         );
@@ -2587,7 +2631,21 @@ mod test {
             command_args: vec![],
             global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
             expected_output: Args {
-                command: Some(Command::Unlink),
+                command: Some(Command::Unlink { target: None }),
+                cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
+                ..Args::default()
+            },
+        }
+        .test();
+
+        CommandTestCase {
+            command: "unlink",
+            command_args: vec![vec!["--target", "remote-cache"]],
+            global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
+            expected_output: Args {
+                command: Some(Command::Unlink {
+                    target: Some(LinkTarget::RemoteCache),
+                }),
                 cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
             },

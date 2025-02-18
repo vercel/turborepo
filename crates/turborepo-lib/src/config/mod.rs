@@ -558,7 +558,7 @@ mod test {
 
         repo_root
             .join_component("turbo.json")
-            .create_with_contents(r#"{}"#)
+            .create_with_contents(r#"{"experimentalSpaces": {"id": "my-spaces-id"}}"#)
             .unwrap();
 
         let turbo_teamid = "team_nLlpyC6REAqxydlFKbrMDlud";
