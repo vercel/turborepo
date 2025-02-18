@@ -1,6 +1,7 @@
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     fmt,
+    sync::OnceLock,
 };
 
 use itertools::Itertools;
@@ -34,6 +35,7 @@ pub struct PackageGraph {
     package_manager: PackageManager,
     lockfile: Option<Box<dyn Lockfile>>,
     repo_root: AbsoluteSystemPathBuf,
+    external_to_internal: OnceLock<HashMap<turborepo_lockfiles::Package, HashSet<PackageNode>>>,
 }
 
 /// The WorkspacePackage.
@@ -553,6 +555,63 @@ impl PackageGraph {
                 })
                 .collect()
         }))
+    }
+
+    pub fn internal_dependencies_for_external_dependency(
+        &self,
+        external_package: &turborepo_lockfiles::Package,
+    ) -> Option<&HashSet<PackageNode>> {
+        // In order to answer this once we have to calculate the info for every external
+        // package so we store the results
+        let map = self
+            .external_to_internal
+            .get_or_init(|| self.external_to_internal());
+        map.get(external_package)
+    }
+
+    // Gotta come up with a better name
+    pub fn external_to_internal(
+        &self,
+    ) -> HashMap<turborepo_lockfiles::Package, HashSet<PackageNode>> {
+        // TODO: provide size hint from Lockfile trait
+        let mut map: HashMap<turborepo_lockfiles::Package, HashSet<PackageNode>> = HashMap::new();
+        // First find which packages directly depend on each external package
+        for (pkg, info) in self.packages.iter() {
+            for dep in info.transitive_dependencies.as_ref().into_iter().flatten() {
+                let rdeps = map.entry(dep.clone()).or_default();
+                rdeps.insert(PackageNode::Workspace(pkg.clone()));
+            }
+        }
+        // Now trace through all ancestors of the direct dependants
+        let root_internal_dependencies = self
+            .root_internal_dependencies()
+            .into_iter()
+            .cloned()
+            .collect::<HashSet<_>>();
+        let root_external_dependencies =
+            self.transitive_external_dependencies(Some(&PackageName::Root));
+        for (external_pkg, rdeps) in map.iter_mut() {
+            // If one of the reverse dependencies of this external package is a root
+            // dependency, everything depends on this
+            if root_external_dependencies.contains(external_pkg)
+                || !root_internal_dependencies.is_disjoint(rdeps)
+            {
+                rdeps.extend(self.graph.node_weights().cloned());
+            } else {
+                let transitive_rdeps = turborepo_graph_utils::transitive_closure(
+                    &self.graph,
+                    rdeps.iter().map(|node| {
+                        *self
+                            .node_lookup
+                            .get(node)
+                            .expect("all nodes should have an index")
+                    }),
+                    petgraph::Direction::Incoming,
+                );
+                rdeps.extend(transitive_rdeps.into_iter().cloned());
+            }
+        }
+        map
     }
 
     // Returns a map of package name and version for external dependencies
