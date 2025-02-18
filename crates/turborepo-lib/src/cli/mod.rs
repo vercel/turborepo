@@ -655,6 +655,10 @@ pub enum Command {
         /// tokens for the given login url.
         #[clap(long = "force", short = 'f')]
         force: bool,
+        /// Manually enter token instead of requesting one from the login
+        /// service.
+        #[clap(long, conflicts_with = "sso_team")]
+        manual: bool,
     },
     /// Logout to your Vercel account
     Logout {
@@ -1432,7 +1436,11 @@ pub async fn run(
 
             Ok(0)
         }
-        Command::Login { sso_team, force } => {
+        Command::Login {
+            sso_team,
+            force,
+            manual,
+        } => {
             let event = CommandEventBuilder::new("login").with_parent(&root_telemetry);
             event.track_call();
             if cli_args.test_run {
@@ -1442,16 +1450,13 @@ pub async fn run(
 
             let sso_team = sso_team.clone();
             let force = *force;
+            let manual = *manual;
 
             let mut base = CommandBase::new(cli_args, repo_root, version, color_config)?;
             event.track_ui_mode(base.opts.run_opts.ui_mode);
             let event_child = event.child();
 
-            if let Some(sso_team) = sso_team {
-                login::sso_login(&mut base, &sso_team, event_child, force).await?;
-            } else {
-                login::login(&mut base, event_child, force).await?;
-            }
+            login::login(&mut base, event_child, sso_team.as_deref(), force, manual).await?;
 
             Ok(0)
         }
@@ -2539,7 +2544,8 @@ mod test {
             Args {
                 command: Some(Command::Login {
                     sso_team: None,
-                    force: false
+                    force: false,
+                    manual: false,
                 }),
                 ..Args::default()
             }
@@ -2553,6 +2559,7 @@ mod test {
                 command: Some(Command::Login {
                     sso_team: None,
                     force: false,
+                    manual: false,
                 }),
                 cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
@@ -2568,6 +2575,7 @@ mod test {
                 command: Some(Command::Login {
                     sso_team: Some("my-team".to_string()),
                     force: false,
+                    manual: false,
                 }),
                 cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
                 ..Args::default()

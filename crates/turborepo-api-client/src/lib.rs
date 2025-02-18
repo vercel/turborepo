@@ -628,6 +628,10 @@ impl APIClient {
         self.base_url.as_str()
     }
 
+    pub fn with_base_url(&mut self, base_url: String) {
+        self.base_url = base_url;
+    }
+
     async fn do_preflight(
         &self,
         token: &str,

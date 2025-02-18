@@ -8,7 +8,7 @@ use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_ui::{color, BOLD, GREY};
 
 use crate::{
-    commands::{bin, generate, link, ls, prune, run::get_signal, CommandBase},
+    commands::{bin, generate, link, login, ls, prune, run::get_signal, CommandBase},
     daemon::DaemonError,
     query,
     rewrite_json::RewriteError,
@@ -46,6 +46,8 @@ pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Ls(#[from] ls::Error),
+    #[error(transparent)]
+    Login(#[from] login::Error),
     #[error(transparent)]
     Link(#[from] link::Error),
     #[error(transparent)]
