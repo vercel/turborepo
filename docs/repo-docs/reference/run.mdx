@@ -121,13 +121,18 @@ turbo run build --concurrency=50%
 turbo run test --concurrency=5
 ```
 
-### `--continue`
+### `--continue [option]`
 
-Default: `false`
+Default: `none`
 
-Continue with task execution in the presence of an error (e.g. non-zero exit code from a task).
+Specify how `turbo` should handle current and pending tasks in the presence of an error (e.g. non-zero exit code from a task).
 
-When `--continue` is `true`, `turbo` will exit with the highest exit code value encountered during execution.
+- When `--continue` is `none` and an error occurs, `turbo` will cancel all tasks.
+- When `--continue` is `independent-tasks-only` and an error occurs, `turbo` will cancel all dependent tasks but continue running other independent tasks.
+- When `--continue` is `all` and an error occurs, `turbo` will continue running pending tasks (including dependents).
+- When `--continue` is specified without a value, it will default to `all`.
+
+In all cases, `turbo` will exit with the highest exit code value encountered during executio n.
 
 ```bash title="Terminal"
 turbo run build --continue

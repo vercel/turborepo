@@ -9,7 +9,8 @@ use turborepo_cache::{CacheOpts, RemoteCacheOpts};
 
 use crate::{
     cli::{
-        Command, DryRunMode, EnvMode, ExecutionArgs, LogOrder, LogPrefix, OutputLogsMode, RunArgs,
+        Command, ContinueMode, DryRunMode, EnvMode, ExecutionArgs, LogOrder, LogPrefix,
+        OutputLogsMode, RunArgs,
     },
     config::ConfigurationOptions,
     run::task_id::TaskId,
@@ -92,8 +93,12 @@ impl Opts {
             cmd.push_str(" --parallel");
         }
 
-        if self.run_opts.continue_on_error {
-            cmd.push_str(" --continue");
+        match self.run_opts.continue_on_error {
+            ContinueMode::All => cmd.push_str(" --continue=all"),
+            ContinueMode::IndependentTasksOnly => {
+                cmd.push_str(" --continue=independent-tasks-only")
+            }
+            _ => (),
         }
 
         if let Some(dry) = self.run_opts.dry_run {
@@ -216,7 +221,7 @@ pub struct RunOpts {
     // Whether or not to infer the framework for each workspace.
     pub(crate) framework_inference: bool,
     pub profile: Option<String>,
-    pub(crate) continue_on_error: bool,
+    pub(crate) continue_on_error: ContinueMode,
     pub(crate) pass_through_args: Vec<String>,
     pub(crate) only: bool,
     pub(crate) dry_run: Option<DryRunMode>,
@@ -550,7 +555,7 @@ mod test {
 
     use super::{APIClientOpts, RepoOpts, RunOpts};
     use crate::{
-        cli::{Command, DryRunMode, RunArgs},
+        cli::{Command, ContinueMode, DryRunMode, RunArgs},
         commands::CommandBase,
         config::ConfigurationOptions,
         opts::{Opts, RunCacheOpts, ScopeOpts},
@@ -565,7 +570,7 @@ mod test {
         only: bool,
         pass_through_args: Vec<String>,
         parallel: bool,
-        continue_on_error: bool,
+        continue_on_error: ContinueMode,
         dry_run: Option<DryRunMode>,
         affected: Option<(String, String)>,
     }
@@ -607,10 +612,20 @@ mod test {
             filter_patterns: vec!["my-app".to_string()],
             tasks: vec!["build".to_string()],
             parallel: true,
-            continue_on_error: true,
+            continue_on_error: ContinueMode::All,
             ..Default::default()
             },
-        "turbo run build --filter=my-app --parallel --continue"
+        "turbo run build --filter=my-app --parallel --continue=all"
+    )]
+    #[test_case(
+        TestCaseOpts{
+            filter_patterns: vec!["my-app".to_string()],
+            tasks: vec!["build".to_string()],
+            parallel: true,
+            continue_on_error: ContinueMode::IndependentTasksOnly,
+            ..Default::default()
+            },
+        "turbo run build --filter=my-app --parallel --continue=independent-tasks-only"
     )]
     #[test_case(
         TestCaseOpts{

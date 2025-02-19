@@ -98,8 +98,8 @@ Test help flag
             Override the filesystem cache directory
         --concurrency <CONCURRENCY>
             Limit the concurrency of task execution. Use 1 for serial (i.e. one-at-a-time) execution
-        --continue
-            Continue execution even if a task exits with an error or non-zero exit code. The default behavior is to bail
+        --continue [<CONTINUE>]
+            Specify which tasks should continue running when an error occurs. Use "none" to cancel all tasks. Use "independent-tasks-only" to continue running independent tasks and cancel dependent ones. Use "all" to continue running all tasks [default: none] [possible values: none, independent-tasks-only, all]
         --single-package
             Run turbo in single-package mode
         --framework-inference [<BOOL>]
@@ -273,8 +273,11 @@ Test help flag
         --concurrency <CONCURRENCY>
             Limit the concurrency of task execution. Use 1 for serial (i.e. one-at-a-time) execution
   
-        --continue
-            Continue execution even if a task exits with an error or non-zero exit code. The default behavior is to bail
+        --continue [<CONTINUE>]
+            Specify which tasks should continue running when an error occurs. Use "none" to cancel all tasks. Use "independent-tasks-only" to continue running independent tasks and cancel dependent ones. Use "all" to continue running all tasks
+            
+            [default: none]
+            [possible values: none, independent-tasks-only, all]
   
         --single-package
             Run turbo in single-package mode
@@ -317,6 +320,7 @@ Test help flag
             
             [default: auto]
             [possible values: auto, none, task]
+
 
 Test help flag for link command
   $ ${TURBO} link -h

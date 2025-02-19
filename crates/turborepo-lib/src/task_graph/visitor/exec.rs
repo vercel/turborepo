@@ -19,6 +19,7 @@ use super::{
     TaskOutput, Visitor,
 };
 use crate::{
+    cli::ContinueMode,
     config::UIMode,
     engine::{Engine, StopExecution},
     process::{ChildExit, Command, ProcessManager},
@@ -169,7 +170,7 @@ pub struct ExecContext {
     manager: ProcessManager,
     task_hash: String,
     execution_env: EnvironmentVariableMap,
-    continue_on_error: bool,
+    continue_on_error: ContinueMode,
     errors: Arc<Mutex<Vec<TaskError>>>,
     warnings: Arc<Mutex<Vec<TaskWarning>>>,
     takes_input: bool,
@@ -252,24 +253,25 @@ impl ExecContext {
                 let task_summary = tracker.build_failed(exit_code, message).await;
                 callback
                     .send(match self.continue_on_error {
-                        true => Ok(()),
-                        false => Err(StopExecution),
+                        ContinueMode::All => Ok(()),
+                        ContinueMode::IndependentTasksOnly => Err(StopExecution::DependentTasks),
+                        ContinueMode::None => Err(StopExecution::AllTasks),
                     })
                     .ok();
 
                 match (spaces_client, self.continue_on_error) {
                     // Nothing to do
-                    (None, true) => (),
+                    (None, ContinueMode::All | ContinueMode::IndependentTasksOnly) => (),
                     // Shut down manager
-                    (None, false) => self.manager.stop().await,
+                    (None, ContinueMode::None) => self.manager.stop().await,
                     // Send task
-                    (Some(client), true) => {
+                    (Some(client), ContinueMode::All | ContinueMode::IndependentTasksOnly) => {
                         let logs = logs.expect("spaced enabled logs should be collected");
                         let info = self.spaces_task_info(self.task_id.clone(), task_summary, logs);
                         client.finish_task(info).await.ok();
                     }
                     // Send task and shut down manager
-                    (Some(client), false) => {
+                    (Some(client), ContinueMode::None) => {
                         let logs = logs.unwrap_or_default();
                         let info = self.spaces_task_info(self.task_id.clone(), task_summary, logs);
                         // Ignore spaces result as that indicates handler is shut down and we are
@@ -281,14 +283,14 @@ impl ExecContext {
             }
             Ok(ExecOutcome::Shutdown) => {
                 tracker.cancel();
-                callback.send(Err(StopExecution)).ok();
+                callback.send(Err(StopExecution::AllTasks)).ok();
                 // Probably overkill here, but we should make sure the process manager is
                 // stopped if we think we're shutting down.
                 self.manager.stop().await;
             }
             Err(e) => {
                 tracker.cancel();
-                callback.send(Err(StopExecution)).ok();
+                callback.send(Err(StopExecution::AllTasks)).ok();
                 self.manager.stop().await;
                 return Err(e);
             }
@@ -459,10 +461,13 @@ impl ExecContext {
                 }
                 let error = TaskErrorCause::from_execution(process.label().to_string(), code);
                 let message = error.to_string();
-                if self.continue_on_error {
-                    prefixed_ui.warn("command finished with error, but continuing...");
-                } else {
-                    prefixed_ui.error(&format!("command finished with error: {error}"));
+                match self.continue_on_error {
+                    ContinueMode::None => {
+                        prefixed_ui.error(&format!("command finished with error: {error}"))
+                    }
+                    ContinueMode::All | ContinueMode::IndependentTasksOnly => {
+                        prefixed_ui.warn("command finished with error, but continuing...")
+                    }
                 }
                 self.errors
                     .lock()

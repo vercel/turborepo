@@ -9,8 +9,8 @@ use std::{
 use biome_deserialize_macros::Deserializable;
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::{
-    builder::NonEmptyStringValueParser, ArgAction, ArgGroup, CommandFactory, Parser, Subcommand,
-    ValueEnum,
+    builder::{EnumValueParser, NonEmptyStringValueParser, PossibleValue, TypedValueParser},
+    ArgAction, ArgGroup, CommandFactory, Parser, Subcommand, ValueEnum,
 };
 use clap_complete::{generate, Shell};
 pub use error::Error;
@@ -156,6 +156,25 @@ impl fmt::Display for EnvMode {
         f.write_str(match self {
             EnvMode::Loose => "loose",
             EnvMode::Strict => "strict",
+        })
+    }
+}
+
+#[derive(Copy, Clone, Debug, Default, PartialEq, ValueEnum, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ContinueMode {
+    #[default]
+    None,
+    IndependentTasksOnly,
+    All,
+}
+
+impl fmt::Display for ContinueMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            ContinueMode::None => "none",
+            ContinueMode::IndependentTasksOnly => "independent-tasks-only",
+            ContinueMode::All => "all",
         })
     }
 }
@@ -811,6 +830,63 @@ fn path_non_empty(s: &str) -> Result<Utf8PathBuf, String> {
     }
 }
 
+#[derive(Copy, Clone, Debug, PartialEq)]
+struct ContinueModeParser;
+
+impl ContinueModeParser {
+    pub fn new() -> Self {
+        Self {}
+    }
+}
+
+// slightly redundant, but this allows us to transform deprecated values
+// /before/ enum conversion, and also hide them from the help message
+impl TypedValueParser for ContinueModeParser {
+    type Value = ContinueMode;
+
+    fn parse_ref(
+        &self,
+        cmd: &clap::Command,
+        arg: Option<&clap::Arg>,
+        value: &std::ffi::OsStr,
+    ) -> Result<Self::Value, clap::Error> {
+        let result = EnumValueParser::<ContinueMode>::new().parse_ref(cmd, arg, value);
+        if result.is_err() {
+            match value.to_str() {
+                Some("false") => {
+                    warn!(
+                        "--continue=false is deprecated and will be removed in a future major \
+                         version. Use --continue=none instead."
+                    );
+                    return Ok(ContinueMode::None);
+                }
+                Some("true") => {
+                    warn!(
+                        "--continue=true is deprecated and will be removed in a future major \
+                         version. Use --continue=all instead."
+                    );
+                    return Ok(ContinueMode::All);
+                }
+                _ => return Err(result.unwrap_err()),
+            }
+        } else {
+            return Ok(result.unwrap());
+        }
+    }
+
+    // don't advertise deprecated values
+    fn possible_values(&self) -> Option<Box<dyn Iterator<Item = PossibleValue> + '_>> {
+        Some(Box::new(
+            vec![
+                PossibleValue::new("none"),
+                PossibleValue::new("independent-tasks-only"),
+                PossibleValue::new("all"),
+            ]
+            .into_iter(),
+        ))
+    }
+}
+
 /// Arguments used in run and watch
 #[derive(Parser, Clone, Debug, Default, PartialEq)]
 #[command(groups = [
@@ -824,10 +900,12 @@ pub struct ExecutionArgs {
     /// one-at-a-time) execution.
     #[clap(long)]
     pub concurrency: Option<String>,
-    /// Continue execution even if a task exits with an error or non-zero
-    /// exit code. The default behavior is to bail
-    #[clap(long = "continue")]
-    pub continue_execution: bool,
+    /// Specify which tasks should continue running when an error occurs.
+    /// Use "none" to cancel all tasks.
+    /// Use "independent-tasks-only" to continue running independent tasks and
+    /// cancel dependent ones. Use "all" to continue running all tasks.
+    #[clap(long = "continue", value_name = "CONTINUE", num_args = 0..=1, default_value = "none", default_missing_value = "all", value_parser = ContinueModeParser::new())]
+    pub continue_execution: ContinueMode,
     /// Run turbo in single-package mode
     #[clap(long)]
     pub single_package: bool,
@@ -895,7 +973,11 @@ impl ExecutionArgs {
         // default to false
         track_usage!(telemetry, self.framework_inference, |val: bool| !val);
 
-        track_usage!(telemetry, self.continue_execution, |val| val);
+        telemetry.track_arg_value(
+            "continue-execution",
+            self.continue_execution,
+            EventType::NonSensitive,
+        );
         track_usage!(telemetry, self.single_package, |val| val);
         track_usage!(telemetry, self.only, |val| val);
         track_usage!(telemetry, &self.cache_dir, Option::is_some);
@@ -1644,7 +1726,7 @@ mod test {
     use itertools::Itertools;
     use pretty_assertions::assert_eq;
 
-    use crate::cli::{ExecutionArgs, LinkTarget, RunArgs};
+    use crate::cli::{ContinueMode, ExecutionArgs, LinkTarget, RunArgs};
 
     struct CommandTestCase {
         command: &'static str,
@@ -1889,14 +1971,44 @@ mod test {
             command: Some(Command::Run {
                 execution_args: Box::new(ExecutionArgs {
                     tasks: vec!["build".to_string()],
-                    continue_execution: true,
+                    continue_execution: ContinueMode::All,
                     ..get_default_execution_args()
                 }),
                 run_args: Box::new(get_default_run_args())
             }),
             ..Args::default()
         } ;
-        "continue flag"
+        "continue option with no value"
+	)]
+    #[test_case::test_case(
+		&["turbo", "run", "build", "--continue=independent-tasks-only"],
+        Args {
+            command: Some(Command::Run {
+                execution_args: Box::new(ExecutionArgs {
+                    tasks: vec!["build".to_string()],
+                    continue_execution: ContinueMode::IndependentTasksOnly,
+                    ..get_default_execution_args()
+                }),
+                run_args: Box::new(get_default_run_args())
+            }),
+            ..Args::default()
+        } ;
+        "continue option with explicit value"
+	)]
+    #[test_case::test_case(
+		&["turbo", "run", "build", "--continue=true"],
+        Args {
+            command: Some(Command::Run {
+                execution_args: Box::new(ExecutionArgs {
+                    tasks: vec!["build".to_string()],
+                    continue_execution: ContinueMode::All,
+                    ..get_default_execution_args()
+                }),
+                run_args: Box::new(get_default_run_args())
+            }),
+            ..Args::default()
+        } ;
+        "continue option with deprecated value"
 	)]
     #[test_case::test_case(
 		&["turbo", "run", "build", "--dry-run"],
