@@ -357,6 +357,19 @@ export interface RemoteCache {
    * @defaultValue `60`
    */
   uploadTimeout?: number;
+
+  /**
+   * The team id of the Remote Cache team. Value will be passed as `teamId` in the
+   * querystring for all Remote Cache HTTP calls. Must start with `team_` or it will
+   * not be used.
+   */
+  teamId?: string;
+
+  /**
+   * The slug of the Remote Cache team. Value will be passed as `slug` in the
+   * querystring for all Remote Cache HTTP calls.
+   */
+  teamSlug?: string;
 }
 
 export const isRootSchemaV2 = (schema: Schema): schema is RootSchema =>

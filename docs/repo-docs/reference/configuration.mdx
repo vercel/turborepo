@@ -633,3 +633,14 @@ Set endpoint for API calls to the remote cache.
 Default: `"https://vercel.com"`
 
 Set endpoint for requesting tokens during `turbo login`.
+
+### `teamId`
+
+The team id of the Remote Cache team.
+Value will be passed as `teamId` in the querystring for all Remote Cache HTTP calls.
+Must start with `team_` or it will not be used.
+
+### `teamSlug`
+
+The slug of the Remote Cache team.
+Value will be passed as `slug` in the querystring for all Remote Cache HTTP calls.
