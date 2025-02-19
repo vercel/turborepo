@@ -359,7 +359,7 @@ export interface RemoteCache {
   uploadTimeout?: number;
 
   /**
-   * The team id of the Remote Cache team. Value will be passed as `teamId` in the
+   * The ID of the Remote Cache team. Value will be passed as `teamId` in the
    * querystring for all Remote Cache HTTP calls. Must start with `team_` or it will
    * not be used.
    */
