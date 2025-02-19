@@ -1132,6 +1132,43 @@ impl Display for LogPrefix {
     }
 }
 
+#[derive(PartialEq)]
+enum PrintVersionState {
+    Enabled,
+    Disabled,
+}
+
+fn get_print_version_state() -> PrintVersionState {
+    // map_or is used here because env::var returns Result<String, ...>
+    // and we want to compare against str
+    env::var("TURBO_PRINT_VERSION_DISABLED").map_or(PrintVersionState::Enabled, |var| {
+        match var.as_str() {
+            "1" | "true" => PrintVersionState::Disabled,
+            _ => PrintVersionState::Enabled,
+        }
+    })
+}
+
+#[derive(PartialEq)]
+enum CIState {
+    Inside,
+    Outside,
+}
+
+fn get_ci_state() -> CIState {
+    match turborepo_ci::is_ci() {
+        true => CIState::Inside,
+        _ => CIState::Outside,
+    }
+}
+
+fn should_print_version() -> bool {
+    let print_version_state = get_print_version_state();
+    let ci_state = get_ci_state();
+
+    print_version_state == PrintVersionState::Enabled && ci_state == CIState::Outside
+}
+
 /// Runs the CLI by parsing arguments with clap, then either calling Rust code
 /// directly or returning a payload for the Go code to use.
 ///
@@ -1180,11 +1217,7 @@ pub async fn run(
         }
     }
 
-    let should_print_version = env::var("TURBO_PRINT_VERSION_DISABLED")
-        .map_or(true, |disable| !matches!(disable.as_str(), "1" | "true"))
-        && !turborepo_ci::is_ci();
-
-    if should_print_version {
+    if should_print_version() {
         eprintln!("{}\n", GREY.apply_to(format!("turbo {}", get_version())));
     }
 
