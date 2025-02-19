@@ -1218,7 +1218,7 @@ fn get_command(cli_args: &mut Args) -> Result<Command, Error> {
     } else {
         // If there is no command, we set the command to `Command::Run` with
         // `self.parsed_args.run_args` as arguments.
-        default_to_run_command(&cli_args)
+        default_to_run_command(cli_args)
     }
 }
 
