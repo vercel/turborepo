@@ -104,7 +104,7 @@ impl<'a> GitChangeDetector for ScopeChangeDetector<'a> {
             merge_base,
         )? {
             Err(InvalidRange { from_ref, to_ref }) => {
-                debug!("all packages changed");
+                debug!("invalid ref range, defaulting to all packages changed");
                 return Ok(self
                     .pkg_graph
                     .packages()
