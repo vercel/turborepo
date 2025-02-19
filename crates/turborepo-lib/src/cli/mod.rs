@@ -1132,6 +1132,28 @@ impl Display for LogPrefix {
     }
 }
 
+fn initialize_telemetry_client(
+    color_config: ColorConfig,
+    version: &str,
+) -> Option<TelemetryHandle> {
+    let mut telemetry_handle: Option<TelemetryHandle> = None;
+    match AnonAPIClient::new("https://telemetry.vercel.com", 250, version) {
+        Ok(anonymous_api_client) => {
+            let handle = init_telemetry(anonymous_api_client, color_config);
+            match handle {
+                Ok(h) => telemetry_handle = Some(h),
+                Err(error) => {
+                    debug!("failed to start telemetry: {:?}", error)
+                }
+            }
+        }
+        Err(error) => {
+            debug!("Failed to create AnonAPIClient: {:?}", error);
+        }
+    }
+    telemetry_handle
+}
+
 #[derive(PartialEq)]
 enum PrintVersionState {
     Enabled,
@@ -1199,23 +1221,7 @@ pub async fn run(
     let version = get_version();
 
     // track telemetry handle to close at the end of the run
-    let mut telemetry_handle: Option<TelemetryHandle> = None;
-
-    // initialize telemetry
-    match AnonAPIClient::new("https://telemetry.vercel.com", 250, version) {
-        Ok(anonymous_api_client) => {
-            let handle = init_telemetry(anonymous_api_client, color_config);
-            match handle {
-                Ok(h) => telemetry_handle = Some(h),
-                Err(error) => {
-                    debug!("failed to start telemetry: {:?}", error)
-                }
-            }
-        }
-        Err(error) => {
-            debug!("Failed to create AnonAPIClient: {:?}", error);
-        }
-    }
+    let telemetry_handle = initialize_telemetry_client(color_config, version);
 
     if should_print_version() {
         eprintln!("{}\n", GREY.apply_to(format!("turbo {}", get_version())));
