@@ -129,11 +129,6 @@ Continue with task execution in the presence of an error (e.g. non-zero exit cod
 
 When `--continue` is `true`, `turbo` will exit with the highest exit code value encountered during execution.
 
-<Callout type="good-to-know">
-  Specifying [the `--parallel` flag](#--parallel) will automatically set
-  `--continue` to `true` unless explicitly set to `false`.
-</Callout>
-
 ```bash title="Terminal"
 turbo run build --continue
 ```
