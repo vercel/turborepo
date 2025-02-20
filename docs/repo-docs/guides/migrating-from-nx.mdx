@@ -7,24 +7,28 @@ import { PackageManagerTabs, Tabs, Tab } from '#/components/tabs';
 
 This guide will help you migrate an existing Nx repository to Turborepo.
 
-- Explore key concepts by [migrating from the Nx starter to Turborepo](#migration-steps)
+- Explore key concepts by [migrating from an Nx starter to Turborepo](#migration-steps)
 - Considerations for [more complex migration scenarios](#advanced-migration-considerations)
 
 ## Why switch?
 
-There are many reasons why you may be choosing to migrate from Nx to Turborepo. Below, we've listed the most common reasons that developers have referenced for their migrations.
+There are many reasons why you may be choosing to migrate from Nx to Turborepo. Below, we've listed the most common motivations that developers have referenced for their migrations.
 
-### Ecosystem standards
+### Using ecosystem standards
 
-Turborepo is [built on top of package manager workspaces](/repo/docs/crafting-your-repository/structuring-a-repository), meaning more tools and workflows are likely to work without plugins or other workarounds. By comparison, the default Nx starter uses conventions and strategies unique to Nx, and you can expect to write more Nx-only code as your codebase grows.
+Turborepo's goal is to be lightweight, leaning on your repository as the source of truth. An example of this is Turborepo being [built on top of JavaScript package manager workspaces](/repo/docs/crafting-your-repository/structuring-a-repository) for it's JavaScript/TypeScript support.
 
-### More control of source code
+By contrast, Nx uses layers of plugins, dependencies, and other Nx-specific code to infer information about your repository. While these plugins can provide a layer of functionality and are optional, Nx users looking to migrate often cite removing Nx-specific code from their codebase as a key motivation for their change.
 
-Nx’s philosophy involves wrapping your code with layers of plugins, other dependencies, and Nx-specific code. Instead, Turborepo infers your repository’s needs from its structure and source code. Since your source code goes through fewer layers of abstraction to be analyzed, you maintain greater control of your repository.
+### Greater control of source code
 
-### Less configuration
+Nx’s philosophy involves wrapping your code with layers of plugins, dependencies, and Nx-specific code. While these layers of code are optional, they provide a great deal of Nx's value and are recommended by Nx, so most Nx repos have them. When migrating to Turborepo, many developers explain that these layers tend to create a layer of obfuscation that abstracts their repository away from their control, causing issues.
 
-Migrating to Turborepo will likely require deleting previous configuration needed for Nx. Turborepo will automatically infer much of what your repository needs. For example, here are the tool-specific configurations you'll find in the default starters for Turborepo and Nx.
+Turborepo chooses to let you handle your tooling on your own terms, configuring (or not configuring) any of your tooling as you please.
+
+### Less configuration for your repository manager
+
+Migrating to Turborepo will likely require deleting previous configuration that you had for Nx and replacing it with less configuration for Turborepo, since Turborepo will automatically infer your repository's needs. For example, here are the tool-specific configurations you'll find in the equivalent starters for Turborepo and Nx [used below](#migration-steps).
 
 <Tabs items={["Turborepo", "Nx"]}>
 
