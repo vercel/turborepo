@@ -162,7 +162,7 @@ mod test {
         }));
         let subscriber = handler.subscribe().unwrap();
         // Send mocked SIGINT
-        tx.send(Signal::Interrupt).unwrap();
+        tx.send(DEFAULT_SIGNAL).unwrap();
 
         let (done, mut is_done) = oneshot::channel();
         let handler2 = handler.clone();
@@ -229,7 +229,7 @@ mod test {
         let subscriber = handler.subscribe().unwrap();
 
         // Send SIGINT
-        tx.send(Signal::Interrupt).unwrap();
+        tx.send(DEFAULT_SIGNAL).unwrap();
         // Do a quick yield to give the worker a chance to read the sigint
         tokio::task::yield_now().await;
         assert!(
