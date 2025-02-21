@@ -110,15 +110,15 @@ impl<N: Eq + Hash + Copy + Send + 'static> Walker<N, Start> {
                             trace!("Receiver was dropped before walk finished without calling cancel");
                             return;
                         }
-                        let callback_result = callback_rx.await;
-                        if callback_result.is_err() {
+                        let Ok(callback_result) = callback_rx.await else {
                             // If the caller drops the callback sender without signaling
                             // that the node processing is finished we assume that it is finished.
-                            trace!("Callback sender was dropped without sending a finish signal")
-                        }
+                            trace!("Callback sender was dropped without sending a finish signal");
+                            return;
+                        };
                         // Send errors indicate that there are no receivers which
                         // happens when this node has no dependents
-                        tx.send(matches!(callback_result, Ok(true))).ok();
+                        tx.send(callback_result).ok();
                     }
                 }
             }));
