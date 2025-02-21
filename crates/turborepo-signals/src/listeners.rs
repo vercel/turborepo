@@ -5,7 +5,7 @@ use crate::signals::Signal;
 #[cfg(windows)]
 /// A listener for Windows Console Ctrl-C events
 pub fn get_signal() -> Result<impl Stream<Item = Option<Signal>>, std::io::Error> {
-    let mut ctrl_c = tokio::signal::windows::ctrl_c().map_err(run::Error::SignalHandler)?;
+    let mut ctrl_c = tokio::signal::windows::ctrl_c()?;
     Ok(stream::once(async move {
         ctrl_c.recv().await.map(|_| Signal::CtrlC)
     }))
