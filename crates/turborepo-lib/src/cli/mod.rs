@@ -1161,14 +1161,12 @@ enum PrintVersionState {
 }
 
 fn get_print_version_state() -> PrintVersionState {
-    // map_or is used here because env::var returns Result<String, ...>
-    // and we want to compare against str
-    env::var("TURBO_PRINT_VERSION_DISABLED").map_or(PrintVersionState::Enabled, |var| {
-        match var.as_str() {
+    env::var("TURBO_PRINT_VERSION_DISABLED")
+        .map(|var| match var.as_str() {
             "1" | "true" => PrintVersionState::Disabled,
             _ => PrintVersionState::Enabled,
-        }
-    })
+        })
+        .unwrap_or(PrintVersionState::Enabled)
 }
 
 #[derive(PartialEq)]
