@@ -1191,6 +1191,37 @@ fn should_print_version() -> bool {
     print_version_state == PrintVersionState::Enabled && ci_state == CIState::Outside
 }
 
+fn default_to_run_command(cli_args: &Args) -> Result<Command, Error> {
+    let run_args = cli_args.run_args.clone().unwrap_or_default();
+    let execution_args = cli_args
+        .execution_args
+        // We clone instead of take as take would leave the command base a copy of cli_args
+        // missing any execution args.
+        .clone()
+        .ok_or_else(|| Error::NoCommand(Backtrace::capture()))?;
+
+    if execution_args.tasks.is_empty() {
+        let mut cmd = <Args as CommandFactory>::command();
+        let _ = cmd.print_help();
+        process::exit(1);
+    }
+
+    Ok(Command::Run {
+        run_args: Box::new(run_args),
+        execution_args: Box::new(execution_args),
+    })
+}
+
+fn get_command(cli_args: &mut Args) -> Result<Command, Error> {
+    if let Some(command) = mem::take(&mut cli_args.command) {
+        Ok(command)
+    } else {
+        // If there is no command, we set the command to `Command::Run` with
+        // `self.parsed_args.run_args` as arguments.
+        default_to_run_command(cli_args)
+    }
+}
+
 /// Runs the CLI by parsing arguments with clap, then either calling Rust code
 /// directly or returning a payload for the Go code to use.
 ///
@@ -1227,30 +1258,7 @@ pub async fn run(
         eprintln!("{}\n", GREY.apply_to(format!("turbo {}", get_version())));
     }
 
-    // If there is no command, we set the command to `Command::Run` with
-    // `self.parsed_args.run_args` as arguments.
-    let mut command = if let Some(command) = mem::take(&mut cli_args.command) {
-        command
-    } else {
-        let run_args = cli_args.run_args.clone().unwrap_or_default();
-        let execution_args = cli_args
-            .execution_args
-            // We clone instead of take as take would leave the command base a copy of cli_args
-            // missing any execution args.
-            .clone()
-            .ok_or_else(|| Error::NoCommand(Backtrace::capture()))?;
-
-        if execution_args.tasks.is_empty() {
-            let mut cmd = <Args as CommandFactory>::command();
-            let _ = cmd.print_help();
-            process::exit(1);
-        }
-
-        Command::Run {
-            run_args: Box::new(run_args),
-            execution_args: Box::new(execution_args),
-        }
-    };
+    let mut command = get_command(&mut cli_args)?;
 
     // Set some run flags if we have the data and are executing a Run
     match &mut command {
