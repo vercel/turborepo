@@ -283,15 +283,6 @@ enum ChildOutput {
     Pty(Box<dyn Read + Send>),
 }
 
-impl ChildInput {
-    fn concrete(self) -> Option<tokio::process::ChildStdin> {
-        match self {
-            ChildInput::Std(stdin) => Some(stdin),
-            ChildInput::Pty(_) => None,
-        }
-    }
-}
-
 impl fmt::Debug for ChildInput {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -562,7 +553,7 @@ impl Child {
         code
     }
 
-    fn pid(&self) -> Option<u32> {
+    pub fn pid(&self) -> Option<u32> {
         self.pid
     }
 
