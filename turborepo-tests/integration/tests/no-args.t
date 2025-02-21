@@ -99,7 +99,7 @@ Make sure exit code is 2 when no args are passed
         --concurrency <CONCURRENCY>
             Limit the concurrency of task execution. Use 1 for serial (i.e. one-at-a-time) execution
         --continue [<CONTINUE>]
-            Specify which tasks should continue running when an error occurs. Use "none" to cancel all tasks. Use "independent-tasks-only" to continue running independent tasks and cancel dependent ones. Use "all" to continue running all tasks
+            Specify which tasks should continue running when an error occurs. Use "none" to cancel all tasks. Use "independent-tasks-only" to continue running independent tasks and cancel dependent ones. Use "all" to continue running all tasks [default: none] [possible values: none, independent-tasks-only, all]
         --single-package
             Run turbo in single-package mode
         --framework-inference [<BOOL>]
