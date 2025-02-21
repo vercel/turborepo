@@ -9,6 +9,9 @@
 //! As of now, the manager will execute futures in a random order, and
 //! must be either `wait`ed on or `stop`ped to drive state.
 
+#![deny(clippy::all)]
+#![feature(assert_matches)]
+
 mod child;
 mod command;
 
