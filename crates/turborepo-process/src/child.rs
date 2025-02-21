@@ -827,7 +827,7 @@ mod test {
     use turbopath::AbsoluteSystemPathBuf;
 
     use super::{Child, ChildInput, ChildOutput, ChildState, Command};
-    use crate::process::{
+    use crate::{
         child::{ChildExit, ShutdownStyle},
         PtySize,
     };
@@ -843,7 +843,7 @@ mod test {
         while !root.join_component(".git").exists() {
             root = root.parent().unwrap().to_owned();
         }
-        root.join_components(&["crates", "turborepo-lib", "test", "scripts"])
+        root.join_components(&["crates", "turborepo-process", "test", "scripts"])
     }
 
     #[test_case(false)]

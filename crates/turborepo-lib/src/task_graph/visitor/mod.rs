@@ -24,6 +24,7 @@ use turbopath::{AbsoluteSystemPath, AnchoredSystemPath};
 use turborepo_ci::{Vendor, VendorBehavior};
 use turborepo_env::{platform::PlatformEnv, EnvironmentVariableMap};
 use turborepo_errors::TURBO_SITE;
+use turborepo_process::ProcessManager;
 use turborepo_repository::package_graph::{PackageGraph, PackageName, ROOT_PKG_NAME};
 use turborepo_telemetry::events::{
     generic::GenericEventBuilder, task::PackageTaskEventBuilder, EventBuilder, TrackedErrors,
@@ -37,7 +38,6 @@ use crate::{
     engine::{Engine, ExecutionOptions},
     microfrontends::MicrofrontendsConfigs,
     opts::RunOpts,
-    process::ProcessManager,
     run::{
         global_hash::GlobalHashableInputs,
         summary::{self, GlobalHashSummary, RunTracker},
