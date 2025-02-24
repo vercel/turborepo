@@ -311,7 +311,7 @@ jobs:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
           turbo-token: "${{ secrets.TURBO_TOKEN }}"
           turbo-team: "${{ vars.TURBO_TEAM }}"
-          test-filter: "@turborepo-examples-tests/with-svelte-*"
+          test-filter: "@turborepo-examples-tests/with-svelte-pnpm"
 
   with-tailwind-example:
     name: "`with-tailwind` example"

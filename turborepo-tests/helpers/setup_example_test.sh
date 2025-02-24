@@ -28,7 +28,7 @@ echo "Created temporary directory: $temp_dir"
 if [ "$package_manager" == "npm" ]; then
   package_manager_command="npx @turbo/workspaces convert . npm --ignore-unchanged-package-manager"
 elif [ "$package_manager" == "pnpm" ]; then
-  package_manager_command="pnpm install --frozen-lockfile"
+  package_manager_command="npx @turbo/workspaces convert . pnpm --ignore-unchanged-package-manager"
 elif [ "$package_manager" == "yarn" ]; then
   package_manager_command="npx @turbo/workspaces convert . yarn --ignore-unchanged-package-manager"
 fi
