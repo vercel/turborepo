@@ -11,6 +11,7 @@ crate-type = ["cdylib"]
 workspace = true
 
 [dependencies]
+either = { workspace = true }
 napi = { version = "2.14.0", features = ["tokio_rt"] }
 napi-derive = "2.14.0"
 thiserror = { workspace = true }

@@ -3,13 +3,15 @@ use std::{
     hash::Hash,
 };
 
+use either::Either;
 use napi::Error;
 use napi_derive::napi;
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
 use turborepo_repository::{
     change_mapper::{
-        ChangeMapper, GlobalDepsPackageChangeMapper, LockfileContents, PackageChanges,
+        ChangeMapper, DefaultPackageChangeMapper, GlobalDepsPackageChangeMapper, LockfileContents,
+        PackageChanges,
     },
     inference::RepoState as WorkspaceState,
     package_graph::{PackageGraph, PackageName, PackageNode, WorkspacePackage, ROOT_PKG_NAME},
@@ -190,7 +192,7 @@ impl Workspace {
         &self,
         changed_files: &HashSet<AnchoredSystemPathBuf>,
         workspace_root: &AbsoluteSystemPath,
-        from_commit: Option<&str>,
+        from_commit: &str,
     ) -> LockfileContents {
         let lockfile_name = self.graph.package_manager().lockfile_name();
         changed_files
@@ -198,7 +200,7 @@ impl Workspace {
             .then(|| {
                 let git = SCM::new(workspace_root);
                 let anchored_path = workspace_root.join_component(lockfile_name);
-                git.previous_content(from_commit, &anchored_path)
+                git.previous_content(Some(from_commit), &anchored_path)
                     .map(LockfileContents::Changed)
                     .inspect_err(|e| debug!("{e}"))
                     .ok()
@@ -218,6 +220,16 @@ impl Workspace {
         comparison: Option<&str>, // this is required when optimize_global_invalidations is true
         optimize_global_invalidations: Option<bool>,
     ) -> Result<Vec<Package>, Error> {
+        let comparison = optimize_global_invalidations
+            .unwrap_or(false)
+            .then(|| {
+                comparison.ok_or_else(|| {
+                    Error::from_reason(
+                        "optimizeGlobalInvalidations true, but no comparison commit given",
+                    )
+                })
+            })
+            .transpose()?;
         let workspace_root = match AbsoluteSystemPath::new(&self.absolute_path) {
             Ok(path) => path,
             Err(e) => return Err(Error::from_reason(e.to_string())),
@@ -232,12 +244,24 @@ impl Workspace {
             .collect();
 
         // Create a ChangeMapper with no ignore patterns
-        let global_deps_package_detector =
-            GlobalDepsPackageChangeMapper::new(&self.graph, std::iter::empty::<&str>()).unwrap();
-        let mapper = ChangeMapper::new(&self.graph, vec![], global_deps_package_detector);
+        let change_detector = comparison
+            .is_some()
+            .then(|| {
+                Either::Left(
+                    GlobalDepsPackageChangeMapper::new(&self.graph, std::iter::empty::<&str>())
+                        .unwrap(),
+                )
+            })
+            .unwrap_or_else(|| Either::Right(DefaultPackageChangeMapper::new(&self.graph)));
+        let mapper = ChangeMapper::new(&self.graph, vec![], change_detector);
 
-        let lockfile_contents = if let Some(true) = optimize_global_invalidations {
-            self.get_lockfile_contents(&changed_files, &workspace_root, comparison)
+        let lockfile_contents = if let Some(comparison) = comparison {
+            self.get_lockfile_contents(&changed_files, workspace_root, comparison)
+        } else if changed_files.contains(
+            AnchoredSystemPath::new(self.graph.package_manager().lockfile_name())
+                .expect("the lockfile name will not be an absolute path"),
+        ) {
+            LockfileContents::UnknownChange
         } else {
             LockfileContents::Unknown
         };
