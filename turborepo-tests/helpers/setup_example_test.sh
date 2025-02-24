@@ -60,6 +60,8 @@ rsync -avq \
 cd "$temp_dir/$example_path-$package_manager/$example_path"
 
 git init
+git config --global user.email "you@example.com"
+git config --global user.name "Your Name"
 git add .
 git commit -m "init"
 
