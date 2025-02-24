@@ -58,6 +58,7 @@ impl EventBuilder for CommandEventBuilder {
 pub enum LoginMethod {
     SSO,
     Standard,
+    Manual,
 }
 
 impl CommandEventBuilder {
@@ -151,6 +152,7 @@ impl CommandEventBuilder {
             value: match method {
                 LoginMethod::SSO => "sso".to_string(),
                 LoginMethod::Standard => "standard".to_string(),
+                LoginMethod::Manual => "manual".to_string(),
             },
             is_sensitive: EventType::NonSensitive,
             send_in_ci: false,

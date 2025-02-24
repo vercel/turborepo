@@ -3,9 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "exports": {
-    "./button": "./src/button.tsx",
-    "./card": "./src/card.tsx",
-    "./code": "./src/code.tsx"
+    "./*": "./src/*.tsx"
   },
   "scripts": {
     "lint": "eslint . --max-warnings 0",
@@ -19,7 +17,7 @@
     "@types/node": "^22.13.0",
     "@types/react": "19.0.8",
     "@types/react-dom": "19.0.3",
-    "eslint": "^9.20.0",
+    "eslint": "^9.21.0",
     "typescript": "5.7.3"
   },
   "dependencies": {

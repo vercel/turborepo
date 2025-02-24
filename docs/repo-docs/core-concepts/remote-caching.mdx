@@ -184,15 +184,11 @@ Learn more about [Turborepo on Vercel](https://vercel.com/docs/monorepos/turbore
 
 ### Self-hosting
 
-You can also self-host your own Remote Cache and set the remote caching domain by specifying the `--api` and `--token` flags, where `--api` is the hostname and `--token` is a bearer token.
+You can also self-host your own Remote Cache and log into it using the `--manual` flag to provide API URL, team, and token information.
 
 ```bash title="Terminal"
-turbo login --api="https://my-server.example.com/api"
-turbo link --api="https://my-server-example.com"
-turbo run build --api="https://my-server.example.com" --token="xxxxxxxxxxxxxxxxx"
+turbo login --manual
 ```
-
-Alternatively, [the `TURBO_API` and `TURBO_TOKEN` System Environment Variables](/repo/docs/reference/system-environment-variables) can be used to set the respective values for the Remote Cache once you've logged in.
 
 You can [find the OpenAPI specification for the API here](/api/remote-cache-spec). At this time, all versions of `turbo` are compatible with the `v8` endpoints.
 
