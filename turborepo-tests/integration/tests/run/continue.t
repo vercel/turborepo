@@ -82,8 +82,8 @@ Run with --continue
    ERROR  run failed: command  exited (1)
   [1]
 
-Run with --continue=independent-tasks-only
-  $ ${TURBO} build --output-logs=errors-only --continue=independent-tasks-only
+Run with --continue=dependencies-successful
+  $ ${TURBO} build --output-logs=errors-only --continue=dependencies-successful
   \xe2\x80\xa2 Packages in scope: base-lib, my-app, other-app, some-lib, yet-another-lib (esc)
   \xe2\x80\xa2 Running build in 5 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)

@@ -94,9 +94,9 @@ impl Opts {
         }
 
         match self.run_opts.continue_on_error {
-            ContinueMode::All => cmd.push_str(" --continue=all"),
-            ContinueMode::IndependentTasksOnly => {
-                cmd.push_str(" --continue=independent-tasks-only")
+            ContinueMode::Always => cmd.push_str(" --continue=always"),
+            ContinueMode::DependenciesSuccessful => {
+                cmd.push_str(" --continue=dependencies-successful")
             }
             _ => (),
         }
@@ -612,20 +612,20 @@ mod test {
             filter_patterns: vec!["my-app".to_string()],
             tasks: vec!["build".to_string()],
             parallel: true,
-            continue_on_error: ContinueMode::All,
+            continue_on_error: ContinueMode::Always,
             ..Default::default()
             },
-        "turbo run build --filter=my-app --parallel --continue=all"
+        "turbo run build --filter=my-app --parallel --continue=always"
     )]
     #[test_case(
         TestCaseOpts{
             filter_patterns: vec!["my-app".to_string()],
             tasks: vec!["build".to_string()],
             parallel: true,
-            continue_on_error: ContinueMode::IndependentTasksOnly,
+            continue_on_error: ContinueMode::DependenciesSuccessful,
             ..Default::default()
             },
-        "turbo run build --filter=my-app --parallel --continue=independent-tasks-only"
+        "turbo run build --filter=my-app --parallel --continue=dependencies-successful"
     )]
     #[test_case(
         TestCaseOpts{

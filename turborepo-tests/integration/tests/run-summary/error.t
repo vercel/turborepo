@@ -97,7 +97,7 @@ Don't use --filter here, so we can validate that both tasks attempted to run
 success should be 1, and attempted should be 2
   $ cat $SUMMARY | jq '.execution'
   {
-    "command": "turbo run maybefails --continue=all",
+    "command": "turbo run maybefails --continue=always",
     "repoPath": "",
     "success": 1,
     "failed": 1,

@@ -99,7 +99,7 @@ Test help flag
         --concurrency <CONCURRENCY>
             Limit the concurrency of task execution. Use 1 for serial (i.e. one-at-a-time) execution
         --continue [<CONTINUE>]
-            Specify which tasks should continue running when an error occurs. Use "none" to cancel all tasks. Use "independent-tasks-only" to continue running independent tasks and cancel dependent ones. Use "all" to continue running all tasks [default: none] [possible values: none, independent-tasks-only, all]
+            Specify which tasks should continue running when an error occurs. Use "never" to cancel all tasks. Use "dependencies-successful" to continue running tasks whose dependencies have succeeded. Use "always" to continue running all tasks, even those whose dependencies have failed [default: never] [possible values: never, dependencies-successful, always]
         --single-package
             Run turbo in single-package mode
         --framework-inference [<BOOL>]
@@ -274,10 +274,10 @@ Test help flag
             Limit the concurrency of task execution. Use 1 for serial (i.e. one-at-a-time) execution
   
         --continue [<CONTINUE>]
-            Specify which tasks should continue running when an error occurs. Use "none" to cancel all tasks. Use "independent-tasks-only" to continue running independent tasks and cancel dependent ones. Use "all" to continue running all tasks
+            Specify which tasks should continue running when an error occurs. Use "never" to cancel all tasks. Use "dependencies-successful" to continue running tasks whose dependencies have succeeded. Use "always" to continue running all tasks, even those whose dependencies have failed
             
-            [default: none]
-            [possible values: none, independent-tasks-only, all]
+            [default: never]
+            [possible values: never, dependencies-successful, always]
   
         --single-package
             Run turbo in single-package mode

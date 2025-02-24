@@ -253,25 +253,25 @@ impl ExecContext {
                 let task_summary = tracker.build_failed(exit_code, message).await;
                 callback
                     .send(match self.continue_on_error {
-                        ContinueMode::All => Ok(()),
-                        ContinueMode::IndependentTasksOnly => Err(StopExecution::DependentTasks),
-                        ContinueMode::None => Err(StopExecution::AllTasks),
+                        ContinueMode::Always => Ok(()),
+                        ContinueMode::DependenciesSuccessful => Err(StopExecution::DependentTasks),
+                        ContinueMode::Never => Err(StopExecution::AllTasks),
                     })
                     .ok();
 
                 match (spaces_client, self.continue_on_error) {
                     // Nothing to do
-                    (None, ContinueMode::All | ContinueMode::IndependentTasksOnly) => (),
+                    (None, ContinueMode::Always | ContinueMode::DependenciesSuccessful) => (),
                     // Shut down manager
-                    (None, ContinueMode::None) => self.manager.stop().await,
+                    (None, ContinueMode::Never) => self.manager.stop().await,
                     // Send task
-                    (Some(client), ContinueMode::All | ContinueMode::IndependentTasksOnly) => {
+                    (Some(client), ContinueMode::Always | ContinueMode::DependenciesSuccessful) => {
                         let logs = logs.expect("spaced enabled logs should be collected");
                         let info = self.spaces_task_info(self.task_id.clone(), task_summary, logs);
                         client.finish_task(info).await.ok();
                     }
                     // Send task and shut down manager
-                    (Some(client), ContinueMode::None) => {
+                    (Some(client), ContinueMode::Never) => {
                         let logs = logs.unwrap_or_default();
                         let info = self.spaces_task_info(self.task_id.clone(), task_summary, logs);
                         // Ignore spaces result as that indicates handler is shut down and we are
@@ -462,10 +462,10 @@ impl ExecContext {
                 let error = TaskErrorCause::from_execution(process.label().to_string(), code);
                 let message = error.to_string();
                 match self.continue_on_error {
-                    ContinueMode::None => {
+                    ContinueMode::Never => {
                         prefixed_ui.error(&format!("command finished with error: {error}"))
                     }
-                    ContinueMode::All | ContinueMode::IndependentTasksOnly => {
+                    ContinueMode::Always | ContinueMode::DependenciesSuccessful => {
                         prefixed_ui.warn("command finished with error, but continuing...")
                     }
                 }

@@ -164,17 +164,17 @@ impl fmt::Display for EnvMode {
 #[serde(rename_all = "lowercase")]
 pub enum ContinueMode {
     #[default]
-    None,
-    IndependentTasksOnly,
-    All,
+    Never,
+    DependenciesSuccessful,
+    Always,
 }
 
 impl fmt::Display for ContinueMode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
-            ContinueMode::None => "none",
-            ContinueMode::IndependentTasksOnly => "independent-tasks-only",
-            ContinueMode::All => "all",
+            ContinueMode::Never => "never",
+            ContinueMode::DependenciesSuccessful => "dependencies-successful",
+            ContinueMode::Always => "always",
         })
     }
 }
@@ -844,10 +844,11 @@ pub struct ExecutionArgs {
     #[clap(long)]
     pub concurrency: Option<String>,
     /// Specify which tasks should continue running when an error occurs.
-    /// Use "none" to cancel all tasks.
-    /// Use "independent-tasks-only" to continue running independent tasks and
-    /// cancel dependent ones. Use "all" to continue running all tasks.
-    #[clap(long = "continue", value_name = "CONTINUE", num_args = 0..=1, default_value = "none", default_missing_value = "all")]
+    /// Use "never" to cancel all tasks. Use "dependencies-successful" to
+    /// continue running tasks whose dependencies have succeeded. Use "always"
+    /// to continue running all tasks, even those whose dependencies have
+    /// failed.
+    #[clap(long = "continue", value_name = "CONTINUE", num_args = 0..=1, default_value = "never", default_missing_value = "always")]
     pub continue_execution: ContinueMode,
     /// Run turbo in single-package mode
     #[clap(long)]
@@ -918,7 +919,7 @@ impl ExecutionArgs {
 
         track_usage!(telemetry, self.continue_execution, |val| matches!(
             val,
-            ContinueMode::All | ContinueMode::IndependentTasksOnly
+            ContinueMode::Always | ContinueMode::DependenciesSuccessful
         ));
         telemetry.track_arg_value(
             "continue-execution-strategy",
@@ -1919,7 +1920,7 @@ mod test {
             command: Some(Command::Run {
                 execution_args: Box::new(ExecutionArgs {
                     tasks: vec!["build".to_string()],
-                    continue_execution: ContinueMode::All,
+                    continue_execution: ContinueMode::Always,
                     ..get_default_execution_args()
                 }),
                 run_args: Box::new(get_default_run_args())
@@ -1929,12 +1930,12 @@ mod test {
         "continue option with no value"
 	)]
     #[test_case::test_case(
-		&["turbo", "run", "build", "--continue=independent-tasks-only"],
+		&["turbo", "run", "build", "--continue=dependencies-successful"],
         Args {
             command: Some(Command::Run {
                 execution_args: Box::new(ExecutionArgs {
                     tasks: vec!["build".to_string()],
-                    continue_execution: ContinueMode::IndependentTasksOnly,
+                    continue_execution: ContinueMode::DependenciesSuccessful,
                     ..get_default_execution_args()
                 }),
                 run_args: Box::new(get_default_run_args())
