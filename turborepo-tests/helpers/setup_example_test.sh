@@ -59,6 +59,10 @@ rsync -avq \
 
 cd "$temp_dir/$example_path-$package_manager/$example_path"
 
+git init
+git add .
+git commit -m "init"
+
 # Run package manager conversion
 $package_manager_command
 
