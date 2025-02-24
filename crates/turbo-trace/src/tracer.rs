@@ -439,8 +439,7 @@ impl Tracer {
             futures.spawn(async move {
                 let file_resolver = Self::infer_resolver_with_ts_config(&file, &resolver);
                 let resolver = file_resolver.as_ref().unwrap_or(&resolver);
-                eprintln!("file: {:?}", file);
-                eprintln!("resolver: {:?}", resolver);
+                eprintln!("file: {:?}", shared_self.cwd.anchor(&file));
                 let mut errors = Vec::new();
 
                 let Some((imported_files, seen_file)) = Self::get_imports_from_file(
@@ -456,8 +455,12 @@ impl Tracer {
                     return (errors, None);
                 };
 
+                if imported_files.is_empty() {
+                    eprintln!("no imports found for {}", file);
+                }
+
                 for import in imported_files {
-                    eprintln!("import: {:?}", import);
+                    eprintln!("import: {:?}", shared_self.cwd.anchor(&import));
                     if shared_self
                         .files
                         .iter()
