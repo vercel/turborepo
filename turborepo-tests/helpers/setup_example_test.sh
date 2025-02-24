@@ -66,6 +66,7 @@ git add .
 git commit -m "init"
 
 corepack enable
+pnpm --version
 
 # Run package manager conversion
 $package_manager_command
