@@ -13,7 +13,6 @@ Run test run
     "timeout": 30,
     "uploadTimeout": 60,
     "enabled": true,
-    "spacesId": null,
     "ui": "stream",
     "packageManager": "npm",
     "daemon": null,

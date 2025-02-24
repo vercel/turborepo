@@ -643,9 +643,10 @@ pub enum Command {
         /// Answer yes to all prompts (default false)
         #[clap(long, short)]
         yes: bool,
-        /// Specify what should be linked (default "remote cache")
-        #[clap(long, value_enum, default_value_t = LinkTarget::RemoteCache)]
-        target: LinkTarget,
+
+        /// DEPRECATED: Specify what should be linked (default "remote cache")
+        #[clap(long, value_enum)]
+        target: Option<LinkTarget>,
     },
     /// Login to your Vercel account
     Login {
@@ -655,6 +656,10 @@ pub enum Command {
         /// tokens for the given login url.
         #[clap(long = "force", short = 'f')]
         force: bool,
+        /// Manually enter token instead of requesting one from the login
+        /// service.
+        #[clap(long, conflicts_with = "sso_team")]
+        manual: bool,
     },
     /// Logout to your Vercel account
     Logout {
@@ -718,9 +723,9 @@ pub enum Command {
     /// Unlink the current directory from your Vercel organization and disable
     /// Remote Caching
     Unlink {
-        /// Specify what should be unlinked (default "remote cache")
-        #[clap(long, value_enum, default_value_t = LinkTarget::RemoteCache)]
-        target: LinkTarget,
+        /// DEPRECATED: Specify what should be unlinked (default "remote cache")
+        #[clap(long, value_enum)]
+        target: Option<LinkTarget>,
     },
 }
 
@@ -997,10 +1002,6 @@ pub struct RunArgs {
     #[clap(long, default_missing_value = "true")]
     pub summarize: Option<Option<bool>>,
 
-    // Pass a string to enable posting Run Summaries to Vercel
-    #[clap(long, hide = true)]
-    pub experimental_space_id: Option<String>,
-
     /// Execute all tasks in parallel.
     #[clap(long)]
     pub parallel: bool,
@@ -1022,7 +1023,6 @@ impl Default for RunArgs {
             anon_profile: None,
             remote_cache_read_only: None,
             summarize: None,
-            experimental_space_id: None,
             parallel: false,
         }
     }
@@ -1083,7 +1083,6 @@ impl RunArgs {
         track_usage!(telemetry, &self.profile, Option::is_some);
         track_usage!(telemetry, &self.anon_profile, Option::is_some);
         track_usage!(telemetry, &self.summarize, Option::is_some);
-        track_usage!(telemetry, &self.experimental_space_id, Option::is_some);
 
         // track values
         if let Some(dry_run) = &self.dry_run {
@@ -1128,39 +1127,11 @@ impl Display for LogPrefix {
     }
 }
 
-/// Runs the CLI by parsing arguments with clap, then either calling Rust code
-/// directly or returning a payload for the Go code to use.
-///
-/// Scenarios:
-/// 1. inference failed, we're running this global turbo. no repo state
-/// 2. --skip-infer was passed, assume we're local turbo and run. no repo state
-/// 3. There is no local turbo, we're running the global one. repo state exists
-/// 4. turbo binary path is set, and it's this one. repo state exists
-///
-/// # Arguments
-///
-/// * `repo_state`: If we have done repository inference and NOT executed
-/// local turbo, such as in the case where `TURBO_BINARY_PATH` is set,
-/// we use it here to modify clap's arguments.
-/// * `logger`: The logger to use for the run.
-/// * `color_config`: The color configuration to use for the run, i.e. whether
-///   we should colorize output.
-///
-/// returns: Result<Payload, Error>
-#[tokio::main]
-pub async fn run(
-    repo_state: Option<RepoState>,
-    #[allow(unused_variables)] logger: &TurboSubscriber,
+fn initialize_telemetry_client(
     color_config: ColorConfig,
-) -> Result<i32, Error> {
-    // TODO: remove mutability from this function
-    let mut cli_args = Args::new(env::args_os().collect());
-    let version = get_version();
-
-    // track telemetry handle to close at the end of the run
+    version: &str,
+) -> Option<TelemetryHandle> {
     let mut telemetry_handle: Option<TelemetryHandle> = None;
-
-    // initialize telemetry
     match AnonAPIClient::new("https://telemetry.vercel.com", 250, version) {
         Ok(anonymous_api_client) => {
             let handle = init_telemetry(anonymous_api_client, color_config);
@@ -1175,42 +1146,50 @@ pub async fn run(
             debug!("Failed to create AnonAPIClient: {:?}", error);
         }
     }
+    telemetry_handle
+}
 
-    let should_print_version = env::var("TURBO_PRINT_VERSION_DISABLED")
-        .map_or(true, |disable| !matches!(disable.as_str(), "1" | "true"))
-        && !turborepo_ci::is_ci();
+#[derive(PartialEq)]
+enum PrintVersionState {
+    Enabled,
+    Disabled,
+}
 
-    if should_print_version {
-        eprintln!("{}\n", GREY.apply_to(format!("turbo {}", get_version())));
+fn get_print_version_state() -> PrintVersionState {
+    env::var("TURBO_PRINT_VERSION_DISABLED")
+        .map(|var| match var.as_str() {
+            "1" | "true" => PrintVersionState::Disabled,
+            _ => PrintVersionState::Enabled,
+        })
+        .unwrap_or(PrintVersionState::Enabled)
+}
+
+#[derive(PartialEq)]
+enum CIState {
+    Inside,
+    Outside,
+}
+
+fn get_ci_state() -> CIState {
+    match turborepo_ci::is_ci() {
+        true => CIState::Inside,
+        _ => CIState::Outside,
     }
+}
 
-    // If there is no command, we set the command to `Command::Run` with
-    // `self.parsed_args.run_args` as arguments.
-    let mut command = if let Some(command) = mem::take(&mut cli_args.command) {
-        command
-    } else {
-        let run_args = cli_args.run_args.clone().unwrap_or_default();
-        let execution_args = cli_args
-            .execution_args
-            // We clone instead of take as take would leave the command base a copy of cli_args
-            // missing any execution args.
-            .clone()
-            .ok_or_else(|| Error::NoCommand(Backtrace::capture()))?;
+fn should_print_version() -> bool {
+    let print_version_state = get_print_version_state();
+    let ci_state = get_ci_state();
 
-        if execution_args.tasks.is_empty() {
-            let mut cmd = <Args as CommandFactory>::command();
-            let _ = cmd.print_help();
-            process::exit(1);
-        }
+    print_version_state == PrintVersionState::Enabled && ci_state == CIState::Outside
+}
 
-        Command::Run {
-            run_args: Box::new(run_args),
-            execution_args: Box::new(execution_args),
-        }
-    };
-
-    // Set some run flags if we have the data and are executing a Run
-    match &mut command {
+fn set_run_flags<'a>(
+    command: &'a mut Command,
+    repo_state: &'a Option<RepoState>,
+    cli_args: &'a Args,
+) -> Result<&'a mut Command, Error> {
+    match command {
         Command::Run {
             run_args: _,
             execution_args,
@@ -1249,6 +1228,80 @@ pub async fn run(
         }
         _ => {}
     }
+    Ok(command)
+}
+
+fn default_to_run_command(cli_args: &Args) -> Result<Command, Error> {
+    let run_args = cli_args.run_args.clone().unwrap_or_default();
+    let execution_args = cli_args
+        .execution_args
+        // We clone instead of take as take would leave the command base a copy of cli_args
+        // missing any execution args.
+        .clone()
+        .ok_or_else(|| Error::NoCommand(Backtrace::capture()))?;
+
+    if execution_args.tasks.is_empty() {
+        let mut cmd = <Args as CommandFactory>::command();
+        let _ = cmd.print_help();
+        process::exit(1);
+    }
+
+    Ok(Command::Run {
+        run_args: Box::new(run_args),
+        execution_args: Box::new(execution_args),
+    })
+}
+
+fn get_command(cli_args: &mut Args) -> Result<Command, Error> {
+    if let Some(command) = mem::take(&mut cli_args.command) {
+        Ok(command)
+    } else {
+        // If there is no command, we set the command to `Command::Run` with
+        // `self.parsed_args.run_args` as arguments.
+        default_to_run_command(cli_args)
+    }
+}
+
+/// Runs the CLI by parsing arguments with clap, then either calling Rust code
+/// directly or returning a payload for the Go code to use.
+///
+/// Scenarios:
+/// 1. inference failed, we're running this global turbo. no repo state
+/// 2. --skip-infer was passed, assume we're local turbo and run. no repo state
+/// 3. There is no local turbo, we're running the global one. repo state exists
+/// 4. turbo binary path is set, and it's this one. repo state exists
+///
+/// # Arguments
+///
+/// * `repo_state`: If we have done repository inference and NOT executed
+/// local turbo, such as in the case where `TURBO_BINARY_PATH` is set,
+/// we use it here to modify clap's arguments.
+/// * `logger`: The logger to use for the run.
+/// * `color_config`: The color configuration to use for the run, i.e. whether
+///   we should colorize output.
+///
+/// returns: Result<Payload, Error>
+#[tokio::main]
+pub async fn run(
+    repo_state: Option<RepoState>,
+    #[allow(unused_variables)] logger: &TurboSubscriber,
+    color_config: ColorConfig,
+) -> Result<i32, Error> {
+    // TODO: remove mutability from this function
+    let mut cli_args = Args::new(env::args_os().collect());
+    let version = get_version();
+
+    // track telemetry handle to close at the end of the run
+    let telemetry_handle = initialize_telemetry_client(color_config, version);
+
+    if should_print_version() {
+        eprintln!("{}\n", GREY.apply_to(format!("turbo {}", get_version())));
+    }
+
+    let mut command = get_command(&mut cli_args)?;
+
+    // Set some run flags if we have the data and are executing a Run
+    set_run_flags(&mut command, &repo_state, &cli_args)?;
 
     // TODO: make better use of RepoState, here and below. We've already inferred
     // the repo root, we don't need to calculate it again, along with package
@@ -1396,6 +1449,9 @@ pub async fn run(
             yes,
             target,
         } => {
+            if target.is_some() {
+                warn!("`--target` flag is deprecated and does not do anything")
+            }
             let event = CommandEventBuilder::new("link").with_parent(&root_telemetry);
             event.track_call();
 
@@ -1409,13 +1465,12 @@ pub async fn run(
             }
 
             let modify_gitignore = !*no_gitignore;
-            let to = *target;
             let yes = *yes;
             let scope = scope.clone();
             let mut base = CommandBase::new(cli_args, repo_root, version, color_config)?;
             event.track_ui_mode(base.opts.run_opts.ui_mode);
 
-            link::link(&mut base, scope, modify_gitignore, yes, to).await?;
+            link::link(&mut base, scope, modify_gitignore, yes).await?;
 
             Ok(0)
         }
@@ -1432,7 +1487,11 @@ pub async fn run(
 
             Ok(0)
         }
-        Command::Login { sso_team, force } => {
+        Command::Login {
+            sso_team,
+            force,
+            manual,
+        } => {
             let event = CommandEventBuilder::new("login").with_parent(&root_telemetry);
             event.track_call();
             if cli_args.test_run {
@@ -1442,20 +1501,21 @@ pub async fn run(
 
             let sso_team = sso_team.clone();
             let force = *force;
+            let manual = *manual;
 
             let mut base = CommandBase::new(cli_args, repo_root, version, color_config)?;
             event.track_ui_mode(base.opts.run_opts.ui_mode);
             let event_child = event.child();
 
-            if let Some(sso_team) = sso_team {
-                login::sso_login(&mut base, &sso_team, event_child, force).await?;
-            } else {
-                login::login(&mut base, event_child, force).await?;
-            }
+            login::login(&mut base, event_child, sso_team.as_deref(), force, manual).await?;
 
             Ok(0)
         }
         Command::Unlink { target } => {
+            if target.is_some() {
+                warn!("`--target` flag is deprecated and does not do anything");
+            }
+
             let event = CommandEventBuilder::new("unlink").with_parent(&root_telemetry);
             event.track_call();
             if cli_args.test_run {
@@ -1463,11 +1523,10 @@ pub async fn run(
                 return Ok(0);
             }
 
-            let from = *target;
             let mut base = CommandBase::new(cli_args, repo_root, version, color_config)?;
             event.track_ui_mode(base.opts.run_opts.ui_mode);
 
-            unlink::unlink(&mut base, from)?;
+            unlink::unlink(&mut base)?;
 
             Ok(0)
         }
@@ -2457,7 +2516,7 @@ mod test {
                     no_gitignore: false,
                     scope: None,
                     yes: false,
-                    target: LinkTarget::RemoteCache,
+                    target: None,
                 }),
                 ..Args::default()
             }
@@ -2472,7 +2531,7 @@ mod test {
                     no_gitignore: false,
                     scope: None,
                     yes: false,
-                    target: LinkTarget::RemoteCache,
+                    target: None,
                 }),
                 cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
@@ -2489,7 +2548,7 @@ mod test {
                     yes: true,
                     no_gitignore: false,
                     scope: None,
-                    target: LinkTarget::RemoteCache,
+                    target: None,
                 }),
                 cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
@@ -2506,7 +2565,7 @@ mod test {
                     yes: false,
                     no_gitignore: false,
                     scope: Some("foo".to_string()),
-                    target: LinkTarget::RemoteCache,
+                    target: None,
                 }),
                 cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
@@ -2523,7 +2582,24 @@ mod test {
                     yes: false,
                     no_gitignore: true,
                     scope: None,
-                    target: LinkTarget::RemoteCache,
+                    target: None,
+                }),
+                cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
+                ..Args::default()
+            },
+        }
+        .test();
+
+        CommandTestCase {
+            command: "link",
+            command_args: vec![vec!["--target", "spaces"]],
+            global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
+            expected_output: Args {
+                command: Some(Command::Link {
+                    yes: false,
+                    no_gitignore: false,
+                    scope: None,
+                    target: Some(LinkTarget::Spaces),
                 }),
                 cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
@@ -2539,7 +2615,8 @@ mod test {
             Args {
                 command: Some(Command::Login {
                     sso_team: None,
-                    force: false
+                    force: false,
+                    manual: false,
                 }),
                 ..Args::default()
             }
@@ -2553,6 +2630,7 @@ mod test {
                 command: Some(Command::Login {
                     sso_team: None,
                     force: false,
+                    manual: false,
                 }),
                 cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
@@ -2568,6 +2646,7 @@ mod test {
                 command: Some(Command::Login {
                     sso_team: Some("my-team".to_string()),
                     force: false,
+                    manual: false,
                 }),
                 cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
@@ -2604,9 +2683,7 @@ mod test {
         assert_eq!(
             Args::try_parse_from(["turbo", "unlink"]).unwrap(),
             Args {
-                command: Some(Command::Unlink {
-                    target: crate::cli::LinkTarget::RemoteCache
-                }),
+                command: Some(Command::Unlink { target: None }),
                 ..Args::default()
             }
         );
@@ -2616,8 +2693,20 @@ mod test {
             command_args: vec![],
             global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
             expected_output: Args {
+                command: Some(Command::Unlink { target: None }),
+                cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
+                ..Args::default()
+            },
+        }
+        .test();
+
+        CommandTestCase {
+            command: "unlink",
+            command_args: vec![vec!["--target", "remote-cache"]],
+            global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
+            expected_output: Args {
                 command: Some(Command::Unlink {
-                    target: crate::cli::LinkTarget::RemoteCache,
+                    target: Some(LinkTarget::RemoteCache),
                 }),
                 cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
                 ..Args::default()

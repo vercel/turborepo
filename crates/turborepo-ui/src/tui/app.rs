@@ -139,7 +139,7 @@ impl<W> App<W> {
     fn update_task_selection_pinned_state(&mut self) -> Result<(), Error> {
         // Preferences assume a pinned state when there is an active task.
         // This `None` creates "un-pinned-ness" on the next TUI startup.
-        self.preferences.set_active_task(None)?;
+        self.preferences.set_active_task(None);
         Ok(())
     }
 
@@ -166,7 +166,7 @@ impl<W> App<W> {
         self.preferences.set_active_task(
             self.is_task_selection_pinned
                 .then(|| active_task.to_owned()),
-        )?;
+        );
         Ok(())
     }
 
@@ -607,7 +607,7 @@ pub async fn run_app(
 ) -> Result<(), Error> {
     let mut terminal = startup(color_config)?;
     let size = terminal.size()?;
-    let preferences = PreferenceLoader::new(repo_root)?;
+    let preferences = PreferenceLoader::new(repo_root);
 
     let mut app: App<Box<dyn io::Write + Send>> =
         App::new(size.height, size.width, tasks, preferences);
@@ -933,7 +933,7 @@ mod test {
             100,
             100,
             vec!["foo".to_string(), "bar".to_string(), "baz".to_string()],
-            PreferenceLoader::new(&repo_root)?,
+            PreferenceLoader::new(&repo_root),
         );
         assert_eq!(
             app.task_list_scroll.selected(),
@@ -980,7 +980,7 @@ mod test {
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
-            PreferenceLoader::new(&repo_root)?,
+            PreferenceLoader::new(&repo_root),
         );
         app.next();
         assert_eq!(app.task_list_scroll.selected(), Some(1), "selected b");
@@ -1007,7 +1007,7 @@ mod test {
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
-            PreferenceLoader::new(&repo_root)?,
+            PreferenceLoader::new(&repo_root),
         );
         app.next();
         app.next();
@@ -1078,7 +1078,7 @@ mod test {
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
-            PreferenceLoader::new(&repo_root)?,
+            PreferenceLoader::new(&repo_root),
         );
         app.next();
         app.next();
@@ -1129,7 +1129,7 @@ mod test {
             100,
             100,
             vec!["a".to_string(), "b".to_string()],
-            PreferenceLoader::new(&repo_root)?,
+            PreferenceLoader::new(&repo_root),
         );
         app.next();
         assert_eq!(app.task_list_scroll.selected(), Some(1), "selected b");
@@ -1171,7 +1171,7 @@ mod test {
             100,
             100,
             vec!["a".to_string(), "b".to_string()],
-            PreferenceLoader::new(&repo_root)?,
+            PreferenceLoader::new(&repo_root),
         );
         assert!(!app.is_focusing_pane(), "app starts focused on table");
         app.insert_stdin("a", Some(Vec::new()))?;
@@ -1202,7 +1202,7 @@ mod test {
             100,
             100,
             vec!["a".to_string(), "b".to_string()],
-            PreferenceLoader::new(&repo_root)?,
+            PreferenceLoader::new(&repo_root),
         );
         app.next();
         assert_eq!(app.task_list_scroll.selected(), Some(1), "selected b");
@@ -1228,7 +1228,7 @@ mod test {
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
-            PreferenceLoader::new(&repo_root)?,
+            PreferenceLoader::new(&repo_root),
         );
         assert_eq!(app.task_list_scroll.selected(), Some(0), "selected a");
         assert_eq!(app.tasks_by_status.task_name(0)?, "a", "selected a");
@@ -1263,7 +1263,7 @@ mod test {
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
-            PreferenceLoader::new(&repo_root)?,
+            PreferenceLoader::new(&repo_root),
         );
         app.next();
         assert_eq!(app.task_list_scroll.selected(), Some(1), "selected b");
@@ -1299,7 +1299,7 @@ mod test {
             20,
             24,
             vec!["a".to_string(), "b".to_string()],
-            PreferenceLoader::new(&repo_root)?,
+            PreferenceLoader::new(&repo_root),
         );
         let pane_rows = app.size.pane_rows();
         let pane_cols = app.size.pane_cols();
@@ -1339,7 +1339,7 @@ mod test {
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
-            PreferenceLoader::new(&repo_root)?,
+            PreferenceLoader::new(&repo_root),
         );
         app.next();
         app.update_tasks(Vec::new())?;
@@ -1358,7 +1358,7 @@ mod test {
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
-            PreferenceLoader::new(&repo_root)?,
+            PreferenceLoader::new(&repo_root),
         );
         app.next();
         app.restart_tasks(vec!["d".to_string()])?;
@@ -1379,7 +1379,7 @@ mod test {
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
-            PreferenceLoader::new(&repo_root)?,
+            PreferenceLoader::new(&repo_root),
         );
         app.enter_search()?;
         assert!(matches!(app.section_focus, LayoutSections::Search { .. }));
@@ -1405,7 +1405,7 @@ mod test {
             100,
             100,
             vec!["a".to_string(), "ab".to_string(), "abc".to_string()],
-            PreferenceLoader::new(&repo_root)?,
+            PreferenceLoader::new(&repo_root),
         );
         app.enter_search()?;
         app.search_enter_char('a')?;
@@ -1433,7 +1433,7 @@ mod test {
             100,
             100,
             vec!["a".to_string(), "ab".to_string(), "abc".to_string()],
-            PreferenceLoader::new(&repo_root)?,
+            PreferenceLoader::new(&repo_root),
         );
         app.enter_search()?;
         app.search_enter_char('b')?;
@@ -1465,7 +1465,7 @@ mod test {
             100,
             100,
             vec!["a".to_string(), "abc".to_string(), "b".to_string()],
-            PreferenceLoader::new(&repo_root)?,
+            PreferenceLoader::new(&repo_root),
         );
         app.next();
         assert_eq!(app.active_task()?, "abc");
@@ -1489,7 +1489,7 @@ mod test {
             100,
             100,
             vec!["a".to_string(), "abc".to_string(), "b".to_string()],
-            PreferenceLoader::new(&repo_root)?,
+            PreferenceLoader::new(&repo_root),
         );
         app.next();
         assert_eq!(app.active_task()?, "abc");
@@ -1513,7 +1513,7 @@ mod test {
             100,
             100,
             vec!["a".to_string(), "ab".to_string(), "abc".to_string()],
-            PreferenceLoader::new(&repo_root)?,
+            PreferenceLoader::new(&repo_root),
         );
         app.enter_search()?;
         app.search_enter_char('b')?;
@@ -1534,7 +1534,7 @@ mod test {
             100,
             100,
             vec!["a".to_string(), "ab".to_string(), "abc".to_string()],
-            PreferenceLoader::new(&repo_root)?,
+            PreferenceLoader::new(&repo_root),
         );
         app.enter_search()?;
         app.search_enter_char('b')?;

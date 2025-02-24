@@ -316,7 +316,6 @@ impl<'a> Visitor<'a> {
                     };
 
                     let tracker = self.run_tracker.track_task(info.clone().into_owned());
-                    let spaces_client = self.run_tracker.spaces_task_client();
                     let parent_span = Span::current();
                     let execution_telemetry = package_task_event.child();
 
@@ -327,7 +326,6 @@ impl<'a> Visitor<'a> {
                                 tracker,
                                 output_client,
                                 callback,
-                                spaces_client,
                                 &execution_telemetry,
                             )
                             .await
@@ -456,9 +454,6 @@ impl<'a> Visitor<'a> {
         vendor_behavior: Option<&VendorBehavior>,
     ) -> OutputClient<impl std::io::Write> {
         let behavior = match self.run_opts.log_order {
-            crate::opts::ResolvedLogOrder::Stream if self.run_tracker.spaces_enabled() => {
-                turborepo_ui::OutputClientBehavior::InMemoryBuffer
-            }
             crate::opts::ResolvedLogOrder::Stream => {
                 turborepo_ui::OutputClientBehavior::Passthrough
             }
