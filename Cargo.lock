@@ -3730,7 +3730,8 @@ dependencies = [
 [[package]]
 name = "oxc_resolver"
 version = "4.2.0"
-source = "git+https://github.com/nicholaslyang/oxc-resolver?branch=symlink-hotfix-again#a9e3fa452ec43352dc7bc0ddc2ef19342dbd0574"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b1c4d9cffbd24c3a874bd44cce4384cb73bf732c4fe4aa99c4406b2e0c4027bb"
 dependencies = [
  "cfg-if",
  "indexmap 2.2.6",
@@ -3738,6 +3739,7 @@ dependencies = [
  "once_cell",
  "papaya",
  "rustc-hash 2.0.0",
+ "seize",
  "serde",
  "serde_json",
  "simdutf8",
