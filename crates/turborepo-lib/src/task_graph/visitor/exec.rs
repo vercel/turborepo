@@ -454,7 +454,7 @@ impl ExecContext {
             // Something else killed the child
             ChildExit::KilledExternal => Err(InternalError::ExternalKill),
             // The child was killed by turbo indicating a shutdown
-            ChildExit::Killed => Ok(ExecOutcome::Shutdown),
+            ChildExit::Killed | ChildExit::Interrupted => Ok(ExecOutcome::Shutdown),
         }
     }
 }
