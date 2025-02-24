@@ -49,7 +49,7 @@ else
 fi
 
 rsync -avq \
-  --exclude='node_modules' \
+  --exclude='**/node_modules' \
   --exclude="dist" \
   --exclude=".turbo" \
   --exclude=".expo" \
