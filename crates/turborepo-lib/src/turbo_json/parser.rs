@@ -11,6 +11,7 @@ use convert_case::{Case, Casing};
 use miette::Diagnostic;
 use struct_iterable::Iterable;
 use thiserror::Error;
+use tracing::log::warn;
 use turborepo_errors::{ParseDiagnostic, WithMetadata};
 use turborepo_unescape::UnescapedString;
 
@@ -301,6 +302,7 @@ impl RawTurboJson {
                 backtrace: backtrace::Backtrace::capture(),
             });
         }
+
         // It's highly unlikely that biome would fail to produce a deserialized value
         // *and* not return any errors, but it's still possible. In that case, we
         // just print that there is an error and return.
@@ -308,6 +310,10 @@ impl RawTurboJson {
             diagnostics: vec![],
             backtrace: backtrace::Backtrace::capture(),
         })?;
+
+        if turbo_json.experimental_spaces.is_some() {
+            warn!("`experimentalSpaces` key in turbo.json is deprecated and does not do anything")
+        }
 
         turbo_json.add_text(Arc::from(text));
         turbo_json.add_path(Arc::from(file_path));

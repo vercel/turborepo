@@ -242,7 +242,6 @@ pub struct ConfigurationOptions {
     pub(crate) timeout: Option<u64>,
     pub(crate) upload_timeout: Option<u64>,
     pub(crate) enabled: Option<bool>,
-    pub(crate) spaces_id: Option<String>,
     #[serde(rename = "ui")]
     pub(crate) ui: Option<UIMode>,
     #[serde(rename = "dangerouslyDisablePackageManagerCheck")]
@@ -319,10 +318,6 @@ impl ConfigurationOptions {
     /// Note: 0 implies no timeout
     pub fn upload_timeout(&self) -> u64 {
         self.upload_timeout.unwrap_or(DEFAULT_UPLOAD_TIMEOUT)
-    }
-
-    pub fn spaces_id(&self) -> Option<&str> {
-        self.spaces_id.as_deref()
     }
 
     pub fn ui(&self) -> UIMode {
@@ -539,7 +534,6 @@ mod test {
         assert!(defaults.enabled());
         assert!(!defaults.preflight());
         assert_eq!(defaults.timeout(), DEFAULT_TIMEOUT);
-        assert_eq!(defaults.spaces_id(), None);
         assert!(!defaults.allow_no_package_manager());
         let repo_root = AbsoluteSystemPath::new(if cfg!(windows) {
             "C:\\fake\\repo"
@@ -594,7 +588,6 @@ mod test {
         let config = builder.build().unwrap();
         assert_eq!(config.team_id().unwrap(), turbo_teamid);
         assert_eq!(config.token().unwrap(), turbo_token);
-        assert_eq!(config.spaces_id().unwrap(), "my-spaces-id");
     }
 
     #[test]
