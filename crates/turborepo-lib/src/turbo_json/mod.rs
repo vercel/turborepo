@@ -113,8 +113,9 @@ pub struct RawTurboJson {
     #[serde(rename = "$schema", skip_serializing_if = "Option::is_none")]
     schema: Option<UnescapedString>,
 
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing)]
     pub experimental_spaces: Option<SpacesJson>,
+
     #[serde(skip_serializing_if = "Option::is_none")]
     extends: Option<Spanned<Vec<UnescapedString>>>,
     // Global root filesystem dependencies
@@ -603,7 +604,7 @@ impl TryFrom<RawTurboJson> for TurboJson {
                 .unwrap_or_default()
                 .map(|s| s.into_iter().map(|s| s.into()).collect()),
             boundaries: raw_turbo.boundaries,
-            // Spaces and Remote Cache config is handled through layered config
+            // Remote Cache config is handled through layered config
         })
     }
 }
@@ -772,7 +773,7 @@ mod tests {
     use test_case::test_case;
     use turborepo_unescape::UnescapedString;
 
-    use super::{RawTurboJson, Spanned, TurboJson, UIMode};
+    use super::{RawTurboJson, SpacesJson, Spanned, TurboJson, UIMode};
     use crate::{
         boundaries::RootBoundariesConfig,
         cli::OutputLogsMode,
@@ -1059,6 +1060,14 @@ mod tests {
     fn test_ui(json: &str, expected: Option<UIMode>) {
         let json = RawTurboJson::parse(json, "").unwrap();
         assert_eq!(json.ui, expected);
+    }
+
+    #[test_case(r#"{ "experimentalSpaces": { "id": "hello-world" } }"#, Some(SpacesJson { id: Some("hello-world".to_string().into()) }))]
+    #[test_case(r#"{ "experimentalSpaces": {} }"#, Some(SpacesJson { id: None }))]
+    #[test_case(r#"{}"#, None)]
+    fn test_spaces(json: &str, expected: Option<SpacesJson>) {
+        let json = RawTurboJson::parse(json, "").unwrap();
+        assert_eq!(json.experimental_spaces, expected);
     }
 
     #[test_case(r#"{ "daemon": true }"#, r#"{"daemon":true}"# ; "daemon_on")]

@@ -426,14 +426,7 @@ impl Diagnostic for RemoteCacheDiagnostic {
                     return;
                 };
                 stopped.await.unwrap();
-                let link_res = link(
-                    &mut base,
-                    None,
-                    false,
-                    false,
-                    crate::cli::LinkTarget::RemoteCache,
-                )
-                .await;
+                let link_res = link(&mut base, None, false, false).await;
                 resume.send(()).unwrap();
                 link_res
             };

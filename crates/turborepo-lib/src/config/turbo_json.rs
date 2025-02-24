@@ -38,10 +38,6 @@ impl<'a> TurboJsonReader<'a> {
 
         // Don't allow token to be set for shared config.
         opts.token = None;
-        opts.spaces_id = turbo_json
-            .experimental_spaces
-            .and_then(|spaces| spaces.id)
-            .map(|spaces_id| spaces_id.into());
         opts.ui = turbo_json.ui;
         opts.allow_no_package_manager = turbo_json.allow_no_package_manager;
         opts.daemon = turbo_json.daemon.map(|daemon| *daemon.as_inner());
