@@ -666,6 +666,7 @@ impl TurboJson {
                         "{mfe_package_name}#build"
                     )))])
                 }),
+                persistent: Some(Spanned::new(true)),
                 ..Default::default()
             }),
         );
