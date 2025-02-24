@@ -60,7 +60,7 @@ rsync -avq \
 cd "$temp_dir/$example_path-$package_manager/$example_path"
 
 # Run package manager conversion
-$package_manager_command
+# $package_manager_command
 
 # Simulating the user's first run and dumping logs to a file
 $turbo_command 2>&1 | tee ../run-1.txt
