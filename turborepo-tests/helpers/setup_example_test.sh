@@ -65,6 +65,8 @@ git config --global user.name "Your Name"
 git add .
 git commit -m "init"
 
+corepack enable
+
 # Run package manager conversion
 $package_manager_command
 
