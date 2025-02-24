@@ -843,7 +843,7 @@ pub struct ExecutionArgs {
     /// one-at-a-time) execution.
     #[clap(long)]
     pub concurrency: Option<String>,
-    /// Specify which tasks should continue running when an error occurs.
+    /// Specify how task execution should proceed when an error occurs.
     /// Use "never" to cancel all tasks. Use "dependencies-successful" to
     /// continue running tasks whose dependencies have succeeded. Use "always"
     /// to continue running all tasks, even those whose dependencies have
