@@ -53,6 +53,10 @@ impl ChildState {
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum ChildExit {
     Finished(Option<i32>),
+    /// The child process was sent an interrupt and shut down on it's own
+    Interrupted,
+    /// The child process was killed, it could either be explicitly killed or it
+    /// did not respond to an interrupt and was killed as a result
     Killed,
     /// The child process was killed by someone else. Note that on
     /// windows, it is not possible to distinguish between whether
@@ -342,7 +346,7 @@ impl ShutdownStyle {
                         // We ignore the exit code and mark it as killed since we sent a SIGINT
                         // This avoids reliance on an underlying process exiting with
                         // no exit code or a non-zero in order for turbo to operate correctly.
-                        Ok(Ok(_exit_code)) => ChildState::Exited(ChildExit::Killed),
+                        Ok(Ok(_exit_code)) => ChildState::Exited(ChildExit::Interrupted),
                         Ok(Err(_)) => ChildState::Exited(ChildExit::Failed),
                         Err(_) => {
                             debug!("graceful shutdown timed out, killing child");
