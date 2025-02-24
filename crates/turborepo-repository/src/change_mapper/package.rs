@@ -24,6 +24,19 @@ pub trait PackageChangeMapper {
     fn detect_package(&self, file: &AnchoredSystemPath) -> PackageMapping;
 }
 
+impl<L, R> PackageChangeMapper for either::Either<L, R>
+where
+    L: PackageChangeMapper,
+    R: PackageChangeMapper,
+{
+    fn detect_package(&self, file: &AnchoredSystemPath) -> PackageMapping {
+        match self {
+            either::Either::Left(l) => l.detect_package(file),
+            either::Either::Right(r) => r.detect_package(file),
+        }
+    }
+}
+
 /// Detects package by checking if the file is inside the package.
 ///
 /// Does *not* use the `globalDependencies` in turbo.json.
