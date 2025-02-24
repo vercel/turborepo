@@ -1189,6 +1189,53 @@ fn should_print_version() -> bool {
     print_version_state == PrintVersionState::Enabled && ci_state == CIState::Outside
 }
 
+fn set_run_flags<'a>(
+    command: &'a mut Command,
+    repo_state: &'a Option<RepoState>,
+    cli_args: &'a Args,
+) -> Result<&'a mut Command, Error> {
+    match command {
+        Command::Run {
+            run_args: _,
+            execution_args,
+        }
+        | Command::Watch { execution_args, .. } => {
+            // Don't overwrite the flag if it's already been set for whatever reason
+            execution_args.single_package = execution_args.single_package
+                || repo_state
+                    .as_ref()
+                    .map(|repo_state| matches!(repo_state.mode, RepoMode::SinglePackage))
+                    .unwrap_or(false);
+            // If this is a run command, and we know the actual invocation path, set the
+            // inference root, as long as the user hasn't overridden the cwd
+            if cli_args.cwd.is_none() {
+                if let Ok(invocation_dir) = env::var(INVOCATION_DIR_ENV_VAR) {
+                    // TODO: this calculation can probably be wrapped into the path library
+                    // and made a little more robust or clear
+                    let invocation_path = Utf8Path::new(&invocation_dir);
+
+                    // If repo state doesn't exist, we're either local turbo running at the root
+                    // (cwd), or inference failed.
+                    // If repo state does exist, we're global turbo, and want to calculate
+                    // package inference based on the repo root
+                    let this_dir = AbsoluteSystemPathBuf::cwd()?;
+                    let repo_root = repo_state.as_ref().map_or(&this_dir, |r| &r.root);
+                    if let Ok(relative_path) = invocation_path.strip_prefix(repo_root) {
+                        if !relative_path.as_str().is_empty() {
+                            debug!("pkg_inference_root set to \"{}\"", relative_path);
+                            execution_args.pkg_inference_root = Some(relative_path.to_string());
+                        }
+                    }
+                } else {
+                    debug!("{} not set", INVOCATION_DIR_ENV_VAR);
+                }
+            }
+        }
+        _ => {}
+    }
+    Ok(command)
+}
+
 fn default_to_run_command(cli_args: &Args) -> Result<Command, Error> {
     let run_args = cli_args.run_args.clone().unwrap_or_default();
     let execution_args = cli_args
@@ -1259,45 +1306,7 @@ pub async fn run(
     let mut command = get_command(&mut cli_args)?;
 
     // Set some run flags if we have the data and are executing a Run
-    match &mut command {
-        Command::Run {
-            run_args: _,
-            execution_args,
-        }
-        | Command::Watch { execution_args, .. } => {
-            // Don't overwrite the flag if it's already been set for whatever reason
-            execution_args.single_package = execution_args.single_package
-                || repo_state
-                    .as_ref()
-                    .map(|repo_state| matches!(repo_state.mode, RepoMode::SinglePackage))
-                    .unwrap_or(false);
-            // If this is a run command, and we know the actual invocation path, set the
-            // inference root, as long as the user hasn't overridden the cwd
-            if cli_args.cwd.is_none() {
-                if let Ok(invocation_dir) = env::var(INVOCATION_DIR_ENV_VAR) {
-                    // TODO: this calculation can probably be wrapped into the path library
-                    // and made a little more robust or clear
-                    let invocation_path = Utf8Path::new(&invocation_dir);
-
-                    // If repo state doesn't exist, we're either local turbo running at the root
-                    // (cwd), or inference failed.
-                    // If repo state does exist, we're global turbo, and want to calculate
-                    // package inference based on the repo root
-                    let this_dir = AbsoluteSystemPathBuf::cwd()?;
-                    let repo_root = repo_state.as_ref().map_or(&this_dir, |r| &r.root);
-                    if let Ok(relative_path) = invocation_path.strip_prefix(repo_root) {
-                        if !relative_path.as_str().is_empty() {
-                            debug!("pkg_inference_root set to \"{}\"", relative_path);
-                            execution_args.pkg_inference_root = Some(relative_path.to_string());
-                        }
-                    }
-                } else {
-                    debug!("{} not set", INVOCATION_DIR_ENV_VAR);
-                }
-            }
-        }
-        _ => {}
-    }
+    set_run_flags(&mut command, &repo_state, &cli_args)?;
 
     // TODO: make better use of RepoState, here and below. We've already inferred
     // the repo root, we don't need to calculate it again, along with package
