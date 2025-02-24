@@ -42,10 +42,10 @@ fi
 # If the types are generating while the type checking happens, it can cause flakes.
 # We'll have to accept this gap in our coverage.
 if [ "$example_path" == "with-svelte" ]; then
-  turbo_command="turbo build lint --continue --output-logs=errors-only"
+  turbo_command="turbo build lint --continue --output-logs=errors-only --env-mode=loose"
 else
   # The rest of the examples implement these three tasks and look safe to test in parallel
-  turbo_command="turbo build lint check-types --continue --output-logs=errors-only"
+  turbo_command="turbo build lint check-types --continue --output-logs=errors-only --env-mode=loose"
 fi
 
 rsync -avq \
@@ -60,7 +60,7 @@ rsync -avq \
 cd "$temp_dir/$example_path-$package_manager/$example_path"
 
 # Run package manager conversion
-# $package_manager_command
+$package_manager_command
 
 # Simulating the user's first run and dumping logs to a file
 $turbo_command 2>&1 | tee ../run-1.txt

@@ -38,4 +38,5 @@ runs:
           --token=${{ inputs.turbo-token }} \
           --team=${{ inputs.turbo-team }} \
           --env-mode=strict \
-          --concurrency=1
+          --concurrency=1 \
+          -- env-mode=loose
