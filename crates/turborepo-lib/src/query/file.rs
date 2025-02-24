@@ -81,7 +81,7 @@ impl From<turbo_trace::TraceError> for Diagnostic {
                 path: Some(file.to_string()),
                 ..Default::default()
             },
-            turbo_trace::TraceError::PathEncoding(_) => Diagnostic {
+            turbo_trace::TraceError::PathError(_) => Diagnostic {
                 message,
                 ..Default::default()
             },
