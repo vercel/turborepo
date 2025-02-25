@@ -19,6 +19,7 @@ use super::{
     TaskOutput, Visitor,
 };
 use crate::{
+    cli::ContinueMode,
     config::UIMode,
     engine::{Engine, StopExecution},
     process::{ChildExit, Command, ProcessManager},
@@ -164,7 +165,7 @@ pub struct ExecContext {
     manager: ProcessManager,
     task_hash: String,
     execution_env: EnvironmentVariableMap,
-    continue_on_error: bool,
+    continue_on_error: ContinueMode,
     errors: Arc<Mutex<Vec<TaskError>>>,
     warnings: Arc<Mutex<Vec<TaskWarning>>>,
     takes_input: bool,
@@ -237,25 +238,29 @@ impl ExecContext {
                 tracker.build_failed(exit_code, message).await;
                 callback
                     .send(match self.continue_on_error {
-                        true => Ok(()),
-                        false => Err(StopExecution),
+                        ContinueMode::Always => Ok(()),
+                        ContinueMode::DependenciesSuccessful => Err(StopExecution::DependentTasks),
+                        ContinueMode::Never => Err(StopExecution::AllTasks),
                     })
                     .ok();
 
-                if !self.continue_on_error {
-                    self.manager.stop().await
+                match self.continue_on_error {
+                    // Nothing to do
+                    ContinueMode::Always | ContinueMode::DependenciesSuccessful => (),
+                    // Shut down manager
+                    ContinueMode::Never => self.manager.stop().await,
                 }
             }
             Ok(ExecOutcome::Shutdown) => {
                 tracker.cancel();
-                callback.send(Err(StopExecution)).ok();
+                callback.send(Err(StopExecution::AllTasks)).ok();
                 // Probably overkill here, but we should make sure the process manager is
                 // stopped if we think we're shutting down.
                 self.manager.stop().await;
             }
             Err(e) => {
                 tracker.cancel();
-                callback.send(Err(StopExecution)).ok();
+                callback.send(Err(StopExecution::AllTasks)).ok();
                 self.manager.stop().await;
                 return Err(e);
             }
@@ -426,10 +431,13 @@ impl ExecContext {
                 }
                 let error = TaskErrorCause::from_execution(process.label().to_string(), code);
                 let message = error.to_string();
-                if self.continue_on_error {
-                    prefixed_ui.warn("command finished with error, but continuing...");
-                } else {
-                    prefixed_ui.error(&format!("command finished with error: {error}"));
+                match self.continue_on_error {
+                    ContinueMode::Never => {
+                        prefixed_ui.error(&format!("command finished with error: {error}"))
+                    }
+                    ContinueMode::Always | ContinueMode::DependenciesSuccessful => {
+                        prefixed_ui.warn("command finished with error, but continuing...")
+                    }
                 }
                 self.errors
                     .lock()
