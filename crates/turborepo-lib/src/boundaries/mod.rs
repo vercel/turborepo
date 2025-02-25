@@ -179,15 +179,15 @@ impl BoundariesResult {
                 }
             }
         }
-        let result_message = if self.diagnostics.is_empty() {
-            color!(color_config, BOLD_GREEN, "no issues found")
-        } else {
-            color!(
+        let result_message = match self.diagnostics.len() {
+            0 => color!(color_config, BOLD_GREEN, "no issues found"),
+            1 => color!(color_config, BOLD_RED, "1 issue found"),
+            _ => color!(
                 color_config,
                 BOLD_RED,
                 "{} issues found",
                 self.diagnostics.len()
-            )
+            ),
         };
 
         for warning in self.warnings.iter().take(MAX_WARNINGS) {
