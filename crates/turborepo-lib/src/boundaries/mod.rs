@@ -1,6 +1,7 @@
 mod config;
 mod imports;
 mod tags;
+mod tsconfig;
 
 use std::{
     collections::{HashMap, HashSet},
