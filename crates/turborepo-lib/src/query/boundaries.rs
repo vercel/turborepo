@@ -21,7 +21,9 @@ impl From<BoundariesDiagnostic> for Diagnostic {
                 import: Some(name.to_string()),
                 reason: None,
             },
-            BoundariesDiagnostic::ImportLeavesPackage { import, span, text } => Diagnostic {
+            BoundariesDiagnostic::ImportLeavesPackage {
+                import, span, text, ..
+            } => Diagnostic {
                 message,
                 path: Some(text.name().to_string()),
                 start: Some(span.offset()),

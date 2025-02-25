@@ -110,9 +110,14 @@ pub enum BoundariesDiagnostic {
         #[source_code]
         text: NamedSource<String>,
     },
-    #[error("cannot import file `{import}` because it leaves the package")]
+    #[error("import `{import}` leaves the package")]
+    #[diagnostic(help(
+        "`{import}` resolves to path `{resolved_import_path}` which is outside of `{package_name}`"
+    ))]
     ImportLeavesPackage {
         import: String,
+        resolved_import_path: String,
+        package_name: PackageName,
         #[label("file imported here")]
         span: SourceSpan,
         #[source_code]
@@ -394,6 +399,7 @@ impl Run {
                     &mut tsconfig_loader,
                     result,
                     &source_file,
+                    package_name,
                     &package_root,
                     import,
                     import_type,

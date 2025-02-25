@@ -9,7 +9,7 @@ use miette::{NamedSource, SourceSpan};
 use oxc_resolver::{ResolveError, Resolver, TsConfig};
 use swc_common::{comments::SingleThreadedComments, SourceFile, Span};
 use turbo_trace::ImportType;
-use turbopath::{AbsoluteSystemPath, PathRelation, RelativeUnixPath};
+use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf, PathRelation, RelativeUnixPath};
 use turborepo_repository::{
     package_graph::{PackageInfo, PackageKey, PackageName, PackageNode, PackageVersion},
     package_json::PackageJson,
@@ -28,6 +28,7 @@ impl Run {
     fn check_import_as_tsconfig_path_alias(
         &self,
         tsconfig_loader: &mut TsConfigLoader,
+        package_name: &PackageName,
         package_root: &AbsoluteSystemPath,
         span: SourceSpan,
         file_path: &AbsoluteSystemPath,
@@ -52,6 +53,7 @@ impl Run {
             result.diagnostics.extend(self.check_file_import(
                 file_path,
                 package_root,
+                package_name,
                 import,
                 resolved_import_path,
                 span,
@@ -69,6 +71,7 @@ impl Run {
         tsconfig_loader: &mut TsConfigLoader,
         result: &mut BoundariesResult,
         source_file: &Arc<SourceFile>,
+        package_name: &PackageName,
         package_root: &AbsoluteSystemPath,
         import: &str,
         import_type: &ImportType,
@@ -116,6 +119,7 @@ impl Run {
 
         if self.check_import_as_tsconfig_path_alias(
             tsconfig_loader,
+            package_name,
             package_root,
             span,
             file_path,
@@ -136,6 +140,7 @@ impl Run {
             self.check_file_import(
                 file_path,
                 &package_root,
+                package_name,
                 import,
                 &resolved_import_path,
                 span,
@@ -166,6 +171,7 @@ impl Run {
         &self,
         file_path: &AbsoluteSystemPath,
         package_path: &AbsoluteSystemPath,
+        package_name: &PackageName,
         import: &str,
         resolved_import_path: &AbsoluteSystemPath,
         source_span: SourceSpan,
@@ -183,10 +189,14 @@ impl Run {
             package_path.relation_to_path(&resolved_import_path),
             PathRelation::Parent
         ) {
+            let resolved_import_path =
+                AnchoredSystemPathBuf::relative_path_between(&package_path, &resolved_import_path)
+                    .to_string();
+
             Ok(Some(BoundariesDiagnostic::ImportLeavesPackage {
                 import: import.to_string(),
-                resolved_import_path: resolved_import_path.to_owned(),
-                package_root: package_path.to_owned(),
+                resolved_import_path,
+                package_name: package_name.to_owned(),
                 span: source_span,
                 text: NamedSource::new(file_path.as_str(), file_content.to_string()),
             }))
