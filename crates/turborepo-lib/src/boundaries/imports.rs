@@ -25,6 +25,7 @@ impl Run {
     /// e.g. `@/types/foo` -> `./src/foo`, and if so, checks the resolved paths.
     ///
     /// Returns true if the import was resolved as a tsconfig path alias.
+    #[allow(clippy::too_many_arguments)]
     fn check_import_as_tsconfig_path_alias(
         &self,
         tsconfig_loader: &mut TsConfigLoader,
@@ -57,7 +58,7 @@ impl Run {
                 import,
                 resolved_import_path,
                 span,
-                &file_content,
+                file_content,
             )?);
         }
 
@@ -85,7 +86,7 @@ impl Run {
     ) -> Result<(), Error> {
         // If the import is prefixed with `@boundaries-ignore`, we ignore it, but print
         // a warning
-        match Self::get_ignored_comment(&comments, *span) {
+        match Self::get_ignored_comment(comments, *span) {
             Some(reason) if reason.is_empty() => {
                 result.warnings.push(
                     "@boundaries-ignore requires a reason, e.g. `// @boundaries-ignore implicit \
@@ -111,7 +112,7 @@ impl Run {
             None => {}
         }
 
-        let (start, end) = result.source_map.span_to_char_offset(&source_file, *span);
+        let (start, end) = result.source_map.span_to_char_offset(source_file, *span);
         let start = start as usize;
         let end = end as usize;
 
@@ -139,12 +140,12 @@ impl Run {
             let resolved_import_path = dir_path.join_unix_path(import_path).clean()?;
             self.check_file_import(
                 file_path,
-                &package_root,
+                package_root,
                 package_name,
                 import,
                 &resolved_import_path,
                 span,
-                &file_content,
+                file_content,
             )?
         } else if Self::is_potential_package_name(import) {
             self.check_package_import(
@@ -154,9 +155,9 @@ impl Run {
                 file_path,
                 file_content,
                 &package_info.package_json,
-                &internal_dependencies,
+                internal_dependencies,
                 unresolved_external_dependencies,
-                &resolver,
+                resolver,
             )
         } else {
             None
@@ -167,6 +168,7 @@ impl Run {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn check_file_import(
         &self,
         file_path: &AbsoluteSystemPath,
@@ -186,11 +188,11 @@ impl Run {
         // We use `relation_to_path` and not `contains` because `contains`
         // panics on invalid paths with too many `..` components
         if !matches!(
-            package_path.relation_to_path(&resolved_import_path),
+            package_path.relation_to_path(resolved_import_path),
             PathRelation::Parent
         ) {
             let resolved_import_path =
-                AnchoredSystemPathBuf::relative_path_between(&package_path, &resolved_import_path)
+                AnchoredSystemPathBuf::relative_path_between(package_path, resolved_import_path)
                     .to_string();
 
             Ok(Some(BoundariesDiagnostic::ImportLeavesPackage {

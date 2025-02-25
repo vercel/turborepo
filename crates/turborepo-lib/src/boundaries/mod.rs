@@ -406,7 +406,7 @@ impl Run {
                     span,
                     file_path,
                     &file_content,
-                    &package_info,
+                    package_info,
                     &internal_dependencies,
                     unresolved_external_dependencies,
                     &resolver,

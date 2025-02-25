@@ -21,7 +21,7 @@ impl<'a> TsConfigLoader<'a> {
             if let Some(config) = self.configs.get(dir) {
                 return Some(config.clone());
             }
-            if let Some(config) = self.resolver.resolve_tsconfig(&dir).ok() {
+            if let Ok(config) = self.resolver.resolve_tsconfig(dir) {
                 self.configs.insert(dir.to_owned(), config.clone());
                 return Some(config);
             }
