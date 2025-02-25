@@ -3729,21 +3729,32 @@ dependencies = [
 
 [[package]]
 name = "oxc_resolver"
-version = "2.1.1"
+version = "4.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "da33ec82d0f4770f4b5c120d6a1d8e45de2d99ae2672a7ee6bd29092ada945f2"
+checksum = "b1c4d9cffbd24c3a874bd44cce4384cb73bf732c4fe4aa99c4406b2e0c4027bb"
 dependencies = [
  "cfg-if",
- "dashmap 6.1.0",
  "indexmap 2.2.6",
  "json-strip-comments",
  "once_cell",
+ "papaya",
  "rustc-hash 2.0.0",
+ "seize",
  "serde",
  "serde_json",
  "simdutf8",
  "thiserror",
  "tracing",
+]
+
+[[package]]
+name = "papaya"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aab21828b6b5952fdadd6c377728ffae53ec3a21b2febc47319ab65741f7e2fd"
+dependencies = [
+ "equivalent",
+ "seize",
 ]
 
 [[package]]
@@ -4762,6 +4773,16 @@ checksum = "31c9bb296072e961fcbd8853511dd39c2d8be2deb1e17c6860b1d30732b323b4"
 dependencies = [
  "core-foundation-sys",
  "libc",
+]
+
+[[package]]
+name = "seize"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e4b8d813387d566f627f3ea1b914c068aac94c40ae27ec43f5f33bde65abefe7"
+dependencies = [
+ "libc",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -6213,7 +6234,7 @@ dependencies = [
  "futures",
  "globwalk",
  "miette",
- "oxc_resolver 2.1.1",
+ "oxc_resolver 4.2.0",
  "swc_common",
  "swc_ecma_ast",
  "swc_ecma_parser",
@@ -6529,7 +6550,7 @@ dependencies = [
  "notify",
  "num_cpus",
  "owo-colors 3.5.0",
- "oxc_resolver 2.1.1",
+ "oxc_resolver 4.2.0",
  "path-clean",
  "petgraph",
  "pidlock",

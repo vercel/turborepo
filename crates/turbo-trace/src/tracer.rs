@@ -48,7 +48,7 @@ pub enum TraceError {
     #[error("failed to read file: {0}")]
     FileNotFound(AbsoluteSystemPathBuf),
     #[error(transparent)]
-    PathEncoding(Arc<PathError>),
+    PathError(Arc<PathError>),
     #[error("tracing a root file `{0}`, no parent found")]
     RootFile(AbsoluteSystemPathBuf),
     #[error("failed to resolve import to `{import}` in `{file_path}`")]
@@ -212,7 +212,7 @@ impl Tracer {
                     match resolved.into_path_buf().try_into().map_err(Arc::new) {
                         Ok(path) => files.push(path),
                         Err(err) => {
-                            errors.push(TraceError::PathEncoding(err));
+                            errors.push(TraceError::PathError(err));
                             continue;
                         }
                     }
@@ -453,7 +453,19 @@ impl Tracer {
                     return (errors, None);
                 };
 
-                for import in imported_files {
+                for mut import in imported_files {
+                    if cfg!(windows) {
+                        match import.to_realpath() {
+                            Ok(path) => {
+                                import = path;
+                            }
+                            Err(err) => {
+                                errors.push(TraceError::PathError(Arc::new(err)));
+                                return (errors, None);
+                            }
+                        }
+                    }
+
                     if shared_self
                         .files
                         .iter()
