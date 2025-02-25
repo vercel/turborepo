@@ -223,7 +223,11 @@ mod test {
         cmd
     }
 
-    const STOPPED_EXIT: Option<ChildExit> = Some(ChildExit::Killed);
+    const STOPPED_EXIT: Option<ChildExit> = Some(if cfg!(windows) {
+        ChildExit::Killed
+    } else {
+        ChildExit::Interrupted
+    });
 
     #[tokio::test]
     async fn test_basic() {
