@@ -30,7 +30,10 @@ use turborepo_errors::Spanned;
 use turborepo_repository::package_graph::{PackageInfo, PackageName, PackageNode};
 use turborepo_ui::{color, ColorConfig, BOLD_GREEN, BOLD_RED};
 
-use crate::{boundaries::tags::ProcessedRulesMap, run::Run};
+use crate::{
+    boundaries::{tags::ProcessedRulesMap, tsconfig::TsConfigLoader},
+    run::Run,
+};
 
 #[derive(Clone, Debug, Error, Diagnostic)]
 pub enum SecondaryDiagnostic {
@@ -52,6 +55,8 @@ pub enum SecondaryDiagnostic {
 
 #[derive(Clone, Debug, Error, Diagnostic)]
 pub enum BoundariesDiagnostic {
+    #[error("Path `{path}` is not valid UTF-8. Turborepo only supports UTF-8 paths.")]
+    InvalidPath { path: String },
     #[error(
         "Package `{package_name}` found without any tag listed in allowlist for \
          `{source_package_name}`"
@@ -321,6 +326,7 @@ impl Run {
             Tracer::create_resolver(tsconfig_path.exists().then(|| tsconfig_path.as_ref()));
 
         let mut not_supported_extensions = HashSet::new();
+        let mut tsconfig_loader = TsConfigLoader::new(&resolver);
 
         for file_path in &files {
             if let Some(ext @ ("svelte" | "vue")) = file_path.extension() {
@@ -383,61 +389,22 @@ impl Run {
             let mut finder = ImportFinder::default();
             module.visit_with(&mut finder);
             for (import, span, import_type) in finder.imports() {
-                // If the import is prefixed with `@boundaries-ignore`, we ignore it, but print
-                // a warning
-                match Self::get_ignored_comment(&comments, *span) {
-                    Some(reason) if reason.is_empty() => {
-                        result.warnings.push(
-                            "@boundaries-ignore requires a reason, e.g. `// @boundaries-ignore \
-                             implicit dependency`"
-                                .to_string(),
-                        );
-                    }
-                    Some(_) => {
-                        // Try to get the line number for warning
-                        let line = result.source_map.lookup_line(span.lo()).map(|l| l.line);
-                        if let Ok(line) = line {
-                            result
-                                .warnings
-                                .push(format!("ignoring import on line {} in {}", line, file_path));
-                        } else {
-                            result
-                                .warnings
-                                .push(format!("ignoring import in {}", file_path));
-                        }
-
-                        continue;
-                    }
-                    None => {}
-                }
-
-                let (start, end) = result.source_map.span_to_char_offset(&source_file, *span);
-                let start = start as usize;
-                let end = end as usize;
-                let span = SourceSpan::new(start.into(), end - start);
-
-                // We have a file import
-                let check_result = if import.starts_with(".") {
-                    self.check_file_import(file_path, &package_root, import, span, &file_content)?
-                } else if Self::is_potential_package_name(import) {
-                    self.check_package_import(
-                        import,
-                        *import_type,
-                        span,
-                        file_path,
-                        &file_content,
-                        &package_info.package_json,
-                        &internal_dependencies,
-                        unresolved_external_dependencies,
-                        &resolver,
-                    )
-                } else {
-                    None
-                };
-
-                if let Some(diagnostic) = check_result {
-                    result.diagnostics.push(diagnostic);
-                }
+                self.check_import(
+                    &comments,
+                    &mut tsconfig_loader,
+                    result,
+                    &source_file,
+                    &package_root,
+                    import,
+                    import_type,
+                    span,
+                    file_path,
+                    &file_content,
+                    &package_info,
+                    &internal_dependencies,
+                    unresolved_external_dependencies,
+                    &resolver,
+                )?;
             }
         }
 

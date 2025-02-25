@@ -68,6 +68,14 @@ impl From<BoundariesDiagnostic> for Diagnostic {
                 import: Some(package_name.to_string()),
                 reason: Some(tag),
             },
+            BoundariesDiagnostic::InvalidPath { path } => Diagnostic {
+                message,
+                path: Some(path),
+                start: None,
+                end: None,
+                import: None,
+                reason: None,
+            },
         }
     }
 }

@@ -88,8 +88,8 @@ impl PackageInfo {
     }
 }
 
-type PackageKey = String;
-type PackageVersion = String;
+pub type PackageKey = String;
+pub type PackageVersion = String;
 
 // PackageName refers to a real package's name or the root package.
 // It's not the best name, because root isn't a real package, but it's
