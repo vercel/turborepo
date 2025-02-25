@@ -454,6 +454,9 @@ impl Tracer {
                 };
 
                 for mut import in imported_files {
+                    // Windows has this annoying habit of abbreviating paths
+                    // like `C:\Users\Admini~1` instead of `C:\Users\Administrator`
+                    // We canonicalize to get the proper, full length path
                     if cfg!(windows) {
                         match import.to_realpath() {
                             Ok(path) => {
