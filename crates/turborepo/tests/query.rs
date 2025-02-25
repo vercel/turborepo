@@ -112,3 +112,22 @@ fn test_reverse_trace() -> Result<(), anyhow::Error> {
 
     Ok(())
 }
+
+#[test]
+fn test_task_queries() -> Result<(), anyhow::Error> {
+    check_json_output!(
+        "task_dependencies/query",
+        "npm@10.5.0",
+        "query",
+        "get tasks for app-a" => ["query { package(name: \"app-a\") { tasks { items { name } } } }"],
+        "get tasks for lib-b" => ["query { package(name: \"lib-b\") { tasks { items { name } } } }"],
+        "get tasks for app-a with dependencies" => ["query { package(name: \"app-a\") { tasks { items { fullName directDependencies { items { fullName } } } } } }"],
+        "get tasks for lib-b with dependents" => ["query { package(name: \"lib-b\") { tasks { items { fullName directDependents { items { fullName } } } } } }"],
+        "get tasks for app-a with dependencies and dependents" => ["query { package(name: \"app-a\") { tasks { items { fullName allDependencies { items { fullName } } } } } }"],
+        "get tasks for lib-b with dependents and dependencies" => ["query { package(name: \"lib-b\") { tasks { items { fullName allDependents { items { fullName } } } } } }"],
+        "get tasks for app-a with indirect dependencies" => ["query { package(name: \"app-a\") { tasks { items { fullName indirectDependencies { items { fullName } } } } } }"],
+        "get tasks for lib-b with indirect dependents" => ["query { package(name: \"lib-b\") { tasks { items { fullName indirectDependents { items { fullName } } } } } }"],
+    );
+
+    Ok(())
+}
