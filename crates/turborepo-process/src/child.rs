@@ -38,14 +38,14 @@ use super::{Command, PtySize};
 #[derive(Debug)]
 pub enum ChildState {
     Running(ChildCommandChannel),
-    Exited(ChildExit),
+    Exited,
 }
 
 impl ChildState {
     pub fn command_channel(&self) -> Option<ChildCommandChannel> {
         match self {
             ChildState::Running(c) => Some(c.clone()),
-            ChildState::Exited(_) => None,
+            ChildState::Exited => None,
         }
     }
 }
@@ -783,7 +783,7 @@ impl ChildStateManager {
 
         {
             let mut task_state = self.task_state.write().await;
-            *task_state = ChildState::Exited(exit);
+            *task_state = ChildState::Exited;
         }
     }
 
@@ -808,7 +808,7 @@ impl ChildStateManager {
         };
         {
             let mut task_state = self.task_state.write().await;
-            *task_state = ChildState::Exited(child_exit);
+            *task_state = ChildState::Exited;
         }
 
         // ignore the send error, the channel is dropped anyways
@@ -860,8 +860,8 @@ mod test {
         assert_matches!(child.pid(), Some(_));
         child.stop().await;
 
-        let state = child.state.read().await;
-        assert_matches!(&*state, ChildState::Exited(ChildExit::Killed));
+        let exit = child.wait().await;
+        assert_matches!(exit, Some(ChildExit::Killed));
     }
 
     #[test_case(false)]
@@ -903,11 +903,6 @@ mod test {
 
         let code = child.wait().await;
         assert_eq!(code, Some(ChildExit::Finished(Some(0))));
-
-        {
-            let state = child.state.read().await;
-            assert_matches!(&*state, ChildState::Exited(ChildExit::Finished(Some(0))));
-        }
     }
 
     #[test_case(false)]
@@ -947,11 +942,9 @@ mod test {
             assert_eq!(trimmed_output, "hello world");
         }
 
-        child.wait().await;
+        let exit = child.wait().await;
 
-        let state = child.state.read().await;
-
-        assert_matches!(&*state, ChildState::Exited(ChildExit::Finished(Some(0))));
+        assert_matches!(exit, Some(ChildExit::Finished(Some(0))));
     }
 
     #[test_case(false)]
@@ -988,11 +981,8 @@ mod test {
 
         assert!(trimmed_out.contains(input), "got: {}", trimmed_out);
 
-        child.wait().await;
-
-        let state = child.state.read().await;
-
-        assert_matches!(&*state, ChildState::Exited(ChildExit::Finished(Some(0))));
+        let exit = child.wait().await;
+        assert_matches!(exit, Some(ChildExit::Finished(Some(0))));
     }
 
     #[test_case(false)]
@@ -1026,10 +1016,9 @@ mod test {
         };
         child.stop().await;
 
-        let state = child.state.read().await;
-
+        let exit = child.wait().await;
         // this should time out and be killed
-        assert_matches!(&*state, ChildState::Exited(ChildExit::Killed));
+        assert_matches!(exit, Some(ChildExit::Killed));
     }
 
     #[test_case(false)]
@@ -1063,16 +1052,14 @@ mod test {
         });
 
         child.stop().await;
-        child.wait().await;
-
-        let state = child.state.read().await;
+        let exit = child.wait().await;
 
         // We should ignore the exit code of the process and always treat it as killed
         if cfg!(windows) {
             // There are no signals on Windows so we must kill
-            assert_matches!(&*state, &ChildState::Exited(ChildExit::Killed));
+            assert_matches!(exit, Some(ChildExit::Killed));
         } else {
-            assert_matches!(&*state, &ChildState::Exited(ChildExit::Interrupted));
+            assert_matches!(exit, Some(ChildExit::Interrupted));
         }
     }
 
@@ -1118,18 +1105,18 @@ mod test {
             }
         }
 
-        child.wait().await;
+        let exit = child.wait().await;
 
         let state = child.state.read().await;
 
-        let ChildState::Exited(state) = &*state else {
+        let ChildState::Exited = &*state else {
             panic!("expected child to have exited after wait call");
         };
 
         #[cfg(unix)]
-        assert_matches!(state, ChildExit::KilledExternal);
+        assert_matches!(exit, Some(ChildExit::KilledExternal));
         #[cfg(not(unix))]
-        assert_matches!(state, ChildExit::Finished(Some(3)));
+        assert_matches!(exit, Some(ChildExit::Finished(Some(3))));
     }
 
     #[test_case(false)]
