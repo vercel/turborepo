@@ -215,6 +215,7 @@ impl ChildHandle {
         self.pid
     }
 
+    /// Perform a `wait` syscall on the child until it exits
     pub async fn wait(&mut self) -> io::Result<Option<i32>> {
         match &mut self.imp {
             ChildHandleImpl::Tokio(child) => child.wait().await.map(|status| status.code()),
@@ -314,7 +315,7 @@ impl ShutdownStyle {
     ///
     /// If an exit channel is provided, the exit code will be sent to the
     /// channel when the child process exits.
-    async fn process(&self, child: &mut ChildHandle) -> ChildState {
+    async fn process(&self, child: &mut ChildHandle) -> ChildExit {
         match self {
             // Windows doesn't give the ability to send a signal to a process so we
             // can't make use of the graceful shutdown timeout.
@@ -346,13 +347,13 @@ impl ShutdownStyle {
                         // We ignore the exit code and mark it as killed since we sent a SIGINT
                         // This avoids reliance on an underlying process exiting with
                         // no exit code or a non-zero in order for turbo to operate correctly.
-                        Ok(Ok(_exit_code)) => ChildState::Exited(ChildExit::Interrupted),
-                        Ok(Err(_)) => ChildState::Exited(ChildExit::Failed),
+                        Ok(Ok(_exit_code)) => ChildExit::Interrupted,
+                        Ok(Err(_)) => ChildExit::Failed,
                         Err(_) => {
                             debug!("graceful shutdown timed out, killing child");
                             match child.kill().await {
-                                Ok(_) => ChildState::Exited(ChildExit::Killed),
-                                Err(_) => ChildState::Exited(ChildExit::Failed),
+                                Ok(_) => ChildExit::Killed,
+                                Err(_) => ChildExit::Failed,
                             }
                         }
                     }
@@ -362,14 +363,14 @@ impl ShutdownStyle {
                 {
                     debug!("timeout not supported on windows, killing");
                     match child.kill().await {
-                        Ok(_) => ChildState::Exited(ChildExit::Killed),
-                        Err(_) => ChildState::Exited(ChildExit::Failed),
+                        Ok(_) => ChildExit::Killed,
+                        Err(_) => ChildExit::Failed,
                     }
                 }
             }
             ShutdownStyle::Kill => match child.kill().await {
-                Ok(_) => ChildState::Exited(ChildExit::Killed),
-                Err(_) => ChildState::Exited(ChildExit::Failed),
+                Ok(_) => ChildExit::Killed,
+                Err(_) => ChildExit::Failed,
             },
         }
     }
@@ -757,7 +758,7 @@ impl ChildStateManager {
         child: &mut ChildHandle,
         controller: Option<Box<dyn PtyController + Send>>,
     ) {
-        let state = match command {
+        let exit = match command {
             // we received a command to stop the child process, or the channel was closed.
             // in theory this happens when the last child is dropped, however in practice
             // we will always get a `Permit` from the recv call before the channel can be
@@ -772,21 +773,14 @@ impl ChildStateManager {
                 ShutdownStyle::Kill.process(child).await
             }
         };
-        match state {
-            ChildState::Exited(exit) => {
-                // ignore the send error, failure means the channel is dropped
-                trace!("sending child exit");
-                self.exit_tx.send(Some(exit)).ok();
-            }
-            ChildState::Running(_) => {
-                debug_assert!(false, "child state should not be running after shutdown");
-            }
-        }
+        // ignore the send error, failure means the channel is dropped
+        trace!("sending child exit");
+        self.exit_tx.send(Some(exit)).ok();
         drop(controller);
 
         {
             let mut task_state = self.task_state.write().await;
-            *task_state = state;
+            *task_state = ChildState::Exited(exit);
         }
     }
 
