@@ -53,6 +53,10 @@ impl ChildState {
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum ChildExit {
     Finished(Option<i32>),
+    /// The child process was sent an interrupt and shut down on it's own
+    Interrupted,
+    /// The child process was killed, it could either be explicitly killed or it
+    /// did not respond to an interrupt and was killed as a result
     Killed,
     /// The child process was killed by someone else. Note that on
     /// windows, it is not possible to distinguish between whether
@@ -283,15 +287,6 @@ enum ChildOutput {
     Pty(Box<dyn Read + Send>),
 }
 
-impl ChildInput {
-    fn concrete(self) -> Option<tokio::process::ChildStdin> {
-        match self {
-            ChildInput::Std(stdin) => Some(stdin),
-            ChildInput::Pty(_) => None,
-        }
-    }
-}
-
 impl fmt::Debug for ChildInput {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -333,9 +328,9 @@ impl ShutdownStyle {
                             debug!("sending SIGINT to child {}", pid);
                             // kill takes negative pid to indicate that you want to use gpid
                             let pgid = -(pid as i32);
-                            unsafe {
-                                libc::kill(pgid, libc::SIGINT);
-                            }
+                            if unsafe { libc::kill(pgid, libc::SIGINT) } == -1 {
+                                debug!("failed to send SIGINT to {pgid}");
+                            };
                             debug!("waiting for child {}", pid);
                             child.wait().await
                         } else {
@@ -351,7 +346,7 @@ impl ShutdownStyle {
                         // We ignore the exit code and mark it as killed since we sent a SIGINT
                         // This avoids reliance on an underlying process exiting with
                         // no exit code or a non-zero in order for turbo to operate correctly.
-                        Ok(Ok(_exit_code)) => ChildState::Exited(ChildExit::Killed),
+                        Ok(Ok(_exit_code)) => ChildState::Exited(ChildExit::Interrupted),
                         Ok(Err(_)) => ChildState::Exited(ChildExit::Failed),
                         Err(_) => {
                             debug!("graceful shutdown timed out, killing child");
@@ -562,7 +557,7 @@ impl Child {
         code
     }
 
-    fn pid(&self) -> Option<u32> {
+    pub fn pid(&self) -> Option<u32> {
         self.pid
     }
 
@@ -570,7 +565,7 @@ impl Child {
         self.stdin.lock().unwrap().take()
     }
 
-    fn outputs(&mut self) -> Option<ChildOutput> {
+    fn outputs(&self) -> Option<ChildOutput> {
         self.output.lock().unwrap().take()
     }
 
@@ -827,7 +822,7 @@ mod test {
     use turbopath::AbsoluteSystemPathBuf;
 
     use super::{Child, ChildInput, ChildOutput, ChildState, Command};
-    use crate::process::{
+    use crate::{
         child::{ChildExit, ShutdownStyle},
         PtySize,
     };
@@ -843,7 +838,7 @@ mod test {
         while !root.join_component(".git").exists() {
             root = root.parent().unwrap().to_owned();
         }
-        root.join_components(&["crates", "turborepo-lib", "test", "scripts"])
+        root.join_components(&["crates", "turborepo-process", "test", "scripts"])
     }
 
     #[test_case(false)]
@@ -1052,13 +1047,27 @@ mod test {
 
         tokio::time::sleep(STARTUP_DELAY).await;
 
+        // We need to read the child output otherwise the child will be unable to
+        // cleanly shut down as it waits for the receiving end of the PTY to read
+        // the output before exiting.
+        let mut output_child = child.clone();
+        tokio::task::spawn(async move {
+            let mut output = Vec::new();
+            output_child.wait_with_piped_outputs(&mut output).await.ok();
+        });
+
         child.stop().await;
         child.wait().await;
 
         let state = child.state.read().await;
 
         // We should ignore the exit code of the process and always treat it as killed
-        assert_matches!(&*state, &ChildState::Exited(ChildExit::Killed));
+        if cfg!(windows) {
+            // There are no signals on Windows so we must kill
+            assert_matches!(&*state, &ChildState::Exited(ChildExit::Killed));
+        } else {
+            assert_matches!(&*state, &ChildState::Exited(ChildExit::Interrupted));
+        }
     }
 
     #[test_case(false)]
@@ -1230,9 +1239,18 @@ mod test {
 
         tokio::time::sleep(STARTUP_DELAY).await;
 
+        // We need to read the child output otherwise the child will be unable to
+        // cleanly shut down as it waits for the receiving end of the PTY to read
+        // the output before exiting.
+        let mut output_child = child.clone();
+        tokio::task::spawn(async move {
+            let mut output = Vec::new();
+            output_child.wait_with_piped_outputs(&mut output).await.ok();
+        });
+
         let exit = child.stop().await;
 
-        assert_matches!(exit, Some(ChildExit::Killed));
+        assert_matches!(exit, Some(ChildExit::Interrupted));
     }
 
     #[cfg(unix)]

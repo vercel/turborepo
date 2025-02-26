@@ -50,7 +50,10 @@ impl From<mpsc::error::SendError<Message<VisitorData, VisitorResult>>> for Execu
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct StopExecution;
+pub enum StopExecution {
+    AllTasks,
+    DependentTasks,
+}
 
 impl Engine {
     /// Execute a task graph by sending task ids to the visitor
@@ -93,7 +96,7 @@ impl Engine {
                     .expect("node id should be present")
                 else {
                     // Root task has nothing to do so we don't emit any event for it
-                    if done.send(()).is_err() {
+                    if done.send(true).is_err() {
                         debug!(
                             "Graph walker done callback receiver was closed before done signal \
                              could be sent"
@@ -114,23 +117,30 @@ impl Engine {
                 let (message, result) = Message::new(task_id.clone());
                 visitor.send(message).await?;
 
-                if let Err(StopExecution) = result.await.unwrap_or_else(|_| {
+                let mut continue_walking_subgraph = true;
+                match result.await.unwrap_or_else(|_| {
                     // If the visitor doesn't send a callback, then we assume the task finished
                     tracing::trace!(
                         "Engine visitor dropped callback sender without sending result"
                     );
                     Ok(())
                 }) {
-                    if walker
-                        .lock()
-                        .expect("Walker mutex poisoned")
-                        .cancel()
-                        .is_err()
-                    {
-                        debug!("Unable to cancel graph walk");
+                    Err(StopExecution::AllTasks) => {
+                        if walker
+                            .lock()
+                            .expect("Walker mutex poisoned")
+                            .cancel()
+                            .is_err()
+                        {
+                            debug!("Unable to cancel graph walk");
+                        }
                     }
-                }
-                if done.send(()).is_err() {
+                    Err(StopExecution::DependentTasks) => {
+                        continue_walking_subgraph = false;
+                    }
+                    _ => (),
+                };
+                if done.send(continue_walking_subgraph).is_err() {
                     debug!("Graph walk done receiver closed before node was finished processing");
                 }
                 Ok(())

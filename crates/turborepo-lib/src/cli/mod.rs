@@ -160,6 +160,25 @@ impl fmt::Display for EnvMode {
     }
 }
 
+#[derive(Copy, Clone, Debug, Default, PartialEq, ValueEnum, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ContinueMode {
+    #[default]
+    Never,
+    DependenciesSuccessful,
+    Always,
+}
+
+impl fmt::Display for ContinueMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            ContinueMode::Never => "never",
+            ContinueMode::DependenciesSuccessful => "dependencies-successful",
+            ContinueMode::Always => "always",
+        })
+    }
+}
+
 /// The parsed arguments from the command line. In general we should avoid using
 /// or mutating this directly, and instead use the fully canonicalized `Opts`
 /// struct.
@@ -825,10 +844,13 @@ pub struct ExecutionArgs {
     /// one-at-a-time) execution.
     #[clap(long)]
     pub concurrency: Option<String>,
-    /// Continue execution even if a task exits with an error or non-zero
-    /// exit code. The default behavior is to bail
-    #[clap(long = "continue")]
-    pub continue_execution: bool,
+    /// Specify how task execution should proceed when an error occurs.
+    /// Use "never" to cancel all tasks. Use "dependencies-successful" to
+    /// continue running tasks whose dependencies have succeeded. Use "always"
+    /// to continue running all tasks, even those whose dependencies have
+    /// failed.
+    #[clap(long = "continue", value_name = "CONTINUE", num_args = 0..=1, default_value = "never", default_missing_value = "always")]
+    pub continue_execution: ContinueMode,
     /// Run turbo in single-package mode
     #[clap(long)]
     pub single_package: bool,
@@ -896,7 +918,16 @@ impl ExecutionArgs {
         // default to false
         track_usage!(telemetry, self.framework_inference, |val: bool| !val);
 
-        track_usage!(telemetry, self.continue_execution, |val| val);
+        track_usage!(telemetry, self.continue_execution, |val| matches!(
+            val,
+            ContinueMode::Always | ContinueMode::DependenciesSuccessful
+        ));
+        telemetry.track_arg_value(
+            "continue-execution-strategy",
+            self.continue_execution,
+            EventType::NonSensitive,
+        );
+
         track_usage!(telemetry, self.single_package, |val| val);
         track_usage!(telemetry, self.only, |val| val);
         track_usage!(telemetry, &self.cache_dir, Option::is_some);
@@ -1653,7 +1684,7 @@ mod test {
     use itertools::Itertools;
     use pretty_assertions::assert_eq;
 
-    use crate::cli::{ExecutionArgs, LinkTarget, RunArgs};
+    use crate::cli::{ContinueMode, ExecutionArgs, LinkTarget, RunArgs};
 
     struct CommandTestCase {
         command: &'static str,
@@ -1898,14 +1929,29 @@ mod test {
             command: Some(Command::Run {
                 execution_args: Box::new(ExecutionArgs {
                     tasks: vec!["build".to_string()],
-                    continue_execution: true,
+                    continue_execution: ContinueMode::Always,
                     ..get_default_execution_args()
                 }),
                 run_args: Box::new(get_default_run_args())
             }),
             ..Args::default()
         } ;
-        "continue flag"
+        "continue option with no value"
+	)]
+    #[test_case::test_case(
+		&["turbo", "run", "build", "--continue=dependencies-successful"],
+        Args {
+            command: Some(Command::Run {
+                execution_args: Box::new(ExecutionArgs {
+                    tasks: vec!["build".to_string()],
+                    continue_execution: ContinueMode::DependenciesSuccessful,
+                    ..get_default_execution_args()
+                }),
+                run_args: Box::new(get_default_run_args())
+            }),
+            ..Args::default()
+        } ;
+        "continue option with explicit value"
 	)]
     #[test_case::test_case(
 		&["turbo", "run", "build", "--dry-run"],
