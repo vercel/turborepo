@@ -68,5 +68,28 @@ describe("affectedPackages", () => {
         workspace.affectedPackages(["pnpm-lock.yaml"], null, true)
       );
     });
+
+    it("still considers root file changes as global", async () => {
+      const dir = path.resolve(__dirname, "./fixtures/monorepo");
+      const workspace = await Workspace.find(dir);
+
+      const reduced: PackageReduced[] = (
+        await workspace.affectedPackages(
+          ["file-we-do-not-understand.txt"],
+          "HEAD",
+          true
+        )
+      ).map((pkg) => {
+        return {
+          name: pkg.name,
+          relativePath: pkg.relativePath,
+        };
+      });
+
+      assert.deepEqual(reduced, [
+        { name: "app-a", relativePath: "apps/app" },
+        { name: "ui", relativePath: "packages/ui" },
+      ]);
+    });
   });
 });

@@ -10,8 +10,8 @@ use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
 use turborepo_repository::{
     change_mapper::{
-        ChangeMapper, DefaultPackageChangeMapper, GlobalDepsPackageChangeMapper, LockfileContents,
-        PackageChanges,
+        ChangeMapper, DefaultPackageChangeMapper, DefaultPackageChangeMapperWithLockfile,
+        LockfileContents, PackageChanges,
     },
     inference::RepoState as WorkspaceState,
     package_graph::{PackageGraph, PackageName, PackageNode, WorkspacePackage, ROOT_PKG_NAME},
@@ -246,12 +246,7 @@ impl Workspace {
         // Create a ChangeMapper with no ignore patterns
         let change_detector = comparison
             .is_some()
-            .then(|| {
-                Either::Left(
-                    GlobalDepsPackageChangeMapper::new(&self.graph, std::iter::empty::<&str>())
-                        .unwrap(),
-                )
-            })
+            .then(|| Either::Left(DefaultPackageChangeMapperWithLockfile::new(&self.graph)))
             .unwrap_or_else(|| Either::Right(DefaultPackageChangeMapper::new(&self.graph)));
         let mapper = ChangeMapper::new(&self.graph, vec![], change_detector);
 
