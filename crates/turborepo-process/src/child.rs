@@ -383,6 +383,7 @@ struct ChildStateManager {
     shutdown_style: ShutdownStyle,
     task_state: Arc<RwLock<ChildState>>,
     exit_tx: watch::Sender<Option<ChildExit>>,
+    shutdown_initiated: bool,
 }
 
 /// A child process that can be interacted with asynchronously.
@@ -461,13 +462,15 @@ impl Child {
             // exits
             let controller = controller;
             debug!("waiting for task: {pid:?}");
-            let manager = ChildStateManager {
+            let mut manager = ChildStateManager {
                 shutdown_style,
                 task_state,
                 exit_tx,
+                shutdown_initiated: false,
             };
             tokio::select! {
                 command = command_rx.recv() => {
+                    manager.shutdown_initiated = true;
                     manager.handle_child_command(command, &mut child, controller).await;
                 }
                 status = child.wait() => {
@@ -785,6 +788,15 @@ impl ChildStateManager {
     }
 
     async fn handle_child_exit(&self, status: io::Result<Option<i32>>) {
+        // If a shutdown was initiated we defer to the exit returned by
+        // `ShutdownStyle::process` as that will have information if the child
+        // responded to a SIGINT or a SIGKILL. The `wait` response this function
+        // gets in that scenario would make it appear that the child was killed by an
+        // external process.
+        if self.shutdown_initiated {
+            return;
+        }
+
         debug!("child process exited normally");
         // the child process exited
         let child_exit = match status {
