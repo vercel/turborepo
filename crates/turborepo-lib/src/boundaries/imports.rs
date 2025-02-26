@@ -11,7 +11,7 @@ use swc_common::{comments::SingleThreadedComments, SourceFile, Span};
 use turbo_trace::ImportType;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf, PathRelation, RelativeUnixPath};
 use turborepo_repository::{
-    package_graph::{PackageInfo, PackageKey, PackageName, PackageNode, PackageVersion},
+    package_graph::{PackageInfo, PackageName, PackageNode},
     package_json::PackageJson,
 };
 
@@ -38,7 +38,7 @@ impl Run {
         result: &mut BoundariesResult,
     ) -> Result<bool, Error> {
         let dir = file_path.parent().expect("file_path must have a parent");
-        let Some(tsconfig) = tsconfig_loader.load(dir) else {
+        let Some(tsconfig) = tsconfig_loader.load(dir, result) else {
             return Ok(false);
         };
 
@@ -81,7 +81,7 @@ impl Run {
         file_content: &str,
         package_info: &PackageInfo,
         internal_dependencies: &HashSet<&PackageNode>,
-        unresolved_external_dependencies: Option<&BTreeMap<PackageKey, PackageVersion>>,
+        unresolved_external_dependencies: Option<&BTreeMap<String, String>>,
         resolver: &Resolver,
     ) -> Result<(), Error> {
         // If the import is prefixed with `@boundaries-ignore`, we ignore it, but print
