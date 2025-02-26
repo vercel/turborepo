@@ -7,8 +7,8 @@ use std::{
 };
 
 pub use package::{
-    DefaultPackageChangeMapper, Error, GlobalDepsPackageChangeMapper, PackageChangeMapper,
-    PackageMapping,
+    DefaultPackageChangeMapper, DefaultPackageChangeMapperWithLockfile, Error,
+    GlobalDepsPackageChangeMapper, PackageChangeMapper, PackageMapping,
 };
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
