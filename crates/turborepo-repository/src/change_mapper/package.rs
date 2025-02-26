@@ -86,6 +86,43 @@ impl PackageChangeMapper for DefaultPackageChangeMapper<'_> {
     }
 }
 
+pub struct DefaultPackageChangeMapperWithLockfile<'a> {
+    base: DefaultPackageChangeMapper<'a>,
+}
+
+impl<'a> DefaultPackageChangeMapperWithLockfile<'a> {
+    pub fn new(pkg_dep_graph: &'a PackageGraph) -> Self {
+        Self {
+            base: DefaultPackageChangeMapper::new(pkg_dep_graph),
+        }
+    }
+}
+
+impl PackageChangeMapper for DefaultPackageChangeMapperWithLockfile<'_> {
+    fn detect_package(&self, path: &AnchoredSystemPath) -> PackageMapping {
+        // If we have a lockfile change, we consider this as a root package change,
+        // since there's a chance that the root package uses a workspace package
+        // dependency (this is cursed behavior but sadly possible). There's a chance
+        // that we can make this more accurate by checking which package
+        // manager, since not all package managers may permit root pulling from
+        // workspace package dependencies
+        if PackageManager::supported_managers()
+            .iter()
+            .any(|pm| pm.lockfile_name() == path.as_str())
+        {
+            PackageMapping::Package((
+                WorkspacePackage {
+                    name: PackageName::Root,
+                    path: AnchoredSystemPathBuf::from_raw("").unwrap(),
+                },
+                PackageInclusionReason::ConservativeRootLockfileChanged,
+            ))
+        } else {
+            self.base.detect_package(path)
+        }
+    }
+}
+
 #[derive(Error, Debug)]
 pub enum Error {
     #[error(transparent)]
