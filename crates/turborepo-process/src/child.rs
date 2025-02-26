@@ -27,7 +27,6 @@ use std::{
 use portable_pty::{native_pty_system, Child as PtyChild, MasterPty as PtyController};
 use tokio::{
     io::{AsyncBufRead, AsyncBufReadExt, BufReader},
-    join,
     process::Command as TokioCommand,
     sync::{mpsc, watch},
 };
@@ -484,38 +483,19 @@ impl Child {
     }
 
     /// Perform a graceful shutdown of the `Child` process.
-    pub async fn stop(&self) -> Option<ChildExit> {
-        let mut watch = self.exit_channel.clone();
-
-        let (_, code) = join! {
-            // if this fails, it's because the channel is dropped (toctou)
-            // we can just ignore it
-            self.command_channel.stop(),
-            async {
-                watch.changed().await.ok()?;
-                *watch.borrow()
-            }
-        };
-
-        code
+    pub async fn stop(&mut self) -> Option<ChildExit> {
+        // if this fails, it's because the channel is dropped (toctou)
+        // we can just ignore it
+        self.command_channel.stop().await.ok();
+        self.wait().await
     }
 
     /// Kill the `Child` process immediately.
-    pub async fn kill(&self) -> Option<ChildExit> {
-        let mut watch = self.exit_channel.clone();
-
-        let (_, code) = join! {
-            // if this fails, it's because the channel is dropped (toctou)
-            // we can just ignore it
-            self.command_channel.kill(),
-            async {
-                // if this fails, it is because the watch receiver is dropped. just ignore it do a best-effort
-                watch.changed().await.ok();
-                *watch.borrow()
-            }
-        };
-
-        code
+    pub async fn kill(&mut self) -> Option<ChildExit> {
+        // if this fails, it's because the channel is dropped (toctou)
+        // we can just ignore it
+        self.command_channel.kill().await.ok();
+        self.wait().await
     }
 
     pub fn pid(&self) -> Option<u32> {
@@ -734,7 +714,7 @@ impl ChildStateManager {
             }
         };
         // ignore the send error, failure means the channel is dropped
-        trace!("sending child exit");
+        trace!("sending child exit after shutdown");
         self.exit_tx.send(Some(exit)).ok();
         drop(controller);
     }
@@ -1167,12 +1147,15 @@ mod test {
     #[test_case(false)]
     #[test_case(TEST_PTY)]
     #[tokio::test]
+    #[traced_test]
     async fn test_kill_process_group(use_pty: bool) {
         let mut cmd = Command::new("sh");
         cmd.args(["-c", "while true; do sleep 0.2; done"]);
         let mut child = Child::spawn(
             cmd,
-            ShutdownStyle::Graceful(Duration::from_millis(100)),
+            // Bumping this to give ample time for the process to respond to the SIGINT to reduce
+            // flakiness inherent with sending and receiving signals.
+            ShutdownStyle::Graceful(Duration::from_millis(500)),
             use_pty.then(PtySize::default),
         )
         .unwrap();
