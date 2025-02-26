@@ -8,7 +8,6 @@ use console::StyledObject;
 use tokio::sync::oneshot;
 use tracing::{error, Instrument};
 use turborepo_env::{platform::PlatformEnv, EnvironmentVariableMap};
-use turborepo_process::{ChildExit, Command, ProcessManager};
 use turborepo_repository::package_manager::PackageManager;
 use turborepo_telemetry::events::{task::PackageTaskEventBuilder, TrackedErrors};
 use turborepo_ui::{ColorConfig, OutputWriter};
@@ -23,6 +22,7 @@ use crate::{
     cli::ContinueMode,
     config::UIMode,
     engine::{Engine, StopExecution},
+    process::{ChildExit, Command, ProcessManager},
     run::{summary::TaskTracker, task_access::TaskAccess, task_id::TaskId, CacheOutput, TaskCache},
     task_hash::TaskHashTracker,
 };
@@ -454,7 +454,7 @@ impl ExecContext {
             // Something else killed the child
             ChildExit::KilledExternal => Err(InternalError::ExternalKill),
             // The child was killed by turbo indicating a shutdown
-            ChildExit::Killed | ChildExit::Interrupted => Ok(ExecOutcome::Shutdown),
+            ChildExit::Killed => Ok(ExecOutcome::Shutdown),
         }
     }
 }
