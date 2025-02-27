@@ -5,6 +5,7 @@ use wax::{BuildError, Program};
 use crate::{
     change_mapper::{AllPackageChangeReason, PackageInclusionReason},
     package_graph::{PackageGraph, PackageName, WorkspacePackage},
+    package_manager::PackageManager,
 };
 
 pub enum PackageMapping {
@@ -113,10 +114,10 @@ impl PackageChangeMapper for GlobalDepsPackageChangeMapper<'_> {
         // that we can make this more accurate by checking which package
         // manager, since not all package managers may permit root pulling from
         // workspace package dependencies
-        if matches!(
-            path.as_str(),
-            "package.json" | "pnpm-lock.yaml" | "yarn.lock"
-        ) {
+        if PackageManager::supported_managers()
+            .iter()
+            .any(|pm| pm.lockfile_name() == path.as_str())
+        {
             return PackageMapping::Package((
                 WorkspacePackage {
                     name: PackageName::Root,
@@ -161,10 +162,10 @@ mod tests {
         change_mapper::{
             AllPackageChangeReason, ChangeMapper, PackageChanges, PackageInclusionReason,
         },
-        discovery,
-        discovery::PackageDiscovery,
+        discovery::{self, PackageDiscovery},
         package_graph::{PackageGraphBuilder, WorkspacePackage},
         package_json::PackageJson,
+        package_manager::PackageManager,
     };
 
     #[allow(dead_code)]
@@ -175,7 +176,7 @@ mod tests {
             &self,
         ) -> Result<discovery::DiscoveryResponse, discovery::Error> {
             Ok(discovery::DiscoveryResponse {
-                package_manager: crate::package_manager::PackageManager::Npm,
+                package_manager: PackageManager::Npm,
                 workspaces: vec![],
             })
         }

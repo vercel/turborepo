@@ -4,25 +4,27 @@ use itertools::Itertools;
 use miette::Diagnostic;
 use thiserror::Error;
 use turborepo_repository::package_graph;
+use turborepo_signals::{listeners::get_signal, SignalHandler};
 use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_ui::{color, BOLD, GREY};
 
 use crate::{
-    commands::{bin, generate, link, ls, prune, run::get_signal, CommandBase},
+    commands::{bin, generate, link, login, ls, prune, CommandBase},
     daemon::DaemonError,
     query,
     rewrite_json::RewriteError,
     run,
     run::{builder::RunBuilder, watch},
-    signal::SignalHandler,
 };
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
-    #[error("No command specified")]
+    #[error("No command specified.")]
     NoCommand(#[backtrace] backtrace::Backtrace),
     #[error("{0}")]
     Bin(#[from] bin::Error, #[backtrace] backtrace::Backtrace),
+    #[error(transparent)]
+    Boundaries(#[from] crate::boundaries::Error),
     #[error(transparent)]
     Path(#[from] turbopath::PathError),
     #[error(transparent)]
@@ -44,6 +46,8 @@ pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Ls(#[from] ls::Error),
+    #[error(transparent)]
+    Login(#[from] login::Error),
     #[error(transparent)]
     Link(#[from] link::Error),
     #[error(transparent)]
@@ -74,7 +78,7 @@ pub async fn print_potential_tasks(
     base: CommandBase,
     telemetry: CommandEventBuilder,
 ) -> Result<(), Error> {
-    let signal = get_signal()?;
+    let signal = get_signal().map_err(run::Error::from)?;
     let handler = SignalHandler::new(signal);
     let color_config = base.color_config;
 

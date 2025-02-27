@@ -98,8 +98,8 @@ Test help flag
             Override the filesystem cache directory
         --concurrency <CONCURRENCY>
             Limit the concurrency of task execution. Use 1 for serial (i.e. one-at-a-time) execution
-        --continue
-            Continue execution even if a task exits with an error or non-zero exit code. The default behavior is to bail
+        --continue [<CONTINUE>]
+            Specify how task execution should proceed when an error occurs. Use "never" to cancel all tasks. Use "dependencies-successful" to continue running tasks whose dependencies have succeeded. Use "always" to continue running all tasks, even those whose dependencies have failed [default: never] [possible values: never, dependencies-successful, always]
         --single-package
             Run turbo in single-package mode
         --framework-inference [<BOOL>]
@@ -111,7 +111,7 @@ Test help flag
     -F, --filter <FILTER>
             Use the given selector to specify package(s) to act as entry points. The syntax mirrors pnpm's syntax, and additional documentation and examples can be found in turbo's documentation https://turbo.build/repo/docs/reference/command-line-reference/run#--filter
         --affected
-            Run only tasks that are affected by changes between the current branch and `main`
+            Filter to only packages that are affected by changes between the current branch and `main`
         --output-logs <OUTPUT_LOGS>
             Set type of process output logging. Use "full" to show all output. Use "hash-only" to show only turbo-computed task hashes. Use "new-only" to show only new output with only hashes for cached tasks. Use "none" to hide process output. (default full) [possible values: full, none, hash-only, new-only, errors-only]
         --log-order <LOG_ORDER>
@@ -273,8 +273,11 @@ Test help flag
         --concurrency <CONCURRENCY>
             Limit the concurrency of task execution. Use 1 for serial (i.e. one-at-a-time) execution
   
-        --continue
-            Continue execution even if a task exits with an error or non-zero exit code. The default behavior is to bail
+        --continue [<CONTINUE>]
+            Specify how task execution should proceed when an error occurs. Use "never" to cancel all tasks. Use "dependencies-successful" to continue running tasks whose dependencies have succeeded. Use "always" to continue running all tasks, even those whose dependencies have failed
+            
+            [default: never]
+            [possible values: never, dependencies-successful, always]
   
         --single-package
             Run turbo in single-package mode
@@ -297,7 +300,7 @@ Test help flag
             Use the given selector to specify package(s) to act as entry points. The syntax mirrors pnpm's syntax, and additional documentation and examples can be found in turbo's documentation https://turbo.build/repo/docs/reference/command-line-reference/run#--filter
   
         --affected
-            Run only tasks that are affected by changes between the current branch and `main`
+            Filter to only packages that are affected by changes between the current branch and `main`
   
         --output-logs <OUTPUT_LOGS>
             Set type of process output logging. Use "full" to show all output. Use "hash-only" to show only turbo-computed task hashes. Use "new-only" to show only new output with only hashes for cached tasks. Use "none" to hide process output. (default full)
@@ -317,6 +320,7 @@ Test help flag
             
             [default: auto]
             [possible values: auto, none, task]
+
 
 Test help flag for link command
   $ ${TURBO} link -h
@@ -340,7 +344,7 @@ Test help flag for link command
         --api <API>
             Override the endpoint for API calls
         --target <TARGET>
-            Specify what should be linked (default "remote cache") [default: remote-cache] [possible values: remote-cache, spaces]
+            DEPRECATED: Specify what should be linked (default "remote cache") [possible values: remote-cache, spaces]
         --color
             Force color usage in the terminal
         --cwd <CWD>
@@ -380,7 +384,7 @@ Test help flag for unlink command
   
   Options:
         --target <TARGET>
-            Specify what should be unlinked (default "remote cache") [default: remote-cache] [possible values: remote-cache, spaces]
+            DEPRECATED: Specify what should be unlinked (default "remote cache") [possible values: remote-cache, spaces]
         --version
             
         --skip-infer
@@ -435,6 +439,8 @@ Test help flag for login command
             Force a login to receive a new token. Will overwrite any existing tokens for the given login url
         --skip-infer
             Skip any attempts to infer which version of Turbo the project is configured to use
+        --manual
+            Manually enter token instead of requesting one from the login service
         --no-update-notifier
             Disable the turbo update notification
         --api <API>

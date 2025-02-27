@@ -1,15 +1,14 @@
-mod bun;
-mod npm;
-mod npmrc;
-mod pnpm;
-mod yarn;
-mod yarnrc;
+pub mod bun;
+pub mod npm;
+pub mod npmrc;
+pub mod pnpm;
+pub mod yarn;
+pub mod yarnrc;
 
 use std::{
     backtrace,
     fmt::{self, Display},
     fs,
-    process::Command,
 };
 
 use bun::BunDetector;
@@ -26,7 +25,6 @@ use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, RelativeUnixPath};
 use turborepo_errors::Spanned;
 use turborepo_lockfiles::Lockfile;
-use which::which;
 use yarnrc::YarnRc;
 
 use crate::{
@@ -138,15 +136,15 @@ impl From<wax::BuildError> for Error {
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
-    #[error("io error: {0}")]
+    #[error("I/O error: {0}")]
     Io(#[from] std::io::Error, #[backtrace] backtrace::Backtrace),
     #[error(transparent)]
     Workspace(#[from] MissingWorkspaceError),
-    #[error("yaml parsing error: {0}")]
+    #[error("YAML parsing error: {0}")]
     ParsingYaml(#[from] serde_yaml::Error, #[backtrace] backtrace::Backtrace),
-    #[error("json parsing error: {0}")]
+    #[error("JSON parsing error: {0}")]
     ParsingJson(#[from] serde_json::Error, #[backtrace] backtrace::Backtrace),
-    #[error("globbing error: {0}")]
+    #[error("Globbing error: {0}")]
     Wax(Box<wax::BuildError>, #[backtrace] backtrace::Backtrace),
     #[error(transparent)]
     PackageJson(#[from] package_json::Error),
@@ -154,49 +152,50 @@ pub enum Error {
     Other(#[from] anyhow::Error),
     #[error(transparent)]
     NoPackageManager(#[from] NoPackageManager),
-    #[error("We detected multiple package managers in your repository: {}. Please remove one \
-    of them.", managers.join(", "))]
+    #[error("Multiple package managers in your repository: {}. Please use one package manager.", managers.join(", "))]
     MultiplePackageManagers { managers: Vec<String> },
-    #[error("invalid semantic version: {explanation}")]
+    #[error("Invalid semantic version: {explanation}")]
     #[diagnostic(code(invalid_semantic_version))]
     InvalidVersion {
         explanation: String,
         #[label("version found here")]
         span: Option<SourceSpan>,
         #[source_code]
-        text: NamedSource,
+        text: NamedSource<String>,
     },
     #[error("{0}: {1}")]
     // this will be something like "cannot find binary: <thing we tried to find>"
     Which(which::Error, String),
-    #[error("invalid utf8: {0}")]
+    #[error("Invalid utf8: {0}")]
     Utf8Error(#[from] std::string::FromUtf8Error),
     #[error(transparent)]
     Path(#[from] turbopath::PathError),
     #[error(
-        "could not parse the packageManager field in package.json, expected to match regular \
-         expression {pattern}"
+        "Could not parse the `packageManager` field in package.json, expected to match regular \
+         expression `{pattern}`."
     )]
     #[diagnostic(code(invalid_package_manager_field))]
     InvalidPackageManager {
         pattern: String,
-        #[label("invalid `packageManager` field")]
+        #[label("Invalid `packageManager` field")]
         span: Option<SourceSpan>,
         #[source_code]
-        text: NamedSource,
+        text: NamedSource<String>,
     },
     #[error(transparent)]
     WorkspaceGlob(#[from] crate::workspaces::Error),
     #[error(transparent)]
     Lockfile(#[from] turborepo_lockfiles::Error),
-    #[error("lockfile not found at {0}")]
+    #[error("Lockfile not found at {0}")]
     LockfileMissing(AbsoluteSystemPathBuf),
-    #[error("discovering workspace: {0}")]
+    #[error("Discovering workspace: {0}")]
     WorkspaceDiscovery(#[from] discovery::Error),
-    #[error("missing packageManager field in package.json")]
+    #[error("Missing `packageManager` field in package.json")]
     MissingPackageManager,
     #[error(transparent)]
     Yarnrc(#[from] yarnrc::Error),
+    #[error("Only found bun.lockb, please run `bun install --save-text-lockfile`")]
+    BunBinaryLockfile,
 }
 
 impl From<std::convert::Infallible> for Error {
@@ -469,19 +468,9 @@ impl PackageManager {
         root_package_json: &PackageJson,
     ) -> Result<Box<dyn Lockfile>, Error> {
         let lockfile_path = self.lockfile_path(root_path);
-        let contents = match self {
-            PackageManager::Bun => {
-                let binary = "bun";
-                Command::new(which(binary).map_err(|e| Error::Which(e, binary.to_string()))?)
-                    .arg(lockfile_path.to_string())
-                    .current_dir(root_path.to_string())
-                    .output()?
-                    .stdout
-            }
-            _ => lockfile_path
-                .read()
-                .map_err(|_| Error::LockfileMissing(lockfile_path.clone()))?,
-        };
+        let contents = lockfile_path
+            .read()
+            .map_err(|_| Error::LockfileMissing(lockfile_path.clone()))?;
         self.parse_lockfile(root_package_json, &contents)
     }
 
@@ -535,14 +524,14 @@ impl PackageManager {
         turbo_root.join_component(self.lockfile_name())
     }
 
-    pub fn arg_separator(&self, user_args: &[String]) -> Option<&str> {
+    pub fn arg_separator(&self, user_args: &[impl AsRef<str>]) -> Option<&str> {
         match self {
             PackageManager::Yarn | PackageManager::Bun => {
                 // Yarn and bun warn and swallows a "--" token. If the user is passing "--", we
                 // need to prepend our own so that the user's doesn't get
                 // swallowed. If they are not passing their own, we don't need
                 // the "--" token and can avoid the warning.
-                if user_args.iter().any(|arg| arg == "--") {
+                if user_args.iter().any(|arg| arg.as_ref() == "--") {
                     Some("--")
                 } else {
                     None

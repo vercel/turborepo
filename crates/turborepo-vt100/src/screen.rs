@@ -698,7 +698,7 @@ impl Screen {
     pub fn row_wrapped(&self, row: u16) -> bool {
         self.grid()
             .visible_row(row)
-            .map_or(false, crate::row::Row::wrapped)
+            .is_some_and(crate::row::Row::wrapped)
     }
 
     /// Returns the terminal's window title.

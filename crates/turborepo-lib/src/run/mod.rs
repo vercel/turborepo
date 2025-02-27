@@ -22,8 +22,9 @@ use std::{
 
 pub use cache::{CacheOutput, ConfigCache, Error as CacheError, RunCache, TaskCache};
 use chrono::{DateTime, Local};
+use futures::StreamExt;
 use rayon::iter::ParallelBridge;
-use tokio::{select, task::JoinHandle};
+use tokio::{pin, select, task::JoinHandle};
 use tracing::{debug, instrument};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_api_client::{APIAuth, APIClient};
@@ -31,6 +32,7 @@ use turborepo_ci::Vendor;
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_repository::package_graph::{PackageGraph, PackageName, PackageNode};
 use turborepo_scm::SCM;
+use turborepo_signals::{listeners::get_signal, SignalHandler};
 use turborepo_telemetry::events::generic::GenericEventBuilder;
 use turborepo_ui::{
     cprint, cprintln, sender::UISender, tui, tui::TuiSender, wui::sender::WebUISender, ColorConfig,
@@ -45,10 +47,9 @@ use crate::{
     opts::Opts,
     process::ProcessManager,
     run::{global_hash::get_global_hash_inputs, summary::RunTracker, task_access::TaskAccess},
-    signal::SignalHandler,
     task_graph::Visitor,
     task_hash::{get_external_deps_hash, get_internal_deps_hash, PackageInputsHashes},
-    turbo_json::{TurboJson, UIMode},
+    turbo_json::{TurboJson, TurboJsonLoader, UIMode},
     DaemonClient, DaemonConnector,
 };
 
@@ -66,6 +67,7 @@ pub struct Run {
     env_at_execution_start: EnvironmentVariableMap,
     filtered_pkgs: HashSet<PackageName>,
     pkg_dep_graph: Arc<PackageGraph>,
+    turbo_json_loader: TurboJsonLoader,
     root_turbo_json: TurboJson,
     scm: SCM,
     run_cache: Arc<RunCache>,
@@ -120,6 +122,10 @@ impl Run {
         } else {
             cprintln!(self.color_config, GREY, "• Remote caching disabled");
         }
+    }
+
+    pub fn turbo_json_loader(&self) -> TurboJsonLoader {
+        self.turbo_json_loader.clone()
     }
 
     pub fn opts(&self) -> &Opts {
@@ -331,8 +337,9 @@ impl Run {
                     };
 
                     let interrupt = async {
-                        if let Ok(fut) = crate::commands::run::get_signal() {
-                            fut.await;
+                        if let Ok(fut) = get_signal() {
+                            pin!(fut);
+                            fut.next().await;
                         } else {
                             tracing::warn!("could not register ctrl-c handler");
                             // wait forever
@@ -439,13 +446,9 @@ impl Run {
         let run_tracker = RunTracker::new(
             self.start_at,
             self.opts.synthesize_command(),
-            self.opts.scope_opts.pkg_inference_root.as_deref(),
             &self.env_at_execution_start,
             &self.repo_root,
             self.version,
-            self.opts.run_opts.experimental_space_id.clone(),
-            self.api_client.clone(),
-            self.api_auth.clone(),
             Vendor::get_user(),
             &self.scm,
         );

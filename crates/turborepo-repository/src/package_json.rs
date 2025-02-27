@@ -79,11 +79,11 @@ pub struct RawPnpmConfig {
 
 #[derive(Debug, thiserror::Error, Diagnostic)]
 pub enum Error {
-    #[error("unable to read package.json: {0}")]
+    #[error("Unable to read package.json: {0}")]
     Io(#[from] std::io::Error),
-    #[error("unable to parse package.json: {0}")]
+    #[error("Unable to parse package.json: {0}")]
     Json(#[from] serde_json::Error),
-    #[error("unable to parse package.json")]
+    #[error("Unable to parse package.json.")]
     #[diagnostic(code(package_json_parse_error))]
     Parse(#[related] Vec<ParseDiagnostic>),
 }
@@ -174,6 +174,7 @@ impl PackageJson {
                     .map(|d| {
                         d.with_file_source_code(contents)
                             .with_file_path(path)
+                            .as_ref()
                             .into()
                     })
                     .collect(),

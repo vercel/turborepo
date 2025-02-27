@@ -6,7 +6,7 @@ use std::{
 };
 
 use chrono::Local;
-use tracing::debug;
+use tracing::{debug, warn};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_analytics::{start_analytics, AnalyticsHandle, AnalyticsSender};
 use turborepo_api_client::{APIAuth, APIClient};
@@ -20,6 +20,7 @@ use turborepo_repository::{
     package_json::PackageJson,
 };
 use turborepo_scm::SCM;
+use turborepo_signals::{SignalHandler, SignalSubscriber};
 use turborepo_telemetry::events::{
     command::CommandEventBuilder,
     generic::{DaemonInitStatus, GenericEventBuilder},
@@ -46,7 +47,6 @@ use crate::{
     process::ProcessManager,
     run::{scope, task_access::TaskAccess, task_id::TaskName, Error, Run, RunCache},
     shim::TurboState,
-    signal::{SignalHandler, SignalSubscriber},
     turbo_json::{TurboJson, TurboJsonLoader, UIMode},
     DaemonConnector,
 };
@@ -363,7 +363,12 @@ impl RunBuilder {
         repo_telemetry.track_size(pkg_dep_graph.len());
         run_telemetry.track_run_type(self.opts.run_opts.dry_run.is_some());
         let micro_frontend_configs =
-            MicrofrontendsConfigs::from_disk(&self.repo_root, &pkg_dep_graph)?;
+            MicrofrontendsConfigs::from_disk(&self.repo_root, &pkg_dep_graph)
+                .inspect_err(|err| {
+                    warn!("Ignoring invalid microfrontends configuration: {err}");
+                })
+                .ok()
+                .flatten();
 
         let scm = scm.await.expect("detecting scm panicked");
         let async_cache = AsyncCache::new(
@@ -440,7 +445,7 @@ impl RunBuilder {
                 &pkg_dep_graph,
                 &root_turbo_json,
                 filtered_pkgs.keys(),
-                turbo_json_loader,
+                turbo_json_loader.clone(),
             )?;
         }
 
@@ -475,6 +480,7 @@ impl RunBuilder {
             env_at_execution_start,
             filtered_pkgs: filtered_pkgs.keys().cloned().collect(),
             pkg_dep_graph: Arc::new(pkg_dep_graph),
+            turbo_json_loader,
             root_turbo_json,
             scm,
             engine: Arc::new(engine),

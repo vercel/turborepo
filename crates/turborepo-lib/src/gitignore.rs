@@ -11,7 +11,7 @@ const TURBO_GITIGNORE_ENTRY: &str = ".turbo";
 const GITIGNORE_FILE: &str = ".gitignore";
 
 fn has_turbo_gitignore_entry(mut lines: io::Lines<io::BufReader<File>>) -> bool {
-    lines.any(|line| line.map_or(false, |line| line.trim() == TURBO_GITIGNORE_ENTRY))
+    lines.any(|line| line.is_ok_and(|line| line.trim() == TURBO_GITIGNORE_ENTRY))
 }
 
 fn get_ignore_string() -> String {

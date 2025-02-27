@@ -163,7 +163,7 @@ impl TurboJsonLoader {
             .expect("just inserted value for this key"))
     }
 
-    fn uncached_load(&self, package: &PackageName) -> Result<TurboJson, Error> {
+    pub fn uncached_load(&self, package: &PackageName) -> Result<TurboJson, Error> {
         match &self.strategy {
             Strategy::SinglePackage {
                 package_json,
@@ -755,7 +755,7 @@ mod test {
                 (
                     "web",
                     turborepo_microfrontends::Config::from_str(
-                        r#"{"version": "2", "applications": {"web": {}, "docs": {}}}"#,
+                        r#"{"version": "1", "applications": {"web": {}, "docs": {}}}"#,
                         "mfe.json",
                     )
                     .map(Some),

@@ -13,8 +13,7 @@ use serde::Deserialize;
 use turborepo_ci::{is_ci, Vendor};
 use turborepo_vercel_api::{
     token::ResponseTokenMetadata, APIError, CachingStatus, CachingStatusResponse,
-    PreflightResponse, SpacesResponse, Team, TeamsResponse, UserResponse, VerificationResponse,
-    VerifiedSsoUser,
+    PreflightResponse, Team, TeamsResponse, UserResponse, VerificationResponse, VerifiedSsoUser,
 };
 use url::Url;
 
@@ -23,7 +22,6 @@ pub use crate::error::{Error, Result};
 pub mod analytics;
 mod error;
 mod retry;
-pub mod spaces;
 pub mod telemetry;
 
 pub use bytes::Bytes;
@@ -43,11 +41,6 @@ pub trait Client {
         team_id: &str,
     ) -> impl Future<Output = Result<Option<Team>>> + Send;
     fn add_ci_header(request_builder: RequestBuilder) -> RequestBuilder;
-    fn get_spaces(
-        &self,
-        token: &str,
-        team_id: Option<&str>,
-    ) -> impl Future<Output = Result<SpacesResponse>> + Send;
     fn verify_sso_token(
         &self,
         token: &str,
@@ -137,7 +130,7 @@ impl std::fmt::Debug for APIAuth {
 pub fn is_linked(api_auth: &Option<APIAuth>) -> bool {
     api_auth
         .as_ref()
-        .map_or(false, |api_auth| api_auth.is_linked())
+        .is_some_and(|api_auth| api_auth.is_linked())
 }
 
 impl Client for APIClient {
@@ -197,29 +190,6 @@ impl Client for APIClient {
         }
 
         request_builder
-    }
-
-    async fn get_spaces(&self, token: &str, team_id: Option<&str>) -> Result<SpacesResponse> {
-        // create url with teamId if provided
-        let endpoint = match team_id {
-            Some(team_id) => format!("/v0/spaces?limit=100&teamId={}", team_id),
-            None => "/v0/spaces?limit=100".to_string(),
-        };
-
-        let request_builder = self
-            .client
-            .get(self.make_url(endpoint.as_str())?)
-            .header("User-Agent", self.user_agent.clone())
-            .header("Content-Type", "application/json")
-            .header("Authorization", format!("Bearer {}", token));
-
-        let response =
-            retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout)
-                .await?
-                .into_response()
-                .error_for_status()?;
-
-        Ok(response.json().await?)
     }
 
     async fn verify_sso_token(&self, token: &str, token_name: &str) -> Result<VerifiedSsoUser> {
@@ -628,6 +598,10 @@ impl APIClient {
         self.base_url.as_str()
     }
 
+    pub fn with_base_url(&mut self, base_url: String) {
+        self.base_url = base_url;
+    }
+
     async fn do_preflight(
         &self,
         token: &str,
@@ -901,7 +875,7 @@ mod test {
                 .unwrap(),
         );
         let err = APIClient::handle_403(response).await;
-        assert_snapshot!(err.to_string(), @"unknown status forbidden: Not authorized");
+        assert_snapshot!(err.to_string(), @"Unknown status forbidden: Not authorized");
     }
 
     #[tokio::test]

@@ -20,6 +20,7 @@ mod daemon;
 mod diagnostics;
 mod engine;
 
+mod boundaries;
 mod framework;
 mod gitignore;
 pub(crate) mod globwatcher;
@@ -33,7 +34,6 @@ mod query;
 mod rewrite_json;
 mod run;
 mod shim;
-mod signal;
 mod task_graph;
 mod task_hash;
 mod tracing;

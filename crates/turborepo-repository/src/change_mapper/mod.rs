@@ -122,6 +122,12 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
     pub fn changed_packages(
         &self,
         changed_files: HashSet<AnchoredSystemPathBuf>,
+        // None - we don't know if the lockfile changed
+        //
+        // Some(None) - we know the lockfile changed, but don't know exactly why (i.e. `git status`
+        // and the lockfile is there)
+        //
+        // Some(Some(content)) - we know the lockfile changed and have the contents
         lockfile_change: Option<Option<Vec<u8>>>,
     ) -> Result<PackageChanges, ChangeMapError> {
         if let Some(file) = Self::default_global_file_changed(&changed_files) {

@@ -33,7 +33,7 @@ impl From<TaskId<'static>> for TaskNode {
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("expected a task node, got root")]
+    #[error("Expected a task node, but got workspace root.")]
     Root,
 }
 
@@ -116,7 +116,7 @@ impl Engine<Building> {
         let has_location = self
             .task_locations
             .get(&task_id)
-            .map_or(false, |existing| existing.range.is_some());
+            .is_some_and(|existing| existing.range.is_some());
 
         if !has_location {
             self.task_locations.insert(task_id, location);
@@ -196,7 +196,7 @@ impl Engine<Built> {
                     .any(|idx| {
                         node_distances
                             .get(&(**idx, node_idx))
-                            .map_or(false, |dist| *dist != i32::MAX)
+                            .is_some_and(|dist| *dist != i32::MAX)
                     })
                     .then_some(node.clone())
             },
@@ -469,7 +469,7 @@ impl Engine<Built> {
                             .task_locations
                             .get(dep_id)
                             .map(|spanned| spanned.span_and_text("turbo.json"))
-                            .unwrap_or((None, NamedSource::new("", "")));
+                            .unwrap_or((None, NamedSource::new("", String::new())));
 
                         return Err(ValidateError::DependencyOnPersistentTask {
                             span,
@@ -490,12 +490,12 @@ impl Engine<Built> {
                     .scripts
                     .get(task_id.task())
                     // handle legacy behaviour from go where an empty string may appear
-                    .map_or(false, |script| !script.is_empty());
+                    .is_some_and(|script| !script.is_empty());
 
                 let task_is_persistent = self
                     .task_definitions
                     .get(task_id)
-                    .map_or(false, |task_def| task_def.persistent);
+                    .is_some_and(|task_def| task_def.persistent);
 
                 Ok(task_is_persistent && package_has_task)
             })
@@ -518,6 +518,8 @@ impl Engine<Built> {
         }
 
         validation_errors.extend(self.validate_interactive(ui_mode));
+
+        validation_errors.sort();
 
         match validation_errors.is_empty() {
             true => Ok(()),
@@ -547,7 +549,7 @@ impl Engine<Built> {
     }
 }
 
-#[derive(Debug, Error, Diagnostic)]
+#[derive(Debug, Error, Diagnostic, PartialEq, PartialOrd, Eq, Ord)]
 pub enum ValidateError {
     #[error("Cannot find task definition for {task_id} in package {package_name}")]
     MissingTask {
@@ -561,7 +563,7 @@ pub enum ValidateError {
         #[label("persistent task")]
         span: Option<SourceSpan>,
         #[source_code]
-        text: NamedSource,
+        text: NamedSource<String>,
         persistent_task: String,
         dependant: String,
     },

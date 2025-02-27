@@ -6,7 +6,7 @@ export const metadata = {
   title: "Store | Kitchen Sink",
 };
 
-export default function Store(): JSX.Element {
+export default function Store() {
   log("Hey! This is the Store page.");
 
   return (

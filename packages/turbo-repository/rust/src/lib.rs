@@ -7,14 +7,14 @@ use napi::Error;
 use napi_derive::napi;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 use turborepo_repository::{
-    change_mapper::{ChangeMapper, DefaultPackageChangeMapper, PackageChanges},
+    change_mapper::{ChangeMapper, GlobalDepsPackageChangeMapper, PackageChanges},
     inference::RepoState as WorkspaceState,
     package_graph::{PackageGraph, PackageName, PackageNode, WorkspacePackage, ROOT_PKG_NAME},
 };
 mod internal;
 
 #[napi]
-#[derive(PartialEq, Eq, Hash, Clone)]
+#[derive(PartialEq, Eq, Hash, Clone, Debug)]
 pub struct Package {
     pub name: String,
     /// The absolute path to the package root.
@@ -187,12 +187,15 @@ impl Workspace {
     /// of strings relative to the monorepo root and use the current system's
     /// path separator.
     #[napi]
-    pub async fn affected_packages(&self, files: Vec<String>) -> Result<Vec<Package>, Error> {
+    pub async fn affected_packages(
+        &self,
+        files: Vec<String>,
+        changed_lockfile: Option<String>,
+    ) -> Result<Vec<Package>, Error> {
         let workspace_root = match AbsoluteSystemPath::new(&self.absolute_path) {
             Ok(path) => path,
             Err(e) => return Err(Error::from_reason(e.to_string())),
         };
-
         let hash_set_of_paths: HashSet<AnchoredSystemPathBuf> = files
             .into_iter()
             .filter_map(|path| {
@@ -203,9 +206,11 @@ impl Workspace {
             .collect();
 
         // Create a ChangeMapper with no ignore patterns
-        let default_package_detector = DefaultPackageChangeMapper::new(&self.graph);
-        let mapper = ChangeMapper::new(&self.graph, vec![], default_package_detector);
-        let package_changes = match mapper.changed_packages(hash_set_of_paths, None) {
+        let global_deps_package_detector =
+            GlobalDepsPackageChangeMapper::new(&self.graph, std::iter::empty::<&str>()).unwrap();
+        let mapper = ChangeMapper::new(&self.graph, vec![], global_deps_package_detector);
+        let lockfile_change = changed_lockfile.map(|s| Some(s.into_bytes()));
+        let package_changes = match mapper.changed_packages(hash_set_of_paths, lockfile_change) {
             Ok(changes) => changes,
             Err(e) => return Err(Error::from_reason(e.to_string())),
         };

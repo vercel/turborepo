@@ -59,7 +59,8 @@ pnpm dlx create-turbo@latest
 Inside `packages/typescript-config`, you have a few `json` files which represent different ways you might want to configure TypeScript in various packages. The `base.json` file is extended by every other `tsconfig.json` in the workspace and looks like this:
 
 ```json title="./packages/typescript-config/base.json"
-"compilerOptions": {
+{
+  "compilerOptions": {
     "esModuleInterop": true,
     "skipLibCheck": true,
     "target": "es2022",
@@ -70,10 +71,13 @@ Inside `packages/typescript-config`, you have a few `json` files which represent
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "module": "NodeNext"
+  }
 }
 ```
 
-<LinkToDocumentation href="https://www.typescriptlang.org/tsconfig">`tsconfig` options reference</LinkToDocumentation>
+<LinkToDocumentation href="https://www.typescriptlang.org/tsconfig">
+  `tsconfig` options reference
+</LinkToDocumentation>
 
 ### Creating the rest of the package
 
@@ -157,13 +161,9 @@ Then, set up the entrypoints for your package in `package.json` so that other pa
 ```json title="./packages/ui/package.json"
 {
   "exports": {
-    "./button": {
-      "types": "./src/button.ts"
-      "default": "./dist/button.js",
-    },
-    "./input": {
-      "types": "./src/input.ts"
-      "default": "./dist/input.js",
+    "./*": {
+      "types": "./src/*.ts"
+      "default": "./dist/*.js",
     }
   }
 }
@@ -173,7 +173,7 @@ Setting up `exports` this way has several advantages:
 
 - Using the `types` field allows `tsserver` to use the code in `src` as the source of truth for your code's types. Your editor will always be up-to-date with the latest interfaces from your code.
 - You can quickly add new entrypoints to your package without creating [dangerous barrel files](https://vercel.com/blog/how-we-optimized-package-imports-in-next-js#what's-the-problem-with-barrel-files).
-- You'll receive auto-importing suggestions for your imports across package boundaries in your editor. For more information about why you may not want to wildcard the entrypoints, see the [limitations section](#package-entrypoint-wildcards).
+- You'll receive auto-importing suggestions for your imports across package boundaries in your editor.
 
 <Callout type="warn">
   If you're publishing the package, you cannot use references to source code in
@@ -224,7 +224,7 @@ For [Internal Packages](/repo/docs/core-concepts/internal-packages), we recommen
 
 #### Just-in-Time Packages
 
-Exports from [Just-in-Time Packages](/repo/docs/core-concepts/internal-packages#just-in-time-packages) will automatically bring you to the original TypeScript source code as long as you aren't using [entrypoint wildcards](#package-entrypoint-wildcards). Go-to-definition will work as expected.
+Exports from [Just-in-Time Packages](/repo/docs/core-concepts/internal-packages#just-in-time-packages) will automatically bring you to the original TypeScript source code. Go-to-definition will work as expected.
 
 #### Compiled Packages
 
@@ -294,7 +294,7 @@ In [Compiled packages](https://turbo.build/repo/docs/core-concepts/internal-pack
   <Tab value="Source code">
 
 ```tsx title="./packages/ui/button.tsx"
-import { MY_STRING } from "#utils.js"; // Uses .js extension // [!code highlight]
+import { MY_STRING } from '#utils.js'; // Uses .js extension // [!code highlight]
 
 export const Button = () => {
   return <button>{MY_STRING}</button>;
@@ -324,20 +324,3 @@ We don't recommend using TypeScript Project References as they introduce both an
 `tsserver` is not able to use different TypeScript versions for different packages in your code editor. Instead, it will discover a specific version and use that everywhere.
 
 This can result in differences between the linting errors that show in your editor and when you run `tsc` scripts to check types. If this is an issue for you, consider [keeping the TypeScript dependency on the same version](/repo/docs/crafting-your-repository/managing-dependencies#keeping-dependencies-on-the-same-version).
-
-### Package entrypoint wildcards
-
-We recommend [listing the entrypoints to your package explicitly](/repo/docs/guides/tools/typescript#creating-entrypoints-to-the-package) - but, to some, this feels too verbose. Instead, you can use wildcards to capture entrypoints:
-
-```json title="./packages/ui/package.json"
-{
-  "exports": {
-    "./*": {
-      "types": "./src/*.ts",
-      "default": "./dist/*.js"
-    }
-  }
-}
-```
-
-While this will work, it comes with the tradeoff of not being able to auto-import across package boundaries [due to performance reasons with the TypeScript compiler](https://github.com/microsoft/TypeScript/issues/53116#issuecomment-1458887175). This tradeoff may or may not be worth it to you depending on your use case.

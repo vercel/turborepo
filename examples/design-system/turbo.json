@@ -15,6 +15,12 @@
     },
     "clean": {
       "cache": false
+    },
+    "preview-storybook": {
+      "dependsOn": [
+        "^build"
+      ],
+      "cache": false
     }
   }
 }

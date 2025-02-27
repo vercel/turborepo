@@ -4,6 +4,7 @@ use std::{
 };
 
 use itertools::Itertools;
+use petgraph::graph::{Edge, NodeIndex};
 use serde::Serialize;
 use tracing::debug;
 use turbopath::{
@@ -219,8 +220,24 @@ impl PackageGraph {
         self.packages.get(package)
     }
 
+    pub fn get_package_by_index(&self, index: NodeIndex) -> Option<&PackageNode> {
+        self.graph.node_weight(index)
+    }
+
+    pub fn node_indices(&self) -> impl Iterator<Item = NodeIndex> {
+        self.graph.node_indices()
+    }
+
+    pub fn edges(&self) -> &[Edge<()>] {
+        self.graph.raw_edges()
+    }
+
     pub fn packages(&self) -> impl Iterator<Item = (&PackageName, &PackageInfo)> {
         self.packages.iter()
+    }
+
+    pub fn get_page_rank(&self) -> Vec<f64> {
+        petgraph::algo::page_rank::page_rank(&self.graph, 0.85, 1)
     }
 
     pub fn root_package_json(&self) -> &PackageJson {
@@ -906,7 +923,7 @@ mod test {
         assert_matches!(
             pkg_graph.validate(),
             Err(builder::Error::InvalidPackageGraph(
-                graph::Error::CyclicDependencies(_)
+                graph::Error::CyclicDependencies { .. }
             ))
         );
     }

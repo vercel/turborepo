@@ -5,20 +5,20 @@ use serde::Serialize;
 use thiserror::Error;
 use turbopath::AnchoredSystemPath;
 use turborepo_repository::package_graph::{PackageName, PackageNode};
+use turborepo_signals::{listeners::get_signal, SignalHandler};
 use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_ui::{color, cprint, cprintln, ColorConfig, BOLD, BOLD_GREEN, GREY};
 
 use crate::{
     cli,
     cli::OutputFormat,
-    commands::{run::get_signal, CommandBase},
+    commands::CommandBase,
     run::{builder::RunBuilder, Run},
-    signal::SignalHandler,
 };
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
-    #[error("package `{package}` not found")]
+    #[error("Package `{package}` not found.")]
     PackageNotFound { package: String },
 }
 
@@ -115,7 +115,7 @@ pub async fn run(
     telemetry: CommandEventBuilder,
     output: Option<OutputFormat>,
 ) -> Result<(), cli::Error> {
-    let signal = get_signal()?;
+    let signal = get_signal().map_err(crate::run::Error::from)?;
     let handler = SignalHandler::new(signal);
 
     let run_builder = RunBuilder::new(base)?;

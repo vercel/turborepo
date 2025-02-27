@@ -19,15 +19,14 @@
 // 		 └── workspace-c#build
 // 		 		 └── workspace-z#dev	// this one is persistent
   $ ${TURBO} run build
-    x invalid task configuration
-  
-  Error:   x "pkg-z#dev" is a persistent task, "pkg-b#build" cannot depend on it
-     ,-[turbo.json:7:1]
-   7 |     "pkg-b#build": {
-   8 |       "dependsOn": ["pkg-z#dev"]
-     :                     ^^^^^|^^^^^
-     :                          `-- persistent task
-   9 |     },
-     `----
+    x Invalid task configuration
+    `->   x "pkg-z#dev" is a persistent task, "pkg-b#build" cannot depend on it
+           ,-[turbo.json:8:21]
+         7 |     "pkg-b#build": {
+         8 |       "dependsOn": ["pkg-z#dev"]
+           :                     ^^^^^|^^^^^
+           :                          `-- persistent task
+         9 |     },
+           `----
   
   [1]

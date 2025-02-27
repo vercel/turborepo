@@ -29,7 +29,7 @@ pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
     MultipleCwd(Box<MultipleCwd>),
-    #[error("No value assigned to `--cwd` flag")]
+    #[error("No value assigned to `--cwd` flag.")]
     #[diagnostic(code(turbo::shim::empty_cwd))]
     EmptyCwd {
         #[backtrace]
@@ -44,15 +44,15 @@ pub enum Error {
     Cli(#[from] cli::Error),
     #[error(transparent)]
     Inference(#[from] turborepo_repository::inference::Error),
-    #[error("failed to execute local turbo process")]
+    #[error("Failed to execute local `turbo` process.")]
     LocalTurboProcess(#[source] std::io::Error),
-    #[error("failed to resolve local turbo path: {0}")]
+    #[error("Failed to resolve local `turbo` path: {0}")]
     LocalTurboPath(String),
-    #[error("failed to find npx: {0}")]
+    #[error("Failed to find `npx`: {0}")]
     Which(#[from] which::Error),
-    #[error("failed to execute turbo via npx")]
+    #[error("Failed to execute `turbo` via `npx`.")]
     NpxTurboProcess(#[source] std::io::Error),
-    #[error("failed to resolve repository root: {0}")]
+    #[error("Failed to resolve repository root: {0}")]
     RepoRootPath(AbsoluteSystemPathBuf),
     #[error(transparent)]
     Path(#[from] turbopath::PathError),
@@ -288,8 +288,17 @@ pub fn run() -> Result<i32, Error> {
         let _ = miette::set_hook(Box::new(|_| {
             Box::new(
                 miette::MietteHandlerOpts::new()
+                    .show_related_errors_as_nested()
                     .color(false)
                     .unicode(false)
+                    .build(),
+            )
+        }));
+    } else {
+        let _ = miette::set_hook(Box::new(|_| {
+            Box::new(
+                miette::MietteHandlerOpts::new()
+                    .show_related_errors_as_nested()
                     .build(),
             )
         }));

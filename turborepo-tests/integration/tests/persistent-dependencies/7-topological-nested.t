@@ -20,15 +20,14 @@
 # error message should say. Leaving as-is so we don't have to implement special casing logic to handle
 # this case.
   $ ${TURBO} run dev
-    x invalid task configuration
-  
-  Error:   x "pkg-b#dev" is a persistent task, "pkg-a#dev" cannot depend on it
-     ,-[turbo.json:4:1]
-   4 |     "dev": {
-   5 |       "dependsOn": ["^dev"],
-     :                     ^^^|^^
-     :                        `-- persistent task
-   6 |       "persistent": true
-     `----
+    x Invalid task configuration
+    `->   x "pkg-b#dev" is a persistent task, "pkg-a#dev" cannot depend on it
+           ,-[turbo.json:5:21]
+         4 |     "dev": {
+         5 |       "dependsOn": ["^dev"],
+           :                     ^^^|^^
+           :                        `-- persistent task
+         6 |       "persistent": true
+           `----
   
   [1]

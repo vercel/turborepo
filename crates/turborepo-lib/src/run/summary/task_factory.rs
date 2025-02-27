@@ -28,9 +28,9 @@ pub struct TaskSummaryFactory<'a> {
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("no workspace found for {0}")]
+    #[error("No workspace found for {0}")]
     MissingWorkspace(String),
-    #[error("no task definition found for {0}")]
+    #[error("No task definition found for {0}")]
     MissingTask(TaskId<'static>),
 }
 
@@ -146,11 +146,11 @@ impl<'a> TaskSummaryFactory<'a> {
 
         let (dependencies, dependents) = self.dependencies_and_dependents(task_id, display_task);
 
-        let log_file = {
+        let log_file = task_definition.cache.then(|| {
             let path = workspace_info.package_path().to_owned();
             let relative_log_file = TaskDefinition::workspace_relative_log_file(task_id.task());
             path.join(&relative_log_file).to_string()
-        };
+        });
 
         Ok(SharedTaskSummary {
             hash,

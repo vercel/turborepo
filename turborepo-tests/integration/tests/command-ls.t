@@ -10,31 +10,7 @@ Run info
     my-app apps[\/\\]my-app (re)
     util packages[\/\\]util (re)
 
-Run info with json output
-  $ ${TURBO} ls --output=json
-   WARNING  ls command is experimental and may change in the future
-  {
-    "packageManager": "npm",
-    "packages": {
-      "count": 3,
-      "items": [
-        {
-          "name": "another",
-          "path": "packages(\/|\\\\)another" (re)
-        },
-        {
-          "name": "my-app",
-          "path": "apps(\/|\\\\)my-app" (re)
-        },
-        {
-          "name": "util",
-          "path": "packages(\/|\\\\)util" (re)
-        }
-      ]
-    }
-  }
-
-Run info with filter
+Run ls with filter
   $ ${TURBO} ls -F my-app...
    WARNING  ls command is experimental and may change in the future
   2 packages (npm)
@@ -42,7 +18,7 @@ Run info with filter
     my-app apps[\/\\]my-app (re)
     util packages[\/\\]util (re)
 
-Run info on package `another`
+Run ls on package `another`
   $ ${TURBO} ls another
    WARNING  ls command is experimental and may change in the future
   another depends on: <no packages>
@@ -51,7 +27,7 @@ Run info on package `another`
     dev: echo building
   
 
-Run info on package `my-app`
+Run ls on package `my-app`
   $ ${TURBO} ls my-app
    WARNING  ls command is experimental and may change in the future
   my-app depends on: util
@@ -60,29 +36,3 @@ Run info on package `my-app`
     build: echo building
     maybefails: exit 4
   
-Run info on package `my-app` with json output
-  $ ${TURBO} ls my-app --output=json
-   WARNING  ls command is experimental and may change in the future
-  {
-    "packages": [
-      {
-        "name": "my-app",
-        "tasks": {
-          "count": 2,
-          "items": [
-            {
-              "name": "build",
-              "command": "echo building"
-            },
-            {
-              "name": "maybefails",
-              "command": "exit 4"
-            }
-          ]
-        },
-        "dependencies": [
-          "util"
-        ]
-      }
-    ]
-  }

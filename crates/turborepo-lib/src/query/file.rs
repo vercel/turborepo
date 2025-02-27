@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use async_graphql::{Enum, Object, SimpleObject};
 use camino::Utf8PathBuf;
-use itertools::Itertools;
 use miette::SourceCode;
 use swc_ecma_ast::EsVersion;
 use swc_ecma_parser::{EsSyntax, Syntax, TsSyntax};
@@ -10,7 +9,7 @@ use turbo_trace::Tracer;
 use turbopath::AbsoluteSystemPathBuf;
 
 use crate::{
-    query::{Array, Error},
+    query::{Array, Diagnostic, Error},
     run::Run,
 };
 
@@ -73,40 +72,30 @@ impl File {
     }
 }
 
-#[derive(SimpleObject, Debug, Default)]
-pub struct TraceError {
-    message: String,
-    reason: String,
-    path: Option<String>,
-    import: Option<String>,
-    start: Option<usize>,
-    end: Option<usize>,
-}
-
-impl From<turbo_trace::TraceError> for TraceError {
+impl From<turbo_trace::TraceError> for Diagnostic {
     fn from(error: turbo_trace::TraceError) -> Self {
         let message = error.to_string();
         match error {
-            turbo_trace::TraceError::FileNotFound(file) => TraceError {
+            turbo_trace::TraceError::FileNotFound(file) => Diagnostic {
                 message,
                 path: Some(file.to_string()),
                 ..Default::default()
             },
-            turbo_trace::TraceError::PathEncoding(_) => TraceError {
+            turbo_trace::TraceError::PathError(_) => Diagnostic {
                 message,
                 ..Default::default()
             },
-            turbo_trace::TraceError::RootFile(path) => TraceError {
+            turbo_trace::TraceError::RootFile(path) => Diagnostic {
                 message,
                 path: Some(path.to_string()),
                 ..Default::default()
             },
-            turbo_trace::TraceError::ParseError(path, e) => TraceError {
+            turbo_trace::TraceError::ParseError(path, e) => Diagnostic {
                 message: format!("failed to parse file: {:?}", e),
                 path: Some(path.to_string()),
                 ..Default::default()
             },
-            turbo_trace::TraceError::GlobError(err) => TraceError {
+            turbo_trace::TraceError::GlobError(err) => Diagnostic {
                 message: format!("failed to glob files: {}", err),
                 ..Default::default()
             },
@@ -122,10 +111,10 @@ impl From<turbo_trace::TraceError> for TraceError {
                     .ok()
                     .map(|s| String::from_utf8_lossy(s.data()).to_string());
 
-                TraceError {
+                Diagnostic {
                     message,
                     import,
-                    reason,
+                    reason: Some(reason.to_string()),
                     path: Some(file_path),
                     start: Some(span.offset()),
                     end: Some(span.offset() + span.len()),
@@ -138,18 +127,19 @@ impl From<turbo_trace::TraceError> for TraceError {
 #[derive(SimpleObject)]
 struct TraceResult {
     files: Array<File>,
-    errors: Array<TraceError>,
+    errors: Array<Diagnostic>,
 }
 
 impl TraceResult {
     fn new(result: turbo_trace::TraceResult, run: Arc<Run>) -> Result<Self, Error> {
+        let mut files = result
+            .files
+            .into_iter()
+            .map(|(path, file)| Ok(File::new(run.clone(), path)?.with_ast(file.ast)))
+            .collect::<Result<Vec<_>, Error>>()?;
+        files.sort_by(|a, b| a.path.cmp(&b.path));
         Ok(Self {
-            files: result
-                .files
-                .into_iter()
-                .sorted_by(|a, b| a.0.cmp(&b.0))
-                .map(|(path, file)| Ok(File::new(run.clone(), path)?.with_ast(file.ast)))
-                .collect::<Result<_, Error>>()?,
+            files: Array::from(files),
             errors: result.errors.into_iter().map(|e| e.into()).collect(),
         })
     }
@@ -166,12 +156,12 @@ pub enum ImportType {
     Values,
 }
 
-impl From<ImportType> for turbo_trace::ImportType {
+impl From<ImportType> for turbo_trace::ImportTraceType {
     fn from(import_type: ImportType) -> Self {
         match import_type {
-            ImportType::All => turbo_trace::ImportType::All,
-            ImportType::Types => turbo_trace::ImportType::Types,
-            ImportType::Values => turbo_trace::ImportType::Values,
+            ImportType::All => turbo_trace::ImportTraceType::All,
+            ImportType::Types => turbo_trace::ImportTraceType::Types,
+            ImportType::Values => turbo_trace::ImportTraceType::Values,
         }
     }
 }

@@ -32,9 +32,9 @@ pub struct DiscoveryResponse {
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
-    #[error("discovery unavailable")]
+    #[error("Discovery unavailable")]
     Unavailable,
-    #[error("discovery failed: {0}")]
+    #[error("Discovery failed: {0}")]
     Failed(Box<dyn std::error::Error + Send + Sync>),
 }
 

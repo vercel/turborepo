@@ -5,7 +5,7 @@ Should error if `--cwd` flag doesn't have path passed along with it
   $ ${TURBO} foo bar --cwd
   turbo::shim::empty_cwd
   
-    \xc3\x97 No value assigned to `--cwd` flag (esc)
+    \xc3\x97 No value assigned to `--cwd` flag. (esc)
      \xe2\x95\xad\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80 (esc)
    1 \xe2\x94\x82 foo bar --cwd (esc)
      \xc2\xb7         \xe2\x94\x80\xe2\x94\x80\xe2\x94\xac\xe2\x94\x80\xe2\x94\x80 (esc)

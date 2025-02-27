@@ -1,6 +1,6 @@
 # Turborepo non-monorepo starter
 
-This is an official starter Turborepo.
+This Turborepo starter is maintained by the Turborepo core team.
 
 ## Using this example
 
@@ -12,19 +12,31 @@ npx create-turbo@latest -e non-monorepo
 
 ## What's inside?
 
-This Turborepo uses a single, non-monorepo project (in this case, a single Next.js application). Since [Turborepo 1.6](https://turbo.build/blog/turbo-1-6-0#any-codebase-can-use-turborepo), you can use Turborepo for non-monorepo projects as well as monorepos.
+This Turborepo uses a single, non-monorepo project (in this case, a single Next.js application).
 
-### Build
+### Tasks
 
-To build all apps and packages, run the following command:
+There are several Turborepo tasks already set up for you to use.
+
+#### Build the application
 
 ```
 pnpm turbo build
 ```
 
-### Develop
+#### Lint source code
 
-To develop all apps and packages, run the following command:
+```
+pnpm turbo lint
+```
+
+#### Type check source code
+
+```
+pnpm turbo check-types
+```
+
+#### Run the application's development server
 
 ```
 pnpm turbo dev

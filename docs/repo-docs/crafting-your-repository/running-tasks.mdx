@@ -157,9 +157,16 @@ When you're working on a specific package, you might want to run tasks for the p
 turbo build --filter=...ui
 ```
 
+### Filtering to include dependencies
+To limit the scope to a package and its dependencies, append `...` to the package name. This runs the task for the specified package and all packages it depends on.
+
+```bash title="Terminal"
+turbo dev --filter=web...
+```
+
 ### Filtering by source control changes
 
-Using filters to run tasks based on changes in source control is a great way to run only the tasks for packages that are affected by your changes. **Source control filters must be wrapped in `[]`**.
+Using filters to run tasks based on changes in source control is a great way to run tasks only for the packages that are affected by your changes. **Source control filters must be wrapped in `[]`**.
 
 - **Comparing to the previous commit**: `turbo build --filter=[HEAD^1]`
 - **Comparing to the main branch**: `turbo build --filter=[main...my-feature]`

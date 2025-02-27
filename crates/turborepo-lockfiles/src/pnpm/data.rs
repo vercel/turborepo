@@ -21,9 +21,13 @@ pub struct PnpmLockfile {
     #[serde(skip_serializing_if = "Option::is_none")]
     settings: Option<LockfileSettings>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pnpmfile_checksum: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     never_built_dependencies: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     only_built_dependencies: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    ignored_optional_dependencies: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     overrides: Option<Map<String, String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -482,12 +486,14 @@ impl crate::Lockfile for PnpmLockfile {
             lockfile_version: self.lockfile_version.clone(),
             never_built_dependencies: self.never_built_dependencies.clone(),
             only_built_dependencies: self.only_built_dependencies.clone(),
+            ignored_optional_dependencies: self.ignored_optional_dependencies.clone(),
             overrides: self.overrides.clone(),
             package_extensions_checksum: self.package_extensions_checksum.clone(),
             patched_dependencies: patches,
             snapshots: pruned_snapshots,
             time: None,
             settings: self.settings.clone(),
+            pnpmfile_checksum: self.pnpmfile_checksum.clone(),
         }))
     }
 

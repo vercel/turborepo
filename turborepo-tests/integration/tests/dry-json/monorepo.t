@@ -179,8 +179,7 @@ Run again with NODE_ENV set and see the value in the summary. --filter=util work
 
 Tasks that don't exist throw an error
   $ ${TURBO} run doesnotexist --dry=json
-    x missing tasks in project
-  
-  Error:   x could not find task `doesnotexist` in project
+    x Missing tasks in project
+    `->   x Could not find task `doesnotexist` in project
   
   [1]
