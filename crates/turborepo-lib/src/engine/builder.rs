@@ -1506,4 +1506,45 @@ mod test {
             .unwrap();
         assert_snapshot!(msg);
     }
+
+    #[test]
+    fn test_filter_removes_task_def() {
+        let repo_root_dir = TempDir::with_prefix("repo").unwrap();
+        let repo_root = AbsoluteSystemPathBuf::new(repo_root_dir.path().to_str().unwrap()).unwrap();
+        let package_graph = mock_package_graph(
+            &repo_root,
+            package_jsons! {
+                repo_root,
+                "app1" => ["libA"],
+                "libA" => []
+            },
+        );
+        let turbo_jsons = vec![
+            (
+                PackageName::Root,
+                turbo_json(json!({
+                    "tasks": {
+                        "build": { "dependsOn": ["^build"] },
+                    }
+                })),
+            ),
+            (
+                PackageName::from("app1"),
+                turbo_json(json!({
+                    "tasks": {
+                        "app1-only": {},
+                    }
+                })),
+            ),
+        ]
+        .into_iter()
+        .collect();
+        let loader = TurboJsonLoader::noop(turbo_jsons);
+        let engine = EngineBuilder::new(&repo_root, &package_graph, loader.clone(), false)
+            .with_tasks(vec![Spanned::new(TaskName::from("app1-only"))])
+            .with_workspaces(vec![PackageName::from("libA")])
+            .build()
+            .unwrap();
+        assert_eq!(engine.tasks().count(), 0);
+    }
 }
