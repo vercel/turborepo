@@ -115,7 +115,7 @@ pub async fn run(
     telemetry: CommandEventBuilder,
     output: Option<OutputFormat>,
 ) -> Result<(), cli::Error> {
-    let signal = get_signal().map_err(crate::run::Error::SignalHandler)?;
+    let signal = get_signal().map_err(crate::run::Error::from)?;
     let handler = SignalHandler::new(signal);
 
     let run_builder = RunBuilder::new(base)?;

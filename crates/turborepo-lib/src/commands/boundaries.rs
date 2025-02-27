@@ -4,7 +4,7 @@ use turborepo_telemetry::events::command::CommandEventBuilder;
 use crate::{cli, commands::CommandBase, run::builder::RunBuilder};
 
 pub async fn run(base: CommandBase, telemetry: CommandEventBuilder) -> Result<i32, cli::Error> {
-    let signal = get_signal().map_err(crate::run::Error::SignalHandler)?;
+    let signal = get_signal().map_err(crate::run::Error::from)?;
     let handler = SignalHandler::new(signal);
 
     let run = RunBuilder::new(base)?

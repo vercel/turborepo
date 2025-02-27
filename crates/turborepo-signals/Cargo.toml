@@ -6,6 +6,7 @@ license = "MIT"
 
 [dependencies]
 futures = "0.3.30"
+thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full", "time"] }
 
 [dev-dependencies]

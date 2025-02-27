@@ -2,9 +2,13 @@ use futures::{stream, Stream};
 
 use crate::signals::Signal;
 
+#[derive(Debug, thiserror::Error)]
+#[error("Failed to register signal handler: {0}")]
+pub struct Error(#[from] std::io::Error);
+
 #[cfg(windows)]
 /// A listener for Windows Console Ctrl-C events
-pub fn get_signal() -> Result<impl Stream<Item = Option<Signal>>, std::io::Error> {
+pub fn get_signal() -> Result<impl Stream<Item = Option<Signal>>, Error> {
     let mut ctrl_c = tokio::signal::windows::ctrl_c()?;
     Ok(stream::once(async move {
         ctrl_c.recv().await.map(|_| Signal::CtrlC)
@@ -15,7 +19,7 @@ pub fn get_signal() -> Result<impl Stream<Item = Option<Signal>>, std::io::Error
 /// A listener for commong Unix signals that require special handling
 ///
 /// Currently listens for SIGINT and SIGTERM
-pub fn get_signal() -> Result<impl Stream<Item = Option<Signal>>, std::io::Error> {
+pub fn get_signal() -> Result<impl Stream<Item = Option<Signal>>, Error> {
     use tokio::signal::unix;
     let mut sigint = unix::signal(unix::SignalKind::interrupt())?;
     let mut sigterm = unix::signal(unix::SignalKind::terminate())?;

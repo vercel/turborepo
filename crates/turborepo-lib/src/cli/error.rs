@@ -78,7 +78,7 @@ pub async fn print_potential_tasks(
     base: CommandBase,
     telemetry: CommandEventBuilder,
 ) -> Result<(), Error> {
-    let signal = get_signal().map_err(run::Error::SignalHandler)?;
+    let signal = get_signal().map_err(run::Error::from)?;
     let handler = SignalHandler::new(signal);
     let color_config = base.color_config;
 

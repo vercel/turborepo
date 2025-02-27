@@ -161,7 +161,7 @@ pub async fn run(
     variables_path: Option<&Utf8Path>,
     include_schema: bool,
 ) -> Result<i32, Error> {
-    let signal = get_signal()?;
+    let signal = get_signal().map_err(crate::run::Error::from)?;
     let handler = SignalHandler::new(signal);
 
     let run_builder = RunBuilder::new(base)?
