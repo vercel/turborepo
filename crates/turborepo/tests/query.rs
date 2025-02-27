@@ -18,6 +18,7 @@ fn test_query() -> Result<(), anyhow::Error> {
         "get the indirect dependencies of `my-app`" => ["query { packages(filter: {equal: { field: NAME, value: \"my-app\" } }) { items { indirectDependencies { items { name } } } } }"],
         "get all dependencies of `my-app`" => ["query { packages(filter: {equal: { field: NAME, value: \"my-app\" } }) { items { allDependencies { items { name } } } } }"],
         "get package graph" => ["query { packageGraph { nodes { items { name } } edges { items { source target } } } }"],
+        "get schema" => ["--schema"],
     );
 
     Ok(())
