@@ -1,0 +1,15 @@
+[package]
+name = "turborepo-signals"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[dependencies]
+futures = "0.3.30"
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["full", "time"] }
+
+[dev-dependencies]
+
+[lints]
+workspace = true

@@ -5,14 +5,14 @@ use camino::Utf8Path;
 use miette::{Diagnostic, Report, SourceSpan};
 use thiserror::Error;
 use turbopath::AbsoluteSystemPathBuf;
+use turborepo_signals::{listeners::get_signal, SignalHandler};
 use turborepo_telemetry::events::command::CommandEventBuilder;
 
 use crate::{
-    commands::{run::get_signal, CommandBase},
+    commands::CommandBase,
     query,
     query::{Error, RepositoryQuery},
     run::builder::RunBuilder,
-    signal::SignalHandler,
 };
 
 const SCHEMA_QUERY: &str = "query IntrospectionQuery {
@@ -161,7 +161,7 @@ pub async fn run(
     variables_path: Option<&Utf8Path>,
     include_schema: bool,
 ) -> Result<i32, Error> {
-    let signal = get_signal()?;
+    let signal = get_signal().map_err(crate::run::Error::from)?;
     let handler = SignalHandler::new(signal);
 
     let run_builder = RunBuilder::new(base)?
