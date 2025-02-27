@@ -234,6 +234,7 @@ mod test {
     #[test_case("1.2.3", Some("foo"), "workspace:@scope/foo@^", Some("@scope/foo"), true ; "handles pnpm alias caret")]
     #[test_case("1.2.3", None, "1.2.3", None, false ; "no workspace linking")]
     #[test_case("1.2.3", None, "workspace:1.2.3", Some("@scope/foo"), false ; "no workspace linking with protocol")]
+    #[test_case("", None, "1.2.3", None, true ; "no workspace package version")]
     fn test_matches_workspace_package(
         package_version: &str,
         dependency_name: Option<&str>,
