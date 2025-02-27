@@ -170,6 +170,11 @@ impl<'a> DependencyVersion<'a> {
                 false
             }
             _ if self.version == "*" => true,
+            _ if package_version.is_empty() => {
+                // The workspace version of this package does not contain a version, no version
+                // based constraints will match it so it must be external.
+                false
+            }
             _ => {
                 // If we got this far, then we need to check the workspace package version to
                 // see it satisfies the dependencies range to determine whether
