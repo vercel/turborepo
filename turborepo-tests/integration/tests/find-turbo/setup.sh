@@ -21,7 +21,7 @@ if [[ "$OSTYPE" == "msys" ]]; then
     pushd node_modules > /dev/null || exit 1
 
     # Use pnpx to run symlnk-dir because installing globally doesn't work with pnpm.
-    pnpx symlink-dir .pnpm/turbo@1.0.0/node_modules/turbo turbo > /dev/null 2>&1
+    pnpx symlink-dir .pnpm/turbo@1.0.0/node_modules/turbo turbo > logs 2>&1 || (cat logs && rm logs)
 
     # Get outta there
     popd > /dev/null || exit 1
