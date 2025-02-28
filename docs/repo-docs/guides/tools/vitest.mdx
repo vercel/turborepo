@@ -128,3 +128,31 @@ turbo test:watch
 </Tab>
 
 </Tabs>
+
+## Creating merged coverage reports
+
+[The Vitest documentation](https://vitest.dev/guide/workspace#configuration) shows how to create merged coverage reports. Note Vitest's requirements for this don't follow some of our best practice monorepo recommendations, but we can still make this work.
+
+Notably, the Vitest documentation recommends creating a configuration file in the root of the JavaScript Workspace. Because of this, there will be configuration outside of our packages that affects their behavior, so we have to account for it in hashing. We can do this by adding the `inputs` key to the task:
+
+```json title="./turbo.json"
+{
+  "tasks": {
+    "test": {
+      "dependsOn": ["^test"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "../vitest.workspace.ts",
+        "../vitest.config.ts"
+      ]
+    }
+  }
+}
+```
+
+The `inputs` is doing two things to ensure caching is correct:
+
+- Using [`$TURBO_DEFAULT$`](/repo/docs/reference/configuration#turbo_default) to ensure the package's default inputs continue to be used
+- Adds the Vitest configuration files from the Workspace root to the hash to ensure cache is missed if these files change
+
+Together, these inputs create the required caching behavior.
