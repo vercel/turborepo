@@ -5,7 +5,7 @@ edition = "2021"
 license = "MIT"
 
 [dependencies]
-futures = "0.3.30"
+futures = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full", "time"] }
 
