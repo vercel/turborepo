@@ -55,6 +55,8 @@ jobs:
       - name: Setup compile target
         if: ${{ matrix.os.target != '' }}
         run: |
+          apk update && apk upgrade
+          apk add libc6-compat musl-dev
           rustup show active-toolchain
           rustup target add ${{ matrix.os.target }}
 
