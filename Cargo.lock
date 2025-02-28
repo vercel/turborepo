@@ -6546,6 +6546,7 @@ dependencies = [
  "libc",
  "merge",
  "miette",
+ "nix 0.26.2",
  "notify",
  "num_cpus",
  "owo-colors 3.5.0",
@@ -6554,6 +6555,7 @@ dependencies = [
  "petgraph",
  "pidlock",
  "port_scanner",
+ "portable-pty",
  "pprof",
  "pretty_assertions",
  "prost 0.12.3",
@@ -6609,9 +6611,9 @@ dependencies = [
  "turborepo-graph-utils",
  "turborepo-lockfiles",
  "turborepo-microfrontends",
- "turborepo-process",
  "turborepo-repository",
  "turborepo-scm",
+ "turborepo-signals",
  "turborepo-telemetry",
  "turborepo-ui",
  "turborepo-unescape",
@@ -6622,6 +6624,7 @@ dependencies = [
  "wax",
  "webbrowser",
  "which",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -6705,25 +6708,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "turborepo-process"
-version = "0.1.0"
-dependencies = [
- "atty",
- "console",
- "futures",
- "itertools 0.10.5",
- "libc",
- "nix 0.26.2",
- "portable-pty",
- "test-case",
- "tokio",
- "tracing",
- "tracing-test",
- "turbopath",
- "windows-sys 0.59.0",
-]
-
-[[package]]
 name = "turborepo-repository"
 version = "0.1.0"
 dependencies = [
@@ -6784,6 +6768,15 @@ dependencies = [
  "turborepo-telemetry",
  "wax",
  "which",
+]
+
+[[package]]
+name = "turborepo-signals"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "thiserror",
+ "tokio",
 ]
 
 [[package]]

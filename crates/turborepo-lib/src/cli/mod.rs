@@ -729,6 +729,8 @@ pub enum Command {
         /// Pass variables to the query via a JSON file
         #[clap(short = 'V', long, requires = "query")]
         variables: Option<Utf8PathBuf>,
+        #[clap(long, conflicts_with = "query")]
+        schema: bool,
         /// The query to run, either a file path or a query string
         query: Option<String>,
     },
@@ -1589,17 +1591,22 @@ pub async fn run(
             })?;
             Ok(exit_code)
         }
-        Command::Query { query, variables } => {
+        Command::Query {
+            query,
+            variables,
+            schema,
+        } => {
             warn!("query command is experimental and may change in the future");
             let query = query.clone();
             let variables = variables.clone();
+            let schema = *schema;
             let event = CommandEventBuilder::new("query").with_parent(&root_telemetry);
             event.track_call();
 
             let base = CommandBase::new(cli_args, repo_root, version, color_config)?;
             event.track_ui_mode(base.opts.run_opts.ui_mode);
 
-            let query = query::run(base, event, query, variables.as_deref()).await?;
+            let query = query::run(base, event, query, variables.as_deref(), schema).await?;
 
             Ok(query)
         }

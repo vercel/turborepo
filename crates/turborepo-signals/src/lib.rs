@@ -1,11 +1,22 @@
+#![deny(clippy::all)]
+#![feature(assert_matches)]
+
+//! A crate for registering listeners for a given signal
+
+pub mod listeners;
+pub mod signals;
+
 use std::{
     fmt::Debug,
-    future::Future,
     sync::{Arc, Mutex},
 };
 
-use futures::{stream::FuturesUnordered, StreamExt};
-use tokio::sync::{mpsc, oneshot};
+use futures::{stream::FuturesUnordered, Stream, StreamExt};
+use signals::Signal;
+use tokio::{
+    pin,
+    sync::{mpsc, oneshot},
+};
 
 /// SignalHandler provides a mechanism to subscribe to a future and get alerted
 /// whenever the future completes or the handler gets a close message.
@@ -17,29 +28,32 @@ pub struct SignalHandler {
 
 #[derive(Debug, Default)]
 struct HandlerState {
-    subscribers: Vec<oneshot::Sender<oneshot::Sender<()>>>,
+    subscribers: Vec<oneshot::Sender<oneshot::Sender<Signal>>>,
     is_closing: bool,
 }
 
-pub struct SignalSubscriber(oneshot::Receiver<oneshot::Sender<()>>);
+pub struct SignalSubscriber(oneshot::Receiver<oneshot::Sender<Signal>>);
 
 /// SubscriberGuard should be kept until a subscriber is done processing the
 /// signal
-pub struct SubscriberGuard(oneshot::Sender<()>);
+pub struct SubscriberGuard {
+    _guard: oneshot::Sender<Signal>,
+}
 
 impl SignalHandler {
     /// Construct a new SignalHandler that will alert any subscribers when
     /// `signal_source` completes or `close` is called on it.
-    pub fn new(signal_source: impl Future<Output = Option<()>> + Send + 'static) -> Self {
+    pub fn new(signal_source: impl Stream<Item = Option<Signal>> + Send + 'static) -> Self {
         // think about channel size
         let state = Arc::new(Mutex::new(HandlerState::default()));
         let worker_state = state.clone();
         let (close, mut rx) = mpsc::channel::<()>(1);
         tokio::spawn(async move {
+            pin!(signal_source);
             tokio::select! {
                 // We don't care if we get a signal or if we are unable to receive signals
                 // Either way we start the shutdown.
-                _ = signal_source => {},
+                _ = signal_source.next() => {},
                 // We don't care if a close message was sent or if all handlers are dropped.
                 // Either way start the shutdown process.
                 _ = rx.recv() => {}
@@ -108,16 +122,16 @@ impl SignalHandler {
 impl SignalSubscriber {
     /// Wait until signal is received by the signal handler
     pub async fn listen(self) -> SubscriberGuard {
-        let callback = self
+        let _guard = self
             .0
             .await
             .expect("signal handler worker thread exited without alerting subscribers");
-        SubscriberGuard(callback)
+        SubscriberGuard { _guard }
     }
 }
 
 impl HandlerState {
-    fn add_subscriber(&mut self) -> Option<oneshot::Receiver<oneshot::Sender<()>>> {
+    fn add_subscriber(&mut self) -> Option<oneshot::Receiver<oneshot::Sender<Signal>>> {
         (!self.is_closing).then(|| {
             let (tx, rx) = oneshot::channel();
             self.subscribers.push(tx);
@@ -130,15 +144,25 @@ impl HandlerState {
 mod test {
     use std::{assert_matches::assert_matches, time::Duration};
 
+    use futures::stream;
+
     use super::*;
+
+    #[cfg(windows)]
+    const DEFAULT_SIGNAL: Signal = Signal::CtrlC;
+    #[cfg(not(windows))]
+    const DEFAULT_SIGNAL: Signal = Signal::Interrupt;
 
     #[tokio::test]
     async fn test_subscribers_triggered_from_signal() {
         let (tx, rx) = oneshot::channel();
-        let handler = SignalHandler::new(async move { rx.await.ok() });
+        let handler = SignalHandler::new(stream::once(async move {
+            rx.await.ok();
+            Some(DEFAULT_SIGNAL)
+        }));
         let subscriber = handler.subscribe().unwrap();
         // Send mocked SIGINT
-        tx.send(()).unwrap();
+        tx.send(DEFAULT_SIGNAL).unwrap();
 
         let (done, mut is_done) = oneshot::channel();
         let handler2 = handler.clone();
@@ -161,7 +185,10 @@ mod test {
     #[tokio::test]
     async fn test_subscribers_triggered_from_close() {
         let (_tx, rx) = oneshot::channel::<()>();
-        let handler = SignalHandler::new(async move { rx.await.ok() });
+        let handler = SignalHandler::new(stream::once(async move {
+            rx.await.ok();
+            Some(DEFAULT_SIGNAL)
+        }));
         let subscriber = handler.subscribe().unwrap();
         let (close_done, mut is_close_done) = oneshot::channel();
 
@@ -184,7 +211,10 @@ mod test {
     #[tokio::test]
     async fn test_close_idempotent() {
         let (_tx, rx) = oneshot::channel::<()>();
-        let handler = SignalHandler::new(async move { rx.await.ok() });
+        let handler = SignalHandler::new(stream::once(async move {
+            rx.await.ok();
+            Some(DEFAULT_SIGNAL)
+        }));
         handler.close().await;
         handler.close().await;
     }
@@ -192,11 +222,14 @@ mod test {
     #[tokio::test]
     async fn test_subscribe_after_close() {
         let (tx, rx) = oneshot::channel();
-        let handler = SignalHandler::new(async move { rx.await.ok() });
+        let handler = SignalHandler::new(stream::once(async move {
+            rx.await.ok();
+            Some(DEFAULT_SIGNAL)
+        }));
         let subscriber = handler.subscribe().unwrap();
 
         // Send SIGINT
-        tx.send(()).unwrap();
+        tx.send(DEFAULT_SIGNAL).unwrap();
         // Do a quick yield to give the worker a chance to read the sigint
         tokio::task::yield_now().await;
         assert!(

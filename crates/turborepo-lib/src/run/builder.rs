@@ -13,7 +13,6 @@ use turborepo_api_client::{APIAuth, APIClient};
 use turborepo_cache::AsyncCache;
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_errors::Spanned;
-use turborepo_process::ProcessManager;
 use turborepo_repository::{
     change_mapper::PackageInclusionReason,
     package_graph::{PackageGraph, PackageName},
@@ -21,6 +20,7 @@ use turborepo_repository::{
     package_json::PackageJson,
 };
 use turborepo_scm::SCM;
+use turborepo_signals::{SignalHandler, SignalSubscriber};
 use turborepo_telemetry::events::{
     command::CommandEventBuilder,
     generic::{DaemonInitStatus, GenericEventBuilder},
@@ -44,9 +44,9 @@ use crate::{
     engine::{Engine, EngineBuilder},
     microfrontends::MicrofrontendsConfigs,
     opts::Opts,
+    process::ProcessManager,
     run::{scope, task_access::TaskAccess, task_id::TaskName, Error, Run, RunCache},
     shim::TurboState,
-    signal::{SignalHandler, SignalSubscriber},
     turbo_json::{TurboJson, TurboJsonLoader, UIMode},
     DaemonConnector,
 };

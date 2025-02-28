@@ -1,34 +1,184 @@
-use std::collections::{BTreeMap, HashSet};
+use std::{
+    collections::{BTreeMap, HashSet},
+    sync::Arc,
+};
 
+use camino::Utf8Path;
 use itertools::Itertools;
 use miette::{NamedSource, SourceSpan};
-use oxc_resolver::{ResolveError, Resolver};
+use oxc_resolver::{ResolveError, Resolver, TsConfig};
+use swc_common::{comments::SingleThreadedComments, SourceFile, Span};
 use turbo_trace::ImportType;
-use turbopath::{AbsoluteSystemPath, PathRelation, RelativeUnixPath};
+use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf, PathRelation, RelativeUnixPath};
 use turborepo_repository::{
-    package_graph::{PackageName, PackageNode},
+    package_graph::{PackageInfo, PackageName, PackageNode},
     package_json::PackageJson,
 };
 
 use crate::{
-    boundaries::{BoundariesDiagnostic, Error},
+    boundaries::{tsconfig::TsConfigLoader, BoundariesDiagnostic, BoundariesResult, Error},
     run::Run,
 };
 
 impl Run {
+    /// Checks if the given import can be resolved as a tsconfig path alias,
+    /// e.g. `@/types/foo` -> `./src/foo`, and if so, checks the resolved paths.
+    ///
+    /// Returns true if the import was resolved as a tsconfig path alias.
+    #[allow(clippy::too_many_arguments)]
+    fn check_import_as_tsconfig_path_alias(
+        &self,
+        tsconfig_loader: &mut TsConfigLoader,
+        package_name: &PackageName,
+        package_root: &AbsoluteSystemPath,
+        span: SourceSpan,
+        file_path: &AbsoluteSystemPath,
+        file_content: &str,
+        import: &str,
+        result: &mut BoundariesResult,
+    ) -> Result<bool, Error> {
+        let dir = file_path.parent().expect("file_path must have a parent");
+        let Some(tsconfig) = tsconfig_loader.load(dir, result) else {
+            return Ok(false);
+        };
+
+        let resolved_paths = tsconfig.resolve(dir.as_std_path(), import);
+        for path in &resolved_paths {
+            let Some(utf8_path) = Utf8Path::from_path(path) else {
+                result.diagnostics.push(BoundariesDiagnostic::InvalidPath {
+                    path: path.to_string_lossy().to_string(),
+                });
+                continue;
+            };
+            let resolved_import_path = AbsoluteSystemPath::new(utf8_path)?;
+            result.diagnostics.extend(self.check_file_import(
+                file_path,
+                package_root,
+                package_name,
+                import,
+                resolved_import_path,
+                span,
+                file_content,
+            )?);
+        }
+
+        Ok(!resolved_paths.is_empty())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn check_import(
+        &self,
+        comments: &SingleThreadedComments,
+        tsconfig_loader: &mut TsConfigLoader,
+        result: &mut BoundariesResult,
+        source_file: &Arc<SourceFile>,
+        package_name: &PackageName,
+        package_root: &AbsoluteSystemPath,
+        import: &str,
+        import_type: &ImportType,
+        span: &Span,
+        file_path: &AbsoluteSystemPath,
+        file_content: &str,
+        package_info: &PackageInfo,
+        internal_dependencies: &HashSet<&PackageNode>,
+        unresolved_external_dependencies: Option<&BTreeMap<String, String>>,
+        resolver: &Resolver,
+    ) -> Result<(), Error> {
+        // If the import is prefixed with `@boundaries-ignore`, we ignore it, but print
+        // a warning
+        match Self::get_ignored_comment(comments, *span) {
+            Some(reason) if reason.is_empty() => {
+                result.warnings.push(
+                    "@boundaries-ignore requires a reason, e.g. `// @boundaries-ignore implicit \
+                     dependency`"
+                        .to_string(),
+                );
+            }
+            Some(_) => {
+                // Try to get the line number for warning
+                let line = result.source_map.lookup_line(span.lo()).map(|l| l.line);
+                if let Ok(line) = line {
+                    result
+                        .warnings
+                        .push(format!("ignoring import on line {} in {}", line, file_path));
+                } else {
+                    result
+                        .warnings
+                        .push(format!("ignoring import in {}", file_path));
+                }
+
+                return Ok(());
+            }
+            None => {}
+        }
+
+        let (start, end) = result.source_map.span_to_char_offset(source_file, *span);
+        let start = start as usize;
+        let end = end as usize;
+
+        let span = SourceSpan::new(start.into(), end - start);
+
+        if self.check_import_as_tsconfig_path_alias(
+            tsconfig_loader,
+            package_name,
+            package_root,
+            span,
+            file_path,
+            file_content,
+            import,
+            result,
+        )? {
+            return Ok(());
+        }
+
+        // We have a file import
+        let check_result = if import.starts_with(".") {
+            let import_path = RelativeUnixPath::new(import)?;
+            let dir_path = file_path
+                .parent()
+                .ok_or_else(|| Error::NoParentDir(file_path.to_owned()))?;
+            let resolved_import_path = dir_path.join_unix_path(import_path).clean()?;
+            self.check_file_import(
+                file_path,
+                package_root,
+                package_name,
+                import,
+                &resolved_import_path,
+                span,
+                file_content,
+            )?
+        } else if Self::is_potential_package_name(import) {
+            self.check_package_import(
+                import,
+                *import_type,
+                span,
+                file_path,
+                file_content,
+                &package_info.package_json,
+                internal_dependencies,
+                unresolved_external_dependencies,
+                resolver,
+            )
+        } else {
+            None
+        };
+
+        result.diagnostics.extend(check_result);
+
+        Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn check_file_import(
         &self,
         file_path: &AbsoluteSystemPath,
         package_path: &AbsoluteSystemPath,
+        package_name: &PackageName,
         import: &str,
+        resolved_import_path: &AbsoluteSystemPath,
         source_span: SourceSpan,
         file_content: &str,
     ) -> Result<Option<BoundariesDiagnostic>, Error> {
-        let import_path = RelativeUnixPath::new(import)?;
-        let dir_path = file_path
-            .parent()
-            .ok_or_else(|| Error::NoParentDir(file_path.to_owned()))?;
-        let resolved_import_path = dir_path.join_unix_path(import_path).clean()?;
         // We have to check for this case because `relation_to_path` returns `Parent` if
         // the paths are equal and there's nothing wrong with importing the
         // package you're in.
@@ -38,11 +188,17 @@ impl Run {
         // We use `relation_to_path` and not `contains` because `contains`
         // panics on invalid paths with too many `..` components
         if !matches!(
-            package_path.relation_to_path(&resolved_import_path),
+            package_path.relation_to_path(resolved_import_path),
             PathRelation::Parent
         ) {
+            let resolved_import_path =
+                AnchoredSystemPathBuf::relative_path_between(package_path, resolved_import_path)
+                    .to_string();
+
             Ok(Some(BoundariesDiagnostic::ImportLeavesPackage {
                 import: import.to_string(),
+                resolved_import_path,
+                package_name: package_name.to_owned(),
                 span: source_span,
                 text: NamedSource::new(file_path.as_str(), file_content.to_string()),
             }))
