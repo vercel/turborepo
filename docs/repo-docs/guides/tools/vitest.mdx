@@ -10,7 +10,11 @@ import { Tab, Tabs } from '#/components/tabs';
 
 [Vitest](https://vitest.dev/) is a test runner from the Vite ecosystem. Integrating it with Turborepo will lead to enormous speed-ups.
 
-<CreateTurboCallout />
+<Callout>
+  For information on how to set up Vitest in a monorepo, refer to [Vitest's
+  Workspace guide](https://vitest.dev/guide/workspace). This guide will teach
+  how to use Vitest with concepts from Turborepo.
+</Callout>
 
 ## Setting up
 
@@ -29,12 +33,15 @@ Let's say we have a monorepo that looks like this:
   </Folder>
 </Files>
 
-Both `apps/web` and `packages/ui` have their own test suite. Their `package.json` files include a `test` script that runs Vitest:
+Both `apps/web` and `packages/ui` have their own test suites, with `vitest` [installed into the packages that use them](/repo/docs/crafting-your-repository/managing-dependencies#install-dependencies-where-theyre-used). Their `package.json` files include a `test` script that runs Vitest:
 
 ```json title="./apps/web/package.json"
 {
+  "devDependencies": {
+    "vitest": "latest"
+  },
   "scripts": {
-    "test": "vitest"
+    "test": "vitest run"
   }
 }
 ```
@@ -44,7 +51,9 @@ Inside the root `turbo.json`, create a `test` task:
 ```json title="./turbo.json"
 {
   "tasks": {
-    "test": {}
+    "test": {
+      "dependsOn": ["^test"]
+    }
   }
 }
 ```
@@ -53,16 +62,24 @@ Now, `turbo test` can parallelize and cache all of the test suites from each pac
 
 ## Running tests in watch mode
 
-When you run your test suite normally, it completes and outputs to `stdout`. This means you can [cache it](/repo/docs/crafting-your-repository/caching) with Turborepo.
+When you run your test suite in CI, it logs to `stdout` and eventually exits upon completion. This means you can [cache it](/repo/docs/crafting-your-repository/caching) with Turborepo.
 
 But when you run your tests in a watched mode, the process never exits. This makes a watch task more like a [development task](/repo/docs/crafting-your-repository/developing-applications).
 
-Because of this difference, we recommend specifying **two separate Turborepo tasks**: one for running your tests, and one for running them in watch mode. Inside your each `package.json` file for each workspace:
+Because of this difference, we recommend specifying **two separate Turborepo tasks**: one for running your tests, and one for running them in watch mode.
+
+<Callout>
+  This strategy below creates two tasks, one for local development and one for
+  CI. You could choose to make the `test` task for local development and create
+  a `test:ci` task instead.
+</Callout>
+
+For example, inside your each `package.json` file for each workspace:
 
 ```json title="./apps/web/package.json"
 {
   "scripts": {
-    "test": "vitest",
+    "test": "vitest run",
     "test:watch": "vitest --watch"
   }
 }
@@ -82,7 +99,7 @@ Inside the root `turbo.json`:
 }
 ```
 
-You can now either run this task using [global `turbo`](/repo/docs/getting-started/installation#global-installation) as `turbo test:watch` or from a script in your root `package.json`:
+You can now either run your tasks using [global `turbo`](/repo/docs/getting-started/installation#global-installation) as `turbo test:watch` or from a script in your root `package.json`:
 
 <Tabs items={["Global turbo", "./package.json"]}>
 <Tab value="Global turbo">
