@@ -10,44 +10,6 @@ const { join } = require("path");
 const { platform, arch } = process;
 
 let nativeBinding = null;
-let localFileExisted = false;
-let loadError = null;
-
-function isMusl() {
-  // For Node 10
-  if (!process.report || typeof process.report.getReport !== "function") {
-    try {
-      const lddPath = require("child_process")
-        .execSync("which ldd")
-        .toString()
-        .trim();
-      return readFileSync(lddPath, "utf8").includes("musl");
-    } catch (e) {
-      return true;
-    }
-  } else {
-    const orig = process.report.excludeNetwork;
-    process.report.excludeNetwork = true;
-    const { glibcVersionRuntime } = process.report.getReport().header;
-    process.report.excludeNetwork = orig;
-    if (typeof glibcVersionRuntime === "string") {
-      try {
-        // We support glibc v2.26+
-        let [major, minor] = glibcVersionRuntime.split(".", 2);
-        if (parseInt(major, 10) !== 2) {
-          return true;
-        }
-        if (parseInt(minor, 10) < 26) {
-          return true;
-        }
-        return false;
-      } catch (e) {
-        return true;
-      }
-    }
-    return !glibcVersionRuntime;
-  }
-}
 
 // TODO: find-up to turbo-repository? This currently only works from turbo-repository/js/dist
 const localPath = join(__dirname, "..", "..", "native", "@turbo");
@@ -88,28 +50,15 @@ switch (platform) {
     }
     break;
   case "linux":
-    if (isMusl()) {
-      switch (arch) {
-        case "x64":
-          suffix = "linux-x64-musl";
-          break;
-        case "arm64":
-          suffix = "linux-arm64-musl";
-          break;
-        default:
-          throw new Error(`Unsupported architecture on Linux: ${arch}`);
-      }
-    } else {
-      switch (arch) {
-        case "x64":
-          suffix = "linux-x64-gnu";
-          break;
-        case "arm64":
-          suffix = "linux-arm64-gnu";
-          break;
-        default:
-          throw new Error(`Unsupported architecture on Linux: ${arch}`);
-      }
+    switch (arch) {
+      case "x64":
+        suffix = "linux-x64-musl";
+        break;
+      case "arm64":
+        suffix = "linux-arm64-musl";
+        break;
+      default:
+        throw new Error(`Unsupported architecture on Linux: ${arch}`);
     }
     break;
   default:

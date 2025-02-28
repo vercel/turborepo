@@ -22,6 +22,7 @@ jobs:
         os:
           - name: ubuntu
             runner: ubuntu-latest
+            target: x86_64-unknown-linux-musl
           - name: macos
             runner: macos-latest
         node-version:
@@ -50,12 +51,31 @@ jobs:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
           node-version: ${{ matrix.node-version }}
 
+      # If we're on Linux we need to force musl as that's what napi uses to decide the target
+      - name: Setup compile target
+        if: ${{ matrix.os.target != '' }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential clang lldb llvm libclang-dev curl musl-tools
+          rustup show active-toolchain
+          rustup target add ${{ matrix.os.target }}
+
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
 
       - name: Run tests
+        if: ${{ matrix.os.target == '' }}
         # Manually set TURBO_API to an empty string to override Hetzner env
         run: |
-          TURBO_API= turbo run test --filter "turborepo-repository" --color --env-mode=strict
+          turbo run test --filter "turborepo-repository" --color
         env:
           NODE_VERSION: ${{ matrix.node-version }}
+
+      - name: Run tests
+        if: ${{ matrix.os.target != '' }}
+        # Manually set TURBO_API to an empty string to override Hetzner env
+        run: |
+          turbo run test --filter "turborepo-repository" --color
+        env:
+          NODE_VERSION: ${{ matrix.node-version }}
+          CARGO_BUILD_TARGET: ${{ matrix.os.target }}
