@@ -107,6 +107,8 @@ pub enum Error {
     NonStandardTurboJsonPath(String),
     #[error("Invalid config: {0}")]
     Config(#[from] crate::config::Error),
+    #[error(transparent)]
+    SignalListener(#[from] turborepo_signals::listeners::Error),
 }
 
 impl WatchClient {
@@ -115,7 +117,7 @@ impl WatchClient {
         experimental_write_cache: bool,
         telemetry: CommandEventBuilder,
     ) -> Result<Self, Error> {
-        let signal = get_signal().map_err(crate::run::Error::from)?;
+        let signal = get_signal()?;
         let handler = SignalHandler::new(signal);
 
         if base.opts.repo_opts.root_turbo_json_path != base.repo_root.join_component(CONFIG_FILE) {

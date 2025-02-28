@@ -70,6 +70,8 @@ pub enum Error {
     Watch(#[from] watch::Error),
     #[error(transparent)]
     Opts(#[from] crate::opts::Error),
+    #[error(transparent)]
+    SignalListener(#[from] turborepo_signals::listeners::Error),
 }
 
 const MAX_CHARS_PER_TASK_LINE: usize = 100;
@@ -78,7 +80,7 @@ pub async fn print_potential_tasks(
     base: CommandBase,
     telemetry: CommandEventBuilder,
 ) -> Result<(), Error> {
-    let signal = get_signal().map_err(run::Error::from)?;
+    let signal = get_signal()?;
     let handler = SignalHandler::new(signal);
     let color_config = base.color_config;
 
