@@ -65,7 +65,7 @@ jobs:
         if: ${{ matrix.os.target == '' }}
         # Manually set TURBO_API to an empty string to override Hetzner env
         run: |
-          TURBO_API= turbo run test --filter "turborepo-repository" --color
+          turbo run test --filter "turborepo-repository" --color
         env:
           NODE_VERSION: ${{ matrix.node-version }}
 
@@ -73,6 +73,7 @@ jobs:
         if: ${{ matrix.os.target != '' }}
         # Manually set TURBO_API to an empty string to override Hetzner env
         run: |
-          TURBO_API= turbo run test --filter "turborepo-repository" --color -- --target=${{ matrix.os.target }}
+          turbo run test --filter "turborepo-repository" --color
         env:
           NODE_VERSION: ${{ matrix.node-version }}
+          CARGO_BUILD_TARGET: ${{ matrix.os.target }}

@@ -4,7 +4,7 @@
   "tasks": {
     "build": {
       "dependsOn": ["cli#rust-src"],
-      "env": ["NODE_VERSION"]
+      "env": ["NODE_VERSION", "CARGO_BUILD_TARGET"]
     },
     "test": {
       "dependsOn": ["build"]
