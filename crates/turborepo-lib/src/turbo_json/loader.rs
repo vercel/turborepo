@@ -158,7 +158,7 @@ impl TurboJsonLoader {
     }
 
     /// Load a turbo.json for a given package
-    pub fn load<'a>(&'a mut self, package: &PackageName) -> Result<&'a TurboJson, Error> {
+    pub fn load<'a>(&'a self, package: &PackageName) -> Result<&'a TurboJson, Error> {
         if let Ok(Some(turbo_json)) = self.cache.get(package) {
             return Ok(turbo_json);
         }
@@ -428,7 +428,7 @@ mod test {
         let repo_root = AbsoluteSystemPath::from_std_path(root_dir.path())?;
         let root_turbo_json = repo_root.join_component("turbo.json");
         fs::write(&root_turbo_json, turbo_json_content)?;
-        let mut loader = TurboJsonLoader {
+        let loader = TurboJsonLoader {
             repo_root: repo_root.to_owned(),
             cache: FixedMap::new(Some(PackageName::Root).into_iter()),
             strategy: Strategy::Workspace {
@@ -509,7 +509,7 @@ mod test {
             fs::write(&root_turbo_json, content)?;
         }
 
-        let mut loader = TurboJsonLoader::single_package(
+        let loader = TurboJsonLoader::single_package(
             repo_root.to_owned(),
             root_turbo_json,
             root_package_json,
@@ -571,7 +571,7 @@ mod test {
             ..Default::default()
         };
 
-        let mut loader =
+        let loader =
             TurboJsonLoader::task_access(repo_root.to_owned(), root_turbo_json, root_package_json);
         let turbo_json = loader.load(&PackageName::Root)?;
         let root_build = turbo_json
@@ -608,7 +608,7 @@ mod test {
             PackageJson::default(),
         );
 
-        for mut loader in [single_loader, task_access_loader] {
+        for loader in [single_loader, task_access_loader] {
             let result = loader.load(&non_root);
             assert!(result.is_err());
             let err = result.unwrap_err();
@@ -629,7 +629,7 @@ mod test {
             .into_iter()
             .collect();
 
-        let mut loader = TurboJsonLoader {
+        let loader = TurboJsonLoader {
             repo_root: repo_root.to_owned(),
             cache: FixedMap::new(vec![PackageName::Root, PackageName::from("a")].into_iter()),
             strategy: Strategy::Workspace {
@@ -661,7 +661,7 @@ mod test {
             .into_iter()
             .collect();
 
-        let mut loader = TurboJsonLoader {
+        let loader = TurboJsonLoader {
             repo_root: repo_root.to_owned(),
             cache: FixedMap::new(vec![PackageName::Root, PackageName::from("a")].into_iter()),
             strategy: Strategy::Workspace {
@@ -696,7 +696,7 @@ mod test {
         .into_iter()
         .collect();
 
-        let mut loader = TurboJsonLoader {
+        let loader = TurboJsonLoader {
             repo_root: repo_root.to_owned(),
             cache: FixedMap::new(vec![PackageName::Root, PackageName::from("pkg-a")].into_iter()),
             strategy: Strategy::WorkspaceNoTurboJson {
@@ -776,7 +776,7 @@ mod test {
         )
         .unwrap();
 
-        let mut loader = TurboJsonLoader {
+        let loader = TurboJsonLoader {
             repo_root: repo_root.to_owned(),
             cache: FixedMap::new(
                 vec![

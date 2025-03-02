@@ -218,7 +218,7 @@ impl<'a> EngineBuilder<'a> {
             return Ok(Engine::default().seal());
         }
 
-        let mut turbo_json_loader = self
+        let turbo_json_loader = self
             .turbo_json_loader
             .take()
             .expect("engine builder cannot be constructed without TurboJsonLoader");
@@ -259,7 +259,7 @@ impl<'a> EngineBuilder<'a> {
                 .task_id()
                 .unwrap_or_else(|| TaskId::new(workspace.as_ref(), task.task()));
 
-            if Self::has_task_definition(&mut turbo_json_loader, workspace, task, &task_id)? {
+            if Self::has_task_definition(&turbo_json_loader, workspace, task, &task_id)? {
                 missing_tasks.remove(task.as_inner());
 
                 // Even if a task definition was found, we _only_ want to add it as an entry
@@ -359,7 +359,7 @@ impl<'a> EngineBuilder<'a> {
             }
 
             let task_definition = self.task_definition(
-                &mut turbo_json_loader,
+                &turbo_json_loader,
                 &task_id,
                 &task_id.as_non_workspace_task_name(),
             )?;
@@ -465,7 +465,7 @@ impl<'a> EngineBuilder<'a> {
     // Helper methods used when building the engine
 
     fn has_task_definition(
-        loader: &mut TurboJsonLoader,
+        loader: &TurboJsonLoader,
         workspace: &PackageName,
         task_name: &TaskName<'static>,
         task_id: &TaskId,
@@ -510,7 +510,7 @@ impl<'a> EngineBuilder<'a> {
 
     fn task_definition(
         &self,
-        turbo_json_loader: &mut TurboJsonLoader,
+        turbo_json_loader: &TurboJsonLoader,
         task_id: &Spanned<TaskId>,
         task_name: &TaskName,
     ) -> Result<TaskDefinition, Error> {
@@ -525,7 +525,7 @@ impl<'a> EngineBuilder<'a> {
 
     fn task_definition_chain(
         &self,
-        turbo_json_loader: &mut TurboJsonLoader,
+        turbo_json_loader: &TurboJsonLoader,
         task_id: &Spanned<TaskId>,
         task_name: &TaskName,
     ) -> Result<Vec<RawTaskDefinition>, Error> {

@@ -383,7 +383,7 @@ impl RunBuilder {
         let task_access = TaskAccess::new(self.repo_root.clone(), async_cache.clone(), &scm);
         task_access.restore_config().await;
 
-        let mut turbo_json_loader = if task_access.is_enabled() {
+        let turbo_json_loader = if task_access.is_enabled() {
             TurboJsonLoader::task_access(
                 self.repo_root.clone(),
                 self.opts.repo_opts.root_turbo_json_path.clone(),
