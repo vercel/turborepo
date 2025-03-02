@@ -168,7 +168,7 @@ impl TurboJsonLoader {
             .map_err(|_| Error::NoTurboJSON)
     }
 
-    pub fn uncached_load(&self, package: &PackageName) -> Result<TurboJson, Error> {
+    fn uncached_load(&self, package: &PackageName) -> Result<TurboJson, Error> {
         match &self.strategy {
             Strategy::SinglePackage {
                 package_json,

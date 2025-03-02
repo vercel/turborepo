@@ -20,23 +20,6 @@ impl<K: Ord, V> FixedMap<K, V> {
         Self { inner }
     }
 
-    pub fn from_iter(entries: impl Iterator<Item = (K, Option<V>)>) -> Self {
-        let mut inner = entries
-            .map(|(key, value)| {
-                let value_slot = OnceLock::new();
-                if let Some(value) = value {
-                    value_slot
-                        .set(value)
-                        .map_err(|_| ())
-                        .expect("nobody else has access to this lock yet");
-                }
-                (key, value_slot)
-            })
-            .collect::<Vec<_>>();
-        inner.sort_by(|(k1, _), (k2, _)| k1.cmp(k2));
-        Self { inner }
-    }
-
     /// Get a value for a key.
     ///
     /// Returns `None` if key hasn't had a value inserted yet.
@@ -72,6 +55,26 @@ impl<K: Clone, V: Clone> Clone for FixedMap<K, V> {
         Self {
             inner: self.inner.clone(),
         }
+    }
+}
+
+impl<K: Ord, V> FromIterator<(K, Option<V>)> for FixedMap<K, V> {
+    fn from_iter<T: IntoIterator<Item = (K, Option<V>)>>(iter: T) -> Self {
+        let mut inner = iter
+            .into_iter()
+            .map(|(key, value)| {
+                let value_slot = OnceLock::new();
+                if let Some(value) = value {
+                    value_slot
+                        .set(value)
+                        .map_err(|_| ())
+                        .expect("nobody else has access to this lock yet");
+                }
+                (key, value_slot)
+            })
+            .collect::<Vec<_>>();
+        inner.sort_by(|(k1, _), (k2, _)| k1.cmp(k2));
+        Self { inner }
     }
 }
 
