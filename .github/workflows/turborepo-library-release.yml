@@ -52,7 +52,7 @@ jobs:
               rustup target add aarch64-unknown-linux-musl
               dirname $(rustup which cargo) >> ${GITHUB_PATH}
               pnpm install
-            rust_env: CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc RUSTFLAGS="-Ctarget-feature=-crt-static"
+            rust_env: CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=/aarch64-linux-musl-cross/bin/aarch64-linux-musl-gcc
 
           - host: windows-latest
             target: aarch64-pc-windows-msvc

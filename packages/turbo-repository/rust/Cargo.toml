@@ -27,6 +27,12 @@ pretty_assertions = { workspace = true }
 [build-dependencies]
 napi-build = "2.0.1"
 
+[target.x86_64-unknown-linux-musl]
+rustflags = ["-C", "target-feature=+crt-static"]
+
+[target.aarch64-unknown-linux-musl]
+rustflags = ["-C", "target-feature=+crt-static"]
+
 [features]
 # The napi proc macro expands to include this feature, forward it correct feature
 # to avoid the lint warning.
