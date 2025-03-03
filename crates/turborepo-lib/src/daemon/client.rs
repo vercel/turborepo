@@ -13,10 +13,7 @@ use super::{
     proto::{DiscoverPackagesResponse, GetFileHashesResponse},
     Paths,
 };
-use crate::{
-    daemon::{proto, proto::PackageChangeEvent},
-    globwatcher::HashGlobSetupError,
-};
+use crate::daemon::{proto, proto::PackageChangeEvent};
 
 #[derive(Debug, Clone)]
 pub struct DaemonClient<T> {
@@ -228,9 +225,6 @@ pub enum DaemonError {
     #[error("invalid timeout specified ({0})")]
     #[allow(dead_code)]
     InvalidTimeout(String),
-    /// The server is unable to start file watching.
-    #[error("unable to start file watching")]
-    SetupFileWatching(#[from] HashGlobSetupError),
 
     #[error("unable to display output: {0}")]
     DisplayError(#[from] serde_json::Error),
