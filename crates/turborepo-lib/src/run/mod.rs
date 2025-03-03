@@ -124,8 +124,8 @@ impl Run {
         }
     }
 
-    pub fn turbo_json_loader(&self) -> TurboJsonLoader {
-        self.turbo_json_loader.clone()
+    pub fn turbo_json_loader(&self) -> &TurboJsonLoader {
+        &self.turbo_json_loader
     }
 
     pub fn opts(&self) -> &Opts {
