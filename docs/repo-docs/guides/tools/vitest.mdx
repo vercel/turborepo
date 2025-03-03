@@ -73,7 +73,7 @@ Now, `turbo run test` can parallelize and cache all of the test suites from each
 
 #### Running tests in watch mode
 
-When you run your test suite in CI, it logs to `stdout` and eventually exits upon completion. This means you can [cache it with Turborepo](/repo/docs/crafting-your-repository/caching). But when you run your tests using Vitest's watch mode during development, the process never exits. This makes a watch task more like a [long-running, development task](/repo/docs/crafting-your-repository/developing-applications).
+When you run your test suite in CI, it logs results and eventually exits upon completion. This means you can [cache it with Turborepo](/repo/docs/crafting-your-repository/caching). But when you run your tests using Vitest's watch mode during development, the process never exits. This makes a watch task more like a [long-running, development task](/repo/docs/crafting-your-repository/developing-applications).
 
 Because of this difference, we recommend specifying **two separate Turborepo tasks**: one for running your tests, and one for running them in watch mode.
 
