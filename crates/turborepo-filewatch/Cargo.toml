@@ -21,7 +21,7 @@ tokio = { workspace = true, features = ["full", "time"] }
 tracing = "0.1.37"
 turbopath = { workspace = true }
 turborepo-repository = { version = "0.1.0", path = "../turborepo-repository" }
-turborepo-scm = { workspace = true }
+turborepo-scm = { workspace = true, features = ["git2"] }
 walkdir = "2.3.3"
 wax = { workspace = true }
 

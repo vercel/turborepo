@@ -1,3 +1,6 @@
+// This module does not require git2, but is only used by modules that require
+// git2
+#![cfg(feature = "git2")]
 use std::{
     io::{BufRead, BufReader, Read},
     process::{Command, Stdio},
@@ -6,7 +9,7 @@ use std::{
 use nom::Finish;
 use turbopath::{AbsoluteSystemPath, RelativeUnixPathBuf};
 
-use crate::{package_deps::GitHashes, wait_for_success, Error, Git};
+use crate::{wait_for_success, Error, Git, GitHashes};
 
 impl Git {
     #[tracing::instrument(skip(self, root_path, hashes))]
@@ -111,7 +114,7 @@ mod tests {
     use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPathBuf, RelativeUnixPathBufTestExt};
 
     use super::read_status;
-    use crate::package_deps::GitHashes;
+    use crate::GitHashes;
 
     #[test]
     fn test_status() {
