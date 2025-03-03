@@ -19,7 +19,7 @@ use turborepo_repository::{
     package_graph::{PackageGraph, PackageGraphBuilder, PackageName, WorkspacePackage},
     package_json::PackageJson,
 };
-use turborepo_scm::package_deps::GitHashes;
+use turborepo_scm::GitHashes;
 
 use crate::turbo_json::{TurboJson, TurboJsonLoader, CONFIG_FILE};
 

@@ -17,10 +17,7 @@ use tokio::{
 use tracing::{debug, trace};
 use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf};
 use turborepo_repository::discovery::DiscoveryResponse;
-use turborepo_scm::{
-    package_deps::{GitHashes, INPUT_INCLUDE_DEFAULT_FILES},
-    Error as SCMError, SCM,
-};
+use turborepo_scm::{package_deps::INPUT_INCLUDE_DEFAULT_FILES, Error as SCMError, GitHashes, SCM};
 
 use crate::{
     debouncer::Debouncer,
@@ -691,7 +688,7 @@ mod tests {
     use turbopath::{
         AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeUnixPathBuf,
     };
-    use turborepo_scm::{package_deps::GitHashes, SCM};
+    use turborepo_scm::{GitHashes, SCM};
 
     use super::{FileHashes, HashState};
     use crate::{
