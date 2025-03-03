@@ -788,8 +788,7 @@ mod test {
         let task_id = TaskId::try_from(task_id).unwrap();
 
         let has_def =
-            EngineBuilder::has_task_definition(&loader, &workspace, &task_name, &task_id)
-                .unwrap();
+            EngineBuilder::has_task_definition(&loader, &workspace, &task_name, &task_id).unwrap();
         assert_eq!(has_def, expected);
     }
 
