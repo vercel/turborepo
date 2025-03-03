@@ -6,7 +6,7 @@ use std::{
 use nom::Finish;
 use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPathBuf};
 
-use crate::{package_deps::GitHashes, wait_for_success, Error, Git};
+use crate::{wait_for_success, Error, Git, GitHashes};
 
 impl Git {
     #[tracing::instrument(skip(self))]
@@ -82,7 +82,7 @@ mod tests {
 
     use turbopath::RelativeUnixPathBuf;
 
-    use crate::{ls_tree::read_ls_tree, package_deps::GitHashes};
+    use crate::{ls_tree::read_ls_tree, GitHashes};
 
     fn to_hash_map(pairs: &[(&str, &str)]) -> GitHashes {
         HashMap::from_iter(

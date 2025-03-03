@@ -138,7 +138,7 @@ turborepo-graph-utils = { path = "../turborepo-graph-utils" }
 turborepo-lockfiles = { workspace = true }
 turborepo-microfrontends = { workspace = true }
 turborepo-repository = { path = "../turborepo-repository" }
-turborepo-scm = { workspace = true }
+turborepo-scm = { workspace = true, features = ["git2"] }
 turborepo-signals = { workspace = true }
 turborepo-telemetry = { path = "../turborepo-telemetry" }
 turborepo-ui = { workspace = true }
