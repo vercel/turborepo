@@ -14,12 +14,6 @@ for flag in $user_provided_flags; do
   if [[ $flag == --target=* ]]; then
     target=${flag#*=}
     rustup target add "$target"
-
-    # For we need to cross-compile some targets with Zig
-    # Fortunately, napi comes with a `--zig` flag
-    if [[ $target == x86_64-unknown-linux-gnu || $target == aarch64-unknown-linux-gnu ]]; then
-      script_provided_flags+=" --zig"
-    fi
   fi
 done
 

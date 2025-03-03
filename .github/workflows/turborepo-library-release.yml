@@ -114,11 +114,20 @@ jobs:
         run: ${{ matrix.settings.setup }}
         if: ${{ matrix.settings.setup }}
 
+      - name: "Install cargo-sweep"
+        uses: taiki-e/install-action@v2
+        env:
+          GITHUB_TOKEN: ${{ inputs.github-token }}
+        with:
+          tool: cargo-zigbuild
+
       - name: Build native library
         run: |
           export PATH=/usr/local/cargo/bin/rustup:/root/.cargo/bin:${PATH}
           cd packages/turbo-repository
           ${{ matrix.settings.rust_env }} pnpm build:release --target=${{ matrix.settings.target }}
+        env:
+          DEBUG: "napi:*"
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
