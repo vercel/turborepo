@@ -44,7 +44,7 @@ jobs:
         run: npx @taplo/cli@0.5.2 format --check
 
       - name: Check licenses
-        uses: EmbarkStudios/cargo-deny-action@v1
+        uses: EmbarkStudios/cargo-deny-action@v2
         with:
           command: check licenses
 
