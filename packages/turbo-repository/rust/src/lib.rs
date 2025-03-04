@@ -217,16 +217,14 @@ impl Workspace {
     pub async fn affected_packages(
         &self,
         files: Vec<String>,
-        comparison: Option<&str>, // this is required when optimize_global_invalidations is true
+        base: Option<&str>, // this is required when optimize_global_invalidations is true
         optimize_global_invalidations: Option<bool>,
     ) -> Result<Vec<Package>, Error> {
-        let comparison = optimize_global_invalidations
+        let base = optimize_global_invalidations
             .unwrap_or(false)
             .then(|| {
-                comparison.ok_or_else(|| {
-                    Error::from_reason(
-                        "optimizeGlobalInvalidations true, but no comparison commit given",
-                    )
+                base.ok_or_else(|| {
+                    Error::from_reason("optimizeGlobalInvalidations true, but no base commit given")
                 })
             })
             .transpose()?;
@@ -244,14 +242,14 @@ impl Workspace {
             .collect();
 
         // Create a ChangeMapper with no ignore patterns
-        let change_detector = comparison
+        let change_detector = base
             .is_some()
             .then(|| Either::Left(DefaultPackageChangeMapperWithLockfile::new(&self.graph)))
             .unwrap_or_else(|| Either::Right(DefaultPackageChangeMapper::new(&self.graph)));
         let mapper = ChangeMapper::new(&self.graph, vec![], change_detector);
 
-        let lockfile_contents = if let Some(comparison) = comparison {
-            self.get_lockfile_contents(&changed_files, workspace_root, comparison)
+        let lockfile_contents = if let Some(base) = base {
+            self.get_lockfile_contents(&changed_files, workspace_root, base)
         } else if changed_files.contains(
             AnchoredSystemPath::new(self.graph.package_manager().lockfile_name())
                 .expect("the lockfile name will not be an absolute path"),
