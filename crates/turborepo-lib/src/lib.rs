@@ -23,7 +23,6 @@ mod engine;
 mod boundaries;
 mod framework;
 mod gitignore;
-pub(crate) mod globwatcher;
 mod hash;
 mod microfrontends;
 mod opts;
