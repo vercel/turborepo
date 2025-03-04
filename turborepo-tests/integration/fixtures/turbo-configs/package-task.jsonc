@@ -1,0 +1,17 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  // This is a comment in turbo.jsonc
+  "pipeline": {
+    // Package-specific task with comments
+    "my-app#build": {
+      "outputs": [
+        "banana.txt", // Output file
+        "apple.json" // Another output file
+      ],
+      "inputs": [
+        "$TURBO_DEFAULT$", // Default inputs
+        ".env.local" // Environment file
+      ]
+    }
+  }
+}
