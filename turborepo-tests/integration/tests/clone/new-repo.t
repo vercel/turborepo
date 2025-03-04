@@ -7,6 +7,8 @@ Create a repo
   $ git init --quiet
   $ echo "Hello World" > README.md
   $ git add README.md
+  $ git config user.email "test@example.com"
+  $ git config user.name "Test"
   $ git commit -m "Initial commit" --quiet
 
 Make sure we allow partial clones
