@@ -26,16 +26,16 @@ Setup
 # Test that turbo prefers turbo.json over turbo.jsonc when both exist
 # First, create a different turbo.json file
   $ cat > different-config.json << 'EOF'
-  {
-    "$schema": "https://turbo.build/schema.json",
-    "globalDependencies": ["different-dep.json"],
-    "pipeline": {
-      "special-task": {
-        "outputs": ["special-output/**"]
-      }
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalDependencies": ["different-dep.json"],
+  "pipeline": {
+    "special-task": {
+      "outputs": ["special-output/**"]
     }
   }
-  EOF
+}
+EOF
 
   $ mv different-config.json turbo.json
 

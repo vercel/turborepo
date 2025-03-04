@@ -23,23 +23,23 @@ Setup
 
 # Create a package-specific task in the root turbo.jsonc
   $ cat > root-with-package-task.jsonc << 'EOF'
-  {
-    "$schema": "https://turbo.build/schema.json",
-    // Root config with package-specific task
-    "pipeline": {
-      // Global build task
-      "build": {
-        "dependsOn": ["^build"],
-        "outputs": ["dist/**"]
-      },
-      // Package-specific task
-      "my-app#special": {
-        "outputs": ["special/**"], // Special outputs
-        "cache": false // Don't cache
-      }
+{
+  "$schema": "https://turbo.build/schema.json",
+  // Root config with package-specific task
+  "pipeline": {
+    // Global build task
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**"]
+    },
+    // Package-specific task
+    "my-app#special": {
+      "outputs": ["special/**"], // Special outputs
+      "cache": false // Don't cache
     }
   }
-  EOF
+}
+EOF
 
   $ mv root-with-package-task.jsonc turbo.jsonc
 
