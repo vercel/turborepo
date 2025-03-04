@@ -4,23 +4,23 @@ Setup
 # Test that syntax errors in turbo.jsonc are properly reported
 Create turbo.jsonc with syntax errors
   $ cat > syntax-error.jsonc << 'EOF'
-  {
-    "$schema": "https://turbo.build/schema.json",,
-    // Comment with a syntax error below
-    "globalDependencies": [
-      "tsconfig.json"
-    ],
-    "pipeline": {
-      "build": {
-        "dependsOn": [
-          "^build"
-        ],
-        "outputs": ["dist/**"]42,
-        "inputs": [".env.local"
-      },
-    }
+{
+  "$schema": "https://turbo.build/schema.json",,
+  // Comment with a syntax error below
+  "globalDependencies": [
+    "tsconfig.json"
+  ],
+  "pipeline": {
+    "build": {
+      "dependsOn": [
+        "^build"
+      ],
+      "outputs": ["dist/**"]42,
+      "inputs": [".env.local"
+    },
   }
-  EOF
+}
+EOF
 
   $ mv syntax-error.jsonc turbo.jsonc
 

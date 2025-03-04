@@ -28,28 +28,28 @@ Create turbo.jsonc with comments
 # Test that complex comments with special characters are handled correctly
 Create turbo.jsonc with complex comments
   $ cat > complex-comments.jsonc << 'EOF'
-  {
-    "$schema": "https://turbo.build/schema.json",
-    /* Multi-line comment with special characters:
-     * "quotes", 'single quotes', [brackets], {braces}
-     */
-    "globalDependencies": [
-      "tsconfig.json" // Comment with "quotes"
-    ],
-    "pipeline": {
-      "build": {
-        // Comment with JSON-like content: { "key": "value" }
-        "dependsOn": [
-          "^build" /* Comment with /* nested comment syntax */ 
-        ],
-        "outputs": [
-          ".next/**", // Comment with // in it
-          "dist/**"   /* Comment with /* in it */
-        ]
-      }
+{
+  "$schema": "https://turbo.build/schema.json",
+  /* Multi-line comment with special characters:
+   * "quotes", 'single quotes', [brackets], {braces}
+   */
+  "globalDependencies": [
+    "tsconfig.json" // Comment with "quotes"
+  ],
+  "pipeline": {
+    "build": {
+      // Comment with JSON-like content: { "key": "value" }
+      "dependsOn": [
+        "^build" /* Comment with /* nested comment syntax */ 
+      ],
+      "outputs": [
+        ".next/**", // Comment with // in it
+        "dist/**"   /* Comment with /* in it */
+      ]
     }
   }
-  EOF
+}
+EOF
 
   $ mv complex-comments.jsonc turbo.jsonc
 

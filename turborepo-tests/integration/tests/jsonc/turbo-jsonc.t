@@ -12,7 +12,7 @@ Run turbo build with both files present
   $ cat error.txt
   multiple_turbo_configs (https://turbo.build/messages/multiple-turbo-configs)
   
-    x Found both turbo.json and turbo.jsonc in the same directory: *
+    x Found both turbo.json and turbo.jsonc in the same directory: .* (re)
     | Please use either turbo.json or turbo.jsonc, but not both.
   
 

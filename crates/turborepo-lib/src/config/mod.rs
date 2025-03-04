@@ -82,10 +82,6 @@ pub enum Error {
         "Found both turbo.json and turbo.jsonc in the same directory: {directory}\nRemove either \
          turbo.json or turbo.jsonc so there is only one."
     )]
-    #[diagnostic(help(
-        "Having both files can lead to unexpected behavior if they contain different \
-         configurations."
-    ))]
     MultipleTurboConfigs { directory: String },
     #[error(transparent)]
     SerdeJson(#[from] serde_json::Error),
