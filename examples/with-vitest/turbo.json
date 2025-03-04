@@ -18,8 +18,11 @@
       "persistent": true
     },
     "test": {
-      "dependsOn": ["^test", "@repo/vitest-config#build"],
+      "dependsOn": ["transit", "@repo/vitest-config#build"],
       "outputs": ["coverage.json"]
+    },
+    "transit": {
+      "dependsOn": ["^transit"]
     }
   }
 }

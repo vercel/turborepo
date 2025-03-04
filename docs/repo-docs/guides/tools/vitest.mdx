@@ -63,10 +63,10 @@ Inside the root `turbo.json`, create a `test` task:
 {
   "tasks": {
     "test": {
-      "dependsOn": ["topo"]
+      "dependsOn": ["transit"]
     },
-    "topo": {
-      "dependsOn": ["^topo"]
+    "transit": {
+      "dependsOn": ["^transit"]
     }
   }
 }
