@@ -11,7 +11,7 @@ describe("getTurboConfigs", () => {
   });
 
   it("supports single-package repos", () => {
-    const { root } = useFixture({ fixture: "single-package" });
+    const { root } = useFixture({ fixture: `single-package` });
     const configs = getTurboConfigs(root);
     expect(configs).toHaveLength(1);
     expect(configs[0].isRootConfig).toBe(true);
@@ -57,7 +57,7 @@ describe("getTurboConfigs", () => {
   });
 
   it("supports repos using workspace configs", () => {
-    const { root } = useFixture({ fixture: "workspace-configs" });
+    const { root } = useFixture({ fixture: `workspace-configs` });
     const configs = getTurboConfigs(root);
 
     expect(configs).toHaveLength(3);
@@ -113,7 +113,7 @@ describe("getTurboConfigs", () => {
   });
 
   it("supports repos with old workspace configuration format", () => {
-    const { root } = useFixture({ fixture: "old-workspace-config" });
+    const { root } = useFixture({ fixture: `old-workspace-config` });
     const configs = getTurboConfigs(root);
 
     expect(configs).toHaveLength(1);

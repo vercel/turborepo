@@ -70,16 +70,15 @@ function getWorkspaceGlobs(root: string): Array<string> {
   }
 }
 
-export function getTurboConfigs(cwd?: string, opts?: Options): TurboConfigs {
+export function getTurboConfigs(
+  cwd?: string,
+  opts?: Options
+): TurboConfigs | undefined {
   const turboRoot = getTurboRoot(cwd, opts);
   const configs: TurboConfigs = [];
 
   const cacheEnabled = opts?.cache ?? true;
-  if (
-    cacheEnabled &&
-    cwd &&
-    Object.prototype.hasOwnProperty.call(turboConfigsCache, cwd)
-  ) {
+  if (cacheEnabled && cwd) {
     return turboConfigsCache[cwd];
   }
 
@@ -102,6 +101,7 @@ export function getTurboConfigs(cwd?: string, opts?: Options): TurboConfigs {
     const configPathsByDir = configPaths.reduce<Record<string, Array<string>>>(
       (acc, configPath) => {
         const dir = path.dirname(configPath);
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- acc[dir] can be undefined
         if (!acc[dir]) {
           acc[dir] = [];
         }
@@ -130,11 +130,11 @@ export function getTurboConfigs(cwd?: string, opts?: Options): TurboConfigs {
         if (isRootConfig) {
           // invalid - root config with extends
           if ("extends" in turboJsonContent) {
-            continue;
+            return;
           }
         } else if (!("extends" in turboJsonContent)) {
           // invalid - workspace config with no extends
-          continue;
+          return;
         }
         configs.push({
           config: turboJsonContent,
@@ -164,11 +164,7 @@ export function getWorkspaceConfigs(
   const configs: Array<WorkspaceConfig> = [];
 
   const cacheEnabled = opts?.cache ?? true;
-  if (
-    cacheEnabled &&
-    cwd &&
-    Object.prototype.hasOwnProperty.call(workspaceConfigCache, cwd)
-  ) {
+  if (cacheEnabled && cwd) {
     return workspaceConfigCache[cwd];
   }
 
