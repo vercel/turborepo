@@ -9,8 +9,8 @@ Create turbo.jsonc with comments
   $ cp ${TESTDIR}/../../../integration/fixtures/turbo-configs/basic.jsonc turbo.jsonc
 
 # Run turbo test to verify that the test task from the config is properly parsed
-  $ ${TURBO} test
-  • Packages in scope: my-app
+  $ ${TURBO} test --output-logs=none
+  • Packages in scope: another, my-app, util (esc)
   • Running test in 1 packages
   • Remote caching disabled
   
@@ -19,8 +19,8 @@ Create turbo.jsonc with comments
   
 
 # Run turbo build to verify that the build task from the config is properly parsed
-  $ ${TURBO} build
-  • Packages in scope: my-app
+  $ ${TURBO} build --output-logs=none
+  • Packages in scope: another, my-app, util (esc)
   • Running build in 1 packages
   • Remote caching disabled
   
@@ -34,21 +34,9 @@ Create turbo.jsonc with complex comments
 
 # Run turbo build to verify the config with complex comments is properly parsed
   $ ${TURBO} build --output-logs=none
-xe2\x80\xa2 Packages in scope: another, my-app, util (esc)
-  \xe2\x80\xa2 Running build in 3 packages (esc)
-   • Remote caching disabled
-   util:build: cache miss, executing b747f7b1bf52e914
-   util:build: 
-   util:build: > build
-   util:build: > echo building
-   util:build: 
-   util:build: building
-   my-app:build: cache miss, executing c6c4a7ed55a7256e
-   my-app:build: 
-   my-app:build: > build
-   my-app:build: > echo building
-   my-app:build: 
-   my-app:build: building
+  • Packages in scope: another, my-app, util (esc)
+  • Running build in 3 packages (esc)
+  • Remote caching disabled
   
   Tasks:  1 successful, 0 total
   Cached:    0 cached, 2 total
