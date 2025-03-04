@@ -57,7 +57,7 @@ export class Workspace {
    */
   affectedPackages(
     files: Array<string>,
-    comparison?: string | undefined | null,
+    base?: string | undefined | null,
     optimizeGlobalInvalidations?: boolean | undefined | null
   ): Promise<Array<Package>>;
 }
