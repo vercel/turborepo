@@ -1,6 +1,9 @@
 Setup
   $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh
 
+# Remove turbo.json to avoid conflict with turbo.jsonc
+  $ rm -f turbo.json
+
 # Test that turbo.jsonc with comments is properly parsed
 Create turbo.jsonc with comments
   $ cp ${TESTDIR}/../../../integration/fixtures/turbo-configs/basic.jsonc turbo.jsonc
@@ -27,37 +30,26 @@ Create turbo.jsonc with comments
 
 # Test that complex comments with special characters are handled correctly
 Create turbo.jsonc with complex comments
-  $ cat > complex-comments.jsonc << 'EOF'
-{
-  "$schema": "https://turbo.build/schema.json",
-  /* Multi-line comment with special characters:
-   * "quotes", 'single quotes', [brackets], {braces}
-   */
-  "globalDependencies": [
-    "tsconfig.json" // Comment with "quotes"
-  ],
-  "pipeline": {
-    "build": {
-      // Comment with JSON-like content: { "key": "value" }
-      "dependsOn": [
-        "^build" /* Comment with /* nested comment syntax */ 
-      ],
-      "outputs": [
-        ".next/**", // Comment with // in it
-        "dist/**"   /* Comment with /* in it */
-      ]
-    }
-  }
-}
-EOF
-
-  $ mv complex-comments.jsonc turbo.jsonc
+  $ cp ${TESTDIR}/../../../integration/fixtures/turbo-configs/complex-comments.jsonc turbo.jsonc
 
 # Run turbo build to verify the config with complex comments is properly parsed
-  $ ${TURBO} build
-  • Packages in scope: my-app
-  • Running build in 1 packages
-  • Remote caching disabled
+  $ ${TURBO} build --output-logs=none
+xe2\x80\xa2 Packages in scope: another, my-app, util (esc)
+  \xe2\x80\xa2 Running build in 3 packages (esc)
+   • Remote caching disabled
+   util:build: cache miss, executing b747f7b1bf52e914
+   util:build: 
+   util:build: > build
+   util:build: > echo building
+   util:build: 
+   util:build: building
+   my-app:build: cache miss, executing c6c4a7ed55a7256e
+   my-app:build: 
+   my-app:build: > build
+   my-app:build: > echo building
+   my-app:build: 
+   my-app:build: building
   
   Tasks:  1 successful, 0 total
+  Cached:    0 cached, 2 total
   Time: *s (re) 
