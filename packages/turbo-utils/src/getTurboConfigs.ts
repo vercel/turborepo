@@ -95,18 +95,17 @@ export function getTurboConfigs(cwd?: string, opts?: Options): TurboConfigs {
     }).map((configPath) => path.join(turboRoot, configPath));
 
     // Check for both turbo.json and turbo.jsonc in the same directory
-    const configPathsByDir = configPaths.reduce<Record<string, Array<string>>>(
-      (acc, configPath) => {
-        const dir = path.dirname(configPath);
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- acc[dir] can be undefined
-        if (!acc[dir]) {
-          acc[dir] = [];
-        }
-        acc[dir].push(configPath);
-        return acc;
-      },
-      {}
-    );
+    const configPathsByDir: Record<string, Array<string>> = {};
+
+    // Group config paths by directory
+    for (const configPath of configPaths) {
+      const dir = path.dirname(configPath);
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- configPathsByDir[dir] can be undefined
+      if (!configPathsByDir[dir]) {
+        configPathsByDir[dir] = [];
+      }
+      configPathsByDir[dir].push(configPath);
+    }
 
     // Process each directory
     for (const [dir, dirConfigPaths] of Object.entries(configPathsByDir)) {

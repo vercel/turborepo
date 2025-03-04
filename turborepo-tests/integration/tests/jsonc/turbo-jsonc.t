@@ -13,7 +13,7 @@ Run turbo build with both files present
   multiple_turbo_configs (https://turbo.build/messages/multiple-turbo-configs)
   
     x Found both turbo.json and turbo.jsonc in the same directory: .* (re)
-    | Please use either turbo.json or turbo.jsonc, but not both.
+    | Remove either turbo.json or turbo.jsonc so there is only one.
   
 
 # Test 2: Using turbo.json in the root
@@ -21,7 +21,7 @@ Remove turbo.jsonc and keep only turbo.json
   $ rm turbo.jsonc
 
 Run turbo build with only turbo.json
-  $ ${TURBO} build
+  $ ${TURBO} build --output-logs none
   • Packages in scope: my-app
   • Running build in 1 packages
   • Remote caching disabled
@@ -36,7 +36,7 @@ Remove turbo.json and use only turbo.jsonc
   $ cp ${TESTDIR}/../../../integration/fixtures/turbo-configs/basic.jsonc turbo.jsonc
 
 Run turbo build with only turbo.jsonc
-  $ ${TURBO} build
+  $ ${TURBO} build --output-logs=none
   • Packages in scope: my-app
   • Running build in 1 packages
   • Remote caching disabled
@@ -50,7 +50,7 @@ Setup turbo.json in root and turbo.jsonc in a package
   $ rm turbo.jsonc
   $ cp ${TESTDIR}/../../../integration/fixtures/turbo-configs/basic.json turbo.json
   $ mkdir -p apps/my-app
-  $ cp ${TESTDIR}/../../../integration/fixtures/turbo-configs/package-task.jsonc apps/my-app/turbo.jsonc
+  $ cp ${TESTDIR}/../../../integration/fixtures/turbo-configs/basic.jsonc apps/my-app/turbo.jsonc
 
 Run turbo build with root turbo.json and package turbo.jsonc
   $ ${TURBO} build
@@ -67,7 +67,7 @@ Setup turbo.jsonc in root and turbo.json in a package
   $ rm turbo.json
   $ rm apps/my-app/turbo.jsonc
   $ cp ${TESTDIR}/../../../integration/fixtures/turbo-configs/basic.jsonc turbo.jsonc
-  $ cp ${TESTDIR}/../../../integration/fixtures/turbo-configs/package-task.json apps/my-app/turbo.json
+  $ cp ${TESTDIR}/../../../integration/fixtures/turbo-configs/basic.json apps/my-app/turbo.json
 
 Run turbo build with root turbo.jsonc and package turbo.json
   $ ${TURBO} build
@@ -90,5 +90,5 @@ Run turbo build with both files in a package
   multiple_turbo_configs (https://turbo.build/messages/multiple-turbo-configs)
   
     x Found both turbo.json and turbo.jsonc in the same directory: */apps/my-app (re)
-    | Please use either turbo.json or turbo.jsonc, but not both.
+    | Remove either turbo.json or turbo.jsonc so there is only one.
   
