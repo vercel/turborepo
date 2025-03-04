@@ -14,7 +14,7 @@ use crate::{
     },
     config::ConfigurationOptions,
     run::task_id::TaskId,
-    turbo_json::UIMode,
+    turbo_json::{UIMode, CONFIG_FILE},
     Args,
 };
 
@@ -287,7 +287,10 @@ pub enum ResolvedLogPrefix {
 
 impl<'a> From<OptsInputs<'a>> for RepoOpts {
     fn from(inputs: OptsInputs<'a>) -> Self {
-        let root_turbo_json_path = inputs.config.root_turbo_json_path(inputs.repo_root);
+        let root_turbo_json_path = inputs
+            .config
+            .root_turbo_json_path(inputs.repo_root)
+            .unwrap_or_else(|_| inputs.repo_root.join_component(CONFIG_FILE));
         let allow_no_package_manager = inputs.config.allow_no_package_manager();
         let allow_no_turbo_json = inputs.config.allow_no_turbo_json();
 
@@ -694,7 +697,9 @@ mod test {
                 .map(|(base, head)| (Some(base), Some(head))),
         };
         let config = ConfigurationOptions::default();
-        let root_turbo_json_path = config.root_turbo_json_path(&AbsoluteSystemPathBuf::default());
+        let root_turbo_json_path = config
+            .root_turbo_json_path(&AbsoluteSystemPathBuf::default())
+            .unwrap_or_else(|_| AbsoluteSystemPathBuf::default().join_component(CONFIG_FILE));
 
         let opts = Opts {
             repo_opts: RepoOpts {

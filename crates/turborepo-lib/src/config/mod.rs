@@ -78,6 +78,16 @@ pub enum Error {
          one."
     )]
     NoTurboJSON,
+    #[error(
+        "Found both turbo.json and turbo.jsonc in the same directory.\nPlease use only one \
+         configuration file format to avoid confusion.\nRemove either turbo.json or turbo.jsonc \
+         from {directory}."
+    )]
+    #[diagnostic(help(
+        "Having both files can lead to unexpected behavior if they contain different \
+         configurations."
+    ))]
+    MultipleTurboConfigs { directory: String },
     #[error(transparent)]
     SerdeJson(#[from] serde_json::Error),
     #[error(transparent)]
@@ -396,25 +406,39 @@ impl ConfigurationOptions {
         self.run_summary.unwrap_or_default()
     }
 
-    pub fn root_turbo_json_path(&self, repo_root: &AbsoluteSystemPath) -> AbsoluteSystemPathBuf {
+    pub fn root_turbo_json_path(
+        &self,
+        repo_root: &AbsoluteSystemPath,
+    ) -> Result<AbsoluteSystemPathBuf, Error> {
         if let Some(path) = &self.root_turbo_json_path {
-            return path.clone();
+            return Ok(path.clone());
+        }
+
+        // Check if both files exist
+        let turbo_json_path = repo_root.join_component(CONFIG_FILE);
+        let turbo_jsonc_path = repo_root.join_component(CONFIG_FILE_JSONC);
+        let turbo_json_exists = turbo_json_path.exists();
+        let turbo_jsonc_exists = turbo_jsonc_path.exists();
+
+        // If both files exist, throw an error
+        if turbo_json_exists && turbo_jsonc_exists {
+            return Err(Error::MultipleTurboConfigs {
+                directory: repo_root.to_string(),
+            });
         }
 
         // First check if turbo.json exists
-        let turbo_json_path = repo_root.join_component(CONFIG_FILE);
-        if turbo_json_path.exists() {
-            return turbo_json_path;
+        if turbo_json_exists {
+            return Ok(turbo_json_path);
         }
 
         // Then check if turbo.jsonc exists
-        let turbo_jsonc_path = repo_root.join_component(CONFIG_FILE_JSONC);
-        if turbo_jsonc_path.exists() {
-            return turbo_jsonc_path;
+        if turbo_jsonc_exists {
+            return Ok(turbo_jsonc_path);
         }
 
         // Default to turbo.json if neither exists
-        turbo_json_path
+        Ok(turbo_json_path)
     }
 
     pub fn allow_no_turbo_json(&self) -> bool {
@@ -471,21 +495,32 @@ impl TurborepoConfigBuilder {
         self.repo_root.join_component("package.json")
     }
     #[allow(dead_code)]
-    fn root_turbo_json_path(&self) -> AbsoluteSystemPathBuf {
-        // First check if turbo.json exists
+    fn root_turbo_json_path(&self) -> Result<AbsoluteSystemPathBuf, Error> {
+        // Check if both files exist
         let turbo_json_path = self.repo_root.join_component(CONFIG_FILE);
-        if turbo_json_path.exists() {
-            return turbo_json_path;
+        let turbo_jsonc_path = self.repo_root.join_component(CONFIG_FILE_JSONC);
+        let turbo_json_exists = turbo_json_path.exists();
+        let turbo_jsonc_exists = turbo_jsonc_path.exists();
+
+        // If both files exist, throw an error
+        if turbo_json_exists && turbo_jsonc_exists {
+            return Err(Error::MultipleTurboConfigs {
+                directory: self.repo_root.to_string(),
+            });
+        }
+
+        // First check if turbo.json exists
+        if turbo_json_exists {
+            return Ok(turbo_json_path);
         }
 
         // Then check if turbo.jsonc exists
-        let turbo_jsonc_path = self.repo_root.join_component(CONFIG_FILE_JSONC);
-        if turbo_jsonc_path.exists() {
-            return turbo_jsonc_path;
+        if turbo_jsonc_exists {
+            return Ok(turbo_jsonc_path);
         }
 
         // Default to turbo.json if neither exists
-        turbo_json_path
+        Ok(turbo_json_path)
     }
 
     fn get_environment(&self) -> HashMap<OsString, OsString> {
@@ -570,7 +605,7 @@ mod test {
         })
         .unwrap();
         assert_eq!(
-            defaults.root_turbo_json_path(repo_root),
+            defaults.root_turbo_json_path(repo_root).unwrap(),
             repo_root.join_component("turbo.json")
         )
     }
