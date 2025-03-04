@@ -1,9 +1,9 @@
 Setup
-  $ . ${TESTDIR}/../../helpers/setup_integration_test.sh
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh
 
 # Test that syntax errors in turbo.jsonc are properly reported
 Create turbo.jsonc with syntax errors
-  $ cat > syntax-error.jsonc << EOF
+  $ cat > syntax-error.jsonc << 'EOF'
   {
     "$schema": "https://turbo.build/schema.json",,
     // Comment with a syntax error below

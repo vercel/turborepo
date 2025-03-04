@@ -1,15 +1,15 @@
 Setup
-  $ . ${TESTDIR}/../../helpers/setup_integration_test.sh
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh
 
 # Test that package-specific tasks in turbo.jsonc files work correctly
 # First, create a repo structure with a package
   $ mkdir -p apps/my-app
 
 # Create a root turbo.jsonc file with basic configuration
-  $ cp ${TESTDIR}/../../integration/fixtures/turbo-configs/basic.jsonc turbo.jsonc
+  $ cp ${TESTDIR}/../../../integration/fixtures/turbo-configs/basic.jsonc turbo.jsonc
 
 # Create a package-specific turbo.jsonc file
-  $ cp ${TESTDIR}/../../integration/fixtures/turbo-configs/package-task.jsonc apps/my-app/turbo.jsonc
+  $ cp ${TESTDIR}/../../../integration/fixtures/turbo-configs/package-task.jsonc apps/my-app/turbo.jsonc
 
 # Run turbo build, it should use both the root and package configs
   $ ${TURBO} build
@@ -22,7 +22,7 @@ Setup
   
 
 # Create a package-specific task in the root turbo.jsonc
-  $ cat > root-with-package-task.jsonc << EOF
+  $ cat > root-with-package-task.jsonc << 'EOF'
   {
     "$schema": "https://turbo.build/schema.json",
     // Root config with package-specific task

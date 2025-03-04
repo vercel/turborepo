@@ -1,9 +1,9 @@
 Setup
-  $ . ${TESTDIR}/../../helpers/setup_integration_test.sh
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh
 
 # Test that turbo.jsonc with comments is properly parsed
 Create turbo.jsonc with comments
-  $ cp ${TESTDIR}/../../integration/fixtures/turbo-configs/basic.jsonc turbo.jsonc
+  $ cp ${TESTDIR}/../../../integration/fixtures/turbo-configs/basic.jsonc turbo.jsonc
 
 # Run turbo test to verify that the test task from the config is properly parsed
   $ ${TURBO} test
@@ -27,7 +27,7 @@ Create turbo.jsonc with comments
 
 # Test that complex comments with special characters are handled correctly
 Create turbo.jsonc with complex comments
-  $ cat > complex-comments.jsonc << EOF
+  $ cat > complex-comments.jsonc << 'EOF'
   {
     "$schema": "https://turbo.build/schema.json",
     /* Multi-line comment with special characters:

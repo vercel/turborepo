@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../helpers/setup_integration_test.sh
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh
 
 # Test that turbo falls back to turbo.jsonc when turbo.json doesn't exist
 # First, create a repo with no turbo.json or turbo.jsonc
@@ -8,10 +8,10 @@ Setup
 # Try to run turbo build, it should fail because no config exists
   $ ${TURBO} build 2> error.txt
   [1]
-  $ grep -q "Could not find turbo.json" error.txt
+  $ grep -q "Could not find turbo.json or turbo.jsonc" error.txt
 
 # Now add a turbo.jsonc file
-  $ cp ${TESTDIR}/../../integration/fixtures/turbo-configs/basic.jsonc turbo.jsonc
+  $ cp ${TESTDIR}/../../../integration/fixtures/turbo-configs/basic.jsonc turbo.jsonc
 
 # Run turbo build, it should succeed using the turbo.jsonc file
   $ ${TURBO} build
@@ -25,7 +25,7 @@ Setup
 
 # Test that turbo prefers turbo.json over turbo.jsonc when both exist
 # First, create a different turbo.json file
-  $ cat > different-config.json << EOF
+  $ cat > different-config.json << 'EOF'
   {
     "$schema": "https://turbo.build/schema.json",
     "globalDependencies": ["different-dep.json"],

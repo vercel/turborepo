@@ -3,7 +3,7 @@
   "globalDependencies": ["foo.txt"],
   "globalEnv": ["SOME_ENV_VAR"],
   "extends": ["//"],
-  "tasks": {
+  "pipeline": {
     "my-app#build": {
       "outputs": ["banana.txt", "apple.json"],
       "inputs": ["$TURBO_DEFAULT$", ".env.local"]
