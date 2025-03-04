@@ -79,9 +79,8 @@ pub enum Error {
     )]
     NoTurboJSON,
     #[error(
-        "Found both turbo.json and turbo.jsonc in the same directory.\nPlease use only one \
-         configuration file format to avoid confusion.\nRemove either turbo.json or turbo.jsonc \
-         from {directory}."
+        "Found both turbo.json and turbo.jsonc in the same directory: {directory}\nRemove either \
+         turbo.json or turbo.jsonc so there is only one."
     )]
     #[diagnostic(help(
         "Having both files can lead to unexpected behavior if they contain different \
@@ -580,9 +579,12 @@ mod test {
     use tempfile::TempDir;
     use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 
-    use crate::config::{
-        ConfigurationOptions, TurborepoConfigBuilder, DEFAULT_API_URL, DEFAULT_LOGIN_URL,
-        DEFAULT_TIMEOUT,
+    use crate::{
+        config::{
+            ConfigurationOptions, Error, TurborepoConfigBuilder, DEFAULT_API_URL,
+            DEFAULT_LOGIN_URL, DEFAULT_TIMEOUT,
+        },
+        turbo_json::{CONFIG_FILE, CONFIG_FILE_JSONC},
     };
 
     #[test]
@@ -697,5 +699,108 @@ mod test {
         assert!(config.signature());
         assert!(!config.preflight());
         assert_eq!(config.timeout(), 123);
+    }
+
+    #[test]
+    fn test_multiple_turbo_configs() {
+        let tmp_dir = TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPath::from_std_path(tmp_dir.path()).unwrap();
+
+        // Create both turbo.json and turbo.jsonc
+        let turbo_json_path = repo_root.join_component(CONFIG_FILE);
+        let turbo_jsonc_path = repo_root.join_component(CONFIG_FILE_JSONC);
+
+        turbo_json_path.create_with_contents("{}").unwrap();
+        turbo_jsonc_path.create_with_contents("{}").unwrap();
+
+        // Test ConfigurationOptions.root_turbo_json_path
+        let config = ConfigurationOptions::default();
+        let result = config.root_turbo_json_path(repo_root);
+
+        assert!(result.is_err());
+        if let Err(Error::MultipleTurboConfigs { directory }) = result {
+            assert_eq!(directory, repo_root.to_string());
+        } else {
+            panic!("Expected MultipleTurboConfigs error");
+        }
+
+        // Test TurborepoConfigBuilder.root_turbo_json_path
+        let builder = TurborepoConfigBuilder::new(repo_root);
+        let result = builder.root_turbo_json_path();
+
+        assert!(result.is_err());
+        if let Err(Error::MultipleTurboConfigs { directory }) = result {
+            assert_eq!(directory, repo_root.to_string());
+        } else {
+            panic!("Expected MultipleTurboConfigs error");
+        }
+    }
+
+    #[test]
+    fn test_only_turbo_json() {
+        let tmp_dir = TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPath::from_std_path(tmp_dir.path()).unwrap();
+
+        // Create only turbo.json
+        let turbo_json_path = repo_root.join_component(CONFIG_FILE);
+        turbo_json_path.create_with_contents("{}").unwrap();
+
+        // Test ConfigurationOptions.root_turbo_json_path
+        let config = ConfigurationOptions::default();
+        let result = config.root_turbo_json_path(repo_root);
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), turbo_json_path);
+
+        // Test TurborepoConfigBuilder.root_turbo_json_path
+        let builder = TurborepoConfigBuilder::new(repo_root);
+        let result = builder.root_turbo_json_path();
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), turbo_json_path);
+    }
+
+    #[test]
+    fn test_only_turbo_jsonc() {
+        let tmp_dir = TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPath::from_std_path(tmp_dir.path()).unwrap();
+
+        // Create only turbo.jsonc
+        let turbo_jsonc_path = repo_root.join_component(CONFIG_FILE_JSONC);
+        turbo_jsonc_path.create_with_contents("{}").unwrap();
+
+        // Test ConfigurationOptions.root_turbo_json_path
+        let config = ConfigurationOptions::default();
+        let result = config.root_turbo_json_path(repo_root);
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), turbo_jsonc_path);
+
+        // Test TurborepoConfigBuilder.root_turbo_json_path
+        let builder = TurborepoConfigBuilder::new(repo_root);
+        let result = builder.root_turbo_json_path();
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), turbo_jsonc_path);
+    }
+
+    #[test]
+    fn test_no_turbo_config() {
+        let tmp_dir = TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPath::from_std_path(tmp_dir.path()).unwrap();
+
+        // Test ConfigurationOptions.root_turbo_json_path
+        let config = ConfigurationOptions::default();
+        let result = config.root_turbo_json_path(repo_root);
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), repo_root.join_component(CONFIG_FILE));
+
+        // Test TurborepoConfigBuilder.root_turbo_json_path
+        let builder = TurborepoConfigBuilder::new(repo_root);
+        let result = builder.root_turbo_json_path();
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), repo_root.join_component(CONFIG_FILE));
     }
 }
