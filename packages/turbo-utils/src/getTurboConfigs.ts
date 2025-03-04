@@ -70,15 +70,12 @@ function getWorkspaceGlobs(root: string): Array<string> {
   }
 }
 
-export function getTurboConfigs(
-  cwd?: string,
-  opts?: Options
-): TurboConfigs | undefined {
+export function getTurboConfigs(cwd?: string, opts?: Options): TurboConfigs {
   const turboRoot = getTurboRoot(cwd, opts);
   const configs: TurboConfigs = [];
 
   const cacheEnabled = opts?.cache ?? true;
-  if (cacheEnabled && cwd) {
+  if (cacheEnabled && cwd && cwd in turboConfigsCache) {
     return turboConfigsCache[cwd];
   }
 
@@ -130,11 +127,11 @@ export function getTurboConfigs(
         if (isRootConfig) {
           // invalid - root config with extends
           if ("extends" in turboJsonContent) {
-            return;
+            continue;
           }
         } else if (!("extends" in turboJsonContent)) {
           // invalid - workspace config with no extends
-          return;
+          continue;
         }
         configs.push({
           config: turboJsonContent,
@@ -164,7 +161,7 @@ export function getWorkspaceConfigs(
   const configs: Array<WorkspaceConfig> = [];
 
   const cacheEnabled = opts?.cache ?? true;
-  if (cacheEnabled && cwd) {
+  if (cacheEnabled && cwd && cwd in workspaceConfigCache) {
     return workspaceConfigCache[cwd];
   }
 
