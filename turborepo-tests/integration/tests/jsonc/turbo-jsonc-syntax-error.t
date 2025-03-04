@@ -3,26 +3,7 @@ Setup
 
 # Test that syntax errors in turbo.jsonc are properly reported
 Create turbo.jsonc with syntax errors
-  $ cat > syntax-error.jsonc << 'EOF'
-{
-  "$schema": "https://turbo.build/schema.json",,
-  // Comment with a syntax error below
-  "globalDependencies": [
-    "tsconfig.json"
-  ],
-  "pipeline": {
-    "build": {
-      "dependsOn": [
-        "^build"
-      ],
-      "outputs": ["dist/**"]42,
-      "inputs": [".env.local"
-    },
-  }
-}
-EOF
-
-  $ mv syntax-error.jsonc turbo.jsonc
+  $ cp ${TESTDIR}/../../../fixtures/turbo-configs/syntax-error.json turbo.jsonc
 
 # Run turbo build to verify the syntax error is properly reported
   $ ${TURBO} build 2> error.txt
@@ -36,19 +17,19 @@ EOF
     |    1 | {
     |    2 |   "$schema": "https://turbo.build/schema.json",,
     |      :                                                ^
-    |    3 |   // Comment with a syntax error below
+    |    3 |   "globalDependencies": ["foo.txt"],
     |      `----
     |->   x expected `,` but instead found `42`
-    |       ,-[turbo.jsonc:12:46]
-    |    11 |         ],
-    |    12 |         "outputs": ["dist/**"]42,
-    |       :                                  ^^
-    |    13 |         "inputs": [".env.local"
+    |       ,-[turbo.jsonc:11:46]
+    |    10 |     // this comment verifies that turbo can read .json files with comments
+    |    11 |     "my-app#build": {
+    |       :                                                  ^^
+    |    12 |       "outputs": ["banana.txt", "apple.json"]42,
     |       `----
     `->   x expected `,` but instead found `}`
-            ,-[turbo.jsonc:15:5]
-         14 |       },
-         15 |     }
+            ,-[turbo.jsonc:13:5]
+         12 |       "outputs": ["banana.txt", "apple.json"]42,
+         13 |       "inputs": [".env.local"
             :     ^
-         16 |   }
+         14 |     },
             `---- 
