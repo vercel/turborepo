@@ -4,9 +4,7 @@
   "tasks": {
     "build": {
       "dependsOn": ["cli#rust-src"],
-      "env": ["NODE_VERSION", "CARGO_BUILD_TARGET"],
-      // napi swallow compile errors so we cannot cache as we might save a failure
-      "cache": false
+      "env": ["NODE_VERSION"]
     },
     "test": {
       "dependsOn": ["build"]
