@@ -1,13 +1,14 @@
-use std::{collections::HashMap, str::FromStr};
+#![cfg(feature = "git2")]
+use std::str::FromStr;
 
 use globwalk::ValidatedGlob;
 use tracing::debug;
-use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, PathError, RelativeUnixPathBuf};
+use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, PathError};
 use turborepo_telemetry::events::task::{FileHashMethod, PackageTaskEventBuilder};
 
-use crate::{hash_object::hash_objects, Error, Git, SCM};
-
-pub type GitHashes = HashMap<RelativeUnixPathBuf, String>;
+#[cfg(feature = "git2")]
+use crate::hash_object::hash_objects;
+use crate::{Error, Git, GitHashes, SCM};
 
 pub const INPUT_INCLUDE_DEFAULT_FILES: &str = "$TURBO_DEFAULT$";
 
@@ -291,9 +292,9 @@ impl Git {
 
 #[cfg(test)]
 mod tests {
-    use std::{assert_matches::assert_matches, process::Command};
+    use std::{assert_matches::assert_matches, collections::HashMap, process::Command};
 
-    use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
+    use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeUnixPathBuf};
 
     use super::*;
     use crate::manual::get_package_file_hashes_without_git;

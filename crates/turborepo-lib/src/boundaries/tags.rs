@@ -51,7 +51,7 @@ impl From<Permissions> for ProcessedPermissions {
 impl Run {
     pub(crate) fn get_package_tags(&self) -> HashMap<PackageName, Spanned<Vec<Spanned<String>>>> {
         let mut package_tags = HashMap::new();
-        let mut turbo_json_loader = self.turbo_json_loader();
+        let turbo_json_loader = self.turbo_json_loader();
         for (package, _) in self.pkg_dep_graph().packages() {
             if let Ok(TurboJson {
                 tags: Some(tags),

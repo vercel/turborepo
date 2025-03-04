@@ -9,6 +9,7 @@
 
 use std::{
     backtrace::{self, Backtrace},
+    collections::HashMap,
     io::Read,
     process::{Child, Command},
 };
@@ -27,6 +28,7 @@ mod status;
 
 #[derive(Debug, Error)]
 pub enum Error {
+    #[cfg(feature = "git2")]
     #[error("Git error on {1}: {0}")]
     Git2(
         #[source] git2::Error,
@@ -65,6 +67,8 @@ pub enum Error {
     UnableToResolveRef,
 }
 
+pub type GitHashes = HashMap<RelativeUnixPathBuf, String>;
+
 impl From<wax::BuildError> for Error {
     fn from(value: wax::BuildError) -> Self {
         Error::Glob(Box::new(value), Backtrace::capture())
@@ -76,6 +80,7 @@ impl Error {
         Error::Git(s.into(), Backtrace::capture())
     }
 
+    #[cfg(feature = "git2")]
     pub(crate) fn git2_error_context(error: git2::Error, error_context: String) -> Self {
         Error::Git2(error, error_context, Backtrace::capture())
     }

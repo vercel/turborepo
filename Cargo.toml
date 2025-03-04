@@ -57,6 +57,7 @@ turborepo-cache = { path = "crates/turborepo-cache" }
 turborepo-ci = { path = "crates/turborepo-ci" }
 turborepo-env = { path = "crates/turborepo-env" }
 turborepo-errors = { path = "crates/turborepo-errors" }
+turborepo-fixed-map = { path = "crates/turborepo-fixed-map" }
 turborepo-fs = { path = "crates/turborepo-fs" }
 turborepo-lib = { path = "crates/turborepo-lib", default-features = false }
 turborepo-lockfiles = { path = "crates/turborepo-lockfiles" }
@@ -65,6 +66,7 @@ turborepo-repository = { path = "crates/turborepo-repository" }
 turborepo-ui = { path = "crates/turborepo-ui" }
 turborepo-unescape = { path = "crates/turborepo-unescape" }
 turborepo-scm = { path = "crates/turborepo-scm" }
+turborepo-signals = { path = "crates/turborepo-signals" }
 wax = { path = "crates/turborepo-wax" }
 turborepo-vercel-api = { path = "crates/turborepo-vercel-api" }
 turborepo-vercel-api-mock = { path = "crates/turborepo-vercel-api-mock" }
@@ -106,9 +108,9 @@ derive_setters = "0.1.6"
 dialoguer = "0.11.0"
 dunce = "1.0.3"
 either = "1.9.0"
-futures = "0.3.26"
+futures = "0.3.30"
 futures-retry = "0.6.0"
-git2 = { version = "0.19.0", default-features = false }
+git2 = { version = "0.20.0", default-features = false }
 hex = "0.4.3"
 httpmock = { version = "0.6.8", default-features = false }
 indexmap = "1.9.2"

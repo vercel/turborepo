@@ -20,6 +20,7 @@ use turborepo_repository::{
     package_json::PackageJson,
 };
 use turborepo_scm::SCM;
+use turborepo_signals::{SignalHandler, SignalSubscriber};
 use turborepo_telemetry::events::{
     command::CommandEventBuilder,
     generic::{DaemonInitStatus, GenericEventBuilder},
@@ -46,7 +47,6 @@ use crate::{
     process::ProcessManager,
     run::{scope, task_access::TaskAccess, task_id::TaskName, Error, Run, RunCache},
     shim::TurboState,
-    signal::{SignalHandler, SignalSubscriber},
     turbo_json::{TurboJson, TurboJsonLoader, UIMode},
     DaemonConnector,
 };
@@ -383,7 +383,7 @@ impl RunBuilder {
         let task_access = TaskAccess::new(self.repo_root.clone(), async_cache.clone(), &scm);
         task_access.restore_config().await;
 
-        let mut turbo_json_loader = if task_access.is_enabled() {
+        let turbo_json_loader = if task_access.is_enabled() {
             TurboJsonLoader::task_access(
                 self.repo_root.clone(),
                 self.opts.repo_opts.root_turbo_json_path.clone(),
@@ -436,7 +436,7 @@ impl RunBuilder {
             &pkg_dep_graph,
             &root_turbo_json,
             filtered_pkgs.keys(),
-            turbo_json_loader.clone(),
+            &turbo_json_loader,
         )?;
 
         if self.opts.run_opts.parallel {
@@ -445,7 +445,7 @@ impl RunBuilder {
                 &pkg_dep_graph,
                 &root_turbo_json,
                 filtered_pkgs.keys(),
-                turbo_json_loader.clone(),
+                &turbo_json_loader,
             )?;
         }
 
@@ -497,7 +497,7 @@ impl RunBuilder {
         pkg_dep_graph: &PackageGraph,
         root_turbo_json: &TurboJson,
         filtered_pkgs: impl Iterator<Item = &'a PackageName>,
-        turbo_json_loader: TurboJsonLoader,
+        turbo_json_loader: &TurboJsonLoader,
     ) -> Result<Engine, Error> {
         let tasks = self.opts.run_opts.tasks.iter().map(|task| {
             // TODO: Pull span info from command

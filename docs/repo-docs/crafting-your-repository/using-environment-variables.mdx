@@ -169,7 +169,22 @@ To do this, add the files to the [`inputs`](/repo/docs/reference/configuration#i
   "globalDependencies": [".env"], // All task hashes
   "tasks": {
     "build": {
-      "inputs": ["$TURBO_DEFAULT$", ".env", ".env.local"] // Only the `build` task hash
+      "inputs": ["$TURBO_DEFAULT$", ".env"] // Only the `build` task hash
+    }
+  }
+}
+```
+
+### Multiple `.env` files
+
+You can capture multiple `.env` files at once using a `*`.
+
+```json title="./turbo.json"
+{
+  "globalDependencies": [".env"], // All task hashes
+  "tasks": {
+    "build": {
+      "inputs": ["$TURBO_DEFAULT$", ".env*"] // Only the `build` task hash
     }
   }
 }

@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_errors::Spanned;
+use turborepo_fixed_map::FixedMap;
 use turborepo_repository::{
     package_graph::{PackageInfo, PackageName},
     package_json::PackageJson,
@@ -22,7 +23,7 @@ use crate::{
 #[derive(Debug, Clone)]
 pub struct TurboJsonLoader {
     repo_root: AbsoluteSystemPathBuf,
-    cache: HashMap<PackageName, TurboJson>,
+    cache: FixedMap<PackageName, TurboJson>,
     strategy: Strategy,
 }
 
@@ -59,7 +60,7 @@ impl TurboJsonLoader {
         let packages = package_turbo_jsons(&repo_root, root_turbo_json_path, packages);
         Self {
             repo_root,
-            cache: HashMap::new(),
+            cache: FixedMap::new(packages.keys().cloned()),
             strategy: Strategy::Workspace {
                 packages,
                 micro_frontends_configs: None,
@@ -77,7 +78,7 @@ impl TurboJsonLoader {
         let packages = package_turbo_jsons(&repo_root, root_turbo_json_path, packages);
         Self {
             repo_root,
-            cache: HashMap::new(),
+            cache: FixedMap::new(packages.keys().cloned()),
             strategy: Strategy::Workspace {
                 packages,
                 micro_frontends_configs: Some(micro_frontends_configs),
@@ -95,7 +96,7 @@ impl TurboJsonLoader {
         let packages = workspace_package_scripts(packages);
         Self {
             repo_root,
-            cache: HashMap::new(),
+            cache: FixedMap::new(packages.keys().cloned()),
             strategy: Strategy::WorkspaceNoTurboJson {
                 packages,
                 microfrontends_configs,
@@ -112,7 +113,7 @@ impl TurboJsonLoader {
     ) -> Self {
         Self {
             repo_root,
-            cache: HashMap::new(),
+            cache: FixedMap::new(Some(PackageName::Root).into_iter()),
             strategy: Strategy::SinglePackage {
                 root_turbo_json,
                 package_json,
@@ -129,7 +130,7 @@ impl TurboJsonLoader {
     ) -> Self {
         Self {
             repo_root,
-            cache: HashMap::new(),
+            cache: FixedMap::new(Some(PackageName::Root).into_iter()),
             strategy: Strategy::TaskAccess {
                 root_turbo_json,
                 package_json,
@@ -141,29 +142,33 @@ impl TurboJsonLoader {
     /// never hit the file system.
     /// Primarily intended for testing
     pub fn noop(turbo_jsons: HashMap<PackageName, TurboJson>) -> Self {
+        let cache = FixedMap::from_iter(
+            turbo_jsons
+                .into_iter()
+                .map(|(key, value)| (key, Some(value))),
+        );
         Self {
             // This never gets read from so we populate it with
             repo_root: AbsoluteSystemPath::new(if cfg!(windows) { "C:\\" } else { "/" })
                 .expect("wasn't able to create absolute system path")
                 .to_owned(),
-            cache: turbo_jsons,
+            cache,
             strategy: Strategy::Noop,
         }
     }
 
     /// Load a turbo.json for a given package
-    pub fn load<'a>(&'a mut self, package: &PackageName) -> Result<&'a TurboJson, Error> {
-        if !self.cache.contains_key(package) {
-            let turbo_json = self.uncached_load(package)?;
-            self.cache.insert(package.clone(), turbo_json);
+    pub fn load<'a>(&'a self, package: &PackageName) -> Result<&'a TurboJson, Error> {
+        if let Ok(Some(turbo_json)) = self.cache.get(package) {
+            return Ok(turbo_json);
         }
-        Ok(self
-            .cache
-            .get(package)
-            .expect("just inserted value for this key"))
+        let turbo_json = self.uncached_load(package)?;
+        self.cache
+            .insert(package, turbo_json)
+            .map_err(|_| Error::NoTurboJSON)
     }
 
-    pub fn uncached_load(&self, package: &PackageName) -> Result<TurboJson, Error> {
+    fn uncached_load(&self, package: &PackageName) -> Result<TurboJson, Error> {
         match &self.strategy {
             Strategy::SinglePackage {
                 package_json,
@@ -423,9 +428,9 @@ mod test {
         let repo_root = AbsoluteSystemPath::from_std_path(root_dir.path())?;
         let root_turbo_json = repo_root.join_component("turbo.json");
         fs::write(&root_turbo_json, turbo_json_content)?;
-        let mut loader = TurboJsonLoader {
+        let loader = TurboJsonLoader {
             repo_root: repo_root.to_owned(),
-            cache: HashMap::new(),
+            cache: FixedMap::new(Some(PackageName::Root).into_iter()),
             strategy: Strategy::Workspace {
                 packages: vec![(PackageName::Root, root_turbo_json)]
                     .into_iter()
@@ -504,7 +509,7 @@ mod test {
             fs::write(&root_turbo_json, content)?;
         }
 
-        let mut loader = TurboJsonLoader::single_package(
+        let loader = TurboJsonLoader::single_package(
             repo_root.to_owned(),
             root_turbo_json,
             root_package_json,
@@ -566,7 +571,7 @@ mod test {
             ..Default::default()
         };
 
-        let mut loader =
+        let loader =
             TurboJsonLoader::task_access(repo_root.to_owned(), root_turbo_json, root_package_json);
         let turbo_json = loader.load(&PackageName::Root)?;
         let root_build = turbo_json
@@ -603,7 +608,7 @@ mod test {
             PackageJson::default(),
         );
 
-        for mut loader in [single_loader, task_access_loader] {
+        for loader in [single_loader, task_access_loader] {
             let result = loader.load(&non_root);
             assert!(result.is_err());
             let err = result.unwrap_err();
@@ -624,9 +629,9 @@ mod test {
             .into_iter()
             .collect();
 
-        let mut loader = TurboJsonLoader {
+        let loader = TurboJsonLoader {
             repo_root: repo_root.to_owned(),
-            cache: HashMap::new(),
+            cache: FixedMap::new(vec![PackageName::Root, PackageName::from("a")].into_iter()),
             strategy: Strategy::Workspace {
                 packages,
                 micro_frontends_configs: None,
@@ -656,9 +661,9 @@ mod test {
             .into_iter()
             .collect();
 
-        let mut loader = TurboJsonLoader {
+        let loader = TurboJsonLoader {
             repo_root: repo_root.to_owned(),
-            cache: HashMap::new(),
+            cache: FixedMap::new(vec![PackageName::Root, PackageName::from("a")].into_iter()),
             strategy: Strategy::Workspace {
                 packages,
                 micro_frontends_configs: None,
@@ -691,9 +696,9 @@ mod test {
         .into_iter()
         .collect();
 
-        let mut loader = TurboJsonLoader {
+        let loader = TurboJsonLoader {
             repo_root: repo_root.to_owned(),
-            cache: HashMap::new(),
+            cache: FixedMap::new(vec![PackageName::Root, PackageName::from("pkg-a")].into_iter()),
             strategy: Strategy::WorkspaceNoTurboJson {
                 packages,
                 microfrontends_configs: None,
@@ -771,9 +776,16 @@ mod test {
         )
         .unwrap();
 
-        let mut loader = TurboJsonLoader {
+        let loader = TurboJsonLoader {
             repo_root: repo_root.to_owned(),
-            cache: HashMap::new(),
+            cache: FixedMap::new(
+                vec![
+                    PackageName::Root,
+                    PackageName::from("web"),
+                    PackageName::from("docs"),
+                ]
+                .into_iter(),
+            ),
             strategy: Strategy::WorkspaceNoTurboJson {
                 packages,
                 microfrontends_configs,

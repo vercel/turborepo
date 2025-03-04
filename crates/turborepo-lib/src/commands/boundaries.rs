@@ -1,11 +1,7 @@
+use turborepo_signals::{listeners::get_signal, SignalHandler};
 use turborepo_telemetry::events::command::CommandEventBuilder;
 
-use crate::{
-    cli,
-    commands::{run::get_signal, CommandBase},
-    run::builder::RunBuilder,
-    signal::SignalHandler,
-};
+use crate::{cli, commands::CommandBase, run::builder::RunBuilder};
 
 pub async fn run(base: CommandBase, telemetry: CommandEventBuilder) -> Result<i32, cli::Error> {
     let signal = get_signal()?;

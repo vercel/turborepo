@@ -7,7 +7,7 @@ use sha1::{Digest, Sha1};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, IntoUnix};
 use wax::{any, Glob, Program};
 
-use crate::{package_deps::GitHashes, Error};
+use crate::{Error, GitHashes};
 
 fn git_like_hash_file(path: &AbsoluteSystemPath) -> Result<String, Error> {
     let mut hasher = Sha1::new();
