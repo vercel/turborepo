@@ -466,12 +466,9 @@ mod test {
             repo_root: repo_root.to_owned(),
             cache: FixedMap::new(Some(PackageName::Root).into_iter()),
             strategy: Strategy::Workspace {
-                packages: vec![(
-                    PackageName::Root,
-                    root_turbo_json.parent().unwrap().to_owned(),
-                )]
-                .into_iter()
-                .collect(),
+                packages: vec![(PackageName::Root, root_turbo_json.to_owned())]
+                    .into_iter()
+                    .collect(),
                 micro_frontends_configs: None,
             },
         };
