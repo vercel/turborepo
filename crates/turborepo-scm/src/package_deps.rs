@@ -204,6 +204,7 @@ impl Git {
             //   downstream.
             inputs.push("package.json".to_string());
             inputs.push("turbo.json".to_string());
+            inputs.push("turbo.jsonc".to_string());
         }
 
         // The input patterns are relative to the package.

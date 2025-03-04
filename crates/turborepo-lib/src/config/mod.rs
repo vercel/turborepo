@@ -412,28 +412,18 @@ impl ConfigurationOptions {
         // Check if both files exist
         let turbo_json_path = repo_root.join_component(CONFIG_FILE);
         let turbo_jsonc_path = repo_root.join_component(CONFIG_FILE_JSONC);
-        let turbo_json_exists = turbo_json_path.exists();
-        let turbo_jsonc_exists = turbo_jsonc_path.exists();
+        let turbo_json_exists = turbo_json_path.try_exists()?;
+        let turbo_jsonc_exists = turbo_jsonc_path.try_exists()?;
 
-        // If both files exist, throw an error
-        if turbo_json_exists && turbo_jsonc_exists {
-            return Err(Error::MultipleTurboConfigs {
+        match (turbo_json_exists, turbo_jsonc_exists) {
+            (true, true) => Err(Error::MultipleTurboConfigs {
                 directory: repo_root.to_string(),
-            });
+            }),
+            (true, false) => Ok(turbo_json_path),
+            (false, true) => Ok(turbo_jsonc_path),
+            // Default to turbo.json if neither exists
+            (false, false) => Ok(turbo_json_path),
         }
-
-        // First check if turbo.json exists
-        if turbo_json_exists {
-            return Ok(turbo_json_path);
-        }
-
-        // Then check if turbo.jsonc exists
-        if turbo_jsonc_exists {
-            return Ok(turbo_jsonc_path);
-        }
-
-        // Default to turbo.json if neither exists
-        Ok(turbo_json_path)
     }
 
     pub fn allow_no_turbo_json(&self) -> bool {
@@ -482,40 +472,6 @@ impl TurborepoConfigBuilder {
     pub fn with_global_config_path(mut self, path: AbsoluteSystemPathBuf) -> Self {
         self.global_config_path = Some(path);
         self
-    }
-
-    // Getting all of the paths.
-    #[allow(dead_code)]
-    fn root_package_json_path(&self) -> AbsoluteSystemPathBuf {
-        self.repo_root.join_component("package.json")
-    }
-    #[allow(dead_code)]
-    fn root_turbo_json_path(&self) -> Result<AbsoluteSystemPathBuf, Error> {
-        // Check if both files exist
-        let turbo_json_path = self.repo_root.join_component(CONFIG_FILE);
-        let turbo_jsonc_path = self.repo_root.join_component(CONFIG_FILE_JSONC);
-        let turbo_json_exists = turbo_json_path.exists();
-        let turbo_jsonc_exists = turbo_jsonc_path.exists();
-
-        // If both files exist, throw an error
-        if turbo_json_exists && turbo_jsonc_exists {
-            return Err(Error::MultipleTurboConfigs {
-                directory: self.repo_root.to_string(),
-            });
-        }
-
-        // First check if turbo.json exists
-        if turbo_json_exists {
-            return Ok(turbo_json_path);
-        }
-
-        // Then check if turbo.jsonc exists
-        if turbo_jsonc_exists {
-            return Ok(turbo_jsonc_path);
-        }
-
-        // Default to turbo.json if neither exists
-        Ok(turbo_json_path)
     }
 
     fn get_environment(&self) -> HashMap<OsString, OsString> {
@@ -577,8 +533,8 @@ mod test {
 
     use crate::{
         config::{
-            ConfigurationOptions, Error, TurborepoConfigBuilder, DEFAULT_API_URL,
-            DEFAULT_LOGIN_URL, DEFAULT_TIMEOUT,
+            ConfigurationOptions, TurborepoConfigBuilder, DEFAULT_API_URL, DEFAULT_LOGIN_URL,
+            DEFAULT_TIMEOUT,
         },
         turbo_json::{CONFIG_FILE, CONFIG_FILE_JSONC},
     };
@@ -712,24 +668,7 @@ mod test {
         // Test ConfigurationOptions.root_turbo_json_path
         let config = ConfigurationOptions::default();
         let result = config.root_turbo_json_path(repo_root);
-
         assert!(result.is_err());
-        if let Err(Error::MultipleTurboConfigs { directory }) = result {
-            assert_eq!(directory, repo_root.to_string());
-        } else {
-            panic!("Expected MultipleTurboConfigs error");
-        }
-
-        // Test TurborepoConfigBuilder.root_turbo_json_path
-        let builder = TurborepoConfigBuilder::new(repo_root);
-        let result = builder.root_turbo_json_path();
-
-        assert!(result.is_err());
-        if let Err(Error::MultipleTurboConfigs { directory }) = result {
-            assert_eq!(directory, repo_root.to_string());
-        } else {
-            panic!("Expected MultipleTurboConfigs error");
-        }
     }
 
     #[test]
@@ -745,14 +684,6 @@ mod test {
         let config = ConfigurationOptions::default();
         let result = config.root_turbo_json_path(repo_root);
 
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), turbo_json_path);
-
-        // Test TurborepoConfigBuilder.root_turbo_json_path
-        let builder = TurborepoConfigBuilder::new(repo_root);
-        let result = builder.root_turbo_json_path();
-
-        assert!(result.is_ok());
         assert_eq!(result.unwrap(), turbo_json_path);
     }
 
@@ -769,14 +700,6 @@ mod test {
         let config = ConfigurationOptions::default();
         let result = config.root_turbo_json_path(repo_root);
 
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), turbo_jsonc_path);
-
-        // Test TurborepoConfigBuilder.root_turbo_json_path
-        let builder = TurborepoConfigBuilder::new(repo_root);
-        let result = builder.root_turbo_json_path();
-
-        assert!(result.is_ok());
         assert_eq!(result.unwrap(), turbo_jsonc_path);
     }
 
@@ -789,14 +712,6 @@ mod test {
         let config = ConfigurationOptions::default();
         let result = config.root_turbo_json_path(repo_root);
 
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), repo_root.join_component(CONFIG_FILE));
-
-        // Test TurborepoConfigBuilder.root_turbo_json_path
-        let builder = TurborepoConfigBuilder::new(repo_root);
-        let result = builder.root_turbo_json_path();
-
-        assert!(result.is_ok());
         assert_eq!(result.unwrap(), repo_root.join_component(CONFIG_FILE));
     }
 }

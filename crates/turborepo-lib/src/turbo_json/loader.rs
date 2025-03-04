@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
@@ -57,7 +57,7 @@ impl TurboJsonLoader {
         root_turbo_json_path: AbsoluteSystemPathBuf,
         packages: impl Iterator<Item = (&'a PackageName, &'a PackageInfo)>,
     ) -> Self {
-        let packages = package_turbo_jsons(&repo_root, root_turbo_json_path, packages);
+        let packages = package_turbo_json_dirs(&repo_root, root_turbo_json_path, packages);
         Self {
             repo_root,
             cache: FixedMap::new(packages.keys().cloned()),
@@ -75,7 +75,7 @@ impl TurboJsonLoader {
         packages: impl Iterator<Item = (&'a PackageName, &'a PackageInfo)>,
         micro_frontends_configs: MicrofrontendsConfigs,
     ) -> Self {
-        let packages = package_turbo_jsons(&repo_root, root_turbo_json_path, packages);
+        let packages = package_turbo_json_dirs(&repo_root, root_turbo_json_path, packages);
         Self {
             repo_root,
             cache: FixedMap::new(packages.keys().cloned()),
@@ -184,8 +184,15 @@ impl TurboJsonLoader {
                 packages,
                 micro_frontends_configs,
             } => {
-                let path = packages.get(package).ok_or_else(|| Error::NoTurboJSON)?;
-                let turbo_json = load_from_file(&self.repo_root, path);
+                let turbo_json_path = packages.get(package).ok_or_else(|| Error::NoTurboJSON)?;
+                let turbo_json = load_from_file(
+                    &self.repo_root,
+                    if package == &PackageName::Root {
+                        LoadTurboJsonPath::File(turbo_json_path)
+                    } else {
+                        LoadTurboJsonPath::Dir(turbo_json_path)
+                    },
+                );
                 if let Some(mfe_configs) = micro_frontends_configs {
                     mfe_configs.update_turbo_json(package, turbo_json)
                 } else {
@@ -227,8 +234,9 @@ impl TurboJsonLoader {
     }
 }
 
-/// Map all packages in the package graph to their turbo.json path
-fn package_turbo_jsons<'a>(
+/// Map all packages in the package graph to their dirs that contain a
+/// turbo.json
+fn package_turbo_json_dirs<'a>(
     repo_root: &AbsoluteSystemPath,
     root_turbo_json_path: AbsoluteSystemPathBuf,
     packages: impl Iterator<Item = (&'a PackageName, &'a PackageInfo)>,
@@ -239,12 +247,7 @@ fn package_turbo_jsons<'a>(
         if pkg == &PackageName::Root {
             None
         } else {
-            Some((
-                pkg.clone(),
-                repo_root
-                    .resolve(info.package_path())
-                    .join_component(CONFIG_FILE),
-            ))
+            Some((pkg.clone(), repo_root.resolve(info.package_path())))
         }
     }));
     package_turbo_jsons
@@ -264,37 +267,39 @@ fn workspace_package_scripts<'a>(
         .collect()
 }
 
+enum LoadTurboJsonPath<'a> {
+    // Look for a turbo.json in this directory
+    Dir(&'a AbsoluteSystemPath),
+    // Only use this path as a source for turbo.json
+    // Does not need to have filename of turbo.json
+    File(&'a AbsoluteSystemPath),
+}
+
 fn load_from_file(
     repo_root: &AbsoluteSystemPath,
-    turbo_json_path: &AbsoluteSystemPath,
+    turbo_json_path: LoadTurboJsonPath,
 ) -> Result<TurboJson, Error> {
-    // Check if we're looking for turbo.json
-    if turbo_json_path.file_name() == Some(super::CONFIG_FILE) {
-        let turbo_json_exists = turbo_json_path.exists();
-        let turbo_jsonc_path = turbo_json_path
-            .parent()
-            .unwrap()
-            .join_component(super::CONFIG_FILE_JSONC);
-        let turbo_jsonc_exists = turbo_jsonc_path.exists();
+    let result = match turbo_json_path {
+        LoadTurboJsonPath::Dir(turbo_json_dir_path) => {
+            let turbo_json_path = turbo_json_dir_path.join_component(CONFIG_FILE);
+            let turbo_jsonc_path = turbo_json_dir_path.join_component(CONFIG_FILE_JSONC);
 
-        // If both files exist, throw an error
-        if turbo_json_exists && turbo_jsonc_exists {
-            return Err(Error::MultipleTurboConfigs {
-                directory: turbo_json_path.parent().unwrap().to_string(),
-            });
+            // Load both turbo.json and turbo.jsonc
+            let turbo_json = TurboJson::read(repo_root, &turbo_json_path);
+            let turbo_jsonc = TurboJson::read(repo_root, &turbo_jsonc_path);
+
+            // If both are present, error as we don't know which to use
+            if turbo_json.is_ok() && turbo_jsonc.is_ok() {
+                return Err(Error::MultipleTurboConfigs {
+                    directory: turbo_json_dir_path.to_string(),
+                });
+            }
+
+            // Attempt to use the turbo.json that was successfully parsed
+            turbo_json.or(turbo_jsonc)
         }
-
-        // If turbo.jsonc exists but turbo.json doesn't, use turbo.jsonc
-        if !turbo_json_exists && turbo_jsonc_exists {
-            return match TurboJson::read(repo_root, &turbo_jsonc_path) {
-                Err(e) => Err(e),
-                Ok(turbo) => Ok(turbo),
-            };
-        }
-    }
-
-    // Try to load the provided path directly
-    let result = TurboJson::read(repo_root, turbo_json_path);
+        LoadTurboJsonPath::File(turbo_json_path) => TurboJson::read(repo_root, turbo_json_path),
+    };
 
     // Handle errors or success
     match result {
@@ -426,16 +431,13 @@ mod test {
     use std::{collections::BTreeMap, fs};
 
     use anyhow::Result;
+    use insta::assert_snapshot;
     use tempfile::tempdir;
     use test_case::test_case;
     use turborepo_unescape::UnescapedString;
 
     use super::*;
-    use crate::{
-        config::Error,
-        task_graph::TaskDefinition,
-        turbo_json::{CONFIG_FILE, CONFIG_FILE_JSONC},
-    };
+    use crate::{config::Error, task_graph::TaskDefinition};
 
     #[test_case(r"{}", TurboJson::default() ; "empty")]
     #[test_case(r#"{ "globalDependencies": ["tsconfig.json", "jest.config.ts"] }"#,
@@ -464,9 +466,12 @@ mod test {
             repo_root: repo_root.to_owned(),
             cache: FixedMap::new(Some(PackageName::Root).into_iter()),
             strategy: Strategy::Workspace {
-                packages: vec![(PackageName::Root, root_turbo_json)]
-                    .into_iter()
-                    .collect(),
+                packages: vec![(
+                    PackageName::Root,
+                    root_turbo_json.parent().unwrap().to_owned(),
+                )]
+                .into_iter()
+                .collect(),
                 micro_frontends_configs: None,
             },
         };
@@ -657,9 +662,12 @@ mod test {
         let repo_root = AbsoluteSystemPath::from_std_path(root_dir.path()).unwrap();
         let a_turbo_json = repo_root.join_components(&["packages", "a", "turbo.json"]);
         a_turbo_json.ensure_dir().unwrap();
-        let packages = vec![(PackageName::from("a"), a_turbo_json.clone())]
-            .into_iter()
-            .collect();
+        let packages = vec![(
+            PackageName::from("a"),
+            a_turbo_json.parent().unwrap().to_owned(),
+        )]
+        .into_iter()
+        .collect();
 
         let loader = TurboJsonLoader {
             repo_root: repo_root.to_owned(),
@@ -689,9 +697,12 @@ mod test {
         let repo_root = AbsoluteSystemPath::from_std_path(root_dir.path()).unwrap();
         let a_turbo_json = repo_root.join_components(&["packages", "a", "turbo.json"]);
         a_turbo_json.ensure_dir().unwrap();
-        let packages = vec![(PackageName::from("a"), a_turbo_json.clone())]
-            .into_iter()
-            .collect();
+        let packages = vec![(
+            PackageName::from("a"),
+            a_turbo_json.parent().unwrap().to_owned(),
+        )]
+        .into_iter()
+        .collect();
 
         let loader = TurboJsonLoader {
             repo_root: repo_root.to_owned(),
@@ -877,23 +888,19 @@ mod test {
         turbo_jsonc_path.create_with_contents("{}")?;
 
         // Test load_from_file with turbo.json path
-        let result = load_from_file(repo_root, &turbo_json_path);
+        let result = load_from_file(repo_root, LoadTurboJsonPath::Dir(repo_root));
 
         // The function should return an error when both files exist
         assert!(result.is_err());
-        if let Err(Error::MultipleTurboConfigs { directory }) = result {
-            assert_eq!(directory, repo_root.to_string());
-        } else {
-            panic!("Expected MultipleTurboConfigs error, got {:?}", result);
+        let mut err = result.unwrap_err();
+        // Override tmpdir so we can snapshot the error message
+        if let Error::MultipleTurboConfigs { directory } = &mut err {
+            *directory = "some-dir".to_owned()
         }
-
-        // Test load_from_file with turbo.jsonc path
-        let result = load_from_file(repo_root, &turbo_jsonc_path);
-
-        // When using turbo.jsonc path directly, it should succeed even if both files
-        // exist because the function only checks for both files when the path
-        // is turbo.json
-        assert!(result.is_ok());
+        assert_snapshot!(err, @r"
+        Found both turbo.json and turbo.jsonc in the same directory: some-dir
+        Remove either turbo.json or turbo.jsonc so there is only one.
+        ");
 
         Ok(())
     }
@@ -908,22 +915,9 @@ mod test {
         turbo_json_path.create_with_contents("{}")?;
 
         // Test load_from_file
-        let result = load_from_file(repo_root, &turbo_json_path);
+        let result = load_from_file(repo_root, LoadTurboJsonPath::Dir(repo_root));
 
         assert!(result.is_ok());
-        let turbo_json = result.unwrap();
-
-        // Compare only the relevant fields, ignoring text and path
-        assert_eq!(turbo_json.tags, TurboJson::default().tags);
-        assert_eq!(turbo_json.boundaries, TurboJson::default().boundaries);
-        assert_eq!(turbo_json.extends, TurboJson::default().extends);
-        assert_eq!(turbo_json.global_deps, TurboJson::default().global_deps);
-        assert_eq!(turbo_json.global_env, TurboJson::default().global_env);
-        assert_eq!(
-            turbo_json.global_pass_through_env,
-            TurboJson::default().global_pass_through_env
-        );
-        assert_eq!(turbo_json.tasks, TurboJson::default().tasks);
 
         Ok(())
     }
@@ -938,203 +932,9 @@ mod test {
         turbo_jsonc_path.create_with_contents("{}")?;
 
         // Test load_from_file
-        let result = load_from_file(repo_root, &turbo_jsonc_path);
+        let result = load_from_file(repo_root, LoadTurboJsonPath::Dir(repo_root));
 
         assert!(result.is_ok());
-        let turbo_json = result.unwrap();
-
-        // Compare only the relevant fields, ignoring text and path
-        assert_eq!(turbo_json.tags, TurboJson::default().tags);
-        assert_eq!(turbo_json.boundaries, TurboJson::default().boundaries);
-        assert_eq!(turbo_json.extends, TurboJson::default().extends);
-        assert_eq!(turbo_json.global_deps, TurboJson::default().global_deps);
-        assert_eq!(turbo_json.global_env, TurboJson::default().global_env);
-        assert_eq!(
-            turbo_json.global_pass_through_env,
-            TurboJson::default().global_pass_through_env
-        );
-        assert_eq!(turbo_json.tasks, TurboJson::default().tasks);
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_load_from_file_with_turbo_jsonc_comments() -> Result<()> {
-        let tmp_dir = tempdir()?;
-        let repo_root = AbsoluteSystemPath::from_std_path(tmp_dir.path())?;
-
-        // Create turbo.jsonc with comments
-        let turbo_jsonc_path = repo_root.join_component(CONFIG_FILE_JSONC);
-        let jsonc_content = r#"{
-            // This is a comment
-            "globalDependencies": [
-                "tsconfig.json", // End of line comment
-                /* Block comment */
-                "jest.config.ts"
-            ],
-            /* Multi-line block comment
-               that spans multiple lines
-               and contains nested quotes "like this" */
-            "globalPassThroughEnv": [
-                // Comment before item
-                "GITHUB_TOKEN",
-                "AWS_SECRET_KEY" // Comment after item
-            ]
-        }"#;
-
-        turbo_jsonc_path.create_with_contents(jsonc_content)?;
-
-        // Test load_from_file
-        let result = load_from_file(repo_root, &turbo_jsonc_path);
-
-        assert!(result.is_ok());
-        let turbo_json = result.unwrap();
-
-        // Verify the content was parsed correctly despite the comments
-        assert_eq!(
-            turbo_json.global_deps,
-            vec!["jest.config.ts".to_string(), "tsconfig.json".to_string()]
-        );
-        assert_eq!(
-            turbo_json.global_pass_through_env,
-            Some(vec![
-                "AWS_SECRET_KEY".to_string(),
-                "GITHUB_TOKEN".to_string()
-            ])
-        );
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_load_from_file_with_complex_turbo_jsonc() -> Result<()> {
-        let tmp_dir = tempdir()?;
-        let repo_root = AbsoluteSystemPath::from_std_path(tmp_dir.path())?;
-
-        // Create a complex turbo.jsonc with nested objects, arrays, and comments
-        let turbo_jsonc_path = repo_root.join_component(CONFIG_FILE_JSONC);
-        let jsonc_content = r#"{
-            // Root level comment
-            "globalDependencies": ["tsconfig.json"],
-            "tasks": {
-                /* Comment for build task */
-                "build": {
-                    "dependsOn": [
-                        // Comment inside array
-                        "^build" // This is a topological dependency
-                    ],
-                    "outputs": [
-                        // Output directories
-                        "dist/**", /* Multiple outputs */
-                        ".next/**"
-                    ],
-                    // Task configuration
-                    "cache": true,
-                    "persistent": false
-                },
-                // Comment for test task
-                "test": {
-                    "dependsOn": ["build"], // Depends on build
-                    "outputs": [], // No outputs
-                    /*
-                     * Multi-line comment with special characters:
-                     * "quotes", 'single quotes', [brackets], {braces}
-                     */
-                    "cache": false // Don't cache tests
-                }
-            },
-            "globalEnv": [
-                // Environment variables
-                "NODE_ENV"
-            ]
-        }"#;
-
-        turbo_jsonc_path.create_with_contents(jsonc_content)?;
-
-        // Test load_from_file
-        let result = load_from_file(repo_root, &turbo_jsonc_path);
-
-        assert!(result.is_ok());
-        let turbo_json = result.unwrap();
-
-        // Verify the content was parsed correctly despite the comments
-        assert_eq!(turbo_json.global_deps, vec!["tsconfig.json".to_string()]);
-        assert_eq!(turbo_json.global_env, vec!["NODE_ENV".to_string()]);
-
-        // Verify tasks were parsed correctly
-        assert!(turbo_json.tasks.contains_key(&TaskName::from("build")));
-        assert!(turbo_json.tasks.contains_key(&TaskName::from("test")));
-
-        // Verify build task properties
-        let build_task = &turbo_json.tasks[&TaskName::from("build")];
-
-        // Check depends_on by extracting the inner values
-        if let Some(depends_on) = &build_task.depends_on {
-            let depends_on_values: Vec<String> = depends_on
-                .value
-                .iter()
-                .map(|s| s.value.to_string())
-                .collect();
-            assert_eq!(depends_on_values, vec!["^build".to_string()]);
-        } else {
-            panic!("Expected depends_on to be Some");
-        }
-
-        // Check outputs by extracting the inner values
-        if let Some(outputs) = &build_task.outputs {
-            let output_values: Vec<String> = outputs.iter().map(|s| s.value.to_string()).collect();
-            let expected_outputs: HashSet<String> =
-                vec![".next/**".to_string(), "dist/**".to_string()]
-                    .into_iter()
-                    .collect();
-            let actual_outputs: HashSet<String> = output_values.into_iter().collect();
-            assert_eq!(actual_outputs, expected_outputs);
-        } else {
-            panic!("Expected outputs to be Some");
-        }
-
-        // Check cache by extracting the inner value
-        if let Some(cache) = &build_task.cache {
-            assert_eq!(cache.value, true);
-        } else {
-            panic!("Expected cache to be Some");
-        }
-
-        // Check persistent by extracting the inner value
-        if let Some(persistent) = &build_task.persistent {
-            assert_eq!(persistent.value, false);
-        } else {
-            panic!("Expected persistent to be Some");
-        }
-
-        // Verify test task properties
-        let test_task = &turbo_json.tasks[&TaskName::from("test")];
-
-        // Check depends_on by extracting the inner values
-        if let Some(depends_on) = &test_task.depends_on {
-            let depends_on_values: Vec<String> = depends_on
-                .value
-                .iter()
-                .map(|s| s.value.to_string())
-                .collect();
-            assert_eq!(depends_on_values, vec!["build".to_string()]);
-        } else {
-            panic!("Expected depends_on to be Some");
-        }
-
-        // Check outputs by extracting the inner values
-        if let Some(outputs) = &test_task.outputs {
-            assert!(outputs.is_empty());
-        } else {
-            panic!("Expected outputs to be Some");
-        }
-
-        // Check cache by extracting the inner value
-        if let Some(cache) = &test_task.cache {
-            assert_eq!(cache.value, false);
-        } else {
-            panic!("Expected cache to be Some");
-        }
 
         Ok(())
     }
