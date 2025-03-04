@@ -1,3 +1,6 @@
+// This module doesn't require git2, but it is only used by modules that require
+// git2.
+#![cfg(feature = "git2")]
 use std::io::{ErrorKind, Read};
 
 use globwalk::fix_glob_pattern;
