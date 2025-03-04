@@ -287,7 +287,7 @@ impl<'a> EngineBuilder<'a> {
                     return true;
                 }
                 match Self::has_task_definition_in_repo(
-                    &mut turbo_json_loader,
+                    turbo_json_loader,
                     self.package_graph,
                     task_name,
                 ) {
@@ -492,7 +492,7 @@ impl<'a> EngineBuilder<'a> {
     // Helper methods used when building the engine
     /// Checks if there's a task definition somewhere in the repository
     fn has_task_definition_in_repo(
-        loader: &mut TurboJsonLoader,
+        loader: &TurboJsonLoader,
         package_graph: &PackageGraph,
         task_name: &TaskName<'static>,
     ) -> Result<bool, Error> {
@@ -836,13 +836,9 @@ mod test {
         let task_name = TaskName::from(task_name);
         let task_id = TaskId::try_from(task_id).unwrap();
 
-        let has_def = EngineBuilder::has_task_definition_in_run(
-            &loader,
-            &workspace,
-            &task_name,
-            &task_id,
-        )
-        .unwrap();
+        let has_def =
+            EngineBuilder::has_task_definition_in_run(&loader, &workspace, &task_name, &task_id)
+                .unwrap();
         assert_eq!(has_def, expected);
     }
 
@@ -1588,7 +1584,7 @@ mod test {
         .into_iter()
         .collect();
         let loader = TurboJsonLoader::noop(turbo_jsons);
-        let engine = EngineBuilder::new(&repo_root, &package_graph, loader.clone(), false)
+        let engine = EngineBuilder::new(&repo_root, &package_graph, &loader, false)
             .with_tasks(vec![Spanned::new(TaskName::from("app1-only"))])
             .with_workspaces(vec![PackageName::from("libA")])
             .build()
