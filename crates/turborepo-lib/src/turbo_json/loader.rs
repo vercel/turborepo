@@ -268,13 +268,31 @@ fn load_from_file(
     repo_root: &AbsoluteSystemPath,
     turbo_json_path: &AbsoluteSystemPath,
 ) -> Result<TurboJson, Error> {
-    match TurboJson::read(repo_root, turbo_json_path) {
-        // If the file didn't exist, throw a custom error here instead of propagating
-        Err(Error::Io(_)) => Err(Error::NoTurboJSON),
-        // There was an error, and we don't have any chance of recovering
-        // because we aren't synthesizing anything
+    // First try to load the provided path directly
+    let result = TurboJson::read(repo_root, turbo_json_path);
+
+    if let Err(Error::Io(_)) = result {
+        // If the file doesn't exist at the provided path, check if we're looking for
+        // turbo.json and try turbo.jsonc instead
+        if turbo_json_path.file_name() == Some(super::CONFIG_FILE) {
+            let turbo_jsonc_path = turbo_json_path
+                .parent()
+                .unwrap()
+                .join_component(super::CONFIG_FILE_JSONC);
+            if turbo_jsonc_path.exists() {
+                return match TurboJson::read(repo_root, &turbo_jsonc_path) {
+                    Err(e) => Err(e),
+                    Ok(turbo) => Ok(turbo),
+                };
+            }
+        }
+        // If we couldn't find either file, return NoTurboJSON error
+        return Err(Error::NoTurboJSON);
+    }
+
+    // Handle other errors or success
+    match result {
         Err(e) => Err(e),
-        // We're not synthesizing anything and there was no error, we're done
         Ok(turbo) => Ok(turbo),
     }
 }

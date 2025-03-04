@@ -553,7 +553,7 @@ mod test {
         commands::CommandBase,
         config::ConfigurationOptions,
         opts::{Opts, RunCacheOpts, ScopeOpts},
-        turbo_json::UIMode,
+        turbo_json::{UIMode, CONFIG_FILE},
         Args,
     };
 
@@ -801,11 +801,11 @@ mod test {
         let tmpdir = TempDir::new()?;
         let repo_root = AbsoluteSystemPathBuf::try_from(tmpdir.path())?;
 
-        repo_root
-            .join_component("turbo.json")
-            .create_with_contents(serde_json::to_string_pretty(&serde_json::json!({
+        repo_root.join_component(CONFIG_FILE).create_with_contents(
+            serde_json::to_string_pretty(&serde_json::json!({
                 "remoteCache": { "enabled": true }
-            }))?)?;
+            }))?,
+        )?;
 
         let mut args = Args::default();
         args.command = Some(Command::Run {

@@ -26,7 +26,7 @@ use turborepo_repository::package_graph::PackageName;
 pub use crate::turbo_json::{RawTurboJson, UIMode};
 use crate::{
     cli::{EnvMode, LogOrder},
-    turbo_json::CONFIG_FILE,
+    turbo_json::{CONFIG_FILE, CONFIG_FILE_JSONC},
 };
 
 #[derive(Debug, Error, Diagnostic)]
@@ -74,7 +74,7 @@ pub enum Error {
     #[error(transparent)]
     PackageJson(#[from] turborepo_repository::package_json::Error),
     #[error(
-        "Could not find turbo.json.\nFollow directions at https://turbo.build/repo/docs to create \
+        "Could not find turbo.json or turbo.jsonc.\nFollow directions at https://turbo.build/repo/docs to create \
          one."
     )]
     NoTurboJSON,
@@ -397,9 +397,24 @@ impl ConfigurationOptions {
     }
 
     pub fn root_turbo_json_path(&self, repo_root: &AbsoluteSystemPath) -> AbsoluteSystemPathBuf {
-        self.root_turbo_json_path
-            .clone()
-            .unwrap_or_else(|| repo_root.join_component(CONFIG_FILE))
+        if let Some(path) = &self.root_turbo_json_path {
+            return path.clone();
+        }
+
+        // First check if turbo.json exists
+        let turbo_json_path = repo_root.join_component(CONFIG_FILE);
+        if turbo_json_path.exists() {
+            return turbo_json_path;
+        }
+
+        // Then check if turbo.jsonc exists
+        let turbo_jsonc_path = repo_root.join_component(CONFIG_FILE_JSONC);
+        if turbo_jsonc_path.exists() {
+            return turbo_jsonc_path;
+        }
+
+        // Default to turbo.json if neither exists
+        turbo_json_path
     }
 
     pub fn allow_no_turbo_json(&self) -> bool {
@@ -457,7 +472,20 @@ impl TurborepoConfigBuilder {
     }
     #[allow(dead_code)]
     fn root_turbo_json_path(&self) -> AbsoluteSystemPathBuf {
-        self.repo_root.join_component("turbo.json")
+        // First check if turbo.json exists
+        let turbo_json_path = self.repo_root.join_component(CONFIG_FILE);
+        if turbo_json_path.exists() {
+            return turbo_json_path;
+        }
+
+        // Then check if turbo.jsonc exists
+        let turbo_jsonc_path = self.repo_root.join_component(CONFIG_FILE_JSONC);
+        if turbo_jsonc_path.exists() {
+            return turbo_jsonc_path;
+        }
+
+        // Default to turbo.json if neither exists
+        turbo_json_path
     }
 
     fn get_environment(&self) -> HashMap<OsString, OsString> {

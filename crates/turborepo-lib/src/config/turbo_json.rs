@@ -2,7 +2,7 @@ use camino::Utf8PathBuf;
 use turbopath::{AbsoluteSystemPath, RelativeUnixPath};
 
 use super::{ConfigurationOptions, Error, ResolvedConfigurationOptions};
-use crate::turbo_json::RawTurboJson;
+use crate::turbo_json::{RawTurboJson, CONFIG_FILE};
 
 pub struct TurboJsonReader<'a> {
     repo_root: &'a AbsoluteSystemPath,
@@ -82,7 +82,7 @@ mod test {
             ..Default::default()
         };
         repo_root
-            .join_component("turbo.json")
+            .join_component(CONFIG_FILE)
             .create_with_contents(
                 serde_json::to_string_pretty(&serde_json::json!({
                     "daemon": false
