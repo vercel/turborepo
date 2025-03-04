@@ -21,6 +21,7 @@ Run ls with filter
 Run ls on package `another`
   $ ${TURBO} ls another
    WARNING  ls command is experimental and may change in the future
+  packages[/\\]another  (re)
   another depends on: <no packages>
   
   tasks:
@@ -30,6 +31,7 @@ Run ls on package `another`
 Run ls on package `my-app`
   $ ${TURBO} ls my-app
    WARNING  ls command is experimental and may change in the future
+  apps[\/\\]my-app  (re)
   my-app depends on: util
   
   tasks:
