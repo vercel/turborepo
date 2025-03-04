@@ -13,7 +13,7 @@ use crate::{
         OutputLogsMode, RunArgs,
     },
     config::ConfigurationOptions,
-    run::task_id::TaskId,
+    run::task_id::{TaskId, TaskName},
     turbo_json::{UIMode, CONFIG_FILE},
     Args,
 };
@@ -258,7 +258,7 @@ impl<'a> TaskArgs<'a> {
             && self
                 .tasks
                 .iter()
-                .any(|task| task.as_str() == task_id.task())
+                .any(|task| TaskName::from(task.as_str()).task() == task_id.task())
         {
             Some(self.pass_through_args)
         } else {
