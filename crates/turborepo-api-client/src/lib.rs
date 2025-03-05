@@ -1,4 +1,3 @@
-#![feature(async_closure)]
 #![feature(error_generic_member_access)]
 #![feature(assert_matches)]
 #![deny(clippy::all)]

@@ -440,9 +440,7 @@ impl Lockfile for BerryLockfile {
             .locator_for_workspace_path(workspace_path)
             .ok_or_else(|| crate::Error::MissingWorkspace(workspace_path.to_string()))?;
 
-        let dependency = self
-            .resolve_dependency(workspace_locator, name, version)
-            .map_err(Error::from)?;
+        let dependency = self.resolve_dependency(workspace_locator, name, version)?;
 
         let Some(locator) = self.resolutions.get(&dependency) else {
             return Ok(None);
