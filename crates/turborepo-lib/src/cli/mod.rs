@@ -851,7 +851,7 @@ pub struct ExecutionArgs {
     /// continue running tasks whose dependencies have succeeded. Use "always"
     /// to continue running all tasks, even those whose dependencies have
     /// failed.
-    #[clap(long = "continue", value_name = "CONTINUE", num_args = 0..=1, default_value = "never", default_missing_value = "always")]
+    #[clap(long = "continue", value_name = "CONTINUE", num_args = 0..=1, default_value = "never", default_missing_value = "always", require_equals = true)]
     pub continue_execution: ContinueMode,
     /// Run turbo in single-package mode
     #[clap(long)]
@@ -1943,6 +1943,21 @@ mod test {
             ..Args::default()
         } ;
         "continue option with no value"
+	)]
+    #[test_case::test_case(
+		&["turbo", "run", "--continue", "build"],
+        Args {
+            command: Some(Command::Run {
+                execution_args: Box::new(ExecutionArgs {
+                    tasks: vec!["build".to_string()],
+                    continue_execution: ContinueMode::Always,
+                    ..get_default_execution_args()
+                }),
+                run_args: Box::new(get_default_run_args())
+            }),
+            ..Args::default()
+        } ;
+        "continue option with no value before task"
 	)]
     #[test_case::test_case(
 		&["turbo", "run", "build", "--continue=dependencies-successful"],
