@@ -13,7 +13,7 @@ use crate::{
         OutputLogsMode, RunArgs,
     },
     config::ConfigurationOptions,
-    run::task_id::TaskId,
+    run::task_id::{TaskId, TaskName},
     turbo_json::{UIMode, CONFIG_FILE},
     Args,
 };
@@ -258,7 +258,7 @@ impl<'a> TaskArgs<'a> {
             && self
                 .tasks
                 .iter()
-                .any(|task| task.as_str() == task_id.task())
+                .any(|task| TaskName::from(task.as_str()).task() == task_id.task())
         {
             Some(self.pass_through_args)
         } else {
@@ -550,12 +550,13 @@ mod test {
     use turborepo_cache::{CacheActions, CacheConfig, CacheOpts};
     use turborepo_ui::ColorConfig;
 
-    use super::{APIClientOpts, RepoOpts, RunOpts};
+    use super::{APIClientOpts, RepoOpts, RunOpts, TaskArgs};
     use crate::{
         cli::{Command, ContinueMode, DryRunMode, RunArgs},
         commands::CommandBase,
         config::ConfigurationOptions,
         opts::{Opts, RunCacheOpts, ScopeOpts},
+        run::task_id::TaskId,
         turbo_json::{UIMode, CONFIG_FILE},
         Args,
     };
@@ -872,6 +873,53 @@ mod test {
         insta::assert_json_snapshot!(
             args_str.iter().join("_"),
             json!({ "tasks": opts.run_opts.tasks, "filter_patterns": opts.scope_opts.filter_patterns  })
+        );
+
+        Ok(())
+    }
+
+    #[test_case(
+        vec!["build".to_string()],
+        vec!["passthrough".to_string()],
+        TaskId::new("web", "build"),
+        Some(vec!["passthrough".to_string()]);
+        "single task"
+    )]
+    #[test_case(
+        vec!["lint".to_string(), "build".to_string()],
+        vec!["passthrough".to_string()],
+        TaskId::new("web", "build"),
+        Some(vec!["passthrough".to_string()]);
+        "multiple tasks"
+    )]
+    #[test_case(
+        vec!["web#build".to_string()],
+        vec!["passthrough".to_string()],
+        TaskId::new("web", "build"),
+        Some(vec!["passthrough".to_string()]);
+        "task with package"
+    )]
+    #[test_case(
+        vec!["lint".to_string()],
+        vec![],
+        TaskId::new("ui", "lint"),
+        None;
+        "no passthrough args"
+    )]
+    fn test_get_args_for_tasks(
+        tasks: Vec<String>,
+        pass_through_args: Vec<String>,
+        expected_task: TaskId<'static>,
+        expected_args: Option<Vec<String>>,
+    ) -> Result<(), anyhow::Error> {
+        let task_opts = TaskArgs {
+            tasks: &tasks,
+            pass_through_args: &pass_through_args,
+        };
+
+        assert_eq!(
+            task_opts.args_for_task(&expected_task),
+            expected_args.as_deref()
         );
 
         Ok(())
