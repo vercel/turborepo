@@ -98,7 +98,7 @@ Make sure exit code is 2 when no args are passed
             Override the filesystem cache directory
         --concurrency <CONCURRENCY>
             Limit the concurrency of task execution. Use 1 for serial (i.e. one-at-a-time) execution
-        --continue [<CONTINUE>]
+        --continue[=<CONTINUE>]
             Specify how task execution should proceed when an error occurs. Use "never" to cancel all tasks. Use "dependencies-successful" to continue running tasks whose dependencies have succeeded. Use "always" to continue running all tasks, even those whose dependencies have failed [default: never] [possible values: never, dependencies-successful, always]
         --single-package
             Run turbo in single-package mode
