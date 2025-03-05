@@ -11,22 +11,28 @@ Create turbo.jsonc with comments
 # Run turbo test to verify that the test task from the config is properly parsed
   $ ${TURBO} test --output-logs=none
   • Packages in scope: another, my-app, util (esc)
-  • Running test in 1 packages
+  • Running test in 3 packages (esc)
   • Remote caching disabled
   
-  Tasks:  1 successful, 0 total
-  Time: *s (re)
+  Tasks:    2 successful, 2 total
+  Cached:    0 cached, 2 total
+  Time:    *ms (re)
   
+  WARNING  no output files found for task my-app#build. Please check your `outputs` key in `turbo.json`
+  WARNING  no output files found for task util#build. Please check your `outputs` key in `turbo.json`
 
 # Run turbo build to verify that the build task from the config is properly parsed
   $ ${TURBO} build --output-logs=none
   • Packages in scope: another, my-app, util (esc)
-  • Running build in 1 packages
+  • Running build in 3 packages (esc)
   • Remote caching disabled
   
-  Tasks:  1 successful, 0 total
-  Time: *s (re)
+  Tasks:    2 successful, 2 total
+  Cached:    0 cached, 2 total
+  Time:    *ms (re)
   
+  WARNING  no output files found for task my-app#build. Please check your `outputs` key in `turbo.json`
+  WARNING  no output files found for task util#build. Please check your `outputs` key in `turbo.json`
 
 # Test that complex comments with special characters are handled correctly
 Create turbo.jsonc with complex comments
@@ -38,6 +44,9 @@ Create turbo.jsonc with complex comments
   • Running build in 3 packages (esc)
   • Remote caching disabled
   
-  Tasks:  1 successful, 0 total
+  Tasks:    2 successful, 2 total
   Cached:    0 cached, 2 total
-  Time: *s (re) 
+  Time:    *ms (re)
+  
+  WARNING  no output files found for task my-app#build. Please check your `outputs` key in `turbo.json`
+  WARNING  no output files found for task util#build. Please check your `outputs` key in `turbo.json`
