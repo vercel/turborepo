@@ -296,8 +296,7 @@ fn is_token_active(metadata: &ResponseTokenMetadata, current_time: u128) -> bool
     // Not all scopes have an expiration date, so we need to check if all of them
     // are expired. If there isn't an expiration date, we assume they are infinite
     // and therefore cannot be expired.
-    let all_scopes_active =
-        earliest_expiration.map_or(true, |expiration| current_time < expiration);
+    let all_scopes_active = earliest_expiration.is_none_or(|expiration| current_time < expiration);
 
     all_scopes_active && (active_at <= current_time)
 }

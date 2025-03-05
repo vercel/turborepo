@@ -18,7 +18,7 @@ use turborepo_unescape::UnescapedString;
 
 use crate::{
     cli::{EnvMode, OutputLogsMode},
-    config::{ConfigurationOptions, Error, InvalidEnvPrefixError, RootSyntaxInGlobalDepsError},
+    config::{ConfigurationOptions, Error, InvalidEnvPrefixError},
     run::{
         task_access::TaskAccessTraceFile,
         task_id::{TaskId, TaskName},
@@ -297,6 +297,7 @@ impl RawTaskDefinition {
 }
 
 pub const CONFIG_FILE: &str = "turbo.json";
+pub const CONFIG_FILE_JSONC: &str = "turbo.jsonc";
 const ENV_PIPELINE_DELIMITER: &str = "$";
 const TOPOLOGICAL_PIPELINE_DELIMITER: &str = "^";
 
@@ -348,7 +349,7 @@ impl TryFrom<RawTaskDefinition> for TaskDefinition {
     fn try_from(raw_task: RawTaskDefinition) -> Result<Self, Error> {
         let outputs = raw_task.outputs.unwrap_or_default().try_into()?;
 
-        let cache = raw_task.cache.map_or(true, |c| c.into_inner());
+        let cache = raw_task.cache.is_none_or(|c| c.into_inner());
         let interactive = raw_task
             .interactive
             .as_ref()
@@ -738,30 +739,6 @@ pub fn validate_extends(turbo_json: &TurboJson) -> Vec<Error> {
     }
 }
 
-pub fn validate_no_root_syntax_in_global_deps(turbo_json: &TurboJson) -> Vec<Error> {
-    let mut errors = Vec::new();
-
-    for dep in &turbo_json.global_deps {
-        if dep.starts_with("$$ROOT$$") {
-            errors.push(Error::RootSyntaxInGlobalDeps(Box::new(
-                RootSyntaxInGlobalDepsError {
-                    span: turbo_json.text.as_ref().map(|text| {
-                        // Find the position of the $$ROOT$$ in the text
-                        let pos = text.find("$$ROOT$$").unwrap_or(0);
-                        (pos, pos + 8).into() // 8 is length of "$$ROOT$$"
-                    }),
-                    text: NamedSource::new(
-                        turbo_json.path.as_deref().unwrap_or("turbo.json"),
-                        turbo_json.text.as_deref().unwrap_or("").to_string(),
-                    ),
-                },
-            )));
-        }
-    }
-
-    errors
-}
-
 fn gather_env_vars(
     vars: Vec<Spanned<impl Into<String>>>,
     key: &str,
@@ -798,16 +775,13 @@ mod tests {
     use test_case::test_case;
     use turborepo_unescape::UnescapedString;
 
-    use super::{
-        validate_extends, validate_no_package_task_syntax, validate_no_root_syntax_in_global_deps,
-        Pipeline, RawTaskDefinition, RawTurboJson, SpacesJson, Spanned, TaskName, TurboJson,
-        UIMode,
-    };
+    use super::{RawTurboJson, SpacesJson, Spanned, TurboJson, UIMode};
     use crate::{
         boundaries::RootBoundariesConfig,
         cli::OutputLogsMode,
-        config::{Error, RootSyntaxInGlobalDepsError},
+        run::task_id::TaskName,
         task_graph::{TaskDefinition, TaskOutputs},
+        turbo_json::RawTaskDefinition,
     };
 
     #[test_case("{}", "empty boundaries")]
@@ -1196,33 +1170,5 @@ mod tests {
             dev_task.siblings.as_ref().unwrap().as_slice(),
             &[Spanned::new(UnescapedString::from("api#server"))]
         );
-    }
-
-    #[test]
-    fn test_validate_no_root_syntax_in_global_deps() {
-        let json_with_root = r#"{
-            "globalDependencies": ["$$ROOT$$/some/path"]
-        }"#;
-
-        let json_without_root = r#"{
-            "globalDependencies": ["some/path"]
-        }"#;
-
-        let turbo_json_with_root = RawTurboJson::parse(json_with_root, "turbo.json").unwrap();
-        let turbo_json = TurboJson::try_from(turbo_json_with_root).unwrap();
-        let errors = validate_no_root_syntax_in_global_deps(&turbo_json);
-        assert_eq!(errors.len(), 1);
-        match &errors[0] {
-            Error::RootSyntaxInGlobalDeps(error) => {
-                assert!(error.span.is_some());
-                assert_eq!(error.text.name(), "turbo.json");
-            }
-            _ => panic!("Expected RootSyntaxInGlobalDeps error"),
-        }
-
-        let turbo_json_without_root = RawTurboJson::parse(json_without_root, "turbo.json").unwrap();
-        let turbo_json = TurboJson::try_from(turbo_json_without_root).unwrap();
-        let errors = validate_no_root_syntax_in_global_deps(&turbo_json);
-        assert!(errors.is_empty());
     }
 }

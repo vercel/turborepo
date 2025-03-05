@@ -24,6 +24,19 @@ pub trait PackageChangeMapper {
     fn detect_package(&self, file: &AnchoredSystemPath) -> PackageMapping;
 }
 
+impl<L, R> PackageChangeMapper for either::Either<L, R>
+where
+    L: PackageChangeMapper,
+    R: PackageChangeMapper,
+{
+    fn detect_package(&self, file: &AnchoredSystemPath) -> PackageMapping {
+        match self {
+            either::Either::Left(l) => l.detect_package(file),
+            either::Either::Right(r) => r.detect_package(file),
+        }
+    }
+}
+
 /// Detects package by checking if the file is inside the package.
 ///
 /// Does *not* use the `globalDependencies` in turbo.json.
@@ -73,6 +86,43 @@ impl PackageChangeMapper for DefaultPackageChangeMapper<'_> {
     }
 }
 
+pub struct DefaultPackageChangeMapperWithLockfile<'a> {
+    base: DefaultPackageChangeMapper<'a>,
+}
+
+impl<'a> DefaultPackageChangeMapperWithLockfile<'a> {
+    pub fn new(pkg_dep_graph: &'a PackageGraph) -> Self {
+        Self {
+            base: DefaultPackageChangeMapper::new(pkg_dep_graph),
+        }
+    }
+}
+
+impl PackageChangeMapper for DefaultPackageChangeMapperWithLockfile<'_> {
+    fn detect_package(&self, path: &AnchoredSystemPath) -> PackageMapping {
+        // If we have a lockfile change, we consider this as a root package change,
+        // since there's a chance that the root package uses a workspace package
+        // dependency (this is cursed behavior but sadly possible). There's a chance
+        // that we can make this more accurate by checking which package
+        // manager, since not all package managers may permit root pulling from
+        // workspace package dependencies
+        if PackageManager::supported_managers()
+            .iter()
+            .any(|pm| pm.lockfile_name() == path.as_str())
+        {
+            PackageMapping::Package((
+                WorkspacePackage {
+                    name: PackageName::Root,
+                    path: AnchoredSystemPathBuf::from_raw("").unwrap(),
+                },
+                PackageInclusionReason::ConservativeRootLockfileChanged,
+            ))
+        } else {
+            self.base.detect_package(path)
+        }
+    }
+}
+
 #[derive(Error, Debug)]
 pub enum Error {
     #[error(transparent)]
@@ -88,7 +138,7 @@ pub enum Error {
 /// changes all packages. Since we have a list of global deps,
 /// we can check against that and avoid invalidating in unnecessary cases.
 pub struct GlobalDepsPackageChangeMapper<'a> {
-    pkg_dep_graph: &'a PackageGraph,
+    base: DefaultPackageChangeMapperWithLockfile<'a>,
     global_deps_matcher: wax::Any<'a>,
 }
 
@@ -97,10 +147,11 @@ impl<'a> GlobalDepsPackageChangeMapper<'a> {
         pkg_dep_graph: &'a PackageGraph,
         global_deps: I,
     ) -> Result<Self, Error> {
+        let base = DefaultPackageChangeMapperWithLockfile::new(pkg_dep_graph);
         let global_deps_matcher = wax::any(global_deps)?;
 
         Ok(Self {
-            pkg_dep_graph,
+            base,
             global_deps_matcher,
         })
     }
@@ -108,25 +159,7 @@ impl<'a> GlobalDepsPackageChangeMapper<'a> {
 
 impl PackageChangeMapper for GlobalDepsPackageChangeMapper<'_> {
     fn detect_package(&self, path: &AnchoredSystemPath) -> PackageMapping {
-        // If we have a lockfile change, we consider this as a root package change,
-        // since there's a chance that the root package uses a workspace package
-        // dependency (this is cursed behavior but sadly possible). There's a chance
-        // that we can make this more accurate by checking which package
-        // manager, since not all package managers may permit root pulling from
-        // workspace package dependencies
-        if PackageManager::supported_managers()
-            .iter()
-            .any(|pm| pm.lockfile_name() == path.as_str())
-        {
-            return PackageMapping::Package((
-                WorkspacePackage {
-                    name: PackageName::Root,
-                    path: AnchoredSystemPathBuf::from_raw("").unwrap(),
-                },
-                PackageInclusionReason::ConservativeRootLockfileChanged,
-            ));
-        }
-        match DefaultPackageChangeMapper::new(self.pkg_dep_graph).detect_package(path) {
+        match self.base.detect_package(path) {
             // Since `DefaultPackageChangeMapper` is overly conservative, we can check here if
             // the path is actually in globalDeps and if not, return it as
             // PackageDetection::Package(WorkspacePackage::root()).
@@ -160,7 +193,8 @@ mod tests {
     use super::{DefaultPackageChangeMapper, GlobalDepsPackageChangeMapper};
     use crate::{
         change_mapper::{
-            AllPackageChangeReason, ChangeMapper, PackageChanges, PackageInclusionReason,
+            AllPackageChangeReason, ChangeMapper, LockfileContents, PackageChanges,
+            PackageInclusionReason,
         },
         discovery::{self, PackageDiscovery},
         package_graph::{PackageGraphBuilder, WorkspacePackage},
@@ -208,7 +242,7 @@ mod tests {
             [AnchoredSystemPathBuf::from_raw("README.md")?]
                 .into_iter()
                 .collect(),
-            None,
+            LockfileContents::Unchanged,
         )?;
 
         // We should return All because we don't have global deps and
@@ -228,7 +262,7 @@ mod tests {
             [AnchoredSystemPathBuf::from_raw("README.md")?]
                 .into_iter()
                 .collect(),
-            None,
+            LockfileContents::Unchanged,
         )?;
 
         // We only get a root workspace change since we have global deps specified and

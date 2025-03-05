@@ -78,7 +78,7 @@ pub async fn sso_login<T: Client + TokenClient + CacheClient>(
                         api_client,
                         sso_team,
                         Some(valid_token_callback(
-                            "Existing Vercel token for {sso_team} found!",
+                            &format!("Existing Vercel token for {sso_team} found!"),
                             color_config,
                         )),
                     )

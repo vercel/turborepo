@@ -26,7 +26,7 @@ use turborepo_repository::package_graph::PackageName;
 pub use crate::turbo_json::{RawTurboJson, UIMode};
 use crate::{
     cli::{EnvMode, LogOrder},
-    turbo_json::CONFIG_FILE,
+    turbo_json::{CONFIG_FILE, CONFIG_FILE_JSONC},
 };
 
 #[derive(Debug, Error, Diagnostic)]
@@ -60,19 +60,6 @@ pub struct UnnecessaryPackageTaskSyntaxError {
     pub text: NamedSource<String>,
 }
 
-#[derive(Debug, Error, Diagnostic)]
-#[diagnostic(
-    code(root_syntax_in_global_deps),
-    url("{}/messages/{}", TURBO_SITE, self.code().unwrap().to_string().to_case(Case::Kebab))
-)]
-#[error("$$ROOT$$ syntax is not allowed in globalDependencies")]
-pub struct RootSyntaxInGlobalDepsError {
-    #[label("$$ROOT$$ syntax found here")]
-    pub span: Option<SourceSpan>,
-    #[source_code]
-    pub text: NamedSource<String>,
-}
-
 #[allow(clippy::enum_variant_names)]
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
@@ -87,10 +74,15 @@ pub enum Error {
     #[error(transparent)]
     PackageJson(#[from] turborepo_repository::package_json::Error),
     #[error(
-        "Could not find turbo.json.\nFollow directions at https://turbo.build/repo/docs to create \
+        "Could not find turbo.json or turbo.jsonc.\nFollow directions at https://turbo.build/repo/docs to create \
          one."
     )]
     NoTurboJSON,
+    #[error(
+        "Found both turbo.json and turbo.jsonc in the same directory: {directory}\nRemove either \
+         turbo.json or turbo.jsonc so there is only one."
+    )]
+    MultipleTurboConfigs { directory: String },
     #[error(transparent)]
     SerdeJson(#[from] serde_json::Error),
     #[error(transparent)]
@@ -212,9 +204,6 @@ pub enum Error {
     },
     #[error("Cannot load turbo.json for {0} in single package mode.")]
     InvalidTurboJsonLoad(PackageName),
-    #[error(transparent)]
-    #[diagnostic(transparent)]
-    RootSyntaxInGlobalDeps(Box<RootSyntaxInGlobalDepsError>),
 }
 
 const DEFAULT_API_URL: &str = "https://vercel.com/api";
@@ -412,10 +401,29 @@ impl ConfigurationOptions {
         self.run_summary.unwrap_or_default()
     }
 
-    pub fn root_turbo_json_path(&self, repo_root: &AbsoluteSystemPath) -> AbsoluteSystemPathBuf {
-        self.root_turbo_json_path
-            .clone()
-            .unwrap_or_else(|| repo_root.join_component(CONFIG_FILE))
+    pub fn root_turbo_json_path(
+        &self,
+        repo_root: &AbsoluteSystemPath,
+    ) -> Result<AbsoluteSystemPathBuf, Error> {
+        if let Some(path) = &self.root_turbo_json_path {
+            return Ok(path.clone());
+        }
+
+        // Check if both files exist
+        let turbo_json_path = repo_root.join_component(CONFIG_FILE);
+        let turbo_jsonc_path = repo_root.join_component(CONFIG_FILE_JSONC);
+        let turbo_json_exists = turbo_json_path.try_exists()?;
+        let turbo_jsonc_exists = turbo_jsonc_path.try_exists()?;
+
+        match (turbo_json_exists, turbo_jsonc_exists) {
+            (true, true) => Err(Error::MultipleTurboConfigs {
+                directory: repo_root.to_string(),
+            }),
+            (true, false) => Ok(turbo_json_path),
+            (false, true) => Ok(turbo_jsonc_path),
+            // Default to turbo.json if neither exists
+            (false, false) => Ok(turbo_json_path),
+        }
     }
 
     pub fn allow_no_turbo_json(&self) -> bool {
@@ -464,16 +472,6 @@ impl TurborepoConfigBuilder {
     pub fn with_global_config_path(mut self, path: AbsoluteSystemPathBuf) -> Self {
         self.global_config_path = Some(path);
         self
-    }
-
-    // Getting all of the paths.
-    #[allow(dead_code)]
-    fn root_package_json_path(&self) -> AbsoluteSystemPathBuf {
-        self.repo_root.join_component("package.json")
-    }
-    #[allow(dead_code)]
-    fn root_turbo_json_path(&self) -> AbsoluteSystemPathBuf {
-        self.repo_root.join_component("turbo.json")
     }
 
     fn get_environment(&self) -> HashMap<OsString, OsString> {
@@ -533,9 +531,12 @@ mod test {
     use tempfile::TempDir;
     use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 
-    use crate::config::{
-        ConfigurationOptions, TurborepoConfigBuilder, DEFAULT_API_URL, DEFAULT_LOGIN_URL,
-        DEFAULT_TIMEOUT,
+    use crate::{
+        config::{
+            ConfigurationOptions, TurborepoConfigBuilder, DEFAULT_API_URL, DEFAULT_LOGIN_URL,
+            DEFAULT_TIMEOUT,
+        },
+        turbo_json::{CONFIG_FILE, CONFIG_FILE_JSONC},
     };
 
     #[test]
@@ -558,7 +559,7 @@ mod test {
         })
         .unwrap();
         assert_eq!(
-            defaults.root_turbo_json_path(repo_root),
+            defaults.root_turbo_json_path(repo_root).unwrap(),
             repo_root.join_component("turbo.json")
         )
     }
@@ -650,5 +651,67 @@ mod test {
         assert!(config.signature());
         assert!(!config.preflight());
         assert_eq!(config.timeout(), 123);
+    }
+
+    #[test]
+    fn test_multiple_turbo_configs() {
+        let tmp_dir = TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPath::from_std_path(tmp_dir.path()).unwrap();
+
+        // Create both turbo.json and turbo.jsonc
+        let turbo_json_path = repo_root.join_component(CONFIG_FILE);
+        let turbo_jsonc_path = repo_root.join_component(CONFIG_FILE_JSONC);
+
+        turbo_json_path.create_with_contents("{}").unwrap();
+        turbo_jsonc_path.create_with_contents("{}").unwrap();
+
+        // Test ConfigurationOptions.root_turbo_json_path
+        let config = ConfigurationOptions::default();
+        let result = config.root_turbo_json_path(repo_root);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_only_turbo_json() {
+        let tmp_dir = TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPath::from_std_path(tmp_dir.path()).unwrap();
+
+        // Create only turbo.json
+        let turbo_json_path = repo_root.join_component(CONFIG_FILE);
+        turbo_json_path.create_with_contents("{}").unwrap();
+
+        // Test ConfigurationOptions.root_turbo_json_path
+        let config = ConfigurationOptions::default();
+        let result = config.root_turbo_json_path(repo_root);
+
+        assert_eq!(result.unwrap(), turbo_json_path);
+    }
+
+    #[test]
+    fn test_only_turbo_jsonc() {
+        let tmp_dir = TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPath::from_std_path(tmp_dir.path()).unwrap();
+
+        // Create only turbo.jsonc
+        let turbo_jsonc_path = repo_root.join_component(CONFIG_FILE_JSONC);
+        turbo_jsonc_path.create_with_contents("{}").unwrap();
+
+        // Test ConfigurationOptions.root_turbo_json_path
+        let config = ConfigurationOptions::default();
+        let result = config.root_turbo_json_path(repo_root);
+
+        assert_eq!(result.unwrap(), turbo_jsonc_path);
+    }
+
+    #[test]
+    fn test_no_turbo_config() {
+        let tmp_dir = TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPath::from_std_path(tmp_dir.path()).unwrap();
+
+        // Test ConfigurationOptions.root_turbo_json_path
+        let config = ConfigurationOptions::default();
+        let result = config.root_turbo_json_path(repo_root);
+
+        assert_eq!(result.unwrap(), repo_root.join_component(CONFIG_FILE));
     }
 }
