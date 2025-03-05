@@ -256,7 +256,7 @@ impl Workspace {
         ) {
             LockfileContents::UnknownChange
         } else {
-            LockfileContents::Unknown
+            LockfileContents::Unchanged
         };
 
         let package_changes = match mapper.changed_packages(changed_files, lockfile_contents) {
