@@ -217,7 +217,7 @@ Because of this, you'll need to use [Root Tasks](/repo/docs/crafting-your-reposi
 
 You can combine the benefits of both approaches by implementing a hybrid solution. This involves maintaining local Vitest configurations in each package while also setting up a root Vitest workspace configuration. This approach gives you the best of both worlds: better local development experience with global watch mode, while preserving Turborepo's caching benefits in CI.
 
-```json title="./vitest.workspace.ts"
+```ts title="./vitest.workspace.ts"
 import { defineWorkspace } from 'vitest/config'
 
 export default defineWorkspace([
