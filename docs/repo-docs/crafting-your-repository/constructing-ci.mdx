@@ -15,10 +15,10 @@ For examples of how to connect your CI vendor to Remote Cache and run tasks, vis
 
 To enable Remote Caching for your CI, setup the environment variables for Turborepo to access your Remote Cache.
 
-| Environment Variable | Description                                                                                                                                                                                                                                    |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `TURBO_TOKEN`        | The Bearer token to access the Remote Cache                                                                                                                                                                                                    |
-| `TURBO_TEAM`         | The account name associated with your repository. When using{' '} <a href="https://vercel.com/docs/monorepos/remote-caching#vercel-remote-cache" rel="noreferrer noopener" target="_blank" >Vercel Remote Cache</a>, this is your team's slug. |
+| Environment Variable | Description                                                                                                                                                                                                                                                                                                                  |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TURBO_TOKEN`        | The Bearer token to access the Remote Cache                                                                                                                                                                                                                                                                                  |
+| `TURBO_TEAM`         | The account name associated with your repository. When using{' '} <a href="https://vercel.com/docs/monorepos/remote-caching#vercel-remote-cache" rel="noreferrer noopener" target="_blank" >Vercel Remote Cache</a>, this is [your team's slug](https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fsettings&title=Get+team+slug). |
 
 When you run tasks through `turbo`, your CI will be able to hit cache, speeding up your pipelines.
 
