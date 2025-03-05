@@ -7,7 +7,6 @@ Create a new branch
 
 Ensure that nothing is affected
   $ ${TURBO} ls --affected
-   WARNING  ls command is experimental and may change in the future
   0 no packages (npm)
   
 
@@ -35,7 +34,6 @@ Validate that we only run `my-app#build` with change not committed
 
 Do the same thing with the `ls` command
   $ ${TURBO} ls --affected
-   WARNING  ls command is experimental and may change in the future
   1 package (npm)
   
     my-app apps[\/\\]my-app (re)
@@ -118,7 +116,6 @@ Validate that we only run `my-app#build` with change not committed
 
 Do the same thing with the `ls` command
   $ ${TURBO} ls --affected
-   WARNING  ls command is experimental and may change in the future
   1 package (npm)
   
     my-app apps[\/\\]my-app (re)
@@ -165,7 +162,6 @@ Validate that we only run `my-app#build` with change committed
 
 Do the same thing with the `ls` command
   $ ${TURBO} ls --affected
-   WARNING  ls command is experimental and may change in the future
   1 package (npm)
   
     my-app apps[\/\\]my-app (re)
@@ -201,7 +197,6 @@ Override the SCM base to be HEAD, so nothing runs
 
 Do the same thing with the `ls` command
   $ TURBO_SCM_BASE="HEAD" ${TURBO} ls --affected
-   WARNING  ls command is experimental and may change in the future
   0 no packages (npm)
   
 
@@ -232,7 +227,6 @@ Override the SCM head to be main, so nothing runs
 
 Do the same thing with the `ls` command
   $ TURBO_SCM_HEAD="main" ${TURBO} ls --affected
-   WARNING  ls command is experimental and may change in the future
   0 no packages (npm)
   
 
@@ -276,7 +270,6 @@ Run the build and expect only `my-app` to be affected, since between
 
 Do the same thing with the `ls` command
   $ ${TURBO} ls --affected
-   WARNING  ls command is experimental and may change in the future
   1 package (npm)
   
     my-app apps[\/\\]my-app (re)
@@ -316,7 +309,6 @@ Now try running `--affected` again, we should run all tasks
 
 Do the same thing with the `ls` command
   $ ${TURBO} ls --affected
-   WARNING  ls command is experimental and may change in the future
    WARNING  unable to detect git range, assuming all files have changed: Git error: fatal: no merge base found
   
   3 packages (npm)
@@ -371,7 +363,6 @@ Now try running `--affected` again, we should run all tasks
 
 Do the same thing with the `ls` command
   $ ${TURBO} ls --affected
-   WARNING  ls command is experimental and may change in the future
    WARNING  unable to detect git range, assuming all files have changed: Git error: fatal: no merge base found
   
   3 packages (npm)
