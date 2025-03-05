@@ -242,7 +242,7 @@ mod tests {
             [AnchoredSystemPathBuf::from_raw("README.md")?]
                 .into_iter()
                 .collect(),
-            LockfileContents::Unknown,
+            LockfileContents::Unchanged,
         )?;
 
         // We should return All because we don't have global deps and
@@ -262,7 +262,7 @@ mod tests {
             [AnchoredSystemPathBuf::from_raw("README.md")?]
                 .into_iter()
                 .collect(),
-            LockfileContents::Unknown,
+            LockfileContents::Unchanged,
         )?;
 
         // We only get a root workspace change since we have global deps specified and

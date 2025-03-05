@@ -37,8 +37,6 @@ pub enum LockfileContents {
     /// previous lockfile (i.e. `git status`, or perhaps a lockfile that was
     /// deleted or otherwise inaccessible with the information we have)
     UnknownChange,
-    /// We are unsure whether the lockfile changed or not
-    Unknown,
     /// We know the lockfile changed and have the contents of the previous
     /// lockfile
     Changed(Vec<u8>),
@@ -205,10 +203,6 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
                     }
 
                     // We don't know if the lockfile changed or not, so we can't assume anything
-                    LockfileContents::Unknown => {
-                        debug!("no previous lockfile available, assuming all packages changed");
-                        Ok(PackageChanges::Some(changed_pkgs))
-                    }
                     LockfileContents::Unchanged => {
                         debug!("the lockfile did not change");
                         Ok(PackageChanges::Some(changed_pkgs))
