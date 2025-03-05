@@ -212,3 +212,39 @@ Because of this, you'll need to use [Root Tasks](/repo/docs/crafting-your-reposi
 ```
 
 **Notably, the file inputs for a Root Task include all packages by default, so any change in any package will result in a cache miss.** While this does make for a simplified configuration to create merged coverage reports, you'll be missing out on opportunities to cache repeated work.
+
+### Using a hybrid approach
+
+You can combine the benefits of both approaches by implementing a hybrid solution. This involves maintaining local Vitest configurations in each package while also setting up a root Vitest workspace configuration. This approach gives you the best of both worlds: better local development experience with global watch mode, while preserving Turborepo's caching benefits in CI.
+
+```json title="./vitest.workspace.ts"
+import { defineWorkspace } from 'vitest/config'
+
+export default defineWorkspace([
+  'packages/*',
+])
+```
+
+In this setup, your packages maintain their individual Vitest configurations and scripts:
+
+```json title="./packages/ui/package.json"
+{
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest --watch"
+  }
+}
+```
+
+While your root `package.json` includes scripts for running tests globally:
+
+```json title="./package.json"
+{
+  "scripts": {
+    "test:workspace": "turbo run test",
+    "test:workspace:watch": "vitest --watch"
+  }
+}
+```
+
+This configuration allows developers to run `pnpm test:workspace:watch` at the root for a seamless local development experience, while CI continues to use `turbo run test` to leverage package-level caching. **You'll still need to handle merged coverage reports manually as described in the previous section**.
