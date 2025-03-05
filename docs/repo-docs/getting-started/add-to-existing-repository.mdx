@@ -64,6 +64,7 @@ We recommend you install `turbo` both globally and into your repository's root f
 
   </Tab>
   <Tab value="pnpm">
+      Ensure you have created a `pnpm-workspace.yaml` file before you begin the installation. Failure to have this file will result in an error that says: ` --workspace-root may only be used inside a workspace`.
 
     ```bash title="Terminal"
     # Global install
@@ -219,9 +220,9 @@ turbo check-types build
 You should see terminal output like this:
 
 ```bash title="Terminal"
- Tasks:    2 successful, 2 total
+Tasks:    2 successful, 2 total
 Cached:    2 cached, 2 total
-  Time:    185ms >>> FULL TURBO
+Time:    185ms >>> FULL TURBO
 ```
 
 Congratulations! **You just built and type checked your code in milliseconds**.
