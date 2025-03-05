@@ -1946,6 +1946,21 @@ mod test {
         "continue option with no value"
 	)]
     #[test_case::test_case(
+		&["turbo", "run", "--continue", "build"],
+        Args {
+            command: Some(Command::Run {
+                execution_args: Box::new(ExecutionArgs {
+                    tasks: vec!["build".to_string()],
+                    continue_execution: ContinueMode::Always,
+                    ..get_default_execution_args()
+                }),
+                run_args: Box::new(get_default_run_args())
+            }),
+            ..Args::default()
+        } ;
+        "continue option with no value before task"
+	)]
+    #[test_case::test_case(
 		&["turbo", "run", "build", "--continue=dependencies-successful"],
         Args {
             command: Some(Command::Run {
