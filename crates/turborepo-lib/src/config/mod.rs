@@ -60,6 +60,19 @@ pub struct UnnecessaryPackageTaskSyntaxError {
     pub text: NamedSource<String>,
 }
 
+#[derive(Debug, Error, Diagnostic)]
+#[diagnostic(
+    code(root_syntax_in_global_deps),
+    url("{}/messages/{}", TURBO_SITE, self.code().unwrap().to_string().to_case(Case::Kebab))
+)]
+#[error("$$ROOT$$ syntax is not allowed in globalDependencies")]
+pub struct RootSyntaxInGlobalDepsError {
+    #[label("$$ROOT$$ syntax found here")]
+    pub span: Option<SourceSpan>,
+    #[source_code]
+    pub text: NamedSource<String>,
+}
+
 #[allow(clippy::enum_variant_names)]
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
@@ -199,6 +212,9 @@ pub enum Error {
     },
     #[error("Cannot load turbo.json for {0} in single package mode.")]
     InvalidTurboJsonLoad(PackageName),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    RootSyntaxInGlobalDeps(Box<RootSyntaxInGlobalDepsError>),
 }
 
 const DEFAULT_API_URL: &str = "https://vercel.com/api";

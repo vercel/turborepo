@@ -2,7 +2,9 @@ use std::{
     collections::{BTreeSet, HashMap, HashSet},
     fmt::Display,
     future::IntoFuture,
+    path::Path,
     str::FromStr,
+    sync::Arc,
     time::Duration,
 };
 
@@ -26,6 +28,8 @@ pub struct GlobSet {
     exclude: Any<'static>,
     // Note that these globs do not include the leading '!' character
     exclude_raw: BTreeSet<String>,
+    // Track which globs are anchored to the workspace root
+    workspace_root_globs: BTreeSet<String>,
 }
 
 impl GlobSet {
@@ -37,6 +41,11 @@ impl GlobSet {
 
     pub fn matches(&self, input: &RelativeUnixPath) -> bool {
         self.include.values().any(|glob| glob.is_match(input)) && !self.exclude.is_match(input)
+    }
+
+    // Check if a glob is anchored to the workspace root
+    pub fn is_workspace_root_glob(&self, glob: &str) -> bool {
+        self.workspace_root_globs.contains(glob)
     }
 }
 
@@ -79,7 +88,16 @@ impl Display for GlobError {
 }
 
 fn compile_glob(raw: &str) -> Result<Glob<'static>, GlobError> {
-    Glob::from_str(raw)
+    // Check if the glob starts with the $$ROOT$$ microsyntax
+    let processed_raw = if raw.starts_with("$$ROOT$$") {
+        // Remove the $$ROOT$$ prefix - the glob will be processed relative to the
+        // workspace root
+        raw.replace("$$ROOT$$", "")
+    } else {
+        raw.to_string()
+    };
+
+    Glob::from_str(&processed_raw)
         .map(|g| g.to_owned())
         .map_err(|e| GlobError {
             underlying: Box::new(e),
@@ -92,32 +110,48 @@ impl GlobSet {
         raw_includes: Vec<String>,
         raw_excludes: Vec<String>,
     ) -> Result<Self, GlobError> {
+        let mut workspace_root_globs = BTreeSet::new();
+
         let include = raw_includes
             .iter()
             .cloned()
             .map(|raw_glob| {
+                // Check if this glob is anchored to the workspace root
+                if raw_glob.starts_with("$$ROOT$$") {
+                    workspace_root_globs.insert(raw_glob.clone());
+                }
+
                 let glob = compile_glob(&raw_glob)?;
                 Ok((raw_glob, glob))
             })
             .collect::<Result<HashMap<_, _>, GlobError>>()?;
+
         let excludes = raw_excludes
             .clone()
             .iter()
             .map(|raw_glob| {
+                // Check if this glob is anchored to the workspace root
+                if raw_glob.starts_with("$$ROOT$$") {
+                    workspace_root_globs.insert(format!("!{}", raw_glob));
+                }
+
                 let glob = compile_glob(raw_glob)?;
                 Ok(glob)
             })
             .collect::<Result<Vec<_>, GlobError>>()?;
+
         let exclude = wax::any(excludes)
             .map_err(|e| GlobError {
                 underlying: Box::new(e),
                 raw_glob: format!("{{{}}}", raw_excludes.join(",")),
             })?
             .to_owned();
+
         Ok(Self {
             include,
             exclude,
             exclude_raw: BTreeSet::from_iter(raw_excludes),
+            workspace_root_globs,
         })
     }
 
@@ -577,6 +611,7 @@ mod test {
             include: make_includes(raw_includes),
             exclude,
             exclude_raw: raw_excludes.iter().map(|s| s.to_string()).collect(),
+            workspace_root_globs: BTreeSet::new(),
         };
 
         let hash = "the-hash".to_string();
@@ -660,6 +695,7 @@ mod test {
             include: make_includes(raw_includes),
             exclude: any(raw_excludes).unwrap(),
             exclude_raw: raw_excludes.iter().map(|s| s.to_string()).collect(),
+            workspace_root_globs: BTreeSet::new(),
         };
 
         let hash = "the-hash".to_string();
@@ -682,6 +718,7 @@ mod test {
             include: make_includes(second_raw_includes),
             exclude: any(second_raw_excludes).unwrap(),
             exclude_raw: second_raw_excludes.iter().map(|s| s.to_string()).collect(),
+            workspace_root_globs: BTreeSet::new(),
         };
         let second_hash = "the-second-hash".to_string();
         glob_watcher
@@ -760,6 +797,7 @@ mod test {
             include: make_includes(raw_includes),
             exclude: any(raw_excludes).unwrap(),
             exclude_raw: raw_excludes.iter().map(|s| s.to_string()).collect(),
+            workspace_root_globs: BTreeSet::new(),
         };
 
         let hash = "the-hash".to_string();
