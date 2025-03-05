@@ -215,7 +215,7 @@ Because of this, you'll need to use [Root Tasks](/repo/docs/crafting-your-reposi
 
 ### Using a hybrid approach
 
-You can combine the benefits of both approaches by implementing a hybrid solution. This involves maintaining local Vitest configurations in each package while also setting up a root Vitest workspace configuration. This approach gives you the best of both worlds: better local development experience with global watch mode, while preserving Turborepo's caching benefits in CI.
+You can combine the benefits of both approaches by implementing a hybrid solution.This approach unifies local development using Vitest's Workspace approach while preserving Turborepo's caching in CI.  This comes at the tradeoff of slightly more configuration and a mixed task running model in the repository.
 
 ```ts title="./vitest.workspace.ts"
 import { defineWorkspace } from 'vitest/config'
