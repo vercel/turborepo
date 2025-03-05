@@ -345,7 +345,7 @@ impl Subscriber {
                 }
 
                 let changed_packages = change_mapper
-                    .changed_packages(changed_files.clone(), LockfileContents::Unknown);
+                    .changed_packages(changed_files.clone(), LockfileContents::Unchanged);
 
                 tracing::warn!("changed_files: {:?}", changed_files);
                 tracing::warn!("changed_packages: {:?}", changed_packages);
