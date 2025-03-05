@@ -20,7 +20,7 @@ use crate::package_graph::{
 
 mod package;
 
-const DEFAULT_GLOBAL_DEPS: [&str; 2] = ["package.json", "turbo.json"];
+const DEFAULT_GLOBAL_DEPS: &[&str] = ["package.json", "turbo.json", "turbo.jsonc"].as_slice();
 
 // We may not be able to load the lockfile contents, but we
 // still want to be able to express a generic change.
