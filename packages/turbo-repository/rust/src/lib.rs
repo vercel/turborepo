@@ -3,14 +3,20 @@ use std::{
     hash::Hash,
 };
 
+use either::Either;
 use napi::Error;
 use napi_derive::napi;
-use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
+use tracing::debug;
+use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
 use turborepo_repository::{
-    change_mapper::{ChangeMapper, GlobalDepsPackageChangeMapper, PackageChanges},
+    change_mapper::{
+        ChangeMapper, DefaultPackageChangeMapper, DefaultPackageChangeMapperWithLockfile,
+        LockfileContents, PackageChanges,
+    },
     inference::RepoState as WorkspaceState,
     package_graph::{PackageGraph, PackageName, PackageNode, WorkspacePackage, ROOT_PKG_NAME},
 };
+use turborepo_scm::SCM;
 mod internal;
 
 #[napi]
@@ -182,6 +188,27 @@ impl Workspace {
         Ok(map)
     }
 
+    pub fn get_lockfile_contents(
+        &self,
+        changed_files: &HashSet<AnchoredSystemPathBuf>,
+        workspace_root: &AbsoluteSystemPath,
+        from_commit: &str,
+    ) -> LockfileContents {
+        let lockfile_name = self.graph.package_manager().lockfile_name();
+        changed_files
+            .contains(AnchoredSystemPath::new(&lockfile_name).unwrap())
+            .then(|| {
+                let git = SCM::new(workspace_root);
+                let anchored_path = workspace_root.join_component(lockfile_name);
+                git.previous_content(Some(from_commit), &anchored_path)
+                    .map(LockfileContents::Changed)
+                    .inspect_err(|e| debug!("{e}"))
+                    .ok()
+                    .unwrap_or(LockfileContents::UnknownChange)
+            })
+            .unwrap_or(LockfileContents::Unchanged)
+    }
+
     /// Given a set of "changed" files, returns a set of packages that are
     /// "affected" by the changes. The `files` argument is expected to be a list
     /// of strings relative to the monorepo root and use the current system's
@@ -190,13 +217,22 @@ impl Workspace {
     pub async fn affected_packages(
         &self,
         files: Vec<String>,
-        changed_lockfile: Option<String>,
+        base: Option<&str>, // this is required when optimize_global_invalidations is true
+        optimize_global_invalidations: Option<bool>,
     ) -> Result<Vec<Package>, Error> {
+        let base = optimize_global_invalidations
+            .unwrap_or(false)
+            .then(|| {
+                base.ok_or_else(|| {
+                    Error::from_reason("optimizeGlobalInvalidations true, but no base commit given")
+                })
+            })
+            .transpose()?;
         let workspace_root = match AbsoluteSystemPath::new(&self.absolute_path) {
             Ok(path) => path,
             Err(e) => return Err(Error::from_reason(e.to_string())),
         };
-        let hash_set_of_paths: HashSet<AnchoredSystemPathBuf> = files
+        let changed_files: HashSet<AnchoredSystemPathBuf> = files
             .into_iter()
             .filter_map(|path| {
                 let path_components = path.split(std::path::MAIN_SEPARATOR).collect::<Vec<&str>>();
@@ -206,11 +242,24 @@ impl Workspace {
             .collect();
 
         // Create a ChangeMapper with no ignore patterns
-        let global_deps_package_detector =
-            GlobalDepsPackageChangeMapper::new(&self.graph, std::iter::empty::<&str>()).unwrap();
-        let mapper = ChangeMapper::new(&self.graph, vec![], global_deps_package_detector);
-        let lockfile_change = changed_lockfile.map(|s| Some(s.into_bytes()));
-        let package_changes = match mapper.changed_packages(hash_set_of_paths, lockfile_change) {
+        let change_detector = base
+            .is_some()
+            .then(|| Either::Left(DefaultPackageChangeMapperWithLockfile::new(&self.graph)))
+            .unwrap_or_else(|| Either::Right(DefaultPackageChangeMapper::new(&self.graph)));
+        let mapper = ChangeMapper::new(&self.graph, vec![], change_detector);
+
+        let lockfile_contents = if let Some(base) = base {
+            self.get_lockfile_contents(&changed_files, workspace_root, base)
+        } else if changed_files.contains(
+            AnchoredSystemPath::new(self.graph.package_manager().lockfile_name())
+                .expect("the lockfile name will not be an absolute path"),
+        ) {
+            LockfileContents::UnknownChange
+        } else {
+            LockfileContents::Unchanged
+        };
+
+        let package_changes = match mapper.changed_packages(changed_files, lockfile_contents) {
             Ok(changes) => changes,
             Err(e) => return Err(Error::from_reason(e.to_string())),
         };

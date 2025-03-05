@@ -3,7 +3,6 @@ Setup
 
 Run info
   $ ${TURBO} ls
-   WARNING  ls command is experimental and may change in the future
   3 packages (npm)
   
     another packages[\/\\]another (re)
@@ -12,7 +11,6 @@ Run info
 
 Run ls with filter
   $ ${TURBO} ls -F my-app...
-   WARNING  ls command is experimental and may change in the future
   2 packages (npm)
   
     my-app apps[\/\\]my-app (re)
@@ -20,7 +18,6 @@ Run ls with filter
 
 Run ls on package `another`
   $ ${TURBO} ls another
-   WARNING  ls command is experimental and may change in the future
   packages[/\\]another  (re)
   another depends on: <no packages>
   
@@ -30,7 +27,6 @@ Run ls on package `another`
 
 Run ls on package `my-app`
   $ ${TURBO} ls my-app
-   WARNING  ls command is experimental and may change in the future
   apps[\/\\]my-app  (re)
   my-app depends on: util
   

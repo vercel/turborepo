@@ -1464,7 +1464,6 @@ pub async fn run(
         Command::Ls {
             packages, output, ..
         } => {
-            warn!("ls command is experimental and may change in the future");
             let event = CommandEventBuilder::new("info").with_parent(&root_telemetry);
 
             event.track_call();
