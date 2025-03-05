@@ -5,10 +5,10 @@ Setup
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running echo in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  my-app:echo: cache miss, executing 3706c931f8ac99c1
+  my-app:echo: cache miss, executing c0813f759149b8af
   my-app:echo: 
   my-app:echo: > echo
-  my-app:echo: > echo $@ hello
+  my-app:echo: > echo hello
   my-app:echo: 
   my-app:echo: hello
   
@@ -21,10 +21,10 @@ Setup
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running my-app#echo in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  my-app:echo: cache miss, executing 81acd8845d88d1d1
+  my-app:echo: cache miss, executing f4397252b3a3d780
   my-app:echo: 
   my-app:echo: > echo
-  my-app:echo: > echo $@ goodbye
+  my-app:echo: > echo goodbye
   my-app:echo: 
   my-app:echo: goodbye
   
