@@ -1,9 +1,12 @@
 Setup
   $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh
 
+# Remove turbo.json to avoid conflict with turbo.jsonc
+  $ rm -f turbo.json
+
 # Test that syntax errors in turbo.jsonc are properly reported
 Create turbo.jsonc with syntax errors
-  $ cp ${TESTDIR}/../../../fixtures/turbo-configs/syntax-error.json turbo.jsonc
+  $ cp ${TESTDIR}/../../../integration/fixtures/turbo-configs/syntax-error.json turbo.jsonc
 
 # Run turbo build to verify the syntax error is properly reported
   $ ${TURBO} build 2> error.txt

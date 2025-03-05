@@ -1,6 +1,9 @@
 Setup
   $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh
 
+# Remove turbo.json to avoid conflict with turbo.jsonc
+  $ rm -f turbo.json
+
 # Test that package-specific tasks in turbo.jsonc files work correctly
 # First, create a repo structure with a package
   $ mkdir -p apps/my-app

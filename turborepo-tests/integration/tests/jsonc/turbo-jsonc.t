@@ -38,13 +38,16 @@ Setup turbo.json in root and turbo.jsonc in a package
   $ cp ${TESTDIR}/../../../integration/fixtures/turbo-configs/basic-with-extends.jsonc apps/my-app/turbo.jsonc
 
 Run turbo build with root turbo.json and package turbo.jsonc
-  $ ${TURBO} build
-  • Packages in scope: my-app
-  • Running build in 1 packages
+  $ ${TURBO} build --output-logs=none
+  • Packages in scope: another, my-app, util (esc)
+  • Running build in 3 packages (esc)
   • Remote caching disabled
   
-  Tasks:  1 successful, 0 total
-  Time: *s (re)
+  Tasks:    2 successful, 2 total
+  Cached:    1 cached, 2 total
+  Time:    *ms (re)
+  
+  WARNING  no output files found for task my-app#build. Please check your `outputs` key in `turbo.json` (re)
   
 
 # Test 4: Using turbo.jsonc in the root and turbo.json in a package
@@ -55,12 +58,13 @@ Setup turbo.jsonc in root and turbo.json in a package
   $ cp ${TESTDIR}/../../../integration/fixtures/turbo-configs/basic-with-extends.json apps/my-app/turbo.json
 
 Run turbo build with root turbo.jsonc and package turbo.json
-  $ ${TURBO} build
-  • Packages in scope: my-app
-  • Running build in 1 packages
+  $ ${TURBO} build --output-logs=none
+  • Packages in scope: another, my-app, util (esc)
+  • Running build in 3 packages (esc)
   • Remote caching disabled
   
   Tasks:  1 successful, 0 total
+  Cached:    1 cached, 2 total
   Time: *s (re)
   
 
@@ -72,6 +76,6 @@ Run turbo build with both files in a package
   $ ${TURBO} build 2> error.txt
   [1]
   $ cat error.txt
-    x Found both turbo.json and turbo.jsonc in the same directory: */apps/my-app (re)
+    x Found both turbo.json and turbo.jsonc in the same directory: .*/apps/my-app (re)
     | Remove either turbo.json or turbo.jsonc so there is only one.
   
