@@ -206,7 +206,7 @@ impl Workspace {
                     .ok()
                     .unwrap_or(LockfileContents::UnknownChange)
             })
-            .unwrap_or(LockfileContents::Unknown)
+            .unwrap_or(LockfileContents::Unchanged)
     }
 
     /// Given a set of "changed" files, returns a set of packages that are
