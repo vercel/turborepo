@@ -4,7 +4,7 @@ mod tags;
 mod tsconfig;
 
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashSet,
     sync::{Arc, LazyLock, Mutex},
 };
 
@@ -26,13 +26,13 @@ use thiserror::Error;
 use tracing::log::warn;
 use turbo_trace::{ImportFinder, Tracer};
 use turbopath::AbsoluteSystemPathBuf;
-use turborepo_errors::Spanned;
 use turborepo_repository::package_graph::{PackageInfo, PackageName, PackageNode};
 use turborepo_ui::{color, ColorConfig, BOLD_GREEN, BOLD_RED};
 
 use crate::{
     boundaries::{tags::ProcessedRulesMap, tsconfig::TsConfigLoader},
     run::Run,
+    turbo_json::TurboJson,
 };
 
 #[derive(Clone, Debug, Error, Diagnostic)]
@@ -211,7 +211,6 @@ impl BoundariesResult {
 
 impl Run {
     pub async fn check_boundaries(&self) -> Result<BoundariesResult, Error> {
-        let package_tags = self.get_package_tags();
         let rules_map = self.get_processed_rules_map();
         let packages: Vec<_> = self.pkg_dep_graph().packages().collect();
         let repo = Repository::discover(self.repo_root()).ok().map(Mutex::new);
@@ -224,15 +223,8 @@ impl Run {
                 continue;
             }
 
-            self.check_package(
-                &repo,
-                package_name,
-                package_info,
-                &package_tags,
-                &rules_map,
-                &mut result,
-            )
-            .await?;
+            self.check_package(&repo, package_name, package_info, &rules_map, &mut result)
+                .await?;
         }
 
         Ok(result)
@@ -258,19 +250,20 @@ impl Run {
         repo: &Option<Mutex<Repository>>,
         package_name: &PackageName,
         package_info: &PackageInfo,
-        all_package_tags: &HashMap<PackageName, Spanned<Vec<Spanned<String>>>>,
         tag_rules: &Option<ProcessedRulesMap>,
         result: &mut BoundariesResult,
     ) -> Result<(), Error> {
         self.check_package_files(repo, package_name, package_info, result)
             .await?;
 
-        if let Some(current_package_tags) = all_package_tags.get(package_name) {
+        if let Ok(TurboJson {
+            tags: Some(tags), ..
+        }) = self.turbo_json_loader().load(package_name)
+        {
             if let Some(tag_rules) = tag_rules {
                 result.diagnostics.extend(self.check_package_tags(
                     PackageNode::Workspace(package_name.clone()),
-                    current_package_tags,
-                    all_package_tags,
+                    tags,
                     tag_rules,
                 )?);
             } else {

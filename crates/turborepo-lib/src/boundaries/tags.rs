@@ -49,17 +49,25 @@ impl From<Permissions> for ProcessedPermissions {
 }
 
 impl Run {
+    pub fn load_package_tags(&self, pkg: &PackageName) -> Option<&Spanned<Vec<Spanned<String>>>> {
+        self.turbo_json_loader()
+            .load(pkg)
+            .ok()
+            .and_then(|turbo_json| turbo_json.tags.as_ref())
+    }
+
     pub(crate) fn get_package_tags(&self) -> HashMap<PackageName, Spanned<Vec<Spanned<String>>>> {
         let mut package_tags = HashMap::new();
-        let turbo_json_loader = self.turbo_json_loader();
         for (package, _) in self.pkg_dep_graph().packages() {
             if let Ok(TurboJson {
                 tags: Some(tags),
                 boundaries,
                 ..
-            }) = turbo_json_loader.load(package)
+            }) = self.turbo_json_loader().load(package)
             {
-                if boundaries.is_some() && !matches!(package, PackageName::Root) {
+                if boundaries.as_ref().is_some_and(|b| b.tags.is_some())
+                    && !matches!(package, PackageName::Root)
+                {
                     warn!(
                         "Boundaries rules can only be defined in the root turbo.json. Any rules \
                          defined in a package's turbo.json will be ignored."
@@ -163,7 +171,6 @@ impl Run {
         &self,
         pkg: PackageNode,
         current_package_tags: &Spanned<Vec<Spanned<String>>>,
-        all_package_tags: &HashMap<PackageName, Spanned<Vec<Spanned<String>>>>,
         tags_rules: &ProcessedRulesMap,
     ) -> Result<Vec<BoundariesDiagnostic>, Error> {
         let mut diagnostics = Vec::new();
@@ -174,7 +181,9 @@ impl Run {
                         if matches!(dependency, PackageNode::Root) {
                             continue;
                         }
-                        let dependency_tags = all_package_tags.get(dependency.as_package_name());
+
+                        let dependency_tags = self.load_package_tags(dependency.as_package_name());
+
                         diagnostics.extend(self.validate_relation(
                             pkg.as_package_name(),
                             dependency.as_package_name(),
@@ -190,7 +199,7 @@ impl Run {
                         if matches!(dependent, PackageNode::Root) {
                             continue;
                         }
-                        let dependent_tags = all_package_tags.get(dependent.as_package_name());
+                        let dependent_tags = self.load_package_tags(dependent.as_package_name());
                         diagnostics.extend(self.validate_relation(
                             pkg.as_package_name(),
                             dependent.as_package_name(),
