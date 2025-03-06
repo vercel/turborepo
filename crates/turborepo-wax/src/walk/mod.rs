@@ -118,8 +118,8 @@ where
 
     fn substituent(separation: &Separation<Self>) -> Self::Substituent<'_> {
         match separation {
-            Separation::Filtrate(ref filtrate) => filtrate.get(),
-            Separation::Residue(ref residue) => residue.get().get(),
+            Separation::Filtrate(filtrate) => filtrate.get(),
+            Separation::Residue(residue) => residue.get().get(),
         }
     }
 }
@@ -240,8 +240,8 @@ enum WalkErrorKind {
 impl WalkErrorKind {
     pub fn path(&self) -> Option<&Path> {
         match self {
-            WalkErrorKind::Io { ref path, .. } => path.as_ref().map(PathBuf::as_ref),
-            WalkErrorKind::LinkCycle { ref leaf, .. } => Some(leaf.as_ref()),
+            WalkErrorKind::Io { path, .. } => path.as_ref().map(PathBuf::as_ref),
+            WalkErrorKind::LinkCycle { leaf, .. } => Some(leaf.as_ref()),
         }
     }
 }
