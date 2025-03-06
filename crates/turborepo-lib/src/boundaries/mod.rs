@@ -8,7 +8,7 @@ use std::{
     sync::{Arc, LazyLock, Mutex},
 };
 
-pub use config::{Permissions, RootBoundariesConfig, Rule};
+pub use config::{BoundariesConfig, Permissions, Rule};
 use git2::Repository;
 use globwalk::Settings;
 use miette::{Diagnostic, NamedSource, Report, SourceSpan};

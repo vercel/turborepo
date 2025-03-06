@@ -6,9 +6,11 @@ use struct_iterable::Iterable;
 use turborepo_errors::Spanned;
 
 #[derive(Serialize, Default, Debug, Clone, Iterable, Deserializable, PartialEq)]
-pub struct RootBoundariesConfig {
+pub struct BoundariesConfig {
     pub tags: Option<Spanned<RulesMap>>,
+    pub implicit_dependencies: Option<Spanned<Vec<Spanned<String>>>>,
 }
+
 pub type RulesMap = HashMap<String, Spanned<Rule>>;
 
 #[derive(Serialize, Default, Debug, Clone, Iterable, Deserializable, PartialEq)]
