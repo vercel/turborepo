@@ -1,7 +1,7 @@
 #![allow(unused_imports)]
 mod fixtures;
-pub use fixtures::fixture;
 pub use fixtures::FixtureScreen;
+pub use fixtures::fixture;
 
 use turborepo_vt100 as vt100;
 
