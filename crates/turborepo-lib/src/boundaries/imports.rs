@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     sync::Arc,
 };
 
@@ -10,6 +10,7 @@ use oxc_resolver::{ResolveError, Resolver, TsConfig};
 use swc_common::{comments::SingleThreadedComments, SourceFile, Span};
 use turbo_trace::ImportType;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf, PathRelation, RelativeUnixPath};
+use turborepo_errors::Spanned;
 use turborepo_repository::{
     package_graph::{PackageInfo, PackageName, PackageNode},
     package_json::PackageJson,
@@ -82,6 +83,7 @@ impl Run {
         package_info: &PackageInfo,
         internal_dependencies: &HashSet<&PackageNode>,
         unresolved_external_dependencies: Option<&BTreeMap<String, String>>,
+        implicit_dependencies: &HashMap<String, Spanned<()>>,
         resolver: &Resolver,
     ) -> Result<(), Error> {
         // If the import is prefixed with `@boundaries-ignore`, we ignore it, but print
@@ -157,6 +159,7 @@ impl Run {
                 &package_info.package_json,
                 internal_dependencies,
                 unresolved_external_dependencies,
+                implicit_dependencies,
                 resolver,
             )
         } else {
@@ -214,6 +217,7 @@ impl Run {
         internal_dependencies: &HashSet<&PackageNode>,
         package_json: &PackageJson,
         unresolved_external_dependencies: Option<&BTreeMap<String, String>>,
+        implicit_dependencies: &HashMap<String, Spanned<()>>,
         package_name: &PackageNode,
     ) -> bool {
         internal_dependencies.contains(&package_name)
@@ -244,6 +248,7 @@ impl Run {
                 .is_some_and(|optional_dependencies| {
                     optional_dependencies.contains_key(package_name.as_package_name().as_str())
                 })
+            || implicit_dependencies.contains_key(package_name.as_package_name().as_str())
     }
 
     fn get_package_name(import: &str) -> String {
@@ -269,6 +274,7 @@ impl Run {
         package_json: &PackageJson,
         internal_dependencies: &HashSet<&PackageNode>,
         unresolved_external_dependencies: Option<&BTreeMap<String, String>>,
+        implicit_dependencies: &HashMap<String, Spanned<()>>,
         resolver: &Resolver,
     ) -> Option<BoundariesDiagnostic> {
         let package_name = Self::get_package_name(import);
@@ -286,6 +292,7 @@ impl Run {
             internal_dependencies,
             package_json,
             unresolved_external_dependencies,
+            implicit_dependencies,
             &package_name,
         );
 
@@ -304,6 +311,7 @@ impl Run {
                 internal_dependencies,
                 package_json,
                 unresolved_external_dependencies,
+                implicit_dependencies,
                 &types_package_name,
             );
 

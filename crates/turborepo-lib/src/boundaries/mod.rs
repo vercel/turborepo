@@ -4,7 +4,7 @@ mod tags;
 mod tsconfig;
 
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     sync::{Arc, LazyLock, Mutex},
 };
 
@@ -26,6 +26,7 @@ use thiserror::Error;
 use tracing::log::warn;
 use turbo_trace::{ImportFinder, Tracer};
 use turbopath::AbsoluteSystemPathBuf;
+use turborepo_errors::Spanned;
 use turborepo_repository::package_graph::{PackageInfo, PackageName, PackageNode};
 use turborepo_ui::{color, ColorConfig, BOLD_GREEN, BOLD_RED};
 
@@ -253,8 +254,26 @@ impl Run {
         tag_rules: &Option<ProcessedRulesMap>,
         result: &mut BoundariesResult,
     ) -> Result<(), Error> {
-        self.check_package_files(repo, package_name, package_info, result)
-            .await?;
+        let implicit_dependencies = self
+            .turbo_json_loader()
+            .load(package_name)
+            .ok()
+            .and_then(|turbo_json| turbo_json.boundaries.as_ref())
+            .and_then(|boundaries| boundaries.implicit_dependencies.as_ref())
+            .into_iter()
+            .flatten()
+            .flatten()
+            .map(|dep| dep.clone().split())
+            .collect::<HashMap<_, _>>();
+
+        self.check_package_files(
+            repo,
+            package_name,
+            package_info,
+            implicit_dependencies,
+            result,
+        )
+        .await?;
 
         if let Ok(TurboJson {
             tags: Some(tags), ..
@@ -290,6 +309,7 @@ impl Run {
         repo: &Option<Mutex<Repository>>,
         package_name: &PackageName,
         package_info: &PackageInfo,
+        implicit_dependencies: HashMap<String, Spanned<()>>,
         result: &mut BoundariesResult,
     ) -> Result<(), Error> {
         let package_root = self.repo_root().resolve(package_info.package_path());
@@ -402,6 +422,7 @@ impl Run {
                     package_info,
                     &internal_dependencies,
                     unresolved_external_dependencies,
+                    &implicit_dependencies,
                     &resolver,
                 )?;
             }
