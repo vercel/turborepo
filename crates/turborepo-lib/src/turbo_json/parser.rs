@@ -16,7 +16,7 @@ use turborepo_errors::{ParseDiagnostic, WithMetadata};
 use turborepo_unescape::UnescapedString;
 
 use crate::{
-    boundaries::{Permissions, RootBoundariesConfig, Rule},
+    boundaries::{BoundariesConfig, Permissions, Rule},
     run::task_id::TaskName,
     turbo_json::{Pipeline, RawTaskDefinition, RawTurboJson, Spanned},
 };
@@ -155,13 +155,19 @@ impl WithMetadata for Pipeline {
     }
 }
 
-impl WithMetadata for RootBoundariesConfig {
+impl WithMetadata for BoundariesConfig {
     fn add_text(&mut self, text: Arc<str>) {
         self.tags.add_text(text.clone());
         if let Some(tags) = &mut self.tags {
             for rule in tags.as_inner_mut().values_mut() {
                 rule.add_text(text.clone());
                 rule.value.add_text(text.clone());
+            }
+        }
+        self.implicit_dependencies.add_text(text.clone());
+        if let Some(implicit_dependencies) = &mut self.implicit_dependencies {
+            for dep in implicit_dependencies.as_inner_mut() {
+                dep.add_text(text.clone());
             }
         }
     }
@@ -172,6 +178,12 @@ impl WithMetadata for RootBoundariesConfig {
             for rule in tags.as_inner_mut().values_mut() {
                 rule.add_path(path.clone());
                 rule.value.add_path(path.clone());
+            }
+        }
+        self.implicit_dependencies.add_path(path.clone());
+        if let Some(implicit_dependencies) = &mut self.implicit_dependencies {
+            for dep in implicit_dependencies.as_inner_mut() {
+                dep.add_path(path.clone());
             }
         }
     }
