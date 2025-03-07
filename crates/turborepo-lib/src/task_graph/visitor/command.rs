@@ -105,7 +105,7 @@ impl<'a> CommandProvider for PackageGraphCommandProvider<'a> {
             .package_json
             .scripts
             .get(task_id.task())
-            .map_or(true, |script| script.is_empty())
+            .is_none_or(|script| script.is_empty())
         {
             return Ok(None);
         }

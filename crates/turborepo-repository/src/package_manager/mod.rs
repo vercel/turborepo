@@ -435,7 +435,7 @@ impl PackageManager {
     pub fn get_package_jsons(
         &self,
         repo_root: &AbsoluteSystemPath,
-    ) -> Result<impl Iterator<Item = AbsoluteSystemPathBuf>, Error> {
+    ) -> Result<impl Iterator<Item = AbsoluteSystemPathBuf> + use<>, Error> {
         let globs = self.get_workspace_globs(repo_root)?;
         Ok(globs.get_package_jsons(repo_root)?)
     }

@@ -44,11 +44,8 @@ pub async fn login_manual(base: &mut CommandBase, force: bool) -> Result<(), Err
     // update global config with token
     write_token(base, token)?;
     // ensure api url & team id/slug are present in turbo.json
-    write_remote(
-        &base.root_turbo_json_path(),
-        api_client.base_url(),
-        team_identifier,
-    )?;
+    let turbo_json_path = base.root_turbo_json_path()?;
+    write_remote(&turbo_json_path, api_client.base_url(), team_identifier)?;
     Ok(())
 }
 

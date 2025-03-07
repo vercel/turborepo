@@ -1,4 +1,5 @@
-// eslint-disable-next-line import/no-default-export -- Matching old module.exports
-export default {
+const config = {
   extends: ["plugin:turbo/recommended"],
 };
+
+module.exports = config;

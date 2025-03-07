@@ -147,7 +147,7 @@ impl WorkspaceGlobs {
     pub fn get_package_jsons(
         &self,
         repo_root: &AbsoluteSystemPath,
-    ) -> Result<impl Iterator<Item = AbsoluteSystemPathBuf>, Error> {
+    ) -> Result<impl Iterator<Item = AbsoluteSystemPathBuf> + use<>, Error> {
         let files = globwalk::globwalk(
             repo_root,
             &self.package_json_inclusions,

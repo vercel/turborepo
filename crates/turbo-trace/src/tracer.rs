@@ -172,6 +172,7 @@ impl Tracer {
         } else {
             Syntax::Es(EsSyntax {
                 jsx: true,
+                import_attributes: true,
                 ..Default::default()
             })
         };

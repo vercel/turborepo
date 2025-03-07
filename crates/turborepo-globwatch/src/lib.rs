@@ -214,7 +214,7 @@ impl GlobWatcher {
                                 // requester. flushes should not be considered as events.
                                 for flush_id in e
                                     .paths
-                                    .extract_if(|p| p.starts_with(flush_dir.as_path()))
+                                    .extract_if(.., |p| p.starts_with(flush_dir.as_path()))
                                     .filter_map(|p| {
                                         get_flush_id(
                                             p.strip_prefix(flush_dir.as_path())

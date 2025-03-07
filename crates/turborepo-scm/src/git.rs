@@ -14,7 +14,7 @@ use turbopath::{
 };
 use turborepo_ci::Vendor;
 
-use crate::{Error, Git, SCM};
+use crate::{Error, GitRepo, SCM};
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct InvalidRange {
@@ -37,6 +37,7 @@ impl SCM {
         }
     }
 
+    /// get the actual changed files between two git refs
     pub fn changed_files(
         &self,
         turbo_root: &AbsoluteSystemPath,
@@ -170,7 +171,7 @@ impl CIEnv {
     }
 }
 
-impl Git {
+impl GitRepo {
     fn get_current_branch(&self) -> Result<String, Error> {
         let output = self.execute_git_command(&["branch", "--show-current"], "")?;
         let output = String::from_utf8(output)?;
@@ -323,7 +324,7 @@ impl Git {
         Ok(files)
     }
 
-    fn execute_git_command(&self, args: &[&str], pathspec: &str) -> Result<Vec<u8>, Error> {
+    pub fn execute_git_command(&self, args: &[&str], pathspec: &str) -> Result<Vec<u8>, Error> {
         let mut command = Command::new(self.bin.as_std_path());
         command
             .args(args)
@@ -431,7 +432,7 @@ mod tests {
     use super::{previous_content, CIEnv, InvalidRange};
     use crate::{
         git::{GitHubCommit, GitHubEvent},
-        Error, Git, SCM,
+        Error, GitRepo, SCM,
     };
 
     fn setup_repository(
@@ -1044,7 +1045,7 @@ mod tests {
             repo.branch(branch, &commit, true).unwrap();
         });
 
-        let thing = Git::find(&root).unwrap();
+        let thing = GitRepo::find(&root).unwrap();
         let actual = thing.resolve_base(target_branch, CIEnv::none()).ok();
 
         assert_eq!(actual.as_deref(), expected);
@@ -1280,7 +1281,7 @@ mod tests {
             Err(VarError::NotPresent)
         };
 
-        let actual = Git::get_github_base_ref(CIEnv {
+        let actual = GitRepo::get_github_base_ref(CIEnv {
             is_github_actions: test_case.env.is_github_actions,
             github_base_ref: test_case.env.github_base_ref,
             github_event_path: temp_file
