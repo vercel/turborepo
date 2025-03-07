@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
-use oxc_resolver::{Resolver, TsConfigSerde};
+use oxc_resolver::{ResolveError, Resolver, TsConfigSerde};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 
 use crate::boundaries::BoundariesResult;
@@ -32,6 +32,8 @@ impl<'a> TsConfigLoader<'a> {
                     self.configs.insert(dir.to_owned(), config.clone());
                     return Some(config);
                 }
+                // Just means tsconfig is not found in this directory, so we can ignore it
+                Err(ResolveError::TsconfigNotFound(_)) => {}
                 Err(err) => {
                     result
                         .warnings

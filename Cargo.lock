@@ -6699,14 +6699,17 @@ dependencies = [
 name = "turborepo-napi"
 version = "0.1.0"
 dependencies = [
+ "either",
  "napi",
  "napi-build",
  "napi-derive",
  "pretty_assertions",
  "thiserror",
  "tokio",
+ "tracing",
  "turbopath",
  "turborepo-repository",
+ "turborepo-scm",
 ]
 
 [[package]]
@@ -6720,6 +6723,7 @@ dependencies = [
  "biome_diagnostics",
  "biome_json_parser",
  "biome_json_syntax",
+ "either",
  "globwalk",
  "itertools 0.10.5",
  "lazy-regex",

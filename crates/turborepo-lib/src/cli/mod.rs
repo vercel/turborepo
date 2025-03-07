@@ -28,8 +28,8 @@ use turborepo_ui::{ColorConfig, GREY};
 use crate::{
     cli::error::print_potential_tasks,
     commands::{
-        bin, boundaries, config, daemon, generate, info, link, login, logout, ls, prune, query,
-        run, scan, telemetry, unlink, CommandBase,
+        bin, boundaries, clone, config, daemon, generate, info, link, login, logout, ls, prune,
+        query, run, scan, telemetry, unlink, CommandBase,
     },
     get_version,
     run::watch::WatchClient,
@@ -588,6 +588,17 @@ pub enum Command {
         #[clap(short = 'F', long, group = "scope-filter-group")]
         filter: Vec<String>,
     },
+    #[clap(hide = true)]
+    Clone {
+        url: String,
+        dir: Option<String>,
+        #[clap(long, conflicts_with = "local")]
+        ci: bool,
+        #[clap(long, conflicts_with = "ci")]
+        local: bool,
+        #[clap(long)]
+        depth: Option<usize>,
+    },
     /// Generate the autocompletion script for the specified shell
     Completion { shell: Shell },
     /// Runs the Turborepo background daemon
@@ -851,7 +862,7 @@ pub struct ExecutionArgs {
     /// continue running tasks whose dependencies have succeeded. Use "always"
     /// to continue running all tasks, even those whose dependencies have
     /// failed.
-    #[clap(long = "continue", value_name = "CONTINUE", num_args = 0..=1, default_value = "never", default_missing_value = "always")]
+    #[clap(long = "continue", value_name = "CONTINUE", num_args = 0..=1, default_value = "never", default_missing_value = "always", require_equals = true)]
     pub continue_execution: ContinueMode,
     /// Run turbo in single-package mode
     #[clap(long)]
@@ -1360,7 +1371,6 @@ pub async fn run(
     };
 
     cli_args.command = Some(command);
-    cli_args.cwd = Some(repo_root.as_path().to_owned());
 
     let root_telemetry = GenericEventBuilder::new();
     root_telemetry.track_start();
@@ -1388,6 +1398,18 @@ pub async fn run(
             let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
 
             Ok(boundaries::run(base, event).await?)
+        }
+        Command::Clone {
+            url,
+            dir,
+            ci,
+            local,
+            depth,
+        } => {
+            let event = CommandEventBuilder::new("clone").with_parent(&root_telemetry);
+            event.track_call();
+
+            Ok(clone::run(cwd, url, dir.as_deref(), *ci, *local, *depth)?)
         }
         #[allow(unused_variables)]
         Command::Daemon { command, idle_time } => {
@@ -1464,7 +1486,6 @@ pub async fn run(
         Command::Ls {
             packages, output, ..
         } => {
-            warn!("ls command is experimental and may change in the future");
             let event = CommandEventBuilder::new("info").with_parent(&root_telemetry);
 
             event.track_call();
@@ -1944,6 +1965,21 @@ mod test {
             ..Args::default()
         } ;
         "continue option with no value"
+	)]
+    #[test_case::test_case(
+		&["turbo", "run", "--continue", "build"],
+        Args {
+            command: Some(Command::Run {
+                execution_args: Box::new(ExecutionArgs {
+                    tasks: vec!["build".to_string()],
+                    continue_execution: ContinueMode::Always,
+                    ..get_default_execution_args()
+                }),
+                run_args: Box::new(get_default_run_args())
+            }),
+            ..Args::default()
+        } ;
+        "continue option with no value before task"
 	)]
     #[test_case::test_case(
 		&["turbo", "run", "build", "--continue=dependencies-successful"],

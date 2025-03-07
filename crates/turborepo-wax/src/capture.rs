@@ -58,8 +58,8 @@ impl<'t> MaybeOwnedText<'t> {
     #[must_use]
     fn to_owned(&self) -> MaybeOwnedText<'static> {
         match self {
-            MaybeOwnedText::Borrowed(ref borrowed) => OwnedText::from(borrowed).into(),
-            MaybeOwnedText::Owned(ref owned) => owned.clone().into(),
+            MaybeOwnedText::Borrowed(borrowed) => OwnedText::from(borrowed).into(),
+            MaybeOwnedText::Owned(owned) => owned.clone().into(),
         }
     }
 }

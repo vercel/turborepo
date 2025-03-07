@@ -191,7 +191,7 @@ impl<'a> DependencyVersion<'a> {
                 constraint
                     .ok()
                     .zip(version.ok())
-                    .map_or(true, |(constraint, version)| constraint.satisfies(&version))
+                    .is_none_or(|(constraint, version)| constraint.satisfies(&version))
             }
         }
     }

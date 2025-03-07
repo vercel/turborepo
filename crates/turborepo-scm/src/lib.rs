@@ -19,6 +19,7 @@ use thiserror::Error;
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError, RelativeUnixPathBuf};
 
+pub mod clone;
 pub mod git;
 mod hash_object;
 mod ls_tree;
@@ -171,7 +172,7 @@ pub(crate) fn wait_for_success<R: Read, T>(
 }
 
 #[derive(Debug, Clone)]
-pub struct Git {
+pub struct GitRepo {
     root: AbsoluteSystemPathBuf,
     bin: AbsoluteSystemPathBuf,
 }
@@ -184,7 +185,7 @@ enum GitError {
     Root(AbsoluteSystemPathBuf, Error),
 }
 
-impl Git {
+impl GitRepo {
     fn find(path_in_repo: &AbsoluteSystemPath) -> Result<Self, GitError> {
         // If which produces an invalid absolute path, it's not an execution error, it's
         // a programming error. We expect it to always give us an absolute path
@@ -236,17 +237,19 @@ fn find_git_root(turbo_root: &AbsoluteSystemPath) -> Result<AbsoluteSystemPathBu
 
 #[derive(Debug, Clone)]
 pub enum SCM {
-    Git(Git),
+    Git(GitRepo),
     Manual,
 }
 
 impl SCM {
     #[tracing::instrument]
     pub fn new(path_in_repo: &AbsoluteSystemPath) -> SCM {
-        Git::find(path_in_repo).map(SCM::Git).unwrap_or_else(|e| {
-            debug!("{}, continuing with manual hashing", e);
-            SCM::Manual
-        })
+        GitRepo::find(path_in_repo)
+            .map(SCM::Git)
+            .unwrap_or_else(|e| {
+                debug!("{}, continuing with manual hashing", e);
+                SCM::Manual
+            })
     }
 
     pub fn is_manual(&self) -> bool {

@@ -8,7 +8,7 @@ use turborepo_telemetry::events::task::{FileHashMethod, PackageTaskEventBuilder}
 
 #[cfg(feature = "git2")]
 use crate::hash_object::hash_objects;
-use crate::{Error, Git, GitHashes, SCM};
+use crate::{Error, GitHashes, GitRepo, SCM};
 
 pub const INPUT_INCLUDE_DEFAULT_FILES: &str = "$TURBO_DEFAULT$";
 
@@ -112,7 +112,7 @@ impl SCM {
     }
 }
 
-impl Git {
+impl GitRepo {
     fn get_package_file_hashes<S: AsRef<str>>(
         &self,
         turbo_root: &AbsoluteSystemPath,
@@ -204,6 +204,7 @@ impl Git {
             //   downstream.
             inputs.push("package.json".to_string());
             inputs.push("turbo.json".to_string());
+            inputs.push("turbo.jsonc".to_string());
         }
 
         // The input patterns are relative to the package.

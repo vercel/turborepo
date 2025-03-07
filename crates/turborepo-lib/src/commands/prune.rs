@@ -16,7 +16,7 @@ use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_ui::BOLD;
 
 use super::CommandBase;
-use crate::turbo_json::RawTurboJson;
+use crate::turbo_json::{RawTurboJson, CONFIG_FILE, CONFIG_FILE_JSONC};
 
 pub const DEFAULT_OUTPUT_DIR: &str = "out";
 
@@ -85,7 +85,12 @@ fn package_json() -> &'static AnchoredSystemPath {
 
 fn turbo_json() -> &'static AnchoredSystemPath {
     static PATH: OnceLock<&'static AnchoredSystemPath> = OnceLock::new();
-    PATH.get_or_init(|| AnchoredSystemPath::new("turbo.json").unwrap())
+    PATH.get_or_init(|| AnchoredSystemPath::new(CONFIG_FILE).unwrap())
+}
+
+fn turbo_jsonc() -> &'static AnchoredSystemPath {
+    static PATH: OnceLock<&'static AnchoredSystemPath> = OnceLock::new();
+    PATH.get_or_init(|| AnchoredSystemPath::new(CONFIG_FILE_JSONC).unwrap())
 }
 
 pub async fn prune(
@@ -440,24 +445,32 @@ impl<'a> Prune<'a> {
     }
 
     fn copy_turbo_json(&self, workspaces: &[String]) -> Result<(), Error> {
-        let anchored_turbo_path = turbo_json();
-        let original_turbo_path = self.root.resolve(anchored_turbo_path);
-        let new_turbo_path = self.full_directory.resolve(anchored_turbo_path);
-
-        let turbo_json_contents = match original_turbo_path.read_to_string() {
-            Ok(contents) => contents,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                // If turbo.json doesn't exist skip copying
-                return Ok(());
-            }
-            Err(e) => return Err(e.into()),
+        let Some((turbo_json, turbo_json_name)) = self
+            .get_turbo_json(turbo_json())
+            .transpose()
+            .or_else(|| self.get_turbo_json(turbo_jsonc()).transpose())
+            .transpose()?
+        else {
+            return Ok(());
         };
 
-        let turbo_json = RawTurboJson::parse(&turbo_json_contents, anchored_turbo_path.as_str())?;
-
         let pruned_turbo_json = turbo_json.prune_tasks(workspaces);
+        let new_turbo_path = self.full_directory.resolve(turbo_json_name);
         new_turbo_path.create_with_contents(serde_json::to_string_pretty(&pruned_turbo_json)?)?;
 
         Ok(())
+    }
+
+    fn get_turbo_json<'b>(
+        &self,
+        turbo_json_name: &'b AnchoredSystemPath,
+    ) -> Result<Option<(RawTurboJson, &'b AnchoredSystemPath)>, Error> {
+        let original_turbo_path = self.root.resolve(turbo_json_name);
+        let Some(turbo_json_contents) = original_turbo_path.read_existing_to_string()? else {
+            return Ok(None);
+        };
+
+        let turbo_json = RawTurboJson::parse(&turbo_json_contents, turbo_json_name.as_str())?;
+        Ok(Some((turbo_json, turbo_json_name)))
     }
 }

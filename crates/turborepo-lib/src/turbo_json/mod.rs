@@ -297,6 +297,7 @@ impl RawTaskDefinition {
 }
 
 pub const CONFIG_FILE: &str = "turbo.json";
+pub const CONFIG_FILE_JSONC: &str = "turbo.jsonc";
 const ENV_PIPELINE_DELIMITER: &str = "$";
 const TOPOLOGICAL_PIPELINE_DELIMITER: &str = "^";
 
@@ -348,7 +349,7 @@ impl TryFrom<RawTaskDefinition> for TaskDefinition {
     fn try_from(raw_task: RawTaskDefinition) -> Result<Self, Error> {
         let outputs = raw_task.outputs.unwrap_or_default().try_into()?;
 
-        let cache = raw_task.cache.map_or(true, |c| c.into_inner());
+        let cache = raw_task.cache.is_none_or(|c| c.into_inner());
         let interactive = raw_task
             .interactive
             .as_ref()

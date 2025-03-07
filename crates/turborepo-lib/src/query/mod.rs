@@ -551,7 +551,7 @@ impl RepositoryQuery {
             let Ok(package) = package.as_ref() else {
                 return true;
             };
-            filter.as_ref().map_or(true, |f| f.check(&package.package))
+            filter.as_ref().is_none_or(|f| f.check(&package.package))
         })
         .collect::<Result<Array<_>, _>>()?;
 
