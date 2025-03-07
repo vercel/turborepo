@@ -52,6 +52,15 @@ export interface WorkspaceSchema extends BaseSchema {
    * @defaultValue `["//"]`
    */
   extends: Array<string>;
+  /**
+   * Used to tag a package for boundaries rules. Boundaries rules can restrict
+   * which packages a tag group can import or be imported by.
+   */
+  tags?: Array<string>;
+  /**
+   * Configuration for `turbo boundaries` that is specific to this package
+   */
+  boundaries?: BoundariesConfig;
 }
 
 export interface RootSchema extends BaseSchema {
@@ -155,6 +164,11 @@ export interface RootSchema extends BaseSchema {
    * @defaultValue `"strict"`
    */
   envMode?: EnvMode;
+
+  /**
+   * Configuration for `turbo boundaries`. Allows users to restrict a package's dependencies and dependents
+   */
+  boundaries?: RootBoundariesConfig;
 }
 
 export interface Pipeline {
@@ -370,6 +384,47 @@ export interface RemoteCache {
    * querystring for all Remote Cache HTTP calls.
    */
   teamSlug?: string;
+}
+
+export interface Permissions {
+  /**
+   * Lists which tags are allowed. Any tag not included will be banned
+   * If omitted, all tags are permitted
+   */
+  allow?: Array<string>;
+  /**
+   * Lists which tags are banned.
+   */
+  deny?: Array<string>;
+}
+
+interface TagRules {
+  /**
+   * Rules for a tag's dependencies. Restricts which packages a tag can import
+   */
+  dependencies?: Permissions;
+  /**
+   * Rules for a tag's dependents. Restricts which packages can import this tag.
+   */
+  dependents?: Permissions;
+}
+
+export type BoundariesRulesMap = Record<string, TagRules>;
+
+export interface BoundariesConfig {
+  /**
+   * Declares any implicit dependencies, i.e. any dependency not declared in a package.json.
+   * These can include dependencies automatically injected by a framework or a testing library.
+   */
+  implicitDependencies?: Array<string>;
+}
+
+export interface RootBoundariesConfig extends BoundariesConfig {
+  /**
+   * The boundaries rules for tags. Restricts which packages
+   * can import a tag and which packages a tag can import
+   */
+  tags?: BoundariesRulesMap;
 }
 
 export const isRootSchemaV2 = (schema: Schema): schema is RootSchema =>
