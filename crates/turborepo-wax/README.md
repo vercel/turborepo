@@ -300,8 +300,8 @@ within a glob expression so long as they do not split tree wildcards (e.g.,
 can be negated by preceding the corresponding character with a minus `-`. Flags
 are toggled in the order in which they appear within `(?...)`.
 
-The only supported flag is the case-insensitivty flag `i`. By default, glob
-expressions use the same case sensitivity as the target platforms's file system
+The only supported flag is the case-insensitivity flag `i`. By default, glob
+expressions use the same case sensitivity as the target platforms' file system
 APIs (case-sensitive on Unix and case-insensitive on Windows), but `i` can be
 used to toggle this explicitly as needed. For example,
 `(?-i)photos/**/*.(?i){jpg,jpeg}` matches file paths beneath a `photos`
@@ -371,7 +371,7 @@ features = [
 
 ## Unsupported Path Features
 
-Any components not recognized as separators nor patterns are interpreted as
+Any components not recognized as separators or patterns are interpreted as
 literals. In combination with strict rules, this means **some platform-specific
 path features cannot be used directly in globs**. This limitation is by design
 and additional code may be necessary to bridge this gap for some use cases.
@@ -433,7 +433,7 @@ assert!(glob.has_semantic_literals());
 
 ### Schemes and Prefixes
 
-While globs can be rooted, they cannot include schemes nor Windows path
+While globs can be rooted, they cannot include schemes or Windows path
 prefixes. For example, the Windows UNC share path `\\server\share\src` cannot be
 represented directly as a glob.
 
@@ -468,7 +468,7 @@ match nor capture some literal byte strings.
 
 At the time of writing, Wax is experimental and unstable. It is possible that
 glob expression syntax and semantics may change between versions in the `0.y.z`
-series without warning nor deprecation.
+series without warning or deprecation.
 
 [miette]: https://github.com/zkat/miette
 [nym]: https://github.com/olson-sean-k/nym
