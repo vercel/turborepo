@@ -27,9 +27,14 @@ pub enum Error {
     NotImplemented,
 }
 
+#[derive(Debug)]
+pub struct BunLockfile {
+    data: BunLockfileData,
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct BunLockfile {
+pub struct BunLockfileData {
     #[allow(unused)]
     lockfile_version: i32,
     workspaces: Map<String, WorkspaceEntry>,
@@ -92,6 +97,7 @@ impl Lockfile for BunLockfile {
         version: &str,
     ) -> Result<Option<crate::Package>, crate::Error> {
         let workspace_entry = self
+            .data
             .workspaces
             .get(workspace_path)
             .ok_or_else(|| crate::Error::MissingWorkspace(workspace_path.into()))?;
@@ -100,7 +106,7 @@ impl Lockfile for BunLockfile {
         if let Some((_key, entry)) = self.package_entry(&workspace_key) {
             let mut version = entry.version().to_string();
             // Check for any patches
-            if let Some(patch) = self.patched_dependencies.get(&entry.ident) {
+            if let Some(patch) = self.data.patched_dependencies.get(&entry.ident) {
                 version.push('+');
                 version.push_str(patch);
             }
@@ -131,6 +137,7 @@ impl Lockfile for BunLockfile {
         key: &str,
     ) -> Result<Option<std::collections::HashMap<String, String>>, crate::Error> {
         let entry = self
+            .data
             .packages
             .get(key)
             .ok_or_else(|| crate::Error::MissingPackage(key.into()))?;
@@ -173,7 +180,7 @@ impl Lockfile for BunLockfile {
     }
 
     fn human_name(&self, package: &crate::Package) -> Option<String> {
-        let entry = self.packages.get(&package.key)?;
+        let entry = self.data.packages.get(&package.key)?;
         Some(entry.ident.clone())
     }
 }
@@ -188,7 +195,7 @@ impl BunLockfile {
     // present in the lockfile
     fn package_entry(&self, key: &str) -> Option<(&str, &PackageEntry)> {
         let (key, entry) =
-            PossibleKeyIter::new(key).find_map(|k| self.packages.get_key_value(k))?;
+            PossibleKeyIter::new(key).find_map(|k| self.data.packages.get_key_value(k))?;
         Some((key, entry))
     }
 }
@@ -217,8 +224,8 @@ impl FromStr for BunLockfile {
         )
         .map_err(Error::from)?;
         let strict_json = format.print().map_err(Error::from)?;
-        let this = serde_json::from_str(strict_json.as_code())?;
-        Ok(this)
+        let data = serde_json::from_str(strict_json.as_code())?;
+        Ok(Self { data })
     }
 }
 impl PackageEntry {
