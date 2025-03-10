@@ -1,0 +1,55 @@
+import {
+  defineDocs,
+  defineConfig,
+  frontmatterSchema,
+} from "fumadocs-mdx/config";
+import { z } from "zod";
+
+export const { docs: repoDocs, meta: repoMeta } = defineDocs({
+  dir: "content/repo-docs",
+  docs: {
+    schema: frontmatterSchema,
+  },
+});
+
+export const { docs: extrasDocs, meta: extrasMeta } = defineDocs({
+  dir: "content/extra",
+  docs: {
+    schema: frontmatterSchema.extend({
+      description: z.string(),
+    }),
+  },
+});
+
+export const { docs: blogDocs, meta: blogMeta } = defineDocs({
+  dir: "content/blog",
+  docs: {
+    schema: frontmatterSchema
+      .extend({
+        description: z.string(),
+        date: z.string(),
+        tag: z.string(),
+        ogImage: z.string().startsWith("/images/blog/").endsWith("x-card.png"),
+      })
+      .strict(),
+  },
+});
+
+export const { docs: externalBlogDocs, meta: externalBlogMeta } = defineDocs({
+  dir: "content/external-blog",
+  docs: {
+    schema: frontmatterSchema.extend({
+      description: z.string(),
+      date: z.string(),
+      isExternal: z.literal(true),
+      href: z.string(),
+    }),
+  },
+});
+
+export const { docs: openapiDocs, meta: openapiMeta } = defineDocs({
+  dir: "content/openapi",
+});
+
+// eslint-disable-next-line import/no-default-export
+export default defineConfig();

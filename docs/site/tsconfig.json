@@ -1,0 +1,31 @@
+{
+  "extends": "@turbo/tsconfig/base.json",
+  "compilerOptions": {
+    "moduleResolution": "bundler",
+    "module": "preserve",
+    "jsx": "preserve",
+    "plugins": [
+      {
+        "name": "next",
+        "enabled": false
+      }
+    ],
+    "paths": {
+      "@/*": ["./*"],
+      "#/*": ["./*"]
+    },
+    "allowJs": true,
+    "target": "ES2017",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "noEmit": true,
+    "incremental": true
+  },
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    "scripts/sync-algolia.mts"
+  ],
+  "exclude": ["node_modules", "turbo"]
+}
