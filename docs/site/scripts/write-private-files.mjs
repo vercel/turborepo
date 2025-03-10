@@ -14,16 +14,8 @@ const FILES_TO_WRITE = [
     envVarKey: "SITE_ANALYTICS_MODULE_CODE",
   },
   {
-    path: "./lib/site-analytics/hooks/use-consent-banner.ts",
-    envVarKey: "CONSENT_HOOK_CODE",
-  },
-  {
     path: "./lib/site-analytics/index.ts",
     envVarKey: "SITE_ANALYTICS_MODULE_CODE",
-  },
-  {
-    path: "./components/consent-banner/analytics-scripts.tsx",
-    envVarKey: "ANALYTICS_SCRIPTS_COMPONENT_CODE",
   },
 ];
 
