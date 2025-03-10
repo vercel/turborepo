@@ -2,7 +2,6 @@ import * as fs from "node:fs";
 import algosearch from "algoliasearch";
 import env from "@next/env";
 import { sync } from "fumadocs-core/search/algolia";
-import { ALGOLIA_APP_ID } from "../lib/algolia-app-id.mjs";
 
 // We assume you're working in development if this is not provided.
 if (!process.env.NEXT_PUBLIC_ALGOLIA_INDEX) {
@@ -21,7 +20,10 @@ const content = fs.readFileSync(".next/server/app/static.json.body");
 /** @type {import('fumadocs-core/search/algolia').DocumentRecord[]} **/
 const indexes = JSON.parse(content.toString());
 
-const algoliaClient = algosearch(ALGOLIA_APP_ID, process.env.ALGOLIA_API_KEY);
+const algoliaClient = algosearch(
+  process.env.ALGOLIA_APP_ID,
+  process.env.ALGOLIA_API_KEY
+);
 
 const getDomain = () => {
   if (process.env.VERCEL_ENV === "production") {
