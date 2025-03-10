@@ -1,5 +1,7 @@
 import { writeFile } from "node:fs/promises";
 
+console.log(process.env);
+
 // List of files that get overwritten during CI.
 // These files have content from our closed source repos
 // but we still want the site to run smoothly for
