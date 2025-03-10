@@ -148,8 +148,6 @@ code {
     --shiki-token-link: var(--ds-green-900);
     --shiki-token-inserted: var(--ds-green-900);
     --shiki-token-deleted: var(--ds-red-900);
-
-    background: black;
   }
 }
 
@@ -271,10 +269,6 @@ code {
 
   --ds-background-100: hsla(var(--ds-background-100-value), 1);
   --ds-background-200: hsla(var(--ds-background-200-value), 1);
-
-  pre {
-    background: white;
-  }
 }
 
 .dark,
@@ -1203,4 +1197,12 @@ thead th:empty {
 
 #nd-home-layout {
   padding-top: 0;
+}
+
+pre {
+  background: white;
+}
+
+.dark pre {
+  background: black;
 }
