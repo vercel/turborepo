@@ -7,7 +7,7 @@ import FumaSearchDialog from "fumadocs-ui/components/dialog/search-algolia";
 import { usePathname } from "next/navigation";
 
 const client = algo(
-  process.env.ALGOLIA_APP_ID,
+  process.env.NEXT_PUBLIC_ALGOLIA_APP_ID,
   process.env.NEXT_PUBLIC_ALGOLIA_READ_KEY!
 );
 
