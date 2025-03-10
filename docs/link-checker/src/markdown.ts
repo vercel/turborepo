@@ -86,10 +86,7 @@ const markdownProcessor = unified()
   });
 
 const filePathToUrl = (filePath: string): string =>
-  filePath
-    .replace("repo-docs", "/repo/docs")
-    .replace("pack-docs", "/pack/docs")
-    .replace(".mdx", "");
+  filePath.replace("repo-docs", "/repo/docs").replace(".mdx", "");
 
 const validateFrontmatter = (path: string, data: Record<string, unknown>) => {
   if (!data.title) {
