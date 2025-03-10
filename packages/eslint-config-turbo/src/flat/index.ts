@@ -11,4 +11,4 @@ export default [
       "turbo/no-undeclared-env-vars": "error",
     },
   },
-] satisfies Linter.Config[];
+] satisfies Array<Linter.Config>;
