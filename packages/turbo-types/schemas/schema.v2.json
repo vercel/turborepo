@@ -88,6 +88,10 @@
           "$ref": "#/definitions/EnvMode",
           "description": "Turborepo's Environment Modes allow you to control which environment variables are available to a task at runtime:\n\n- `\"strict\"`: Filter environment variables to only those that are specified in the `env` and `globalEnv` keys in `turbo.json`.\n- `\"loose\"`: Allow all environment variables for the process to be available.\n\nDocumentation: https://turbo.build/repo/docs/reference/configuration#envmode",
           "default": "strict"
+        },
+        "boundaries": {
+          "$ref": "#/definitions/RootBoundariesConfig",
+          "description": "Configuration for `turbo boundaries`. Allows users to restrict a package's dependencies and dependents"
         }
       },
       "additionalProperties": false,
@@ -253,6 +257,60 @@
         "loose"
       ]
     },
+    "RootBoundariesConfig": {
+      "type": "object",
+      "properties": {
+        "implicitDependencies": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Declares any implicit dependencies, i.e. any dependency not declared in a package.json. These can include dependencies automatically injected by a framework or a testing library."
+        },
+        "tags": {
+          "$ref": "#/definitions/BoundariesRulesMap",
+          "description": "The boundaries rules for tags. Restricts which packages can import a tag and which packages a tag can import"
+        }
+      },
+      "additionalProperties": false
+    },
+    "BoundariesRulesMap": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "dependencies": {
+            "$ref": "#/definitions/Permissions",
+            "description": "Rules for a tag's dependencies. Restricts which packages a tag can import"
+          },
+          "dependents": {
+            "$ref": "#/definitions/Permissions",
+            "description": "Rules for a tag's dependents. Restricts which packages can import this tag."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "Permissions": {
+      "type": "object",
+      "properties": {
+        "allow": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Lists which tags are allowed. Any tag not included will be banned If omitted, all tags are permitted"
+        },
+        "deny": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Lists which tags are banned."
+        }
+      },
+      "additionalProperties": false
+    },
     "WorkspaceSchema": {
       "type": "object",
       "properties": {
@@ -278,6 +336,17 @@
           "default": [
             "//"
           ]
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Used to tag a package for boundaries rules. Boundaries rules can restrict which packages a tag group can import or be imported by."
+        },
+        "boundaries": {
+          "$ref": "#/definitions/BoundariesConfig",
+          "description": "Configuration for `turbo boundaries` that is specific to this package"
         }
       },
       "required": [
@@ -286,6 +355,19 @@
       ],
       "additionalProperties": false,
       "description": "A `turbo.json` file in a package in the monorepo (not the root)"
+    },
+    "BoundariesConfig": {
+      "type": "object",
+      "properties": {
+        "implicitDependencies": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Declares any implicit dependencies, i.e. any dependency not declared in a package.json. These can include dependencies automatically injected by a framework or a testing library."
+        }
+      },
+      "additionalProperties": false
     }
   }
 }
