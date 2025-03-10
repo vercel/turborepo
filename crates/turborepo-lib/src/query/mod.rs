@@ -705,10 +705,12 @@ impl RepositoryQuery {
             )?
             .expect("set allow unknown objects to false");
 
-        Ok(change_result
+        let files = change_result
             .into_iter()
             .map(|file| File::new(self.run.clone(), self.run.repo_root().resolve(&file)))
-            .collect())
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(Array::from(files))
     }
 
     /// Gets a list of packages that match the given filter
