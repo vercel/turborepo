@@ -30,6 +30,7 @@ pub enum Error {
 #[derive(Debug)]
 pub struct BunLockfile {
     data: BunLockfileData,
+    key_to_entry: Map<String, String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -136,15 +137,19 @@ impl Lockfile for BunLockfile {
         &self,
         key: &str,
     ) -> Result<Option<std::collections::HashMap<String, String>>, crate::Error> {
+        let entry_key = self
+            .key_to_entry
+            .get(key)
+            .ok_or_else(|| crate::Error::MissingPackage(key.into()))?;
         let entry = self
             .data
             .packages
-            .get(key)
+            .get(entry_key)
             .ok_or_else(|| crate::Error::MissingPackage(key.into()))?;
 
         let mut deps = HashMap::new();
         for (dependency, version) in entry.info.iter().flat_map(|info| info.all_dependencies()) {
-            let parent_key = format!("{key}/{dependency}");
+            let parent_key = format!("{entry_key}/{dependency}");
             let Some((dep_key, _)) = self.package_entry(&parent_key) else {
                 return Err(crate::Error::MissingPackage(dependency.to_string()));
             };
@@ -224,8 +229,12 @@ impl FromStr for BunLockfile {
         )
         .map_err(Error::from)?;
         let strict_json = format.print().map_err(Error::from)?;
-        let data = serde_json::from_str(strict_json.as_code())?;
-        Ok(Self { data })
+        let data: BunLockfileData = serde_json::from_str(strict_json.as_code())?;
+        let mut key_to_entry = Map::new();
+        for (path, info) in data.packages.iter() {
+            key_to_entry.insert(info.ident.clone(), path.clone());
+        }
+        Ok(Self { data, key_to_entry })
     }
 }
 impl PackageEntry {
