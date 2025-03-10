@@ -5,7 +5,6 @@ import { GeistMono } from "geist/font/mono";
 import type { ReactNode } from "react";
 import type { Metadata } from "next";
 import { Footer } from "@/app/_components/footer";
-import { AnalyticsScripts } from "@/components/consent-banner/analytics-scripts";
 import { RootProvider } from "@/components/root-provider";
 import { PRODUCT_SLOGANS } from "@/lib/constants";
 import { createMetadata } from "@/lib/create-metadata";
@@ -36,7 +35,6 @@ export default function Layout({
         <RootProvider>{children}</RootProvider>
         {shouldInjectToolbar ? <VercelToolbar /> : null}
         <Footer />
-        <AnalyticsScripts />
         <VercelTrackers />
       </body>
     </html>

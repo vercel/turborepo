@@ -43,12 +43,7 @@
     },
     "write-private-files": {
       "cache": false,
-      "env": [
-        "SITE_ANALYTICS_MODULE_CODE",
-        "CONSENT_HOOK_CODE",
-        "SITE_ANALYTICS_MODULE_CODE",
-        "ANALYTICS_SCRIPTS_COMPONENT_CODE"
-      ]
+      "env": ["SITE_ANALYTICS_MODULE_CODE", "SITE_ANALYTICS_MODULE_CODE"]
     },
     "index-docs": {
       "dependsOn": ["build"],
