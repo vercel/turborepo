@@ -47,7 +47,7 @@
     },
     "index-docs": {
       "dependsOn": ["build"],
-      "env": ["ALGOLIA_API_KEY", "NEXT_PUBLIC_ALGOLIA_INDEX"],
+      "env": ["ALGOLIA_APP_ID", "ALGOLIA_API_KEY", "NEXT_PUBLIC_ALGOLIA_INDEX"],
       "cache": false
     },
     "link-check": {
