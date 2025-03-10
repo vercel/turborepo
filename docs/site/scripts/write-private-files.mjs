@@ -1,7 +1,5 @@
 import { writeFile } from "node:fs/promises";
 
-console.log(process.env);
-
 // List of files that get overwritten during CI.
 // These files have content from our closed source repos
 // but we still want the site to run smoothly for
@@ -39,9 +37,7 @@ async function modifyFiles() {
       console.log(`Processing file: ${fileConfig.path}`);
 
       // Step 1: Delete the file's contents by writing an empty string
-      console.log(`Deleting contents of ${fileConfig.path}...`);
       await writeFile(fileConfig.path, "");
-      console.log("File contents deleted successfully.");
 
       const envVarContent = process.env[fileConfig.envVarKey];
       if (!envVarContent) {
@@ -49,13 +45,11 @@ async function modifyFiles() {
       }
 
       // Step 2: Write new contents to the file
-      console.log("Writing new contents...");
       await writeFile(fileConfig.path, envVarContent);
-      console.log("New contents written successfully.");
-
-      console.log(`File modification complete for ${fileConfig.path}!`);
+      console.log(`New contents written to ${fileConfig.path} successfully.`);
     } catch (error) {
       console.error(`Error modifying file ${fileConfig.path}:`, error.message);
+      process.exit(1);
     }
   }
 }
