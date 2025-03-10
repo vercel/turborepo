@@ -8,7 +8,7 @@ use std::{
     sync::{Arc, LazyLock, Mutex},
 };
 
-pub use config::{Permissions, RootBoundariesConfig, Rule};
+pub use config::{BoundariesConfig, Permissions, Rule};
 use git2::Repository;
 use globwalk::Settings;
 use miette::{Diagnostic, NamedSource, Report, SourceSpan};
@@ -31,8 +31,9 @@ use turborepo_repository::package_graph::{PackageInfo, PackageName, PackageNode}
 use turborepo_ui::{color, ColorConfig, BOLD_GREEN, BOLD_RED};
 
 use crate::{
-    boundaries::{tags::ProcessedRulesMap, tsconfig::TsConfigLoader},
+    boundaries::{imports::DependencyLocations, tags::ProcessedRulesMap, tsconfig::TsConfigLoader},
     run::Run,
+    turbo_json::TurboJson,
 };
 
 #[derive(Clone, Debug, Error, Diagnostic)]
@@ -211,12 +212,11 @@ impl BoundariesResult {
 
 impl Run {
     pub async fn check_boundaries(&self) -> Result<BoundariesResult, Error> {
-        let package_tags = self.get_package_tags();
         let rules_map = self.get_processed_rules_map();
         let packages: Vec<_> = self.pkg_dep_graph().packages().collect();
         let repo = Repository::discover(self.repo_root()).ok().map(Mutex::new);
         let mut result = BoundariesResult::default();
-
+        let global_implicit_dependencies = self.get_implicit_dependencies(&PackageName::Root);
         for (package_name, package_info) in packages {
             if !self.filtered_pkgs().contains(package_name)
                 || matches!(package_name, PackageName::Root)
@@ -228,8 +228,8 @@ impl Run {
                 &repo,
                 package_name,
                 package_info,
-                &package_tags,
                 &rules_map,
+                &global_implicit_dependencies,
                 &mut result,
             )
             .await?;
@@ -251,6 +251,19 @@ impl Run {
         None
     }
 
+    pub fn get_implicit_dependencies(&self, pkg: &PackageName) -> HashMap<String, Spanned<()>> {
+        self.turbo_json_loader()
+            .load(pkg)
+            .ok()
+            .and_then(|turbo_json| turbo_json.boundaries.as_ref())
+            .and_then(|boundaries| boundaries.implicit_dependencies.as_ref())
+            .into_iter()
+            .flatten()
+            .flatten()
+            .map(|dep| dep.clone().split())
+            .collect::<HashMap<_, _>>()
+    }
+
     /// Either returns a list of errors and number of files checked or a single,
     /// fatal error
     async fn check_package(
@@ -258,19 +271,29 @@ impl Run {
         repo: &Option<Mutex<Repository>>,
         package_name: &PackageName,
         package_info: &PackageInfo,
-        all_package_tags: &HashMap<PackageName, Spanned<Vec<Spanned<String>>>>,
         tag_rules: &Option<ProcessedRulesMap>,
+        global_implicit_dependencies: &HashMap<String, Spanned<()>>,
         result: &mut BoundariesResult,
     ) -> Result<(), Error> {
-        self.check_package_files(repo, package_name, package_info, result)
-            .await?;
+        let implicit_dependencies = self.get_implicit_dependencies(package_name);
+        self.check_package_files(
+            repo,
+            package_name,
+            package_info,
+            implicit_dependencies,
+            global_implicit_dependencies,
+            result,
+        )
+        .await?;
 
-        if let Some(current_package_tags) = all_package_tags.get(package_name) {
+        if let Ok(TurboJson {
+            tags: Some(tags), ..
+        }) = self.turbo_json_loader().load(package_name)
+        {
             if let Some(tag_rules) = tag_rules {
                 result.diagnostics.extend(self.check_package_tags(
                     PackageNode::Workspace(package_name.clone()),
-                    current_package_tags,
-                    all_package_tags,
+                    tags,
                     tag_rules,
                 )?);
             } else {
@@ -297,6 +320,8 @@ impl Run {
         repo: &Option<Mutex<Repository>>,
         package_name: &PackageName,
         package_info: &PackageInfo,
+        implicit_dependencies: HashMap<String, Spanned<()>>,
+        global_implicit_dependencies: &HashMap<String, Spanned<()>>,
         result: &mut BoundariesResult,
     ) -> Result<(), Error> {
         let package_root = self.repo_root().resolve(package_info.package_path());
@@ -393,6 +418,14 @@ impl Run {
             // Visit the AST and find imports
             let mut finder = ImportFinder::default();
             module.visit_with(&mut finder);
+            let dependency_locations = DependencyLocations {
+                internal_dependencies: &internal_dependencies,
+                package_json: &package_info.package_json,
+                implicit_dependencies: &implicit_dependencies,
+                global_implicit_dependencies,
+                unresolved_external_dependencies,
+            };
+
             for (import, span, import_type) in finder.imports() {
                 self.check_import(
                     &comments,
@@ -406,9 +439,7 @@ impl Run {
                     span,
                     file_path,
                     &file_content,
-                    package_info,
-                    &internal_dependencies,
-                    unresolved_external_dependencies,
+                    dependency_locations,
                     &resolver,
                 )?;
             }

@@ -177,7 +177,7 @@ mod tests {
 
             let live_ci = if Vendor::get_name() == Some("GitHub Actions") {
                 let live_ci = std::env::var("GITHUB_ACTIONS").unwrap_or_default();
-                env::remove_var("GITHUB_ACTIONS");
+                unsafe { env::remove_var("GITHUB_ACTIONS") };
                 Some(live_ci)
             } else {
                 None
@@ -187,23 +187,23 @@ mod tests {
                 let mut env_parts = env.split('=');
                 let key = env_parts.next().unwrap();
                 let val = env_parts.next().unwrap_or("some value");
-                env::set_var(key, val);
+                unsafe { env::set_var(key, val) };
             }
 
             assert_eq!(Vendor::infer_inner(), want.as_ref());
 
             if Vendor::get_name() == Some("GitHub Actions") {
                 if let Some(live_ci) = live_ci {
-                    env::set_var("GITHUB_ACTIONS", live_ci);
+                    unsafe { env::set_var("GITHUB_ACTIONS", live_ci) };
                 } else {
-                    env::remove_var("GITHUB_ACTIONS");
+                    unsafe { env::remove_var("GITHUB_ACTIONS") };
                 }
             }
 
             for env in set_env {
                 let mut env_parts = env.split('=');
                 let key = env_parts.next().unwrap();
-                env::remove_var(key);
+                unsafe { env::remove_var(key) };
             }
         }
     }

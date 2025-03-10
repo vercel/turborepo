@@ -213,7 +213,7 @@ impl Variance {
     /// Returns `None` if variant.
     pub fn path(&self) -> Option<&Path> {
         match self {
-            Variance::Invariant(ref path) => Some(path),
+            Variance::Invariant(path) => Some(path),
             Variance::Variant => None,
         }
     }

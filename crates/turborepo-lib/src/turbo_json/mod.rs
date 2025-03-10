@@ -31,7 +31,7 @@ pub mod parser;
 
 pub use loader::TurboJsonLoader;
 
-use crate::{boundaries::RootBoundariesConfig, config::UnnecessaryPackageTaskSyntaxError};
+use crate::{boundaries::BoundariesConfig, config::UnnecessaryPackageTaskSyntaxError};
 
 #[derive(Serialize, Deserialize, Debug, Default, PartialEq, Clone, Deserializable)]
 #[serde(rename_all = "camelCase")]
@@ -54,7 +54,7 @@ pub struct TurboJson {
     text: Option<Arc<str>>,
     path: Option<Arc<str>>,
     pub(crate) tags: Option<Spanned<Vec<Spanned<String>>>>,
-    pub(crate) boundaries: Option<Spanned<RootBoundariesConfig>>,
+    pub(crate) boundaries: Option<Spanned<BoundariesConfig>>,
     pub(crate) extends: Spanned<Vec<String>>,
     pub(crate) global_deps: Vec<String>,
     pub(crate) global_env: Vec<String>,
@@ -153,7 +153,7 @@ pub struct RawTurboJson {
     pub tags: Option<Spanned<Vec<Spanned<String>>>>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub boundaries: Option<Spanned<RootBoundariesConfig>>,
+    pub boundaries: Option<Spanned<BoundariesConfig>>,
 
     #[deserializable(rename = "//")]
     #[serde(skip)]
@@ -777,7 +777,7 @@ mod tests {
 
     use super::{RawTurboJson, SpacesJson, Spanned, TurboJson, UIMode};
     use crate::{
-        boundaries::RootBoundariesConfig,
+        boundaries::BoundariesConfig,
         cli::OutputLogsMode,
         run::task_id::TaskName,
         task_graph::{TaskDefinition, TaskOutputs},
@@ -816,15 +816,35 @@ mod tests {
     }"#,
         "tags and dependents"
     )]
+    #[test_case(
+        r#"{
+            "implicitDependencies": ["my-package"],
+        }"#,
+        "implicit dependencies"
+    )]
+    #[test_case(
+        r#"{
+            "implicitDependencies": ["my-package"],
+            "tags": {
+                "my-tag": {
+                    "dependents": {
+                        "allow": ["my-package"],
+                        "deny": ["my-other-package"]
+                    }
+                }
+            },
+        }"#,
+        "implicit dependencies and tags"
+    )]
     fn test_deserialize_boundaries(json: &str, name: &str) {
         let deserialized_result = deserialize_from_json_str(
             json,
             JsonParserOptions::default().with_allow_comments(),
             "turbo.json",
         );
-        let raw_task_definition: RootBoundariesConfig =
+        let raw_boundaries_config: BoundariesConfig =
             deserialized_result.into_deserialized().unwrap();
-        insta::assert_json_snapshot!(name.replace(' ', "_"), raw_task_definition);
+        insta::assert_json_snapshot!(name.replace(' ', "_"), raw_boundaries_config);
     }
 
     #[test_case(
