@@ -92,6 +92,11 @@ const config = {
         permanent: true,
       },
       {
+        source: "/discord{/}?",
+        destination: "https://vercel.community/tag/turborepo",
+        permanent: true,
+      },
+      {
         source: "/docs/changelog",
         destination: "https://github.com/vercel/turbo/releases",
         permanent: true,
