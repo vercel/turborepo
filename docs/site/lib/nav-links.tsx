@@ -6,6 +6,7 @@ import {
 import type { LinkItemType } from "fumadocs-ui/layouts/links";
 
 export const navLinks: LinkItemType[] = [
+  { url: "/repo/docs", text: "Docs", icon: <BookOpenIcon /> },
   { url: "/blog", text: "Blog", icon: <BookOpenIcon /> },
   { url: "/showcase", text: "Showcase", icon: <StarIcon /> },
   {

@@ -4,6 +4,7 @@ import {
   frontmatterSchema,
 } from "fumadocs-mdx/config";
 import { z } from "zod";
+import { createCssVariablesTheme } from "shiki";
 
 export const { docs: repoDocs, meta: repoMeta } = defineDocs({
   dir: "content/repo-docs",
@@ -51,5 +52,20 @@ export const { docs: openapiDocs, meta: openapiMeta } = defineDocs({
   dir: "content/openapi",
 });
 
+const theme = createCssVariablesTheme({
+  name: "css-variables",
+  variablePrefix: "--shiki-",
+  variableDefaults: {},
+});
+
 // eslint-disable-next-line import/no-default-export
-export default defineConfig();
+export default defineConfig({
+  mdxOptions: {
+    rehypeCodeOptions: {
+      themes: {
+        light: theme,
+        dark: theme,
+      },
+    },
+  },
+});

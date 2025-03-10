@@ -133,6 +133,24 @@ code {
   --vaul-overlay-background: 255, 255, 255;
   --vaul-overlay-background-start: rgba(0, 0, 0, 0);
   --vaul-overlay-background-end: rgba(0, 0, 0, 0.4);
+
+  pre {
+    --shiki-color-text: var(--ds-gray-1000);
+    --shiki-background: transparent;
+    --shiki-token-constant: var(--ds-blue-900);
+    --shiki-token-string: var(--ds-green-900);
+    --shiki-token-comment: var(--ds-gray-900);
+    --shiki-token-keyword: var(--ds-pink-900);
+    --shiki-token-parameter: var(--ds-amber-900);
+    --shiki-token-function: var(--ds-purple-900);
+    --shiki-token-string-expression: var(--ds-green-900);
+    --shiki-token-punctuation: var(--ds-gray-1000);
+    --shiki-token-link: var(--ds-green-900);
+    --shiki-token-inserted: var(--ds-green-900);
+    --shiki-token-deleted: var(--ds-red-900);
+
+    background: black;
+  }
 }
 
 :root,
@@ -253,6 +271,10 @@ code {
 
   --ds-background-100: hsla(var(--ds-background-100-value), 1);
   --ds-background-200: hsla(var(--ds-background-200-value), 1);
+
+  pre {
+    background: white;
+  }
 }
 
 .dark,
