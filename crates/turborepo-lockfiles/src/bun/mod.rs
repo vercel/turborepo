@@ -290,9 +290,9 @@ mod test {
     .as_slice();
     const CHALK_DEPS: &[&str] = ["ansi-styles", "supports-color"].as_slice();
 
-    #[test_case("@turbo/gen", TURBO_GEN_DEPS)]
-    #[test_case("@turbo/gen/chalk", TURBO_GEN_CHALK_DEPS)]
-    #[test_case("chalk", CHALK_DEPS)]
+    #[test_case("@turbo/gen@1.13.4", TURBO_GEN_DEPS)]
+    #[test_case("chalk@2.4.2", TURBO_GEN_CHALK_DEPS)]
+    #[test_case("chalk@4.1.2", CHALK_DEPS)]
     fn test_all_dependencies(key: &str, expected: &[&str]) {
         let lockfile = BunLockfile::from_str(BASIC_LOCKFILE).unwrap();
         let mut expected = expected.to_vec();
