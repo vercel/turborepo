@@ -255,10 +255,10 @@ impl File {
                     .packages()
                     .map(|(name, _)| Package::new(self.run.clone(), name.clone()))
                     .collect::<Result<Vec<_>, Error>>()?;
-                
+
                 packages.sort_by(|a, b| a.get_name().cmp(b.get_name()));
                 Ok(Array::from(packages))
-            },
+            }
             Ok(Some(PackageMapping::Package(package))) => {
                 let node: PackageNode = PackageNode::Workspace(package.get_name().clone());
                 let mut ancestors = self
