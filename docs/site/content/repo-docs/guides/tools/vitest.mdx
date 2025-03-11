@@ -191,7 +191,7 @@ With this in place, run `turbo test && turbo report` to create a merged coverage
 
 ### Using Vitest's Workspace feature
 
-The Vitest Workspace feature doesn't follow the same model as a [package manager Workspace](/repo/docs/crafting-your-repository/structuring-a-repository). Instead, it uses a root script that then reaches out into each package in the repository to handle the tests in that repsective package.
+The Vitest Workspace feature doesn't follow the same model as a [package manager Workspace](/repo/docs/crafting-your-repository/structuring-a-repository). Instead, it uses a root script that then reaches out into each package in the repository to handle the tests in that respective package.
 
 In this model, there aren't package boundaries, from a modern JavaScript ecosystem perspective. This means you can't rely on Turborepo's caching, since Turborepo leans on those package boundaries.
 
