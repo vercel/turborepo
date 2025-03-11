@@ -204,6 +204,13 @@ pub enum Error {
     },
     #[error("Cannot load turbo.json for {0} in single package mode.")]
     InvalidTurboJsonLoad(PackageName),
+    #[error("Cannot use '$TURBO_ROOT$' anywhere besides start of string.")]
+    InvalidTurboRootUse {
+        #[label("must be at start")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource<String>,
+    },
 }
 
 const DEFAULT_API_URL: &str = "https://vercel.com/api";

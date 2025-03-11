@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use convert_case::{Case, Casing};
 use itertools::Itertools;
 use miette::{Diagnostic, NamedSource, SourceSpan};
-use turbopath::AbsoluteSystemPath;
+use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf, RelativeUnixPathBuf};
 use turborepo_errors::{Spanned, TURBO_SITE};
 use turborepo_graph_utils as graph;
 use turborepo_repository::package_graph::{PackageGraph, PackageName, PackageNode, ROOT_PKG_NAME};
@@ -568,8 +568,11 @@ impl<'a> EngineBuilder<'a> {
             task_id,
             task_name,
         )?);
-
-        Ok(TaskDefinition::try_from(raw_task_definition)?)
+        let path_to_root = self.path_to_root(task_id.as_inner())?;
+        Ok(TaskDefinition::from_raw(
+            raw_task_definition,
+            &path_to_root,
+        )?)
     }
 
     fn task_definition_chain(
@@ -637,6 +640,22 @@ impl<'a> EngineBuilder<'a> {
         }
 
         Ok(task_definitions)
+    }
+
+    // Returns that path from a task's package directory to the repo root
+    fn path_to_root(&self, task_id: &TaskId) -> Result<RelativeUnixPathBuf, Error> {
+        let package_name = PackageName::from(task_id.package());
+        let pkg_path = self
+            .package_graph
+            .package_dir(&package_name)
+            .ok_or_else(|| Error::MissingPackageJson {
+                workspace: package_name,
+            })?;
+        Ok(AnchoredSystemPathBuf::relative_path_between(
+            &self.repo_root.resolve(pkg_path),
+            self.repo_root,
+        )
+        .to_unix())
     }
 }
 
@@ -1593,6 +1612,47 @@ mod test {
             engine.tasks().collect::<Vec<_>>(),
             &[&TaskNode::Root],
             "only the root task node should be present"
+        );
+    }
+
+    #[test]
+    fn test_path_to_root() {
+        let repo_root_dir = TempDir::with_prefix("repo").unwrap();
+        let repo_root = AbsoluteSystemPathBuf::new(repo_root_dir.path().to_str().unwrap()).unwrap();
+        let package_graph = mock_package_graph(
+            &repo_root,
+            package_jsons! {
+                repo_root,
+                "app1" => ["libA"],
+                "libA" => []
+            },
+        );
+        let turbo_jsons = vec![(
+            PackageName::Root,
+            turbo_json(json!({
+                "tasks": {
+                    "build": { "dependsOn": ["^build"] },
+                }
+            })),
+        )]
+        .into_iter()
+        .collect();
+        let loader = TurboJsonLoader::noop(turbo_jsons);
+        let engine = EngineBuilder::new(&repo_root, &package_graph, &loader, false);
+        assert_eq!(
+            engine
+                .path_to_root(&TaskId::new("//", "build"))
+                .unwrap()
+                .as_str(),
+            "."
+        );
+        // libA is located at packages/libA
+        assert_eq!(
+            engine
+                .path_to_root(&TaskId::new("libA", "build"))
+                .unwrap()
+                .as_str(),
+            "../.."
         );
     }
 }
