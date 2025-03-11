@@ -587,7 +587,7 @@ pub enum Command {
     Boundaries {
         #[clap(short = 'F', long, group = "scope-filter-group")]
         filter: Vec<String>,
-        #[clap(long, value_enum)]
+        #[clap(long, value_enum, default_missing_value = "prompt", num_args = 0..=1)]
         ignore: Option<BoundariesIgnore>,
         #[clap(long, requires = "ignore")]
         reason: Option<String>,
@@ -3335,6 +3335,22 @@ mod test {
     #[test_case::test_case(&["turbo", "--filter=foo", "boundaries"], false; "execution args")]
     #[test_case::test_case(&["turbo", "--no-daemon", "boundaries"], false; "run args")]
     fn test_no_run_args_before_boundaries(args: &[&str], is_okay: bool) {
+        let os_args = args.iter().map(|s| OsString::from(*s)).collect();
+        let cli = Args::parse(os_args);
+        if is_okay {
+            cli.unwrap();
+        } else {
+            let err = cli.unwrap_err();
+            assert_snapshot!(args.join("-").as_str(), err);
+        }
+    }
+
+    #[test_case::test_case(&["turbo", "boundaries"], true; "empty")]
+    #[test_case::test_case(&["turbo", "boundaries", "--ignore"], true; "with ignore")]
+    #[test_case::test_case(&["turbo", "boundaries", "--ignore", "all"], true; "with ignore all")]
+    #[test_case::test_case(&["turbo", "boundaries", "--ignore", "prompt"], true; "with ignore prompt")]
+    #[test_case::test_case(&["turbo", "boundaries", "--filter", "ui"], true; "with filter")]
+    fn test_boundaries(args: &[&str], is_okay: bool) {
         let os_args = args.iter().map(|s| OsString::from(*s)).collect();
         let cli = Args::parse(os_args);
         if is_okay {

@@ -37,13 +37,14 @@ pub async fn run(
                     "automatically added by `turbo boundaries --ignore=all`".to_string()
                 })),
                 BoundariesIgnore::Prompt => {
-                    print!("\x1B[2J\x1B[1;1H");
+                    print!("{esc}c", esc = 27 as char);
+                    println!();
+                    println!();
                     println!("{:?}", Report::new(diagnostic.clone()));
-                    let short_path = match run.repo_root().anchor(path) {
-                        Ok(path) => path.to_string(),
-                        Err(_) => path.to_string(),
-                    };
-                    let prompt = format!("Add @boundaries-ignore to {}?", short_path);
+                    let prompt = format!(
+                        "Ignore this error by adding a {} comment?",
+                        color!(run.color_config(), BOLD_GREEN, "@boundaries-ignore"),
+                    );
                     if Confirm::new()
                         .with_prompt(prompt)
                         .default(false)
