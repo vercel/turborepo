@@ -16,7 +16,7 @@ Should you wish to see working [examples](#examples) instead of reading
 
 ## Credits
 
-This project is rather cookbook combing various projects into one. Special to [osxcross](https://github.com/tpoechtrager/osxcross) for amazing cross-compile environment for OSX.
+This project is rather cookbook combining various projects into one. Special to [osxcross](https://github.com/tpoechtrager/osxcross) for amazing cross-compile environment for OSX.
 
 ## Docker
 
