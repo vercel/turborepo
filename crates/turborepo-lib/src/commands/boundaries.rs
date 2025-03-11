@@ -45,6 +45,7 @@ pub async fn run(
                     "automatically added by `turbo boundaries --ignore=all`".to_string()
                 })),
                 BoundariesIgnore::Prompt => {
+                    print!("\x1B[2J\x1B[1;1H");
                     println!("{:?}", Report::new(diagnostic.clone()));
                     let prompt = format!("Add @boundaries-ignore to {}?", short_path);
                     if Confirm::new()
