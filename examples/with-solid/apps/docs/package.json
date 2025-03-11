@@ -1,0 +1,34 @@
+{
+  "name": "docs",
+  "scripts": {
+    "dev": "vinxi dev",
+    "build": "vinxi build",
+    "start": "vinxi start",
+    "test": "vitest run",
+    "test-watch": "vitest",
+    "test-ui": "vitest --ui"
+  },
+  "type": "module",
+  "dependencies": {
+    "@repo/ui": "workspace:*",
+    "@tailwindcss/vite": "^4.0.9",
+    "tailwindcss": "^4.0.9"
+  },
+  "devDependencies": {
+    "@repo/eslint-config": "workspace:*",
+    "@repo/tailwind-config": "workspace:*",
+    "@solidjs/meta": "^0.29.4",
+    "@solidjs/router": "^0.15.0",
+    "@solidjs/start": "^1.1.0",
+    "@solidjs/testing-library": "^0.8.10",
+    "@testing-library/jest-dom": "^6.6.2",
+    "@testing-library/user-event": "^14.5.2",
+    "@vitest/ui": "3.0.5",
+    "jsdom": "^25.0.1",
+    "solid-js": "^1.9.3",
+    "typescript": "^5.6.3",
+    "vinxi": "^0.5.3",
+    "vite-plugin-solid": "^2.11.6",
+    "vitest": "3.0.5"
+  }
+}
