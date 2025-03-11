@@ -1,7 +1,8 @@
-use std::collections::HashSet;
+use std::collections::HashMap;
 
 use dialoguer::{Confirm, Input};
-use miette::Report;
+use miette::{Report, SourceSpan};
+use turbopath::AbsoluteSystemPath;
 use turborepo_signals::{listeners::get_signal, SignalHandler};
 use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_ui::{color, BOLD_GREEN};
@@ -25,19 +26,10 @@ pub async fn run(
     let result = run.check_boundaries().await?;
 
     if let Some(ignore) = ignore {
-        let mut seen_locations = HashSet::new();
+        let mut patches: HashMap<&AbsoluteSystemPath, Vec<(SourceSpan, String)>> = HashMap::new();
         for diagnostic in &result.diagnostics {
             let Some((path, span)) = diagnostic.path_and_span() else {
                 continue;
-            };
-            if seen_locations.contains(&(path, span)) {
-                continue;
-            }
-            seen_locations.insert((path, span));
-
-            let short_path = match run.repo_root().anchor(path) {
-                Ok(path) => path.to_string(),
-                Err(_) => path.to_string(),
             };
 
             let reason = match ignore {
@@ -47,6 +39,10 @@ pub async fn run(
                 BoundariesIgnore::Prompt => {
                     print!("\x1B[2J\x1B[1;1H");
                     println!("{:?}", Report::new(diagnostic.clone()));
+                    let short_path = match run.repo_root().anchor(path) {
+                        Ok(path) => path.to_string(),
+                        Err(_) => path.to_string(),
+                    };
                     let prompt = format!("Add @boundaries-ignore to {}?", short_path);
                     if Confirm::new()
                         .with_prompt(prompt)
@@ -69,13 +65,21 @@ pub async fn run(
             };
 
             if let Some(reason) = reason {
-                println!(
-                    "{} {}",
-                    color!(run.color_config(), BOLD_GREEN, "patching"),
-                    short_path
-                );
-                run.add_ignore(path, span, reason)?;
+                patches.entry(path).or_default().push((span, reason));
             }
+        }
+
+        for (path, file_patches) in patches {
+            let short_path = match run.repo_root().anchor(path) {
+                Ok(path) => path.to_string(),
+                Err(_) => path.to_string(),
+            };
+            println!(
+                "{} {}",
+                color!(run.color_config(), BOLD_GREEN, "patching"),
+                short_path
+            );
+            run.patch_file(path, file_patches)?;
         }
     } else {
         result.emit(run.color_config());

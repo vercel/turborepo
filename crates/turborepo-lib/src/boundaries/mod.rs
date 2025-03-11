@@ -4,7 +4,7 @@ mod tags;
 mod tsconfig;
 
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     fs::OpenOptions,
     io::Write,
     sync::{Arc, LazyLock, Mutex},
@@ -13,6 +13,7 @@ use std::{
 pub use config::{BoundariesConfig, Permissions, Rule};
 use git2::Repository;
 use globwalk::Settings;
+use indicatif::ProgressIterator;
 use miette::{Diagnostic, NamedSource, Report, SourceSpan};
 use regex::Regex;
 use swc_common::{
@@ -235,7 +236,8 @@ impl Run {
         let repo = Repository::discover(self.repo_root()).ok().map(Mutex::new);
         let mut result = BoundariesResult::default();
         let global_implicit_dependencies = self.get_implicit_dependencies(&PackageName::Root);
-        for (package_name, package_info) in packages {
+        println!("Checking packages...");
+        for (package_name, package_info) in packages.into_iter().progress() {
             if !self.filtered_pkgs().contains(package_name)
                 || matches!(package_name, PackageName::Root)
             {
@@ -475,42 +477,55 @@ impl Run {
         Ok(())
     }
 
-    pub fn add_ignore(
+    pub fn patch_file(
         &self,
         file_path: &AbsoluteSystemPath,
-        span: SourceSpan,
-        reason: String,
+        file_patches: Vec<(SourceSpan, String)>,
     ) -> Result<(), Error> {
+        // Deduplicate and sort by offset
+        let file_patches = file_patches
+            .into_iter()
+            .map(|(span, patch)| (span.offset(), patch.into()))
+            .collect::<BTreeMap<usize, String>>();
+
         let contents = file_path
             .read_to_string()
             .map_err(|_| Error::FileNotFound(file_path.to_owned()))?;
-        let contents_before_span = &contents[..span.offset()];
 
-        // Find the last newline before the span
-        let newline_idx = contents_before_span.rfind('\n');
         let mut options = OpenOptions::new();
         options.read(true).write(true).truncate(true);
         let mut file = file_path
             .open_with_options(options)
             .map_err(|_| Error::FileNotFound(file_path.to_owned()))?;
 
-        if let Some(newline_idx) = newline_idx {
-            file.write_all(contents[..newline_idx].as_bytes())
-                .map_err(|_| Error::FileWriteError(file_path.to_owned()))?;
-            file.write_all(b"\n")
-                .map_err(|_| Error::FileWriteError(file_path.to_owned()))?;
+        let mut last_idx = 0;
+        for (idx, reason) in file_patches {
+            let contents_before_span = &contents[last_idx..idx];
+
+            // Find the last newline before the span (note this is the index into the slice,
+            // not the full file)
+            let newline_idx = contents_before_span.rfind('\n');
+
+            // If newline exists, we write all the contents before newline
+            if let Some(newline_idx) = newline_idx {
+                file.write_all(contents[last_idx..(last_idx + newline_idx)].as_bytes())
+                    .map_err(|_| Error::FileWriteError(file_path.to_owned()))?;
+                file.write_all(b"\n")
+                    .map_err(|_| Error::FileWriteError(file_path.to_owned()))?;
+            }
+
             file.write_all(b"// @boundaries-ignore ")
                 .map_err(|_| Error::FileWriteError(file_path.to_owned()))?;
             file.write_all(reason.as_bytes())
                 .map_err(|_| Error::FileWriteError(file_path.to_owned()))?;
-            file.write_all(contents[newline_idx..].as_bytes())
+            file.write_all(b"\n")
                 .map_err(|_| Error::FileWriteError(file_path.to_owned()))?;
-        } else {
-            file.write_all(b"// @boundaries-ignore\n")
-                .map_err(|_| Error::FileWriteError(file_path.to_owned()))?;
-            file.write_all(contents.as_bytes())
-                .map_err(|_| Error::FileWriteError(file_path.to_owned()))?;
+
+            last_idx = idx;
         }
+
+        file.write_all(contents[last_idx..].as_bytes())
+            .map_err(|_| Error::FileWriteError(file_path.to_owned()))?;
 
         Ok(())
     }
