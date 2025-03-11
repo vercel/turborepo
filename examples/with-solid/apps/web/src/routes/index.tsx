@@ -1,4 +1,3 @@
-import { App } from "@repo/ui";
 import { Title } from "@solidjs/meta";
 import Counter from "~/components/Counter";
 
@@ -15,7 +14,6 @@ export default function Home() {
         </a>{" "}
         to learn how to build SolidStart apps.
       </p>
-      <App/>
     </main>
   );
 }
