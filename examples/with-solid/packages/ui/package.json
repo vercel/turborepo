@@ -4,6 +4,9 @@
   "description": "This is solidJS UI library package.",
   "type": "module",
   "main": "index.ts",
+  "sideEffects": [
+    "**/*.css"
+  ],
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "lint": "eslint . --max-warnings 0"
@@ -21,6 +24,10 @@
     "@tailwindcss/vite": "^4.0.9",
     "eslint": "^9.21.0",
     "solid-js": "^1.9.5",
-    "tailwindcss": "^4.0.9"
+    "tailwindcss": "^4.0.9",
+    "clsx": "^2.1.1",
+    "path": "^0.12.7",
+    "tailwind-merge": "^3.0.1",
+    "vite-tsconfig-paths": "^5.1.4"
   }
 }
