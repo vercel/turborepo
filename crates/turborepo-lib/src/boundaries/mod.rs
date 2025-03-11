@@ -5,6 +5,8 @@ mod tsconfig;
 
 use std::{
     collections::{HashMap, HashSet},
+    fs::OpenOptions,
+    io::Write,
     sync::{Arc, LazyLock, Mutex},
 };
 
@@ -25,7 +27,7 @@ use swc_ecma_visit::VisitWith;
 use thiserror::Error;
 use tracing::log::warn;
 use turbo_trace::{ImportFinder, Tracer};
-use turbopath::AbsoluteSystemPathBuf;
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_errors::Spanned;
 use turborepo_repository::package_graph::{PackageInfo, PackageName, PackageNode};
 use turborepo_ui::{color, ColorConfig, BOLD_GREEN, BOLD_RED};
@@ -97,6 +99,7 @@ pub enum BoundariesDiagnostic {
     )]
     #[help("add `type` to the import declaration")]
     NotTypeOnlyImport {
+        path: AbsoluteSystemPathBuf,
         import: String,
         #[label("package imported here")]
         span: SourceSpan,
@@ -105,6 +108,7 @@ pub enum BoundariesDiagnostic {
     },
     #[error("cannot import package `{name}` because it is not a dependency")]
     PackageNotFound {
+        path: AbsoluteSystemPathBuf,
         name: String,
         #[label("package imported here")]
         span: SourceSpan,
@@ -116,6 +120,7 @@ pub enum BoundariesDiagnostic {
         "`{import}` resolves to path `{resolved_import_path}` which is outside of `{package_name}`"
     ))]
     ImportLeavesPackage {
+        path: AbsoluteSystemPathBuf,
         import: String,
         resolved_import_path: String,
         package_name: PackageName,
@@ -142,6 +147,19 @@ pub enum Error {
     GlobWalk(#[from] globwalk::WalkError),
     #[error("failed to read file: {0}")]
     FileNotFound(AbsoluteSystemPathBuf),
+    #[error("failed to write to file: {0}")]
+    FileWriteError(AbsoluteSystemPathBuf),
+}
+
+impl BoundariesDiagnostic {
+    pub fn path_and_span(&self) -> Option<(&AbsoluteSystemPath, SourceSpan)> {
+        match self {
+            Self::ImportLeavesPackage { path, span, .. } => Some((path, *span)),
+            Self::PackageNotFound { path, span, .. } => Some((path, *span)),
+            Self::NotTypeOnlyImport { path, span, .. } => Some((path, *span)),
+            _ => None,
+        }
+    }
 }
 
 static PACKAGE_NAME_REGEX: LazyLock<Regex> = LazyLock::new(|| {
@@ -453,6 +471,46 @@ impl Run {
         }
 
         result.files_checked += files.len();
+
+        Ok(())
+    }
+
+    pub fn add_ignore(
+        &self,
+        file_path: &AbsoluteSystemPath,
+        span: SourceSpan,
+        reason: String,
+    ) -> Result<(), Error> {
+        let contents = file_path
+            .read_to_string()
+            .map_err(|_| Error::FileNotFound(file_path.to_owned()))?;
+        let contents_before_span = &contents[..span.offset()];
+
+        // Find the last newline before the span
+        let newline_idx = contents_before_span.rfind('\n');
+        let mut options = OpenOptions::new();
+        options.read(true).write(true).truncate(true);
+        let mut file = file_path
+            .open_with_options(options)
+            .map_err(|_| Error::FileNotFound(file_path.to_owned()))?;
+
+        if let Some(newline_idx) = newline_idx {
+            file.write_all(contents[..newline_idx].as_bytes())
+                .map_err(|_| Error::FileWriteError(file_path.to_owned()))?;
+            file.write_all(b"\n")
+                .map_err(|_| Error::FileWriteError(file_path.to_owned()))?;
+            file.write_all(b"// @boundaries-ignore ")
+                .map_err(|_| Error::FileWriteError(file_path.to_owned()))?;
+            file.write_all(reason.as_bytes())
+                .map_err(|_| Error::FileWriteError(file_path.to_owned()))?;
+            file.write_all(contents[newline_idx..].as_bytes())
+                .map_err(|_| Error::FileWriteError(file_path.to_owned()))?;
+        } else {
+            file.write_all(b"// @boundaries-ignore\n")
+                .map_err(|_| Error::FileWriteError(file_path.to_owned()))?;
+            file.write_all(contents.as_bytes())
+                .map_err(|_| Error::FileWriteError(file_path.to_owned()))?;
+        }
 
         Ok(())
     }

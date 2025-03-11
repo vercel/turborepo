@@ -587,6 +587,10 @@ pub enum Command {
     Boundaries {
         #[clap(short = 'F', long, group = "scope-filter-group")]
         filter: Vec<String>,
+        #[clap(long, value_enum)]
+        ignore: Option<BoundariesIgnore>,
+        #[clap(long, requires = "ignore")]
+        reason: Option<String>,
     },
     #[clap(hide = true)]
     Clone {
@@ -759,6 +763,15 @@ pub enum Command {
         #[clap(long, value_enum)]
         target: Option<LinkTarget>,
     },
+}
+
+#[derive(Copy, Clone, Debug, Default, ValueEnum, Serialize, Eq, PartialEq)]
+pub enum BoundariesIgnore {
+    /// Adds a `@boundaries-ignore` comment everywhere possible
+    All,
+    /// Prompts user if they want to add `@boundaries-ignore` comment
+    #[default]
+    Prompt,
 }
 
 #[derive(Parser, Clone, Debug, Default, Serialize, PartialEq)]
@@ -1391,13 +1404,15 @@ pub async fn run(
 
             Ok(0)
         }
-        Command::Boundaries { .. } => {
+        Command::Boundaries { ignore, reason, .. } => {
             let event = CommandEventBuilder::new("boundaries").with_parent(&root_telemetry);
+            let ignore = *ignore;
+            let reason = reason.clone();
 
             event.track_call();
             let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
 
-            Ok(boundaries::run(base, event).await?)
+            Ok(boundaries::run(base, event, ignore, reason).await?)
         }
         Command::Clone {
             url,

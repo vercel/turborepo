@@ -251,6 +251,7 @@ impl Run {
                     .to_string();
 
             Ok(Some(BoundariesDiagnostic::ImportLeavesPackage {
+                path: file_path.to_owned(),
                 import: import.to_string(),
                 resolved_import_path,
                 package_name: package_name.to_owned(),
@@ -289,6 +290,7 @@ impl Run {
 
         if package_name.starts_with("@types/") && matches!(import_type, ImportType::Value) {
             return Some(BoundariesDiagnostic::NotTypeOnlyImport {
+                path: file_path.to_owned(),
                 import: import.to_string(),
                 span,
                 text: NamedSource::new(file_path.as_str(), file_content.to_string()),
@@ -315,6 +317,7 @@ impl Run {
                 return match import_type {
                     ImportType::Type => None,
                     ImportType::Value => Some(BoundariesDiagnostic::NotTypeOnlyImport {
+                        path: file_path.to_owned(),
                         import: import.to_string(),
                         span,
                         text: NamedSource::new(file_path.as_str(), file_content.to_string()),
@@ -323,6 +326,7 @@ impl Run {
             }
 
             return Some(BoundariesDiagnostic::PackageNotFound {
+                path: file_path.to_owned(),
                 name: package_name.to_string(),
                 span,
                 text: NamedSource::new(file_path.as_str(), file_content.to_string()),

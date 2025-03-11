@@ -5,27 +5,41 @@ impl From<BoundariesDiagnostic> for Diagnostic {
     fn from(diagnostic: BoundariesDiagnostic) -> Self {
         let message = diagnostic.to_string();
         match diagnostic {
-            BoundariesDiagnostic::NotTypeOnlyImport { import, span, text } => Diagnostic {
+            BoundariesDiagnostic::NotTypeOnlyImport {
+                import,
+                span,
+                text: _,
+                path,
+            } => Diagnostic {
                 message,
-                path: Some(text.name().to_string()),
+                path: Some(path.to_string()),
                 start: Some(span.offset()),
                 end: Some(span.offset() + span.len()),
                 import: Some(import),
                 reason: None,
             },
-            BoundariesDiagnostic::PackageNotFound { name, span, text } => Diagnostic {
+            BoundariesDiagnostic::PackageNotFound {
+                name,
+                span,
+                text: _,
+                path,
+            } => Diagnostic {
                 message,
-                path: Some(text.name().to_string()),
+                path: Some(path.to_string()),
                 start: Some(span.offset()),
                 end: Some(span.offset() + span.len()),
                 import: Some(name.to_string()),
                 reason: None,
             },
             BoundariesDiagnostic::ImportLeavesPackage {
-                import, span, text, ..
+                import,
+                span,
+                text: _,
+                path,
+                ..
             } => Diagnostic {
                 message,
-                path: Some(text.name().to_string()),
+                path: Some(path.to_string()),
                 start: Some(span.offset()),
                 end: Some(span.offset() + span.len()),
                 import: Some(import),
