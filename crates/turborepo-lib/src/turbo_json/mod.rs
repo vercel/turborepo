@@ -11,7 +11,7 @@ use clap::ValueEnum;
 use miette::{NamedSource, SourceSpan};
 use serde::{Deserialize, Serialize};
 use struct_iterable::Iterable;
-use turbopath::AbsoluteSystemPath;
+use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
 use turborepo_errors::Spanned;
 use turborepo_repository::package_graph::ROOT_PKG_NAME;
 use turborepo_unescape::UnescapedString;
@@ -32,6 +32,8 @@ pub mod parser;
 pub use loader::TurboJsonLoader;
 
 use crate::{boundaries::BoundariesConfig, config::UnnecessaryPackageTaskSyntaxError};
+
+const TURBO_ROOT: &str = "$TURBO_ROOT$";
 
 #[derive(Serialize, Deserialize, Debug, Default, PartialEq, Clone, Deserializable)]
 #[serde(rename_all = "camelCase")]
@@ -537,10 +539,11 @@ impl RawTurboJson {
     }
 }
 
-impl TryFrom<RawTurboJson> for TurboJson {
-    type Error = Error;
-
-    fn try_from(raw_turbo: RawTurboJson) -> Result<Self, Error> {
+impl TurboJson {
+    fn from_raw(
+        raw_turbo: RawTurboJson,
+        path_to_repo_root: &AnchoredSystemPath,
+    ) -> Result<Self, Error> {
         if let Some(pipeline) = raw_turbo.pipeline {
             let (span, text) = pipeline.span_and_text("turbo.json");
             return Err(Error::PipelineField { span, text });
@@ -608,6 +611,8 @@ impl TryFrom<RawTurboJson> for TurboJson {
             // Remote Cache config is handled through layered config
         })
     }
+
+    // fn task
 }
 
 impl TurboJson {
@@ -629,7 +634,12 @@ impl TurboJson {
         path: &AbsoluteSystemPath,
     ) -> Result<TurboJson, Error> {
         let raw_turbo_json = RawTurboJson::read(repo_root, path)?;
-        raw_turbo_json.try_into()
+        // pass in repo_root
+        // This needs the relative path to root
+        let pkg_path = path.parent().expect("turbo.json is not root");
+        // relative pkg_path -> repo_root
+        let path_to_root = AnchoredSystemPathBuf::relative_path_between(pkg_path, repo_root);
+        TurboJson::from_raw(raw_turbo_json, &path_to_root)
     }
 
     pub fn task(&self, task_id: &TaskId, task_name: &TaskName) -> Option<RawTaskDefinition> {
@@ -763,6 +773,21 @@ fn gather_env_vars(
     }
 
     Ok(())
+}
+
+// $TURBO_ROOT$/something
+fn replace_turbo_root_token(
+    task_definition: &mut TaskDefinition,
+    path_to_repo_root: &AnchoredSystemPath,
+) {
+    for input in task_definition.inputs.iter_mut() {
+        let swapped = input.replacen(TURBO_ROOT, path_to_repo_root.as_str(), 1);
+    }
+    /* need to go through incl & exclu individually
+       for output in task_definition.outputs.iter_mut() {
+           let swapped = output.replacen(TURBO_ROOT, path_to_repo_root.as_str(), 1);
+       }
+    */
 }
 
 #[cfg(test)]
