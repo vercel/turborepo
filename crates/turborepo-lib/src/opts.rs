@@ -153,7 +153,7 @@ impl Opts {
 
                 (&Box::new(execution_args), &Box::default())
             }
-            Some(Command::Boundaries { filter }) => {
+            Some(Command::Boundaries { filter, .. }) => {
                 let execution_args = ExecutionArgs {
                     filter: filter.clone(),
                     ..Default::default()

@@ -587,6 +587,10 @@ pub enum Command {
     Boundaries {
         #[clap(short = 'F', long, group = "scope-filter-group")]
         filter: Vec<String>,
+        #[clap(long, value_enum, default_missing_value = "prompt", num_args = 0..=1, require_equals = true)]
+        ignore: Option<BoundariesIgnore>,
+        #[clap(long, requires = "ignore")]
+        reason: Option<String>,
     },
     #[clap(hide = true)]
     Clone {
@@ -759,6 +763,15 @@ pub enum Command {
         #[clap(long, value_enum)]
         target: Option<LinkTarget>,
     },
+}
+
+#[derive(Copy, Clone, Debug, Default, ValueEnum, Serialize, Eq, PartialEq)]
+pub enum BoundariesIgnore {
+    /// Adds a `@boundaries-ignore` comment everywhere possible
+    All,
+    /// Prompts user if they want to add `@boundaries-ignore` comment
+    #[default]
+    Prompt,
 }
 
 #[derive(Parser, Clone, Debug, Default, Serialize, PartialEq)]
@@ -1391,13 +1404,15 @@ pub async fn run(
 
             Ok(0)
         }
-        Command::Boundaries { .. } => {
+        Command::Boundaries { ignore, reason, .. } => {
             let event = CommandEventBuilder::new("boundaries").with_parent(&root_telemetry);
+            let ignore = *ignore;
+            let reason = reason.clone();
 
             event.track_call();
             let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
 
-            Ok(boundaries::run(base, event).await?)
+            Ok(boundaries::run(base, event, ignore, reason).await?)
         }
         Command::Clone {
             url,
@@ -3320,6 +3335,22 @@ mod test {
     #[test_case::test_case(&["turbo", "--filter=foo", "boundaries"], false; "execution args")]
     #[test_case::test_case(&["turbo", "--no-daemon", "boundaries"], false; "run args")]
     fn test_no_run_args_before_boundaries(args: &[&str], is_okay: bool) {
+        let os_args = args.iter().map(|s| OsString::from(*s)).collect();
+        let cli = Args::parse(os_args);
+        if is_okay {
+            cli.unwrap();
+        } else {
+            let err = cli.unwrap_err();
+            assert_snapshot!(args.join("-").as_str(), err);
+        }
+    }
+
+    #[test_case::test_case(&["turbo", "boundaries"], true; "empty")]
+    #[test_case::test_case(&["turbo", "boundaries", "--ignore"], true; "with ignore")]
+    #[test_case::test_case(&["turbo", "boundaries", "--ignore=all"], true; "with ignore all")]
+    #[test_case::test_case(&["turbo", "boundaries", "--ignore=prompt"], true; "with ignore prompt")]
+    #[test_case::test_case(&["turbo", "boundaries", "--filter", "ui"], true; "with filter")]
+    fn test_boundaries(args: &[&str], is_okay: bool) {
         let os_args = args.iter().map(|s| OsString::from(*s)).collect();
         let cli = Args::parse(os_args);
         if is_okay {
