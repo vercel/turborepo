@@ -328,7 +328,7 @@ impl ShutdownStyle {
 
                     let result = tokio::time::timeout(*timeout, fut).await;
                     match result {
-                        // We ignore the exit code and mark it as killed since we sent a SIGINT
+                        // We ignore the exit code and mark it as interrupted since we sent a SIGINT
                         // This avoids reliance on an underlying process exiting with
                         // no exit code or a non-zero in order for turbo to operate correctly.
                         Ok(Ok(_exit_code)) => ChildExit::Interrupted,
