@@ -192,7 +192,7 @@ Contributing to examples helps the Turborepo community by showcasing how to use 
 > [!IMPORTANT]
 > As Turborepo usage has grown, the community has contributed more and more examples to the repository. While this is exciting for us on the core team, we're unable to maintain the full surface area of every example, given the constant updates across the breadth of tooling that Turborepo works with in the examples.
 >
-> Because of this, a handful of the examples are explictly marked as maintained by the core team. For the rest, we work with the community to keep them as up to date and correct as possible. If you find a problem with a community-supported template, we ask that you do not open a GitHub Issue for it. Instead, please open a pull request with the needed fixes.
+> Because of this, a handful of the examples are explicitly marked as maintained by the core team. For the rest, we work with the community to keep them as up to date and correct as possible. If you find a problem with a community-supported template, we ask that you do not open a GitHub Issue for it. Instead, please open a pull request with the needed fixes.
 
 The `basic` example is the default used by `create-turbo`.
 
