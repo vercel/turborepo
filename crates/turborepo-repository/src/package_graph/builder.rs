@@ -237,7 +237,8 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedPackageManager, T> {
         let name = PackageName::Other(
             json.name
                 .clone()
-                .ok_or(Error::PackageJsonMissingName(package_json_path))?,
+                .ok_or(Error::PackageJsonMissingName(package_json_path))?
+                .into_inner(),
         );
         let entry = PackageInfo {
             package_json: json,

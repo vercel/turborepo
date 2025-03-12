@@ -320,6 +320,7 @@ impl Run {
             if let Some(tag_rules) = tag_rules {
                 result.diagnostics.extend(self.check_package_tags(
                     PackageNode::Workspace(package_name.clone()),
+                    &package_info.package_json,
                     tags,
                     tag_rules,
                 )?);

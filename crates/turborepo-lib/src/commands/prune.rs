@@ -307,7 +307,11 @@ impl<'a> Prune<'a> {
             };
             trace!(
                 "target: {}",
-                info.package_json.name.as_deref().unwrap_or_default()
+                info.package_json
+                    .name
+                    .as_ref()
+                    .map(|name| name.as_str())
+                    .unwrap_or_default()
             );
             trace!("workspace package.json: {}", &info.package_json_path);
             trace!(

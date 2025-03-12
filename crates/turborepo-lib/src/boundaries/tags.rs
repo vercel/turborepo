@@ -1,8 +1,12 @@
 use std::collections::{HashMap, HashSet};
 
+use miette::NamedSource;
 use tracing::warn;
 use turborepo_errors::Spanned;
-use turborepo_repository::package_graph::{PackageName, PackageNode};
+use turborepo_repository::{
+    package_graph::{PackageName, PackageNode},
+    package_json::PackageJson,
+};
 
 use crate::{
     boundaries::{config::Rule, BoundariesDiagnostic, Error, Permissions, SecondaryDiagnostic},
@@ -99,14 +103,43 @@ impl Run {
     fn validate_relation(
         &self,
         package_name: &PackageName,
+        package_json: &PackageJson,
         relation_package_name: &PackageName,
         tags: Option<&Spanned<Vec<Spanned<String>>>>,
         allow_list: Option<&Spanned<HashSet<String>>>,
         deny_list: Option<&Spanned<HashSet<String>>>,
     ) -> Result<Option<BoundariesDiagnostic>, Error> {
-        // If there is no allow list, then we vacuously have a tag in the allow list
-        let mut has_tag_in_allowlist = allow_list.is_none();
+        // We allow "punning" the package name as a tag, so if the allow list contains
+        // the package name, then we have a tag in the allow list
+        // Likewise, if the allow list is empty, then we vacuously have a tag in the
+        // allow list
+        let mut has_tag_in_allowlist =
+            allow_list.is_none_or(|allow_list| allow_list.contains(relation_package_name.as_str()));
         let tags_span = tags.map(|tags| tags.to(())).unwrap_or_default();
+        if let Some(deny_list) = deny_list {
+            if deny_list.contains(relation_package_name.as_str()) {
+                let (span, text) = package_json
+                    .name
+                    .as_ref()
+                    .map(|name| name.span_and_text("turbo.json"))
+                    .unwrap_or_else(|| (None, NamedSource::new("package.json", String::new())));
+                let deny_list_spanned = deny_list.to(());
+                let (deny_list_span, deny_list_text) =
+                    deny_list_spanned.span_and_text("turbo.json");
+
+                return Ok(Some(BoundariesDiagnostic::DeniedTag {
+                    source_package_name: package_name.clone(),
+                    package_name: relation_package_name.clone(),
+                    tag: relation_package_name.to_string(),
+                    span,
+                    text,
+                    secondary: [SecondaryDiagnostic::Denylist {
+                        span: deny_list_span,
+                        text: deny_list_text,
+                    }],
+                }));
+            }
+        }
 
         for tag in tags.into_iter().flatten().flatten() {
             if let Some(allow_list) = allow_list {
@@ -170,6 +203,7 @@ impl Run {
     pub(crate) fn check_package_tags(
         &self,
         pkg: PackageNode,
+        package_json: &PackageJson,
         current_package_tags: &Spanned<Vec<Spanned<String>>>,
         tags_rules: &ProcessedRulesMap,
     ) -> Result<Vec<BoundariesDiagnostic>, Error> {
@@ -186,6 +220,7 @@ impl Run {
 
                         diagnostics.extend(self.validate_relation(
                             pkg.as_package_name(),
+                            package_json,
                             dependency.as_package_name(),
                             dependency_tags,
                             dependency_permissions.allow.as_ref(),
@@ -202,6 +237,7 @@ impl Run {
                         let dependent_tags = self.load_package_tags(dependent.as_package_name());
                         diagnostics.extend(self.validate_relation(
                             pkg.as_package_name(),
+                            package_json,
                             dependent.as_package_name(),
                             dependent_tags,
                             dependent_permissions.allow.as_ref(),
