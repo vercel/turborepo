@@ -223,7 +223,12 @@ impl WatchClient {
 
                 if let Some(changed_packages) = some_changed_packages {
                     // Clean up currently running tasks
-                    if let Some(RunHandle { stopper, run_task, persistent_exit }) = run_handle.take() {
+                    if let Some(RunHandle {
+                        stopper,
+                        run_task,
+                        persistent_exit,
+                    }) = run_handle.take()
+                    {
                         // Shut down the tasks for the run
                         stopper.stop().await;
                         // Run should exit shortly after we stop all child tasks, wait for it to
@@ -293,7 +298,10 @@ impl WatchClient {
         if let Some(sender) = &self.ui_sender {
             sender.stop().await;
         }
-        if let Some(RunHandle { stopper, run_task, .. }) = self.persistent_tasks_handle.take() {
+        if let Some(RunHandle {
+            stopper, run_task, ..
+        }) = self.persistent_tasks_handle.take()
+        {
             // Shut down the tasks for the run
             stopper.stop().await;
             // Run should exit shortly after we stop all child tasks, wait for it to finish
@@ -355,7 +363,7 @@ impl WatchClient {
                 Ok(RunHandle {
                     stopper: run.stopper(),
                     run_task: tokio::spawn(async move { run.run(ui_sender, true).await }),
-                    persistent_exit: None
+                    persistent_exit: None,
                 })
             }
             ChangedPackages::All => {
@@ -382,7 +390,12 @@ impl WatchClient {
                 self.watched_packages = self.run.get_relevant_packages();
 
                 // Clean up currently running persistent tasks
-                if let Some(RunHandle { stopper, run_task, persistent_exit }) = self.persistent_tasks_handle.take() {
+                if let Some(RunHandle {
+                    stopper,
+                    run_task,
+                    persistent_exit,
+                }) = self.persistent_tasks_handle.take()
+                {
                     // Shut down the tasks for the run
                     stopper.stop().await;
                     // Run should exit shortly after we stop all child tasks, wait for it to finish
