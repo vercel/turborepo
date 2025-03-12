@@ -325,7 +325,7 @@ impl LanguageServer for Backend {
             let package_json_name = if repo_root.contains(&wd.package_json) {
                 Some("//")
             } else {
-                package_json.name.as_deref()
+                package_json.name.as_ref().map(|name| name.as_str())
             };
 
             // todo: use jsonc_ast instead of text search
@@ -613,7 +613,7 @@ impl LanguageServer for Backend {
             .iter()
             .flat_map(|p| p.scripts.keys().map(move |k| (p.name.clone(), k)))
             .map(|(package, s)| CompletionItem {
-                label: format!("{}#{}", package.unwrap_or_default(), s),
+                label: format!("{}#{}", package.unwrap_or_default().into_inner(), s),
                 kind: Some(CompletionItemKind::FIELD),
                 ..Default::default()
             });
@@ -708,7 +708,7 @@ impl Backend {
                     {
                         Some("//".to_string())
                     } else {
-                        package_json.name
+                        package_json.name.map(|name| name.into_inner())
                     };
                     Some(
                         package_json

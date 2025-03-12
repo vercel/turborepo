@@ -638,7 +638,7 @@ mod test {
                     };
 
                     let package = PackageJson {
-                        name: Some(name.to_string()),
+                        name: Some(Spanned::new(name.to_string())),
                         scripts,
                         ..Default::default()
                     };

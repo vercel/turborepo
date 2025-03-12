@@ -132,7 +132,11 @@ impl Workspace {
                 // package_json_path)
                 path.parent()
                     .map(|package_path| {
-                        Ok(Package::new(name, &self.workspace_state.root, package_path))
+                        Ok(Package::new(
+                            name.into_inner(),
+                            &self.workspace_state.root,
+                            package_path,
+                        ))
                     })
                     .or_else(|| Some(Err(Error::MissingParent(path.to_owned()))))
             })

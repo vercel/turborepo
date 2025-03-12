@@ -591,6 +591,8 @@ impl PackageInfo {
 mod test {
     use std::assert_matches::assert_matches;
 
+    use turborepo_errors::Spanned;
+
     use super::*;
 
     struct MockDiscovery;
@@ -618,7 +620,7 @@ mod test {
         let builder = PackageGraphBuilder::new(
             &root,
             PackageJson {
-                name: Some("root".into()),
+                name: Some(Spanned::new("root".into())),
                 ..Default::default()
             },
         )
@@ -628,14 +630,14 @@ mod test {
             map.insert(
                 root.join_component("a"),
                 PackageJson {
-                    name: Some("foo".into()),
+                    name: Some(Spanned::new("foo".into())),
                     ..Default::default()
                 },
             );
             map.insert(
                 root.join_component("b"),
                 PackageJson {
-                    name: Some("foo".into()),
+                    name: Some(Spanned::new("foo".into())),
                     ..Default::default()
                 },
             );
