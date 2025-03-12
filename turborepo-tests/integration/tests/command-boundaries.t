@@ -4,8 +4,8 @@ Setup
 Ignore all errors
   $ ${TURBO} boundaries --ignore=all
   Checking packages...
-  patching apps/my-app/(index|types).ts (re)
-  patching apps/my-app/(index|types).ts (re)
+  patching apps(\\|/)my-app(\\|/)(index|types).ts (re)
+  patching apps(\\|/)my-app(\\|/)(index|types).ts (re)
   [1]
 
   $ git diff

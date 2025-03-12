@@ -149,7 +149,7 @@ pub enum Error {
     #[error("failed to read file: {0}")]
     FileNotFound(AbsoluteSystemPathBuf),
     #[error("failed to write to file: {0}")]
-    FileWriteError(AbsoluteSystemPathBuf),
+    FileWrite(AbsoluteSystemPathBuf),
 }
 
 impl BoundariesDiagnostic {
@@ -492,7 +492,7 @@ impl Run {
         // Deduplicate and sort by offset
         let file_patches = file_patches
             .into_iter()
-            .map(|(span, patch)| (span.offset(), patch.into()))
+            .map(|(span, patch)| (span.offset(), patch))
             .collect::<BTreeMap<usize, String>>();
 
         let contents = file_path
@@ -516,23 +516,23 @@ impl Run {
             // If newline exists, we write all the contents before newline
             if let Some(newline_idx) = newline_idx {
                 file.write_all(contents[last_idx..(last_idx + newline_idx)].as_bytes())
-                    .map_err(|_| Error::FileWriteError(file_path.to_owned()))?;
+                    .map_err(|_| Error::FileWrite(file_path.to_owned()))?;
                 file.write_all(b"\n")
-                    .map_err(|_| Error::FileWriteError(file_path.to_owned()))?;
+                    .map_err(|_| Error::FileWrite(file_path.to_owned()))?;
             }
 
             file.write_all(b"// @boundaries-ignore ")
-                .map_err(|_| Error::FileWriteError(file_path.to_owned()))?;
+                .map_err(|_| Error::FileWrite(file_path.to_owned()))?;
             file.write_all(reason.as_bytes())
-                .map_err(|_| Error::FileWriteError(file_path.to_owned()))?;
+                .map_err(|_| Error::FileWrite(file_path.to_owned()))?;
             file.write_all(b"\n")
-                .map_err(|_| Error::FileWriteError(file_path.to_owned()))?;
+                .map_err(|_| Error::FileWrite(file_path.to_owned()))?;
 
             last_idx = idx;
         }
 
         file.write_all(contents[last_idx..].as_bytes())
-            .map_err(|_| Error::FileWriteError(file_path.to_owned()))?;
+            .map_err(|_| Error::FileWrite(file_path.to_owned()))?;
 
         Ok(())
     }
