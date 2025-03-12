@@ -27,32 +27,20 @@ use std::{
 use portable_pty::{native_pty_system, Child as PtyChild, MasterPty as PtyController};
 use tokio::{
     io::{AsyncBufRead, AsyncBufReadExt, BufReader},
-    join,
     process::Command as TokioCommand,
-    sync::{mpsc, watch, RwLock},
+    sync::{mpsc, watch},
 };
 use tracing::{debug, trace};
 
 use super::{Command, PtySize};
 
-#[derive(Debug)]
-pub enum ChildState {
-    Running(ChildCommandChannel),
-    Exited(ChildExit),
-}
-
-impl ChildState {
-    pub fn command_channel(&self) -> Option<ChildCommandChannel> {
-        match self {
-            ChildState::Running(c) => Some(c.clone()),
-            ChildState::Exited(_) => None,
-        }
-    }
-}
-
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum ChildExit {
     Finished(Option<i32>),
+    /// The child process was sent an interrupt and shut down on it's own
+    Interrupted,
+    /// The child process was killed, it could either be explicitly killed or it
+    /// did not respond to an interrupt and was killed as a result
     Killed,
     /// The child process was killed by someone else. Note that on
     /// windows, it is not possible to distinguish between whether
@@ -211,6 +199,7 @@ impl ChildHandle {
         self.pid
     }
 
+    /// Perform a `wait` syscall on the child until it exits
     pub async fn wait(&mut self) -> io::Result<Option<i32>> {
         match &mut self.imp {
             ChildHandleImpl::Tokio(child) => child.wait().await.map(|status| status.code()),
@@ -283,15 +272,6 @@ enum ChildOutput {
     Pty(Box<dyn Read + Send>),
 }
 
-impl ChildInput {
-    fn concrete(self) -> Option<tokio::process::ChildStdin> {
-        match self {
-            ChildInput::Std(stdin) => Some(stdin),
-            ChildInput::Pty(_) => None,
-        }
-    }
-}
-
 impl fmt::Debug for ChildInput {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -319,7 +299,7 @@ impl ShutdownStyle {
     ///
     /// If an exit channel is provided, the exit code will be sent to the
     /// channel when the child process exits.
-    async fn process(&self, child: &mut ChildHandle) -> ChildState {
+    async fn process(&self, child: &mut ChildHandle) -> ChildExit {
         match self {
             // Windows doesn't give the ability to send a signal to a process so we
             // can't make use of the graceful shutdown timeout.
@@ -333,9 +313,9 @@ impl ShutdownStyle {
                             debug!("sending SIGINT to child {}", pid);
                             // kill takes negative pid to indicate that you want to use gpid
                             let pgid = -(pid as i32);
-                            unsafe {
-                                libc::kill(pgid, libc::SIGINT);
-                            }
+                            if unsafe { libc::kill(pgid, libc::SIGINT) } == -1 {
+                                debug!("failed to send SIGINT to {pgid}");
+                            };
                             debug!("waiting for child {}", pid);
                             child.wait().await
                         } else {
@@ -348,16 +328,16 @@ impl ShutdownStyle {
 
                     let result = tokio::time::timeout(*timeout, fut).await;
                     match result {
-                        // We ignore the exit code and mark it as killed since we sent a SIGINT
+                        // We ignore the exit code and mark it as interrupted since we sent a SIGINT
                         // This avoids reliance on an underlying process exiting with
                         // no exit code or a non-zero in order for turbo to operate correctly.
-                        Ok(Ok(_exit_code)) => ChildState::Exited(ChildExit::Killed),
-                        Ok(Err(_)) => ChildState::Exited(ChildExit::Failed),
+                        Ok(Ok(_exit_code)) => ChildExit::Interrupted,
+                        Ok(Err(_)) => ChildExit::Failed,
                         Err(_) => {
                             debug!("graceful shutdown timed out, killing child");
                             match child.kill().await {
-                                Ok(_) => ChildState::Exited(ChildExit::Killed),
-                                Err(_) => ChildState::Exited(ChildExit::Failed),
+                                Ok(_) => ChildExit::Killed,
+                                Err(_) => ChildExit::Failed,
                             }
                         }
                     }
@@ -367,14 +347,14 @@ impl ShutdownStyle {
                 {
                     debug!("timeout not supported on windows, killing");
                     match child.kill().await {
-                        Ok(_) => ChildState::Exited(ChildExit::Killed),
-                        Err(_) => ChildState::Exited(ChildExit::Failed),
+                        Ok(_) => ChildExit::Killed,
+                        Err(_) => ChildExit::Failed,
                     }
                 }
             }
             ShutdownStyle::Kill => match child.kill().await {
-                Ok(_) => ChildState::Exited(ChildExit::Killed),
-                Err(_) => ChildState::Exited(ChildExit::Failed),
+                Ok(_) => ChildExit::Killed,
+                Err(_) => ChildExit::Failed,
             },
         }
     }
@@ -385,8 +365,8 @@ impl ShutdownStyle {
 #[derive(Debug)]
 struct ChildStateManager {
     shutdown_style: ShutdownStyle,
-    task_state: Arc<RwLock<ChildState>>,
     exit_tx: watch::Sender<Option<ChildExit>>,
+    shutdown_initiated: bool,
 }
 
 /// A child process that can be interacted with asynchronously.
@@ -396,7 +376,7 @@ struct ChildStateManager {
 #[derive(Clone, Debug)]
 pub struct Child {
     pid: Option<u32>,
-    state: Arc<RwLock<ChildState>>,
+    command_channel: ChildCommandChannel,
     exit_channel: watch::Receiver<Option<ChildExit>>,
     stdin: Arc<Mutex<Option<ChildInput>>>,
     output: Arc<Mutex<Option<ChildOutput>>>,
@@ -457,21 +437,19 @@ impl Child {
         // - the child process fails somehow (some syscall fails)
         let (exit_tx, exit_rx) = watch::channel(None);
 
-        let state = Arc::new(RwLock::new(ChildState::Running(command_tx)));
-        let task_state = state.clone();
-
         let _task = tokio::spawn(async move {
             // On Windows it is important that this gets dropped once the child process
             // exits
             let controller = controller;
             debug!("waiting for task: {pid:?}");
-            let manager = ChildStateManager {
+            let mut manager = ChildStateManager {
                 shutdown_style,
-                task_state,
                 exit_tx,
+                shutdown_initiated: false,
             };
             tokio::select! {
                 command = command_rx.recv() => {
+                    manager.shutdown_initiated = true;
                     manager.handle_child_command(command, &mut child, controller).await;
                 }
                 status = child.wait() => {
@@ -485,7 +463,7 @@ impl Child {
 
         Ok(Self {
             pid,
-            state,
+            command_channel: command_tx,
             exit_channel: exit_rx,
             stdin: Arc::new(Mutex::new(stdin)),
             output: Arc::new(Mutex::new(output)),
@@ -506,63 +484,21 @@ impl Child {
 
     /// Perform a graceful shutdown of the `Child` process.
     pub async fn stop(&mut self) -> Option<ChildExit> {
-        let mut watch = self.exit_channel.clone();
-
-        let fut = async {
-            let child = {
-                let state = self.state.read().await;
-
-                match state.command_channel() {
-                    Some(child) => child,
-                    None => return,
-                }
-            };
-
-            // if this fails, it's because the channel is dropped (toctou)
-            // we can just ignore it
-            child.stop().await.ok();
-        };
-
-        let (_, code) = join! {
-            fut,
-            async {
-                watch.changed().await.ok()?;
-                *watch.borrow()
-            }
-        };
-
-        code
+        // if this fails, it's because the channel is dropped (toctou)
+        // we can just ignore it
+        self.command_channel.stop().await.ok();
+        self.wait().await
     }
 
     /// Kill the `Child` process immediately.
     pub async fn kill(&mut self) -> Option<ChildExit> {
-        let mut watch = self.exit_channel.clone();
-
-        let fut = async {
-            let rw_lock_read_guard = self.state.read().await;
-            let child = match rw_lock_read_guard.command_channel() {
-                Some(child) => child,
-                None => return,
-            };
-
-            // if this fails, it's because the channel is dropped (toctou)
-            // we can just ignore it
-            child.kill().await.ok();
-        };
-
-        let (_, code) = join! {
-            fut,
-            async {
-                // if this fails, it is because the watch receiver is dropped. just ignore it do a best-effort
-                watch.changed().await.ok();
-                *watch.borrow()
-            }
-        };
-
-        code
+        // if this fails, it's because the channel is dropped (toctou)
+        // we can just ignore it
+        self.command_channel.kill().await.ok();
+        self.wait().await
     }
 
-    fn pid(&self) -> Option<u32> {
+    pub fn pid(&self) -> Option<u32> {
         self.pid
     }
 
@@ -570,7 +506,7 @@ impl Child {
         self.stdin.lock().unwrap().take()
     }
 
-    fn outputs(&mut self) -> Option<ChildOutput> {
+    fn outputs(&self) -> Option<ChildOutput> {
         self.output.lock().unwrap().take()
     }
 
@@ -762,7 +698,7 @@ impl ChildStateManager {
         child: &mut ChildHandle,
         controller: Option<Box<dyn PtyController + Send>>,
     ) {
-        let state = match command {
+        let exit = match command {
             // we received a command to stop the child process, or the channel was closed.
             // in theory this happens when the last child is dropped, however in practice
             // we will always get a `Permit` from the recv call before the channel can be
@@ -777,25 +713,22 @@ impl ChildStateManager {
                 ShutdownStyle::Kill.process(child).await
             }
         };
-        match state {
-            ChildState::Exited(exit) => {
-                // ignore the send error, failure means the channel is dropped
-                trace!("sending child exit");
-                self.exit_tx.send(Some(exit)).ok();
-            }
-            ChildState::Running(_) => {
-                debug_assert!(false, "child state should not be running after shutdown");
-            }
-        }
+        // ignore the send error, failure means the channel is dropped
+        trace!("sending child exit after shutdown");
+        self.exit_tx.send(Some(exit)).ok();
         drop(controller);
-
-        {
-            let mut task_state = self.task_state.write().await;
-            *task_state = state;
-        }
     }
 
     async fn handle_child_exit(&self, status: io::Result<Option<i32>>) {
+        // If a shutdown was initiated we defer to the exit returned by
+        // `ShutdownStyle::process` as that will have information if the child
+        // responded to a SIGINT or a SIGKILL. The `wait` response this function
+        // gets in that scenario would make it appear that the child was killed by an
+        // external process.
+        if self.shutdown_initiated {
+            return;
+        }
+
         debug!("child process exited normally");
         // the child process exited
         let child_exit = match status {
@@ -805,14 +738,18 @@ impl ChildStateManager {
             Ok(None) => ChildExit::KilledExternal,
             Err(_e) => ChildExit::Failed,
         };
-        {
-            let mut task_state = self.task_state.write().await;
-            *task_state = ChildState::Exited(child_exit);
-        }
 
         // ignore the send error, the channel is dropped anyways
         trace!("sending child exit");
         self.exit_tx.send(Some(child_exit)).ok();
+    }
+}
+
+#[cfg(test)]
+impl Child {
+    // Helper method for checking if child is running
+    fn is_running(&self) -> bool {
+        !self.command_channel.0.is_closed()
     }
 }
 
@@ -826,8 +763,8 @@ mod test {
     use tracing_test::traced_test;
     use turbopath::AbsoluteSystemPathBuf;
 
-    use super::{Child, ChildInput, ChildOutput, ChildState, Command};
-    use crate::process::{
+    use super::{Child, ChildInput, ChildOutput, Command};
+    use crate::{
         child::{ChildExit, ShutdownStyle},
         PtySize,
     };
@@ -843,7 +780,7 @@ mod test {
         while !root.join_component(".git").exists() {
             root = root.parent().unwrap().to_owned();
         }
-        root.join_components(&["crates", "turborepo-lib", "test", "scripts"])
+        root.join_components(&["crates", "turborepo-process", "test", "scripts"])
     }
 
     #[test_case(false)]
@@ -859,8 +796,8 @@ mod test {
         assert_matches!(child.pid(), Some(_));
         child.stop().await;
 
-        let state = child.state.read().await;
-        assert_matches!(&*state, ChildState::Exited(ChildExit::Killed));
+        let exit = child.wait().await;
+        assert_matches!(exit, Some(ChildExit::Killed));
     }
 
     #[test_case(false)]
@@ -895,18 +832,10 @@ mod test {
         let mut child =
             Child::spawn(cmd, ShutdownStyle::Kill, use_pty.then(PtySize::default)).unwrap();
 
-        {
-            let state = child.state.read().await;
-            assert_matches!(&*state, ChildState::Running(_));
-        }
+        assert!(child.is_running());
 
         let code = child.wait().await;
         assert_eq!(code, Some(ChildExit::Finished(Some(0))));
-
-        {
-            let state = child.state.read().await;
-            assert_matches!(&*state, ChildState::Exited(ChildExit::Finished(Some(0))));
-        }
     }
 
     #[test_case(false)]
@@ -946,11 +875,9 @@ mod test {
             assert_eq!(trimmed_output, "hello world");
         }
 
-        child.wait().await;
+        let exit = child.wait().await;
 
-        let state = child.state.read().await;
-
-        assert_matches!(&*state, ChildState::Exited(ChildExit::Finished(Some(0))));
+        assert_matches!(exit, Some(ChildExit::Finished(Some(0))));
     }
 
     #[test_case(false)]
@@ -987,11 +914,8 @@ mod test {
 
         assert!(trimmed_out.contains(input), "got: {}", trimmed_out);
 
-        child.wait().await;
-
-        let state = child.state.read().await;
-
-        assert_matches!(&*state, ChildState::Exited(ChildExit::Finished(Some(0))));
+        let exit = child.wait().await;
+        assert_matches!(exit, Some(ChildExit::Finished(Some(0))));
     }
 
     #[test_case(false)]
@@ -1025,10 +949,9 @@ mod test {
         };
         child.stop().await;
 
-        let state = child.state.read().await;
-
+        let exit = child.wait().await;
         // this should time out and be killed
-        assert_matches!(&*state, ChildState::Exited(ChildExit::Killed));
+        assert_matches!(exit, Some(ChildExit::Killed));
     }
 
     #[test_case(false)]
@@ -1052,13 +975,25 @@ mod test {
 
         tokio::time::sleep(STARTUP_DELAY).await;
 
-        child.stop().await;
-        child.wait().await;
+        // We need to read the child output otherwise the child will be unable to
+        // cleanly shut down as it waits for the receiving end of the PTY to read
+        // the output before exiting.
+        let mut output_child = child.clone();
+        tokio::task::spawn(async move {
+            let mut output = Vec::new();
+            output_child.wait_with_piped_outputs(&mut output).await.ok();
+        });
 
-        let state = child.state.read().await;
+        child.stop().await;
+        let exit = child.wait().await;
 
         // We should ignore the exit code of the process and always treat it as killed
-        assert_matches!(&*state, &ChildState::Exited(ChildExit::Killed));
+        if cfg!(windows) {
+            // There are no signals on Windows so we must kill
+            assert_matches!(exit, Some(ChildExit::Killed));
+        } else {
+            assert_matches!(exit, Some(ChildExit::Interrupted));
+        }
     }
 
     #[test_case(false)]
@@ -1103,18 +1038,12 @@ mod test {
             }
         }
 
-        child.wait().await;
-
-        let state = child.state.read().await;
-
-        let ChildState::Exited(state) = &*state else {
-            panic!("expected child to have exited after wait call");
-        };
+        let exit = child.wait().await;
 
         #[cfg(unix)]
-        assert_matches!(state, ChildExit::KilledExternal);
+        assert_matches!(exit, Some(ChildExit::KilledExternal));
         #[cfg(not(unix))]
-        assert_matches!(state, ChildExit::Finished(Some(3)));
+        assert_matches!(exit, Some(ChildExit::Finished(Some(3))));
     }
 
     #[test_case(false)]
@@ -1218,21 +1147,33 @@ mod test {
     #[test_case(false)]
     #[test_case(TEST_PTY)]
     #[tokio::test]
+    #[traced_test]
     async fn test_kill_process_group(use_pty: bool) {
         let mut cmd = Command::new("sh");
         cmd.args(["-c", "while true; do sleep 0.2; done"]);
         let mut child = Child::spawn(
             cmd,
-            ShutdownStyle::Graceful(Duration::from_millis(100)),
+            // Bumping this to give ample time for the process to respond to the SIGINT to reduce
+            // flakiness inherent with sending and receiving signals.
+            ShutdownStyle::Graceful(Duration::from_millis(500)),
             use_pty.then(PtySize::default),
         )
         .unwrap();
 
         tokio::time::sleep(STARTUP_DELAY).await;
 
+        // We need to read the child output otherwise the child will be unable to
+        // cleanly shut down as it waits for the receiving end of the PTY to read
+        // the output before exiting.
+        let mut output_child = child.clone();
+        tokio::task::spawn(async move {
+            let mut output = Vec::new();
+            output_child.wait_with_piped_outputs(&mut output).await.ok();
+        });
+
         let exit = child.stop().await;
 
-        assert_matches!(exit, Some(ChildExit::Killed));
+        assert_matches!(exit, Some(ChildExit::Interrupted));
     }
 
     #[cfg(unix)]

@@ -4,12 +4,12 @@ use tracing::debug;
 use turbopath::AbsoluteSystemPath;
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_microfrontends::MICROFRONTENDS_PACKAGE;
+use turborepo_process::Command;
 use turborepo_repository::package_graph::{PackageGraph, PackageInfo, PackageName};
 
 use super::Error;
 use crate::{
-    engine::Engine, microfrontends::MicrofrontendsConfigs, opts::TaskArgs, process::Command,
-    run::task_id::TaskId,
+    engine::Engine, microfrontends::MicrofrontendsConfigs, opts::TaskArgs, run::task_id::TaskId,
 };
 
 pub trait CommandProvider {
