@@ -92,6 +92,14 @@ impl From<BoundariesDiagnostic> for Diagnostic {
                 import: None,
                 reason: None,
             },
+            BoundariesDiagnostic::TagSharesPackageName { tag, tag_span, .. } => Diagnostic {
+                message,
+                path: None,
+                start: tag_span.map(|span| span.offset()),
+                end: tag_span.map(|span| span.offset() + span.len()),
+                import: None,
+                reason: Some(tag),
+            },
         }
     }
 }

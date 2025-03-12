@@ -1,7 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
 use miette::NamedSource;
-use tracing::warn;
 use turborepo_errors::Spanned;
 use turborepo_repository::{
     package_graph::{PackageName, PackageNode},
@@ -11,19 +10,21 @@ use turborepo_repository::{
 use crate::{
     boundaries::{config::Rule, BoundariesDiagnostic, Error, Permissions, SecondaryDiagnostic},
     run::Run,
-    turbo_json::TurboJson,
 };
 
 pub type ProcessedRulesMap = HashMap<String, ProcessedRule>;
 
 pub struct ProcessedRule {
+    span: Spanned<()>,
     dependencies: Option<ProcessedPermissions>,
     dependents: Option<ProcessedPermissions>,
 }
 
-impl From<Rule> for ProcessedRule {
-    fn from(rule: Rule) -> Self {
+impl From<Spanned<Rule>> for ProcessedRule {
+    fn from(rule: Spanned<Rule>) -> Self {
+        let (rule, span) = rule.split();
         Self {
+            span,
             dependencies: rule
                 .dependencies
                 .map(|dependencies| dependencies.into_inner().into()),
@@ -60,30 +61,6 @@ impl Run {
             .and_then(|turbo_json| turbo_json.tags.as_ref())
     }
 
-    pub(crate) fn get_package_tags(&self) -> HashMap<PackageName, Spanned<Vec<Spanned<String>>>> {
-        let mut package_tags = HashMap::new();
-        for (package, _) in self.pkg_dep_graph().packages() {
-            if let Ok(TurboJson {
-                tags: Some(tags),
-                boundaries,
-                ..
-            }) = self.turbo_json_loader().load(package)
-            {
-                if boundaries.as_ref().is_some_and(|b| b.tags.is_some())
-                    && !matches!(package, PackageName::Root)
-                {
-                    warn!(
-                        "Boundaries rules can only be defined in the root turbo.json. Any rules \
-                         defined in a package's turbo.json will be ignored."
-                    )
-                }
-                package_tags.insert(package.clone(), tags.clone());
-            }
-        }
-
-        package_tags
-    }
-
     pub(crate) fn get_processed_rules_map(&self) -> Option<ProcessedRulesMap> {
         self.root_turbo_json()
             .boundaries
@@ -92,7 +69,7 @@ impl Run {
             .map(|tags| {
                 tags.as_inner()
                     .iter()
-                    .map(|(k, v)| (k.clone(), v.as_inner().clone().into()))
+                    .map(|(k, v)| (k.clone(), v.clone().into()))
                     .collect()
             })
     }
@@ -208,6 +185,29 @@ impl Run {
         tags_rules: &ProcessedRulesMap,
     ) -> Result<Vec<BoundariesDiagnostic>, Error> {
         let mut diagnostics = Vec::new();
+
+        // We don't allow tags to share the same name as the package because
+        // we allow package names to be used as a tag
+        if let Some(rule) = tags_rules.get(pkg.as_package_name().as_str()) {
+            let (tag_span, tag_text) = rule.span.span_and_text("turbo.json");
+            let (package_span, package_text) = package_json
+                .name
+                .as_ref()
+                .map(|name| name.span_and_text("package.json"))
+                .unwrap_or_else(|| (None, NamedSource::new("package.json", "".into())));
+            diagnostics.push(BoundariesDiagnostic::TagSharesPackageName {
+                tag: pkg.as_package_name().to_string(),
+                package: pkg.as_package_name().to_string(),
+                tag_span,
+                tag_text,
+                secondary: [SecondaryDiagnostic::PackageDefinedHere {
+                    package: pkg.as_package_name().to_string(),
+                    package_span,
+                    package_text,
+                }],
+            });
+        }
+
         for tag in current_package_tags.iter() {
             if let Some(rule) = tags_rules.get(tag.as_inner()) {
                 if let Some(dependency_permissions) = &rule.dependencies {
