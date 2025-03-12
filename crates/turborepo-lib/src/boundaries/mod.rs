@@ -13,7 +13,7 @@ use std::{
 pub use config::{BoundariesConfig, Permissions, Rule};
 use git2::Repository;
 use globwalk::Settings;
-use indicatif::ProgressIterator;
+use indicatif::{ProgressBar, ProgressIterator};
 use miette::{Diagnostic, NamedSource, Report, SourceSpan};
 use regex::Regex;
 use swc_common::{
@@ -230,14 +230,21 @@ impl BoundariesResult {
 }
 
 impl Run {
-    pub async fn check_boundaries(&self) -> Result<BoundariesResult, Error> {
+    pub async fn check_boundaries(&self, show_progress: bool) -> Result<BoundariesResult, Error> {
         let rules_map = self.get_processed_rules_map();
         let packages: Vec<_> = self.pkg_dep_graph().packages().collect();
         let repo = Repository::discover(self.repo_root()).ok().map(Mutex::new);
         let mut result = BoundariesResult::default();
         let global_implicit_dependencies = self.get_implicit_dependencies(&PackageName::Root);
-        println!("Checking packages...");
-        for (package_name, package_info) in packages.into_iter().progress() {
+
+        let progress = if show_progress {
+            println!("Checking packages...");
+            ProgressBar::new(packages.len() as u64)
+        } else {
+            ProgressBar::hidden()
+        };
+
+        for (package_name, package_info) in packages.into_iter().progress_with(progress) {
             if !self.filtered_pkgs().contains(package_name)
                 || matches!(package_name, PackageName::Root)
             {
