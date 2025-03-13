@@ -50,13 +50,17 @@ impl<'de> Deserialize<'de> for PackageEntry {
             .pop_front()
             .and_then(val_to_info)
             .or_else(|| vals.pop_front().and_then(val_to_info));
+        let checksum = vals.pop_front().and_then(|val| match val {
+            Vals::Str(sha) => Some(sha),
+            Vals::Info(_) => None,
+        });
         Ok(Self {
             ident: key,
             info,
             // The rest are only necessary for serializing a lockfile and aren't needed until adding
             // `prune` support
             registry: None,
-            checksum: None,
+            checksum,
             root: None,
         })
     }
@@ -117,7 +121,7 @@ mod test {
                     .collect(),
                 ..Default::default()
             }),
-            checksum: None,
+            checksum: Some("sha".into()),
             root: None,
         }
     );
