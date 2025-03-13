@@ -6,34 +6,35 @@ import { VercelLogo } from "../../_components/logos/og/vercel-logo";
 import fs from "fs";
 import path from "path";
 
-export type Products = "repo";
-
-export async function GET(req: NextApiRequest): Promise<Response> {
-  const fontPath = path.join(
-    process.cwd(),
-    "node_modules",
-    "geist",
-    "dist",
-    "fonts",
-    "geist-sans",
-    "Geist-Regular.ttf"
-  );
-  const geistSans = fs.readFileSync(fontPath);
-
-  const fontMonoPath = path.join(
-    process.cwd(),
-    "node_modules",
-    "geist",
-    "dist",
-    "fonts",
-    "geist-mono",
-    "GeistMono-Regular.ttf"
-  );
-  const geistMono = fs.readFileSync(fontMonoPath);
-
+const getBackgroundImage = () => {
   const bgImagePath = path.join(process.cwd(), "app", "api", "og", "bg.jpeg");
   const bgImageBuffer = fs.readFileSync(bgImagePath);
-  const bg = `data:image/jpeg;base64,${bgImageBuffer.toString("base64")}`;
+  return `data:image/jpeg;base64,${bgImageBuffer.toString("base64")}`;
+};
+
+// Choosing to pull these from node_modules so that its always consistent across the site
+// TODO(maybe?): Import them like any other package? import {} from 'geist'
+const GEIST_BASE = path.join(
+  process.cwd(),
+  "node_modules",
+  "geist",
+  "dist",
+  "fonts"
+);
+
+const loadFonts = () => {
+  const geistSans = fs.readFileSync(
+    path.join(GEIST_BASE, "geist-sans", "Geist-Regular.ttf")
+  );
+  const geistMono = fs.readFileSync(
+    path.join(GEIST_BASE, "geist-mono", "GeistMono-Regular.ttf")
+  );
+  return { geistSans, geistMono };
+};
+
+const { geistSans, geistMono } = loadFonts();
+
+export async function GET(req: NextApiRequest): Promise<Response> {
   try {
     if (!req.url) {
       throw new Error("No URL was provided");
@@ -61,12 +62,11 @@ export async function GET(req: NextApiRequest): Promise<Response> {
             fontFamily: "Geist Sans",
             fontWeight: 700,
             fontSize: 60,
-            backgroundImage: `url(${bg})`,
+            backgroundImage: `url(${getBackgroundImage()})`,
             backgroundSize: "1200px 630px",
             color: "#fff",
           }}
         >
-          {}
           <div
             style={{ display: "flex", height: 97 * 1.1, alignItems: "center" }}
           >
@@ -121,16 +121,12 @@ export async function GET(req: NextApiRequest): Promise<Response> {
       }
     );
   } catch (err: unknown) {
-    if (process.env.NODE_ENV === "development") {
-      // eslint-disable-next-line no-console
-      console.error(err);
-    }
-
+    // Protects us from serving no image at all if something is broken.
     if (process.env.VERCEL) {
       return new Response(undefined, {
         status: 302,
         headers: {
-          Location: "https://turbo.build/og-image.png",
+          Location: "/og-image.png",
         },
       });
     }
