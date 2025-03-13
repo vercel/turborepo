@@ -36,7 +36,6 @@ use turborepo_ui::{color, ColorConfig, BOLD_GREEN, BOLD_RED};
 use crate::{
     boundaries::{imports::DependencyLocations, tags::ProcessedRulesMap, tsconfig::TsConfigLoader},
     run::Run,
-    turbo_json::TurboJson,
 };
 
 #[derive(Clone, Debug, Error, Diagnostic)]
@@ -339,18 +338,15 @@ impl Run {
         )
         .await?;
 
-        if let Ok(TurboJson {
-            tags: Some(tags), ..
-        }) = self.turbo_json_loader().load(package_name)
-        {
-            if let Some(tag_rules) = tag_rules {
-                result.diagnostics.extend(self.check_package_tags(
-                    PackageNode::Workspace(package_name.clone()),
-                    &package_info.package_json,
-                    tags,
-                    tag_rules,
-                )?);
-            } else {
+        if let Ok(turbo_json) = self.turbo_json_loader().load(package_name) {
+            result.diagnostics.extend(self.check_package_tags(
+                PackageNode::Workspace(package_name.clone()),
+                &package_info.package_json,
+                turbo_json.tags.as_ref(),
+                tag_rules.as_ref(),
+            )?);
+
+            if turbo_json.tags.is_some() && tag_rules.is_none() {
                 // NOTE: if we use tags for something other than boundaries, we should remove
                 // this warning
                 warn!(
