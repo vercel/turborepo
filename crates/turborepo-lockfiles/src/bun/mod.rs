@@ -13,7 +13,7 @@ use crate::Lockfile;
 mod de;
 mod id;
 
-type Map<K, V> = std::collections::HashMap<K, V>;
+type Map<K, V> = std::collections::BTreeMap<K, V>;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -25,11 +25,23 @@ pub enum Error {
     Print(#[from] biome_formatter::PrintError),
     #[error("Turborepo cannot serialize Bun lockfiles.")]
     NotImplemented,
+    #[error("{ident} had two entries with differing checksums: {sha1}, {sha2}")]
+    MismatchedShas {
+        ident: String,
+        sha1: String,
+        sha2: String,
+    },
+}
+
+#[derive(Debug)]
+pub struct BunLockfile {
+    data: BunLockfileData,
+    key_to_entry: HashMap<String, String>,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct BunLockfile {
+pub struct BunLockfileData {
     #[allow(unused)]
     lockfile_version: i32,
     workspaces: Map<String, WorkspaceEntry>,
@@ -92,6 +104,7 @@ impl Lockfile for BunLockfile {
         version: &str,
     ) -> Result<Option<crate::Package>, crate::Error> {
         let workspace_entry = self
+            .data
             .workspaces
             .get(workspace_path)
             .ok_or_else(|| crate::Error::MissingWorkspace(workspace_path.into()))?;
@@ -100,7 +113,7 @@ impl Lockfile for BunLockfile {
         if let Some((_key, entry)) = self.package_entry(&workspace_key) {
             let mut version = entry.version().to_string();
             // Check for any patches
-            if let Some(patch) = self.patched_dependencies.get(&entry.ident) {
+            if let Some(patch) = self.data.patched_dependencies.get(&entry.ident) {
                 version.push('+');
                 version.push_str(patch);
             }
@@ -130,14 +143,19 @@ impl Lockfile for BunLockfile {
         &self,
         key: &str,
     ) -> Result<Option<std::collections::HashMap<String, String>>, crate::Error> {
-        let entry = self
-            .packages
+        let entry_key = self
+            .key_to_entry
             .get(key)
+            .ok_or_else(|| crate::Error::MissingPackage(key.into()))?;
+        let entry = self
+            .data
+            .packages
+            .get(entry_key)
             .ok_or_else(|| crate::Error::MissingPackage(key.into()))?;
 
         let mut deps = HashMap::new();
         for (dependency, version) in entry.info.iter().flat_map(|info| info.all_dependencies()) {
-            let parent_key = format!("{key}/{dependency}");
+            let parent_key = format!("{entry_key}/{dependency}");
             let Some((dep_key, _)) = self.package_entry(&parent_key) else {
                 return Err(crate::Error::MissingPackage(dependency.to_string()));
             };
@@ -173,7 +191,7 @@ impl Lockfile for BunLockfile {
     }
 
     fn human_name(&self, package: &crate::Package) -> Option<String> {
-        let entry = self.packages.get(&package.key)?;
+        let entry = self.data.packages.get(&package.key)?;
         Some(entry.ident.clone())
     }
 }
@@ -188,7 +206,7 @@ impl BunLockfile {
     // present in the lockfile
     fn package_entry(&self, key: &str) -> Option<(&str, &PackageEntry)> {
         let (key, entry) =
-            PossibleKeyIter::new(key).find_map(|k| self.packages.get_key_value(k))?;
+            PossibleKeyIter::new(key).find_map(|k| self.data.packages.get_key_value(k))?;
         Some((key, entry))
     }
 }
@@ -217,8 +235,25 @@ impl FromStr for BunLockfile {
         )
         .map_err(Error::from)?;
         let strict_json = format.print().map_err(Error::from)?;
-        let this = serde_json::from_str(strict_json.as_code())?;
-        Ok(this)
+        let data: BunLockfileData = serde_json::from_str(strict_json.as_code())?;
+        let mut key_to_entry = HashMap::with_capacity(data.packages.len());
+        for (path, info) in data.packages.iter() {
+            if let Some(prev_path) = key_to_entry.insert(info.ident.clone(), path.clone()) {
+                let prev_info = data
+                    .packages
+                    .get(&prev_path)
+                    .expect("we just got this path from the packages list");
+                if prev_info.checksum != info.checksum {
+                    return Err(Error::MismatchedShas {
+                        ident: info.ident.clone(),
+                        sha1: prev_info.checksum.clone().unwrap_or_default(),
+                        sha2: info.checksum.clone().unwrap_or_default(),
+                    }
+                    .into());
+                }
+            }
+        }
+        Ok(Self { data, key_to_entry })
     }
 }
 impl PackageEntry {
@@ -248,6 +283,7 @@ impl PackageInfo {
 #[cfg(test)]
 mod test {
     use pretty_assertions::assert_eq;
+    use serde_json::json;
     use test_case::test_case;
 
     use super::*;
@@ -282,17 +318,20 @@ mod test {
         "validate-npm-package-name",
     ]
     .as_slice();
+    // Both @turbo/gen and log-symbols depend on the same version of chalk
+    // log-symbols version wins out, but this is okay since they are the same exact
+    // version of chalk.
     const TURBO_GEN_CHALK_DEPS: &[&str] = [
-        "@turbo/gen/chalk/ansi-styles",
-        "@turbo/gen/chalk/escape-string-regexp",
-        "@turbo/gen/chalk/supports-color",
+        "log-symbols/chalk/ansi-styles",
+        "log-symbols/chalk/escape-string-regexp",
+        "log-symbols/chalk/supports-color",
     ]
     .as_slice();
     const CHALK_DEPS: &[&str] = ["ansi-styles", "supports-color"].as_slice();
 
-    #[test_case("@turbo/gen", TURBO_GEN_DEPS)]
-    #[test_case("@turbo/gen/chalk", TURBO_GEN_CHALK_DEPS)]
-    #[test_case("chalk", CHALK_DEPS)]
+    #[test_case("@turbo/gen@1.13.4", TURBO_GEN_DEPS)]
+    #[test_case("chalk@2.4.2", TURBO_GEN_CHALK_DEPS)]
+    #[test_case("chalk@4.1.2", CHALK_DEPS)]
     fn test_all_dependencies(key: &str, expected: &[&str]) {
         let lockfile = BunLockfile::from_str(BASIC_LOCKFILE).unwrap();
         let mut expected = expected.to_vec();
@@ -319,5 +358,30 @@ mod test {
             pkg,
             crate::Package::new("is-odd@3.0.0", "3.0.0+patches/is-odd@3.0.0.patch")
         );
+    }
+
+    #[test]
+    fn test_failure_if_mismatched_keys() {
+        let contents = serde_json::to_string(&json!({
+            "lockfileVersion": 0,
+            "workspaces": {
+                "": {
+                    "name": "test",
+                    "dependencies": {
+                        "foo": "^1.0.0",
+                        "bar": "^1.0.0",
+                    }
+                }
+            },
+            "packages": {
+                "bar": ["bar@1.0.0", { "dependencies": { "shared": "^1.0.0" } }, "sha512-goodbye"],
+                "bar/shared": ["shared@1.0.0", {}, "sha512-bar"],
+                "foo": ["foo@1.0.0", { "dependencies": { "shared": "^1.0.0" } }, "sha512-hello"],
+                "foo/shared": ["shared@1.0.0", { }, "sha512-foo"],
+            }
+        }))
+        .unwrap();
+        let lockfile = BunLockfile::from_str(&contents);
+        assert!(lockfile.is_err(), "matching packages have differing shas");
     }
 }
