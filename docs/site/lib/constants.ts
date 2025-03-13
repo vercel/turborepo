@@ -1,6 +1,6 @@
 export const PRODUCT_SLOGANS = {
   turbo:
-    "Turbo is an incremental bundler and build system optimized for JavaScript and TypeScript, written in Rust.",
+    "Turborepo is a build system optimized for JavaScript and TypeScript, written in Rust.",
   repo: "The build system that makes ship happen.",
 } as const;
 
