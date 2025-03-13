@@ -100,6 +100,14 @@ impl From<BoundariesDiagnostic> for Diagnostic {
                 import: None,
                 reason: Some(tag),
             },
+            BoundariesDiagnostic::PackageBoundariesHasTags { span, text: _ } => Diagnostic {
+                message,
+                path: None,
+                start: span.map(|span| span.offset()),
+                end: span.map(|span| span.offset() + span.len()),
+                import: None,
+                reason: None,
+            },
         }
     }
 }
