@@ -204,7 +204,7 @@ pub enum Error {
     },
     #[error("Cannot load turbo.json for {0} in single package mode.")]
     InvalidTurboJsonLoad(PackageName),
-    #[error("Cannot use '$TURBO_ROOT$' anywhere besides start of string.")]
+    #[error("\"$TURBO_ROOT$\" must be used at the start of glob.")]
     InvalidTurboRootUse {
         #[label("must be at start")]
         span: Option<SourceSpan>,
