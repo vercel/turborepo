@@ -57,15 +57,9 @@ export const createMetadata = ({
     console.warn(`Warning: ${canonicalPath} does not have a description.`);
   }
 
-  const formatTitle = (): string => {
-    return title ?? "Turborepo";
-  };
-
-  const formattedTitle = formatTitle();
-
   return {
     metadataBase: getBaseURL(),
-    title: formattedTitle,
+    title: title ? `${title} | Turborepo` : "Turborepo",
     description,
     openGraph: {
       siteName: "Turborepo",
