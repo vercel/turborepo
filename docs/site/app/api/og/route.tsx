@@ -3,39 +3,33 @@ import { ImageResponse } from "next/og";
 import type { NextApiRequest } from "next/index";
 import { RepoLogo } from "../../_components/logos/og/repo-logo";
 import { VercelLogo } from "../../_components/logos/og/vercel-logo";
-import fs from "fs";
-import path from "path";
 
-const getBackgroundImage = () => {
-  const bgImagePath = path.join(process.cwd(), "app", "api", "og", "bg.jpeg");
-  const bgImageBuffer = fs.readFileSync(bgImagePath);
-  return `data:image/jpeg;base64,${bgImageBuffer.toString("base64")}`;
-};
-
-// Choosing to pull these from node_modules so that its always consistent across the site
-// TODO(maybe?): Import them like any other package? import {} from 'geist'
-const GEIST_BASE = path.join(
-  process.cwd(),
-  "node_modules",
-  "geist",
-  "dist",
-  "fonts"
-);
-
-const loadFonts = () => {
-  const geistSans = fs.readFileSync(
-    path.join(GEIST_BASE, "geist-sans", "Geist-Regular.ttf")
-  );
-  const geistMono = fs.readFileSync(
-    path.join(GEIST_BASE, "geist-mono", "GeistMono-Regular.ttf")
-  );
-  return { geistSans, geistMono };
-};
-
-const { geistSans, geistMono } = loadFonts();
+function _arrayBufferToBase64(buffer: ArrayBuffer): string {
+  let binary = "";
+  const bytes = new Uint8Array(buffer);
+  const len = bytes.byteLength;
+  for (let i = 0; i < len; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
 
 export async function GET(req: NextApiRequest): Promise<Response> {
   try {
+    const [geistSans, geistMono, bg] = await Promise.all([
+      fetch(new URL("./Geist-Regular.ttf", import.meta.url)).then((res) =>
+        res.arrayBuffer()
+      ),
+      fetch(new URL("./GeistMono-Regular.ttf", import.meta.url)).then((res) =>
+        res.arrayBuffer()
+      ),
+      _arrayBufferToBase64(
+        await fetch(new URL("./bg.jpeg", import.meta.url)).then((res) =>
+          res.arrayBuffer()
+        )
+      ),
+    ]);
+
     if (!req.url) {
       throw new Error("No URL was provided");
     }
@@ -62,7 +56,7 @@ export async function GET(req: NextApiRequest): Promise<Response> {
             fontFamily: "Geist Sans",
             fontWeight: 700,
             fontSize: 60,
-            backgroundImage: `url(${getBackgroundImage()})`,
+            backgroundImage: `url(${bg})`,
             backgroundSize: "1200px 630px",
             color: "#fff",
           }}
