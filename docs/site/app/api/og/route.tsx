@@ -4,6 +4,10 @@ import type { NextApiRequest } from "next/index";
 import { RepoLogo } from "../../_components/logos/og/repo-logo";
 import { VercelLogo } from "../../_components/logos/og/vercel-logo";
 
+export const config = {
+  runtime: "edge",
+};
+
 function _arrayBufferToBase64(buffer: ArrayBuffer): string {
   let binary = "";
   const bytes = new Uint8Array(buffer);
@@ -116,7 +120,7 @@ export async function GET(req: NextApiRequest): Promise<Response> {
     );
   } catch (err: unknown) {
     // Protects us from serving no image at all if something is broken.
-    if (process.env.VERCEL) {
+    if (process.env.VERCEL_ENV === "production") {
       return new Response(undefined, {
         status: 302,
         headers: {
