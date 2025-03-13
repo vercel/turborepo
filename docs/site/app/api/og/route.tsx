@@ -4,9 +4,7 @@ import type { NextApiRequest } from "next/index";
 import { RepoLogo } from "../../_components/logos/og/repo-logo";
 import { VercelLogo } from "../../_components/logos/og/vercel-logo";
 
-export const config = {
-  runtime: "edge",
-};
+export const runtime = "edge";
 
 function _arrayBufferToBase64(buffer: ArrayBuffer): string {
   let binary = "";
@@ -20,7 +18,7 @@ function _arrayBufferToBase64(buffer: ArrayBuffer): string {
 
 export async function GET(req: NextApiRequest): Promise<Response> {
   try {
-    const [geistSans, geistMono, bg] = await Promise.all([
+    const [geist, geistMono, bg] = await Promise.all([
       fetch(new URL("./Geist-Regular.ttf", import.meta.url)).then((res) =>
         res.arrayBuffer()
       ),
@@ -34,11 +32,7 @@ export async function GET(req: NextApiRequest): Promise<Response> {
       ),
     ]);
 
-    if (!req.url) {
-      throw new Error("No URL was provided");
-    }
-
-    const { searchParams } = new URL(req.url);
+    const { searchParams } = new URL(req.url!);
 
     let title: string | null = null;
 
@@ -57,10 +51,10 @@ export async function GET(req: NextApiRequest): Promise<Response> {
             justifyContent: "center",
             width: "100%",
             height: "100%",
-            fontFamily: "Geist Sans",
+            fontFamily: "Geist Mono",
             fontWeight: 700,
             fontSize: 60,
-            backgroundImage: `url(${bg})`,
+            backgroundImage: `url(data:image/jpeg;base64,${bg})`,
             backgroundSize: "1200px 630px",
             color: "#fff",
           }}
@@ -73,7 +67,7 @@ export async function GET(req: NextApiRequest): Promise<Response> {
           {title ? (
             <div
               style={{
-                fontFamily: "Geist Sans",
+                fontFamily: "Geist Mono",
                 fontSize: 36,
                 letterSpacing: -1.5,
                 padding: "40px 20px 30px",
@@ -111,7 +105,7 @@ export async function GET(req: NextApiRequest): Promise<Response> {
           },
           {
             name: "Geist Sans",
-            data: geistSans,
+            data: geist,
             weight: 400 as const,
             style: "normal" as const,
           },
@@ -119,16 +113,17 @@ export async function GET(req: NextApiRequest): Promise<Response> {
       }
     );
   } catch (err: unknown) {
-    // Protects us from serving no image at all if something is broken.
+    // Prevents us from have no OG image at all in production.
     if (process.env.VERCEL_ENV === "production") {
       return new Response(undefined, {
         status: 302,
         headers: {
-          Location: "/og-image.png",
+          Location: "https://turbo.build/og-image.png",
         },
       });
     }
 
+    // We want to see the 500s everywhere else.
     return new Response(undefined, {
       status: 500,
     });
