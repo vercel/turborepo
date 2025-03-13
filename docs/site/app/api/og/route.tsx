@@ -1,10 +1,10 @@
 import React from "react";
 import { ImageResponse } from "next/og";
 import type { NextApiRequest } from "next/index";
-import { PRODUCT_SLOGANS } from "@/lib/constants";
-import { RepoLogo } from "../../_components/logos/og/repo-logo";
 import { TurboLogo } from "../../_components/logos/og/turbo-logo";
 import { VercelLogo } from "../../_components/logos/og/vercel-logo";
+import fs from "fs";
+import path from "path";
 
 export type Products = "repo";
 
@@ -19,20 +19,27 @@ function _arrayBufferToBase64(buffer: ArrayBuffer): string {
 }
 
 export async function GET(req: NextApiRequest): Promise<Response> {
+  const bgImagePath = path.join(process.cwd(), "app", "api", "og", "bg.jpeg");
+  const bgImageBuffer = fs.readFileSync(bgImagePath);
+  const bg = `data:image/jpeg;base64,${bgImageBuffer.toString("base64")}`;
+  // const url = new URL("bg.jpeg", import.meta.url);
+  // console.log(url);
+  // console.log(await fetch(url));
   try {
-    const [geist, geistMono, bg] = await Promise.all([
-      fetch(new URL("./Geist-Regular.ttf", import.meta.url)).then((res) =>
-        res.arrayBuffer()
-      ),
-      fetch(new URL("./GeistMono-Regular.ttf", import.meta.url)).then((res) =>
-        res.arrayBuffer()
-      ),
-      _arrayBufferToBase64(
-        await fetch(new URL("./bg.jpeg", import.meta.url)).then((res) =>
-          res.arrayBuffer()
-        )
-      ),
-    ]);
+    // const [bg] = await Promise.all([
+    // fetch(new URL("./Geist-Regular.ttf", import.meta.url)).then((res) =>
+    //   res.arrayBuffer()
+    // ),
+    // fetch(new URL("./GeistMono-Regular.ttf", import.meta.url)).then((res) =>
+    //   res.arrayBuffer()
+    // ),
+    // _arrayBufferToBase64(
+    //   // await fetch(new URL("./bg.jpeg", import.meta.url)).then((res) =>
+    //   await fetch(new URL("./bg.jpeg", import.meta.url)).then((res) =>
+    //     res.arrayBuffer()
+    //   )
+    // ),
+    // ]);
 
     if (!req.url) {
       throw new Error("No URL was provided");
@@ -41,16 +48,6 @@ export async function GET(req: NextApiRequest): Promise<Response> {
     const { searchParams } = new URL(req.url);
 
     let title: string | null = null;
-
-    const type: string | null = searchParams.get("type");
-    const typeIsNotProduct = type !== "repo";
-    if (typeIsNotProduct && !searchParams.has("title")) {
-      throw new Error(type ?? "undefined");
-    }
-
-    if (!typeIsNotProduct) {
-      title = PRODUCT_SLOGANS[type as keyof typeof PRODUCT_SLOGANS];
-    }
 
     if (searchParams.has("title")) {
       // @ts-expect-error -- We just checked .has so we know its there.
@@ -70,7 +67,7 @@ export async function GET(req: NextApiRequest): Promise<Response> {
             fontFamily: "Geist Mono",
             fontWeight: 700,
             fontSize: 60,
-            backgroundImage: `url(data:image/jpeg;base64,${bg})`,
+            backgroundImage: `url(${bg})`,
             backgroundSize: "1200px 630px",
             color: "#fff",
           }}
@@ -79,7 +76,7 @@ export async function GET(req: NextApiRequest): Promise<Response> {
           <div
             style={{ display: "flex", height: 97 * 1.1, alignItems: "center" }}
           >
-            <Logo type={type as Products | null} />
+            <TurboLogo height={97 * 1.1} width={459 * 1.1} />
           </div>
           {title ? (
             <div
@@ -113,43 +110,39 @@ export async function GET(req: NextApiRequest): Promise<Response> {
         </div>
       ),
       {
-        fonts: [
-          {
-            name: "Geist Mono",
-            data: geistMono,
-            weight: 700 as const,
-            style: "normal" as const,
-          },
-          {
-            name: "Geist Sans",
-            data: geist,
-            weight: 400 as const,
-            style: "normal" as const,
-          },
-        ],
+        // fonts: [
+        //   {
+        //     name: "Geist Mono",
+        //     data: geistMono,
+        //     weight: 700 as const,
+        //     style: "normal" as const,
+        //   },
+        //   {
+        //     name: "Geist Sans",
+        //     data: geist,
+        //     weight: 400 as const,
+        //     style: "normal" as const,
+        //   },
+        // ],
       }
     );
   } catch (err: unknown) {
     if (process.env.NODE_ENV === "development") {
       // eslint-disable-next-line no-console
-      console.log(
-        // @ts-expect-error -- Error handling.
-        `Incorrect type provided to /api/og. "${err.message}" was provided.`
-      );
+      console.error(err);
     }
+
+    if (process.env.VERCEL) {
+      return new Response(undefined, {
+        status: 302,
+        headers: {
+          Location: "https://turbo.build/og-image.png",
+        },
+      });
+    }
+
     return new Response(undefined, {
-      status: 302,
-      headers: {
-        Location: "https://turbo.build/og-image.png",
-      },
+      status: 500,
     });
   }
-}
-
-function Logo({ type }: { type: Products | null }): JSX.Element {
-  if (type === "repo") {
-    return <RepoLogo height={83 * 1.1} width={616 * 1.1} />;
-  }
-
-  return <TurboLogo height={97 * 1.1} width={459 * 1.1} />;
 }
