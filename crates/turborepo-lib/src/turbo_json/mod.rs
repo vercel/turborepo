@@ -908,6 +908,14 @@ mod tests {
         }"#,
         "implicit dependencies and tags"
     )]
+    #[test_case(
+        r#"{
+          "dependencies": {
+              "allow": ["my-package"]
+          }
+      }"#,
+        "package rule"
+    )]
     fn test_deserialize_boundaries(json: &str, name: &str) {
         let deserialized_result = deserialize_from_json_str(
             json,

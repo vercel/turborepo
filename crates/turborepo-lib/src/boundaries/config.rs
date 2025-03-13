@@ -11,13 +11,20 @@ pub struct BoundariesConfig {
     pub tags: Option<Spanned<RulesMap>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub implicit_dependencies: Option<Spanned<Vec<Spanned<String>>>>,
+    /// Defines a rule for a package `turbo.json`
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dependencies: Option<Spanned<Permissions>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dependents: Option<Spanned<Permissions>>,
 }
 
 pub type RulesMap = HashMap<String, Spanned<Rule>>;
 
 #[derive(Serialize, Default, Debug, Clone, Iterable, Deserializable, PartialEq)]
 pub struct Rule {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub dependencies: Option<Spanned<Permissions>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub dependents: Option<Spanned<Permissions>>,
 }
 
