@@ -1,12 +1,10 @@
 import React from "react";
 import { ImageResponse } from "next/og";
 import type { NextApiRequest } from "next/index";
-import { PRODUCT_SLOGANS } from "@/lib/constants";
 import { RepoLogo } from "../../_components/logos/og/repo-logo";
-import { TurboLogo } from "../../_components/logos/og/turbo-logo";
 import { VercelLogo } from "../../_components/logos/og/vercel-logo";
 
-export type Products = "repo";
+export const runtime = "edge";
 
 function _arrayBufferToBase64(buffer: ArrayBuffer): string {
   let binary = "";
@@ -34,23 +32,9 @@ export async function GET(req: NextApiRequest): Promise<Response> {
       ),
     ]);
 
-    if (!req.url) {
-      throw new Error("No URL was provided");
-    }
-
-    const { searchParams } = new URL(req.url);
+    const { searchParams } = new URL(req.url!);
 
     let title: string | null = null;
-
-    const type: string | null = searchParams.get("type");
-    const typeIsNotProduct = type !== "repo";
-    if (typeIsNotProduct && !searchParams.has("title")) {
-      throw new Error(type ?? "undefined");
-    }
-
-    if (!typeIsNotProduct) {
-      title = PRODUCT_SLOGANS[type as keyof typeof PRODUCT_SLOGANS];
-    }
 
     if (searchParams.has("title")) {
       // @ts-expect-error -- We just checked .has so we know its there.
@@ -75,11 +59,10 @@ export async function GET(req: NextApiRequest): Promise<Response> {
             color: "#fff",
           }}
         >
-          {}
           <div
             style={{ display: "flex", height: 97 * 1.1, alignItems: "center" }}
           >
-            <Logo type={type as Products | null} />
+            <RepoLogo />
           </div>
           {title ? (
             <div
@@ -130,26 +113,19 @@ export async function GET(req: NextApiRequest): Promise<Response> {
       }
     );
   } catch (err: unknown) {
-    if (process.env.NODE_ENV === "development") {
-      // eslint-disable-next-line no-console
-      console.log(
-        // @ts-expect-error -- Error handling.
-        `Incorrect type provided to /api/og. "${err.message}" was provided.`
-      );
+    // Prevents us from have no OG image at all in production.
+    if (process.env.VERCEL_ENV === "production") {
+      return new Response(undefined, {
+        status: 302,
+        headers: {
+          Location: "https://turbo.build/og-image.png",
+        },
+      });
     }
+
+    // We want to see the 500s everywhere else.
     return new Response(undefined, {
-      status: 302,
-      headers: {
-        Location: "https://turbo.build/og-image.png",
-      },
+      status: 500,
     });
   }
-}
-
-function Logo({ type }: { type: Products | null }): JSX.Element {
-  if (type === "repo") {
-    return <RepoLogo height={83 * 1.1} width={616 * 1.1} />;
-  }
-
-  return <TurboLogo height={97 * 1.1} width={459 * 1.1} />;
 }
