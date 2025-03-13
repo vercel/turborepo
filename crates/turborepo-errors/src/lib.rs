@@ -113,6 +113,12 @@ impl<T: Deserializable> Deserializable for Spanned<T> {
     }
 }
 
+impl Spanned<String> {
+    pub fn as_str(&self) -> &str {
+        self.value.as_str()
+    }
+}
+
 impl<T> Spanned<T> {
     pub fn new(t: T) -> Self {
         Self {

@@ -760,7 +760,7 @@ mod test {
                 $(
                     let path = $root.join_components(&["packages", $name, "package.json"]);
                     let dependencies = Some($deps.iter().map(|dep: &&str| (dep.to_string(), "workspace:*".to_string())).collect());
-                    let package_json = PackageJson { name: Some($name.to_string()), dependencies, ..Default::default() };
+                    let package_json = PackageJson { name: Some(Spanned::new($name.to_string())), dependencies, ..Default::default() };
                     _map.insert(path, package_json);
                 )+
                 _map

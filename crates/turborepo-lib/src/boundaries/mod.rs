@@ -41,6 +41,14 @@ use crate::{
 
 #[derive(Clone, Debug, Error, Diagnostic)]
 pub enum SecondaryDiagnostic {
+    #[error("package `{package} is defined here")]
+    PackageDefinedHere {
+        package: String,
+        #[label]
+        package_span: Option<SourceSpan>,
+        #[source_code]
+        package_text: NamedSource<String>,
+    },
     #[error("consider adding one of the following tags listed here")]
     Allowlist {
         #[label]
@@ -59,6 +67,17 @@ pub enum SecondaryDiagnostic {
 
 #[derive(Clone, Debug, Error, Diagnostic)]
 pub enum BoundariesDiagnostic {
+    #[error("Tag `{tag}` cannot share the same name as package `{package}`")]
+    TagSharesPackageName {
+        tag: String,
+        package: String,
+        #[label("tag defined here")]
+        tag_span: Option<SourceSpan>,
+        #[source_code]
+        tag_text: NamedSource<String>,
+        #[related]
+        secondary: [SecondaryDiagnostic; 1],
+    },
     #[error("Path `{path}` is not valid UTF-8. Turborepo only supports UTF-8 paths.")]
     InvalidPath { path: String },
     #[error(
@@ -320,6 +339,7 @@ impl Run {
             if let Some(tag_rules) = tag_rules {
                 result.diagnostics.extend(self.check_package_tags(
                     PackageNode::Workspace(package_name.clone()),
+                    &package_info.package_json,
                     tags,
                     tag_rules,
                 )?);
