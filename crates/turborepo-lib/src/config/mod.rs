@@ -211,6 +211,13 @@ pub enum Error {
         #[source_code]
         text: NamedSource<String>,
     },
+    #[error("\"$TURBO_ROOT$\" must be followed by a '/'.")]
+    InvalidTurboRootNeedsSlash {
+        #[label("\"$TURBO_ROOT$\" must be followed by a '/'.")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource<String>,
+    },
 }
 
 const DEFAULT_API_URL: &str = "https://vercel.com/api";

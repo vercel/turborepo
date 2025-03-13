@@ -34,6 +34,7 @@ pub use loader::TurboJsonLoader;
 use crate::{boundaries::BoundariesConfig, config::UnnecessaryPackageTaskSyntaxError};
 
 const TURBO_ROOT: &str = "$TURBO_ROOT$";
+const TURBO_ROOT_SLASH: &str = "$TURBO_ROOT$/";
 
 #[derive(Serialize, Deserialize, Debug, Default, PartialEq, Clone, Deserializable)]
 #[serde(rename_all = "camelCase")]
@@ -777,7 +778,14 @@ fn replace_turbo_root_token_in_string(
     input: &mut Spanned<UnescapedString>,
     path_to_repo_root: &RelativeUnixPath,
 ) -> Result<(), Error> {
-    match input.find(TURBO_ROOT) {
+    let turbo_root_index = input.find(TURBO_ROOT);
+    if let Some(index) = turbo_root_index {
+        if !input.as_inner()[index..].starts_with(TURBO_ROOT_SLASH) {
+            let (span, text) = input.span_and_text("turbo.json");
+            return Err(Error::InvalidTurboRootNeedsSlash { span, text });
+        }
+    }
+    match turbo_root_index {
         Some(0) => {
             // Replace
             input
@@ -1283,7 +1291,8 @@ mod tests {
     #[test_case("index.ts", Ok("index.ts") ; "no token")]
     #[test_case("$TURBO_ROOT$/config.txt", Ok("../../config.txt") ; "valid token")]
     #[test_case("!$TURBO_ROOT$/README.md", Ok("!../../README.md") ; "negation")]
-    #[test_case("../$TURBO_ROOT$/config.txt", Err("Cannot use '$TURBO_ROOT$' anywhere besides start of string.") ; "invalid token")]
+    #[test_case("../$TURBO_ROOT$/config.txt", Err("\"$TURBO_ROOT$\" must be used at the start of glob.") ; "invalid token")]
+    #[test_case("$TURBO_ROOT$config.txt", Err("\"$TURBO_ROOT$\" must be followed by a '/'.") ; "trailing slash")]
     fn test_replace_turbo_root(input: &'static str, expected: Result<&str, &str>) {
         let mut spanned_string = Spanned::new(UnescapedString::from(input))
             .with_path(Arc::from("turbo.json"))
