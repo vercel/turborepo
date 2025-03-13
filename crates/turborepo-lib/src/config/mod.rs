@@ -206,7 +206,7 @@ pub enum Error {
     InvalidTurboJsonLoad(PackageName),
     #[error("\"$TURBO_ROOT$\" must be used at the start of glob.")]
     InvalidTurboRootUse {
-        #[label("must be at start")]
+        #[label("\"$TURBO_ROOT$\" must be used at the start of glob.")]
         span: Option<SourceSpan>,
         #[source_code]
         text: NamedSource<String>,
