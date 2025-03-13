@@ -67,6 +67,13 @@ pub enum SecondaryDiagnostic {
 
 #[derive(Clone, Debug, Error, Diagnostic)]
 pub enum BoundariesDiagnostic {
+    #[error("Package boundaries rules cannot have `tags` key")]
+    PackageBoundariesHasTags {
+        #[label("tags defined here")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource<String>,
+    },
     #[error("Tag `{tag}` cannot share the same name as package `{package}`")]
     TagSharesPackageName {
         tag: String,
