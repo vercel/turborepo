@@ -893,6 +893,13 @@ mod test {
         "multiple tasks"
     )]
     #[test_case(
+        vec!["test".to_string()],
+        vec!["passthrough".to_string()],
+        TaskId::new("web", "build"),
+        None;
+        "different task"
+    )]
+    #[test_case(
         vec!["web#build".to_string()],
         vec!["passthrough".to_string()],
         TaskId::new("web", "build"),
