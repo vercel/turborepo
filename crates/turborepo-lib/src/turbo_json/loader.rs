@@ -434,6 +434,7 @@ mod test {
     use insta::assert_snapshot;
     use tempfile::tempdir;
     use test_case::test_case;
+    use turbopath::RelativeUnixPath;
     use turborepo_unescape::UnescapedString;
 
     use super::*;
@@ -616,7 +617,7 @@ mod test {
 
         assert_eq!(
             expected_root_build,
-            TaskDefinition::try_from(root_build.clone())?
+            TaskDefinition::from_raw(root_build.clone(), RelativeUnixPath::new(".").unwrap())?
         );
 
         Ok(())

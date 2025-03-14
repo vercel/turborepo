@@ -11,7 +11,7 @@ use clap::ValueEnum;
 use miette::{NamedSource, SourceSpan};
 use serde::{Deserialize, Serialize};
 use struct_iterable::Iterable;
-use turbopath::AbsoluteSystemPath;
+use turbopath::{AbsoluteSystemPath, RelativeUnixPath};
 use turborepo_errors::Spanned;
 use turborepo_repository::package_graph::ROOT_PKG_NAME;
 use turborepo_unescape::UnescapedString;
@@ -32,6 +32,9 @@ pub mod parser;
 pub use loader::TurboJsonLoader;
 
 use crate::{boundaries::BoundariesConfig, config::UnnecessaryPackageTaskSyntaxError};
+
+const TURBO_ROOT: &str = "$TURBO_ROOT$";
+const TURBO_ROOT_SLASH: &str = "$TURBO_ROOT$/";
 
 #[derive(Serialize, Deserialize, Debug, Default, PartialEq, Clone, Deserializable)]
 #[serde(rename_all = "camelCase")]
@@ -343,10 +346,12 @@ impl TryFrom<Vec<Spanned<UnescapedString>>> for TaskOutputs {
     }
 }
 
-impl TryFrom<RawTaskDefinition> for TaskDefinition {
-    type Error = Error;
-
-    fn try_from(raw_task: RawTaskDefinition) -> Result<Self, Error> {
+impl TaskDefinition {
+    pub fn from_raw(
+        mut raw_task: RawTaskDefinition,
+        path_to_repo_root: &RelativeUnixPath,
+    ) -> Result<Self, Error> {
+        replace_turbo_root_token(&mut raw_task, path_to_repo_root)?;
         let outputs = raw_task.outputs.unwrap_or_default().try_into()?;
 
         let cache = raw_task.cache.is_none_or(|c| c.into_inner());
@@ -572,6 +577,8 @@ impl TryFrom<RawTurboJson> for TurboJson {
             }
         }
 
+        let tasks = raw_turbo.tasks.clone().unwrap_or_default();
+
         Ok(TurboJson {
             text: raw_turbo.span.text,
             path: raw_turbo.span.path,
@@ -598,7 +605,7 @@ impl TryFrom<RawTurboJson> for TurboJson {
 
                 global_deps
             },
-            tasks: raw_turbo.tasks.unwrap_or_default(),
+            tasks,
             // copy these over, we don't need any changes here.
             extends: raw_turbo
                 .extends
@@ -629,7 +636,7 @@ impl TurboJson {
         path: &AbsoluteSystemPath,
     ) -> Result<TurboJson, Error> {
         let raw_turbo_json = RawTurboJson::read(repo_root, path)?;
-        raw_turbo_json.try_into()
+        TurboJson::try_from(raw_turbo_json)
     }
 
     pub fn task(&self, task_id: &TaskId, task_name: &TaskName) -> Option<RawTaskDefinition> {
@@ -765,17 +772,82 @@ fn gather_env_vars(
     Ok(())
 }
 
+// Takes an input/output glob that might start with TURBO_ROOT_PREFIX
+// and swap it with the relative path to the turbo root.
+fn replace_turbo_root_token_in_string(
+    input: &mut Spanned<UnescapedString>,
+    path_to_repo_root: &RelativeUnixPath,
+) -> Result<(), Error> {
+    let turbo_root_index = input.find(TURBO_ROOT);
+    if let Some(index) = turbo_root_index {
+        if !input.as_inner()[index..].starts_with(TURBO_ROOT_SLASH) {
+            let (span, text) = input.span_and_text("turbo.json");
+            return Err(Error::InvalidTurboRootNeedsSlash { span, text });
+        }
+    }
+    match turbo_root_index {
+        Some(0) => {
+            // Replace
+            input
+                .as_inner_mut()
+                .replace_range(..TURBO_ROOT.len(), path_to_repo_root.as_str());
+            Ok(())
+        }
+        // Handle negations
+        Some(1) if input.starts_with('!') => {
+            input
+                .as_inner_mut()
+                .replace_range(1..TURBO_ROOT.len() + 1, path_to_repo_root.as_str());
+            Ok(())
+        }
+        // We do not allow for TURBO_ROOT to be used in the middle of a glob
+        Some(_) => {
+            let (span, text) = input.span_and_text("turbo.json");
+            Err(Error::InvalidTurboRootUse { span, text })
+        }
+        None => Ok(()),
+    }
+}
+
+fn replace_turbo_root_token(
+    task_definition: &mut RawTaskDefinition,
+    path_to_repo_root: &RelativeUnixPath,
+) -> Result<(), Error> {
+    for input in task_definition
+        .inputs
+        .iter_mut()
+        .flat_map(|inputs| inputs.iter_mut())
+    {
+        replace_turbo_root_token_in_string(input, path_to_repo_root)?;
+    }
+
+    for output in task_definition
+        .outputs
+        .iter_mut()
+        .flat_map(|outputs| outputs.iter_mut())
+    {
+        replace_turbo_root_token_in_string(output, path_to_repo_root)?;
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use anyhow::Result;
     use biome_deserialize::json::deserialize_from_json_str;
     use biome_json_parser::JsonParserOptions;
     use pretty_assertions::assert_eq;
     use serde_json::json;
     use test_case::test_case;
+    use turbopath::RelativeUnixPath;
     use turborepo_unescape::UnescapedString;
 
-    use super::{RawTurboJson, SpacesJson, Spanned, TurboJson, UIMode};
+    use super::{
+        replace_turbo_root_token_in_string, RawTurboJson, SpacesJson, Spanned, TurboJson, UIMode,
+    };
     use crate::{
         boundaries::BoundariesConfig,
         cli::OutputLogsMode,
@@ -787,7 +859,7 @@ mod tests {
     #[test_case("{}", "empty boundaries")]
     #[test_case(r#"{"tags": {} }"#, "empty tags")]
     #[test_case(
-        r#"{"tags": { "my-tag": { "dependencies": { "allow": ["my-package"] } } } }"#,
+        r#"{"tags": { "my-tag": { "dependencies": { "allow": ["my-package"] } } }"#,
         "tags and dependencies"
     )]
     #[test_case(
@@ -954,6 +1026,29 @@ mod tests {
         }
       ; "full (windows)"
     )]
+    #[test_case(
+        r#"{
+            "inputs": ["$TURBO_ROOT$/config.txt"],
+            "outputs": ["$TURBO_ROOT$/coverage/**", "!$TURBO_ROOT$/coverage/index.html"]
+        }"#,
+        RawTaskDefinition {
+            inputs: Some(vec![Spanned::new(UnescapedString::from("$TURBO_ROOT$/config.txt")).with_range(25..50)]),
+            outputs: Some(vec![
+                Spanned::new(UnescapedString::from("$TURBO_ROOT$/coverage/**")).with_range(77..103),
+                Spanned::new(UnescapedString::from("!$TURBO_ROOT$/coverage/index.html")).with_range(105..140),
+            ]),
+            ..RawTaskDefinition::default()
+        },
+        TaskDefinition {
+            inputs: vec!["../../config.txt".to_owned()],
+            outputs: TaskOutputs {
+                inclusions: vec!["../../coverage/**".to_owned()],
+                exclusions: vec!["../../coverage/index.html".to_owned()],
+            },
+            ..TaskDefinition::default()
+        }
+    ; "turbo root"
+    )]
     fn test_deserialize_task_definition(
         task_definition_content: &str,
         expected_raw_task_definition: RawTaskDefinition,
@@ -968,7 +1063,8 @@ mod tests {
             deserialized_result.into_deserialized().unwrap();
         assert_eq!(raw_task_definition, expected_raw_task_definition);
 
-        let task_definition: TaskDefinition = raw_task_definition.try_into()?;
+        let task_definition =
+            TaskDefinition::from_raw(raw_task_definition, RelativeUnixPath::new("../..").unwrap())?;
         assert_eq!(task_definition, expected_task_definition);
 
         Ok(())
@@ -1190,5 +1286,26 @@ mod tests {
             dev_task.siblings.as_ref().unwrap().as_slice(),
             &[Spanned::new(UnescapedString::from("api#server"))]
         );
+    }
+
+    #[test_case("index.ts", Ok("index.ts") ; "no token")]
+    #[test_case("$TURBO_ROOT$/config.txt", Ok("../../config.txt") ; "valid token")]
+    #[test_case("!$TURBO_ROOT$/README.md", Ok("!../../README.md") ; "negation")]
+    #[test_case("../$TURBO_ROOT$/config.txt", Err("\"$TURBO_ROOT$\" must be used at the start of glob.") ; "invalid token")]
+    #[test_case("$TURBO_ROOT$config.txt", Err("\"$TURBO_ROOT$\" must be followed by a '/'.") ; "trailing slash")]
+    fn test_replace_turbo_root(input: &'static str, expected: Result<&str, &str>) {
+        let mut spanned_string = Spanned::new(UnescapedString::from(input))
+            .with_path(Arc::from("turbo.json"))
+            .with_text(format!("\"{input}\""))
+            .with_range(1..(input.len()));
+        let result = replace_turbo_root_token_in_string(
+            &mut spanned_string,
+            RelativeUnixPath::new("../..").unwrap(),
+        );
+        let actual = match result {
+            Ok(()) => Ok(spanned_string.as_inner().as_ref()),
+            Err(e) => Err(e.to_string()),
+        };
+        assert_eq!(actual, expected.map_err(|s| s.to_owned()));
     }
 }

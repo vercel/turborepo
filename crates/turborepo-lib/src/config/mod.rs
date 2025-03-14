@@ -204,6 +204,20 @@ pub enum Error {
     },
     #[error("Cannot load turbo.json for {0} in single package mode.")]
     InvalidTurboJsonLoad(PackageName),
+    #[error("\"$TURBO_ROOT$\" must be used at the start of glob.")]
+    InvalidTurboRootUse {
+        #[label("\"$TURBO_ROOT$\" must be used at the start of glob.")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource<String>,
+    },
+    #[error("\"$TURBO_ROOT$\" must be followed by a '/'.")]
+    InvalidTurboRootNeedsSlash {
+        #[label("\"$TURBO_ROOT$\" must be followed by a '/'.")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource<String>,
+    },
 }
 
 const DEFAULT_API_URL: &str = "https://vercel.com/api";
