@@ -13,7 +13,7 @@ turbo run [tasks] [options] [-- [args passed to tasks]]
 
 - **[tasks]**: Turborepo can run one or many tasks at the same time. To run a task through `turbo`, it must be specified in `turbo.json`.
 - **[options]**: Options are used to control the behavior of the `turbo run` command. Available flag options are described below.
-- **[-- [args passed to tasks]]**: You may also pass arguments to the underlying scripts. Note that all arguments will be passed to all tasks.
+- **[-- [args passed to tasks]]**: You may also pass arguments to the underlying scripts. Note that all arguments will be passed to all tasks that are named in the run command.
 
 <Callout type="good-to-know">
   `turbo run` is aliased to `turbo`. `turbo run build lint check-types` is the
