@@ -58,7 +58,6 @@ jobs:
       - name: "Setup Node"
         uses: ./.github/actions/setup-node
         with:
-          extra-flags: --no-optional
           node-version: ${{ matrix.node-version }}
         env:
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
