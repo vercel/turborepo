@@ -358,6 +358,8 @@ An allowlist of environment variables that should be made available to this task
 
 A list of file glob patterns relative to the package's `package.json` to cache when the task is successfully completed.
 
+See [`$TURBO_ROOT$`](#turbo_root) if output paths need to be relative to the repository root.
+
 ```jsonc title="./turbo.json"
 {
   "tasks": {
@@ -426,6 +428,23 @@ the special string `$TURBO_DEFAULT$` within the `inputs` array to restore `turbo
     "check-types": {
       // Consider all default inputs except the package's README
       "inputs": ["$TURBO_DEFAULT$", "!README.md"]
+    }
+  }
+}
+```
+
+#### `$TURBO_ROOT$`
+
+Tasks might reference a file that lies outside of their directory.
+
+Starting a file glob with `$TURBO_ROOT$` will change the glob to be relative to the root of the repository instead of the package directory.
+
+```jsonc title="./turbo.json"
+{
+  "tasks": {
+    "check-types": {
+      // Consider all Typescript files in `src/` and the root tsconfig.json as inputs
+      "inputs": ["$TURBO_ROOT$/tsconfig.json", "src/**/*.ts"]
     }
   }
 }
