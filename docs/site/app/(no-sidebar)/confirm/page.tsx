@@ -8,12 +8,12 @@ export function Confirm(): JSX.Element {
               <h2 className="text-xl font-bold">Thanks so much!</h2>
               <p>
                 Keep an eye on your inbox for product updates and announcements
-                from Turbo and Vercel.
+                from Turborepo and Vercel.
               </p>{" "}
               <p>
                 Thanks,
                 <br />
-                The Turbo Team
+                The Turborepo Team
               </p>
             </div>
           </div>

@@ -46,9 +46,7 @@ export const createMetadata = ({
   title,
   description,
   canonicalPath,
-  product,
 }: {
-  product?: Products;
   title?: string;
   description?: string;
   /** You do not need to supply the domain! `metadataBase` already does that for you. */
@@ -59,30 +57,15 @@ export const createMetadata = ({
     console.warn(`Warning: ${canonicalPath} does not have a description.`);
   }
 
-  const formatTitle = (): string => {
-    if (canonicalPath === "/repo") {
-      return "Turborepo";
-    }
-
-    if (product === "repo") {
-      return `${title} | Turborepo`;
-    }
-
-    return title ?? "Turbo";
-  };
-
-  const formattedTitle = formatTitle();
-
   return {
     metadataBase: getBaseURL(),
-    title: formattedTitle,
+    title: title ? `${title} | Turborepo` : "Turborepo",
     description,
     openGraph: {
-      siteName: "Turbo",
+      siteName: "Turborepo",
       images: [
         createOgImagePath({
           title: canonicalPath === "/" ? "" : title,
-          product,
           canonicalPath,
         }),
       ],

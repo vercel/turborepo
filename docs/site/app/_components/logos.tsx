@@ -134,7 +134,7 @@ export function TurborepoLogo({
   return (
     <svg
       className={className}
-      aria-label="Turbo logomark"
+      aria-label="Turborepo logomark"
       height="80"
       role="img"
       viewBox="0 0 40 40"
