@@ -47,8 +47,6 @@ pub enum Error {
     MissingWorkspace(PackageName),
     #[error("Cannot prune without parsed lockfile.")]
     MissingLockfile,
-    #[error("`prune` is not supported for Bun.")]
-    BunUnsupported,
     #[error("Unable to read config: {0}")]
     Config(#[from] crate::config::Error),
 }
@@ -105,13 +103,6 @@ pub async fn prune(
     telemetry.track_arg_usage("out-dir", output_dir != DEFAULT_OUTPUT_DIR);
 
     let prune = Prune::new(base, scope, docker, output_dir, use_gitignore, telemetry).await?;
-
-    if matches!(
-        prune.package_graph.package_manager(),
-        turborepo_repository::package_manager::PackageManager::Bun
-    ) {
-        return Err(Error::BunUnsupported);
-    }
 
     println!(
         "Generating pruned monorepo for {} in {}",
