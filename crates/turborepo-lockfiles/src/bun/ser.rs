@@ -4,7 +4,7 @@ use super::PackageEntry;
 
 impl Serialize for PackageEntry {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let mut tuple = serializer.serialize_tuple(4)?;
+        let mut tuple = serializer.serialize_tuple(5)?;
         tuple.serialize_element(&self.ident)?;
 
         if let Some(info) = &self.info {
