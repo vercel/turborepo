@@ -12,6 +12,7 @@ mod task;
 mod task_factory;
 use std::{collections::HashSet, io, io::Write};
 
+use camino::Utf8Path;
 use chrono::{DateTime, Local};
 pub use duration::TurboDuration;
 pub use execution::TaskTracker;
@@ -23,6 +24,7 @@ use tabwriter::TabWriter;
 use thiserror::Error;
 use tracing::{error, log::warn};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath};
+use turborepo_db::DatabaseHandle;
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_repository::package_graph::{PackageGraph, PackageName};
 use turborepo_scm::SCM;
@@ -61,6 +63,8 @@ pub enum Error {
     Env(#[source] turborepo_env::Error),
     #[error("Failed to construct task summary: {0}")]
     TaskSummary(#[from] task_factory::Error),
+    #[error(transparent)]
+    Database(#[from] turborepo_db::Error),
 }
 
 // NOTE: When changing this, please ensure that the server side is updated to
@@ -109,11 +113,12 @@ pub struct RunTracker {
     execution_tracker: ExecutionTracker,
     user: Option<String>,
     synthesized_command: String,
+    database_handle: Option<DatabaseHandle>,
 }
 
 impl RunTracker {
     #[allow(clippy::too_many_arguments)]
-    pub fn new(
+    pub async fn new(
         started_at: DateTime<Local>,
         synthesized_command: String,
         env_at_execution_start: &EnvironmentVariableMap,
@@ -121,8 +126,14 @@ impl RunTracker {
         version: &'static str,
         user: Option<String>,
         scm: &SCM,
+        cache_dir: &Utf8Path,
     ) -> Self {
         let scm = SCMState::get(env_at_execution_start, scm, repo_root);
+
+        let database_handle = DatabaseHandle::new(cache_dir, repo_root).await.ok();
+        if database_handle.is_none() {
+            warn!("Failed to connect to database");
+        }
 
         RunTracker {
             scm,
@@ -131,6 +142,7 @@ impl RunTracker {
             execution_tracker: ExecutionTracker::new(),
             user,
             synthesized_command,
+            database_handle,
         }
     }
 
