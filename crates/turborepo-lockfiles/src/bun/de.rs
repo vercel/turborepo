@@ -26,13 +26,15 @@ impl<'de> Deserialize<'de> for PackageEntry {
         D: serde::Deserializer<'de>,
     {
         use serde::de;
-        #[derive(Deserialize, Debug)]
+        #[derive(Deserialize)]
         #[serde(untagged)]
         enum Vals {
             Str(String),
             Info(Box<PackageInfo>),
         }
         let mut vals = VecDeque::<Vals>::deserialize(deserializer)?;
+
+        // First value is always the package key
         let key = vals
             .pop_front()
             .ok_or_else(|| de::Error::custom("expected package entry to not be empty"))?;
@@ -45,12 +47,11 @@ impl<'de> Deserialize<'de> for PackageEntry {
             Vals::Str(_) => None,
             Vals::Info(package_info) => Some(*package_info),
         };
-        // For workspace packages deps are second element, rest have them as third
-        // element
 
         let mut registry = None;
         let mut info = None;
 
+        // Special case: root packages have a unique second value, so we handle it here
         if key.ends_with("@root:") {
             let root = vals.pop_front().and_then(|val| {
                 serde_json::from_value::<RootInfo>(match val {

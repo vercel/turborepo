@@ -21,6 +21,8 @@ use super::PackageEntry;
 impl Serialize for PackageEntry {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut tuple = serializer.serialize_tuple(4)?;
+
+        // First value is always the package key
         tuple.serialize_element(&self.ident)?;
 
         // For root packages, only thing left to serialize is the root info
@@ -50,16 +52,13 @@ impl Serialize for PackageEntry {
 
 #[cfg(test)]
 mod test {
-    use std::{str::FromStr, sync::OnceLock};
+    use std::sync::OnceLock;
 
     use serde_json::json;
     use test_case::test_case;
 
     use super::*;
-    use crate::{
-        bun::{PackageInfo, RootInfo, WorkspaceEntry},
-        BunLockfile,
-    };
+    use crate::bun::{PackageInfo, RootInfo, WorkspaceEntry};
 
     macro_rules! fixture {
         ($name:ident, $kind:ty, $cons:expr) => {
@@ -147,7 +146,7 @@ mod test {
     #[test_case(json!(["is-odd@3.0.1", "", {"dependencies": {"is-number": "^6.0.0"}}, "sha"]), registry_pkg() ; "registry package")]
     #[test_case(json!(["docs", {"dependencies": {"is-odd": "3.0.1"}}]), workspace_pkg() ; "workspace package")]
     #[test_case(json!(["some-package@root:", {"bin": "bin", "binDir": "binDir"}]), root_pkg() ; "root package")]
-    fn test_serialization<T: for<'a> Serialize + PartialEq + std::fmt::Debug>(
+    fn test_serialization<T: Serialize + PartialEq + std::fmt::Debug>(
         expected: serde_json::Value,
         input: &T,
     ) {
