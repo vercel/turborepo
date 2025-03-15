@@ -9,7 +9,7 @@ const getBaseURL = (): URL => {
     return new URL(`https://${process.env.VERCEL_URL}`);
   }
 
-  return new URL(`http://localhost:${process.env.PORT || 3335}`);
+  return new URL(`http://localhost:${process.env.PORT || 3000}`);
 };
 
 const createOgImagePath = ({
