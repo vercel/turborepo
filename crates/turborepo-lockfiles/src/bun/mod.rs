@@ -4,7 +4,7 @@ use biome_json_formatter::context::JsonFormatOptions;
 use biome_json_parser::JsonParserOptions;
 use id::PossibleKeyIter;
 use itertools::Itertools as _;
-use serde::{ser::SerializeTuple, Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use turborepo_errors::ParseDiagnostic;
 
@@ -12,6 +12,7 @@ use crate::Lockfile;
 
 mod de;
 mod id;
+mod ser;
 
 type Map<K, V> = std::collections::BTreeMap<K, V>;
 
@@ -97,25 +98,6 @@ struct PackageInfo {
 struct RootInfo {
     bin: Option<String>,
     bin_dir: Option<String>,
-}
-
-impl Serialize for PackageEntry {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let mut tuple = serializer.serialize_tuple(4)?;
-        tuple.serialize_element(&self.ident)?;
-
-        let Some(info) = &self.info else {
-            return tuple.end();
-        };
-
-        tuple.serialize_element(&self.registry.as_deref().unwrap_or(""))?;
-        tuple.serialize_element(info)?;
-        tuple.serialize_element(&self.checksum)?;
-        if let Some(root) = &self.root {
-            tuple.serialize_element(root)?;
-        }
-        tuple.end()
-    }
 }
 
 impl Lockfile for BunLockfile {
@@ -252,13 +234,16 @@ impl BunLockfile {
         let mut new_patched_dependencies = Map::new();
 
         for package in packages {
-            let package_key = self.key_to_entry.get(package).expect("package key");
+            let package_key = self
+                .key_to_entry
+                .get(package)
+                .expect("package key should exist");
             if let Some((key, entry)) = self.package_entry(&package_key) {
                 new_packages.insert(key.to_string(), entry.clone());
             }
         }
 
-        // Add root workspace
+        // The root workspace is "" in the lockfile
         let root_workspace = self
             .data
             .workspaces
@@ -364,6 +349,7 @@ impl PackageInfo {
 #[cfg(test)]
 mod test {
     use pretty_assertions::assert_eq;
+    use serde_json::json;
     use test_case::test_case;
 
     use super::*;
