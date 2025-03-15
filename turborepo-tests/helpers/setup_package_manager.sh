@@ -34,7 +34,9 @@ if [ "$PRYSK_TEMP" == "" ]; then
   mkdir -p "${COREPACK_INSTALL_DIR}"
   export PATH=${COREPACK_INSTALL_DIR}:$PATH
 else
-  COREPACK_INSTALL_DIR="${PRYSK_TEMP}/corepack"
+  # When running prysk via pytest PRYSK_TEMP == TEST_DIR unexpectedly
+  NEW_TMPDIR=$(mktemp -d)
+  COREPACK_INSTALL_DIR="${NEW_TMPDIR}/corepack"
   mkdir -p "${COREPACK_INSTALL_DIR}"
   export PATH=${COREPACK_INSTALL_DIR}:$PATH
 fi
