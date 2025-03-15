@@ -4,7 +4,7 @@ use biome_json_formatter::context::JsonFormatOptions;
 use biome_json_parser::JsonParserOptions;
 use id::PossibleKeyIter;
 use itertools::Itertools as _;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use turborepo_errors::ParseDiagnostic;
 
@@ -33,36 +33,42 @@ pub enum Error {
     },
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BunLockfile {
     data: BunLockfileData,
     key_to_entry: HashMap<String, String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BunLockfileData {
     #[allow(unused)]
     lockfile_version: i32,
     workspaces: Map<String, WorkspaceEntry>,
     packages: Map<String, PackageEntry>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Map::is_empty")]
     patched_dependencies: Map<String, String>,
 }
 
-#[derive(Debug, Deserialize, PartialEq, Default)]
+#[derive(Debug, Deserialize, PartialEq, Default, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct WorkspaceEntry {
     name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     version: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     dependencies: Option<Map<String, String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     dev_dependencies: Option<Map<String, String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     optional_dependencies: Option<Map<String, String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     peer_dependencies: Option<Map<String, String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     optional_peers: Option<Vec<String>>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 struct PackageEntry {
     ident: String,
     registry: Option<String>,
@@ -73,26 +79,47 @@ struct PackageEntry {
     root: Option<RootInfo>,
 }
 
-#[derive(Debug, Deserialize, Default, PartialEq)]
+#[derive(Debug, Deserialize, Default, PartialEq, Clone, Serialize)]
 struct PackageInfo {
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Map::is_empty")]
     dependencies: Map<String, String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Map::is_empty")]
     dev_dependencies: Map<String, String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Map::is_empty")]
     optional_dependencies: Map<String, String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Map::is_empty")]
     peer_dependencies: Map<String, String>,
     // We do not care about the rest here
     // the values here should be generic
     #[serde(flatten)]
     other: Map<String, Value>,
 }
-#[derive(Debug, Deserialize, PartialEq)]
+#[derive(Debug, Deserialize, PartialEq, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct RootInfo {
     bin: Option<String>,
     bin_dir: Option<String>,
+}
+
+impl Serialize for PackageEntry {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeTuple;
+
+        let mut tuple = serializer.serialize_tuple(4)?;
+        tuple.serialize_element(&self.ident)?;
+
+        let Some(info) = &self.info else {
+            return tuple.end();
+        };
+
+        tuple.serialize_element(&self.registry.as_deref().unwrap_or(""))?;
+        tuple.serialize_element(info)?;
+        tuple.serialize_element(&self.checksum)?;
+        if let Some(root) = &self.root {
+            tuple.serialize_element(root)?;
+        }
+        tuple.end()
+    }
 }
 
 impl Lockfile for BunLockfile {
@@ -165,17 +192,19 @@ impl Lockfile for BunLockfile {
         Ok(Some(deps))
     }
 
-    #[allow(unused)]
     fn subgraph(
         &self,
         workspace_packages: &[String],
         packages: &[String],
-    ) -> Result<Box<dyn Lockfile>, super::Error> {
-        Err(crate::Error::Bun(Error::NotImplemented))
+    ) -> Result<Box<dyn Lockfile>, crate::Error> {
+        let subgraph = self.subgraph(workspace_packages, packages)?;
+        Ok(Box::new(subgraph))
     }
 
     fn encode(&self) -> Result<Vec<u8>, crate::Error> {
-        Err(crate::Error::Bun(Error::NotImplemented))
+        // Ok(self.lockfile()?.to_string().into_bytes())
+        // Use serde_json to encode the lockfile
+        Ok(serde_json::to_vec(&self.data)?)
     }
 
     fn global_change(&self, other: &dyn Lockfile) -> bool {
@@ -208,6 +237,168 @@ impl BunLockfile {
         let (key, entry) =
             PossibleKeyIter::new(key).find_map(|k| self.data.packages.get_key_value(k))?;
         Some((key, entry))
+    }
+
+    pub fn lockfile(&self) -> Result<BunLockfileData, Error> {
+        // let mut packages = Map::new();
+        // let mut metadata = self.data.metadata.clone();
+        // let reverse_lookup = self.locator_to_descriptors();
+
+        // for (locator, descriptors) in reverse_lookup {
+        //     let mut descriptors = descriptors
+        //         .into_iter()
+        //         .map(|d| d.to_string())
+        //         .collect::<Vec<_>>();
+        //     descriptors.sort();
+        //     let key = descriptors.join(", ");
+
+        //     let package = self
+        //         .locator_package
+        //         .get(locator)
+        //         .ok_or_else(|| Error::MissingPackageForLocator(locator.as_owned()))?;
+        //     packages.insert(key, package.clone());
+        // }
+
+        // // If there aren't any checksums in the lockfile, then cache key is omitted
+        // let mut no_checksum = true;
+        // for pkg in self.resolutions.values().map(|locator| {
+        //     self.locator_package
+        //         .get(locator)
+        //         .ok_or_else(|| Error::MissingPackageForLocator(locator.as_owned()))
+        // }) {
+        //     let pkg = pkg?;
+        //     no_checksum = pkg.checksum.is_none();
+        //     if !no_checksum {
+        //         break;
+        //     }
+        // }
+        // if no_checksum {
+        //     metadata.cache_key = None;
+        // }
+
+        Ok(BunLockfileData {
+            lockfile_version: self.data.lockfile_version,
+            workspaces: self.data.workspaces.clone(),
+            packages: self.data.packages.clone(),
+            patched_dependencies: self.data.patched_dependencies.clone(),
+        })
+    }
+
+    fn subgraph(
+        &self,
+        workspace_packages: &[String],
+        packages: &[String],
+    ) -> Result<BunLockfile, Error> {
+        // let reverse_lookup = self.locator_to_descriptors();
+
+        // let mut resolutions = Map::new();
+        // let mut patches = Map::new();
+
+        // // Include all workspace packages and their references
+        // for (locator, package) in &self.locator_package {
+        //     if workspace_packages
+        //         .iter()
+        //         .map(|s| s.as_str())
+        //         .chain(iter::once("."))
+        //         .any(|path| locator.is_workspace_path(path))
+        //     {
+        //         //  We need to track all of the descriptors coming out the workspace
+        //         for (name, range) in package.dependencies.iter().flatten() {
+        //             let dependency = self.resolve_dependency(locator, name,
+        // range.as_ref())?;             let dep_locator = self
+        //                 .resolutions
+        //                 .get(&dependency)
+        //                 .ok_or_else(||
+        // Error::MissingLocator(dependency.clone().into_owned()))?;
+        // resolutions.insert(dependency, dep_locator.clone());         }
+
+        //         // Included workspaces will always have their locator listed as a
+        // descriptor.         // All other descriptors should show up in the
+        // other workspace package         // dependencies.
+        //         resolutions.insert(Descriptor::from(locator.clone()),
+        // locator.clone());     }
+        // }
+
+        // for key in packages {
+        //     let locator = Locator::try_from(key.as_str())?;
+
+        //     let package = self
+        //         .locator_package
+        //         .get(&locator)
+        //         .cloned()
+        //         .ok_or_else(|| Error::MissingPackageForLocator(locator.as_owned()))?;
+
+        //     for (name, range) in package.dependencies.iter().flatten() {
+        //         let dependency = self.resolve_dependency(&locator, name,
+        // range.as_ref())?;         let dep_locator = self
+        //             .resolutions
+        //             .get(&dependency)
+        //             .ok_or_else(||
+        // Error::MissingLocator(dependency.clone().into_owned()))?;
+        //         resolutions.insert(dependency, dep_locator.clone());
+        //     }
+
+        //     // If the package has an associated patch we include it in the subgraph
+        //     if let Some(patch_locator) = self.patches.get(&locator) {
+        //         patches.insert(locator.as_owned(), patch_locator.clone());
+        //     }
+
+        //     // Yarn 4 allows workspaces to depend directly on patched dependencies
+        // instead     // of using resolutions. This results in the patched
+        // dependency appearing in the     // closure instead of the original.
+        //     if locator.patch_file().is_some() {
+        //         if let Some((original, _)) =
+        //             self.patches.iter().find(|(_, patch)| patch == &&locator)
+        //         {
+        //             patches.insert(original.as_owned(), locator.as_owned());
+        //             // We include the patched dependency resolution
+        //             let Locator { ident, reference } = original.as_owned();
+        //             resolutions.insert(
+        //                 Descriptor {
+        //                     ident,
+        //                     range: reference,
+        //                 },
+        //                 original.as_owned(),
+        //             );
+        //         }
+        //     }
+        // }
+
+        // for patch in patches.values() {
+        //     let patch_descriptors = reverse_lookup
+        //         .get(patch)
+        //         .unwrap_or_else(|| panic!("Unable to find {patch} in reverse
+        // lookup"));
+
+        //     // For each patch descriptor we extract the primary descriptor that each
+        // patch     // descriptor targets and check if that descriptor is
+        // present in the     // pruned map and add it if it is present
+        //     for patch_descriptor in patch_descriptors {
+        //         let version = patch_descriptor.primary_version().unwrap();
+        //         let primary_descriptor = Descriptor {
+        //             ident: patch_descriptor.ident.clone(),
+        //             range: version.into(),
+        //         };
+
+        //         if resolutions.contains_key(&primary_descriptor) {
+        //             resolutions.insert((*patch_descriptor).clone(), patch.clone());
+        //         }
+        //     }
+        // }
+
+        // // Add any descriptors used by package extensions
+        // for descriptor in &self.extensions {
+        //     let locator = self
+        //         .resolutions
+        //         .get(descriptor)
+        //         .ok_or_else(|| Error::MissingLocator(descriptor.to_owned()))?;
+        //     resolutions.insert(descriptor.clone(), locator.clone());
+        // }
+
+        Ok(Self {
+            data: self.data.clone(),
+            key_to_entry: self.key_to_entry.clone(),
+        })
     }
 }
 
