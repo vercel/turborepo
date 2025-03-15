@@ -35,7 +35,7 @@ const getDomain = () => {
   }
 
   // For local development
-  return "http://localhost:3335";
+  return `http://localhost:${process.env.PORT || 3000}`;
 };
 
 void sync(algoliaClient, {
