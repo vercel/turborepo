@@ -4,7 +4,7 @@ use biome_json_formatter::context::JsonFormatOptions;
 use biome_json_parser::JsonParserOptions;
 use id::PossibleKeyIter;
 use itertools::Itertools as _;
-use serde::{Deserialize, Serialize};
+use serde::{ser::SerializeTuple, Deserialize, Serialize};
 use serde_json::Value;
 use turborepo_errors::ParseDiagnostic;
 
@@ -101,8 +101,6 @@ struct RootInfo {
 
 impl Serialize for PackageEntry {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        use serde::ser::SerializeTuple;
-
         let mut tuple = serializer.serialize_tuple(4)?;
         tuple.serialize_element(&self.ident)?;
 
@@ -366,7 +364,6 @@ impl PackageInfo {
 #[cfg(test)]
 mod test {
     use pretty_assertions::assert_eq;
-    use serde_json::json;
     use test_case::test_case;
 
     use super::*;
@@ -385,6 +382,56 @@ mod test {
             .unwrap()
             .unwrap();
         assert_eq!(result.key, expected);
+    }
+
+    #[test]
+    fn test_subgraph() {
+        let lockfile = BunLockfile::from_str(BASIC_LOCKFILE).unwrap();
+        let subgraph = lockfile
+            .subgraph(&["".into(), "apps/docs".into()], &["is-odd@3.0.1".into()])
+            .unwrap();
+        let subgraph_data = subgraph.lockfile().unwrap();
+
+        assert!(subgraph_data
+            .packages
+            .get("is-odd")
+            .is_some_and(|pkg| pkg.ident == "is-odd@3.0.1"));
+        assert_eq!(
+            subgraph_data.workspaces.keys().collect::<Vec<_>>(),
+            vec!["", "apps/docs"]
+        );
+    }
+
+    #[test]
+    fn test_patch_subgraph() {
+        let lockfile = BunLockfile::from_str(PATCH_LOCKFILE).unwrap();
+        let subgraph_a = lockfile
+            .subgraph(&["".into(), "apps/a".into()], &["is-odd@3.0.1".into()])
+            .unwrap();
+        let subgraph_a_data = subgraph_a.lockfile().unwrap();
+
+        assert!(subgraph_a_data
+            .packages
+            .get("is-odd")
+            .is_some_and(|pkg| pkg.ident == "is-odd@3.0.1"));
+        assert_eq!(
+            subgraph_a_data.workspaces.keys().collect::<Vec<_>>(),
+            vec!["", "apps/a"]
+        );
+
+        let subgraph_b = lockfile
+            .subgraph(&["".into(), "apps/b".into()], &["is-odd@3.0.0".into()])
+            .unwrap();
+        let subgraph_b_data = subgraph_b.lockfile().unwrap();
+
+        assert!(subgraph_b_data
+            .packages
+            .get("b/is-odd")
+            .is_some_and(|pkg| pkg.ident == "is-odd@3.0.0"));
+        assert_eq!(
+            subgraph_b_data.workspaces.keys().collect::<Vec<_>>(),
+            vec!["", "apps/b"]
+        );
     }
 
     const TURBO_GEN_DEPS: &[&str] = [
