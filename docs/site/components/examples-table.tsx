@@ -49,7 +49,7 @@ for (const example of examples) {
 }
 
 // Validate examples against schema
-const validatedExamples = z.array(ExampleMetaSchema).parse(EXAMPLES);
+z.array(ExampleMetaSchema).parse(EXAMPLES);
 
 export function ExamplesTable({
   coreMaintained,
