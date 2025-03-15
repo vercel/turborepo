@@ -23,8 +23,6 @@ pub enum Error {
     Format(#[from] biome_formatter::FormatError),
     #[error("Failed to strip commas: {0}")]
     Print(#[from] biome_formatter::PrintError),
-    #[error("Turborepo cannot serialize Bun lockfiles.")]
-    NotImplemented,
     #[error("{ident} had two entries with differing checksums: {sha1}, {sha2}")]
     MismatchedShas {
         ident: String,
@@ -33,13 +31,13 @@ pub enum Error {
     },
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct BunLockfile {
     data: BunLockfileData,
     key_to_entry: HashMap<String, String>,
 }
 
-#[derive(Debug, Deserialize, Clone, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BunLockfileData {
     #[allow(unused)]
@@ -263,7 +261,11 @@ impl BunLockfile {
         }
 
         // Add root workspace
-        let root_workspace = self.data.workspaces.get("").expect("root workspace");
+        let root_workspace = self
+            .data
+            .workspaces
+            .get("")
+            .expect("root workspace should exist");
         new_workspaces.insert("".to_string(), root_workspace.clone());
 
         for workspace in workspace_packages {
