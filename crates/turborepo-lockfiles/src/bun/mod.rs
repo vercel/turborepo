@@ -215,13 +215,8 @@ impl BunLockfile {
         Some((key, entry))
     }
 
-    pub fn lockfile(&self) -> Result<BunLockfileData, Error> {
-        Ok(BunLockfileData {
-            lockfile_version: self.data.lockfile_version,
-            workspaces: self.data.workspaces.clone(),
-            packages: self.data.packages.clone(),
-            patched_dependencies: self.data.patched_dependencies.clone(),
-        })
+    pub fn lockfile(self) -> Result<BunLockfileData, Error> {
+        Ok(self.data)
     }
 
     fn subgraph(
@@ -229,41 +224,31 @@ impl BunLockfile {
         workspace_packages: &[String],
         packages: &[String],
     ) -> Result<BunLockfile, Error> {
-        let mut new_packages = Map::new();
-        let mut new_workspaces = Map::new();
-        let mut new_patched_dependencies = Map::new();
+        let new_workspaces: Map<_, _> = workspace_packages
+            .iter()
+            // Add the root workspace, which is always indexed by ""
+            .chain(std::iter::once(&"".to_string()))
+            .filter_map(|ws| Some((ws.to_string(), self.data.workspaces.get(ws)?.clone())))
+            .collect();
 
-        for package in packages {
-            let package_key = self
-                .key_to_entry
-                .get(package)
-                .expect("package key should exist");
-            if let Some((key, entry)) = self.package_entry(&package_key) {
-                new_packages.insert(key.to_string(), entry.clone());
-            }
-        }
+        let new_packages: Map<_, _> = packages
+            .iter()
+            .filter_map(|package| {
+                let key = self.key_to_entry.get(package)?;
+                self.package_entry(key)
+                    .map(|(k, v)| (k.to_string(), v.clone()))
+            })
+            .collect();
 
-        // The root workspace is "" in the lockfile
-        let root_workspace = self
-            .data
-            .workspaces
-            .get("")
-            .expect("root workspace should exist");
-        new_workspaces.insert("".to_string(), root_workspace.clone());
-
-        for workspace in workspace_packages {
-            let workspace_entry = self.data.workspaces.get(workspace);
-
-            if let Some(workspace_entry) = workspace_entry {
-                new_workspaces.insert(workspace.to_string(), workspace_entry.clone());
-            }
-        }
-
-        for (key, patch) in self.data.patched_dependencies.iter() {
-            if packages.contains(&key) {
-                new_patched_dependencies.insert(key.to_string(), patch.to_string());
-            }
-        }
+        let new_patched_dependencies = new_packages
+            .values()
+            .filter_map(|entry| {
+                self.data
+                    .patched_dependencies
+                    .get(&entry.ident)
+                    .map(|patch| (entry.ident.clone(), patch.clone()))
+            })
+            .collect();
 
         Ok(Self {
             data: BunLockfileData {
@@ -378,10 +363,14 @@ mod test {
             .unwrap();
         let subgraph_data = subgraph.lockfile().unwrap();
 
-        assert!(subgraph_data
-            .packages
-            .get("is-odd")
-            .is_some_and(|pkg| pkg.ident == "is-odd@3.0.1"));
+        assert_eq!(
+            subgraph_data
+                .packages
+                .iter()
+                .map(|(key, pkg)| (key.as_str(), pkg.ident.as_str()))
+                .collect::<Vec<_>>(),
+            vec![("is-odd", "is-odd@3.0.1")]
+        );
         assert_eq!(
             subgraph_data.workspaces.keys().collect::<Vec<_>>(),
             vec!["", "apps/docs"]
@@ -396,10 +385,14 @@ mod test {
             .unwrap();
         let subgraph_a_data = subgraph_a.lockfile().unwrap();
 
-        assert!(subgraph_a_data
-            .packages
-            .get("is-odd")
-            .is_some_and(|pkg| pkg.ident == "is-odd@3.0.1"));
+        assert_eq!(
+            subgraph_a_data
+                .packages
+                .iter()
+                .map(|(key, pkg)| (key.as_str(), pkg.ident.as_str()))
+                .collect::<Vec<_>>(),
+            vec![("is-odd", "is-odd@3.0.1")]
+        );
         assert_eq!(
             subgraph_a_data.workspaces.keys().collect::<Vec<_>>(),
             vec!["", "apps/a"]
@@ -410,10 +403,14 @@ mod test {
             .unwrap();
         let subgraph_b_data = subgraph_b.lockfile().unwrap();
 
-        assert!(subgraph_b_data
-            .packages
-            .get("b/is-odd")
-            .is_some_and(|pkg| pkg.ident == "is-odd@3.0.0"));
+        assert_eq!(
+            subgraph_b_data
+                .packages
+                .iter()
+                .map(|(key, pkg)| (key.as_str(), pkg.ident.as_str()))
+                .collect::<Vec<_>>(),
+            vec![("b/is-odd", "is-odd@3.0.0")]
+        );
         assert_eq!(
             subgraph_b_data.workspaces.keys().collect::<Vec<_>>(),
             vec!["", "apps/b"]
