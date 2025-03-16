@@ -345,15 +345,6 @@ impl Run {
                 turbo_json.tags.as_ref(),
                 tag_rules.as_ref(),
             )?);
-
-            if turbo_json.tags.is_some() && tag_rules.is_none() {
-                // NOTE: if we use tags for something other than boundaries, we should remove
-                // this warning
-                warn!(
-                    "No boundaries rules found, but package {} has tags",
-                    package_name
-                );
-            }
         }
 
         result.packages_checked += 1;

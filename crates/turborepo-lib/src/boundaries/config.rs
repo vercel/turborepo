@@ -11,7 +11,8 @@ pub struct BoundariesConfig {
     pub tags: Option<Spanned<RulesMap>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub implicit_dependencies: Option<Spanned<Vec<Spanned<String>>>>,
-    /// Defines a rule for a package `turbo.json`
+    /// If in a package `turbo.json`, the following two keys define
+    /// boundaries rules for that package
     #[serde(skip_serializing_if = "Option::is_none")]
     pub dependencies: Option<Spanned<Permissions>>,
     #[serde(skip_serializing_if = "Option::is_none")]

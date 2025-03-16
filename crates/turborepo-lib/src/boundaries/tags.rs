@@ -186,7 +186,7 @@ impl Run {
         package_json: &PackageJson,
     ) -> Result<(), Error> {
         if let Some(dependency_permissions) = dependencies {
-            for dependency in self.pkg_dep_graph().dependencies(&pkg) {
+            for dependency in self.pkg_dep_graph().dependencies(pkg) {
                 if matches!(dependency, PackageNode::Root) {
                     continue;
                 }
@@ -205,7 +205,7 @@ impl Run {
         }
 
         if let Some(dependent_permissions) = dependents {
-            for dependent in self.pkg_dep_graph().ancestors(&pkg) {
+            for dependent in self.pkg_dep_graph().ancestors(pkg) {
                 if matches!(dependent, PackageNode::Root) {
                     continue;
                 }
@@ -224,6 +224,31 @@ impl Run {
         Ok(())
     }
 
+    fn check_if_package_name_is_tag(
+        tags_rules: &ProcessedRulesMap,
+        pkg: &PackageNode,
+        package_json: &PackageJson,
+    ) -> Option<BoundariesDiagnostic> {
+        let rule = tags_rules.get(pkg.as_package_name().as_str())?;
+        let (tag_span, tag_text) = rule.span.span_and_text("turbo.json");
+        let (package_span, package_text) = package_json
+            .name
+            .as_ref()
+            .map(|name| name.span_and_text("package.json"))
+            .unwrap_or_else(|| (None, NamedSource::new("package.json", "".into())));
+        Some(BoundariesDiagnostic::TagSharesPackageName {
+            tag: pkg.as_package_name().to_string(),
+            package: pkg.as_package_name().to_string(),
+            tag_span,
+            tag_text,
+            secondary: [SecondaryDiagnostic::PackageDefinedHere {
+                package: pkg.as_package_name().to_string(),
+                package_span,
+                package_text,
+            }],
+        })
+    }
+
     pub(crate) fn check_package_tags(
         &self,
         pkg: PackageNode,
@@ -233,8 +258,6 @@ impl Run {
     ) -> Result<Vec<BoundariesDiagnostic>, Error> {
         let mut diagnostics = Vec::new();
         let package_turbo_json = self.turbo_json_loader().load(pkg.as_package_name());
-        eprintln!("{}", pkg.as_package_name());
-        eprintln!("{:?}", package_turbo_json);
         let package_boundaries = package_turbo_json
             .ok()
             .and_then(|turbo_json| turbo_json.boundaries.as_ref());
@@ -263,27 +286,13 @@ impl Run {
         }
 
         if let Some(tags_rules) = tags_rules {
-            // We don't allow tags to share the same name as the package because
-            // we allow package names to be used as a tag
-            if let Some(rule) = tags_rules.get(pkg.as_package_name().as_str()) {
-                let (tag_span, tag_text) = rule.span.span_and_text("turbo.json");
-                let (package_span, package_text) = package_json
-                    .name
-                    .as_ref()
-                    .map(|name| name.span_and_text("package.json"))
-                    .unwrap_or_else(|| (None, NamedSource::new("package.json", "".into())));
-                diagnostics.push(BoundariesDiagnostic::TagSharesPackageName {
-                    tag: pkg.as_package_name().to_string(),
-                    package: pkg.as_package_name().to_string(),
-                    tag_span,
-                    tag_text,
-                    secondary: [SecondaryDiagnostic::PackageDefinedHere {
-                        package: pkg.as_package_name().to_string(),
-                        package_span,
-                        package_text,
-                    }],
-                });
-            }
+            // We don't allow tags to share the same name as the package
+            // because we allow package names to be used as a tag
+            diagnostics.extend(Self::check_if_package_name_is_tag(
+                tags_rules,
+                &pkg,
+                package_json,
+            ));
 
             for tag in current_package_tags.into_iter().flatten().flatten() {
                 if let Some(rule) = tags_rules.get(tag.as_inner()) {
