@@ -15,7 +15,6 @@ export async function generateMetadata(props: {
 
   return createMetadata({
     title: page.data.title,
-    product: "repo",
     description: page.data.description,
     canonicalPath: page.url,
   });

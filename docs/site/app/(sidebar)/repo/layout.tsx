@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
-import { DocsLayout } from "fumadocs-ui/layouts/docs";
-import { layoutPropsWithSidebar } from "@/app/_components/inner-layout-props";
+import { DocsLayout } from "#/components/docs-layout";
 import { repoDocsPages } from "@/app/source";
 
 export default function Layout({
@@ -8,9 +7,5 @@ export default function Layout({
 }: {
   children: ReactNode;
 }): JSX.Element {
-  return (
-    <DocsLayout {...layoutPropsWithSidebar} tree={repoDocsPages.pageTree}>
-      {children}
-    </DocsLayout>
-  );
+  return <DocsLayout tree={repoDocsPages.pageTree}>{children}</DocsLayout>;
 }

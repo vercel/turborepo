@@ -240,7 +240,7 @@ export const SidebarItem = ({
     <SidebarMenuItem>
       <SidebarMenuButton
         asChild
-        className="m-0 flex h-auto w-full rounded-md p-0 text-sm font-normal text-gray-900 hover:text-gray-1000 data-[active=true]:font-normal data-[active=true]:text-blue-700 dark:data-[active=true]:text-blue-600"
+        className="m-0 flex h-auto w-full rounded-md p-0 text-sm font-normal data-[active=true]:font-normal data-[active=true]:text-blue-700 dark:data-[active=true]:text-blue-600"
       >
         <Link href={href} data-active={active} prefetch={prefetch}>
           <span className="truncate">{children}</span>

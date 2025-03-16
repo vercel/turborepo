@@ -1,13 +1,13 @@
 import { TreeContextProvider } from "fumadocs-ui/provider";
-import { LayoutBody, SidebarItems, TableOfContents } from "./docs.client";
+import { LayoutBody, SidebarItems } from "./docs.client";
+import { TableOfContents } from "./docs.client";
 import type { PageTree } from "fumadocs-core/server";
 import {
-  Sidebar,
   SidebarContent,
   SidebarGroup,
   SidebarInset,
 } from "@/components/ui/sidebar";
-import { SidebarViewport } from "./sidebar";
+import { Sidebar, SidebarViewport } from "./sidebar";
 import { MobileMenu } from "./mobile-menu";
 import { MobileMenuProvider } from "./use-mobile-menu-context";
 
@@ -16,7 +16,7 @@ interface DocsLayoutProps {
   children: React.ReactNode;
 }
 
-const DocsLayout = ({ tree, children }: DocsLayoutProps) => {
+export const DocsLayout = ({ tree, children }: DocsLayoutProps) => {
   if (!tree) return null;
   return (
     <TreeContextProvider tree={tree}>
@@ -50,5 +50,3 @@ const DocsLayout = ({ tree, children }: DocsLayoutProps) => {
     </TreeContextProvider>
   );
 };
-
-export default DocsLayout;
