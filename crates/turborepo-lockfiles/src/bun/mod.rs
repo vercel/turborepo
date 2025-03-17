@@ -393,6 +393,35 @@ mod test {
         );
     }
 
+    // There are multiple aliases that resolve to the same ident, here we test that
+    // we output them all
+    #[test]
+    fn test_deduplicated_idents() {
+        // chalk@2.4.2
+        let lockfile = BunLockfile::from_str(BASIC_LOCKFILE).unwrap();
+        let subgraph = lockfile
+            .subgraph(&["apps/docs".into()], &["chalk@2.4.2".into()])
+            .unwrap();
+        let subgraph_data = subgraph.lockfile().unwrap();
+
+        assert_eq!(
+            subgraph_data
+                .packages
+                .iter()
+                .map(|(key, pkg)| (key.as_str(), pkg.ident.as_str()))
+                .collect::<Vec<_>>(),
+            vec![
+                ("@turbo/gen/chalk", "chalk@2.4.2"),
+                ("@turbo/workspaces/chalk", "chalk@2.4.2"),
+                ("log-symbols/chalk", "chalk@2.4.2")
+            ]
+        );
+        assert_eq!(
+            subgraph_data.workspaces.keys().collect::<Vec<_>>(),
+            vec!["", "apps/docs"]
+        );
+    }
+
     #[test]
     fn test_patch_subgraph() {
         let lockfile = BunLockfile::from_str(PATCH_LOCKFILE).unwrap();
