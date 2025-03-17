@@ -42,8 +42,10 @@ export const itemVariants = cva(
   "flex h-auto w-full items-center p-0 text-sm font-medium text-gray-1000 data-[active=true]:text-blue-700 dark:data-[active=true]:text-blue-600 [&:not(:first-of-type)]:mt-2.5 [overflow-wrap:anywhere] transition-colors duration-100"
 );
 
-export const getItemClass = (href: string) => {
-  const hasMoreThanThreeSegments = href.split("/").filter(Boolean).length > 3;
+export const getItemClass = (href: string | undefined) => {
+  const hasMoreThanThreeSegments = href
+    ? href.split("/").filter(Boolean).length > 3
+    : false;
 
   return (className?: string) =>
     cn(

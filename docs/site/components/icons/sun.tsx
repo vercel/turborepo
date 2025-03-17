@@ -14,7 +14,7 @@ export const Sun = ({
       strokeLinejoin="round"
       viewBox="0 0 16 16"
       width="16"
-      style={{ color: "currentcolor;", ...style }}
+      style={{ color: "currentcolor", ...style }}
     >
       <path
         fillRule="evenodd"

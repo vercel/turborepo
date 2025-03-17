@@ -125,14 +125,16 @@ export const Navigation = () => {
         <div className="hidden items-center gap-2 md:flex">
           <Button
             aria-label="Search…"
-            className="group !font-normal !text-gray-800 hover:!text-gray-1000"
+            variant="secondary"
+            size="sm"
+            className="group flex-row !font-normal !text-gray-800 hover:!text-gray-1000"
             onClick={() => {
               setOpenSearch(true);
             }}
           >
-            <div className="text-start lg:w-20 xl:w-24">
-              Search…
-              <span className="flex w-full items-center justify-center rounded border border-gray-200 font-sans text-sm group-hover:border-gray-alpha-400">
+            <div className="text-start justify-between flex gap-2 lg:w-20 xl:w-24">
+              <span>Search…</span>
+              <span className="inline-flex items-center justify-center rounded border border-gray-200 font-sans text-sm group-hover:border-gray-alpha-400">
                 <kbd className="flex h-5 min-h-5 w-fit items-center px-1 py-0 text-center font-sans text-xs">
                   {hotKey.map((k, i) => (
                     <span key={`${i}-${k.key}`}>{k.display}</span>
@@ -143,10 +145,17 @@ export const Navigation = () => {
           </Button>
 
           <FeedbackWidget />
-          <Button variant="link" className="hidden xl:block">
-            <a href="https://github.com/vercel/turborepo" target="_noblank">
-              <LogoGitHub />
-              GitHub
+          <Button
+            variant="default"
+            asChild
+            size="sm"
+            // @ts-expect-error
+            href="https://github.com/vercel/turborepo"
+            className="hidden xl:flex"
+          >
+            <a>
+              <LogoGitHub className="inline" />
+              <span>GitHub</span>
             </a>
           </Button>
         </div>

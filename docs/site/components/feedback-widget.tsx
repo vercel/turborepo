@@ -72,7 +72,8 @@ export function FeedbackWidget() {
       <Popover.Trigger asChild>
         <Button
           type="button"
-          className="inline-flex items-center justify-center w-full bg-white text-black dark:bg-black dark:text-white border border-black/20 dark:border-white/20 hover:bg-gray-100 dark:hover:bg-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-opacity-75"
+          variant="secondary"
+          size="sm"
           aria-label="Open feedback form"
         >
           Feedback
