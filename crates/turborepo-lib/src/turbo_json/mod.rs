@@ -259,7 +259,7 @@ pub struct RawTaskDefinition {
     #[serde(skip)]
     env_mode: Option<EnvMode>,
     // This can currently only be set internally and isn't a part of turbo.json
-    #[serde(skip)]
+    #[serde(skip_serializing_if = "Option::is_none")]
     with: Option<Vec<Spanned<UnescapedString>>>,
 }
 
@@ -443,8 +443,8 @@ impl TaskDefinition {
             })
             .transpose()?;
 
-        let siblings = raw_task.with.map(|siblings| {
-            siblings
+        let with = raw_task.with.map(|with_tasks| {
+            with_tasks
                 .into_iter()
                 .map(|sibling| {
                     let (sibling, span) = sibling.split();
@@ -466,7 +466,7 @@ impl TaskDefinition {
             interruptible: *interruptible,
             interactive,
             env_mode: raw_task.env_mode,
-            with: siblings,
+            with,
         })
     }
 }
@@ -743,6 +743,23 @@ pub fn validate_extends(turbo_json: &TurboJson) -> Vec<Error> {
     }
 }
 
+pub fn validate_with_has_no_topo(turbo_json: &TurboJson) -> Vec<Error> {
+    turbo_json
+        .tasks
+        .iter()
+        .flat_map(|(_, definition)| {
+            definition.with.iter().flatten().filter_map(|with_task| {
+                if with_task.starts_with(TOPOLOGICAL_PIPELINE_DELIMITER) {
+                    let (span, text) = with_task.span_and_text("turbo.json");
+                    Some(Error::InvalidTaskWith { span, text })
+                } else {
+                    None
+                }
+            })
+        })
+        .collect()
+}
+
 fn gather_env_vars(
     vars: Vec<Spanned<impl Into<String>>>,
     key: &str,
@@ -843,7 +860,8 @@ mod tests {
     use turborepo_unescape::UnescapedString;
 
     use super::{
-        replace_turbo_root_token_in_string, RawTurboJson, SpacesJson, Spanned, TurboJson, UIMode,
+        replace_turbo_root_token_in_string, validate_with_has_no_topo, Pipeline, RawTurboJson,
+        SpacesJson, Spanned, TurboJson, UIMode,
     };
     use crate::{
         boundaries::BoundariesConfig,
@@ -1045,6 +1063,22 @@ mod tests {
             ..TaskDefinition::default()
         }
     ; "turbo root"
+    )]
+    #[test_case(
+        r#"{
+            "with": ["proxy"]
+        }"#,
+        RawTaskDefinition {
+            with: Some(vec![
+                Spanned::new(UnescapedString::from("proxy")).with_range(23..30),
+            ]),
+            ..RawTaskDefinition::default()
+        },
+        TaskDefinition {
+            with: Some(vec![Spanned::new(TaskName::from("proxy")).with_range(23..30)]),
+            ..TaskDefinition::default()
+        }
+    ; "with task"
     )]
     fn test_deserialize_task_definition(
         task_definition_content: &str,
@@ -1304,5 +1338,31 @@ mod tests {
             Err(e) => Err(e.to_string()),
         };
         assert_eq!(actual, expected.map_err(|s| s.to_owned()));
+    }
+
+    #[test]
+    fn test_validate_with_has_no_topo() {
+        let turbo_json = TurboJson {
+            tasks: Pipeline(
+                vec![(
+                    TaskName::from("dev"),
+                    Spanned::new(RawTaskDefinition {
+                        with: Some(vec![Spanned::new(UnescapedString::from("^proxy"))]),
+                        ..Default::default()
+                    }),
+                )]
+                .into_iter()
+                .collect(),
+            ),
+            ..Default::default()
+        };
+
+        let errs = validate_with_has_no_topo(&turbo_json);
+        assert_eq!(errs.len(), 1);
+        let error = &errs[0];
+        assert_eq!(
+            error.to_string(),
+            "`with` cannot use topological dependencies."
+        );
     }
 }

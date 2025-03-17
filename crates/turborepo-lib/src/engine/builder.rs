@@ -14,7 +14,8 @@ use crate::{
     run::task_id::{TaskId, TaskName},
     task_graph::TaskDefinition,
     turbo_json::{
-        validate_extends, validate_no_package_task_syntax, RawTaskDefinition, TurboJsonLoader,
+        validate_extends, validate_no_package_task_syntax, validate_with_has_no_topo,
+        RawTaskDefinition, TurboJsonLoader,
     },
 };
 
@@ -584,6 +585,12 @@ impl<'a> EngineBuilder<'a> {
         let mut task_definitions = Vec::new();
 
         let root_turbo_json = turbo_json_loader.load(&PackageName::Root)?;
+        let validation_errors = root_turbo_json.validate(&[validate_with_has_no_topo]);
+        if !validation_errors.is_empty() {
+            return Err(Error::Validation {
+                errors: validation_errors,
+            });
+        }
 
         if let Some(root_definition) = root_turbo_json.task(task_id, task_name) {
             task_definitions.push(root_definition)
@@ -608,8 +615,11 @@ impl<'a> EngineBuilder<'a> {
         if task_id.package() != ROOT_PKG_NAME {
             match turbo_json_loader.load(&PackageName::from(task_id.package())) {
                 Ok(workspace_json) => {
-                    let validation_errors = workspace_json
-                        .validate(&[validate_no_package_task_syntax, validate_extends]);
+                    let validation_errors = workspace_json.validate(&[
+                        validate_no_package_task_syntax,
+                        validate_extends,
+                        validate_with_has_no_topo,
+                    ]);
                     if !validation_errors.is_empty() {
                         return Err(Error::Validation {
                             errors: validation_errors,

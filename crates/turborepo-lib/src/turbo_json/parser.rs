@@ -254,7 +254,8 @@ impl WithMetadata for RawTaskDefinition {
         self.interruptible.add_text(text.clone());
         self.outputs.add_text(text.clone());
         self.output_logs.add_text(text.clone());
-        self.interactive.add_text(text);
+        self.interactive.add_text(text.clone());
+        self.with.add_text(text);
     }
 
     fn add_path(&mut self, path: Arc<str>) {
@@ -269,7 +270,8 @@ impl WithMetadata for RawTaskDefinition {
         self.interruptible.add_path(path.clone());
         self.outputs.add_path(path.clone());
         self.output_logs.add_path(path.clone());
-        self.interactive.add_path(path);
+        self.interactive.add_path(path.clone());
+        self.with.add_path(path);
     }
 }
 
