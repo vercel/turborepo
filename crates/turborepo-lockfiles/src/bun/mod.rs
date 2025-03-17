@@ -231,7 +231,7 @@ impl BunLockfile {
             .filter_map(|ws| Some((ws.to_string(), self.data.workspaces.get(ws)?.clone())))
             .collect();
 
-        let new_packages: Map<_, _> = packages
+        let mut new_packages: Map<_, _> = packages
             .iter()
             .filter_map(|package| {
                 let key = self.key_to_entry.get(package)?;
@@ -239,6 +239,22 @@ impl BunLockfile {
                     .map(|(k, v)| (k.to_string(), v.clone()))
             })
             .collect();
+
+        // Some packages have multiple "aliases" that resolve to the same ident.
+        // These were deduplicated before pruning, so we need to add them back here.
+        let idents: Map<_, _> = new_packages
+            .iter()
+            .map(|(k, v)| (v.ident.clone(), k.clone()))
+            .collect();
+        self.data
+            .packages
+            .iter()
+            .filter(|(existing_key, entry)| {
+                idents.get(&entry.ident).is_some_and(|k| k != *existing_key)
+            })
+            .for_each(|(key, entry)| {
+                new_packages.insert(key.clone(), entry.clone());
+            });
 
         let new_patched_dependencies = new_packages
             .values()
@@ -359,7 +375,7 @@ mod test {
     fn test_subgraph() {
         let lockfile = BunLockfile::from_str(BASIC_LOCKFILE).unwrap();
         let subgraph = lockfile
-            .subgraph(&["".into(), "apps/docs".into()], &["is-odd@3.0.1".into()])
+            .subgraph(&["apps/docs".into()], &["is-odd@3.0.1".into()])
             .unwrap();
         let subgraph_data = subgraph.lockfile().unwrap();
 
@@ -381,7 +397,7 @@ mod test {
     fn test_patch_subgraph() {
         let lockfile = BunLockfile::from_str(PATCH_LOCKFILE).unwrap();
         let subgraph_a = lockfile
-            .subgraph(&["".into(), "apps/a".into()], &["is-odd@3.0.1".into()])
+            .subgraph(&["apps/a".into()], &["is-odd@3.0.1".into()])
             .unwrap();
         let subgraph_a_data = subgraph_a.lockfile().unwrap();
 
@@ -399,7 +415,7 @@ mod test {
         );
 
         let subgraph_b = lockfile
-            .subgraph(&["".into(), "apps/b".into()], &["is-odd@3.0.0".into()])
+            .subgraph(&["apps/b".into()], &["is-odd@3.0.0".into()])
             .unwrap();
         let subgraph_b_data = subgraph_b.lockfile().unwrap();
 
