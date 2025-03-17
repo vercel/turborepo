@@ -309,6 +309,17 @@ export interface Pipeline {
    * @defaultValue `false`
    */
   interruptible?: boolean;
+
+  /**
+   * A list of tasks that will run alongside this task.
+   *
+   * Tasks in this list will not be run until completion before this task starts execution.
+   *
+   * Documentation: https://turbo.build/repo/docs/reference/configuration#with
+   *
+   * @defaultValue `[]`
+   */
+  with?: Array<string>;
 }
 
 export interface RemoteCache {
