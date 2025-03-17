@@ -157,6 +157,7 @@ const TOCItem = ({ item }: { item: TOCItemType }) => {
 };
 
 export const TableOfContents = () => {
+  return null;
   // const params = useParams<{ code: string; slug: string[] }>();
   // const page = repoDocsPages.getPage(params.slug);
   // if (!page) return null;
