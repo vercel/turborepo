@@ -4,7 +4,7 @@ import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import type { ReactNode } from "react";
 import type { Metadata } from "next";
-import { Footer } from "@/app/_components/footer";
+import { Footer } from "@/components/nav/footer";
 import { RootProvider } from "@/components/root-provider";
 import { PRODUCT_SLOGANS } from "@/lib/constants";
 import { createMetadata } from "@/lib/create-metadata";
