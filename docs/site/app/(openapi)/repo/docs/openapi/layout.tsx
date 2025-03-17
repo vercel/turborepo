@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import { DocsLayout } from "fumadocs-ui/layouts/docs";
-import { layoutPropsWithSidebar } from "@/app/_components/inner-layout-props";
 import { openapiPages } from "@/app/source";
 
 export default function Layout({
@@ -10,8 +9,7 @@ export default function Layout({
 }): JSX.Element {
   return (
     <DocsLayout
-      {...layoutPropsWithSidebar}
-      sidebar={{ defaultOpenLevel: 3, collapsible: false }}
+      sidebar={{ defaultOpenLevel: 0, collapsible: false }}
       tree={openapiPages.pageTree}
     >
       {children}

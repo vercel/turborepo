@@ -41,6 +41,18 @@ export function isActive(
 export const itemVariants = cva(
   "flex h-auto w-full items-center p-0 text-sm font-medium text-gray-1000 data-[active=true]:text-blue-700 dark:data-[active=true]:text-blue-600 [&:not(:first-of-type)]:mt-2.5 [overflow-wrap:anywhere] transition-colors duration-100"
 );
+
+export const getItemClass = (href: string) => {
+  const hasMoreThanThreeSegments = href.split("/").filter(Boolean).length > 3;
+
+  return (className?: string) =>
+    cn(
+      itemVariants(),
+      hasMoreThanThreeSegments && "py-1 text-gray-900",
+      className
+    );
+};
+
 export interface SidebarProps extends HTMLAttributes<HTMLElement> {
   /**
    * Open folders by default if their level is lower or equal to a specific level
@@ -175,6 +187,7 @@ export const SidebarFolderLink = ({
   const { prefetch } = useInternalContext();
   const pathname = usePathname();
   const active = href !== undefined && isActive(String(href), pathname, false);
+  const itemClasses = getItemClass(href);
 
   useLayoutEffect(() => {
     if (active) {
@@ -186,9 +199,9 @@ export const SidebarFolderLink = ({
     <Link
       href={href}
       data-active={active}
-      className={cn(itemVariants(), className)}
+      className={itemClasses(className)}
       prefetch={prefetch}
-      onClick={(e: any) => {
+      onClick={(e: React.MouseEvent<HTMLAnchorElement>) => {
         if (
           // clicking on icon
           (e.target as HTMLElement).hasAttribute("data-icon") ||
@@ -219,7 +232,7 @@ export const SidebarFolderContent = ({
 }) => {
   return (
     <CollapsibleContent>
-      <SidebarMenuSub className="m-0 my-2.5 flex flex-col gap-y-2.5 border-none p-0">
+      <SidebarMenuSub className="m-0 my-2.5 flex flex-col border-none p-0">
         {children}
       </SidebarMenuSub>
     </CollapsibleContent>
@@ -240,7 +253,7 @@ export const SidebarItem = ({
     <SidebarMenuItem>
       <SidebarMenuButton
         asChild
-        className="m-0 flex h-auto w-full rounded-md p-0 text-sm font-normal data-[active=true]:font-normal data-[active=true]:text-blue-700 dark:data-[active=true]:text-blue-600"
+        className="m-0 flex h-auto w-full rounded-md p-0 text-sm font-normal hover:text-gray-1000 data-[active=true]:font-normal data-[active=true]:text-blue-700 dark:data-[active=true]:text-blue-600"
       >
         <Link href={href} data-active={active} prefetch={prefetch}>
           <span className="truncate">{children}</span>
@@ -258,8 +271,9 @@ export function SidebarSeparator({
   className?: string;
   children: React.ReactNode;
 }) {
+  const itemClasses = getItemClass();
   return (
-    <SidebarGroupLabel {...props} className={cn(itemVariants(), className)}>
+    <SidebarGroupLabel {...props} className={itemClasses(className)}>
       {children}
     </SidebarGroupLabel>
   );

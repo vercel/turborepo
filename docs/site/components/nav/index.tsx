@@ -10,7 +10,6 @@ import {
 } from "./navigation-menu";
 import { cn } from "../cn";
 import { usePathname } from "next/navigation";
-import { TurborepoLogo } from "@/app/_components/logos";
 import { VercelLogo } from "@/app/_components/logos";
 import { LogoGitHub } from "#/components/icons/logo-github";
 import { ForwardSlash } from "../icons/ForwardSlash";
@@ -107,10 +106,10 @@ export const Navigation = () => {
                       <Link
                         href={page.href}
                         className={cn(
-                          "text-sm text-gray-900 transition-colors duration-100 hover:text-gray-1000 data-[active=true]:text-gray-1000"
+                          "text-sm transition-colors duration-100 hover:text-gray-1000 data-[active=true]:text-gray-1000"
                         )}
                         data-active={pageFromRoute === page.name}
-                        scroll={page.href !== "/docs"}
+                        scroll={page.href !== "/repo/docs"}
                       >
                         {page.tooltip}
                       </Link>

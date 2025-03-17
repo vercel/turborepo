@@ -3,11 +3,12 @@ import { LayoutBody, SidebarItems } from "./docs.client";
 import { TableOfContents } from "./docs.client";
 import type { PageTree } from "fumadocs-core/server";
 import {
+  Sidebar,
   SidebarContent,
   SidebarGroup,
   SidebarInset,
 } from "@/components/ui/sidebar";
-import { Sidebar, SidebarViewport } from "./sidebar";
+import { SidebarViewport } from "./sidebar";
 import { MobileMenu } from "./mobile-menu";
 import { MobileMenuProvider } from "./use-mobile-menu-context";
 
