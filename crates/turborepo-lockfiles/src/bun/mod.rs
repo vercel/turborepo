@@ -1,4 +1,8 @@
-use std::{any::Any, collections::HashMap, str::FromStr};
+use std::{
+    any::Any,
+    collections::{HashMap, HashSet},
+    str::FromStr,
+};
 
 use biome_json_formatter::context::JsonFormatOptions;
 use biome_json_parser::JsonParserOptions;
@@ -231,30 +235,21 @@ impl BunLockfile {
             .filter_map(|ws| Some((ws.to_string(), self.data.workspaces.get(ws)?.clone())))
             .collect();
 
-        let mut new_packages: Map<_, _> = packages
-            .iter()
-            .filter_map(|package| {
-                let key = self.key_to_entry.get(package)?;
-                self.package_entry(key)
-                    .map(|(k, v)| (k.to_string(), v.clone()))
-            })
-            .collect();
-
-        // Some packages have multiple "aliases" that resolve to the same ident.
-        // These were deduplicated before pruning, so we need to add them back here.
-        let idents: Map<_, _> = new_packages
-            .iter()
-            .map(|(k, v)| (v.ident.clone(), k.clone()))
-            .collect();
-        self.data
+        // Filter out packages that are not in the subgraph. Note that _multiple_
+        // entries can correspond to the same ident.
+        let idents: HashSet<_> = packages.iter().collect();
+        let new_packages: Map<_, _> = self
+            .data
             .packages
             .iter()
-            .filter(|(existing_key, entry)| {
-                idents.get(&entry.ident).is_some_and(|k| k != *existing_key)
+            .filter_map(|(key, entry)| {
+                if idents.contains(&entry.ident) {
+                    Some((key.clone(), entry.clone()))
+                } else {
+                    None
+                }
             })
-            .for_each(|(key, entry)| {
-                new_packages.insert(key.clone(), entry.clone());
-            });
+            .collect();
 
         let new_patched_dependencies = new_packages
             .values()
