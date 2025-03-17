@@ -123,7 +123,7 @@ Sometimes, you may need to ensure that two tasks in the same package run in a sp
 
 #### Depending on a specific task in a specific package
 
-You can also specify an individual task in a specific package to depend on. In the example below, the `build` task in `utils` must be ran before any `lint` tasks.
+You can also specify an individual task in a specific package to depend on. In the example below, the `build` task in `utils` must be run before any `lint` tasks.
 
 ```json title="./turbo.json"
 {
@@ -147,7 +147,7 @@ You can also be more specific about the dependent task, limiting it to a certain
 }
 ```
 
-With this configuration, the `lint` task in your `web` package can only be ran after the `build` task in the `utils` package is complete.
+With this configuration, the `lint` task in your `web` package can only be run after the `build` task in the `utils` package is complete.
 
 #### No dependencies
 
@@ -306,7 +306,7 @@ In large monorepos with many teams, this allows teams greater control over their
 
 ### Performing side-effects
 
-Some tasks should always be ran no matter what, like a deployment script after a cached build. For these tasks, add `"cache": false` to your task definition.
+Some tasks should always be run no matter what, like a deployment script after a cached build. For these tasks, add `"cache": false` to your task definition.
 
 ```json title="./turbo.json"
 {
@@ -322,9 +322,9 @@ Some tasks should always be ran no matter what, like a deployment script after a
 }
 ```
 
-### Dependent tasks that can be ran in parallel
+### Dependent tasks that can be run in parallel
 
-Some tasks can be ran in parallel despite being dependent on other packages. An example of tasks that fit this description are linters, since a linter doesn't need to wait for outputs in dependencies to run successfully.
+Some tasks can be run in parallel despite being dependent on other packages. An example of tasks that fit this description are linters, since a linter doesn't need to wait for outputs in dependencies to run successfully.
 
 Because of this, you may be tempted to define your `check-types` task like this:
 
