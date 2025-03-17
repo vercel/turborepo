@@ -27,9 +27,9 @@ export const getRemoteCacheSavedMinutes =
   async (): Promise<TurborepoMinutesSaved> => {
     if (!process.env.VERCEL && !process.env.TINYBIRD_TIME_SAVED_TOKEN) {
       return {
-        total: 100000,
-        remoteCacheMinutesSaved: 50000,
-        localCacheMinutesSaved: 50000,
+        total: 100000000,
+        remoteCacheMinutesSaved: 50000000,
+        localCacheMinutesSaved: 50000000,
       };
     }
 

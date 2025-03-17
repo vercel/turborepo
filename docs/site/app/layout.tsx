@@ -32,8 +32,10 @@ export default function Layout({
       suppressHydrationWarning
     >
       <body>
-        <RootProvider>{children}</RootProvider>
-        <Footer />
+        <RootProvider>
+          {children}
+          <Footer />
+        </RootProvider>
         <VercelTrackers />
         {shouldInjectToolbar ? <VercelToolbar /> : null}
       </body>

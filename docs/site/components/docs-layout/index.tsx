@@ -1,6 +1,5 @@
 import { TreeContextProvider } from "fumadocs-ui/provider";
-import { LayoutBody, SidebarItems } from "./docs.client";
-import { TableOfContents } from "./docs.client";
+import { LayoutBody, TableOfContents, SidebarItems } from "./docs.client";
 import type { PageTree } from "fumadocs-core/server";
 import {
   Sidebar,

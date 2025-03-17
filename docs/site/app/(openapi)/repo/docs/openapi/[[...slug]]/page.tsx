@@ -6,7 +6,7 @@ import {
 } from "fumadocs-ui/page";
 import { notFound } from "next/navigation";
 import defaultMdxComponents from "fumadocs-ui/mdx";
-import { openapi, openapiPages } from "@/app/source";
+import { openapi, openapiPages } from "../../../source";
 // eslint-disable-next-line rulesdir/global-css
 import "./openapi.css";
 

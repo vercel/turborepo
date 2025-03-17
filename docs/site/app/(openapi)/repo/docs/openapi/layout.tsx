@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { DocsLayout } from "fumadocs-ui/layouts/docs";
-import { openapiPages } from "@/app/source";
+import { openapiPages } from "@/app/(openapi)/repo/source";
 
 export default function Layout({
   children,
