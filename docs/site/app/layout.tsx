@@ -33,9 +33,9 @@ export default function Layout({
     >
       <body>
         <RootProvider>{children}</RootProvider>
-        {shouldInjectToolbar ? <VercelToolbar /> : null}
         <Footer />
         <VercelTrackers />
+        {shouldInjectToolbar ? <VercelToolbar /> : null}
       </body>
     </html>
   );

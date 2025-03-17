@@ -18,6 +18,9 @@ export function ThemeSwitcher({
   short?: boolean;
 }) {
   const { theme, setTheme } = useTheme();
+  const herm = useTheme();
+  console.log(herm);
+
   const [mounted, setMounted] = useState(false);
   const iconSize = size / 2;
   const padding = size / 10.67;

@@ -125,8 +125,8 @@ importers:
         specifier: ^9.7.3
         version: 9.7.5(react-dom@19.0.0)(react@19.0.0)
       '@turbo/gen':
-        specifier: 2.3.1-canary.2
-        version: 2.3.1-canary.2(@types/node@20.11.30)(typescript@5.6.3)
+        specifier: ^2.4.4
+        version: 2.4.4(@types/node@20.11.30)(typescript@5.6.3)
       '@vercel/speed-insights':
         specifier: 1.2.0
         version: 1.2.0(next@15.2.2)(react@19.0.0)
@@ -5433,11 +5433,11 @@ packages:
   /@tsconfig/node16@1.0.4:
     resolution: {integrity: sha512-vxhUy4J8lyeyinH7Azl1pdd43GJhZH/tP2weN8TntQblOY+A0XbT8DJk1/oCPuOOyg/Ja757rG0CgHcWC8OfMA==}
 
-  /@turbo/gen@2.3.1-canary.2(@types/node@20.11.30)(typescript@5.6.3):
-    resolution: {integrity: sha512-OO6V3wXu+hDHSnLYgW4ZwrDhjWP4Ydz/xodet4WDMZ05R9mfPJaP/A18BLN88PI/dAgFoBF5wvSZ3upw2JwdLA==}
+  /@turbo/gen@2.4.4(@types/node@20.11.30)(typescript@5.6.3):
+    resolution: {integrity: sha512-02DR0UFngfVROq/L7j4VdkpT46Rnk5mm8i5AE985jV114SjuN57Y2oBjSK9Lzm6hlun/H0MQtdJBRybk4nRIAQ==}
     hasBin: true
     dependencies:
-      '@turbo/workspaces': 2.3.1-canary.2
+      '@turbo/workspaces': 2.4.4
       commander: 10.0.0
       fs-extra: 10.1.0
       inquirer: 8.2.4
@@ -5460,8 +5460,8 @@ packages:
     resolution: {integrity: sha512-Ph/jWhTS2YdUaowfXstM3TmWA17TaXZAqHki1zWKevxlBZd35BmqRQYb92qaKVoOu43BagqU4vhxKYH1HVpcyg==}
     dev: true
 
-  /@turbo/workspaces@2.3.1-canary.2:
-    resolution: {integrity: sha512-mWBLsEjTY8MfKxZeE6yOtTVpvKT+v8cLKZ1F6DC/8Q5MbysTl5rp2R0mRMW9hMd/p4qOEZD0x41HHqxrtvmX/g==}
+  /@turbo/workspaces@2.4.4:
+    resolution: {integrity: sha512-5CK3ZkVskSExf9YaXVMJ04F6Fb18HXKVZw8TMKVP7qOIvHGiBmT6YzWHqsQ3/PMNov2TzJ41ofRKX3zjR3G6Yg==}
     hasBin: true
     dependencies:
       commander: 10.0.0
@@ -5473,7 +5473,6 @@ packages:
       js-yaml: 4.1.0
       ora: 4.1.1
       picocolors: 1.0.1
-      rimraf: 3.0.2
       semver: 7.6.2
       update-check: 1.5.4
     dev: false
@@ -16531,7 +16530,7 @@ packages:
       '@tsconfig/node14': 1.0.3
       '@tsconfig/node16': 1.0.4
       '@types/node': 20.11.30
-      acorn: 8.10.0
+      acorn: 8.14.1
       acorn-walk: 8.2.0
       arg: 4.1.3
       create-require: 1.1.1

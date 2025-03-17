@@ -1,6 +1,6 @@
 import { VercelLogo } from "@/app/_components/logos";
 import Fumalink from "fumadocs-core/link";
-import { ThemeSwitcher } from "./theme-switcher";
+import { ThemeSwitcher } from "./theme-switcher/index";
 
 interface FooterItem {
   href: string;
@@ -40,7 +40,6 @@ const NavItems = ({ category }: { category: FooterItem[] }) => {
             key={item.href}
             className="transition duration-100 hover:text-gray-1000"
           >
-            {/* Fumalink as it by default handles external / internal – can replace if necessary */}
             <Fumalink href={item.href}>{item.label}</Fumalink>
           </li>
         );

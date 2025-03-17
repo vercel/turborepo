@@ -1,8 +1,7 @@
 import type { ReactNode } from "react";
-import { HomeLayout as FumaLayout } from "fumadocs-ui/layouts/home";
-import { navLinks } from "@/lib/nav-links";
+import { HomeLayout } from "fumadocs-ui/layouts/home";
 import { FaviconHandler } from "../_components/favicon-handler";
-import { TitleLogos } from "@/components/TitleLogos";
+import { baseOptions } from "../layout-config";
 
 export default function Layout({
   children,
@@ -12,15 +11,9 @@ export default function Layout({
   return (
     <>
       <FaviconHandler />
-      <FumaLayout
-        githubUrl="https://github.com/vercel/turborepo"
-        links={navLinks}
-        nav={{
-          title: <TitleLogos />,
-        }}
-      >
+      <HomeLayout className="p-0" {...baseOptions}>
         {children}
-      </FumaLayout>
+      </HomeLayout>
     </>
   );
 }
