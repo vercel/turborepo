@@ -447,7 +447,7 @@ impl<'a> EngineBuilder<'a> {
                 });
 
             for (sibling, span) in task_definition
-                .siblings
+                .with
                 .iter()
                 .flatten()
                 .map(|s| s.as_ref().split())
@@ -1443,7 +1443,7 @@ mod test {
     }
 
     #[test]
-    fn test_sibling_task() {
+    fn test_with_task() {
         let repo_root_dir = TempDir::with_prefix("repo").unwrap();
         let repo_root = AbsoluteSystemPathBuf::new(repo_root_dir.path().to_str().unwrap()).unwrap();
         let package_graph = mock_package_graph(
@@ -1461,7 +1461,7 @@ mod test {
                     "api#serve": { "persistent": true }
                 }
             }));
-            t_json.with_sibling(TaskName::from("web#dev"), &TaskName::from("api#serve"));
+            t_json.with_task(TaskName::from("web#dev"), &TaskName::from("api#serve"));
             t_json
         })]
         .into_iter()
