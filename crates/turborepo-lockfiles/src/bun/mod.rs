@@ -228,11 +228,18 @@ impl BunLockfile {
         workspace_packages: &[String],
         packages: &[String],
     ) -> Result<BunLockfile, Error> {
-        let new_workspaces: Map<_, _> = workspace_packages
+        let new_workspaces: Map<_, _> = self
+            .data
+            .workspaces
             .iter()
-            // Add the root workspace, which is always indexed by ""
-            .chain(std::iter::once(&"".to_string()))
-            .filter_map(|ws| Some((ws.to_string(), self.data.workspaces.get(ws)?.clone())))
+            .filter_map(|(key, entry)| {
+                // Ensure the root workspace package is included, which is always indexed by ""
+                if key == "" || workspace_packages.contains(&key) {
+                    Some((key.clone(), entry.clone()))
+                } else {
+                    None
+                }
+            })
             .collect();
 
         // Filter out packages that are not in the subgraph. Note that _multiple_
@@ -251,13 +258,16 @@ impl BunLockfile {
             })
             .collect();
 
-        let new_patched_dependencies = new_packages
-            .values()
-            .filter_map(|entry| {
-                self.data
-                    .patched_dependencies
-                    .get(&entry.ident)
-                    .map(|patch| (entry.ident.clone(), patch.clone()))
+        let new_patched_dependencies = self
+            .data
+            .patched_dependencies
+            .iter()
+            .filter_map(|(ident, patch)| {
+                if idents.contains(ident) {
+                    Some((ident.clone(), patch.clone()))
+                } else {
+                    None
+                }
             })
             .collect();
 
@@ -437,6 +447,14 @@ mod test {
             subgraph_a_data.workspaces.keys().collect::<Vec<_>>(),
             vec!["", "apps/a"]
         );
+        assert_eq!(
+            subgraph_a_data
+                .patched_dependencies
+                .iter()
+                .map(|(key, patch)| (key.as_str(), patch.as_str()))
+                .collect::<Vec<_>>(),
+            vec![]
+        );
 
         let subgraph_b = lockfile
             .subgraph(&["apps/b".into()], &["is-odd@3.0.0".into()])
@@ -454,6 +472,14 @@ mod test {
         assert_eq!(
             subgraph_b_data.workspaces.keys().collect::<Vec<_>>(),
             vec!["", "apps/b"]
+        );
+        assert_eq!(
+            subgraph_b_data
+                .patched_dependencies
+                .iter()
+                .map(|(key, patch)| (key.as_str(), patch.as_str()))
+                .collect::<Vec<_>>(),
+            vec![("is-odd@3.0.0", "patches/is-odd@3.0.0.patch")]
         );
     }
 
