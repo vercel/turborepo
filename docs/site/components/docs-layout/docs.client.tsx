@@ -69,7 +69,7 @@ function renderSidebarList(items: PageTree.Node[]): React.ReactNode[] {
 export const SidebarItems = () => {
   const { root } = useTreeContext();
   return (
-    <SidebarMenu className="flex flex-col gap-y-2.5">
+    <SidebarMenu className="flex flex-col">
       {renderSidebarList(root.children)}
     </SidebarMenu>
   );

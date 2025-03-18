@@ -7,7 +7,7 @@ import { RemoteCacheCounterClient } from "./client";
 export function RemoteCacheCounter(): JSX.Element {
   return (
     <Link
-      className="group mt-4 h-[126px] min-h-[126px] w-full overflow-hidden rounded-lg border border-transparent bg-gradient-to-r from-[#ef4444] to-[#3b82f6] bg-origin-border"
+      className="group my-4 h-[126px] min-h-[126px] w-full overflow-hidden rounded-lg border border-transparent bg-gradient-to-r from-[#ef4444] to-[#3b82f6] bg-origin-border"
       href="/repo/docs/core-concepts/remote-caching"
       onClick={() => track("Remote Cache counter click")}
     >

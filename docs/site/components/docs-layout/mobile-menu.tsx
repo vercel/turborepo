@@ -40,7 +40,7 @@ export const MobileMenu = () => {
         Menu
       </CollapsibleTrigger>
       <CollapsibleContent className="h-full">
-        <div className="flex h-full flex-col gap-y-2.5 py-3">
+        <div className="flex h-full flex-col py-3">
           {renderMobileList(root.children, 1)}
         </div>
       </CollapsibleContent>
@@ -65,6 +65,10 @@ const MobileMenuLink = ({ item }: { item: PageTree.Item }) => {
   );
 };
 
+export const getItemClass = (href: string | undefined) => {
+  return href ? href.split("/").filter(Boolean).length > 3 : false;
+};
+
 export function renderMobileList(items: PageTree.Node[], level: number) {
   return items.map((item, i) => {
     const id = `${item.type}_${i}`;
@@ -79,24 +83,24 @@ export function renderMobileList(items: PageTree.Node[], level: number) {
       case "folder":
         return (
           <Collapsible key={id} className="group/folder flex flex-col gap-y-1">
-            {item.index ? (
-              <div className={cn(itemVariants())}>{item.name}</div>
-            ) : (
-              <CollapsibleTrigger asChild>
-                <button
-                  type="button"
-                  className={cn(itemVariants(), "group/trigger text-base")}
-                >
-                  {item.name}
-                  <ChevronRight
-                    data-icon
-                    className="ml-auto transition-transform group-data-[state=open]/folder:rotate-90 w-3 h-3"
-                  />
-                </button>
-              </CollapsibleTrigger>
-            )}
+            <CollapsibleTrigger asChild>
+              <button
+                type="button"
+                className={cn(
+                  itemVariants(),
+                  "group/trigger text-base",
+                  getItemClass(item.index?.url) ? "text-gray-900" : ""
+                )}
+              >
+                {item.name}
+                <ChevronRight
+                  data-icon
+                  className="ml-auto transition-transform group-data-[state=open]/folder:rotate-90 w-3 h-3"
+                />
+              </button>
+            </CollapsibleTrigger>
             <CollapsibleContent>
-              <div className="flex flex-col gap-y-2 pb-1">
+              <div className="flex flex-col pb-1">
                 {renderMobileList(item.children, level + 1)}
               </div>
             </CollapsibleContent>
