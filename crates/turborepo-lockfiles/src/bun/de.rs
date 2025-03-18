@@ -72,9 +72,11 @@ impl<'de> Deserialize<'de> for PackageEntry {
         }
 
         // The second value can be either registry (string) or info (object)
-        vals.pop_front().map(|val| match val {
-            Vals::Str(reg) => registry = Some(reg),
-            Vals::Info(package_info) => info = Some(*package_info),
+        let Some(val) = vals.pop_front() {
+            match val {
+                Vals::Str(reg) => registry = Some(reg),
+                Vals::Info(package_info) => info = Some(*package_info),
+            }
         });
 
         // Info will be next if we haven't already found it
