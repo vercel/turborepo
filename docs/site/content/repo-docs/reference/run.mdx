@@ -34,13 +34,22 @@ turbo run
 
 ### `--affected`
 
-Automatically filter to only packages that are affected by changes on the current branch.
+Filter to only packages that are affected by changes on the current branch.
 
 ```bash title="Terminal"
 turbo run build lint test --affected
 ```
 
 By default, the flag is equivalent to `--filter=...[main...HEAD]`. This considers changes between `main` and `HEAD` from Git's perspective.
+
+<Callout type="warn">
+  The comparison requires everything between base and head to exist in the
+  checkout. If the checkout is too shallow, then all packages will be considered
+  changed.
+
+For example, setting up Git to check out with `--filter=blob:none --depth=0` will ensure `--affected` has the right history to work correctly.
+
+</Callout>
 
 You can override the default base and head with their respective [System Environment Variables](/repo/docs/reference/system-environment-variables).
 
@@ -51,12 +60,6 @@ TURBO_SCM_BASE=development turbo run build --affected
 # Override Git comparison head
 TURBO_SCM_HEAD=your-branch turbo run build --affected
 ```
-
-<Callout type="warn">
-  The comparison requires everything between base and head to exist in the
-  checkout. If the checkout is too shallow, then all packages will be considered
-  changed.
-</Callout>
 
 ### `--cache <options>`
 
