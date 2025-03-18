@@ -527,9 +527,7 @@ To enable restarting persistent tasks, set `interruptible` to `true`.
 
 ### `with`
 
-A list of tasks that will be run along side this task.
-
-Unlike [`dependsOn`](#dependson), tasks listed here will not be run until completion before execution of this task starts.
+A list of tasks that will be ran alongside this task. This is most useful for long-running tasks that you want to ensure always run at the same time.
 
 ## Boundaries
 
