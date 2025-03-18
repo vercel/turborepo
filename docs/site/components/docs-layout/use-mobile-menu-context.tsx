@@ -35,3 +35,36 @@ export const MobileMenuProvider = ({ children }: MobileMenuProviderProps) => {
     </MobileMenuContext.Provider>
   );
 };
+
+interface TopLevelMobileMenuContextProps {
+  openMobileMenu: boolean;
+  setOpenMobileMenu: (open: boolean) => void;
+}
+
+const TopLevelMobileMenuContext = createContext<
+  TopLevelMobileMenuContextProps | undefined
+>(undefined);
+
+export const useTopLevelMobileMenuContext = (): MobileMenuContextProps => {
+  const context = useContext(TopLevelMobileMenuContext);
+  if (!context) {
+    throw new Error(
+      "useMobileMenuContext must be used within a MobileMenuProvider"
+    );
+  }
+  return context;
+};
+
+export const TopLevelMobileMenuProvider = ({
+  children,
+}: MobileMenuProviderProps) => {
+  const [openMobileMenu, setOpenMobileMenu] = useState(false);
+
+  return (
+    <TopLevelMobileMenuContext.Provider
+      value={{ openMobileMenu, setOpenMobileMenu }}
+    >
+      {children}
+    </TopLevelMobileMenuContext.Provider>
+  );
+};

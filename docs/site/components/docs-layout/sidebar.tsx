@@ -189,7 +189,7 @@ export const SidebarFolderLink = ({
   const { prefetch } = useInternalContext();
   const pathname = usePathname();
   const active = href !== undefined && isActive(String(href), pathname, false);
-  const itemClasses = getItemClass(href);
+  const itemClasses = getItemClass(href.toString());
 
   useLayoutEffect(() => {
     if (active) {
@@ -273,7 +273,7 @@ export function SidebarSeparator({
   className?: string;
   children: React.ReactNode;
 }) {
-  const itemClasses = getItemClass();
+  const itemClasses = getItemClass(undefined);
   return (
     <SidebarGroupLabel {...props} className={itemClasses(className)}>
       {children}

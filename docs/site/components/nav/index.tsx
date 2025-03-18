@@ -17,6 +17,7 @@ import { Button } from "../button";
 import { FeedbackWidget } from "../feedback-widget";
 import { useSearchContext } from "fumadocs-ui/provider";
 import { ThemeAwareImage } from "../theme-aware-image";
+import { MobileMenu } from "../docs-layout/mobile-menu-top-level";
 
 export const PAGES = [
   {
@@ -40,6 +41,7 @@ export const PAGES = [
     name: "enterprise",
   },
 ] as const;
+export type Pages = typeof PAGES;
 
 const size = 24;
 
@@ -94,7 +96,10 @@ export const Navigation = () => {
           <div className="flex flex-shrink-0 flex-row items-center gap-2">
             <HomeLinks />
           </div>
-          <div className="flex w-full justify-end md:justify-start md:pl-6">
+          <div className="ml-auto">
+            <MobileMenu pages={PAGES} />
+          </div>
+          <div className="hidden md:flex w-full justify-end md:justify-start md:pl-6">
             <NavigationMenu>
               <NavigationMenuList className="h-14 gap-3">
                 {PAGES.map((page) => (

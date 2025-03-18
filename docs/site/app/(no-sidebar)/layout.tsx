@@ -11,6 +11,7 @@ export default function Layout({
   return (
     <>
       <FaviconHandler />
+      {/* @ts-expect-error */}
       <HomeLayout className="p-0" {...baseOptions}>
         {children}
       </HomeLayout>
