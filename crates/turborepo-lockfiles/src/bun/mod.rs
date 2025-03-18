@@ -234,7 +234,7 @@ impl BunLockfile {
             .iter()
             .filter_map(|(key, entry)| {
                 // Ensure the root workspace package is included, which is always indexed by ""
-                if key == "" || workspace_packages.contains(&key) {
+                if key.is_empty() || workspace_packages.contains(key) {
                     Some((key.clone(), entry.clone()))
                 } else {
                     None
