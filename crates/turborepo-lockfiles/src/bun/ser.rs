@@ -1,9 +1,7 @@
-use std::collections::VecDeque;
+use serde::{ser::SerializeTuple, Serialize};
 
-use serde::Deserialize;
+use super::PackageEntry;
 
-use super::{PackageEntry, PackageInfo};
-use crate::bun::RootInfo;
 // Comment explaining entry schemas taken from bun.lock.zig
 // first index is resolution for each type of package
 // npm         -> [
@@ -20,95 +18,47 @@ use crate::bun::RootInfo;
 // git         -> [ "name@git+repo", INFO, .bun-tag string (TODO: remove this) ]
 // github      -> [ "name@github:user/repo", INFO, .bun-tag string (TODO: remove
 // this) ]
-impl<'de> Deserialize<'de> for PackageEntry {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        use serde::de;
-        #[derive(Deserialize)]
-        #[serde(untagged)]
-        enum Vals {
-            Str(String),
-            Info(Box<PackageInfo>),
-        }
-        let mut vals = VecDeque::<Vals>::deserialize(deserializer)?;
+impl Serialize for PackageEntry {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut tuple = serializer.serialize_tuple(4)?;
 
         // First value is always the package key
-        let key = vals
-            .pop_front()
-            .ok_or_else(|| de::Error::custom("expected package entry to not be empty"))?;
-        let Vals::Str(key) = key else {
-            return Err(de::Error::custom(
-                "expected first element in package to be string",
-            ));
-        };
-        let val_to_info = |val| match val {
-            Vals::Str(_) => None,
-            Vals::Info(package_info) => Some(*package_info),
-        };
+        tuple.serialize_element(&self.ident)?;
 
-        let mut registry = None;
-        let mut info = None;
-
-        // Special case: root packages have a unique second value, so we handle it here
-        if key.ends_with("@root:") {
-            let root = vals.pop_front().and_then(|val| {
-                serde_json::from_value::<RootInfo>(match val {
-                    Vals::Info(info) => {
-                        serde_json::to_value(info.other).expect("failed to convert info to value")
-                    }
-                    _ => return None,
-                })
-                .ok()
-            });
-            return Ok(Self {
-                ident: key,
-                info,
-                registry,
-                checksum: None,
-                root,
-            });
+        // For root packages, only thing left to serialize is the root info
+        if let Some(root) = &self.root {
+            tuple.serialize_element(root)?;
+            return tuple.end();
         }
 
-        // The second value can be either registry (string) or info (object)
-        if let Some(val) = vals.pop_front() {
-            match val {
-                Vals::Str(reg) => registry = Some(reg),
-                Vals::Info(package_info) => info = Some(*package_info),
-            }
-        };
-
-        // Info will be next if we haven't already found it
-        if info.is_none() {
-            info = vals.pop_front().and_then(val_to_info);
+        // npm packages have a registry
+        if let Some(registry) = &self.registry {
+            tuple.serialize_element(registry)?;
         }
 
-        // Checksum is last
-        let checksum = vals.pop_front().and_then(|val| match val {
-            Vals::Str(sha) => Some(sha),
-            Vals::Info(_) => None,
-        });
+        // All packages have info in the next slot
+        if let Some(info) = &self.info {
+            tuple.serialize_element(info)?;
+        };
 
-        Ok(Self {
-            ident: key,
-            info,
-            registry,
-            checksum,
-            root: None,
-        })
+        // npm packages, git, and github have a checksum/integrity
+        if let Some(checksum) = &self.checksum {
+            tuple.serialize_element(checksum)?;
+        }
+
+        tuple.end()
     }
 }
 
 #[cfg(test)]
 mod test {
-    use std::{str::FromStr, sync::OnceLock};
+    use std::sync::OnceLock;
 
     use serde_json::json;
     use test_case::test_case;
 
     use super::*;
-    use crate::{bun::WorkspaceEntry, BunLockfile};
+    use crate::bun::{PackageInfo, RootInfo, WorkspaceEntry};
 
     macro_rules! fixture {
         ($name:ident, $kind:ty, $cons:expr) => {
@@ -196,25 +146,11 @@ mod test {
     #[test_case(json!(["is-odd@3.0.1", "", {"dependencies": {"is-number": "^6.0.0"}}, "sha"]), registry_pkg() ; "registry package")]
     #[test_case(json!(["docs", {"dependencies": {"is-odd": "3.0.1"}}]), workspace_pkg() ; "workspace package")]
     #[test_case(json!(["some-package@root:", {"bin": "bin", "binDir": "binDir"}]), root_pkg() ; "root package")]
-    fn test_deserialization<T: for<'a> Deserialize<'a> + PartialEq + std::fmt::Debug>(
-        input: serde_json::Value,
-        expected: &T,
+    fn test_serialization<T: Serialize + PartialEq + std::fmt::Debug>(
+        expected: serde_json::Value,
+        input: &T,
     ) {
-        let actual: T = serde_json::from_value(input).unwrap();
-        assert_eq!(&actual, expected);
-    }
-
-    #[test]
-    fn test_full_parse() {
-        let contents = include_str!("../../fixtures/basic-bun.lock");
-        let result = BunLockfile::from_str(contents);
-        assert!(result.is_ok(), "{}", result.unwrap_err());
-    }
-
-    #[test]
-    fn test_patch() {
-        let contents = include_str!("../../fixtures/bun-patch.lock");
-        let result = BunLockfile::from_str(contents);
-        assert!(result.is_ok(), "{}", result.unwrap_err());
+        let actual = serde_json::to_value(input).unwrap();
+        assert_eq!(actual, expected);
     }
 }

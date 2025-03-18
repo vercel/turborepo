@@ -14,7 +14,8 @@ use crate::{
     run::task_id::{TaskId, TaskName},
     task_graph::TaskDefinition,
     turbo_json::{
-        validate_extends, validate_no_package_task_syntax, RawTaskDefinition, TurboJsonLoader,
+        validate_extends, validate_no_package_task_syntax, validate_with_has_no_topo,
+        RawTaskDefinition, TurboJsonLoader,
     },
 };
 
@@ -447,7 +448,7 @@ impl<'a> EngineBuilder<'a> {
                 });
 
             for (sibling, span) in task_definition
-                .siblings
+                .with
                 .iter()
                 .flatten()
                 .map(|s| s.as_ref().split())
@@ -584,6 +585,7 @@ impl<'a> EngineBuilder<'a> {
         let mut task_definitions = Vec::new();
 
         let root_turbo_json = turbo_json_loader.load(&PackageName::Root)?;
+        Error::from_validation(root_turbo_json.validate(&[validate_with_has_no_topo]))?;
 
         if let Some(root_definition) = root_turbo_json.task(task_id, task_name) {
             task_definitions.push(root_definition)
@@ -608,13 +610,11 @@ impl<'a> EngineBuilder<'a> {
         if task_id.package() != ROOT_PKG_NAME {
             match turbo_json_loader.load(&PackageName::from(task_id.package())) {
                 Ok(workspace_json) => {
-                    let validation_errors = workspace_json
-                        .validate(&[validate_no_package_task_syntax, validate_extends]);
-                    if !validation_errors.is_empty() {
-                        return Err(Error::Validation {
-                            errors: validation_errors,
-                        });
-                    }
+                    Error::from_validation(workspace_json.validate(&[
+                        validate_no_package_task_syntax,
+                        validate_extends,
+                        validate_with_has_no_topo,
+                    ]))?;
 
                     if let Some(workspace_def) = workspace_json.tasks.get(task_name) {
                         task_definitions.push(workspace_def.value.clone());
@@ -662,6 +662,14 @@ impl<'a> EngineBuilder<'a> {
 impl Error {
     fn is_missing_turbo_json(&self) -> bool {
         matches!(self, Self::Config(crate::config::Error::NoTurboJSON))
+    }
+
+    fn from_validation(errors: Vec<config::Error>) -> Result<(), Self> {
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(Error::Validation { errors })
+        }
     }
 }
 
@@ -1443,7 +1451,7 @@ mod test {
     }
 
     #[test]
-    fn test_sibling_task() {
+    fn test_with_task() {
         let repo_root_dir = TempDir::with_prefix("repo").unwrap();
         let repo_root = AbsoluteSystemPathBuf::new(repo_root_dir.path().to_str().unwrap()).unwrap();
         let package_graph = mock_package_graph(
@@ -1461,7 +1469,7 @@ mod test {
                     "api#serve": { "persistent": true }
                 }
             }));
-            t_json.with_sibling(TaskName::from("web#dev"), &TaskName::from("api#serve"));
+            t_json.with_task(TaskName::from("web#dev"), &TaskName::from("api#serve"));
             t_json
         })]
         .into_iter()
