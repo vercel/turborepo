@@ -21,7 +21,7 @@ Thank you for your interest in contributing to Turborepo!
 
 ## General dependencies
 
-You will need to have these dependences installed on your machine to work on this repository:
+You will need to have these dependencies installed on your machine to work on this repository:
 
 - [Rust](https://www.rust-lang.org/tools/install) ([Repository toolchain](https://github.com/vercel/turborepo/blob/main/rust-toolchain.toml))
 - [NodeJS](https://nodejs.org/en) v20

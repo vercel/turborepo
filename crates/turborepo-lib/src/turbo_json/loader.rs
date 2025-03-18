@@ -844,7 +844,7 @@ mod test {
                     // Make sure proxy is in there
                     if task_name == "dev" {
                         assert_eq!(
-                            def.siblings.as_ref().unwrap().first().unwrap().as_inner(),
+                            def.with.as_ref().unwrap().first().unwrap().as_inner(),
                             &UnescapedString::from("web#proxy")
                         )
                     }
@@ -863,7 +863,7 @@ mod test {
                         Some(false)
                     );
                     assert_eq!(
-                        def.siblings.as_ref().unwrap().first().unwrap().as_inner(),
+                        def.with.as_ref().unwrap().first().unwrap().as_inner(),
                         &UnescapedString::from("web#proxy")
                     )
                 } else {

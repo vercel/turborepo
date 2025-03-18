@@ -1,10 +1,14 @@
-use std::{any::Any, collections::HashMap, str::FromStr};
+use std::{
+    any::Any,
+    collections::{HashMap, HashSet},
+    str::FromStr,
+};
 
 use biome_json_formatter::context::JsonFormatOptions;
 use biome_json_parser::JsonParserOptions;
 use id::PossibleKeyIter;
 use itertools::Itertools as _;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use turborepo_errors::ParseDiagnostic;
 
@@ -12,6 +16,7 @@ use crate::Lockfile;
 
 mod de;
 mod id;
+mod ser;
 
 type Map<K, V> = std::collections::BTreeMap<K, V>;
 
@@ -23,8 +28,6 @@ pub enum Error {
     Format(#[from] biome_formatter::FormatError),
     #[error("Failed to strip commas: {0}")]
     Print(#[from] biome_formatter::PrintError),
-    #[error("Turborepo cannot serialize Bun lockfiles.")]
-    NotImplemented,
     #[error("{ident} had two entries with differing checksums: {sha1}, {sha2}")]
     MismatchedShas {
         ident: String,
@@ -39,30 +42,36 @@ pub struct BunLockfile {
     key_to_entry: HashMap<String, String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BunLockfileData {
     #[allow(unused)]
     lockfile_version: i32,
     workspaces: Map<String, WorkspaceEntry>,
     packages: Map<String, PackageEntry>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Map::is_empty")]
     patched_dependencies: Map<String, String>,
 }
 
-#[derive(Debug, Deserialize, PartialEq, Default)]
+#[derive(Debug, Deserialize, PartialEq, Default, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct WorkspaceEntry {
     name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     version: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     dependencies: Option<Map<String, String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     dev_dependencies: Option<Map<String, String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     optional_dependencies: Option<Map<String, String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     peer_dependencies: Option<Map<String, String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     optional_peers: Option<Vec<String>>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 struct PackageEntry {
     ident: String,
     registry: Option<String>,
@@ -73,22 +82,22 @@ struct PackageEntry {
     root: Option<RootInfo>,
 }
 
-#[derive(Debug, Deserialize, Default, PartialEq)]
+#[derive(Debug, Deserialize, Default, PartialEq, Clone, Serialize)]
 struct PackageInfo {
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Map::is_empty")]
     dependencies: Map<String, String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Map::is_empty")]
     dev_dependencies: Map<String, String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Map::is_empty")]
     optional_dependencies: Map<String, String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Map::is_empty")]
     peer_dependencies: Map<String, String>,
     // We do not care about the rest here
     // the values here should be generic
     #[serde(flatten)]
     other: Map<String, Value>,
 }
-#[derive(Debug, Deserialize, PartialEq)]
+#[derive(Debug, Deserialize, PartialEq, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct RootInfo {
     bin: Option<String>,
@@ -165,17 +174,17 @@ impl Lockfile for BunLockfile {
         Ok(Some(deps))
     }
 
-    #[allow(unused)]
     fn subgraph(
         &self,
         workspace_packages: &[String],
         packages: &[String],
-    ) -> Result<Box<dyn Lockfile>, super::Error> {
-        Err(crate::Error::Bun(Error::NotImplemented))
+    ) -> Result<Box<dyn Lockfile>, crate::Error> {
+        let subgraph = self.subgraph(workspace_packages, packages)?;
+        Ok(Box::new(subgraph))
     }
 
     fn encode(&self) -> Result<Vec<u8>, crate::Error> {
-        Err(crate::Error::Bun(Error::NotImplemented))
+        Ok(serde_json::to_vec(&self.data)?)
     }
 
     fn global_change(&self, other: &dyn Lockfile) -> bool {
@@ -208,6 +217,69 @@ impl BunLockfile {
         let (key, entry) =
             PossibleKeyIter::new(key).find_map(|k| self.data.packages.get_key_value(k))?;
         Some((key, entry))
+    }
+
+    pub fn lockfile(self) -> Result<BunLockfileData, Error> {
+        Ok(self.data)
+    }
+
+    fn subgraph(
+        &self,
+        workspace_packages: &[String],
+        packages: &[String],
+    ) -> Result<BunLockfile, Error> {
+        let new_workspaces: Map<_, _> = self
+            .data
+            .workspaces
+            .iter()
+            .filter_map(|(key, entry)| {
+                // Ensure the root workspace package is included, which is always indexed by ""
+                if key.is_empty() || workspace_packages.contains(key) {
+                    Some((key.clone(), entry.clone()))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        // Filter out packages that are not in the subgraph. Note that _multiple_
+        // entries can correspond to the same ident.
+        let idents: HashSet<_> = packages.iter().collect();
+        let new_packages: Map<_, _> = self
+            .data
+            .packages
+            .iter()
+            .filter_map(|(key, entry)| {
+                if idents.contains(&entry.ident) {
+                    Some((key.clone(), entry.clone()))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        let new_patched_dependencies = self
+            .data
+            .patched_dependencies
+            .iter()
+            .filter_map(|(ident, patch)| {
+                if idents.contains(ident) {
+                    Some((ident.clone(), patch.clone()))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        Ok(Self {
+            data: BunLockfileData {
+                lockfile_version: self.data.lockfile_version,
+                workspaces: new_workspaces,
+                packages: new_packages,
+                patched_dependencies: new_patched_dependencies,
+            },
+            key_to_entry: self.key_to_entry.clone(),
+        })
     }
 }
 
@@ -302,6 +374,113 @@ mod test {
             .unwrap()
             .unwrap();
         assert_eq!(result.key, expected);
+    }
+
+    #[test]
+    fn test_subgraph() {
+        let lockfile = BunLockfile::from_str(BASIC_LOCKFILE).unwrap();
+        let subgraph = lockfile
+            .subgraph(&["apps/docs".into()], &["is-odd@3.0.1".into()])
+            .unwrap();
+        let subgraph_data = subgraph.lockfile().unwrap();
+
+        assert_eq!(
+            subgraph_data
+                .packages
+                .iter()
+                .map(|(key, pkg)| (key.as_str(), pkg.ident.as_str()))
+                .collect::<Vec<_>>(),
+            vec![("is-odd", "is-odd@3.0.1")]
+        );
+        assert_eq!(
+            subgraph_data.workspaces.keys().collect::<Vec<_>>(),
+            vec!["", "apps/docs"]
+        );
+    }
+
+    // There are multiple aliases that resolve to the same ident, here we test that
+    // we output them all
+    #[test]
+    fn test_deduplicated_idents() {
+        // chalk@2.4.2
+        let lockfile = BunLockfile::from_str(BASIC_LOCKFILE).unwrap();
+        let subgraph = lockfile
+            .subgraph(&["apps/docs".into()], &["chalk@2.4.2".into()])
+            .unwrap();
+        let subgraph_data = subgraph.lockfile().unwrap();
+
+        assert_eq!(
+            subgraph_data
+                .packages
+                .iter()
+                .map(|(key, pkg)| (key.as_str(), pkg.ident.as_str()))
+                .collect::<Vec<_>>(),
+            vec![
+                ("@turbo/gen/chalk", "chalk@2.4.2"),
+                ("@turbo/workspaces/chalk", "chalk@2.4.2"),
+                ("log-symbols/chalk", "chalk@2.4.2")
+            ]
+        );
+        assert_eq!(
+            subgraph_data.workspaces.keys().collect::<Vec<_>>(),
+            vec!["", "apps/docs"]
+        );
+    }
+
+    #[test]
+    fn test_patch_subgraph() {
+        let lockfile = BunLockfile::from_str(PATCH_LOCKFILE).unwrap();
+        let subgraph_a = lockfile
+            .subgraph(&["apps/a".into()], &["is-odd@3.0.1".into()])
+            .unwrap();
+        let subgraph_a_data = subgraph_a.lockfile().unwrap();
+
+        assert_eq!(
+            subgraph_a_data
+                .packages
+                .iter()
+                .map(|(key, pkg)| (key.as_str(), pkg.ident.as_str()))
+                .collect::<Vec<_>>(),
+            vec![("is-odd", "is-odd@3.0.1")]
+        );
+        assert_eq!(
+            subgraph_a_data.workspaces.keys().collect::<Vec<_>>(),
+            vec!["", "apps/a"]
+        );
+        assert_eq!(
+            subgraph_a_data
+                .patched_dependencies
+                .iter()
+                .map(|(key, patch)| (key.as_str(), patch.as_str()))
+                .collect::<Vec<_>>(),
+            vec![]
+        );
+
+        let subgraph_b = lockfile
+            .subgraph(&["apps/b".into()], &["is-odd@3.0.0".into()])
+            .unwrap();
+        let subgraph_b_data = subgraph_b.lockfile().unwrap();
+
+        assert_eq!(
+            subgraph_b_data
+                .packages
+                .iter()
+                .map(|(key, pkg)| (key.as_str(), pkg.ident.as_str()))
+                .collect::<Vec<_>>(),
+            vec![("b/is-odd", "is-odd@3.0.0")]
+        );
+        assert_eq!(
+            subgraph_b_data.workspaces.keys().collect::<Vec<_>>(),
+            vec!["", "apps/b"]
+        );
+        assert_eq!(
+            subgraph_b_data
+                .patched_dependencies
+                .iter()
+                .map(|(key, patch)| (key.as_str(), patch.as_str()))
+                .collect::<Vec<_>>(),
+            vec![("is-odd@3.0.0", "patches/is-odd@3.0.0.patch")]
+        );
     }
 
     const TURBO_GEN_DEPS: &[&str] = [
