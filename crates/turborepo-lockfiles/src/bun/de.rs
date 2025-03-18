@@ -77,7 +77,7 @@ impl<'de> Deserialize<'de> for PackageEntry {
                 Vals::Str(reg) => registry = Some(reg),
                 Vals::Info(package_info) => info = Some(*package_info),
             }
-        });
+        };
 
         // Info will be next if we haven't already found it
         if info.is_none() {
