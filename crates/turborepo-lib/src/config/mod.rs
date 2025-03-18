@@ -218,7 +218,7 @@ pub enum Error {
         #[source_code]
         text: NamedSource<String>,
     },
-    #[error("`with` cannot use topological dependencies.")]
+    #[error("`with` cannot use dependency relationships.")]
     InvalidTaskWith {
         #[label("Remove `^` from start of task name.")]
         span: Option<SourceSpan>,
