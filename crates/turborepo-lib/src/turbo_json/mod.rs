@@ -1362,7 +1362,7 @@ mod tests {
         let error = &errs[0];
         assert_eq!(
             error.to_string(),
-            "`with` cannot use topological dependencies."
+            "`with` cannot use dependency relationships."
         );
     }
 }
