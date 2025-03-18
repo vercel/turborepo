@@ -525,6 +525,10 @@ Label a `persistent` task as `interruptible` to allow it to be restarted by `tur
 that are affected. However, if a task is persistent, it will not be restarted by default.
 To enable restarting persistent tasks, set `interruptible` to `true`.
 
+### `with`
+
+A list of tasks that will be ran alongside this task. This is most useful for long-running tasks that you want to ensure always run at the same time.
+
 ## Boundaries
 
 The `boundaries` tag allows you to define rules for the [`boundaries` command](/repo/docs/reference/boundaries).

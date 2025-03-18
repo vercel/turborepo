@@ -135,7 +135,7 @@ impl MicrofrontendsConfigs {
             if let Some(dev) = dev {
                 // If this package has a dev task that's part of the MFE, then we make sure the
                 // proxy gets included in the task graph.
-                turbo_json.with_sibling(
+                turbo_json.with_task(
                     TaskName::from(dev.task()).into_owned(),
                     &proxy.as_task_name(),
                 );

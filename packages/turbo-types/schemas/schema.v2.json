@@ -173,6 +173,14 @@
           "type": "boolean",
           "description": "Label a persistent task as interruptible to allow it to be restarted by `turbo watch`. `turbo watch` watches for changes to your packages and automatically restarts tasks that are affected. However, if a task is persistent, it will not be restarted by default. To enable restarting persistent tasks, set `interruptible` to true.\n\nDocumentation: https://turbo.build/repo/docs/reference/configuration#interruptible",
           "default": false
+        },
+        "with": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "A list of tasks that will run alongside this task.\n\nTasks in this list will not be run until completion before this task starts execution.\n\nDocumentation: https://turbo.build/repo/docs/reference/configuration#with",
+          "default": []
         }
       },
       "additionalProperties": false
