@@ -7,17 +7,14 @@ import { Sidebar } from "#/components/docs-layout/sidebar";
 
 export default async function Layout({
   children,
-  params,
 }: {
   children: React.ReactNode;
-  params: Promise<{ slug?: string[] }>;
 }) {
-  const { slug } = await params;
   return (
     <>
       <Navigation />
       <Sidebar>
-        <DocsLayout tree={repoDocsPages.pageTree} path={slug} {...baseOptions}>
+        <DocsLayout tree={repoDocsPages.pageTree} {...baseOptions}>
           {children}
         </DocsLayout>
       </Sidebar>

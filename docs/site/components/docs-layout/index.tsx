@@ -10,8 +10,6 @@ import {
 import { SidebarViewport } from "./sidebar";
 import { MobileMenu } from "./mobile-menu";
 import { MobileMenuProvider } from "./use-mobile-menu-context";
-import { repoDocsPages } from "@/app/source";
-import { notFound } from "next/navigation";
 
 interface DocsLayoutProps {
   tree: PageTree.Root;
@@ -19,13 +17,8 @@ interface DocsLayoutProps {
   path?: string[];
 }
 
-export const DocsLayout = ({ tree, children, path }: DocsLayoutProps) => {
+export const DocsLayout = ({ tree, children }: DocsLayoutProps) => {
   if (!tree) return null;
-
-  const page = repoDocsPages.getPage(path);
-  if (!page) {
-    notFound();
-  }
 
   return (
     <TreeContextProvider tree={tree}>
@@ -51,7 +44,7 @@ export const DocsLayout = ({ tree, children, path }: DocsLayoutProps) => {
               id="nd-toc"
               className="sticky top-[calc(var(--nav-height)+32px)] hidden h-fit shrink-0 flex-col gap-2.5 overflow-x-hidden p-2 md:w-[256px] xl:flex 2xl:w-72"
             >
-              <TableOfContents toc={page.data.toc} />
+              <TableOfContents />
             </aside>
           </div>
         </SidebarInset>
