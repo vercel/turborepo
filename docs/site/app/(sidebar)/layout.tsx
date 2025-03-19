@@ -5,12 +5,19 @@ import { Navigation } from "@/components/nav";
 import { RedirectsHandler } from "./redirects-handler";
 import { Sidebar } from "#/components/docs-layout/sidebar";
 
-export default function Layout({ children }: { children: React.ReactNode }) {
+export default async function Layout({
+  children,
+  params,
+}: {
+  children: React.ReactNode;
+  params: Promise<{ slug?: string[] }>;
+}) {
+  const { slug } = await params;
   return (
     <>
       <Navigation />
       <Sidebar>
-        <DocsLayout tree={repoDocsPages.pageTree} {...baseOptions}>
+        <DocsLayout tree={repoDocsPages.pageTree} path={slug} {...baseOptions}>
           {children}
         </DocsLayout>
       </Sidebar>

@@ -3,7 +3,11 @@
 import React from "react";
 import Link from "next/link";
 import { useParams, usePathname } from "next/navigation";
-import type { PageTree, TOCItemType } from "fumadocs-core/server";
+import type {
+  TableOfContents as ToCType,
+  PageTree,
+  TOCItemType,
+} from "fumadocs-core/server";
 import { findNeighbour } from "fumadocs-core/server";
 import { useTreeContext, useTreePath } from "fumadocs-ui/provider";
 import * as Base from "fumadocs-core/toc";
@@ -157,24 +161,20 @@ const TOCItem = ({ item }: { item: TOCItemType }) => {
   );
 };
 
-export const TableOfContents = () => {
-  const params = useParams<{ code: string; slug: string[] }>();
-  const page = repoDocsPages.getPage(params.slug);
-  if (!page) return null;
-  const { data } = page;
+export const TableOfContents = ({ toc }: { toc: ToCType }) => {
   const ref = React.useRef<HTMLDivElement>(null);
 
   return (
     <>
       <RemoteCacheCounter />
-      <Base.AnchorProvider toc={data.toc}>
+      <Base.AnchorProvider toc={toc}>
         <Base.ScrollProvider containerRef={ref}>
           <span className="-ms-0.5 flex items-center gap-x-1.5 text-sm font-medium text-gray-1000">
             <AlignmentLeft className="w-3 h-3" />
             On this page
           </span>
           <ul className="flex flex-col gap-y-2.5 text-sm text-gray-900">
-            {data.toc.map((item) => {
+            {toc.map((item) => {
               return <TOCItem key={item.url} item={item} />;
             })}
           </ul>
