@@ -34,14 +34,18 @@ struct EnvConditional {
 #[derive(Debug, PartialEq, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Framework {
-    slug: String,
+    slug: Slug,
     env_wildcards: Vec<String>,
     env_conditionals: Option<Vec<EnvConditional>>,
     dependency_match: Matcher,
 }
 
+#[derive(Debug, PartialEq, Clone, Deserialize)]
+#[serde(transparent)]
+pub struct Slug(String);
+
 impl Framework {
-    pub fn slug(&self) -> String {
+    pub fn slug(&self) -> Slug {
         self.slug.clone()
     }
 
@@ -99,6 +103,18 @@ impl Matcher {
     }
 }
 
+impl Slug {
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::fmt::Display for Slug {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 pub fn infer_framework(workspace: &PackageInfo, is_monorepo: bool) -> Option<&Framework> {
     let frameworks = get_frameworks();
 
@@ -119,7 +135,7 @@ mod tests {
     fn get_framework_by_slug(slug: &str) -> &Framework {
         get_frameworks()
             .iter()
-            .find(|framework| framework.slug == slug)
+            .find(|framework| framework.slug.as_str() == slug)
             .expect("framework not found")
     }
 

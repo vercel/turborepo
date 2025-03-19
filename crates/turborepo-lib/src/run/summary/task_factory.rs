@@ -125,7 +125,11 @@ impl<'a> TaskSummaryFactory<'a> {
             .expanded_outputs(task_id)
             .unwrap_or_default();
 
-        let framework = self.hash_tracker.framework(task_id).unwrap_or_default();
+        let framework = self
+            .hash_tracker
+            .framework(task_id)
+            .map(|framework| framework.to_string())
+            .unwrap_or_default();
         let hash = self
             .hash_tracker
             .hash(task_id)
