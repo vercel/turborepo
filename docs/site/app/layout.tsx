@@ -10,6 +10,7 @@ import { PRODUCT_SLOGANS } from "@/lib/constants";
 import { createMetadata } from "@/lib/create-metadata";
 import { VercelTrackers } from "@/components/analytics";
 import "./global.css";
+import { FaviconHandler } from "./_components/favicon-handler";
 
 export function generateMetadata(): Metadata {
   return createMetadata({
@@ -36,6 +37,7 @@ export default function Layout({
           {children}
           <Footer />
         </RootProvider>
+        <FaviconHandler />
         <VercelTrackers />
         {shouldInjectToolbar ? <VercelToolbar /> : null}
       </body>
