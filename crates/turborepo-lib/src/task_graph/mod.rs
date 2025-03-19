@@ -95,7 +95,7 @@ pub struct TaskDefinition {
     // It contains no guarantees regarding ordering, just that this will also get run.
     // It will also not affect the task's hash aside from the definition getting folded into the
     // hash.
-    pub siblings: Option<Vec<Spanned<TaskName<'static>>>>,
+    pub with: Option<Vec<Spanned<TaskName<'static>>>>,
 }
 
 impl Default for TaskDefinition {
@@ -113,7 +113,7 @@ impl Default for TaskDefinition {
             interruptible: Default::default(),
             interactive: Default::default(),
             env_mode: Default::default(),
-            siblings: Default::default(),
+            with: Default::default(),
         }
     }
 }

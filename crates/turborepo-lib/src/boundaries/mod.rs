@@ -36,7 +36,6 @@ use turborepo_ui::{color, ColorConfig, BOLD_GREEN, BOLD_RED};
 use crate::{
     boundaries::{imports::DependencyLocations, tags::ProcessedRulesMap, tsconfig::TsConfigLoader},
     run::Run,
-    turbo_json::TurboJson,
 };
 
 #[derive(Clone, Debug, Error, Diagnostic)]
@@ -67,6 +66,13 @@ pub enum SecondaryDiagnostic {
 
 #[derive(Clone, Debug, Error, Diagnostic)]
 pub enum BoundariesDiagnostic {
+    #[error("Package boundaries rules cannot have `tags` key")]
+    PackageBoundariesHasTags {
+        #[label("tags defined here")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource<String>,
+    },
     #[error("Tag `{tag}` cannot share the same name as package `{package}`")]
     TagSharesPackageName {
         tag: String,
@@ -332,25 +338,13 @@ impl Run {
         )
         .await?;
 
-        if let Ok(TurboJson {
-            tags: Some(tags), ..
-        }) = self.turbo_json_loader().load(package_name)
-        {
-            if let Some(tag_rules) = tag_rules {
-                result.diagnostics.extend(self.check_package_tags(
-                    PackageNode::Workspace(package_name.clone()),
-                    &package_info.package_json,
-                    tags,
-                    tag_rules,
-                )?);
-            } else {
-                // NOTE: if we use tags for something other than boundaries, we should remove
-                // this warning
-                warn!(
-                    "No boundaries rules found, but package {} has tags",
-                    package_name
-                );
-            }
+        if let Ok(turbo_json) = self.turbo_json_loader().load(package_name) {
+            result.diagnostics.extend(self.check_package_tags(
+                PackageNode::Workspace(package_name.clone()),
+                &package_info.package_json,
+                turbo_json.tags.as_ref(),
+                tag_rules.as_ref(),
+            )?);
         }
 
         result.packages_checked += 1;

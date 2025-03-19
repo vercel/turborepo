@@ -218,6 +218,13 @@ pub enum Error {
         #[source_code]
         text: NamedSource<String>,
     },
+    #[error("`with` cannot use dependency relationships.")]
+    InvalidTaskWith {
+        #[label("Remove `^` from start of task name.")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource<String>,
+    },
 }
 
 const DEFAULT_API_URL: &str = "https://vercel.com/api";

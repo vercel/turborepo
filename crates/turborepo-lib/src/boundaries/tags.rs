@@ -177,73 +177,132 @@ impl Run {
         Ok(None)
     }
 
+    pub(crate) fn check_tag(
+        &self,
+        diagnostics: &mut Vec<BoundariesDiagnostic>,
+        dependencies: Option<&ProcessedPermissions>,
+        dependents: Option<&ProcessedPermissions>,
+        pkg: &PackageNode,
+        package_json: &PackageJson,
+    ) -> Result<(), Error> {
+        if let Some(dependency_permissions) = dependencies {
+            for dependency in self.pkg_dep_graph().dependencies(pkg) {
+                if matches!(dependency, PackageNode::Root) {
+                    continue;
+                }
+
+                let dependency_tags = self.load_package_tags(dependency.as_package_name());
+
+                diagnostics.extend(self.validate_relation(
+                    pkg.as_package_name(),
+                    package_json,
+                    dependency.as_package_name(),
+                    dependency_tags,
+                    dependency_permissions.allow.as_ref(),
+                    dependency_permissions.deny.as_ref(),
+                )?);
+            }
+        }
+
+        if let Some(dependent_permissions) = dependents {
+            for dependent in self.pkg_dep_graph().ancestors(pkg) {
+                if matches!(dependent, PackageNode::Root) {
+                    continue;
+                }
+                let dependent_tags = self.load_package_tags(dependent.as_package_name());
+                diagnostics.extend(self.validate_relation(
+                    pkg.as_package_name(),
+                    package_json,
+                    dependent.as_package_name(),
+                    dependent_tags,
+                    dependent_permissions.allow.as_ref(),
+                    dependent_permissions.deny.as_ref(),
+                )?)
+            }
+        }
+
+        Ok(())
+    }
+
+    fn check_if_package_name_is_tag(
+        tags_rules: &ProcessedRulesMap,
+        pkg: &PackageNode,
+        package_json: &PackageJson,
+    ) -> Option<BoundariesDiagnostic> {
+        let rule = tags_rules.get(pkg.as_package_name().as_str())?;
+        let (tag_span, tag_text) = rule.span.span_and_text("turbo.json");
+        let (package_span, package_text) = package_json
+            .name
+            .as_ref()
+            .map(|name| name.span_and_text("package.json"))
+            .unwrap_or_else(|| (None, NamedSource::new("package.json", "".into())));
+        Some(BoundariesDiagnostic::TagSharesPackageName {
+            tag: pkg.as_package_name().to_string(),
+            package: pkg.as_package_name().to_string(),
+            tag_span,
+            tag_text,
+            secondary: [SecondaryDiagnostic::PackageDefinedHere {
+                package: pkg.as_package_name().to_string(),
+                package_span,
+                package_text,
+            }],
+        })
+    }
+
     pub(crate) fn check_package_tags(
         &self,
         pkg: PackageNode,
         package_json: &PackageJson,
-        current_package_tags: &Spanned<Vec<Spanned<String>>>,
-        tags_rules: &ProcessedRulesMap,
+        current_package_tags: Option<&Spanned<Vec<Spanned<String>>>>,
+        tags_rules: Option<&ProcessedRulesMap>,
     ) -> Result<Vec<BoundariesDiagnostic>, Error> {
         let mut diagnostics = Vec::new();
+        let package_turbo_json = self.turbo_json_loader().load(pkg.as_package_name());
+        let package_boundaries = package_turbo_json
+            .ok()
+            .and_then(|turbo_json| turbo_json.boundaries.as_ref());
 
-        // We don't allow tags to share the same name as the package because
-        // we allow package names to be used as a tag
-        if let Some(rule) = tags_rules.get(pkg.as_package_name().as_str()) {
-            let (tag_span, tag_text) = rule.span.span_and_text("turbo.json");
-            let (package_span, package_text) = package_json
-                .name
-                .as_ref()
-                .map(|name| name.span_and_text("package.json"))
-                .unwrap_or_else(|| (None, NamedSource::new("package.json", "".into())));
-            diagnostics.push(BoundariesDiagnostic::TagSharesPackageName {
-                tag: pkg.as_package_name().to_string(),
-                package: pkg.as_package_name().to_string(),
-                tag_span,
-                tag_text,
-                secondary: [SecondaryDiagnostic::PackageDefinedHere {
-                    package: pkg.as_package_name().to_string(),
-                    package_span,
-                    package_text,
-                }],
-            });
+        if let Some(boundaries) = package_boundaries {
+            if let Some(tags) = &boundaries.tags {
+                let (span, text) = tags.span_and_text("turbo.json");
+                diagnostics.push(BoundariesDiagnostic::PackageBoundariesHasTags { span, text });
+            }
+            let dependencies = boundaries
+                .dependencies
+                .clone()
+                .map(|deps| deps.into_inner().into());
+            let dependents = boundaries
+                .dependents
+                .clone()
+                .map(|deps| deps.into_inner().into());
+
+            self.check_tag(
+                &mut diagnostics,
+                dependencies.as_ref(),
+                dependents.as_ref(),
+                &pkg,
+                package_json,
+            )?;
         }
 
-        for tag in current_package_tags.iter() {
-            if let Some(rule) = tags_rules.get(tag.as_inner()) {
-                if let Some(dependency_permissions) = &rule.dependencies {
-                    for dependency in self.pkg_dep_graph().dependencies(&pkg) {
-                        if matches!(dependency, PackageNode::Root) {
-                            continue;
-                        }
+        if let Some(tags_rules) = tags_rules {
+            // We don't allow tags to share the same name as the package
+            // because we allow package names to be used as a tag
+            diagnostics.extend(Self::check_if_package_name_is_tag(
+                tags_rules,
+                &pkg,
+                package_json,
+            ));
 
-                        let dependency_tags = self.load_package_tags(dependency.as_package_name());
-
-                        diagnostics.extend(self.validate_relation(
-                            pkg.as_package_name(),
-                            package_json,
-                            dependency.as_package_name(),
-                            dependency_tags,
-                            dependency_permissions.allow.as_ref(),
-                            dependency_permissions.deny.as_ref(),
-                        )?);
-                    }
-                }
-
-                if let Some(dependent_permissions) = &rule.dependents {
-                    for dependent in self.pkg_dep_graph().ancestors(&pkg) {
-                        if matches!(dependent, PackageNode::Root) {
-                            continue;
-                        }
-                        let dependent_tags = self.load_package_tags(dependent.as_package_name());
-                        diagnostics.extend(self.validate_relation(
-                            pkg.as_package_name(),
-                            package_json,
-                            dependent.as_package_name(),
-                            dependent_tags,
-                            dependent_permissions.allow.as_ref(),
-                            dependent_permissions.deny.as_ref(),
-                        )?)
-                    }
+            for tag in current_package_tags.into_iter().flatten().flatten() {
+                if let Some(rule) = tags_rules.get(tag.as_inner()) {
+                    self.check_tag(
+                        &mut diagnostics,
+                        rule.dependencies.as_ref(),
+                        rule.dependents.as_ref(),
+                        &pkg,
+                        package_json,
+                    )?;
                 }
             }
         }

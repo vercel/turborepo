@@ -29,6 +29,7 @@
       "cache": false
     },
     "schema": {
+      "dependsOn": ["@turbo/types#build"],
       "inputs": ["scripts/copy-json-schema.mjs"],
       "outputs": ["public/schema*.json"],
       "env": []
