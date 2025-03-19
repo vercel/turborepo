@@ -15,7 +15,8 @@
     "start": "next start",
     "type-check": "fumadocs-mdx && tsc --noEmit",
     "generate-openapi": "node ./scripts/generate-docs.mjs",
-    "write-private-files": "node ./scripts/write-private-files.mjs"
+    "write-private-files": "node ./scripts/write-private-files.mjs",
+    "collect-examples-data": "node ./scripts/collect-examples-data.mjs"
   },
   "dependencies": {
     "@headlessui/react": "^1.7.17",

@@ -3,7 +3,7 @@ export const Menu = ({ className }: { className?: string }) => {
     <svg
       className={className}
       height="16"
-      stroke-linejoin="round"
+      strokeLinejoin="round"
       viewBox="0 0 16 16"
       width="16"
       style={{ color: "currentcolor" }}

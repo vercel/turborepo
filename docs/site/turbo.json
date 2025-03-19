@@ -20,6 +20,7 @@
         "rss",
         "schema",
         "write-private-files",
+        "collect-examples-data",
         "generate-openapi"
       ]
     },
@@ -45,6 +46,9 @@
     "write-private-files": {
       "cache": false,
       "env": ["SITE_ANALYTICS_MODULE_CODE", "MIDDLEWARE_MODULE_CODE"]
+    },
+    "collect-examples-data": {
+      "cache": false
     },
     "index-docs": {
       "dependsOn": ["build"],
