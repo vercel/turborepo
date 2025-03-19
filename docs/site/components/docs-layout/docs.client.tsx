@@ -169,7 +169,7 @@ export const TableOfContents = () => {
       <RemoteCacheCounter />
       <Base.AnchorProvider toc={data.toc}>
         <Base.ScrollProvider containerRef={ref}>
-          <span className="-ms-0.5 flex items-center gap-x-1.5 text-sm font-medium text-gray-1000">
+          <span className="-ms-0.5 flex mb-2 items-center gap-x-1.5 text-sm font-medium text-gray-1000">
             <AlignmentLeft className="w-3 h-3" />
             On this page
           </span>
