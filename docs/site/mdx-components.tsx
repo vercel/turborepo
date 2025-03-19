@@ -1,6 +1,7 @@
 import type { MDXComponents } from "mdx/types";
 import defaultComponents from "fumadocs-ui/mdx";
 import { Pre, CodeBlock } from "fumadocs-ui/components/codeblock";
+import { Heading } from "fumadocs-ui/components/heading";
 import type { ReactNode, Ref } from "react";
 import { NodeJsLogo, TurborepoLogo } from "./app/_components/logos";
 
@@ -17,6 +18,12 @@ const iconAdder = (title?: string): JSX.Element | null => {
 
 export const mdxComponents: MDXComponents = {
   ...defaultComponents,
+  h2: (props) => (
+    <Heading className="scroll-m-7 text-heading-24" as="h2" {...props} />
+  ),
+  h3: (props) => (
+    <Heading className="scroll-m-7 text-heading-20" as="h3" {...props} />
+  ),
   pre: ({
     ref: _ref,
     title,

@@ -82,7 +82,7 @@ export function FeedbackWidget() {
 
       <Popover.Portal>
         <Popover.Content
-          className="w-[400px] max-xl:hidden animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95"
+          className="w-[400px] max-md:hidden z-50 animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95"
           sideOffset={5}
           align="end"
         >
@@ -95,7 +95,7 @@ export function FeedbackWidget() {
                 <p className="text-xl font-medium mb-2 text-black dark:text-white">
                   Your feedback has been received!
                 </p>
-                <p className="text-gray-400">Thank you for your help.</p>
+                <p className="text-gray-900">Thank you for your help.</p>
               </div>
             ) : (
               <form>
@@ -108,30 +108,31 @@ export function FeedbackWidget() {
                   />
                 </div>
 
-                <div className="flex items-center justify-between text-black dark:text-gray-500">
+                <div className="flex items-center justify-between text-black dark:text-gray-900">
                   <div className="flex space-x-4">
-                    {emojis.map((item) => (
-                      <button
-                        type="button"
-                        key={item.label}
-                        onClick={() => setSelectedEmoji(item.emoji)}
-                        className={cn(
-                          "text-2xl w-7 h-7 p-1 transition-transform hover:scale-110",
-                          selectedEmoji === item.emoji
-                            ? "bg-blue-400/40 rounded-full"
-                            : ""
-                        )}
-                        aria-label={item.label}
-                      >
-                        <span className="relative">{item.component}</span>
-                      </button>
-                    ))}
+                    {emojis.map((item) => {
+                      return (
+                        <button
+                          type="button"
+                          key={item.label}
+                          onClick={() => setSelectedEmoji(item.emoji)}
+                          className={cn(
+                            "text-2xl w-7 h-7 p-1 transition-transform hover:scale-110",
+                            selectedEmoji === item.emoji
+                              ? "bg-blue-400 rounded-full"
+                              : ""
+                          )}
+                          aria-label={item.label}
+                        >
+                          <span className="relative">{item.component}</span>
+                        </button>
+                      );
+                    })}
                   </div>
 
                   <div className="flex items-center gap-2">
                     <Button
                       type="submit"
-                      className="border dark:text-white hover:bg-black/10 dark:hover:bg-white/10"
                       onClick={(e: any) => handleSubmit(e)}
                       disabled={loading || !feedback || !selectedEmoji}
                     >

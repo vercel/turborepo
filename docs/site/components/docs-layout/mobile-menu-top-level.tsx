@@ -6,7 +6,7 @@ import { GithubLogo } from "@/app/_components/logos";
 import { gitHubRepoUrl } from "@/lib/constants";
 import { ThemeSwitcher } from "../nav/theme-switcher";
 
-export const MobileMenu = ({ pages }: { pages: Pages }) => {
+export const MobileMenuTopLevel = ({ pages }: { pages: Pages }) => {
   return (
     <Popover>
       <PopoverTrigger>
@@ -15,7 +15,10 @@ export const MobileMenu = ({ pages }: { pages: Pages }) => {
       <PopoverContent className="mr-4">
         {pages.map((page) => {
           return (
-            <Link className="block p-1 text-sm" href={page.href}>
+            <Link
+              className="block p-1 text-sm hover:text-gray-800 dark:hover:text-gray-1000"
+              href={page.href}
+            >
               {page.tooltip}
             </Link>
           );
@@ -25,7 +28,6 @@ export const MobileMenu = ({ pages }: { pages: Pages }) => {
           <Link href={gitHubRepoUrl}>
             <GithubLogo className="w-5 h-5" />
           </Link>
-
           <ThemeSwitcher />
         </div>
       </PopoverContent>
