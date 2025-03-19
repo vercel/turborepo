@@ -45,7 +45,7 @@ In workspace directories, you can now add a `turbo.json` to:
 - add tasks specific to that workspace
 - override configuration for tasks
 
-This will enable teams to scale ownership of the projects in their monorepos by moving away from global configuration to fine-grain contol over tasks in workspaces.
+This will enable teams to scale ownership of the projects in their monorepos by moving away from global configuration to fine-grain control over tasks in workspaces.
 
 For example, imagine your monorepo has a Next.js app and a SvelteKit app, and you want to use Turborepo to cache outputs of the `build` task. The Next.js `build` script creates a `.next` directory, whereas SvelteKit creates a `.svelte-kit` directory. Instead of adding both build directories in your root `outputs`, you can define the `outputs` key in the workspace instead:
 
