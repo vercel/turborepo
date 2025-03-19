@@ -10,6 +10,7 @@ use tracing::{debug, Span};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
 use turborepo_cache::CacheHitMetadata;
 use turborepo_env::{BySource, DetailedMap, EnvironmentVariableMap};
+use turborepo_frameworks::infer_framework;
 use turborepo_repository::package_graph::{PackageInfo, PackageName};
 use turborepo_scm::SCM;
 use turborepo_telemetry::events::{
@@ -19,7 +20,6 @@ use turborepo_telemetry::events::{
 use crate::{
     cli::EnvMode,
     engine::TaskNode,
-    framework::infer_framework,
     hash::{FileHashes, LockFilePackages, TaskHashable, TurboHash},
     opts::RunOpts,
     run::task_id::TaskId,

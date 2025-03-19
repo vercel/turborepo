@@ -114,7 +114,7 @@ mod tests {
     use test_case::test_case;
     use turborepo_repository::{package_graph::PackageInfo, package_json::PackageJson};
 
-    use crate::framework::{get_frameworks, infer_framework, Framework};
+    use super::*;
 
     fn get_framework_by_slug(slug: &str) -> &Framework {
         get_frameworks()
@@ -316,8 +316,8 @@ mod tests {
         let mut framework = get_framework_by_slug("nextjs").clone();
 
         if let Some(env_conditionals) = framework.env_conditionals.as_mut() {
-            env_conditionals.push(crate::framework::EnvConditional {
-                when: crate::framework::EnvConditionKey {
+            env_conditionals.push(EnvConditional {
+                when: EnvConditionKey {
                     key: "ANOTHER_CONDITION".to_string(),
                     value: Some("true".to_string()),
                 },

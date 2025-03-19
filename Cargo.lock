@@ -6472,6 +6472,16 @@ name = "turborepo-fixed-map"
 version = "0.1.0"
 
 [[package]]
+name = "turborepo-frameworks"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "test-case",
+ "turborepo-repository",
+]
+
+[[package]]
 name = "turborepo-fs"
 version = "0.1.0"
 dependencies = [
@@ -6611,6 +6621,7 @@ dependencies = [
  "turborepo-errors",
  "turborepo-filewatch",
  "turborepo-fixed-map",
+ "turborepo-frameworks",
  "turborepo-fs",
  "turborepo-graph-utils",
  "turborepo-lockfiles",
