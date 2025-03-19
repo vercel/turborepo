@@ -107,6 +107,14 @@ impl Slug {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+
+    pub fn framework(&self) -> &Framework {
+        let frameworks = get_frameworks();
+        frameworks
+            .iter()
+            .find(|framework| framework.slug.as_str() == self.as_str())
+            .expect("slug is only constructed via deserialization")
+    }
 }
 
 impl std::fmt::Display for Slug {
@@ -359,5 +367,12 @@ mod tests {
             "Expected both VERCEL_DEPLOYMENT_ID and ADDITIONAL_ENV_VAR when both conditions are \
              met"
         );
+    }
+
+    #[test]
+    fn test_framework_slug_roundtrip() {
+        for framework in get_frameworks() {
+            assert_eq!(framework, framework.slug().framework());
+        }
     }
 }
