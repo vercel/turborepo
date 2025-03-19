@@ -17,7 +17,7 @@ const THEMES = {
   },
   error: {
     background: "bg-red-400 dark:bg-red-400 dark:bg-opacity-20",
-    text: "text-red-900 dark:text-red-100/80",
+    text: "text-red-900 dark:text-red-900/80",
     border: "border border-red-400/40",
   },
   warn: {
