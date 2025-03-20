@@ -169,15 +169,17 @@ export const TableOfContents = () => {
       <RemoteCacheCounter />
       <Base.AnchorProvider toc={data.toc}>
         <Base.ScrollProvider containerRef={ref}>
-          <span className="-ms-0.5 flex mb-2 items-center gap-x-1.5 text-sm font-medium text-gray-1000">
-            <AlignmentLeft className="w-3 h-3" />
-            On this page
-          </span>
-          <ul className="flex flex-col gap-y-2.5 text-sm text-gray-900">
-            {data.toc.map((item) => {
-              return <TOCItem key={item.url} item={item} />;
-            })}
-          </ul>
+          <div className="max-h-[calc(100vh-300px)]">
+            <span className="-ms-0.5 flex mb-2 items-center gap-x-1.5 text-sm font-medium text-gray-1000">
+              <AlignmentLeft className="w-3 h-3" />
+              On this page
+            </span>
+            <ul className="flex flex-col gap-y-2.5 text-sm text-gray-900">
+              {data.toc.map((item) => {
+                return <TOCItem key={item.url} item={item} />;
+              })}
+            </ul>
+          </div>
         </Base.ScrollProvider>
       </Base.AnchorProvider>
     </>

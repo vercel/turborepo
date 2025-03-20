@@ -40,7 +40,7 @@ export const MobileMenu = () => {
         Menu
       </CollapsibleTrigger>
       <CollapsibleContent className="h-full">
-        <div className="flex h-full flex-col py-3">
+        <div className="flex h-full flex-col py-3 max-h-[calc(100vh-98px)] overflow-auto">
           {renderMobileList(root.children, 1)}
         </div>
       </CollapsibleContent>
