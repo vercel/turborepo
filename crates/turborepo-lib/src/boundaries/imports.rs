@@ -24,6 +24,8 @@ use crate::{
 /// All the places a dependency can be declared
 #[derive(Clone, Copy)]
 pub struct DependencyLocations<'a> {
+    // The containing package's name. We allow a package to import itself for testing purposes
+    pub(crate) package: &'a PackageName,
     pub(crate) internal_dependencies: &'a HashSet<&'a PackageNode>,
     pub(crate) package_json: &'a PackageJson,
     pub(crate) unresolved_external_dependencies: Option<&'a BTreeMap<String, String>>,
@@ -36,7 +38,9 @@ impl<'a> DependencyLocations<'a> {
     /// it's a valid import. We don't use `oxc_resolver` because there are some
     /// cases where you can resolve a package that isn't declared properly.
     fn is_dependency(&self, package_name: &PackageNode) -> bool {
-        self.internal_dependencies.contains(package_name)
+        // We allow a package to import itself for testing purposes
+        self.package == package_name.as_package_name()
+            || self.internal_dependencies.contains(package_name)
             || self
                 .unresolved_external_dependencies
                 .is_some_and(|external_dependencies| {
