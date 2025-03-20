@@ -1,18 +1,22 @@
-import type { ReactNode } from "react";
-import { DocsLayout } from "fumadocs-ui/layouts/docs";
-import { openapiPages } from "@/app/(openapi)/repo/source";
+import { DocsLayout } from "@/components/docs-layout";
+import { baseOptions } from "../../../../layout-config";
+import { Navigation } from "@/components/nav";
+import { Sidebar } from "#/components/docs-layout/sidebar";
+import { openapiPages } from "../../source";
 
-export default function Layout({
+export default async function Layout({
   children,
 }: {
-  children: ReactNode;
-}): JSX.Element {
+  children: React.ReactNode;
+}) {
   return (
-    <DocsLayout
-      sidebar={{ defaultOpenLevel: 0, collapsible: false }}
-      tree={openapiPages.pageTree}
-    >
-      {children}
-    </DocsLayout>
+    <>
+      <Navigation />
+      <Sidebar>
+        <DocsLayout isOpenApiSpec tree={openapiPages.pageTree} {...baseOptions}>
+          {children}
+        </DocsLayout>
+      </Sidebar>
+    </>
   );
 }

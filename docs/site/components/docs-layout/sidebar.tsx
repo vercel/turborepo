@@ -75,7 +75,6 @@ export interface SidebarProps extends HTMLAttributes<HTMLElement> {
 interface InternalContext {
   defaultOpenLevel: number;
   prefetch: boolean;
-  // We don't really use levels, but future proofing
   level: number;
 }
 

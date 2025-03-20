@@ -23,10 +23,17 @@ import {
   SidebarSeparator,
 } from "./sidebar";
 
-export const LayoutBody = ({ children }: { children: React.ReactNode }) => {
+export const LayoutBody = ({
+  children,
+  isOpenApiSpec,
+}: {
+  children: React.ReactNode;
+  isOpenApiSpec?: boolean;
+}) => {
   return (
     <div
       id="nd-docs-layout"
+      data-openapi={isOpenApiSpec}
       className="mx-auto mb-16 grid w-full max-w-screen-xl grid-cols-1 gap-x-6 md:grid-cols-[var(--sidebar-width)_minmax(0,1fr)]"
     >
       {children}

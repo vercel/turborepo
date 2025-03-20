@@ -15,14 +15,19 @@ interface DocsLayoutProps {
   tree: PageTree.Root;
   children: React.ReactNode;
   path?: string[];
+  isOpenApiSpec?: boolean;
 }
 
-export const DocsLayout = ({ tree, children }: DocsLayoutProps) => {
+export const DocsLayout = ({
+  tree,
+  children,
+  isOpenApiSpec,
+}: DocsLayoutProps) => {
   if (!tree) return null;
 
   return (
     <TreeContextProvider tree={tree}>
-      <LayoutBody>
+      <LayoutBody isOpenApiSpec={isOpenApiSpec}>
         <Sidebar className="sticky left-auto top-[calc(var(--nav-height)+32px)] h-[calc(100svh-var(--nav-height)-64px)] justify-self-end border-none">
           <SidebarViewport>
             <SidebarContent>
@@ -40,12 +45,14 @@ export const DocsLayout = ({ tree, children }: DocsLayoutProps) => {
               </MobileMenuProvider>
               {children}
             </div>
-            <aside
-              id="nd-toc"
-              className="sticky top-[calc(var(--nav-height)+32px)] hidden h-fit shrink-0 flex-col gap-2.5 overflow-x-hidden p-2 md:w-[256px] xl:flex 2xl:w-72"
-            >
-              <TableOfContents />
-            </aside>
+            {!isOpenApiSpec ? (
+              <aside
+                id="nd-toc"
+                className="sticky top-[calc(var(--nav-height)+32px)] hidden h-fit shrink-0 flex-col gap-2.5 overflow-x-hidden p-2 md:w-[256px] xl:flex 2xl:w-72"
+              >
+                <TableOfContents />
+              </aside>
+            ) : null}
           </div>
         </SidebarInset>
       </LayoutBody>

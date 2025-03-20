@@ -143,3 +143,12 @@
 .fd-step:before {
   background: var(--ds-gray-200);
 }
+
+/* Hack: "Fixes" colors for dark mode on OpenAPI pages */
+.dark {
+  [data-openapi="true"] {
+    --ds-green-400: hsla(var(--ds-green-900-value), 1);
+    --ds-red-400: hsla(var(--ds-red-900-value), 1);
+    --ds-blue-400: hsla(var(--ds-blue-900-value), 1);
+  }
+}

@@ -77,7 +77,7 @@ function HomeLinks() {
             },
           }}
         />
-        <div className="text-lg font-bold ml-2">Turborepo</div>
+        <div className="text-lg font-semibold ml-2">Turborepo</div>
       </Link>
     </div>
   );
