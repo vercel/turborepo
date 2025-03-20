@@ -34,14 +34,18 @@ struct EnvConditional {
 #[derive(Debug, PartialEq, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Framework {
-    slug: String,
+    slug: Slug,
     env_wildcards: Vec<String>,
     env_conditionals: Option<Vec<EnvConditional>>,
     dependency_match: Matcher,
 }
 
+#[derive(Debug, PartialEq, Clone, Deserialize)]
+#[serde(transparent)]
+pub struct Slug(String);
+
 impl Framework {
-    pub fn slug(&self) -> String {
+    pub fn slug(&self) -> Slug {
         self.slug.clone()
     }
 
@@ -99,6 +103,26 @@ impl Matcher {
     }
 }
 
+impl Slug {
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    pub fn framework(&self) -> &Framework {
+        let frameworks = get_frameworks();
+        frameworks
+            .iter()
+            .find(|framework| framework.slug.as_str() == self.as_str())
+            .expect("slug is only constructed via deserialization")
+    }
+}
+
+impl std::fmt::Display for Slug {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 pub fn infer_framework(workspace: &PackageInfo, is_monorepo: bool) -> Option<&Framework> {
     let frameworks = get_frameworks();
 
@@ -114,12 +138,12 @@ mod tests {
     use test_case::test_case;
     use turborepo_repository::{package_graph::PackageInfo, package_json::PackageJson};
 
-    use crate::framework::{get_frameworks, infer_framework, Framework};
+    use super::*;
 
     fn get_framework_by_slug(slug: &str) -> &Framework {
         get_frameworks()
             .iter()
-            .find(|framework| framework.slug == slug)
+            .find(|framework| framework.slug.as_str() == slug)
             .expect("framework not found")
     }
 
@@ -316,8 +340,8 @@ mod tests {
         let mut framework = get_framework_by_slug("nextjs").clone();
 
         if let Some(env_conditionals) = framework.env_conditionals.as_mut() {
-            env_conditionals.push(crate::framework::EnvConditional {
-                when: crate::framework::EnvConditionKey {
+            env_conditionals.push(EnvConditional {
+                when: EnvConditionKey {
                     key: "ANOTHER_CONDITION".to_string(),
                     value: Some("true".to_string()),
                 },
@@ -343,5 +367,12 @@ mod tests {
             "Expected both VERCEL_DEPLOYMENT_ID and ADDITIONAL_ENV_VAR when both conditions are \
              met"
         );
+    }
+
+    #[test]
+    fn test_framework_slug_roundtrip() {
+        for framework in get_frameworks() {
+            assert_eq!(framework, framework.slug().framework());
+        }
     }
 }
