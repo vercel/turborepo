@@ -76,6 +76,7 @@
   /* Code syntax highlighting */
   /* copied from @vercel/geist/src/components/code-block/code-block.module.css */
   pre {
+    background: white;
     --shiki-color-text: var(--ds-gray-1000);
     --shiki-color-background: transparent;
     --shiki-token-constant: var(--ds-blue-900);
@@ -87,6 +88,8 @@
     --shiki-token-string-expression: var(--ds-green-900);
     --shiki-token-punctuation: var(--ds-gray-1000);
     --shiki-token-link: var(--ds-green-900);
+    --shiki-token-inserted: var(--ds-green-900);
+    --shiki-token-deleted: var(--ds-red-900);
   }
 }
 
@@ -124,5 +127,19 @@
     --sidebar-accent-foreground: 240 4.8% 95.9%;
     --sidebar-border: 240 3.7% 15.9%;
     --sidebar-ring: 217.2 91.2% 59.8%;
+
+    pre {
+      background: black;
+    }
   }
+}
+
+.dark {
+  .fd-step:before {
+    background: var(--ds-gray-200);
+  }
+}
+
+.fd-step:before {
+  background: var(--ds-gray-200);
 }

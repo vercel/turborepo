@@ -33,7 +33,7 @@ export const DocsLayout = ({ tree, children }: DocsLayoutProps) => {
           </SidebarViewport>
         </Sidebar>
         <SidebarInset>
-          <div className="flex w-full flex-row gap-x-6 [&_article]:mt-[var(--mobile-menu-height)] md:[&_article]:mt-0 md:[&_article]:px-0 [&_h1]:mb-0 [&_h1]:!tracking-tight [&_h1]:text-heading-40">
+          <div className="flex w-full flex-row gap-x-6 [&_article]:mt-[var(--mobile-menu-height)] md:[&_article]:mt-0 md:[&_article]:px-0">
             <div className="grid w-full max-w-3xl grid-cols-1 gap-10 px-0 md:pr-4 xl:mx-auto xl:px-0">
               <MobileMenuProvider>
                 <MobileMenu />

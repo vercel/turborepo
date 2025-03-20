@@ -197,5 +197,5 @@ module.exports = {
       },
     },
   },
-  presets: [createPreset(), "./typography-plugin.js"],
+  presets: [createPreset(), require("./typography-plugin.js")],
 };

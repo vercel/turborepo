@@ -41,7 +41,9 @@ export default async function Page(props: {
   return (
     <>
       <SystemEnvironmentVariablesHashHighlighter />
-      <h1 className="scroll-m-7 text-3xl font-bold">{page.data.title}</h1>
+      <h1 className="scroll-m-7 text-4xl font-semibold tracking-normal">
+        {page.data.title}
+      </h1>
       <Mdx components={mdxComponents} />
     </>
   );

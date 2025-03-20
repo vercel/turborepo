@@ -3,11 +3,38 @@ import defaultComponents from "fumadocs-ui/mdx";
 import { Pre, CodeBlock } from "fumadocs-ui/components/codeblock";
 import { Heading } from "fumadocs-ui/components/heading";
 import type { ReactNode, Ref } from "react";
-import { NodeJsLogo, TurborepoLogo } from "./app/_components/logos";
+import { NodeJsLogo } from "./app/_components/logos";
+import { ThemeAwareImage } from "./components/theme-aware-image";
 
 const iconAdder = (title?: string): JSX.Element | null => {
   if (title?.endsWith("turbo.json")) {
-    return <TurborepoLogo className="grayscale" />;
+    const size = 14;
+    return (
+      <ThemeAwareImage
+        light={{
+          src: "/images/product-icons/repo-light-32x32.png",
+          alt: "Turborepo logo",
+          className: "grayscale",
+          props: {
+            src: "/images/product-icons/repo-light-32x32.png",
+            alt: "Turborepo logo",
+            width: size,
+            height: size,
+          },
+        }}
+        dark={{
+          src: "/images/product-icons/repo-dark-32x32.png",
+          alt: "Turborepo logo",
+          className: "grayscale",
+          props: {
+            src: "/images/product-icons/repo-dark-32x32.png",
+            alt: "Turborepo logo",
+            width: size,
+            height: size,
+          },
+        }}
+      />
+    );
   }
 
   if (title?.endsWith("package.json")) {
@@ -19,10 +46,13 @@ const iconAdder = (title?: string): JSX.Element | null => {
 export const mdxComponents: MDXComponents = {
   ...defaultComponents,
   h2: (props) => (
-    <Heading className="scroll-m-7 text-heading-24" as="h2" {...props} />
+    <Heading className="scroll-mt-20 text-heading-24" as="h2" {...props} />
   ),
   h3: (props) => (
-    <Heading className="scroll-m-7 text-heading-20" as="h3" {...props} />
+    <Heading className="scroll-mt-20 text-heading-20" as="h3" {...props} />
+  ),
+  h4: (props) => (
+    <Heading className="scroll-mt-20 text-lg" as="h4" {...props} />
   ),
   pre: ({
     ref: _ref,

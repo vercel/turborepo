@@ -11,18 +11,18 @@ export type FumaCalloutProps = Omit<
 
 const THEMES = {
   info: {
-    background: "bg-blue-400 dark:bg-blue-400 dark:bg-opacity-20",
-    text: "text-blue-900 dark:text-blue-100/80",
+    background: "bg-blue-200 dark:bg-blue-200 dark:bg-opacity-20",
+    text: "text-blue-900 dark:text-blue-100/100",
     border: "border border-blue-400/40",
   },
   error: {
-    background: "bg-red-400 dark:bg-red-400 dark:bg-opacity-20",
-    text: "text-red-900 dark:text-red-900/80",
+    background: "bg-red-200 dark:bg-red-200 dark:bg-opacity-20",
+    text: "text-red-900 dark:text-red-100/100",
     border: "border border-red-400/40",
   },
   warn: {
-    background: "bg-amber-400 dark:bg-amber-400 dark:bg-opacity-20",
-    text: "text-amber-900 dark:text-amber-100/80",
+    background: "bg-amber-200 dark:bg-amber-200 dark:bg-opacity-20",
+    text: "text-amber-900 dark:text-amber-100/100",
     border: "border border-amber-400/40",
   },
   "good-to-know": {
@@ -32,7 +32,7 @@ const THEMES = {
   },
 };
 
-const iconStyles = "w-6 h-6";
+const iconStyles = "w-5 h-5 relative top-0.5";
 
 const ICONS = {
   info: (
