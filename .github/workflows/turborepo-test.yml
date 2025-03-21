@@ -91,7 +91,6 @@ jobs:
           check_paths "with-tailwind-example" "examples/with-tailwind/,turborepo-tests/example-with-svelte-*/,turborepo-tests/helpers/"
 
           # Handle the "rest" pattern - files that are NOT in examples/ or docs/
-          echo "Checking for changes in rest paths..."
           CHANGED_FILES=$(git diff --name-only $BASE_COMMIT $HEAD_COMMIT)
 
           # Filter to only include files that do NOT start with examples/ or docs/
@@ -99,7 +98,7 @@ jobs:
 
           if [ -n "$FILES_NOT_IN_EXAMPLES_OR_DOCS" ]; then
             echo "rest=true" >> $GITHUB_OUTPUT
-            echo "Changes detected outside examples/ and docs/ directories:"
+            echo "Changes detected outside examples/ and docs/ directories"
           else
             echo "rest=false" >> $GITHUB_OUTPUT
             echo "No changes outside examples/ and docs/ directories"
