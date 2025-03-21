@@ -7,6 +7,7 @@ mod server;
 mod task;
 
 use std::{
+    borrow::Cow,
     io,
     ops::{Deref, DerefMut},
     sync::Arc,
@@ -63,6 +64,10 @@ pub enum Error {
     Parse(swc_ecma_parser::error::Error),
     #[error(transparent)]
     SignalListener(#[from] turborepo_signals::listeners::Error),
+    #[error(transparent)]
+    ChangeMapper(#[from] turborepo_repository::change_mapper::Error),
+    #[error(transparent)]
+    Scm(#[from] turborepo_scm::Error),
 }
 
 pub struct RepositoryQuery {
@@ -164,6 +169,15 @@ pub struct Array<T: OutputType> {
     length: usize,
 }
 
+impl<T: OutputType> Default for Array<T> {
+    fn default() -> Self {
+        Self {
+            items: Vec::new(),
+            length: 0,
+        }
+    }
+}
+
 impl<T: ObjectType> From<Vec<T>> for Array<T> {
     fn from(value: Vec<T>) -> Self {
         Self {
@@ -193,6 +207,22 @@ impl<T: OutputType> FromIterator<T> for Array<T> {
         Self { items, length }
     }
 }
+
+impl<T: OutputType> Array<T> {
+    pub fn sort_by<F>(&mut self, f: F)
+    where
+        F: FnMut(&T, &T) -> std::cmp::Ordering,
+    {
+        self.items.sort_by(f);
+    }
+}
+
+impl<T: OutputType> TypeName for Array<T> {
+    fn type_name() -> Cow<'static, str> {
+        Cow::Owned(format!("Array<{}>", T::type_name()))
+    }
+}
+
 #[derive(Enum, Copy, Clone, Eq, PartialEq, Debug)]
 enum PackageFields {
     Name,
@@ -515,6 +545,44 @@ enum PackageChangeReason {
     InFilteredDirectory(InFilteredDirectory),
 }
 
+impl From<AllPackageChangeReason> for PackageChangeReason {
+    fn from(reason: AllPackageChangeReason) -> Self {
+        match reason {
+            AllPackageChangeReason::GlobalDepsChanged { file } => {
+                PackageChangeReason::GlobalDepsChanged(GlobalDepsChanged {
+                    file_path: file.to_string(),
+                })
+            }
+            AllPackageChangeReason::DefaultGlobalFileChanged { file } => {
+                PackageChangeReason::DefaultGlobalFileChanged(DefaultGlobalFileChanged {
+                    file_path: file.to_string(),
+                })
+            }
+
+            AllPackageChangeReason::LockfileChangeDetectionFailed => {
+                PackageChangeReason::LockfileChangeDetectionFailed(LockfileChangeDetectionFailed {
+                    empty: false,
+                })
+            }
+
+            AllPackageChangeReason::GitRefNotFound { from_ref, to_ref } => {
+                PackageChangeReason::GitRefNotFound(GitRefNotFound { from_ref, to_ref })
+            }
+
+            AllPackageChangeReason::LockfileChangedWithoutDetails => {
+                PackageChangeReason::LockfileChangedWithoutDetails(LockfileChangedWithoutDetails {
+                    empty: false,
+                })
+            }
+            AllPackageChangeReason::RootInternalDepChanged { root_internal_dep } => {
+                PackageChangeReason::RootInternalDepChanged(RootInternalDepChanged {
+                    root_internal_dep: root_internal_dep.to_string(),
+                })
+            }
+        }
+    }
+}
+
 #[derive(SimpleObject)]
 struct ChangedPackage {
     reason: PackageChangeReason,
@@ -598,6 +666,51 @@ impl RepositoryQuery {
         }
 
         File::new(self.run.clone(), abs_path)
+    }
+
+    /// Get the files that have changed between the `base` and `head` commits.
+    ///
+    /// # Arguments
+    ///
+    /// * `base`: Defaults to `main` or `master`
+    /// * `head`: Defaults to `HEAD`
+    /// * `include_uncommitted`: Defaults to `true` if `head` is not provided
+    /// * `allow_unknown_objects`: Defaults to `false`
+    /// * `merge_base`: Defaults to `true`
+    ///
+    /// returns: Result<Array<File>, Error>
+    async fn affected_files(
+        &self,
+        base: Option<String>,
+        head: Option<String>,
+        include_uncommitted: Option<bool>,
+        merge_base: Option<bool>,
+    ) -> Result<Array<File>, Error> {
+        let base = base.as_deref();
+        let head = head.as_deref();
+        let include_uncommitted = include_uncommitted.unwrap_or_else(|| head.is_none());
+        let merge_base = merge_base.unwrap_or(true);
+
+        let repo_root = self.run.repo_root();
+        let change_result = self
+            .run
+            .scm()
+            .changed_files(
+                repo_root,
+                base,
+                head,
+                include_uncommitted,
+                false,
+                merge_base,
+            )?
+            .expect("set allow unknown objects to false");
+
+        let files = change_result
+            .into_iter()
+            .map(|file| File::new(self.run.clone(), self.run.repo_root().resolve(&file)))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(Array::from(files))
     }
 
     /// Gets a list of packages that match the given filter
