@@ -29,34 +29,77 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - uses: dorny/paths-filter@v3
+      - name: Check path changes
         id: filter
-        with:
-          filters: |
-            docs:
-              - "docs/**"
-            basic-example:
-              - "examples/basic/**"
-              - "turborepo-tests/example-basic-*/**"
-              - "turborepo-tests/helpers/**"
-            kitchen-sink-example:
-              - "examples/kitchen-sink/**"
-              - "turborepo-tests/example-kitchen-sink-*/**"
-              - "turborepo-tests/helpers/**"
-            non-monorepo-example:
-              - "examples/non-monorepo/**"
-              - "turborepo-tests/example-non-monorepo-*/**"
-              - "turborepo-tests/helpers/**"
-            with-svelte-example:
-              - "examples/with-svelte/**"
-              - "turborepo-tests/example-with-svelte-*/**"
-              - "turborepo-tests/helpers/**"
-            with-tailwind-example:
-              - "examples/with-tailwind/**"
-              - "turborepo-tests/example-with-svelte-*/**"
-              - "turborepo-tests/helpers/**"
-            rest:
-              - "!(examples/**|docs/**)**"
+        run: |
+          # Determine the base and head commits to compare
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            # For pull requests, compare the base branch to the current HEAD
+            git fetch origin ${{ github.base_ref }}
+            BASE_COMMIT="origin/${{ github.base_ref }}"
+            HEAD_COMMIT="HEAD"
+          else
+            # For pushes, use the before and after SHAs
+            BASE_COMMIT="${{ github.event.before }}"
+            HEAD_COMMIT="${{ github.event.after }}"
+          fi
+
+          echo "Comparing changes between $BASE_COMMIT and $HEAD_COMMIT"
+
+          # Function to check if files in given paths have changed
+          check_path_changes() {
+            local name=$1
+            shift
+            local paths=("$@")
+
+            # Create a command that checks all paths
+            local cmd="git diff --name-only $BASE_COMMIT $HEAD_COMMIT -- "
+            for path in "${paths[@]}"; do
+              cmd+="\"$path\" "
+            done
+
+            # Run the command and check if there are any results
+            if eval "$cmd" | grep -q .; then
+              echo "$name=true" >> $GITHUB_OUTPUT
+              echo "Changes detected in $name paths"
+            else
+              echo "$name=false" >> $GITHUB_OUTPUT
+              echo "No changes in $name paths"
+            fi
+          }
+
+          # Function to make path checking more readable
+          check_paths() {
+            local name=$1
+            local path_string=$2
+
+            # Convert the comma-separated string to an array
+            IFS=',' read -ra path_array <<< "$path_string"
+
+            # Call the check_path_changes function with the name and paths
+            check_path_changes "$name" "${path_array[@]}"
+          }
+
+          # Check each path pattern with a more readable syntax
+          echo "Checking path patterns..."
+
+          check_paths "docs" "docs/"
+          check_paths "basic-example" "examples/basic/,turborepo-tests/example-basic-*/,turborepo-tests/helpers/"
+          check_paths "kitchen-sink-example" "examples/kitchen-sink/,turborepo-tests/example-kitchen-sink-*/,turborepo-tests/helpers/"
+          check_paths "non-monorepo-example" "examples/non-monorepo/,turborepo-tests/example-non-monorepo-*/,turborepo-tests/helpers/"
+          check_paths "with-svelte-example" "examples/with-svelte/,turborepo-tests/example-with-svelte-*/,turborepo-tests/helpers/"
+          check_paths "with-tailwind-example" "examples/with-tailwind/,turborepo-tests/example-with-svelte-*/,turborepo-tests/helpers/"
+
+          # Handle the "rest" pattern separately, since it's negative filtering
+          echo "Checking for changes in rest paths..."
+          CHANGED_FILES=$(git diff --name-only $BASE_COMMIT $HEAD_COMMIT)
+          if echo "$CHANGED_FILES" | grep -v -E "^(examples/|docs/)" | grep -q .; then
+            echo "rest=true" >> $GITHUB_OUTPUT
+            echo "Changes detected in rest paths"
+          else
+            echo "rest=false" >> $GITHUB_OUTPUT
+            echo "No changes in rest paths"
+          fi
 
   integration:
     name: Turborepo Integration
