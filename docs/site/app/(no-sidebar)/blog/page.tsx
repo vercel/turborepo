@@ -37,7 +37,7 @@ function Page(): JSX.Element {
         <h1 className="mb-6 mt-2 text-center text-4xl font-bold leading-tight tracking-tight text-slate-900 dark:text-slate-100 lg:text-5xl">
           Blog
         </h1>
-        <p className="text-center text-gray-500 dark:text-gray-400">
+        <p className="text-center text-gray-900 dark:text-gray-900">
           The latest updates and releases from the Turborepo team at Vercel.
         </p>
       </div>
