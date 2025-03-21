@@ -4,12 +4,13 @@ import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import type { ReactNode } from "react";
 import type { Metadata } from "next";
-import { Footer } from "@/app/_components/footer";
+import { Footer } from "@/components/nav/footer";
 import { RootProvider } from "@/components/root-provider";
 import { PRODUCT_SLOGANS } from "@/lib/constants";
 import { createMetadata } from "@/lib/create-metadata";
 import { VercelTrackers } from "@/components/analytics";
 import "./global.css";
+import { FaviconHandler } from "./_components/favicon-handler";
 
 export function generateMetadata(): Metadata {
   return createMetadata({
@@ -32,10 +33,13 @@ export default function Layout({
       suppressHydrationWarning
     >
       <body>
-        <RootProvider>{children}</RootProvider>
-        {shouldInjectToolbar ? <VercelToolbar /> : null}
-        <Footer />
+        <RootProvider>
+          {children}
+          <Footer />
+        </RootProvider>
+        <FaviconHandler />
         <VercelTrackers />
+        {shouldInjectToolbar ? <VercelToolbar /> : null}
       </body>
     </html>
   );

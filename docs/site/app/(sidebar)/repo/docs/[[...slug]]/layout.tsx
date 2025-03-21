@@ -1,8 +1,6 @@
 import { DocsPage, DocsBody } from "fumadocs-ui/page";
 import { notFound } from "next/navigation";
-import { FeedbackWidget } from "@/components/feedback-widget";
 import { repoDocsPages } from "@/app/source";
-import { RemoteCacheCounter } from "@/components/remote-cache-counter";
 
 export default async function SlugLayout(props: {
   params: Promise<{ slug?: string[] }>;
@@ -19,17 +17,7 @@ export default async function SlugLayout(props: {
   }
 
   return (
-    <DocsPage
-      tableOfContent={{
-        header: (
-          <>
-            <RemoteCacheCounter />
-            <FeedbackWidget />
-          </>
-        ),
-      }}
-      toc={page.data.toc}
-    >
+    <DocsPage>
       <DocsBody>{children}</DocsBody>
     </DocsPage>
   );

@@ -19,7 +19,7 @@ export function File({
   return (
     <FumaFile
       className={`${classNames({
-        "text-green-600 dark:text-green-400": green,
+        "text-green-700 dark:text-green-900": green,
       })} ${className}`}
       name={name}
       {...props}
@@ -40,7 +40,7 @@ export function Folder({
   return (
     <FumaFolder
       className={`${classNames({
-        "text-green-600 dark:text-green-400": green,
+        "text-green-700 dark:text-green-900": green,
       })} ${className}`}
       name={name}
       {...props}

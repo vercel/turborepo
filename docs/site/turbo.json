@@ -20,6 +20,7 @@
         "rss",
         "schema",
         "write-private-files",
+        "collect-examples-data",
         "generate-openapi"
       ]
     },
@@ -46,15 +47,13 @@
       "cache": false,
       "env": ["SITE_ANALYTICS_MODULE_CODE", "MIDDLEWARE_MODULE_CODE"]
     },
+    "collect-examples-data": {
+      "cache": false
+    },
     "index-docs": {
       "dependsOn": ["build"],
       "env": ["ALGOLIA_APP_ID", "ALGOLIA_API_KEY", "NEXT_PUBLIC_ALGOLIA_INDEX"],
       "cache": false
-    },
-    "link-check": {
-      "env": ["BASE_URL", "PROTECTION_BYPASS_SECRET"],
-      "passThroughEnv": ["PORT"],
-      "dependsOn": ["build"]
     },
     "generate-openapi": {
       "env": ["BASE_URL", "PROTECTION_BYPASS_SECRET"],

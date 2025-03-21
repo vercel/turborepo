@@ -15,7 +15,6 @@ export async function generateMetadata(props: {
 
   return createMetadata({
     title: page.data.title,
-    product: "repo",
     description: page.data.description,
     canonicalPath: page.url,
   });
@@ -42,7 +41,9 @@ export default async function Page(props: {
   return (
     <>
       <SystemEnvironmentVariablesHashHighlighter />
-      <h1 className="text-left">{page.data.title}</h1>
+      <h1 className="scroll-m-7 text-4xl font-semibold tracking-normal">
+        {page.data.title}
+      </h1>
       <Mdx components={mdxComponents} />
     </>
   );

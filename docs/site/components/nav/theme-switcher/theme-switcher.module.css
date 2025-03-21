@@ -1,0 +1,20 @@
+.root {
+  width: fit-content;
+  display: flex;
+  border-radius: 9999px;
+  border: 1px solid var(--ds-gray-400);
+}
+
+.switch {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: inherit;
+  border: 0;
+  color: var(--ds-gray-900);
+
+  &[data-active="true"] {
+    background: var(--ds-gray-300);
+    color: var(--ds-gray-1000);
+  }
+}
