@@ -520,11 +520,23 @@ To enable restarting persistent tasks, set `interruptible` to `true`.
 
 A list of tasks that will be ran alongside this task. This is most useful for long-running tasks that you want to ensure always run at the same time.
 
+```json title="./apps/web/turbo.json"
+{
+  "tasks": {
+    "dev": {
+      "with": ["api#dev"],
+      "persistent": true,
+      "cache": false
+    }
+  }
+}
+```
+
 ## Boundaries
 
 The `boundaries` tag allows you to define rules for the [`boundaries` command](/repo/docs/reference/boundaries).
 
-```jsonc title="./turbo.json"
+```json title="./turbo.json"
 {
   "boundaries": {}
 }
