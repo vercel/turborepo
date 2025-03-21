@@ -9,7 +9,7 @@ export function Date({
   update?: string;
 }): JSX.Element {
   return (
-    <div className="mt-2 text-center text-sm text-gray-500 dark:text-gray-400">
+    <div className="mt-2 text-center text-sm text-gray-900 dark:text-gray-900">
       {children}
 
       {update !== undefined && (

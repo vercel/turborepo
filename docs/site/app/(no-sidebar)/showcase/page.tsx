@@ -19,7 +19,7 @@ function Showcase(): JSX.Element {
           <h1 className="mt-2 text-3xl font-extrabold leading-8 tracking-tight text-gray-900 dark:text-white sm:text-4xl sm:leading-10 md:text-5xl">
             Showcase
           </h1>
-          <p className="mt-4 max-w-3xl font-mono text-xl leading-7 text-gray-500 dark:text-gray-400 lg:mx-auto">
+          <p className="mt-4 max-w-3xl font-mono text-xl leading-7 text-gray-900 dark:text-gray-900 lg:mx-auto">
             Who is using Turborepo?
           </p>
         </div>

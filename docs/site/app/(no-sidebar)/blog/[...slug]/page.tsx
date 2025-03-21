@@ -52,7 +52,7 @@ export default async function Page(props: {
       <FaviconHandler />
       <div className="my-4">
         <Link
-          className="hover:text-foreground flex flex-row gap-2 text-sm text-gray-500  transition-all dark:text-gray-400"
+          className="hover:text-foreground flex flex-row gap-2 text-sm text-gray-900  transition-all dark:text-gray-900"
           href="/blog"
         >
           <ArrowLeftIcon width=".75rem" />

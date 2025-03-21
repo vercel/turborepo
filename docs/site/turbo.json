@@ -25,7 +25,7 @@
       ]
     },
     "dev": {
-      "dependsOn": ["schema", "generate-openapi"],
+      "dependsOn": ["schema", "collect-examples-data", "generate-openapi"],
       "persistent": true,
       "cache": false
     },
