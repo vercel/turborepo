@@ -936,4 +936,36 @@ mod test {
 
         Ok(())
     }
+
+    #[test]
+    fn test_invalid_workspace_turbo_json() {
+        let root_dir = tempdir().unwrap();
+        let repo_root = AbsoluteSystemPath::from_std_path(root_dir.path()).unwrap();
+        let a_turbo_json = repo_root.join_components(&["packages", "a", "turbo.json"]);
+        a_turbo_json.ensure_dir().unwrap();
+        let packages = vec![(
+            PackageName::from("a"),
+            a_turbo_json.parent().unwrap().to_owned(),
+        )]
+        .into_iter()
+        .collect();
+
+        a_turbo_json
+            .create_with_contents(r#"{"tasks": {"build": {"lol": true}}}"#)
+            .unwrap();
+
+        let loader = TurboJsonLoader {
+            repo_root: repo_root.to_owned(),
+            cache: FixedMap::new(vec![PackageName::Root, PackageName::from("a")].into_iter()),
+            strategy: Strategy::Workspace {
+                packages,
+                micro_frontends_configs: None,
+            },
+        };
+        let result = loader.load(&PackageName::from("a"));
+        assert!(
+            matches!(result.unwrap_err(), Error::TurboJsonParseError(_)),
+            "expected parsing to fail due to unknown key"
+        );
+    }
 }
