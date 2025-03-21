@@ -53,15 +53,8 @@ impl<'a> ResolvedConfigurationOptions for TurboJsonReader<'a> {
         existing_config: &ConfigurationOptions,
     ) -> Result<ConfigurationOptions, Error> {
         let turbo_json_path = existing_config.root_turbo_json_path(self.repo_root)?;
-        let turbo_json = RawTurboJson::read(self.repo_root, &turbo_json_path).or_else(|e| {
-            if let Error::Io(e) = &e {
-                if matches!(e.kind(), std::io::ErrorKind::NotFound) {
-                    return Ok(Default::default());
-                }
-            }
-
-            Err(e)
-        })?;
+        let turbo_json = RawTurboJson::read(self.repo_root, &turbo_json_path)
+            .map(|turbo_json| turbo_json.unwrap_or_default())?;
         Self::turbo_json_to_config_options(turbo_json)
     }
 }
