@@ -83,6 +83,7 @@ struct PackageEntry {
 }
 
 #[derive(Debug, Deserialize, Default, PartialEq, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct PackageInfo {
     #[serde(default, skip_serializing_if = "Map::is_empty")]
     dependencies: Map<String, String>,
@@ -92,6 +93,8 @@ struct PackageInfo {
     optional_dependencies: Map<String, String>,
     #[serde(default, skip_serializing_if = "Map::is_empty")]
     peer_dependencies: Map<String, String>,
+    #[serde(default, skip_serializing_if = "HashSet::is_empty")]
+    optional_peers: HashSet<String>,
     // We do not care about the rest here
     // the values here should be generic
     #[serde(flatten)]
@@ -163,10 +166,21 @@ impl Lockfile for BunLockfile {
             .ok_or_else(|| crate::Error::MissingPackage(key.into()))?;
 
         let mut deps = HashMap::new();
-        for (dependency, version) in entry.info.iter().flat_map(|info| info.all_dependencies()) {
+
+        let Some(info) = &entry.info else {
+            return Ok(Some(deps));
+        };
+
+        let optional_peers = &info.optional_peers;
+        for (dependency, version) in info.all_dependencies() {
             let parent_key = format!("{entry_key}/{dependency}");
             let Some((dep_key, _)) = self.package_entry(&parent_key) else {
-                return Err(crate::Error::MissingPackage(dependency.to_string()));
+                // This is an optional peer dependency
+                if optional_peers.contains(&dependency.to_string()) {
+                    continue;
+                }
+
+                return Err(crate::Error::MissingPackage(parent_key));
             };
             deps.insert(dep_key.to_string(), version.to_string());
         }
