@@ -180,7 +180,7 @@ impl Lockfile for BunLockfile {
                     continue;
                 }
 
-                return Err(crate::Error::MissingPackage(parent_key));
+                return Err(crate::Error::MissingPackage(dependency.to_string()));
             };
             deps.insert(dep_key.to_string(), version.to_string());
         }
