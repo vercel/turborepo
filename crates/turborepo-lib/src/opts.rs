@@ -315,6 +315,7 @@ impl<'a> TryFrom<OptsInputs<'a>> for RunOpts {
             .execution_args
             .concurrency
             .as_deref()
+            .or(inputs.config.concurrency.as_deref())
             .map(parse_concurrency)
             .transpose()?
             .unwrap_or(DEFAULT_CONCURRENCY);
