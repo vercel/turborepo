@@ -8,11 +8,11 @@ import { Steps, Step } from '#/components/steps';
 import { PackageManagerTabs, Tabs, Tab } from '#/components/tabs';
 import { Files, File, Folder } from '#/components/files';
 
-[Internal Packages](/repo/docs/core-concepts/internal-packages) are the building blocks of your workspace, giving you a powerful way to share code and functionality across your repo. Turborepo automatically understands the relationships between Internal Packages using the dependencies in `package.json`, creating a [Package Graph](/repo/docs/core-concepts/package-and-task-graph#package-graph) under the hood to optimize your repository's workflows.
+[Internal Packages](/docs/core-concepts/internal-packages) are the building blocks of your workspace, giving you a powerful way to share code and functionality across your repo. Turborepo automatically understands the relationships between Internal Packages using the dependencies in `package.json`, creating a [Package Graph](/docs/core-concepts/package-and-task-graph#package-graph) under the hood to optimize your repository's workflows.
 
 ![Visual representation of a Package Graph in a Turborepo.](/images/docs/package-graph.png)
 
-Let's create your first Internal Package to share math utilities in your repo using the guidance in the [Anatomy of a package](/repo/docs/crafting-your-repository/structuring-a-repository#anatomy-of-a-package) section and the [Compiled Packages](/repo/docs/core-concepts/internal-packages#compiled-packages) pattern. In the steps below, we assume you've [created a new repository using `create-turbo`](/repo/docs/getting-started/installation) or are using a similarly structured repository.
+Let's create your first Internal Package to share math utilities in your repo using the guidance in the [Anatomy of a package](/docs/crafting-your-repository/structuring-a-repository#anatomy-of-a-package) section and the [Compiled Packages](/docs/core-concepts/internal-packages#compiled-packages) pattern. In the steps below, we assume you've [created a new repository using `create-turbo`](/docs/getting-started/installation) or are using a similarly structured repository.
 
 <Steps>
 <Step>
@@ -42,7 +42,7 @@ You'll need a directory to put the package in. Let's create one at `./packages/m
 <Step>
 ### Add a package.json
 
-Next, create the `package.json` for the package. By adding this file, you'll fulfill [the two requirements for an Internal Package](/repo/docs/crafting-your-repository/structuring-a-repository#specifying-packages-in-a-monorepo), making it discoverable to Turborepo and the rest of your Workspace:
+Next, create the `package.json` for the package. By adding this file, you'll fulfill [the two requirements for an Internal Package](/docs/crafting-your-repository/structuring-a-repository#specifying-packages-in-a-monorepo), making it discoverable to Turborepo and the rest of your Workspace:
 
 <PackageManagerTabs>
 <Tab>
@@ -164,7 +164,7 @@ You've done four important things here:
   There's a lot more to learn about TypeScript configuration, but this is a good
   place to start for now. If you'd like to learn more, visit [the official
   TypeScript documentation](https://www.typescriptlang.org/tsconfig) or [our
-  TypeScript guide](/repo/docs/guides/tools/typescript).
+  TypeScript guide](/docs/guides/tools/typescript).
 </Callout>
 
 </Step>
@@ -274,14 +274,14 @@ Add the artifacts for the new `@repo/math` library to the `outputs` for the `bui
 <Step>
 ### Run `turbo build`
 
-If you've [installed `turbo` globally](/repo/docs/getting-started/installation#global-installation), run `turbo build` in your terminal at the root of your Workspace. You can also run the `build` script from `package.json` with your package manager, which will use `turbo run build`.
+If you've [installed `turbo` globally](/docs/getting-started/installation#global-installation), run `turbo build` in your terminal at the root of your Workspace. You can also run the `build` script from `package.json` with your package manager, which will use `turbo run build`.
 
 The `@repo/math` package built before the `web` application built so that the runtime code in `./packages/math/dist` is available to the `web` application when it bundles.
 
 <Callout type="info">
   You can run `turbo build` again to see your `web` application rebuild in
   **milliseconds**. We'll discuss this at length in [the Caching
-  guide](/repo/docs/crafting-your-repository/caching).
+  guide](/docs/crafting-your-repository/caching).
 </Callout>
 
 </Step>
@@ -294,7 +294,7 @@ The `@repo/math` package built before the `web` application built so that the ru
 When you're creating Internal Packages, it's recommended to create packages that have a single "purpose". This isn't a strict science or rule, but a best practice depending on your repository, your scale, your organization, what your teams need, and more. This strategy has several advantages:
 
 - **Easier to understand**: As a repository scales, developers working in the repository will more easily be able to find the code they need.
-- **Reducing dependencies per package**: Using fewer dependencies per package makes it so Turborepo can more effectively [prune the dependencies of your package graph](/repo/docs/reference/prune).
+- **Reducing dependencies per package**: Using fewer dependencies per package makes it so Turborepo can more effectively [prune the dependencies of your package graph](/docs/reference/prune).
 
 Some examples include:
 
@@ -304,16 +304,16 @@ Some examples include:
 
 ### Application Packages do not contain shared code
 
-When you're creating [Application Packages](/repo/docs/core-concepts/package-types#application-packages), it's best to avoid putting shared code in those packages. Instead, you should create a separate package for the shared code and have the application packages depend on that package.
+When you're creating [Application Packages](/docs/core-concepts/package-types#application-packages), it's best to avoid putting shared code in those packages. Instead, you should create a separate package for the shared code and have the application packages depend on that package.
 
-Additionally, Application Packages are not meant to be installed into other packages. Instead, they should be thought of as an entrypoint to your [Package Graph](/repo/docs/core-concepts/package-and-task-graph#package-graph).
+Additionally, Application Packages are not meant to be installed into other packages. Instead, they should be thought of as an entrypoint to your [Package Graph](/docs/core-concepts/package-and-task-graph#package-graph).
 
 <Callout type="good-to-know">
   There are [rare
-  exceptions](/repo/docs/core-concepts/package-types#installing-an-applicaiton-package-into-another-package)
+  exceptions](/docs/core-concepts/package-types#installing-an-applicaiton-package-into-another-package)
   to this rule.
 </Callout>
 
 ## Next steps
 
-With a new Internal Package in place, you can start [configuring tasks](/repo/docs/crafting-your-repository/configuring-tasks).
+With a new Internal Package in place, you can start [configuring tasks](/docs/crafting-your-repository/configuring-tasks).

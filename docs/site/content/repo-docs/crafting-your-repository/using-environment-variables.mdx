@@ -25,9 +25,9 @@ There are three important questions when working with environment variables in T
 
 <Callout type="good-to-know">
   Turborepo also uses [System Environment
-  Variables](/repo/docs/reference/system-environment-variables) to configure its
-  own behavior. Below, you'll find information about environment variables for
-  your task's runtime and how they affect task hashing.
+  Variables](/docs/reference/system-environment-variables) to configure its own
+  behavior. Below, you'll find information about environment variables for your
+  task's runtime and how they affect task hashing.
 </Callout>
 
 ## Adding environment variables to task hashes
@@ -51,12 +51,12 @@ Turborepo needs to be aware of your environment variables to account for changes
 <Callout type="good-to-know">
   Turborepo supports wildcards for environment variables so you can easily
   account for all environment variables with a given prefix. Visit [the API
-  reference for `env`](/repo/docs/reference/configuration#wildcards) for more.
+  reference for `env`](/docs/reference/configuration#wildcards) for more.
 </Callout>
 
 ### Framework Inference
 
-Turborepo automatically adds prefix wildcards to your [`env`](/repo/docs/reference/configuration#env) key for common frameworks. If you're using one of the frameworks below in a package, you don't need to specify environment variables with these prefixes:
+Turborepo automatically adds prefix wildcards to your [`env`](/docs/reference/configuration#env) key for common frameworks. If you're using one of the frameworks below in a package, you don't need to specify environment variables with these prefixes:
 
 <table>
   <thead>
@@ -119,11 +119,11 @@ This means that tasks that do not account for all of the environment variables t
 In advanced use cases, you may want to make some environment variables
 available to a task without including them in the hash. Changes to these variables don't affect task outputs but still need to be available for the task to run successfully.
 
-For these cases, add those environment variables to [`globalPassThroughEnv`](/repo/docs/reference/configuration#globalpassthroughenv) and [`passThroughEnv`](/repo/docs/reference/configuration#passthroughenv).
+For these cases, add those environment variables to [`globalPassThroughEnv`](/docs/reference/configuration#globalpassthroughenv) and [`passThroughEnv`](/docs/reference/configuration#passthroughenv).
 
 #### CI vendor compatibility
 
-Strict Mode will filter out environment variables that come from your CI vendors until you've accounted for them using [`env`](/repo/docs/reference/configuration#env), [`globalEnv`](/repo/docs/reference/configuration#globalenv), [`passThroughEnv`](/repo/docs/reference/configuration#passthroughenv), or [`globalPassThroughEnv`](/repo/docs/reference/configuration#globalpassthroughenv).
+Strict Mode will filter out environment variables that come from your CI vendors until you've accounted for them using [`env`](/docs/reference/configuration#env), [`globalEnv`](/docs/reference/configuration#globalenv), [`passThroughEnv`](/docs/reference/configuration#passthroughenv), or [`globalPassThroughEnv`](/docs/reference/configuration#globalpassthroughenv).
 
 If any of these variables are important to your tasks and aren't included by [Framework Inference](#framework-inference), make sure they are in your `turbo.json` configuration.
 
@@ -131,7 +131,7 @@ If any of these variables are important to your tasks and aren't included by [Fr
 
 Loose Mode does not filter your environment variables according to your `globalEnv` and `env` keys. This makes it easier to get started with incrementally migrating to Strict Mode.
 
-Use [the `--env-mode` flag](/repo/docs/reference/run#--env-mode-option) to enable Loose Mode on any invocation where you're seeing environment variables cannot be found by your scripts:
+Use [the `--env-mode` flag](/docs/reference/run#--env-mode-option) to enable Loose Mode on any invocation where you're seeing environment variables cannot be found by your scripts:
 
 ```bash title="Terminal"
 turbo run build --env-mode=loose
@@ -151,7 +151,7 @@ When you're using Loose Mode, `MY_API_URL` is available in the task runtime **ev
 
 ### Platform Environment Variables
 
-When deploying your application to [Vercel](https://vercel.com/new?ref=turborepo), you likely already have [environment variables](https://vercel.com/docs/projects/environment-variables) configured on your project. Turborepo will automatically check these variables against your `turbo.json` configuration to ensure that you've [accounted for them](/repo/docs/crafting-your-repository/using-environment-variables#adding-environment-variables-to-task-hashes),
+When deploying your application to [Vercel](https://vercel.com/new?ref=turborepo), you likely already have [environment variables](https://vercel.com/docs/projects/environment-variables) configured on your project. Turborepo will automatically check these variables against your `turbo.json` configuration to ensure that you've [accounted for them](/docs/crafting-your-repository/using-environment-variables#adding-environment-variables-to-task-hashes),
 and will warn you about any missing variables.
 
 This functionality can be disabled by setting `TURBO_PLATFORM_ENV_DISABLED=false`
@@ -162,7 +162,7 @@ This functionality can be disabled by setting `TURBO_PLATFORM_ENV_DISABLED=false
 
 However, it's important that `turbo` knows about changes to values in your `.env` files so that it can use them for hashing. If you change a variable in your `.env` files between builds, the `build` task should miss cache.
 
-To do this, add the files to the [`inputs`](/repo/docs/reference/configuration#inputs) key:
+To do this, add the files to the [`inputs`](/docs/reference/configuration#inputs) key:
 
 ```json title="./turbo.json"
 {
@@ -193,9 +193,8 @@ You can capture multiple `.env` files at once using a `*`.
 <Callout type="info">
   `.env` files can load variables into the task runtime even when the
   environment variables have not been added to [the `env`
-  key](/repo/docs/reference/configuration#env). Ensure that you add your
-  environment variables for your builds the `env` key for CI and production
-  builds.
+  key](/docs/reference/configuration#env). Ensure that you add your environment
+  variables for your builds the `env` key for CI and production builds.
 </Callout>
 
 ## Best practices
@@ -214,7 +213,7 @@ This practice more closely models the runtime behavior of your applications sinc
 
 ### Use `eslint-config-turbo`
 
-[The `eslint-config-turbo` package](/repo/docs/reference/eslint-config-turbo) helps you find environment variables that are used in your code that aren't listed in your `turbo.json`. This helps ensure that all your environment variables are accounted for in your configuration.
+[The `eslint-config-turbo` package](/docs/reference/eslint-config-turbo) helps you find environment variables that are used in your code that aren't listed in your `turbo.json`. This helps ensure that all your environment variables are accounted for in your configuration.
 
 ### Avoid creating or mutating environment variables at runtime
 
@@ -313,7 +312,7 @@ The `turbo.json` below expresses:
 
 ### Use `--summarize`
 
-[The `--summarize` flag](/repo/docs/reference/run#--summarize) can be added to your `turbo run` command to produce a JSON file summarizing data about your task. Checking the diff for the `globalEnv` and `env` key can help you identify any environment variables that may be missing from your configuration.
+[The `--summarize` flag](/docs/reference/run#--summarize) can be added to your `turbo run` command to produce a JSON file summarizing data about your task. Checking the diff for the `globalEnv` and `env` key can help you identify any environment variables that may be missing from your configuration.
 
 ## Next steps
 
