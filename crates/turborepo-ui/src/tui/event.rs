@@ -29,6 +29,8 @@ pub enum Event {
     Down,
     ScrollUp,
     ScrollDown,
+    PageUp,
+    PageDown,
     SetStdin {
         task: String,
         stdin: Box<dyn std::io::Write + Send>,
@@ -64,6 +66,7 @@ pub enum Event {
     SearchBackspace,
 }
 
+#[derive(Clone)]
 pub enum Direction {
     Up,
     Down,

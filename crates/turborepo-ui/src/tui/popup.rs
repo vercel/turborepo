@@ -6,19 +6,21 @@ use ratatui::{
     widgets::{Block, List, ListItem, Padding},
 };
 
-const BIND_LIST: [&str; 12] = [
-    "m      - Toggle this help popup",
-    "↑ or j - Select previous task",
-    "↓ or k - Select next task",
-    "h      - Toggle task list",
-    "p      - Toggle pinned task selection",
-    "/      - Filter tasks to search term",
-    "ESC    - Clear filter",
-    "i      - Interact with task",
-    "Ctrl+z - Stop interacting with task",
-    "c      - Copy logs selection (Only when logs are selected)",
-    "u      - Scroll logs up",
-    "d      - Scroll logs down",
+const BIND_LIST: [&str; 14] = [
+    "m       - Toggle this help popup",
+    "↑ or j  - Select previous task",
+    "↓ or k  - Select next task",
+    "h       - Toggle task list",
+    "p       - Toggle pinned task selection",
+    "/       - Filter tasks to search term",
+    "ESC     - Clear filter",
+    "i       - Interact with task",
+    "Ctrl+z  - Stop interacting with task",
+    "c       - Copy logs selection (Only when logs are selected)",
+    "u       - Scroll logs up",
+    "d       - Scroll logs down",
+    "Shift+u - Page logs up",
+    "Shift+d - Page logs down",
 ];
 
 pub fn popup_area(area: Rect) -> Rect {

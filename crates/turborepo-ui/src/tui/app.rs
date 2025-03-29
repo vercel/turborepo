@@ -201,6 +201,19 @@ impl<W> App<W> {
         Ok(())
     }
 
+    #[tracing::instrument(skip_all)]
+    pub fn scroll_terminal_output_by_page(&mut self, direction: Direction) -> Result<(), Error> {
+        let pane_rows = self.size.pane_rows();
+        let task = self.get_full_task_mut()?;
+
+        // Scroll by the height of the terminal pane
+        for _ in 0..pane_rows {
+            task.scroll(direction.clone())?;
+        }
+
+        Ok(())
+    }
+
     pub fn enter_search(&mut self) -> Result<(), Error> {
         self.section_focus = LayoutSections::Search {
             previous_selection: self.active_task()?.to_string(),
@@ -816,6 +829,14 @@ fn update(
         Event::ScrollDown => {
             app.is_task_selection_pinned = true;
             app.scroll_terminal_output(Direction::Down)?;
+        }
+        Event::PageUp => {
+            app.is_task_selection_pinned = true;
+            app.scroll_terminal_output_by_page(Direction::Up)?;
+        }
+        Event::PageDown => {
+            app.is_task_selection_pinned = true;
+            app.scroll_terminal_output_by_page(Direction::Down)?;
         }
         Event::EnterInteractive => {
             app.is_task_selection_pinned = true;

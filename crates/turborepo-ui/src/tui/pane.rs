@@ -11,6 +11,7 @@ const EXIT_INTERACTIVE_HINT: &str = "Ctrl-z - Stop interacting";
 const ENTER_INTERACTIVE_HINT: &str = "i - Interact";
 const HAS_SELECTION: &str = "c - Copy selection";
 const SCROLL_LOGS: &str = "u/d - Scroll logs";
+const PAGE_LOGS: &str = "U/D - Page logs";
 const TASK_LIST_HIDDEN: &str = "h - Show task list";
 
 pub struct TerminalPane<'a, W> {
@@ -65,9 +66,9 @@ impl<'a, W> TerminalPane<'a, W> {
         match self.section {
             LayoutSections::Pane => build_message_vec(&[EXIT_INTERACTIVE_HINT]),
             LayoutSections::TaskList if self.has_stdin() => {
-                build_message_vec(&[ENTER_INTERACTIVE_HINT, SCROLL_LOGS])
+                build_message_vec(&[ENTER_INTERACTIVE_HINT, SCROLL_LOGS, PAGE_LOGS])
             }
-            LayoutSections::TaskList => build_message_vec(&[SCROLL_LOGS]),
+            LayoutSections::TaskList => build_message_vec(&[SCROLL_LOGS, PAGE_LOGS]),
             LayoutSections::Search { results, .. } => {
                 Line::from(format!("/ {}", results.query())).left_aligned()
             }
