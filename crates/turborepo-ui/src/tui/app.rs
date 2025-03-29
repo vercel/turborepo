@@ -201,7 +201,6 @@ impl<W> App<W> {
         Ok(())
     }
 
-    #[tracing::instrument(skip_all)]
     pub fn scroll_terminal_output_by_page(&mut self, direction: Direction) -> Result<(), Error> {
         let pane_rows = self.size.pane_rows();
         let task = self.get_full_task_mut()?;
@@ -564,14 +563,12 @@ impl<W> App<W> {
         })
     }
 
-    #[tracing::instrument(skip_all)]
     pub fn jump_to_logs_top(&mut self) -> Result<(), Error> {
         let task = self.get_full_task_mut()?;
         task.parser.screen_mut().set_scrollback(usize::MAX);
         Ok(())
     }
 
-    #[tracing::instrument(skip_all)]
     pub fn jump_to_logs_bottom(&mut self) -> Result<(), Error> {
         let task = self.get_full_task_mut()?;
         task.parser.screen_mut().set_scrollback(0);

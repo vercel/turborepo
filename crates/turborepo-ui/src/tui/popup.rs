@@ -21,8 +21,8 @@ const BIND_LIST: [&str; 16] = [
     "d       - Scroll logs down",
     "Shift+u - Page logs up",
     "Shift+d - Page logs down",
-    "t  - Jump to top of logs",
-    "b - Jump to bottom of logs",
+    "t       - Jump to top of logs",
+    "b       - Jump to bottom of logs",
 ];
 
 pub fn popup_area(area: Rect) -> Rect {
