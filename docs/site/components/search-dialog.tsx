@@ -19,7 +19,7 @@ export function SearchDialog(props: SharedProps): JSX.Element {
       {...props}
       links={[
         ["Home", "/"],
-        ["Turborepo documentation", "/repo/docs"],
+        ["Turborepo documentation", "/docs"],
         ["Blog", "/blog"],
         ["Changelog", `${gitHubRepoUrl}/releases`],
         ["Github", gitHubRepoUrl],
