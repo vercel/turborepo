@@ -21,7 +21,7 @@ import { MobileMenuTopLevel } from "../docs-layout/mobile-menu-top-level";
 
 export const PAGES = [
   {
-    href: "/repo/docs",
+    href: "/docs",
     tooltip: "Docs",
     name: "docs",
   },
@@ -114,7 +114,7 @@ export const Navigation = () => {
                           "text-sm transition-colors duration-100 hover:text-gray-1000 data-[active=true]:text-gray-1000"
                         )}
                         data-active={pageFromRoute === page.name}
-                        scroll={page.href !== "/repo/docs"}
+                        scroll={page.href !== "/docs"}
                       >
                         {page.tooltip}
                       </Link>

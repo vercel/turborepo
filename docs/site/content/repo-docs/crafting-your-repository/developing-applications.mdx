@@ -61,11 +61,11 @@ You may also want to run scripts that set up your development environment or pre
 }
 ```
 
-In this example, we're using a [Root Task](/repo/docs/crafting-your-repository/configuring-tasks#registering-root-tasks) but you can use the same idea for [arbitrary tasks in packages](/repo/docs/crafting-your-repository/configuring-tasks#depending-on-a-specific-task-in-a-specific-package).
+In this example, we're using a [Root Task](/docs/crafting-your-repository/configuring-tasks#registering-root-tasks) but you can use the same idea for [arbitrary tasks in packages](/docs/crafting-your-repository/configuring-tasks#depending-on-a-specific-task-in-a-specific-package).
 
 ### Running a specific application
 
-The `--filter` flag allows you to pick a subset of your [Package Graph](/repo/docs/core-concepts/package-and-task-graph#package-graph) so you can run your `dev` task for a specific application and its dependencies:
+The `--filter` flag allows you to pick a subset of your [Package Graph](/docs/core-concepts/package-and-task-graph#package-graph) so you can run your `dev` task for a specific application and its dependencies:
 
 ```bash title="Terminal"
 turbo dev --filter=web
@@ -93,7 +93,7 @@ You can quickly adjust the UI to your needs using keybinds.
 
 Some of your tools may allow you to type input into them. Examples of this include Drizzle ORM's interactive migrations or Jest's filtering and re-running of test suites.
 
-You can interact with tasks that are [marked as interactive](/repo/docs/reference/configuration#interactive) to give them input.
+You can interact with tasks that are [marked as interactive](/docs/reference/configuration#interactive) to give them input.
 
 | Keybind  | Action            |
 | -------- | ----------------- |
@@ -105,9 +105,9 @@ You can interact with tasks that are [marked as interactive](/repo/docs/referenc
 Many tools have a built-in watcher, like [`tsc --watch`](https://www.typescriptlang.org/docs/handbook/compiler-options.html#compiler-options),
 that will respond to changes in your source code. However, some don't.
 
-`turbo watch` adds a dependency-aware watcher to any tool. Changes to source code will follow [the Task Graph](/repo/docs/core-concepts/package-and-task-graph#task-graph) that you've described in `turbo.json`, just like all your other tasks.
+`turbo watch` adds a dependency-aware watcher to any tool. Changes to source code will follow [the Task Graph](/docs/core-concepts/package-and-task-graph#task-graph) that you've described in `turbo.json`, just like all your other tasks.
 
-For example, using a package structure like [`create-turbo`](/repo/docs/reference/create-turbo) with the following tasks and scripts:
+For example, using a package structure like [`create-turbo`](/docs/reference/create-turbo) with the following tasks and scripts:
 
 <Tabs items={["turbo.json", "packages/ui", "apps/web"]}>
 <Tab value="turbo.json">
@@ -164,7 +164,7 @@ When you run `turbo watch dev lint`, you'll see the `lint` scripts are re-run wh
 
 The Next.js development server in `web` and the TypeScript Compiler's built-in watcher in `@repo/ui` will continue to work as usual, since they are marked with `persistent`.
 
-For more information, [visit the `turbo watch` reference](/repo/docs/reference/watch).
+For more information, [visit the `turbo watch` reference](/docs/reference/watch).
 
 ## Limitations
 

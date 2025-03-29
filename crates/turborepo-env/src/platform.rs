@@ -64,7 +64,7 @@ impl PlatformEnv {
         let docs_message = color!(
             color_config,
             UNDERLINE,
-            "https://turbo.build/repo/docs/platform-environment-variables"
+            "https://turbo.build/docs/platform-environment-variables"
         );
 
         match ci {

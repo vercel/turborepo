@@ -6,7 +6,7 @@ description: Learn how to use multiple languages with Turborepo.
 import { PackageManagerTabs, Tab } from '#/components/tabs';
 import { LinkToDocumentation } from '#/components/link-to-documentation';
 
-Turborepo is built on the conventions of the JavaScript ecosystem to find scripts and tasks to execute - but it doesn't care what those scripts do. Following [the guidance for specifying a package in a JavaScript workspace](/repo/docs/crafting-your-repository/structuring-a-repository#specifying-packages-in-a-monorepo), you can add any other language or toolchain to Turborepo.
+Turborepo is built on the conventions of the JavaScript ecosystem to find scripts and tasks to execute - but it doesn't care what those scripts do. Following [the guidance for specifying a package in a JavaScript workspace](/docs/crafting-your-repository/structuring-a-repository#specifying-packages-in-a-monorepo), you can add any other language or toolchain to Turborepo.
 
 As an example, you may have a Rust project in the `./cli` directory in your repository. To add this directory as a package to your JavaScript package manager's workspace, add the directory to the workspace definition:
 
@@ -64,7 +64,7 @@ Now, when you use `turbo build`, the `"build"` script in `./cli/package.json` wi
 
 ## Caching build artifacts
 
-Ensure that the outputs for your builds are being cached with [the outputs key](/repo/docs/reference/configuration#outputs) in `turbo.json`. In the case of a Rust CLI being compiled with cargo, a release build would be created in the `target/release` directory and we can cache it using:
+Ensure that the outputs for your builds are being cached with [the outputs key](/docs/reference/configuration#outputs) in `turbo.json`. In the case of a Rust CLI being compiled with cargo, a release build would be created in the `target/release` directory and we can cache it using:
 
 ```json title="./turbo.json"
 {

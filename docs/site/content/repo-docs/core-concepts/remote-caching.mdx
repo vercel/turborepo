@@ -7,7 +7,7 @@ import { Callout } from '#/components/callout';
 import { PlatformTabs, PackageManagerTabs, Tab } from '#/components/tabs';
 import { ThemeAwareImage } from '#/components/theme-aware-image';
 
-Turborepo's [task cache](/repo/docs/crafting-your-repository/caching) saves time by never doing the same work twice.
+Turborepo's [task cache](/docs/crafting-your-repository/caching) saves time by never doing the same work twice.
 
 But there's a problem: **the cache is local to your machine**. When you're working with a Continuous Integration system, this can result in a lot of duplicated work:
 
@@ -63,15 +63,15 @@ What if you could share a single Turborepo cache across your entire team (and ev
 
 Turborepo can securely communicate with a remote cache - a cloud server that stores the results of your tasks. This can save enormous amounts of time by **preventing duplicated work across your entire organization**.
 
-Remote Caching is free and can be used with both [managed providers](https://turbo.build/repo/docs/core-concepts/remote-caching#managed-remote-cache-with-vercel) or as a [self-hosted cache](https://turbo.build/repo/docs/core-concepts/remote-caching#self-hosting).
+Remote Caching is free and can be used with both [managed providers](https://turbo.build/docs/core-concepts/remote-caching#managed-remote-cache-with-vercel) or as a [self-hosted cache](https://turbo.build/docs/core-concepts/remote-caching#self-hosting).
 
 <Callout>
   Remote Caching is a powerful feature of Turborepo, but, with great power,
   comes great responsibility. Make sure you are caching correctly first and
   double check [handling of environment
-  variables](/repo/docs/crafting-your-repository/using-environment-variables).
-  Please also remember Turborepo treats logs as artifacts, so be aware of what
-  you are printing to the console.
+  variables](/docs/crafting-your-repository/using-environment-variables). Please
+  also remember Turborepo treats logs as artifacts, so be aware of what you are
+  printing to the console.
 </Callout>
 
 ## Vercel
@@ -86,7 +86,7 @@ To link your local Turborepo to your Remote Cache, authenticate the Turborepo CL
 turbo login
 ```
 
-You can also use your package manager if you do not have [global `turbo`](/repo/docs/getting-started/installation#global-installation) installed:
+You can also use your package manager if you do not have [global `turbo`](/docs/getting-started/installation#global-installation) installed:
 
 <PackageManagerTabs>
 <Tab>
@@ -192,7 +192,7 @@ turbo login --manual
 
 #### OpenAPI specification
 
-- [Human-readable viewer](/repo/docs/openapi)
+- [Human-readable viewer](/docs/openapi)
 - [JSON](/api/remote-cache-spec)
 
 At this time, all versions of `turbo` are compatible with the `v8` endpoints.

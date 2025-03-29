@@ -8,7 +8,7 @@ import { Callout } from '#/components/callout';
 
 ## Package Graph
 
-The Package Graph is the structure of your monorepo created by your package manager. When you install [Internal Packages](/repo/docs/core-concepts/internal-packages) into each other, Turborepo will automatically identify those dependency relationships to build a foundational understanding of your Workspace.
+The Package Graph is the structure of your monorepo created by your package manager. When you install [Internal Packages](/docs/core-concepts/internal-packages) into each other, Turborepo will automatically identify those dependency relationships to build a foundational understanding of your Workspace.
 
 This sets the groundwork for the Task Graph, where you'll define how **tasks** relate to each other.
 
@@ -19,7 +19,7 @@ dependencies between tasks, but we have a more formal name for them: the Task Gr
 
 <Callout type="good-to-know">
   You can generate a visualization of the task graph for your tasks using [the
-  `--graph` flag](/repo/docs/reference/run#--graph-file-type).
+  `--graph` flag](/docs/reference/run#--graph-file-type).
 </Callout>
 
 Turborepo uses a data structure called a [directed acyclic graph (DAG)](https://en.wikipedia.org/wiki/Directed_acyclic_graph) to

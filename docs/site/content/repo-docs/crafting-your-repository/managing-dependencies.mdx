@@ -8,7 +8,7 @@ import { Callout } from '#/components/callout';
 import { LinkToDocumentation } from '#/components/link-to-documentation';
 
 - **External dependencies** come from [the npm registry](https://www.npmjs.com/), allowing you to leverage valuable code from the ecosystem to build your applications and libraries faster.
-- **Internal dependencies** let you share functionality within your repository, dramatically improving discoverability and usability of shared code. We will discuss how to build an Internal Package in [the next guide](/repo/docs/crafting-your-repository/creating-an-internal-package).
+- **Internal dependencies** let you share functionality within your repository, dramatically improving discoverability and usability of shared code. We will discuss how to build an Internal Package in [the next guide](/docs/crafting-your-repository/creating-an-internal-package).
 
 <PackageManagerTabs>
 <Tab>
@@ -102,9 +102,9 @@ pnpm install jest --save-dev --recursive --filter=web --filter=@repo/ui --filter
 This practice has several benefits:
 
 - **Improved clarity**: It's easier to understand what a package depends on when its dependencies are listed in its `package.json`. Developers working in the repository can see at a glance what dependencies are used within the package.
-- **Enhanced flexibility**: In a monorepo at scale, it can be unrealistic to expect each package to use the same version of an external dependency. When there are many teams working in the same codebase, there will be differing priorities, timelines, and needs due to the realities of [operating at scale](https://vercel.com/blog/how-to-scale-a-large-codebase). By installing dependencies in the package that uses them, you can enable your `ui` team to bump to the latest version of TypeScript, while your `web` team can prioritize shipping new features and bumping TypeScript later. Additionally, if you still want to keep dependency versions in sync, [you can do that, too](/repo/docs/crafting-your-repository/managing-dependencies#keeping-dependencies-on-the-same-version).
+- **Enhanced flexibility**: In a monorepo at scale, it can be unrealistic to expect each package to use the same version of an external dependency. When there are many teams working in the same codebase, there will be differing priorities, timelines, and needs due to the realities of [operating at scale](https://vercel.com/blog/how-to-scale-a-large-codebase). By installing dependencies in the package that uses them, you can enable your `ui` team to bump to the latest version of TypeScript, while your `web` team can prioritize shipping new features and bumping TypeScript later. Additionally, if you still want to keep dependency versions in sync, [you can do that, too](/docs/crafting-your-repository/managing-dependencies#keeping-dependencies-on-the-same-version).
 - **Better caching ability**: If you install too many dependencies in the root of your repository, you'll be changing the workspace root whenever you add, update, or delete a dependency, leading to unnecessary cache misses.
-- **Pruning unused dependencies**: For Docker users, [Turborepo's pruning feature](/repo/docs/reference/prune) can remove unused dependencies from Docker images to create lighter images. When dependencies are installed in the packages that they are meant for, Turborepo can read your lockfile and remove dependencies that aren't used in the packages you need.
+- **Pruning unused dependencies**: For Docker users, [Turborepo's pruning feature](/docs/reference/prune) can remove unused dependencies from Docker images to create lighter images. When dependencies are installed in the packages that they are meant for, Turborepo can read your lockfile and remove dependencies that aren't used in the packages you need.
 
 ### Few dependencies in the root
 
@@ -194,4 +194,4 @@ Your IDE's refactoring tooling can find and replace the version of a dependency 
 
 ## Next steps
 
-Now that you know how to manage dependencies effectively in a workspace, let's [create an Internal Package](/repo/docs/crafting-your-repository/creating-an-internal-package) to be used as a dependency in your monorepo.
+Now that you know how to manage dependencies effectively in a workspace, let's [create an Internal Package](/docs/crafting-your-repository/creating-an-internal-package) to be used as a dependency in your monorepo.

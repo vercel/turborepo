@@ -18,10 +18,10 @@ turbo run [tasks] [options] [-- [args passed to tasks]]
 <Callout type="good-to-know">
   `turbo run` is aliased to `turbo`. `turbo run build lint check-types` is the
   same as `turbo build lint check-types`. We recommend [using `turbo run` in CI
-  pipelines](/repo/docs/crafting-your-repository/constructing-ci#use-turbo-run-in-ci)
+  pipelines](/docs/crafting-your-repository/constructing-ci#use-turbo-run-in-ci)
   and `turbo` with [global `turbo`
-  locally](/repo/docs/getting-started/installation#global-installation) for ease
-  of use.
+  locally](/docs/getting-started/installation#global-installation) for ease of
+  use.
 </Callout>
 
 If no tasks are provided, `turbo` will display what tasks are available for the packages in the repository.
@@ -51,7 +51,7 @@ For example, setting up Git to check out with `--filter=blob:none --depth=0` wil
 
 </Callout>
 
-You can override the default base and head with their respective [System Environment Variables](/repo/docs/reference/system-environment-variables).
+You can override the default base and head with their respective [System Environment Variables](/docs/reference/system-environment-variables).
 
 ```bash title="Terminal"
 # Override Git comparison base
@@ -153,15 +153,15 @@ turbo run build --cwd=./somewhere/else/in/your/repo
 
 ### `--dangerously-disable-package-manager-check`
 
-Turborepo uses your repository's lockfile to determine caching behavior, [Package Graphs](https://turbo.build/repo/docs/core-concepts/internal-packages), and more. Because of this, we use [the `packageManager` field](https://nodejs.org/api/packages.html#packagemanager) to help you stabilize your Turborepo.
+Turborepo uses your repository's lockfile to determine caching behavior, [Package Graphs](https://turbo.build/docs/core-concepts/internal-packages), and more. Because of this, we use [the `packageManager` field](https://nodejs.org/api/packages.html#packagemanager) to help you stabilize your Turborepo.
 
 To help with incremental migration or in situations where you cannot use the `packageManager` field, you may use `--dangerously-disable-package-manager-check` to opt out of this check and assume the risks of unstable lockfiles producing unpredictable behavior. When disabled, Turborepo will attempt a best-effort discovery of the intended package manager meant for the repository.
 
 <Callout type="info">
   You may also opt out of this check using [configuration in
-  `turbo.json`](/repo/docs/reference/configuration#dangerouslydisablepacakgemanagercheck)
+  `turbo.json`](/docs/reference/configuration#dangerouslydisablepacakgemanagercheck)
   or the
-  [`TURBO_DANGEROUSLY_DISABLE_PACKAGE_MANAGER_CHECK`](/repo/docs/reference/system-environment-variables)
+  [`TURBO_DANGEROUSLY_DISABLE_PACKAGE_MANAGER_CHECK`](/docs/reference/system-environment-variables)
   environment variable for broader coverage.
 </Callout>
 
@@ -213,10 +213,10 @@ The same behavior can also be set via the `TURBO_ENV_MODE=strict` system variabl
 Only environment variables specified in the following keys are
 available to the task:
 
-- [`env`](/repo/docs/reference/configuration#env)
-- [`passThroughEnv`](/repo/docs/reference/configuration#passthroughenv)
-- [`globalEnv`](/repo/docs/reference/configuration#globalenv)
-- [`globalPassThroughEnv`](/repo/docs/reference/configuration#globalpassthroughenv)
+- [`env`](/docs/reference/configuration#env)
+- [`passThroughEnv`](/docs/reference/configuration#passthroughenv)
+- [`globalEnv`](/docs/reference/configuration#globalenv)
+- [`globalPassThroughEnv`](/docs/reference/configuration#globalpassthroughenv)
 
 If Strict Mode is specified or inferred, **all** tasks are run in `strict` mode,
 regardless of their configuration.
@@ -249,11 +249,11 @@ Filters can be combined to create combinations of packages, directories, and git
 #### Microsyntaxes for filtering
 
 - `!`: Negate targets from the selection.
-- `...` using packages: Select all packages in the [Package Graph](/repo/docs/core-concepts/package-and-task-graph#package-graph) relative to the target. Using `...` **before** the package name will select **dependents** of the target while using `...` **after** the package name will select **dependencies** of the target.
+- `...` using packages: Select all packages in the [Package Graph](/docs/core-concepts/package-and-task-graph#package-graph) relative to the target. Using `...` **before** the package name will select **dependents** of the target while using `...` **after** the package name will select **dependencies** of the target.
 - `...` using Git commits: Select a range using `[<from commit>]...[<to commit>]`.
 - `^`: Omit the target from the selection when using `...`.
 
-For in-depth discussion and practical use cases of filtering, visit [the Running Tasks page](/repo/docs/crafting-your-repository/running-tasks).
+For in-depth discussion and practical use cases of filtering, visit [the Running Tasks page](/docs/crafting-your-repository/running-tasks).
 
 #### Using a task identifier
 
@@ -311,15 +311,15 @@ Ignore existing cached artifacts and re-execute all tasks.
 turbo run build --force
 ```
 
-The same behavior can also be set via [the `TURBO_FORCE` environment variable](/repo/docs/reference/system-environment-variables).
+The same behavior can also be set via [the `TURBO_FORCE` environment variable](/docs/reference/system-environment-variables).
 
 ### `--framework-inference`
 
 Default: `true`
 
-Specify whether or not to do [Framework Inference](/repo/docs/crafting-your-repository/using-environment-variables#framework-inference) for tasks.
+Specify whether or not to do [Framework Inference](/docs/crafting-your-repository/using-environment-variables#framework-inference) for tasks.
 
-When `false`, [automatic environment variable inclusion](/repo/docs/crafting-your-repository/using-environment-variables#framework-inference) is disabled.
+When `false`, [automatic environment variable inclusion](/docs/crafting-your-repository/using-environment-variables#framework-inference) is disabled.
 
 ```bash title="Terminal"
 turbo run build --framework-inference=false
@@ -336,8 +336,8 @@ turbo run build --global-deps=".env.*" --global-deps=".eslintrc" --global-deps="
 
 <Callout type="info">
   We recommend specifying file globs that you'd like to include your hashes in
-  [the `globalDependencies` key](/repo/docs/reference/configuration#globaldeps)
-  in `turbo.json` to make sure they are always accounted for.
+  [the `globalDependencies` key](/docs/reference/configuration#globaldeps) in
+  `turbo.json` to make sure they are always accounted for.
 </Callout>
 
 ### `--graph <file type>`
@@ -366,7 +366,7 @@ Default: `auto`
 
 Set the ordering for log output.
 
-By default, `turbo` will use `grouped` logs in CI environments and `stream` logs everywhere else. This flag is not applicable when using [the terminal UI](https://turbo.build/repo/docs/reference/configuration#ui).
+By default, `turbo` will use `grouped` logs in CI environments and `stream` logs everywhere else. This flag is not applicable when using [the terminal UI](https://turbo.build/docs/reference/configuration#ui).
 
 ```bash title="Terminal"
 turbo run build --log-order=stream
@@ -413,7 +413,7 @@ turbo run dev --no-cache
 
 `turbo` can run a background process to pre-calculate values used for determining work that needs to be done. This standalone process (daemon) is an optimization, and not required for proper functioning of `turbo`.
 
-The default daemon usage is set for your repository using [the `daemon` field in `turbo.json`](/repo/docs/reference/configuration#daemon). Passing `--daemon` requires `turbo` to use the standalone process, while `--no-daemon` instructs `turbo` to avoid using or creating the standalone process.
+The default daemon usage is set for your repository using [the `daemon` field in `turbo.json`](/docs/reference/configuration#daemon). Passing `--daemon` requires `turbo` to use the standalone process, while `--no-daemon` instructs `turbo` to avoid using or creating the standalone process.
 
 The same behavior can also be set via the `TURBO_DAEMON=true` system variable.
 
@@ -421,7 +421,7 @@ The same behavior can also be set via the `TURBO_DAEMON=true` system variable.
 
 Default: `full`
 
-Set type of output logging, overriding [`outputLogs`](/repo/docs/reference/configuration#outputlogs) if it's defined in `turbo.json`.
+Set type of output logging, overriding [`outputLogs`](/docs/reference/configuration#outputlogs) if it's defined in `turbo.json`.
 
 ```bash title="Terminal"
 turbo run build --output-logs=errors-only
@@ -481,8 +481,7 @@ turbo run dev --parallel
 <Callout type="info">
   The `--parallel` flag is typically used for long-running "dev" or "watch"
   tasks that don't exit. Starting in `turbo@1.7`, we recommend configuring these
-  tasks using [`persistent`](/repo/docs/reference/configuration#persistent)
-  instead.
+  tasks using [`persistent`](/docs/reference/configuration#persistent) instead.
 </Callout>
 
 ### `--preflight`
@@ -565,7 +564,7 @@ A bearer token for Remote Caching. Useful for running in non-interactive shells 
 turbo run build --team=my-team --token=xxxxxxxxxxxxxxxxx
 ```
 
-This value can also be set using [the `TURBO_TOKEN` system variable](/repo/docs/reference/system-environment-variables). If both are present, the flag value will override the system variable.
+This value can also be set using [the `TURBO_TOKEN` system variable](/docs/reference/system-environment-variables). If both are present, the flag value will override the system variable.
 
 <Callout type="good-to-know">
   If you are using [Vercel Remote
@@ -583,7 +582,7 @@ turbo run build --team=my-team
 turbo run build --team=my-team --token=xxxxxxxxxxxxxxxxx
 ```
 
-This value can also be set using [the `TURBO_TEAM` system variable](/repo/docs/reference/system-environment-variables). If both are present, the flag value will override the system variable.
+This value can also be set using [the `TURBO_TEAM` system variable](/docs/reference/system-environment-variables). If both are present, the flag value will override the system variable.
 
 ### `--ui`
 

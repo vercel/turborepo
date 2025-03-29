@@ -21,7 +21,7 @@ export interface BaseSchema {
    * these conventions to schedule, execute, and cache the outputs of tasks in
    * your project.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#tasks
+   * Documentation: https://turbo.build/docs/reference/configuration#tasks
    *
    * @defaultValue `{}`
    */
@@ -78,7 +78,7 @@ export interface RootSchema extends BaseSchema {
    * that are not represented in the traditional dependency graph
    * (e.g. a root tsconfig.json, jest.config.ts, .eslintrc, etc.)
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#globaldependencies
+   * Documentation: https://turbo.build/docs/reference/configuration#globaldependencies
    *
    * @defaultValue `[]`
    */
@@ -89,7 +89,7 @@ export interface RootSchema extends BaseSchema {
    *
    * The variables included in this list will affect all task hashes.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#globalenv
+   * Documentation: https://turbo.build/docs/reference/configuration#globalenv
    *
    * @defaultValue `[]`
    */
@@ -99,7 +99,7 @@ export interface RootSchema extends BaseSchema {
    * An allowlist of environment variables that should be made to all tasks, but
    * should not contribute to the task's cache key, e.g. `AWS_SECRET_KEY`.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#globalpassthroughenv
+   * Documentation: https://turbo.build/docs/reference/configuration#globalpassthroughenv
    *
    * @defaultValue `null`
    */
@@ -108,7 +108,7 @@ export interface RootSchema extends BaseSchema {
   /**
    * Configuration options that control how turbo interfaces with the remote cache.
    *
-   * Documentation: https://turbo.build/repo/docs/core-concepts/remote-caching
+   * Documentation: https://turbo.build/docs/core-concepts/remote-caching
    *
    * @defaultValue `{}`
    */
@@ -117,7 +117,7 @@ export interface RootSchema extends BaseSchema {
   /**
    * Enable use of the UI for `turbo`.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#ui
+   * Documentation: https://turbo.build/docs/reference/configuration#ui
    *
    * @defaultValue `"stream"`
    */
@@ -138,7 +138,7 @@ export interface RootSchema extends BaseSchema {
   /**
    * Specify the filesystem cache directory.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#cachedir
+   * Documentation: https://turbo.build/docs/reference/configuration#cachedir
    *
    * @defaultValue `".turbo/cache"`
    */
@@ -147,7 +147,7 @@ export interface RootSchema extends BaseSchema {
   /**
    * Turborepo runs a background process to pre-calculate some expensive operations. This standalone process (daemon) is a performance optimization, and not required for proper functioning of `turbo`.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#daemon
+   * Documentation: https://turbo.build/docs/reference/configuration#daemon
    *
    * @defaultValue `false`
    */
@@ -159,7 +159,7 @@ export interface RootSchema extends BaseSchema {
    * - `"strict"`: Filter environment variables to only those that are specified in the `env` and `globalEnv` keys in `turbo.json`.
    * - `"loose"`: Allow all environment variables for the process to be available.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#envmode
+   * Documentation: https://turbo.build/docs/reference/configuration#envmode
    *
    * @defaultValue `"strict"`
    */
@@ -184,7 +184,7 @@ export interface Pipeline {
    * same package (e.g. "A package's test and lint commands depend on its own build being
    * completed first.")
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#dependson
+   * Documentation: https://turbo.build/docs/reference/configuration#dependson
    *
    * @defaultValue `[]`
    */
@@ -198,7 +198,7 @@ export interface Pipeline {
    * You no longer need to use the $ prefix.
    * (e.g. $GITHUB_TOKEN → GITHUB_TOKEN)
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#env
+   * Documentation: https://turbo.build/docs/reference/configuration#env
    *
    * @defaultValue `[]`
    */
@@ -209,7 +209,7 @@ export interface Pipeline {
    * task's environment, but should not contribute to the task's cache key,
    * e.g. `AWS_SECRET_KEY`.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#passthroughenv
+   * Documentation: https://turbo.build/docs/reference/configuration#passthroughenv
    *
    * @defaultValue `null`
    */
@@ -222,7 +222,7 @@ export interface Pipeline {
    * produce no artifacts other than logs (such as linters). Logs are always treated as a
    * cacheable artifact and never need to be specified.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#outputs
+   * Documentation: https://turbo.build/docs/reference/configuration#outputs
    *
    * @defaultValue `[]`
    */
@@ -233,7 +233,7 @@ export interface Pipeline {
    *
    * Setting cache to false is useful for long-running "watch" or development mode tasks.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#cache
+   * Documentation: https://turbo.build/docs/reference/configuration#cache
    *
    * @defaultValue `true`
    */
@@ -250,7 +250,7 @@ export interface Pipeline {
    *
    * If omitted or empty, all files in the package are considered as inputs.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#inputs
+   * Documentation: https://turbo.build/docs/reference/configuration#inputs
    *
    * @defaultValue `[]`
    */
@@ -269,7 +269,7 @@ export interface Pipeline {
    *
    * "none": Hides all task output
    *
-   * Documentation: https://turbo.build/repo/docs/reference/run#--output-logs-option
+   * Documentation: https://turbo.build/docs/reference/run#--output-logs-option
    *
    * @defaultValue `"full"`
    */
@@ -280,7 +280,7 @@ export interface Pipeline {
    * turbo that this is a long-running task and will ensure that other tasks
    * cannot depend on it.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#persistent
+   * Documentation: https://turbo.build/docs/reference/configuration#persistent
    *
    * @defaultValue `false`
    */
@@ -291,7 +291,7 @@ export interface Pipeline {
    * Interactive tasks must be marked with "cache": false as the input
    * they receive from stdin can change the outcome of the task.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#interactive
+   * Documentation: https://turbo.build/docs/reference/configuration#interactive
    *
    * @defaultValue `false`
    */
@@ -304,7 +304,7 @@ export interface Pipeline {
    * not be restarted by default. To enable restarting persistent tasks, set
    * `interruptible` to true.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#interruptible
+   * Documentation: https://turbo.build/docs/reference/configuration#interruptible
    *
    * @defaultValue `false`
    */
@@ -315,7 +315,7 @@ export interface Pipeline {
    *
    * Tasks in this list will not be run until completion before this task starts execution.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#with
+   * Documentation: https://turbo.build/docs/reference/configuration#with
    *
    * @defaultValue `[]`
    */
@@ -337,7 +337,7 @@ export interface RemoteCache {
    * Indicates if the remote cache is enabled. When `false`, Turborepo will disable
    * all remote cache operations, even if the repo has a valid token. If true, remote caching
    * is enabled, but still requires the user to login and link their repo to a remote cache.
-   * Documentation: https://turbo.build/repo/docs/core-concepts/remote-caching
+   * Documentation: https://turbo.build/docs/core-concepts/remote-caching
    *
    * @defaultValue `true`
    */
@@ -354,14 +354,14 @@ export interface RemoteCache {
   preflight?: boolean;
   /**
    * Set endpoint for API calls to the remote cache.
-   * Documentation: https://turbo.build/repo/docs/core-concepts/remote-caching#self-hosting
+   * Documentation: https://turbo.build/docs/core-concepts/remote-caching#self-hosting
    *
    * @defaultValue `"https://vercel.com/api"`
    */
   apiUrl?: string;
   /**
    * Set endpoint for requesting tokens during `turbo login`.
-   * Documentation: https://turbo.build/repo/docs/core-concepts/remote-caching#self-hosting
+   * Documentation: https://turbo.build/docs/core-concepts/remote-caching#self-hosting
    *
    * @defaultValue `"https://vercel.com"`
    */

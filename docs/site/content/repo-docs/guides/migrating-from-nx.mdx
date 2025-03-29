@@ -16,7 +16,7 @@ There are many reasons why you may be choosing to migrate from Nx to Turborepo. 
 
 ### Using ecosystem standards
 
-Turborepo's goal is to be lightweight, leaning on your repository as the source of truth. An example of this is Turborepo being [built on top of JavaScript package manager workspaces](/repo/docs/crafting-your-repository/structuring-a-repository) for it's JavaScript/TypeScript support.
+Turborepo's goal is to be lightweight, leaning on your repository as the source of truth. An example of this is Turborepo being [built on top of JavaScript package manager workspaces](/docs/crafting-your-repository/structuring-a-repository) for it's JavaScript/TypeScript support.
 
 By contrast, Nx uses layers of plugins, dependencies, and other Nx-specific code to infer information about your repository. While these plugins can provide a layer of functionality and are optional, Nx users looking to migrate often cite removing Nx-specific code from their codebase as a key motivation for their change.
 
@@ -143,9 +143,9 @@ Migrating to Turborepo will likely require deleting previous configuration that 
 
 ### Free Remote Caching
 
-Turborepo’s [Remote Caching](/repo/docs/core-concepts/remote-caching) stores the results of your task on a cloud server. This saves enormous amounts of time by **preventing duplicated work across your entire organization**. [Vercel Remote Cache](https://vercel.com/docs/monorepos/remote-caching) has saved teams over 500 years of compute so far.
+Turborepo’s [Remote Caching](/docs/core-concepts/remote-caching) stores the results of your task on a cloud server. This saves enormous amounts of time by **preventing duplicated work across your entire organization**. [Vercel Remote Cache](https://vercel.com/docs/monorepos/remote-caching) has saved teams over 500 years of compute so far.
 
-Since Nx 19.7, similar functionality is a paid-for feature, even when self-hosting. Remote Caching with Turborepo is free when [self-hosting](/repo/docs/core-concepts/remote-caching#self-hosting) or using [Vercel Remote Cache](https://vercel.com/docs/monorepos/remote-caching).
+Since Nx 19.7, similar functionality is a paid-for feature, even when self-hosting. Remote Caching with Turborepo is free when [self-hosting](/docs/core-concepts/remote-caching#self-hosting) or using [Vercel Remote Cache](https://vercel.com/docs/monorepos/remote-caching).
 
 ## Migration steps
 
@@ -437,9 +437,9 @@ We encourage incremental migration, meaning you will have both of Nx and Turbore
 
 ### Installing dependencies where they're used
 
-Turborepo recommends [installing packages where they're used](/repo/docs/crafting-your-repository/managing-dependencies#best-practices-for-dependency-installation) to improve cache hit ratios, help dependency pruning capability, and clarify for developers which dependencies are meant for which packages. This is different from the Nx strategy, where all dependencies are installed at the root of the repository, making all dependencies available to all packages in the workspace.
+Turborepo recommends [installing packages where they're used](/docs/crafting-your-repository/managing-dependencies#best-practices-for-dependency-installation) to improve cache hit ratios, help dependency pruning capability, and clarify for developers which dependencies are meant for which packages. This is different from the Nx strategy, where all dependencies are installed at the root of the repository, making all dependencies available to all packages in the workspace.
 
-Historically, Nx has recommended installing all dependencies in the root of the repository, making all dependencies available to all packages in the Workspace. If you followed this guidance, we highly recommend that you move dependencies to the `package.json`'s for packages and applications that need them. [Visit our documentation on managing dependencies](/repo/docs/crafting-your-repository/managing-dependencies) to learn more.
+Historically, Nx has recommended installing all dependencies in the root of the repository, making all dependencies available to all packages in the Workspace. If you followed this guidance, we highly recommend that you move dependencies to the `package.json`'s for packages and applications that need them. [Visit our documentation on managing dependencies](/docs/crafting-your-repository/managing-dependencies) to learn more.
 
 ### Creating shared packages
 
@@ -451,7 +451,7 @@ You’ll follow roughly the same set of steps as above to add a package to your 
 
 ### Multi-language monorepos
 
-Turborepo natively supports JavaScript and TypeScript, with secondary support for any other languages you’d like to use. [Visit the Multi-Language support documentation](/repo/docs/guides/multi-language) to learn more.
+Turborepo natively supports JavaScript and TypeScript, with secondary support for any other languages you’d like to use. [Visit the Multi-Language support documentation](/docs/guides/multi-language) to learn more.
 
 ## Configuration equivalents
 
@@ -459,40 +459,40 @@ Configuration found in `nx.json` can be mapped to `turbo.json` using the tables 
 
 <Callout type="info">
   The majorify of globs for capturing files are the same between Nx and
-  Turborepo. See [our file glob specification](/repo/docs/reference/globs) for
+  Turborepo. See [our file glob specification](/docs/reference/globs) for
   details and edge cases.
 </Callout>
 
 ### Global configuration
 
-| Nx                         | Turborepo                                                                     |
-| -------------------------- | ----------------------------------------------------------------------------- |
-| `sharedGlobals`            | [`globalDependencies`](/repo/docs/reference/configuration#globaldependencies) |
-| `sharedGlobals.env`        | [`globalEnv`](/repo/docs/reference/configuration#globalenv)                   |
-| `sharedGlobals.namedInput` | [`globalDependencies`](/repo/docs/reference/configuration#globaldependencies) |
-| `cacheDirectory`           | [`cacheDir`](/repo/docs/reference/configuration#cachedir)                     |
+| Nx                         | Turborepo                                                                |
+| -------------------------- | ------------------------------------------------------------------------ |
+| `sharedGlobals`            | [`globalDependencies`](/docs/reference/configuration#globaldependencies) |
+| `sharedGlobals.env`        | [`globalEnv`](/docs/reference/configuration#globalenv)                   |
+| `sharedGlobals.namedInput` | [`globalDependencies`](/docs/reference/configuration#globaldependencies) |
+| `cacheDirectory`           | [`cacheDir`](/docs/reference/configuration#cachedir)                     |
 
 ### Task configuration
 
-| Nx              | Turborepo                                                           |
-| --------------- | ------------------------------------------------------------------- |
-| `inputs` files  | [`tasks[task].inputs`](/repo/docs/reference/configuration#inputs)   |
-| `inputs.env`    | [`tasks[task].env`](/repo/docs/reference/configuration#env)         |
-| `outputs` files | [`tasks[task].outputs`](/repo/docs/reference/configuration#outputs) |
-| `cache`         | [`tasks[task].cache`](/repo/docs/reference/configuration#cache)     |
+| Nx              | Turborepo                                                      |
+| --------------- | -------------------------------------------------------------- |
+| `inputs` files  | [`tasks[task].inputs`](/docs/reference/configuration#inputs)   |
+| `inputs.env`    | [`tasks[task].env`](/docs/reference/configuration#env)         |
+| `outputs` files | [`tasks[task].outputs`](/docs/reference/configuration#outputs) |
+| `cache`         | [`tasks[task].cache`](/docs/reference/configuration#cache)     |
 
 ### CLI equivalents
 
-| Nx               | Turborepo                                                                    |
-| ---------------- | ---------------------------------------------------------------------------- |
-| `nx generate`    | [`turbo generate`](/repo/docs/reference/generate)                            |
-| `nx run`         | [`turbo run`](/repo/docs/reference/run)                                      |
-| `nx run-many`    | [`turbo run`](/repo/docs/reference/run)                                      |
-| `nx reset`       | [`--force`](/repo/docs/reference/run#--force)                                |
-| `--parallel`     | [`--concurrency`](/repo/docs/reference/run#--concurrency-number--percentage) |
-| `--nxBail`       | [`--continue`](/repo/docs/reference/run#--continueoption)                    |
-| `--projects`     | [`--filter`](/repo/docs/reference/run#--filter-string)                       |
-| `--graph`        | [`--graph`](/repo/docs/reference/run#--graph-file-type)                      |
-| `--output-style` | [`--log-order`](/repo/docs/reference/run#--log-order-option)                 |
-| `--no-cloud`     | [`--cache`](/repo/docs/reference/run#--cache-options)                        |
-| `--verbose`      | [`--verbosity`](/repo/docs/reference/run#--verbosity)                        |
+| Nx               | Turborepo                                                               |
+| ---------------- | ----------------------------------------------------------------------- |
+| `nx generate`    | [`turbo generate`](/docs/reference/generate)                            |
+| `nx run`         | [`turbo run`](/docs/reference/run)                                      |
+| `nx run-many`    | [`turbo run`](/docs/reference/run)                                      |
+| `nx reset`       | [`--force`](/docs/reference/run#--force)                                |
+| `--parallel`     | [`--concurrency`](/docs/reference/run#--concurrency-number--percentage) |
+| `--nxBail`       | [`--continue`](/docs/reference/run#--continueoption)                    |
+| `--projects`     | [`--filter`](/docs/reference/run#--filter-string)                       |
+| `--graph`        | [`--graph`](/docs/reference/run#--graph-file-type)                      |
+| `--output-style` | [`--log-order`](/docs/reference/run#--log-order-option)                 |
+| `--no-cloud`     | [`--cache`](/docs/reference/run#--cache-options)                        |
+| `--verbose`      | [`--verbosity`](/docs/reference/run#--verbosity)                        |

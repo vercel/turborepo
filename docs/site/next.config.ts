@@ -41,11 +41,6 @@ const config = {
   },
   redirects() {
     return [
-      ...REDIRECTS_FROM_ADDING_PACK.map((route) => ({
-        source: route,
-        destination: `/repo${route}`,
-        permanent: true,
-      })),
       {
         source: "/docs/getting-started",
         destination: "/repo/docs",
@@ -179,6 +174,11 @@ const config = {
       {
         source: "/repo/docs/openapi/artifacts",
         destination: "/repo/docs/openapi/artifacts/artifact-exists",
+        permanent: false,
+      },
+      {
+        source: "/repo/docs/:slug*",
+        destination: "/docs/:slug*",
         permanent: false,
       },
     ];

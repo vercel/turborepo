@@ -20,7 +20,7 @@ In this guide, we'll walk through setting up a multi-package workspace (monorepo
 
 ## Getting started
 
-Setting up a workspace's structure can be tedious to do by hand. If you're new to monorepos, we recommend [using `create-turbo` to get started](/repo/docs/getting-started/installation) with a valid workspace structure right away.
+Setting up a workspace's structure can be tedious to do by hand. If you're new to monorepos, we recommend [using `create-turbo` to get started](/docs/getting-started/installation) with a valid workspace structure right away.
 
 ```bash title="Terminal"
 npx create-turbo@latest
@@ -30,7 +30,7 @@ You can then review the repository for the characteristics described in this gui
 
 ## Anatomy of a workspace
 
-In JavaScript, a workspace can either be [a single package](/repo/docs/guides/single-package-workspaces) or a collection of packages. In these guides, we'll be focusing on [a multi-package workspace](https://vercel.com/docs/vercel-platform/glossary#monorepo), often called a "monorepo".
+In JavaScript, a workspace can either be [a single package](/docs/guides/single-package-workspaces) or a collection of packages. In these guides, we'll be focusing on [a multi-package workspace](https://vercel.com/docs/vercel-platform/glossary#monorepo), often called a "monorepo".
 
 Below, the structural elements of `create-turbo` that make it a valid workspace are highlighted.
 
@@ -237,11 +237,11 @@ The root `package.json` is the base for your workspace. Below is a common exampl
 
 ### Root `turbo.json`
 
-`turbo.json` is used to configure the behavior of `turbo`. To learn more about how to configure your tasks, visit the [Configuring tasks](/repo/docs/crafting-your-repository/configuring-tasks) page.
+`turbo.json` is used to configure the behavior of `turbo`. To learn more about how to configure your tasks, visit the [Configuring tasks](/docs/crafting-your-repository/configuring-tasks) page.
 
 ### Package manager lockfile
 
-A lockfile is key to reproducible behavior for both your package manager and `turbo`. Additionally, Turborepo uses the lockfile to understand the dependencies between your [Internal Packages](/repo/docs/core-concepts/internal-packages) within your Workspace.
+A lockfile is key to reproducible behavior for both your package manager and `turbo`. Additionally, Turborepo uses the lockfile to understand the dependencies between your [Internal Packages](/docs/core-concepts/internal-packages) within your Workspace.
 
 <Callout type="warn">
   If you do not have a lockfile present when you run `turbo`, you may see
@@ -261,7 +261,7 @@ Additionally, a package has specific entrypoints that other packages in your Wor
 [The `name` field](https://nodejs.org/api/packages.html#name) is used to identify the package. It should be unique within your workspace.
 
 <Callout type="info">
-It's best practice to use a namespace prefix for your [Internal Packages](/repo/docs/core-concepts/internal-packages) to avoid conflicts with other packages on the npm registry. For example, if your organization is named `acme`, you might name your packages `@acme/package-name`.
+It's best practice to use a namespace prefix for your [Internal Packages](/docs/core-concepts/internal-packages) to avoid conflicts with other packages on the npm registry. For example, if your organization is named `acme`, you might name your packages `@acme/package-name`.
 
 We use `@repo` in our docs and examples because it is an unused, unclaimable namespace on the npm registry. You can choose to keep it or use your own prefix.
 
@@ -269,7 +269,7 @@ We use `@repo` in our docs and examples because it is an unused, unclaimable nam
 
 #### `scripts`
 
-The `scripts` field is used to define scripts that can be run in the package's context. Turborepo will use the name of these scripts to identify what scripts to run (if any) in a package. We talk more about these scripts on the [Running Tasks](/repo/docs/crafting-your-repository/running-tasks) page.
+The `scripts` field is used to define scripts that can be run in the package's context. Turborepo will use the name of these scripts to identify what scripts to run (if any) in a package. We talk more about these scripts on the [Running Tasks](/docs/crafting-your-repository/running-tasks) page.
 
 #### `exports`
 
@@ -287,7 +287,7 @@ For example, if you had a `@repo/math` package, you might have the following `ex
 }
 ```
 
-Note that this example uses the [Just-in-Time Package](/repo/docs/core-concepts/internal-packages#just-in-time-packages) pattern for simplicity. It exports TypeScript directly, but you might choose to use the [Compiled Package](/repo/docs/core-concepts/internal-packages#compiled-packages) pattern instead.
+Note that this example uses the [Just-in-Time Package](/docs/core-concepts/internal-packages#just-in-time-packages) pattern for simplicity. It exports TypeScript directly, but you might choose to use the [Compiled Package](/docs/core-concepts/internal-packages#compiled-packages) pattern instead.
 
 <Callout type="info">
   The `exports` field in this example requires modern versions of Node.js and
@@ -310,10 +310,10 @@ Using exports this way provides three major benefits:
 
 #### `imports` (optional)
 
-[The `imports` field](https://nodejs.org/api/packages.html#imports) gives you a way to create subpaths to other modules within your package. You can think of these like "shortcuts" to write simpler import paths that are more resilient to refactors that move files. To learn how, visit [the TypeScript page](/repo/docs/guides/tools/typescript#use-nodejs-subpath-imports-instead-of-typescript-compiler-paths).
+[The `imports` field](https://nodejs.org/api/packages.html#imports) gives you a way to create subpaths to other modules within your package. You can think of these like "shortcuts" to write simpler import paths that are more resilient to refactors that move files. To learn how, visit [the TypeScript page](/docs/guides/tools/typescript#use-nodejs-subpath-imports-instead-of-typescript-compiler-paths).
 
 <Callout type="info">
-You may be more familiar with TypeScript's `compilerOptions#paths` option, which accomplishes a similar goal. As of TypeScript 5.4, TypeScript can infer subpaths from `imports`, making it a better option since you'll be working with Node.js conventions. For more information, visit [our TypeScript guide](/repo/docs/guides/tools/typescript#use-nodejs-subpath-imports-instead-of-typescript-compiler-paths).
+You may be more familiar with TypeScript's `compilerOptions#paths` option, which accomplishes a similar goal. As of TypeScript 5.4, TypeScript can infer subpaths from `imports`, making it a better option since you'll be working with Node.js conventions. For more information, visit [our TypeScript guide](/docs/guides/tools/typescript#use-nodejs-subpath-imports-instead-of-typescript-compiler-paths).
 
 </Callout>
 
@@ -323,9 +323,9 @@ Of course, you'll want some source code in your package. Packages commonly use a
 
 ## Common pitfalls
 
-- If you're using TypeScript, you likely don't need a `tsconfig.json` in the root of your workspace. Packages should independently specify their own configurations, usually building off of a shared `tsconfig.json` from a separate package in the workspace. For more information, visit [the TypeScript guide](/repo/docs/guides/tools/typescript#you-likely-dont-need-a-tsconfigjson-file-in-the-root-of-your-project).
+- If you're using TypeScript, you likely don't need a `tsconfig.json` in the root of your workspace. Packages should independently specify their own configurations, usually building off of a shared `tsconfig.json` from a separate package in the workspace. For more information, visit [the TypeScript guide](/docs/guides/tools/typescript#you-likely-dont-need-a-tsconfigjson-file-in-the-root-of-your-project).
 - You want to avoid accessing files across package boundaries as much as possible. If you ever find yourself writing `../` to get from one package to another, you likely have an opportunity to re-think your approach by installing the package where it's needed and importing it into your code.
 
 ## Next steps
 
-With your Workspace configured, you can now use your package manager to [install dependencies into your packages](/repo/docs/crafting-your-repository/managing-dependencies).
+With your Workspace configured, you can now use your package manager to [install dependencies into your packages](/docs/crafting-your-repository/managing-dependencies).

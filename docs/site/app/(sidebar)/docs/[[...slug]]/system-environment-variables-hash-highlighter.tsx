@@ -10,7 +10,7 @@ export function SystemEnvironmentVariablesHashHighlighter(): JSX.Element {
 
   useEffect(() => {
     const hash = window.location.hash.substring(1);
-    if (path === "/repo/docs/reference/system-environment-variables" && hash) {
+    if (path === "/docs/reference/system-environment-variables" && hash) {
       const element = document.getElementById(hash);
       if (!element) return;
       element.classList.add("focus");

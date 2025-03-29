@@ -15,7 +15,7 @@ Root tasks are the scripts defined in the monorepo's root `package.json`. These 
 }
 ```
 
-This creates a problem when we declare [topological dependencies](/repo/docs/reference/configuration#dependson). Topological
+This creates a problem when we declare [topological dependencies](/docs/reference/configuration#dependson). Topological
 dependencies specify that your package's dependencies should execute their tasks before your package executes its own task.
 
 ```json title="./turbo.json"

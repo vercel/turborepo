@@ -40,7 +40,7 @@ You won't want to commit this file to source control since it's dependent on env
 
 Now, make sure that `turbo` is aware of the file by adding it to task inputs. You can do this two ways:
 
-- **For specific tasks**: Include the file in [the `inputs` array](/repo/docs/reference/configuration#inputs) of the task(s):
+- **For specific tasks**: Include the file in [the `inputs` array](/docs/reference/configuration#inputs) of the task(s):
 
 ```json title="./turbo.json"
 {
@@ -53,7 +53,7 @@ Now, make sure that `turbo` is aware of the file by adding it to task inputs. Yo
 }
 ```
 
-- **For all tasks**: Add the file to [`globalDependencies`](/repo/docs/reference/configuration#globaldependencies)
+- **For all tasks**: Add the file to [`globalDependencies`](/docs/reference/configuration#globaldependencies)
 
 ```json title="./turbo.json"
 {

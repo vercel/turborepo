@@ -17,7 +17,7 @@ export const extraPages = loader({
 });
 
 export const repoDocsPages = loader({
-  baseUrl: "/repo/docs",
+  baseUrl: "/docs",
   source: createMDXSource(repoDocs, repoMeta),
 });
 

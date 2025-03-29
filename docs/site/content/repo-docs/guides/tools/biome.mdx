@@ -12,7 +12,7 @@ import { CreateTurboCallout } from './create-turbo-callout.tsx';
 
 ## Using Biome with Turborepo
 
-Biome is a rare exception to most tools that are used with Turborepo because it is **so extraordinarily fast**. For this reason, we recommend using a [Root Task](/repo/docs/crafting-your-repository/configuring-tasks#registering-root-tasks) rather than creating separate scripts in each of your packages.
+Biome is a rare exception to most tools that are used with Turborepo because it is **so extraordinarily fast**. For this reason, we recommend using a [Root Task](/docs/crafting-your-repository/configuring-tasks#registering-root-tasks) rather than creating separate scripts in each of your packages.
 
 <Callout type="info" title="Caching behavior">
   Using Biome at the root of the project will result in cache misses for all
@@ -37,7 +37,7 @@ First, [follow the installation documentation to set up Biome](https://biomejs.d
 
 ### Create a root task
 
-In practice, Biome is unlikely to be a bottleneck in the iteration speed of your repository. For this reason, we can have less configuration to manage in our repository by using Biome in a [Root Task](/repo/docs/crafting-your-repository/configuring-tasks#registering-root-tasks).
+In practice, Biome is unlikely to be a bottleneck in the iteration speed of your repository. For this reason, we can have less configuration to manage in our repository by using Biome in a [Root Task](/docs/crafting-your-repository/configuring-tasks#registering-root-tasks).
 
 <Callout type="info">
   If you believe Biome may be faster in your repository split up into tasks in
@@ -45,7 +45,7 @@ In practice, Biome is unlikely to be a bottleneck in the iteration speed of your
   best for your use case.
 </Callout>
 
-To create a [Root Task](/repo/docs/crafting-your-repository/configuring-tasks#registering-root-tasks), register the scripts to Turborepo:
+To create a [Root Task](/docs/crafting-your-repository/configuring-tasks#registering-root-tasks), register the scripts to Turborepo:
 
 ```json title="./turbo.json"
 {
