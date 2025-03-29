@@ -563,6 +563,20 @@ impl<W> App<W> {
             term.resize(pane_rows, pane_cols);
         })
     }
+
+    #[tracing::instrument(skip_all)]
+    pub fn jump_to_logs_top(&mut self) -> Result<(), Error> {
+        let task = self.get_full_task_mut()?;
+        task.parser.screen_mut().set_scrollback(usize::MAX);
+        Ok(())
+    }
+
+    #[tracing::instrument(skip_all)]
+    pub fn jump_to_logs_bottom(&mut self) -> Result<(), Error> {
+        let task = self.get_full_task_mut()?;
+        task.parser.screen_mut().set_scrollback(0);
+        Ok(())
+    }
 }
 
 impl<W: Write> App<W> {
@@ -837,6 +851,14 @@ fn update(
         Event::PageDown => {
             app.is_task_selection_pinned = true;
             app.scroll_terminal_output_by_page(Direction::Down)?;
+        }
+        Event::JumpToLogsTop => {
+            app.is_task_selection_pinned = true;
+            app.jump_to_logs_top()?;
+        }
+        Event::JumpToLogsBottom => {
+            app.is_task_selection_pinned = true;
+            app.jump_to_logs_bottom()?;
         }
         Event::EnterInteractive => {
             app.is_task_selection_pinned = true;
