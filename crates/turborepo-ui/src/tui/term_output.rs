@@ -1,4 +1,4 @@
-use std::{io::Write, mem};
+use std::{env, io::Write, mem};
 
 use turborepo_vt100 as vt100;
 
@@ -7,7 +7,15 @@ use super::{
     Error,
 };
 
-const SCROLLBACK_LEN: usize = 1024;
+const SCROLLBACK_LEN: usize = 2048;
+const SCROLLBACK_ENV_VAR: &str = "TURBO_TUI_SCROLLBACK_LENGTH";
+
+fn get_scrollback_len() -> usize {
+    env::var(SCROLLBACK_ENV_VAR)
+        .ok()
+        .and_then(|val| val.parse::<usize>().ok())
+        .unwrap_or(SCROLLBACK_LEN)
+}
 
 pub struct TerminalOutput<W> {
     output: Vec<u8>,
@@ -28,9 +36,10 @@ enum LogBehavior {
 
 impl<W> TerminalOutput<W> {
     pub fn new(rows: u16, cols: u16, stdin: Option<W>) -> Self {
+        let scrollback_len = get_scrollback_len();
         Self {
             output: Vec::new(),
-            parser: vt100::Parser::new(rows, cols, SCROLLBACK_LEN),
+            parser: vt100::Parser::new(rows, cols, scrollback_len),
             stdin,
             status: None,
             output_logs: None,
@@ -58,7 +67,8 @@ impl<W> TerminalOutput<W> {
     pub fn resize(&mut self, rows: u16, cols: u16) {
         if self.parser.screen().size() != (rows, cols) {
             let scrollback = self.parser.screen().scrollback();
-            let mut new_parser = vt100::Parser::new(rows, cols, SCROLLBACK_LEN);
+            let scrollback_len = get_scrollback_len();
+            let mut new_parser = vt100::Parser::new(rows, cols, scrollback_len);
             new_parser.process(&self.output);
             new_parser.screen_mut().set_scrollback(scrollback);
             // Completely swap out the old vterm with a new correctly sized one
