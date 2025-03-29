@@ -105,7 +105,7 @@ mod test {
         let pane = TerminalPane::new(&term, "foo", &LayoutSections::TaskList, true);
         assert_eq!(
             String::from(pane.footer()),
-            "   i - Interact   u/d - Scroll logs"
+            "   i - Interact   u/d - Scroll logs   U/D - Page logs"
         );
     }
 
@@ -113,6 +113,9 @@ mod test {
     fn test_footer_non_interactive() {
         let term: TerminalOutput<Vec<u8>> = TerminalOutput::new(16, 16, None);
         let pane = TerminalPane::new(&term, "foo", &LayoutSections::TaskList, true);
-        assert_eq!(String::from(pane.footer()), "   u/d - Scroll logs");
+        assert_eq!(
+            String::from(pane.footer()),
+            "   u/d - Scroll logs   U/D - Page logs"
+        );
     }
 }
