@@ -67,10 +67,14 @@ impl<W> TerminalOutput<W> {
     }
 
     pub fn scroll(&mut self, direction: Direction) -> Result<(), Error> {
+        self.scroll_by(direction, 1)
+    }
+
+    pub fn scroll_by(&mut self, direction: Direction, magnitude: usize) -> Result<(), Error> {
         let scrollback = self.parser.screen().scrollback();
         let new_scrollback = match direction {
-            Direction::Up => scrollback + 1,
-            Direction::Down => scrollback.saturating_sub(1),
+            Direction::Up => scrollback.saturating_add(magnitude),
+            Direction::Down => scrollback.saturating_sub(magnitude),
         };
         self.parser.screen_mut().set_scrollback(new_scrollback);
         Ok(())

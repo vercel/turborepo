@@ -204,11 +204,8 @@ impl<W> App<W> {
     pub fn scroll_terminal_output_by_page(&mut self, direction: Direction) -> Result<(), Error> {
         let pane_rows = self.size.pane_rows();
         let task = self.get_full_task_mut()?;
-
         // Scroll by the height of the terminal pane
-        for _ in 0..pane_rows {
-            task.scroll(direction.clone())?;
-        }
+        task.scroll_by(direction, usize::from(pane_rows))?;
 
         Ok(())
     }

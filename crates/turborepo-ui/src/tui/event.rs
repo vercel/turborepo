@@ -68,7 +68,7 @@ pub enum Event {
     SearchBackspace,
 }
 
-#[derive(Clone)]
+#[derive(Copy, Clone)]
 pub enum Direction {
     Up,
     Down,
