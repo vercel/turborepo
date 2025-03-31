@@ -1,5 +1,6 @@
 use std::{io::Write, mem};
 
+use turborepo_lib::config::ConfigurationOptions;
 use turborepo_vt100 as vt100;
 
 use super::{
@@ -24,11 +25,16 @@ enum LogBehavior {
     Nothing,
 }
 
+fn get_scrollback_len() -> usize {
+    // Convert from u64 to usize
+    ConfigurationOptions::tui_scrollback_length() as usize
+}
+
 impl<W> TerminalOutput<W> {
     pub fn new(rows: u16, cols: u16, stdin: Option<W>) -> Self {
         Self {
             output: Vec::new(),
-            parser: vt100::Parser::new(rows, cols, scrollback_len),
+            parser: vt100::Parser::new(rows, cols, get_scrollback_len()),
             stdin,
             status: None,
             output_logs: None,
