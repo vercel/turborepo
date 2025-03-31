@@ -5,7 +5,7 @@ import { fetchDistTags } from "../app/api/binaries/version/route";
 // This is an optimization to avoid fetching the latest version of turbo from npm
 // It doesn't strictly need to always be up to date, but it will avoid a network
 // request on page loads that use this component.
-const STATIC_LATEST_RELEASE = "2.4.4";
+const STATIC_LATEST_RELEASE = "2.1.3";
 
 if (!valid(STATIC_LATEST_RELEASE)) {
   throw new Error(`Invalid static version "${STATIC_LATEST_RELEASE}"`);
