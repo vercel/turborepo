@@ -7,7 +7,7 @@ use super::{
     Error,
 };
 
-const SCROLLBACK_LEN: usize = 1024;
+const SCROLLBACK_LEN: usize = 2048;
 
 pub struct TerminalOutput<W> {
     output: Vec<u8>,
