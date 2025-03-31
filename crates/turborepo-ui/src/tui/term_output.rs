@@ -1,6 +1,5 @@
 use std::{io::Write, mem};
 
-use turborepo_lib::config::ConfigurationOptions;
 use turborepo_vt100 as vt100;
 
 use super::{
@@ -16,6 +15,7 @@ pub struct TerminalOutput<W> {
     pub output_logs: Option<OutputLogs>,
     pub task_result: Option<TaskResult>,
     pub cache_result: Option<CacheResult>,
+    pub scrollback_len: u64,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -25,21 +25,17 @@ enum LogBehavior {
     Nothing,
 }
 
-fn get_scrollback_len() -> usize {
-    // Convert from u64 to usize
-    ConfigurationOptions::tui_scrollback_length() as usize
-}
-
 impl<W> TerminalOutput<W> {
-    pub fn new(rows: u16, cols: u16, stdin: Option<W>) -> Self {
+    pub fn new(rows: u16, cols: u16, stdin: Option<W>, scrollback_len: u64) -> Self {
         Self {
             output: Vec::new(),
-            parser: vt100::Parser::new(rows, cols, get_scrollback_len()),
+            parser: vt100::Parser::new(rows, cols, scrollback_len as usize),
             stdin,
             status: None,
             output_logs: None,
             task_result: None,
             cache_result: None,
+            scrollback_len,
         }
     }
 
@@ -62,7 +58,7 @@ impl<W> TerminalOutput<W> {
     pub fn resize(&mut self, rows: u16, cols: u16) {
         if self.parser.screen().size() != (rows, cols) {
             let scrollback = self.parser.screen().scrollback();
-            let scrollback_len = get_scrollback_len();
+            let scrollback_len = self.scrollback_len as usize;
             let mut new_parser = vt100::Parser::new(rows, cols, scrollback_len);
             new_parser.process(&self.output);
             new_parser.screen_mut().set_scrollback(scrollback);

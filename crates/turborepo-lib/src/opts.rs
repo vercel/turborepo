@@ -75,6 +75,7 @@ pub struct Opts {
     pub run_opts: RunOpts,
     pub runcache_opts: RunCacheOpts,
     pub scope_opts: ScopeOpts,
+    pub tui_opts: TuiOpts,
 }
 
 impl Opts {
@@ -177,6 +178,7 @@ impl Opts {
         let runcache_opts = RunCacheOpts::from(inputs);
         let api_client_opts = APIClientOpts::from(inputs);
         let repo_opts = RepoOpts::from(inputs);
+        let tui_opts = TuiOpts::from(inputs);
 
         Ok(Self {
             repo_opts,
@@ -185,6 +187,7 @@ impl Opts {
             scope_opts,
             runcache_opts,
             api_client_opts,
+            tui_opts,
         })
     }
 }
@@ -536,6 +539,19 @@ impl RunOpts {
 impl ScopeOpts {
     pub fn get_filters(&self) -> Vec<String> {
         self.filter_patterns.clone()
+    }
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct TuiOpts {
+    pub(crate) scrollback_length: u64,
+}
+
+impl<'a> From<OptsInputs<'a>> for TuiOpts {
+    fn from(inputs: OptsInputs) -> Self {
+        TuiOpts {
+            scrollback_length: inputs.config.tui_scrollback_length(),
+        }
     }
 }
 

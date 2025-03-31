@@ -59,10 +59,17 @@ pub struct App<W> {
     showing_help_popup: bool,
     done: bool,
     preferences: PreferenceLoader,
+    scrollback_len: u64,
 }
 
 impl<W> App<W> {
-    pub fn new(rows: u16, cols: u16, tasks: Vec<String>, preferences: PreferenceLoader) -> Self {
+    pub fn new(
+        rows: u16,
+        cols: u16,
+        tasks: Vec<String>,
+        preferences: PreferenceLoader,
+        scrollback_len: u64,
+    ) -> Self {
         debug!("tasks: {tasks:?}");
         let size = SizeInfo::new(rows, cols, tasks.iter().map(|s| s.as_str()));
 
@@ -97,7 +104,7 @@ impl<W> App<W> {
                 .map(|task_name| {
                     (
                         task_name.to_owned(),
-                        TerminalOutput::new(pane_rows, pane_cols, None),
+                        TerminalOutput::new(pane_rows, pane_cols, None, scrollback_len),
                     )
                 })
                 .collect(),
@@ -107,6 +114,7 @@ impl<W> App<W> {
             showing_help_popup: false,
             is_task_selection_pinned: preferences.active_task().is_some(),
             preferences,
+            scrollback_len,
         }
     }
 
@@ -404,7 +412,12 @@ impl<W> App<W> {
         // Make sure all tasks have a terminal output
         for task in &tasks {
             self.tasks.entry(task.clone()).or_insert_with(|| {
-                TerminalOutput::new(self.size.pane_rows(), self.size.pane_cols(), None)
+                TerminalOutput::new(
+                    self.size.pane_rows(),
+                    self.size.pane_cols(),
+                    None,
+                    self.scrollback_len,
+                )
             });
         }
         // Trim the terminal output to only tasks that exist in new list
@@ -440,7 +453,12 @@ impl<W> App<W> {
         // Make sure all tasks have a terminal output
         for task in &tasks {
             self.tasks.entry(task.clone()).or_insert_with(|| {
-                TerminalOutput::new(self.size.pane_rows(), self.size.pane_cols(), None)
+                TerminalOutput::new(
+                    self.size.pane_rows(),
+                    self.size.pane_cols(),
+                    None,
+                    self.scrollback_len,
+                )
             });
         }
 
@@ -604,13 +622,14 @@ pub async fn run_app(
     receiver: AppReceiver,
     color_config: ColorConfig,
     repo_root: &AbsoluteSystemPathBuf,
+    scrollback_len: u64,
 ) -> Result<(), Error> {
     let mut terminal = startup(color_config)?;
     let size = terminal.size()?;
     let preferences = PreferenceLoader::new(repo_root);
 
     let mut app: App<Box<dyn io::Write + Send>> =
-        App::new(size.height, size.width, tasks, preferences);
+        App::new(size.height, size.width, tasks, preferences, scrollback_len);
     let (crossterm_tx, crossterm_rx) = mpsc::channel(1024);
     input::start_crossterm_stream(crossterm_tx);
 
