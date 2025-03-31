@@ -1,0 +1,149 @@
+---
+title: Turborepo 2.5
+date: 2025/3/3
+description: 'Sidecar tasks, `--continue` flexibility, turbo.jsonc, Bun pruning, `$TURBO_ROOT$`, OpenAPI viewer, and more.'
+tag: 'web development'
+ogImage: /images/blog/turbo-2-5/x-card.png
+---
+
+import { Authors } from '#/components/authors';
+import { Date } from '#/components/blog/date';
+
+# Turborepo 2.5
+
+<Date>Thursday, March 3rd, 2025</Date>
+
+<Authors authors={['nicholasyang', 'anthonyshew', 'chrisolszewski']} />
+
+Turborepo 2.5 includes a number of improvements to enhance your repository:
+
+- [**Sidecar tasks**](#sidebar-tasks): Use `with` to ensure persistent tasks always run together
+- [**Flexibility for `--continue`**](#improved-control-for---continue-behavior): Only continue running tasks when dependencies are successful
+- [**`turbo.jsonc`**](#add-comments-to-your-turborepo-configuration-files): Write comments directly in your configuration file
+- [**`prune` for Bun**](#pruned-monorepos-for-bun-repositories): You can now use `turbo prune` in Bun repositories
+- [**`$TURBO_ROOT$`**](#reference-your-workspace-root-with-the-turbo_root-microsyntax): Reference the Workspace root in `turbo.json`
+- [**OpenAPI viewer**](#openapi-specification-viewer-for-self-hosting): Human-readable OpenAPI spec for self-hosted Remote Caches
+
+Upgrade today by running `npx @turbo/codemod migrate` or get started with `npx create-turbo@latest`.
+
+## Sidecar tasks
+
+In some cases, you want to ensure two long-running tasks like development servers are always running at the same time. For example, you may have a web application that makes requests to another application in your monorepo. Running the web application by itself may not be useful, since the API application won’t be available to serve its requests.
+
+You may have tried to use `dependsOn` to create this relationship - but quickly discovered that depending on a long-running task isn’t allowed. A long-running task never exits, so the dependent task would never run. This meant you’d have to carefully create a `--filter` that would include the needed tasks to ensure those resources are available—and make sure everyone in the repo knows to use it.
+
+Instead, we’re introducing the `with` key so you can guarantee that a dependent long-running task always runs _with_ its other long-running tasks.
+
+```json title="apps/web/turbo.json"
+{
+  "tasks": {
+    "dev": {
+      "with": ["api#dev"],
+      "persistent": true,
+      "cache": false
+    }
+  }
+}
+```
+
+With this configuration, any time that the `web` application’s `dev` task is started, the `api`'s `dev` task will also run.
+
+[Visit the documentation](https://turbo.build/repo/docs/reference/configuration#with) to learn more.
+
+## Improved control for `--continue` behavior
+
+By default, Turborepo stops running tasks when it encounters a task that has failed. You can alter this behavior using the `--continue` flag, instructing Turborepo to continue running tasks, even when one or more tasks have failed.
+
+While the `--continue` flag is useful, there are times when running tasks whose dependencies have failed will only result in more failures. For these situations, we’ve added a new value to the `--continue` flag in this release: `--continue=dependencies-successful`.
+
+```bash title="Terminal"
+turbo run test --continue=dependencies-successful
+```
+
+When using this value, all dependencies for a task must be successful for the dependent task to run.
+
+[Learn more in the documentation](https://turbo.build/repo/docs/reference/run#--continueoption).
+
+## Add comments to your Turborepo configuration files
+
+You can now use JSONC (`turbo.jsonc`) for your configuration files, allowing you to add useful comments to your configuration.
+
+```json title="./turbo.json"
+{
+  "tasks": {
+    "test": {
+      // Our tests need their dependencies to be built first
+      "dependsOn": ["^build"]
+    }
+  }
+}
+```
+
+## Pruned monorepos for Bun repositories
+
+`turbo prune` creates a partial monorepo for a target package, and is especially useful for [creating lightweight Docker images from monorepos](https://turbo.build/repo/docs/guides/tools/docker). This command has been available for pnpm, npm, and Yarn repositories in previous versions of Turborepo.
+
+In this release, `turbo prune` is now available for Bun v1.2+, which has introduced a text-based lockfile that we can now read and analyze.
+
+```bash title="Terminal"
+turbo prune web
+```
+
+To learn more about `turbo prune`, [visit the documentation](https://turbo.build/repo/docs/reference/prune).
+
+## Reference your workspace root with the `$TURBO_ROOT$` microsyntax
+
+In some situations, you’re forced to break out of package boundaries in a monorepo. This could be due to a number of constraints, like tooling that doesn’t conform to modern package manager workspaces or incremental migration workflows that take you out of ideal conditions.
+
+In the past, you’d need to write paths in `turbo.json` that traverse to the workspace root, since globs are anchored to the root of packages:
+
+```json title="./turbo.json"
+{
+  "tasks": {
+    "build": {
+      "inputs": ["../../important-file.txt"]
+    }
+  }
+}
+```
+
+While this pattern does work, it can lead to inconsistencies in some cases:
+
+- Some packages may need `../` while others need `../../`
+- A developer could potentially move a package to a different location so that the path isn’t correct
+
+Instead, you can now use the `$TURBO_ROOT$` microsyntax:
+
+```json title="./turbo.json"
+{
+  "tasks": {
+    "build": {
+      "inputs": ["$TURBO_ROOT$/important-file.txt"]
+    }
+  }
+}
+```
+
+Now, this file glob is guaranteed to always start at the root of your workspace.
+
+[Visit the documentation](https://turbo.build/repo/docs/reference/configuration#turbo_root) to learn more.
+
+## OpenAPI specification viewer for self-hosting
+
+Turborepo is proudly open-source with a public specification for its Remote Caching protocol. While [Vercel Remote Cache is a free to use managed option](https://vercel.com/docs/monorepos/remote-caching), the OpenAPI spec allows the community to create implementations for Remote Caching of their own.
+
+We’ve published [the Remote Cache spec as JSON to the web](https://turbo.build/api/remote-cache-spec) for some time, and have recently added a human-friendly version of the spec at [https://turbo.build/repo/docs/openapi](https://turbo.build/repo/docs/openapi).
+
+[Visit the Remote Caching documentation](https://turbo.build/repo/docs/core-concepts/remote-caching#remote-cache-api) to learn more.
+
+## Other changes
+
+TODO
+
+## Acknowledgments and community
+
+Turborepo is the result of the combined work of all of its contributors, including our core team: [Anthony](https://github.com/anthonyshew), [Chris](https://github.com/chris-olszewski), [Dimitri](https://github.com/dimitropoulos), [Nicholas](https://github.com/NicholasLYang), and [Tom](https://github.com/tknickman).
+
+Thank you for your continued support, feedback, and collaboration to make Turborepo your build tool of choice. To learn how to get involved, [visit the Community page](/repo/docs/community).
+
+TODO: Contributor list
