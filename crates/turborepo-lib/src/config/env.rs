@@ -149,15 +149,15 @@ impl ResolvedConfigurationOptions for EnvVars {
             .transpose()
             .map_err(Error::InvalidUploadTimeout)?;
 
-        // Process
         let tui_scrollback_length = self
             .output_map
             .get("tui_scrollback_length")
+            .filter(|s| !s.is_empty())
             .map(|s| s.parse())
             .transpose()
             .map_err(Error::InvalidTuiScrollbackLength)?;
 
-        // Process experimentalUI
+        // Process ui
         let ui =
             self.truthy_value("ui")
                 .flatten()
@@ -279,7 +279,7 @@ mod test {
     use super::*;
     use crate::{
         cli::LogOrder,
-        config::{DEFAULT_API_URL, DEFAULT_LOGIN_URL},
+        config::{DEFAULT_API_URL, DEFAULT_LOGIN_URL, DEFAULT_TUI_SCROLLBACK_LENGTH},
     };
 
     #[test]
@@ -325,6 +325,7 @@ mod test {
         env.insert("turbo_run_summary".into(), "true".into());
         env.insert("turbo_allow_no_turbo_json".into(), "true".into());
         env.insert("turbo_remote_cache_upload_timeout".into(), "200".into());
+        env.insert("turbo_tui_scrollback_length".into(), "2048".into());
 
         let config = EnvVars::new(&env)
             .unwrap()
@@ -376,6 +377,7 @@ mod test {
         env.insert("turbo_remote_cache_read_only".into(), "".into());
         env.insert("turbo_run_summary".into(), "".into());
         env.insert("turbo_allow_no_turbo_json".into(), "".into());
+        env.insert("turbo_tui_scrollback_length".into(), "".into());
 
         let config = EnvVars::new(&env)
             .unwrap()
@@ -399,5 +401,9 @@ mod test {
         assert!(!config.remote_cache_read_only());
         assert!(!config.run_summary());
         assert!(!config.allow_no_turbo_json());
+        assert_eq!(
+            config.tui_scrollback_length(),
+            DEFAULT_TUI_SCROLLBACK_LENGTH
+        );
     }
 }

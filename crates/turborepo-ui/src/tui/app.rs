@@ -953,6 +953,7 @@ mod test {
             100,
             vec!["foo".to_string(), "bar".to_string(), "baz".to_string()],
             PreferenceLoader::new(&repo_root),
+            2048,
         );
         assert_eq!(
             app.task_list_scroll.selected(),
@@ -1000,6 +1001,7 @@ mod test {
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
             PreferenceLoader::new(&repo_root),
+            2048,
         );
         app.next();
         assert_eq!(app.task_list_scroll.selected(), Some(1), "selected b");
@@ -1027,6 +1029,7 @@ mod test {
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
             PreferenceLoader::new(&repo_root),
+            2048,
         );
         app.next();
         app.next();
@@ -1098,6 +1101,7 @@ mod test {
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
             PreferenceLoader::new(&repo_root),
+            2048,
         );
         app.next();
         app.next();
@@ -1149,6 +1153,7 @@ mod test {
             100,
             vec!["a".to_string(), "b".to_string()],
             PreferenceLoader::new(&repo_root),
+            2048,
         );
         app.next();
         assert_eq!(app.task_list_scroll.selected(), Some(1), "selected b");
@@ -1191,6 +1196,7 @@ mod test {
             100,
             vec!["a".to_string(), "b".to_string()],
             PreferenceLoader::new(&repo_root),
+            2048,
         );
         assert!(!app.is_focusing_pane(), "app starts focused on table");
         app.insert_stdin("a", Some(Vec::new()))?;
@@ -1222,6 +1228,7 @@ mod test {
             100,
             vec!["a".to_string(), "b".to_string()],
             PreferenceLoader::new(&repo_root),
+            2048,
         );
         app.next();
         assert_eq!(app.task_list_scroll.selected(), Some(1), "selected b");
@@ -1248,6 +1255,7 @@ mod test {
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
             PreferenceLoader::new(&repo_root),
+            2048,
         );
         assert_eq!(app.task_list_scroll.selected(), Some(0), "selected a");
         assert_eq!(app.tasks_by_status.task_name(0)?, "a", "selected a");
@@ -1283,6 +1291,7 @@ mod test {
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
             PreferenceLoader::new(&repo_root),
+            2048,
         );
         app.next();
         assert_eq!(app.task_list_scroll.selected(), Some(1), "selected b");
@@ -1319,6 +1328,7 @@ mod test {
             24,
             vec!["a".to_string(), "b".to_string()],
             PreferenceLoader::new(&repo_root),
+            2048,
         );
         let pane_rows = app.size.pane_rows();
         let pane_cols = app.size.pane_cols();
@@ -1359,6 +1369,7 @@ mod test {
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
             PreferenceLoader::new(&repo_root),
+            2048,
         );
         app.next();
         app.update_tasks(Vec::new())?;
@@ -1378,6 +1389,7 @@ mod test {
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
             PreferenceLoader::new(&repo_root),
+            2048,
         );
         app.next();
         app.restart_tasks(vec!["d".to_string()])?;
@@ -1399,6 +1411,7 @@ mod test {
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
             PreferenceLoader::new(&repo_root),
+            2048,
         );
         app.enter_search()?;
         assert!(matches!(app.section_focus, LayoutSections::Search { .. }));
@@ -1425,6 +1438,7 @@ mod test {
             100,
             vec!["a".to_string(), "ab".to_string(), "abc".to_string()],
             PreferenceLoader::new(&repo_root),
+            2048,
         );
         app.enter_search()?;
         app.search_enter_char('a')?;
@@ -1453,6 +1467,7 @@ mod test {
             100,
             vec!["a".to_string(), "ab".to_string(), "abc".to_string()],
             PreferenceLoader::new(&repo_root),
+            2048,
         );
         app.enter_search()?;
         app.search_enter_char('b')?;
@@ -1485,6 +1500,7 @@ mod test {
             100,
             vec!["a".to_string(), "abc".to_string(), "b".to_string()],
             PreferenceLoader::new(&repo_root),
+            2048,
         );
         app.next();
         assert_eq!(app.active_task()?, "abc");
@@ -1509,6 +1525,7 @@ mod test {
             100,
             vec!["a".to_string(), "abc".to_string(), "b".to_string()],
             PreferenceLoader::new(&repo_root),
+            2048,
         );
         app.next();
         assert_eq!(app.active_task()?, "abc");
@@ -1533,6 +1550,7 @@ mod test {
             100,
             vec!["a".to_string(), "ab".to_string(), "abc".to_string()],
             PreferenceLoader::new(&repo_root),
+            2048,
         );
         app.enter_search()?;
         app.search_enter_char('b')?;
@@ -1554,6 +1572,7 @@ mod test {
             100,
             vec!["a".to_string(), "ab".to_string(), "abc".to_string()],
             PreferenceLoader::new(&repo_root),
+            2048,
         );
         app.enter_search()?;
         app.search_enter_char('b')?;

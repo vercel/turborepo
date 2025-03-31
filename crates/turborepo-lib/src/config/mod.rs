@@ -354,7 +354,8 @@ impl ConfigurationOptions {
     }
 
     pub fn tui_scrollback_length(&self) -> u64 {
-        self.upload_timeout.unwrap_or(DEFAULT_TUI_SCROLLBACK_LENGTH)
+        self.tui_scrollback_length
+            .unwrap_or(DEFAULT_TUI_SCROLLBACK_LENGTH)
     }
 
     pub fn ui(&self) -> UIMode {

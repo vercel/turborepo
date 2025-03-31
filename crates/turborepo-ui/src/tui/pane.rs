@@ -100,7 +100,7 @@ mod test {
 
     #[test]
     fn test_footer_interactive() {
-        let term: TerminalOutput<Vec<u8>> = TerminalOutput::new(16, 16, Some(Vec::new()));
+        let term: TerminalOutput<Vec<u8>> = TerminalOutput::new(16, 16, Some(Vec::new()), 2048);
         let pane = TerminalPane::new(&term, "foo", &LayoutSections::TaskList, true);
         assert_eq!(
             String::from(pane.footer()),
@@ -110,7 +110,7 @@ mod test {
 
     #[test]
     fn test_footer_non_interactive() {
-        let term: TerminalOutput<Vec<u8>> = TerminalOutput::new(16, 16, None);
+        let term: TerminalOutput<Vec<u8>> = TerminalOutput::new(16, 16, None, 2048);
         let pane = TerminalPane::new(&term, "foo", &LayoutSections::TaskList, true);
         assert_eq!(String::from(pane.footer()), "   u/d - Scroll logs");
     }

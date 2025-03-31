@@ -571,7 +571,7 @@ mod test {
         cli::{Command, ContinueMode, DryRunMode, RunArgs},
         commands::CommandBase,
         config::ConfigurationOptions,
-        opts::{Opts, RunCacheOpts, ScopeOpts},
+        opts::{Opts, RunCacheOpts, ScopeOpts, TuiOpts},
         run::task_id::TaskId,
         turbo_json::{UIMode, CONFIG_FILE},
         Args,
@@ -718,6 +718,10 @@ mod test {
             .root_turbo_json_path(&AbsoluteSystemPathBuf::default())
             .unwrap_or_else(|_| AbsoluteSystemPathBuf::default().join_component(CONFIG_FILE));
 
+        let tui_opts = TuiOpts {
+            scrollback_length: 2048,
+        };
+
         let opts = Opts {
             repo_opts: RepoOpts {
                 root_turbo_json_path,
@@ -738,6 +742,7 @@ mod test {
             run_opts,
             cache_opts,
             runcache_opts,
+            tui_opts,
         };
         let synthesized = opts.synthesize_command();
         assert_eq!(synthesized, expected);
