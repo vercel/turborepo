@@ -42,6 +42,7 @@ const TURBO_MAPPING: &[(&str, &str)] = [
     ("turbo_run_summary", "run_summary"),
     ("turbo_allow_no_turbo_json", "allow_no_turbo_json"),
     ("turbo_cache", "cache"),
+    ("turbo_tui_scrollback_length", "tui_scrollback_length"),
 ]
 .as_slice();
 
@@ -148,6 +149,14 @@ impl ResolvedConfigurationOptions for EnvVars {
             .transpose()
             .map_err(Error::InvalidUploadTimeout)?;
 
+        // Process
+        let tui_scrollback_length = self
+            .output_map
+            .get("tui_scrollback_length")
+            .map(|s| s.parse())
+            .transpose()
+            .map_err(Error::InvalidTuiScrollbackLength)?;
+
         // Process experimentalUI
         let ui =
             self.truthy_value("ui")
@@ -218,6 +227,8 @@ impl ResolvedConfigurationOptions for EnvVars {
             // Processed numbers
             timeout,
             upload_timeout,
+            tui_scrollback_length,
+
             env_mode,
             cache_dir,
             root_turbo_json_path,

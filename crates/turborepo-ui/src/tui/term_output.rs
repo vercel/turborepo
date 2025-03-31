@@ -1,4 +1,4 @@
-use std::{env, io::Write, mem};
+use std::{io::Write, mem};
 
 use turborepo_vt100 as vt100;
 
@@ -6,16 +6,6 @@ use super::{
     event::{CacheResult, Direction, OutputLogs, TaskResult},
     Error,
 };
-
-const SCROLLBACK_LEN: usize = 2048;
-const SCROLLBACK_ENV_VAR: &str = "TURBO_TUI_SCROLLBACK_LENGTH";
-
-fn get_scrollback_len() -> usize {
-    env::var(SCROLLBACK_ENV_VAR)
-        .ok()
-        .and_then(|val| val.parse::<usize>().ok())
-        .unwrap_or(SCROLLBACK_LEN)
-}
 
 pub struct TerminalOutput<W> {
     output: Vec<u8>,
@@ -36,7 +26,6 @@ enum LogBehavior {
 
 impl<W> TerminalOutput<W> {
     pub fn new(rows: u16, cols: u16, stdin: Option<W>) -> Self {
-        let scrollback_len = get_scrollback_len();
         Self {
             output: Vec::new(),
             parser: vt100::Parser::new(rows, cols, scrollback_len),
