@@ -23,7 +23,7 @@ const BIND_LIST: &[&str] = [
     "Shift+d - Page logs down",
     "t       - Jump to top of logs",
     "b       - Jump to bottom of logs",
-];
+].as_slice();
 
 pub fn popup_area(area: Rect) -> Rect {
     let screen_width = area.width;
