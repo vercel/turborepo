@@ -8,6 +8,7 @@ ogImage: /images/blog/turbo-2-5/x-card.png
 
 import { Authors } from '#/components/authors';
 import { Date } from '#/components/blog/date';
+import { Accordion, Accordions } from '#/components/accordion';
 
 # Turborepo 2.5
 
@@ -138,7 +139,94 @@ We’ve published [the Remote Cache spec as JSON to the web](/api/remote-cache-s
 
 ## Other changes
 
-TODO
+<Accordions>
+  <Accordion title="Features (9)">
+
+- feat(boundaries): package rules ([#10160](https://github.com/vercel/turborepo/pull/10160))
+- feat(boundaries): package name as tag punning ([#10151](https://github.com/vercel/turborepo/pull/10151))
+- feat(boundaries): implicit dependencies ([#10117](https://github.com/vercel/turborepo/pull/10117))
+- feat(process): distinguish between signals used to kill children ([#10049](https://github.com/vercel/turborepo/pull/10049))
+- feat(boundaries): auto ignore ([#10147](https://github.com/vercel/turborepo/pull/10147))
+- feat(clone): turbo clone ([#9904](https://github.com/vercel/turborepo/pull/9904))
+- feat(boundaries): support tsconfig path aliases ([#10002](https://github.com/vercel/turborepo/pull/10002))
+- feat(query): add schema flag ([#10052](https://github.com/vercel/turborepo/pull/10052))
+- feat(ls): add package path to ls ([#10079](https://github.com/vercel/turborepo/pull/10079))
+
+  </Accordion>
+
+  <Accordion title="Fixes (19)">
+
+- fix(turbo_json): avoid workspace validation errors ([#10211](https://github.com/vercel/turborepo/pull/10211))
+- fix(bun): deserialize correctly and use optionalPeers ([#10219](https://github.com/vercel/turborepo/pull/10219))
+- fix: update env variables supported by nitro ([#10176](https://github.com/vercel/turborepo/pull/10176))
+- fix: mark type of flat config export to satisfy Linter.Config[] ([#10128](https://github.com/vercel/turborepo/pull/10128))
+- fix(eslint): array type lints ([#10139](https://github.com/vercel/turborepo/pull/10139))
+- fix(bun): properly handle bun lockfile keys ([#10137](https://github.com/vercel/turborepo/pull/10137))
+- fix: eslint-config-turbo module export ([#10105](https://github.com/vercel/turborepo/pull/10105))
+- fix: correctly forward passthrough arguments when using pkg#task format ([#10087](https://github.com/vercel/turborepo/pull/10087))
+- fix(boundaries): support import attributes ([#10078](https://github.com/vercel/turborepo/pull/10078))
+- fix(boundaries): unnecessary tsconfig warnings ([#10104](https://github.com/vercel/turborepo/pull/10104))
+- fix(affected): consider turbo.jsonc as a default global dependency ([#10106](https://github.com/vercel/turborepo/pull/10106))
+- fix(prune): support copying turbo.jsonc ([#10107](https://github.com/vercel/turborepo/pull/10107))
+- fix(cli): no longer attempt to parse task name as continue value ([#10097](https://github.com/vercel/turborepo/pull/10097))
+- fix: affected_packages's optimization flow ([#9950](https://github.com/vercel/turborepo/pull/9950))
+- fix(@turbo/repository): revert "chore(deps): update git2 to 0.20.0" ([#10045](https://github.com/vercel/turborepo/pull/10045))
+- fix(process): revert "feat(process): differentiate between child interruption and killing" ([#10046](https://github.com/vercel/turborepo/pull/10046))
+- fix: filter logic ([#9653](https://github.com/vercel/turborepo/pull/9653))
+- fix(packages): no longer match versionless packages ([#10056](https://github.com/vercel/turborepo/pull/10056))
+- fix(engine): no longer error if provided task is omitted by filter ([#10051](https://github.com/vercel/turborepo/pull/10051))
+
+  </Accordion>
+
+  <Accordion title="Documentation (33)">
+
+- docs: layout redesign ([#10178](https://github.com/vercel/turborepo/pull/10178))
+- docs: fix text colors in a few spots ([#10213](https://github.com/vercel/turborepo/pull/10213))
+- docs: remove stale callout ([#10217](https://github.com/vercel/turborepo/pull/10217))
+- docs: links for OpenAPI spec for both human-readable and JSON ([#10216](https://github.com/vercel/turborepo/pull/10216))
+- docs: add a snippet to with ([#10215](https://github.com/vercel/turborepo/pull/10215))
+- docs: mention JSONC support ([#10214](https://github.com/vercel/turborepo/pull/10214))
+- docs: fix the incorrect export keyword ([#10235](https://github.com/vercel/turborepo/pull/10235))
+- docs: add checkout optimization for --affected ([#10188](https://github.com/vercel/turborepo/pull/10188))
+- docs: use schema from current @turbo/types ([#10197](https://github.com/vercel/turborepo/pull/10197))
+- docs: switch turbo run to turbo watch for --experimental-write-cache ([#10199](https://github.com/vercel/turborepo/pull/10199))
+- docs(run): fix passthrough arg behavior ([#10167](https://github.com/vercel/turborepo/pull/10167))
+- docs: bump openapi framework version ([#10172](https://github.com/vercel/turborepo/pull/10172))
+- docs: fix typos ([#10182](https://github.com/vercel/turborepo/pull/10182))
+- docs: update fallback OG image ([#10174](https://github.com/vercel/turborepo/pull/10174))
+- docs: enhance examples tables ([#10173](https://github.com/vercel/turborepo/pull/10173))
+- docs: fix typos in documentation files ([#10192](https://github.com/vercel/turborepo/pull/10192))
+- docs: fix typos in documentation files ([#10124](https://github.com/vercel/turborepo/pull/10124))
+- docs: update storybook initiation instructions ([#10145](https://github.com/vercel/turborepo/pull/10145))
+- docs: clarify TURBO_TEAM slug usage ([#10102](https://github.com/vercel/turborepo/pull/10102))
+- fix: adds callout for installation instructions for PNPM ([#10100](https://github.com/vercel/turborepo/pull/10100))
+- docs: add release phases to support policy ([#10091](https://github.com/vercel/turborepo/pull/10091))
+- docs: remove ls from Experimental phase in Support Policy ([#10108](https://github.com/vercel/turborepo/pull/10108))
+- docs: fix code black background colors ([#10141](https://github.com/vercel/turborepo/pull/10141))
+- fix(docs): prefix environment variable for search dialog ([#10142](https://github.com/vercel/turborepo/pull/10142))
+- fix(docs): fix commas in package exports example ([#10143](https://github.com/vercel/turborepo/pull/10143))
+- docs: open source site source code ([#10127](https://github.com/vercel/turborepo/pull/10127))
+- docs: remove experimental warning from ls command ([#10096](https://github.com/vercel/turborepo/pull/10096))
+- docs: add hybrid approach to vitest guide ([#10092](https://github.com/vercel/turborepo/pull/10092))
+- docs: fix typo on continue docs ([#10041](https://github.com/vercel/turborepo/pull/10041))
+- docs: add explicit mention for capturing multiple .env files ([#10061](https://github.com/vercel/turborepo/pull/10061))
+- docs: fix json title for Watch Mode docs ([#10085](https://github.com/vercel/turborepo/pull/10085))
+- docs: upgrades for Vitest doc and add with-vitest example ([#10063](https://github.com/vercel/turborepo/pull/10063))
+- fix(docs): asset importing failure for OG images ([#10159](https://github.com/vercel/turborepo/pull/10159))
+
+  </Accordion>
+
+  <Accordion title="Examples (5)">
+
+- fix: unexpected top-level property default in base.js eslint config ([#10240](https://github.com/vercel/turborepo/pull/10240))
+- fix(example): remove obsolete @types/react-native from with-react-native-web ([#10190](https://github.com/vercel/turborepo/pull/10190))
+- docs: update README.md in examples with-tailwind to correctly reference .ts config files instead of .js ([#10057](https://github.com/vercel/turborepo/pull/10057))
+- docs: fix JSDoc annotation for ESLint flat configs of basic example ([#10089](https://github.com/vercel/turborepo/pull/10089))
+- feat(examples): add example with-solid ([#10144](https://github.com/vercel/turborepo/pull/10144))
+
+  </Accordion>
+
+</Accordions>
 
 ## Acknowledgments and community
 
@@ -146,4 +234,4 @@ Turborepo is the result of the combined work of all of its contributors, includi
 
 Thank you for your continued support, feedback, and collaboration to make Turborepo your build tool of choice. To learn how to get involved, [visit the Community page](/repo/docs/community).
 
-TODO: Contributor list
+We also thank everyone who contributed to this release of Turborepo: @beaussan, @bohongu, @camero2734, @cprussin, @dinglindong, @jenseng, @jimmycathy, @kevincatty, @mm-webx, @ognevny, @pi0, @pudongair, @rootdiae, @shinjith-dev, @sicarius97, @ssshashank, @Tigatok, @todaymoon, @Tyoneb, @victorlagerfors, @vinayaksodar, @wmjae, @x-N0, and @xiaobei0715.
