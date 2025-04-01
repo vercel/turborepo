@@ -65,11 +65,13 @@ When using this value, all dependencies for a task must be successful for the de
 
 [Learn more in the documentation](/repo/docs/reference/run#--continueoption).
 
+The Turborepo core team would like to thank @jenseng for contributing this feature.
+
 ## Add comments to your Turborepo configuration files
 
 You can now use JSONC (`turbo.jsonc`) for your configuration files, allowing you to add useful comments to your configuration.
 
-```json title="./turbo.json"
+```json title="./turbo.jsonc"
 {
   "tasks": {
     "test": {
@@ -91,6 +93,8 @@ turbo prune web
 ```
 
 To learn more about `turbo prune`, [visit the documentation](/repo/docs/reference/prune).
+
+The Turborepo core team would like to thank @camero2734 for contributing this feature.
 
 ## Reference your workspace root with the `$TURBO_ROOT$` microsyntax
 
