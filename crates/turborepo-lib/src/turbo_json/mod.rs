@@ -475,8 +475,10 @@ impl RawTurboJson {
     pub(crate) fn read(
         repo_root: &AbsoluteSystemPath,
         path: &AbsoluteSystemPath,
-    ) -> Result<RawTurboJson, Error> {
-        let contents = path.read_to_string()?;
+    ) -> Result<Option<RawTurboJson>, Error> {
+        let Some(contents) = path.read_existing_to_string()? else {
+            return Ok(None);
+        };
         // Anchoring the path can fail if the path resides outside of the repository
         // Just display absolute path in that case.
         let root_relative_path = repo_root.anchor(path).map_or_else(
@@ -485,7 +487,7 @@ impl RawTurboJson {
         );
         let raw_turbo_json = RawTurboJson::parse(&contents, &root_relative_path)?;
 
-        Ok(raw_turbo_json)
+        Ok(Some(raw_turbo_json))
     }
 
     /// Produces a new turbo.json without any tasks that reference non-existent
@@ -634,9 +636,11 @@ impl TurboJson {
     pub(crate) fn read(
         repo_root: &AbsoluteSystemPath,
         path: &AbsoluteSystemPath,
-    ) -> Result<TurboJson, Error> {
-        let raw_turbo_json = RawTurboJson::read(repo_root, path)?;
-        TurboJson::try_from(raw_turbo_json)
+    ) -> Result<Option<TurboJson>, Error> {
+        let Some(raw_turbo_json) = RawTurboJson::read(repo_root, path)? else {
+            return Ok(None);
+        };
+        TurboJson::try_from(raw_turbo_json).map(Some)
     }
 
     pub fn task(&self, task_id: &TaskId, task_name: &TaskName) -> Option<RawTaskDefinition> {
