@@ -63,8 +63,12 @@ pub fn recursive_copy(
                     let suffix = AnchoredSystemPathBuf::new(src, path)?;
                     let target = dst.resolve(&suffix);
                     if file_type.is_dir() {
-                        let src_metadata = entry.metadata()?;
-                        make_dir_copy(&target, &src_metadata)?;
+                        if let Ok(metadata) = entry.metadata() {
+                            make_dir_copy(&target, &metadata)?;
+                        } else {
+                            let src_metadata = path.stat()?;
+                            make_dir_copy(&target, &src_metadata)?;
+                        }
                     } else {
                         copy_file_with_type(path, file_type, &target)?;
                     }
