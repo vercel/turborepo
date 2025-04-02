@@ -68,17 +68,42 @@ impl FSCache {
     }
 
     #[tracing::instrument(skip_all)]
+    pub(crate) fn exists(&self, hash: &str) -> Result<Option<CacheHitMetadata>, CacheError> {
+        // Create these paths once to avoid redundant string formatting
+        let tar_filename = format!("{}.tar", hash);
+        let tar_zst_filename = format!("{}.tar.zst", hash);
+        let meta_filename = format!("{}-meta.json", hash);
+
+        let uncompressed_cache_path = self.cache_directory.join_component(&tar_filename);
+        let compressed_cache_path = self.cache_directory.join_component(&tar_zst_filename);
+
+        if !uncompressed_cache_path.exists() && !compressed_cache_path.exists() {
+            return Ok(None);
+        }
+
+        let duration = CacheMetadata::read(&self.cache_directory.join_component(&meta_filename))
+            .map(|meta| meta.duration)
+            .unwrap_or(0);
+
+        Ok(Some(CacheHitMetadata {
+            time_saved: duration,
+            source: CacheSource::Local,
+        }))
+    }
+
+    #[tracing::instrument(skip_all)]
     pub fn fetch(
         &self,
         anchor: &AbsoluteSystemPath,
         hash: &str,
     ) -> Result<Option<(CacheHitMetadata, Vec<AnchoredSystemPathBuf>)>, CacheError> {
-        let uncompressed_cache_path = self
-            .cache_directory
-            .join_component(&format!("{}.tar", hash));
-        let compressed_cache_path = self
-            .cache_directory
-            .join_component(&format!("{}.tar.zst", hash));
+        // Create these paths once to avoid redundant string formatting
+        let tar_filename = format!("{}.tar", hash);
+        let tar_zst_filename = format!("{}.tar.zst", hash);
+        let meta_filename = format!("{}-meta.json", hash);
+
+        let uncompressed_cache_path = self.cache_directory.join_component(&tar_filename);
+        let compressed_cache_path = self.cache_directory.join_component(&tar_zst_filename);
 
         let cache_path = if uncompressed_cache_path.exists() {
             uncompressed_cache_path
@@ -93,11 +118,7 @@ impl FSCache {
 
         let restored_files = cache_reader.restore(anchor)?;
 
-        let meta = CacheMetadata::read(
-            &self
-                .cache_directory
-                .join_component(&format!("{}-meta.json", hash)),
-        )?;
+        let meta = CacheMetadata::read(&self.cache_directory.join_component(&meta_filename))?;
 
         self.log_fetch(analytics::CacheEvent::Hit, hash, meta.duration);
 
@@ -111,33 +132,6 @@ impl FSCache {
     }
 
     #[tracing::instrument(skip_all)]
-    pub(crate) fn exists(&self, hash: &str) -> Result<Option<CacheHitMetadata>, CacheError> {
-        let uncompressed_cache_path = self
-            .cache_directory
-            .join_component(&format!("{}.tar", hash));
-        let compressed_cache_path = self
-            .cache_directory
-            .join_component(&format!("{}.tar.zst", hash));
-
-        if !uncompressed_cache_path.exists() && !compressed_cache_path.exists() {
-            return Ok(None);
-        }
-
-        let duration = CacheMetadata::read(
-            &self
-                .cache_directory
-                .join_component(&format!("{}-meta.json", hash)),
-        )
-        .map(|meta| meta.duration)
-        .unwrap_or(0);
-
-        Ok(Some(CacheHitMetadata {
-            time_saved: duration,
-            source: CacheSource::Local,
-        }))
-    }
-
-    #[tracing::instrument(skip_all)]
     pub fn put(
         &self,
         anchor: &AbsoluteSystemPath,
@@ -145,9 +139,10 @@ impl FSCache {
         files: &[AnchoredSystemPathBuf],
         duration: u64,
     ) -> Result<(), CacheError> {
-        let cache_path = self
-            .cache_directory
-            .join_component(&format!("{}.tar.zst", hash));
+        let tar_zst_filename = format!("{}.tar.zst", hash);
+        let meta_filename = format!("{}-meta.json", hash);
+
+        let cache_path = self.cache_directory.join_component(&tar_zst_filename);
 
         let mut cache_item = CacheWriter::create(&cache_path)?;
 
@@ -155,9 +150,7 @@ impl FSCache {
             cache_item.add_file(anchor, file)?;
         }
 
-        let metadata_path = self
-            .cache_directory
-            .join_component(&format!("{}-meta.json", hash));
+        let metadata_path = self.cache_directory.join_component(&meta_filename);
 
         let meta = CacheMetadata {
             hash: hash.to_string(),
