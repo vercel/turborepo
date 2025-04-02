@@ -8,7 +8,16 @@ import { writeFile } from "node:fs/promises";
 // source control and overwritten during the build.
 // Files listed below are responsible for analytics
 // and cookie consent banners.
-const FILES_TO_WRITE = [];
+const FILES_TO_WRITE = [
+  {
+    path: "./lib/site-analytics/index.ts",
+    envVarKey: "SITE_ANALYTICS_MODULE_CODE",
+  },
+  {
+    path: "./lib/site-analytics/index.ts",
+    envVarKey: "SITE_ANALYTICS_MODULE_CODE",
+  },
+];
 
 async function modifyFiles() {
   if (!process.env.CI) {

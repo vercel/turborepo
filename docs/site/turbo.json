@@ -19,6 +19,7 @@
         "^build",
         "rss",
         "schema",
+        "write-private-files",
         "collect-examples-data",
         "generate-openapi"
       ]
@@ -41,6 +42,10 @@
     },
     "check-spelling": {
       "inputs": ["$TURBO_DEFAULTS$", "**/*.mdx"]
+    },
+    "write-private-files": {
+      "cache": false,
+      "env": ["SITE_ANALYTICS_MODULE_CODE", "MIDDLEWARE_MODULE_CODE"]
     },
     "collect-examples-data": {
       "cache": false
