@@ -41,7 +41,7 @@ impl<'a> CacheWriter<'a> {
 
     pub fn from_writer(writer: impl Write + 'a, use_compression: bool) -> Result<Self, CacheError> {
         if use_compression {
-            let zw = zstd::Encoder::new(writer, 0)?.auto_finish();
+            let zw = zstd::Encoder::new(writer, 3)?.auto_finish();
             Ok(CacheWriter {
                 builder: tar::Builder::new(Box::new(zw)),
             })
@@ -67,7 +67,7 @@ impl<'a> CacheWriter<'a> {
         let is_compressed = path.extension() == Some("zst");
 
         if is_compressed {
-            let zw = zstd::Encoder::new(file_buffer, 0)?.auto_finish();
+            let zw = zstd::Encoder::new(file_buffer, 3)?.auto_finish();
 
             Ok(CacheWriter {
                 builder: tar::Builder::new(Box::new(zw)),
