@@ -1,5 +1,11 @@
-// This file gets overwritten during CI.
-// We have it committed to source control like this
-// so open source contributors can still run thing smoothly.
+const vercelSiteAnalyticsModule = await import("@vercel/site-analytics").catch(
+  () => null
+);
 
-export const analytics = [];
+function getAnalyticsService() {
+  if (!vercelSiteAnalyticsModule) {
+    return [];
+  }
+}
+
+export const analytics = getAnalyticsService();

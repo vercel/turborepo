@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { SearchDialog } from "@/components/search-dialog";
 import { LocalStorageProvider } from "./local-storage-hook";
 import { TopLevelMobileMenuProvider } from "./docs-layout/use-mobile-menu-context";
+import { AnalyticsScripts } from "./analytics/analytics-scripts";
 
 export function RootProvider({
   children,
@@ -12,12 +13,14 @@ export function RootProvider({
   children: ReactNode;
 }): JSX.Element {
   return (
-    <TopLevelMobileMenuProvider>
-      <LocalStorageProvider>
-        <FumaRootProvider search={{ SearchDialog }}>
-          {children}
-        </FumaRootProvider>
-      </LocalStorageProvider>
-    </TopLevelMobileMenuProvider>
+    <AnalyticsScripts>
+      <TopLevelMobileMenuProvider>
+        <LocalStorageProvider>
+          <FumaRootProvider search={{ SearchDialog }}>
+            {children}
+          </FumaRootProvider>
+        </LocalStorageProvider>
+      </TopLevelMobileMenuProvider>
+    </AnalyticsScripts>
   );
 }
