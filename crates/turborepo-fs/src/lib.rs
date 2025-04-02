@@ -122,7 +122,17 @@ fn copy_file_with_type(
         to.symlink_to_file(target)?;
         Ok(())
     } else {
-        to.ensure_dir()?;
+        // Only ensure directory exists if parent directory doesn't exist
+        // This avoids unnecessary filesystem calls when copying many files to the same
+        // directory
+        if let Some(parent) = to.parent() {
+            if !parent.exists() {
+                parent.create_dir_all()?;
+            }
+        } else {
+            // Fall back to the original behavior if we can't get the parent
+            to.ensure_dir()?;
+        }
         fs::copy(from.as_path(), to.as_path())?;
         Ok(())
     }
