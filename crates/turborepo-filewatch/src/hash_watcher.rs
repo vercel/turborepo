@@ -228,8 +228,11 @@ impl FileHashes {
     }
 
     fn get_changed_specs(&self, file_path: &AnchoredSystemPath) -> HashSet<HashSpec> {
+        // Cache the string conversion to avoid doing it multiple times
+        let file_path_str = file_path.as_str();
+
         self.0
-            .get_ancestor(file_path.as_str())
+            .get_ancestor(file_path_str)
             // verify we have a key
             .and_then(|subtrie| subtrie.key().map(|key| (key, subtrie)))
             // convert key to AnchoredSystemPath, and verify we have a value
