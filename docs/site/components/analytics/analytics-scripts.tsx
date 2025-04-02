@@ -1,3 +1,7 @@
+import * as siteAnalyticsModule from "../../lib/site-analytics";
+
+console.log("TESTING siteAnalyticsModule", siteAnalyticsModule);
+
 export function AnalyticsScripts({
   children,
 }: {
