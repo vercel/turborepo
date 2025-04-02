@@ -49,7 +49,7 @@ impl AsyncCache {
             api_auth,
             analytics_recorder,
         )?);
-        let (writer_sender, mut write_consumer) = mpsc::channel(1);
+        let (writer_sender, mut write_consumer) = mpsc::channel(max_workers);
 
         // start a task to manage workers
         let worker_real_cache = real_cache.clone();
