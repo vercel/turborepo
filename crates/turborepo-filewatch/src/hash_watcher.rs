@@ -296,12 +296,16 @@ impl FileHashes {
     }
 
     fn insert(&mut self, key: HashSpec, value: HashState) {
-        if let Some(states) = self.0.get_mut(key.package_path.as_str()) {
+        // Cache the string representation to avoid calling as_str() twice
+        let package_path_str = key.package_path.as_str();
+
+        if let Some(states) = self.0.get_mut(package_path_str) {
             states.insert(key.inputs, value);
         } else {
             let mut states = HashMap::new();
             states.insert(key.inputs, value);
-            self.0.insert(key.package_path.as_str().to_owned(), states);
+            // We have to convert to an owned String for the trie insertion
+            self.0.insert(package_path_str.to_owned(), states);
         }
     }
 
