@@ -165,7 +165,12 @@ impl CacheMultiplexer {
                     // optimization.
                     if self.cache_config.local.write {
                         if let Some(fs) = &self.fs {
-                            let _ = fs.put(anchor, key, &files, time_saved);
+                            // Only attempt to write to local cache if we have a non-empty list of
+                            // files This avoids unnecessary operations
+                            // when there's nothing to cache
+                            if !files.is_empty() {
+                                let _ = fs.put(anchor, key, &files, time_saved);
+                            }
                         }
                     }
 
