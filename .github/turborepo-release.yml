@@ -6,10 +6,9 @@ changelog:
       - "area: ci"
       - "release: turborepo"
   categories:
-    - title: Docs
+    - title: Changelog
       labels:
-        - "area: docs"
-        - "area: site"
+        - "*"
     - title: create-turbo
       labels:
         - "pkg: create-turbo"
@@ -28,9 +27,10 @@ changelog:
     - title: "@turbo/telemetry"
       labels:
         - "pkg: turbo-telemetry"
+    - title: Docs
+      labels:
+        - "area: docs"
+        - "area: site"
     - title: Examples
       labels:
         - "area: examples"
-    - title: Changelog
-      labels:
-        - "*"
