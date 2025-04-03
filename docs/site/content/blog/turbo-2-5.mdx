@@ -29,9 +29,9 @@ Upgrade today by running `npx @turbo/codemod migrate` or get started with `npx c
 
 ## Sidecar tasks
 
-In some cases, you want to ensure two long-running tasks are always running at the same time. For example, you may have a web application that makes requests to another application in your monorepo. Running the web application by itself may not be useful, since the API application won’t be available to serve its requests.
+In some cases, you want to ensure two long-running tasks are always running at the same time. For example, you may have a web application that makes requests to another application in your monorepo. Running the web application by itself may not be useful, since the backend API application won’t be available to serve its requests.
 
-You may have tried to use `dependsOn` to create this relationship - but quickly discovered that depending on a long-running task isn’t allowed. A long-running task never exits, so the dependent task would never run. This meant you’d have to carefully craft [a `--filter`](/repo/docs/reference/run#--filter-string) to ensure those resources are available—and make sure everyone in the repo knows to use it.
+You may have tried to use `dependsOn` to create this relationship - but quickly discovered that depending on a long-running task isn’t allowed. A long-running task never exits, so the dependent task would never run. This meant you’d have to carefully craft a [`--filter`](/repo/docs/reference/run#--filter-string) to ensure those resources are available—and make sure everyone in the repo knows to use it.
 
 Instead, we’re introducing the `with` key so you can guarantee that a dependent long-running task always runs _with_ the long-running tasks that it depends on at runtime.
 
@@ -39,7 +39,7 @@ Instead, we’re introducing the `with` key so you can guarantee that a dependen
 {
   "tasks": {
     "dev": {
-      "with": ["api#dev"],
+      "with": ["api#start"],
       "persistent": true,
       "cache": false
     }
@@ -47,7 +47,7 @@ Instead, we’re introducing the `with` key so you can guarantee that a dependen
 }
 ```
 
-With this configuration, any time that the `web` application’s `dev` task is started, the `api`'s `dev` task will also run using [the `package#task` microsyntax](/repo/docs/crafting-your-repository/configuring-tasks#depending-on-a-specific-task-in-a-specific-package).
+Using this [Package Configuration](/repo/docs/reference/package-configurations), anytime that the `web` application’s `dev` task is started, the `api`'s `start` task will also run using [the `package#task` microsyntax](/repo/docs/crafting-your-repository/configuring-tasks#depending-on-a-specific-task-in-a-specific-package).
 
 [Visit the documentation](/repo/docs/reference/configuration#with) to learn more.
 
@@ -135,7 +135,7 @@ Now, this file glob is guaranteed to always start at the root of your workspace.
 
 ## OpenAPI specification viewer for self-hosting
 
-Turborepo is proudly open-source with a public specification for its Remote Caching protocol. While [Vercel Remote Cache is a free to use managed option](https://vercel.com/docs/monorepos/remote-caching), the OpenAPI spec allows the community to create implementations for Remote Caching of their own.
+Turborepo is proudly open-source with a public specification for its Remote Caching protocol. While [Vercel Remote Cache is a free-to-use managed option](https://vercel.com/docs/monorepos/remote-caching), the OpenAPI spec allows the community to create implementations for Remote Caching of their own.
 
 We’ve published [the Remote Cache spec as JSON to the web](/api/remote-cache-spec) for some time, and have recently added a human-friendly version of the spec at [https://turbo.build/repo/docs/openapi](https://turbo.build/repo/docs/openapi).
 
