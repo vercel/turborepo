@@ -3,7 +3,7 @@ import { Grid } from "@/components/grid/grid";
 import { GridCell } from "@/components/grid/grid-cell";
 import { Snippet } from "@/components/snippet";
 import { DynamicCodeBlock } from "fumadocs-ui/components/dynamic-codeblock";
-import { Testimonials } from "./testimonials";
+import { Testimonials } from "#/components/testimonials";
 import { ArrowRight } from "#/components/icons/arrow-right";
 import type { Metadata } from "next";
 import { createCssVariablesTheme } from "shiki";
