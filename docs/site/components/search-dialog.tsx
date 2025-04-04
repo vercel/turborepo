@@ -23,7 +23,7 @@ export function SearchDialog(props: SharedProps): JSX.Element {
         ["Blog", "/blog"],
         ["Changelog", `${gitHubRepoUrl}/releases`],
         ["Github", gitHubRepoUrl],
-        ["Vercel Community", "https://vercel.community/tag/turborepo"],
+        ["Community", "https://vercel.community/tag/turborepo"],
       ]}
     />
   );

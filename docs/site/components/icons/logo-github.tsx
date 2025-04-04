@@ -18,7 +18,7 @@ export const LogoGitHub = ({ className }: { className?: string }) => {
       </g>
       <defs>
         <clipPath id="clip0_872_3147">
-          <rect width="16" height="16" fill="white"></rect>
+          <rect width="16" height="16" fill="currentColor"></rect>
         </clipPath>
       </defs>
     </svg>
