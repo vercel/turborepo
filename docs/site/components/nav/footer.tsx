@@ -1,6 +1,6 @@
 import { VercelLogo } from "@/app/_components/logos";
 import Fumalink from "fumadocs-core/link";
-import { ThemeSwitcher } from "./theme-switcher";
+import { ThemeSwitcher } from "./theme-switcher/index";
 
 interface FooterItem {
   href: string;
