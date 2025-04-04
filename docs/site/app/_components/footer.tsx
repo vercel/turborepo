@@ -69,12 +69,12 @@ const navigation = {
     { name: "Governance", href: "/governance" },
   ],
   repo: [
-    { name: "Documentation", href: "/repo/docs" },
+    { name: "Documentation", href: "/docs" },
     {
       name: "API Reference",
-      href: "/repo/docs/reference",
+      href: "/docs/reference",
     },
-    { name: "Telemetry", href: "/repo/docs/telemetry" },
+    { name: "Telemetry", href: "/docs/telemetry" },
   ],
   support: [
     {

@@ -37,6 +37,7 @@ jobs:
       - name: Commit and push
         run: |
           git commit -am "release(turborepo): update examples to latest"
+          git pull origin main
           git push origin ${{ steps.branch.outputs.STAGE_BRANCH }}
 
       - name: Create pull request

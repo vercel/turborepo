@@ -46,7 +46,7 @@ pnpm dlx create-turbo@latest -e design-system
 
 ### Create a monorepo
 
-If you don't have an existing project, use [create-turbo](/repo/docs/getting-started/installation) to create a new monorepo:
+If you don't have an existing project, use [create-turbo](/docs/getting-started/installation) to create a new monorepo:
 
 <PackageManagerTabs>
 <Tab>
@@ -271,7 +271,7 @@ const config = {
 <Step>
 ####  Move story files to the UI package
 
-Following along with [the guide above](/repo/docs/guides/tools/storybook#set-up-a-story-for-your-button-component), move the `./apps/storybook/src/stories/Button.stories.tsx` file to `./packages/ui/src/Button.stories.tsx`.
+Following along with [the guide above](/docs/guides/tools/storybook#set-up-a-story-for-your-button-component), move the `./apps/storybook/src/stories/Button.stories.tsx` file to `./packages/ui/src/Button.stories.tsx`.
 
 Update components imports so that they reference the now co-located modules. For instance, in the story's imports:
 
@@ -282,7 +282,7 @@ Update components imports so that they reference the now co-located modules. For
 
 <Callout type="good-to-know">
   You may also need to update [absolute
-  imports](/repo/docs/guides/tools/typescript#use-nodejs-subpath-imports-instead-of-typescript-compiler-paths)
+  imports](/docs/guides/tools/typescript#use-nodejs-subpath-imports-instead-of-typescript-compiler-paths)
   according to your changes and usage.
 </Callout>
 
@@ -336,7 +336,7 @@ To prevent this, exclude stories from the inputs to your `build` task in your ro
 }
 ```
 
-Additionally, create a [Package Configuration](/repo/docs/reference/package-configurations) in the `storybook` application so stories are **accounted for in building the Storybook application, specifically**:
+Additionally, create a [Package Configuration](/docs/reference/package-configurations) in the `storybook` application so stories are **accounted for in building the Storybook application, specifically**:
 
 ```json title="./apps/storybook/turbo.json"
 {
@@ -352,8 +352,8 @@ Additionally, create a [Package Configuration](/repo/docs/reference/package-conf
 
 <Callout type="good-to-know">
   If you are using the [Compiled Package
-  pattern](/repo/docs/core-concepts/internal-packages#compiled-packages), you
-  may also need to add `^build` to your `dependsOn`.
+  pattern](/docs/core-concepts/internal-packages#compiled-packages), you may
+  also need to add `^build` to your `dependsOn`.
 </Callout>
 
 </Step>
