@@ -31,7 +31,7 @@ Upgrade today by running `npx @turbo/codemod migrate` or get started with `npx c
 
 In some cases, you want to ensure two long-running tasks are always running at the same time. For example, you may have a web application that makes requests to another application in your monorepo. Running the web application by itself may not be useful, since the backend API application won’t be available to serve its requests.
 
-You may have tried to use `dependsOn` to create this relationship - but quickly discovered that depending on a long-running task isn’t allowed. A long-running task never exits, so the dependent task would never run. This meant you’d have to carefully craft a [`--filter`](/repo/docs/reference/run#--filter-string) to ensure those resources are available—and make sure everyone in the repo knows to use it.
+You may have tried to use `dependsOn` to create this relationship - but quickly discovered that depending on a long-running task isn’t allowed. A long-running task never exits, so the dependent task would never run. This meant you’d have to carefully craft a [`--filter`](/docs/reference/run#--filter-string) to ensure those resources are available—and make sure everyone in the repo knows to use it.
 
 Instead, we’re introducing the `with` key so you can guarantee that a dependent long-running task always runs _with_ the long-running tasks that it depends on at runtime.
 
@@ -47,9 +47,9 @@ Instead, we’re introducing the `with` key so you can guarantee that a dependen
 }
 ```
 
-Using this [Package Configuration](/repo/docs/reference/package-configurations), anytime that the `web` application’s `dev` task is started, the `api`'s `start` task will also run using [the `package#task` microsyntax](/repo/docs/crafting-your-repository/configuring-tasks#depending-on-a-specific-task-in-a-specific-package).
+Using this [Package Configuration](/docs/reference/package-configurations), anytime that the `web` application’s `dev` task is started, the `api`'s `start` task will also run using [the `package#task` microsyntax](/docs/crafting-your-repository/configuring-tasks#depending-on-a-specific-task-in-a-specific-package).
 
-[Visit the documentation](/repo/docs/reference/configuration#with) to learn more.
+[Visit the documentation](/docs/reference/configuration#with) to learn more.
 
 ## Improved control for `--continue` behavior
 
@@ -63,7 +63,7 @@ turbo run test --continue=dependencies-successful
 
 When using this value, all dependencies for a task must be successful for the dependent task to run.
 
-[Learn more in the documentation](/repo/docs/reference/run#--continueoption).
+[Learn more in the documentation](/docs/reference/run#--continueoption).
 
 The Turborepo core team would like to thank @jenseng for contributing this feature.
 
@@ -84,7 +84,7 @@ You can now use JSONC (`turbo.jsonc`) for your configuration files, allowing you
 
 ## Pruned monorepos for Bun repositories
 
-`turbo prune` creates a partial monorepo for a target package, and is especially useful for [creating lightweight Docker images from monorepos](/repo/docs/guides/tools/docker). This command has been available for pnpm, npm, and Yarn repositories in previous versions of Turborepo.
+`turbo prune` creates a partial monorepo for a target package, and is especially useful for [creating lightweight Docker images from monorepos](/docs/guides/tools/docker). This command has been available for pnpm, npm, and Yarn repositories in previous versions of Turborepo.
 
 In this release, `turbo prune` is now available for Bun v1.2+, which has introduced a text-based lockfile that we can now read and analyze.
 
@@ -92,7 +92,7 @@ In this release, `turbo prune` is now available for Bun v1.2+, which has introdu
 turbo prune web
 ```
 
-To learn more about `turbo prune`, [visit the documentation](/repo/docs/reference/prune).
+To learn more about `turbo prune`, [visit the documentation](/docs/reference/prune).
 
 The Turborepo core team would like to thank @camero2734 for contributing this feature.
 
@@ -131,15 +131,15 @@ Instead, you can now use the `$TURBO_ROOT$` microsyntax:
 
 Now, this file glob is guaranteed to always start at the root of your workspace.
 
-[Visit the documentation](/repo/docs/reference/configuration#turbo_root) to learn more.
+[Visit the documentation](/docs/reference/configuration#turbo_root) to learn more.
 
 ## OpenAPI specification viewer for self-hosting
 
 Turborepo is proudly open-source with a public specification for its Remote Caching protocol. While [Vercel Remote Cache is a free-to-use managed option](https://vercel.com/docs/monorepos/remote-caching), the OpenAPI spec allows the community to create implementations for Remote Caching of their own.
 
-We’ve published [the Remote Cache spec as JSON to the web](/api/remote-cache-spec) for some time, and have recently added a human-friendly version of the spec at [https://turbo.build/repo/docs/openapi](https://turbo.build/repo/docs/openapi).
+We’ve published [the Remote Cache spec as JSON to the web](/api/remote-cache-spec) for some time, and have recently added a human-friendly version of the spec at [https://turbo.build/docs/openapi](https://turbo.build/docs/openapi).
 
-[Visit the Remote Caching documentation](/repo/docs/core-concepts/remote-caching#remote-cache-api) to learn more.
+[Visit the Remote Caching documentation](/docs/core-concepts/remote-caching#remote-cache-api) to learn more.
 
 ## Other changes
 
@@ -237,6 +237,6 @@ We’ve published [the Remote Cache spec as JSON to the web](/api/remote-cache-s
 
 Turborepo is the result of the combined work of all of its contributors, including our core team: [Anthony](https://github.com/anthonyshew), [Chris](https://github.com/chris-olszewski), [Dimitri](https://github.com/dimitropoulos), [Nicholas](https://github.com/NicholasLYang), and [Tom](https://github.com/tknickman).
 
-Thank you for your continued support, feedback, and collaboration to make Turborepo your build tool of choice. To learn how to get involved, [visit the Community page](/repo/docs/community).
+Thank you for your continued support, feedback, and collaboration to make Turborepo your build tool of choice. To learn how to get involved, [visit the Community page](/docs/community).
 
 We also thank everyone who contributed to this release of Turborepo: @beaussan, @bohongu, @camero2734, @cprussin, @dinglindong, @jenseng, @jimmycathy, @kevincatty, @mm-webx, @ognevny, @pi0, @pudongair, @rootdiae, @shinjith-dev, @sicarius97, @ssshashank, @Tigatok, @todaymoon, @Tyoneb, @victorlagerfors, @vinayaksodar, @wmjae, @x-N0, and @xiaobei0715.

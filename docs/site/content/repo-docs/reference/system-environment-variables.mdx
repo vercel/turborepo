@@ -29,7 +29,7 @@ System environment variables are always overridden by flag values provided direc
       </td>
       <td>
         Set the base URL for{' '}
-        <a href="/repo/docs/core-concepts/remote-caching">Remote Cache</a>.
+        <a href="/docs/core-concepts/remote-caching">Remote Cache</a>.
       </td>
     </tr>
     <tr id="turbo_binary_path">
@@ -52,7 +52,7 @@ System environment variables are always overridden by flag values provided direc
       </td>
       <td>
         Control reading and writing for cache sources. Uses the same syntax as{' '}
-        <a href="/repo/docs/reference/run#--cache-options">
+        <a href="/docs/reference/run#--cache-options">
           {' '}
           <code>--cache</code>
         </a>
@@ -65,7 +65,7 @@ System environment variables are always overridden by flag values provided direc
       </td>
       <td>
         Sets the cache directory, similar to using{' '}
-        <a href="/repo/docs/reference/run#--cache-dir-path">
+        <a href="/docs/reference/run#--cache-dir-path">
           {' '}
           <code>--cache-dir</code>
         </a>{' '}
@@ -78,7 +78,7 @@ System environment variables are always overridden by flag values provided direc
       </td>
       <td>
         Set a prefix for environment variables that you want
-        <strong>excluded</strong> from <a href="/repo/docs/crafting-your-repository/using-environment-variables#framework-inference">
+        <strong>excluded</strong> from <a href="/docs/crafting-your-repository/using-environment-variables#framework-inference">
           Framework Inference
         </a>.<span></span>
         <strong>NOTE</strong>: This does not need to be set by the user and should
@@ -92,7 +92,7 @@ System environment variables are always overridden by flag values provided direc
       <td>
         Disable checking the <code>packageManager</code> field in{' '}
         <code>package.json</code>. You may run into{' '}
-        <a href="/repo/docs/reference/run#--dangerously-disable-package-manager-check">
+        <a href="/docs/reference/run#--dangerously-disable-package-manager-check">
           errors and unexpected caching behavior
         </a>{' '}
         when disabling this check. Use <code>true</code> or <code>1</code> to
@@ -140,8 +140,7 @@ System environment variables are always overridden by flag values provided direc
         <code>TURBO_LOG_ORDER</code>
       </td>
       <td>
-        Set the{' '}
-        <a href="/repo/docs/reference/run#--log-order-option">log order</a>.
+        Set the <a href="/docs/reference/run#--log-order-option">log order</a>.
         Allowed values are <code>grouped</code> and <code>default</code>.
       </td>
     </tr>
@@ -151,7 +150,7 @@ System environment variables are always overridden by flag values provided direc
       </td>
       <td>
         Set the URL used to log in to{' '}
-        <a href="/repo/docs/core-concepts/remote-caching">Remote Cache</a>. Only
+        <a href="/docs/core-concepts/remote-caching">Remote Cache</a>. Only
         needed for self-hosted Remote Caches that implement an endpoint that
         dynamically creates tokens.
       </td>
@@ -194,7 +193,7 @@ System environment variables are always overridden by flag values provided direc
         Enables sending a preflight request before every cache artifact and
         analytics request. The follow-up upload and download will follow
         redirects. Only applicable when{' '}
-        <a href="/repo/docs/core-concepts/remote-caching">Remote Caching</a> is
+        <a href="/docs/core-concepts/remote-caching">Remote Caching</a> is
         configured.
       </td>
     </tr>
@@ -204,7 +203,7 @@ System environment variables are always overridden by flag values provided direc
       </td>
       <td>
         Prevent writing to the{' '}
-        <a href="/repo/docs/core-concepts/remote-caching">Remote Cache</a> - but
+        <a href="/docs/core-concepts/remote-caching">Remote Cache</a> - but
         still allow reading.
       </td>
     </tr>
@@ -214,7 +213,7 @@ System environment variables are always overridden by flag values provided direc
       </td>
       <td>
         Sign artifacts with a secret key. For more information, visit{' '}
-        <a href="/repo/docs/core-concepts/remote-caching#artifact-integrity-and-authenticity-verification">
+        <a href="/docs/core-concepts/remote-caching#artifact-integrity-and-authenticity-verification">
           the Artifact Integrity section
         </a>
         .
@@ -226,7 +225,7 @@ System environment variables are always overridden by flag values provided direc
       </td>
       <td>
         Set a timeout in seconds for <code>turbo</code> to get artifacts from{' '}
-        <a href="/repo/docs/core-concepts/remote-caching">Remote Cache</a>.
+        <a href="/docs/core-concepts/remote-caching">Remote Cache</a>.
       </td>
     </tr>
     <tr id="turbo_remote_cache_upload_timeout">
@@ -235,7 +234,7 @@ System environment variables are always overridden by flag values provided direc
       </td>
       <td>
         Set a timeout in seconds for <code>turbo</code> to upload artifacts to{' '}
-        <a href="/repo/docs/core-concepts/remote-caching">Remote Cache</a>.
+        <a href="/docs/core-concepts/remote-caching">Remote Cache</a>.
       </td>
     </tr>
     <tr id="turbo_remote_only">
@@ -249,9 +248,8 @@ System environment variables are always overridden by flag values provided direc
         <code>TURBO_RUN_SUMMARY</code>
       </td>
       <td>
-        Generate a{' '}
-        <a href="/repo/docs/reference/run#--summarize">Run Summary</a> when you
-        run tasks.
+        Generate a <a href="/docs/reference/run#--summarize">Run Summary</a>{' '}
+        when you run tasks.
       </td>
     </tr>
     <tr id="turbo_scm_base">
@@ -285,8 +283,7 @@ System environment variables are always overridden by flag values provided direc
         >
           Vercel Remote Cache
         </a>
-        , this is [your team's
-        slug](https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fsettings&title=Get+team+slug).
+        , this is [your team's slug](https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fsettings&title=Get+team+slug).
       </td>
     </tr>
     <tr id="turbo_teamid">
@@ -311,7 +308,7 @@ System environment variables are always overridden by flag values provided direc
       </td>
       <td>
         Disable the message notifying you that{' '}
-        <a href="/repo/docs/telemetry">Telemetry</a> is enabled.
+        <a href="/docs/telemetry">Telemetry</a> is enabled.
       </td>
     </tr>
     <tr id="turbo_token">
@@ -320,7 +317,7 @@ System environment variables are always overridden by flag values provided direc
       </td>
       <td>
         The Bearer token for authentication to access{' '}
-        <a href="/repo/docs/core-concepts/remote-caching">Remote Cache</a>.
+        <a href="/docs/core-concepts/remote-caching">Remote Cache</a>.
       </td>
     </tr>
     <tr id="turbo_ui">
@@ -338,7 +335,7 @@ System environment variables are always overridden by flag values provided direc
 
 Turborepo will make the following environment variables available within your tasks while they are executing:
 
-| Variable       | Description                                                                                  |
-| -------------- | -------------------------------------------------------------------------------------------- |
-| `TURBO_HASH`   | The hash of the currently running task.                                                      |
-| `TURBO_IS_TUI` | When using the [TUI](/repo/docs/reference/configuration#ui), this variable is set to `true`. |
+| Variable       | Description                                                                             |
+| -------------- | --------------------------------------------------------------------------------------- |
+| `TURBO_HASH`   | The hash of the currently running task.                                                 |
+| `TURBO_IS_TUI` | When using the [TUI](/docs/reference/configuration#ui), this variable is set to `true`. |
