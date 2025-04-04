@@ -4,6 +4,7 @@ description: Learn how to configure Turborepo through `turbo.json`.
 ---
 
 import { Callout } from '#/components/callout';
+import { InVersion } from '#/components/in-version';
 import { ExperimentalBadge } from '#/components/experimental-badge';
 import Link from 'next/link';
 
@@ -517,6 +518,22 @@ Label a `persistent` task as `interruptible` to allow it to be restarted by `tur
 `turbo watch` watches for changes to your packages and automatically restarts tasks
 that are affected. However, if a task is persistent, it will not be restarted by default.
 To enable restarting persistent tasks, set `interruptible` to `true`.
+
+### `with`
+
+A list of tasks that will be ran alongside this task. This is most useful for long-running tasks that you want to ensure always run at the same time.
+
+```json title="./apps/web/turbo.json"
+{
+  "tasks": {
+    "dev": {
+      "with": ["api#dev"],
+      "persistent": true,
+      "cache": false
+    }
+  }
+}
+```
 
 ## Boundaries
 

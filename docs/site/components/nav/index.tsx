@@ -16,8 +16,11 @@ import { ForwardSlash } from "../icons/ForwardSlash";
 import { Button } from "../button";
 import { FeedbackWidget } from "../feedback-widget";
 import { useSearchContext } from "fumadocs-ui/provider";
-import { ThemeAwareImage } from "../theme-aware-image";
 import { MobileMenuTopLevel } from "../docs-layout/mobile-menu-top-level";
+import {
+  TurborepoWordmarkDark,
+  TurborepoWordmarkLight,
+} from "#/components/icons/turborepo-wordmark";
 
 export const PAGES = [
   {
@@ -43,8 +46,6 @@ export const PAGES = [
 ] as const;
 export type Pages = typeof PAGES;
 
-const size = 24;
-
 function HomeLinks() {
   return (
     <div className="flex items-center gap-2">
@@ -55,29 +56,8 @@ function HomeLinks() {
       <ForwardSlash className="w-[16px] h-[16px]" />
 
       <Link className="flex flex-row items-center gap-2" href="/">
-        <ThemeAwareImage
-          light={{
-            src: "/images/product-icons/repo-light-32x32.png",
-            alt: "Turborepo logo",
-            props: {
-              src: "/images/product-icons/repo-light-32x32.png",
-              alt: "Turborepo logo",
-              width: size,
-              height: size,
-            },
-          }}
-          dark={{
-            src: "/images/product-icons/repo-dark-32x32.png",
-            alt: "Turborepo logo",
-            props: {
-              src: "/images/product-icons/repo-dark-32x32.png",
-              alt: "Turborepo logo",
-              width: size,
-              height: size,
-            },
-          }}
-        />
-        <div className="text-lg font-semibold ml-2">Turborepo</div>
+        <TurborepoWordmarkDark className="h-[24px] w-auto hidden dark:block" />
+        <TurborepoWordmarkLight className="h-[24px] w-auto dark:hidden" />
       </Link>
     </div>
   );

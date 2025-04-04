@@ -304,6 +304,24 @@ With the Root Task now registered, `turbo run lint:root` will now run the task. 
 
 In large monorepos with many teams, this allows teams greater control over their own tasks. To learn more, visit [the Package Configurations documentation](/docs/reference/package-configurations)
 
+### Long-running tasks with runtime dependencies
+
+You might have a long-running task that requires another task to always be running at the same time. For this, use [the `with` key](/repo/docs/reference/configuration#with).
+
+```json title="./apps/web/turbo.json"
+{
+  "tasks": {
+    "dev": {
+      "with": ["api#dev"],
+      "persistent": true,
+      "cache": false
+    }
+  }
+}
+```
+
+A long-running task never exits, meaning you can't depend on it. Instead, the `with` keyword will run the `api#dev` task whenever the `web#dev` task runs.
+
 ### Performing side-effects
 
 Some tasks should always be run no matter what, like a deployment script after a cached build. For these tasks, add `"cache": false` to your task definition.
