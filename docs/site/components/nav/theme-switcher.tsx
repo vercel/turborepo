@@ -2,14 +2,11 @@
 
 import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
-import { clsx } from "clsx";
-import styles from "./theme-switcher.module.css";
 import { DeviceDesktop } from "@/components/icons/device-desktop";
 import { Moon } from "@/components/icons/moon";
 import { Sun } from "@/components/icons/sun";
 
 export function ThemeSwitcher({
-  className,
   size = 28,
   short = false,
 }: {
@@ -32,14 +29,14 @@ export function ThemeSwitcher({
 
   return (
     <div
-      className={clsx(styles.root, className)}
+      className="w-fit flex rounded-full border-[1px] border-[var(--ds-gray-400)] md:ml-auto"
       style={{ padding: short ? "0" : `${padding}px` }}
       role="radiogroup"
     >
       <button
         aria-checked={theme === "light"}
         aria-label="Switch to light theme"
-        className={styles.switch}
+        className="flex items-center justify-center rounded-[inherit] border-0 text-[var(--ds-gray-900)] data-[active=true]:bg-[var(--ds-gray-300)] data-[active=true]:text-[var(--ds-gray-1000)]"
         data-active={theme === "light"}
         style={{
           height: `${size}px`,
@@ -57,7 +54,7 @@ export function ThemeSwitcher({
       <button
         aria-checked={theme === "system"}
         aria-label="Switch to system theme"
-        className={styles.switch}
+        className="flex items-center justify-center rounded-[inherit] border-0 text-[var(--ds-gray-900)] data-[active=true]:bg-[var(--ds-gray-300)] data-[active=true]:text-[var(--ds-gray-1000)]"
         style={{
           height: `${size}px`,
           width: `${size}px`,
@@ -75,7 +72,7 @@ export function ThemeSwitcher({
       <button
         aria-checked={theme === "dark"}
         aria-label="Switch to dark theme"
-        className={styles.switch}
+        className="flex items-center justify-center rounded-[inherit] border-0 text-[var(--ds-gray-900)] data-[active=true]:bg-[var(--ds-gray-300)] data-[active=true]:text-[var(--ds-gray-1000)]"
         style={{
           height: `${size}px`,
           width: `${size}px`,

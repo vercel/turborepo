@@ -1,9 +1,7 @@
 "use client";
-import { clsx } from "clsx";
 import { useEffect, useState } from "react";
 import type { JSX } from "react";
 import { isApple } from "./utils";
-import styles from "./kbd.module.css";
 
 interface KbdProps {
   meta?: boolean;
@@ -21,21 +19,20 @@ export function Kbd({
   shift,
   alt,
   ctrl,
-  small,
   children,
   className,
   ...props
 }: KbdProps): JSX.Element {
   return (
     <kbd
-      className={clsx(styles.kbd, { [String(styles.small)]: small }, className)}
+      className="bg-gray-100 text-gray-100 inline-block text-center min-w-[var(--geist-gap)] text-sm leading-[1.7em] py-[6px] rounded-[4px] font-sans ml-[4px] min-h-[24px]"
       {...props}
     >
       {meta ? <Meta /> : null}
-      {shift ? <span>⇧</span> : null}
-      {alt ? <span>⌥</span> : null}
-      {ctrl ? <span>⌃</span> : null}
-      {children ? <span>{children}</span> : null}
+      {shift ? <span className="ml-[4px]">⇧</span> : null}
+      {alt ? <span className="ml-[4px]">⌥</span> : null}
+      {ctrl ? <span className="ml-[4px]">⌃</span> : null}
+      {children ? <span className="ml-[4px]">{children}</span> : null}
     </kbd>
   );
 }
@@ -60,6 +57,11 @@ function Meta(): JSX.Element {
   }, [apple]);
 
   return (
-    <span style={{ minWidth: "1em", display: "inline-block" }}>{label}</span>
+    <span
+      className="ml-[4px]"
+      style={{ minWidth: "1em", display: "inline-block" }}
+    >
+      {label}
+    </span>
   );
 }
