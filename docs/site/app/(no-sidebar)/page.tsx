@@ -6,6 +6,14 @@ import { DynamicCodeBlock } from "fumadocs-ui/components/dynamic-codeblock";
 import { Testimonials } from "./testimonials";
 import { ArrowRight } from "#/components/icons/arrow-right";
 import type { Metadata } from "next";
+import { createCssVariablesTheme } from "shiki";
+
+// Copied from source.config.ts
+const theme = createCssVariablesTheme({
+  name: "css-variables",
+  variablePrefix: "--shiki-",
+  variableDefaults: {},
+});
 
 const FEATURES = [
   {
@@ -133,8 +141,9 @@ export default async function HomePage() {
                 lang="json"
                 code={simpleTurboJson}
                 options={{
-                  colorReplacements: {
-                    "#005cc5": "#ffffff",
+                  themes: {
+                    light: theme,
+                    dark: theme,
                   },
                 }}
               />
@@ -143,7 +152,16 @@ export default async function HomePage() {
               </span>
             </div>
             <div>
-              <DynamicCodeBlock lang="bash" code={remoteCachingCommands} />
+              <DynamicCodeBlock
+                lang="bash"
+                code={remoteCachingCommands}
+                options={{
+                  themes: {
+                    light: theme,
+                    dark: theme,
+                  },
+                }}
+              />
               <span className="text-xs text-gray-900">
                 Linking to Remote Cache and running tasks
               </span>
