@@ -8,7 +8,7 @@ export function Authors({ authors }: { authors: Author[] }): JSX.Element {
     <div className="authors w-full border-b border-gray-400 border-opacity-20">
       <div
         className={cn(
-          "mx-auto flex flex-wrap justify-center gap-7 py-8",
+          "mx-auto flex flex-wrap gap-7 py-8",
           authors.length > 4 && "max-w-3xl"
         )}
       >

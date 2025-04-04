@@ -48,11 +48,11 @@ export default async function Page(props: {
   const Mdx = page.data.body;
 
   return (
-    <article className="prose mx-auto mt-14 mb-10 w-full min-w-0 max-w-4xl px-6 pt-4 md:px-12">
+    <article className="prose mx-auto mb-10 w-full min-w-0 max-w-4xl px-6 pt-4 md:px-12">
       <FaviconHandler />
       <div className="my-4">
         <Link
-          className="hover:text-foreground flex flex-row gap-2 text-sm text-gray-900  transition-all dark:text-gray-900"
+          className="hover:text-foreground mb-16 flex flex-row gap-2 text-sm text-gray-900 no-underline transition-all dark:text-gray-900"
           href="/blog"
         >
           <ArrowLeftIcon width=".75rem" />
@@ -60,9 +60,6 @@ export default async function Page(props: {
         </Link>
       </div>
 
-      {/* TODO: Currently, the content is controlling the <h1 className="text-center"> to get the heading centered.
-      /* Needs to be controlled here so we can just write the markdown and it will do the right thing.
-       * */}
       <Mdx components={mdxComponents} />
     </article>
   );
