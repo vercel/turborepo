@@ -24,11 +24,11 @@ export function generateMetadata(): Metadata {
 }
 
 function Page(): JSX.Element {
-  const posts = [...blog.getPages(), ...externalBlog.getPages()]
-    .filter((post) => post.data.title !== "Turbopack Performance Benchmarks")
-    .sort((a, b) => {
+  const posts = [...blog.getPages(), ...externalBlog.getPages()].sort(
+    (a, b) => {
       return Number(new Date(b.data.date)) - Number(new Date(a.data.date));
-    });
+    }
+  );
 
   return (
     <main className="mx-auto mt-8 flex w-full min-w-0 max-w-6xl flex-col gap-4 px-6 pt-14 md:px-12">

@@ -1,6 +1,5 @@
 import { createMDX } from "fumadocs-mdx/next";
 import { withVercelToolbar } from "@vercel/toolbar/plugins/next";
-import { REDIRECTS_FROM_ADDING_PACK } from "./lib/redirects/add-pack-docs.mjs";
 import { REDIRECTS_FOR_V2_DOCS } from "./lib/redirects/v2-docs.mjs";
 
 const withMDX = createMDX();
@@ -122,22 +121,6 @@ const config = {
         permanent: true,
       },
       {
-        source: "/pack/docs/comparisons/turbopack-vs-vite",
-        destination: "/pack/docs/comparisons/vite",
-        permanent: true,
-      },
-      {
-        source: "/pack/docs/comparisons/turbopack-vs-webpack",
-        destination: "/pack/docs/comparisons/webpack",
-        permanent: true,
-      },
-      {
-        source: "/pack/docs/features/customizing-turbopack",
-        destination:
-          "https://nextjs.org/docs/app/api-reference/next-config-js/turbo",
-        permanent: true,
-      },
-      {
         source: "/repo/docs/platform-environment-variables",
         destination:
           "/repo/docs/crafting-your-repository/using-environment-variables#platform-environment-variables",
@@ -148,14 +131,14 @@ const config = {
         destination: route.destination,
         permanent: true,
       })),
-      {
-        source: "/pack/docs/core-concepts",
-        destination: "/pack/docs/incremental-computation",
-        permanent: true,
-      },
       // March 4, 2025: Removal of Turbopack from these docs
       {
         source: "/pack/:slug*",
+        destination: "https://nextjs.org/docs/app/api-reference/turbopack",
+        permanent: true,
+      },
+      {
+        source: "/blog/turbopack-benchmarks",
         destination: "https://nextjs.org/docs/app/api-reference/turbopack",
         permanent: true,
       },
