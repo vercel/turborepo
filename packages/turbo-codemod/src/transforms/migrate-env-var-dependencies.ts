@@ -1,7 +1,7 @@
 import path from "node:path";
 import fs from "fs-extra";
 import { type PackageJson, getTurboConfigs } from "@turbo/utils";
-import type { Pipeline, PipelineV1, SchemaV1 } from "@turbo/types";
+import type { Pipeline, SchemaV1 } from "@turbo/types";
 import { getTransformerHelpers } from "../utils/getTransformerHelpers";
 import type { TransformerResults } from "../runner";
 import type { Transformer, TransformerArgs } from "../types";
@@ -16,7 +16,7 @@ const INTRODUCED_IN = "1.5.0";
 
 export function hasLegacyEnvVarDependencies(config: SchemaV1) {
   if (isPipelineKeyMissing(config)) {
-    return;
+    return { hasKeys: false };
   }
 
   const dependsOn = [
@@ -99,7 +99,7 @@ export function migrateGlobal(config: SchemaV1) {
 
 export function migrateConfig(config: SchemaV1) {
   if (isPipelineKeyMissing(config)) {
-    return;
+    return config;
   }
 
   const migratedConfig = migrateGlobal(config);
