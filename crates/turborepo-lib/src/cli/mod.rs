@@ -28,8 +28,8 @@ use turborepo_ui::{ColorConfig, GREY};
 use crate::{
     cli::error::print_potential_tasks,
     commands::{
-        bin, boundaries, clone, config, daemon, generate, info, link, login, logout, ls, prune,
-        query, run, scan, telemetry, unlink, CommandBase,
+        bin, boundaries, check_deps, clone, config, daemon, generate, info, link, login, logout,
+        ls, prune, query, run, scan, telemetry, unlink, CommandBase,
     },
     get_version,
     run::watch::WatchClient,
@@ -592,6 +592,8 @@ pub enum Command {
         #[clap(long, requires = "ignore")]
         reason: Option<String>,
     },
+    /// Check for inconsistent dependency versions across your monorepo
+    CheckDeps,
     #[clap(hide = true)]
     Clone {
         url: String,
@@ -1413,6 +1415,14 @@ pub async fn run(
             let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
 
             Ok(boundaries::run(base, event, ignore, reason).await?)
+        }
+        Command::CheckDeps => {
+            let event = CommandEventBuilder::new("check-deps").with_parent(&root_telemetry);
+            event.track_call();
+            let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
+            event.track_ui_mode(base.opts.run_opts.ui_mode);
+
+            Ok(check_deps::run(base).await?)
         }
         Command::Clone {
             url,
