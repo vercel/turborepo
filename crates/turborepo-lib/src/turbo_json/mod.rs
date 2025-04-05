@@ -158,6 +158,9 @@ pub struct RawTurboJson {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub boundaries: Option<Spanned<BoundariesConfig>>,
 
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub concurrency: Option<String>,
+
     #[deserializable(rename = "//")]
     #[serde(skip)]
     _comment: Option<String>,

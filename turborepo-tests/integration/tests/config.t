@@ -19,7 +19,8 @@ Run test run
     "envMode": "strict",
     "scmBase": null,
     "scmHead": null,
-    "cacheDir": ".turbo[\\/]+cache" (re)
+    "cacheDir": ".turbo[\\/]+cache", (re)
+    "concurrency": null
   }
 
 Run test run with api overloaded
@@ -111,3 +112,15 @@ Add env var: `TURBO_CACHE_DIR`
 Add flag: `--cache-dir`
   $ ${TURBO} --cache-dir FifthDimension/Nebulo9 config | jq -r .cacheDir
   FifthDimension[\\/]Nebulo9 (re)
+
+No concurrency by default
+  $ ${TURBO} config | jq -r .concurrency
+  null
+
+Add env var: `TURBO_CONCURRENCY`
+  $ TURBO_CONCURRENCY=5 ${TURBO} config | jq -r .concurrency
+  5
+
+Add flag: `--concurrency`
+  $ ${TURBO} --concurrency=5 config | jq -r .concurrency
+  5

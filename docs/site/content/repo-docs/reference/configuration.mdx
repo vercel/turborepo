@@ -91,6 +91,22 @@ Select a terminal UI for the repository.
 }
 ```
 
+### `concurrency`
+
+Default: `"10"`
+
+Set/limit the maximum concurrency for task execution. Must be an integer greater than or equal to `1` or a percentage value like `50%`.
+
+- Use `1` to force serial execution (one task at a time).
+- Use `100%` to use all available logical processors.
+- This option is ignored if the [`--parallel`](#--parallel) flag is also passed.
+
+```jsonc title="./turbo.json"
+{
+  "concurrency": "1"
+}
+```
+
 ### `dangerouslyDisablePackageManagerCheck`
 
 Default: `false`

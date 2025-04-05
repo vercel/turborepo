@@ -290,6 +290,7 @@ pub struct ConfigurationOptions {
     pub(crate) remote_cache_read_only: Option<bool>,
     pub(crate) run_summary: Option<bool>,
     pub(crate) allow_no_turbo_json: Option<bool>,
+    pub(crate) concurrency: Option<String>,
 }
 
 #[derive(Default)]

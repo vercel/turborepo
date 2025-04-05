@@ -43,6 +43,7 @@ impl<'a> TurboJsonReader<'a> {
         opts.daemon = turbo_json.daemon.map(|daemon| *daemon.as_inner());
         opts.env_mode = turbo_json.env_mode;
         opts.cache_dir = cache_dir;
+        opts.concurrency = turbo_json.concurrency;
         Ok(opts)
     }
 }
