@@ -50,7 +50,8 @@ And a `turbo.json`:
 Create a file called `.circleci/config.yml` in your repository with the following contents:
 
 <PackageManagerTabs>
-<Tab>
+
+  <Tab value="pnpm">
 
     ```yaml title=".circleci/config.yml"
     version: 2.1
@@ -68,18 +69,21 @@ Create a file called `.circleci/config.yml` in your repository with the followin
           - checkout
           - node/install-packages
           - run:
-            command: npm run build
+            command: npm i -g pnpm
             environment:
               TURBO_UI: "false"
-
           - run:
-            command: npm run test
+            command: pnpm build
+            environment:
+              TURBO_UI: "false"
+          - run:
+            command: pnpm test
             environment:
               TURBO_UI: "false"
     ```
 
   </Tab>
-  <Tab>
+  <Tab value="yarn">
 
     ```yaml title=".circleci/config.yml"
     version: 2.1
@@ -108,7 +112,8 @@ Create a file called `.circleci/config.yml` in your repository with the followin
     ```
 
   </Tab>
-  <Tab>
+
+<Tab value="npm">
 
     ```yaml title=".circleci/config.yml"
     version: 2.1
@@ -126,15 +131,12 @@ Create a file called `.circleci/config.yml` in your repository with the followin
           - checkout
           - node/install-packages
           - run:
-            command: npm i -g pnpm
+            command: npm run build
             environment:
               TURBO_UI: "false"
+
           - run:
-            command: pnpm build
-            environment:
-              TURBO_UI: "false"
-          - run:
-            command: pnpm test
+            command: npm run test
             environment:
               TURBO_UI: "false"
     ```

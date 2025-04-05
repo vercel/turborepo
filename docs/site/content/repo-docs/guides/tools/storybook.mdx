@@ -14,15 +14,16 @@ import { Steps, Step } from '#/components/steps';
 If you'd rather use a template, this guide is walking through how to build [this Storybook/Turborepo template](https://vercel.com/templates/react/turborepo-design-system) on Vercel.
 
 <PackageManagerTabs>
-<Tab>
+
+<Tab value="pnpm">
 
 ```bash title="Terminal"
-npx create-turbo@latest -e design-system
+pnpm dlx create-turbo@latest -e design-system
 ```
 
 </Tab>
 
-<Tab>
+<Tab value="yarn">
 
 ```bash title="Terminal"
 yarn dlx create-turbo@latest -e design-system
@@ -30,10 +31,10 @@ yarn dlx create-turbo@latest -e design-system
 
 </Tab>
 
-<Tab>
+<Tab value="npm">
 
 ```bash title="Terminal"
-pnpm dlx create-turbo@latest -e design-system
+npx create-turbo@latest -e design-system
 ```
 
 </Tab>
@@ -49,15 +50,16 @@ pnpm dlx create-turbo@latest -e design-system
 If you don't have an existing project, use [create-turbo](/docs/getting-started/installation) to create a new monorepo:
 
 <PackageManagerTabs>
-<Tab>
+
+<Tab value="pnpm">
 
 ```bash title="Terminal"
-npx create-turbo@latest
+pnpm dlx create-turbo@latest
 ```
 
 </Tab>
 
-<Tab>
+<Tab value="yarn">
 
 ```bash title="Terminal"
 yarn dlx create-turbo@latest
@@ -65,10 +67,10 @@ yarn dlx create-turbo@latest
 
 </Tab>
 
-<Tab>
+<Tab value="npm">
 
 ```bash title="Terminal"
-pnpm dlx create-turbo@latest
+npx create-turbo@latest
 ```
 
 </Tab>
@@ -94,24 +96,26 @@ cd apps/storybook
 In the `apps/storybook` directory, initialize a new Storybook application:
 
 <PackageManagerTabs>
-  <Tab>
+
+  <Tab value="pnpm">
 
 ```bash title="Terminal"
-npm create storybook@latest
+pnpm create storybook@latest
 ```
 
   </Tab>
-  <Tab>
+  <Tab value="yarn">
 
 ```bash title="Terminal"
 yarn create storybook@latest
 ```
 
   </Tab>
-  <Tab>
+
+  <Tab value="npm">
 
 ```bash title="Terminal"
-pnpm create storybook@latest
+npm create storybook@latest
 ```
 
   </Tab>
@@ -132,15 +136,16 @@ Follow the prompts to create an application. For the rest of this guide, we'll a
 Now, install your UI package into Storybook.
 
 <PackageManagerTabs>
-<Tab>
+
+<Tab value="pnpm">
 
 ```bash title="Terminal"
-npm install @repo/ui --workspace=storybook
+pnpm install @repo/ui --filter=storybook
 ```
 
 </Tab>
 
-<Tab>
+<Tab value="yarn">
 
 ```bash title="Terminal"
 yarn workspace storybook add @repo/ui
@@ -148,10 +153,10 @@ yarn workspace storybook add @repo/ui
 
 </Tab>
 
-<Tab>
+<Tab value="npm">
 
 ```bash title="Terminal"
-pnpm install @repo/ui --filter=storybook
+npm install @repo/ui --workspace=storybook
 ```
 
 </Tab>
@@ -289,15 +294,16 @@ Update components imports so that they reference the now co-located modules. For
 You'll also need to install any Storybook packages required for writing stories. For example, moving the story from above would require that you install `@storybook/react` into your `@repo/ui` package.
 
 <PackageManagerTabs>
-<Tab>
+
+<Tab value="pnpm">
 
 ```bash title="Terminal"
-npm install @storybook/react --workspace=@repo/ui --save-dev
+pnpm install @storybook/react --filter=@repo/ui --save-dev
 ```
 
 </Tab>
 
-<Tab>
+<Tab value="yarn">
 
 ```bash title="Terminal"
 yarn workspace @repo/ui add @storybook/react --dev
@@ -305,10 +311,10 @@ yarn workspace @repo/ui add @storybook/react --dev
 
 </Tab>
 
-<Tab>
+<Tab value="npm">
 
 ```bash title="Terminal"
-pnpm install @storybook/react --filter=@repo/ui --save-dev
+npm install @storybook/react --workspace=@repo/ui --save-dev
 ```
 
 </Tab>

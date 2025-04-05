@@ -71,29 +71,32 @@ Notably, the `next.js` and `react-internal.js` configurations use the `base.js` 
 In our `web` app, we first need to add `@repo/eslint-config` as a dependency.
 
 <PackageManagerTabs>
-  <Tab>
-```jsonc title="./apps/web/package.json"
-{
-  "devDependencies": {
-    "@repo/eslint-config": "*"
-  }
-}
-```
-  </Tab>
-  <Tab>
-```jsonc title="./apps/web/package.json"
-{
-  "devDependencies": {
-    "@repo/eslint-config": "*"
-  }
-}
-```
-  </Tab>
-  <Tab>
+
+  <Tab value="pnpm">
 ```jsonc title="./apps/web/package.json"
 {
   "devDependencies": {
     "@repo/eslint-config": "workspace:*"
+  }
+}
+```
+  </Tab>
+
+  <Tab value="yarn">
+```jsonc title="./apps/web/package.json"
+{
+  "devDependencies": {
+    "@repo/eslint-config": "*"
+  }
+}
+```
+  </Tab>
+
+  <Tab value="npm">
+```jsonc title="./apps/web/package.json"
+{
+  "devDependencies": {
+    "@repo/eslint-config": "*"
   }
 }
 ```
@@ -203,29 +206,31 @@ Note that the ESLint dependencies are all listed here. This is useful, since it 
 In our `web` app, we first need to add `@repo/eslint-config` as a dependency.
 
 <PackageManagerTabs>
-  <Tab>
-```jsonc title="./apps/web/package.json"
-{
-  "dependencies": {
-    "@repo/eslint-config": "*"
-  }
-}
-```
-  </Tab>
-  <Tab>
-```jsonc title="./apps/web/package.json"
-{
-  "dependencies": {
-    "@repo/eslint-config": "*"
-  }
-}
-```
-  </Tab>
-  <Tab>
+
+  <Tab value="pnpm">
 ```jsonc title="./apps/web/package.json"
 {
   "dependencies": {
     "@repo/eslint-config": "workspace:*"
+  }
+}
+```
+  </Tab>
+  <Tab value="yarn">
+```jsonc title="./apps/web/package.json"
+{
+  "dependencies": {
+    "@repo/eslint-config": "*"
+  }
+}
+```
+  </Tab>
+
+  <Tab value="npm">
+```jsonc title="./apps/web/package.json"
+{
+  "dependencies": {
+    "@repo/eslint-config": "*"
   }
 }
 ```

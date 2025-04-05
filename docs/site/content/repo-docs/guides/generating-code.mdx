@@ -90,46 +90,47 @@ manually at `turbo/generators/config.ts` (or `config.js`) at the root of your re
 For example, the following illustrates a monorepo with three locations for generators:
 
 <PackageManagerTabs>
-<Tab>
-<Files>
-  <Folder name="apps" defaultOpen>
-    <Folder name="docs">
-     <File name="package.json"  />
+
+<Tab value="pnpm">
+  <Files>
+    <Folder name="apps" defaultOpen>
+      <Folder name="docs">
+        <File name="package.json" />
+      </Folder>
+      <Folder name="web" defaultOpen>
+        <File name="package.json" />
+        <Folder name="turbo" green defaultOpen>
+          <Folder name="generators">
+            <File name="config.ts" />
+            <File name="templates" />
+          </Folder>
+        </Folder>
+      </Folder>
     </Folder>
-    <Folder name="web" defaultOpen>
-      <File name="package.json"  />
-  <Folder name="turbo" green defaultOpen>
-    <Folder name="generators">
-      <File name="config.ts" />
-      <File name="templates" />
+    <Folder name="packages" defaultOpen>
+      <Folder name="ui" defaultOpen>
+        <File name="package.json" />
+        <Folder name="turbo" green defaultOpen>
+          <Folder name="generators">
+            <File name="config.ts" />
+            <File name="templates" />
+          </Folder>
+        </Folder>
+      </Folder>
     </Folder>
-  </Folder>
-  </Folder>
-  </Folder>
-  <Folder name="packages" defaultOpen>
-    <Folder name="ui" defaultOpen>
-      <File name="package.json" />
-  <Folder name="turbo" green defaultOpen>
-    <Folder name="generators">
-      <File name="config.ts" />
-      <File name="templates" />
+    <Folder name="turbo" green defaultOpen>
+      <Folder name="generators">
+        <File name="config.ts" />
+        <File name="templates" />
+      </Folder>
     </Folder>
-  </Folder>
-    </Folder>
-  </Folder>
-  <Folder name="turbo" green defaultOpen>
-    <Folder name="generators">
-      <File name="config.ts" />
-      <File name="templates" />
-    </Folder>
-  </Folder>
-  <File name="package.json"  />
-  <File name="package-lock.json"  />
-  <File name="turbo.json"  />
-</Files>
+    <File name="package.json" />
+    <File name="package-lock.yaml" />
+    <File name="turbo.json" />
+  </Files>
 </Tab>
 
-<Tab>
+<Tab value="yarn">
   <Files>
     <Folder name="apps" defaultOpen>
       <Folder name="docs">
@@ -168,7 +169,7 @@ For example, the following illustrates a monorepo with three locations for gener
   </Files>
 </Tab>
 
-<Tab>
+<Tab value="npm">
 <Files>
   <Folder name="apps" defaultOpen>
     <Folder name="docs">
@@ -202,7 +203,7 @@ For example, the following illustrates a monorepo with three locations for gener
     </Folder>
   </Folder>
   <File name="package.json"  />
-  <File name="package-lock.yaml"  />
+  <File name="package-lock.json"  />
   <File name="turbo.json"  />
 </Files>
 </Tab>

@@ -32,15 +32,16 @@ Let's say we have a monorepo that looks like this:
 Install `jest` into the packages where you plan on having test suites. For this example, we will have tests in `web` and `@repo/ui`:
 
 <PackageManagerTabs>
-<Tab>
+
+<Tab value="pnpm">
 
 ```bash title="Terminal"
-npm install jest --workspace=web --workspace=@repo/ui --save-dev
+pnpm install jest --save-dev --filter=@repo/ui --filter=web
 ```
 
 </Tab>
 
-<Tab>
+<Tab value="yarn">
 
 ```bash title="Terminal"
 yarn workspace web add jest --dev
@@ -49,10 +50,10 @@ yarn workspace @repo/ui add jest --dev
 
 </Tab>
 
-<Tab>
+<Tab value="npm">
 
 ```bash title="Terminal"
-pnpm install jest --save-dev --filter=@repo/ui --filter=web
+npm install jest --workspace=web --workspace=@repo/ui --save-dev
 ```
 
 </Tab>

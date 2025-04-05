@@ -18,15 +18,15 @@ Get started upgrading from 1.x to 2.0 by running:
 
 <PackageManagerTabs>
 
-<Tab>
+<Tab value="pnpm">
 
 ```bash title="Terminal"
-npx @turbo/codemod migrate
+pnpm dlx @turbo/codemod migrate
 ```
 
 </Tab>
 
-<Tab>
+<Tab value="yarn">
 
 ```bash title="Terminal"
 yarn dlx @turbo/codemod migrate
@@ -34,10 +34,10 @@ yarn dlx @turbo/codemod migrate
 
 </Tab>
 
-<Tab>
+<Tab value="npm">
 
 ```bash title="Terminal"
-pnpm dlx @turbo/codemod migrate
+npx @turbo/codemod migrate
 ```
 
 </Tab>
@@ -64,17 +64,18 @@ Additionally, a `name` field will be added to any `package.json` in the Workspac
 Turborepo 2.0 requires that your Workspace define this field as a way to improve the stability and behavioral predictability of your codebase. If you do not have one already, add this field to your root `package.json`:
 
 <PackageManagerTabs>
-<Tab>
+
+<Tab value="pnpm">
 
 ```diff title="./package.json"
 {
-+ "packageManager": "npm@10.8.1"
++ "packageManager": "pnpm@9.2.0"
 }
 ```
 
 </Tab>
 
-<Tab>
+<Tab value="yarn">
 
 ```diff title="./package.json"
 {
@@ -84,11 +85,11 @@ Turborepo 2.0 requires that your Workspace define this field as a way to improve
 
 </Tab>
 
-<Tab>
+<Tab value="npm">
 
 ```diff title="./package.json"
 {
-+ "packageManager": "pnpm@9.2.0"
++ "packageManager": "npm@10.8.1"
 }
 ```
 

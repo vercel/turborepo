@@ -169,31 +169,31 @@ Turborepo is built on top of package manager workspaces, a JavaScript ecosystem 
 
 <PackageManagerTabs>
 
-<Tab>
-
-```json title="package.json"
-{
-  "workspaces": ["apps/*"]
-}
-```
-
-</Tab>
-
-<Tab>
-
-```json title="package.json"
-{
-  "workspaces": ["apps/*"]
-}
-```
-
-</Tab>
-
-<Tab>
+<Tab value="pnpm">
 
 ```yml title="pnpm-workspace.yaml"
 packages:
   - apps/*
+```
+
+</Tab>
+
+<Tab value="yarn">
+
+```json title="package.json"
+{
+  "workspaces": ["apps/*"]
+}
+```
+
+</Tab>
+
+<Tab value="npm">
+
+```json title="package.json"
+{
+  "workspaces": ["apps/*"]
+}
 ```
 
 </Tab>
@@ -233,17 +233,17 @@ The root package.json needs to have the `packageManager` field. This ensures dev
 
 <PackageManagerTabs>
 
-<Tab>
+<Tab value="pnpm">
 
 ```json title="./package.json"
 {
-  "packageManager": "npm@10.0.0"
+  "packageManager": "pnpm@9.0.0"
 }
 ```
 
 </Tab>
 
-<Tab>
+<Tab value="yarn">
 
 ```json title="./package.json"
 {
@@ -253,11 +253,11 @@ The root package.json needs to have the `packageManager` field. This ensures dev
 
 </Tab>
 
-<Tab>
+<Tab value="npm">
 
 ```json title="./package.json"
 {
-  "packageManager": "pnpm@9.0.0"
+  "packageManager": "npm@10.0.0"
 }
 ```
 
@@ -271,15 +271,15 @@ Update your lockfile by running your installation command.
 
 <PackageManagerTabs>
 
-<Tab>
+<Tab value="pnpm">
 
 ```bash title="Terminal"
-npm install
+pnpm install
 ```
 
 </Tab>
 
-<Tab>
+<Tab value="yarn">
 
 ```bash title="Terminal"
 yarn install
@@ -287,10 +287,10 @@ yarn install
 
 </Tab>
 
-<Tab>
+<Tab value="npm">
 
 ```bash title="Terminal"
-pnpm install
+npm install
 ```
 
 </Tab>
@@ -305,15 +305,15 @@ Add Turborepo to the root `package.json` of the workspace.
 
 <PackageManagerTabs>
 
-<Tab>
+<Tab value="pnpm">
 
 ```bash title="Terminal"
-npm install turbo --save-dev
+pnpm install turbo --save-dev --workspace-root
 ```
 
 </Tab>
 
-<Tab>
+<Tab value="yarn">
 
 ```bash title="Terminal"
  yarn add turbo --save-dev --ignore-workspace-root-check
@@ -321,10 +321,10 @@ npm install turbo --save-dev
 
 </Tab>
 
-<Tab>
+<Tab value="npm">
 
 ```bash title="Terminal"
-pnpm install turbo --save-dev --workspace-root
+npm install turbo --save-dev
 ```
 
 </Tab>
@@ -335,15 +335,15 @@ You can also optionally install `turbo` globally for added convenience when work
 
 <PackageManagerTabs>
 
-<Tab>
+<Tab value="pnpm">
 
 ```bash title="Terminal"
-npm install turbo --global
+pnpm install turbo --global
 ```
 
 </Tab>
 
-<Tab>
+<Tab value="yarn">
 
 ```bash title="Terminal"
 yarn global add turbo
@@ -351,10 +351,10 @@ yarn global add turbo
 
 </Tab>
 
-<Tab>
+<Tab value="npm">
 
 ```bash title="Terminal"
-pnpm install turbo --global
+npm install turbo --global
 ```
 
 </Tab>
@@ -386,15 +386,15 @@ Build the application with Turborepo. Using global `turbo`, this would be `turbo
 
 <PackageManagerTabs>
 
-<Tab>
+<Tab value="pnpm">
 
 ```bash title="Terminal"
-npx turbo run build
+pnpm exec turbo build
 ```
 
 </Tab>
 
-<Tab>
+<Tab value="yarn">
 
 ```bash title="Terminal"
  yarn dlx turbo build
@@ -402,10 +402,10 @@ npx turbo run build
 
 </Tab>
 
-<Tab>
+<Tab value="npm">
 
 ```bash title="Terminal"
-pnpm exec turbo build
+npx turbo run build
 ```
 
 </Tab>

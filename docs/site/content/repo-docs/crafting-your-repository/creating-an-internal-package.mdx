@@ -45,7 +45,62 @@ You'll need a directory to put the package in. Let's create one at `./packages/m
 Next, create the `package.json` for the package. By adding this file, you'll fulfill [the two requirements for an Internal Package](/docs/crafting-your-repository/structuring-a-repository#specifying-packages-in-a-monorepo), making it discoverable to Turborepo and the rest of your Workspace:
 
 <PackageManagerTabs>
-<Tab>
+
+<Tab value="pnpm">
+```json title="./packages/math/package.json"
+{
+  "name": "@repo/math",
+  "type": "module",
+  "scripts": {
+    "dev": "tsc --watch",
+    "build": "tsc"
+  },
+  "exports": {
+    "./add": {
+      "types": "./src/add.ts",
+      "default": "./dist/add.js"
+    },
+    "./subtract": {
+      "types": "./src/subtract.ts",
+      "default": "./dist/subtract.js"
+    }
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:*",
+    "typescript": "latest"
+  }
+}
+```
+</Tab>
+
+<Tab value="yarn">
+```json title="./packages/math/package.json"
+{
+  "name": "@repo/math",
+  "type": "module",
+  "scripts": {
+    "dev": "tsc --watch",
+    "build": "tsc"
+  },
+  "exports": {
+    "./add": {
+      "types": "./src/add.ts",
+      "default": "./dist/add.js"
+    },
+    "./subtract": {
+      "types": "./src/subtract.ts",
+      "default": "./dist/subtract.js"
+    }
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:*",
+    "typescript": "latest"
+  }
+}
+```
+</Tab>
+
+<Tab value="npm">
 ```json title="./packages/math/package.json"
 {
   "name": "@repo/math",
@@ -71,58 +126,6 @@ Next, create the `package.json` for the package. By adding this file, you'll ful
 }
 ````
 
-</Tab>
-<Tab>
-```json title="./packages/math/package.json"
-{
-  "name": "@repo/math",
-  "type": "module",
-  "scripts": {
-    "dev": "tsc --watch",
-    "build": "tsc"
-  },
-  "exports": {
-    "./add": {
-      "types": "./src/add.ts",
-      "default": "./dist/add.js"
-    },
-    "./subtract": {
-      "types": "./src/subtract.ts",
-      "default": "./dist/subtract.js"
-    }
-  },
-  "devDependencies": {
-    "@repo/typescript-config": "workspace:*",
-    "typescript": "latest"
-  }
-}
-```
-</Tab>
-<Tab>
-```json title="./packages/math/package.json"
-{
-  "name": "@repo/math",
-  "type": "module",
-  "scripts": {
-    "dev": "tsc --watch",
-    "build": "tsc"
-  },
-  "exports": {
-    "./add": {
-      "types": "./src/add.ts",
-      "default": "./dist/add.js"
-    },
-    "./subtract": {
-      "types": "./src/subtract.ts",
-      "default": "./dist/subtract.js"
-    }
-  },
-  "devDependencies": {
-    "@repo/typescript-config": "workspace:*",
-    "typescript": "latest"
-  }
-}
-```
 </Tab>
 </PackageManagerTabs>
 
@@ -201,30 +204,33 @@ These files map to the outputs that will be created by `tsc` when you run `turbo
 You're ready to use your new package in an application. Let's add it to the `web` application.
 
 <PackageManagerTabs>
-<Tab>
-```diff title="apps/web/package.json"
-  "dependencies": {
-+   "@repo/math": "*",
-    "next": "latest",
-    "react": "latest",
-    "react-dom": "latest"
-  },
-```
-</Tab>
-<Tab>
-```diff title="apps/web/package.json"
-  "dependencies": {
-+   "@repo/math": "*",
-    "next": "latest",
-    "react": "latest",
-    "react-dom": "latest"
-  },
-```
-</Tab>
-<Tab>
+
+<Tab value="pnpm">
 ```diff title="apps/web/package.json"
   "dependencies": {
 +   "@repo/math": "workspace:*",
+    "next": "latest",
+    "react": "latest",
+    "react-dom": "latest"
+  },
+```
+</Tab>
+
+<Tab value="yarn">
+```diff title="apps/web/package.json"
+  "dependencies": {
++   "@repo/math": "*",
+    "next": "latest",
+    "react": "latest",
+    "react-dom": "latest"
+  },
+```
+</Tab>
+
+<Tab value="npm">
+```diff title="apps/web/package.json"
+  "dependencies": {
++   "@repo/math": "*",
     "next": "latest",
     "react": "latest",
     "react-dom": "latest"
