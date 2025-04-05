@@ -56,50 +56,93 @@ impl Lockfile for NpmLockfile {
             return Err(Error::MissingWorkspace(workspace_path.to_string()));
         }
 
-        let possible_keys = [
-            // AllDependencies will return a key to avoid choosing the incorrect transitive dep
-            name.to_string(),
-            // If we didn't find the entry just using name, then this is an initial call to
-            // ResolvePackage based on information coming from internal packages'
-            // package.json First we check if the workspace uses a nested version of
-            // the package
-            format!("{}/node_modules/{}", workspace_path, name),
-            // Next we check for a top level version of the package
-            format!("node_modules/{}", name),
-        ];
-        possible_keys
-            .into_iter()
-            .filter_map(|key| {
-                self.packages.get(&key).map(|pkg| {
-                    let version = pkg.version.clone().unwrap_or_default();
-                    Ok(Package { key, version })
-                })
-            })
-            .next()
-            .transpose()
+        // Check directly for the name first - most efficient path
+        if let Some(pkg) = self.packages.get(name) {
+            if let Some(version) = pkg.version.as_ref() {
+                return Ok(Some(Package {
+                    key: name.to_string(),
+                    version: version.clone(),
+                }));
+            }
+        }
+
+        // Check for workspace node_modules path
+        let workspace_module_path = format!("{}/node_modules/{}", workspace_path, name);
+        if let Some(pkg) = self.packages.get(&workspace_module_path) {
+            if let Some(version) = pkg.version.as_ref() {
+                return Ok(Some(Package {
+                    key: workspace_module_path,
+                    version: version.clone(),
+                }));
+            }
+        }
+
+        // Finally check for top-level node_modules path
+        let top_level_path = format!("node_modules/{}", name);
+        if let Some(pkg) = self.packages.get(&top_level_path) {
+            if let Some(version) = pkg.version.as_ref() {
+                return Ok(Some(Package {
+                    key: top_level_path,
+                    version: version.clone(),
+                }));
+            }
+        }
+
+        Ok(None)
     }
 
     #[tracing::instrument(skip(self))]
     fn all_dependencies(&self, key: &str) -> Result<Option<HashMap<String, String>>, Error> {
-        self.packages
-            .get(key)
-            .map(|pkg| {
-                pkg.dep_keys()
-                    .filter_map(|name| {
-                        Self::possible_npm_deps(key, name)
-                            .into_iter()
-                            .find_map(|possible_key| {
-                                let entry = self.packages.get(&possible_key)?;
-                                match entry.version.as_deref() {
-                                    Some(version) => Some(Ok((possible_key, version.to_string()))),
-                                    None if entry.resolved.is_some() => None,
-                                    None => Some(Err(Error::MissingVersion(possible_key.clone()))),
-                                }
-                            })
-                    })
-                    .collect()
-            })
-            .transpose()
+        if let Some(pkg) = self.packages.get(key) {
+            // Create a HashMap with a capacity based on the number of dependencies to avoid
+            // reallocations
+            let total_deps = pkg.dependencies.len()
+                + pkg.dev_dependencies.len()
+                + pkg.optional_dependencies.len()
+                + pkg.peer_dependencies.len();
+
+            let mut result: HashMap<String, String> = HashMap::with_capacity(total_deps);
+
+            // Helper function to check for a package at the given path and add to result if
+            // found
+            let mut check_and_add = |possible_key: String| -> Result<bool, Error> {
+                if let Some(entry) = self.packages.get(&possible_key) {
+                    if let Some(version) = entry.version.as_deref() {
+                        result.insert(possible_key.clone(), version.to_string());
+                        return Ok(true);
+                    } else if entry.resolved.is_some() {
+                        return Ok(true); // Skip but don't report as error
+                    }
+                    return Err(Error::MissingVersion(possible_key));
+                }
+                Ok(false)
+            };
+
+            // Process all dependency keys
+            for name in pkg.dep_keys() {
+                let paths = Self::possible_npm_deps(key, name);
+
+                let mut found = false;
+                for possible_key in paths {
+                    match check_and_add(possible_key) {
+                        Ok(true) => {
+                            found = true;
+                            break;
+                        }
+                        Err(e) => return Err(e),
+                        _ => {}
+                    }
+                }
+
+                // If we didn't find the dependency in any possible location, we
+                // just skip it This matches the previous
+                // behavior
+            }
+
+            Ok(Some(result))
+        } else {
+            Ok(None)
+        }
     }
 
     fn subgraph(
@@ -186,13 +229,21 @@ impl NpmLockfile {
     }
 
     fn possible_npm_deps(key: &str, dep: &str) -> Vec<String> {
-        let mut possible_deps = vec![format!("{key}/node_modules/{dep}")];
+        let mut possible_deps = Vec::with_capacity(3); // Pre-allocate with a reasonable capacity
 
-        let mut curr = Some(key);
-        while let Some(key) = curr {
-            let next = Self::npm_path_parent(key);
-            possible_deps.push(format!("{}node_modules/{}", next.unwrap_or(""), dep));
-            curr = next;
+        // Direct node_modules path
+        possible_deps.push(format!("{key}/node_modules/{dep}"));
+
+        // Traverse up the node_modules hierarchy
+        let mut current_path = key;
+        while let Some(parent) = Self::npm_path_parent(current_path) {
+            possible_deps.push(format!("{}node_modules/{}", parent, dep));
+            current_path = parent;
+        }
+
+        // Add root-level node_modules path if not already added
+        if !key.is_empty() && !possible_deps.contains(&format!("node_modules/{}", dep)) {
+            possible_deps.push(format!("node_modules/{}", dep));
         }
 
         possible_deps

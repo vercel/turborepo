@@ -375,8 +375,9 @@ impl crate::Lockfile for PnpmLockfile {
         name: &str,
         version: &str,
     ) -> Result<Option<crate::Package>, crate::Error> {
-        // Check if version is a key
+        // Optimization: Early check for direct package match
         if self.has_package(version) {
+            // Only extract version if we found a match
             let extracted_version = self.extract_version(version)?;
             return Ok(Some(crate::Package {
                 key: version.into(),
@@ -384,33 +385,43 @@ impl crate::Lockfile for PnpmLockfile {
             }));
         }
 
+        // Resolve the specifier to a concrete version
         let Some(resolved_version) = self.resolve_specifier(workspace_path, name, version)? else {
             return Ok(None);
         };
 
+        // After resolution, check for the package in two ways
         let key = self.format_key(name, resolved_version);
 
+        // First, check if the formatted key exists
         if self.has_package(&key) {
-            let version = self
-                .package_version(&key)
-                .unwrap_or(resolved_version)
-                .to_owned();
-            Ok(Some(crate::Package { key, version }))
-        } else if self.has_package(resolved_version) {
-            let version = self.package_version(resolved_version).map_or_else(
-                || {
-                    self.extract_version(resolved_version)
-                        .map(|s| s.to_string())
-                },
-                |version| Ok(version.to_string()),
-            )?;
-            Ok(Some(crate::Package {
+            // Optimization: Avoid package_version lookup if possible by using
+            // resolved_version directly
+            let version = match self.package_version(&key) {
+                Some(v) => v.to_owned(),
+                None => resolved_version.to_owned(),
+            };
+
+            return Ok(Some(crate::Package { key, version }));
+        }
+
+        // Second, check if resolved_version itself is a package key
+        if self.has_package(resolved_version) {
+            // Get the actual version from the package if available
+            let version = if let Some(v) = self.package_version(resolved_version) {
+                v.to_owned()
+            } else {
+                // Only extract if we couldn't get the version directly
+                self.extract_version(resolved_version)?.to_string()
+            };
+
+            return Ok(Some(crate::Package {
                 key: resolved_version.to_string(),
                 version,
-            }))
-        } else {
-            Ok(None)
+            }));
         }
+
+        Ok(None)
     }
 
     #[tracing::instrument(skip(self))]
@@ -418,18 +429,37 @@ impl crate::Lockfile for PnpmLockfile {
         &self,
         key: &str,
     ) -> Result<Option<std::collections::HashMap<String, String>>, crate::Error> {
-        // Check snapshots for v7
-        if let Some(snapshot) = self
-            .snapshots
-            .as_ref()
-            .and_then(|snapshots| snapshots.get(key))
-        {
-            return Ok(Some(snapshot.dependencies()));
+        // Optimization: Check lockfile version to determine where to look first
+        match self.version() {
+            SupportedLockfileVersion::V7AndV9 => {
+                // For V7/V9, check snapshots first as they're more likely to contain the
+                // dependencies
+                if let Some(snapshots) = &self.snapshots {
+                    if let Some(snapshot) = snapshots.get(key) {
+                        return Ok(Some(snapshot.dependencies()));
+                    }
+                }
+
+                // Fallback to packages if not found in snapshots
+                if let Some(packages) = &self.packages {
+                    if let Some(entry) = packages.get(key) {
+                        return Ok(Some(entry.snapshot.dependencies()));
+                    }
+                }
+
+                Ok(None)
+            }
+            _ => {
+                // For other versions, check packages first
+                if let Some(packages) = &self.packages {
+                    if let Some(entry) = packages.get(key) {
+                        return Ok(Some(entry.snapshot.dependencies()));
+                    }
+                }
+
+                Ok(None)
+            }
         }
-        let Some(entry) = self.packages.as_ref().and_then(|pkgs| pkgs.get(key)) else {
-            return Ok(None);
-        };
-        Ok(Some(entry.snapshot.dependencies()))
     }
 
     fn subgraph(
@@ -589,12 +619,30 @@ impl Dependency {
 
 impl PackageSnapshotV7 {
     pub fn dependencies(&self) -> HashMap<String, String> {
-        self.dependencies
-            .iter()
-            .flatten()
-            .chain(self.optional_dependencies.iter().flatten())
-            .map(|(k, v)| (k.clone(), v.clone()))
-            .collect()
+        // Pre-allocate the HashMap with the expected capacity to avoid reallocations
+        let total_deps = self.dependencies.as_ref().map_or(0, |deps| deps.len())
+            + self
+                .optional_dependencies
+                .as_ref()
+                .map_or(0, |deps| deps.len());
+
+        let mut result = HashMap::with_capacity(total_deps);
+
+        // Add regular dependencies
+        if let Some(deps) = &self.dependencies {
+            for (k, v) in deps {
+                result.insert(k.clone(), v.clone());
+            }
+        }
+
+        // Add optional dependencies
+        if let Some(deps) = &self.optional_dependencies {
+            for (k, v) in deps {
+                result.insert(k.clone(), v.clone());
+            }
+        }
+
+        result
     }
 }
 

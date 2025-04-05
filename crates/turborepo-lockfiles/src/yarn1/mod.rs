@@ -62,7 +62,27 @@ impl Lockfile for Yarn1Lockfile {
         name: &str,
         version: &str,
     ) -> Result<Option<crate::Package>, crate::Error> {
-        for key in possible_keys(name, version) {
+        // Try direct match first (most common case)
+        let direct_key = format!("{name}@{version}");
+        if let Some(entry) = self.inner.get(&direct_key) {
+            return Ok(Some(crate::Package {
+                key: direct_key,
+                version: entry.version.clone(),
+            }));
+        }
+
+        // Check for npm: prefix (second most common case)
+        let npm_key = format!("{name}@npm:{version}");
+        if let Some(entry) = self.inner.get(&npm_key) {
+            return Ok(Some(crate::Package {
+                key: npm_key,
+                version: entry.version.clone(),
+            }));
+        }
+
+        // Check remaining protocols
+        for protocol in &PROTOCOLS[2..] {
+            let key = format!("{name}@{protocol}{version}");
             if let Some(entry) = self.inner.get(&key) {
                 return Ok(Some(crate::Package {
                     key,
@@ -79,15 +99,18 @@ impl Lockfile for Yarn1Lockfile {
         &self,
         key: &str,
     ) -> Result<Option<std::collections::HashMap<String, String>>, crate::Error> {
-        let Some(entry) = self.inner.get(key) else {
-            return Ok(None);
-        };
-
-        let all_deps: std::collections::HashMap<_, _> = entry.dependency_entries().collect();
-        Ok(match all_deps.is_empty() {
-            false => Some(all_deps),
-            true => None,
-        })
+        if let Some(entry) = self.inner.get(key) {
+            let deps = entry
+                .dependency_entries()
+                .collect::<std::collections::HashMap<_, _>>();
+            if deps.is_empty() {
+                Ok(None)
+            } else {
+                Ok(Some(deps))
+            }
+        } else {
+            Ok(None)
+        }
     }
 
     fn subgraph(
@@ -144,11 +167,29 @@ pub fn yarn_subgraph(contents: &[u8], packages: &[String]) -> Result<Vec<u8>, cr
 
 impl Entry {
     fn dependency_entries(&self) -> impl Iterator<Item = (String, String)> + '_ {
-        self.dependencies
-            .iter()
-            .flatten()
-            .chain(self.optional_dependencies.iter().flatten())
-            .map(|(k, v)| (k.clone(), v.clone()))
+        let total_deps = self.dependencies.as_ref().map_or(0, |deps| deps.len())
+            + self
+                .optional_dependencies
+                .as_ref()
+                .map_or(0, |deps| deps.len());
+
+        let mut result = Vec::with_capacity(total_deps);
+
+        // Add regular dependencies
+        if let Some(deps) = &self.dependencies {
+            for (k, v) in deps {
+                result.push((k.clone(), v.clone()));
+            }
+        }
+
+        // Add optional dependencies
+        if let Some(deps) = &self.optional_dependencies {
+            for (k, v) in deps {
+                result.push((k.clone(), v.clone()));
+            }
+        }
+
+        result.into_iter()
     }
 }
 
