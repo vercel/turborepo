@@ -52,8 +52,8 @@ export const TurborepoWordmarkDark = ({
         fill="white"
       />
       <path
-        fill-rule="evenodd"
-        clip-rule="evenodd"
+        fillRule="evenodd"
+        clipRule="evenodd"
         d="M40.2115 14.744V7.125C56.7719 8.0104 69.9275 21.7208 69.9275 38.5016C69.9275 55.2824 56.7719 68.989 40.2115 69.8782V62.2592C52.5539 61.3776 62.3275 51.0644 62.3275 38.5016C62.3275 25.9388 52.5539 15.6256 40.2115 14.744ZM20.5048 54.0815C17.233 50.3043 15.124 45.4935 14.7478 40.2115H7.125C7.5202 47.6025 10.4766 54.3095 15.1088 59.4737L20.501 54.0815H20.5048ZM36.7916 69.8782V62.2592C31.5058 61.883 26.695 59.7778 22.9178 56.5022L17.5256 61.8944C22.6936 66.5304 29.4006 69.483 36.7878 69.8782H36.7916Z"
         fill="url(#paint0_linear_2028_477)"
       />
@@ -66,8 +66,8 @@ export const TurborepoWordmarkDark = ({
           y2="42.4236"
           gradientUnits="userSpaceOnUse"
         >
-          <stop stop-color="#0096FF" />
-          <stop offset="1" stop-color="#FF1E56" />
+          <stop stopColor="#0096FF" />
+          <stop offset="1" stopColor="#FF1E56" />
         </linearGradient>
       </defs>
     </svg>
@@ -128,8 +128,8 @@ export const TurborepoWordmarkLight = ({
         fill="black"
       />
       <path
-        fill-rule="evenodd"
-        clip-rule="evenodd"
+        fillRule="evenodd"
+        clipRule="evenodd"
         d="M40.2115 14.744V7.125C56.7719 8.0104 69.9275 21.7208 69.9275 38.5016C69.9275 55.2824 56.7719 68.989 40.2115 69.8782V62.2592C52.5539 61.3776 62.3275 51.0644 62.3275 38.5016C62.3275 25.9388 52.5539 15.6256 40.2115 14.744ZM20.5048 54.0815C17.233 50.3043 15.124 45.4935 14.7478 40.2115H7.125C7.5202 47.6025 10.4766 54.3095 15.1088 59.4737L20.501 54.0815H20.5048ZM36.7916 69.8782V62.2592C31.5058 61.883 26.695 59.7778 22.9178 56.5022L17.5256 61.8944C22.6936 66.5304 29.4006 69.483 36.7878 69.8782H36.7916Z"
         fill="url(#paint0_linear_2028_252)"
       />
@@ -142,8 +142,8 @@ export const TurborepoWordmarkLight = ({
           y2="42.4236"
           gradientUnits="userSpaceOnUse"
         >
-          <stop stop-color="#0096FF" />
-          <stop offset="1" stop-color="#FF1E56" />
+          <stop stopColor="#0096FF" />
+          <stop offset="1" stopColor="#FF1E56" />
         </linearGradient>
       </defs>
     </svg>
