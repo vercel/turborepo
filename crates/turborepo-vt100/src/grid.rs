@@ -267,7 +267,7 @@ impl Grid {
                 );
                 cell.select(false);
             }
-        };
+        }
         self.selection = None;
     }
 
@@ -290,7 +290,7 @@ impl Grid {
                 );
                 cell.select(true);
             }
-        };
+        }
     }
 
     pub fn update_selection(&mut self, row: u16, col: u16) {
@@ -314,7 +314,7 @@ impl Grid {
                 );
                 cell.select(true);
             }
-        };
+        }
     }
 
     fn translate_pos(&self, row: u16, col: u16) -> AbsPos {

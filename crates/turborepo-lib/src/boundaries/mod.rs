@@ -1,3 +1,5 @@
+#![allow(clippy::sliced_string_as_bytes)]
+
 mod config;
 mod imports;
 mod tags;

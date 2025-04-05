@@ -195,18 +195,17 @@ impl Workspace {
         from_commit: &str,
     ) -> LockfileContents {
         let lockfile_name = self.graph.package_manager().lockfile_name();
-        changed_files
-            .contains(AnchoredSystemPath::new(&lockfile_name).unwrap())
-            .then(|| {
-                let git = SCM::new(workspace_root);
-                let anchored_path = workspace_root.join_component(lockfile_name);
-                git.previous_content(Some(from_commit), &anchored_path)
-                    .map(LockfileContents::Changed)
-                    .inspect_err(|e| debug!("{e}"))
-                    .ok()
-                    .unwrap_or(LockfileContents::UnknownChange)
-            })
-            .unwrap_or(LockfileContents::Unchanged)
+        if changed_files.contains(AnchoredSystemPath::new(&lockfile_name).unwrap()) {
+            let git = SCM::new(workspace_root);
+            let anchored_path = workspace_root.join_component(lockfile_name);
+            git.previous_content(Some(from_commit), &anchored_path)
+                .map(LockfileContents::Changed)
+                .inspect_err(|e| debug!("{e}"))
+                .ok()
+                .unwrap_or(LockfileContents::UnknownChange)
+        } else {
+            LockfileContents::Unchanged
+        }
     }
 
     /// Given a set of "changed" files, returns a set of packages that are
