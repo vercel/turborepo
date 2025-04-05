@@ -6,10 +6,8 @@ export function CreateTurboCallout(): JSX.Element {
     <Callout type="good-to-know">
       {" "}
       This guide assumes you&apos;re using{" "}
-      <Link href="/docs/getting-started/installation">
-        create-turbo
-      </Link>{" "}
-      or a repository with a similar structure.
+      <Link href="/docs/getting-started/installation">create-turbo</Link> or a
+      repository with a similar structure.
     </Callout>
   );
 }
