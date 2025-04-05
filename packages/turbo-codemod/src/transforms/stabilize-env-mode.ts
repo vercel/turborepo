@@ -6,6 +6,7 @@ import type { Transformer, TransformerArgs } from "../types";
 import { getTransformerHelpers } from "../utils/getTransformerHelpers";
 import type { TransformerResults } from "../runner";
 import { loadTurboJson } from "../utils/loadTurboJson";
+import { isPipelineKeyMissing } from "../utils/is-pipeline-key-missing";
 
 // transformer details
 const TRANSFORMER = "stabilize-env-mode";
@@ -59,6 +60,10 @@ function migrateRootConfig(config: ExperimentalRootSchema) {
 }
 
 function migrateTaskConfigs(config: ExperimentalSchema) {
+  if (isPipelineKeyMissing(config)) {
+    return;
+  }
+
   for (const [_, taskDef] of Object.entries(config.pipeline)) {
     const oldConfig = taskDef.experimentalPassThroughEnv;
     const newConfig = taskDef.passThroughEnv;

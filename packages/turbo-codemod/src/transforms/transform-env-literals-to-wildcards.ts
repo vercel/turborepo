@@ -6,6 +6,7 @@ import type { Transformer, TransformerArgs } from "../types";
 import { getTransformerHelpers } from "../utils/getTransformerHelpers";
 import type { TransformerResults } from "../runner";
 import { loadTurboJson } from "../utils/loadTurboJson";
+import { isPipelineKeyMissing } from "../utils/is-pipeline-key-missing";
 
 // transformer details
 const TRANSFORMER = "transform-env-literals-to-wildcards";
@@ -41,6 +42,10 @@ function migrateRootConfig(config: RootSchemaV1) {
 }
 
 function migrateTaskConfigs(config: SchemaV1) {
+  if (isPipelineKeyMissing(config)) {
+    return;
+  }
+
   for (const [_, taskDef] of Object.entries(config.pipeline)) {
     const { env, passThroughEnv } = taskDef;
 
