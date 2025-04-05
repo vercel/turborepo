@@ -22,12 +22,12 @@ export function Tabs({
   );
 }
 
-const checkPackageManagerIndex = (index: number, provided: string) => {
-  const expectedValues = ["pnpm", "yarn", "npm"];
+const packageManagers = ["pnpm", "yarn", "npm"];
 
-  if (provided !== expectedValues[index]) {
+const checkPackageManagerIndex = (index: number, provided: string) => {
+  if (provided !== packageManagers[index]) {
     throw new Error(
-      `Package manager at index ${index} must be ${expectedValues[index]}.`
+      `Package manager at index ${index} must be ${packageManagers[index]}.`
     );
   }
 };
@@ -41,8 +41,6 @@ export function PackageManagerTabs({
   storageKey?: string;
   children: ReactNode;
 }): JSX.Element {
-  const items = ["pnpm", "yarn", "npm"];
-
   if (!Array.isArray(children)) {
     throw new Error("Children must be an array.");
   }
@@ -56,10 +54,13 @@ export function PackageManagerTabs({
   });
 
   return (
-    <FumaTabs id={storageKey} items={items} {...props}>
+    <FumaTabs id={storageKey} items={packageManagers} {...props}>
       {children.map((child, index) => {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-assignment
-        return { ...child, props: { ...child.props, value: items[index] } };
+        return {
+          ...child,
+          props: { ...child.props, value: packageManagers[index] },
+        };
       })}
     </FumaTabs>
   );
