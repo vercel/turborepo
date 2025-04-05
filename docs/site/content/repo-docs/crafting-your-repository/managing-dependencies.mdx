@@ -11,32 +11,35 @@ import { LinkToDocumentation } from '#/components/link-to-documentation';
 - **Internal dependencies** let you share functionality within your repository, dramatically improving discoverability and usability of shared code. We will discuss how to build an Internal Package in [the next guide](/docs/crafting-your-repository/creating-an-internal-package).
 
 <PackageManagerTabs>
-<Tab>
-```json title="./apps/web/package.json"
-{
-  "dependencies": {
-    "next": "latest", // External dependency
-    "@repo/ui": "*" // Internal dependency
-  }
-}
-```
-</Tab>
-<Tab>
-```json title="./apps/web/package.json"
-{
-  "dependencies": {
-    "next": "latest", // External dependency
-    "@repo/ui": "*" // Internal dependency
-  }
-}
-```
-</Tab>
-<Tab>
+
+<Tab value="pnpm">
 ```json title="./apps/web/package.json"
 {
   "dependencies": {
     "next": "latest", // External dependency
     "@repo/ui": "workspace:*" // Internal dependency
+  }
+}
+```
+</Tab>
+
+<Tab value="yarn">
+```json title="./apps/web/package.json"
+{
+  "dependencies": {
+    "next": "latest", // External dependency
+    "@repo/ui": "*" // Internal dependency
+  }
+}
+```
+</Tab>
+
+<Tab value="npm">
+```json title="./apps/web/package.json"
+{
+  "dependencies": {
+    "next": "latest", // External dependency
+    "@repo/ui": "*" // Internal dependency
   }
 }
 ```
@@ -57,16 +60,17 @@ When you install a dependency in your repository, you should install it directly
 To quickly install dependencies in multiple packages, you can use your package manager:
 
 <PackageManagerTabs>
-<Tab>
+
+<Tab value="pnpm">
 
 ```bash title="Terminal"
-npm install jest --workspace=web --workspace=@repo/ui --save-dev
+pnpm install jest --save-dev --recursive --filter=web --filter=@repo/ui --filter=@repo/web
 ```
 
-<LinkToDocumentation href="https://docs.npmjs.com/cli/v7/using-npm/config#workspace">npm documentation</LinkToDocumentation>
+<LinkToDocumentation href="https://pnpm.io/cli/recursive">pnpm documentation</LinkToDocumentation>
 </Tab>
 
-<Tab>
+<Tab value="yarn">
 Yarn 1:
 
 ```bash title="Terminal"
@@ -89,13 +93,13 @@ yarn workspaces foreach -R --from '{web,@repo/ui}' add jest --dev
 </LinkToDocumentation>
 </Tab>
 
-<Tab>
+<Tab value="npm">
 
 ```bash title="Terminal"
-pnpm install jest --save-dev --recursive --filter=web --filter=@repo/ui --filter=@repo/web
+npm install jest --workspace=web --workspace=@repo/ui --save-dev
 ```
 
-<LinkToDocumentation href="https://pnpm.io/cli/recursive">pnpm documentation</LinkToDocumentation>
+<LinkToDocumentation href="https://docs.npmjs.com/cli/v7/using-npm/config#workspace">npm documentation</LinkToDocumentation>
 </Tab>
 </PackageManagerTabs>
 
@@ -154,15 +158,16 @@ Tools like [`syncpack`](https://www.npmjs.com/package/syncpack), [`manypkg`](htt
 You can use your package manager to update dependency versions in one command.
 
 <PackageManagerTabs>
-<Tab>
+
+<Tab value="pnpm">
 ```bash title="Terminal"
-npm install typescript@latest --workspaces
+pnpm up --recursive typescript@latest
 ```
-  <small>[→ npm documentation](https://docs.npmjs.com/cli/v7/using-npm/config#workspaces)</small>
+  <small>[→ pnpm documentation](https://pnpm.io/cli/update#--recursive--r)</small>
 
 </Tab>
 
-<Tab>
+<Tab value="yarn">
 Yarn 1:
 ```bash title="Terminal"
 yarn upgrade-interactive --latest
@@ -179,11 +184,11 @@ yarn upgrade typescript@latest --upgrade
 
 </Tab>
 
-<Tab>
+<Tab value="npm">
 ```bash title="Terminal"
-pnpm up --recursive typescript@latest
+npm install typescript@latest --workspaces
 ```
-  <small>[→ pnpm documentation](https://pnpm.io/cli/update#--recursive--r)</small>
+  <small>[→ npm documentation](https://docs.npmjs.com/cli/v7/using-npm/config#workspaces)</small>
 
 </Tab>
 </PackageManagerTabs>

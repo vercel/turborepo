@@ -12,24 +12,27 @@ import { PackageManagerTabs, Tab } from '#/components/tabs';
 Install `eslint-config-turbo` into the location where your ESLint configuration is held:
 
 <PackageManagerTabs>
-  <Tab>
+
+  <Tab value="pnpm">
 
     ```bash title="Terminal"
-    npm i --save-dev eslint-config-turbo -w @acme/eslint-config
+    pnpm add eslint-config-turbo --filter=@repo/eslint-config
     ```
 
   </Tab>
-  <Tab>
+
+  <Tab value="yarn">
 
     ```bash title="Terminal"
     yarn workspace @acme/eslint-config add eslint-config-turbo --dev
     ```
 
   </Tab>
-  <Tab>
+
+  <Tab value="npm">
 
     ```bash title="Terminal"
-    pnpm add eslint-config-turbo --filter=@repo/eslint-config
+    npm i --save-dev eslint-config-turbo -w @acme/eslint-config
     ```
 
   </Tab>

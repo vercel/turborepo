@@ -10,31 +10,32 @@ Internal Packages are libraries whose source code is inside your Workspace. You 
 Internal Packages are used in your repository by installing them in `package.json` similar to an external package coming from the npm registry. However, instead of marking a version to install, you can reference the package using your package manager's workspace installation syntax:
 
 <PackageManagerTabs>
-<Tab>
-```json title="./apps/web/package.json"
-{
-  "dependencies": {
-    "@repo/ui": "*" // [!code highlight]
-  }
-}
-```
-</Tab>
 
-<Tab>
-```json title="./apps/web/package.json"
-{
-  "dependencies": {
-    "@repo/ui": "*" // [!code highlight]
-  }
-}
-```
-</Tab>
-
-<Tab>
+<Tab value="pnpm">
 ```json title="./apps/web/package.json"
 {
   "dependencies": {
     "@repo/ui": "workspace:*" // [!code highlight]
+  }
+}
+```
+</Tab>
+
+<Tab value="yarn">
+```json title="./apps/web/package.json"
+{
+  "dependencies": {
+    "@repo/ui": "*" // [!code highlight]
+  }
+}
+```
+</Tab>
+
+<Tab value="npm">
+```json title="./apps/web/package.json"
+{
+  "dependencies": {
+    "@repo/ui": "*" // [!code highlight]
   }
 }
 ```

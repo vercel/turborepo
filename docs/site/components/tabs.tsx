@@ -22,6 +22,16 @@ export function Tabs({
   );
 }
 
+const checkPackageManagerIndex = (index: number, provided: string) => {
+  const expectedValues = ["pnpm", "yarn", "npm"];
+
+  if (provided !== expectedValues[index]) {
+    throw new Error(
+      `Package manager at index ${index} must be ${expectedValues[index]}.`
+    );
+  }
+};
+
 /** Use <Tab /> component to create the tabs. They will automatically be assigned their values in the order ["npm", "yarn", "pnpm"]. */
 export function PackageManagerTabs({
   storageKey = "package-manager-tabs",
@@ -31,11 +41,19 @@ export function PackageManagerTabs({
   storageKey?: string;
   children: ReactNode;
 }): JSX.Element {
-  const items = ["npm", "yarn", "pnpm"];
+  const items = ["pnpm", "yarn", "npm"];
 
   if (!Array.isArray(children)) {
     throw new Error("Children must be an array.");
   }
+
+  children.forEach((packageManager, index) => {
+    if (!packageManager.props.value) {
+      throw new Error(`Package manager tab is missing a value.`);
+    }
+
+    checkPackageManagerIndex(index, packageManager.props.value);
+  });
 
   return (
     <FumaTabs id={storageKey} items={items} {...props}>

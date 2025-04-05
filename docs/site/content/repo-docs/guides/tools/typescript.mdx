@@ -29,15 +29,16 @@ TypeScript's `tsconfig.json` sets the configuration for the TypeScript compiler 
 This guide will use [`create-turbo`](/docs/reference/create-turbo) as an example.
 
 <PackageManagerTabs>
-<Tab>
+
+<Tab value="pnpm">
 
 ```bash title="Terminal"
-npx create-turbo@latest
+pnpm dlx create-turbo@latest
 ```
 
 </Tab>
 
-<Tab>
+<Tab value="yarn">
 
 ```bash title="Terminal"
 yarn dlx create-turbo@latest
@@ -45,10 +46,10 @@ yarn dlx create-turbo@latest
 
 </Tab>
 
-<Tab>
+<Tab value="npm">
 
 ```bash title="Terminal"
-pnpm dlx create-turbo@latest
+npx create-turbo@latest
 ```
 
 </Tab>
@@ -98,31 +99,34 @@ Inside `package.json`, name the package so it can be referenced in the rest of t
 First, install the `@repo/typescript-config` package into your package:
 
 <PackageManagerTabs>
-<Tab>
-```json title="./apps/web/package.json"
-{
-  "devDependencies": {
-     "@repo/typescript-config": "*",
-     "typescript": "latest",
-  }
-}
-```
-</Tab>
-<Tab>
-```json title="./apps/web/package.json"
-{
-  "devDependencies": {
-     "@repo/typescript-config": "*",
-     "typescript": "latest",
-  }
-}
-```
-</Tab>
-<Tab>
+
+<Tab value="pnpm">
 ```json title="./apps/web/package.json"
 {
   "devDependencies": {
      "@repo/typescript-config": "workspace:*",
+     "typescript": "latest",
+  }
+}
+```
+</Tab>
+
+<Tab value="yarn">
+```json title="./apps/web/package.json"
+{
+  "devDependencies": {
+     "@repo/typescript-config": "*",
+     "typescript": "latest",
+  }
+}
+```
+</Tab>
+
+<Tab value="npm">
+```json title="./apps/web/package.json"
+{
+  "devDependencies": {
+     "@repo/typescript-config": "*",
      "typescript": "latest",
   }
 }
