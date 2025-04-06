@@ -190,7 +190,7 @@ CMD node apps/web/server.js
 
 ## Remote Caching
 
-To take advantage of remote caches during Docker builds, you will need to make sure your build container has credentials to access your [Remote Cache](/repo/docs/core-concepts/remote-caching).
+To take advantage of remote caches during Docker builds, you will need to make sure your build container has credentials to access your [Remote Cache](/docs/core-concepts/remote-caching).
 
 There are many ways to take care of secrets in a Docker image. We will use a simple strategy here with multi-stage builds using secrets as build arguments that will get hidden for the final image.
 

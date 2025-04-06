@@ -5,6 +5,7 @@ import { Heading } from "fumadocs-ui/components/heading";
 import type { ReactNode, Ref } from "react";
 import { NodeJsLogo } from "./app/_components/logos";
 import { ThemeAwareImage } from "./components/theme-aware-image";
+import { cn } from "./components/cn";
 
 const iconAdder = (title?: string): JSX.Element | null => {
   if (title?.endsWith("turbo.json")) {
@@ -45,6 +46,17 @@ const iconAdder = (title?: string): JSX.Element | null => {
 
 export const mdxComponents: MDXComponents = {
   ...defaultComponents,
+  h1: (props) => {
+    const { className, ...rest } = props;
+
+    return (
+      <Heading
+        className={cn("font-semibold text-center", className)}
+        as="h1"
+        {...rest}
+      />
+    );
+  },
   h2: (props) => (
     <Heading className="scroll-mt-20 text-heading-24" as="h2" {...props} />
   ),
@@ -53,6 +65,9 @@ export const mdxComponents: MDXComponents = {
   ),
   h4: (props) => (
     <Heading className="scroll-mt-20 text-lg" as="h4" {...props} />
+  ),
+  a: (props) => (
+    <a className="text-[var(--ds-blue-900)] no-underline" {...props} />
   ),
   pre: ({
     ref: _ref,

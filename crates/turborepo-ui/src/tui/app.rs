@@ -201,6 +201,15 @@ impl<W> App<W> {
         Ok(())
     }
 
+    pub fn scroll_terminal_output_by_page(&mut self, direction: Direction) -> Result<(), Error> {
+        let pane_rows = self.size.pane_rows();
+        let task = self.get_full_task_mut()?;
+        // Scroll by the height of the terminal pane
+        task.scroll_by(direction, usize::from(pane_rows))?;
+
+        Ok(())
+    }
+
     pub fn enter_search(&mut self) -> Result<(), Error> {
         self.section_focus = LayoutSections::Search {
             previous_selection: self.active_task()?.to_string(),
@@ -550,6 +559,18 @@ impl<W> App<W> {
             term.resize(pane_rows, pane_cols);
         })
     }
+
+    pub fn jump_to_logs_top(&mut self) -> Result<(), Error> {
+        let task = self.get_full_task_mut()?;
+        task.parser.screen_mut().set_scrollback(usize::MAX);
+        Ok(())
+    }
+
+    pub fn jump_to_logs_bottom(&mut self) -> Result<(), Error> {
+        let task = self.get_full_task_mut()?;
+        task.parser.screen_mut().set_scrollback(0);
+        Ok(())
+    }
 }
 
 impl<W: Write> App<W> {
@@ -816,6 +837,22 @@ fn update(
         Event::ScrollDown => {
             app.is_task_selection_pinned = true;
             app.scroll_terminal_output(Direction::Down)?;
+        }
+        Event::PageUp => {
+            app.is_task_selection_pinned = true;
+            app.scroll_terminal_output_by_page(Direction::Up)?;
+        }
+        Event::PageDown => {
+            app.is_task_selection_pinned = true;
+            app.scroll_terminal_output_by_page(Direction::Down)?;
+        }
+        Event::JumpToLogsTop => {
+            app.is_task_selection_pinned = true;
+            app.jump_to_logs_top()?;
+        }
+        Event::JumpToLogsBottom => {
+            app.is_task_selection_pinned = true;
+            app.jump_to_logs_bottom()?;
         }
         Event::EnterInteractive => {
             app.is_task_selection_pinned = true;

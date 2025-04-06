@@ -4,7 +4,7 @@ import { loader } from "fumadocs-core/source";
 import { openapiDocs, openapiMeta } from "@/.source";
 
 export const openapiPages = loader({
-  baseUrl: "/repo/docs/openapi",
+  baseUrl: "/docs/openapi",
   source: createMDXSource(openapiDocs, openapiMeta),
   pageTree: {
     attachFile,

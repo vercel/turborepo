@@ -4,12 +4,13 @@ description: Learn how to configure Turborepo through `turbo.json`.
 ---
 
 import { Callout } from '#/components/callout';
+import { InVersion } from '#/components/in-version';
 import { ExperimentalBadge } from '#/components/experimental-badge';
 import Link from 'next/link';
 
 Configure the behavior of `turbo` by using a `turbo.json` file in your Workspace's root directory. You can also:
 
-- Use [Package Configurations](/repo/docs/reference/package-configurations) for more granular control.
+- Use [Package Configurations](/docs/reference/package-configurations) for more granular control.
 - Use `turbo.jsonc` to add comments to your configuration with IDE support.
 
 ## Global options
@@ -22,7 +23,7 @@ Configure the behavior of `turbo` by using a `turbo.json` file in your Workspace
 }
 ```
 
-Extend from the root `turbo.json` to create specific configuration for a package using [Package Configurations](/repo/docs/reference/package-configurations).
+Extend from the root `turbo.json` to create specific configuration for a package using [Package Configurations](/docs/reference/package-configurations).
 
 - The only valid value for `extends` is `["//"]` to inherit configuration from the root `turbo.json`.
 - If `extends` is used in the root `turbo.json`, it will be ignored.
@@ -64,7 +65,7 @@ For more on wildcard and negation syntax, [see the `env` section](#env).
 }
 ```
 
-A list of environment variables that you want to make available to tasks. Using this key opts all tasks into [Strict Environment Variable Mode](/repo/docs/crafting-your-repository/using-environment-variables#strict-mode).
+A list of environment variables that you want to make available to tasks. Using this key opts all tasks into [Strict Environment Variable Mode](/docs/crafting-your-repository/using-environment-variables#strict-mode).
 
 Additionally, Turborepo has a built-in set of global passthrough variables for common cases, like operating system environment variables. This includes variables like `HOME`, `PATH`, `APPDATA`, `SHELL`, `PWD`, and more. The full list can be found [in the source code](https://github.com/vercel/turborepo/blob/main/crates/turborepo-lib/src/task_hash.rs).
 
@@ -94,7 +95,7 @@ Select a terminal UI for the repository.
 
 Default: `false`
 
-Turborepo uses your repository's lockfile to determine caching behavior, [Package Graphs](https://turbo.build/repo/docs/core-concepts/internal-packages), and more. Because of this, we use [the `packageManager` field](https://nodejs.org/api/packages.html#packagemanager) to help you stabilize your Turborepo.
+Turborepo uses your repository's lockfile to determine caching behavior, [Package Graphs](https://turbo.build/docs/core-concepts/internal-packages), and more. Because of this, we use [the `packageManager` field](https://nodejs.org/api/packages.html#packagemanager) to help you stabilize your Turborepo.
 
 To help with incremental migration or in situations where you can't use the `packageManager` field, you may use `--dangerously-disable-package-manager-check` to opt out of this check and assume the risks of unstable lockfiles producing unpredictable behavior. When disabled, Turborepo will attempt a best-effort discovery of the intended package manager meant for the repository.
 
@@ -106,9 +107,9 @@ To help with incremental migration or in situations where you can't use the `pac
 
 <Callout type="info">
   You may also opt out of this check via
-  [`flag`](/repo/docs/reference/run#--dangerously-disable-package-manager-check)
-  or the
-  [`TURBO_DANGEROUSLY_DISABLE_PACKAGE_MANAGER_CHECK`](https://turbo.build/repo/docs/reference/system-environment-variables)
+  [`flag`](/docs/reference/run#--dangerously-disable-package-manager-check) or
+  the
+  [`TURBO_DANGEROUSLY_DISABLE_PACKAGE_MANAGER_CHECK`](https://turbo.build/docs/reference/system-environment-variables)
   environment variable.
 </Callout>
 
@@ -156,7 +157,7 @@ Turborepo's Environment Modes allow you to control which environment variables a
 }
 ```
 
-Read more about [Environment Modes](/repo/docs/crafting-your-repository/using-environment-variables#environment-modes).
+Read more about [Environment Modes](/docs/crafting-your-repository/using-environment-variables#environment-modes).
 
 ### `tags` <ExperimentalBadge>Experimental</ExperimentalBadge>
 
@@ -166,15 +167,15 @@ Read more about [Environment Modes](/repo/docs/crafting-your-repository/using-en
 }
 ```
 
-Adds a tag to a package for use with [Boundaries](/repo/docs/reference/boundaries).
+Adds a tag to a package for use with [Boundaries](/docs/reference/boundaries).
 
-This key only works in [Package Configurations](/repo/docs/reference/package-configurations). Using this key in a root `turbo.json` will result in an error.
+This key only works in [Package Configurations](/docs/reference/package-configurations). Using this key in a root `turbo.json` will result in an error.
 
 ## Defining tasks
 
 ### `tasks`
 
-Each key in the `tasks` object is the name of a task that can be executed by [`turbo run`](/repo/docs/reference/run). Turborepo will search the packages described in your [Workspace's configuration](/repo/docs/crafting-your-repository/structuring-a-repository#specifying-packages-in-a-monorepo) for scripts in `package.json` with the name of the task.
+Each key in the `tasks` object is the name of a task that can be executed by [`turbo run`](/docs/reference/run). Turborepo will search the packages described in your [Workspace's configuration](/docs/crafting-your-repository/structuring-a-repository#specifying-packages-in-a-monorepo) for scripts in `package.json` with the name of the task.
 
 Using the rest of the configuration described in the task, Turborepo will run the scripts in the described order, caching logs and file outputs in [the `outputs` key](#outputs) when provided.
 
@@ -278,7 +279,7 @@ The list of environment variables a task depends on.
 <Callout type="good-to-know">
   Turborepo automatically includes environment variables prefixed by common
   frameworks through [Framework
-  Inference](/repo/docs/crafting-your-repository/using-environment-variables#framework-inference).
+  Inference](/docs/crafting-your-repository/using-environment-variables#framework-inference).
   For example, if your package is a Next.js project, you do not need to specify
   any environment variables that [start with
   `NEXT_PUBLIC_`](https://nextjs.org/docs/basic-features/environment-variables#exposing-environment-variables-to-the-browser).
@@ -328,7 +329,7 @@ A leading `!` means that the entire pattern will be negated. For instance, the `
 
 ### `passThroughEnv`
 
-An allowlist of environment variables that should be made available to this task's runtime, even when in [Strict Environment Mode](/repo/docs/crafting-your-repository/using-environment-variables#strict-mode).
+An allowlist of environment variables that should be made available to this task's runtime, even when in [Strict Environment Mode](/docs/crafting-your-repository/using-environment-variables#strict-mode).
 
 ```jsonc title="./turbo.json"
 {
@@ -392,7 +393,7 @@ Default: `[]`, all files in the package that are checked into source control
 
 A list of file glob patterns relative to the package's `package.json` to consider when determining if a package has changed. `turbo.json` is **always** considered an input.
 
-Visit the [file glob specification](/repo/docs/reference/globs) for more information on globbing syntax.
+Visit the [file glob specification](/docs/reference/globs) for more information on globbing syntax.
 
 ```jsonc title="./turbo.json"
 {
@@ -447,7 +448,7 @@ Starting a file glob with `$TURBO_ROOT$` will change the glob to be relative to 
 
 Default: `full`
 
-Set output logging verbosity. Can be overridden by the [`--output-logs`](/repo/docs/reference/run#--output-logs-option) CLI option.
+Set output logging verbosity. Can be overridden by the [`--output-logs`](/docs/reference/run#--output-logs-option) CLI option.
 
 | Option        | Description                       |
 | ------------- | --------------------------------- |
@@ -518,9 +519,25 @@ Label a `persistent` task as `interruptible` to allow it to be restarted by `tur
 that are affected. However, if a task is persistent, it will not be restarted by default.
 To enable restarting persistent tasks, set `interruptible` to `true`.
 
+### `with`
+
+A list of tasks that will be ran alongside this task. This is most useful for long-running tasks that you want to ensure always run at the same time.
+
+```json title="./apps/web/turbo.json"
+{
+  "tasks": {
+    "dev": {
+      "with": ["api#dev"],
+      "persistent": true,
+      "cache": false
+    }
+  }
+}
+```
+
 ## Boundaries
 
-The `boundaries` tag allows you to define rules for the [`boundaries` command](/repo/docs/reference/boundaries).
+The `boundaries` tag allows you to define rules for the [`boundaries` command](/docs/reference/boundaries).
 
 ```json title="./turbo.json"
 {
@@ -530,7 +547,7 @@ The `boundaries` tag allows you to define rules for the [`boundaries` command](/
 
 ### `tags`
 
-Each key in the `tags` object is the name of a tag that can be checked with [`turbo boundaries`](/repo/docs/reference/boundaries).
+Each key in the `tags` object is the name of a tag that can be checked with [`turbo boundaries`](/docs/reference/boundaries).
 
 In the configuration object for a tag, you can define rules for dependencies and dependents.
 

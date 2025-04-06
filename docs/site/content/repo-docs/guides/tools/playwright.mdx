@@ -11,7 +11,7 @@ We recommend creating a Playwright package for each test suite that you'd like t
 
 ## Handling Playwright's environment variables
 
-Playwright requires several environment variables to run correctly. To ensure that these variables are available within your tasks in [Strict Mode](/repo/docs/crafting-your-repository/using-environment-variables#strict-mode), you'll want to add them to your pass through variables using [`passThroughEnv`](/repo/docs/reference/configuration#passthroughenv) in your end-to-end task or [`globalPassThroughEnv`](/repo/docs/reference/configuration#globalpassthroughenv) globally, depending on your scoping preferences.
+Playwright requires several environment variables to run correctly. To ensure that these variables are available within your tasks in [Strict Mode](/docs/crafting-your-repository/using-environment-variables#strict-mode), you'll want to add them to your pass through variables using [`passThroughEnv`](/docs/reference/configuration#passthroughenv) in your end-to-end task or [`globalPassThroughEnv`](/docs/reference/configuration#globalpassthroughenv) globally, depending on your scoping preferences.
 
 <Tabs items={["Only in end-to-end task", "Globally"]}>
 
@@ -91,7 +91,7 @@ This relationship can be expressed in `turbo.json` and the end-to-end suite's `p
 
 </Tabs>
 
-Later on, when you want to run your end-to-end tests, use [the `--only` flag](/repo/docs/reference/run#--only) to run end-to-end tests without running the application's build first. As an example, your command may look like `turbo run e2e --filter=@repo/playwright-myapp --only`.
+Later on, when you want to run your end-to-end tests, use [the `--only` flag](/docs/reference/run#--only) to run end-to-end tests without running the application's build first. As an example, your command may look like `turbo run e2e --filter=@repo/playwright-myapp --only`.
 
 ## Sharing Playwright utilities
 

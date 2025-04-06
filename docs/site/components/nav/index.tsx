@@ -16,12 +16,16 @@ import { ForwardSlash } from "../icons/ForwardSlash";
 import { Button } from "../button";
 import { FeedbackWidget } from "../feedback-widget";
 import { useSearchContext } from "fumadocs-ui/provider";
-import { ThemeAwareImage } from "../theme-aware-image";
 import { MobileMenuTopLevel } from "../docs-layout/mobile-menu-top-level";
+import {
+  TurborepoWordmarkDark,
+  TurborepoWordmarkLight,
+} from "#/components/icons/turborepo-wordmark";
+import { MagnifyingGlass } from "#/components/icons/magnifying-glass";
 
 export const PAGES = [
   {
-    href: "/repo/docs",
+    href: "/docs",
     tooltip: "Docs",
     name: "docs",
   },
@@ -43,8 +47,6 @@ export const PAGES = [
 ] as const;
 export type Pages = typeof PAGES;
 
-const size = 24;
-
 function HomeLinks() {
   return (
     <div className="flex items-center gap-2">
@@ -55,29 +57,8 @@ function HomeLinks() {
       <ForwardSlash className="w-[16px] h-[16px]" />
 
       <Link className="flex flex-row items-center gap-2" href="/">
-        <ThemeAwareImage
-          light={{
-            src: "/images/product-icons/repo-light-32x32.png",
-            alt: "Turborepo logo",
-            props: {
-              src: "/images/product-icons/repo-light-32x32.png",
-              alt: "Turborepo logo",
-              width: size,
-              height: size,
-            },
-          }}
-          dark={{
-            src: "/images/product-icons/repo-dark-32x32.png",
-            alt: "Turborepo logo",
-            props: {
-              src: "/images/product-icons/repo-dark-32x32.png",
-              alt: "Turborepo logo",
-              width: size,
-              height: size,
-            },
-          }}
-        />
-        <div className="text-lg font-semibold ml-2">Turborepo</div>
+        <TurborepoWordmarkDark className="h-[24px] w-auto hidden dark:block" />
+        <TurborepoWordmarkLight className="h-[24px] w-auto dark:hidden" />
       </Link>
     </div>
   );
@@ -91,12 +72,13 @@ export const Navigation = () => {
 
   return (
     <>
-      <div className="sticky top-0 z-40 flex h-[var(--nav-height)] justify-between border-b bg-background-200 px-4">
+      <div className="sticky top-0 z-40 flex h-[var(--nav-height)] justify-between border-b bg-background-200 px-4 pr-0 md:pr-4">
         <div className="flex w-full select-none flex-row items-center">
           <div className="flex flex-shrink-0 flex-row items-center gap-2">
             <HomeLinks />
           </div>
-          <div className="ml-auto md:hidden">
+
+          <div className="ml-auto flex md:hidden">
             <MobileMenuTopLevel pages={PAGES} />
           </div>
           <div className="hidden md:flex w-full justify-end md:justify-start md:pl-6">
@@ -111,10 +93,10 @@ export const Navigation = () => {
                       <Link
                         href={page.href}
                         className={cn(
-                          "text-sm transition-colors duration-100 hover:text-gray-1000 data-[active=true]:text-gray-1000"
+                          "text-sm transition-colors duration-100 hover:text-gray-900 data-[active=true]:text-gray-1000"
                         )}
                         data-active={pageFromRoute === page.name}
-                        scroll={page.href !== "/repo/docs"}
+                        scroll={page.href !== "/docs"}
                       >
                         {page.tooltip}
                       </Link>
@@ -127,18 +109,25 @@ export const Navigation = () => {
           </div>
         </div>
 
+        <button
+          className="hidden p-4 pr-2 md:pr-4 md:block lg:hidden"
+          onClick={() => setOpenSearch(true)}
+        >
+          <MagnifyingGlass />
+        </button>
+
         <div className="hidden items-center gap-2 md:flex">
           <Button
             aria-label="Search…"
             variant="secondary"
             size="sm"
-            className="group flex-row !font-normal !text-gray-800 hover:!text-gray-1000"
+            className="group flex-row !font-normal !text-gray-800 hover:!text-gray-1000 hidden lg:block"
             onClick={() => {
               setOpenSearch(true);
             }}
           >
             <div className="text-start justify-between flex gap-2 lg:w-20 xl:w-24">
-              <span>Search…</span>
+              <span>Search</span>
               <span className="inline-flex items-center justify-center rounded border border-gray-200 font-sans text-sm group-hover:border-gray-alpha-400">
                 <kbd className="flex h-5 min-h-5 w-fit items-center px-1 py-0 text-center font-sans text-xs">
                   {hotKey.map((k, i) => (
@@ -151,16 +140,15 @@ export const Navigation = () => {
 
           <FeedbackWidget />
           <Button
-            variant="default"
+            variant="secondary"
             asChild
             size="sm"
             // @ts-expect-error
             href="https://github.com/vercel/turborepo"
-            className="hidden xl:flex"
+            className="bg-transparent hover:bg-transparent"
           >
             <a>
               <LogoGitHub className="inline" />
-              <span>GitHub</span>
             </a>
           </Button>
         </div>

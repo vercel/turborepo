@@ -653,7 +653,7 @@ pub enum Command {
         /// Use the given selector to specify package(s) to act as
         /// entry points. The syntax mirrors pnpm's syntax, and
         /// additional documentation and examples can be found in
-        /// turbo's documentation https://turbo.build/repo/docs/reference/command-line-reference/run#--filter
+        /// turbo's documentation https://turbo.build/docs/reference/command-line-reference/run#--filter
         #[clap(short = 'F', long, group = "scope-filter-group")]
         filter: Vec<String>,
         /// Get insight into a specific package, such as
@@ -895,7 +895,7 @@ pub struct ExecutionArgs {
     /// Use the given selector to specify package(s) to act as
     /// entry points. The syntax mirrors pnpm's syntax, and
     /// additional documentation and examples can be found in
-    /// turbo's documentation https://turbo.build/repo/docs/reference/command-line-reference/run#--filter
+    /// turbo's documentation https://turbo.build/docs/reference/command-line-reference/run#--filter
     #[clap(short = 'F', long, group = "scope-filter-group")]
     pub filter: Vec<String>,
 

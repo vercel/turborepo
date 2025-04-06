@@ -9,13 +9,13 @@ import { Step, Steps } from '#/components/steps';
 
 Turborepo can be incrementally adopted in **any repository, single or multi-package**, to speed up the developer and CI workflows of the repository.
 
-After installing `turbo` and configuring your tasks in `turbo.json`, you'll notice how [caching](/repo/docs/crafting-your-repository/caching) helps you run tasks much faster.
+After installing `turbo` and configuring your tasks in `turbo.json`, you'll notice how [caching](/docs/crafting-your-repository/caching) helps you run tasks much faster.
 
 ## Preparing a single-package workspace
 
 A [single-package workspace](https://vercel.com/docs/vercel-platform/glossary#single-package-workspace) is, for example, what you get after running `npx create-next-app` or `npm create vite`. You don't need to do any extra work for Turborepo to handle your repo so you can jump to the first step below.
 
-To learn more about Turborepo in single-package workspaces, visit [the dedicated guide](/repo/docs/guides/single-package-workspaces).
+To learn more about Turborepo in single-package workspaces, visit [the dedicated guide](/docs/guides/single-package-workspaces).
 
 ## Preparing a multi-package workspace (monorepo)
 
@@ -25,8 +25,8 @@ To learn more about Turborepo in single-package workspaces, visit [the dedicated
   If you're finding that `turbo` is having issues like not being able to
   discover packages in your workspace or not following your dependency graph,
   visit our [Structuring a
-  repository](/repo/docs/crafting-your-repository/structuring-a-repository) page
-  for tips.
+  repository](/docs/crafting-your-repository/structuring-a-repository) page for
+  tips.
 </Callout>
 
 Note that you don't have to start running _all_ your tasks for _all_ your
@@ -76,7 +76,7 @@ We recommend you install `turbo` both globally and into your repository's root f
   </Tab>
 </Tabs>
 
-To learn more about why we recommend both installations, visit the [Installation page](/repo/docs/getting-started/installation).
+To learn more about why we recommend both installations, visit the [Installation page](/docs/getting-started/installation).
 
 </Step>
 <Step>
@@ -108,7 +108,7 @@ We'll be using `build` and `check-types` tasks in this guide but you can replace
 }
 ```
 
-For more information on configuring your `turbo.json`, see the [Configuration Options](/repo/docs/reference/configuration) documentation.
+For more information on configuring your `turbo.json`, see the [Configuration Options](/docs/reference/configuration) documentation.
 
 In your Next.js application, make sure you have a `check-types` script for `turbo` to run.
 
@@ -192,7 +192,7 @@ Turborepo optimizes your repository using information from your package manager.
 
 <Callout type="good-to-know">
   Depending on your repository, you may need to use the
-  [`dangerouslyDisablePackageManagerCheck`](/repo/docs/reference/configuration#dangerouslydisablepackagemanagercheck)
+  [`dangerouslyDisablePackageManagerCheck`](/docs/reference/configuration#dangerouslydisablepackagemanagercheck)
   while migrating or in situations where you can't use the `packageManager` key
   yet.
 </Callout>
@@ -207,7 +207,7 @@ You can now run the tasks you added to `turbo.json` earlier using Turborepo. Usi
 turbo build check-types
 ```
 
-This runs the `build` and `check-types` tasks at the same time. The dependency graph of your [Workspace](/repo/docs/crafting-your-repository/structuring-a-repository#anatomy-of-a-workspace) will be used to run tasks in the right order.
+This runs the `build` and `check-types` tasks at the same time. The dependency graph of your [Workspace](/docs/crafting-your-repository/structuring-a-repository#anatomy-of-a-workspace) will be used to run tasks in the right order.
 
 </Step>
 <Step>
@@ -227,7 +227,7 @@ Time:    185ms >>> FULL TURBO
 
 Congratulations! **You just built and type checked your code in milliseconds**.
 
-To learn more about how `turbo` makes this possible, check out [the caching documentation](/repo/docs/crafting-your-repository/caching).
+To learn more about how `turbo` makes this possible, check out [the caching documentation](/docs/crafting-your-repository/caching).
 
 </Step>
 <Step>
@@ -240,7 +240,7 @@ In a multi-package workspace, you can run `turbo dev` to start the development t
 turbo dev
 ```
 
-You can also [use a filter](/repo/docs/crafting-your-repository/running-tasks#using-filters) to focus on a specific package and its dependencies.
+You can also [use a filter](/docs/crafting-your-repository/running-tasks#using-filters) to focus on a specific package and its dependencies.
 
 <Callout type="info">
 Note that this step doesn't provide much value in a single-package workspace since:
@@ -258,10 +258,10 @@ Note that this step doesn't provide much value in a single-package workspace sin
 
 You're now up and running with Turborepo! To learn about more ways you can improve your workflow and get the most out of `turbo`, we recommend checking out the following pages:
 
-- [Enabling Remote Caching for development machines](/repo/docs/crafting-your-repository/constructing-ci#enabling-remote-caching)
-- [Enabling Remote Caching in CI](/repo/docs/crafting-your-repository/constructing-ci)
-- [Handling environment variables](/repo/docs/crafting-your-repository/using-environment-variables)
-- [Filtering tasks](/repo/docs/reference/run#--filter-string)
+- [Enabling Remote Caching for development machines](/docs/crafting-your-repository/constructing-ci#enabling-remote-caching)
+- [Enabling Remote Caching in CI](/docs/crafting-your-repository/constructing-ci)
+- [Handling environment variables](/docs/crafting-your-repository/using-environment-variables)
+- [Filtering tasks](/docs/reference/run#--filter-string)
 
 </Step>
 </Steps>

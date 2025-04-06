@@ -72,7 +72,7 @@ export function FeedbackWidget() {
       <Popover.Trigger asChild>
         <Button
           type="button"
-          variant="secondary"
+          variant="outline"
           size="sm"
           aria-label="Open feedback form"
         >
