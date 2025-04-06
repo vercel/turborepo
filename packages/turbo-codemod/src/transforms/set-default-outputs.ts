@@ -17,9 +17,9 @@ const DESCRIPTION =
 const INTRODUCED_IN = "1.7.0";
 const IDEMPOTENT = false;
 
-function migrateConfig(config: SchemaV1) {
+export function migrateConfig(config: SchemaV1) {
   if (isPipelineKeyMissing(config)) {
-    return;
+    return config;
   }
 
   for (const [_, taskDef] of Object.entries(config.pipeline)) {

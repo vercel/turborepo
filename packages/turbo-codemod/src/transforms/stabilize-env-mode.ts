@@ -27,7 +27,11 @@ type ExperimentalSchema = Omit<SchemaV1, "pipeline"> & {
   pipeline: Record<string, ExperimentalPipeline>;
 };
 
-function migrateRootConfig(config: ExperimentalRootSchema) {
+export function migrateRootConfig(config: ExperimentalRootSchema) {
+  if (isPipelineKeyMissing(config)) {
+    return config;
+  }
+
   const oldConfig = config.experimentalGlobalPassThroughEnv;
   const newConfig = config.globalPassThroughEnv;
   // Set to an empty array is meaningful, so we have undefined as an option here.
@@ -59,9 +63,9 @@ function migrateRootConfig(config: ExperimentalRootSchema) {
   return migrateTaskConfigs(config);
 }
 
-function migrateTaskConfigs(config: ExperimentalSchema) {
+export function migrateTaskConfigs(config: ExperimentalSchema) {
   if (isPipelineKeyMissing(config)) {
-    return;
+    return config;
   }
 
   for (const [_, taskDef] of Object.entries(config.pipeline)) {

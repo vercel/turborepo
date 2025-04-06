@@ -1,11 +1,72 @@
 import { setupTestFixtures } from "@turbo/test-utils";
 import { describe, it, expect } from "@jest/globals";
-import { transformer } from "../src/transforms/transform-env-literals-to-wildcards";
+import type { SchemaV2 } from "@turbo/types";
+import {
+  transformer,
+  migrateTaskConfigs,
+  migrateRootConfig,
+} from "../src/transforms/transform-env-literals-to-wildcards";
 
 describe.only("transform-env-literals-to-wildcards", () => {
   const { useFixture } = setupTestFixtures({
     directory: __dirname,
     test: "transform-env-literals-to-wildcards",
+  });
+
+  it("skips migrateTaskConfigs when no pipeline key", () => {
+    const config: SchemaV2 = {
+      $schema: "./docs/public/schema.json",
+      globalDependencies: ["$GLOBAL_ENV_KEY"],
+      tasks: {
+        test: {
+          outputs: ["coverage/**/*"],
+          dependsOn: ["^build"],
+        },
+        lint: {
+          outputs: [],
+        },
+        dev: {
+          cache: false,
+        },
+        build: {
+          outputs: ["dist/**/*", ".next/**/*", "!.next/cache/**"],
+          dependsOn: ["^build", "$TASK_ENV_KEY", "$ANOTHER_ENV_KEY"],
+        },
+      },
+    };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument -- Testing a situation outside of types that users can get themselves into at runtime
+    const doneConfig = migrateTaskConfigs(config as any);
+
+    expect(doneConfig).toEqual(config);
+  });
+
+  it("skips migrateRootConfigs when no pipeline key", () => {
+    const config: SchemaV2 = {
+      $schema: "./docs/public/schema.json",
+      globalDependencies: ["$GLOBAL_ENV_KEY"],
+      tasks: {
+        test: {
+          outputs: ["coverage/**/*"],
+          dependsOn: ["^build"],
+        },
+        lint: {
+          outputs: [],
+        },
+        dev: {
+          cache: false,
+        },
+        build: {
+          outputs: ["dist/**/*", ".next/**/*", "!.next/cache/**"],
+          dependsOn: ["^build", "$TASK_ENV_KEY", "$ANOTHER_ENV_KEY"],
+        },
+      },
+    };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument -- Testing a situation outside of types that users can get themselves into at runtime
+    const doneConfig = migrateRootConfig(config as any);
+
+    expect(doneConfig).toEqual(config);
   });
 
   it("migrates wildcards has-empty", () => {
