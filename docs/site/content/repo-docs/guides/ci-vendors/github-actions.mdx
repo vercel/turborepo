@@ -5,6 +5,7 @@ description: Learn how to use GitHub Actions with Turborepo.
 
 import { PackageManagerTabs, Tab } from '#/components/tabs';
 import { Steps, Step } from '#/components/steps';
+import { Callout } from '#/components/callout';
 
 The following example shows how to use Turborepo with [GitHub Actions](https://github.com/features/actions).
 
@@ -187,7 +188,7 @@ To use Remote Caching with GitHub Actions, add the following environment variabl
 to make them available to your `turbo` commands.
 
 - `TURBO_TOKEN` - The Bearer token to access the Remote Cache
-- `TURBO_TEAM` - The account to which the monorepo belongs
+- `TURBO_TEAM` - The account to which the repository belongs
 
 To use Remote Caching, retrieve the team and token for the Remote Cache for your provider. In this example, we'll use [Vercel Remote Cache](https://vercel.com/docs/monorepos/remote-caching).
 
@@ -209,14 +210,14 @@ Go to your GitHub repository settings and click on the **Secrets** and then **Ac
 </Step>
 
 <Step>
-Create a new repository variable (click the **Variables** tab) called `TURBO_TEAM` and enter the value of your team's Vercel URL _without_ the `vercel.com/`.
-   Using a repository variable rather than a secret will keep GitHub Actions from censoring your team name in log output.
+Create a new repository variable (click the **Variables** tab) called `TURBO_TEAM` and enter [your Team URL](https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fsettings&title=Find+Team+URL).
+
+<Callout type="good-to-know">
+  Using a repository variable rather than a secret will keep GitHub Actions from
+  censoring your team name in log output.
+</Callout>
 
 ![GitHub Repository Variables](/images/docs/vercel-team-repo-var.png)
-
-Your Team URL can be found inside your team's general project settings from the dashboard. If you're using a Hobby Plan, you can use your username. Your username can be found in your [Vercel Personal Account Settings](https://vercel.com/account)
-
-![Vercel Account Slug](/images/docs/vercel-slug.png)
 
 </Step>
 <Step>
