@@ -1,8 +1,8 @@
 import { DocsLayout } from "@/components/docs-layout";
-import { baseOptions } from "../../../../layout-config";
+import { baseOptions } from "#/app/layout-config";
 import { Navigation } from "@/components/nav";
 import { Sidebar } from "#/components/docs-layout/sidebar";
-import { openapiPages } from "../../source";
+import { openapiPages } from "./source";
 
 export default async function Layout({
   children,
