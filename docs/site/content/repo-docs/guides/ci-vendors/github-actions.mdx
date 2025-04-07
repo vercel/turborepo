@@ -231,9 +231,9 @@ jobs:
     timeout-minutes: 15
     runs-on: ubuntu-latest
     # To use Turborepo Remote Caching, set the following environment variables for the job.
-    env:
-      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }} // [!code highlight]
-      TURBO_TEAM: ${{ vars.TURBO_TEAM }} // [!code highlight]
+    env: # [!code highlight]
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }} # [!code highlight]
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }} # [!code highlight]
 
     steps:
       - name: Check out code
@@ -279,32 +279,32 @@ Configure your GitHub pipeline with a step which utilizes the `actions/cache@v4`
 Example `ci` yaml with `.turbo` as chosen cache folder:
 
 ```yaml title=".github/workflows/ci.yml"
-  jobs:
-    build:
-      runs-on: ubuntu-latest
-      steps:
-        - name: Check out code
-          uses: actions/checkout@v4
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
 
-        - name: Cache turbo build setup // [!code highlight]
-          uses: actions/cache@v4 // [!code highlight]
-          with: // [!code highlight]
-            path: .turbo // [!code highlight]
-            key: ${{ runner.os }}-turbo-${{ github.sha }} // [!code highlight]
-            restore-keys: | // [!code highlight]
-              ${{ runner.os }}-turbo- // [!code highlight]
+      - name: Cache turbo build setup # [!code highlight]
+        uses: actions/cache@v4 # [!code highlight]
+        with: # [!code highlight]
+          path: .turbo # [!code highlight]
+          key: ${{ runner.os }}-turbo-${{ github.sha }} # [!code highlight]
+          restore-keys: | # [!code highlight]
+            ${{ runner.os }}-turbo-
 
-        - name: Setup Node.js environment
-          uses: actions/setup-node@v4
-          with:
-            node-version: 20
-            cache: 'npm'
+      - name: Setup Node.js environment
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
 
-        - name: Install dependencies
-          run: npm install
+      - name: Install dependencies
+        run: npm install
 
-        - name: Build
-          run: npm run build
+      - name: Build
+        run: npm run build
 ```
 
 </Step>
