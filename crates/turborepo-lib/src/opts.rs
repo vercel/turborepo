@@ -75,6 +75,7 @@ pub struct Opts {
     pub run_opts: RunOpts,
     pub runcache_opts: RunCacheOpts,
     pub scope_opts: ScopeOpts,
+    pub tui_opts: TuiOpts,
 }
 
 impl Opts {
@@ -177,6 +178,7 @@ impl Opts {
         let runcache_opts = RunCacheOpts::from(inputs);
         let api_client_opts = APIClientOpts::from(inputs);
         let repo_opts = RepoOpts::from(inputs);
+        let tui_opts = TuiOpts::from(inputs);
 
         Ok(Self {
             repo_opts,
@@ -185,6 +187,7 @@ impl Opts {
             scope_opts,
             runcache_opts,
             api_client_opts,
+            tui_opts,
         })
     }
 }
@@ -539,6 +542,19 @@ impl ScopeOpts {
     }
 }
 
+#[derive(Clone, Debug, Serialize)]
+pub struct TuiOpts {
+    pub(crate) scrollback_length: u64,
+}
+
+impl<'a> From<OptsInputs<'a>> for TuiOpts {
+    fn from(inputs: OptsInputs) -> Self {
+        TuiOpts {
+            scrollback_length: inputs.config.tui_scrollback_length(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use clap::Parser;
@@ -555,7 +571,7 @@ mod test {
         cli::{Command, ContinueMode, DryRunMode, RunArgs},
         commands::CommandBase,
         config::ConfigurationOptions,
-        opts::{Opts, RunCacheOpts, ScopeOpts},
+        opts::{Opts, RunCacheOpts, ScopeOpts, TuiOpts},
         run::task_id::TaskId,
         turbo_json::{UIMode, CONFIG_FILE},
         Args,
@@ -702,6 +718,10 @@ mod test {
             .root_turbo_json_path(&AbsoluteSystemPathBuf::default())
             .unwrap_or_else(|_| AbsoluteSystemPathBuf::default().join_component(CONFIG_FILE));
 
+        let tui_opts = TuiOpts {
+            scrollback_length: 2048,
+        };
+
         let opts = Opts {
             repo_opts: RepoOpts {
                 root_turbo_json_path,
@@ -722,6 +742,7 @@ mod test {
             run_opts,
             cache_opts,
             runcache_opts,
+            tui_opts,
         };
         let synthesized = opts.synthesize_command();
         assert_eq!(synthesized, expected);
