@@ -145,12 +145,12 @@ const config = {
       },
       // OpenAPI redirects (until we have more content)
       {
-        source: "/repo/docs/openapi",
+        source: "/docs/openapi",
         destination: "/repo/docs/openapi/artifacts/artifact-exists",
         permanent: false,
       },
       {
-        source: "/repo/docs/openapi/artifacts",
+        source: "/docs/openapi/artifacts",
         destination: "/repo/docs/openapi/artifacts/artifact-exists",
         permanent: false,
       },
