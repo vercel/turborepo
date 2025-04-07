@@ -109,7 +109,7 @@ Create a file called `.gitlab-ci.yml` in your repository with the following cont
 To use Remote Caching, retrieve the team and token for the Remote Cache for your provider. In this example, we'll use [Vercel Remote Cache](https://vercel.com/docs/monorepos/remote-caching):
 
 - `TURBO_TOKEN` - The Bearer token to access the Remote Cache
-- `TURBO_TEAM` - The account to which the monorepo belongs
+- `TURBO_TEAM` - The account to which the repository belongs
 
 To use Vercel Remote Caching, you can get the value of these variables in a few steps:
 
@@ -124,8 +124,6 @@ Copy the value to a safe place. You'll need it in a moment.
 ![GitLab CI Variables](/images/docs/gitlab-ci-variables.png)
 ![GitLab CI Create Variable](/images/docs/gitlab-ci-create-variable.png)
 
-3. Make a second secret called `TURBO_TEAM` and enter the value of your team's Vercel URL _without_ the `vercel.com/`. Your Team URL can be found inside your team's general project settings from the dashboard.
+3. Make a second secret called `TURBO_TEAM` and enter [your Team URL](https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fsettings&title=Find+Team+URL).
 
-   If you're using a Hobby Plan, you can use your username. Your username can be found in your [Vercel Personal Account Settings](https://vercel.com/account)
-
-![Vercel Account Slug](/images/docs/vercel-slug.png)
+Remote Caching will now be operational in your GitLab workflows.
