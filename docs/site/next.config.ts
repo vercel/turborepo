@@ -41,11 +41,6 @@ const config = {
   redirects() {
     return [
       {
-        source: "/docs/getting-started",
-        destination: "/repo/docs",
-        permanent: true,
-      },
-      {
         source: "/usage",
         destination: "/repo/docs/reference/command-line-reference",
         permanent: true,
