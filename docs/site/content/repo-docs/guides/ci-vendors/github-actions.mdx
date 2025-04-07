@@ -44,96 +44,7 @@ And a `turbo.json`:
 Create a file called `.github/workflows/ci.yml` in your repository with the following contents:
 
 <PackageManagerTabs>
-  <Tab>
-
-    ```yaml title=".github/workflows/ci.yml"
-    name: CI
-
-    on:
-      push:
-        branches: ["main"]
-      pull_request:
-        types: [opened, synchronize]
-
-    jobs:
-      build:
-        name: Build and Test
-        timeout-minutes: 15
-        runs-on: ubuntu-latest
-        # To use Remote Caching, uncomment the next lines and follow the steps below.
-        # env:
-        #  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-        #  TURBO_TEAM: ${{ vars.TURBO_TEAM }}
-        #  TURBO_REMOTE_ONLY: true
-
-        steps:
-          - name: Check out code
-            uses: actions/checkout@v4
-            with:
-              fetch-depth: 2
-
-          - name: Setup Node.js environment
-            uses: actions/setup-node@v4
-            with:
-              node-version: 20
-              cache: 'npm'
-
-          - name: Install dependencies
-            run: npm install
-
-          - name: Build
-            run: npm run build
-
-          - name: Test
-            run: npm run test
-    ```
-
-  </Tab>
-  <Tab>
-
-    ```yaml title=".github/workflows/ci.yml"
-    name: CI
-
-    on:
-      push:
-        branches: ["main"]
-      pull_request:
-        types: [opened, synchronize]
-
-    jobs:
-      build:
-        name: Build and Test
-        timeout-minutes: 15
-        runs-on: ubuntu-latest
-        # To use Remote Caching, uncomment the next lines and follow the steps below.
-        # env:
-        #  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-        #  TURBO_TEAM: ${{ vars.TURBO_TEAM }}
-
-        steps:
-          - name: Check out code
-            uses: actions/checkout@v4
-            with:
-              fetch-depth: 2
-
-          - name: Setup Node.js environment
-            uses: actions/setup-node@v4
-            with:
-              node-version: 20
-              cache: 'yarn'
-
-          - name: Install dependencies
-            run: yarn
-
-          - name: Build
-            run: yarn build
-
-          - name: Test
-            run: yarn test
-    ```
-
-  </Tab>
-  <Tab>
+  <Tab value="pnpm">
     ```yaml title=".github/workflows/ci.yml"
     name: CI
 
@@ -177,6 +88,96 @@ Create a file called `.github/workflows/ci.yml` in your repository with the foll
 
           - name: Test
             run: pnpm test
+    ```
+
+  </Tab>
+
+  <Tab value="yarn">
+
+    ```yaml title=".github/workflows/ci.yml"
+    name: CI
+
+    on:
+      push:
+        branches: ["main"]
+      pull_request:
+        types: [opened, synchronize]
+
+    jobs:
+      build:
+        name: Build and Test
+        timeout-minutes: 15
+        runs-on: ubuntu-latest
+        # To use Remote Caching, uncomment the next lines and follow the steps below.
+        # env:
+        #  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+        #  TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+
+        steps:
+          - name: Check out code
+            uses: actions/checkout@v4
+            with:
+              fetch-depth: 2
+
+          - name: Setup Node.js environment
+            uses: actions/setup-node@v4
+            with:
+              node-version: 20
+              cache: 'yarn'
+
+          - name: Install dependencies
+            run: yarn
+
+          - name: Build
+            run: yarn build
+
+          - name: Test
+            run: yarn test
+    ```
+
+  </Tab>
+  <Tab value="npm">
+
+    ```yaml title=".github/workflows/ci.yml"
+    name: CI
+
+    on:
+      push:
+        branches: ["main"]
+      pull_request:
+        types: [opened, synchronize]
+
+    jobs:
+      build:
+        name: Build and Test
+        timeout-minutes: 15
+        runs-on: ubuntu-latest
+        # To use Remote Caching, uncomment the next lines and follow the steps below.
+        # env:
+        #  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+        #  TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+        #  TURBO_REMOTE_ONLY: true
+
+        steps:
+          - name: Check out code
+            uses: actions/checkout@v4
+            with:
+              fetch-depth: 2
+
+          - name: Setup Node.js environment
+            uses: actions/setup-node@v4
+            with:
+              node-version: 20
+              cache: 'npm'
+
+          - name: Install dependencies
+            run: npm install
+
+          - name: Build
+            run: npm run build
+
+          - name: Test
+            run: npm run test
     ```
 
   </Tab>

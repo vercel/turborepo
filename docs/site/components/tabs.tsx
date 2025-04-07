@@ -22,6 +22,16 @@ export function Tabs({
   );
 }
 
+const packageManagers = ["pnpm", "yarn", "npm"];
+
+const checkPackageManagerIndex = (index: number, provided: string) => {
+  if (provided !== packageManagers[index]) {
+    throw new Error(
+      `Package manager at index ${index} must be ${packageManagers[index]}.`
+    );
+  }
+};
+
 /** Use <Tab /> component to create the tabs. They will automatically be assigned their values in the order ["npm", "yarn", "pnpm"]. */
 export function PackageManagerTabs({
   storageKey = "package-manager-tabs",
@@ -31,17 +41,26 @@ export function PackageManagerTabs({
   storageKey?: string;
   children: ReactNode;
 }): JSX.Element {
-  const items = ["npm", "yarn", "pnpm"];
-
   if (!Array.isArray(children)) {
     throw new Error("Children must be an array.");
   }
 
+  children.forEach((packageManager, index) => {
+    if (!packageManager.props.value) {
+      throw new Error(`Package manager tab is missing a value.`);
+    }
+
+    checkPackageManagerIndex(index, packageManager.props.value);
+  });
+
   return (
-    <FumaTabs id={storageKey} items={items} {...props}>
+    <FumaTabs id={storageKey} items={packageManagers} {...props}>
       {children.map((child, index) => {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-assignment
-        return { ...child, props: { ...child.props, value: items[index] } };
+        return {
+          ...child,
+          props: { ...child.props, value: packageManagers[index] },
+        };
       })}
     </FumaTabs>
   );

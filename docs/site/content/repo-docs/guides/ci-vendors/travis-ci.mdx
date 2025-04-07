@@ -42,38 +42,7 @@ And a `turbo.json`:
 Create a file called `.travis.yml` in your repository with the following contents:
 
 <PackageManagerTabs>
-<Tab>
-
-    ```yaml title=".travis.yml"
-    language: node_js
-    node_js:
-      - lts/*
-    install:
-      - npm install
-    script:
-      - npm run build
-    script:
-      - npm run test
-    ```
-
-  </Tab>
-    <Tab>
-      Travis CI detects the use of Yarn by the presence of `yarn.lock`. It will automatically ensure it is installed.
-
-      ```yaml title=".travis.yml"
-      language: node_js
-      node_js:
-        - lts/*
-      install:
-        - yarn
-      script:
-        - yarn build
-      script:
-        - yarn test
-      ```
-
-  </Tab>
-    <Tab>
+    <Tab value="pnpm">
 
       ```yaml title=".travis.yml"
       language: node_js
@@ -95,6 +64,38 @@ Create a file called `.travis.yml` in your repository with the following content
       ```
 
       > For more information visit the pnpm documentation section on Travis CI integration, view it [here](https://pnpm.io/continuous-integration#travis)
+
+  </Tab>
+    <Tab value="yarn">
+      Travis CI detects the use of Yarn by the presence of `yarn.lock`. It will automatically ensure it is installed.
+
+      ```yaml title=".travis.yml"
+      language: node_js
+      node_js:
+        - lts/*
+      install:
+        - yarn
+      script:
+        - yarn build
+      script:
+        - yarn test
+      ```
+
+  </Tab>
+
+<Tab value="npm">
+
+    ```yaml title=".travis.yml"
+    language: node_js
+    node_js:
+      - lts/*
+    install:
+      - npm install
+    script:
+      - npm run build
+    script:
+      - npm run test
+    ```
 
   </Tab>
 </PackageManagerTabs>

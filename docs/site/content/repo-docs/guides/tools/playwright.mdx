@@ -99,19 +99,18 @@ You can also create a common package for shared utilities that you need in your 
 
 <PackageManagerTabs>
 
-<Tab>
+<Tab value="pnpm">
 ```json title="./packages/playwright-utilities/package.json"
 {
- "name": "@repo/playwright-utilities",
- "peerDependencies": {
-   "playwright": "*"
+  "name": "@repo/playwright-utilities",
+  "peerDependencies": {
+    "playwright": "workspace:*"
 }
 }
 ```
-
 </Tab>
 
-<Tab>
+<Tab value="yarn">
 ```json title="./packages/playwright-utilities/package.json"
 {
   "name": "@repo/playwright-utilities",
@@ -122,15 +121,16 @@ You can also create a common package for shared utilities that you need in your 
 ```
 </Tab>
 
-<Tab>
+<Tab value="npm">
 ```json title="./packages/playwright-utilities/package.json"
 {
-  "name": "@repo/playwright-utilities",
-  "peerDependencies": {
-    "playwright": "workspace:*"
+ "name": "@repo/playwright-utilities",
+ "peerDependencies": {
+   "playwright": "*"
 }
 }
 ```
+
 </Tab>
 
 </PackageManagerTabs>
