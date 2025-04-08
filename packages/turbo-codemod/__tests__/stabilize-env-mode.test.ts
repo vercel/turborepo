@@ -1,11 +1,72 @@
 import { setupTestFixtures } from "@turbo/test-utils";
 import { describe, it, expect } from "@jest/globals";
-import { transformer } from "../src/transforms/stabilize-env-mode";
+import type { SchemaV2 } from "@turbo/types";
+import {
+  transformer,
+  migrateRootConfig,
+  migrateTaskConfigs,
+} from "../src/transforms/stabilize-env-mode";
 
 describe("stabilize-env-mode", () => {
   const { useFixture } = setupTestFixtures({
     directory: __dirname,
     test: "stabilize-env-mode",
+  });
+
+  it("skips migrateRootConfig when no pipeline key", () => {
+    const config: SchemaV2 = {
+      $schema: "./docs/public/schema.json",
+      globalDependencies: ["$GLOBAL_ENV_KEY"],
+      tasks: {
+        test: {
+          outputs: ["coverage/**/*"],
+          dependsOn: ["^build"],
+        },
+        lint: {
+          outputs: [],
+        },
+        dev: {
+          cache: false,
+        },
+        build: {
+          outputs: ["dist/**/*", ".next/**/*", "!.next/cache/**"],
+          dependsOn: ["^build", "$TASK_ENV_KEY", "$ANOTHER_ENV_KEY"],
+        },
+      },
+    };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument -- Testing a situation outside of types that users can get themselves into at runtime
+    const doneConfig = migrateRootConfig(config as any);
+
+    expect(doneConfig).toEqual(config);
+  });
+
+  it("skips migrateTaskConfigs when no pipeline key", () => {
+    const config: SchemaV2 = {
+      $schema: "./docs/public/schema.json",
+      globalDependencies: ["$GLOBAL_ENV_KEY"],
+      tasks: {
+        test: {
+          outputs: ["coverage/**/*"],
+          dependsOn: ["^build"],
+        },
+        lint: {
+          outputs: [],
+        },
+        dev: {
+          cache: false,
+        },
+        build: {
+          outputs: ["dist/**/*", ".next/**/*", "!.next/cache/**"],
+          dependsOn: ["^build", "$TASK_ENV_KEY", "$ANOTHER_ENV_KEY"],
+        },
+      },
+    };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument -- Testing a situation outside of types that users can get themselves into at runtime
+    const doneConfig = migrateTaskConfigs(config as any);
+
+    expect(doneConfig).toEqual(config);
   });
 
   it("migrates env-mode has-both", () => {
