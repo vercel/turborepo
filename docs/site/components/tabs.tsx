@@ -32,13 +32,11 @@ const checkPackageManagerIndex = (index: number, provided: string) => {
   }
 };
 
-/** Use <Tab /> component to create the tabs. They will automatically be assigned their values in the order ["npm", "yarn", "pnpm"]. */
+/** Use <Tab /> component to create the tabs. */
 export function PackageManagerTabs({
-  storageKey = "package-manager-tabs",
   children,
   ...props
 }: {
-  storageKey?: string;
   children: ReactNode;
 }): JSX.Element {
   if (!Array.isArray(children)) {
@@ -54,12 +52,20 @@ export function PackageManagerTabs({
   });
 
   return (
-    <FumaTabs id={storageKey} items={packageManagers} {...props}>
+    <FumaTabs
+      groupId="package-manager"
+      items={packageManagers}
+      persist
+      {...props}
+    >
       {children.map((child, index) => {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-assignment
         return {
           ...child,
-          props: { ...child.props, value: packageManagers[index] },
+          props: {
+            ...child.props,
+            value: packageManagers[index],
+          },
         };
       })}
     </FumaTabs>
@@ -68,7 +74,6 @@ export function PackageManagerTabs({
 
 /** Use <Tab /> component to create the tabs. They will automatically be assigned their values in the order ["UNIX", "Windows"]. */
 export function PlatformTabs({
-  storageKey = "platform-tabs",
   children,
   ...props
 }: {
@@ -82,7 +87,7 @@ export function PlatformTabs({
   }
 
   return (
-    <FumaTabs id={storageKey} items={items} {...props}>
+    <FumaTabs groupId="platform-tabs" items={items} persist {...props}>
       {Children.map(children, (child, index) =>
         // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
         cloneElement(child, { ...child.props, value: items[index] })
