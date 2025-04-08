@@ -1480,7 +1480,7 @@ pub async fn run(
             telemetry::configure(command, &mut base, child_event);
             Ok(0)
         }
-        Command::Scan {} => {
+        Command::Scan => {
             let event = CommandEventBuilder::new("scan").with_parent(&root_telemetry);
             event.track_call();
             let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
