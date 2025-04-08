@@ -7,7 +7,7 @@ import { z } from "zod";
 import { createCssVariablesTheme } from "shiki";
 
 export const { docs: repoDocs, meta: repoMeta } = defineDocs({
-  dir: "content/repo-docs",
+  dir: "content/docs",
   docs: {
     schema: frontmatterSchema,
   },

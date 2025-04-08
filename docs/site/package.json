@@ -5,7 +5,7 @@
   "description": "The documentation for Turborepo.",
   "scripts": {
     "build": "next build",
-    "check-spelling": "spellchecker --files '**/*.mdx' --files '!content/blog/*.mdx' --files '!content/repo-docs/acknowledgments.mdx' --files '!node_modules/**' --files '!content/extra/terms.mdx' --files '!content/extra/governance.mdx' --files '!content/extra/privacy.mdx' --dictionaries 'dictionary.txt' --no-suggestions --quiet",
+    "check-spelling": "spellchecker --files '**/*.mdx' --files '!content/blog/*.mdx' --files '!content/docs/acknowledgments.mdx' --files '!node_modules/**' --files '!content/extra/terms.mdx' --files '!content/extra/governance.mdx' --files '!content/extra/privacy.mdx' --dictionaries 'dictionary.txt' --no-suggestions --quiet",
     "dev": "next dev",
     "eslint": "fumadocs-mdx && eslint .",
     "eslint:fix": "fumadocs-mdx && eslint . --fix",
