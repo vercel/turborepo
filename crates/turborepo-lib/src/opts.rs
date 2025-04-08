@@ -312,10 +312,9 @@ impl<'a> TryFrom<OptsInputs<'a>> for RunOpts {
 
     fn try_from(inputs: OptsInputs) -> Result<Self, Self::Error> {
         let concurrency = inputs
-            .execution_args
+            .config
             .concurrency
             .as_deref()
-            .or(inputs.config.concurrency.as_deref())
             .map(parse_concurrency)
             .transpose()?
             .unwrap_or(DEFAULT_CONCURRENCY);
