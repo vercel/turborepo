@@ -37,9 +37,70 @@ const removeExamples = (obj) => {
   return result;
 };
 
+/* The Vercel Remote Cache spec has responses related to billing.
+ * Self-hosted users don't need these. */
+function removeBillingRelated403Responses(spec) {
+  // Define billing-related phrases to filter out
+  const billingPhrases = [
+    "The customer has reached their spend cap limit and has been paused",
+    "The Remote Caching usage limit has been reached for this account",
+    "Remote Caching has been disabled for this team or user",
+  ];
+
+  // Process all paths
+  for (const path in spec.paths) {
+    const pathObj = spec.paths[path];
+
+    // Process all methods in each path
+    for (const method in pathObj) {
+      const methodObj = pathObj[method];
+
+      // Check if the method has responses
+      if (methodObj?.responses["403"]) {
+        const description = methodObj.responses["403"].description;
+
+        // Split the description by newlines
+        const descriptionLines = description.split("\n");
+
+        // Filter out billing-related lines
+        const filteredLines = descriptionLines.filter((line) => {
+          return !billingPhrases.some((phrase) => line.includes(phrase));
+        });
+
+        // If there are remaining lines, join them back together
+        if (filteredLines.length > 0) {
+          methodObj.responses["403"].description = filteredLines.join("\n");
+        } else {
+          // If all lines were billing-related, set a generic permission message
+          methodObj.responses["403"].description =
+            "You do not have permission to access this resource.";
+        }
+      }
+    }
+  }
+
+  return spec;
+}
+
+const updateServerDescription = (spec) => {
+  if (spec.servers && spec.servers.length > 0) {
+    const serverIndex = spec.servers.findIndex(
+      (server) => server.url === "https://api.vercel.com"
+    );
+
+    if (serverIndex !== -1) {
+      spec.servers[serverIndex].description =
+        "Vercel Remote Cache implementation for reference.";
+    }
+    return spec;
+  }
+};
+
 const thing = await fetch("https://turbo.build/api/remote-cache-spec")
   .then((res) => res.json())
-  .then((json) => removeExamples(json));
+  .then((json) => removeExamples(json))
+  .then((json) => removeBillingRelated403Responses(json))
+  .then((json) => updateServerDescription(json));
 
 writeFileSync("./.openapi.json", JSON.stringify(thing, null, 2));
 
