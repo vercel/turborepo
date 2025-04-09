@@ -69,16 +69,10 @@ export const mdxComponents: MDXComponents = {
   a: (props) => (
     <a className="text-[var(--ds-blue-900)] no-underline" {...props} />
   ),
-  pre: ({
-    ref: _ref,
-    title,
-    ...props
-  }: {
-    icon: ReactNode;
-    ref: Ref<HTMLPreElement>;
-    title?: string;
-  }) => {
+  pre: ({ ref: _ref, title, ...props }) => {
+    //@ts-ignore
     const preIcon: ReactNode = props.icon;
+    //@ts-ignore
     const { icon: _icon, ...preProps } = props;
 
     if (!title) {
@@ -94,3 +88,10 @@ export const mdxComponents: MDXComponents = {
     );
   },
 };
+
+export function useMDXComponents(components: MDXComponents): MDXComponents {
+  return {
+    ...components,
+    ...mdxComponents,
+  };
+}
