@@ -12,10 +12,10 @@ export const revalidate = false;
 export async function GET(): Promise<Response> {
   // all scanned content
   const files = await fg([
-    "./content/repo-docs/**/*.mdx",
-    "!./content/repo-docs/acknowledgments.mdx",
-    "!./content/repo-docs/community.mdx",
-    "!./content/repo-docs/telemetry.mdx",
+    "./content/docs/**/*.mdx",
+    "!./content/docs/acknowledgments.mdx",
+    "!./content/docs/community.mdx",
+    "!./content/docs/telemetry.mdx",
   ]);
 
   const scan = files.map(async (file) => {
