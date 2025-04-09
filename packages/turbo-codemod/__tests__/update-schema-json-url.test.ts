@@ -1,6 +1,6 @@
 import { setupTestFixtures } from "@turbo/test-utils";
 import { describe, it, expect } from "@jest/globals";
-import { transformer } from "../src/transforms/update-schema-url";
+import { transformer } from "../src/transforms/update-schema-json-url";
 
 describe("update-schema-url", () => {
   const { useFixture } = setupTestFixtures({

@@ -5,7 +5,7 @@ import { getTransformerHelpers } from "../utils/getTransformerHelpers";
 import type { Transformer, TransformerArgs } from "../types";
 
 // transformer details
-const TRANSFORMER = "update-schema-url";
+const TRANSFORMER = "update-schema-json-url";
 const DESCRIPTION =
   'Update the "$schema" property in turbo.json from "https://turbo.build/schema.v1.json" to "https://turbo.build/schema.v2.json"';
 const INTRODUCED_IN = "2.0.0";
