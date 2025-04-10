@@ -126,6 +126,7 @@ For example, the following illustrates a monorepo with three locations for gener
     </Folder>
     <File name="package.json" />
     <File name="package-lock.yaml" />
+    <File name="pnpm-workspace.yaml" />
     <File name="turbo.json" />
   </Files>
 </Tab>
@@ -170,42 +171,81 @@ For example, the following illustrates a monorepo with three locations for gener
 </Tab>
 
 <Tab value="npm">
-<Files>
-  <Folder name="apps" defaultOpen>
-    <Folder name="docs">
-     <File name="package.json"  />
+  <Files>
+    <Folder name="apps" defaultOpen>
+      <Folder name="docs">
+        <File name="package.json" />
+      </Folder>
+      <Folder name="web" defaultOpen>
+        <File name="package.json" />
+        <Folder name="turbo" green defaultOpen>
+          <Folder name="generators">
+            <File name="config.ts" />
+            <File name="templates" />
+          </Folder>
+        </Folder>
+      </Folder>
     </Folder>
-    <Folder name="web" defaultOpen>
-      <File name="package.json"  />
-  <Folder name="turbo" green defaultOpen>
-    <Folder name="generators">
-      <File name="config.ts" />
-      <File name="templates" />
+    <Folder name="packages" defaultOpen>
+      <Folder name="ui" defaultOpen>
+        <File name="package.json" />
+        <Folder name="turbo" green defaultOpen>
+          <Folder name="generators">
+            <File name="config.ts" />
+            <File name="templates" />
+          </Folder>
+        </Folder>
+      </Folder>
     </Folder>
-  </Folder>
-  </Folder>
-  </Folder>
-  <Folder name="packages" defaultOpen>
-    <Folder name="ui" defaultOpen>
-      <File name="package.json" />
-  <Folder name="turbo" green defaultOpen>
-    <Folder name="generators">
-      <File name="config.ts" />
-      <File name="templates" />
+    <Folder name="turbo" green defaultOpen>
+      <Folder name="generators">
+        <File name="config.ts" />
+        <File name="templates" />
+      </Folder>
     </Folder>
-  </Folder>
+    <File name="package.json" />
+    <File name="package-lock.json" />
+    <File name="turbo.json" />
+  </Files>
+</Tab>
+
+<Tab value="bun (Beta)">
+  <Files>
+    <Folder name="apps" defaultOpen>
+      <Folder name="docs">
+        <File name="package.json" />
+      </Folder>
+      <Folder name="web" defaultOpen>
+        <File name="package.json" />
+        <Folder name="turbo" green defaultOpen>
+          <Folder name="generators">
+            <File name="config.ts" />
+            <File name="templates" />
+          </Folder>
+        </Folder>
+      </Folder>
     </Folder>
-  </Folder>
-  <Folder name="turbo" green defaultOpen>
-    <Folder name="generators">
-      <File name="config.ts" />
-      <File name="templates" />
+    <Folder name="packages" defaultOpen>
+      <Folder name="ui" defaultOpen>
+        <File name="package.json" />
+        <Folder name="turbo" green defaultOpen>
+          <Folder name="generators">
+            <File name="config.ts" />
+            <File name="templates" />
+          </Folder>
+        </Folder>
+      </Folder>
     </Folder>
-  </Folder>
-  <File name="package.json"  />
-  <File name="package-lock.json"  />
-  <File name="turbo.json"  />
-</Files>
+    <Folder name="turbo" green defaultOpen>
+      <Folder name="generators">
+        <File name="config.ts" />
+        <File name="templates" />
+      </Folder>
+    </Folder>
+    <File name="package.json" />
+    <File name="bun.lock" />
+    <File name="turbo.json" />
+  </Files>
 </Tab>
 </PackageManagerTabs>
 

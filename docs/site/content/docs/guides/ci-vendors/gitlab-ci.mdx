@@ -104,6 +104,29 @@ Create a file called `.gitlab-ci.yml` in your repository with the following cont
 
     </Tab>
 
+<Tab value="bun (Beta)">
+    ```yaml title=".gitlab-ci.yml"
+    default:
+      image: oven/bun:1.2
+      cache:
+        key:
+          files:
+            - bun.lock
+        paths:
+          - node_modules/
+      before_script:
+          - bun install
+
+    build:
+    script: - bun run build
+
+    test:
+    script: - bun run test
+
+    ```
+
+</Tab>
+
 </PackageManagerTabs>
 
 ## Remote Caching

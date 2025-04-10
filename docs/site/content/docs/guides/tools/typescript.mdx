@@ -53,6 +53,14 @@ npx create-turbo@latest
 ```
 
 </Tab>
+
+<Tab value="bun (Beta)">
+
+```bash title="Terminal"
+bunx create-turbo@latest
+```
+
+</Tab>
 </PackageManagerTabs>
 
 ### Use a base `tsconfig` file
@@ -127,6 +135,17 @@ First, install the `@repo/typescript-config` package into your package:
 {
   "devDependencies": {
      "@repo/typescript-config": "*",
+     "typescript": "latest",
+  }
+}
+```
+</Tab>
+
+<Tab value="bun (Beta)">
+```json title="./apps/web/package.json"
+{
+  "devDependencies": {
+     "@repo/typescript-config": "workspace:*",
      "typescript": "latest",
   }
 }

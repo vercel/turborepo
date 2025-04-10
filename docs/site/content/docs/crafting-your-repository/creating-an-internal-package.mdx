@@ -124,7 +124,35 @@ Next, create the `package.json` for the package. By adding this file, you'll ful
     "typescript": "latest"
   }
 }
-````
+```
+
+</Tab>
+
+<Tab value="bun (Beta)">
+```json title="./packages/math/package.json"
+{
+  "name": "@repo/math",
+  "type": "module",
+  "scripts": {
+    "dev": "tsc --watch",
+    "build": "tsc"
+  },
+  "exports": {
+    "./add": {
+      "types": "./src/add.ts",
+      "default": "./dist/add.js"
+    },
+    "./subtract": {
+      "types": "./src/subtract.ts",
+      "default": "./dist/subtract.js"
+    }
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:*",
+    "typescript": "latest"
+  }
+}
+```
 
 </Tab>
 </PackageManagerTabs>
@@ -231,6 +259,17 @@ You're ready to use your new package in an application. Let's add it to the `web
 ```diff title="apps/web/package.json"
   "dependencies": {
 +   "@repo/math": "*",
+    "next": "latest",
+    "react": "latest",
+    "react-dom": "latest"
+  },
+```
+</Tab>
+
+<Tab value="bun (Beta)">
+```diff title="apps/web/package.json"
+  "dependencies": {
++   "@repo/math": "workspace:*",
     "next": "latest",
     "react": "latest",
     "react-dom": "latest"

@@ -44,6 +44,17 @@ import { LinkToDocumentation } from '#/components/link-to-documentation';
 }
 ```
 </Tab>
+
+<Tab value="bun (Beta)">
+```json title="./apps/web/package.json"
+{
+  "dependencies": {
+    "next": "latest", // External dependency
+    "@repo/ui": "workspace:*" // Internal dependency
+  }
+}
+```
+</Tab>
 </PackageManagerTabs>
 
 ## Best practices for dependency installation
@@ -100,6 +111,15 @@ npm install jest --workspace=web --workspace=@repo/ui --save-dev
 ```
 
 <LinkToDocumentation href="https://docs.npmjs.com/cli/v7/using-npm/config#workspace">npm documentation</LinkToDocumentation>
+</Tab>
+
+<Tab value="bun (Beta)">
+
+```bash title="Terminal"
+bun install jest --filter=web --filter=@repo/ui --dev
+```
+
+<LinkToDocumentation href="https://bun.sh/docs/install/workspaces">bun documentation</LinkToDocumentation>
 </Tab>
 </PackageManagerTabs>
 
@@ -189,6 +209,13 @@ yarn upgrade typescript@latest --upgrade
 npm install typescript@latest --workspaces
 ```
   <small>[→ npm documentation](https://docs.npmjs.com/cli/v7/using-npm/config#workspaces)</small>
+
+</Tab>
+
+<Tab value="bun (Beta)">
+No equivalent
+
+<small>[→ Bun documentation](https://bun.sh/docs/install/workspaces)</small>
 
 </Tab>
 </PackageManagerTabs>

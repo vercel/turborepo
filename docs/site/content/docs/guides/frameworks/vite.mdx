@@ -37,6 +37,14 @@ npx create-turbo@latest -e with-vite
 ```
 
 </Tab>
+
+<Tab value="bun (Beta)">
+
+```bash title="Terminal"
+bunx create-turbo@latest -e with-vite
+```
+
+</Tab>
 </PackageManagerTabs>
 
 ## Adding a Vite application to an existing repository
@@ -65,6 +73,14 @@ yarn create vite@latest apps/my-app
 
 ```bash title="Terminal"
 npm create vite@latest apps/my-app
+```
+
+</Tab>
+
+<Tab value="bun (Beta)">
+
+```bash title="Terminal"
+bun create vite@latest apps/my-app
 ```
 
 </Tab>
@@ -109,6 +125,19 @@ To add [Internal Packages](/docs/core-concepts/internal-packages) to your new ap
  "name": "my-app",
   "dependencies": {
 +   "@repo/ui": "*"
+  }
+}
+```
+
+</Tab>
+
+<Tab value="bun (Beta)">
+
+```diff title="./apps/my-app/package.json"
+{
+ "name": "my-app",
+  "dependencies": {
++   "@repo/ui": "workspace:*"
   }
 }
 ```

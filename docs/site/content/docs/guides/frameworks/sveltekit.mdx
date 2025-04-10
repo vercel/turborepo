@@ -37,6 +37,14 @@ npx create-turbo@latest -e with-svelte
 ```
 
 </Tab>
+
+<Tab value="bun (Beta)">
+
+```bash title="Terminal"
+bunx create-turbo@latest -e with-svelte
+```
+
+</Tab>
 </PackageManagerTabs>
 
 ## Adding a SvelteKit application to an existing repository
@@ -48,7 +56,7 @@ Use [`npm create svelte`](https://kit.svelte.dev/docs/creating-a-project) to set
 <Tab value="pnpm">
 
 ```bash title="Terminal"
-pnpm create svelte@latest apps/my-app
+pnpm dlx sv create
 ```
 
 </Tab>
@@ -56,7 +64,7 @@ pnpm create svelte@latest apps/my-app
 <Tab value="yarn">
 
 ```bash title="Terminal"
-yarn create svelte@latest apps/my-app
+yarn dlx sv create
 ```
 
 </Tab>
@@ -64,7 +72,15 @@ yarn create svelte@latest apps/my-app
 <Tab value="npm">
 
 ```bash title="Terminal"
-npm create svelte@latest apps/my-app
+npx sv create
+```
+
+</Tab>
+
+<Tab value="bun (Beta)">
+
+```bash title="Terminal"
+bunx sv create
 ```
 
 </Tab>
@@ -109,6 +125,19 @@ To add [Internal Packages](/docs/core-concepts/internal-packages) to your new ap
  "name": "my-app",
   "dependencies": {
 +   "@repo/ui": "*"
+  }
+}
+```
+
+</Tab>
+
+<Tab value="bun (Beta)">
+
+```diff title="./apps/my-app/package.json"
+{
+ "name": "my-app",
+  "dependencies": {
++   "@repo/ui": "workspace:*"
   }
 }
 ```

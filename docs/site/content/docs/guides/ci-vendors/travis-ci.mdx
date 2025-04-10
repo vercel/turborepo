@@ -98,6 +98,28 @@ Create a file called `.travis.yml` in your repository with the following content
     ```
 
   </Tab>
+
+    <Tab value="bun (Beta)">
+
+      ```yaml title=".travis.yml"
+      language: node_js
+      node_js:
+        - lts/*
+      cache:
+        npm: false
+        directories:
+          - "~/.pnpm-store"
+      before_install:
+        - curl -fsSL https://bun.sh/install | bash
+      install:
+        - bun install
+      script:
+        - bun run build
+      script:
+        - bun run test
+      ```
+
+  </Tab>
 </PackageManagerTabs>
 
 ## Remote Caching

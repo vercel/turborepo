@@ -101,6 +101,16 @@ In our `web` app, we first need to add `@repo/eslint-config` as a dependency.
 }
 ```
   </Tab>
+
+  <Tab value="bun (Beta)">
+```jsonc title="./apps/web/package.json"
+{
+  "devDependencies": {
+    "@repo/eslint-config": "workspace:*"
+  }
+}
+```
+  </Tab>
 </PackageManagerTabs>
 
 We can then import the configuration like this:
@@ -231,6 +241,16 @@ In our `web` app, we first need to add `@repo/eslint-config` as a dependency.
 {
   "dependencies": {
     "@repo/eslint-config": "*"
+  }
+}
+```
+  </Tab>
+
+  <Tab value="bun (Beta)">
+```jsonc title="./apps/web/package.json"
+{
+  "dependencies": {
+    "@repo/eslint-config": "workspace:*"
   }
 }
 ```

@@ -22,7 +22,7 @@ export function Tabs({
   );
 }
 
-const packageManagers = ["pnpm", "yarn", "npm"];
+const packageManagers = ["pnpm", "yarn", "npm", "bun (Beta)"];
 
 const checkPackageManagerIndex = (index: number, provided: string) => {
   if (provided !== packageManagers[index]) {
@@ -43,11 +43,11 @@ export function PackageManagerTabs({
     throw new Error("Children must be an array.");
   }
 
-  children.forEach((packageManager, index) => {
-    if (!packageManager.props.value) {
-      throw new Error(`Package manager tab is missing a value.`);
-    }
+  if (packageManagers.length > children.length) {
+    throw new Error(`Package manager tab is missing a value.`);
+  }
 
+  children.forEach((packageManager, index) => {
     checkPackageManagerIndex(index, packageManager.props.value);
   });
 

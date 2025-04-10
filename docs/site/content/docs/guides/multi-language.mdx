@@ -50,6 +50,20 @@ As an example, you may have a Rust project in the `./cli` directory in your repo
 
   <LinkToDocumentation href="https://docs.npmjs.com/cli/v7/using-npm/workspaces#defining-workspaces">npm workspace documentation</LinkToDocumentation>
   </Tab>
+
+  <Tab value="bun (Beta)">
+  ```json title="./package.json"
+  {
+    "workspaces": [
+      "apps/*"
+      "packages/*",
+      "cli" // [!code highlight]
+    ]
+  }
+  ```
+
+  <LinkToDocumentation href="https://bun.sh/docs/install/workspaces">Bun workspace documentation</LinkToDocumentation>
+  </Tab>
 </PackageManagerTabs>
 
 Then, add a `package.json` to the directory:
@@ -116,6 +130,18 @@ For instance, if you wanted to make sure that the `rust-cli` "package" from abov
 {
   "devDependencies": {
 +   "@repo/rust-cli": "*"
+  }
+}
+```
+
+  </Tab>
+
+  <Tab value="bun (Beta)">
+
+```diff title="./web/package.json"
+{
+  "devDependencies": {
++   "@repo/rust-cli": "workspace:*"
   }
 }
 ```
