@@ -42,6 +42,14 @@ npx @turbo/codemod migrate
 
 </Tab>
 
+<Tab value="bun (Beta)">
+
+```bash title="Terminal"
+bunx @turbo/codemod migrate
+```
+
+</Tab>
+
 </PackageManagerTabs>
 
 This will update your `turbo.json`(s) for many of the breaking changes from 1.x to 2.0.
@@ -90,6 +98,16 @@ Turborepo 2.0 requires that your Workspace define this field as a way to improve
 ```diff title="./package.json"
 {
 + "packageManager": "npm@10.8.1"
+}
+```
+
+</Tab>
+
+<Tab value="bun (Beta)">
+
+```diff title="./package.json"
+{
++ "packageManager": "bun@1.2.0"
 }
 ```
 

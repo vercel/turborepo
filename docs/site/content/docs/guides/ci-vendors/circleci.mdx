@@ -142,6 +142,39 @@ Create a file called `.circleci/config.yml` in your repository with the followin
     ```
 
   </Tab>
+
+  <Tab value="bun (Beta)">
+
+    ```yaml title=".circleci/config.yml"
+    version: 2.1
+    orbs:
+      node: circleci/node@5.0.2
+    workflows:
+      test:
+        jobs:
+          - test
+    jobs:
+      test:
+        docker:
+          - image: cimg/node:lts
+        steps:
+          - checkout
+          - node/install-packages
+          - run:
+            command: npm i -g bun
+            environment:
+              TURBO_UI: "false"
+          - run:
+            command: bun run build
+            environment:
+              TURBO_UI: "false"
+          - run:
+            command: bun run test
+            environment:
+              TURBO_UI: "false"
+    ```
+
+  </Tab>
 </PackageManagerTabs>
 
 ## Remote Caching

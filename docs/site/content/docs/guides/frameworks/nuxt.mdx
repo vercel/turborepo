@@ -37,6 +37,14 @@ npx create-turbo@latest -e with-vue-nuxt
 ```
 
 </Tab>
+
+<Tab value="bun (Beta)">
+
+```bash title="Terminal"
+bunx create-turbo@latest -e with-vue-nuxt
+```
+
+</Tab>
 </PackageManagerTabs>
 
 ## Adding a Nuxt application to an existing repository
@@ -65,6 +73,14 @@ yarn dlx nuxi@latest init apps/my-app
 
 ```bash title="Terminal"
 npx nuxi@latest init apps/my-app
+```
+
+</Tab>
+
+<Tab value="bun (Beta)">
+
+```bash title="Terminal"
+bunx nuxi@latest init apps/my-app
 ```
 
 </Tab>
@@ -109,6 +125,19 @@ To add [Internal Packages](/docs/core-concepts/internal-packages) to your new ap
  "name": "my-app",
   "dependencies": {
 +   "@repo/ui": "*"
+  }
+}
+```
+
+</Tab>
+
+<Tab value="bun (Beta)">
+
+```diff title="./apps/my-app/package.json"
+{
+ "name": "my-app",
+  "dependencies": {
++   "@repo/ui": "workspace:*"
   }
 }
 ```

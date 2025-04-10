@@ -198,6 +198,16 @@ packages:
 
 </Tab>
 
+<Tab value="bun (Beta)">
+
+```json title="package.json"
+{
+  "workspaces": ["apps/*"]
+}
+```
+
+</Tab>
+
 </PackageManagerTabs>
 
 ### Step 3: Add a package.json to the application
@@ -263,6 +273,16 @@ The root package.json needs to have the `packageManager` field. This ensures dev
 
 </Tab>
 
+<Tab value="bun (Beta)">
+
+```json title="./package.json"
+{
+  "packageManager": "bun@1.2.0"
+}
+```
+
+</Tab>
+
 </PackageManagerTabs>
 
 ### Step 6: Run you package manager's install command
@@ -291,6 +311,14 @@ yarn install
 
 ```bash title="Terminal"
 npm install
+```
+
+</Tab>
+
+<Tab value="bun (Beta)">
+
+```bash title="Terminal"
+bun install
 ```
 
 </Tab>
@@ -329,6 +357,14 @@ npm install turbo --save-dev
 
 </Tab>
 
+<Tab value="bun (Beta)">
+
+```bash title="Terminal"
+bun install turbo --dev
+```
+
+</Tab>
+
 </PackageManagerTabs>
 
 You can also optionally install `turbo` globally for added convenience when working with Turborepo.
@@ -355,6 +391,14 @@ yarn global add turbo
 
 ```bash title="Terminal"
 npm install turbo --global
+```
+
+</Tab>
+
+<Tab value="bun (Beta)">
+
+```bash title="Terminal"
+bun install turbo --global
 ```
 
 </Tab>
@@ -406,6 +450,14 @@ pnpm exec turbo build
 
 ```bash title="Terminal"
 npx turbo run build
+```
+
+</Tab>
+
+<Tab value="bun (Beta)">
+
+```bash title="Terminal"
+bunx turbo run build
 ```
 
 </Tab>

@@ -40,6 +40,16 @@ Internal Packages are used in your repository by installing them in `package.jso
 }
 ```
 </Tab>
+
+<Tab value="bun (Beta)">
+```json title="./apps/web/package.json"
+{
+  "dependencies": {
+    "@repo/ui": "workspace:*" // [!code highlight]
+  }
+}
+```
+</Tab>
 </PackageManagerTabs>
 
 In the [Creating an Internal Package guide](/docs/crafting-your-repository/creating-an-internal-package), you can build an Internal Package from the beginning using [the Compiled Package strategy](#compiled-packages). On this page, we'll describe other strategies for creating Internal Packages and their tradeoffs, including [publishing the package to the npm registry](#publishable-packages) to create an External Package.

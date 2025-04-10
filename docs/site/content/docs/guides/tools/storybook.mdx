@@ -38,6 +38,14 @@ npx create-turbo@latest -e design-system
 ```
 
 </Tab>
+
+<Tab value="bun (Beta)">
+
+```bash title="Terminal"
+bunx create-turbo@latest -e design-system
+```
+
+</Tab>
 </PackageManagerTabs>
 
 ## Guide
@@ -71,6 +79,14 @@ yarn dlx create-turbo@latest
 
 ```bash title="Terminal"
 npx create-turbo@latest
+```
+
+</Tab>
+
+<Tab value="bun (Beta)">
+
+```bash title="Terminal"
+bunx create-turbo@latest
 ```
 
 </Tab>
@@ -119,6 +135,14 @@ npm create storybook@latest
 ```
 
   </Tab>
+
+  <Tab value="bun (Beta)">
+
+```bash title="Terminal"
+bun create storybook@latest
+```
+
+  </Tab>
 </PackageManagerTabs>
 
 Follow the prompts to create an application. For the rest of this guide, we'll assume React and TypeScript.
@@ -157,6 +181,14 @@ yarn workspace storybook add @repo/ui
 
 ```bash title="Terminal"
 npm install @repo/ui --workspace=storybook
+```
+
+</Tab>
+
+<Tab value="bun (Beta)">
+
+```bash title="Terminal"
+bun install @repo/ui --filter=storybook
 ```
 
 </Tab>
@@ -315,6 +347,14 @@ yarn workspace @repo/ui add @storybook/react --dev
 
 ```bash title="Terminal"
 npm install @storybook/react --workspace=@repo/ui --save-dev
+```
+
+</Tab>
+
+<Tab value="bun (Beta)">
+
+```bash title="Terminal"
+bun install @storybook/react --filter=@repo/ui --save-dev
 ```
 
 </Tab>

@@ -45,6 +45,13 @@ npx create-turbo@latest
 
 </Tab>
 
+<Tab value="bun (Beta)">
+```bash title="Terminal"
+bunx create-turbo@latest
+```
+
+</Tab>
+
 </PackageManagerTabs>
 
 You can then review the repository for the characteristics described in this guide.
@@ -61,6 +68,7 @@ Below, the structural elements of `create-turbo` that make it a valid workspace 
   <Files>
     <File name="package.json" green />
     <File name="pnpm-lock.yaml" green />
+    <File name="pnpm-workspace.yaml" green />
     <File name="turbo.json" />
     <Folder name="apps" defaultOpen>
       <Folder name="docs" className="text-foreground" defaultOpen>
@@ -103,6 +111,27 @@ Below, the structural elements of `create-turbo` that make it a valid workspace 
   <Files>
     <File name="package.json" green />
     <File name="package-lock.json" green />
+    <File name="turbo.json" />
+    <Folder name="apps" defaultOpen>
+      <Folder name="docs" className="text-foreground" defaultOpen>
+        <File name="package.json" green />
+      </Folder>
+      <Folder name="web">
+        <File name="package.json" green />
+      </Folder>
+    </Folder>
+    <Folder name="packages">
+      <Folder name="ui">
+        <File name="package.json" green />
+      </Folder>
+    </Folder>
+  </Files>
+</Tab>
+
+<Tab value="bun (Beta)">
+  <Files>
+    <File name="package.json" green />
+    <File name="bun.lock" green />
     <File name="turbo.json" />
     <Folder name="apps" defaultOpen>
       <Folder name="docs" className="text-foreground" defaultOpen>
@@ -176,6 +205,20 @@ First, your package manager needs to describe the locations of your packages. We
 
   <LinkToDocumentation href="https://docs.npmjs.com/cli/v7/using-npm/workspaces#defining-workspaces">npm workspace documentation</LinkToDocumentation>
   </Tab>
+
+  <Tab value="bun (Beta)">
+  ```json title="./package.json"
+  {
+    "workspaces": [
+      "apps/*",
+      "packages/*"
+    ]
+  }
+  ```
+
+  <LinkToDocumentation href="https://bun.sh/docs/install/workspaces">npm workspace documentation</LinkToDocumentation>
+  </Tab>
+
 </PackageManagerTabs>
 
 Using this configuration, every directory **with a `package.json`** in the `apps` or `packages` directories will be considered a package.
@@ -255,6 +298,25 @@ The root `package.json` is the base for your workspace. Below is a common exampl
     "turbo": "latest"
   },
   "packageManager": "npm@10.0.0"
+}
+```
+
+</Tab>
+
+<Tab value="bun (Beta)">
+
+```json title="./package.json"
+{
+  "private": true,
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint"
+  },
+  "devDependencies": {
+    "turbo": "latest"
+  },
+  "packageManager": "bun@1.2.0"
 }
 ```
 
