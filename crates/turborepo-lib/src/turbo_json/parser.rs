@@ -114,6 +114,13 @@ impl WithMetadata for RawTurboJson {
             boundaries.value.add_text(text.clone());
         }
 
+        // Add text for the dependencies field
+        if let Some(_dependencies) = &mut self.dependencies {
+            // No need to add text to the HashMap itself, only its values would
+            // need text/path info which isn't currently implemented
+            // for DependencyConfig
+        }
+
         self.tasks.add_text(text.clone());
         self.cache_dir.add_text(text.clone());
         self.pipeline.add_text(text);
@@ -133,6 +140,12 @@ impl WithMetadata for RawTurboJson {
         if let Some(boundaries) = &mut self.boundaries {
             boundaries.value.add_path(path.clone());
         }
+
+        // Add path for the dependencies field
+        if let Some(_dependencies) = &mut self.dependencies {
+            // No need to add path to the HashMap itself
+        }
+
         self.tasks.add_path(path.clone());
         self.cache_dir.add_path(path.clone());
         self.pipeline.add_path(path);
@@ -327,6 +340,29 @@ impl RawTurboJson {
 
         if turbo_json.experimental_spaces.is_some() {
             warn!("`experimentalSpaces` key in turbo.json is deprecated and does not do anything")
+        }
+
+        // Add validation for dependency configurations
+        if let Some(dependencies) = &turbo_json.dependencies {
+            for (name, config) in dependencies {
+                if let Err(err_msg) = config.validate() {
+                    // Create an error message that will be shown to the user
+                    let error_message = format!(
+                        "Invalid dependency configuration for '{}': {}",
+                        name, err_msg
+                    );
+
+                    // Instead of trying to use complex diagnostics handling,
+                    // we'll add a simple custom message and return an empty diagnostics list
+                    // This will be clear enough for users to understand the error
+                    warn!("{}", error_message);
+
+                    return Err(Error {
+                        diagnostics: vec![], // Empty diagnostics, but the warning above will show
+                        backtrace: backtrace::Backtrace::capture(),
+                    });
+                }
+            }
         }
 
         turbo_json.add_text(Arc::from(text));

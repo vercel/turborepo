@@ -9,7 +9,7 @@ use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_ui::{color, BOLD, GREY};
 
 use crate::{
-    commands::{bin, generate, link, login, ls, prune, CommandBase},
+    commands::{bin, check_deps, generate, link, login, ls, prune, CommandBase},
     daemon::DaemonError,
     query,
     rewrite_json::RewriteError,
@@ -25,6 +25,8 @@ pub enum Error {
     Bin(#[from] bin::Error, #[backtrace] backtrace::Backtrace),
     #[error(transparent)]
     Boundaries(#[from] crate::boundaries::Error),
+    #[error(transparent)]
+    CheckDeps(#[from] check_deps::Error),
     #[error(transparent)]
     Clone(#[from] crate::commands::clone::Error),
     #[error(transparent)]
