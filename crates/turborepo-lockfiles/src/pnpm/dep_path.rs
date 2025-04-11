@@ -96,28 +96,41 @@ fn parse_dep_path(i: &str) -> IResult<&str, DepPath> {
 }
 
 fn parse_dep_path_v9(input: &str) -> Result<DepPath, Error> {
+    // Check if input is empty
     if input.is_empty() {
         return Err(Error::MissingAt(input.to_owned()));
     }
-    let sep_index = input[1..]
-        .find('@')
-        .ok_or_else(|| Error::MissingAt(input.to_owned()))?
-        + 1;
-    // Need to check if sep_index is valid index
-    if sep_index >= input.len() {
-        return Err(Error::MissingVersion(input.to_owned()));
-    }
-    let (name, version) = input.split_at(sep_index);
-    let version = &version[1..];
 
-    let (version, peer_suffix) = match version.find('(') {
-        Some(paren_index) if version.ends_with(')') => {
-            let (version, peer_suffix) = version.split_at(paren_index);
-            (version, Some(peer_suffix))
-        }
-        _ => (version, None),
+    // Find the @ separator more efficiently
+    let sep_index = match input[1..].find('@') {
+        Some(idx) => idx + 1, // Add 1 to adjust for the slice offset
+        None => return Err(Error::MissingAt(input.to_owned())),
     };
 
+    // Check if we have a version after the separator
+    if sep_index >= input.len() - 1 {
+        return Err(Error::MissingVersion(input.to_owned()));
+    }
+
+    // Split the input into name and version without allocating new strings
+    let name = &input[..sep_index];
+    let version_with_suffix = &input[(sep_index + 1)..];
+
+    // Check for peer dependencies suffix using a single allocation
+    let (version, peer_suffix) = if let Some(paren_index) = version_with_suffix.find('(') {
+        if version_with_suffix.ends_with(')') {
+            (
+                &version_with_suffix[..paren_index],
+                Some(&version_with_suffix[paren_index..]),
+            )
+        } else {
+            (version_with_suffix, None)
+        }
+    } else {
+        (version_with_suffix, None)
+    };
+
+    // Create the DepPath with the parsed components
     Ok(DepPath::new(name, version).with_peer_suffix(peer_suffix))
 }
 

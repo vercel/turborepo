@@ -24,14 +24,28 @@ impl Yarn1Lockfile {
     // A "seen key" just entry.resolved with the key's package name appended to it
     // See https://github.com/yarnpkg/yarn/pull/9023/
     fn seen_keys(&self) -> HashMap<&str, String> {
-        let mut seen_keys = HashMap::new();
+        let mut seen_keys = HashMap::with_capacity(self.inner.len());
+
+        // Create a pattern cache to avoid recreating patterns for the same key prefixes
+        let mut pattern_cache = HashMap::new();
+
         for (key, entry) in &self.inner {
-            let Some(resolved) = entry.resolved.as_deref() else {
-                continue;
-            };
-            let pkg_name = Pattern::new(key).name;
-            let seen_key = format!("{resolved}#{pkg_name}");
-            seen_keys.insert(key.as_str(), seen_key);
+            if let Some(resolved) = entry.resolved.as_deref() {
+                // Extract package name using caching
+                let pkg_name = if let Some(name) = pattern_cache.get(key.as_str()) {
+                    // Use cached pattern
+                    name
+                } else {
+                    // Create new pattern and cache it
+                    let name = Pattern::new(key).name;
+                    pattern_cache.insert(key.as_str(), name);
+                    pattern_cache.get(key.as_str()).unwrap()
+                };
+
+                // Create the seen key
+                let seen_key = format!("{resolved}#{pkg_name}");
+                seen_keys.insert(key.as_str(), seen_key);
+            }
         }
         seen_keys
     }
