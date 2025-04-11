@@ -12,6 +12,49 @@ expression: query_output
       "subscriptionType": null,
       "types": [
         {
+          "kind": "OBJECT",
+          "name": "All",
+          "description": null,
+          "fields": [
+            {
+              "name": "reason",
+              "description": null,
+              "args": [],
+              "type": {
+                "kind": "NON_NULL",
+                "name": null,
+                "ofType": {
+                  "kind": "UNION",
+                  "name": "PackageChangeReason",
+                  "ofType": null
+                }
+              },
+              "isDeprecated": false,
+              "deprecationReason": null
+            },
+            {
+              "name": "count",
+              "description": null,
+              "args": [],
+              "type": {
+                "kind": "NON_NULL",
+                "name": null,
+                "ofType": {
+                  "kind": "SCALAR",
+                  "name": "Int",
+                  "ofType": null
+                }
+              },
+              "isDeprecated": false,
+              "deprecationReason": null
+            }
+          ],
+          "inputFields": null,
+          "interfaces": [],
+          "enumValues": null,
+          "possibleTypes": null
+        },
+        {
           "kind": "SCALAR",
           "name": "Boolean",
           "description": "The `Boolean` scalar type represents `true` or `false`.",
@@ -726,13 +769,9 @@ expression: query_output
               "description": null,
               "args": [],
               "type": {
-                "kind": "NON_NULL",
-                "name": null,
-                "ofType": {
-                  "kind": "SCALAR",
-                  "name": "String",
-                  "ofType": null
-                }
+                "kind": "SCALAR",
+                "name": "String",
+                "ofType": null
               },
               "isDeprecated": false,
               "deprecationReason": null
@@ -747,6 +786,34 @@ expression: query_output
                 "ofType": {
                   "kind": "SCALAR",
                   "name": "String",
+                  "ofType": null
+                }
+              },
+              "isDeprecated": false,
+              "deprecationReason": null
+            },
+            {
+              "name": "package",
+              "description": null,
+              "args": [],
+              "type": {
+                "kind": "UNION",
+                "name": "PackageMapping",
+                "ofType": null
+              },
+              "isDeprecated": false,
+              "deprecationReason": null
+            },
+            {
+              "name": "affectedPackages",
+              "description": "Gets the affected packages for the file, i.e. all packages that depend\non the file.",
+              "args": [],
+              "type": {
+                "kind": "NON_NULL",
+                "name": null,
+                "ofType": {
+                  "kind": "OBJECT",
+                  "name": "Packages",
                   "ofType": null
                 }
               },
@@ -1620,6 +1687,27 @@ expression: query_output
           "possibleTypes": null
         },
         {
+          "kind": "UNION",
+          "name": "PackageMapping",
+          "description": null,
+          "fields": null,
+          "inputFields": null,
+          "interfaces": null,
+          "enumValues": null,
+          "possibleTypes": [
+            {
+              "kind": "OBJECT",
+              "name": "All",
+              "ofType": null
+            },
+            {
+              "kind": "OBJECT",
+              "name": "Package",
+              "ofType": null
+            }
+          ]
+        },
+        {
           "kind": "INPUT_OBJECT",
           "name": "PackagePredicate",
           "description": "Predicates are used to filter packages. If you include multiple predicates,\nthey are combined using AND. To combine predicates using OR, use the `or`\nfield.\n\nFor pairs that do not obey type safety, e.g. `NAME` `greater_than` `10`, we\ndefault to `false`.",
@@ -1954,6 +2042,63 @@ expression: query_output
                 "ofType": {
                   "kind": "OBJECT",
                   "name": "File",
+                  "ofType": null
+                }
+              },
+              "isDeprecated": false,
+              "deprecationReason": null
+            },
+            {
+              "name": "affectedFiles",
+              "description": "Get the files that have changed between the `base` and `head` commits.\n\n# Arguments\n\n* `base`: Defaults to `main` or `master`\n* `head`: Defaults to `HEAD`\n* `include_uncommitted`: Defaults to `true` if `head` is not provided\n* `allow_unknown_objects`: Defaults to `false`\n* `merge_base`: Defaults to `true`\n\nreturns: Result<Array<File>, Error>",
+              "args": [
+                {
+                  "name": "base",
+                  "description": null,
+                  "type": {
+                    "kind": "SCALAR",
+                    "name": "String",
+                    "ofType": null
+                  },
+                  "defaultValue": null
+                },
+                {
+                  "name": "head",
+                  "description": null,
+                  "type": {
+                    "kind": "SCALAR",
+                    "name": "String",
+                    "ofType": null
+                  },
+                  "defaultValue": null
+                },
+                {
+                  "name": "includeUncommitted",
+                  "description": null,
+                  "type": {
+                    "kind": "SCALAR",
+                    "name": "Boolean",
+                    "ofType": null
+                  },
+                  "defaultValue": null
+                },
+                {
+                  "name": "mergeBase",
+                  "description": null,
+                  "type": {
+                    "kind": "SCALAR",
+                    "name": "Boolean",
+                    "ofType": null
+                  },
+                  "defaultValue": null
+                }
+              ],
+              "type": {
+                "kind": "NON_NULL",
+                "name": null,
+                "ofType": {
+                  "kind": "OBJECT",
+                  "name": "Files",
                   "ofType": null
                 }
               },
