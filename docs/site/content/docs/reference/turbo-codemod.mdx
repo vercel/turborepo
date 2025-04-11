@@ -39,6 +39,26 @@ All the codemods you need to upgrade will be run for you.
 The codemods below are used for migration paths in the second major version of Turborepo.
 
 <Accordions>
+
+<Accordion title="update-schema-json-url (2.0.0)" id="update-schema-json-url">
+
+Updates a versioned schema.json URL to v2.
+
+```bash title="Terminal"
+npx @turbo/codemod update-schema-json-url
+```
+
+**Example**
+
+```diff title="./turbo.json"
+{
+- "$schema": "https://turbo.build/schema.v1.json",
++ "$schema": "https://turbo.build/schema.v2.json",
+}
+```
+
+</Accordion>
+
 <Accordion title="add-package-names (2.0.0)" id="add-package-names">
 
 Adds a name to `package.json` in any packages that don't have one.
