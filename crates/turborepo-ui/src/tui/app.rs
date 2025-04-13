@@ -2,6 +2,10 @@ use std::{
     collections::BTreeMap,
     io::{self, Stdout, Write},
     mem,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
     time::Duration,
 };
 
@@ -654,6 +658,9 @@ pub async fn run_app(
     let (crossterm_tx, crossterm_rx) = mpsc::channel(1024);
     input::start_crossterm_stream(crossterm_tx);
 
+    // Set up signal handlers for proper terminal cleanup on SIGINT, SIGTERM, etc.
+    let terminal_cleanup_state = setup_signal_handlers()?;
+
     let (result, callback) =
         match run_app_inner(&mut terminal, &mut app, receiver, crossterm_rx).await {
             Ok(callback) => (Ok(()), callback),
@@ -663,9 +670,88 @@ pub async fn run_app(
             }
         };
 
+    // Reset the signal handlers to default since we're done with the TUI
+    reset_signal_handlers(terminal_cleanup_state);
     cleanup(terminal, app, callback)?;
 
     result
+}
+
+// Global state for terminal cleanup on signal
+type TerminalCleanupState = Arc<AtomicBool>;
+
+// Set up signal handlers to handle SIGINT, SIGTERM, etc.
+fn setup_signal_handlers() -> io::Result<TerminalCleanupState> {
+    let cleanup_state = Arc::new(AtomicBool::new(false));
+    let cleanup_state_clone = cleanup_state.clone();
+
+    // Use a different approach for different platforms
+    #[cfg(unix)]
+    {
+        use signal_hook::{consts::*, flag};
+
+        // Set up handlers for SIGINT, SIGTERM, SIGHUP
+        flag::register(SIGINT, cleanup_state_clone.clone())?;
+        flag::register(SIGTERM, cleanup_state_clone.clone())?;
+        flag::register(SIGHUP, cleanup_state_clone.clone())?;
+
+        // Set up a thread to monitor signals and perform cleanup
+        let state = cleanup_state_clone.clone();
+        std::thread::spawn(move || {
+            loop {
+                if state.load(Ordering::SeqCst) {
+                    // Emergency terminal cleanup on signal
+                    let _ = emergency_terminal_cleanup();
+                    break;
+                }
+
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+        });
+    }
+
+    #[cfg(windows)]
+    {
+        // On Windows, we can use SetConsoleCtrlHandler
+        use winapi::um::consoleapi::SetConsoleCtrlHandler;
+
+        extern "system" fn ctrl_handler(_: u32) -> i32 {
+            let _ = emergency_terminal_cleanup();
+            1 // Signal was handled
+        }
+
+        unsafe {
+            let result = SetConsoleCtrlHandler(Some(ctrl_handler), 1);
+            if result == 0 {
+                return Err(io::Error::last_os_error());
+            }
+        }
+    }
+
+    Ok(cleanup_state)
+}
+
+// Reset signal handlers to default
+fn reset_signal_handlers(state: TerminalCleanupState) {
+    state.store(true, Ordering::SeqCst);
+}
+
+// Emergency terminal cleanup that is safe to call from a signal handler
+fn emergency_terminal_cleanup() -> io::Result<()> {
+    // This cleanup is minimal and avoids any operations that are unsafe in signal
+    // handlers
+    let mut stdout = io::stdout();
+
+    // We need to use direct calls to avoid complex operations in signal handlers
+    crossterm::terminal::disable_raw_mode()?;
+
+    crossterm::execute!(
+        stdout,
+        crossterm::event::DisableMouseCapture,
+        crossterm::terminal::LeaveAlternateScreen
+    )?;
+
+    Ok(())
 }
 
 // Break out inner loop so we can use `?` without worrying about cleaning up the

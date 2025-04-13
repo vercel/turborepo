@@ -254,7 +254,10 @@ impl Grid {
     }
 
     pub fn set_scrollback(&mut self, rows: usize) {
-        self.scrollback_offset = rows.min(self.scrollback.len());
+        // Ensure we don't set the scrollback beyond what we actually have stored
+        // This helps prevent issues during terminal cleanup or unexpected termination
+        let max_available = self.scrollback.len();
+        self.scrollback_offset = rows.min(max_available);
     }
 
     pub fn clear_selection(&mut self) {

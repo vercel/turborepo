@@ -34,6 +34,7 @@ nix = { version = "0.26.2", features = ["signal"] }
 ratatui = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
+signal-hook = "0.3.17"
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
@@ -46,3 +47,4 @@ which = { workspace = true }
 [target."cfg(windows)".dependencies]
 clipboard-win = "5.3.1"
 windows-sys = { version = "0.59", features = ["Win32_System_Console"] }
+winapi = { version = "0.3.9", features = ["consoleapi"] }
