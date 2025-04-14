@@ -106,131 +106,238 @@ impl From<&RawRemoteCacheOptions> for ConfigurationOptions {
     }
 }
 
-#[derive(Serialize, Default, Debug, Clone, Iterable, Deserializable)]
+// Dependency configuration for dependency version checking
+#[derive(Serialize, Debug, Clone, Iterable, Default)]
 #[serde(rename_all = "camelCase")]
-// The raw deserialized turbo.json file.
-pub struct RawTurboJson {
-    #[serde(skip)]
-    span: Spanned<()>,
-
-    #[serde(rename = "$schema", skip_serializing_if = "Option::is_none")]
-    schema: Option<UnescapedString>,
-
-    #[serde(skip_serializing)]
-    pub experimental_spaces: Option<SpacesJson>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    extends: Option<Spanned<Vec<UnescapedString>>>,
-    // Global root filesystem dependencies
-    #[serde(skip_serializing_if = "Option::is_none")]
-    global_dependencies: Option<Vec<Spanned<UnescapedString>>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    global_env: Option<Vec<Spanned<UnescapedString>>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    global_pass_through_env: Option<Vec<Spanned<UnescapedString>>>,
-    // Tasks is a map of task entries which define the task graph
-    // and cache behavior on a per task or per package-task basis.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub tasks: Option<Pipeline>,
-
-    #[serde(skip_serializing)]
-    pub pipeline: Option<Spanned<Pipeline>>,
-    // Configuration options when interfacing with the remote cache
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) remote_cache: Option<RawRemoteCacheOptions>,
-    #[serde(skip_serializing_if = "Option::is_none", rename = "ui")]
-    pub ui: Option<UIMode>,
-    #[serde(
-        skip_serializing_if = "Option::is_none",
-        rename = "dangerouslyDisablePackageManagerCheck"
-    )]
-    pub allow_no_package_manager: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub daemon: Option<Spanned<bool>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub env_mode: Option<EnvMode>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cache_dir: Option<Spanned<UnescapedString>>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub tags: Option<Spanned<Vec<Spanned<String>>>>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub boundaries: Option<Spanned<BoundariesConfig>>,
-
-    #[deserializable(rename = "//")]
-    #[serde(skip)]
-    _comment: Option<String>,
+pub struct DependencyConfig {
+    /// List of rule objects that define how to handle dependency
+    /// inconsistencies
+    #[serde(default)]
+    pub rules: Vec<DependencyRule>,
 }
 
-#[derive(Serialize, Default, Debug, PartialEq, Clone)]
-#[serde(transparent)]
-pub struct Pipeline(BTreeMap<TaskName<'static>, Spanned<RawTaskDefinition>>);
+// Custom deserialization for DependencyConfig to support both formats:
+// 1. Array format: "typescript": [{...}, {...}]
+// 2. Object format: "typescript": {"rules": [{...}, {...}]}
+impl<'de> Deserialize<'de> for DependencyConfig {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use std::fmt;
 
-impl IntoIterator for Pipeline {
-    type Item = (TaskName<'static>, Spanned<RawTaskDefinition>);
-    type IntoIter =
-        <BTreeMap<TaskName<'static>, Spanned<RawTaskDefinition>> as IntoIterator>::IntoIter;
+        use serde::de::{self, MapAccess, SeqAccess, Visitor};
 
-    fn into_iter(self) -> Self::IntoIter {
-        self.0.into_iter()
+        struct DependencyConfigVisitor;
+
+        impl<'de> Visitor<'de> for DependencyConfigVisitor {
+            type Value = DependencyConfig;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("an array of rules or an object with a 'rules' field")
+            }
+
+            // Handle array format: [rule1, rule2, ...]
+            fn visit_seq<S>(self, mut seq: S) -> Result<DependencyConfig, S::Error>
+            where
+                S: SeqAccess<'de>,
+            {
+                let mut rules = Vec::new();
+                while let Some(rule) = seq.next_element()? {
+                    rules.push(rule);
+                }
+                Ok(DependencyConfig { rules })
+            }
+
+            // Handle object format: { "rules": [...] }
+            fn visit_map<M>(self, mut map: M) -> Result<DependencyConfig, M::Error>
+            where
+                M: MapAccess<'de>,
+            {
+                let mut rules = None;
+
+                while let Some(key) = map.next_key::<String>()? {
+                    if key == "rules" {
+                        if rules.is_some() {
+                            return Err(de::Error::duplicate_field("rules"));
+                        }
+                        rules = Some(map.next_value()?);
+                    } else {
+                        // Skip other fields
+                        let _ = map.next_value::<serde::de::IgnoredAny>()?;
+                    }
+                }
+
+                Ok(DependencyConfig {
+                    rules: rules.unwrap_or_default(),
+                })
+            }
+        }
+
+        // Try to deserialize as either an array or an object
+        deserializer.deserialize_any(DependencyConfigVisitor)
     }
 }
 
-impl Deref for Pipeline {
-    type Target = BTreeMap<TaskName<'static>, Spanned<RawTaskDefinition>>;
+// Implementation for the biome-deserialize framework
+impl Deserializable for DependencyConfig {
+    fn deserialize(
+        value: &impl DeserializableValue,
+        name: &str,
+        diagnostics: &mut Vec<DeserializationDiagnostic>,
+    ) -> Option<Self> {
+        // Handle array format
+        if value.is_array() {
+            let mut rules = Vec::new();
 
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
+            // Parse the array elements
+            if let Some(elements) = value.as_array() {
+                for element in elements {
+                    if let Some(rule) = DependencyRule::deserialize(element, "rule", diagnostics) {
+                        rules.push(rule);
+                    }
+                }
+            }
 
-impl DerefMut for Pipeline {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
+            Some(DependencyConfig { rules })
+        }
+        // Handle object format with "rules" field
+        else if value.is_object() {
+            if let Some(rules_value) = value.get_field("rules") {
+                let mut rules = Vec::new();
 
-#[derive(Serialize, Deserialize, Debug, Copy, Clone, Deserializable, PartialEq, Eq, ValueEnum)]
-#[serde(rename_all = "camelCase")]
-pub enum UIMode {
-    /// Use the terminal user interface
-    Tui,
-    /// Use the standard output stream
-    Stream,
-    /// Use the web user interface (experimental)
-    Web,
-}
+                if let Some(elements) = rules_value.as_array() {
+                    for element in elements {
+                        if let Some(rule) =
+                            DependencyRule::deserialize(element, "rule", diagnostics)
+                        {
+                            rules.push(rule);
+                        }
+                    }
+                }
 
-impl Default for UIMode {
-    fn default() -> Self {
-        Self::Tui
-    }
-}
-
-impl Display for UIMode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            UIMode::Tui => write!(f, "tui"),
-            UIMode::Stream => write!(f, "stream"),
-            UIMode::Web => write!(f, "web"),
+                Some(DependencyConfig { rules })
+            } else {
+                // No "rules" field - create empty config
+                Some(DependencyConfig::default())
+            }
+        } else {
+            // Neither array nor object - can't parse
+            diagnostics.push(DeserializationDiagnostic::new_incorrect_type(
+                value.range(),
+                &[VisitableType::ARRAY, VisitableType::MAP],
+                value.get_type(),
+            ));
+            None
         }
     }
 }
 
-impl UIMode {
-    pub fn use_tui(&self) -> bool {
-        matches!(self, Self::Tui)
-    }
+/// A single rule for handling a dependency
+#[derive(Serialize, Deserialize, Debug, Clone, Iterable, Deserializable, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct DependencyRule {
+    /// Configuration for ignoring dependency version inconsistencies
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ignore: Option<IgnoreConfig>,
 
-    /// Returns true if the UI mode has a sender,
-    /// i.e. web or tui but not stream
-    pub fn has_sender(&self) -> bool {
-        matches!(self, Self::Tui | Self::Web)
+    /// Configuration for pinning dependency versions
+    #[serde(
+        default,
+        rename = "pinToVersion",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub pin_to_version: Option<PinVersionConfig>,
+}
+
+/// Configuration for ignoring dependencies
+#[derive(Serialize, Deserialize, Debug, Clone, Iterable, Deserializable, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct IgnoreConfig {
+    /// List of package name patterns where dependency version inconsistencies
+    /// should be ignored Supports glob patterns like "*" or "**" for all
+    /// packages Negation patterns like "!pkg-name" can be used to exclude
+    /// specific packages
+    #[serde(default)]
+    pub packages: Vec<String>,
+}
+
+/// Configuration for pinning dependency versions
+#[derive(Serialize, Deserialize, Debug, Clone, Iterable, Deserializable, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct PinVersionConfig {
+    /// The version to pin packages to
+    pub version: String,
+
+    /// List of package name patterns to apply the pinned version to
+    /// Supports glob patterns like "*" or "**" for all packages
+    /// Negation patterns like "!pkg-name" can be used to exclude specific
+    /// packages
+    #[serde(default)]
+    pub packages: Vec<String>,
+}
+
+impl DependencyConfig {
+    /// Validates that:
+    /// 1. At least one rule is specified
+    /// 2. Each rule has either ignore or pinToVersion, but not both
+    /// 3. No package pattern appears in both ignore and pinToVersion lists
+    ///    across all rules
+    pub fn validate(&self) -> Result<(), &'static str> {
+        // Check that at least one rule is provided
+        if self.rules.is_empty() {
+            return Err("At least one rule must be specified for a dependency");
+        }
+
+        // Check each rule has exactly one of ignore or pinToVersion
+        for rule in &self.rules {
+            match (rule.ignore.is_some(), rule.pin_to_version.is_some()) {
+                (true, true) => return Err("A rule cannot have both 'ignore' and 'pinToVersion'"),
+                (false, false) => return Err("A rule must have either 'ignore' or 'pinToVersion'"),
+                _ => {}
+            }
+        }
+
+        // Collect all ignore and pin package patterns to check for conflicts
+        let mut all_ignore_patterns = Vec::new();
+        let mut all_pin_patterns = Vec::new();
+
+        for rule in &self.rules {
+            if let Some(ignore) = &rule.ignore {
+                all_ignore_patterns.extend(ignore.packages.iter().cloned());
+            }
+            if let Some(pin) = &rule.pin_to_version {
+                all_pin_patterns.extend(pin.packages.iter().cloned());
+            }
+        }
+
+        // Check for conflicts between ignore and pin patterns
+        for ignore_pattern in &all_ignore_patterns {
+            for pin_pattern in &all_pin_patterns {
+                if ignore_pattern == pin_pattern {
+                    return Err(
+                        "The same package pattern cannot appear in both 'ignore' and \
+                         'pinToVersion'",
+                    );
+                }
+
+                // Special case for "*" and "**" wildcards in ignore
+                if (ignore_pattern == "*" || ignore_pattern == "**")
+                    && !pin_pattern.starts_with('!')
+                {
+                    return Err(
+                        "When using '*' or '**' in 'ignore', all pinToVersion patterns must use \
+                         negation ('!') prefix",
+                    );
+                }
+            }
+        }
+
+        Ok(())
     }
 }
 
-#[derive(Serialize, Default, Debug, PartialEq, Clone, Iterable, Deserializable)]
+#[derive(Serialize, Default, Debug, Clone, Iterable, Deserializable)]
 #[serde(rename_all = "camelCase")]
 #[deserializable(unknown_fields = "deny")]
 pub struct RawTaskDefinition {
