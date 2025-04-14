@@ -82,7 +82,7 @@ const config = {
       },
       {
         source: "/discord{/}?",
-        destination: "https://vercel.community/tag/turborepo",
+        destination: "https://community.vercel.com/tag/turborepo",
         permanent: true,
       },
       {
