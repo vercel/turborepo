@@ -43,7 +43,7 @@ export function GridCell({
       className={cn(
         colSpanClass,
         rowSpanClass,
-        "border-0 border-gray-200 p-12",
+        "border-0 border-gray-200 p-6 xs:p-12",
         className
       )}
       {...props}

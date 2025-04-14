@@ -67,34 +67,38 @@ export const metadata: Metadata = {
 
 export default async function HomePage() {
   return (
-    <div className="py-12 max-w-6xl mx-auto">
+    <div className="py-12 max-w-6xl p-3 mx-auto">
       <Grid
         columns={{
           sm: 1,
           md: 2,
         }}
-        className="border border-gray-200"
+        className="relative border border-gray-200"
       >
-        <GridCell className="border-b border-r">
+        <div className="absolute -top-[2px]">
+          <div className="border-t-[1px] relative w-4 h-4 -left-[.5rem] top-[1px] md:w-8 md:h-8 md:-left-[1rem] md:top-[1px] border-gray-900" />
+          <div className="border-l-[1px] relative w-4 h-4 -top-[1.45rem] -left-[1px] md:w-8 md:h-8 md:-top-[2.9rem] md:-left-[1px] border-gray-900" />
+        </div>
+        <GridCell className="border-b border-r-0 md:border-r col-span-2 sm:col-span-1">
           <div className="flex flex-col justify-center">
             <h1 className="mb-2.5 text-5xl font-semibold md:text-heading-64">
               Make ship happen
             </h1>
-            <p className="mb-6 font-medium text-gray-900 text-label-20 md:mb-12">
+            <p className="mb-6 font-medium text-gray-900 text-label-20 md:mb-12 text-pretty">
               The build system for JavaScript and TypeScript codebases
             </p>
-            <div className="flex h-fit gap-x-4 items-center">
-              <Button asChild className="h-[48px] text-[18px]">
+            <div className="flex flex-col md:flex-row h-fit gap-4 items-center">
+              <Button asChild className="w-full md:w-auto h-[54px]">
                 <a href="/docs">Get started</a>
               </Button>
               <Snippet
                 code="npm i turbo"
-                className="flex h-fit items-center border border-[var(--ds-gray-alpha-400)] justify-center font-mono bg-[var(--ds-background-100)]"
+                className="flex h-fit w-full md:w-auto items-center border border-[var(--ds-gray-alpha-400)] justify-center font-mono bg-[var(--ds-background-100)]"
               />
             </div>
           </div>
         </GridCell>
-        <GridCell className="relative sm:!mb-0 border-b">
+        <GridCell className="relative sm:!mb-0 border-b col-span-2 sm:col-span-1">
           <p>A hero image goes here!</p>
         </GridCell>
         <GridCell className="h-fit col-span-2 border-b">
@@ -112,7 +116,7 @@ export default async function HomePage() {
                 <h3 className="mt-3 text-heading-24 md:mt-6">
                   {feature.title}
                 </h3>
-                <p className="mt-1.5 text-gray-900 text-copy-16 md:mt-4">
+                <p className="mt-1.5 text-gray-900 text-copy-16 md:mt-4 text-pretty">
                   {feature.description}
                 </p>
               </div>
@@ -123,14 +127,14 @@ export default async function HomePage() {
           <div className="flex flex-col items-start justify-between gap-y-4 md:flex-row">
             <div className="flex flex-col gap-y-1">
               <h2 className="text-2xl font-semibold">Simple setup</h2>
-              <p className="text-gray-900 text-copy-16">
+              <p className="text-gray-900 text-copy-16 text-pretty">
                 Start a new repository or migrate an existing repo incrementally
-                in minutes
+                in minutes.
               </p>
             </div>
             <Button asChild>
-              <a href="/repo/docs">
-                Read the Docs
+              <a href="/repo/docs" className="w-full sm:w-auto">
+                Read the docs
                 <ArrowRight />
               </a>
             </Button>
@@ -140,12 +144,14 @@ export default async function HomePage() {
               <DynamicCodeBlock
                 lang="json"
                 code={simpleTurboJson}
-                options={{
-                  themes: {
-                    light: theme,
-                    dark: theme,
-                  },
-                }}
+                options={
+                  {
+                    themes: {
+                      light: theme,
+                      dark: theme,
+                    },
+                  } as any
+                }
               />
               <span className="text-xs text-gray-900">
                 Declaring a build task
@@ -169,7 +175,7 @@ export default async function HomePage() {
           </div>
         </GridCell>
         <GridCell className="h-fit col-span-2 border-b">
-          <h2 className="text-2xl font-semibold">
+          <h2 className="text-2xl font-semibold text-pretty">
             What builders say about Turborepo
           </h2>
 
@@ -177,16 +183,16 @@ export default async function HomePage() {
         </GridCell>
         <GridCell className="col-span-2">
           <div className="flex flex-col items-start gap-y-6 md:flex-row md:items-center md:justify-between md:gap-x-6">
-            <h2 className="text-2xl font-semibold md:text-4xl">
+            <h2 className="text-2xl font-semibold md:text-4xl text-pretty">
               Deploy your Turborepo today.
             </h2>
-            <div className="flex gap-x-4 items-center">
-              <Button asChild className="h-[48px] text-[18px]">
+            <div className="flex flex-col w-full xs:flex-row gap-4 items-center">
+              <Button asChild className="w-full xs:w-auto h-[54px] text-[18px]">
                 <a href="/repo/docs">Get Started</a>
               </Button>
               <Snippet
                 code="npm i turbo"
-                className="flex h-fit items-center border border-[var(--ds-gray-alpha-400)] justify-center font-mono bg-[var(--ds-background-100)]"
+                className="flex h-fit w-full xs:w-auto items-center border border-[var(--ds-gray-alpha-400)] justify-center font-mono bg-[var(--ds-background-100)]"
               />
             </div>
           </div>
