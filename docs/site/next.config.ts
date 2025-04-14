@@ -47,11 +47,6 @@ const config = {
   redirects() {
     return [
       {
-        source: "/docs/getting-started",
-        destination: "/repo/docs",
-        permanent: true,
-      },
-      {
         source: "/usage",
         destination: "/repo/docs/reference/command-line-reference",
         permanent: true,
@@ -93,7 +88,7 @@ const config = {
       },
       {
         source: "/discord{/}?",
-        destination: "https://vercel.community/tag/turborepo",
+        destination: "https://community.vercel.com/tag/turborepo",
         permanent: true,
       },
       {
@@ -156,12 +151,12 @@ const config = {
       },
       // OpenAPI redirects (until we have more content)
       {
-        source: "/repo/docs/openapi",
+        source: "/docs/openapi",
         destination: "/repo/docs/openapi/artifacts/artifact-exists",
         permanent: false,
       },
       {
-        source: "/repo/docs/openapi/artifacts",
+        source: "/docs/openapi/artifacts",
         destination: "/repo/docs/openapi/artifacts/artifact-exists",
         permanent: false,
       },

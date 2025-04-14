@@ -39,6 +39,34 @@ const getTestTurboConfig = (
 };
 
 describe("migrate-env-var-dependencies", () => {
+  it("skips when no pipeline key", () => {
+    const config: SchemaV2 = {
+      $schema: "./docs/public/schema.json",
+      globalDependencies: ["$GLOBAL_ENV_KEY"],
+      tasks: {
+        test: {
+          outputs: ["coverage/**/*"],
+          dependsOn: ["^build"],
+        },
+        lint: {
+          outputs: [],
+        },
+        dev: {
+          cache: false,
+        },
+        build: {
+          outputs: ["dist/**/*", ".next/**/*", "!.next/cache/**"],
+          dependsOn: ["^build", "$TASK_ENV_KEY", "$ANOTHER_ENV_KEY"],
+        },
+      },
+    };
+
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any -- Testing a situation outside of types that users can get themselves into at runtime
+    const doneConfig = migrateConfig(config as any);
+
+    expect(doneConfig).toEqual(config);
+  });
+
   describe("hasLegacyEnvVarDependencies - utility", () => {
     it("finds env keys in legacy turbo.json - has keys", () => {
       const config = getTestTurboConfig();

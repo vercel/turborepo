@@ -80,6 +80,12 @@ impl<'a> PackageGraphBuilder<'a, LocalPackageDiscoveryBuilder> {
             .with_allow_no_package_manager(allow_no_package_manager);
         self
     }
+
+    pub fn with_package_manager(mut self, package_manager: PackageManager) -> Self {
+        self.package_discovery
+            .with_package_manager(Some(package_manager));
+        self
+    }
 }
 
 impl<'a, P> PackageGraphBuilder<'a, P> {

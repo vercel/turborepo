@@ -83,7 +83,7 @@ const navigation = {
     },
     {
       name: "Community",
-      href: "https://vercel.community/tag/turborepo",
+      href: "https://community.vercel.com/tag/turborepo",
     },
   ],
   company: [
