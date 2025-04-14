@@ -67,7 +67,7 @@ export const metadata: Metadata = {
 
 export default async function HomePage() {
   return (
-    <div className="py-12 max-w-6xl p-3 mx-auto">
+    <div className="py-12 max-w-6xl px-3 sm:px-6 lg:px-12 mx-auto">
       <Grid
         columns={{
           sm: 1,
