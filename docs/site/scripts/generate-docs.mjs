@@ -82,6 +82,49 @@ function removeBillingRelated403Responses(spec) {
   return spec;
 }
 
+/* Add x-artifact-tag header to artifact download endpoint responses */
+function addArtifactTagHeader(spec) {
+  // Process all paths in the spec
+  for (const path in spec.paths) {
+    const pathObj = spec.paths[path];
+
+    // Look for paths related to artifacts
+    if (path.includes("artifacts") || path.includes("artifact")) {
+      // Process all methods in each path
+      for (const method in pathObj) {
+        const methodObj = pathObj[method];
+
+        // Check if the method has a 200 response with artifact download content
+        if (methodObj?.responses?.["200"]) {
+          const response = methodObj.responses["200"];
+          const jsonContent = response.content?.["application/json"];
+
+          // Check if this is the artifact download response (has content description about streams)
+          if (
+            response.description?.includes("artifact was found") &&
+            jsonContent?.schema?.format === "binary"
+          ) {
+            // Add headers to the response if they don't exist
+            if (!response.headers) {
+              response.headers = {};
+            }
+
+            // Add the x-artifact-tag header
+            response.headers["x-artifact-tag"] = {
+              schema: {
+                type: "string",
+              },
+              description: "The hash value of the artifact found",
+            };
+          }
+        }
+      }
+    }
+  }
+
+  return spec;
+}
+
 const updateServerDescription = (spec) => {
   if (spec.servers && spec.servers.length > 0) {
     const serverIndex = spec.servers.findIndex(
@@ -100,6 +143,7 @@ const thing = await fetch("https://turbo.build/api/remote-cache-spec")
   .then((res) => res.json())
   .then((json) => removeExamples(json))
   .then((json) => removeBillingRelated403Responses(json))
+  .then((json) => addArtifactTagHeader(json))
   .then((json) => updateServerDescription(json));
 
 writeFileSync("./.openapi.json", JSON.stringify(thing, null, 2));
