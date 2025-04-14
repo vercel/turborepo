@@ -84,41 +84,28 @@ function removeBillingRelated403Responses(spec) {
 
 /* Add x-artifact-tag header to artifact download endpoint responses */
 function addArtifactTagHeader(spec) {
-  // Process all paths in the spec
-  for (const path in spec.paths) {
-    const pathObj = spec.paths[path];
+  // Target only the specific /v8/artifacts/{hash} endpoint
+  const artifactEndpoint = "/v8/artifacts/{hash}";
 
-    // Look for paths related to artifacts
-    if (path.includes("artifacts") || path.includes("artifact")) {
-      // Process all methods in each path
-      for (const method in pathObj) {
-        const methodObj = pathObj[method];
+  if (spec.paths?.[artifactEndpoint]) {
+    // Get the GET method for this endpoint
+    const getMethod = spec.paths[artifactEndpoint]?.get;
 
-        // Check if the method has a 200 response with artifact download content
-        if (methodObj?.responses?.["200"]) {
-          const response = methodObj.responses["200"];
-          const jsonContent = response.content?.["application/json"];
+    if (getMethod?.responses?.["200"]) {
+      const response = getMethod.responses["200"];
 
-          // Check if this is the artifact download response (has content description about streams)
-          if (
-            response.description?.includes("artifact was found") &&
-            jsonContent?.schema?.format === "binary"
-          ) {
-            // Add headers to the response if they don't exist
-            if (!response.headers) {
-              response.headers = {};
-            }
-
-            // Add the x-artifact-tag header
-            response.headers["x-artifact-tag"] = {
-              schema: {
-                type: "string",
-              },
-              description: "The hash value of the artifact found",
-            };
-          }
-        }
+      // Add headers to the response if they don't exist
+      if (!response.headers) {
+        response.headers = {};
       }
+
+      // Add the x-artifact-tag header
+      response.headers["x-artifact-tag"] = {
+        schema: {
+          type: "string",
+        },
+        description: "The hash value of the artifact found",
+      };
     }
   }
 
