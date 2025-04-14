@@ -103,10 +103,7 @@ pub enum Error {
     UI(#[from] turborepo_ui::Error),
     #[error("Could not connect to UI thread: {0}")]
     UISend(String),
-    #[error(
-        "Cannot use non-standard turbo configuration at {0} with Watch Mode. Only turbo.json or \
-         turbo.jsonc at the repository root are supported."
-    )]
+    #[error("Cannot use non-standard turbo configuration at {0} with Watch Mode.")]
     NonStandardTurboJsonPath(String),
     #[error("Invalid config: {0}")]
     Config(#[from] crate::config::Error),
