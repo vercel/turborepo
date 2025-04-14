@@ -82,6 +82,36 @@ function removeBillingRelated403Responses(spec) {
   return spec;
 }
 
+/* Add x-artifact-tag header to artifact download endpoint response */
+function addArtifactTagHeader(spec) {
+  // Target only the specific /v8/artifacts/{hash} endpoint
+  const artifactEndpoint = "/v8/artifacts/{hash}";
+
+  if (spec.paths?.[artifactEndpoint]) {
+    // Get the GET method for this endpoint
+    const getMethod = spec.paths[artifactEndpoint]?.get;
+
+    if (getMethod?.responses?.["200"]) {
+      const response = getMethod.responses["200"];
+
+      // Add headers to the response if they don't exist
+      if (!response.headers) {
+        response.headers = {};
+      }
+
+      // Add the x-artifact-tag header
+      response.headers["x-artifact-tag"] = {
+        schema: {
+          type: "string",
+        },
+        description: "The signature of the artifact found",
+      };
+    }
+  }
+
+  return spec;
+}
+
 const updateServerDescription = (spec) => {
   if (spec.servers && spec.servers.length > 0) {
     const serverIndex = spec.servers.findIndex(
@@ -100,6 +130,7 @@ const thing = await fetch("https://turbo.build/api/remote-cache-spec")
   .then((res) => res.json())
   .then((json) => removeExamples(json))
   .then((json) => removeBillingRelated403Responses(json))
+  .then((json) => addArtifactTagHeader(json))
   .then((json) => updateServerDescription(json));
 
 writeFileSync("./.openapi.json", JSON.stringify(thing, null, 2));
