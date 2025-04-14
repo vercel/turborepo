@@ -104,7 +104,7 @@ function addArtifactTagHeader(spec) {
         schema: {
           type: "string",
         },
-        description: "The hash value of the artifact found",
+        description: "The signature of the artifact found",
       };
     }
   }
