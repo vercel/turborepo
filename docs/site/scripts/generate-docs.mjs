@@ -82,7 +82,7 @@ function removeBillingRelated403Responses(spec) {
   return spec;
 }
 
-/* Add x-artifact-tag header to artifact download endpoint responses */
+/* Add x-artifact-tag header to artifact download endpoint response */
 function addArtifactTagHeader(spec) {
   // Target only the specific /v8/artifacts/{hash} endpoint
   const artifactEndpoint = "/v8/artifacts/{hash}";
