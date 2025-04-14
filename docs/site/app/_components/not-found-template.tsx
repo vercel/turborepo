@@ -43,7 +43,7 @@ export function NotFoundTemplate({
             <li>
               <Link
                 className="text-center"
-                href="https://vercel.community/tag/turborepo"
+                href="https://community.vercel.com/tag/turborepo"
               >
                 Community
               </Link>
