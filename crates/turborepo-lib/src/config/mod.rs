@@ -297,6 +297,7 @@ pub struct ConfigurationOptions {
     pub(crate) run_summary: Option<bool>,
     pub(crate) allow_no_turbo_json: Option<bool>,
     pub(crate) tui_scrollback_length: Option<u64>,
+    pub(crate) concurrency: Option<String>,
 }
 
 #[derive(Default)]
