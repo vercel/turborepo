@@ -23,11 +23,7 @@ use turborepo_repository::{
 };
 use turborepo_scm::GitHashes;
 
-use crate::{
-    commands::{self, CommandBase},
-    config::ConfigurationOptions,
-    turbo_json::{TurboJson, TurboJsonLoader, CONFIG_FILE, CONFIG_FILE_JSONC},
-};
+use crate::turbo_json::{TurboJson, TurboJsonLoader, CONFIG_FILE, CONFIG_FILE_JSONC};
 
 #[derive(Clone)]
 pub enum PackageChangeEvent {
@@ -483,16 +479,23 @@ impl Subscriber {
             }
         };
 
+        // Create a separate task for handling the exit signal
+        let exit_signal = tokio::spawn(async move {
+            let _ = exit_rx.await;
+            tracing::debug!("exiting package changes watcher due to signal");
+            true
+        });
+
+        // Run both main tasks concurrently and exit when either completes
         tokio::select! {
-            biased;
-            _ = exit_rx => {
-                tracing::debug!("exiting package changes watcher due to signal");
-            },
             _ = event_fut => {
                 tracing::debug!("exiting package changes watcher due to file event end");
-            },
+            }
             _ = changes_fut => {
                 tracing::debug!("exiting package changes watcher due to process end");
+            }
+            _ = exit_signal => {
+                // Exit signal already logged in the task
             }
         }
     }
