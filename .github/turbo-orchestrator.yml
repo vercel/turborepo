@@ -37,7 +37,7 @@ labeler:
     # Removes the PR from release notes when its chore or ci
     - label: "release-notes-ignore"
       when:
-        isPrTitleMatch: "(\bchore\b|\bci\b).*?:"
+        isPRTitleMatch: "(\bchore\b|\bci\b).*?:"
 
     # areas
     - label: "area: ci"
