@@ -171,13 +171,14 @@ impl Subscriber {
             return None;
         };
 
-        // Check for both turbo.json and turbo.jsonc
         let turbo_json_path = self.repo_root.join_component(CONFIG_FILE);
         let turbo_jsonc_path = self.repo_root.join_component(CONFIG_FILE_JSONC);
 
         let turbo_json_exists = turbo_json_path.exists();
         let turbo_jsonc_exists = turbo_jsonc_path.exists();
 
+        // TODO: Dedupe places where we search for turbo.json and turbo.jsonc
+        // There are now several places where we do this in the codebase
         let config_path = match (turbo_json_exists, turbo_jsonc_exists) {
             (true, true) => {
                 tracing::warn!(
@@ -188,7 +189,7 @@ impl Subscriber {
             }
             (true, false) => turbo_json_path,
             (false, true) => turbo_jsonc_path,
-            (false, false) => turbo_json_path, // Default to turbo.json if neither exists
+            (false, false) => turbo_json_path, // Default to turbo.json
         };
 
         let root_turbo_json = TurboJsonLoader::workspace(
@@ -479,23 +480,16 @@ impl Subscriber {
             }
         };
 
-        // Create a separate task for handling the exit signal
-        let exit_signal = tokio::spawn(async move {
-            let _ = exit_rx.await;
-            tracing::debug!("exiting package changes watcher due to signal");
-            true
-        });
-
-        // Run both main tasks concurrently and exit when either completes
         tokio::select! {
+            biased;
+            _ = exit_rx => {
+                tracing::debug!("exiting package changes watcher due to signal");
+            },
             _ = event_fut => {
                 tracing::debug!("exiting package changes watcher due to file event end");
-            }
+            },
             _ = changes_fut => {
                 tracing::debug!("exiting package changes watcher due to process end");
-            }
-            _ = exit_signal => {
-                // Exit signal already logged in the task
             }
         }
     }
