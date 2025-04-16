@@ -1,4 +1,4 @@
-https://turbo.build/docs/guides/generating-codeimport { logger } from "@turbo/utils";
+import { logger } from "@turbo/utils";
 import { getCustomGenerators, runCustomGenerator } from "../utils/plop";
 import * as prompts from "../commands/run/prompts";
 import { GeneratorError } from "../utils/error";
