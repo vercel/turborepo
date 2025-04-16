@@ -159,6 +159,11 @@ const config = {
         destination: "/docs/:slug*",
         permanent: false,
       },
+      {
+        source: "/docs/getting-started/support-policy",
+        destination: "/docs/support-policy",
+        permanent: true,
+      },
     ];
   },
 };
