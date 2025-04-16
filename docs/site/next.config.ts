@@ -1,4 +1,5 @@
 import { createMDX } from "fumadocs-mdx/next";
+import withRspack from "next-rspack";
 import { withVercelToolbar } from "@vercel/toolbar/plugins/next";
 import { REDIRECTS_FOR_V2_DOCS } from "./lib/redirects/v2-docs.mjs";
 
@@ -165,4 +166,7 @@ const config = {
 
 // @ts-expect-error -- Not sure what's up here but not worth spending time on.
 // eslint-disable-next-line import/no-default-export
-export default withMDX(vercelToolbar(config));
+const nextConfig = withMDX(vercelToolbar(config));
+export default process.env.NEXT_RSPACK == "true"
+  ? withRspack(nextConfig)
+  : nextConfig;
