@@ -1,4 +1,4 @@
-import { logger } from "@turbo/utils";
+https://turbo.build/docs/guides/generating-codeimport { logger } from "@turbo/utils";
 import { getCustomGenerators, runCustomGenerator } from "../utils/plop";
 import * as prompts from "../commands/run/prompts";
 import { GeneratorError } from "../utils/error";
@@ -50,7 +50,7 @@ export async function generate({
     } else {
       logger.log();
       logger.dimmed(
-        "Learn more about custom Turborepo generators - https://turbo.build/docs/core-concepts/monorepos/code-generation#custom-generators"
+        "Learn more about custom Turborepo generators - https://turbo.build/docs/guides/generating-code#custom-generators"
       );
       return;
     }
@@ -87,7 +87,7 @@ export async function generate({
       logger.log();
       logger.info(`Congrats! You just ran your first Turborepo generator`);
       logger.dimmed(
-        "Learn more about custom Turborepo generators - https://turbo.build/docs/core-concepts/monorepos/code-generation#custom-generators"
+        "Learn more about custom Turborepo generators - https://turbo.build/docs/guides/generating-code#custom-generators"
       );
     }
   }
