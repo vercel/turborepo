@@ -6,9 +6,6 @@ const withMDX = createMDX();
 const vercelToolbar = withVercelToolbar();
 
 const config = {
-  experimental: {
-    mdxRs: true,
-  },
   reactStrictMode: true,
   images: {
     formats: ["image/avif", "image/webp"],
