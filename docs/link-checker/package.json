@@ -6,7 +6,7 @@
     "src"
   ],
   "scripts": {
-    "check-links": "tsx src/validate-docs-links.ts"
+    "check-links": "cd ../site/content && tsx ../../link-checker/src/validate-docs-links.ts"
   },
   "devDependencies": {
     "@types/node": "22.7.8",

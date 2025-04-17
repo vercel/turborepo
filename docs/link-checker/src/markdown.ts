@@ -38,7 +38,7 @@ const DOCS_PATH = ".";
 const EXCLUDED_HASHES = ["top"];
 
 /** These paths exist, just not in our Markdown files */
-const EXCLUDED_PATHS = ["/api/remote-cache-spec", "/repo"];
+const EXCLUDED_PATHS = ["/api/remote-cache-spec", "/discord", "/docs/openapi"];
 
 const slugger = new GitHubSlugger();
 
@@ -86,7 +86,8 @@ const markdownProcessor = unified()
   });
 
 const filePathToUrl = (filePath: string): string =>
-  filePath.replace("docs", "/docs").replace(".mdx", "");
+  // "/" prefix makes it easier to compare internal links
+  "/" + filePath.replace(".mdx", "");
 
 const validateFrontmatter = (path: string, data: Record<string, unknown>) => {
   if (!data.title) {
@@ -235,6 +236,9 @@ const traverseTreeAndValidateLinks = (
  */
 export const collectLinkErrors = async (): Promise<LinkError[]> => {
   const allMdxFilePaths = await getAllMdxFilePaths();
+  if (allMdxFilePaths.length === 0) {
+    throw new Error("No files were found for processing.");
+  }
 
   const documentMap = new Map(
     await Promise.all(allMdxFilePaths.map(prepareDocumentMapEntry))
