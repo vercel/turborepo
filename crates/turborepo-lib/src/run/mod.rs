@@ -360,8 +360,6 @@ impl Run {
                         _ = fut => {}
                         _ = interrupt => {tracing::debug!("received interrupt, exiting");}
                     }
-                } else {
-                    tracing::warn!("could not start shutdown, exiting");
                 }
                 spinner.finish_and_clear();
             });
