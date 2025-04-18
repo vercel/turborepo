@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import cn from "classnames";
+import { cn } from "@/components/cn";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { Clients } from "@/app/_clients/clients";

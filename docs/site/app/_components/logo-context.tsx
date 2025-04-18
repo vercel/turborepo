@@ -3,7 +3,7 @@
 import type { MouseEvent } from "react";
 import { useEffect, useCallback, useState, useRef } from "react";
 import Link from "next/link";
-import classNames from "classnames";
+import { cn } from "@/components/cn";
 import { VercelLogo } from "./logos";
 import { PRODUCT_MENU_ITEMS, PLATFORM_MENU_ITEMS } from "./items";
 import type { MenuItemProps } from "./types";
@@ -17,9 +17,7 @@ function MenuDivider({
 }): JSX.Element {
   return (
     <h3
-      className={classNames(
-        "group flex items-center px-4 py-2 text-xs font-bold text-gray-500 dark:text-gray-600"
-      )}
+      className="group flex items-center px-4 py-2 text-xs font-bold text-gray-500 dark:text-gray-600"
       {...other}
     >
       {children}
@@ -63,7 +61,7 @@ function MenuItem({
     }
   }, [copied, closeMenu]);
 
-  const classes = classNames(
+  const classes = cn(
     className,
     "group flex items-center px-4 py-2 text-sm dark:hover:bg-gray-800 hover:bg-gray-200 w-full rounded-md"
   );
@@ -170,7 +168,7 @@ export function LogoContext(): JSX.Element {
               </MenuItem>
             ))}
             <MenuDivider>Products</MenuDivider>
-            {PRODUCT_MENU_ITEMS({ theme }).map((item) => (
+            {PRODUCT_MENU_ITEMS().map((item) => (
               <MenuItem
                 closeMenu={() => {
                   setOpen(false);

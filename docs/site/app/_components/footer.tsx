@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { ReactNode, ReactElement } from "react";
 import { useState } from "react";
-import cn from "classnames";
+import { cn } from "@/components/cn";
 import { VercelLogo } from "./logos";
 import { gitHubRepoUrl } from "@/lib/constants";
 

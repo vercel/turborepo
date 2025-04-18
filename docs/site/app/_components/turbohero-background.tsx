@@ -1,4 +1,4 @@
-import cn from "classnames";
+import { cn } from "@/components/cn";
 import type { JSX } from "react";
 import styles from "./turbohero-background.module.css";
 
