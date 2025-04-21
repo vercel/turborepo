@@ -141,6 +141,11 @@ const config: NextConfig = {
         destination: "/blog/:path*",
         permanent: true,
       },
+      {
+        source: "/repo/docs/:slug*",
+        destination: "/docs/:slug*",
+        permanent: true,
+      },
       // OpenAPI redirects (until we have more content)
       {
         source: "/docs/openapi",
@@ -150,11 +155,6 @@ const config: NextConfig = {
       {
         source: "/docs/openapi/artifacts",
         destination: "/repo/docs/openapi/artifacts/artifact-exists",
-        permanent: false,
-      },
-      {
-        source: "/repo/docs/:slug*",
-        destination: "/docs/:slug*",
         permanent: false,
       },
       {
