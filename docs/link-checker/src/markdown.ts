@@ -41,12 +41,6 @@ const EXCLUDED_HASHES: string[] = [
   "add-package-manager",
   "set-default-outputs",
   // End: hashlinks created by Fumadocs
-  // Start: Experimental badge messes up parsing
-  "strict-environments-experimental",
-  "query-your-repository-experimental",
-  "boundaries-experimental",
-  "watch-mode-caching-experimental",
-  // End: Experimental badge messes up parsing
 ];
 
 /** These paths exist, just not in our Markdown files */
@@ -200,6 +194,23 @@ const validateHashLink = (doc: Document, href: string) => {
   }
 
   if (doc.headings.includes(hashLink)) {
+    return [];
+  }
+
+  if (
+    doc.headings.includes(
+      // Handles when the link has the experimental badge in it.
+      // Because we're parsing the raw document (not the rendered output), the JSX declaration is still present.
+      hashLink.replace(
+        "-experimental",
+        "-experimentalbadgeexperimentalexperimentalbadge"
+      )
+    )
+  ) {
+    console.warn(
+      `The hash link "${hashLink}" passed when including the <ExperimentalBadge /> JSX declaration.`
+    );
+    console.log();
     return [];
   }
 
