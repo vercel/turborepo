@@ -157,6 +157,11 @@ const config: NextConfig = {
         destination: "/repo/docs/openapi/artifacts/artifact-exists",
         permanent: false,
       },
+      {
+        source: "/docs/getting-started/support-policy",
+        destination: "/docs/support-policy",
+        permanent: true,
+      },
     ];
   },
 };
