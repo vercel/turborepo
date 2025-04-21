@@ -134,7 +134,7 @@ Also note that you will no longer need to specify `outputs: []` because not cach
 ## “Errors only” output mode for quieter logs
 
 To bring visibility to errors, community member [@dobesv](https://github.com/dobesv) contributed [a solution to only show errors instead of all logs from a task run](https://github.com/vercel/turbo/pull/2588). While debugging a pipeline, `--output-logs=errors-only` can be used to keep your signal-to-noise ratio high so you can focus on ensuring successful runs for your pipelines.
-This can be used as a [configuration option](/docs/reference/configuration#outputmode) or as a [CLI flag](/docs/reference/run#--output-logs)
+This can be used as a [configuration option](/docs/reference/configuration#outputlogs) or as a [CLI flag](/docs/reference/run#--output-logs-option)
 
 ```bash title="Terminal"
 turbo build --output-logs=errors-only

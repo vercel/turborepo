@@ -35,7 +35,19 @@ export type LinkError = {
 
 /** where to look for docs (.mdx files) */
 const DOCS_PATH = ".";
-const EXCLUDED_HASHES: string[] = [];
+const EXCLUDED_HASHES: string[] = [
+  // Start: hashlinks created by Fumadocs
+  "create-turbo-config",
+  "add-package-manager",
+  "set-default-outputs",
+  // End: hashlinks created by Fumadocs
+  // Start: Experimental badge messes up parsing
+  "strict-environments-experimental",
+  "query-your-repository-experimental",
+  "boundaries-experimental",
+  "watch-mode-caching-experimental",
+  // End: Experimental badge messes up parsing
+];
 
 /** These paths exist, just not in our Markdown files */
 const EXCLUDED_PATHS = ["/api/remote-cache-spec", "/discord", "/docs/openapi"];
