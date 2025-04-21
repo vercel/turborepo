@@ -35,7 +35,7 @@ export type LinkError = {
 
 /** where to look for docs (.mdx files) */
 const DOCS_PATH = ".";
-const EXCLUDED_HASHES = ["top"];
+const EXCLUDED_HASHES: string[] = [];
 
 /** These paths exist, just not in our Markdown files */
 const EXCLUDED_PATHS = ["/api/remote-cache-spec", "/discord", "/docs/openapi"];
