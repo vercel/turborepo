@@ -17,7 +17,7 @@ export default async function SlugLayout(props: {
   }
 
   return (
-    <DocsPage>
+    <DocsPage breadcrumb={{ enabled: false }}>
       <DocsBody>{children}</DocsBody>
     </DocsPage>
   );

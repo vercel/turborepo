@@ -40,19 +40,16 @@ export default async function Page(props: {
 
   const rawMarkdown = readFileSync(page.data._file.absolutePath)
     .toString()
-    // TODO: Make the regex capture all of the header metadata
-    .replace(/---/g, "")
-    // TODO: Regex to capture all import lines for real
-    .replace(/import { Step, Steps } from \'#\/components\/steps\';/g, "")
-    .replace(/import { Tabs, Tab } from \'#\/components\/tabs\';/g, "")
-    .replace(/import { Callout } from \'#\/components\/callout\';/g, "");
+    // Removes frontmatter
+    .replace(/^---\n(.*?\n)---\n/s, "")
+    // Removes import statements for components
+    .replace(/^import\s+{[^}]+}\s+from\s+['"]#\/[^'"]+['"];(\r?\n|$)/gm, "");
 
   const Mdx = page.data.body;
 
   return (
     <>
       <SystemEnvironmentVariablesHashHighlighter />
-
       <div className="flex justify-between gap-4">
         <h1 className="scroll-m-7 text-4xl font-semibold tracking-normal">
           {page.data.title}
