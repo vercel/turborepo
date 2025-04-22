@@ -159,9 +159,6 @@ importers:
       eslint:
         specifier: ^9.25.0
         version: 9.25.0
-      publint:
-        specifier: ^0.3.2
-        version: 0.3.12
       svelte:
         specifier: ^5.28.1
         version: 5.28.1
@@ -574,11 +571,6 @@ packages:
 
   /@polka/url@1.0.0-next.28:
     resolution: {integrity: sha512-8LduaNlMZGwdZ6qWrKlfa+2M4gahzFkprZiAt2TF8uS0qQgBizKXpXURqvTJ4WtmupWxaLqjRb2UCTe72mu+Aw==}
-    dev: true
-
-  /@publint/pack@0.1.2:
-    resolution: {integrity: sha512-S+9ANAvUmjutrshV4jZjaiG8XQyuJIZ8a4utWmN/vW1sgQ9IfBnPndwkmQYw53QmouOIytT874u65HEmu6H5jw==}
-    engines: {node: '>=18'}
     dev: true
 
   /@rollup/rollup-android-arm-eabi@4.40.0:
@@ -1790,10 +1782,6 @@ packages:
       p-limit: 3.1.0
     dev: true
 
-  /package-manager-detector@1.2.0:
-    resolution: {integrity: sha512-PutJepsOtsqVfUsxCzgTTpyXmiAgvKptIgY4th5eq5UXXFhj5PxfQ9hnGkypMeovpAvVshFRItoFHYO18TCOqA==}
-    dev: true
-
   /parent-module@1.0.1:
     resolution: {integrity: sha512-GQ2EWRpQV8/o+Aw8YqtfZZPfNRWZYkbidE9k5rpl/hC3vtHHBfGm2Ifi6qWV+coDGkrUKZAxE3Lot5kcsRlh+g==}
     engines: {node: '>=6'}
@@ -1912,17 +1900,6 @@ packages:
     resolution: {integrity: sha512-lc6npv5PH7hVqozBR7lkBNOGXV9vMwROAPlumdBkX0wTbbzPu/U1hk5yL8p2pt4Xoc+2mkT8t/sow2YrV/M5qg==}
     engines: {node: '>=14'}
     hasBin: true
-    dev: true
-
-  /publint@0.3.12:
-    resolution: {integrity: sha512-1w3MMtL9iotBjm1mmXtG3Nk06wnq9UhGNRpQ2j6n1Zq7YAD6gnxMMZMIxlRPAydVjVbjSm+n0lhwqsD1m4LD5w==}
-    engines: {node: '>=18'}
-    hasBin: true
-    dependencies:
-      '@publint/pack': 0.1.2
-      package-manager-detector: 1.2.0
-      picocolors: 1.1.1
-      sade: 1.8.1
     dev: true
 
   /punycode@2.3.1:
