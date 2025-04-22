@@ -3,9 +3,9 @@ export class Counter {
 
   increment = () => {
     this.count++;
-  }
+  };
 
   decrement = () => {
     this.count--;
-  }
+  };
 }
