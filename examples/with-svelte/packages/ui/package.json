@@ -4,8 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "svelte-package --watch --input=src",
-    "build": "pnpm prepack",
-    "prepack": "svelte-package --input=src && publint",
+    "build": "svelte-package --input=src && publint",
     "lint": "eslint .",
     "check-types": "svelte-check --tsconfig ./tsconfig.json"
   },
