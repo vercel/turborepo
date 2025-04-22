@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "svelte-package --watch --input=src",
     "build": "svelte-package --input=src && publint",
+    "prepack": "svelte-package --input=src && publint",
     "lint": "eslint .",
     "check-types": "svelte-check --tsconfig ./tsconfig.json"
   },
