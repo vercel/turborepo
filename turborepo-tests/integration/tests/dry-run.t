@@ -27,7 +27,7 @@ Setup
     Engines Values                        = 
 
 # Part 3 are Tasks to Run, and we have to validate each task separately
-  $ cat tmp-3.txt | grep "my-app#build" -A 17
+  $ cat tmp-3.txt | grep "my-app#build" -A 18
   my-app#build
     Task                           = build\s* (re)
     Package                        = my-app\s* (re)
@@ -48,7 +48,7 @@ Setup
     Passed Through Env Vars        =\s* (re)
     Passed Through Env Vars Values =\s* (re)
 
-  $ cat tmp-3.txt | grep "util#build" -A 17
+  $ cat tmp-3.txt | grep "util#build" -A 18
   util#build
     Task                           = build\s* (re)
     Package                        = util\s* (re)
