@@ -12,7 +12,7 @@ function App() {
       <CounterButton />
       <p className="description">
         Built With{" "}
-        <Link href="https://turborepo.com/repo" newTab>
+        <Link href="https://turborepo.com" newTab>
           Turborepo
         </Link>
         {" & "}
