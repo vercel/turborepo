@@ -10,7 +10,7 @@ export default function generator(plop: PlopTypes.NodePlopAPI): void {
 
   // create generators
   plop.setGenerator("blog - release post", {
-    description: "Add a new release post to the turbo.build blog",
+    description: "Add a new release post to the turborepo.com blog",
     prompts: [
       {
         type: "input",

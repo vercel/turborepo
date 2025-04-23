@@ -7,7 +7,7 @@ import type { Transformer, TransformerArgs } from "../types";
 // transformer details
 const TRANSFORMER = "update-schema-json-url";
 const DESCRIPTION =
-  'Update the "$schema" property in turbo.json from "https://turbo.build/schema.v1.json" to "https://turbo.build/schema.v2.json"';
+  'Update the "$schema" property in turbo.json from "https://turborepo.com/schema.v1.json" to "https://turborepo.com/schema.v2.json"';
 const INTRODUCED_IN = "2.0.0";
 
 /**
@@ -15,8 +15,8 @@ const INTRODUCED_IN = "2.0.0";
  */
 function updateSchemaUrl(content: string): string {
   return content.replace(
-    "https://turbo.build/schema.v1.json",
-    "https://turbo.build/schema.v2.json"
+    "https://turborepo.com/schema.v1.json",
+    "https://turborepo.com/schema.v2.json"
   );
 }
 
@@ -44,7 +44,7 @@ export function transformer({
     const turboConfigContent = fs.readFileSync(turboConfigPath, "utf8");
 
     // Check if it has the v1 schema URL
-    if (turboConfigContent.includes("https://turbo.build/schema.v1.json")) {
+    if (turboConfigContent.includes("https://turborepo.com/schema.v1.json")) {
       // Replace the v1 schema URL with the current one
       const updatedContent = updateSchemaUrl(turboConfigContent);
 

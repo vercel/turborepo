@@ -10,7 +10,7 @@ export function run(profilePath: string) {
 
   const turboFlags = `--dry --skip-infer --profile=${profilePath}`;
 
-  console.log("Executing turbo build in child process", {
+  console.log("Executing turborepo.com in child process", {
     cwd: process.cwd(),
     bin: TURBO_BIN,
     execOpts: DEFAULT_EXEC_OPTS,
@@ -28,6 +28,6 @@ export function run(profilePath: string) {
     // catch errors and exit. the build command seems to be erroring out due to very large output?
     // need to chase it down, but the benchmark seems to still be working, and when the same turbo run build
     // is executed _without_ a child process, it works and has a 0 exit code.
-    console.error("Error running turbo build", e);
+    console.error("Error running turborepo.com", e);
   }
 }

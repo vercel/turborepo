@@ -21,7 +21,7 @@ describe("migrate-dot-env", () => {
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turbo.build/schema.json",
+      $schema: "https://turborepo.com/schema.json",
       globalDependencies: [".env"],
       tasks: {
         "build-one": {
@@ -59,7 +59,7 @@ describe("migrate-dot-env", () => {
     });
 
     expect(readJson("turbo.json") || "{}").toStrictEqual({
-      $schema: "https://turbo.build/schema.json",
+      $schema: "https://turborepo.com/schema.json",
       tasks: {
         "build-one": {
           inputs: ["$TURBO_DEFAULT$", "build-one/.env"],
@@ -72,7 +72,7 @@ describe("migrate-dot-env", () => {
     });
 
     expect(readJson("apps/docs/turbo.json") || "{}").toStrictEqual({
-      $schema: "https://turbo.build/schema.json",
+      $schema: "https://turborepo.com/schema.json",
       extends: ["//"],
       tasks: {
         build: {},
@@ -80,7 +80,7 @@ describe("migrate-dot-env", () => {
     });
 
     expect(readJson("apps/web/turbo.json") || "{}").toStrictEqual({
-      $schema: "https://turbo.build/schema.json",
+      $schema: "https://turborepo.com/schema.json",
       extends: ["//"],
       tasks: {
         build: {
@@ -90,7 +90,7 @@ describe("migrate-dot-env", () => {
     });
 
     expect(readJson("packages/ui/turbo.json") || "{}").toStrictEqual({
-      $schema: "https://turbo.build/schema.json",
+      $schema: "https://turborepo.com/schema.json",
       extends: ["//"],
       tasks: {
         "build-three": {
@@ -168,7 +168,7 @@ describe("migrate-dot-env", () => {
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turbo.build/schema.json",
+      $schema: "https://turborepo.com/schema.json",
       globalDependencies: [".env"],
       tasks: {
         "build-one": {
@@ -235,7 +235,7 @@ describe("migrate-dot-env", () => {
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turbo.build/schema.json",
+      $schema: "https://turborepo.com/schema.json",
       globalDependencies: ["$NEXT_PUBLIC_API_KEY", "$STRIPE_API_KEY", ".env"],
       tasks: {},
     });
@@ -265,7 +265,7 @@ describe("migrate-dot-env", () => {
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turbo.build/schema.json",
+      $schema: "https://turborepo.com/schema.json",
       tasks: {
         "build-one": {
           dependsOn: ["build-two"],
