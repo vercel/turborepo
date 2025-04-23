@@ -19,7 +19,7 @@ Turborepo is a high-performance build system for JavaScript and TypeScript codeb
 
 ## Getting Started
 
-Visit https://turborepo.com/repo to get started with Turborepo.
+Visit https://turborepo.com to get started with Turborepo.
 
 ## Contributing
 

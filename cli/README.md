@@ -1,3 +1,3 @@
 # `turbo` CLI
 
-Visit https://turborepo.com/repo to view the full documentation.
+Visit https://turborepo.com to view the full documentation.
