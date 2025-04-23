@@ -64,21 +64,15 @@ export const mdxComponents: MDXComponents = {
     <Heading className="scroll-mt-20 text-heading-20" as="h3" {...props} />
   ),
   h4: (props) => (
-    <Heading className="scroll-mt-20 text-lg" as="h4" {...props} />
+    <Heading className="text-lg scroll-mt-20" as="h4" {...props} />
   ),
   a: (props) => (
     <a className="text-[var(--ds-blue-900)] no-underline" {...props} />
   ),
-  pre: ({
-    ref: _ref,
-    title,
-    ...props
-  }: {
-    icon: ReactNode;
-    ref: Ref<HTMLPreElement>;
-    title?: string;
-  }) => {
+  pre: ({ ref: _ref, title, ...props }) => {
+    //@ts-ignore
     const preIcon: ReactNode = props.icon;
+    //@ts-ignore
     const { icon: _icon, ...preProps } = props;
 
     if (!title) {

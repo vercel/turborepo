@@ -1,3 +1,4 @@
+import { type NextConfig } from "next";
 import { createMDX } from "fumadocs-mdx/next";
 import { withVercelToolbar } from "@vercel/toolbar/plugins/next";
 import { REDIRECTS_FOR_V2_DOCS } from "./lib/redirects/v2-docs.mjs";
@@ -5,10 +6,7 @@ import { REDIRECTS_FOR_V2_DOCS } from "./lib/redirects/v2-docs.mjs";
 const withMDX = createMDX();
 const vercelToolbar = withVercelToolbar();
 
-const config = {
-  experimental: {
-    mdxRs: true,
-  },
+const config: NextConfig = {
   reactStrictMode: true,
   images: {
     formats: ["image/avif", "image/webp"],
@@ -20,7 +18,7 @@ const config = {
   eslint: {
     ignoreDuringBuilds: true,
   },
-  rewrites() {
+  async rewrites() {
     return {
       beforeFiles:
         process.env.VERCEL_ENV === "production"
@@ -38,7 +36,7 @@ const config = {
           : undefined,
     };
   },
-  redirects() {
+  async redirects() {
     return [
       {
         source: "/usage",
@@ -143,6 +141,11 @@ const config = {
         destination: "/blog/:path*",
         permanent: true,
       },
+      {
+        source: "/repo/docs/:slug*",
+        destination: "/docs/:slug*",
+        permanent: true,
+      },
       // OpenAPI redirects (until we have more content)
       {
         source: "/docs/openapi",
@@ -155,14 +158,12 @@ const config = {
         permanent: false,
       },
       {
-        source: "/repo/docs/:slug*",
-        destination: "/docs/:slug*",
-        permanent: false,
+        source: "/docs/getting-started/support-policy",
+        destination: "/docs/support-policy",
+        permanent: true,
       },
     ];
   },
 };
 
-// @ts-expect-error -- Not sure what's up here but not worth spending time on.
-// eslint-disable-next-line import/no-default-export
 export default withMDX(vercelToolbar(config));

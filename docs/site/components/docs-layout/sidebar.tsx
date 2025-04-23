@@ -197,32 +197,30 @@ export const SidebarFolderLink = ({
   }, [active, setOpenFolder]);
 
   return (
-    <Link
-      href={href}
-      data-active={active}
-      className={itemClasses(className)}
-      prefetch={prefetch}
-      onClick={(e: React.MouseEvent<HTMLAnchorElement>) => {
-        if (
-          // clicking on icon
-          (e.target as HTMLElement).hasAttribute("data-icon") ||
-          active
-        ) {
-          setOpenFolder(!openFolder);
-          e.preventDefault();
-        }
-      }}
-      {...props}
-    >
-      {children}
-      <ChevronRight
-        data-icon
-        className={cn(
-          "ml-auto transition-transform h-3 w-3",
-          openFolder ? "rotate-90" : ""
-        )}
-      />
-    </Link>
+    <div className="flex items-center w-full">
+      <Link
+        href={href}
+        data-active={active}
+        className={itemClasses(className)}
+        prefetch={prefetch}
+        {...props}
+      >
+        {children}
+      </Link>
+      <button
+        onClick={() => setOpenFolder(!openFolder)}
+        className="ml-auto p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md transition-colors"
+        aria-label={openFolder ? "Collapse section" : "Expand section"}
+      >
+        <ChevronRight
+          data-icon
+          className={cn(
+            "transition-transform h-3 w-3",
+            openFolder ? "rotate-90" : ""
+          )}
+        />
+      </button>
+    </div>
   );
 };
 
