@@ -91,7 +91,7 @@ We'll be using `build` and `check-types` tasks in this guide but you can replace
   <Tab value="Next.js">
 ```json title="./turbo.json"
 {
-  "$schema": "https://turbo.build/schema.json",
+  "$schema": "https://turborepo.com/schema.json",
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
@@ -124,7 +124,7 @@ In your Next.js application, make sure you have a `check-types` script for `turb
   <Tab value="Vite">
 ```json title="./turbo.json"
 {
-  "$schema": "https://turbo.build/schema.json",
+  "$schema": "https://turborepo.com/schema.json",
   "tasks": {
     "build": {
       "outputs": ["dist/**"]

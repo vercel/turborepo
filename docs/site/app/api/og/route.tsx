@@ -118,7 +118,7 @@ export async function GET(req: NextApiRequest): Promise<Response> {
       return new Response(undefined, {
         status: 302,
         headers: {
-          Location: "https://turbo.build/og-image.png",
+          Location: "https://turborepo.com/og-image.png",
         },
       });
     }

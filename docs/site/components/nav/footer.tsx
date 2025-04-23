@@ -26,7 +26,7 @@ const FOOTER_ITEMS = {
   community: [
     { href: "https://github.com/vercel/turborepo", label: "GitHub" },
     { href: "https://community.vercel.com/tag/turborepo", label: "Community" },
-    { href: "https://bsky.app/profile/turbo.build", label: "Bluesky" },
+    { href: "https://bsky.app/profile/turborepo.com", label: "Bluesky" },
     { href: "https://x.com/turborepo", label: "X" },
   ],
 };

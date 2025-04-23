@@ -18,7 +18,7 @@ use thiserror::Error;
 /// used.
 pub const TURBO_SITE: &str = match option_env!("TURBO_SITE") {
     Some(url) => url,
-    None => "https://turbo.build",
+    None => "https://turborepo.com",
 };
 
 /// A little helper to convert from biome's syntax errors to miette.

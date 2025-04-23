@@ -153,7 +153,7 @@ turbo run build --cwd=./somewhere/else/in/your/repo
 
 ### `--dangerously-disable-package-manager-check`
 
-Turborepo uses your repository's lockfile to determine caching behavior, [Package Graphs](https://turbo.build/docs/core-concepts/internal-packages), and more. Because of this, we use [the `packageManager` field](https://nodejs.org/api/packages.html#packagemanager) to help you stabilize your Turborepo.
+Turborepo uses your repository's lockfile to determine caching behavior, [Package Graphs](https://turborepo.com/docs/core-concepts/internal-packages), and more. Because of this, we use [the `packageManager` field](https://nodejs.org/api/packages.html#packagemanager) to help you stabilize your Turborepo.
 
 To help with incremental migration or in situations where you cannot use the `packageManager` field, you may use `--dangerously-disable-package-manager-check` to opt out of this check and assume the risks of unstable lockfiles producing unpredictable behavior. When disabled, Turborepo will attempt a best-effort discovery of the intended package manager meant for the repository.
 
@@ -366,7 +366,7 @@ Default: `auto`
 
 Set the ordering for log output.
 
-By default, `turbo` will use `grouped` logs in CI environments and `stream` logs everywhere else. This flag is not applicable when using [the terminal UI](https://turbo.build/docs/reference/configuration#ui).
+By default, `turbo` will use `grouped` logs in CI environments and `stream` logs everywhere else. This flag is not applicable when using [the terminal UI](https://turborepo.com/docs/reference/configuration#ui).
 
 ```bash title="Terminal"
 turbo run build --log-order=stream
@@ -447,7 +447,7 @@ Given this `turbo.json`:
 
 ```json title="./turbo.json"
 {
-  "$schema": "https://turbo.build/schema.json",
+  "$schema": "https://turborepo.com/schema.json",
   "tasks": {
     "build": {
       "dependsOn": ["^build"]

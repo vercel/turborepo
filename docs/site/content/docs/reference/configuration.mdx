@@ -111,7 +111,7 @@ Set/limit the maximum concurrency for task execution. Must be an integer greater
 
 Default: `false`
 
-Turborepo uses your repository's lockfile to determine caching behavior, [Package Graphs](https://turbo.build/docs/core-concepts/internal-packages), and more. Because of this, we use [the `packageManager` field](https://nodejs.org/api/packages.html#packagemanager) to help you stabilize your Turborepo.
+Turborepo uses your repository's lockfile to determine caching behavior, [Package Graphs](https://turborepo.com/docs/core-concepts/internal-packages), and more. Because of this, we use [the `packageManager` field](https://nodejs.org/api/packages.html#packagemanager) to help you stabilize your Turborepo.
 
 To help with incremental migration or in situations where you can't use the `packageManager` field, you may use `--dangerously-disable-package-manager-check` to opt out of this check and assume the risks of unstable lockfiles producing unpredictable behavior. When disabled, Turborepo will attempt a best-effort discovery of the intended package manager meant for the repository.
 
@@ -125,7 +125,7 @@ To help with incremental migration or in situations where you can't use the `pac
   You may also opt out of this check via
   [`flag`](/docs/reference/run#--dangerously-disable-package-manager-check) or
   the
-  [`TURBO_DANGEROUSLY_DISABLE_PACKAGE_MANAGER_CHECK`](https://turbo.build/docs/reference/system-environment-variables)
+  [`TURBO_DANGEROUSLY_DISABLE_PACKAGE_MANAGER_CHECK`](https://turborepo.com/docs/reference/system-environment-variables)
   environment variable.
 </Callout>
 
@@ -199,7 +199,7 @@ In the example below, we've defined three tasks under the `tasks` key: `build`, 
 
 ```jsonc title="./turbo.json"
 {
-  "$schema": "https://turbo.build/schema.json",
+  "$schema": "https://turborepo.com/schema.json",
   "tasks": {
     "build": {
       "dependsOn": ["^build"],

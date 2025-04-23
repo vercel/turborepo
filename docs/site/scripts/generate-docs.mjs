@@ -11,7 +11,7 @@
 //
 // You can verify differences for the specs by comparing:
 // Vercel Remote Cache: https://vercel.com/docs/rest-api/reference/endpoints/artifacts/record-an-artifacts-cache-usage-event
-// Self-hosted: https://turbo.build/api/remote-cache-spec
+// Self-hosted: https://turborepo.com/api/remote-cache-spec
 
 import { writeFileSync } from "node:fs";
 import { generateFiles } from "fumadocs-openapi";
@@ -126,7 +126,7 @@ const updateServerDescription = (spec) => {
   }
 };
 
-const thing = await fetch("https://turbo.build/api/remote-cache-spec")
+const thing = await fetch("https://turborepo.com/api/remote-cache-spec")
   .then((res) => res.json())
   .then((json) => removeExamples(json))
   .then((json) => removeBillingRelated403Responses(json))

@@ -90,11 +90,11 @@ const navigation = {
     { name: "Vercel", href: "https://vercel.com" },
     {
       name: "Open Source Software",
-      href: "https://vercel.com/oss?utm_source=turbo.build&utm_medium=referral&utm_campaign=footer-ossLink",
+      href: "https://vercel.com/oss?utm_source=turborepo.com&utm_medium=referral&utm_campaign=footer-ossLink",
     },
     {
       name: "Contact Sales",
-      href: "https://vercel.com/solutions/turborepo?utm_source=turbo.build&utm_medium=referral&utm_campaign=footer-enterpriseLink",
+      href: "https://vercel.com/solutions/turborepo?utm_source=turborepo.com&utm_medium=referral&utm_campaign=footer-enterpriseLink",
     },
     { name: "X", href: "https://x.com/vercel" },
   ],
@@ -183,7 +183,7 @@ function FooterContent(): JSX.Element {
           <div>
             <a
               className="text-current"
-              href="https://vercel.com?utm_source=turbo.build&utm_medium=referral&utm_campaign=footer-logoLink"
+              href="https://vercel.com?utm_source=turborepo.com&utm_medium=referral&utm_campaign=footer-logoLink"
               rel="noopener noreferrer"
               target="_blank"
               title="vercel.com homepage"
