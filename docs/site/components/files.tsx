@@ -1,4 +1,4 @@
-import classNames from "classnames";
+import { cn } from "@/components/cn";
 import {
   File as FumaFile,
   Folder as FumaFolder,
@@ -18,9 +18,10 @@ export function File({
 }): JSX.Element {
   return (
     <FumaFile
-      className={`${classNames({
-        "text-green-700 dark:text-green-900": green,
-      })} ${className}`}
+      className={cn(
+        green ? "text-green-700 dark:text-green-900" : "",
+        className
+      )}
       name={name}
       {...props}
     />
@@ -39,9 +40,10 @@ export function Folder({
 }): JSX.Element {
   return (
     <FumaFolder
-      className={`${classNames({
-        "text-green-700 dark:text-green-900": green,
-      })} ${className}`}
+      className={cn(
+        green ? "text-green-700 dark:text-green-900" : "",
+        className
+      )}
       name={name}
       {...props}
     />
