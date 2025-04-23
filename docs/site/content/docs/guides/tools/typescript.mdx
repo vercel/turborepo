@@ -218,7 +218,7 @@ First, add a `check-types` script to any package that you want to check the type
 }
 ```
 
-Then, create a `check-types` task in `turbo.json`. From the [Configuring tasks guide](/docs/crafting-your-repository/configuring-tasks#dependent-tasks-that-can-be-ran-in-parallel), we can make the task run in parallel while respecting source code changes from other packages using a [Transit Node](/docs/core-concepts/package-and-task-graph#transit-nodes):
+Then, create a `check-types` task in `turbo.json`. From the [Configuring tasks guide](/docs/crafting-your-repository/configuring-tasks#dependent-tasks-that-can-be-run-in-parallel), we can make the task run in parallel while respecting source code changes from other packages using a [Transit Node](/docs/core-concepts/package-and-task-graph#transit-nodes):
 
 ```json title="./turbo.json"
 {
