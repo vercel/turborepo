@@ -19,7 +19,7 @@ describe("getTurboConfigs", () => {
     expect(configs[0].isRootConfig).toBe(true);
     expect(configs[0].config).toMatchInlineSnapshot(`
       {
-        "$schema": "https://turbo.build/schema.json",
+        "$schema": "https://turborepo.com/schema.json",
         "globalEnv": [
           "UNORDERED",
           "CI",
@@ -67,7 +67,7 @@ describe("getTurboConfigs", () => {
     expect(configs[0].isRootConfig).toBe(true);
     expect(configs[0].config).toMatchInlineSnapshot(`
       {
-        "$schema": "https://turbo.build/schema.json",
+        "$schema": "https://turborepo.com/schema.json",
         "globalEnv": [
           "CI",
         ],
@@ -83,7 +83,7 @@ describe("getTurboConfigs", () => {
     expect(configs[1].isRootConfig).toBe(false);
     expect(configs[1].config).toMatchInlineSnapshot(`
       {
-        "$schema": "https://turbo.build/schema.json",
+        "$schema": "https://turborepo.com/schema.json",
         "extends": [
           "//",
         ],
@@ -100,7 +100,7 @@ describe("getTurboConfigs", () => {
     expect(configs[2].isRootConfig).toBe(false);
     expect(configs[2].config).toMatchInlineSnapshot(`
       {
-        "$schema": "https://turbo.build/schema.json",
+        "$schema": "https://turborepo.com/schema.json",
         "extends": [
           "//",
         ],
@@ -124,7 +124,7 @@ describe("getTurboConfigs", () => {
     expect(configs[0].isRootConfig).toBe(true);
     expect(configs[0].config).toMatchInlineSnapshot(`
       {
-        "$schema": "https://turbo.build/schema.json",
+        "$schema": "https://turborepo.com/schema.json",
         "globalDependencies": [
           "**/.env.*local",
         ],
@@ -151,7 +151,7 @@ describe("JSON5 parsing for turbo.jsonc", () => {
   it("correctly parses turbo.jsonc with comments", () => {
     const turboJsoncContent = `{
       // This is a comment in turbo.jsonc
-      "$schema": "https://turbo.build/schema.json",
+      "$schema": "https://turborepo.com/schema.json",
       "globalEnv": ["UNORDERED", "CI"], // Another comment
       "tasks": {
         "build": {
@@ -176,7 +176,7 @@ describe("JSON5 parsing for turbo.jsonc", () => {
     const parsed: TurboConfigs = JSON5.parse(turboJsoncContent);
 
     expect(parsed).toMatchObject({
-      $schema: "https://turbo.build/schema.json",
+      $schema: "https://turborepo.com/schema.json",
       globalEnv: ["UNORDERED", "CI"],
       tasks: {
         build: {

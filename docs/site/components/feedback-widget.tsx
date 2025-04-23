@@ -35,7 +35,7 @@ export function FeedbackWidget() {
       body: JSON.stringify({
         url:
           window.location.hostname === "localhost"
-            ? `https://turbo.build/dev-mode${window.location.pathname}`
+            ? `https://turborepo.com/dev-mode${window.location.pathname}`
             : window.location.toString(),
         note: feedback,
         emotion: selectedEmoji,

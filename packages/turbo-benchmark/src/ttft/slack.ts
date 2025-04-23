@@ -11,7 +11,7 @@ if (!runID) {
 
 const slackPayloadPath = path.join(process.cwd(), "slack-payload.json");
 
-console.log("Executing turbo build in child process", {
+console.log("Executing turborepo.com in child process", {
   cwd: process.cwd(),
   slackPayloadPath,
 });

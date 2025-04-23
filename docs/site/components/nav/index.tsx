@@ -40,7 +40,7 @@ export const PAGES = [
     name: "showcase",
   },
   {
-    href: "https://vercel.com/contact/sales?utm_source=turbo.build&utm_medium=referral&utm_campaign=header-enterpriseLink",
+    href: "https://vercel.com/contact/sales?utm_source=turborepo.com&utm_medium=referral&utm_campaign=header-enterpriseLink",
     tooltip: "Enterprise",
     name: "enterprise",
   },

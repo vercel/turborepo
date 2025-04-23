@@ -10,7 +10,7 @@ export const navLinks: LinkItemType[] = [
   { url: "/blog", text: "Blog", icon: <BookOpenIcon /> },
   { url: "/showcase", text: "Showcase", icon: <StarIcon /> },
   {
-    url: "https://vercel.com/contact/sales?utm_source=turbo.build&utm_medium=referral&utm_campaign=header-enterpriseLink",
+    url: "https://vercel.com/contact/sales?utm_source=turborepo.com&utm_medium=referral&utm_campaign=header-enterpriseLink",
     text: "Enterprise",
     icon: <ExternalLinkIcon />,
   },

@@ -15,9 +15,9 @@ async function generate() {
   const feed = new RSS({
     title: "Turborepo Blog",
     description: "Turborepo news, updates, and announcements.",
-    site_url: "https://turbo.build",
-    feed_url: "https://turbo.build/feed.xml",
-    image_url: "https://turbo.build/api/og",
+    site_url: "https://turborepo.com",
+    feed_url: "https://turborepo.com/feed.xml",
+    image_url: "https://turborepo.com/api/og",
   });
 
   const posts = await fs.readdir(path.join(__dirname, "..", "content", "blog"));
@@ -45,11 +45,11 @@ async function generate() {
     );
     feed.item({
       title: frontmatter.data.title,
-      url: `https://turbo.build/blog/${frontmatter.slug}`, // intentionally including slash here
+      url: `https://turborepo.com/blog/${frontmatter.slug}`, // intentionally including slash here
       date: frontmatter.data.date,
       description: frontmatter.data.description,
       enclosure: {
-        url: `https://turbo.build${frontmatter.data.ogImage}`, // intentionally omitting slash here
+        url: `https://turborepo.com${frontmatter.data.ogImage}`, // intentionally omitting slash here
         type: "image/png",
         size: stat.size,
       },
