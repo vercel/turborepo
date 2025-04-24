@@ -187,7 +187,6 @@ jobs:
         uses: ./.github/actions/setup-turborepo-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
-          node-version: "22"
 
       - name: Run cargo fmt check
         run: |
@@ -220,7 +219,6 @@ jobs:
         uses: ./.github/actions/setup-turborepo-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
-          node-version: "22"
 
       - name: Run cargo check
         run: |
@@ -256,7 +254,6 @@ jobs:
         uses: ./.github/actions/setup-turborepo-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
-          node-version: "22"
 
       - name: Run sccache-cache
         uses: mozilla-actions/sccache-action@v0.0.6
