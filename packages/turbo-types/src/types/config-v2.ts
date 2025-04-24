@@ -124,6 +124,18 @@ export interface RootSchema extends BaseSchema {
   ui?: UI;
 
   /**
+   * Set/limit the maximum concurrency for task execution. Must be an integer greater than or equal to `1` or a percentage value like `50%`.
+   *
+   *  - Use `1` to force serial execution (one task at a time).
+   *  - Use `100%` to use all available logical processors.
+   *
+   * Documentation: https://turborepo.com/docs/reference/configuration#concurrency
+   *
+   * @defaultValue `"10"`
+   */
+  concurrency?: string;
+
+  /**
    * Disable check for `packageManager` in root `package.json`
    *
    * This is highly discouraged as it leaves `turbo` dependent on system

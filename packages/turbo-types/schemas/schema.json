@@ -69,6 +69,11 @@
           "description": "Enable use of the UI for `turbo`.\n\nDocumentation: https://turborepo.com/docs/reference/configuration#ui",
           "default": "stream"
         },
+        "concurrency": {
+          "type": "string",
+          "description": "Set/limit the maximum concurrency for task execution. Must be an integer greater than or equal to `1` or a percentage value like `50%`.\n\n - Use `1` to force serial execution (one task at a time).  - Use `100%` to use all available logical processors.\n\nDocumentation: https://turborepo.com/docs/reference/configuration#concurrency",
+          "default": "10"
+        },
         "dangerouslyDisablePackageManagerCheck": {
           "type": "boolean",
           "description": "Disable check for `packageManager` in root `package.json`\n\nThis is highly discouraged as it leaves `turbo` dependent on system configuration to infer the correct package manager.\n\nSome turbo features are disabled if this is set to true.",
