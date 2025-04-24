@@ -24,6 +24,7 @@ struct ChildConfig {
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserializable, Default, Clone)]
 struct Application {
+    package_name: Option<String>,
     development: Option<Development>,
 }
 
@@ -78,7 +79,7 @@ impl ConfigV1 {
     pub fn development_tasks(&self) -> impl Iterator<Item = (&str, Option<&str>)> {
         self.applications
             .iter()
-            .map(|(application, config)| (application.as_str(), config.task()))
+            .map(|(application, config)| (config.package_name(application), config.task()))
     }
 
     pub fn port(&self, name: &str) -> Option<u16> {
@@ -99,6 +100,10 @@ impl Application {
     fn port(&self, name: &str) -> u16 {
         self.user_port()
             .unwrap_or_else(|| generate_port_from_name(name))
+    }
+
+    fn package_name<'a>(&'a self, key: &'a str) -> &'a str {
+        self.package_name.as_deref().unwrap_or(key)
     }
 }
 
@@ -181,6 +186,58 @@ mod test {
                 assert_eq!(
                     config_v1.applications.get("docs").unwrap().task(),
                     Some("serve")
+                );
+            }
+            ParseResult::Reference(_) => panic!("expected to get main config"),
+        }
+    }
+
+    #[test]
+    fn test_package_name_parse() {
+        let input = r#"{
+        "applications": {
+          "web": {
+            "packageName": "@acme/web"
+          },
+          "docs": {"development": {"task": "serve"}}
+        }
+    }"#;
+
+        let config = ConfigV1::from_str(input, "somewhere").unwrap();
+        match config {
+            ParseResult::Actual(config_v1) => {
+                assert_eq!(
+                    config_v1.applications.get("web").unwrap().package_name,
+                    Some("@acme/web".into())
+                );
+                assert_eq!(
+                    config_v1.applications.get("docs").unwrap().package_name,
+                    None
+                );
+            }
+            ParseResult::Reference(_) => panic!("expected to get main config"),
+        }
+    }
+
+    #[test]
+    fn test_package_name_development_tasks() {
+        let input = r#"{
+        "applications": {
+          "web": {
+            "packageName": "@acme/web"
+          },
+          "docs": {"development": {"task": "serve"}}
+        }
+    }"#;
+
+        let config = ConfigV1::from_str(input, "somewhere").unwrap();
+        match config {
+            ParseResult::Actual(config_v1) => {
+                let mut dev_tasks = config_v1.development_tasks().collect::<Vec<_>>();
+                dev_tasks.sort_by(|(a, _), (b, _)| a.cmp(b));
+                assert_eq!(
+                    dev_tasks,
+                    vec![("@acme/web", None), ("docs", Some("serve"))]
                 );
             }
             ParseResult::Reference(_) => panic!("expected to get main config"),
