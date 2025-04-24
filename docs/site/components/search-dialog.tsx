@@ -5,12 +5,13 @@ import type { SharedProps } from "fumadocs-ui/components/dialog/search";
 import FumaSearchDialog from "fumadocs-ui/components/dialog/search-algolia";
 import { gitHubRepoUrl } from "@/lib/constants";
 
-const client = algo(
-  process.env.NEXT_PUBLIC_ALGOLIA_APP_ID,
-  process.env.NEXT_PUBLIC_ALGOLIA_READ_KEY!
-);
+// Make sure these environment variables are defined in your environment
+const appId = process.env.NEXT_PUBLIC_ALGOLIA_APP_ID || "";
+const readKey = process.env.NEXT_PUBLIC_ALGOLIA_READ_KEY || "";
+const indexName = process.env.NEXT_PUBLIC_ALGOLIA_INDEX || "";
 
-const index = client.initIndex(process.env.NEXT_PUBLIC_ALGOLIA_INDEX!);
+const client = algo(appId, readKey);
+const index = client.initIndex(indexName);
 
 export function SearchDialog(props: SharedProps): JSX.Element {
   return (

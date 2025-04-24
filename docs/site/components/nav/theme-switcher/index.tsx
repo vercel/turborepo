@@ -17,6 +17,7 @@ export function ThemeSwitcher({
   size?: number;
   short?: boolean;
 }) {
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- It is typed.
   const { theme, setTheme } = useTheme();
 
   const [mounted, setMounted] = useState(false);

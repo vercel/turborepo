@@ -34,7 +34,7 @@ export async function InVersion({
 
   const now = Date.now();
   if (cache && now - cache.timestamp < CACHE_DURATION) {
-    // eslint-disable-next-line no-console
+    // eslint-disable-next-line no-console --
     console.log("Using cached latest");
   } else {
     // Fetch latest version of turbo

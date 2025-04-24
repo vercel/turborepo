@@ -121,9 +121,10 @@ const NavigationMenuListItem = ({
   className,
   onSelect,
   ...props
-}: React.ComponentProps<typeof Link> & {
+}: Omit<typeof Link, "title" | "description"> & {
   title: string;
   description?: React.ReactNode;
+  className?: string;
 } & Pick<React.ComponentProps<typeof NavigationMenuLink>, "onSelect">) => (
   <li>
     <NavigationMenuLink onSelect={onSelect} asChild>

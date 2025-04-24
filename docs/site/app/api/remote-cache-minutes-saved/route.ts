@@ -40,11 +40,9 @@ export const getRemoteCacheSavedMinutes =
     const data = raw.data[0];
 
     return {
-      total:
-        (data.remote_cache_minutes_saved ?? 0) +
-        (data.local_cache_minutes_saved ?? 0),
-      remoteCacheMinutesSaved: data.remote_cache_minutes_saved ?? 0,
-      localCacheMinutesSaved: data.local_cache_minutes_saved ?? 0,
+      total: data.remote_cache_minutes_saved + data.local_cache_minutes_saved,
+      remoteCacheMinutesSaved: data.remote_cache_minutes_saved,
+      localCacheMinutesSaved: data.local_cache_minutes_saved,
     };
   };
 

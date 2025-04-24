@@ -192,13 +192,10 @@ const handleRedirect = (
     | undefined =
     clientRedirectsMap[pathname as keyof typeof clientRedirectsMap];
 
-  const newHash: string | undefined =
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-    redirectList?.[window.location.hash]?.hash;
+  const newHash: string | undefined = redirectList[window.location.hash].hash;
 
   const newLocation: string | undefined =
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-    redirectList?.[window.location.hash]?.location;
+    redirectList[window.location.hash].location;
 
   if (newHash && newLocation) {
     /* eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- TODO: Fix ESLint Error (#13355)
@@ -224,7 +221,6 @@ export function RedirectsHandler(): null {
 
   useEffect(() => {
     handleRedirect(router, pathname);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- We only want this hook to run on initial entry to the site.
   }, []);
 
   return null;

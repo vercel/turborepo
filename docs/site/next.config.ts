@@ -1,4 +1,4 @@
-import { type NextConfig } from "next";
+import type { NextConfig } from "next";
 import { createMDX } from "fumadocs-mdx/next";
 import { withVercelToolbar } from "@vercel/toolbar/plugins/next";
 import { REDIRECTS_FOR_V2_DOCS } from "./lib/redirects/v2-docs.mjs";
@@ -6,7 +6,7 @@ import { REDIRECTS_FOR_V2_DOCS } from "./lib/redirects/v2-docs.mjs";
 const withMDX = createMDX();
 const vercelToolbar = withVercelToolbar();
 
-const config: NextConfig = {
+export const config: NextConfig = {
   reactStrictMode: true,
   images: {
     formats: ["image/avif", "image/webp"],
@@ -18,6 +18,7 @@ const config: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  // Next.js still expects these to return Promises even without await
   async rewrites() {
     return {
       beforeFiles:
@@ -166,4 +167,5 @@ const config: NextConfig = {
   },
 };
 
+// Required by Next.js, but we've extracted the config into a named export as well
 export default withMDX(vercelToolbar(config));

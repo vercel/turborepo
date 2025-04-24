@@ -133,7 +133,7 @@ export const Navigation = () => {
               <span className="inline-flex items-center justify-center rounded border border-gray-200 font-sans text-sm group-hover:border-gray-alpha-400">
                 <kbd className="flex h-5 min-h-5 w-fit items-center px-1 py-0 text-center font-sans text-xs">
                   {hotKey.map((k, i) => (
-                    <span key={`${i}-${k.key}`}>{k.display}</span>
+                    <span key={`${i}-${k.key.toString()}`}>{k.display}</span>
                   ))}
                 </kbd>
               </span>
@@ -145,7 +145,7 @@ export const Navigation = () => {
             variant="secondary"
             asChild
             size="sm"
-            // @ts-expect-error
+            // @ts-expect-error - Button with asChild expects its children to have href but TypeScript doesn't recognize this pattern
             href="https://github.com/vercel/turborepo"
             className="bg-transparent hover:bg-transparent"
           >

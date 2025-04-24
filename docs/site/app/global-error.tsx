@@ -8,6 +8,7 @@ interface NextErrorType {
   stack?: string;
 }
 
+// We use named export as the primary export
 export function GlobalError({ error }: { error: NextErrorType }): JSX.Element {
   useEffect(() => {
     // eslint-disable-next-line no-console -- This console log is intentional for error reporting
@@ -23,5 +24,6 @@ export function GlobalError({ error }: { error: NextErrorType }): JSX.Element {
   );
 }
 
-// Next.js requires a default export for error pages
+// To satisfy Next.js's requirement for default export for error pages
+// eslint-disable-next-line import/no-default-export -- Required by Next.js for error pages
 export default GlobalError;
