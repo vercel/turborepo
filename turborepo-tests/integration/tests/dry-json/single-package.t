@@ -57,6 +57,7 @@ Setup
         "logFile": ".turbo(\/|\\\\)turbo-build.log", (re)
         "dependencies": [],
         "dependents": [],
+        "with": [],
         "resolvedTaskDefinition": {
           "outputs": [
             "foo.txt"

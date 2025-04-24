@@ -59,6 +59,7 @@ Setup
         "dependents": [
           "test"
         ],
+        "with": [],
         "resolvedTaskDefinition": {
           "outputs": [
             "foo.txt"
@@ -113,6 +114,7 @@ Setup
           "build"
         ],
         "dependents": [],
+        "with": [],
         "resolvedTaskDefinition": {
           "outputs": [],
           "cache": true,

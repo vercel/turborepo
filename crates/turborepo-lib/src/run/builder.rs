@@ -138,6 +138,10 @@ impl RunBuilder {
         });
     }
 
+    fn will_execute_tasks(&self) -> bool {
+        self.opts.run_opts.dry_run.is_none() && self.opts.run_opts.graph.is_none()
+    }
+
     pub fn with_analytics_sender(mut self, analytics_sender: Option<AnalyticsSender>) -> Self {
         self.analytics_sender = analytics_sender;
         self
@@ -464,9 +468,9 @@ impl RunBuilder {
             self.opts.run_opts.dry_run.is_some(),
         ));
 
-        let should_print_prelude = self.should_print_prelude_override.unwrap_or_else(|| {
-            self.opts.run_opts.dry_run.is_none() && self.opts.run_opts.graph.is_none()
-        });
+        let should_print_prelude = self
+            .should_print_prelude_override
+            .unwrap_or_else(|| self.will_execute_tasks());
 
         Ok(Run {
             version: self.version,
@@ -538,6 +542,7 @@ impl RunBuilder {
                     pkg_dep_graph,
                     self.opts.run_opts.concurrency,
                     self.opts.run_opts.ui_mode,
+                    self.will_execute_tasks(),
                 )
                 .map_err(Error::EngineValidation)?;
         }
