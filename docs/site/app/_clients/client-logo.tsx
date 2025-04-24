@@ -23,28 +23,30 @@ export function Logo({
     ...DEFAULT_SIZE,
     ...user.style,
   };
-  let numericWidth: number;
-  let numericHeight: number;
+
+  // Initialize with default values
+  let numericWidth = DEFAULT_SIZE.width;
+  let numericHeight = DEFAULT_SIZE.height;
+
   if (typeof styles.width === "number") {
     numericWidth = styles.width;
   }
   if (typeof styles.height === "number") {
     numericHeight = styles.height;
   }
+
   const logo = (
     <Image
       alt={`${user.caption}'s Logo`}
       className={cn("mx-8", className)}
-      // biome-ignore lint/style/noNonNullAssertion: Ignored using `--suppress`
-      height={numericHeight!}
+      height={numericHeight}
       priority
       src={user.image.replace(
         "/logos",
         theme === "light" ? "/logos/white" : "/logos/color"
       )}
       style={styles}
-      // biome-ignore lint/style/noNonNullAssertion: Ignored using `--suppress`
-      width={numericWidth!}
+      width={numericWidth}
     />
   );
 

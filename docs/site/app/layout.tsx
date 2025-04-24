@@ -1,4 +1,4 @@
-/* eslint-disable rulesdir/global-css */
+/* eslint-disable rulesdir/global-css -- Global CSS is necessary for the root layout */
 import { VercelToolbar } from "@vercel/toolbar/next";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";

@@ -45,6 +45,7 @@ export default async function Page(props: {
 
   if (!page) notFound();
 
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Not being inferred correctly
   const Mdx = page.data.body;
 
   return (

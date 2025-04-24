@@ -41,10 +41,14 @@ export default async function Page(props: {
   const rawMarkdown = readFileSync(page.data._file.absolutePath)
     .toString()
     // Removes frontmatter
-    .replace(/^---\n(.*?\n)---\n/s, "")
+    .replace(/^---\n(?<content>.*?\n)---\n/s, "")
     // Removes import statements for components
-    .replace(/^import\s+{[^}]+}\s+from\s+['"]#\/[^'"]+['"];(\r?\n|$)/gm, "");
+    .replace(
+      /^import\s+{[^}]+}\s+from\s+['"]#\/[^'"]+['"];(?<lineEnding>\r?\n|$)/gm,
+      ""
+    );
 
+  /* eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- MDX component is dynamically imported */
   const Mdx = page.data.body;
 
   return (

@@ -27,7 +27,7 @@ export function FeedbackWidget() {
 
     setLoading(true);
 
-    fetch("/api/feedback", {
+    void fetch("/api/feedback", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -98,7 +98,7 @@ export function FeedbackWidget() {
                 <p className="text-gray-900">Thank you for your help.</p>
               </div>
             ) : (
-              <form>
+              <form onSubmit={handleSubmit}>
                 <div className="mb-4">
                   <Textarea
                     placeholder="Your feedback..."
@@ -137,9 +137,6 @@ export function FeedbackWidget() {
                   <div className="flex items-center gap-2">
                     <Button
                       type="submit"
-                      onClick={(e: any) => {
-                        handleSubmit(e);
-                      }}
                       disabled={loading || !feedback || !selectedEmoji}
                     >
                       Send

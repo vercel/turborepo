@@ -5,11 +5,7 @@ import { Sidebar } from "#/components/docs-layout/sidebar";
 import { baseOptions } from "../layout-config";
 import { RedirectsHandler } from "./redirects-handler";
 
-export default async function Layout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <>
       <Navigation />
