@@ -1,6 +1,20 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { useSearchContext } from "fumadocs-ui/provider";
+import { VercelLogo } from "@/app/_components/logos";
+import { LogoGitHub } from "#/components/icons/logo-github";
+import {
+  TurborepoWordmarkDark,
+  TurborepoWordmarkLight,
+} from "#/components/icons/turborepo-wordmark";
+import { MagnifyingGlass } from "#/components/icons/magnifying-glass";
+import { cn } from "../cn";
+import { ForwardSlash } from "../icons/ForwardSlash";
+import { Button } from "../button";
+import { FeedbackWidget } from "../feedback-widget";
+import { MobileMenuTopLevel } from "../docs-layout/mobile-menu-top-level";
 import {
   NavigationMenu,
   NavigationMenuIndicator,
@@ -8,20 +22,6 @@ import {
   NavigationMenuLink,
   NavigationMenuList,
 } from "./navigation-menu";
-import { cn } from "../cn";
-import { usePathname } from "next/navigation";
-import { VercelLogo } from "@/app/_components/logos";
-import { LogoGitHub } from "#/components/icons/logo-github";
-import { ForwardSlash } from "../icons/ForwardSlash";
-import { Button } from "../button";
-import { FeedbackWidget } from "../feedback-widget";
-import { useSearchContext } from "fumadocs-ui/provider";
-import { MobileMenuTopLevel } from "../docs-layout/mobile-menu-top-level";
-import {
-  TurborepoWordmarkDark,
-  TurborepoWordmarkLight,
-} from "#/components/icons/turborepo-wordmark";
-import { MagnifyingGlass } from "#/components/icons/magnifying-glass";
 
 export const PAGES = [
   {
@@ -111,7 +111,9 @@ export const Navigation = () => {
 
         <button
           className="hidden p-4 pr-2 md:pr-4 md:block lg:hidden"
-          onClick={() => setOpenSearch(true)}
+          onClick={() => {
+            setOpenSearch(true);
+          }}
         >
           <MagnifyingGlass />
         </button>

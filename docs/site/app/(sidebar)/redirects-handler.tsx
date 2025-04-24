@@ -204,7 +204,8 @@ const handleRedirect = (
     /* eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- TODO: Fix ESLint Error (#13355)
      * biome-ignore lint/correctness/noVoidTypeReturn: Ignored using `--suppress`
      * */
-    return router.push(`${newLocation ?? ""}${newHash ? `#${newHash}` : ""}`);
+    router.push(`${newLocation ?? ""}${newHash ? `#${newHash}` : ""}`);
+    return;
   }
 
   if (newHash) {

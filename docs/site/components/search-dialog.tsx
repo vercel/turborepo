@@ -1,9 +1,9 @@
 "use client";
 
-import { gitHubRepoUrl } from "@/lib/constants";
 import algo from "algoliasearch/lite";
 import type { SharedProps } from "fumadocs-ui/components/dialog/search";
 import FumaSearchDialog from "fumadocs-ui/components/dialog/search-algolia";
+import { gitHubRepoUrl } from "@/lib/constants";
 
 const client = algo(
   process.env.NEXT_PUBLIC_ALGOLIA_APP_ID,

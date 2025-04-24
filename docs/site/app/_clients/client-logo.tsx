@@ -1,6 +1,6 @@
 import React from "react";
-import { cn } from "@/components/cn";
 import Image from "next/image";
+import { cn } from "@/components/cn";
 import type { TurboUser } from "./users";
 
 const DEFAULT_SIZE = {

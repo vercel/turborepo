@@ -1,14 +1,14 @@
 "use client";
 
-import { Popover, PopoverContent, PopoverTrigger } from "../popover";
-import { Menu } from "#/components/icons/menu";
-import { Pages } from "../nav";
 import Link from "next/link";
+import { useSearchContext } from "fumadocs-ui/provider";
+import { Menu } from "#/components/icons/menu";
 import { GithubLogo } from "@/app/_components/logos";
 import { gitHubRepoUrl } from "@/lib/constants";
+import { Popover, PopoverContent, PopoverTrigger } from "../popover";
+import type { Pages } from "../nav";
 import { ThemeSwitcher } from "../nav/theme-switcher";
 import { MagnifyingGlass } from "../icons/magnifying-glass";
-import { useSearchContext } from "fumadocs-ui/provider";
 import { XDotCom } from "../icons/x-dot-com";
 
 export const MobileMenuTopLevel = ({ pages }: { pages: Pages }) => {
@@ -18,7 +18,9 @@ export const MobileMenuTopLevel = ({ pages }: { pages: Pages }) => {
     <>
       <button
         className="block lg:hidden p-4 pr-2"
-        onClick={() => setOpenSearch(true)}
+        onClick={() => {
+          setOpenSearch(true);
+        }}
       >
         <MagnifyingGlass />
       </button>

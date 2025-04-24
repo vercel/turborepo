@@ -11,7 +11,7 @@ import { openapi, openapiPages } from "../source";
 import "./openapi.css";
 
 export default async function Page(props: {
-  params: Promise<{ slug?: string[] }>;
+  params: Promise<{ slug?: Array<string> }>;
 }): Promise<JSX.Element> {
   const params = await props.params;
   const page = openapiPages.getPage(params.slug);
@@ -38,6 +38,6 @@ export default async function Page(props: {
   );
 }
 
-export function generateStaticParams(): { slug: string[] }[] {
+export function generateStaticParams(): Array<{ slug: Array<string> }> {
   return openapiPages.generateParams();
 }

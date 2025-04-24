@@ -12,7 +12,7 @@ export function Tabs({
   ...props
 }: {
   storageKey?: string;
-  items: string[];
+  items: Array<string>;
   children: ReactNode;
 }): JSX.Element {
   return (
@@ -59,7 +59,6 @@ export function PackageManagerTabs({
       {...props}
     >
       {children.map((child, index) => {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-assignment
         return {
           ...child,
           props: {

@@ -1,7 +1,7 @@
 import React from "react";
-import { cn } from "@/components/cn";
 import type { ImageProps } from "next/image";
 import Image from "next/image";
+import { cn } from "@/components/cn";
 
 interface ImageAttrs {
   src: string;

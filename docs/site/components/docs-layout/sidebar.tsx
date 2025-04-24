@@ -3,20 +3,6 @@
 import Link, { type LinkProps } from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  Collapsible,
-  CollapsibleTrigger,
-  CollapsibleContent,
-} from "@/components/ui/collapsible";
-import { ChevronRight } from "../icons/chevron-right";
-import {
-  SidebarGroupLabel,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarMenuSub,
-  SidebarProvider,
-} from "@/components/ui/sidebar";
-import { FolderProvider, useFolderContext } from "./use-folder-context";
-import {
   createContext,
   type HTMLAttributes,
   useContext,
@@ -25,10 +11,24 @@ import {
   useState,
 } from "react";
 import { cva } from "class-variance-authority";
-import { cn } from "../cn";
-import { ScrollArea, ScrollViewport } from "../ui/scroll-area";
 import type { ScrollAreaProps } from "@radix-ui/react-scroll-area";
 import { useOnChange } from "fumadocs-core/utils/use-on-change";
+import {
+  SidebarGroupLabel,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarProvider,
+} from "@/components/ui/sidebar";
+import {
+  Collapsible,
+  CollapsibleTrigger,
+  CollapsibleContent,
+} from "@/components/ui/collapsible";
+import { ScrollArea, ScrollViewport } from "../ui/scroll-area";
+import { cn } from "../cn";
+import { ChevronRight } from "../icons/chevron-right";
+import { FolderProvider, useFolderContext } from "./use-folder-context";
 
 export function isActive(
   url: string,
@@ -208,7 +208,9 @@ export const SidebarFolderLink = ({
         {children}
       </Link>
       <button
-        onClick={() => setOpenFolder(!openFolder)}
+        onClick={() => {
+          setOpenFolder(!openFolder);
+        }}
         className="ml-auto p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md transition-colors"
         aria-label={openFolder ? "Collapse section" : "Expand section"}
       >

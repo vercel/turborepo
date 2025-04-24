@@ -1,19 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronRight } from "../icons/chevron-right";
 import { useTreeContext } from "fumadocs-ui/provider";
 import type { PageTree } from "fumadocs-core/server";
+import { useEffect } from "react";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { itemVariants } from "./sidebar";
+import { ChevronRight } from "../icons/chevron-right";
 import { cn } from "../cn";
+import { itemVariants } from "./sidebar";
 import { useLockBodyScroll } from "./use-lock-body-scroll";
 import { useMobileMenuContext } from "./use-mobile-menu-context";
-import { useEffect } from "react";
 import { useIsMobile } from "./use-mobile";
 
 export const MobileMenu = () => {
@@ -54,7 +54,9 @@ const MobileMenuLink = ({ item }: { item: PageTree.Item }) => {
     <Link
       href={item.url}
       key={item.url}
-      onClick={() => setOpenMobileMenu(false)}
+      onClick={() => {
+        setOpenMobileMenu(false);
+      }}
       className={cn(
         itemVariants(),
         "text-base font-normal text-gray-900 no-underline first-of-type:mt-1 hover:text-gray-1000 [&:not(:first-of-type)]:mt-0"
@@ -69,7 +71,7 @@ export const getItemClass = (href: string | undefined) => {
   return href ? href.split("/").filter(Boolean).length > 3 : false;
 };
 
-export function renderMobileList(items: PageTree.Node[], level: number) {
+export function renderMobileList(items: Array<PageTree.Node>, level: number) {
   return items.map((item, i) => {
     const id = `${item.type}_${i}`;
 

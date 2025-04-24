@@ -30,7 +30,9 @@ export function useColorScheme(): ColorScheme {
     mediaQuery.addEventListener("change", handleChange);
 
     // Clean up
-    return () => mediaQuery.removeEventListener("change", handleChange);
+    return () => {
+      mediaQuery.removeEventListener("change", handleChange);
+    };
   }, []);
 
   return colorScheme;

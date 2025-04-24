@@ -3,10 +3,10 @@
 import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
 import { clsx } from "clsx";
-import styles from "./theme-switcher.module.css";
 import { DeviceDesktop } from "@/components/icons/device-desktop";
 import { Moon } from "@/components/icons/moon";
 import { Sun } from "@/components/icons/sun";
+import styles from "./theme-switcher.module.css";
 
 export function ThemeSwitcher({
   className,

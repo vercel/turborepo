@@ -5,8 +5,8 @@ import Link from "next/link";
 import type { ReactNode, ReactElement } from "react";
 import { useState } from "react";
 import { cn } from "@/components/cn";
-import { VercelLogo } from "./logos";
 import { gitHubRepoUrl } from "@/lib/constants";
+import { VercelLogo } from "./logos";
 
 function findError<T extends object>(error: T): boolean {
   if (Object.prototype.toString.call(error) === "[object Error]") {
@@ -217,14 +217,14 @@ function SubmitForm(): JSX.Element {
         })
           .then((res) => res.json())
           .then(() => {
-            return router.push("/confirm");
+            router.push("/confirm");
           })
           .catch((e: unknown) => {
             if (isError(e)) {
               // eslint-disable-next-line no-console -- We'd like to see something weird is happening in Logs.
               console.error(e.message);
             }
-            return router.push("/confirm");
+            router.push("/confirm");
           });
         ev.preventDefault();
       }}

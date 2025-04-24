@@ -1,5 +1,4 @@
 import { TreeContextProvider } from "fumadocs-ui/provider";
-import { LayoutBody, TableOfContents, SidebarItems } from "./docs.client";
 import type { PageTree } from "fumadocs-core/server";
 import {
   Sidebar,
@@ -7,6 +6,7 @@ import {
   SidebarGroup,
   SidebarInset,
 } from "@/components/ui/sidebar";
+import { LayoutBody, TableOfContents, SidebarItems } from "./docs.client";
 import { SidebarViewport } from "./sidebar";
 import { MobileMenu } from "./mobile-menu";
 import { MobileMenuProvider } from "./use-mobile-menu-context";
@@ -14,7 +14,7 @@ import { MobileMenuProvider } from "./use-mobile-menu-context";
 interface DocsLayoutProps {
   tree: PageTree.Root;
   children: React.ReactNode;
-  path?: string[];
+  path?: Array<string>;
   isOpenApiSpec?: boolean;
 }
 
