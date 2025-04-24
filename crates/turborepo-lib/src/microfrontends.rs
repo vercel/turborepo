@@ -68,10 +68,6 @@ impl MicrofrontendsConfigs {
         }))
     }
 
-    pub fn contains_package(&self, package_name: &str) -> bool {
-        self.configs.contains_key(package_name)
-    }
-
     pub fn configs(&self) -> impl Iterator<Item = (&String, &HashSet<TaskId<'static>>)> {
         self.configs.iter().map(|(pkg, info)| (pkg, &info.tasks))
     }
