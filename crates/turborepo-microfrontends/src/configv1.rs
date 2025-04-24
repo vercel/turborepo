@@ -4,7 +4,7 @@ use biome_deserialize_macros::Deserializable;
 use biome_json_parser::JsonParserOptions;
 use serde::Serialize;
 
-use crate::Error;
+use crate::{DevelopmentTask, Error};
 
 pub enum ParseResult {
     Actual(ConfigV1),
@@ -76,10 +76,14 @@ impl ConfigV1 {
         }
     }
 
-    pub fn development_tasks(&self) -> impl Iterator<Item = (&str, Option<&str>)> {
+    pub fn development_tasks(&self) -> impl Iterator<Item = DevelopmentTask> {
         self.applications
             .iter()
-            .map(|(application, config)| (config.package_name(application), config.task()))
+            .map(|(application, config)| DevelopmentTask {
+                application_name: application,
+                package: config.package_name(application),
+                task: config.task(),
+            })
     }
 
     pub fn port(&self, name: &str) -> Option<u16> {
@@ -234,10 +238,21 @@ mod test {
         match config {
             ParseResult::Actual(config_v1) => {
                 let mut dev_tasks = config_v1.development_tasks().collect::<Vec<_>>();
-                dev_tasks.sort_by(|(a, _), (b, _)| a.cmp(b));
+                dev_tasks.sort();
                 assert_eq!(
                     dev_tasks,
-                    vec![("@acme/web", None), ("docs", Some("serve"))]
+                    vec![
+                        DevelopmentTask {
+                            application_name: "docs",
+                            package: "docs",
+                            task: Some("serve")
+                        },
+                        DevelopmentTask {
+                            application_name: "web",
+                            package: "@acme/web",
+                            task: None
+                        },
+                    ]
                 );
             }
             ParseResult::Reference(_) => panic!("expected to get main config"),

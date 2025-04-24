@@ -20,7 +20,8 @@ pub struct MicrofrontendsConfigs {
 
 #[derive(Debug, Clone, Default, PartialEq)]
 struct ConfigInfo {
-    tasks: HashSet<TaskId<'static>>,
+    // A map from tasks declared in the configuration to the application that they belong to
+    tasks: HashMap<TaskId<'static>, String>,
     ports: HashMap<TaskId<'static>, u16>,
     version: &'static str,
     path: Option<RelativeUnixPathBuf>,
@@ -86,11 +87,11 @@ impl MicrofrontendsConfigs {
         }))
     }
 
-    pub fn configs(&self) -> impl Iterator<Item = (&String, &HashSet<TaskId<'static>>)> {
+    pub fn configs(&self) -> impl Iterator<Item = (&String, &HashMap<TaskId<'static>, String>)> {
         self.configs.iter().map(|(pkg, info)| (pkg, &info.tasks))
     }
 
-    pub fn get(&self, package_name: &str) -> Option<&HashSet<TaskId<'static>>> {
+    pub fn get(&self, package_name: &str) -> Option<&HashMap<TaskId<'static>, String>> {
         let info = self.configs.get(package_name)?;
         Some(&info.tasks)
     }
@@ -98,7 +99,7 @@ impl MicrofrontendsConfigs {
     pub fn task_has_mfe_proxy(&self, task_id: &TaskId) -> bool {
         self.configs
             .values()
-            .any(|info| info.tasks.contains(task_id))
+            .any(|info| info.tasks.contains_key(task_id))
     }
 
     pub fn config_filename(&self, package_name: &str) -> Option<&RelativeUnixPath> {
@@ -166,7 +167,7 @@ impl MicrofrontendsConfigs {
         package_name: &PackageName,
     ) -> Option<FindResult<'a>> {
         let results = self.configs.iter().filter_map(|(config, info)| {
-            let dev_task = info.tasks.iter().find_map(|task| {
+            let dev_task = info.tasks.iter().find_map(|(task, _)| {
                 (task.package() == package_name.as_str()).then(|| FindResult {
                     dev: Some(task.as_borrowed()),
                     proxy: TaskId::new(config, "proxy"),
@@ -193,22 +194,6 @@ impl MicrofrontendsConfigs {
                 Some(path.as_str().to_string())
             })
             .collect()
-    }
-
-    // Given a list of package names, returns a list of packages referenced in the
-    // configs that are missing from the list.
-    fn missing_packages<'a>(&self, package_names: impl Iterator<Item = &'a str>) -> HashSet<&str> {
-        let packages_in_graph = package_names.collect::<HashSet<_>>();
-        self.packages()
-            .filter(|package| !packages_in_graph.contains(package))
-            .collect()
-    }
-
-    // All packages referenced in the configs
-    fn packages(&self) -> impl Iterator<Item = &str> {
-        self.configs().flat_map(|(default_app, config)| {
-            std::iter::once(default_app.as_str()).chain(config.iter().map(|task| task.package()))
-        })
     }
 }
 
@@ -257,7 +242,7 @@ impl PackageGraphResult {
                 info.path = Some(path.to_unix());
             }
             referenced_packages.insert(package_name.to_string());
-            referenced_packages.extend(info.tasks.iter().map(|task| task.package().to_string()));
+            referenced_packages.extend(info.tasks.keys().map(|task| task.package().to_string()));
             configs.insert(package_name.to_string(), info);
         }
         let default_apps_found = configs.keys().cloned().collect();
@@ -291,13 +276,13 @@ struct FindResult<'a> {
 impl ConfigInfo {
     fn new(config: &MFEConfig) -> Self {
         let mut ports = HashMap::new();
-        let mut tasks = HashSet::new();
-        for (application, dev_task) in config.development_tasks() {
-            let task = TaskId::new(application, dev_task.unwrap_or("dev")).into_owned();
-            if let Some(port) = config.port(application) {
+        let mut tasks = HashMap::new();
+        for dev_task in config.development_tasks() {
+            let task = TaskId::new(dev_task.package, dev_task.task.unwrap_or("dev")).into_owned();
+            if let Some(port) = config.port(dev_task.application_name) {
                 ports.insert(task.clone(), port);
             }
-            tasks.insert(task);
+            tasks.insert(task, dev_task.application_name.to_owned());
         }
         let version = config.version();
 
@@ -322,9 +307,11 @@ mod test {
             {
                 let mut _map = std::collections::HashMap::new();
                 $(
-                    let mut _dev_tasks = std::collections::HashSet::new();
+                    let mut _dev_tasks = std::collections::HashMap::new();
                     for _dev_task in $dev_tasks.as_slice() {
-                        _dev_tasks.insert(crate::run::task_id::TaskName::from(*_dev_task).task_id().unwrap().into_owned());
+                        let _dev_task_id = crate::run::task_id::TaskName::from(*_dev_task).task_id().unwrap().into_owned();
+                        let _dev_application = _dev_task_id.package().to_owned();
+                        _dev_tasks.insert(_dev_task_id, _dev_application);
                     }
                     _map.insert($config_owner.to_string(), ConfigInfo { tasks: _dev_tasks, version: "1", path: None, ports: std::collections::HashMap::new() });
                 )+
