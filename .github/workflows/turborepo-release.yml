@@ -109,7 +109,6 @@ jobs:
         uses: ./.github/actions/setup-turborepo-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
-          node-version: "20"
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
         with:
