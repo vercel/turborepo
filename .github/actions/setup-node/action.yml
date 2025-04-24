@@ -27,7 +27,7 @@ runs:
       uses: actions/setup-node@v4
       with:
         # node-version-file is the default, but can be overridden using node-version
-        node-version-file: "package.json"
+        node-version-file: ".node-version"
         node-version: ${{ inputs.node-version }}
         cache: pnpm
 
