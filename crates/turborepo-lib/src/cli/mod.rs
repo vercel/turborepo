@@ -495,10 +495,10 @@ impl Args {
 
     /// Fetch the execution args supplied to the command
     pub fn execution_args(&self) -> Option<&ExecutionArgs> {
-        if let Some(Command::Run { execution_args, .. }) = &self.command {
-            Some(execution_args)
-        } else {
-            self.execution_args.as_ref()
+        match &self.command {
+            Some(Command::Run { execution_args, .. }) => Some(execution_args),
+            Some(Command::Watch { execution_args, .. }) => Some(execution_args),
+            _ => self.execution_args.as_ref(),
         }
     }
 
