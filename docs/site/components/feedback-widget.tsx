@@ -108,6 +108,14 @@ export function FeedbackWidget() {
                   />
                 </div>
 
+                {!selectedEmoji && feedback ? (
+                  <p className="text-red-900 text-right mb-4 text-sm">
+                    Please select an emoji.
+                  </p>
+                ) : (
+                  <div className="h-9" />
+                )}
+
                 <div className="flex items-center justify-between text-black dark:text-gray-900">
                   <div className="flex space-x-4">
                     {emojis.map((item) => {
