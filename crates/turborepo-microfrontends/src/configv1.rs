@@ -11,29 +11,29 @@ pub enum ParseResult {
     Reference(String),
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserializable, Default)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserializable, Default, Clone)]
 pub struct ConfigV1 {
     version: Option<String>,
     applications: BTreeMap<String, Application>,
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserializable, Default)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserializable, Default, Clone)]
 struct ChildConfig {
     part_of: String,
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserializable, Default)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserializable, Default, Clone)]
 struct Application {
     development: Option<Development>,
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserializable, Default)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserializable, Default, Clone)]
 struct Development {
     task: Option<String>,
     local: Option<LocalHost>,
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserializable, Default)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserializable, Default, Clone, Copy)]
 struct LocalHost {
     port: Option<u16>,
 }

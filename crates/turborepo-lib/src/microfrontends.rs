@@ -32,24 +32,33 @@ impl MicrofrontendsConfigs {
         repo_root: &AbsoluteSystemPath,
         package_graph: &PackageGraph,
     ) -> Result<Option<Self>, Error> {
-        Self::from_configs(package_graph.packages().map(|(name, info)| {
-            (
-                name.as_str(),
-                MFEConfig::load_from_dir(repo_root, info.package_path()),
-            )
-        }))
+        let package_names = package_graph
+            .packages()
+            .map(|(name, _)| name.as_str())
+            .collect();
+        Self::from_configs(
+            package_names,
+            package_graph.packages().map(|(name, info)| {
+                (
+                    name.as_str(),
+                    MFEConfig::load_from_dir(repo_root, info.package_path()),
+                )
+            }),
+        )
     }
 
     /// Constructs a collection of configurations from a list of configurations
     pub fn from_configs<'a>(
+        package_names: HashSet<&str>,
         configs: impl Iterator<Item = (&'a str, Result<Option<MFEConfig>, Error>)>,
     ) -> Result<Option<Self>, Error> {
         let PackageGraphResult {
             configs,
             missing_default_apps,
+            missing_applications,
             unsupported_version,
             mfe_package,
-        } = PackageGraphResult::new(configs)?;
+        } = PackageGraphResult::new(package_names, configs)?;
 
         for (package, err) in unsupported_version {
             warn!("Ignoring {package}: {err}");
@@ -59,6 +68,15 @@ impl MicrofrontendsConfigs {
             warn!(
                 "Missing default applications: {}",
                 missing_default_apps.join(", ")
+            );
+        }
+
+        if !missing_applications.is_empty() {
+            warn!(
+                "Unable to find packages referenced in 'microfrontends.json' in workspace.Local \
+                 proxy will not route to the following applications if they are running locally: \
+                 {}",
+                missing_applications.join(", ")
             );
         }
 
@@ -176,22 +194,41 @@ impl MicrofrontendsConfigs {
             })
             .collect()
     }
+
+    // Given a list of package names, returns a list of packages referenced in the
+    // configs that are missing from the list.
+    fn missing_packages<'a>(&self, package_names: impl Iterator<Item = &'a str>) -> HashSet<&str> {
+        let packages_in_graph = package_names.collect::<HashSet<_>>();
+        self.packages()
+            .filter(|package| !packages_in_graph.contains(package))
+            .collect()
+    }
+
+    // All packages referenced in the configs
+    fn packages(&self) -> impl Iterator<Item = &str> {
+        self.configs().flat_map(|(default_app, config)| {
+            std::iter::once(default_app.as_str()).chain(config.iter().map(|task| task.package()))
+        })
+    }
 }
 
 // Internal struct used to capture the results of checking the package graph
 struct PackageGraphResult {
     configs: HashMap<String, ConfigInfo>,
     missing_default_apps: Vec<String>,
+    missing_applications: Vec<String>,
     unsupported_version: Vec<(String, String)>,
     mfe_package: Option<&'static str>,
 }
 
 impl PackageGraphResult {
     fn new<'a>(
+        packages_in_graph: HashSet<&str>,
         packages: impl Iterator<Item = (&'a str, Result<Option<MFEConfig>, Error>)>,
     ) -> Result<Self, Error> {
         let mut configs = HashMap::new();
         let mut referenced_default_apps = HashSet::new();
+        let mut referenced_packages = HashSet::new();
         let mut unsupported_version = Vec::new();
         let mut mfe_package = None;
         // We sort packages to ensure deterministic behavior
@@ -219,6 +256,8 @@ impl PackageGraphResult {
             if let Some(path) = config.path() {
                 info.path = Some(path.to_unix());
             }
+            referenced_packages.insert(package_name.to_string());
+            referenced_packages.extend(info.tasks.iter().map(|task| task.package().to_string()));
             configs.insert(package_name.to_string(), info);
         }
         let default_apps_found = configs.keys().cloned().collect();
@@ -227,9 +266,15 @@ impl PackageGraphResult {
             .cloned()
             .collect::<Vec<_>>();
         missing_default_apps.sort();
+        let mut missing_applications = referenced_packages
+            .into_iter()
+            .filter(|package| !packages_in_graph.contains(package.as_str()))
+            .collect::<Vec<_>>();
+        missing_applications.sort();
         Ok(Self {
             configs,
             missing_default_apps,
+            missing_applications,
             unsupported_version,
             mfe_package,
         })
@@ -359,22 +404,28 @@ mod test {
 
     #[test]
     fn test_mfe_package_is_found() {
-        let result =
-            PackageGraphResult::new(vec![(MICROFRONTENDS_PACKAGE, Ok(None))].into_iter()).unwrap();
+        let result = PackageGraphResult::new(
+            HashSet::default(),
+            vec![(MICROFRONTENDS_PACKAGE, Ok(None))].into_iter(),
+        )
+        .unwrap();
         assert_eq!(result.mfe_package, Some(MICROFRONTENDS_PACKAGE));
     }
 
     #[test]
     fn test_no_mfe_package() {
-        let result =
-            PackageGraphResult::new(vec![("foo", Ok(None)), ("bar", Ok(None))].into_iter())
-                .unwrap();
+        let result = PackageGraphResult::new(
+            HashSet::default(),
+            vec![("foo", Ok(None)), ("bar", Ok(None))].into_iter(),
+        )
+        .unwrap();
         assert_eq!(result.mfe_package, None);
     }
 
     #[test]
     fn test_unsupported_versions_ignored() {
         let result = PackageGraphResult::new(
+            HashSet::default(),
             vec![("foo", Err(Error::UnsupportedVersion("bad version".into())))].into_iter(),
         )
         .unwrap();
@@ -384,6 +435,7 @@ mod test {
     #[test]
     fn test_child_configs_with_missing_default() {
         let result = PackageGraphResult::new(
+            HashSet::default(),
             vec![(
                 "child",
                 Err(Error::ChildConfig {
@@ -400,6 +452,7 @@ mod test {
     #[test]
     fn test_io_err_stops_traversal() {
         let result = PackageGraphResult::new(
+            HashSet::default(),
             vec![
                 (
                     "a",
@@ -438,8 +491,11 @@ mod test {
             "something.txt",
         )
         .unwrap();
-        let mut result =
-            PackageGraphResult::new(vec![("web", Ok(Some(config)))].into_iter()).unwrap();
+        let mut result = PackageGraphResult::new(
+            HashSet::default(),
+            vec![("web", Ok(Some(config)))].into_iter(),
+        )
+        .unwrap();
         result
             .configs
             .values_mut()
@@ -450,6 +506,42 @@ mod test {
                 "web" => ["web#dev", "docs#serve"]
             )
         )
+    }
+
+    #[test]
+    fn test_missing_packages() {
+        let config = MFEConfig::from_str(
+            &serde_json::to_string_pretty(&json!({
+                "version": "1",
+                "applications": {
+                    "web": {},
+                    "docs": {
+                        "development": {
+                            "task": "serve"
+                        }
+                    }
+                }
+            }))
+            .unwrap(),
+            "something.txt",
+        )
+        .unwrap();
+        let missing_result = PackageGraphResult::new(
+            HashSet::default(),
+            vec![("web", Ok(Some(config.clone())))].into_iter(),
+        )
+        .unwrap();
+        assert_eq!(missing_result.missing_applications, vec!["docs", "web"]);
+        let found_result = PackageGraphResult::new(
+            HashSet::from_iter(["docs", "web"].iter().copied()),
+            vec![("web", Ok(Some(config)))].into_iter(),
+        )
+        .unwrap();
+        assert!(
+            found_result.missing_applications.is_empty(),
+            "Expected no missing applications: {:?}",
+            found_result.missing_applications
+        );
     }
 
     #[test]
@@ -473,7 +565,11 @@ mod test {
             "something.txt",
         )
         .unwrap();
-        let result = PackageGraphResult::new(vec![("web", Ok(Some(config)))].into_iter()).unwrap();
+        let result = PackageGraphResult::new(
+            HashSet::default(),
+            vec![("web", Ok(Some(config)))].into_iter(),
+        )
+        .unwrap();
         let web_ports = result.configs["web"].ports.clone();
         assert_eq!(
             web_ports.get(&TaskId::new("docs", "serve")).copied(),

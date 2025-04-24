@@ -23,14 +23,14 @@ pub const SUPPORTED_VERSIONS: &[&str] = ["1"].as_slice();
 
 /// The minimal amount of information Turborepo needs to correctly start a local
 /// proxy server for microfrontends
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Config {
     inner: ConfigInner,
     filename: String,
     path: Option<AnchoredSystemPathBuf>,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 enum ConfigInner {
     V1(ConfigV1),
 }
