@@ -7,8 +7,9 @@
     "build": "next build --turbopack",
     "check-spelling": "spellchecker --files '**/*.mdx' --files '!content/blog/*.mdx' --files '!content/docs/acknowledgments.mdx' --files '!node_modules/**' --files '!content/extra/terms.mdx' --files '!content/extra/governance.mdx' --files '!content/extra/privacy.mdx' --dictionaries 'dictionary.txt' --no-suggestions --quiet",
     "dev": "next dev --turbopack",
-    "eslint": "fumadocs-mdx && eslint .",
-    "eslint:fix": "fumadocs-mdx && eslint . --fix",
+    "lint": "fumadocs-mdx && next lint",
+    "lint:fix": "fumadocs-mdx && next lint --fix",
+    "lint:prettier": "prettier --write -c . --cache --ignore-path=../../.prettierignore",
     "index-docs": "tsx ./scripts/sync-algolia.mjs",
     "rss": "node scripts/generate-rss.cjs",
     "schema": "node scripts/copy-json-schema.mjs",
@@ -60,6 +61,7 @@
   "devDependencies": {
     "@mdx-js/mdx": "^3.0.1",
     "@next/env": "15.3.1-canary.12",
+    "@turbo/eslint-config": "workspace:*",
     "@next/eslint-plugin-next": "15.3.1-canary.12",
     "@turbo/tsconfig": "workspace:^",
     "@turbo/types": "workspace:*",
@@ -80,8 +82,5 @@
     "tailwindcss": "^3.4.1",
     "tsx": "^4.6.2",
     "typescript": "5.6.3"
-  },
-  "engines": {
-    "node": "20.x"
   }
 }

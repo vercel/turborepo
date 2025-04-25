@@ -193,18 +193,19 @@ const handleRedirect = (
     clientRedirectsMap[pathname as keyof typeof clientRedirectsMap];
 
   const newHash: string | undefined =
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- These are correct.
     redirectList?.[window.location.hash]?.hash;
 
   const newLocation: string | undefined =
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- These are correct.
     redirectList?.[window.location.hash]?.location;
 
   if (newHash && newLocation) {
     /* eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- TODO: Fix ESLint Error (#13355)
      * biome-ignore lint/correctness/noVoidTypeReturn: Ignored using `--suppress`
      * */
-    return router.push(`${newLocation ?? ""}${newHash ? `#${newHash}` : ""}`);
+    router.push(`${newLocation ?? ""}${newHash ? `#${newHash}` : ""}`);
+    return;
   }
 
   if (newHash) {
@@ -223,7 +224,6 @@ export function RedirectsHandler(): null {
 
   useEffect(() => {
     handleRedirect(router, pathname);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- We only want this hook to run on initial entry to the site.
   }, []);
 
   return null;

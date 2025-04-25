@@ -4,6 +4,6 @@
 
 import { NextResponse } from "next/server";
 
-export async function middleware(): Promise<Response> {
+export function middleware(): Response {
   return NextResponse.next();
 }

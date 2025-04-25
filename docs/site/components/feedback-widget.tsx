@@ -1,8 +1,8 @@
 "use client";
 
-import { FaceHappy, FaceSad, FaceSmile, FaceUnhappy } from "./faces";
 import { useState } from "react";
 import * as Popover from "@radix-ui/react-popover";
+import { FaceHappy, FaceSad, FaceSmile, FaceUnhappy } from "./faces";
 import { Check } from "./check";
 import { Textarea } from "./textarea";
 import { Button } from "./button";
@@ -22,14 +22,12 @@ export function FeedbackWidget() {
     { emoji: "😭", component: <FaceSad />, label: "Hate it" },
   ];
 
-  const handleSubmit = (
-    e?: React.FormEvent<HTMLFormElement> | React.MouseEvent<HTMLButtonElement>
-  ): void => {
+  const handleSubmit = (e?: React.MouseEvent<HTMLButtonElement>): void => {
     e?.preventDefault();
 
     setLoading(true);
 
-    fetch("/api/feedback", {
+    void fetch("/api/feedback", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -106,7 +104,9 @@ export function FeedbackWidget() {
                     placeholder="Your feedback..."
                     className="min-h-28 text-black dark:bg-black border-gray-700 dark:text-white placeholder:text-gray-500 resize-none"
                     value={feedback}
-                    onChange={(e) => setFeedback(e.target.value)}
+                    onChange={(e) => {
+                      setFeedback(e.target.value);
+                    }}
                   />
                 </div>
 
@@ -130,7 +130,9 @@ export function FeedbackWidget() {
                         <button
                           type="button"
                           key={item.label}
-                          onClick={() => setSelectedEmoji(item.emoji)}
+                          onClick={() => {
+                            setSelectedEmoji(item.emoji);
+                          }}
                           className={cn(
                             "text-2xl w-7 h-7 p-1 transition-transform hover:scale-110",
                             selectedEmoji === item.emoji
@@ -153,9 +155,9 @@ export function FeedbackWidget() {
                   <div className="flex items-center gap-2">
                     <Button
                       type="submit"
-                      onClick={(e: React.MouseEvent<HTMLButtonElement>) =>
-                        handleSubmit(e)
-                      }
+                      onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+                        handleSubmit(e);
+                      }}
                       disabled={loading || !feedback || !selectedEmoji}
                     >
                       Send

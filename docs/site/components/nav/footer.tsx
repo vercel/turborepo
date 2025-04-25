@@ -1,5 +1,5 @@
-import { VercelLogo } from "@/app/_components/logos";
 import Fumalink from "fumadocs-core/link";
+import { VercelLogo } from "@/app/_components/logos";
 import { ThemeSwitcher } from "./theme-switcher/index";
 
 interface FooterItem {
@@ -31,7 +31,7 @@ const FOOTER_ITEMS = {
   ],
 };
 
-const NavItems = ({ category }: { category: FooterItem[] }) => {
+const NavItems = ({ category }: { category: Array<FooterItem> }) => {
   return (
     <ul className="flex flex-col gap-y-3 text-gray-900">
       {category.map((item) => {

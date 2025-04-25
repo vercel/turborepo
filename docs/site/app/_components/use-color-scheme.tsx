@@ -8,7 +8,7 @@ import type { ColorScheme } from "./favicon-handler";
 export function useColorScheme(): ColorScheme {
   const [colorScheme, setColorScheme] = useState<ColorScheme>(() => {
     // Check the initial color scheme
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+    /* eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- Window check is necessary for SSR */
     if (typeof window !== "undefined" && window.matchMedia) {
       return window.matchMedia("(prefers-color-scheme: dark)").matches
         ? "dark"
@@ -30,7 +30,9 @@ export function useColorScheme(): ColorScheme {
     mediaQuery.addEventListener("change", handleChange);
 
     // Clean up
-    return () => mediaQuery.removeEventListener("change", handleChange);
+    return () => {
+      mediaQuery.removeEventListener("change", handleChange);
+    };
   }, []);
 
   return colorScheme;

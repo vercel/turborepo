@@ -1,14 +1,14 @@
+import { readFileSync } from "node:fs";
 import { notFound } from "next/navigation";
-import { readFileSync } from "fs";
 import type { Metadata } from "next/types";
 import { repoDocsPages } from "@/app/source";
 import { createMetadata } from "@/lib/create-metadata";
 import { mdxComponents } from "@/mdx-components";
-import { SystemEnvironmentVariablesHashHighlighter } from "./system-environment-variables-hash-highlighter";
 import { CopyToMarkdown } from "@/components/copy-to-markdown";
+import { SystemEnvironmentVariablesHashHighlighter } from "./system-environment-variables-hash-highlighter";
 
 export async function generateMetadata(props: {
-  params: Promise<{ slug?: string[] }>;
+  params: Promise<{ slug?: Array<string> }>;
 }): Promise<Metadata> {
   const params = await props.params;
   const page = repoDocsPages.getPage(params.slug);
@@ -22,14 +22,14 @@ export async function generateMetadata(props: {
   });
 }
 
-export function generateStaticParams(): { slug: string[] }[] {
+export function generateStaticParams(): Array<{ slug: Array<string> }> {
   return repoDocsPages.getPages().map((page) => ({
     slug: page.slugs,
   }));
 }
 
 export default async function Page(props: {
-  params: Promise<{ slug?: string[] }>;
+  params: Promise<{ slug?: Array<string> }>;
 }): Promise<JSX.Element> {
   const params = await props.params;
   const page = repoDocsPages.getPage(params.slug);
@@ -41,10 +41,14 @@ export default async function Page(props: {
   const rawMarkdown = readFileSync(page.data._file.absolutePath)
     .toString()
     // Removes frontmatter
-    .replace(/^---\n(.*?\n)---\n/s, "")
+    .replace(/^---\n(?<content>.*?\n)---\n/s, "")
     // Removes import statements for components
-    .replace(/^import\s+{[^}]+}\s+from\s+['"]#\/[^'"]+['"];(\r?\n|$)/gm, "");
+    .replace(
+      /^import\s+{[^}]+}\s+from\s+['"]#\/[^'"]+['"];(?<lineEnding>\r?\n|$)/gm,
+      ""
+    );
 
+  /* eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- MDX component is dynamically imported */
   const Mdx = page.data.body;
 
   return (

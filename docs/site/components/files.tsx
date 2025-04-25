@@ -1,8 +1,8 @@
-import { cn } from "@/components/cn";
 import {
   File as FumaFile,
   Folder as FumaFolder,
 } from "fumadocs-ui/components/files";
+import { cn } from "@/components/cn";
 
 export { Files } from "fumadocs-ui/components/files";
 

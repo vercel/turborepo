@@ -2,10 +2,10 @@
 
 import type { ReactElement } from "react";
 import React, { useEffect, useState } from "react";
+import { useTheme } from "next-themes";
 import { cn } from "@/components/cn";
 import { users } from "./users";
 import { Logo } from "./client-logo";
-import { useTheme } from "next-themes";
 
 interface LogoWrapperProps {
   className: string;
@@ -31,7 +31,7 @@ export function Clients({
 }: {
   linked?: boolean;
   staticWidth?: boolean;
-  companyList?: string[];
+  companyList?: Array<string>;
 }) {
   const [mounted, setMounted] = useState(false);
   const { theme } = useTheme();

@@ -5,7 +5,7 @@ import { repoDocsPages } from "@/app/source";
 export const revalidate = false;
 
 export function GET(): NextResponse {
-  const results: DocumentRecord[] = [];
+  const results: Array<DocumentRecord> = [];
 
   for (const page of [...repoDocsPages.getPages()]) {
     results.push({

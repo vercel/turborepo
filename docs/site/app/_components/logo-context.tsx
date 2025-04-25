@@ -68,8 +68,7 @@ function MenuItem({
 
   if (type === "internal") {
     return (
-      // biome-ignore lint/style/noNonNullAssertion: Ignored using `--suppress`
-      <Link className={classes} href={href!} onClick={handleClick} {...other}>
+      <Link className={classes} href={href} onClick={handleClick} {...other}>
         {prefix}
         {children}
       </Link>

@@ -1,8 +1,8 @@
 "use client";
 
-import { cn } from "../cn";
 import * as CollapsiblePrimitive from "@radix-ui/react-collapsible";
 import { forwardRef } from "react";
+import { cn } from "../cn";
 
 const Collapsible = CollapsiblePrimitive.Root;
 
