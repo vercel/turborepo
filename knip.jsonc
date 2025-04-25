@@ -10,6 +10,8 @@
   "workspaces": {
     "docs/site": {
       "ignoreDependencies": [
+        // TODO: We're using this but its getting reported?
+        "copy-to-clipboard",
         "@next/env",
         "@next/eslint-plugin-next",
         "rss",
