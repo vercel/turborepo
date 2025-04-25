@@ -1,0 +1,20 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema-jsonc.json",
+  "ignore": [
+    "turborepo-tests/**",
+    // Not working well for this package for some reason
+    "docs/link-checker/**",
+    // TODO: Widen coverage
+    "packages/**"
+  ],
+  "workspaces": {
+    "docs/site": {
+      "ignoreDependencies": [
+        "@next/env",
+        "@next/eslint-plugin-next",
+        "rss",
+        "@radix-ui/react-dropdown-menu"
+      ]
+    }
+  }
+}
