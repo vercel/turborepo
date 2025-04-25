@@ -8,6 +8,11 @@ import { Moon } from "@/components/icons/moon";
 import { Sun } from "@/components/icons/sun";
 import styles from "./theme-switcher.module.css";
 
+interface ThemeProviderValue {
+  theme: string | undefined;
+  setTheme: (theme: string) => void;
+}
+
 export function ThemeSwitcher({
   className,
   size = 28,
@@ -17,8 +22,7 @@ export function ThemeSwitcher({
   size?: number;
   short?: boolean;
 }) {
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- It is typed.
-  const { theme, setTheme } = useTheme();
+  const { theme, setTheme } = useTheme() as ThemeProviderValue;
 
   const [mounted, setMounted] = useState(false);
   const iconSize = size / 2;
@@ -37,9 +41,7 @@ export function ThemeSwitcher({
       style={{ padding: short ? "0" : `${padding}px` }}
       role="radiogroup"
     >
-      <button
-        aria-checked={theme === "light"}
-        aria-label="Switch to light theme"
+      <label
         className={styles.switch}
         data-active={theme === "light"}
         style={{
@@ -47,50 +49,61 @@ export function ThemeSwitcher({
           width: `${size}px`,
         }}
         data-theme-switcher
-        onClick={(): void => {
-          setTheme("light");
-        }}
-        role="radio"
-        type="button"
       >
+        <input
+          type="radio"
+          name="theme"
+          value="light"
+          checked={theme === "light"}
+          onChange={() => {
+            setTheme("light");
+          }}
+          className={styles.radioInput}
+        />
         <Sun style={{ width: iconSize, height: iconSize }} />
-      </button>
-      <button
-        aria-checked={theme === "system"}
-        aria-label="Switch to system theme"
+      </label>
+      <label
         className={styles.switch}
-        style={{
-          height: `${size}px`,
-          width: `${size}px`,
-        }}
         data-active={theme === "system"}
-        data-theme-switcher
-        onClick={(): void => {
-          setTheme("system");
-        }}
-        role="radio"
-        type="button"
-      >
-        <DeviceDesktop style={{ width: iconSize, height: iconSize }} />
-      </button>
-      <button
-        aria-checked={theme === "dark"}
-        aria-label="Switch to dark theme"
-        className={styles.switch}
         style={{
           height: `${size}px`,
           width: `${size}px`,
         }}
-        data-active={theme === "dark"}
         data-theme-switcher
-        onClick={(): void => {
-          setTheme("dark");
-        }}
-        role="radio"
-        type="button"
       >
+        <input
+          type="radio"
+          name="theme"
+          value="system"
+          checked={theme === "system"}
+          onChange={() => {
+            setTheme("system");
+          }}
+          className={styles.radioInput}
+        />
+        <DeviceDesktop style={{ width: iconSize, height: iconSize }} />
+      </label>
+      <label
+        className={styles.switch}
+        data-active={theme === "dark"}
+        style={{
+          height: `${size}px`,
+          width: `${size}px`,
+        }}
+        data-theme-switcher
+      >
+        <input
+          type="radio"
+          name="theme"
+          value="dark"
+          checked={theme === "dark"}
+          onChange={() => {
+            setTheme("dark");
+          }}
+          className={styles.radioInput}
+        />
         <Moon style={{ width: iconSize, height: iconSize }} />
-      </button>
+      </label>
     </div>
   );
 }

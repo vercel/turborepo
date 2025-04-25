@@ -126,9 +126,9 @@ export function Callout({
   const safeType: CalloutType = type in THEMES ? (type as CalloutType) : "info";
 
   // Cast children to ReactNode[] for type safety
-  const childrenToArray = Children.toArray(props.children).filter(
-    Boolean
-  ) as Array<ReactNode>;
+  const childrenToArray = Children.toArray(
+    props.children as ReactNode | Array<ReactNode>
+  ).filter(Boolean) as Array<ReactNode>;
   const goodToKnowChildren = [
     <p className="inline font-medium" key="good-to-know">
       Good to know:&nbsp;

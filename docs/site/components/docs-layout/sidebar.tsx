@@ -187,8 +187,8 @@ export const SidebarFolderLink = ({
   const { openFolder, setOpenFolder } = useFolderContext();
   const { prefetch } = useInternalContext();
   const pathname = usePathname();
-  const active = href !== undefined && isActive(String(href), pathname, false);
-  const itemClasses = getItemClass(href.toString());
+  const active = isActive(String(href), pathname, false);
+  const itemClasses = getItemClass(String(href));
 
   useLayoutEffect(() => {
     if (active) {
@@ -247,7 +247,7 @@ export const SidebarItem = ({
   children: React.ReactNode;
 }) => {
   const pathname = usePathname();
-  const active = href !== undefined && isActive(String(href), pathname, false);
+  const active = isActive(String(href), pathname, false);
   const { prefetch } = useInternalContext();
 
   return (
