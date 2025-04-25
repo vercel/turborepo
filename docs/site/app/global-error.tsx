@@ -24,6 +24,4 @@ export function GlobalError({ error }: { error: NextErrorType }): JSX.Element {
   );
 }
 
-// To satisfy Next.js's requirement for default export for error pages
-// eslint-disable-next-line import/no-default-export -- Required by Next.js for error pages
 export default GlobalError;

@@ -8,6 +8,8 @@ module.exports = {
     "!app/.well-known/vercel/flags/route.ts",
     ".source",
     "components/ui/**",
+    // TODO: Need to fix the JSON inference in this file
+    "components/examples-table.tsx",
   ],
   overrides: [
     {
