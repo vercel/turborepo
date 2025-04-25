@@ -3,10 +3,15 @@
 import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
 import { clsx } from "clsx";
-import styles from "./theme-switcher.module.css";
 import { DeviceDesktop } from "@/components/icons/device-desktop";
 import { Moon } from "@/components/icons/moon";
 import { Sun } from "@/components/icons/sun";
+import styles from "./theme-switcher.module.css";
+
+interface ThemeProvider {
+  theme: string | undefined;
+  setTheme: (theme: string) => void;
+}
 
 export function ThemeSwitcher({
   className,
@@ -17,7 +22,7 @@ export function ThemeSwitcher({
   size?: number;
   short?: boolean;
 }) {
-  const { theme, setTheme } = useTheme();
+  const { theme, setTheme } = useTheme() as ThemeProvider;
 
   const [mounted, setMounted] = useState(false);
   const iconSize = size / 2;

@@ -58,7 +58,6 @@ const theme = createCssVariablesTheme({
   variableDefaults: {},
 });
 
-// eslint-disable-next-line import/no-default-export
 export default defineConfig({
   mdxOptions: {
     rehypeCodeOptions: {

@@ -1,4 +1,4 @@
-import { type NextConfig } from "next";
+import type { NextConfig } from "next";
 import { createMDX } from "fumadocs-mdx/next";
 import { withVercelToolbar } from "@vercel/toolbar/plugins/next";
 import { REDIRECTS_FOR_V2_DOCS } from "./lib/redirects/v2-docs.mjs";
@@ -18,6 +18,8 @@ const config: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  // Next.js still expects these to return Promises even without await
+  // eslint-disable-next-line @typescript-eslint/require-await -- Purposeful.
   async rewrites() {
     return {
       beforeFiles:
@@ -36,6 +38,8 @@ const config: NextConfig = {
           : undefined,
     };
   },
+  // Next.js still expects these to return Promises even without await
+  // eslint-disable-next-line @typescript-eslint/require-await -- Purposeful.
   async redirects() {
     return [
       {
@@ -166,4 +170,5 @@ const config: NextConfig = {
   },
 };
 
+// Required by Next.js, but we've extracted the config into a named export as well
 export default withMDX(vercelToolbar(config));

@@ -1,4 +1,3 @@
-/* eslint-disable rulesdir/global-css */
 import { VercelToolbar } from "@vercel/toolbar/next";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";

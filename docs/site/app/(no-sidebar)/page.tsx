@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useState } from "react";
-import { cn } from "@/components/cn";
 import Link from "next/link";
 import { motion } from "framer-motion";
+import { cn } from "@/components/cn";
 import { Clients } from "@/app/_clients/clients";
 import { FadeIn } from "@/app/_components/home-shared/fade-in";
 import { PackLogo } from "@/app/_components/logos/pack-logo";

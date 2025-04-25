@@ -3,6 +3,6 @@ import json from "#/.openapi.json";
 
 export const revalidate = 0;
 
-export async function GET(): Promise<Response> {
+export function GET(): Response {
   return Response.json(json);
 }

@@ -394,6 +394,13 @@ impl Engine<Built> {
         self.task_graph.node_weights()
     }
 
+    pub fn task_ids(&self) -> impl Iterator<Item = &TaskId<'static>> {
+        self.tasks().filter_map(|task| match task {
+            crate::engine::TaskNode::Task(task_id) => Some(task_id),
+            crate::engine::TaskNode::Root => None,
+        })
+    }
+
     /// Return all tasks that have a command to be run
     pub fn tasks_with_command(&self, pkg_graph: &PackageGraph) -> Vec<String> {
         self.tasks()

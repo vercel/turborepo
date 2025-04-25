@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { Copy, Check } from "lucide-react";
 import { Button } from "./button";
-import { cn } from "./cn";
 
 export const CopyToMarkdown = ({
   markdownContent,
@@ -27,7 +26,9 @@ export const CopyToMarkdown = ({
       variant="outline"
       size="sm"
       className={"text-xs hidden sm:flex"}
-      onClick={handleCopy}
+      onClick={() => {
+        void handleCopy();
+      }}
     >
       {copied ? (
         <Check className="w-4 h-4 mr-1" />

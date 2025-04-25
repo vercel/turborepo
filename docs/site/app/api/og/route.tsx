@@ -32,7 +32,9 @@ export async function GET(req: NextApiRequest): Promise<Response> {
       ),
     ]);
 
-    const { searchParams } = new URL(req.url!);
+    // Default to empty string if URL is not available
+    const reqUrl = req.url || "";
+    const { searchParams } = new URL(reqUrl);
 
     let title: string | null = null;
 

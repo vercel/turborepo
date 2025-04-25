@@ -451,7 +451,10 @@ fn select_turbo_json(
 
 #[cfg(test)]
 mod test {
-    use std::{collections::BTreeMap, fs};
+    use std::{
+        collections::{BTreeMap, HashSet},
+        fs,
+    };
 
     use anyhow::Result;
     use insta::assert_snapshot;
@@ -820,6 +823,7 @@ mod test {
         .collect();
 
         let microfrontends_configs = MicrofrontendsConfigs::from_configs(
+            HashSet::from_iter(["web", "docs"].iter().copied()),
             vec![
                 (
                     "web",

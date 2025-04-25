@@ -4,11 +4,7 @@ import { Navigation } from "@/components/nav";
 import { Sidebar } from "#/components/docs-layout/sidebar";
 import { openapiPages } from "./source";
 
-export default async function Layout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <>
       <Navigation />

@@ -2,7 +2,7 @@ import type { MDXComponents } from "mdx/types";
 import defaultComponents from "fumadocs-ui/mdx";
 import { Pre, CodeBlock } from "fumadocs-ui/components/codeblock";
 import { Heading } from "fumadocs-ui/components/heading";
-import type { ReactNode, Ref } from "react";
+import type { ReactNode } from "react";
 import { NodeJsLogo } from "./app/_components/logos";
 import { ThemeAwareImage } from "./components/theme-aware-image";
 import { cn } from "./components/cn";
@@ -70,9 +70,9 @@ export const mdxComponents: MDXComponents = {
     <a className="text-[var(--ds-blue-900)] no-underline" {...props} />
   ),
   pre: ({ ref: _ref, title, ...props }) => {
-    //@ts-ignore
+    /* @ts-expect-error - Props are dynamically passed through MDX and include additional properties */
     const preIcon: ReactNode = props.icon;
-    //@ts-ignore
+    /* @ts-expect-error - Props are dynamically passed through MDX and include additional properties */
     const { icon: _icon, ...preProps } = props;
 
     if (!title) {
