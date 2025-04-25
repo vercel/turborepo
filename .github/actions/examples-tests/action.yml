@@ -24,7 +24,6 @@ runs:
       uses: ./.github/actions/setup-turborepo-environment
       with:
         github-token: "${{ inputs.github-token }}"
-        node-version: "22"
 
     - name: Install Global Turbo
       uses: ./.github/actions/install-global-turbo
