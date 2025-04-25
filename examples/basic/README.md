@@ -80,8 +80,5 @@ Learn more about the power of Turborepo:
 - [Caching](https://turborepo.com/docs/crafting-your-repository/caching)
 - [Remote Caching](https://turborepo.com/docs/core-concepts/remote-caching)
 - [Filtering](https://turborepo.com/docs/crafting-your-repository/running-tasks#using-filters)
-<<<<<<< Updated upstream
 - [Configuration Options](https://turborepo.com/docs/reference/configuration)
-=======
-- [Configuration Options](https://turborepo.com/docs/reference/configuration)
->>>>>>> Stashed changes
+- [CLI Usage](https://turborepo.com/docs/reference/command-line-reference)
