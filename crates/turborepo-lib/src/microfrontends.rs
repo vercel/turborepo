@@ -74,7 +74,7 @@ impl MicrofrontendsConfigs {
 
         if !missing_applications.is_empty() {
             warn!(
-                "Unable to find packages referenced in 'microfrontends.json' in workspace.Local \
+                "Unable to find packages referenced in 'microfrontends.json' in workspace. Local \
                  proxy will not route to the following applications if they are running locally: \
                  {}",
                 missing_applications.join(", ")
