@@ -14,7 +14,7 @@ export default async function Page(props: {
     notFound();
   }
 
-  /* eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- MDX component is dynamically imported */
+  /* eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- MDX component */
   const Mdx = page.data.body;
 
   return (

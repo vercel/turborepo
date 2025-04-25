@@ -19,9 +19,11 @@ module.exports = {
     {
       files: [
         "next.config.mjs",
-        "global-error.jsx",
+        "global-error.tsx",
         "page.tsx",
         "not-found.tsx",
+        "source.config.ts",
+        "next.config.ts",
         "layout.tsx",
       ],
       rules: {

@@ -19,25 +19,18 @@ export default async function Page(props: {
     notFound();
   }
 
-  /* eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access -- MDX component is dynamically imported */
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Not typed properly?
   const Mdx = page.data.body;
 
   return (
-    <DocsPage
-      /* eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access -- Page data is dynamically generated */
-      full={page.data.full}
-      /* eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access -- Page data is dynamically generated */
-      toc={page.data.toc}
-    >
-      {/* eslint-disable-next-line @typescript-eslint/no-unsafe-member-access -- Page data is dynamically generated */}
+    <DocsPage full={page.data.full} toc={page.data.toc}>
       <DocsTitle>{page.data.title}</DocsTitle>
-      {/* eslint-disable-next-line @typescript-eslint/no-unsafe-member-access -- Page data is dynamically generated */}
       <DocsDescription>{page.data.description}</DocsDescription>
       <DocsBody>
         <Mdx
           components={{
             ...defaultMdxComponents,
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- What's going on here?
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Not typed properly?
             APIPage: openapi.APIPage,
           }}
         />

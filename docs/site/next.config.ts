@@ -6,7 +6,7 @@ import { REDIRECTS_FOR_V2_DOCS } from "./lib/redirects/v2-docs.mjs";
 const withMDX = createMDX();
 const vercelToolbar = withVercelToolbar();
 
-export const config: NextConfig = {
+const config: NextConfig = {
   reactStrictMode: true,
   images: {
     formats: ["image/avif", "image/webp"],
@@ -19,6 +19,7 @@ export const config: NextConfig = {
     ignoreDuringBuilds: true,
   },
   // Next.js still expects these to return Promises even without await
+  // eslint-disable-next-line @typescript-eslint/require-await -- Purposeful.
   async rewrites() {
     return {
       beforeFiles:
@@ -37,6 +38,8 @@ export const config: NextConfig = {
           : undefined,
     };
   },
+  // Next.js still expects these to return Promises even without await
+  // eslint-disable-next-line @typescript-eslint/require-await -- Purposeful.
   async redirects() {
     return [
       {

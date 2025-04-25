@@ -192,10 +192,13 @@ const handleRedirect = (
     | undefined =
     clientRedirectsMap[pathname as keyof typeof clientRedirectsMap];
 
-  const newHash: string | undefined = redirectList[window.location.hash].hash;
+  const newHash: string | undefined =
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- These are correct.
+    redirectList?.[window.location.hash]?.hash;
 
   const newLocation: string | undefined =
-    redirectList[window.location.hash].location;
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- These are correct.
+    redirectList?.[window.location.hash]?.location;
 
   if (newHash && newLocation) {
     /* eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- TODO: Fix ESLint Error (#13355)

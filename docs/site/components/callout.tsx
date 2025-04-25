@@ -2,7 +2,6 @@ import { Children, type ReactNode } from "react";
 import { Callout as FumaCallout } from "fumadocs-ui/components/callout";
 import { cn } from "./cn";
 
-// Define the valid callout types
 type CalloutType = "info" | "error" | "warn" | "good-to-know";
 
 export type FumaCalloutProps = Omit<
@@ -12,7 +11,6 @@ export type FumaCalloutProps = Omit<
   type: CalloutType;
 };
 
-// Typing the themes explicitly
 const THEMES: Record<
   CalloutType,
   {

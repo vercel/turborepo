@@ -22,7 +22,7 @@ export function FeedbackWidget() {
     { emoji: "😭", component: <FaceSad />, label: "Hate it" },
   ];
 
-  const handleSubmit = (e?: React.FormEvent<HTMLFormElement>): void => {
+  const handleSubmit = (e?: React.MouseEvent<HTMLButtonElement>): void => {
     e?.preventDefault();
 
     setLoading(true);
@@ -98,7 +98,7 @@ export function FeedbackWidget() {
                 <p className="text-gray-900">Thank you for your help.</p>
               </div>
             ) : (
-              <form onSubmit={handleSubmit}>
+              <form>
                 <div className="mb-4">
                   <Textarea
                     placeholder="Your feedback..."
@@ -137,6 +137,9 @@ export function FeedbackWidget() {
                   <div className="flex items-center gap-2">
                     <Button
                       type="submit"
+                      onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+                        handleSubmit(e);
+                      }}
                       disabled={loading || !feedback || !selectedEmoji}
                     >
                       Send

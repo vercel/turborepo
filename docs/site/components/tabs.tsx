@@ -32,7 +32,6 @@ const checkPackageManagerIndex = (index: number, provided: string) => {
   }
 };
 
-// Type for Tab components with a value prop
 interface TabElement extends ReactElement {
   props: {
     value: string;
