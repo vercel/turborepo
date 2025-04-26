@@ -34,7 +34,7 @@ export function Clients({
   companyList?: Array<string>;
 }) {
   const [mounted, setMounted] = useState(false);
-  const { theme } = useTheme();
+  const { resolvedTheme } = useTheme();
 
   useEffect(() => {
     setMounted(true);
@@ -46,7 +46,7 @@ export function Clients({
   return users
     .filter((i) => (companyList ? companyList.includes(i.caption) : true))
     .map((user) => {
-      const isDark = theme === "dark";
+      const isDark = resolvedTheme === "dark";
       const imgTheme = isDark ? "light" : "dark";
 
       return (
