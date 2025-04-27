@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchContext } from "fumadocs-ui/provider";
-import { Menu } from "#/components/icons/menu";
+import { Menu } from "#components/icons/menu.tsx";
 import { GithubLogo } from "@/app/_components/logos";
 import { gitHubRepoUrl } from "@/lib/constants";
 import { Popover, PopoverContent, PopoverTrigger } from "../popover";

@@ -1,4 +1,4 @@
-import { cn } from "#/components/cn";
+import { cn } from "#components/cn.ts";
 
 export const ForwardSlash = ({ className }: { className?: string }) => {
   return (

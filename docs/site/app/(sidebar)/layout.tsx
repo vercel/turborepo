@@ -1,7 +1,7 @@
 import { DocsLayout } from "@/components/docs-layout";
 import { repoDocsPages } from "@/app/source";
 import { Navigation } from "@/components/nav";
-import { Sidebar } from "#/components/docs-layout/sidebar";
+import { Sidebar } from "#components/docs-layout/sidebar.tsx";
 import { baseOptions } from "../layout-config";
 import { RedirectsHandler } from "./redirects-handler";
 

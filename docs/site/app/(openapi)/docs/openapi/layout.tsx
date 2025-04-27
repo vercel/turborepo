@@ -1,7 +1,7 @@
 import { DocsLayout } from "@/components/docs-layout";
-import { baseOptions } from "#/app/layout-config";
 import { Navigation } from "@/components/nav";
-import { Sidebar } from "#/components/docs-layout/sidebar";
+import { Sidebar } from "#components/docs-layout/sidebar.tsx";
+import { baseOptions } from "#app/layout-config.tsx";
 import { openapiPages } from "./source";
 
 export default function Layout({ children }: { children: React.ReactNode }) {

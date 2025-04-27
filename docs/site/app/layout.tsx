@@ -4,11 +4,11 @@ import { GeistMono } from "geist/font/mono";
 import type { ReactNode } from "react";
 import type { Metadata } from "next";
 import { Footer } from "@/components/nav/footer";
-import { RootProvider } from "@/components/root-provider";
 import { PRODUCT_SLOGANS } from "@/lib/constants";
 import { createMetadata } from "@/lib/create-metadata";
 import { VercelTrackers } from "@/components/analytics";
 import "./global.css";
+import { RootProvider } from "#components/root-provider.tsx";
 import { FaviconHandler } from "./_components/favicon-handler";
 
 export function generateMetadata(): Metadata {

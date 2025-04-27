@@ -3,6 +3,9 @@
   "version": "0.0.1",
   "private": true,
   "description": "The documentation for Turborepo.",
+  "imports": {
+    "#*": "./*"
+  },
   "scripts": {
     "build": "next build --turbopack",
     "check-spelling": "spellchecker --files '**/*.mdx' --files '!content/blog/*.mdx' --files '!content/docs/acknowledgments.mdx' --files '!node_modules/**' --files '!content/extra/terms.mdx' --files '!content/extra/governance.mdx' --files '!content/extra/privacy.mdx' --dictionaries 'dictionary.txt' --no-suggestions --quiet",
@@ -62,6 +65,7 @@
     "@turbo/eslint-config": "workspace:*",
     "@turbo/tsconfig": "workspace:^",
     "@turbo/types": "workspace:*",
+    "@types/mdx": "^2.0.8",
     "@types/node": "20.11.30",
     "@types/react": "18.3.1",
     "@types/react-dom": "18.3.0",
