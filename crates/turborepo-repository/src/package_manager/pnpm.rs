@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 
 use node_semver::{Range, Version};
+use serde::Deserialize;
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, RelativeUnixPath};
 
@@ -11,6 +12,7 @@ use crate::{
 };
 
 pub const LOCKFILE: &str = "pnpm-lock.yaml";
+pub const WORKSPACE_CONFIGURATION_PATH: &str = "pnpm-workspace.yaml";
 
 /// A representation of the pnpm versions have different treatment by turbo.
 ///
@@ -95,6 +97,28 @@ pub fn link_workspace_packages(pnpm_version: PnpmVersion, repo_root: &AbsoluteSy
             PnpmVersion::Pnpm6 | PnpmVersion::Pnpm7And8 => true,
             PnpmVersion::Pnpm9 => false,
         })
+}
+
+pub fn get_configured_workspace_globs(repo_root: &AbsoluteSystemPath) -> Option<Vec<String>> {
+    // Make sure to convert this to a missing workspace error
+    // so we can catch it in the case of single package mode.
+    let workspace_yaml_path = repo_root.join_component(WORKSPACE_CONFIGURATION_PATH);
+    let workspace_yaml = workspace_yaml_path.read_to_string().ok()?;
+    let pnpm_workspace: PnpmWorkspace = serde_yaml::from_str(&workspace_yaml).ok()?;
+    if pnpm_workspace.packages.is_empty() {
+        None
+    } else {
+        Some(pnpm_workspace.packages)
+    }
+}
+
+pub fn get_default_exclusions() -> &'static [&'static str] {
+    ["**/node_modules/**", "**/bower_components/**"].as_slice()
+}
+
+#[derive(Debug, Deserialize)]
+struct PnpmWorkspace {
+    pub packages: Vec<String>,
 }
 
 #[derive(Debug)]

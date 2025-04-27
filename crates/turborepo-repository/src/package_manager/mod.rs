@@ -33,11 +33,6 @@ use crate::{
 };
 
 #[derive(Debug, Deserialize)]
-struct PnpmWorkspace {
-    pub packages: Vec<String>,
-}
-
-#[derive(Debug, Deserialize)]
 struct PackageJsonWorkspaces {
     workspaces: Workspaces,
 }
@@ -262,7 +257,7 @@ impl PackageManager {
     pub fn get_default_exclusions(&self) -> impl Iterator<Item = String> {
         let ignores = match self {
             PackageManager::Pnpm | PackageManager::Pnpm6 | PackageManager::Pnpm9 => {
-                ["**/node_modules/**", "**/bower_components/**"].as_slice()
+                pnpm::get_default_exclusions()
             }
             PackageManager::Npm => ["**/node_modules/**"].as_slice(),
             PackageManager::Bun => ["**/node_modules", "**/.git"].as_slice(),
@@ -278,17 +273,8 @@ impl PackageManager {
     ) -> Result<(Vec<String>, Vec<String>), Error> {
         let globs = match self {
             PackageManager::Pnpm | PackageManager::Pnpm6 | PackageManager::Pnpm9 => {
-                // Make sure to convert this to a missing workspace error
-                // so we can catch it in the case of single package mode.
-                let source = self.workspace_glob_source(root_path);
-                let workspace_yaml = fs::read_to_string(source)
-                    .map_err(|_| Error::Workspace(MissingWorkspaceError::from(self.clone())))?;
-                let pnpm_workspace: PnpmWorkspace = serde_yaml::from_str(&workspace_yaml)?;
-                if pnpm_workspace.packages.is_empty() {
-                    return Err(MissingWorkspaceError::from(self.clone()).into());
-                } else {
-                    pnpm_workspace.packages
-                }
+                pnpm::get_configured_workspace_globs(root_path)
+                    .ok_or_else(|| Error::Workspace(MissingWorkspaceError::from(self.clone())))?
             }
             PackageManager::Berry
             | PackageManager::Npm
@@ -450,7 +436,7 @@ impl PackageManager {
     pub fn workspace_configuration_path(&self) -> Option<&'static str> {
         match self {
             PackageManager::Pnpm | PackageManager::Pnpm6 | PackageManager::Pnpm9 => {
-                Some("pnpm-workspace.yaml")
+                Some(pnpm::WORKSPACE_CONFIGURATION_PATH)
             }
             PackageManager::Npm
             | PackageManager::Berry
