@@ -19,6 +19,9 @@ jobs:
 
       - uses: ./.github/actions/setup-node
 
+      - name: Install Global Turbo
+        uses: ./.github/actions/install-global-turbo
+
       - name: Run link checker
         run: cd docs/link-checker && pnpm run check-links
         env:
