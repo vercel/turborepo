@@ -8,8 +8,8 @@ import { createMetadata } from "#lib/create-metadata.ts";
 import { VercelTrackers } from "#components/analytics.tsx";
 import "./global.css";
 import { RootProvider } from "#components/root-provider.tsx";
-import { FaviconHandler } from "./_components/favicon-handler";
 import { Footer } from "#components/nav/footer.tsx";
+import { FaviconHandler } from "./_components/favicon-handler";
 
 export function generateMetadata(): Metadata {
   return createMetadata({

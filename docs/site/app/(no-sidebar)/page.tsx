@@ -4,14 +4,14 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { cn } from "#components/cn.ts";
-import { Clients } from "#app/_clients/clients";
-import { FadeIn } from "#app/_components/home-shared/fade-in";
-import { PackLogo } from "#app/_components/logos/pack-logo";
-import { RepoLogo } from "#app/_components/logos/repo-logo";
-import { TurboheroBackground } from "#app/_components/turbohero-background";
+import { FadeIn } from "#app/_components/home-shared/fade-in.tsx";
+import { PackLogo } from "#app/_components/logos/pack-logo.tsx";
+import { RepoLogo } from "#app/_components/logos/repo-logo.tsx";
+import { TurboheroBackground } from "#app/_components/turbohero-background.tsx";
 import { Turborepo } from "#app/_components/turborepo.tsx";
-import { Turbopack } from "#app/_components/turbopack";
+import { Turbopack } from "#app/_components/turbopack.tsx";
 import { PRODUCT_SLOGANS } from "#lib/constants.ts";
+import { Clients } from "#app/_clients/clients.tsx";
 import styles from "./index.module.css";
 
 function Background(): JSX.Element {
