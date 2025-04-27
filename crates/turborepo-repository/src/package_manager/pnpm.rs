@@ -89,8 +89,16 @@ pub fn link_workspace_packages(pnpm_version: PnpmVersion, repo_root: &AbsoluteSy
     let npmrc_config = npmrc::NpmRc::from_file(repo_root)
         .inspect_err(|e| debug!("unable to read npmrc: {e}"))
         .unwrap_or_default();
-    npmrc_config
-        .link_workspace_packages
+    let workspace_config = matches!(pnpm_version, PnpmVersion::Pnpm9)
+        .then(|| {
+            PnpmWorkspace::from_file(repo_root)
+                .inspect_err(|e| debug!("unable to read {WORKSPACE_CONFIGURATION_PATH}: {e}"))
+                .ok()
+        })
+        .flatten()
+        .and_then(|config| config.link_workspace_packages);
+    workspace_config
+        .or(npmrc_config.link_workspace_packages)
         // The default for pnpm 9 is false if not explicitly set
         // All previous versions had a default of true
         .unwrap_or(match pnpm_version {
@@ -102,9 +110,7 @@ pub fn link_workspace_packages(pnpm_version: PnpmVersion, repo_root: &AbsoluteSy
 pub fn get_configured_workspace_globs(repo_root: &AbsoluteSystemPath) -> Option<Vec<String>> {
     // Make sure to convert this to a missing workspace error
     // so we can catch it in the case of single package mode.
-    let workspace_yaml_path = repo_root.join_component(WORKSPACE_CONFIGURATION_PATH);
-    let workspace_yaml = workspace_yaml_path.read_to_string().ok()?;
-    let pnpm_workspace: PnpmWorkspace = serde_yaml::from_str(&workspace_yaml).ok()?;
+    let pnpm_workspace = PnpmWorkspace::from_file(repo_root).ok()?;
     if pnpm_workspace.packages.is_empty() {
         None
     } else {
@@ -117,8 +123,18 @@ pub fn get_default_exclusions() -> &'static [&'static str] {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct PnpmWorkspace {
     pub packages: Vec<String>,
+    link_workspace_packages: Option<bool>,
+}
+
+impl PnpmWorkspace {
+    pub fn from_file(repo_root: &AbsoluteSystemPath) -> Result<Self, Error> {
+        let workspace_yaml_path = repo_root.join_component(WORKSPACE_CONFIGURATION_PATH);
+        let workspace_yaml = workspace_yaml_path.read_to_string()?;
+        Ok(serde_yaml::from_str(&workspace_yaml)?)
+    }
 }
 
 #[derive(Debug)]
@@ -218,6 +234,15 @@ mod test {
         );
     }
 
+    #[test]
+    fn test_workspace_parsing() {
+        let config: PnpmWorkspace =
+            serde_yaml::from_str("linkWorkspacePackages: true\npackages:\n  - \"apps/*\"\n")
+                .unwrap();
+        assert_eq!(config.link_workspace_packages, Some(true));
+        assert_eq!(config.packages, vec!["apps/*".to_string()]);
+    }
+
     #[test_case(PnpmVersion::Pnpm6, None, true)]
     #[test_case(PnpmVersion::Pnpm7And8, None, true)]
     #[test_case(PnpmVersion::Pnpm7And8, Some(false), false)]
@@ -236,5 +261,48 @@ mod test {
         }
         let actual = link_workspace_packages(version, repo_root);
         assert_eq!(actual, expected);
+    }
+
+    #[test_case(PnpmVersion::Pnpm6, None, true)]
+    #[test_case(PnpmVersion::Pnpm7And8, None, true)]
+    // Pnpm <9 doesn't use workspace config
+    #[test_case(PnpmVersion::Pnpm7And8, Some(false), true)]
+    #[test_case(PnpmVersion::Pnpm7And8, Some(true), true)]
+    #[test_case(PnpmVersion::Pnpm9, None, false)]
+    #[test_case(PnpmVersion::Pnpm9, Some(true), true)]
+    #[test_case(PnpmVersion::Pnpm9, Some(false), false)]
+    fn test_link_workspace_packages_via_workspace(
+        version: PnpmVersion,
+        enabled: Option<bool>,
+        expected: bool,
+    ) {
+        let tmpdir = tempfile::tempdir().unwrap();
+        let repo_root = AbsoluteSystemPath::from_std_path(tmpdir.path()).unwrap();
+        if let Some(enabled) = enabled {
+            repo_root
+                .join_component(WORKSPACE_CONFIGURATION_PATH)
+                .create_with_contents(format!(
+                    "linkWorkspacePackages: {enabled}\npackages:\n  - \"apps/*\"\n"
+                ))
+                .unwrap();
+        }
+        let actual = link_workspace_packages(version, repo_root);
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_workspace_yaml_wins_over_npmrc() {
+        let tmpdir = tempfile::tempdir().unwrap();
+        let repo_root = AbsoluteSystemPath::from_std_path(tmpdir.path()).unwrap();
+        repo_root
+            .join_component(WORKSPACE_CONFIGURATION_PATH)
+            .create_with_contents("linkWorkspacePackages: true\npackages:\n  - \"apps/*\"\n")
+            .unwrap();
+        repo_root
+            .join_component(npmrc::NPMRC_FILENAME)
+            .create_with_contents("link-workspace-packages=false")
+            .unwrap();
+        let actual = link_workspace_packages(PnpmVersion::Pnpm9, repo_root);
+        assert!(actual);
     }
 }
