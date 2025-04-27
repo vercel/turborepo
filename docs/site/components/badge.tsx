@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { cn } from "@/components/cn";
+import { cn } from "#components/cn.ts";
 
 export type BadgeProps = React.ComponentProps<"span"> & {
   children: ReactNode;

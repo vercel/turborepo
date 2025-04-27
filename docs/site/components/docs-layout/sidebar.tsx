@@ -19,12 +19,12 @@ import {
   SidebarMenuItem,
   SidebarMenuSub,
   SidebarProvider,
-} from "@/components/ui/sidebar";
+} from "#components/ui/sidebar.tsx";
 import {
   Collapsible,
   CollapsibleTrigger,
   CollapsibleContent,
-} from "@/components/ui/collapsible";
+} from "#components/ui/collapsible.tsx";
 import { ScrollArea, ScrollViewport } from "../ui/scroll-area";
 import { cn } from "../cn";
 import { ChevronRight } from "../icons/chevron-right";

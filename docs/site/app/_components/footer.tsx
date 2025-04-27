@@ -4,8 +4,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { ReactNode, ReactElement } from "react";
 import { useState } from "react";
-import { cn } from "@/components/cn";
-import { gitHubRepoUrl } from "@/lib/constants";
+import { cn } from "#components/cn.ts";
+import { gitHubRepoUrl } from "#lib/constants.ts";
 import { VercelLogo } from "./logos";
 
 function findError<T extends object>(error: T): boolean {

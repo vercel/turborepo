@@ -9,7 +9,7 @@ import {
   blogMeta,
   externalBlogDocs,
   externalBlogMeta,
-} from "@/.source";
+} from "#.source";
 
 export const extraPages = loader({
   baseUrl: "/",

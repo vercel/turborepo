@@ -1,6 +1,6 @@
-import { DocsLayout } from "@/components/docs-layout";
-import { repoDocsPages } from "@/app/source";
-import { Navigation } from "@/components/nav";
+import { DocsLayout } from "#components/docs-layout/index.tsx";
+import { repoDocsPages } from "#app/source.ts";
+import { Navigation } from "#components/nav/index.tsx";
 import { Sidebar } from "#components/docs-layout/sidebar.tsx";
 import { baseOptions } from "../layout-config";
 import { RedirectsHandler } from "./redirects-handler";

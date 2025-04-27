@@ -4,15 +4,15 @@ import * as React from "react";
 import { Slot } from "@radix-ui/react-slot";
 import { type VariantProps, cva } from "class-variance-authority";
 import { PanelLeft } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { Button } from "#components/ui/button.tsx";
+import { Input } from "#components/ui/input.tsx";
+import { Sheet, SheetContent } from "#components/ui/sheet.tsx";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from "@/components/ui/tooltip";
+} from "#components/ui/tooltip.tsx";
 import { useIsMobile } from "../docs-layout/use-mobile";
 import { cn } from "../cn";
 

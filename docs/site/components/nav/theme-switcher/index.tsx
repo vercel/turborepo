@@ -3,9 +3,9 @@
 import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
 import { clsx } from "clsx";
-import { DeviceDesktop } from "@/components/icons/device-desktop";
-import { Moon } from "@/components/icons/moon";
-import { Sun } from "@/components/icons/sun";
+import { Moon } from "#components/icons/moon.tsx";
+import { Sun } from "#components/icons/sun.tsx";
+import { DeviceDesktop } from "#components/icons/device-desktop.tsx";
 import styles from "./theme-switcher.module.css";
 
 interface ThemeProvider {

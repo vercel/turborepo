@@ -1,4 +1,4 @@
-import { cn } from "@/components/cn";
+import { cn } from "#components/cn.ts";
 import { TURBO_TEAM } from "./team";
 import type { Author } from "./team";
 import { Avatar } from "./avatar";

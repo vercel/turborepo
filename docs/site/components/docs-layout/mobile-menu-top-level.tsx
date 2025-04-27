@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useSearchContext } from "fumadocs-ui/provider";
 import { Menu } from "#components/icons/menu.tsx";
-import { GithubLogo } from "@/app/_components/logos";
-import { gitHubRepoUrl } from "@/lib/constants";
+import { GithubLogo } from "#app/_components/logos";
+import { gitHubRepoUrl } from "#lib/constants.ts";
 import { Popover, PopoverContent, PopoverTrigger } from "../popover";
 import type { Pages } from "../nav";
 import { ThemeSwitcher } from "../nav/theme-switcher";

@@ -3,7 +3,7 @@
 import algo from "algoliasearch/lite";
 import type { SharedProps } from "fumadocs-ui/components/dialog/search";
 import FumaSearchDialog from "fumadocs-ui/components/dialog/search-algolia";
-import { gitHubRepoUrl } from "@/lib/constants";
+import { gitHubRepoUrl } from "#lib/constants.ts";
 
 // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- Environment variable.
 const appId = process.env.NEXT_PUBLIC_ALGOLIA_APP_ID!;

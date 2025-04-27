@@ -1,6 +1,6 @@
 import { DocsPage, DocsBody } from "fumadocs-ui/page";
 import { notFound } from "next/navigation";
-import { repoDocsPages } from "@/app/source";
+import { repoDocsPages } from "#app/source.ts";
 
 export default async function SlugLayout(props: {
   params: Promise<{ slug?: Array<string> }>;

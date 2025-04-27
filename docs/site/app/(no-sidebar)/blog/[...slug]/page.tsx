@@ -2,10 +2,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeftIcon } from "@heroicons/react/outline";
 import type { Metadata } from "next";
-import { blog } from "@/app/source";
-import { createMetadata } from "@/lib/create-metadata";
-import { FaviconHandler } from "@/app/_components/favicon-handler";
-import { mdxComponents } from "@/mdx-components";
+import { blog } from "#app/source.ts";
+import { createMetadata } from "#lib/create-metadata.ts";
+import { FaviconHandler } from "#app/_components/favicon-handler";
+import { mdxComponents } from "#mdx-components.tsx";
 
 export function generateStaticParams(): Array<{ slug: Array<string> }> {
   return blog.getPages().map((page) => ({

@@ -3,7 +3,7 @@
 import type { ReactElement } from "react";
 import React, { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
-import { cn } from "@/components/cn";
+import { cn } from "#components/cn.ts";
 import { users } from "./users";
 import { Logo } from "./client-logo";
 

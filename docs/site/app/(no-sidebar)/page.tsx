@@ -3,15 +3,15 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { cn } from "@/components/cn";
-import { Clients } from "@/app/_clients/clients";
-import { FadeIn } from "@/app/_components/home-shared/fade-in";
-import { PackLogo } from "@/app/_components/logos/pack-logo";
-import { RepoLogo } from "@/app/_components/logos/repo-logo";
-import { TurboheroBackground } from "@/app/_components/turbohero-background";
-import { Turborepo } from "@/app/_components/turborepo";
-import { Turbopack } from "@/app/_components/turbopack";
-import { PRODUCT_SLOGANS } from "@/lib/constants";
+import { cn } from "#components/cn.ts";
+import { Clients } from "#app/_clients/clients";
+import { FadeIn } from "#app/_components/home-shared/fade-in";
+import { PackLogo } from "#app/_components/logos/pack-logo";
+import { RepoLogo } from "#app/_components/logos/repo-logo";
+import { TurboheroBackground } from "#app/_components/turbohero-background";
+import { Turborepo } from "#app/_components/turborepo.tsx";
+import { Turbopack } from "#app/_components/turbopack";
+import { PRODUCT_SLOGANS } from "#lib/constants.ts";
 import styles from "./index.module.css";
 
 function Background(): JSX.Element {
