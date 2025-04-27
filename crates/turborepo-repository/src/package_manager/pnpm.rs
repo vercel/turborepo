@@ -1,14 +1,28 @@
 use std::collections::HashSet;
 
 use node_semver::{Range, Version};
+use tracing::debug;
 use turbopath::{AbsoluteSystemPath, RelativeUnixPath};
 
+use super::npmrc;
 use crate::{
     package_json::PackageJson,
     package_manager::{Error, PackageManager},
 };
 
 pub const LOCKFILE: &str = "pnpm-lock.yaml";
+
+/// A representation of the pnpm versions have different treatment by turbo.
+///
+/// Not all behaviors are gated by this enum, lockfile interpretations are
+/// decided by `lockfileVersion` in `pnpm-lock.yaml`. In the future, this would
+/// be better represented by the semver to allow better gating of behavior
+/// based on when it changed in pnpm.
+pub enum PnpmVersion {
+    Pnpm6,
+    Pnpm7And8,
+    Pnpm9,
+}
 
 pub struct PnpmDetector<'a> {
     found: bool,
@@ -67,6 +81,52 @@ pub(crate) fn prune_patches<R: AsRef<RelativeUnixPath>>(
     }
 
     pruned_json
+}
+
+pub fn link_workspace_packages(pnpm_version: PnpmVersion, repo_root: &AbsoluteSystemPath) -> bool {
+    let npmrc_config = npmrc::NpmRc::from_file(repo_root)
+        .inspect_err(|e| debug!("unable to read npmrc: {e}"))
+        .unwrap_or_default();
+    npmrc_config
+        .link_workspace_packages
+        // The default for pnpm 9 is false if not explicitly set
+        // All previous versions had a default of true
+        .unwrap_or(match pnpm_version {
+            PnpmVersion::Pnpm6 | PnpmVersion::Pnpm7And8 => true,
+            PnpmVersion::Pnpm9 => false,
+        })
+}
+
+#[derive(Debug)]
+pub struct NotPnpmError {
+    package_manager: PackageManager,
+}
+
+impl std::fmt::Display for NotPnpmError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!(
+            "Package managers other than pnpm cannot have pnpm version: {:?}",
+            self.package_manager
+        ))
+    }
+}
+
+impl TryFrom<&'_ PackageManager> for PnpmVersion {
+    type Error = NotPnpmError;
+
+    fn try_from(value: &PackageManager) -> Result<Self, Self::Error> {
+        match value {
+            PackageManager::Pnpm9 => Ok(Self::Pnpm9),
+            PackageManager::Pnpm => Ok(Self::Pnpm7And8),
+            PackageManager::Pnpm6 => Ok(Self::Pnpm6),
+            PackageManager::Berry
+            | PackageManager::Yarn
+            | PackageManager::Npm
+            | PackageManager::Bun => Err(NotPnpmError {
+                package_manager: value.clone(),
+            }),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -132,5 +192,25 @@ mod test {
             PnpmDetector::detect_pnpm6_or_pnpm(&version).unwrap(),
             expected
         );
+    }
+
+    #[test_case(PnpmVersion::Pnpm6, None, true)]
+    #[test_case(PnpmVersion::Pnpm7And8, None, true)]
+    #[test_case(PnpmVersion::Pnpm7And8, Some(false), false)]
+    #[test_case(PnpmVersion::Pnpm7And8, Some(true), true)]
+    #[test_case(PnpmVersion::Pnpm9, None, false)]
+    #[test_case(PnpmVersion::Pnpm9, Some(true), true)]
+    #[test_case(PnpmVersion::Pnpm9, Some(false), false)]
+    fn test_link_workspace_packages(version: PnpmVersion, enabled: Option<bool>, expected: bool) {
+        let tmpdir = tempfile::tempdir().unwrap();
+        let repo_root = AbsoluteSystemPath::from_std_path(tmpdir.path()).unwrap();
+        if let Some(enabled) = enabled {
+            repo_root
+                .join_component(npmrc::NPMRC_FILENAME)
+                .create_with_contents(format!("link-workspace-packages={enabled}"))
+                .unwrap();
+        }
+        let actual = link_workspace_packages(version, repo_root);
+        assert_eq!(actual, expected);
     }
 }

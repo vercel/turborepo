@@ -1,3 +1,4 @@
+pub mod berry;
 pub mod bun;
 pub mod npm;
 pub mod npmrc;
@@ -17,15 +18,12 @@ use lazy_regex::{lazy_regex, Lazy};
 use miette::{Diagnostic, NamedSource, SourceSpan};
 use node_semver::SemverError;
 use npm::NpmDetector;
-use npmrc::NpmRc;
 use regex::Regex;
 use serde::Deserialize;
 use thiserror::Error;
-use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, RelativeUnixPath};
 use turborepo_errors::Spanned;
 use turborepo_lockfiles::Lockfile;
-use yarnrc::YarnRc;
 
 use crate::{
     discovery,
@@ -550,21 +548,11 @@ impl PackageManager {
     /// be used where `false` would use a `lib` package from the registry.
     pub fn link_workspace_packages(&self, repo_root: &AbsoluteSystemPath) -> bool {
         match self {
-            PackageManager::Berry => {
-                let yarnrc = YarnRc::from_file(repo_root)
-                    .inspect_err(|e| debug!("unable to read yarnrc: {e}"))
-                    .unwrap_or_default();
-                yarnrc.enable_transparent_workspaces
-            }
+            PackageManager::Berry => berry::link_workspace_packages(repo_root),
             PackageManager::Pnpm9 | PackageManager::Pnpm | PackageManager::Pnpm6 => {
-                let npmrc = NpmRc::from_file(repo_root)
-                    .inspect_err(|e| debug!("unable to read npmrc: {e}"))
-                    .unwrap_or_default();
-                npmrc
-                    .link_workspace_packages
-                    // The default for pnpm 9 is false if not explicitly set
-                    // All previous versions had a default of true
-                    .unwrap_or(!matches!(self, PackageManager::Pnpm9))
+                let pnpm_version = pnpm::PnpmVersion::try_from(self)
+                    .expect("attempted to extract pnpm version from non-pnpm package manager");
+                pnpm::link_workspace_packages(pnpm_version, repo_root)
             }
             PackageManager::Yarn | PackageManager::Bun | PackageManager::Npm => true,
         }
@@ -849,33 +837,16 @@ mod tests {
         Ok(())
     }
 
-    #[test_case(PackageManager::Npm, None, true)]
-    #[test_case(PackageManager::Yarn, None, true)]
-    #[test_case(PackageManager::Bun, None, true)]
-    #[test_case(PackageManager::Pnpm6, None, true)]
-    #[test_case(PackageManager::Pnpm, None, true)]
-    #[test_case(PackageManager::Pnpm, Some(false), false)]
-    #[test_case(PackageManager::Pnpm, Some(true), true)]
-    #[test_case(PackageManager::Pnpm9, None, false)]
-    #[test_case(PackageManager::Pnpm9, Some(true), true)]
-    #[test_case(PackageManager::Pnpm9, Some(false), false)]
-    #[test_case(PackageManager::Berry, None, true)]
-    #[test_case(PackageManager::Berry, Some(false), false)]
-    #[test_case(PackageManager::Berry, Some(true), true)]
-    fn test_link_workspace_packages(pm: PackageManager, enabled: Option<bool>, expected: bool) {
+    #[test_case(PackageManager::Npm)]
+    #[test_case(PackageManager::Yarn)]
+    #[test_case(PackageManager::Bun)]
+    fn test_link_workspace_packages_enabled_by_default(pm: PackageManager) {
         let tmpdir = tempfile::tempdir().unwrap();
         let repo_root = AbsoluteSystemPath::from_std_path(tmpdir.path()).unwrap();
-        if let Some(enabled) = enabled {
-            repo_root
-                .join_component(npmrc::NPMRC_FILENAME)
-                .create_with_contents(format!("link-workspace-packages={enabled}"))
-                .unwrap();
-            repo_root
-                .join_component(yarnrc::YARNRC_FILENAME)
-                .create_with_contents(format!("enableTransparentWorkspaces: {enabled}"))
-                .unwrap();
-        }
         let actual = pm.link_workspace_packages(repo_root);
-        assert_eq!(actual, expected);
+        assert!(
+            actual,
+            "all package managers without a special implementation should use workspace packages"
+        );
     }
 }
