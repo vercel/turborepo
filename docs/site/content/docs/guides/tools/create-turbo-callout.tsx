@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Callout } from "#/components/callout";
+import { Callout } from "#components/callout.tsx";
 
 export function CreateTurboCallout(): JSX.Element {
   return (

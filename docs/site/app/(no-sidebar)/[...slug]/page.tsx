@@ -1,8 +1,8 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { extraPages } from "@/app/source";
-import { createMetadata } from "@/lib/create-metadata";
-import { mdxComponents } from "@/mdx-components";
+import { extraPages } from "#app/source.ts";
+import { createMetadata } from "#lib/create-metadata.ts";
+import { mdxComponents } from "#mdx-components.tsx";
 
 export default async function Page(props: {
   params: Promise<{ slug?: Array<string> }>;

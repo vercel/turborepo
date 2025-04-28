@@ -8,7 +8,7 @@ import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
-} from "@/components/ui/collapsible";
+} from "#components/ui/collapsible";
 import { ChevronRight } from "../icons/chevron-right";
 import { cn } from "../cn";
 import { itemVariants } from "./sidebar";

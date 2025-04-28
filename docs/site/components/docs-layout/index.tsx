@@ -5,7 +5,7 @@ import {
   SidebarContent,
   SidebarGroup,
   SidebarInset,
-} from "@/components/ui/sidebar";
+} from "#components/ui/sidebar.tsx";
 import { LayoutBody, TableOfContents, SidebarItems } from "./docs.client";
 import { SidebarViewport } from "./sidebar";
 import { MobileMenu } from "./mobile-menu";

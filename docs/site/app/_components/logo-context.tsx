@@ -3,7 +3,7 @@
 import type { MouseEvent } from "react";
 import { useEffect, useCallback, useState, useRef } from "react";
 import Link from "next/link";
-import { cn } from "@/components/cn";
+import { cn } from "#components/cn.ts";
 import { VercelLogo } from "./logos";
 import { PRODUCT_MENU_ITEMS, PLATFORM_MENU_ITEMS } from "./items";
 import type { MenuItemProps } from "./types";

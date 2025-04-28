@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type { DocumentRecord } from "fumadocs-core/search/algolia";
-import { repoDocsPages } from "@/app/source";
+import { repoDocsPages } from "#app/source.ts";
 
 export const revalidate = false;
 

@@ -1,10 +1,10 @@
 import { readFileSync } from "node:fs";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next/types";
-import { repoDocsPages } from "@/app/source";
-import { createMetadata } from "@/lib/create-metadata";
-import { mdxComponents } from "@/mdx-components";
-import { CopyToMarkdown } from "@/components/copy-to-markdown";
+import { repoDocsPages } from "#app/source.ts";
+import { createMetadata } from "#lib/create-metadata.ts";
+import { mdxComponents } from "#mdx-components.tsx";
+import { CopyToMarkdown } from "#components/copy-to-markdown.tsx";
 import { SystemEnvironmentVariablesHashHighlighter } from "./system-environment-variables-hash-highlighter";
 
 export async function generateMetadata(props: {

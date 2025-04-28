@@ -1,5 +1,5 @@
 import type { JSX } from "react";
-import { cn } from "@/components/cn";
+import { cn } from "#components/cn.ts";
 import styles from "./turbohero-background.module.css";
 
 export function TurboheroBackground(): JSX.Element {

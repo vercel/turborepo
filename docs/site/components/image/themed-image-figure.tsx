@@ -1,5 +1,5 @@
 import React from "react";
-import { cn } from "@/components/cn";
+import { cn } from "#components/cn.ts";
 import type { ImageFigureProps } from "./image-figure";
 import type { ThemedImageProps } from "./themed-image";
 import { ThemedImage } from "./themed-image";

@@ -3,13 +3,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSearchContext } from "fumadocs-ui/provider";
-import { VercelLogo } from "@/app/_components/logos";
-import { LogoGitHub } from "#/components/icons/logo-github";
+import { VercelLogo } from "#app/_components/logos";
+import { LogoGitHub } from "#components/icons/logo-github.tsx";
 import {
   TurborepoWordmarkDark,
   TurborepoWordmarkLight,
-} from "#/components/icons/turborepo-wordmark";
-import { MagnifyingGlass } from "#/components/icons/magnifying-glass";
+} from "#components/icons/turborepo-wordmark.tsx";
+import { MagnifyingGlass } from "#components/icons/magnifying-glass.tsx";
 import { cn } from "../cn";
 import { ForwardSlash } from "../icons/ForwardSlash";
 import { Button } from "../button";

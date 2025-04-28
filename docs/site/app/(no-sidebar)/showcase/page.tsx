@@ -1,7 +1,7 @@
 import type { Metadata } from "next/types";
-import { Clients } from "@/app/_clients/clients";
-import { PRODUCT_SLOGANS } from "@/lib/constants";
-import { createMetadata } from "@/lib/create-metadata";
+import { Clients } from "#app/_clients/clients";
+import { PRODUCT_SLOGANS } from "#lib/constants.ts";
+import { createMetadata } from "#lib/create-metadata.ts";
 
 export function generateMetadata(): Metadata {
   return createMetadata({

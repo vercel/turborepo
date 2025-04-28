@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { extraPages } from "@/app/source";
+import { extraPages } from "#app/source.ts";
 
 export default async function SlugLayout(props: {
   params: Promise<{ slug?: Array<string> }>;

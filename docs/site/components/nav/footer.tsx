@@ -1,5 +1,5 @@
 import Fumalink from "fumadocs-core/link";
-import { VercelLogo } from "@/app/_components/logos";
+import { VercelLogo } from "#app/_components/logos.tsx";
 import { ThemeSwitcher } from "./theme-switcher/index";
 
 interface FooterItem {
