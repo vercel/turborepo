@@ -273,6 +273,8 @@ impl PackageManager {
     ) -> Result<(Vec<String>, Vec<String>), Error> {
         let globs = match self {
             PackageManager::Pnpm | PackageManager::Pnpm6 | PackageManager::Pnpm9 => {
+                // Make sure to convert this to a missing workspace error
+                // so we can catch it in the case of single package mode.
                 pnpm::get_configured_workspace_globs(root_path)
                     .ok_or_else(|| Error::Workspace(MissingWorkspaceError::from(self.clone())))?
             }

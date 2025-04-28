@@ -108,8 +108,6 @@ pub fn link_workspace_packages(pnpm_version: PnpmVersion, repo_root: &AbsoluteSy
 }
 
 pub fn get_configured_workspace_globs(repo_root: &AbsoluteSystemPath) -> Option<Vec<String>> {
-    // Make sure to convert this to a missing workspace error
-    // so we can catch it in the case of single package mode.
     let pnpm_workspace = PnpmWorkspace::from_file(repo_root).ok()?;
     if pnpm_workspace.packages.is_empty() {
         None
