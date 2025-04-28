@@ -23,3 +23,17 @@ jobs:
         run: cd docs/link-checker && pnpm run check-links
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  check-spelling:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - uses: ./.github/actions/setup-node
+
+      - name: Install Global Turbo
+        uses: ./.github/actions/install-global-turbo
+
+      - name: Run link checker
+        run: turbo run check-spelling
