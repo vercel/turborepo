@@ -28,8 +28,8 @@ use turborepo_ui::{ColorConfig, GREY};
 use crate::{
     cli::error::print_potential_tasks,
     commands::{
-        bin, boundaries, clone, config, daemon, generate, info, link, login, logout, ls, prune,
-        query, run, scan, telemetry, unlink, CommandBase,
+        bin, boundaries, check_deps, clone, config, daemon, generate, info, link, login, logout,
+        ls, prune, query, run, scan, telemetry, unlink, CommandBase,
     },
     get_version,
     run::watch::WatchClient,
@@ -584,6 +584,7 @@ pub enum Command {
     /// Get the path to the Turbo binary
     Bin,
     #[clap(hide = true)]
+    CheckDeps {},
     Boundaries {
         #[clap(short = 'F', long, group = "scope-filter-group")]
         filter: Vec<String>,
@@ -1404,6 +1405,7 @@ pub async fn run(
 
             Ok(0)
         }
+        Command::CheckDeps { .. } => Ok(check_deps::run().await?),
         Command::Boundaries { ignore, reason, .. } => {
             let event = CommandEventBuilder::new("boundaries").with_parent(&root_telemetry);
             let ignore = *ignore;
