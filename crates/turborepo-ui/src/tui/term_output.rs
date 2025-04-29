@@ -115,7 +115,6 @@ impl<W> TerminalOutput<W> {
                 stdout.write_all(title.as_bytes())?;
                 stdout.write_all(b"\r\n")?;
                 for row in screen.rows_formatted(0, cols) {
-                    stdout.write_all("│ ".as_bytes())?;
                     stdout.write_all(&row)?;
                     stdout.write_all(b"\r\n")?;
                 }
