@@ -71,7 +71,7 @@ export const mdxComponents: MDXComponents = {
   ),
   pre: ({ ref: _ref, title, ...props }) => {
     /* @ts-expect-error - Props are dynamically passed through MDX and include additional properties */
-    const preIcon: ReactNode = props.icon;
+    const preIcon = props.icon as ReactNode;
     /* @ts-expect-error - Props are dynamically passed through MDX and include additional properties */
     const { icon: _icon, ...preProps } = props;
 

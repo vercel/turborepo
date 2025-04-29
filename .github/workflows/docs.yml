@@ -24,7 +24,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  check-spelling:
+  docs-checks:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -35,5 +35,5 @@ jobs:
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
 
-      - name: Run link checker
-        run: turbo run check-spelling
+      - name: Run docs specific checks
+        run: turbo run check-spelling check-types lint

@@ -6,7 +6,7 @@ type LinkProps = Parameters<typeof Link>[0];
 export function LinkToDocumentation(props: LinkProps): JSX.Element {
   return (
     <small>
-      <Link className="flex flex-row space-y-0 gap-2" {...props}>
+      <Link className="flex flex-row gap-2 space-y-0" {...props}>
         <span>→</span> {props.children}
       </Link>
     </small>
