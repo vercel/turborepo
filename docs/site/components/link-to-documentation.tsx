@@ -1,6 +1,10 @@
 import Link from "next/link";
+import type { LinkProps as NextLinkProps } from "next/link";
+import type { ReactNode } from "react";
 
-type LinkProps = Parameters<typeof Link>[0];
+type LinkProps = NextLinkProps & {
+  children: ReactNode;
+};
 
 /** Link to either external or internal documentation. */
 export function LinkToDocumentation(props: LinkProps): JSX.Element {
