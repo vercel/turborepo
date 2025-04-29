@@ -166,6 +166,22 @@ const config: NextConfig = {
         destination: "/docs/support-policy",
         permanent: true,
       },
+      {
+        source: "/docs/core-concepts/monorepos/filtering",
+        destination:
+          "docs/crafting-your-repository/running-tasks#using-filters",
+        permanent: true,
+      },
+      {
+        source: "/docs/core-concepts/monorepos/running-tasks",
+        destination: "/docs/crafting-your-repository/running-tasks",
+        permanent: true,
+      },
+      {
+        source: "/docs/core-concepts/caching",
+        destination: "/docs/crafting-your-repository/caching",
+        permanent: true,
+      },
     ];
   },
 };
