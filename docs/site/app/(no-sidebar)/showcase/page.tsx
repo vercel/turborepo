@@ -1,5 +1,5 @@
 import type { Metadata } from "next/types";
-import { Clients } from "#app/_clients/clients";
+import { Clients } from "#app/_clients/clients.tsx";
 import { PRODUCT_SLOGANS } from "#lib/constants.ts";
 import { createMetadata } from "#lib/create-metadata.ts";
 

@@ -18,6 +18,7 @@ export function File({
 }): JSX.Element {
   return (
     <FumaFile
+      // @ts-expect-error -- Not on the type...but it works.
       className={cn(
         green ? "text-green-700 dark:text-green-900" : "",
         className
@@ -40,6 +41,7 @@ export function Folder({
 }): JSX.Element {
   return (
     <FumaFolder
+      // @ts-expect-error -- Not on the type...but it works.
       className={cn(
         green ? "text-green-700 dark:text-green-900" : "",
         className

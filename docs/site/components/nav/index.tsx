@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSearchContext } from "fumadocs-ui/provider";
-import { VercelLogo } from "#app/_components/logos";
+import { VercelLogo } from "#app/_components/logos.tsx";
 import { LogoGitHub } from "#components/icons/logo-github.tsx";
 import {
   TurborepoWordmarkDark,
