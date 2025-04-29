@@ -20,7 +20,6 @@ export default async function Page(props: {
   return (
     <article className="prose pt-10 mx-auto mb-10 w-full min-w-0 max-w-5xl px-6 md:px-12">
       <h1 className="text-left">{page.data.title}</h1>
-      {/* eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Types not inferred correctly */}
       <Mdx components={mdxComponents} />
     </article>
   );

@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next/types";
 import { blog, externalBlog } from "#app/source.ts";
 import { createMetadata } from "#lib/create-metadata.ts";
-import { FaviconHandler } from "#app/_components/favicon-handler";
+import { FaviconHandler } from "#app/_components/favicon-handler.tsx";
 
 export function generateMetadata(): Metadata {
   const rawMetadata = createMetadata({

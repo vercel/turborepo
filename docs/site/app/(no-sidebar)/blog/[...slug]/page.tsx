@@ -4,7 +4,7 @@ import { ArrowLeftIcon } from "@heroicons/react/outline";
 import type { Metadata } from "next";
 import { blog } from "#app/source.ts";
 import { createMetadata } from "#lib/create-metadata.ts";
-import { FaviconHandler } from "#app/_components/favicon-handler";
+import { FaviconHandler } from "#app/_components/favicon-handler.tsx";
 import { mdxComponents } from "#mdx-components.tsx";
 
 export function generateStaticParams(): Array<{ slug: Array<string> }> {
@@ -61,7 +61,7 @@ export default async function Page(props: {
         </Link>
       </div>
 
-      {/* eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Types not inferred correctly */}
+      {}
       <Mdx components={mdxComponents} />
     </article>
   );
