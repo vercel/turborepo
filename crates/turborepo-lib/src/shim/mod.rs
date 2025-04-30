@@ -255,7 +255,11 @@ fn is_turbo_binary_path_set() -> bool {
     env::var("TURBO_BINARY_PATH").is_ok()
 }
 
-fn try_check_for_updates(args: &ShimArgs, current_version: &str, config: &crate::config::ConfigurationOptions) {
+fn try_check_for_updates(
+    args: &ShimArgs,
+    current_version: &str,
+    config: &crate::config::ConfigurationOptions,
+) {
     if args.should_check_for_update() && !config.no_update_notifier() {
         // custom footer for update message
         let footer = format!(
