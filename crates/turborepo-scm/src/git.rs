@@ -313,7 +313,7 @@ impl GitRepo {
         }
 
         let output = self.execute_git_command(&args, pathspec)?;
-        self.add_files_from_stdout(&mut files, turbo_root, output).ok();
+        self.add_files_from_stdout(&mut files, turbo_root, output)?;
 
         // We only care about non-tracked files if we haven't specified both ends up the
         // comparison
@@ -324,11 +324,11 @@ impl GitRepo {
                 &["ls-files", "--others", "--modified", "--exclude-standard"],
                 pathspec,
             )?;
-            self.add_files_from_stdout(&mut files, turbo_root, ls_files_output).ok();
+            self.add_files_from_stdout(&mut files, turbo_root, ls_files_output)?;
             // Include any files that have been staged, but not committed
             let diff_output =
                 self.execute_git_command(&["diff", "--name-only", "--cached"], pathspec)?;
-            self.add_files_from_stdout(&mut files, turbo_root, diff_output).ok();
+            self.add_files_from_stdout(&mut files, turbo_root, diff_output)?;
         }
 
         Ok(files)
@@ -361,7 +361,7 @@ impl GitRepo {
         turbo_root: &AbsoluteSystemPath,
         stdout: Vec<u8>,
     ) -> Result<(), Error> {
-        let stdout = String::from_utf8(stdout)?;
+        let stdout = String::from_utf8_lossy(&stdout);
         for line in stdout.lines() {
             match RelativeUnixPath::new(line) {
                 Ok(path) => match self.reanchor_path_from_git_root_to_turbo_root(turbo_root, path) {
@@ -369,11 +369,11 @@ impl GitRepo {
                         files.insert(anchored_to_turbo_root_file_path);
                     }
                     Err(err) => {
-                        warn!("Skipping file that could not be anchored to turbo root: {} ({})", line, err);
+                        return Err(Error::Path(err, std::backtrace::Backtrace::capture()));
                     }
                 },
                 Err(err) => {
-                    warn!("Skipping invalid file path: {} ({})", line, err);
+                    return Err(Error::Path(err, std::backtrace::Backtrace::capture()));
                 }
             }
         }
@@ -1356,8 +1356,8 @@ mod tests {
 
         let result = git_repo.add_files_from_stdout(&mut files, &turbo_root_path, stdout);
 
-        assert!(result.is_ok());
-
+        assert!(result.is_err());
+        
         assert!(files.is_empty());
 
         Ok(())
