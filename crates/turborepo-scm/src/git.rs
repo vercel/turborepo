@@ -370,12 +370,18 @@ impl GitRepo {
                             files.insert(anchored_to_turbo_root_file_path);
                         }
                         Err(err) => {
-                            return Err(err);
+                            warn!(
+                                "Skipping file that could not be anchored to turbo root: {} ({})",
+                                line, err
+                            );
                         }
                     }
                 }
                 Err(err) => {
-                    return Err(Error::Path(err, std::backtrace::Backtrace::capture()));
+                    warn!(
+                        "Skipping file with invalid path format: {} ({})",
+                        line, err
+                    );
                 }
             }
         }
