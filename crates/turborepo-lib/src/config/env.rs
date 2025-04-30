@@ -231,6 +231,7 @@ impl ResolvedConfigurationOptions for EnvVars {
             remote_cache_read_only,
             run_summary,
             allow_no_turbo_json,
+            no_update_notifier: None,
 
             // Processed numbers
             timeout,
