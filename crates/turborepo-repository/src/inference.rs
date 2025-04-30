@@ -366,7 +366,8 @@ mod test {
             .unwrap();
 
         let repo_state = RepoState::infer(&package_foo).unwrap();
-        // With our fix for leading ./ in workspace globs, we now expect the correct behavior
+        // With our fix for leading ./ in workspace globs, we now expect the correct
+        // behavior
         assert_eq!(repo_state.root, monorepo_root);
         assert_eq!(repo_state.mode, RepoMode::MultiPackage);
     }

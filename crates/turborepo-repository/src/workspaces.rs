@@ -181,8 +181,7 @@ mod test {
 
     #[test]
     fn test_workspace_globs_leading_dot_slash() {
-        let globs =
-            WorkspaceGlobs::new(vec!["./packages/foo", "./packages/bar"], vec![]).unwrap();
+        let globs = WorkspaceGlobs::new(vec!["./packages/foo", "./packages/bar"], vec![]).unwrap();
         assert_eq!(
             &globs
                 .package_json_inclusions
