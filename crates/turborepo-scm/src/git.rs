@@ -378,10 +378,7 @@ impl GitRepo {
                     }
                 }
                 Err(err) => {
-                    warn!(
-                        "Skipping file with invalid path format: {} ({})",
-                        line, err
-                    );
+                    warn!("Skipping file with invalid path format: {} ({})", line, err);
                 }
             }
         }
