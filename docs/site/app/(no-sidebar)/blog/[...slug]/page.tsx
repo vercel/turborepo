@@ -2,19 +2,19 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeftIcon } from "@heroicons/react/outline";
 import type { Metadata } from "next";
-import { blog } from "@/app/source";
-import { createMetadata } from "@/lib/create-metadata";
-import { FaviconHandler } from "@/app/_components/favicon-handler";
-import { mdxComponents } from "@/mdx-components";
+import { blog } from "#app/source.ts";
+import { createMetadata } from "#lib/create-metadata.ts";
+import { FaviconHandler } from "#app/_components/favicon-handler.tsx";
+import { mdxComponents } from "#mdx-components.tsx";
 
-export function generateStaticParams(): { slug: string[] }[] {
+export function generateStaticParams(): Array<{ slug: Array<string> }> {
   return blog.getPages().map((page) => ({
     slug: page.slugs,
   }));
 }
 
 export async function generateMetadata(props: {
-  params: Promise<{ slug?: string[] }>;
+  params: Promise<{ slug?: Array<string> }>;
 }): Promise<Metadata> {
   const params = await props.params;
   const page = blog.getPage(params.slug);
@@ -38,13 +38,14 @@ export async function generateMetadata(props: {
 }
 
 export default async function Page(props: {
-  params: Promise<{ slug?: string[] }>;
+  params: Promise<{ slug?: Array<string> }>;
 }): Promise<JSX.Element> {
   const params = await props.params;
   const page = blog.getPage(params.slug);
 
   if (!page) notFound();
 
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Not being inferred correctly
   const Mdx = page.data.body;
 
   return (
@@ -60,6 +61,7 @@ export default async function Page(props: {
         </Link>
       </div>
 
+      {}
       <Mdx components={mdxComponents} />
     </article>
   );

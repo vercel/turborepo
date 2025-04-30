@@ -205,5 +205,5 @@ module.exports = {
       },
     },
   },
-  presets: [createPreset(), require("./typography-plugin.js")],
+  presets: [createPreset(), require("./typography-plugin.cjs")],
 };

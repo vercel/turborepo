@@ -1,9 +1,9 @@
-import classNames from "classnames";
+import { cn } from "#components/cn.ts";
 
 export function VercelLogo({ className }: { className?: string }): JSX.Element {
   return (
     <svg
-      className={classNames(className, "fill-black dark:fill-white")}
+      className={cn(className, "fill-black dark:fill-white")}
       fill="none"
       height={22}
       viewBox="0 0 235 203"

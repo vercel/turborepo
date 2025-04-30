@@ -2,7 +2,7 @@ import type { MDXComponents } from "mdx/types";
 import defaultComponents from "fumadocs-ui/mdx";
 import { Pre, CodeBlock } from "fumadocs-ui/components/codeblock";
 import { Heading } from "fumadocs-ui/components/heading";
-import type { ReactNode, Ref } from "react";
+import type { ReactNode } from "react";
 import { NodeJsLogo } from "./app/_components/logos";
 import { ThemeAwareImage } from "./components/theme-aware-image";
 import { cn } from "./components/cn";
@@ -64,21 +64,15 @@ export const mdxComponents: MDXComponents = {
     <Heading className="scroll-mt-20 text-heading-20" as="h3" {...props} />
   ),
   h4: (props) => (
-    <Heading className="scroll-mt-20 text-lg" as="h4" {...props} />
+    <Heading className="text-lg scroll-mt-20" as="h4" {...props} />
   ),
   a: (props) => (
     <a className="text-[var(--ds-blue-900)] no-underline" {...props} />
   ),
-  pre: ({
-    ref: _ref,
-    title,
-    ...props
-  }: {
-    icon: ReactNode;
-    ref: Ref<HTMLPreElement>;
-    title?: string;
-  }) => {
-    const preIcon: ReactNode = props.icon;
+  pre: ({ ref: _ref, title, ...props }) => {
+    /* @ts-expect-error - Props are dynamically passed through MDX and include additional properties */
+    const preIcon = props.icon as ReactNode;
+    /* @ts-expect-error - Props are dynamically passed through MDX and include additional properties */
     const { icon: _icon, ...preProps } = props;
 
     if (!title) {

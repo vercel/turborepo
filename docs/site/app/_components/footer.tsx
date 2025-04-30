@@ -4,9 +4,9 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { ReactNode, ReactElement } from "react";
 import { useState } from "react";
-import cn from "classnames";
+import { cn } from "#components/cn.ts";
+import { gitHubRepoUrl } from "#lib/constants.ts";
 import { VercelLogo } from "./logos";
-import { gitHubRepoUrl } from "@/lib/constants";
 
 function findError<T extends object>(error: T): boolean {
   if (Object.prototype.toString.call(error) === "[object Error]") {
@@ -90,11 +90,11 @@ const navigation = {
     { name: "Vercel", href: "https://vercel.com" },
     {
       name: "Open Source Software",
-      href: "https://vercel.com/oss?utm_source=turbo.build&utm_medium=referral&utm_campaign=footer-ossLink",
+      href: "https://vercel.com/oss?utm_source=turborepo.com&utm_medium=referral&utm_campaign=footer-ossLink",
     },
     {
       name: "Contact Sales",
-      href: "https://vercel.com/solutions/turborepo?utm_source=turbo.build&utm_medium=referral&utm_campaign=footer-enterpriseLink",
+      href: "https://vercel.com/solutions/turborepo?utm_source=turborepo.com&utm_medium=referral&utm_campaign=footer-enterpriseLink",
     },
     { name: "X", href: "https://x.com/vercel" },
   ],
@@ -183,7 +183,7 @@ function FooterContent(): JSX.Element {
           <div>
             <a
               className="text-current"
-              href="https://vercel.com?utm_source=turbo.build&utm_medium=referral&utm_campaign=footer-logoLink"
+              href="https://vercel.com?utm_source=turborepo.com&utm_medium=referral&utm_campaign=footer-logoLink"
               rel="noopener noreferrer"
               target="_blank"
               title="vercel.com homepage"
@@ -217,14 +217,14 @@ function SubmitForm(): JSX.Element {
         })
           .then((res) => res.json())
           .then(() => {
-            return router.push("/confirm");
+            router.push("/confirm");
           })
           .catch((e: unknown) => {
             if (isError(e)) {
               // eslint-disable-next-line no-console -- We'd like to see something weird is happening in Logs.
               console.error(e.message);
             }
-            return router.push("/confirm");
+            router.push("/confirm");
           });
         ev.preventDefault();
       }}

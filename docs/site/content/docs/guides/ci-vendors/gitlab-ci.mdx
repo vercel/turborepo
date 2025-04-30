@@ -3,7 +3,7 @@ title: GitLab CI
 description: Learn how to use GitLab CI with Turborepo.
 ---
 
-import { PackageManagerTabs, Tab } from '#/components/tabs';
+import { PackageManagerTabs, Tab } from '#components/tabs';
 
 The following example shows how to use Turborepo with [GitLab CI](https://docs.gitlab.com/ee/ci/).
 
@@ -26,7 +26,7 @@ And a `turbo.json`:
 
 ```json title="./turbo.json"
 {
-  "$schema": "https://turbo.build/schema.json",
+  "$schema": "https://turborepo.com/schema.json",
   "tasks": {
     "build": {
       "outputs": [".svelte-kit/**"],

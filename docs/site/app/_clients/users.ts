@@ -8,7 +8,7 @@ export interface TurboUser {
   style?: CSSProperties;
 }
 
-export const users: TurboUser[] = [
+export const users: Array<TurboUser> = [
   {
     caption: "Vercel",
     image: "/images/logos/vercel.svg",

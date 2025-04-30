@@ -8,10 +8,10 @@ ogImage: /images/blog/turbo-2-0/x-card.png
 
 <h1 className="text-center">Turborepo 2.0</h1>
 
-import { Authors } from '#/components/authors';
-import { Date } from '#/components/blog/date';
-import { Callout } from '#/components/callout';
-import { Video } from '#/components/video';
+import { Authors } from '#components/authors';
+import { Date } from '#components/blog/date';
+import { Callout } from '#components/callout';
+import { Video } from '#components/video';
 
 <Date>Tuesday, June 4, 2024</Date>
 
@@ -22,7 +22,7 @@ Turborepo 2.0 improves the developer experience of JavaScript and TypeScript rep
 - [**New terminal UI**](#new-terminal-ui): Interactive tasks and clearer logs
 - [**Watch Mode**](#watch-mode): Dependency-aware task watcher for any tooling in your repository
 - [**All-new documentation**](#all-new-documentation): Core monorepo concepts, refreshed API reference, and ecosystem tooling guides
-- **Licensing and maintenance updates**: Upgraded to MIT license and added [Long Term Support policy](/docs/getting-started/support-policy#lts-policy)
+- **Licensing and maintenance updates**: Upgraded to MIT license and added [Long Term Support policy](/docs/support-policy#lts-policy)
 
 Update today by running `npx @turbo/codemod migrate` or get started with `npx create-turbo@latest`.
 
@@ -30,7 +30,7 @@ Visit [the upgrading guide](/docs/crafting-your-repository/upgrading#upgrading-t
 
 ## New terminal UI
 
-In [Turborepo 1.13](https://turbo.build/blog/turbo-1-13-0), we released an experimental interface to learn how a refined terminal UI could improve development velocity. Through [the RFC process](https://github.com/vercel/turbo/discussions/7802), we were able to work with the community on designing a revamped local experience, driven by your feedback. Thank you to those who participated.
+In [Turborepo 1.13](https://turborepo.com/blog/turbo-1-13-0), we released an experimental interface to learn how a refined terminal UI could improve development velocity. Through [the RFC process](https://github.com/vercel/turbo/discussions/7802), we were able to work with the community on designing a revamped local experience, driven by your feedback. Thank you to those who participated.
 
 Today, we’re releasing the new UI as stable, along with the highly requested features that it enables.
 
@@ -136,7 +136,7 @@ Visit [the upgrading guide](/docs/crafting-your-repository/upgrading#upgrading-t
 
 ### Other
 
-- Minimum package manager version support for npm and pnpm updated to 8 ([Source](/docs/getting-started/support-policy#package-managers))
+- Minimum package manager version support for npm and pnpm updated to 8 ([Source](/docs/support-policy#package-managers))
 - Remove package manager argument from `create-turbo`, replaced by option ([PR](https://github.com/vercel/turbo/pull/8150))
 
 ## Community

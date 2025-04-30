@@ -111,15 +111,16 @@ impl<W> TerminalOutput<W> {
             LogBehavior::Full => {
                 let screen = self.parser.entire_screen();
                 let (_, cols) = screen.size();
-                stdout.write_all("┌".as_bytes())?;
+                stdout.write_all("┌─".as_bytes())?;
                 stdout.write_all(title.as_bytes())?;
                 stdout.write_all(b"\r\n")?;
                 for row in screen.rows_formatted(0, cols) {
-                    stdout.write_all("│ ".as_bytes())?;
                     stdout.write_all(&row)?;
                     stdout.write_all(b"\r\n")?;
                 }
-                stdout.write_all("└────>\r\n".as_bytes())?;
+                stdout.write_all("└─ ".as_bytes())?;
+                stdout.write_all(task_name.as_bytes())?;
+                stdout.write_all(" ──\r\n".as_bytes())?;
             }
             LogBehavior::Status => {
                 stdout.write_all(title.as_bytes())?;

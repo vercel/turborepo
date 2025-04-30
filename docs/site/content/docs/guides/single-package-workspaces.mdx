@@ -3,8 +3,8 @@ title: Single-package workspaces
 description: Learn how to use Turborepo in a single-package workspace.
 ---
 
-import { Callout } from '#/components/callout';
-import { PackageManagerTabs, Tab } from '#/components/tabs';
+import { Callout } from '#components/callout';
+import { PackageManagerTabs, Tab } from '#components/tabs';
 
 While Turborepo is highly effective in [multi-package workspaces](https://vercel.com/docs/vercel-platform/glossary#multi-package-workspace) (commonly referred to as monorepos), it can also be used to make [single-package workspaces](https://vercel.com/docs/vercel-platform/glossary#single-package-workspace) faster.
 
@@ -92,7 +92,7 @@ Then, create tasks in `turbo.json` to run these scripts in order:
 
 ```json title="./turbo.json"
 {
-  "$schema": "https://turbo.build/schema.json",
+  "$schema": "https://turborepo.com/schema.json",
   "tasks": {
     "dev": {
       "dependsOn": ["db:seed"],
@@ -134,7 +134,7 @@ You can create a configuration like this one:
 
 ```json title="turbo.json"
 {
-  "$schema": "https://turbo.build/schema.json",
+  "$schema": "https://turborepo.com/schema.json",
   "tasks": {
     "lint": {},
     "format": {},
@@ -157,7 +157,7 @@ For instance, a script for checking types using `tsc --noEmit` can be configured
 
 ```json title="./turbo.json"
 {
-  "$schema": "https://turbo.build/schema.json",
+  "$schema": "https://turborepo.com/schema.json",
   "tasks": {
     "check-types": {
       "inputs": ["**/*.{ts,tsx}"]

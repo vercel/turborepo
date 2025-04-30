@@ -1,11 +1,11 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { extraPages } from "@/app/source";
-import { createMetadata } from "@/lib/create-metadata";
-import { mdxComponents } from "@/mdx-components";
+import { extraPages } from "#app/source.ts";
+import { createMetadata } from "#lib/create-metadata.ts";
+import { mdxComponents } from "#mdx-components.tsx";
 
 export default async function Page(props: {
-  params: Promise<{ slug?: string[] }>;
+  params: Promise<{ slug?: Array<string> }>;
 }): Promise<JSX.Element> {
   const params = await props.params;
   const page = extraPages.getPage(params.slug);
@@ -14,6 +14,7 @@ export default async function Page(props: {
     notFound();
   }
 
+  /* eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- MDX component */
   const Mdx = page.data.body;
 
   return (
@@ -24,14 +25,14 @@ export default async function Page(props: {
   );
 }
 
-export function generateStaticParams(): { slug: string[] }[] {
+export function generateStaticParams(): Array<{ slug: Array<string> }> {
   return extraPages.getPages().map((page) => ({
     slug: page.slugs,
   }));
 }
 
 export async function generateMetadata(props: {
-  params: Promise<{ slug?: string[] }>;
+  params: Promise<{ slug?: Array<string> }>;
 }): Promise<Metadata> {
   const params = await props.params;
   const page = extraPages.getPage(params.slug);

@@ -495,10 +495,10 @@ impl Args {
 
     /// Fetch the execution args supplied to the command
     pub fn execution_args(&self) -> Option<&ExecutionArgs> {
-        if let Some(Command::Run { execution_args, .. }) = &self.command {
-            Some(execution_args)
-        } else {
-            self.execution_args.as_ref()
+        match &self.command {
+            Some(Command::Run { execution_args, .. }) => Some(execution_args),
+            Some(Command::Watch { execution_args, .. }) => Some(execution_args),
+            _ => self.execution_args.as_ref(),
         }
     }
 
@@ -653,7 +653,7 @@ pub enum Command {
         /// Use the given selector to specify package(s) to act as
         /// entry points. The syntax mirrors pnpm's syntax, and
         /// additional documentation and examples can be found in
-        /// turbo's documentation https://turbo.build/docs/reference/command-line-reference/run#--filter
+        /// turbo's documentation https://turborepo.com/docs/reference/command-line-reference/run#--filter
         #[clap(short = 'F', long, group = "scope-filter-group")]
         filter: Vec<String>,
         /// Get insight into a specific package, such as
@@ -895,7 +895,7 @@ pub struct ExecutionArgs {
     /// Use the given selector to specify package(s) to act as
     /// entry points. The syntax mirrors pnpm's syntax, and
     /// additional documentation and examples can be found in
-    /// turbo's documentation https://turbo.build/docs/reference/command-line-reference/run#--filter
+    /// turbo's documentation https://turborepo.com/docs/reference/command-line-reference/run#--filter
     #[clap(short = 'F', long, group = "scope-filter-group")]
     pub filter: Vec<String>,
 

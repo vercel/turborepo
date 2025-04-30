@@ -3,9 +3,9 @@ title: GitHub Actions
 description: Learn how to use GitHub Actions with Turborepo.
 ---
 
-import { PackageManagerTabs, Tab } from '#/components/tabs';
-import { Steps, Step } from '#/components/steps';
-import { Callout } from '#/components/callout';
+import { PackageManagerTabs, Tab } from '#components/tabs';
+import { Steps, Step } from '#components/steps';
+import { Callout } from '#components/callout';
 
 The following example shows how to use Turborepo with [GitHub Actions](https://github.com/features/actions).
 
@@ -28,7 +28,7 @@ And a `turbo.json`:
 
 ```json title="./turbo.json"
 {
-  "$schema": "https://turbo.build/schema.json",
+  "$schema": "https://turborepo.com/schema.json",
   "tasks": {
     "build": {
       "outputs": [".next/**", "!.next/cache/**", "other-output-dirs/**"],

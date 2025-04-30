@@ -1,12 +1,13 @@
-import { Button } from "#/components/button";
-import { Grid } from "@/components/grid/grid";
-import { GridCell } from "@/components/grid/grid-cell";
-import { Snippet } from "@/components/snippet";
 import { DynamicCodeBlock } from "fumadocs-ui/components/dynamic-codeblock";
-import { Testimonials } from "#/components/testimonials";
-import { ArrowRight } from "#/components/icons/arrow-right";
 import type { Metadata } from "next";
 import { createCssVariablesTheme } from "shiki";
+import Link from "next/link";
+import { Button } from "#components/button.tsx";
+import { Grid } from "#components/grid/grid.tsx";
+import { GridCell } from "#components/grid/grid-cell.tsx";
+import { Snippet } from "#components/snippet.tsx";
+import { Testimonials } from "#components/testimonials.tsx";
+import { ArrowRight } from "#components/icons/arrow-right.tsx";
 
 // Copied from source.config.ts
 const theme = createCssVariablesTheme({
@@ -65,7 +66,7 @@ export const metadata: Metadata = {
   alternates: { canonical: "https://turbo.build" },
 };
 
-export default async function HomePage() {
+export default function HomePage() {
   return (
     <div className="py-12 max-w-6xl px-3 sm:px-6 lg:px-12 mx-auto">
       <Grid
@@ -89,7 +90,7 @@ export default async function HomePage() {
             </p>
             <div className="flex flex-col md:flex-row h-fit gap-4 items-center">
               <Button asChild className="w-full md:w-auto h-[54px]">
-                <a href="/docs">Get started</a>
+                <Link href="/docs">Get started</Link>
               </Button>
               <Snippet
                 code="npm i turbo"
@@ -133,10 +134,10 @@ export default async function HomePage() {
               </p>
             </div>
             <Button asChild>
-              <a href="/repo/docs" className="w-full sm:w-auto">
+              <Link href="/repo/docs" className="w-full sm:w-auto">
                 Read the docs
                 <ArrowRight />
-              </a>
+              </Link>
             </Button>
           </div>
           <div className="mt-4 grid w-full grid-cols-1 gap-x-4 md:grid-cols-2">
@@ -145,11 +146,13 @@ export default async function HomePage() {
                 lang="json"
                 code={simpleTurboJson}
                 options={
+                  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Types are fixed in a higher version of Fumadocs than we are on
                   {
                     themes: {
                       light: theme,
                       dark: theme,
                     },
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Types are fixed in a higher version of Fumadocs than we are on
                   } as any
                 }
               />
@@ -161,12 +164,16 @@ export default async function HomePage() {
               <DynamicCodeBlock
                 lang="bash"
                 code={remoteCachingCommands}
-                options={{
-                  themes: {
-                    light: theme,
-                    dark: theme,
-                  },
-                }}
+                options={
+                  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Types are fixed in a higher version of Fumadocs than we are on
+                  {
+                    themes: {
+                      light: theme,
+                      dark: theme,
+                    },
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Types are fixed in a higher version of Fumadocs than we are on
+                  } as any
+                }
               />
               <span className="text-xs text-gray-900">
                 Linking to Remote Cache and running tasks
@@ -188,7 +195,7 @@ export default async function HomePage() {
             </h2>
             <div className="flex flex-col w-full xs:flex-row gap-4 items-center">
               <Button asChild className="w-full xs:w-auto h-[54px] text-[18px]">
-                <a href="/repo/docs">Get Started</a>
+                <Link href="/repo/docs">Get Started</Link>
               </Button>
               <Snippet
                 code="npm i turbo"

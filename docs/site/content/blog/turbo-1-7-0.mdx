@@ -10,9 +10,9 @@ import { Tabs, Tab } from '../../components/tabs';
 
 <h1 className="text-center">Turborepo 1.7</h1>
 
-import { Badge } from '#/components/badge';
-import { Authors } from '#/components/authors';
-import { Date } from '#/components/blog/date';
+import { Badge } from '#components/badge';
+import { Authors } from '#components/authors';
+import { Date } from '#components/blog/date';
 
 <Date>Wednesday, January 11th, 2023</Date>
 
@@ -134,7 +134,7 @@ Also note that you will no longer need to specify `outputs: []` because not cach
 ## “Errors only” output mode for quieter logs
 
 To bring visibility to errors, community member [@dobesv](https://github.com/dobesv) contributed [a solution to only show errors instead of all logs from a task run](https://github.com/vercel/turbo/pull/2588). While debugging a pipeline, `--output-logs=errors-only` can be used to keep your signal-to-noise ratio high so you can focus on ensuring successful runs for your pipelines.
-This can be used as a [configuration option](/docs/reference/configuration#outputmode) or as a [CLI flag](/docs/reference/run#--output-logs)
+This can be used as a [configuration option](/docs/reference/configuration#outputlogs) or as a [CLI flag](/docs/reference/run#--output-logs-option)
 
 ```bash title="Terminal"
 turbo build --output-logs=errors-only
@@ -142,7 +142,7 @@ turbo build --output-logs=errors-only
 
 ## Community
 
-Since releasing [Turborepo v1.6](/blog/turbo-1-6-0) and merging with [Turbopack](https://turbo.build/pack), we've seen incredible adoption and community growth:
+Since releasing [Turborepo v1.6](/blog/turbo-1-6-0) and merging with [Turbopack](https://turborepo.com/pack), we've seen incredible adoption and community growth:
 
 - [18.7k+ GitHub Stars](https://github.com/vercel/turbo)
 - [750k weekly NPM downloads](https://www.npmjs.com/package/turbo)

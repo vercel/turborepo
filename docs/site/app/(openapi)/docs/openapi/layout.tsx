@@ -1,14 +1,10 @@
-import { DocsLayout } from "@/components/docs-layout";
-import { baseOptions } from "#/app/layout-config";
-import { Navigation } from "@/components/nav";
-import { Sidebar } from "#/components/docs-layout/sidebar";
+import { Navigation } from "#components/nav/index.tsx";
+import { Sidebar } from "#components/docs-layout/sidebar.tsx";
+import { baseOptions } from "#app/layout-config.tsx";
+import { DocsLayout } from "#components/docs-layout/index.tsx";
 import { openapiPages } from "./source";
 
-export default async function Layout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <>
       <Navigation />

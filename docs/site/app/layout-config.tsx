@@ -1,5 +1,5 @@
-import { Navigation } from "@/components/nav";
 import type { BaseLayoutProps } from "fumadocs-ui/layouts/shared";
+import { Navigation } from "#components/nav/index.tsx";
 
 export const baseOptions: BaseLayoutProps = {
   nav: {

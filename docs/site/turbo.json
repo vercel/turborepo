@@ -1,5 +1,5 @@
 {
-  "$schema": "https://turbo.build/schema.json",
+  "$schema": "https://turborepo.com/schema.json",
   "extends": ["//"],
   "tasks": {
     "build": {
@@ -41,7 +41,7 @@
       "env": []
     },
     "check-spelling": {
-      "inputs": ["$TURBO_DEFAULTS$", "**/*.mdx"]
+      "inputs": ["$TURBO_DEFAULTS$", "**/*.mdx", "dictionary.txt"]
     },
     "write-private-files": {
       "cache": false,
@@ -49,6 +49,9 @@
     },
     "collect-examples-data": {
       "cache": false
+    },
+    "check-types": {
+      "dependsOn": ["collect-examples-data", "generate-openapi"]
     },
     "index-docs": {
       "dependsOn": ["build"],

@@ -36,7 +36,7 @@ export async function transform(args: TransformInput): TransformResult {
 
   let metaJson: MetaJson | undefined;
 
-  // 1. remove meta file (used for generating the examples page on turbo.build)
+  // 1. remove meta file (used for generating the examples page on turborepo.com)
   try {
     metaJson = fs.readJsonSync(rootMetaJsonPath) as MetaJson;
     fs.rmSync(rootMetaJsonPath, { force: true });

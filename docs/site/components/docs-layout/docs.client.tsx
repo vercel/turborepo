@@ -8,12 +8,12 @@ import { findNeighbour } from "fumadocs-core/server";
 import { useTreeContext, useTreePath } from "fumadocs-ui/provider";
 import * as Base from "fumadocs-core/toc";
 import { useActiveAnchor } from "fumadocs-core/toc";
-import { repoDocsPages } from "@/app/source";
-import { RemoteCacheCounter } from "@/components/remote-cache-counter";
+import { repoDocsPages } from "#app/source.ts";
+import { SidebarMenu } from "#components/ui/sidebar.tsx";
+import { RemoteCacheCounter } from "#components/remote-cache-counter/index.tsx";
 import { AlignmentLeft } from "../icons/alignment-left";
 import { ChevronLeft } from "../icons/chevron-left";
 import { ChevronRight } from "../icons/chevron-right";
-import { SidebarMenu } from "@/components/ui/sidebar";
 import {
   SidebarFolder,
   SidebarFolderLink,
@@ -41,7 +41,9 @@ export const LayoutBody = ({
   );
 };
 
-function renderSidebarList(items: PageTree.Node[]): React.ReactNode[] {
+function renderSidebarList(
+  items: Array<PageTree.Node>
+): Array<React.ReactNode> {
   return items.map((item, i) => {
     const id = `${item.type}_${i}`;
 
@@ -165,7 +167,7 @@ const TOCItem = ({ item }: { item: TOCItemType }) => {
 };
 
 export const TableOfContents = () => {
-  const params = useParams<{ code: string; slug: string[] }>();
+  const params = useParams<{ code: string; slug: Array<string> }>();
   const page = repoDocsPages.getPage(params.slug);
   if (!page) return null;
   const { data } = page;

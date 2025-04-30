@@ -8,7 +8,9 @@ if (!process.env.NEXT_PUBLIC_ALGOLIA_INDEX) {
   env.loadEnvConfig(process.cwd());
 }
 
-// If you are targeting the development environment, you can get this key from the `turbo-site` project on Vercel.
+// If you are targeting the development environment,
+// you can get this key from the `turbo-site` project on Vercel
+// if you are a part of the Vercel team.
 if (!process.env.ALGOLIA_API_KEY) {
   throw new Error("No ALGOLIA_API_KEY provided.");
 }
@@ -18,7 +20,10 @@ const ALGOLIA_INDEX_NAME = process.env.NEXT_PUBLIC_ALGOLIA_INDEX ?? "_docs_dev";
 const content = fs.readFileSync(".next/server/app/static.json.body");
 
 /** @type {import('fumadocs-core/search/algolia').DocumentRecord[]} **/
-const indexes = JSON.parse(content.toString());
+const indexes = JSON.parse(content.toString()).filter(
+  // These path don't have information that we think people want in search.
+  (doc) => !["docs/community", "/docs"].includes(doc.url)
+);
 
 const algoliaClient = algosearch(
   process.env.ALGOLIA_APP_ID,

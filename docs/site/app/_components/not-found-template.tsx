@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { gitHubRepoUrl } from "#lib/constants.ts";
 import { Turborepo } from "./turborepo";
-import { gitHubRepoUrl } from "@/lib/constants";
 
 export function NotFoundTemplate({
   content,

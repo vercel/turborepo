@@ -19,7 +19,8 @@ Run test run
     "envMode": "strict",
     "scmBase": null,
     "scmHead": null,
-    "cacheDir": ".turbo[\\/]+cache" (re)
+    "cacheDir": ".turbo[\\/]+cache", (re)
+    "concurrency": null
   }
 
 Run test run with api overloaded
@@ -47,7 +48,7 @@ Use our custom turbo config with an invalid env var
 
 Run build with invalid env var
   $ ${TURBO} build
-  invalid_env_prefix (https://turbo.build/messages/invalid-env-prefix)
+  invalid_env_prefix (https://turborepo.com/messages/invalid-env-prefix)
   
     x Environment variables should not be prefixed with "$"
      ,-[turbo.json:7:27]
@@ -111,3 +112,15 @@ Add env var: `TURBO_CACHE_DIR`
 Add flag: `--cache-dir`
   $ ${TURBO} --cache-dir FifthDimension/Nebulo9 config | jq -r .cacheDir
   FifthDimension[\\/]Nebulo9 (re)
+
+No concurrency by default
+  $ ${TURBO} config | jq -r .concurrency
+  null
+
+Add env var: `TURBO_CONCURRENCY`
+  $ TURBO_CONCURRENCY=5 ${TURBO} config | jq -r .concurrency
+  5
+
+Add flag: `--concurrency`
+  $ ${TURBO} --concurrency=5 config | jq -r .concurrency
+  5

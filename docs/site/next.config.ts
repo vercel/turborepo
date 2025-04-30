@@ -1,3 +1,4 @@
+import type { NextConfig } from "next";
 import { createMDX } from "fumadocs-mdx/next";
 import { withVercelToolbar } from "@vercel/toolbar/plugins/next";
 import { REDIRECTS_FOR_V2_DOCS } from "./lib/redirects/v2-docs.mjs";
@@ -5,10 +6,7 @@ import { REDIRECTS_FOR_V2_DOCS } from "./lib/redirects/v2-docs.mjs";
 const withMDX = createMDX();
 const vercelToolbar = withVercelToolbar();
 
-const config = {
-  experimental: {
-    mdxRs: true,
-  },
+const config: NextConfig = {
   reactStrictMode: true,
   images: {
     formats: ["image/avif", "image/webp"],
@@ -26,7 +24,9 @@ const config = {
   eslint: {
     ignoreDuringBuilds: true,
   },
-  rewrites() {
+  // Next.js still expects these to return Promises even without await
+  // eslint-disable-next-line @typescript-eslint/require-await -- Purposeful.
+  async rewrites() {
     return {
       beforeFiles:
         process.env.VERCEL_ENV === "production"
@@ -44,7 +44,9 @@ const config = {
           : undefined,
     };
   },
-  redirects() {
+  // Next.js still expects these to return Promises even without await
+  // eslint-disable-next-line @typescript-eslint/require-await -- Purposeful.
+  async redirects() {
     return [
       {
         source: "/usage",
@@ -149,6 +151,11 @@ const config = {
         destination: "/blog/:path*",
         permanent: true,
       },
+      {
+        source: "/repo/docs/:slug*",
+        destination: "/docs/:slug*",
+        permanent: true,
+      },
       // OpenAPI redirects (until we have more content)
       {
         source: "/docs/openapi",
@@ -161,14 +168,29 @@ const config = {
         permanent: false,
       },
       {
-        source: "/repo/docs/:slug*",
-        destination: "/docs/:slug*",
-        permanent: false,
+        source: "/docs/getting-started/support-policy",
+        destination: "/docs/support-policy",
+        permanent: true,
+      },
+      {
+        source: "/docs/core-concepts/monorepos/filtering",
+        destination:
+          "docs/crafting-your-repository/running-tasks#using-filters",
+        permanent: true,
+      },
+      {
+        source: "/docs/core-concepts/monorepos/running-tasks",
+        destination: "/docs/crafting-your-repository/running-tasks",
+        permanent: true,
+      },
+      {
+        source: "/docs/core-concepts/caching",
+        destination: "/docs/crafting-your-repository/caching",
+        permanent: true,
       },
     ];
   },
 };
 
-// @ts-expect-error -- Not sure what's up here but not worth spending time on.
-// eslint-disable-next-line import/no-default-export
+// Required by Next.js, but we've extracted the config into a named export as well
 export default withMDX(vercelToolbar(config));

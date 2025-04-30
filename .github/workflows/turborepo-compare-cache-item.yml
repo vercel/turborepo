@@ -16,10 +16,8 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 18
+      - name: Setup Node
+        uses: ./.github/actions/setup-node
 
       - name: create-turbo
         run: |
@@ -50,10 +48,8 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 18
+      - name: Setup Node
+        uses: ./.github/actions/setup-node
 
       - name: create-turbo
         run: |

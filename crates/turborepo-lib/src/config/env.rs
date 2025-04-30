@@ -43,6 +43,7 @@ const TURBO_MAPPING: &[(&str, &str)] = [
     ("turbo_allow_no_turbo_json", "allow_no_turbo_json"),
     ("turbo_cache", "cache"),
     ("turbo_tui_scrollback_length", "tui_scrollback_length"),
+    ("turbo_concurrency", "concurrency"),
 ]
 .as_slice();
 
@@ -202,6 +203,12 @@ impl ResolvedConfigurationOptions for EnvVars {
                 )
             })?;
 
+        let concurrency = self
+            .output_map
+            .get("concurrency")
+            .filter(|s| !s.is_empty())
+            .cloned();
+
         let output = ConfigurationOptions {
             api_url: self.output_map.get("api_url").cloned(),
             login_url: self.output_map.get("login_url").cloned(),
@@ -210,6 +217,7 @@ impl ResolvedConfigurationOptions for EnvVars {
             token: self.output_map.get("token").cloned(),
             scm_base: self.output_map.get("scm_base").cloned(),
             scm_head: self.output_map.get("scm_head").cloned(),
+            concurrency,
             cache,
             // Processed booleans
             signature,
@@ -326,6 +334,7 @@ mod test {
         env.insert("turbo_allow_no_turbo_json".into(), "true".into());
         env.insert("turbo_remote_cache_upload_timeout".into(), "200".into());
         env.insert("turbo_tui_scrollback_length".into(), "2048".into());
+        env.insert("turbo_concurrency".into(), "50%".into());
 
         let config = EnvVars::new(&env)
             .unwrap()
@@ -354,6 +363,7 @@ mod test {
             config.root_turbo_json_path,
             Some(AbsoluteSystemPathBuf::new(root_turbo_json).unwrap())
         );
+        assert_eq!(config.concurrency, Some("50%".to_owned()));
     }
 
     #[test]
@@ -378,6 +388,7 @@ mod test {
         env.insert("turbo_run_summary".into(), "".into());
         env.insert("turbo_allow_no_turbo_json".into(), "".into());
         env.insert("turbo_tui_scrollback_length".into(), "".into());
+        env.insert("turbo_concurrency".into(), "".into());
 
         let config = EnvVars::new(&env)
             .unwrap()
@@ -405,5 +416,6 @@ mod test {
             config.tui_scrollback_length(),
             DEFAULT_TUI_SCROLLBACK_LENGTH
         );
+        assert_eq!(config.concurrency, None);
     }
 }

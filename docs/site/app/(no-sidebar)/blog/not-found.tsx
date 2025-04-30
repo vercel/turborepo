@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { blog, externalBlog } from "@/app/source";
+import { blog, externalBlog } from "#app/source.ts";
 import { NotFoundTemplate } from "../../_components/not-found-template";
 
 export default function NotFound(): JSX.Element {

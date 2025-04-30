@@ -7,11 +7,10 @@ import {
 import { notFound } from "next/navigation";
 import defaultMdxComponents from "fumadocs-ui/mdx";
 import { openapi, openapiPages } from "../source";
-// eslint-disable-next-line rulesdir/global-css
 import "./openapi.css";
 
 export default async function Page(props: {
-  params: Promise<{ slug?: string[] }>;
+  params: Promise<{ slug?: Array<string> }>;
 }): Promise<JSX.Element> {
   const params = await props.params;
   const page = openapiPages.getPage(params.slug);
@@ -20,6 +19,7 @@ export default async function Page(props: {
     notFound();
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Not typed properly?
   const Mdx = page.data.body;
 
   return (
@@ -30,6 +30,7 @@ export default async function Page(props: {
         <Mdx
           components={{
             ...defaultMdxComponents,
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Not typed properly?
             APIPage: openapi.APIPage,
           }}
         />
@@ -38,6 +39,6 @@ export default async function Page(props: {
   );
 }
 
-export function generateStaticParams(): { slug: string[] }[] {
+export function generateStaticParams(): Array<{ slug: Array<string> }> {
   return openapiPages.generateParams();
 }

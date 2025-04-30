@@ -74,7 +74,7 @@ pub enum Error {
     #[error(transparent)]
     PackageJson(#[from] turborepo_repository::package_json::Error),
     #[error(
-        "Could not find turbo.json or turbo.jsonc.\nFollow directions at https://turbo.build/docs \
+        "Could not find turbo.json or turbo.jsonc.\nFollow directions at https://turborepo.com/docs \
          to create one."
     )]
     NoTurboJSON,
@@ -297,6 +297,7 @@ pub struct ConfigurationOptions {
     pub(crate) run_summary: Option<bool>,
     pub(crate) allow_no_turbo_json: Option<bool>,
     pub(crate) tui_scrollback_length: Option<u64>,
+    pub(crate) concurrency: Option<String>,
 }
 
 #[derive(Default)]
