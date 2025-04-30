@@ -101,7 +101,6 @@ impl From<&RawRemoteCacheOptions> for ConfigurationOptions {
             timeout: remote_cache_opts.timeout,
             upload_timeout: remote_cache_opts.upload_timeout,
             enabled: remote_cache_opts.enabled,
-            no_update_notifier: None, // Remote cache options don't include this
             ..Self::default()
         }
     }

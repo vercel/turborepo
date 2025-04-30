@@ -75,7 +75,10 @@ fn run_correct_turbo(
     ui: ColorConfig,
 ) -> Result<i32, Error> {
     if let Some(turbo_state) = LocalTurboState::infer(&repo_state.root) {
-        let builder = crate::config::TurborepoConfigBuilder::new(&repo_state.root);
+        let mut builder = crate::config::TurborepoConfigBuilder::new(&repo_state.root);
+        if let Some(root_turbo_json) = &shim_args.root_turbo_json {
+            builder = builder.with_root_turbo_json(root_turbo_json);
+        }
         let config = builder.build().unwrap_or_default();
         try_check_for_updates(&shim_args, turbo_state.version(), &config);
 
@@ -97,7 +100,10 @@ fn run_correct_turbo(
         spawn_npx_turbo(&repo_state, local_config.turbo_version(), shim_args)
     } else {
         let version = get_version();
-        let builder = crate::config::TurborepoConfigBuilder::new(&repo_state.root);
+        let mut builder = crate::config::TurborepoConfigBuilder::new(&repo_state.root);
+        if let Some(root_turbo_json) = &shim_args.root_turbo_json {
+            builder = builder.with_root_turbo_json(root_turbo_json);
+        }
         let config = builder.build().unwrap_or_default();
         try_check_for_updates(&shim_args, version, &config);
         // cli::run checks for this env var, rather than an arg, so that we can support
