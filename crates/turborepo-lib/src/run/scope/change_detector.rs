@@ -124,10 +124,10 @@ impl<'a> GitChangeDetector for ScopeChangeDetector<'a> {
                     .map(|(name, _)| {
                         (
                             name.to_owned(),
-                            PackageInclusionReason::All(AllPackageChangeReason::Other(format!(
-                                "Path error: {}",
-                                err
-                            ))),
+                            PackageInclusionReason::All(AllPackageChangeReason::GitRefNotFound {
+                                from_ref: from_ref.map(String::from),
+                                to_ref: to_ref.map(String::from),
+                            }),
                         )
                     })
                     .collect());
@@ -143,10 +143,10 @@ impl<'a> GitChangeDetector for ScopeChangeDetector<'a> {
                     .map(|(name, _)| {
                         (
                             name.to_owned(),
-                            PackageInclusionReason::All(AllPackageChangeReason::Other(format!(
-                                "Unexpected error: {}",
-                                err
-                            ))),
+                            PackageInclusionReason::All(AllPackageChangeReason::GitRefNotFound {
+                                from_ref: from_ref.map(String::from),
+                                to_ref: to_ref.map(String::from),
+                            }),
                         )
                     })
                     .collect());
