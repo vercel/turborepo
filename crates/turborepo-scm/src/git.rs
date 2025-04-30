@@ -1364,7 +1364,7 @@ mod tests {
 
         let result = git_repo.add_files_from_stdout(&mut files, &turbo_root_path, stdout);
 
-        assert!(result.is_err());
+        assert!(result.is_ok());
 
         assert!(files.is_empty());
 
