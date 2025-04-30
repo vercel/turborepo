@@ -1,25 +1,45 @@
 "use client";
 
-import { animated } from "@react-spring/web";
+import { animated, useSpring } from "@react-spring/web";
+import { useEffect, useState } from "react";
+import { cn } from "#components/cn.ts";
 import { useTurborepoMinutesSaved } from "./use-turborepo-minutes-saved";
 
 const counterFormatter = Intl.NumberFormat(undefined, {
-  minimumIntegerDigits: 7,
   maximumFractionDigits: 0,
 });
 
-export function RemoteCacheCounterClient(): JSX.Element {
+export function RemoteCacheCounterClient({
+  className,
+}: {
+  className?: string;
+}): JSX.Element {
   const timeSaved = useTurborepoMinutesSaved()?.total;
+  const [initialValue, setInitialValue] = useState<number | undefined>(
+    timeSaved ? timeSaved / 60 : undefined
+  );
+
+  useEffect(() => {
+    if (timeSaved) {
+      setInitialValue(timeSaved / 60);
+    }
+  }, []);
+
+  const dur = Number.isFinite(initialValue) ? initialValue : 0;
+  const spring = useSpring({
+    val: timeSaved ? timeSaved / 60 : 0,
+    from: { val: dur },
+    config: { mass: 1, tension: 170, friction: 60, clamp: true },
+  });
 
   return (
-    <>
-      {timeSaved ? (
-        <animated.p className="inline-block tabular-nums">
-          {counterFormatter.format(timeSaved / 60)}
-        </animated.p>
-      ) : (
-        <p className="h-5 w-[97.2px]" />
+    <animated.p
+      className={cn(
+        "inline-block tabular-nums text-right min-w-[75.75px]",
+        className
       )}
-    </>
+    >
+      {spring.val?.to((val) => counterFormatter.format(val))}
+    </animated.p>
   );
 }
