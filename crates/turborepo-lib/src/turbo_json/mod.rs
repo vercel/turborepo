@@ -101,6 +101,7 @@ impl From<&RawRemoteCacheOptions> for ConfigurationOptions {
             timeout: remote_cache_opts.timeout,
             upload_timeout: remote_cache_opts.upload_timeout,
             enabled: remote_cache_opts.enabled,
+            no_update_notifier: None, // Remote cache options don't include this
             ..Self::default()
         }
     }
@@ -151,6 +152,9 @@ pub struct RawTurboJson {
     pub env_mode: Option<EnvMode>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cache_dir: Option<Spanned<UnescapedString>>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub no_update_notifier: Option<bool>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tags: Option<Spanned<Vec<Spanned<String>>>>,
