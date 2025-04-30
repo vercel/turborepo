@@ -360,7 +360,7 @@ impl GitRepo {
                 }
                 Err(err) => {
                     warn!(
-                        "Skipping file that could not be anchored to turbo root: {} ({})",
+                        "Skipping file that could not be anchored to Turborepo root: {} ({})",
                         line, err
                     );
                 }
