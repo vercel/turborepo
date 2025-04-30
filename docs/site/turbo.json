@@ -51,7 +51,7 @@
       "cache": false
     },
     "check-types": {
-      "dependsOn": ["collect-examples-data"]
+      "dependsOn": ["collect-examples-data", "generate-openapi"]
     },
     "index-docs": {
       "dependsOn": ["build"],
