@@ -138,8 +138,9 @@ impl ShimArgs {
                 // If we see a `--root-turbo-json` we expect the next arg to be a path.
                 root_turbo_json_flag_idx = Some(idx);
             } else if let Some(path) = arg.strip_prefix("--root-turbo-json=") {
-                // In the case where `--root-turbo-json` is passed as `--root-turbo-json=./path/to/turbo.json`, that
-                // entire chunk is a single arg, so we need to split it up.
+                // In the case where `--root-turbo-json` is passed as
+                // `--root-turbo-json=./path/to/turbo.json`, that entire chunk
+                // is a single arg, so we need to split it up.
                 root_turbo_json = Some(AbsoluteSystemPathBuf::from_unknown(&invocation_dir, path));
             } else {
                 remaining_turbo_args.push(arg);
@@ -156,7 +157,7 @@ impl ShimArgs {
                 flag_range: spans[0],
             });
         }
-        
+
         if let Some(idx) = root_turbo_json_flag_idx {
             let (spans, args_string) =
                 Self::get_spans_in_args_string(vec![idx], env::args().skip(1));
