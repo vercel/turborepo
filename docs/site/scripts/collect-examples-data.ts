@@ -1,9 +1,3 @@
-// @ts-check
-// @ts-nocheck
-// This script exports examples data to a JSON file
-// Use Node.js ESM syntax
-// @ts-ignore
-
 import fs from "node:fs";
 import path from "node:path";
 import { z } from "zod";
@@ -32,7 +26,7 @@ const examples = fs
       dirent.name !== "node_modules"
   )
   .filter((dirent) => dirent.name !== "with-nextjs")
-  // @ts-expect-error
+  // @ts-expect-error -- TODO
   .sort((a, b) => a.name - b.name)
   .map((dirent) => dirent.name);
 
@@ -43,11 +37,13 @@ for (const example of examples) {
   if (fs.existsSync(metaPath)) {
     try {
       const metaContent = fs.readFileSync(metaPath, "utf8");
-      const metaJson = JSON.parse(metaContent);
+      const metaJson = JSON.parse(metaContent) as z.infer<
+        typeof ExampleMetaSchema
+      >;
       EXAMPLES.push({ ...metaJson, slug: example });
     } catch (error) {
-      // @ts-expect-error
-      throw new Error(error);
+      // Ensure error is converted to string when creating new Error
+      throw new Error(error instanceof Error ? error.message : String(error));
     }
   }
 }

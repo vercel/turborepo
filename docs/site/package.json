@@ -14,14 +14,14 @@
     "lint": "fumadocs-mdx && next lint",
     "lint:fix": "fumadocs-mdx && next lint --fix",
     "lint:prettier": "prettier --write -c . --cache --ignore-path=../../.prettierignore",
-    "index-docs": "tsx ./scripts/sync-algolia.mjs",
-    "rss": "node scripts/generate-rss.cjs",
-    "schema": "node scripts/copy-json-schema.mjs",
+    "index-docs": "node --experimental-strip-types ./scripts/sync-algolia.ts",
+    "rss": "node --experimental-strip-types scripts/generate-rss.ts",
+    "schema": "node --experimental-strip-types  scripts/copy-json-schema.ts",
     "start": "next start",
     "check-types": "fumadocs-mdx && tsc --noEmit",
-    "generate-openapi": "node ./scripts/generate-docs.mjs",
-    "write-private-files": "node ./scripts/write-private-files.mjs",
-    "collect-examples-data": "node ./scripts/collect-examples-data.mjs"
+    "generate-openapi": "node --experimental-strip-types  ./scripts/generate-docs.ts",
+    "write-private-files": "node --experimental-strip-types  ./scripts/write-private-files.ts",
+    "collect-examples-data": "node --experimental-strip-types  ./scripts/collect-examples-data.ts"
   },
   "dependencies": {
     "@heroicons/react": "1.0.6",
@@ -81,7 +81,6 @@
     "rss": "^1.2.2",
     "spellchecker-cli": "^6.2.0",
     "tailwindcss": "^3.4.1",
-    "tsx": "^4.6.2",
     "typescript": "5.6.3"
   }
 }

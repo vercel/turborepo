@@ -18,17 +18,58 @@ import { generateFiles } from "fumadocs-openapi";
 
 const out = "./content/openapi";
 
+interface OpenAPISpec {
+  paths?: Record<
+    string,
+    Record<
+      string,
+      {
+        responses?: Record<
+          string,
+          {
+            description?: string;
+            headers?: Record<
+              string,
+              {
+                schema: {
+                  type: string;
+                };
+                description: string;
+              }
+            >;
+          }
+        >;
+      }
+    >
+  >;
+  servers?: Array<{
+    url: string;
+    description?: string;
+  }>;
+}
+
+// Define a more specific type for the OpenAPI value structure
+type OpenAPIValue =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: OpenAPIValue }
+  | Array<OpenAPIValue>;
+
 /* The Vercel Remote Cache spec has examples that show Vercel values.
  * Removing them makes the self-hosted spec easier to use. */
-const removeExamples = (obj) => {
+const removeExamples = (obj: OpenAPIValue): OpenAPIValue => {
   if (!obj || typeof obj !== "object") return obj;
 
   if (Array.isArray(obj)) {
     return obj.map((item) => removeExamples(item));
   }
 
-  const result = {};
-  for (const [key, value] of Object.entries(obj)) {
+  const result: Record<string, OpenAPIValue> = {};
+  for (const [key, value] of Object.entries(
+    obj as Record<string, OpenAPIValue>
+  )) {
     if (key !== "example") {
       result[key] = removeExamples(value);
     }
@@ -39,7 +80,7 @@ const removeExamples = (obj) => {
 
 /* The Vercel Remote Cache spec has responses related to billing.
  * Self-hosted users don't need these. */
-function removeBillingRelated403Responses(spec) {
+function removeBillingRelated403Responses(spec: OpenAPISpec): OpenAPISpec {
   // Define billing-related phrases to filter out
   const billingPhrases = [
     "The customer has reached their spend cap limit and has been paused",
@@ -56,11 +97,11 @@ function removeBillingRelated403Responses(spec) {
       const methodObj = pathObj[method];
 
       // Check if the method has responses
-      if (methodObj?.responses["403"]) {
+      if (methodObj.responses?.["403"]) {
         const description = methodObj.responses["403"].description;
 
         // Split the description by newlines
-        const descriptionLines = description.split("\n");
+        const descriptionLines = description?.split("\n") ?? [];
 
         // Filter out billing-related lines
         const filteredLines = descriptionLines.filter((line) => {
@@ -83,15 +124,15 @@ function removeBillingRelated403Responses(spec) {
 }
 
 /* Add x-artifact-tag header to artifact download endpoint response */
-function addArtifactTagHeader(spec) {
+function addArtifactTagHeader(spec: OpenAPISpec): OpenAPISpec {
   // Target only the specific /v8/artifacts/{hash} endpoint
   const artifactEndpoint = "/v8/artifacts/{hash}";
 
   if (spec.paths?.[artifactEndpoint]) {
     // Get the GET method for this endpoint
-    const getMethod = spec.paths[artifactEndpoint]?.get;
+    const getMethod = spec.paths[artifactEndpoint].get;
 
-    if (getMethod?.responses?.["200"]) {
+    if (getMethod.responses?.["200"]) {
       const response = getMethod.responses["200"];
 
       // Add headers to the response if they don't exist
@@ -112,7 +153,7 @@ function addArtifactTagHeader(spec) {
   return spec;
 }
 
-const updateServerDescription = (spec) => {
+const updateServerDescription = (spec: OpenAPISpec): OpenAPISpec => {
   if (spec.servers && spec.servers.length > 0) {
     const serverIndex = spec.servers.findIndex(
       (server) => server.url === "https://api.vercel.com"
@@ -124,11 +165,12 @@ const updateServerDescription = (spec) => {
     }
     return spec;
   }
+  return spec;
 };
 
 const thing = await fetch("https://turborepo.com/api/remote-cache-spec")
   .then((res) => res.json())
-  .then((json) => removeExamples(json))
+  .then((json: unknown) => removeExamples(json as OpenAPIValue) as OpenAPISpec)
   .then((json) => removeBillingRelated403Responses(json))
   .then((json) => addArtifactTagHeader(json))
   .then((json) => updateServerDescription(json));
