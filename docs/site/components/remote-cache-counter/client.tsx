@@ -34,10 +34,7 @@ export function RemoteCacheCounterClient({
 
   return (
     <animated.p
-      className={cn(
-        "inline-block tabular-nums text-right min-w-[75.75px]",
-        className
-      )}
+      className={cn("inline-block tabular-nums min-w-[94.6875px]", className)}
     >
       {spring.val?.to((val) => counterFormatter.format(val))}
     </animated.p>

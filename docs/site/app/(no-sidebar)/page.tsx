@@ -88,7 +88,7 @@ export default function HomePage() {
                 <div className="absolute inset-0 rounded-full bg-gradient-to-r from-red-900 to-blue-900"></div>
                 <div className="relative rounded-full m-[2px] bg-white dark:bg-black px-6 py-1 md:py-2">
                   <span className="flex flex-col gap-0 md:flex-row md:gap-2 text-sm md:text-[20px] bg-gradient-to-r from-red-900 to-blue-900 bg-clip-text text-transparent font-medium">
-                    <RemoteCacheCounterClient className="!text-center md:text-right" />
+                    <RemoteCacheCounterClient className="text-center md:text-right" />
                     <span>hours of compute saved</span>
                   </span>
                 </div>
