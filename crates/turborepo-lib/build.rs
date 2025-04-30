@@ -2,6 +2,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let tonic_build_result = tonic_build::configure()
         .build_server(true)
         .file_descriptor_set_path("src/daemon/file_descriptor_set.bin")
+        .protoc_arg("--experimental_allow_proto3_optional")
         .compile(
             &["./src/daemon/proto/turbod.proto"],
             &["./src/daemon/proto"],
