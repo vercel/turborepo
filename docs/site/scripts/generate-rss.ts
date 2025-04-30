@@ -1,5 +1,6 @@
 import { promises as fs, statSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import RSS from "rss";
 import matter from "gray-matter";
 
@@ -32,12 +33,16 @@ async function generate(): Promise<void> {
     image_url: "https://turborepo.com/api/og",
   });
 
-  const posts = await fs.readdir(path.join(__dirname, "..", "content", "blog"));
+  const currentDir = path.dirname(fileURLToPath(import.meta.url));
+
+  const posts = await fs.readdir(
+    path.join(currentDir, "..", "content", "blog")
+  );
 
   const promises = posts.map(async (post: string) => {
     if (post.startsWith("index.") || post.startsWith("_meta.json")) return;
     const file = await fs.readFile(
-      path.join(__dirname, "..", "content", "blog", post)
+      path.join(currentDir, "..", "content", "blog", post)
     );
     const { data, content } = matter(file);
     if (data.href) return;
@@ -55,7 +60,7 @@ async function generate(): Promise<void> {
   for (const frontmatter of sortedData) {
     // get the og image size
     const stat = statSync(
-      path.join(__dirname, "..", "public", frontmatter.data.ogImage)
+      path.join(currentDir, "..", "public", frontmatter.data.ogImage)
     );
 
     feed.item({

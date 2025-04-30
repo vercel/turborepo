@@ -6,7 +6,7 @@
     "src"
   ],
   "scripts": {
-    "check-links": "cd ../site/content && node ../../link-checker/src/validate-docs-links.ts --experimental-strip-types"
+    "check-links": "cd ../site/content && node --experimental-strip-types ../../link-checker/src/validate-docs-links.ts"
   },
   "devDependencies": {
     "@types/node": "22.7.8",
