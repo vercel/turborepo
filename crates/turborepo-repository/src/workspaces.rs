@@ -80,7 +80,10 @@ impl WorkspaceGlobs {
         // take ownership of the inputs
         let raw_inclusions: Vec<String> = inclusions
             .into_iter()
-            .map(|s| s.into())
+            .map(|s| {
+                let s_str: String = s.into();
+                s_str.strip_prefix("./").unwrap_or(&s_str).to_string()
+            })
             .collect::<Vec<String>>();
         let package_json_inclusions = raw_inclusions
             .iter()
@@ -173,6 +176,20 @@ mod test {
                 .map(|i| i.as_str())
                 .collect::<Vec<_>>(),
             &["scripts/package.json", "packages/**/package.json"]
+        );
+    }
+
+    #[test]
+    fn test_workspace_globs_leading_dot_slash() {
+        let globs =
+            WorkspaceGlobs::new(vec!["./packages/foo", "./packages/bar"], vec![]).unwrap();
+        assert_eq!(
+            &globs
+                .package_json_inclusions
+                .iter()
+                .map(|i| i.as_str())
+                .collect::<Vec<_>>(),
+            &["packages/foo/package.json", "packages/bar/package.json"]
         );
     }
 }

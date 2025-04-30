@@ -366,11 +366,8 @@ mod test {
             .unwrap();
 
         let repo_state = RepoState::infer(&package_foo).unwrap();
-        // These assertions are the buggy behavior
-        assert_eq!(repo_state.root, package_foo);
-        assert_eq!(repo_state.mode, RepoMode::SinglePackage);
-        // TODO: the following assertions are the correct behavior
-        // assert_eq!(repo_state.root, monorepo_root);
-        // assert_eq!(repo_state.mode, RepoMode::MultiPackage);
+        // With our fix for leading ./ in workspace globs, we now expect the correct behavior
+        assert_eq!(repo_state.root, monorepo_root);
+        assert_eq!(repo_state.mode, RepoMode::MultiPackage);
     }
 }
