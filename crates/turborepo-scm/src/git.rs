@@ -359,7 +359,10 @@ impl GitRepo {
                     files.insert(anchored_to_turbo_root_file_path);
                 }
                 Err(err) => {
-                    warn!("Skipping file that could not be anchored to turbo root: {} ({})", line, err);
+                    warn!(
+                        "Skipping file that could not be anchored to turbo root: {} ({})",
+                        line, err
+                    );
                 }
             }
         }
