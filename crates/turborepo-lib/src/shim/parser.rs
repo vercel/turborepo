@@ -359,7 +359,9 @@ mod test {
                 force_update_check,
                 color,
                 no_color,
-                root_turbo_json: relative_root_turbo_json.map(|components| invocation_dir.join_components(components)),
+                root_turbo_json: relative_root_turbo_json.map(|components| {
+                    AbsoluteSystemPathBuf::from_unknown(&invocation_dir, components[0])
+                }),
             }
         }
     }

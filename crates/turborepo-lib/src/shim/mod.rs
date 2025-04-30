@@ -77,7 +77,7 @@ fn run_correct_turbo(
     if let Some(turbo_state) = LocalTurboState::infer(&repo_state.root) {
         let mut builder = crate::config::TurborepoConfigBuilder::new(&repo_state.root);
         if let Some(root_turbo_json) = &shim_args.root_turbo_json {
-            builder = builder.with_root_turbo_json(root_turbo_json);
+            builder = builder.with_root_turbo_json_path(Some(root_turbo_json.clone()));
         }
         let config = builder.build().unwrap_or_default();
         try_check_for_updates(&shim_args, turbo_state.version(), &config);
@@ -102,7 +102,7 @@ fn run_correct_turbo(
         let version = get_version();
         let mut builder = crate::config::TurborepoConfigBuilder::new(&repo_state.root);
         if let Some(root_turbo_json) = &shim_args.root_turbo_json {
-            builder = builder.with_root_turbo_json(root_turbo_json);
+            builder = builder.with_root_turbo_json_path(Some(root_turbo_json.clone()));
         }
         let config = builder.build().unwrap_or_default();
         try_check_for_updates(&shim_args, version, &config);
