@@ -303,7 +303,7 @@ impl GitRepo {
         }
 
         let output = self.execute_git_command(&args, pathspec)?;
-        self.add_files_from_stdout(&mut files, turbo_root, output);
+        self.add_files_from_stdout(&mut files, turbo_root, output)?;
 
         // We only care about non-tracked files if we haven't specified both ends up the
         // comparison
@@ -314,11 +314,11 @@ impl GitRepo {
                 &["ls-files", "--others", "--modified", "--exclude-standard"],
                 pathspec,
             )?;
-            self.add_files_from_stdout(&mut files, turbo_root, ls_files_output);
+            self.add_files_from_stdout(&mut files, turbo_root, ls_files_output)?;
             // Include any files that have been staged, but not committed
             let diff_output =
                 self.execute_git_command(&["diff", "--name-only", "--cached"], pathspec)?;
-            self.add_files_from_stdout(&mut files, turbo_root, diff_output);
+            self.add_files_from_stdout(&mut files, turbo_root, diff_output)?;
         }
 
         Ok(files)
@@ -350,22 +350,14 @@ impl GitRepo {
         files: &mut HashSet<AnchoredSystemPathBuf>,
         turbo_root: &AbsoluteSystemPath,
         stdout: Vec<u8>,
-    ) {
-        let stdout = String::from_utf8(stdout).unwrap();
+    ) -> Result<(), Error> {
+        let stdout = String::from_utf8(stdout)?;
         for line in stdout.lines() {
-            let path = RelativeUnixPath::new(line).unwrap();
-            match self.reanchor_path_from_git_root_to_turbo_root(turbo_root, path) {
-                Ok(anchored_to_turbo_root_file_path) => {
-                    files.insert(anchored_to_turbo_root_file_path);
-                }
-                Err(err) => {
-                    warn!(
-                        "Skipping file that could not be anchored to Turborepo root: {} ({})",
-                        line, err
-                    );
-                }
-            }
+            let path = RelativeUnixPath::new(line).map_err(|e| Error::Path(e, Backtrace::capture()))?;
+            let anchored_to_turbo_root_file_path = self.reanchor_path_from_git_root_to_turbo_root(turbo_root, path)?;
+            files.insert(anchored_to_turbo_root_file_path);
         }
+        Ok(())
     }
 
     fn reanchor_path_from_git_root_to_turbo_root(
@@ -1342,7 +1334,16 @@ mod tests {
         let problematic_path = "some/path/with/special/characters/\\321\\216.spec.ts";
         let stdout = problematic_path.as_bytes().to_vec();
 
-        git_repo.add_files_from_stdout(&mut files, &turbo_root_path, stdout);
+        let result = git_repo.add_files_from_stdout(&mut files, &turbo_root_path, stdout);
+        
+        assert!(result.is_err());
+        if let Err(err) = result {
+            match err {
+                Error::Path(_, _) => {
+                }
+                _ => panic!("Expected PathError, got: {:?}", err),
+            }
+        }
 
         assert!(files.is_empty());
 

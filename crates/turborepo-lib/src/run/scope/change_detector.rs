@@ -9,7 +9,7 @@ use turborepo_repository::{
     },
     package_graph::{PackageGraph, PackageName},
 };
-use turborepo_scm::{git::InvalidRange, SCM};
+use turborepo_scm::{git::InvalidRange, Error as ScmError, SCM};
 
 use crate::run::scope::ResolutionError;
 
@@ -112,6 +112,38 @@ impl<'a> GitChangeDetector for ScopeChangeDetector<'a> {
                                 from_ref: from_ref.clone(),
                                 to_ref: to_ref.clone(),
                             }),
+                        )
+                    })
+                    .collect());
+            }
+            Err(ScmError::Path(err, _)) => {
+                debug!("path error: {}, defaulting to all packages changed", err);
+                return Ok(self
+                    .pkg_graph
+                    .packages()
+                    .map(|(name, _)| {
+                        (
+                            name.to_owned(),
+                            PackageInclusionReason::All(AllPackageChangeReason::Other(format!(
+                                "Path error: {}",
+                                err
+                            ))),
+                        )
+                    })
+                    .collect());
+            }
+            Err(err) => {
+                debug!("unexpected error: {}, defaulting to all packages changed", err);
+                return Ok(self
+                    .pkg_graph
+                    .packages()
+                    .map(|(name, _)| {
+                        (
+                            name.to_owned(),
+                            PackageInclusionReason::All(AllPackageChangeReason::Other(format!(
+                                "Unexpected error: {}",
+                                err
+                            ))),
                         )
                     })
                     .collect());
