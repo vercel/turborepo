@@ -354,10 +354,14 @@ impl GitRepo {
         let stdout = String::from_utf8(stdout).unwrap();
         for line in stdout.lines() {
             let path = RelativeUnixPath::new(line).unwrap();
-            let anchored_to_turbo_root_file_path = self
-                .reanchor_path_from_git_root_to_turbo_root(turbo_root, path)
-                .unwrap();
-            files.insert(anchored_to_turbo_root_file_path);
+            match self.reanchor_path_from_git_root_to_turbo_root(turbo_root, path) {
+                Ok(anchored_to_turbo_root_file_path) => {
+                    files.insert(anchored_to_turbo_root_file_path);
+                }
+                Err(err) => {
+                    warn!("Skipping file that could not be anchored to turbo root: {} ({})", line, err);
+                }
+            }
         }
     }
 
