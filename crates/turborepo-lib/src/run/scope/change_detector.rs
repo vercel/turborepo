@@ -117,7 +117,10 @@ impl<'a> GitChangeDetector for ScopeChangeDetector<'a> {
                     .collect());
             }
             Err(ScmError::Path(err, _)) => {
-                warn!("Could not process some file paths: {}. Defaulting to all packages changed.", err);
+                warn!(
+                    "Could not process some file paths: {}. Defaulting to all packages changed.",
+                    err
+                );
                 debug!("path error: {}, defaulting to all packages changed", err);
                 return Ok(self
                     .pkg_graph

@@ -364,14 +364,16 @@ impl GitRepo {
         let stdout = String::from_utf8_lossy(&stdout);
         for line in stdout.lines() {
             match RelativeUnixPath::new(line) {
-                Ok(path) => match self.reanchor_path_from_git_root_to_turbo_root(turbo_root, path) {
-                    Ok(anchored_to_turbo_root_file_path) => {
-                        files.insert(anchored_to_turbo_root_file_path);
+                Ok(path) => {
+                    match self.reanchor_path_from_git_root_to_turbo_root(turbo_root, path) {
+                        Ok(anchored_to_turbo_root_file_path) => {
+                            files.insert(anchored_to_turbo_root_file_path);
+                        }
+                        Err(err) => {
+                            return Err(err);
+                        }
                     }
-                    Err(err) => {
-                        return Err(err);
-                    }
-                },
+                }
                 Err(err) => {
                     return Err(Error::Path(err, std::backtrace::Backtrace::capture()));
                 }
@@ -1357,7 +1359,7 @@ mod tests {
         let result = git_repo.add_files_from_stdout(&mut files, &turbo_root_path, stdout);
 
         assert!(result.is_err());
-        
+
         assert!(files.is_empty());
 
         Ok(())
