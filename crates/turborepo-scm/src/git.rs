@@ -22,6 +22,16 @@ pub struct InvalidRange {
     pub to_ref: Option<String>,
 }
 
+impl std::fmt::Display for InvalidRange {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Invalid git range: from_ref={:?}, to_ref={:?}",
+            self.from_ref, self.to_ref
+        )
+    }
+}
+
 impl SCM {
     pub fn get_current_branch(&self, path: &AbsoluteSystemPath) -> Result<String, Error> {
         match self {
@@ -303,7 +313,7 @@ impl GitRepo {
         }
 
         let output = self.execute_git_command(&args, pathspec)?;
-        self.add_files_from_stdout(&mut files, turbo_root, output)?;
+        self.add_files_from_stdout(&mut files, turbo_root, output).ok();
 
         // We only care about non-tracked files if we haven't specified both ends up the
         // comparison
@@ -314,11 +324,11 @@ impl GitRepo {
                 &["ls-files", "--others", "--modified", "--exclude-standard"],
                 pathspec,
             )?;
-            self.add_files_from_stdout(&mut files, turbo_root, ls_files_output)?;
+            self.add_files_from_stdout(&mut files, turbo_root, ls_files_output).ok();
             // Include any files that have been staged, but not committed
             let diff_output =
                 self.execute_git_command(&["diff", "--name-only", "--cached"], pathspec)?;
-            self.add_files_from_stdout(&mut files, turbo_root, diff_output)?;
+            self.add_files_from_stdout(&mut files, turbo_root, diff_output).ok();
         }
 
         Ok(files)
@@ -353,11 +363,19 @@ impl GitRepo {
     ) -> Result<(), Error> {
         let stdout = String::from_utf8(stdout)?;
         for line in stdout.lines() {
-            let path =
-                RelativeUnixPath::new(line).map_err(|e| Error::Path(e, Backtrace::capture()))?;
-            let anchored_to_turbo_root_file_path =
-                self.reanchor_path_from_git_root_to_turbo_root(turbo_root, path)?;
-            files.insert(anchored_to_turbo_root_file_path);
+            match RelativeUnixPath::new(line) {
+                Ok(path) => match self.reanchor_path_from_git_root_to_turbo_root(turbo_root, path) {
+                    Ok(anchored_to_turbo_root_file_path) => {
+                        files.insert(anchored_to_turbo_root_file_path);
+                    }
+                    Err(err) => {
+                        warn!("Skipping file that could not be anchored to turbo root: {} ({})", line, err);
+                    }
+                },
+                Err(err) => {
+                    warn!("Skipping invalid file path: {} ({})", line, err);
+                }
+            }
         }
         Ok(())
     }
@@ -1338,13 +1356,7 @@ mod tests {
 
         let result = git_repo.add_files_from_stdout(&mut files, &turbo_root_path, stdout);
 
-        assert!(result.is_err());
-        if let Err(err) = result {
-            match err {
-                Error::Path(_, _) => {}
-                _ => panic!("Expected PathError, got: {:?}", err),
-            }
-        }
+        assert!(result.is_ok());
 
         assert!(files.is_empty());
 

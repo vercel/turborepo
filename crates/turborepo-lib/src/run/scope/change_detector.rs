@@ -109,8 +109,8 @@ impl<'a> GitChangeDetector for ScopeChangeDetector<'a> {
                         (
                             name.to_owned(),
                             PackageInclusionReason::All(AllPackageChangeReason::GitRefNotFound {
-                                from_ref: from_ref.clone(),
-                                to_ref: to_ref.clone(),
+                                from_ref,
+                                to_ref,
                             }),
                         )
                     })
