@@ -24,8 +24,6 @@ function dateSortDesc(a: FrontMatter, b: FrontMatter): number {
 }
 
 async function generate(): Promise<void> {
-  // @ts-expect-error -- Package lacks typings
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call -- Package lacks types
   const feed = new RSS({
     title: "Turborepo Blog",
     description: "Turborepo news, updates, and announcements.",
@@ -59,7 +57,7 @@ async function generate(): Promise<void> {
     const stat = statSync(
       path.join(__dirname, "..", "public", frontmatter.data.ogImage)
     );
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access -- Package lacks types
+
     feed.item({
       title: frontmatter.data.title,
       url: `https://turborepo.com/blog/${frontmatter.slug}`, // intentionally including slash here
@@ -73,7 +71,6 @@ async function generate(): Promise<void> {
     });
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument -- Package lacks types
   await fs.writeFile("./public/feed.xml", feed.xml({ indent: true }));
 }
 
