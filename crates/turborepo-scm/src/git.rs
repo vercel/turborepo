@@ -369,7 +369,7 @@ impl GitRepo {
                         files.insert(anchored_to_turbo_root_file_path);
                     }
                     Err(err) => {
-                        return Err(Error::Path(err, std::backtrace::Backtrace::capture()));
+                        return Err(err);
                     }
                 },
                 Err(err) => {
