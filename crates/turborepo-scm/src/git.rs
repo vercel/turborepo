@@ -1319,4 +1319,33 @@ mod tests {
 
         assert_eq!(None, actual);
     }
+
+    #[test]
+    fn test_add_files_from_stdout_with_unancorable_path() -> Result<(), Error> {
+        let (repo_root, _repo) = setup_repository(None)?;
+        let git_root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        
+        // Create a separate directory that is not a subdirectory of git_root
+        let turbo_root = tempfile::tempdir()?;
+        let turbo_root_path = AbsoluteSystemPathBuf::try_from(turbo_root.path()).unwrap();
+        
+        // Create a GitRepo instance directly
+        let git_repo = GitRepo {
+            root: git_root.clone(),
+            bin: GitRepo::find_bin()?,
+        };
+        
+        // Create a HashSet to collect files
+        let mut files = HashSet::new();
+        
+        // Create stdout with a path that cannot be anchored
+        let problematic_path = "some/path/with/special/characters/\\321\\216.spec.ts";
+        let stdout = problematic_path.as_bytes().to_vec();
+        
+        git_repo.add_files_from_stdout(&mut files, &turbo_root_path, stdout);
+        
+        assert!(files.is_empty());
+        
+        Ok(())
+    }
 }
