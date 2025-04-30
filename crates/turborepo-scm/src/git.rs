@@ -353,8 +353,10 @@ impl GitRepo {
     ) -> Result<(), Error> {
         let stdout = String::from_utf8(stdout)?;
         for line in stdout.lines() {
-            let path = RelativeUnixPath::new(line).map_err(|e| Error::Path(e, Backtrace::capture()))?;
-            let anchored_to_turbo_root_file_path = self.reanchor_path_from_git_root_to_turbo_root(turbo_root, path)?;
+            let path =
+                RelativeUnixPath::new(line).map_err(|e| Error::Path(e, Backtrace::capture()))?;
+            let anchored_to_turbo_root_file_path =
+                self.reanchor_path_from_git_root_to_turbo_root(turbo_root, path)?;
             files.insert(anchored_to_turbo_root_file_path);
         }
         Ok(())
@@ -1335,12 +1337,11 @@ mod tests {
         let stdout = problematic_path.as_bytes().to_vec();
 
         let result = git_repo.add_files_from_stdout(&mut files, &turbo_root_path, stdout);
-        
+
         assert!(result.is_err());
         if let Err(err) = result {
             match err {
-                Error::Path(_, _) => {
-                }
+                Error::Path(_, _) => {}
                 _ => panic!("Expected PathError, got: {:?}", err),
             }
         }

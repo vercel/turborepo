@@ -133,7 +133,10 @@ impl<'a> GitChangeDetector for ScopeChangeDetector<'a> {
                     .collect());
             }
             Err(err) => {
-                debug!("unexpected error: {}, defaulting to all packages changed", err);
+                debug!(
+                    "unexpected error: {}, defaulting to all packages changed",
+                    err
+                );
                 return Ok(self
                     .pkg_graph
                     .packages()
