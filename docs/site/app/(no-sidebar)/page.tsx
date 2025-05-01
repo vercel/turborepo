@@ -73,9 +73,9 @@ export default function HomePage() {
           <div className="border-t-[1px] relative w-4 h-4 -left-[.5rem] top-[1px] md:w-8 md:h-8 md:-left-[1rem] md:top-[1px] border-gray-900" />
           <div className="border-l-[1px] relative w-4 h-4 -top-[1.45rem] -left-[1px] md:w-8 md:h-8 md:-top-[2.9rem] md:-left-[1px] border-gray-900" />
         </div>
-        <GridCell className="relative border-b border-r-0 md:border-r col-span-2">
+        <GridCell className="relative border-b col-span-2">
           <DottedLines className="absolute top-0 bottom-0 left-0 right-0 w-full h-full" />
-          <div className="flex flex-col justify-center">
+          <div className="relative z-10 flex flex-col justify-center">
             <h1 className="mb-2.5 text-5xl font-medium text-center md:text-heading-64">
               Make ship happen
             </h1>
@@ -87,7 +87,7 @@ export default function HomePage() {
               <div className="relative inline-flex rounded-full">
                 <div className="absolute inset-0 rounded-full bg-gradient-to-r from-red-900 to-blue-900"></div>
                 <div className="relative rounded-full m-[2px] bg-white dark:bg-black px-6 py-1 md:py-2">
-                  <span className="flex flex-col gap-0 md:flex-row md:gap-2 text-sm md:text-[20px] bg-gradient-to-r from-red-900 to-blue-900 bg-clip-text text-transparent font-medium">
+                  <span className="flex flex-col gap-0 md:flex-row md:gap-2 text-sm md:text-[20px] bg-gradient-to-r from-red-900 to-blue-900 bg-clip-text text-transparent">
                     <RemoteCacheCounterClient className="text-center md:text-right" />
                     <span>hours of compute saved</span>
                   </span>
@@ -118,7 +118,7 @@ export default function HomePage() {
                 <div className="flex items-center justify-center">
                   {feature.illustration}
                 </div>
-                <h3 className="mt-3 text-heading-24 md:mt-6">
+                <h3 className="mt-3 font-medium text-[20px] md:mt-6">
                   {feature.title}
                 </h3>
                 <p className="mt-1.5 text-gray-900 text-copy-16 md:mt-4 text-pretty">
@@ -197,7 +197,7 @@ export default function HomePage() {
             <h2 className="text-2xl font-medium md:text-4xl text-pretty">
               Deploy your Turborepo today.
             </h2>
-            <div className="flex flex-col w-full xs:flex-row gap-4 items-center">
+            <div className="flex flex-col w-full xs:flex-row gap-4 justify-start md:justify-end items-center">
               <Button asChild className="w-full xs:w-auto h-[54px] text-[18px]">
                 <Link href="/repo/docs">Get Started</Link>
               </Button>
