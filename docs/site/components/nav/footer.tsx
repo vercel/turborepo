@@ -50,7 +50,7 @@ const NavItems = ({ category }: { category: Array<FooterItem> }) => {
 
 export const Footer = () => {
   return (
-    <footer className="w-full border-t border-gray-200 bg-background-200 py-12">
+    <footer className="w-full border-t border-gray-200 bg-background-100 py-12">
       <div className="mx-auto flex w-full max-w-screen-xl flex-col gap-y-12 px-6">
         <div className="flex w-full flex-col items-start justify-between gap-y-12 md:flex-row">
           <VercelLogo className="h-6" />

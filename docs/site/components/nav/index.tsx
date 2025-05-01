@@ -72,7 +72,7 @@ export const Navigation = () => {
 
   return (
     <>
-      <div className="sticky top-0 z-40 flex h-[var(--nav-height)] justify-between border-b bg-background-200 px-4 pr-0 md:pr-4">
+      <div className="sticky top-0 z-40 flex h-[var(--nav-height)] justify-between border-b bg-background-100 px-4 pr-0 md:pr-4">
         <div className="flex w-full select-none flex-row items-center">
           <div className="flex flex-shrink-0 flex-row items-center gap-2">
             <HomeLinks />
@@ -93,7 +93,7 @@ export const Navigation = () => {
                       <Link
                         href={page.href}
                         className={cn(
-                          "text-sm transition-colors duration-100 hover:text-gray-900 data-[active=true]:text-gray-1000"
+                          "text-sm text-gray-900 transition-colors duration-100 hover:text-gray-1000 data-[active=true]:text-gray-1000"
                         )}
                         data-active={pageFromRoute === page.name}
                         scroll={page.href !== "/docs"}
@@ -121,9 +121,9 @@ export const Navigation = () => {
         <div className="hidden items-center gap-2 md:flex">
           <Button
             aria-label="Search…"
-            variant="secondary"
+            variant="primary"
             size="sm"
-            className="group flex-row !font-normal !text-gray-800 hover:!text-gray-1000 hidden lg:block"
+            className="group border flex-row !font-normal !text-gray-800 hover:!text-gray-1000 hidden lg:block"
             onClick={() => {
               setOpenSearch(true);
             }}
@@ -142,15 +142,15 @@ export const Navigation = () => {
 
           <FeedbackWidget />
           <Button
-            variant="secondary"
             asChild
             size="sm"
             // @ts-expect-error - Button with asChild expects its children to have href but TypeScript doesn't recognize this pattern
             href="https://github.com/vercel/turborepo"
-            className="bg-transparent hover:bg-transparent"
+            className=""
           >
             <a>
               <LogoGitHub className="inline" />
+              <span>GitHub</span>
             </a>
           </Button>
         </div>
