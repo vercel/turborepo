@@ -51,7 +51,7 @@ pub fn start_spinner(message: &str) -> ProgressBar {
     pb.set_style(
         ProgressStyle::default_spinner()
             // For more spinners check out the cli-spinners project:
-            // https://github.com/sindresorhus/cli-spinners/blob/master/spinners.json
+            // https://github.com/sindresorhus/cli-spinners/blob/main/spinners.json
             .tick_strings(&[
                 "   ",
                 GREY.apply_to(">  ").to_string().as_str(),
