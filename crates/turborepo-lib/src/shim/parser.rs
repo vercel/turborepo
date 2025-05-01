@@ -360,9 +360,8 @@ mod test {
                 force_update_check,
                 color,
                 no_color,
-                root_turbo_json: relative_root_turbo_json.map(|path| {
-                    AbsoluteSystemPathBuf::from_unknown(&invocation_dir, path)
-                }),
+                root_turbo_json: relative_root_turbo_json
+                    .map(|path| AbsoluteSystemPathBuf::from_unknown(&invocation_dir, path)),
             }
         }
     }
