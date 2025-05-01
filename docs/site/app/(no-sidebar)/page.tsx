@@ -73,7 +73,7 @@ export default function HomePage() {
           <div className="border-t-[1px] absolute w-[11px] h-[11px] -left-[6px] top-[1px] md:w-[21px] md:h-[21px] md:-left-[11px] md:top-[1px] border-gray-600" />
           <div className="border-l-[1px] absolute w-[11px] h-[11px] -top-[4px] -left-[1px] md:w-[21px] md:h-[21px] md:-top-[11px] md:-left-[1px] border-gray-600" />
         </div>
-        <GridCell className="relative border-b col-span-2 xs:p-6 xs:py-8 md:p-16">
+        <GridCell className="relative border-b col-span-2 px-6 py-12 xs:px-6 xs:py-12 md:p-16">
           {/* <DottedLines className="absolute top-0 bottom-0 left-0 right-0 w-full h-full" /> */}
           <div className="relative z-1 flex flex-col justify-center">
             <h1 className="mb-4 text-6xl font-semibold tracking-tighter text-center md:text-7xl">
@@ -83,7 +83,7 @@ export default function HomePage() {
               Turborepo is the build system for JavaScript and TypeScript
               codebases
             </p>
-            <div className="flex justify-center mb-6">
+            <div className="flex justify-center mt-2 mb-10">
               <div className="relative inline-flex w-full xs:w-auto">
                 <div className="absolute inset-0 rounded-md xs:rounded-[18px] bg-gradient-to-r from-[#FF1E56] to-[#0196FF] w-full xs:w-auto"></div>
                 <div className="relative text-center rounded-sm xs:rounded-[16px] m-[2px] bg-background-200 dark:bg-black px-6 py-1.5 md:px-5 md:py-0.5 w-full xs:w-auto">
@@ -106,9 +106,11 @@ export default function HomePage() {
             </div>
           </div>
         </GridCell>
-        <GridCell className="h-fit col-span-2 border-b">
-          <h2 className="mb-1 text-2xl font-medium">Scale your workflows</h2>
-          <p className="max-w-prose text-balance text-gray-900 text-copy-16">
+        <GridCell className="h-fit col-span-2">
+          <h2 className="mb-1 text-3xl font-semibold tracking-tight">
+            Scale your workflows
+          </h2>
+          <p className="max-w-prose text-balance text-gray-900 text-base">
             Optimize your local and CI tasks to save years of engineering time
             and compute.
           </p>
@@ -118,20 +120,22 @@ export default function HomePage() {
                 <div className="flex items-center justify-center">
                   <div className="min-h-[200px]">{feature.illustration}</div>
                 </div>
-                <h3 className="mt-3 font-medium text-[20px] md:mt-6">
+                <h3 className="mt-3 text-xl font-semibold tracking-tight md:mt-4">
                   {feature.title}
                 </h3>
-                <p className="mt-1.5 text-gray-900 text-copy-16 md:mt-4 text-pretty">
+                <p className="mt-1.5 text-gray-900 text-base md:mt-2.5 text-pretty">
                   {feature.description}
                 </p>
               </div>
             ))}
           </div>
         </GridCell>
-        <GridCell className="h-fit bg-background-100 col-span-2 border-b">
+        <GridCell className="h-fit col-span-2 border-b">
           <div className="flex flex-col items-start justify-between gap-y-4 md:flex-row">
             <div className="flex flex-col gap-y-1">
-              <h2 className="text-2xl font-medium">Simple setup</h2>
+              <h2 className="text-3xl font-semibold tracking-tight">
+                Simple setup
+              </h2>
               <p className="text-gray-900 text-copy-16 text-pretty">
                 Start a new repository or migrate an existing repo incrementally
                 in minutes.
