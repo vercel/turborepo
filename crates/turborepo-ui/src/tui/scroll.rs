@@ -1,17 +1,31 @@
-use std::{
-    collections::VecDeque,
-    time::{Duration, Instant},
-};
+use std::time::{Duration, Instant};
 
 use crate::tui::event::Direction;
 
+/// The maximum number of lines that can be scrolled per event.
+/// Increase for a higher top speed; decrease for a lower top speed.
 const MAX_VELOCITY: f32 = 12.0; // max lines per event
-const MIN_VELOCITY: f32 = 1.0; // min lines per event
-const ACCELERATION: f32 = 2.0; // lines per event per fast scroll
-const DECAY_TIME: Duration = Duration::from_millis(200); // ms to reset momentum
-const THROTTLE_FACTOR: u8 = 3; // Only process 1 out of every 3 events
-const WINDOW_SIZE: usize = 3; // Number of scrolls to trigger acceleration
-const WINDOW_TIME: Duration = Duration::from_millis(250); // Time window for acceleration
+
+/// The minimum number of lines to scroll per event (when not accelerating).
+/// Usually leave at 1.0 for single-line scrolls.
+const MIN_VELOCITY: f32 = 1.0;
+
+/// How much the scroll velocity increases per qualifying event.
+/// Increase for faster acceleration (reaches top speed quicker, feels
+/// snappier). Decrease for slower, smoother acceleration (takes longer to reach
+/// top speed).
+const ACCELERATION: f32 = 0.2;
+
+/// How long (in ms) between scrolls before momentum resets.
+/// Increase to allow longer pauses between scrolls while keeping momentum.
+/// Decrease to require faster, more continuous scrolling to maintain momentum.
+const DECAY_TIME: Duration = Duration::from_millis(200);
+
+/// Only process 1 out of every N scroll events (throttling).
+/// Increase to make scrolling less sensitive to high-frequency mouse wheels
+/// (e.g. trackpads). Decrease to process more events (smoother, but may be
+/// too fast on some input devices).
+const THROTTLE_FACTOR: u8 = 3;
 
 /// Core struct to track and compute momentum-based scrolling.
 pub struct ScrollMomentum {
@@ -20,7 +34,6 @@ pub struct ScrollMomentum {
     phase: Phase,
     last_direction: Option<Direction>,
     throttle_counter: u8,
-    recent_events: VecDeque<Instant>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -37,7 +50,6 @@ impl ScrollMomentum {
             phase: Phase::Idle,
             last_direction: None,
             throttle_counter: 0,
-            recent_events: VecDeque::with_capacity(WINDOW_SIZE),
         }
     }
 
@@ -58,24 +70,6 @@ impl ScrollMomentum {
             self.velocity = MIN_VELOCITY;
             self.phase = Phase::Idle;
             self.last_event = Some(now);
-            self.recent_events.clear();
-        }
-
-        // Update moving window of recent scrolls
-        self.recent_events.push_back(now);
-        if self.recent_events.len() > WINDOW_SIZE {
-            self.recent_events.pop_front();
-        }
-
-        let reached_window_size = self.recent_events.len() == WINDOW_SIZE;
-        let within_window_time =
-            now.duration_since(self.recent_events.front().copied().unwrap()) <= WINDOW_TIME;
-        let should_accelerate = reached_window_size && within_window_time;
-
-        if !should_accelerate {
-            self.phase = Phase::Idle;
-            self.velocity = MIN_VELOCITY;
-            return 1;
         }
 
         let lines_to_scroll = if let Some(last) = self.last_event {
@@ -109,6 +103,5 @@ impl ScrollMomentum {
         self.phase = Phase::Idle;
         self.last_direction = None;
         self.throttle_counter = 0;
-        self.recent_events.clear();
     }
 }
