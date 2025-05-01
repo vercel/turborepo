@@ -198,10 +198,10 @@ export default function HomePage() {
         </GridCell>
         <GridCell className="col-span-2">
           <div className="flex flex-col items-start gap-y-6 md:flex-row md:items-center md:justify-between md:gap-x-6">
-            <h2 className="text-2xl font-medium md:text-4xl text-pretty">
+            <h2 className="text-4xl font-semibold tracking-tight md:text-[40px]">
               Deploy your Turborepo today.
             </h2>
-            <div className="flex flex-col w-full xs:flex-row gap-4 justify-start md:justify-end items-center">
+            <div className="flex flex-col xs:flex-row gap-4 justify-start md:justify-end items-center">
               <Button asChild className="w-full xs:w-auto h-[54px] text-[18px]">
                 <Link href="/repo/docs">Get Started</Link>
               </Button>
