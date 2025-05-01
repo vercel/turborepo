@@ -27,27 +27,20 @@ const DECAY_TIME: Duration = Duration::from_millis(200);
 /// too fast on some input devices).
 const THROTTLE_FACTOR: u8 = 3;
 
-/// Core struct to track and compute momentum-based scrolling.
+/// Tracks and computes momentum-based scrolling.
 pub struct ScrollMomentum {
     velocity: f32,
     last_event: Option<Instant>,
-    phase: Phase,
     last_direction: Option<Direction>,
     throttle_counter: u8,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Phase {
-    Idle,
-    Accelerating,
-}
-
 impl ScrollMomentum {
+    /// Create a new ScrollMomentum tracker.
     pub fn new() -> Self {
         Self {
             velocity: 0.0,
             last_event: None,
-            phase: Phase::Idle,
             last_direction: None,
             throttle_counter: 0,
         }
@@ -56,51 +49,43 @@ impl ScrollMomentum {
     /// Call this on every scroll event (mouse wheel, key, etc).
     /// Returns the number of lines to scroll for this event.
     pub fn on_scroll_event(&mut self, direction: Direction) -> usize {
-        // Throttle: only process 1 out of every THROTTLE_FACTOR events
         self.throttle_counter = (self.throttle_counter + 1) % THROTTLE_FACTOR;
-        if self.throttle_counter != 0 {
+        let should_throttle = self.throttle_counter != 0;
+        if should_throttle {
             return 0;
         }
 
         let now = Instant::now();
+        let has_direction_changed = self.last_direction.map_or(false, |last| last != direction);
+        let is_first_scroll_event = self.last_event.is_none();
+        let is_scrolling_quickly = self
+            .last_event
+            .map_or(false, |last| now.duration_since(last) < DECAY_TIME);
 
-        // Reset momentum if direction changes
-        let direction_changed = self.last_direction.map_or(false, |last| last != direction);
-        if direction_changed {
+        if has_direction_changed {
             self.velocity = MIN_VELOCITY;
-            self.phase = Phase::Idle;
             self.last_event = Some(now);
+            self.last_direction = Some(direction);
+            return self.velocity as usize;
         }
 
-        let lines_to_scroll = if let Some(last) = self.last_event {
-            let dt = now.duration_since(last);
-            if dt < DECAY_TIME && !direction_changed {
-                // User is scrolling fast, accelerate
-                self.phase = Phase::Accelerating;
-                self.velocity = (self.velocity + ACCELERATION).min(MAX_VELOCITY);
-                self.velocity.round() as usize
-            } else {
-                // Too slow, reset
-                self.phase = Phase::Idle;
-                self.velocity = MIN_VELOCITY;
-                MIN_VELOCITY as usize
-            }
-        } else {
-            self.phase = Phase::Accelerating;
+        if is_first_scroll_event {
             self.velocity = MIN_VELOCITY;
-            MIN_VELOCITY as usize
-        };
+        } else if is_scrolling_quickly {
+            self.velocity = (self.velocity + ACCELERATION).min(MAX_VELOCITY);
+        } else {
+            self.velocity = MIN_VELOCITY;
+        }
 
         self.last_event = Some(now);
         self.last_direction = Some(direction);
-        lines_to_scroll
+        self.velocity.round().max(MIN_VELOCITY) as usize
     }
 
-    /// Call this to reset the momentum (e.g. on focus loss or scroll stop)
+    /// Reset the momentum (e.g. on focus loss or scroll stop)
     pub fn reset(&mut self) {
         self.velocity = 0.0;
         self.last_event = None;
-        self.phase = Phase::Idle;
         self.last_direction = None;
         self.throttle_counter = 0;
     }
