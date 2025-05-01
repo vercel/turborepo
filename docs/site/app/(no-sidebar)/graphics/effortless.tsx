@@ -23,8 +23,7 @@ export const EffortlessGraphic = () => {
 const EffortlessLight = () => {
   return (
     <svg
-      width="312"
-      height="200"
+      className="w-full h-auto"
       viewBox="0 0 312 200"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
@@ -415,8 +414,7 @@ const EffortlessLight = () => {
 const EffortlessDark = () => {
   return (
     <svg
-      width="312"
-      height="200"
+      className="w-full h-auto"
       viewBox="0 0 312 200"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"

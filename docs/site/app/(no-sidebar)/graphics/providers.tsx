@@ -22,8 +22,7 @@ export const CiProviders = () => {
 const ProvidersLight = () => {
   return (
     <svg
-      width="307"
-      height="200"
+      className="w-full h-auto"
       viewBox="0 0 307 200"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
@@ -486,7 +485,7 @@ const ProvidersLight = () => {
 
 export const ProvidersDark = () => {
   return (
-    <svg width="307" height="200" viewBox="0 0 307 200" fill="none">
+    <svg className="w-full h-auto" viewBox="0 0 307 200" fill="none">
       <path
         d="M153.75 142.5C153.945 108.329 154.055 89.1709 154.25 55"
         stroke="#8657A7"

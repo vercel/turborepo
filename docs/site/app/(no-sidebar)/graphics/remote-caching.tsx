@@ -23,8 +23,7 @@ export const RemoteCachingGraphic = () => {
 const RemoteCachingDark = () => {
   return (
     <svg
-      width="307"
-      height="200"
+      className="w-full h-auto"
       viewBox="0 0 307 200"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
@@ -233,8 +232,7 @@ const RemoteCachingDark = () => {
 const RemoteCachingLight = () => {
   return (
     <svg
-      width="307"
-      height="200"
+      className="w-full h-auto"
       viewBox="0 0 307 200"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
