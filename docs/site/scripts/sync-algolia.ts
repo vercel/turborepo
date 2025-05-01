@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import algosearch from "algoliasearch";
 import env from "@next/env";
-import { sync } from "fumadocs-core/search/algolia";
+import { sync, type DocumentRecord } from "fumadocs-core/search/algolia";
 
 // We assume you're working in development if this is not provided.
 if (!process.env.NEXT_PUBLIC_ALGOLIA_INDEX) {
@@ -19,11 +19,16 @@ const ALGOLIA_INDEX_NAME = process.env.NEXT_PUBLIC_ALGOLIA_INDEX ?? "_docs_dev";
 
 const content = fs.readFileSync(".next/server/app/static.json.body");
 
-/** @type {import('fumadocs-core/search/algolia').DocumentRecord[]} **/
-const indexes = JSON.parse(content.toString()).filter(
+const indexes = (
+  JSON.parse(content.toString()) as Array<DocumentRecord>
+).filter(
   // These path don't have information that we think people want in search.
   (doc) => !["docs/community", "/docs"].includes(doc.url)
 );
+
+if (!process.env.ALGOLIA_APP_ID) {
+  throw new Error("No ALGOLIA_APP_ID found.");
+}
 
 const algoliaClient = algosearch(
   process.env.ALGOLIA_APP_ID,
@@ -56,7 +61,7 @@ void sync(algoliaClient, {
   .then(() => {
     console.log(`Search index updated for ${ALGOLIA_INDEX_NAME}.`);
   })
-  .catch((err) => {
+  .catch((err: unknown) => {
     console.error(err);
-    throw new Error(err);
+    throw err instanceof Error ? err : new Error(String(err));
   });
