@@ -74,12 +74,12 @@ export default function HomePage() {
           <div className="border-l-[1px] absolute w-[11px] h-[11px] -top-[4px] -left-[1px] md:w-[21px] md:h-[21px] md:-top-[11px] md:-left-[1px] border-gray-600" />
         </div>
         <GridCell className="relative border-b col-span-2 px-6 py-12 xs:px-6 xs:py-12 md:p-16">
-          {/* <DottedLines className="absolute top-0 bottom-0 left-0 right-0 w-full h-full" /> */}
+          <DottedLines className="absolute top-0 bottom-0 left-0 right-0 overflow-hidden text-center flex items-center justify-center" />
           <div className="relative z-1 flex flex-col justify-center">
             <h1 className="mb-4 text-6xl font-semibold tracking-tighter text-center md:text-7xl">
               Make ship happen
             </h1>
-            <p className="max-w-[440px] m-auto mb-4 font-normal text-center text-gray-900 text-lg md:text-xl">
+            <p className="max-w-[380px] m-auto mb-4 font-normal text-center text-gray-900 text-lg md:text-xl">
               Turborepo is the build system for JavaScript and TypeScript
               codebases
             </p>
@@ -87,14 +87,13 @@ export default function HomePage() {
               <div className="relative inline-flex w-full xs:w-auto">
                 <div className="absolute inset-0 rounded-lg xs:rounded-[22px] bg-gradient-to-r from-[#FF1E56] to-[#0196FF] w-full xs:w-auto"></div>
                 <div className="relative text-center rounded-md xs:rounded-[20px] m-[2px] bg-background-100 dark:bg-black px-4 py-1.5 md:px-5 md:py-0.5 w-full xs:w-auto">
-                  <span className="flex flex-col gap-0 items-center xs:flex-row sm:gap-2 text-lg sm:text-xl leading-tight bg-gradient-to-r from-[#FF1E56] to-[#0196FF] bg-clip-text text-transparent">
-                    <RemoteCacheCounterClient className="text-lg sm:text-xl leading-tight" />
+                  <span className="flex flex-col gap-0 items-center xs:flex-row sm:gap-1 text-base sm:text-xl leading-tight bg-gradient-to-r from-[#FF1E56] to-[#0196FF] bg-clip-text text-transparent">
+                    <RemoteCacheCounterClient className="" />
                     <span>hours of compute saved</span>
                   </span>
                 </div>
               </div>
             </div>
-            <div></div>
             <div className="flex flex-row h-fit gap-2 sm:gap-4 justify-center items-center">
               <Button asChild className="text-sm sm:h-12 sm:text-base">
                 <Link href="/docs">Get started</Link>

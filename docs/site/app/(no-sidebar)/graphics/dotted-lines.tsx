@@ -1,111 +1,29 @@
 export const DottedLines = ({ className }: { className: string }) => {
   return (
-    <svg
-      width="914"
-      height="373"
-      className={className}
-      viewBox="0 0 914 373"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <g opacity="0.15">
-        <line
-          x1="664.5"
-          y1="0.0999985"
-          x2="664.5"
-          y2="373"
-          stroke="#4F71CB"
-          stroke-dasharray="4 4"
-        />
-        <line
-          x1="332.5"
-          y1="0.0999985"
-          x2="332.5"
-          y2="373"
-          stroke="#9F4C96"
-          stroke-dasharray="4 4"
-        />
-        <line
-          x1="0.5"
-          y1="0.0999985"
-          x2="0.499985"
-          y2="373"
-          stroke="#EF2661"
-          stroke-dasharray="4 4"
-        />
-        <line
-          x1="747.5"
-          y1="0.0999985"
-          x2="747.5"
-          y2="373"
-          stroke="#3B7BD9"
-          stroke-dasharray="4 4"
-        />
-        <line
-          x1="415.5"
-          y1="0.0999985"
-          x2="415.5"
-          y2="373"
-          stroke="#8B56A4"
-          stroke-dasharray="4 4"
-        />
-        <line
-          x1="83.5"
-          y1="0.0999985"
-          x2="83.5"
-          y2="373"
-          stroke="#DB2F6E"
-          stroke-dasharray="4 4"
-        />
-        <line
-          x1="830.5"
-          y1="0.0999985"
-          x2="830.5"
-          y2="373"
-          stroke="#2885E6"
-          stroke-dasharray="4 4"
-        />
-        <line
-          x1="498.5"
-          y1="0.0999985"
-          x2="498.5"
-          y2="373"
-          stroke="#775FB1"
-          stroke-dasharray="4 4"
-        />
-        <line
-          x1="166.5"
-          y1="0.0999985"
-          x2="166.5"
-          y2="373"
-          stroke="#C8397C"
-          stroke-dasharray="4 4"
-        />
-        <line
-          x1="913.5"
-          y1="0.0999985"
-          x2="913.5"
-          y2="373"
-          stroke="#148DF3"
-          stroke-dasharray="4 4"
-        />
-        <line
-          x1="581.5"
-          y1="0.0999985"
-          x2="581.5"
-          y2="373"
-          stroke="#6368BE"
-          stroke-dasharray="4 4"
-        />
-        <line
-          x1="249.5"
-          y1="0.0999985"
-          x2="249.5"
-          y2="373"
-          stroke="#B34288"
-          stroke-dasharray="4 4"
-        />
-      </g>
-    </svg>
+    <div className={className}>
+      <svg
+        fill="none"
+        height="1080"
+        viewBox="0 0 1080 1080"
+        width="1080"
+        xmlns="http://www.w3.org/2000/svg"
+        className="absolute margin-auto"
+      >
+        <g opacity=".15" strokeDasharray="4 4">
+          <path d="m747.5 3.17647v1076.82353" stroke="#4f71cb" />
+          <path d="m415.5 3.17647v1076.82353" stroke="#9f4c96" />
+          <path d="m83.5 3.17647v1076.82353" stroke="#ef2661" />
+          <path d="m830.5 3.17647v1076.82353" stroke="#3b7bd9" />
+          <path d="m498.5 3.17647v1076.82353" stroke="#8b56a4" />
+          <path d="m166.5 3.17647v1076.82353" stroke="#db2f6e" />
+          <path d="m913.5 3.17647v1076.82353" stroke="#2885e6" />
+          <path d="m581.5 3.17647v1076.82353" stroke="#775fb1" />
+          <path d="m249.5 3.17647v1076.82353" stroke="#c8397c" />
+          <path d="m996.5 3.17647v1076.82353" stroke="#148df3" />
+          <path d="m664.5 3.17647v1076.82353" stroke="#6368be" />
+          <path d="m332.5 3.17647v1076.82353" stroke="#b34288" />
+        </g>
+      </svg>
+    </div>
   );
 };
