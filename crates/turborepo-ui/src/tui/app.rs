@@ -867,10 +867,12 @@ fn update(
         }
         Event::ScrollUp => {
             app.is_task_selection_pinned = true;
+            app.scroll_momentum.reset();
             app.scroll_terminal_output(Direction::Up, false)?
         }
         Event::ScrollDown => {
             app.is_task_selection_pinned = true;
+            app.scroll_momentum.reset();
             app.scroll_terminal_output(Direction::Down, false)?;
         }
         Event::ScrollWithMomentum(direction) => {
@@ -879,18 +881,22 @@ fn update(
         }
         Event::PageUp => {
             app.is_task_selection_pinned = true;
+            app.scroll_momentum.reset();
             app.scroll_terminal_output_by_page(Direction::Up)?;
         }
         Event::PageDown => {
             app.is_task_selection_pinned = true;
+            app.scroll_momentum.reset();
             app.scroll_terminal_output_by_page(Direction::Down)?;
         }
         Event::JumpToLogsTop => {
             app.is_task_selection_pinned = true;
+            app.scroll_momentum.reset();
             app.jump_to_logs_top()?;
         }
         Event::JumpToLogsBottom => {
             app.is_task_selection_pinned = true;
+            app.scroll_momentum.reset();
             app.jump_to_logs_bottom()?;
         }
         Event::EnterInteractive => {
