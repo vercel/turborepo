@@ -218,7 +218,10 @@ impl<W> App<W> {
             self.scroll_momentum.reset();
             1
         };
-        self.get_full_task_mut()?.scroll_by(direction, lines)?;
+
+        if lines > 0 {
+            self.get_full_task_mut()?.scroll_by(direction, lines)?;
+        }
         Ok(())
     }
 
