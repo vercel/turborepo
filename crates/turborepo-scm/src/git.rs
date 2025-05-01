@@ -361,24 +361,15 @@ impl GitRepo {
         turbo_root: &AbsoluteSystemPath,
         stdout: Vec<u8>,
     ) -> Result<(), Error> {
-        let stdout = String::from_utf8_lossy(&stdout);
+        let stdout = String::from_utf8(stdout)?;
         for line in stdout.lines() {
-            match RelativeUnixPath::new(line) {
-                Ok(path) => {
-                    match self.reanchor_path_from_git_root_to_turbo_root(turbo_root, path) {
-                        Ok(anchored_to_turbo_root_file_path) => {
-                            files.insert(anchored_to_turbo_root_file_path);
-                        }
-                        Err(err) => {
-                            warn!(
-                                "Skipping file that could not be anchored to turbo root: {} ({})",
-                                line, err
-                            );
-                        }
-                    }
+            let path = RelativeUnixPath::new(line).unwrap();
+            match self.reanchor_path_from_git_root_to_turbo_root(turbo_root, path) {
+                Ok(anchored_to_turbo_root_file_path) => {
+                    files.insert(anchored_to_turbo_root_file_path);
                 }
                 Err(err) => {
-                    warn!("Skipping file with invalid path format: {} ({})", line, err);
+                    warn!("Skipping file that could not be anchored to turbo root: {} ({})", line, err);
                 }
             }
         }
@@ -1356,13 +1347,12 @@ mod tests {
         let mut files = HashSet::new();
 
         // Create stdout with a path that cannot be anchored
-        let problematic_path = "some/path/with/special/characters/\\321\\216.spec.ts";
+        let problematic_path = "some/path/with/special/characters/test.spec.ts";
         let stdout = problematic_path.as_bytes().to_vec();
 
         let result = git_repo.add_files_from_stdout(&mut files, &turbo_root_path, stdout);
 
-        assert!(result.is_ok());
-
+        assert!(result.is_err());
         assert!(files.is_empty());
 
         Ok(())

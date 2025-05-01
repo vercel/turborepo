@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use tracing::debug;
+use tracing::{debug, warn};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 use turborepo_repository::{
     change_mapper::{
@@ -82,6 +82,31 @@ impl<'a> ScopeChangeDetector<'a> {
     }
 }
 
+impl<'a> ScopeChangeDetector<'a> {
+    fn all_packages_changed_due_to_error(
+        &self,
+        from_ref: Option<&str>,
+        to_ref: Option<&str>,
+        error_message: &str,
+    ) -> Result<HashMap<PackageName, PackageInclusionReason>, ResolutionError> {
+        debug!("{}, defaulting to all packages changed", error_message);
+        Ok(self
+            .pkg_graph
+            .packages()
+            .map(|(name, _)| {
+                (
+                    name.to_owned(),
+                    PackageInclusionReason::All(AllPackageChangeReason::GitError {
+                        from_ref: from_ref.map(String::from),
+                        to_ref: to_ref.map(String::from),
+                        message: error_message.to_string(),
+                    }),
+                )
+            })
+            .collect())
+    }
+}
+
 impl<'a> GitChangeDetector for ScopeChangeDetector<'a> {
     /// get the actual changed packages between two git refs
     fn changed_packages(
@@ -101,59 +126,29 @@ impl<'a> GitChangeDetector for ScopeChangeDetector<'a> {
             merge_base,
         )? {
             Err(InvalidRange { from_ref, to_ref }) => {
-                debug!("invalid ref range, defaulting to all packages changed");
-                return Ok(self
-                    .pkg_graph
-                    .packages()
-                    .map(|(name, _)| {
-                        (
-                            name.to_owned(),
-                            PackageInclusionReason::All(AllPackageChangeReason::GitRefNotFound {
-                                from_ref,
-                                to_ref,
-                            }),
-                        )
-                    })
-                    .collect());
+                return self.all_packages_changed_due_to_error(
+                    from_ref.as_deref(),
+                    to_ref.as_deref(),
+                    "invalid ref range",
+                );
             }
             Err(ScmError::Path(err, _)) => {
                 warn!(
                     "Could not process some file paths: {}. Defaulting to all packages changed.",
                     err
                 );
-                debug!("path error: {}, defaulting to all packages changed", err);
-                return Ok(self
-                    .pkg_graph
-                    .packages()
-                    .map(|(name, _)| {
-                        (
-                            name.to_owned(),
-                            PackageInclusionReason::All(AllPackageChangeReason::GitRefNotFound {
-                                from_ref: from_ref.map(String::from),
-                                to_ref: to_ref.map(String::from),
-                            }),
-                        )
-                    })
-                    .collect());
+                return self.all_packages_changed_due_to_error(
+                    from_ref,
+                    to_ref,
+                    &format!("path error: {}", err),
+                );
             }
             Err(err) => {
-                debug!(
-                    "unexpected error: {}, defaulting to all packages changed",
-                    err
+                return self.all_packages_changed_due_to_error(
+                    from_ref,
+                    to_ref,
+                    &format!("unexpected error: {}", err),
                 );
-                return Ok(self
-                    .pkg_graph
-                    .packages()
-                    .map(|(name, _)| {
-                        (
-                            name.to_owned(),
-                            PackageInclusionReason::All(AllPackageChangeReason::GitRefNotFound {
-                                from_ref: from_ref.map(String::from),
-                                to_ref: to_ref.map(String::from),
-                            }),
-                        )
-                    })
-                    .collect());
             }
             Ok(changed_files) => changed_files,
         };
