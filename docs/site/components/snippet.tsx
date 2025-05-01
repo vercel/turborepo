@@ -30,14 +30,14 @@ export function Snippet({ code, className }: SnippetProps) {
         className
       )}
     >
-      <pre className="geist-overflow-scroll-y !bg-[var(--ds-background-100)] p-2.5 pr-10 text-sm font-mono">
+      <pre className="geist-overflow-scroll-y !bg-[var(--ds-background-100)] p-2.5 sm:pl-4 pr-12 text-sm font-mono">
         $ {code}
       </pre>
       <button
         type="button"
         aria-label="Copy to clipboard"
         onClick={copyToClipboard}
-        className="absolute right-2 top-2 p-1 rounded-md hover:bg-gray-800 transition-colors"
+        className="absolute right-2 top-2 p-1 sm:p-2 rounded-md hover:bg-gray-800 transition-colors"
       >
         <span className="flex items-center justify-center">
           {copied ? (

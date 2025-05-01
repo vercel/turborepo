@@ -14,7 +14,7 @@ export const Card = ({ name, alias, avatar, url, children }: CardProps) => {
     <Link
       href={url}
       target="_blank"
-      className="drop-shadow-xs rounded-xl border border-gray-400 bg-background-200 px-6 py-5 hover:bg-background-100 hover:drop-shadow-sm"
+      className="drop-shadow-xs rounded-xl border border-gray-400 bg-background-100 px-6 py-5 hover:bg-background-200 hover:drop-shadow-sm"
     >
       <div className="flex items-center gap-4">
         <Image

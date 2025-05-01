@@ -85,8 +85,8 @@ export default function HomePage() {
             </p>
             <div className="flex justify-center mt-2 mb-10">
               <div className="relative inline-flex w-full xs:w-auto">
-                <div className="absolute inset-0 rounded-md xs:rounded-[18px] bg-gradient-to-r from-[#FF1E56] to-[#0196FF] w-full xs:w-auto"></div>
-                <div className="relative text-center rounded-sm xs:rounded-[16px] m-[2px] bg-background-200 dark:bg-black px-6 py-1.5 md:px-5 md:py-0.5 w-full xs:w-auto">
+                <div className="absolute inset-0 rounded-lg xs:rounded-[22px] bg-gradient-to-r from-[#FF1E56] to-[#0196FF] w-full xs:w-auto"></div>
+                <div className="relative text-center rounded-md xs:rounded-[20px] m-[2px] bg-background-100 dark:bg-black px-4 py-1.5 md:px-5 md:py-0.5 w-full xs:w-auto">
                   <span className="flex flex-col gap-0 items-center xs:flex-row sm:gap-2 text-lg sm:text-xl leading-tight bg-gradient-to-r from-[#FF1E56] to-[#0196FF] bg-clip-text text-transparent">
                     <RemoteCacheCounterClient className="text-lg sm:text-xl leading-tight" />
                     <span>hours of compute saved</span>
@@ -95,19 +95,19 @@ export default function HomePage() {
               </div>
             </div>
             <div></div>
-            <div className="flex flex-row h-fit gap-4 justify-center items-center">
-              <Button asChild className="md:w-auto text-sm">
+            <div className="flex flex-row h-fit gap-2 sm:gap-4 justify-center items-center">
+              <Button asChild className="text-sm sm:h-12 sm:text-base">
                 <Link href="/docs">Get started</Link>
               </Button>
               <Snippet
                 code="npm i turbo"
-                className="flex h-fit w-full xs:w-auto items-center border border-[var(--ds-gray-alpha-400)] justify-start font-mono bg-[var(--ds-background-100)]"
+                className="flex h-fit w-full xs:w-auto sm:h-12 items-center border border-[var(--ds-gray-alpha-400)] justify-start font-mono bg-[var(--ds-background-100)]"
               />
             </div>
           </div>
         </GridCell>
-        <GridCell className="h-fit col-span-2">
-          <h2 className="mb-1 text-3xl font-semibold tracking-tight">
+        <GridCell className="h-fit col-span-2 px-6 py-14 xs:px-6 xs:py-10 md:px-9 lg:px-12">
+          <h2 className="mb-1 text-[32px] font-semibold tracking-tighter">
             Scale your workflows
           </h2>
           <p className="max-w-prose text-balance text-gray-900 text-base">
@@ -118,22 +118,22 @@ export default function HomePage() {
             {FEATURES.map((feature) => (
               <div key={feature.title}>
                 <div className="flex items-center justify-center">
-                  <div className="min-h-[200px]">{feature.illustration}</div>
+                  {feature.illustration}
                 </div>
-                <h3 className="mt-3 text-xl font-semibold tracking-tight md:mt-4">
+                <h3 className="mt-2 text-2xl font-semibold tracking-tighter">
                   {feature.title}
                 </h3>
-                <p className="mt-1.5 text-gray-900 text-base md:mt-2.5 text-pretty">
+                <p className="mt-1.5 text-gray-900 text-base md:mt-2 text-pretty">
                   {feature.description}
                 </p>
               </div>
             ))}
           </div>
         </GridCell>
-        <GridCell className="h-fit col-span-2">
+        <GridCell className="col-span-2 px-6 py-14 xs:px-6 xs:py-10 md:px-9 lg:px-12">
           <div className="flex flex-col items-start justify-between gap-y-4 md:flex-row">
             <div className="flex flex-col gap-y-1">
-              <h2 className="text-3xl font-semibold tracking-tight">
+              <h2 className="text-[32px] font-semibold tracking-tighter">
                 Simple setup
               </h2>
               <p className="text-gray-900 text-copy-16 text-pretty">
@@ -141,14 +141,18 @@ export default function HomePage() {
                 in minutes.
               </p>
             </div>
-            <Button asChild>
-              <Link href="/repo/docs" className="w-full sm:w-auto">
+            <Button
+              asChild
+              className="text-sm sm:h-12 sm:text-base"
+              variant="outline"
+            >
+              <Link href="/repo/docs">
                 Read the docs
                 <ArrowRight />
               </Link>
             </Button>
           </div>
-          <div className="mt-4 grid w-full grid-cols-1 gap-x-4 md:grid-cols-2">
+          <div className="mt-6 grid w-full grid-cols-1 gap-x-4 md:grid-cols-2">
             <div className="mb-6 md:mb-0">
               <DynamicCodeBlock
                 lang="json"
@@ -189,25 +193,25 @@ export default function HomePage() {
             </div>
           </div>
         </GridCell>
-        <GridCell className="h-fit col-span-2 border-b">
-          <h2 className="text-3xl font-semibold tracking-tight">
+        <GridCell className="col-span-2 px-6 py-14 xs:px-6 xs:py-10 md:px-9 lg:px-12 border-b">
+          <h2 className="text-[32px] font-semibold tracking-tighter">
             What builders say about Turborepo
           </h2>
 
           <Testimonials />
         </GridCell>
-        <GridCell className="col-span-2">
+        <GridCell className="col-span-2 px-6 py-14 xs:px-6 xs:py-10 md:px-9 lg:px-12">
           <div className="flex flex-col items-start gap-y-6 md:flex-row md:items-center md:justify-between md:gap-x-6">
-            <h2 className="text-4xl font-semibold tracking-tight md:text-[40px]">
+            <h2 className="text-[32px] font-semibold tracking-tighter md:text-[40px]">
               Deploy your Turborepo today.
             </h2>
             <div className="flex flex-col xs:flex-row gap-4 justify-start md:justify-end items-center">
-              <Button asChild className="w-full xs:w-auto h-[54px] text-[18px]">
-                <Link href="/repo/docs">Get Started</Link>
+              <Button asChild className="text-sm sm:h-12 sm:text-base">
+                <Link href="/docs">Get started</Link>
               </Button>
               <Snippet
                 code="npm i turbo"
-                className="flex h-fit w-full xs:w-auto items-center border border-[var(--ds-gray-alpha-400)] justify-center font-mono bg-[var(--ds-background-100)]"
+                className="flex h-fit w-full xs:w-auto sm:h-12 items-center border border-[var(--ds-gray-alpha-400)] justify-start font-mono bg-[var(--ds-background-100)]"
               />
             </div>
           </div>
