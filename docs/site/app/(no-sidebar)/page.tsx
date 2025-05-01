@@ -116,7 +116,7 @@ export default function HomePage() {
             {FEATURES.map((feature) => (
               <div key={feature.title}>
                 <div className="flex items-center justify-center">
-                  {feature.illustration}
+                  <div className="min-h-[200px]">{feature.illustration}</div>
                 </div>
                 <h3 className="mt-3 font-medium text-[20px] md:mt-6">
                   {feature.title}

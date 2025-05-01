@@ -9,6 +9,10 @@ const counterFormatter = Intl.NumberFormat(undefined, {
   maximumFractionDigits: 0,
 });
 
+// A number to start the counter at that is lower than the actual time saved
+// to make the counter not start at 0
+const ARBITRARY_START_NUMBER = 176070400 / 60;
+
 export function RemoteCacheCounterClient({
   className,
 }: {
@@ -25,9 +29,11 @@ export function RemoteCacheCounterClient({
     }
   }, []);
 
-  const dur = Number.isFinite(initialValue) ? initialValue : 0;
+  const dur = Number.isFinite(initialValue)
+    ? initialValue
+    : ARBITRARY_START_NUMBER;
   const spring = useSpring({
-    val: timeSaved ? timeSaved / 60 : 0,
+    val: timeSaved ? timeSaved / 60 : ARBITRARY_START_NUMBER,
     from: { val: dur },
     config: { mass: 1, tension: 170, friction: 60, clamp: true },
   });
