@@ -3,6 +3,7 @@ import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import type { ReactNode } from "react";
 import type { Metadata } from "next";
+import clsx from "clsx";
 import { PRODUCT_SLOGANS } from "#lib/constants.ts";
 import { createMetadata } from "#lib/create-metadata.ts";
 import { VercelTrackers } from "#components/analytics.tsx";
@@ -31,7 +32,7 @@ export default function Layout({
       lang="en"
       suppressHydrationWarning
     >
-      <body>
+      <body className={clsx("flex min-h-svh flex-col antialiased")}>
         <RootProvider>
           {children}
           <Footer />

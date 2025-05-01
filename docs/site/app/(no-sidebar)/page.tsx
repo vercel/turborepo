@@ -67,41 +67,41 @@ export default function HomePage() {
           sm: 1,
           md: 2,
         }}
-        className="relative border border-gray-200"
+        className="relative border border-gray-400"
       >
         <div className="absolute -top-[2px]">
-          <div className="border-t-[1px] relative w-4 h-4 -left-[.5rem] top-[1px] md:w-8 md:h-8 md:-left-[1rem] md:top-[1px] border-gray-900" />
-          <div className="border-l-[1px] relative w-4 h-4 -top-[1.45rem] -left-[1px] md:w-8 md:h-8 md:-top-[2.9rem] md:-left-[1px] border-gray-900" />
+          <div className="border-t-[1px] absolute w-[11px] h-[11px] -left-[6px] top-[1px] md:w-[21px] md:h-[21px] md:-left-[11px] md:top-[1px] border-gray-600" />
+          <div className="border-l-[1px] absolute w-[11px] h-[11px] -top-[4px] -left-[1px] md:w-[21px] md:h-[21px] md:-top-[11px] md:-left-[1px] border-gray-600" />
         </div>
-        <GridCell className="relative border-b col-span-2">
-          <DottedLines className="absolute top-0 bottom-0 left-0 right-0 w-full h-full" />
-          <div className="relative z-10 flex flex-col justify-center">
-            <h1 className="mb-2.5 text-5xl font-medium text-center md:text-heading-64">
+        <GridCell className="relative border-b col-span-2 xs:p-6 xs:py-8 md:p-16">
+          {/* <DottedLines className="absolute top-0 bottom-0 left-0 right-0 w-full h-full" /> */}
+          <div className="relative z-1 flex flex-col justify-center">
+            <h1 className="mb-4 text-6xl font-semibold tracking-tighter text-center md:text-7xl">
               Make ship happen
             </h1>
-            <p className="text-gray-900 text-center text-sm md:text-[20px]  text-pretty">
+            <p className="max-w-[440px] m-auto mb-4 font-normal text-center text-gray-900 text-lg md:text-xl">
               Turborepo is the build system for JavaScript and TypeScript
               codebases
             </p>
-            <div className="flex justify-center my-6 md:mt-4 md:mb-6">
-              <div className="relative inline-flex rounded-full">
-                <div className="absolute inset-0 rounded-full bg-gradient-to-r from-red-900 to-blue-900"></div>
-                <div className="relative rounded-full m-[2px] bg-white dark:bg-black px-6 py-1 md:py-2">
-                  <span className="flex flex-col gap-0 md:flex-row md:gap-2 text-sm md:text-[20px] bg-gradient-to-r from-red-900 to-blue-900 bg-clip-text text-transparent">
-                    <RemoteCacheCounterClient className="text-center md:text-right" />
+            <div className="flex justify-center mb-6">
+              <div className="relative inline-flex w-full xs:w-auto">
+                <div className="absolute inset-0 rounded-md xs:rounded-[18px] bg-gradient-to-r from-[#FF1E56] to-[#0196FF] w-full xs:w-auto"></div>
+                <div className="relative text-center rounded-sm xs:rounded-[16px] m-[2px] bg-background-200 dark:bg-black px-6 py-1.5 md:px-5 md:py-0.5 w-full xs:w-auto">
+                  <span className="flex flex-col gap-0 items-center xs:flex-row sm:gap-2 text-lg sm:text-xl leading-tight bg-gradient-to-r from-[#FF1E56] to-[#0196FF] bg-clip-text text-transparent">
+                    <RemoteCacheCounterClient className="text-lg sm:text-xl leading-tight" />
                     <span>hours of compute saved</span>
                   </span>
                 </div>
               </div>
             </div>
             <div></div>
-            <div className="flex flex-col md:flex-row h-fit gap-4 justify-center items-center">
-              <Button asChild className="w-full md:w-auto h-[54px]">
+            <div className="flex flex-row h-fit gap-4 justify-center items-center">
+              <Button asChild className="md:w-auto text-sm">
                 <Link href="/docs">Get started</Link>
               </Button>
               <Snippet
                 code="npm i turbo"
-                className="flex h-fit w-full md:w-auto items-center border border-[var(--ds-gray-alpha-400)] justify-center font-mono bg-[var(--ds-background-100)]"
+                className="flex h-fit w-full xs:w-auto items-center border border-[var(--ds-gray-alpha-400)] justify-start font-mono bg-[var(--ds-background-100)]"
               />
             </div>
           </div>
