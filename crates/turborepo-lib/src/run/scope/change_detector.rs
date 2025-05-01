@@ -123,33 +123,26 @@ impl<'a> GitChangeDetector for ScopeChangeDetector<'a> {
             include_uncommitted,
             allow_unknown_objects,
             merge_base,
-        )? {
-            Err(InvalidRange { from_ref, to_ref }) => {
-                return self.all_packages_changed_due_to_error(
-                    from_ref.as_deref(),
-                    to_ref.as_deref(),
-                    "invalid ref range",
-                );
-            }
+        ) {
+            Ok(changed_files) => changed_files,
             Err(ScmError::Path(err, _)) => {
                 warn!(
                     "Could not process some file paths: {}. Defaulting to all packages changed.",
                     err
                 );
                 return self.all_packages_changed_due_to_error(
-                    from_ref.map(|s| s),
-                    to_ref.map(|s| s),
+                    from_ref,
+                    to_ref,
                     &format!("path error: {}", err),
                 );
             }
             Err(err) => {
                 return self.all_packages_changed_due_to_error(
-                    from_ref.map(|s| s),
-                    to_ref.map(|s| s),
+                    from_ref,
+                    to_ref,
                     &format!("unexpected error: {}", err),
                 );
             }
-            Ok(changed_files) => changed_files,
         };
 
         let lockfile_contents = self.get_lockfile_contents(from_ref, &changed_files);
