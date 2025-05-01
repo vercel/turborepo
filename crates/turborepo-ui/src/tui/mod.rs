@@ -7,6 +7,7 @@ mod input;
 mod pane;
 mod popup;
 mod preferences;
+pub mod scroll;
 mod search;
 mod size;
 mod spinner;

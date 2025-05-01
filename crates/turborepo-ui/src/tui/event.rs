@@ -29,6 +29,7 @@ pub enum Event {
     Down,
     ScrollUp,
     ScrollDown,
+    ScrollWithMomentum(Direction),
     PageUp,
     PageDown,
     JumpToLogsTop,
@@ -68,7 +69,7 @@ pub enum Event {
     SearchBackspace,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 pub enum Direction {
     Up,
     Down,
