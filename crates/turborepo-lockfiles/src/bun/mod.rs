@@ -198,7 +198,7 @@ impl Lockfile for BunLockfile {
     }
 
     fn encode(&self) -> Result<Vec<u8>, crate::Error> {
-        Ok(serde_json::to_vec(&self.data)?)
+        Ok(serde_json::to_vec_pretty(&self.data)?)
     }
 
     fn global_change(&self, other: &dyn Lockfile) -> bool {
