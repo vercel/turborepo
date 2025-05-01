@@ -162,7 +162,7 @@ impl ShimArgs {
             let (spans, args_string) =
                 Self::get_spans_in_args_string(vec![idx], env::args().skip(1));
 
-            return Err(Error::EmptyCwd {
+            return Err(Error::EmptyRootTurboJson {
                 backtrace: Backtrace::capture(),
                 args_string,
                 flag_range: spans[0],
@@ -328,7 +328,7 @@ mod test {
         pub color: bool,
         pub no_color: bool,
         pub relative_cwd: Option<&'static [&'static str]>,
-        pub relative_root_turbo_json: Option<&'static [&'static str]>,
+        pub relative_root_turbo_json: Option<&'static str>,
     }
 
     impl ExpectedArgs {
@@ -360,8 +360,8 @@ mod test {
                 force_update_check,
                 color,
                 no_color,
-                root_turbo_json: relative_root_turbo_json.map(|components| {
-                    AbsoluteSystemPathBuf::from_unknown(&invocation_dir, components[0])
+                root_turbo_json: relative_root_turbo_json.map(|path| {
+                    AbsoluteSystemPathBuf::from_unknown(&invocation_dir, path)
                 }),
             }
         }
@@ -496,7 +496,7 @@ mod test {
     #[test_case(
         &["turbo", "--root-turbo-json", "path/to/turbo.json"],
         ExpectedArgs {
-            relative_root_turbo_json: Some(&["path/to/turbo.json"]),
+            relative_root_turbo_json: Some("path/to/turbo.json"),
             ..Default::default()
         }
         ; "root turbo json value"
@@ -504,10 +504,18 @@ mod test {
     #[test_case(
         &["turbo", "--root-turbo-json=path/to/turbo.json"],
         ExpectedArgs {
-            relative_root_turbo_json: Some(&["path/to/turbo.json"]),
+            relative_root_turbo_json: Some("path/to/turbo.json"),
             ..Default::default()
         }
         ; "root turbo json equals"
+    )]
+    #[test_case(
+        &["turbo", "--root-turbo-json", "/absolute/path/to/turbo.json"],
+        ExpectedArgs {
+            relative_root_turbo_json: Some("/absolute/path/to/turbo.json"),
+            ..Default::default()
+        }
+        ; "root turbo json absolute path"
     )]
     fn test_shim_parsing(args: &[&str], expected: ExpectedArgs) {
         let cwd = AbsoluteSystemPathBuf::new(if cfg!(windows) {

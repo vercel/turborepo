@@ -39,6 +39,16 @@ pub enum Error {
         #[label = "Requires a path to be passed after it"]
         flag_range: SourceSpan,
     },
+    #[error("No value assigned to `--root-turbo-json` flag.")]
+    #[diagnostic(code(turbo::shim::empty_root_turbo_json))]
+    EmptyRootTurboJson {
+        #[backtrace]
+        backtrace: Backtrace,
+        #[source_code]
+        args_string: String,
+        #[label = "Requires a path to be passed after it"]
+        flag_range: SourceSpan,
+    },
     #[error(transparent)]
     #[diagnostic(transparent)]
     Cli(#[from] cli::Error),
