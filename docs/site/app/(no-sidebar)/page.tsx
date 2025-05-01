@@ -61,7 +61,7 @@ export const metadata: Metadata = {
 
 export default function HomePage() {
   return (
-    <div className="py-12 max-w-6xl px-3 sm:px-6 lg:px-12 mx-auto">
+    <div className="py-6 max-w-6xl px-3 sm:px-6 md:py-12 lg:px-12 mx-auto">
       <Grid
         columns={{
           sm: 1,
@@ -130,7 +130,7 @@ export default function HomePage() {
             ))}
           </div>
         </GridCell>
-        <GridCell className="h-fit col-span-2 border-b">
+        <GridCell className="h-fit col-span-2">
           <div className="flex flex-col items-start justify-between gap-y-4 md:flex-row">
             <div className="flex flex-col gap-y-1">
               <h2 className="text-3xl font-semibold tracking-tight">
@@ -190,7 +190,7 @@ export default function HomePage() {
           </div>
         </GridCell>
         <GridCell className="h-fit col-span-2 border-b">
-          <h2 className="text-2xl font-medium text-pretty">
+          <h2 className="text-3xl font-semibold tracking-tight">
             What builders say about Turborepo
           </h2>
 
