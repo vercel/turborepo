@@ -116,9 +116,7 @@ export default function HomePage() {
           <div className="my-8 grid h-fit gap-y-12 md:grid-cols-3 md:gap-x-8">
             {FEATURES.map((feature) => (
               <div key={feature.title} className="w-full">
-                <div className="w-full flex items-center justify-center">
-                  {feature.illustration}
-                </div>
+                {feature.illustration}
                 <h3 className="mt-2 text-2xl font-semibold tracking-tighter">
                   {feature.title}
                 </h3>
