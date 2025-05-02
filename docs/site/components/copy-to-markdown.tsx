@@ -23,7 +23,7 @@ export const CopyToMarkdown = ({
 
   return (
     <Button
-      variant="outline"
+      variant="ghost"
       size="sm"
       className={"text-xs hidden sm:flex"}
       onClick={() => {
@@ -35,7 +35,7 @@ export const CopyToMarkdown = ({
       ) : (
         <Copy className="w-4 h-4 mr-1" />
       )}
-      Copy as Markdown
+      Copy page
     </Button>
   );
 };
