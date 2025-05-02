@@ -67,19 +67,41 @@ impl Iterator for PnpmDetector<'_> {
     }
 }
 
+pub(crate) fn read_workspace_patches(repo_root: &AbsoluteSystemPath) -> Result<Option<std::collections::BTreeMap<String, turbopath::RelativeUnixPathBuf>>, Error> {
+    if let Ok(workspace) = PnpmWorkspace::from_file(repo_root) {
+        return Ok(workspace.patched_dependencies);
+    }
+    
+    Ok(None)
+}
+
 pub(crate) fn prune_patches<R: AsRef<RelativeUnixPath>>(
     package_json: &PackageJson,
     patches: &[R],
+    repo_root: Option<&AbsoluteSystemPath>,
 ) -> PackageJson {
     let mut pruned_json = package_json.clone();
-    let patches = patches.iter().map(|r| r.as_ref()).collect::<HashSet<_>>();
+    let patches_set = patches.iter().map(|r| r.as_ref()).collect::<HashSet<_>>();
 
     if let Some(existing_patches) = pruned_json
         .pnpm
         .as_mut()
         .and_then(|config| config.patched_dependencies.as_mut())
     {
-        existing_patches.retain(|_, patch_path| patches.contains(patch_path.as_ref()));
+        existing_patches.retain(|_, patch_path| patches_set.contains(patch_path.as_ref()));
+    }
+
+    if let Some(repo_root) = repo_root {
+        if let Ok(Some(workspace_patches)) = read_workspace_patches(repo_root) {
+            let pnpm_config = pruned_json.pnpm.get_or_insert_with(Default::default);
+            let patched_deps = pnpm_config.patched_dependencies.get_or_insert_with(Default::default);
+            
+            for (key, patch_path) in workspace_patches {
+                if patches_set.contains(patch_path.as_ref()) {
+                    patched_deps.insert(key, patch_path);
+                }
+            }
+        }
     }
 
     pruned_json
@@ -125,6 +147,7 @@ pub fn get_default_exclusions() -> &'static [&'static str] {
 struct PnpmWorkspace {
     pub packages: Vec<String>,
     link_workspace_packages: Option<bool>,
+    pub patched_dependencies: Option<std::collections::BTreeMap<String, turbopath::RelativeUnixPathBuf>>,
 }
 
 impl PnpmWorkspace {
@@ -203,7 +226,7 @@ mod test {
         }))
         .unwrap();
         let patches = vec![RelativeUnixPathBuf::new("patches/foo@1.0.0.patch").unwrap()];
-        let pruned = prune_patches(&package_json, &patches);
+        let pruned = prune_patches(&package_json, &patches, None);
         assert_eq!(
             pruned
                 .pnpm
@@ -302,5 +325,33 @@ mod test {
             .unwrap();
         let actual = link_workspace_packages(PnpmVersion::Pnpm9, repo_root);
         assert!(actual);
+    }
+
+    #[test]
+    fn test_workspace_patches() {
+        let tmpdir = tempfile::tempdir().unwrap();
+        let repo_root = AbsoluteSystemPath::from_std_path(tmpdir.path()).unwrap();
+        
+        repo_root
+            .join_component(WORKSPACE_CONFIGURATION_PATH)
+            .create_with_contents(
+                "packages:\n  - \"packages/*\"\npatchedDependencies:\n  foo@1.0.0: patches/foo@1.0.0.patch\n  bar: patches/bar.patch\n"
+            )
+            .unwrap();
+        
+        let workspace_patches = read_workspace_patches(repo_root).unwrap();
+        assert!(workspace_patches.is_some());
+        let patches = workspace_patches.unwrap();
+        assert_eq!(patches.len(), 2);
+        assert!(patches.contains_key("foo@1.0.0"));
+        assert!(patches.contains_key("bar"));
+        assert_eq!(
+            patches.get("foo@1.0.0").unwrap().as_str(),
+            "patches/foo@1.0.0.patch"
+        );
+        assert_eq!(
+            patches.get("bar").unwrap().as_str(),
+            "patches/bar.patch"
+        );
     }
 }

@@ -494,11 +494,12 @@ impl PackageManager {
         &self,
         package_json: &PackageJson,
         patches: &[R],
+        repo_root: Option<&AbsoluteSystemPath>,
     ) -> PackageJson {
         match self {
             PackageManager::Berry => yarn::prune_patches(package_json, patches),
             PackageManager::Pnpm9 | PackageManager::Pnpm6 | PackageManager::Pnpm => {
-                pnpm::prune_patches(package_json, patches)
+                pnpm::prune_patches(package_json, patches, repo_root)
             }
             PackageManager::Yarn | PackageManager::Npm | PackageManager::Bun => {
                 unreachable!("bun, npm, and yarn 1 don't have a concept of patches")

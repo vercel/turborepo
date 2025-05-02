@@ -299,6 +299,7 @@ impl PnpmLockfile {
         let mut pruned_patches = Map::new();
         for dependency in pruned_packages.keys() {
             let dp = DepPath::parse(self.version(), dependency.as_str())?;
+            
             let patch_key = format!("{}@{}", dp.name, dp.version);
             if let Some(patch) = patches.get(&patch_key).filter(|patch| {
                 // In V7 patch hash isn't included in packages key, so no need to check
@@ -306,6 +307,12 @@ impl PnpmLockfile {
                     || dp.patch_hash() == Some(&patch.hash)
             }) {
                 pruned_patches.insert(patch_key, patch.clone());
+                continue;
+            }
+            
+            let version_less_key = dp.name.to_string();
+            if let Some(patch) = patches.get(&version_less_key) {
+                pruned_patches.insert(version_less_key, patch.clone());
             }
         }
         Ok(pruned_patches)
@@ -1284,4 +1291,65 @@ c:
         let lockfile = PnpmLockfile::from_bytes(lockfile).unwrap();
         assert_eq!(lockfile.turbo_version().as_deref(), expected);
     }
+
+#[test]
+fn test_prune_patches_without_version() {
+    use crate::pnpm::{LockfileVersion, VersionFormat, SupportedLockfileVersion};
+
+    // Create a simple test lockfile with a version-less patch
+    let mut lockfile = PnpmLockfile {
+        lockfile_version: LockfileVersion {
+            version: "9.0".to_string(),
+            format: VersionFormat::String,
+        },
+        patched_dependencies: Some(Map::from_iter([
+            ("foo".to_string(), PatchFile {
+                path: "patches/foo.patch".to_string(),
+                hash: "hashvalue".to_string(),
+            })
+        ])),
+        importers: Map::new(),
+        packages: Some(Map::from_iter([
+            ("foo@1.0.0".to_string(), PackageSnapshot {
+                patched: Some(true),
+                resolution: PackageResolution {
+                    integrity: Some("sha512-abc".to_string()),
+                    type_field: None,
+                    tarball: None,
+                    directory: None,
+                    repo: None,
+                    commit: None,
+                },
+                name: Some("foo".to_string()),
+                version: Some("1.0.0".to_string()),
+                snapshot: PackageSnapshotV7 {
+                    optional: false,
+                    dependencies: None,
+                    optional_dependencies: None,
+                    transitive_peer_dependencies: None,
+                },
+                other: Map::new(),
+                id: None,
+            }),
+        ])),
+        snapshots: None,
+        settings: None,
+        pnpmfile_checksum: None,
+        never_built_dependencies: None,
+        only_built_dependencies: None,
+        ignored_optional_dependencies: None,
+        overrides: None,
+        package_extensions_checksum: None,
+        time: None,
+    };
+
+    let pruned = lockfile.prune_patches(
+        lockfile.patched_dependencies.as_ref().unwrap(),
+        lockfile.packages.as_ref().unwrap()
+    ).unwrap();
+
+    assert_eq!(pruned.len(), 1);
+    assert!(pruned.contains_key("foo"));
+}
+
 }
