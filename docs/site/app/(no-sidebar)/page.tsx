@@ -94,13 +94,13 @@ export default function HomePage() {
                 </div>
               </div>
             </div>
-            <div className="flex flex-col xs:flex-row h-fit gap-6 xs:gap-2 sm:gap-4 justify-center items-center">
+            <div className="w-full flex flex-wrap h-fit gap-3 2xs:gap-2 sm:gap-4 justify-center items-center">
               <Button asChild className="text-sm sm:h-12 sm:text-base">
                 <Link href="/docs">Get started</Link>
               </Button>
               <Snippet
                 code="npm i turbo"
-                className="flex h-fit w-full xs:w-auto sm:h-12 max-w-[170px] items-center border border-[var(--ds-gray-alpha-400)] justify-start font-mono bg-[var(--ds-background-100)]"
+                className="flex h-fit min-w-[160px] max-w-[180px] xs:w-auto sm:h-12 items-center border border-[var(--ds-gray-alpha-400)] justify-start font-mono bg-[var(--ds-background-100)]"
               />
             </div>
           </div>
@@ -202,13 +202,13 @@ export default function HomePage() {
             <h2 className="text-[32px] font-semibold tracking-tighter md:text-[40px]">
               Deploy your Turborepo today.
             </h2>
-            <div className="flex flex-col xs:flex-row gap-4 justify-start md:justify-end items-center">
+            <div className="flex flex-wrap gap-3 justify-start md:justify-end items-center">
               <Button asChild className="text-sm sm:h-12 sm:text-base">
                 <Link href="/docs">Get started</Link>
               </Button>
               <Snippet
                 code="npm i turbo"
-                className="flex h-fit w-full xs:w-auto sm:h-12 items-center border border-[var(--ds-gray-alpha-400)] justify-start font-mono bg-[var(--ds-background-100)]"
+                className="flex h-fit min-w-[160px] max-w-[180px] xs:w-auto sm:h-12 items-center border border-[var(--ds-gray-alpha-400)] justify-start font-mono bg-[var(--ds-background-100)]"
               />
             </div>
           </div>
