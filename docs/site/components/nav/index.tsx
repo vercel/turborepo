@@ -121,7 +121,7 @@ export const Navigation = () => {
         <div className="hidden items-center gap-2 md:flex">
           <Button
             aria-label="Search…"
-            variant="default"
+            variant="secondary"
             size="sm"
             className="group border flex-row !font-normal !text-gray-800 hover:!text-gray-1000 hidden lg:block"
             onClick={() => {
