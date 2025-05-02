@@ -54,7 +54,7 @@ function HomeLinks() {
         <VercelLogo className="-translate-y-[0.5px] w-[18px] h-[18px]" />
       </Link>
 
-      <ForwardSlash className="w-[16px] h-[16px]" />
+      <ForwardSlash />
 
       <Link className="flex flex-row items-center gap-2" href="/">
         <TurborepoWordmarkDark className="h-[24px] w-auto hidden dark:block" />
@@ -121,7 +121,7 @@ export const Navigation = () => {
         <div className="hidden items-center gap-2 md:flex">
           <Button
             aria-label="Search…"
-            variant="primary"
+            variant="default"
             size="sm"
             className="group border flex-row !font-normal !text-gray-800 hover:!text-gray-1000 hidden lg:block"
             onClick={() => {

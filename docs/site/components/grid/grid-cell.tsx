@@ -1,4 +1,3 @@
-import type React from "react";
 import { cn } from "../cn";
 
 export interface GridItemProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -25,6 +24,7 @@ export function GridCell({
   ...props
 }: GridItemProps) {
   const colSpanClass = cn(
+    // @ts-expect-error -- This works as expected
     colSpan?.sm && `col-span-${colSpan.sm}`,
     colSpan?.md && `md:col-span-${colSpan.md}`,
     colSpan?.lg && `lg:col-span-${colSpan.lg}`,
@@ -32,6 +32,7 @@ export function GridCell({
   );
 
   const rowSpanClass = cn(
+    // @ts-expect-error -- This works as expected
     rowSpan?.sm && `row-span-${rowSpan.sm}`,
     rowSpan?.md && `md:row-span-${rowSpan.md}`,
     rowSpan?.lg && `lg:row-span-${rowSpan.lg}`,

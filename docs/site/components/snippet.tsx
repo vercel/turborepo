@@ -17,8 +17,11 @@ export function Snippet({ code, className }: SnippetProps) {
     try {
       await navigator.clipboard.writeText(code);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      setTimeout(() => {
+        setCopied(false);
+      }, 2000);
     } catch (err) {
+      // eslint-disable-next-line no-console -- Purposeful.
       console.error("Failed to copy text: ", err);
     }
   };
@@ -36,7 +39,7 @@ export function Snippet({ code, className }: SnippetProps) {
       <button
         type="button"
         aria-label="Copy to clipboard"
-        onClick={copyToClipboard}
+        onClick={() => void copyToClipboard()}
         className="absolute right-2 top-2 p-1 sm:p-2 rounded-md hover:bg-gray-800 transition-colors"
       >
         <span className="flex items-center justify-center">

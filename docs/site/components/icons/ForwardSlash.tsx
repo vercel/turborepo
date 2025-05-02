@@ -1,6 +1,4 @@
-import { cn } from "#components/cn.ts";
-
-export const ForwardSlash = ({ className }: { className?: string }) => {
+export const ForwardSlash = () => {
   return (
     <svg
       data-testid="geist-icon"
