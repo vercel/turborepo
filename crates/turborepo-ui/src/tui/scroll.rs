@@ -21,6 +21,11 @@ const ACCELERATION: f32 = 0.3;
 /// Decrease to require faster, more continuous scrolling to maintain momentum.
 const DECAY_TIME: Duration = Duration::from_millis(350);
 
+/// How long (in ms) between scrolls before events are ignored
+/// Increase to allow longer pauses between scrolls to trigger throttling
+/// Decrease to require faster, more continuous scrolling to trigger throttling
+const THROTTLE_TIME: Duration = Duration::from_millis(50);
+
 /// Only process 1 out of every N scroll events (throttling).
 /// Increase to make scrolling less sensitive to high-frequency mouse wheels
 /// (e.g. trackpads). Decrease to process more events (smoother, but may be
@@ -49,27 +54,26 @@ impl ScrollMomentum {
     /// Call this on every scroll event (mouse wheel, key, etc).
     /// Returns the number of lines to scroll for this event.
     pub fn on_scroll_event(&mut self, direction: Direction) -> usize {
-        self.throttle_counter = (self.throttle_counter + 1) % THROTTLE_FACTOR;
-        let should_throttle = self.throttle_counter != 0;
-        if should_throttle {
-            return 0;
-        }
-
         let now = Instant::now();
-        let has_direction_changed = self.last_direction.map_or(false, |last| last != direction);
-        let is_first_scroll_event = self.last_event.is_none();
-        let is_scrolling_quickly = self
-            .last_event
-            .map_or(false, |last| now.duration_since(last) < DECAY_TIME);
+        let last_event = self.last_event.replace(now);
+        let last_direction = self.last_direction.replace(direction);
+
+        let has_direction_changed = last_direction.is_some_and(|last| last != direction);
+        let is_scrolling_quickly =
+            last_event.is_some_and(|last| now.duration_since(last) < DECAY_TIME);
+        let is_throttling = last_event.is_some_and(|last| now.duration_since(last) < THROTTLE_TIME);
+
+        if is_throttling {
+            self.throttle_counter = (self.throttle_counter + 1) % THROTTLE_FACTOR;
+            let should_throttle = self.throttle_counter != 0;
+            if should_throttle {
+                return 0;
+            }
+        } else {
+            self.throttle_counter = 0;
+        }
 
         if has_direction_changed {
-            self.velocity = MIN_VELOCITY;
-            self.last_event = Some(now);
-            self.last_direction = Some(direction);
-            return self.velocity as usize;
-        }
-
-        if is_first_scroll_event {
             self.velocity = MIN_VELOCITY;
         } else if is_scrolling_quickly {
             self.velocity = (self.velocity + ACCELERATION).min(MAX_VELOCITY);
@@ -77,9 +81,7 @@ impl ScrollMomentum {
             self.velocity = MIN_VELOCITY;
         }
 
-        self.last_event = Some(now);
-        self.last_direction = Some(direction);
-        self.velocity.round().max(MIN_VELOCITY) as usize
+        self.velocity.round().clamp(MIN_VELOCITY, MAX_VELOCITY) as usize
     }
 
     /// Reset the momentum (e.g. on focus loss or scroll stop)
@@ -88,5 +90,16 @@ impl ScrollMomentum {
         self.last_event = None;
         self.last_direction = None;
         self.throttle_counter = 0;
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn first_event_scrolls() {
+        let mut scroll = ScrollMomentum::new();
+        assert_eq!(scroll.on_scroll_event(Direction::Up), 1);
     }
 }
