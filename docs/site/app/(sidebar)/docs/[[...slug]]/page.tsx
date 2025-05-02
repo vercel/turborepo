@@ -61,7 +61,6 @@ export default async function Page(props: {
 
         <CopyToMarkdown markdownContent={rawMarkdown} />
       </div>
-      {/* eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Types not inferred correctly */}
       <Mdx components={mdxComponents} />
     </>
   );

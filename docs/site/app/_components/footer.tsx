@@ -259,7 +259,7 @@ function SubmitForm(): JSX.Element {
 
 export function Footer({ menu }: { menu?: boolean }): ReactElement {
   return (
-    <footer className="relative bg-[#FAFAFA] pb-[env(safe-area-inset-bottom)] dark:bg-[#111111]">
+    <footer className="relative bg-background-100 pb-[env(safe-area-inset-bottom)] dark:bg-[#111111]">
       <div className="pointer-events-none absolute top-0 h-12 w-full -translate-y-full bg-gradient-to-t from-[#FAFAFA] to-transparent dark:from-black" />
       <div
         className={cn(

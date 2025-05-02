@@ -15,7 +15,7 @@ export function RemoteCacheCounter(): JSX.Element {
     >
       <div className="bg-white p-4 dark:bg-black">
         <span className="ml-auto inline-flex gap-1 bg-gradient-to-r from-[#ef4444] to-[#3b82f6] bg-clip-text font-mono text-lg text-transparent">
-          <RemoteCacheCounterClient />
+          <RemoteCacheCounterClient className="min-w-[97.2px] text-right" />
           <p className="inline-block">hours</p>
         </span>
         <div className="text-xs">Total Compute Saved</div>
