@@ -67,11 +67,13 @@ impl Iterator for PnpmDetector<'_> {
     }
 }
 
-pub(crate) fn read_workspace_patches(repo_root: &AbsoluteSystemPath) -> Result<Option<std::collections::BTreeMap<String, turbopath::RelativeUnixPathBuf>>, Error> {
+pub(crate) fn read_workspace_patches(
+    repo_root: &AbsoluteSystemPath,
+) -> Result<Option<std::collections::BTreeMap<String, turbopath::RelativeUnixPathBuf>>, Error> {
     if let Ok(workspace) = PnpmWorkspace::from_file(repo_root) {
         return Ok(workspace.patched_dependencies);
     }
-    
+
     Ok(None)
 }
 
@@ -94,8 +96,10 @@ pub(crate) fn prune_patches<R: AsRef<RelativeUnixPath>>(
     if let Some(repo_root) = repo_root {
         if let Ok(Some(workspace_patches)) = read_workspace_patches(repo_root) {
             let pnpm_config = pruned_json.pnpm.get_or_insert_with(Default::default);
-            let patched_deps = pnpm_config.patched_dependencies.get_or_insert_with(Default::default);
-            
+            let patched_deps = pnpm_config
+                .patched_dependencies
+                .get_or_insert_with(Default::default);
+
             for (key, patch_path) in workspace_patches {
                 if patches_set.contains(patch_path.as_ref()) {
                     patched_deps.insert(key, patch_path);
@@ -147,7 +151,8 @@ pub fn get_default_exclusions() -> &'static [&'static str] {
 struct PnpmWorkspace {
     pub packages: Vec<String>,
     link_workspace_packages: Option<bool>,
-    pub patched_dependencies: Option<std::collections::BTreeMap<String, turbopath::RelativeUnixPathBuf>>,
+    pub patched_dependencies:
+        Option<std::collections::BTreeMap<String, turbopath::RelativeUnixPathBuf>>,
 }
 
 impl PnpmWorkspace {
@@ -331,14 +336,15 @@ mod test {
     fn test_workspace_patches() {
         let tmpdir = tempfile::tempdir().unwrap();
         let repo_root = AbsoluteSystemPath::from_std_path(tmpdir.path()).unwrap();
-        
+
         repo_root
             .join_component(WORKSPACE_CONFIGURATION_PATH)
             .create_with_contents(
-                "packages:\n  - \"packages/*\"\npatchedDependencies:\n  foo@1.0.0: patches/foo@1.0.0.patch\n  bar: patches/bar.patch\n"
+                "packages:\n  - \"packages/*\"\npatchedDependencies:\n  foo@1.0.0: \
+                 patches/foo@1.0.0.patch\n  bar: patches/bar.patch\n",
             )
             .unwrap();
-        
+
         let workspace_patches = read_workspace_patches(repo_root).unwrap();
         assert!(workspace_patches.is_some());
         let patches = workspace_patches.unwrap();
@@ -349,9 +355,6 @@ mod test {
             patches.get("foo@1.0.0").unwrap().as_str(),
             "patches/foo@1.0.0.patch"
         );
-        assert_eq!(
-            patches.get("bar").unwrap().as_str(),
-            "patches/bar.patch"
-        );
+        assert_eq!(patches.get("bar").unwrap().as_str(), "patches/bar.patch");
     }
 }
