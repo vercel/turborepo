@@ -94,18 +94,18 @@ export default function HomePage() {
                 </div>
               </div>
             </div>
-            <div className="flex flex-row h-fit gap-2 sm:gap-4 justify-center items-center">
+            <div className="flex flex-col xs:flex-row h-fit gap-6 xs:gap-2 sm:gap-4 justify-center items-center">
               <Button asChild className="text-sm sm:h-12 sm:text-base">
                 <Link href="/docs">Get started</Link>
               </Button>
               <Snippet
                 code="npm i turbo"
-                className="flex h-fit w-full xs:w-auto sm:h-12 items-center border border-[var(--ds-gray-alpha-400)] justify-start font-mono bg-[var(--ds-background-100)]"
+                className="flex h-fit w-full xs:w-auto sm:h-12 max-w-[170px] items-center border border-[var(--ds-gray-alpha-400)] justify-start font-mono bg-[var(--ds-background-100)]"
               />
             </div>
           </div>
         </GridCell>
-        <GridCell className="h-fit col-span-2 px-6 py-14 xs:px-6 xs:py-10 md:px-9 lg:px-12">
+        <GridCell className="border-0 h-fit col-span-2 px-6 py-14 xs:px-6 xs:py-10 md:px-9 lg:px-12">
           <h2 className="mb-1 text-[32px] font-semibold tracking-tighter">
             Scale your workflows
           </h2>
@@ -115,8 +115,8 @@ export default function HomePage() {
           </p>
           <div className="my-8 grid h-fit gap-y-12 md:grid-cols-3 md:gap-x-8">
             {FEATURES.map((feature) => (
-              <div key={feature.title}>
-                <div className="flex items-center justify-center">
+              <div key={feature.title} className="w-full">
+                <div className="w-full flex items-center justify-center">
                   {feature.illustration}
                 </div>
                 <h3 className="mt-2 text-2xl font-semibold tracking-tighter">
