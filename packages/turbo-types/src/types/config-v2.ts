@@ -181,6 +181,15 @@ export interface RootSchema extends BaseSchema {
    * Configuration for `turbo boundaries`. Allows users to restrict a package's dependencies and dependents
    */
   boundaries?: RootBoundariesConfig;
+
+  /**
+   * When set to `true`, disables the update notification that appears when a new version of `turbo` is available.
+   *
+   * Documentation: https://turborepo.com/docs/reference/configuration#noupdatenotifier
+   *
+   * @defaultValue `false`
+   */
+  noUpdateNotifier?: boolean;
 }
 
 export interface Pipeline {

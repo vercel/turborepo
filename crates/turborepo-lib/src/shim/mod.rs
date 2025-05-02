@@ -39,6 +39,16 @@ pub enum Error {
         #[label = "Requires a path to be passed after it"]
         flag_range: SourceSpan,
     },
+    #[error("No value assigned to `--root-turbo-json` flag.")]
+    #[diagnostic(code(turbo::shim::empty_root_turbo_json))]
+    EmptyRootTurboJson {
+        #[backtrace]
+        backtrace: Backtrace,
+        #[source_code]
+        args_string: String,
+        #[label = "Requires a path to be passed after it"]
+        flag_range: SourceSpan,
+    },
     #[error(transparent)]
     #[diagnostic(transparent)]
     Cli(#[from] cli::Error),
@@ -75,7 +85,12 @@ fn run_correct_turbo(
     ui: ColorConfig,
 ) -> Result<i32, Error> {
     if let Some(turbo_state) = LocalTurboState::infer(&repo_state.root) {
-        try_check_for_updates(&shim_args, turbo_state.version());
+        let mut builder = crate::config::TurborepoConfigBuilder::new(&repo_state.root);
+        if let Some(root_turbo_json) = &shim_args.root_turbo_json {
+            builder = builder.with_root_turbo_json_path(Some(root_turbo_json.clone()));
+        }
+        let config = builder.build().unwrap_or_default();
+        try_check_for_updates(&shim_args, turbo_state.version(), &config);
 
         if turbo_state.local_is_self() {
             env::set_var(
@@ -95,7 +110,12 @@ fn run_correct_turbo(
         spawn_npx_turbo(&repo_state, local_config.turbo_version(), shim_args)
     } else {
         let version = get_version();
-        try_check_for_updates(&shim_args, version);
+        let mut builder = crate::config::TurborepoConfigBuilder::new(&repo_state.root);
+        if let Some(root_turbo_json) = &shim_args.root_turbo_json {
+            builder = builder.with_root_turbo_json_path(Some(root_turbo_json.clone()));
+        }
+        let config = builder.build().unwrap_or_default();
+        try_check_for_updates(&shim_args, version, &config);
         // cli::run checks for this env var, rather than an arg, so that we can support
         // calling old versions without passing unknown flags.
         env::set_var(
@@ -251,8 +271,12 @@ fn is_turbo_binary_path_set() -> bool {
     env::var("TURBO_BINARY_PATH").is_ok()
 }
 
-fn try_check_for_updates(args: &ShimArgs, current_version: &str) {
-    if args.should_check_for_update() {
+fn try_check_for_updates(
+    args: &ShimArgs,
+    current_version: &str,
+    config: &crate::config::ConfigurationOptions,
+) {
+    if args.should_check_for_update() && !config.no_update_notifier() {
         // custom footer for update message
         let footer = format!(
             "Follow {username} for updates: {url}",

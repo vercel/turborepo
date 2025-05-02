@@ -298,6 +298,7 @@ pub struct ConfigurationOptions {
     pub(crate) allow_no_turbo_json: Option<bool>,
     pub(crate) tui_scrollback_length: Option<u64>,
     pub(crate) concurrency: Option<String>,
+    pub(crate) no_update_notifier: Option<bool>,
 }
 
 #[derive(Default)]
@@ -462,6 +463,10 @@ impl ConfigurationOptions {
 
     pub fn allow_no_turbo_json(&self) -> bool {
         self.allow_no_turbo_json.unwrap_or_default()
+    }
+
+    pub fn no_update_notifier(&self) -> bool {
+        self.no_update_notifier.unwrap_or_default()
     }
 }
 

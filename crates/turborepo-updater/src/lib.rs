@@ -21,7 +21,7 @@ const DEFAULT_TIMEOUT: Duration = Duration::from_millis(800);
 // 1 day
 const DEFAULT_INTERVAL: Duration = Duration::from_secs(60 * 60 * 24);
 
-const NOTIFIER_DISABLE_VARS: [&str; 2] = ["NO_UPDATE_NOTIFIER", "TURBO_NO_UPDATE_NOTIFIER"];
+const NOTIFIER_DISABLE_VARS: [&str; 1] = ["NO_UPDATE_NOTIFIER"];
 const ENVIRONMENTAL_DISABLE_VARS: [&str; 1] = ["CI"];
 
 #[derive(ThisError, Debug)]
