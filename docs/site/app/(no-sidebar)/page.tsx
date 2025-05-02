@@ -113,7 +113,7 @@ export default function HomePage() {
             Optimize your local and CI tasks to save years of engineering time
             and compute.
           </p>
-          <div className="my-8 grid h-fit gap-y-8 md:grid-cols-3 md:gap-x-8">
+          <div className="my-8 grid h-fit gap-y-12 md:grid-cols-3 md:gap-x-8">
             {FEATURES.map((feature) => (
               <div key={feature.title}>
                 <div className="flex items-center justify-center">
