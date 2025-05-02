@@ -44,6 +44,7 @@ const TURBO_MAPPING: &[(&str, &str)] = [
     ("turbo_cache", "cache"),
     ("turbo_tui_scrollback_length", "tui_scrollback_length"),
     ("turbo_concurrency", "concurrency"),
+    ("turbo_no_update_notifier", "no_update_notifier"),
 ]
 .as_slice();
 
@@ -166,6 +167,8 @@ impl ResolvedConfigurationOptions for EnvVars {
 
         let allow_no_package_manager = self.truthy_value("allow_no_package_manager").flatten();
 
+        let no_update_notifier = self.truthy_value("no_update_notifier").flatten();
+
         // Process daemon
         let daemon = self.truthy_value("daemon").flatten();
 
@@ -231,7 +234,7 @@ impl ResolvedConfigurationOptions for EnvVars {
             remote_cache_read_only,
             run_summary,
             allow_no_turbo_json,
-            no_update_notifier: None,
+            no_update_notifier,
 
             // Processed numbers
             timeout,
