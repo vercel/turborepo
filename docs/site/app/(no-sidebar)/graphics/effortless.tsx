@@ -13,7 +13,7 @@ export const EffortlessGraphic = () => {
     setMounted(true);
   }, []);
 
-  if (!mounted) return null;
+  if (!mounted) return <div className={sizingString}></div>;
 
   if (resolvedTheme === "dark") {
     return <EffortlessDark />;
