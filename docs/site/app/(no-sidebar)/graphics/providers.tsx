@@ -1,6 +1,7 @@
 "use client";
 import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
+import { cn } from "../../../components/cn";
 import { sizingString } from "./sizing-string";
 
 export const CiProviders = () => {
@@ -12,7 +13,7 @@ export const CiProviders = () => {
     setMounted(true);
   }, []);
 
-  if (!mounted) return null;
+  if (!mounted) return <div className={sizingString}></div>;
 
   if (resolvedTheme === "dark") {
     return <ProvidersDark />;

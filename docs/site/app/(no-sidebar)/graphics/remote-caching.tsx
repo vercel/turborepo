@@ -13,7 +13,7 @@ export const RemoteCachingGraphic = () => {
     setMounted(true);
   }, []);
 
-  if (!mounted) return null;
+  if (!mounted) return <div className={sizingString}></div>;
 
   if (resolvedTheme === "dark") {
     return <RemoteCachingDark />;
@@ -25,7 +25,7 @@ const RemoteCachingDark = () => {
   return (
     <div className={sizingString}>
       <svg
-        className="w-full h-auto"
+        className={sizingString}
         viewBox="0 0 307 200"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
