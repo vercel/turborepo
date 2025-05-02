@@ -14,18 +14,18 @@ const MIN_VELOCITY: f32 = 1.0;
 /// Increase for faster acceleration (reaches top speed quicker, feels
 /// snappier). Decrease for slower, smoother acceleration (takes longer to reach
 /// top speed).
-const ACCELERATION: f32 = 2.0;
+const ACCELERATION: f32 = 0.3;
 
 /// How long (in ms) between scrolls before momentum resets.
 /// Increase to allow longer pauses between scrolls while keeping momentum.
 /// Decrease to require faster, more continuous scrolling to maintain momentum.
-const DECAY_TIME: Duration = Duration::from_millis(200);
+const DECAY_TIME: Duration = Duration::from_millis(350);
 
 /// Only process 1 out of every N scroll events (throttling).
 /// Increase to make scrolling less sensitive to high-frequency mouse wheels
 /// (e.g. trackpads). Decrease to process more events (smoother, but may be
 /// too fast on some input devices).
-const THROTTLE_FACTOR: u8 = 1;
+const THROTTLE_FACTOR: u8 = 3;
 
 /// Tracks and computes momentum-based scrolling.
 pub struct ScrollMomentum {
