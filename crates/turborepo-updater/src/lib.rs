@@ -9,6 +9,7 @@ use console::style;
 use semver::Version as SemVerVersion;
 use serde::Deserialize;
 use thiserror::Error as ThisError;
+use turborepo_repository::package_manager::PackageManager;
 use update_informer::{
     http_client::{GenericHttpClient, HttpClient},
     Check, Package, Registry, Result as UpdateResult, Version,
@@ -103,6 +104,7 @@ pub fn display_update_check(
     current_version: &str,
     timeout: Option<Duration>,
     interval: Option<Duration>,
+    package_manager: PackageManager,
 ) -> Result<(), UpdateNotifierError> {
     // bail early if the user has disabled update notifications
     if should_skip_notification() {
@@ -113,8 +115,17 @@ pub fn display_update_check(
 
     if let Ok(Some(version)) = version {
         let latest_version = version.to_string();
-        // TODO: make this package manager aware
-        let update_cmd = style("npx @turbo/codemod@latest update").cyan().bold();
+
+        let update_cmd = match package_manager {
+            PackageManager::Npm => style("npx @turbo/codemod@latest update").cyan().bold(),
+            PackageManager::Yarn | PackageManager::Berry => {
+                style("yarn dlx @turbo/codemod@latest update").cyan().bold()
+            }
+            PackageManager::Pnpm | PackageManager::Pnpm6 | PackageManager::Pnpm9 => {
+                style("pnpm dlx @turbo/codemod@latest update").cyan().bold()
+            }
+            PackageManager::Bun => style("bunx @turbo/codemod@latest update").cyan().bold(),
+        };
 
         let msg = format!(
             "

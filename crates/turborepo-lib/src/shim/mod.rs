@@ -16,7 +16,10 @@ use tracing::{debug, warn};
 pub use turbo_state::TurboState;
 use turbo_updater::display_update_check;
 use turbopath::AbsoluteSystemPathBuf;
-use turborepo_repository::inference::{RepoMode, RepoState};
+use turborepo_repository::{
+    inference::{RepoMode, RepoState},
+    package_manager::PackageManager,
+};
 use turborepo_ui::ColorConfig;
 use which::which;
 
@@ -84,13 +87,20 @@ fn run_correct_turbo(
     subscriber: &TurboSubscriber,
     ui: ColorConfig,
 ) -> Result<i32, Error> {
+    let package_manager = repo_state
+        .package_manager
+        .as_ref()
+        .unwrap_or(&PackageManager::Npm)
+        .to_owned();
+
     if let Some(turbo_state) = LocalTurboState::infer(&repo_state.root) {
         let mut builder = crate::config::TurborepoConfigBuilder::new(&repo_state.root);
         if let Some(root_turbo_json) = &shim_args.root_turbo_json {
             builder = builder.with_root_turbo_json_path(Some(root_turbo_json.clone()));
         }
         let config = builder.build().unwrap_or_default();
-        try_check_for_updates(&shim_args, turbo_state.version(), &config);
+
+        try_check_for_updates(&shim_args, turbo_state.version(), &config, package_manager);
 
         if turbo_state.local_is_self() {
             env::set_var(
@@ -115,7 +125,7 @@ fn run_correct_turbo(
             builder = builder.with_root_turbo_json_path(Some(root_turbo_json.clone()));
         }
         let config = builder.build().unwrap_or_default();
-        try_check_for_updates(&shim_args, version, &config);
+        try_check_for_updates(&shim_args, version, &config, package_manager);
         // cli::run checks for this env var, rather than an arg, so that we can support
         // calling old versions without passing unknown flags.
         env::set_var(
@@ -275,6 +285,7 @@ fn try_check_for_updates(
     args: &ShimArgs,
     current_version: &str,
     config: &crate::config::ConfigurationOptions,
+    package_manager: PackageManager,
 ) {
     if args.should_check_for_update() && !config.no_update_notifier() {
         // custom footer for update message
@@ -300,6 +311,7 @@ fn try_check_for_updates(
             // use default for timeout (800ms)
             None,
             interval,
+            package_manager,
         );
     }
 }
