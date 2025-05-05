@@ -1,0 +1,264 @@
+---
+title: TailwindCSS
+description: Learn how to use TailwindCSS in a Turborepo.
+---
+
+import { PackageManagerTabs, Tabs, Tab } from '#components/tabs';
+import { Callout } from '#components/callout';
+import { Steps, Step } from '#components/steps';
+
+[TailwindCSS](https://tailwindcss.com/) is a CSS framework that allows you to rapidly build modern websites without ever leaving your HTML.
+
+## Quickstart
+
+If you'd rather use a template, this guide is walking throw how to build [this TailwindCSS + Turborepo template](https://github.com/vercel/turborepo/tree/main/examples/with-tailwind).
+
+<PackageManagerTabs>
+
+<Tab value="pnpm">
+
+```bash title="Terminal"
+pnpm dlx create-turbo@latest -e with-tailwind
+```
+
+</Tab>
+
+<Tab value="yarn">
+
+```bash title="Terminal"
+yarn dlx create-turbo@latest -e with-tailwind
+```
+
+</Tab>
+
+<Tab value="npm">
+
+```bash title="Terminal"
+npx create-turbo@latest -e with-tailwind
+```
+
+</Tab>
+
+<Tab value="bun (Beta)">
+
+```bash title="Terminal"
+bunx create-turbo@latest -e with-tailwind
+```
+
+</Tab>
+</PackageManagerTabs>
+
+## Guide
+
+<Callout type="info">This guide is for TailwindCSS v4.</Callout>
+
+<Steps>
+<Step>
+
+### Create a monorepo
+
+If you don't have an existing project, use [create-turbo](/docs/getting-started/installation) to create a new monorepo:
+
+<PackageManagerTabs>
+
+<Tab value="pnpm">
+
+```bash title="Terminal"
+pnpm dlx create-turbo@latest
+```
+
+</Tab>
+
+<Tab value="yarn">
+
+```bash title="Terminal"
+yarn dlx create-turbo@latest
+```
+
+</Tab>
+
+<Tab value="npm">
+
+```bash title="Terminal"
+npx create-turbo@latest
+```
+
+</Tab>
+
+<Tab value="bun (Beta)">
+
+```bash title="Terminal"
+bunx create-turbo@latest
+```
+
+</Tab>
+</PackageManagerTabs>
+
+</Step>
+
+<Step>
+
+### Add TailwindCSS to your application
+
+[Follow TailwindCSS's guides](https://tailwindcss.com/docs/installation/using-vite) to set up TailwindCSS for your frontend framework.
+
+Once completed, we can integrate your UI package into the applications.
+
+</Step>
+
+<Step>
+
+### Create a shared TailwindCSS configuration package
+
+First, build an [Internal Package](https://turborepo.com/docs/core-concepts/internal-packages) with three files:
+
+<Tabs items={["package.json", "tailwind.config.ts", "tsconfig.json"]}>
+
+<Tab value="package.json">
+
+This `package.json` installs TailwindCSS so we can create the configuration file and exports the configuration file for use in the rest of the repository.
+
+```json title="./packages/tailwind-config/package.json"
+{
+  "name": "@repo/tailwind-config",
+  "version": "0.0.0",
+  "private": true,
+  "exports": {
+    ".": "./tailwind.config.ts"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:*",
+    "tailwindcss": "^4.1.5"
+  }
+}
+```
+
+</Tab>
+
+<Tab value="tailwind.config.ts">
+
+This `tailwind.config.ts` will be shared to the libraries and applications in the repository.
+
+```ts title="./packages/tailwind-config/tailwind.config.ts"
+import type { Config } from 'tailwindcss';
+
+const config: Omit<Config, 'content'> = {
+  darkMode: 'class',
+};
+export default config;
+```
+
+</Tab>
+
+<Tab value="tsconfig.json">
+
+A simple TypeScript configuration file so we can use TypeScript for the `tailwind.config.ts`
+
+```ts title="./packages/tailwind-config/tconfig.json"
+{
+  "extends": "@repo/typescript-config/base.json",
+  "include": ["."],
+  "exclude": ["dist", "build", "node_modules"]
+}
+```
+
+</Tab>
+</Tabs>
+
+</Step>
+
+<Step>
+
+### Create the UI package
+
+You can now build the components you share to your applications.
+
+For a full example, [visit the source code for `@repo/ui` package in the TailwindCSS example](https://github.com/vercel/turborepo/tree/main/examples/with-tailwind/packages/ui). The files required for your TailwindCSS setup are below.
+
+<Tabs items={["package.json", "turbo.json", "tailwind.config.ts", "postcss.config.js", "styles.css"]}>
+
+<Tab value="package.json">
+
+The `package.json` installs the dependencies for the package, sets up scripts for development and build environments, and marks the exports for the package.
+
+```json title="./packages/ui/package.json"
+{
+  "exports": {
+    "./styles.css": "./dist/index.css",
+    "./*": "./dist/*.js"
+  },
+  "scripts": {
+    "build:styles": "tailwindcss -i ./src/styles.css -o ./dist/index.css",
+    "build:components": "tsc",
+    "dev:styles": "tailwindcss -i ./src/styles.css -o ./dist/index.css --watch",
+    "dev:components": "tsc --watch"
+  },
+  "devDependencies": {
+    "@repo/tailwind-config": "workspace:*",
+    "@tailwindcss/cli": "^4.1.5",
+    "@tailwindcss/postcss": "^4.1.5",
+    "autoprefixer": "^10.4.20",
+    "tailwindcss": "^4.1.5"
+  }
+}
+```
+
+<Callout type="good-to-know">
+  Above, we've only included the code related to setting up Tailwind. The full
+  package.json is
+  [here](https://github.com/vercel/turborepo/tree/main/examples/with-tailwind/packages/ui/package.json).
+</Callout>
+
+</Tab>
+
+<Tab value="turbo.json">
+
+Create a `build` and `dev` task that runs the scripts for building of components and style sheets in parallel.
+
+```json title="./packages/ui/turbo.json"
+{
+  "extends": ["//"],
+  "tasks": {
+    "build": {
+      "dependsOn": ["build:styles", "build:components"]
+    },
+    "build:styles": {
+      "outputs": ["dist/**"]
+    },
+    "build:components": {
+      "outputs": ["dist/**"]
+    },
+    "dev": {
+      "with": ["dev:styles", "dev:components"]
+    },
+    "dev:styles": {
+      "cache": false,
+      "persistent": true
+    },
+    "dev:components": {
+      "cache": false,
+      "persistent": true
+    }
+  }
+}
+```
+
+</Tab>
+
+<Tab value="tailwind.config.ts">
+
+Use the shared configuration from the Tailwind configuration package.
+
+```ts title="./packages/ui/turbo.json"
+import sharedConfig from '@repo/tailwind-config';
+
+export default sharedConfig;
+```
+
+</Tab>
+
+</Tabs>
+
+</Step>
+
+</Steps>
