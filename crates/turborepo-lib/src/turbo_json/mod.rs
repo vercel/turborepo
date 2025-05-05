@@ -153,6 +153,9 @@ pub struct RawTurboJson {
     pub cache_dir: Option<Spanned<UnescapedString>>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub no_update_notifier: Option<bool>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub tags: Option<Spanned<Vec<Spanned<String>>>>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
