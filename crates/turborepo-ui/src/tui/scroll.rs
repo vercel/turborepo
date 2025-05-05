@@ -40,6 +40,12 @@ pub struct ScrollMomentum {
     throttle_counter: u8,
 }
 
+impl Default for ScrollMomentum {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ScrollMomentum {
     /// Create a new ScrollMomentum tracker.
     pub fn new() -> Self {
