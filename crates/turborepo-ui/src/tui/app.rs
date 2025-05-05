@@ -32,6 +32,7 @@ use super::{
 };
 use crate::{
     tui::{
+        scroll::ScrollMomentum,
         task::{Task, TasksByStatus},
         term_output::TerminalOutput,
     },
@@ -60,6 +61,7 @@ pub struct App<W> {
     done: bool,
     preferences: PreferenceLoader,
     scrollback_len: u64,
+    scroll_momentum: ScrollMomentum,
 }
 
 impl<W> App<W> {
@@ -115,6 +117,7 @@ impl<W> App<W> {
             is_task_selection_pinned: preferences.active_task().is_some(),
             preferences,
             scrollback_len,
+            scroll_momentum: ScrollMomentum::new(),
         }
     }
 
@@ -204,8 +207,21 @@ impl<W> App<W> {
     }
 
     #[tracing::instrument(skip_all)]
-    pub fn scroll_terminal_output(&mut self, direction: Direction) -> Result<(), Error> {
-        self.get_full_task_mut()?.scroll(direction)?;
+    pub fn scroll_terminal_output(
+        &mut self,
+        direction: Direction,
+        use_momentum: bool,
+    ) -> Result<(), Error> {
+        let lines = if use_momentum {
+            self.scroll_momentum.on_scroll_event(direction)
+        } else {
+            self.scroll_momentum.reset();
+            1
+        };
+
+        if lines > 0 {
+            self.get_full_task_mut()?.scroll_by(direction, lines)?;
+        }
         Ok(())
     }
 
@@ -851,26 +867,36 @@ fn update(
         }
         Event::ScrollUp => {
             app.is_task_selection_pinned = true;
-            app.scroll_terminal_output(Direction::Up)?;
+            app.scroll_momentum.reset();
+            app.scroll_terminal_output(Direction::Up, false)?
         }
         Event::ScrollDown => {
             app.is_task_selection_pinned = true;
-            app.scroll_terminal_output(Direction::Down)?;
+            app.scroll_momentum.reset();
+            app.scroll_terminal_output(Direction::Down, false)?;
+        }
+        Event::ScrollWithMomentum(direction) => {
+            app.is_task_selection_pinned = true;
+            app.scroll_terminal_output(direction, true)?;
         }
         Event::PageUp => {
             app.is_task_selection_pinned = true;
+            app.scroll_momentum.reset();
             app.scroll_terminal_output_by_page(Direction::Up)?;
         }
         Event::PageDown => {
             app.is_task_selection_pinned = true;
+            app.scroll_momentum.reset();
             app.scroll_terminal_output_by_page(Direction::Down)?;
         }
         Event::JumpToLogsTop => {
             app.is_task_selection_pinned = true;
+            app.scroll_momentum.reset();
             app.jump_to_logs_top()?;
         }
         Event::JumpToLogsBottom => {
             app.is_task_selection_pinned = true;
+            app.scroll_momentum.reset();
             app.jump_to_logs_bottom()?;
         }
         Event::EnterInteractive => {
