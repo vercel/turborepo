@@ -1,17 +1,17 @@
 ---
-title: TailwindCSS
-description: Learn how to use TailwindCSS in a Turborepo.
+title: Tailwind CSS
+description: Learn how to use Tailwind CSS in a Turborepo.
 ---
 
 import { PackageManagerTabs, Tabs, Tab } from '#components/tabs';
 import { Callout } from '#components/callout';
 import { Steps, Step } from '#components/steps';
 
-[TailwindCSS](https://tailwindcss.com/) is a CSS framework that allows you to rapidly build modern websites without ever leaving your HTML.
+[Tailwind CSS](https://tailwindcss.com/) is a CSS framework that allows you to rapidly build modern websites without ever leaving your HTML.
 
 ## Quickstart
 
-If you'd rather use a template, this guide is walking throw how to build [this TailwindCSS + Turborepo template](https://github.com/vercel/turborepo/tree/main/examples/with-tailwind).
+If you'd rather use a template, this guide is walking throw how to build [this Tailwind CSS + Turborepo template](https://github.com/vercel/turborepo/tree/main/examples/with-tailwind).
 
 <PackageManagerTabs>
 
@@ -50,7 +50,7 @@ bunx create-turbo@latest -e with-tailwind
 
 ## Guide
 
-<Callout type="info">This guide is for TailwindCSS v4.</Callout>
+<Callout type="info">This guide is for Tailwind CSS v4.</Callout>
 
 <Steps>
 <Step>
@@ -98,9 +98,9 @@ bunx create-turbo@latest
 
 <Step>
 
-### Add TailwindCSS to your application
+### Add Tailwind CSS to your application
 
-[Follow TailwindCSS's guides](https://tailwindcss.com/docs/installation/using-vite) to set up TailwindCSS for your frontend framework.
+[Follow Tailwind CSS's guides](https://tailwindcss.com/docs/installation/using-vite) to set up Tailwind CSS for your frontend framework.
 
 Once completed, you can start working on bringing your UI package into the applications.
 
@@ -108,7 +108,7 @@ Once completed, you can start working on bringing your UI package into the appli
 
 <Step>
 
-### Create a shared TailwindCSS configuration package
+### Create a shared Tailwind CSS configuration package
 
 First, build an [Internal Package](https://turborepo.com/docs/core-concepts/internal-packages) with four files:
 
@@ -116,7 +116,7 @@ First, build an [Internal Package](https://turborepo.com/docs/core-concepts/inte
 
 <Tab value="package.json">
 
-This `package.json` installs TailwindCSS so we can create the file shared styles and export for the rest of the repository.
+This `package.json` installs Tailwind CSS so we can create the file shared styles and export for the rest of the repository.
 
 ```json title="./packages/tailwind-config/package.json"
 {
@@ -176,7 +176,7 @@ export const postcssConfig = {
 
 You can now build the components to share to your applications.
 
-For a full example, [visit the source code for `@repo/ui` package in the TailwindCSS example](https://github.com/vercel/turborepo/tree/main/examples/with-tailwind/packages/ui). The files required for your TailwindCSS setup are below.
+For a full example, [visit the source code for `@repo/ui` package in the Tailwind CSS example](https://github.com/vercel/turborepo/tree/main/examples/with-tailwind/packages/ui). The files required for your Tailwind CSS setup are below.
 
 <Tabs items={["package.json", "turbo.json", "styles.css"]}>
 
@@ -250,7 +250,7 @@ Create a `build` and `dev` task that runs the scripts for building of components
 
 <Tab value="styles.css">
 
-This file is small! It makes sure that TailwindCSS runs for the package.
+This file is small! It makes sure that Tailwind CSS runs for the package.
 
 ```css title="./packages/ui/src/index.css"
 @import 'tailwindcss';
