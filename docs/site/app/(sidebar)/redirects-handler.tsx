@@ -201,8 +201,7 @@ const handleRedirect = (
     redirectList?.[window.location.hash]?.location;
 
   if (newHash && newLocation) {
-    /* eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- TODO: Fix ESLint Error (#13355)
-     * biome-ignore lint/correctness/noVoidTypeReturn: Ignored using `--suppress`
+    /* eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- This is needed or else we can get crashes.
      * */
     router.push(`${newLocation ?? ""}${newHash ? `#${newHash}` : ""}`);
     return;

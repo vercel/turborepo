@@ -26,8 +26,7 @@ const examples = fs
       dirent.name !== "node_modules"
   )
   .filter((dirent) => dirent.name !== "with-nextjs")
-  // @ts-expect-error -- TODO
-  .sort((a, b) => a.name - b.name)
+  .sort((a, b) => a.name.localeCompare(b.name))
   .map((dirent) => dirent.name);
 
 for (const example of examples) {
