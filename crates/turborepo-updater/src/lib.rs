@@ -104,7 +104,7 @@ pub fn display_update_check(
     current_version: &str,
     timeout: Option<Duration>,
     interval: Option<Duration>,
-    package_manager: PackageManager,
+    package_manager: &PackageManager,
 ) -> Result<(), UpdateNotifierError> {
     // bail early if the user has disabled update notifications
     if should_skip_notification() {

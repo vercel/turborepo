@@ -88,7 +88,7 @@ fn run_correct_turbo(
     subscriber: &TurboSubscriber,
     ui: ColorConfig,
 ) -> Result<i32, Error> {
-    let package_manager = repo_state.package_manager;
+    let package_manager = repo_state.package_manager.as_ref();
 
     if let Some(turbo_state) = LocalTurboState::infer(&repo_state.root) {
         let mut builder = crate::config::TurborepoConfigBuilder::new(&repo_state.root);
@@ -282,12 +282,9 @@ fn try_check_for_updates(
     args: &ShimArgs,
     current_version: &str,
     config: &crate::config::ConfigurationOptions,
-    package_manager: Result<PackageManager, package_manager::Error>,
+    package_manager: Result<&PackageManager, &package_manager::Error>,
 ) {
-    let package_manager = package_manager
-        .as_ref()
-        .unwrap_or(&PackageManager::Npm)
-        .to_owned();
+    let package_manager = package_manager.unwrap_or(&PackageManager::Npm);
 
     if args.should_check_for_update() && !config.no_update_notifier() {
         // custom footer for update message
