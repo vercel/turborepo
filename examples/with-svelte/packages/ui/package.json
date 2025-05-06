@@ -3,8 +3,8 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "svelte-package --watch --input=src",
-    "build": "svelte-package --input=src",
+    "dev": "svelte-kit sync && svelte-package --watch --input=src",
+    "build": "svelte-kit sync && svelte-package --input=src",
     "lint": "eslint .",
     "check-types": "svelte-check --tsconfig ./tsconfig.json"
   },
@@ -31,6 +31,7 @@
   "devDependencies": {
     "@repo/eslint-config": "workspace:*",
     "@repo/typescript-config": "workspace:*",
+    "@sveltejs/kit": "^2.20.0",
     "@sveltejs/package": "^2.0.0",
     "@sveltejs/vite-plugin-svelte": "^5.0.0",
     "eslint": "^9.25.0",
