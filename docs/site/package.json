@@ -8,7 +8,7 @@
     "#*": "./*"
   },
   "scripts": {
-    "build": "next build",
+    "build": "next build --turbopack",
     "check-spelling": "spellchecker --files '**/*.mdx' --files '!content/blog/*.mdx' --files '!content/docs/acknowledgments.mdx' --files '!node_modules/**' --files '!content/extra/terms.mdx' --files '!content/extra/governance.mdx' --files '!content/extra/privacy.mdx' --dictionaries 'dictionary.txt' --no-suggestions --quiet",
     "dev": "next dev --turbopack",
     "lint": "fumadocs-mdx && next lint",
@@ -49,7 +49,7 @@
     "fumadocs-ui": "^14",
     "geist": "^1.3.0",
     "lucide-react": "^0.479.0",
-    "next": "15.4.0-canary.12",
+    "next": "15.4.0-canary.23",
     "next-themes": "^0.4.6",
     "react": "19.0.0",
     "react-dom": "19.0.0",
@@ -63,8 +63,8 @@
     "zod": "^3.24.2"
   },
   "devDependencies": {
-    "@next/env": "15.4.0-canary.12",
-    "@next/eslint-plugin-next": "15.4.0-canary.12",
+    "@next/env": "15.4.0-canary.23",
+    "@next/eslint-plugin-next": "15.4.0-canary.23",
     "@turbo/eslint-config": "workspace:*",
     "@turbo/tsconfig": "workspace:^",
     "@turbo/types": "workspace:*",
