@@ -82,8 +82,8 @@ async-compression = { version = "0.3.13", default-features = false, features = [
   "gzip",
   "tokio",
 ] }
-async-graphql = "7.0.7"
-async-graphql-axum = "7.0.7"
+async-graphql = "7.0.16"
+async-graphql-axum = "7.0.16"
 async-trait = "0.1.64"
 atty = "0.2.14"
 axum = "0.7.5"
@@ -176,3 +176,8 @@ urlencoding = "2.1.2"
 webbrowser = "0.8.7"
 which = "4.4.0"
 unicode-segmentation = "1.10.1"
+
+
+# Needed until a fix for https://github.com/async-graphql/async-graphql/issues/1703 is published
+[patch.crates-io]
+async-graphql = { git = "https://github.com/yasamoka/async-graphql.git", rev = "15fed95142019722e7da2c214ff9d8e2e755c9e5" }
