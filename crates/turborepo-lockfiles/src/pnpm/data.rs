@@ -21,6 +21,8 @@ pub struct PnpmLockfile {
     #[serde(skip_serializing_if = "Option::is_none")]
     settings: Option<LockfileSettings>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    catalogs: Option<Map<String, Map<String, Dependency>>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pnpmfile_checksum: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     never_built_dependencies: Option<Vec<String>>,
@@ -270,6 +272,19 @@ impl PnpmLockfile {
         name: &str,
         specifier: &'a str,
     ) -> Result<Option<&'a str>, crate::Error> {
+        // Handle catalog references
+        if specifier == "catalog:" {
+            if let Some(catalogs) = &self.catalogs {
+                // Look for the package in the default catalog first
+                if let Some(default_catalog) = catalogs.get("default") {
+                    if let Some(dep) = default_catalog.get(name) {
+                        return Ok(Some(&dep.version));
+                    }
+                }
+            }
+            return Ok(None);
+        }
+
         let importer = self.get_workspace(workspace_path)?;
 
         let Some((resolved_specifier, resolved_version)) =
@@ -494,6 +509,7 @@ impl crate::Lockfile for PnpmLockfile {
             time: None,
             settings: self.settings.clone(),
             pnpmfile_checksum: self.pnpmfile_checksum.clone(),
+            catalogs: self.catalogs.clone(),
         }))
     }
 
@@ -1283,5 +1299,24 @@ c:
     fn test_turbo_version(lockfile: &[u8], expected: Option<&str>) {
         let lockfile = PnpmLockfile::from_bytes(lockfile).unwrap();
         assert_eq!(lockfile.turbo_version().as_deref(), expected);
+    }
+
+    #[test]
+    fn test_catalog_support() {
+        let lockfile =
+            PnpmLockfile::from_bytes(include_bytes!("../../fixtures/pnpm-catalog.yaml")).unwrap();
+
+        // Test resolving a package from the default catalog
+        let react = lockfile
+            .resolve_package("apps/docs", "react", "catalog:")
+            .unwrap()
+            .unwrap();
+        assert_eq!(react.version, "19.1.0");
+
+        // Test resolving a package that's not in the catalog
+        let not_in_catalog = lockfile
+            .resolve_package("apps/docs", "not-in-catalog", "catalog:")
+            .unwrap();
+        assert!(not_in_catalog.is_none());
     }
 }
