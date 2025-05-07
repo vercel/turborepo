@@ -274,9 +274,24 @@ impl PnpmLockfile {
     ) -> Result<Option<&'a str>, crate::Error> {
         // Handle catalog references (https://pnpm.io/catalogs)
         if let Some(catalog_name) = specifier.strip_prefix("catalog:") {
+            let catalog_name = if catalog_name.is_empty() {
+                "default"
+            } else {
+                catalog_name
+            };
             if let Some(catalogs) = &self.catalogs {
                 if let Some(catalog) = catalogs.get(catalog_name) {
                     if let Some(dep) = catalog.get(name) {
+                        let importer = self.get_workspace(workspace_path)?;
+                        // Check if there's a peer dependency version in the workspace
+                        if let Some((_, resolved_version)) =
+                            importer.dependencies.find_resolution(name)
+                        {
+                            // If the resolved version includes peer dependencies, use that
+                            if resolved_version.contains('(') {
+                                return Ok(Some(resolved_version));
+                            }
+                        }
                         return Ok(Some(&dep.version));
                     }
                 }
@@ -459,15 +474,37 @@ impl crate::Lockfile for PnpmLockfile {
     ) -> Result<Option<crate::Package>, crate::Error> {
         // Handle catalog references first
         if version.starts_with("catalog:") {
-            let catalog_name = version.strip_prefix("catalog:").unwrap_or("catalog:");
+            let catalog_name = version
+                .strip_prefix("catalog:")
+                .ok_or_else(|| Error::UnknownCatalogSpecifier(version.to_string()))?;
+            let catalog_name = if catalog_name.is_empty() {
+                "default"
+            } else {
+                catalog_name
+            };
 
             if let Some(catalogs) = &self.catalogs {
                 if let Some(catalog) = catalogs.get(catalog_name) {
                     if let Some(dep) = catalog.get(name) {
-                        return Ok(Some(crate::Package::new(
-                            format!("{}@{}", name, dep.version),
-                            &dep.version,
-                        )));
+                        // Get the workspace to check for peer dependencies
+                        let importer = self.get_workspace(workspace_path)?;
+                        let version_with_peers = if let Some((_, resolved_version)) =
+                            importer.dependencies.find_resolution(name)
+                        {
+                            // If the resolved version includes peer dependencies, use that
+                            if resolved_version.contains('(') {
+                                resolved_version.to_string()
+                            } else {
+                                dep.version.clone()
+                            }
+                        } else {
+                            dep.version.clone()
+                        };
+
+                        return Ok(Some(crate::Package {
+                            key: format!("{}@{}", name, version_with_peers),
+                            version: version_with_peers,
+                        }));
                     }
                 }
             }

@@ -15,6 +15,8 @@ pub enum Error {
     MissingInjectedPackage(String),
     #[error("Unsupported lockfile version: {0}")]
     UnsupportedVersion(String),
+    #[error("Unknown pnpm catalog specifier: {0}")]
+    UnknownCatalogSpecifier(String),
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
