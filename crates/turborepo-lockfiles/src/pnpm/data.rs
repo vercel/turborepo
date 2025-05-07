@@ -283,11 +283,11 @@ impl PnpmLockfile {
                 if let Some(catalog) = catalogs.get(catalog_name) {
                     if let Some(dep) = catalog.get(name) {
                         let importer = self.get_workspace(workspace_path)?;
-                        // Check if there's a peer dependency version in the workspace
+                        // Check if there's a peer dependency version in the workspace.
                         if let Some((_, resolved_version)) =
                             importer.dependencies.find_resolution(name)
                         {
-                            // If the resolved version includes peer dependencies, use that
+                            // If the resolved version includes peer dependencies, use that.
                             if resolved_version.contains('(') {
                                 return Ok(Some(resolved_version));
                             }
@@ -364,7 +364,7 @@ impl PnpmLockfile {
                 let entry = if let Some(entry) = snapshots.get(package.as_str()) {
                     Some(entry)
                 } else {
-                    // Parse the dep path to get base key and peer suffix.
+                    // Parse the dependency path to get base key and peer suffix.
                     let dp = DepPath::parse(self.version(), package.as_str()).ok();
                     dp.and_then(|dp| {
                         let base_key = self.format_key(dp.name, dp.version);
@@ -392,7 +392,7 @@ impl PnpmLockfile {
                                     return Some(*entry);
                                 }
                             }
-                            // Otherwise, just use the first candidate
+                            // Otherwise, just use the first candidate.
                             if let Some((_, entry)) = candidates.into_iter().next() {
                                 return Some(entry);
                             }
@@ -1455,23 +1455,24 @@ c:
 
         // Test resolving from default catalog
         let react = lockfile
-            .resolve_package("apps/web", "react", "catalog:")
+            .resolve_package("apps/blog", "react", "catalog:")
             .unwrap()
             .unwrap();
         assert_eq!(react.version, "19.1.0");
 
         // Test resolving from specific catalog
         let eslint = lockfile
-            .resolve_package("apps/docs", "eslint", "catalog:eslint")
+            .resolve_package("packages/logger", "eslint", "catalog:eslint")
             .unwrap()
             .unwrap();
         assert_eq!(eslint.version, "9.26.0");
 
+        // Tests a peer dep
         let react_dom = lockfile
             .resolve_package("packages/ui", "react-dom", "catalog:reactdommm")
             .unwrap()
             .unwrap();
-        assert_eq!(react_dom.version, "19.1.0");
+        assert_eq!(react_dom.version, "19.1.0(react@19.1.0)");
 
         // Test resolving a package that's not in the catalog
         let not_in_catalog = lockfile
