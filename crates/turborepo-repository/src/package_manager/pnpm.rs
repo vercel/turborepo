@@ -84,7 +84,7 @@ pub(crate) fn prune_patches<R: AsRef<RelativeUnixPath>>(
     }
 
     // Patches can be declared in pnpm-workspace.yaml as well
-    if let Some(workspace) = PnpmWorkspace::from_file(repo_root).ok() {
+    if let Ok(workspace) = PnpmWorkspace::from_file(repo_root) {
         let pnpm_config = pruned_json.pnpm.get_or_insert_with(Default::default);
         let patched_deps = pnpm_config
             .patched_dependencies
