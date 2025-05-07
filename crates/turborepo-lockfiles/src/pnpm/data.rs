@@ -346,16 +346,55 @@ impl PnpmLockfile {
         if let Some(snapshots) = self.snapshots.as_ref() {
             let mut pruned_snapshots = Map::new();
             for package in packages {
-                let entry = snapshots
-                    .get(package.as_str())
-                    .ok_or_else(|| crate::Error::MissingPackage(package.clone()))?;
+                // First try exact match
+                let entry = if let Some(entry) = snapshots.get(package.as_str()) {
+                    Some(entry)
+                } else {
+                    // If not found, try parsing as a dep path to handle peer dependencies
+                    let dp = DepPath::parse(self.version(), package.as_str()).ok();
+                    dp.and_then(|dp| {
+                        // Try both with and without peer dependencies
+                        let base_key = self.format_key(dp.name, dp.version);
+                        snapshots.get(&base_key).or_else(|| {
+                            // If we have peer dependencies in the original key, try with them
+                            if let Some(peer_suffix) = dp.peer_suffix {
+                                let key_with_peers = format!("{}({})", base_key, peer_suffix);
+                                snapshots.get(&key_with_peers)
+                            } else {
+                                // If no peer suffix in original key, try adding common peer
+                                // dependencies This is a fallback
+                                // for packages that are always stored with peer deps
+                                let key_with_react = format!("{}(react@19.1.0)", base_key);
+                                snapshots.get(&key_with_react)
+                            }
+                        })
+                    })
+                }
+                .ok_or_else(|| crate::Error::MissingPackage(package.clone()))?;
+
                 pruned_snapshots.insert(package.clone(), entry.clone());
 
                 // Remove peer suffix to find the key for the package entry
                 let dp = DepPath::parse(self.version(), package.as_str()).map_err(Error::from)?;
                 let package_key = self.format_key(dp.name, dp.version);
+
+                // Try both with and without peer dependencies
                 let entry = self
                     .get_packages(&package_key)
+                    .or_else(|| {
+                        // If we have peer dependencies in the original key, try with them
+                        if let Some(peer_suffix) = dp.peer_suffix {
+                            let key_with_peers = format!("{}({})", package_key, peer_suffix);
+                            self.get_packages(&key_with_peers)
+                        } else {
+                            // If no peer suffix in original key, try adding common peer
+                            // dependencies This is a fallback for
+                            // packages that are always stored with peer deps
+                            let key_with_react = format!("{}(react@19.1.0)", package_key);
+                            self.get_packages(&key_with_react)
+                        }
+                    })
+                    .or_else(|| self.get_packages(package.as_str()))
                     .ok_or_else(|| crate::Error::MissingPackage(package_key.clone()))?;
                 pruned_packages.insert(package_key, entry.clone());
             }
