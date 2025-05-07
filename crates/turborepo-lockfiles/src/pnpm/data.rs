@@ -299,6 +299,7 @@ impl PnpmLockfile {
         let mut pruned_patches = Map::new();
         for dependency in pruned_packages.keys() {
             let dp = DepPath::parse(self.version(), dependency.as_str())?;
+
             let patch_key = format!("{}@{}", dp.name, dp.version);
             if let Some(patch) = patches.get(&patch_key).filter(|patch| {
                 // In V7 patch hash isn't included in packages key, so no need to check
@@ -306,6 +307,12 @@ impl PnpmLockfile {
                     || dp.patch_hash() == Some(&patch.hash)
             }) {
                 pruned_patches.insert(patch_key, patch.clone());
+                continue;
+            }
+
+            let version_less_key = dp.name.to_string();
+            if let Some(patch) = patches.get(&version_less_key) {
+                pruned_patches.insert(version_less_key, patch.clone());
             }
         }
         Ok(pruned_patches)
@@ -638,6 +645,7 @@ mod tests {
     const PNPM_V9: &[u8] = include_bytes!("../../fixtures/pnpm-v9.yaml").as_slice();
     const PNPM6_TURBO: &[u8] = include_bytes!("../../fixtures/pnpm6turbo.yaml").as_slice();
     const PNPM8_TURBO: &[u8] = include_bytes!("../../fixtures/pnpm8turbo.yaml").as_slice();
+    const PNPM10_PATCH: &[u8] = include_bytes!("../../fixtures/pnpm-10-patch.lock").as_slice();
 
     use super::*;
     use crate::{Lockfile, Package};
@@ -650,6 +658,7 @@ mod tests {
     #[test_case(PNPM_V7_PEER)]
     #[test_case(PNPM_V7_PATCH)]
     #[test_case(PNPM_V9)]
+    #[test_case(PNPM10_PATCH)]
     fn test_roundtrip(fixture: &[u8]) {
         let lockfile = PnpmLockfile::from_bytes(fixture).unwrap();
         let serialized_lockfile = serde_yaml::to_string(&lockfile).unwrap();
@@ -668,6 +677,18 @@ mod tests {
                 RelativeUnixPathBuf::new("patches/@babel__core@7.20.12.patch").unwrap(),
                 RelativeUnixPathBuf::new("patches/is-odd@3.0.1.patch").unwrap(),
                 RelativeUnixPathBuf::new("patches/moleculer@0.14.28.patch").unwrap(),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_unversioned_patches() {
+        let lockfile = PnpmLockfile::from_bytes(PNPM10_PATCH).unwrap();
+        assert_eq!(
+            lockfile.patches().unwrap(),
+            vec![
+                RelativeUnixPathBuf::new("patches/is-number@7.0.0.patch").unwrap(),
+                RelativeUnixPathBuf::new("patches/is-odd.patch").unwrap(),
             ]
         );
     }
@@ -979,6 +1000,34 @@ mod tests {
                 RelativeUnixPathBuf::new("patches/@babel__helper-string-parser@7.19.4.patch")
                     .unwrap()
             ]
+        )
+    }
+
+    #[test]
+    fn test_prune_patches_v10() {
+        let lockfile = PnpmLockfile::from_bytes(PNPM10_PATCH).unwrap();
+        let pruned = lockfile
+            .subgraph(
+                &["packages/pkg-a".into()],
+                &["is-odd@3.0.1(patch_hash=e861997dbe1a5bbcd8e52a8ebab33faf7531f71876fb8dd37694f3d11da81de2)".into(), "is-number@6.0.0".into()],
+            )
+            .unwrap();
+        assert_eq!(
+            pruned.patches().unwrap(),
+            vec![RelativeUnixPathBuf::new("patches/is-odd.patch").unwrap()]
+        );
+
+        let pruned = lockfile
+            .subgraph(
+                &["packages/pkg-b".into()],
+                &["is-number@7.0.\
+                   0(patch_hash=0bae9732f8037300debc03db26de9b8823a5dc7bb7c3a6a346d9462c70167a75)"
+                    .into()],
+            )
+            .unwrap();
+        assert_eq!(
+            pruned.patches().unwrap(),
+            vec![RelativeUnixPathBuf::new("patches/is-number@7.0.0.patch").unwrap()]
         )
     }
 
