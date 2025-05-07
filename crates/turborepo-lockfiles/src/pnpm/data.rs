@@ -272,12 +272,12 @@ impl PnpmLockfile {
         name: &str,
         specifier: &'a str,
     ) -> Result<Option<&'a str>, crate::Error> {
-        // Handle catalog references
-        if specifier == "catalog:" {
+        // Handle catalog references (https://pnpm.io/catalogs)
+        if specifier.starts_with("catalog:") {
             if let Some(catalogs) = &self.catalogs {
-                // Look for the package in the default catalog first
-                if let Some(default_catalog) = catalogs.get("default") {
-                    if let Some(dep) = default_catalog.get(name) {
+                let catalog_name = specifier.strip_prefix("catalog:").unwrap_or("default");
+                if let Some(catalog) = catalogs.get(catalog_name) {
+                    if let Some(dep) = catalog.get(name) {
                         return Ok(Some(&dep.version));
                     }
                 }
@@ -1318,5 +1318,44 @@ c:
             .resolve_package("apps/docs", "not-in-catalog", "catalog:")
             .unwrap();
         assert!(not_in_catalog.is_none());
+    }
+
+    #[test]
+    fn test_multiple_catalogs() {
+        let lockfile =
+            PnpmLockfile::from_bytes(include_bytes!("../../fixtures/pnpm-multiple-catalogs.yaml"))
+                .unwrap();
+
+        // Test resolving from default catalog
+        let react = lockfile
+            .resolve_package("apps/docs", "react", "catalog:")
+            .unwrap()
+            .unwrap();
+        assert_eq!(react.version, "19.1.0");
+
+        // Test resolving from specific catalog
+        let typescript4 = lockfile
+            .resolve_package("apps/web", "typescript", "catalog:typescript4")
+            .unwrap()
+            .unwrap();
+        assert_eq!(typescript4.version, "4.9.5");
+
+        let typescript5 = lockfile
+            .resolve_package("packages/ui", "typescript", "catalog:typescript5")
+            .unwrap()
+            .unwrap();
+        assert_eq!(typescript5.version, "5.8.2");
+
+        // Test resolving a package that's not in the catalog
+        let not_in_catalog = lockfile
+            .resolve_package("apps/docs", "not-in-catalog", "catalog:")
+            .unwrap();
+        assert!(not_in_catalog.is_none());
+
+        // Test resolving from non-existent catalog
+        let non_existent_catalog = lockfile
+            .resolve_package("apps/docs", "react", "catalog:non-existent")
+            .unwrap();
+        assert!(non_existent_catalog.is_none());
     }
 }
