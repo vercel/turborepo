@@ -273,9 +273,8 @@ impl PnpmLockfile {
         specifier: &'a str,
     ) -> Result<Option<&'a str>, crate::Error> {
         // Handle catalog references (https://pnpm.io/catalogs)
-        if specifier.starts_with("catalog:") {
+        if let Some(catalog_name) = specifier.strip_prefix("catalog:") {
             if let Some(catalogs) = &self.catalogs {
-                let catalog_name = specifier.strip_prefix("catalog:").unwrap_or("default");
                 if let Some(catalog) = catalogs.get(catalog_name) {
                     if let Some(dep) = catalog.get(name) {
                         return Ok(Some(&dep.version));
@@ -346,29 +345,44 @@ impl PnpmLockfile {
         if let Some(snapshots) = self.snapshots.as_ref() {
             let mut pruned_snapshots = Map::new();
             for package in packages {
-                // First try exact match
+                // Try exact match first
                 let entry = if let Some(entry) = snapshots.get(package.as_str()) {
                     Some(entry)
                 } else {
-                    // If not found, try parsing as a dependency path for handling peer
-                    // dependencies.
+                    // Parse the dep path to get base key and peer suffix.
                     let dp = DepPath::parse(self.version(), package.as_str()).ok();
                     dp.and_then(|dp| {
-                        // Try both with and without peer dependencies
                         let base_key = self.format_key(dp.name, dp.version);
-                        snapshots.get(&base_key).or_else(|| {
-                            // If we have peer dependencies in the original key, try with those.
+                        // Try base key (no peer deps).
+                        if let Some(entry) = snapshots.get(&base_key) {
+                            return Some(entry);
+                        }
+                        // For v7+, try any peer variant
+                        if matches!(self.version(), SupportedLockfileVersion::V7AndV9) {
+                            // Find all keys that start with base_key and have a peer suffix.
+                            let candidates = snapshots
+                                .iter()
+                                .filter(|(k, _)| {
+                                    k.starts_with(&base_key)
+                                        && k.len() > base_key.len()
+                                        && k[base_key.len()..].starts_with('(')
+                                })
+                                .collect::<Vec<_>>();
+                            // If the original key had a peer suffix, prefer exact match.
                             if let Some(peer_suffix) = dp.peer_suffix {
-                                let key_with_peers = format!("{}({})", base_key, peer_suffix);
-                                snapshots.get(&key_with_peers)
-                            } else {
-                                // If no peer suffix in original key, try adding common peer
-                                // dependencies. This is a fallback
-                                // for packages that are always stored with peer deps.
-                                let key_with_react = format!("{}(react@19.1.0)", base_key);
-                                snapshots.get(&key_with_react)
+                                let wanted = format!("{}{}", base_key, peer_suffix);
+                                if let Some((_, entry)) =
+                                    candidates.iter().find(|(k, _)| k.as_str() == wanted)
+                                {
+                                    return Some(*entry);
+                                }
                             }
-                        })
+                            // Otherwise, just use the first candidate
+                            if let Some((_, entry)) = candidates.into_iter().next() {
+                                return Some(entry);
+                            }
+                        }
+                        None
                     })
                 }
                 .ok_or_else(|| crate::Error::MissingPackage(package.clone()))?;
@@ -379,21 +393,34 @@ impl PnpmLockfile {
                 let dp = DepPath::parse(self.version(), package.as_str()).map_err(Error::from)?;
                 let package_key = self.format_key(dp.name, dp.version);
 
-                // Try both with and without peer dependencies.
+                // Try exact match in packages
                 let entry = self
                     .get_packages(&package_key)
                     .or_else(|| {
-                        // If we have peer dependencies in the original key, try with those.
-                        if let Some(peer_suffix) = dp.peer_suffix {
-                            let key_with_peers = format!("{}({})", package_key, peer_suffix);
-                            self.get_packages(&key_with_peers)
-                        } else {
-                            // If no peer suffix in original key, try adding common peer
-                            // dependencies This is a fallback for
-                            // packages that are always stored with peer deps.
-                            let key_with_react = format!("{}(react@19.1.0)", package_key);
-                            self.get_packages(&key_with_react)
+                        // For v7+, try any peer variant in packages
+                        if matches!(self.version(), SupportedLockfileVersion::V7AndV9) {
+                            let pkgs = self.packages.as_ref()?;
+                            let candidates = pkgs
+                                .iter()
+                                .filter(|(k, _)| {
+                                    k.starts_with(&package_key)
+                                        && k.len() > package_key.len()
+                                        && k[package_key.len()..].starts_with('(')
+                                })
+                                .collect::<Vec<_>>();
+                            if let Some(peer_suffix) = dp.peer_suffix {
+                                let wanted = format!("{}{}", package_key, peer_suffix);
+                                if let Some((_, entry)) =
+                                    candidates.iter().find(|(k, _)| k.as_str() == wanted)
+                                {
+                                    return Some(*entry);
+                                }
+                            }
+                            if let Some((_, entry)) = candidates.into_iter().next() {
+                                return Some(entry);
+                            }
                         }
+                        None
                     })
                     .or_else(|| self.get_packages(package.as_str()))
                     .ok_or_else(|| crate::Error::MissingPackage(package_key.clone()))?;
@@ -432,11 +459,7 @@ impl crate::Lockfile for PnpmLockfile {
     ) -> Result<Option<crate::Package>, crate::Error> {
         // Handle catalog references first
         if version.starts_with("catalog:") {
-            let catalog_name = match version.strip_prefix("catalog:") {
-                Some("") => "default",
-                Some(name) => name,
-                None => unreachable!(), // We already checked with starts_with
-            };
+            let catalog_name = version.strip_prefix("catalog:").unwrap_or("catalog:");
 
             if let Some(catalogs) = &self.catalogs {
                 if let Some(catalog) = catalogs.get(catalog_name) {
@@ -1379,6 +1402,12 @@ c:
             .resolve_package("apps/docs", "not-in-catalog", "catalog:")
             .unwrap();
         assert!(not_in_catalog.is_none());
+
+        // Test resolving from non-existent catalog
+        let non_existent_catalog = lockfile
+            .resolve_package("apps/docs", "react", "catalog:non-existent")
+            .unwrap();
+        assert!(non_existent_catalog.is_none());
     }
 
     #[test]
