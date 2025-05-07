@@ -1349,23 +1349,23 @@ c:
 
         // Test resolving from default catalog
         let react = lockfile
-            .resolve_package("apps/docs", "react", "catalog:")
+            .resolve_package("apps/web", "react", "catalog:")
             .unwrap()
             .unwrap();
         assert_eq!(react.version, "19.1.0");
 
         // Test resolving from specific catalog
-        let typescript4 = lockfile
-            .resolve_package("apps/web", "typescript", "catalog:typescript4")
+        let eslint = lockfile
+            .resolve_package("apps/docs", "eslint", "catalog:eslint")
             .unwrap()
             .unwrap();
-        assert_eq!(typescript4.version, "4.9.5");
+        assert_eq!(eslint.version, "9.26.0");
 
-        let typescript5 = lockfile
-            .resolve_package("packages/ui", "typescript", "catalog:typescript5")
+        let react_dom = lockfile
+            .resolve_package("packages/ui", "react-dom", "catalog:reactdommm")
             .unwrap()
             .unwrap();
-        assert_eq!(typescript5.version, "5.8.2");
+        assert_eq!(react_dom.version, "19.1.0");
 
         // Test resolving a package that's not in the catalog
         let not_in_catalog = lockfile

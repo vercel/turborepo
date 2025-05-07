@@ -7,16 +7,16 @@ settings:
 catalogs:
   default:
     react:
+      specifier: ^19.0.1
+      version: 19.1.0
+  eslint:
+    eslint:
+      specifier: ^9.26.0
+      version: 9.26.0
+  reactdommm:
+    react-dom:
       specifier: ^19.1.0
       version: 19.1.0
-  typescript4:
-    typescript:
-      specifier: ^4
-      version: 4.9.5
-  typescript5:
-    typescript:
-      specifier: ^5
-      version: 5.8.2
 
 importers:
   .:
@@ -40,10 +40,10 @@ importers:
         specifier: ^15.3.0
         version: 15.3.0(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       react:
-        specifier: "catalog:"
+        specifier: ^19.1.0
         version: 19.1.0
       react-dom:
-        specifier: ^19.1.0
+        specifier: catalog:reactdommm
         version: 19.1.0(react@19.1.0)
     devDependencies:
       "@repo/eslint-config":
@@ -62,7 +62,7 @@ importers:
         specifier: 19.1.1
         version: 19.1.1(@types/react@19.1.0)
       eslint:
-        specifier: ^9.26.0
+        specifier: catalog:eslint
         version: 9.26.0
       typescript:
         specifier: 5.8.2
@@ -80,7 +80,7 @@ importers:
         specifier: "catalog:"
         version: 19.1.0
       react-dom:
-        specifier: ^19.1.0
+        specifier: catalog:reactdommm
         version: 19.1.0(react@19.1.0)
     devDependencies:
       "@repo/eslint-config":
@@ -99,11 +99,11 @@ importers:
         specifier: 19.1.1
         version: 19.1.1(@types/react@19.1.0)
       eslint:
-        specifier: ^9.26.0
+        specifier: catalog:eslint
         version: 9.26.0
       typescript:
-        specifier: catalog:typescript4
-        version: 4.9.5
+        specifier: 5.8.2
+        version: 5.8.2
 
   packages/eslint-config:
     devDependencies:
@@ -146,10 +146,10 @@ importers:
   packages/ui:
     dependencies:
       react:
-        specifier: "catalog:"
+        specifier: ^19.1.0
         version: 19.1.0
       react-dom:
-        specifier: ^19.1.0
+        specifier: catalog:reactdommm
         version: 19.1.0(react@19.1.0)
     devDependencies:
       "@repo/eslint-config":
@@ -171,10 +171,10 @@ importers:
         specifier: 19.1.1
         version: 19.1.1(@types/react@19.1.0)
       eslint:
-        specifier: ^9.26.0
+        specifier: catalog:eslint
         version: 9.26.0
       typescript:
-        specifier: catalog:typescript5
+        specifier: 5.8.2
         version: 5.8.2
 
 packages:
@@ -3715,14 +3715,6 @@ packages:
       eslint: ^8.57.0 || ^9.0.0
       typescript: ">=4.8.4 <5.9.0"
 
-  typescript@4.9.5:
-    resolution:
-      {
-        integrity: sha512-1FXk9E2Hm+QzZQ7z+McJiHL4NW1F2EzMu9Nq9i3zAaGqibafqYwCVU6WyWAuyQRRzOlxou8xZSyXLEN8oKj24g==,
-      }
-    engines: { node: ">=4.2.0" }
-    hasBin: true
-
   typescript@5.8.2:
     resolution:
       {
@@ -6305,8 +6297,6 @@ snapshots:
       typescript: 5.8.2
     transitivePeerDependencies:
       - supports-color
-
-  typescript@4.9.5: {}
 
   typescript@5.8.2: {}
 
