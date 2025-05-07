@@ -390,6 +390,27 @@ impl crate::Lockfile for PnpmLockfile {
         name: &str,
         version: &str,
     ) -> Result<Option<crate::Package>, crate::Error> {
+        // Handle catalog references first
+        if version.starts_with("catalog:") {
+            let catalog_name = if version == "catalog:" {
+                "default"
+            } else {
+                &version[8..] // Skip "catalog:"
+            };
+
+            if let Some(catalogs) = &self.catalogs {
+                if let Some(catalog) = catalogs.get(catalog_name) {
+                    if let Some(dep) = catalog.get(name) {
+                        return Ok(Some(crate::Package::new(
+                            &format!("{}@{}", name, dep.version),
+                            &dep.version,
+                        )));
+                    }
+                }
+            }
+            return Ok(None);
+        }
+
         // Check if version is a key
         if self.has_package(version) {
             let extracted_version = self.extract_version(version)?;
