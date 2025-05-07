@@ -645,6 +645,7 @@ mod tests {
     const PNPM_V9: &[u8] = include_bytes!("../../fixtures/pnpm-v9.yaml").as_slice();
     const PNPM6_TURBO: &[u8] = include_bytes!("../../fixtures/pnpm6turbo.yaml").as_slice();
     const PNPM8_TURBO: &[u8] = include_bytes!("../../fixtures/pnpm8turbo.yaml").as_slice();
+    const PNPM10_PATCH: &[u8] = include_bytes!("../../fixtures/pnpm-10-patch.lock").as_slice();
 
     use super::*;
     use crate::{Lockfile, Package};
@@ -657,6 +658,7 @@ mod tests {
     #[test_case(PNPM_V7_PEER)]
     #[test_case(PNPM_V7_PATCH)]
     #[test_case(PNPM_V9)]
+    #[test_case(PNPM10_PATCH)]
     fn test_roundtrip(fixture: &[u8]) {
         let lockfile = PnpmLockfile::from_bytes(fixture).unwrap();
         let serialized_lockfile = serde_yaml::to_string(&lockfile).unwrap();
@@ -675,6 +677,18 @@ mod tests {
                 RelativeUnixPathBuf::new("patches/@babel__core@7.20.12.patch").unwrap(),
                 RelativeUnixPathBuf::new("patches/is-odd@3.0.1.patch").unwrap(),
                 RelativeUnixPathBuf::new("patches/moleculer@0.14.28.patch").unwrap(),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_unversioned_patches() {
+        let lockfile = PnpmLockfile::from_bytes(PNPM10_PATCH).unwrap();
+        assert_eq!(
+            lockfile.patches().unwrap(),
+            vec![
+                RelativeUnixPathBuf::new("patches/is-number@7.0.0.patch").unwrap(),
+                RelativeUnixPathBuf::new("patches/is-odd.patch").unwrap(),
             ]
         );
     }
@@ -990,6 +1004,34 @@ mod tests {
     }
 
     #[test]
+    fn test_prune_patches_v10() {
+        let lockfile = PnpmLockfile::from_bytes(PNPM10_PATCH).unwrap();
+        let pruned = lockfile
+            .subgraph(
+                &["packages/pkg-a".into()],
+                &["is-odd@3.0.1(patch_hash=e861997dbe1a5bbcd8e52a8ebab33faf7531f71876fb8dd37694f3d11da81de2)".into(), "is-number@6.0.0".into()],
+            )
+            .unwrap();
+        assert_eq!(
+            pruned.patches().unwrap(),
+            vec![RelativeUnixPathBuf::new("patches/is-odd.patch").unwrap()]
+        );
+
+        let pruned = lockfile
+            .subgraph(
+                &["packages/pkg-b".into()],
+                &["is-number@7.0.\
+                   0(patch_hash=0bae9732f8037300debc03db26de9b8823a5dc7bb7c3a6a346d9462c70167a75)"
+                    .into()],
+            )
+            .unwrap();
+        assert_eq!(
+            pruned.patches().unwrap(),
+            vec![RelativeUnixPathBuf::new("patches/is-number@7.0.0.patch").unwrap()]
+        )
+    }
+
+    #[test]
     fn test_pnpm_alias_overlap() {
         let lockfile = PnpmLockfile::from_bytes(PNPM_ABSOLUTE).unwrap();
         let closures = crate::all_transitive_closures(
@@ -1290,69 +1332,5 @@ c:
     fn test_turbo_version(lockfile: &[u8], expected: Option<&str>) {
         let lockfile = PnpmLockfile::from_bytes(lockfile).unwrap();
         assert_eq!(lockfile.turbo_version().as_deref(), expected);
-    }
-
-    #[test]
-    fn test_prune_patches_without_version() {
-        use crate::pnpm::{LockfileVersion, SupportedLockfileVersion, VersionFormat};
-
-        // Create a simple test lockfile with a version-less patch
-        let mut lockfile = PnpmLockfile {
-            lockfile_version: LockfileVersion {
-                version: "9.0".to_string(),
-                format: VersionFormat::String,
-            },
-            patched_dependencies: Some(Map::from_iter([(
-                "foo".to_string(),
-                PatchFile {
-                    path: "patches/foo.patch".to_string(),
-                    hash: "hashvalue".to_string(),
-                },
-            )])),
-            importers: Map::new(),
-            packages: Some(Map::from_iter([(
-                "foo@1.0.0".to_string(),
-                PackageSnapshot {
-                    patched: Some(true),
-                    resolution: PackageResolution {
-                        integrity: Some("sha512-abc".to_string()),
-                        type_field: None,
-                        tarball: None,
-                        directory: None,
-                        repo: None,
-                        commit: None,
-                    },
-                    name: Some("foo".to_string()),
-                    version: Some("1.0.0".to_string()),
-                    snapshot: PackageSnapshotV7 {
-                        optional: false,
-                        dependencies: None,
-                        optional_dependencies: None,
-                        transitive_peer_dependencies: None,
-                    },
-                    other: Map::new(),
-                    id: None,
-                },
-            )])),
-            snapshots: None,
-            settings: None,
-            pnpmfile_checksum: None,
-            never_built_dependencies: None,
-            only_built_dependencies: None,
-            ignored_optional_dependencies: None,
-            overrides: None,
-            package_extensions_checksum: None,
-            time: None,
-        };
-
-        let pruned = lockfile
-            .prune_patches(
-                lockfile.patched_dependencies.as_ref().unwrap(),
-                lockfile.packages.as_ref().unwrap(),
-            )
-            .unwrap();
-
-        assert_eq!(pruned.len(), 1);
-        assert!(pruned.contains_key("foo"));
     }
 }
