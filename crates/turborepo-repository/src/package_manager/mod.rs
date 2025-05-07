@@ -494,7 +494,7 @@ impl PackageManager {
         &self,
         package_json: &PackageJson,
         patches: &[R],
-        repo_root: Option<&AbsoluteSystemPath>,
+        repo_root: &AbsoluteSystemPath,
     ) -> PackageJson {
         match self {
             PackageManager::Berry => yarn::prune_patches(package_json, patches),

@@ -203,7 +203,7 @@ pub async fn prune(
         let pruned_json = package_manager.prune_patched_packages(
             prune.package_graph.root_package_json(),
             &pruned_patches,
-            Some(repo_root),
+            repo_root,
         );
         let mut pruned_json_contents = serde_json::to_string_pretty(&pruned_json)?;
         // Add trailing newline to match Go behavior
