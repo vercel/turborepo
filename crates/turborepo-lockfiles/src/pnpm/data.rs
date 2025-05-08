@@ -339,40 +339,12 @@ impl PnpmLockfile {
 
                 pruned_snapshots.insert(package.clone(), entry.clone());
 
-                // Remove peer suffix to find the key for the package entry.
+                // Remove peer suffix to find the key for the package entry
                 let dp = DepPath::parse(self.version(), package.as_str()).map_err(Error::from)?;
                 let package_key = self.format_key(dp.name, dp.version);
 
-                // Try exact match in packages
                 let entry = self
                     .get_packages(&package_key)
-                    .or_else(|| {
-                        // For v7+, try any peer variant in packages
-                        if matches!(self.version(), SupportedLockfileVersion::V7AndV9) {
-                            let pkgs = self.packages.as_ref()?;
-                            let candidates = pkgs
-                                .iter()
-                                .filter(|(k, _)| {
-                                    k.starts_with(&package_key)
-                                        && k.len() > package_key.len()
-                                        && k[package_key.len()..].starts_with('(')
-                                })
-                                .collect::<Vec<_>>();
-                            if let Some(peer_suffix) = dp.peer_suffix {
-                                let wanted = format!("{}{}", package_key, peer_suffix);
-                                if let Some((_, entry)) =
-                                    candidates.iter().find(|(k, _)| k.as_str() == wanted)
-                                {
-                                    return Some(*entry);
-                                }
-                            }
-                            if let Some((_, entry)) = candidates.into_iter().next() {
-                                return Some(entry);
-                            }
-                        }
-                        None
-                    })
-                    .or_else(|| self.get_packages(package.as_str()))
                     .ok_or_else(|| crate::Error::MissingPackage(package_key.clone()))?;
                 pruned_packages.insert(package_key, entry.clone());
             }
