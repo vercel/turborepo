@@ -333,47 +333,9 @@ impl PnpmLockfile {
         if let Some(snapshots) = self.snapshots.as_ref() {
             let mut pruned_snapshots = Map::new();
             for package in packages {
-                // Try exact match first
-                let entry = if let Some(entry) = snapshots.get(package.as_str()) {
-                    Some(entry)
-                } else {
-                    // Parse the dependency path to get base key and peer suffix.
-                    let dp = DepPath::parse(self.version(), package.as_str()).ok();
-                    dp.and_then(|dp| {
-                        let base_key = self.format_key(dp.name, dp.version);
-                        // Try base key (no peer deps).
-                        if let Some(entry) = snapshots.get(&base_key) {
-                            return Some(entry);
-                        }
-                        // For v7+, try any peer variant
-                        if matches!(self.version(), SupportedLockfileVersion::V7AndV9) {
-                            // Find all keys that start with base_key and have a peer suffix.
-                            let candidates = snapshots
-                                .iter()
-                                .filter(|(k, _)| {
-                                    k.starts_with(&base_key)
-                                        && k.len() > base_key.len()
-                                        && k[base_key.len()..].starts_with('(')
-                                })
-                                .collect::<Vec<_>>();
-                            // If the original key had a peer suffix, prefer exact match.
-                            if let Some(peer_suffix) = dp.peer_suffix {
-                                let wanted = format!("{}{}", base_key, peer_suffix);
-                                if let Some((_, entry)) =
-                                    candidates.iter().find(|(k, _)| k.as_str() == wanted)
-                                {
-                                    return Some(*entry);
-                                }
-                            }
-                            // Otherwise, just use the first candidate.
-                            if let Some((_, entry)) = candidates.into_iter().next() {
-                                return Some(entry);
-                            }
-                        }
-                        None
-                    })
-                }
-                .ok_or_else(|| crate::Error::MissingPackage(package.clone()))?;
+                let entry = snapshots
+                    .get(package.as_str())
+                    .ok_or_else(|| crate::Error::MissingPackage(package.clone()))?;
 
                 pruned_snapshots.insert(package.clone(), entry.clone());
 
