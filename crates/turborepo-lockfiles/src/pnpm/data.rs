@@ -377,45 +377,6 @@ impl crate::Lockfile for PnpmLockfile {
         name: &str,
         version: &str,
     ) -> Result<Option<crate::Package>, crate::Error> {
-        // Handle catalog references first
-        if version.starts_with("catalog:") {
-            let catalog_name = version
-                .strip_prefix("catalog:")
-                .ok_or_else(|| Error::UnknownCatalogSpecifier(version.to_string()))?;
-            let catalog_name = if catalog_name.is_empty() {
-                "default"
-            } else {
-                catalog_name
-            };
-
-            if let Some(catalogs) = &self.catalogs {
-                if let Some(catalog) = catalogs.get(catalog_name) {
-                    if let Some(dep) = catalog.get(name) {
-                        // Get the workspace to check for peer dependencies
-                        let importer = self.get_workspace(workspace_path)?;
-                        let version_with_peers = if let Some((_, resolved_version)) =
-                            importer.dependencies.find_resolution(name)
-                        {
-                            // If the resolved version includes peer dependencies, use that
-                            if resolved_version.contains('(') {
-                                resolved_version.to_string()
-                            } else {
-                                dep.version.clone()
-                            }
-                        } else {
-                            dep.version.clone()
-                        };
-
-                        return Ok(Some(crate::Package {
-                            key: format!("{}@{}", name, version_with_peers),
-                            version: version_with_peers,
-                        }));
-                    }
-                }
-            }
-            return Ok(None);
-        }
-
         // Check if version is a key
         if self.has_package(version) {
             let extracted_version = self.extract_version(version)?;
