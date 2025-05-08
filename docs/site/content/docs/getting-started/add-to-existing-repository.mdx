@@ -202,26 +202,14 @@ Turborepo optimizes your repository using information from your package manager.
 <Step>
 ### Set up package manager workspaces
 
-For multi-package repositories, you'll need to configure your package manager to recognize your workspace structure. This is done by adding a `workspaces` field to your root `package.json`.
+For [multi-package workspaces](https://vercel.com/docs/glossary#multi-package-workspace), you'll need to configure your package manager to recognize your workspace structure.
 
 The `workspaces` field tells your package manager which directories contain your packages. Common patterns include `apps/*` for applications and `packages/*` for shared libraries.
 
-```diff title="package.json"
-{
-  "packageManager": "npm@8.5.0",
-+  "workspaces": [
-+    "apps/*",
-+    "packages/*"
-+  ]
-}
-```
-
-<Callout type="info">
+<Callout type="good-to-know">
   If you're working with a single-package repository, you can skip this step as
   workspaces aren't needed.
 </Callout>
-
-Different package managers may have alternative ways to configure workspaces:
 
 <PackageManagerTabs>
 
@@ -271,7 +259,7 @@ Different package managers may have alternative ways to configure workspaces:
   }
   ```
 
-  <LinkToDocumentation href="https://bun.sh/docs/install/workspaces">npm workspace documentation</LinkToDocumentation>
+  <LinkToDocumentation href="https://bun.sh/docs/install/workspaces">bun workspace documentation</LinkToDocumentation>
   </Tab>
 
 </PackageManagerTabs>
