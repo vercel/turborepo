@@ -21,6 +21,8 @@ pub struct PnpmLockfile {
     #[serde(skip_serializing_if = "Option::is_none")]
     settings: Option<LockfileSettings>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    catalogs: Option<Map<String, Map<String, Dependency>>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pnpmfile_checksum: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     never_built_dependencies: Option<Vec<String>>,
@@ -501,6 +503,7 @@ impl crate::Lockfile for PnpmLockfile {
             time: None,
             settings: self.settings.clone(),
             pnpmfile_checksum: self.pnpmfile_checksum.clone(),
+            catalogs: self.catalogs.clone(),
         }))
     }
 
@@ -1332,5 +1335,152 @@ c:
     fn test_turbo_version(lockfile: &[u8], expected: Option<&str>) {
         let lockfile = PnpmLockfile::from_bytes(lockfile).unwrap();
         assert_eq!(lockfile.turbo_version().as_deref(), expected);
+    }
+
+    #[test]
+    fn test_catalog_support() {
+        let lockfile =
+            PnpmLockfile::from_bytes(include_bytes!("../../fixtures/pnpm-catalog.yaml")).unwrap();
+
+        // Test resolving a package from the default catalog
+        let react = lockfile
+            .resolve_package("apps/docs", "react", "catalog:")
+            .unwrap()
+            .unwrap();
+        assert_eq!(react.version, "19.1.0");
+
+        // Test resolving a package that's not in the catalog
+        let not_in_catalog = lockfile
+            .resolve_package("apps/docs", "not-in-catalog", "catalog:")
+            .unwrap();
+        assert!(not_in_catalog.is_none());
+
+        // Test resolving from non-existent catalog
+        let non_existent_catalog = lockfile
+            .resolve_package("apps/docs", "react", "catalog:non-existent")
+            .unwrap();
+        assert!(non_existent_catalog.is_none());
+    }
+
+    #[test]
+    fn test_multiple_catalogs() {
+        let lockfile =
+            PnpmLockfile::from_bytes(include_bytes!("../../fixtures/pnpm-multiple-catalogs.yaml"))
+                .unwrap();
+
+        // Test resolving from default catalog
+        let react = lockfile
+            .resolve_package("apps/blog", "react", "catalog:")
+            .unwrap()
+            .unwrap();
+        assert_eq!(react.version, "19.1.0");
+
+        // Test resolving from specific catalog
+        let eslint = lockfile
+            .resolve_package("packages/logger", "eslint", "catalog:eslint")
+            .unwrap()
+            .unwrap();
+        assert_eq!(eslint.version, "9.26.0");
+
+        // Tests a peer dep
+        let react_dom = lockfile
+            .resolve_package("packages/ui", "react-dom", "catalog:reactdommm")
+            .unwrap()
+            .unwrap();
+        assert_eq!(react_dom.version, "19.1.0(react@19.1.0)");
+
+        // Test resolving a package that's not in the catalog
+        let not_in_catalog = lockfile.resolve_package("apps/docs", "not-in-catalog", "catalog:");
+        assert_eq!(
+            not_in_catalog.unwrap_err().to_string(),
+            crate::Error::MissingWorkspace("apps/docs".to_string()).to_string()
+        );
+
+        // Test resolving from non-existent catalog
+        let non_existent_catalog =
+            lockfile.resolve_package("apps/docs", "react", "catalog:non-existent");
+        assert_eq!(
+            non_existent_catalog.unwrap_err().to_string(),
+            crate::Error::MissingWorkspace("apps/docs".to_string()).to_string()
+        );
+    }
+
+    #[test]
+    fn test_catalog_peer_dependencies() {
+        let lockfile =
+            PnpmLockfile::from_bytes(include_bytes!("../../fixtures/pnpm-multiple-catalogs.yaml"))
+                .unwrap();
+
+        // Test resolving a package with peer dependencies from catalog
+        let react_dom = lockfile
+            .resolve_package("apps/admin", "react-dom", "catalog:reactdommm")
+            .unwrap()
+            .unwrap();
+        assert_eq!(react_dom.version, "19.1.0(react@19.1.0)");
+
+        // Test resolving a package from default catalog
+        let react = lockfile
+            .resolve_package("apps/admin", "react", "catalog:")
+            .unwrap()
+            .unwrap();
+        assert_eq!(react.version, "19.1.0");
+
+        // Test resolving a package from a specific catalog
+        let typescript = lockfile
+            .resolve_package("apps/admin", "typescript", "catalog:typescript5")
+            .unwrap()
+            .unwrap();
+        assert_eq!(typescript.version, "5.8.2");
+    }
+
+    #[test]
+    fn test_catalog_peer_dependency_resolution() {
+        let lockfile =
+            PnpmLockfile::from_bytes(include_bytes!("../../fixtures/pnpm-multiple-catalogs.yaml"))
+                .unwrap();
+
+        // Test resolving a package with peer dependencies
+        let react_dom = lockfile
+            .resolve_package("apps/admin", "react-dom", "catalog:reactdommm")
+            .unwrap()
+            .unwrap();
+        assert_eq!(react_dom.version, "19.1.0(react@19.1.0)");
+
+        // Test resolving a package from default catalog
+        let react = lockfile
+            .resolve_package("apps/blog", "react", "catalog:")
+            .unwrap()
+            .unwrap();
+        assert_eq!(react.version, "19.1.0");
+
+        // Test resolving a package from a specific catalog
+        let eslint = lockfile
+            .resolve_package("apps/admin", "eslint", "catalog:eslint")
+            .unwrap()
+            .unwrap();
+        assert_eq!(eslint.version, "9.26.0");
+
+        // Test resolving a package that doesn't exist
+        let missing = lockfile.resolve_package("apps/docs", "missing-package", "catalog:");
+        assert_eq!(
+            missing.unwrap_err().to_string(),
+            crate::Error::MissingWorkspace("apps/docs".to_string()).to_string()
+        );
+
+        // Test resolving from non-existent catalog
+        let non_existent_catalog =
+            lockfile.resolve_package("apps/docs", "react", "catalog:non-existent");
+        assert_eq!(
+            non_existent_catalog.unwrap_err().to_string(),
+            crate::Error::MissingWorkspace("apps/docs".to_string()).to_string()
+        );
+
+        // Test resolving a package with a non-existent peer dependency
+        let missing_peer =
+            lockfile.resolve_package("apps/docs", "non-existent", "catalog:reactdommm");
+        assert_eq!(
+            missing_peer.unwrap_err().to_string(),
+            crate::Error::MissingWorkspace("apps/docs".to_string()).to_string()
+        );
     }
 }
