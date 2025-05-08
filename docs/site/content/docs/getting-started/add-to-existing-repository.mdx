@@ -3,9 +3,10 @@ title: Add to an existing repository
 description: Using Turborepo with your existing repository
 ---
 
-import { Tabs, Tab } from '#components/tabs';
+import { PackageManagerTabs, Tabs, Tab } from '#components/tabs';
 import { Callout } from '#components/callout';
 import { Step, Steps } from '#components/steps';
+import { LinkToDocumentation } from '#components/link-to-documentation';
 
 Turborepo can be incrementally adopted in **any repository, single or multi-package**, to speed up the developer and CI workflows of the repository.
 
@@ -186,11 +187,7 @@ Turborepo optimizes your repository using information from your package manager.
 
 ```diff title="package.json"
 {
-+  "packageManager": "npm@8.5.0",
-   "workspaces": [
-     "apps/*",
-     "packages/*"
-   ]
++  "packageManager": "npm@8.5.0"
 }
 ```
 
@@ -200,6 +197,86 @@ Turborepo optimizes your repository using information from your package manager.
   while migrating or in situations where you can't use the `packageManager` key
   yet.
 </Callout>
+
+</Step>
+<Step>
+### Set up package manager workspaces
+
+For multi-package repositories, you'll need to configure your package manager to recognize your workspace structure. This is done by adding a `workspaces` field to your root `package.json`.
+
+The `workspaces` field tells your package manager which directories contain your packages. Common patterns include `apps/*` for applications and `packages/*` for shared libraries.
+
+```diff title="package.json"
+{
+  "packageManager": "npm@8.5.0",
++  "workspaces": [
++    "apps/*",
++    "packages/*"
++  ]
+}
+```
+
+<Callout type="info">
+  If you're working with a single-package repository, you can skip this step as
+  workspaces aren't needed.
+</Callout>
+
+Different package managers may have alternative ways to configure workspaces:
+
+<PackageManagerTabs>
+
+  <Tab value="pnpm">
+  ```json title="pnpm-workspace.yaml"
+ packages:
+    - "apps/*"
+    - "packages/*"
+  ```
+  <LinkToDocumentation href="https://pnpm.io/pnpm-workspace_yaml">pnpm workspace documentation</LinkToDocumentation>
+
+  </Tab>
+
+  <Tab value="yarn">
+  ```json title="./package.json"
+  {
+    "workspaces": [
+      "apps/*",
+      "packages/*"
+    ]
+  }
+  ```
+
+  <LinkToDocumentation href="https://yarnpkg.com/features/workspaces#how-are-workspaces-declared">yarn workspace documentation</LinkToDocumentation>
+   </Tab>
+
+  <Tab value="npm">
+  ```json title="./package.json"
+  {
+    "workspaces": [
+      "apps/*",
+      "packages/*"
+    ]
+  }
+  ```
+
+  <LinkToDocumentation href="https://docs.npmjs.com/cli/v7/using-npm/workspaces#defining-workspaces">npm workspace documentation</LinkToDocumentation>
+  </Tab>
+
+  <Tab value="bun (Beta)">
+  ```json title="./package.json"
+  {
+    "workspaces": [
+      "apps/*",
+      "packages/*"
+    ]
+  }
+  ```
+
+  <LinkToDocumentation href="https://bun.sh/docs/install/workspaces">npm workspace documentation</LinkToDocumentation>
+  </Tab>
+
+</PackageManagerTabs>
+
+For more details on how to structure your repository, see [Structuring a Repository](/docs/crafting-your-repository/structuring-a-repository#declaring-directories-for-packages).
 
 </Step>
 <Step>
