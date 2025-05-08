@@ -141,12 +141,6 @@ Migrating to Turborepo will likely require deleting previous configuration that 
 
 </Tabs>
 
-### Free Remote Caching
-
-Turborepo’s [Remote Caching](/docs/core-concepts/remote-caching) stores the results of your task on a cloud server. This saves enormous amounts of time by **preventing duplicated work across your entire organization**. [Vercel Remote Cache](https://vercel.com/docs/monorepos/remote-caching) has saved teams over 500 years of compute so far.
-
-Since Nx 19.7, similar functionality is a paid-for feature, even when self-hosting. Remote Caching with Turborepo is free when [self-hosting](/docs/core-concepts/remote-caching#self-hosting) or using [Vercel Remote Cache](https://vercel.com/docs/monorepos/remote-caching).
-
 ## Migration steps
 
 Our goal for this migration is to get a working Turborepo task as quickly as possible, so that you can adopt Turborepo features incrementally. We’ll start by using the Nx scaffolder to create a repository with a Next.js app.
@@ -473,7 +467,7 @@ turbo login
 turbo link
 ```
 
-You may also configure a self-hosted Remote Cache, which does not require a license or any other fees.
+You may also configure a self-hosted Remote Cache.
 
 ## Advanced migration considerations
 
