@@ -336,13 +336,11 @@ impl PnpmLockfile {
                 let entry = snapshots
                     .get(package.as_str())
                     .ok_or_else(|| crate::Error::MissingPackage(package.clone()))?;
-
                 pruned_snapshots.insert(package.clone(), entry.clone());
 
                 // Remove peer suffix to find the key for the package entry
                 let dp = DepPath::parse(self.version(), package.as_str()).map_err(Error::from)?;
                 let package_key = self.format_key(dp.name, dp.version);
-
                 let entry = self
                     .get_packages(&package_key)
                     .ok_or_else(|| crate::Error::MissingPackage(package_key.clone()))?;
