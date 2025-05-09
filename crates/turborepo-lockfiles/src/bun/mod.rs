@@ -256,15 +256,31 @@ impl BunLockfile {
             })
             .collect();
 
+        let workspace_versions = workspace_packages
+            .iter()
+            .map(|workspace| format!("workspace:{workspace}"))
+            .collect::<HashSet<_>>();
+
         // Filter out packages that are not in the subgraph. Note that _multiple_
         // entries can correspond to the same ident.
-        let idents: HashSet<_> = packages.iter().collect();
+        let idents: HashSet<_> = packages.iter().map(|s| s.as_str()).collect();
+        #[allow(clippy::if_same_then_else)]
         let new_packages: Map<_, _> = self
             .data
             .packages
             .iter()
             .filter_map(|(key, entry)| {
-                if idents.contains(&entry.ident) {
+                let should_include_entry = (idents.contains(entry.ident.as_str())
+                // If the entry is scoped to a specific package, only include the entry
+                // if the closure includes the introducing package
+                && PossibleKeyIter::new(key).skip(1)
+                        .last()
+                        .is_none_or(|pkg| idents.contains(pkg)))
+                    // If the entry is for a workspace in the pruned lockfile also include it
+                    || workspace_versions
+                        .iter()
+                        .any(|workspace| entry.ident.ends_with(workspace));
+                if should_include_entry {
                     Some((key.clone(), entry.clone()))
                 } else {
                     None
@@ -277,7 +293,7 @@ impl BunLockfile {
             .patched_dependencies
             .iter()
             .filter_map(|(ident, patch)| {
-                if idents.contains(ident) {
+                if idents.contains(ident.as_str()) {
                     Some((ident.clone(), patch.clone()))
                 } else {
                     None
@@ -376,6 +392,7 @@ mod test {
 
     const BASIC_LOCKFILE: &str = include_str!("../../fixtures/basic-bun.lock");
     const PATCH_LOCKFILE: &str = include_str!("../../fixtures/bun-patch.lock");
+    const GH_10410: &str = include_str!("../../fixtures/bun-gh10410.lock");
 
     #[test_case("", "turbo", "^2.3.3", "turbo@2.3.3" ; "root")]
     #[test_case("apps/docs", "is-odd", "3.0.1", "is-odd@3.0.1" ; "docs is odd")]
@@ -576,5 +593,58 @@ mod test {
         .unwrap();
         let lockfile = BunLockfile::from_str(&contents);
         assert!(lockfile.is_err(), "matching packages have differing shas");
+    }
+
+    #[test]
+    fn gh_10410() {
+        let lockfile = BunLockfile::from_str(GH_10410).unwrap();
+        let closure = crate::transitive_closure(
+            &lockfile,
+            "packages/a",
+            vec![
+                ("@types/compression", "^1.7.5"),
+                ("@types/cookie-parser", "^1.4.8"),
+                ("@types/express", "^4.17.21"),
+                ("@types/bun", "^1.2.11"),
+                ("@babel/register", "7.25.9"),
+                ("eslint", "9.25.1"),
+                ("compression", "^1.8.0"),
+                ("cookie-parser", "^1.4.7"),
+                ("express", "^4.21.2"),
+                ("express-openapi-validator", "^5.4.9"),
+                ("http-errors", "^2.0.0"),
+            ]
+            .into_iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect(),
+            false,
+        )
+        .unwrap();
+        let packages = closure
+            .iter()
+            .map(|pkg| pkg.key.clone())
+            .collect::<Vec<_>>();
+        let pruned_lockfile = lockfile
+            .subgraph(&["packages/a".into()], &packages)
+            .unwrap();
+        assert!(!pruned_lockfile
+            .data
+            .packages
+            .contains_key("@react-native/community-cli-plugin/debug"));
+        assert!(pruned_lockfile
+            .data
+            .packages
+            .contains_key("bun-turbo-prune-repro-a"));
+        // This is a renamed import from metro
+        assert!(!pruned_lockfile
+            .data
+            .packages
+            .contains_key("@babel/traverse--for-generate-function-map"));
+        assert!(!pruned_lockfile.data.packages.contains_key("p-try"));
+        assert!(!pruned_lockfile.data.packages.contains_key("fast-uri"));
+        assert!(!pruned_lockfile
+            .data
+            .packages
+            .contains_key("require-from-string"));
     }
 }
