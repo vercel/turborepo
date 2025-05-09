@@ -180,10 +180,12 @@ You can use your package manager to update dependency versions in one command.
 <PackageManagerTabs>
 
 <Tab value="pnpm">
+
 ```bash title="Terminal"
 pnpm up --recursive typescript@latest
 ```
-  <small>[→ pnpm documentation](https://pnpm.io/cli/update#--recursive--r)</small>
+
+<small>[→ pnpm documentation](https://pnpm.io/cli/update#--recursive--r)</small>
 
 </Tab>
 
@@ -219,6 +221,12 @@ No equivalent
 
 </Tab>
 </PackageManagerTabs>
+
+#### pnpm catalogs
+
+In pnpm v9.5+, you can use catalogs to define dependency version ranges as reusable constants. This will keep dependencies on the same version since you're referencing the same value across the workspace.
+
+To learn more, [visit the pnpm catalogs documentation](https://pnpm.io/catalogs).
 
 #### Using an IDE
 
