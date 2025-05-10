@@ -175,7 +175,7 @@ const config: NextConfig = {
       {
         source: "/docs/core-concepts/monorepos/filtering",
         destination:
-          "docs/crafting-your-repository/running-tasks#using-filters",
+          "/docs/crafting-your-repository/running-tasks#using-filters",
         permanent: true,
       },
       {
@@ -186,6 +186,343 @@ const config: NextConfig = {
       {
         source: "/docs/core-concepts/caching",
         destination: "/docs/crafting-your-repository/caching",
+        permanent: true,
+      },
+      {
+        // Slug pattern that was historically used for blog and nothing else
+        source: "/turbo-:slug",
+        destination: "/blog/turbo-:slug",
+        permanent: false,
+      },
+      {
+        source: "/benchmarks",
+        destination: "https://nextjs.org/docs/app/api-reference/turbopack",
+        permanent: true,
+      },
+      {
+        source: "/cookie-policy",
+        destination: "https://vercel.com/legal/privacy-policy",
+        permanent: true,
+      },
+      {
+        source: "/core-concepts",
+        destination: "/docs/core-concepts",
+        permanent: true,
+      },
+      {
+        source: "/core-concepts/internal-packages",
+        destination: "/docs/core-concepts/internal-packages",
+        permanent: true,
+      },
+      {
+        source: "/core-concepts/package-and-task-graph",
+        destination: "/docs/core-concepts/package-and-task-graph",
+        permanent: true,
+      },
+      {
+        source: "/core-concepts/remote-caching",
+        destination: "/docs/core-concepts/remote-caching",
+        permanent: true,
+      },
+      {
+        source: "/crafting-your-repository",
+        destination: "/docs/crafting-your-repository",
+        permanent: true,
+      },
+      {
+        source: "/crafting-your-repository/caching",
+        destination: "/docs/crafting-your-repository/caching",
+        permanent: true,
+      },
+      {
+        source: "/crafting-your-repository/configuring-tasks",
+        destination: "/docs/crafting-your-repository/configuring-tasks",
+        permanent: true,
+      },
+      {
+        source: "/crafting-your-repository/developing-applications",
+        destination: "/docs/crafting-your-repository/developing-applications",
+        permanent: true,
+      },
+      {
+        source: "/crafting-your-repository/managing-dependencies",
+        destination: "/docs/crafting-your-repository/managing-dependencies",
+        permanent: true,
+      },
+      {
+        source: "/crafting-your-repository/running-tasks",
+        destination: "/docs/crafting-your-repository/running-tasks",
+        permanent: true,
+      },
+      {
+        source: "/crafting-your-repository/structuring-a-repository",
+        destination: "/docs/crafting-your-repository/structuring-a-repository",
+        permanent: true,
+      },
+      {
+        source: "/crafting-your-repository/using-environment-variables",
+        destination:
+          "/docs/crafting-your-repository/using-environment-variables",
+        permanent: true,
+      },
+      {
+        source: "/docs/core-concepts/scopes",
+        destination: "/docs/crafting-your-repository/running-tasks",
+        permanent: true,
+      },
+      {
+        source: "/docs/features/scopes",
+        destination: "/docs/crafting-your-repository/running-tasks",
+        permanent: true,
+      },
+      {
+        source: "/docs/features/caching",
+        destination: "/docs/crafting-your-repository/caching",
+        permanent: true,
+      },
+      {
+        source: "/docs/features/pipelines",
+        destination: "/docs/crafting-your-repository/running-tasks",
+        permanent: true,
+      },
+      {
+        source: "/docs/features/remote-caching",
+        destination: "/docs/core-concepts/remote-caching",
+        permanent: true,
+      },
+      {
+        source: "/docs/installation",
+        destination: "/docs/getting-started/installation",
+        permanent: true,
+      },
+      {
+        source: "/docs/llms.txt",
+        destination: "/llms.txt",
+        permanent: true,
+      },
+      {
+        source: "/features",
+        destination: "https://nextjs.org/docs/app/api-reference/turbopack",
+        permanent: true,
+      },
+      {
+        source: "/features/:path*",
+        destination: "https://nextjs.org/docs/app/api-reference/turbopack",
+        permanent: true,
+      },
+      {
+        source: "/free-vercel-remote-cache",
+        destination: "/blog/free-vercel-remote-cache",
+        permanent: true,
+      },
+      {
+        source: "/guides/ci-vendors",
+        destination: "/docs/guides/ci-vendors",
+        permanent: true,
+      },
+      {
+        source: "/guides/ci-vendors/:path*",
+        destination: "/docs/guides/ci-vendors/:path*",
+        permanent: true,
+      },
+      {
+        source: "/guides/generating-code",
+        destination: "/docs/guides/generating-code",
+        permanent: true,
+      },
+      {
+        source: "/guides/single-package-workspaces",
+        destination: "/docs/guides/single-package-workspaces",
+        permanent: true,
+      },
+      {
+        source: "/guides/tools",
+        destination: "/docs/guides/tools",
+        permanent: true,
+      },
+      {
+        source: "/guides/tools/:path*",
+        destination: "/docs/guides/tools/:path*",
+        permanent: true,
+      },
+      {
+        source: "/joining-vercel",
+        destination: "/blog/joining-vercel",
+        permanent: true,
+      },
+      {
+        source: "/migrating-from-webpack",
+        destination: "https://nextjs.org/docs/app/api-reference/turbopack",
+        permanent: true,
+      },
+      {
+        source: "/pack/docs/features/imports",
+        destination: "/docs/crafting-your-repository/structuring-a-repository",
+        permanent: true,
+      },
+      {
+        source: "/reference",
+        destination: "/docs/reference",
+        permanent: true,
+      },
+      {
+        source: "/reference/package-configurations",
+        destination: "/docs/reference/package-configurations",
+        permanent: true,
+      },
+      {
+        source: "/reference/run",
+        destination: "/docs/reference/run",
+        permanent: true,
+      },
+      {
+        source: "/repo/docs/core-concepts/pipelines",
+        destination: "/docs/crafting-your-repository/running-tasks",
+        permanent: true,
+      },
+      {
+        source: "/repo/docs/getting-started",
+        destination: "/docs/getting-started",
+        permanent: true,
+      },
+      {
+        source: "/repo/docs/getting-started/introduction",
+        destination: "/docs/getting-started",
+        permanent: true,
+      },
+      {
+        source: "/repo/docs/reference/command-line-reference",
+        destination: "/docs/reference",
+        permanent: true,
+      },
+      {
+        source: "/repo/docs/reference/gen",
+        destination: "/docs/reference/generate",
+        permanent: true,
+      },
+      {
+        source: "/docs/reference/gen",
+        destination: "/docs/reference/generate",
+        permanent: true,
+      },
+      {
+        source: "/roi-calculator",
+        destination: "/docs",
+        permanent: true,
+      },
+      {
+        source: "/telemetry",
+        destination: "/docs/telemetry",
+        permanent: true,
+      },
+      {
+        source: "/docs/intro",
+        destination: "/docs",
+        permanent: true,
+      },
+      {
+        source: "/getting-started/add-to-existing-repository",
+        destination: "/docs/getting-started/add-to-existing-repository",
+        permanent: true,
+      },
+      {
+        source: "/getting-started/installation",
+        destination: "/docs/getting-started/installation",
+        permanent: true,
+      },
+      {
+        source: "/guides/publishing-libraries",
+        destination: "/docs/guides/publishing-libraries",
+        permanent: true,
+      },
+      {
+        source: "/guides/skipping-tasks",
+        destination: "/docs/guides/skipping-tasks",
+        permanent: true,
+      },
+      {
+        source: "/reference/configuration",
+        destination: "/docs/reference/configuration",
+        permanent: true,
+      },
+      {
+        source: "/reference/prune",
+        destination: "/docs/reference/prune",
+        permanent: true,
+      },
+      {
+        source: "/repo/docs/ci/gitlabci",
+        destination: "/docs/guides/ci-vendors/gitlab-ci",
+        permanent: true,
+      },
+      {
+        source: "/repo/docs/ci/travisci",
+        destination: "/docs/guides/ci-vendors/travis-ci",
+        permanent: true,
+      },
+      {
+        source: "/docs/getting-started/existing-monorepos",
+        destination: "/docs/getting-started/add-to-existing-repository",
+        permanent: true,
+      },
+      {
+        source: "/repo/docs/guides/ci-vendors/gitlabci",
+        destination: "/docs/guides/ci-vendors/gitlab-ci",
+        permanent: true,
+      },
+      {
+        source: "/repo/docs/guides/ci-vendors/travisci",
+        destination: "/docs/guides/ci-vendors/travis-ci",
+        permanent: true,
+      },
+      {
+        source: "/docs/guides/gitlab-ci",
+        destination: "/docs/guides/ci-vendors/gitlab-ci",
+        permanent: true,
+      },
+      {
+        source: "/repo/docs/reference/command-line-reference/gen",
+        destination: "/docs/reference/generate",
+        permanent: true,
+      },
+      {
+        source: "/roadmap",
+        destination: "/blog",
+        permanent: true,
+      },
+      {
+        source: "/saml-sso-now-available",
+        destination: "/blog/saml-sso-now-available",
+        permanent: true,
+      },
+      {
+        source: "/turbopack-benchmarks",
+        destination: "https://nextjs.org/docs/app/api-reference/turbopack",
+        permanent: true,
+      },
+      {
+        source: "/why-turbopack",
+        destination: "https://nextjs.org/docs/app/api-reference/turbopack",
+        permanent: true,
+      },
+      {
+        source: "/you-might-not-need-typescript-project-references",
+        destination: "/blog/you-might-not-need-typescript-project-references",
+        permanent: true,
+      },
+      {
+        source: "/docs/core-concepts/monorepos/configuring-workspaces",
+        destination: "/docs/reference/package-configurations",
+        permanent: true,
+      },
+      {
+        source: "/docs/handbook/linting/eslint",
+        destination: "/docs/guides/tools/eslint",
+        permanent: true,
+      },
+      {
+        source: "/docs/reference/command-line-reference",
+        destination: "/docs/reference",
         permanent: true,
       },
     ];
