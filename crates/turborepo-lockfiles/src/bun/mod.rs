@@ -270,12 +270,13 @@ impl BunLockfile {
             .packages
             .iter()
             .filter_map(|(key, entry)| {
-                let should_include_entry = (idents.contains(entry.ident.as_str())
+                println!("Key: {}, Ident: {}, Contains: {}", key, entry.ident, idents.contains(entry.ident.as_str())); println!("Key: {}, PossibleKeyIter: {:?}", key, PossibleKeyIter::new(key).skip(1).collect::<Vec<_>>()); println!("Key: {}, Ident: {}, Contains: {}, PossibleKeyIter skip(1).last(): {:?}", key, entry.ident, idents.contains(entry.ident.as_str()), PossibleKeyIter::new(key).skip(1).last()); let should_include_entry = (idents.contains(entry.ident.as_str())
                 // If the entry is scoped to a specific package, only include the entry
                 // if the closure includes the introducing package
-                && PossibleKeyIter::new(key).skip(1)
-                        .last()
-                        .is_none_or(|pkg| idents.contains(pkg)))
+                && match PossibleKeyIter::new(key).skip(1).last() {
+                    Some(pkg) => idents.contains(pkg),
+                    None => false, // Don't include entries with no parent package
+                })
                     // If the entry is for a workspace in the pruned lockfile also include it
                     || workspace_versions
                         .iter()
