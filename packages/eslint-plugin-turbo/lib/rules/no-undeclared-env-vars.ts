@@ -264,6 +264,44 @@ function create(context: RuleContextWithOptions): Rule.RuleListener {
 
   return {
     MemberExpression(node) {
+      // Log current configuration state
+      debug("Current configuration state:");
+      debug(
+        `- Root config: ${JSON.stringify(project.projectRoot?.turboConfig)}`
+      );
+      debug(
+        `- Workspace configs: ${project.projectWorkspaces
+          .map((w) => w.workspaceName)
+          .join(", ")}`
+      );
+
+      // Reload project configuration
+      project.reload();
+
+      // Log new configuration state
+      debug("Configuration state after reload:");
+      debug(
+        `- Root config: ${JSON.stringify(project.projectRoot?.turboConfig)}`
+      );
+      debug(
+        `- Workspace configs: ${project.projectWorkspaces
+          .map((w) => w.workspaceName)
+          .join(", ")}`
+      );
+
+      // Verify that the configuration was actually reloaded
+      const rootConfigPath = path.join(cwd || process.cwd(), "turbo.json");
+      try {
+        const rootConfigContent = readFileSync(rootConfigPath, "utf-8");
+        debug(`- Current turbo.json content: ${rootConfigContent}`);
+      } catch (err) {
+        debug(
+          `Could not read turbo.json: ${
+            err instanceof Error ? err.message : String(err)
+          }`
+        );
+      }
+
       // we only care about complete process env declarations and non-computed keys
       if (isProcessEnv(node) || isImportMetaEnv(node)) {
         // we're doing something with process.env

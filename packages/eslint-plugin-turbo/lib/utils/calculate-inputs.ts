@@ -284,13 +284,10 @@ export class Project {
   constructor(cwd: string | undefined) {
     this.cwd = cwd;
     this.allConfigs = getWorkspaceConfigs(cwd);
-    this.projectRoot = this.allConfigs.find(
-      (workspaceConfig) => workspaceConfig.isWorkspaceRoot
-    );
+    this.projectRoot = this.allConfigs.find((config) => config.isWorkspaceRoot);
     this.projectWorkspaces = this.allConfigs.filter(
-      (workspaceConfig) => !workspaceConfig.isWorkspaceRoot
+      (config) => !config.isWorkspaceRoot
     );
-
     this._key = this.generateKey();
     this._test = this.generateTestConfig();
   }
@@ -441,5 +438,18 @@ export class Project {
     }
 
     return tests.flat().some((test) => test(envVar));
+  }
+
+  reload() {
+    // Reload workspace configurations with caching disabled
+    this.allConfigs = getWorkspaceConfigs(this.cwd, { cache: false });
+    this.projectRoot = this.allConfigs.find((config) => config.isWorkspaceRoot);
+    this.projectWorkspaces = this.allConfigs.filter(
+      (config) => !config.isWorkspaceRoot
+    );
+
+    // Regenerate key and test configurations
+    this._key = this.generateKey();
+    this._test = this.generateTestConfig();
   }
 }
