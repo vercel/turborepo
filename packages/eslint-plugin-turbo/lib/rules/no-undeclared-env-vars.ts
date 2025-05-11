@@ -263,9 +263,11 @@ function create(context: RuleContextWithOptions): Rule.RuleListener {
   };
 
   return {
+    Program() {
+      project.reload();
+    },
     MemberExpression(node) {
       // Reload project configuration so that changes show in the user's editor
-      project.reload();
 
       // we only care about complete process env declarations and non-computed keys
       if (isProcessEnv(node) || isImportMetaEnv(node)) {
