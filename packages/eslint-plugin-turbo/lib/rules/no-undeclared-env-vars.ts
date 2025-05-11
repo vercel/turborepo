@@ -267,19 +267,6 @@ function create(context: RuleContextWithOptions): Rule.RuleListener {
       // Reload project configuration so that changes show in the users editor
       project.reload();
 
-      // Verify that the configuration was actually reloaded
-      const rootConfigPath = path.join(cwd || process.cwd(), "turbo.json");
-      try {
-        const rootConfigContent = readFileSync(rootConfigPath, "utf-8");
-        debug(`- Current turbo.json content: ${rootConfigContent}`);
-      } catch (err) {
-        debug(
-          `Could not read turbo.json: ${
-            err instanceof Error ? err.message : String(err)
-          }`
-        );
-      }
-
       // we only care about complete process env declarations and non-computed keys
       if (isProcessEnv(node) || isImportMetaEnv(node)) {
         // we're doing something with process.env
