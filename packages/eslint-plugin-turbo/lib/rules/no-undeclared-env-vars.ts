@@ -264,30 +264,8 @@ function create(context: RuleContextWithOptions): Rule.RuleListener {
 
   return {
     MemberExpression(node) {
-      // Log current configuration state
-      debug("Current configuration state:");
-      debug(
-        `- Root config: ${JSON.stringify(project.projectRoot?.turboConfig)}`
-      );
-      debug(
-        `- Workspace configs: ${project.projectWorkspaces
-          .map((w) => w.workspaceName)
-          .join(", ")}`
-      );
-
-      // Reload project configuration
+      // Reload project configuration so that changes show in the users editor
       project.reload();
-
-      // Log new configuration state
-      debug("Configuration state after reload:");
-      debug(
-        `- Root config: ${JSON.stringify(project.projectRoot?.turboConfig)}`
-      );
-      debug(
-        `- Workspace configs: ${project.projectWorkspaces
-          .map((w) => w.workspaceName)
-          .join(", ")}`
-      );
 
       // Verify that the configuration was actually reloaded
       const rootConfigPath = path.join(cwd || process.cwd(), "turbo.json");
