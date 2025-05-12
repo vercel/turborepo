@@ -264,11 +264,10 @@ function create(context: RuleContextWithOptions): Rule.RuleListener {
 
   return {
     Program() {
+      // Reload project configuration so that changes show in the user's editor
       project.reload();
     },
     MemberExpression(node) {
-      // Reload project configuration so that changes show in the user's editor
-
       // we only care about complete process env declarations and non-computed keys
       if (isProcessEnv(node) || isImportMetaEnv(node)) {
         // we're doing something with process.env
