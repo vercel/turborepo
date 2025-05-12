@@ -525,6 +525,26 @@ const config: NextConfig = {
         destination: "/docs/reference",
         permanent: true,
       },
+      {
+        source: "/docs/guides/ci-vendors/gitlabci",
+        destination: "/docs/guides/ci-vendors/gitlab-ci",
+        permanent: true,
+      },
+      {
+        source: "/docs/guides/ci-vendors/travisci",
+        destination: "/docs/guides/ci-vendors/travis-ci",
+        permanent: true,
+      },
+      {
+        source: "/repo/docs/ci/gitlabci",
+        destination: "/docs/guides/ci-vendors/gitlab-ci",
+        permanent: true,
+      },
+      {
+        source: "/repo/docs/ci/travisci",
+        destination: "/docs/guides/ci-vendors/travis-ci",
+        permanent: true,
+      },
     ];
   },
 };
