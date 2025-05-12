@@ -540,7 +540,6 @@ const config: NextConfig = {
         destination: "/docs/guides/ci-vendors/gitlab-ci",
         permanent: true,
       },
-
       {
         source: "/repo/docs/ci/travisci",
         destination: "/docs/guides/ci-vendors/travis-ci",
