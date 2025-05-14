@@ -12,7 +12,7 @@ const ENTER_INTERACTIVE_HINT: &str = "i - Interact";
 const HAS_SELECTION: &str = "c - Copy selection";
 const SCROLL_LOGS: &str = "u/d - Scroll logs";
 const PAGE_LOGS: &str = "U/D - Page logs";
-const JUMP_IN_LOGS: &str = "t/b - Jump to top/buttom";
+const JUMP_IN_LOGS: &str = "t/b - Jump to top/bottom";
 const TASK_LIST_HIDDEN: &str = "h - Show task list";
 
 pub struct TerminalPane<'a, W> {
@@ -106,7 +106,7 @@ mod test {
         let pane = TerminalPane::new(&term, "foo", &LayoutSections::TaskList, true);
         assert_eq!(
             String::from(pane.footer()),
-            "   i - Interact   u/d - Scroll logs   U/D - Page logs   t/b - Jump to top/buttom"
+            "   i - Interact   u/d - Scroll logs   U/D - Page logs   t/b - Jump to top/bottom"
         );
     }
 
@@ -116,7 +116,7 @@ mod test {
         let pane = TerminalPane::new(&term, "foo", &LayoutSections::TaskList, true);
         assert_eq!(
             String::from(pane.footer()),
-            "   u/d - Scroll logs   U/D - Page logs   t/b - Jump to top/buttom"
+            "   u/d - Scroll logs   U/D - Page logs   t/b - Jump to top/bottom"
         );
     }
 }
