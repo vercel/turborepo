@@ -138,7 +138,7 @@ impl ChildHandle {
             .openpty(size)
             .map_err(|err| match err.downcast() {
                 Ok(err) => err,
-                Err(err) => io::Error::new(io::ErrorKind::Other, err),
+                Err(err) => io::Error::other(err),
             })?;
 
         let controller = pair.master;
@@ -168,7 +168,7 @@ impl ChildHandle {
             .spawn_command(command)
             .map_err(|err| match err.downcast() {
                 Ok(err) => err,
-                Err(err) => io::Error::new(io::ErrorKind::Other, err),
+                Err(err) => io::Error::other(err),
             })?;
 
         let pid = child.process_id();

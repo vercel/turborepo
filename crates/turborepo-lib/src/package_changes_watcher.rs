@@ -74,7 +74,7 @@ impl PackageChangesWatcher {
 enum ChangedFiles {
     All,
     // Trie doesn't support PathBuf as a key on Windows, so we need to use `String`
-    Some(Trie<String, ()>),
+    Some(Box<Trie<String, ()>>),
 }
 
 impl ChangedFiles {
@@ -88,7 +88,7 @@ impl ChangedFiles {
 
 impl Default for ChangedFiles {
     fn default() -> Self {
-        ChangedFiles::Some(Trie::new())
+        ChangedFiles::Some(Box::new(Trie::new()))
     }
 }
 
