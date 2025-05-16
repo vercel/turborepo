@@ -38,7 +38,7 @@ Extend from the root `turbo.json` to create specific configuration for a package
 
 A list of globs that you want to include in all task hashes. **If any file matching these globs changes, all tasks will miss cache.** Globs are relative to the location of `turbo.json`.
 
-By default, all files in source control in the Workspace root are included in the global hash.
+By default, only the root package.json and lockfile are included in [the global hash](/docs/crafting-your-repository/caching) and can't be ignored. Any added `globalDependencies` will also be included in the global hash.
 
 <Callout type="error">
   Globs must be in the repository's source control root. Globs outside of the
