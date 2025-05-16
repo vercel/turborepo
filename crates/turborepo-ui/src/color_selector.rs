@@ -38,14 +38,10 @@ impl ColorSelector {
             return style;
         }
 
-        let color = {
-            self.inner
-                .write()
-                .expect("lock poisoned")
-                .insert_color(key.to_string())
-        };
-
-        color
+        self.inner
+            .write()
+            .expect("lock poisoned")
+            .insert_color(key.to_string())
     }
 
     pub fn prefix_with_color(&self, cache_key: &str, prefix: &str) -> StyledObject<String> {

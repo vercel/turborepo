@@ -241,10 +241,11 @@ impl Workspace {
             .collect();
 
         // Create a ChangeMapper with no ignore patterns
-        let change_detector = base
-            .is_some()
-            .then(|| Either::Left(DefaultPackageChangeMapperWithLockfile::new(&self.graph)))
-            .unwrap_or_else(|| Either::Right(DefaultPackageChangeMapper::new(&self.graph)));
+        let change_detector = if base.is_some() {
+            Either::Left(DefaultPackageChangeMapperWithLockfile::new(&self.graph))
+        } else {
+            Either::Right(DefaultPackageChangeMapper::new(&self.graph))
+        };
         let mapper = ChangeMapper::new(&self.graph, vec![], change_detector);
 
         let lockfile_contents = if let Some(base) = base {

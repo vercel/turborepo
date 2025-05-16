@@ -1,5 +1,6 @@
 #![feature(assert_matches)]
 #![feature(error_generic_member_access)]
+#![allow(clippy::result_large_err)]
 
 pub mod change_mapper;
 pub mod discovery;
