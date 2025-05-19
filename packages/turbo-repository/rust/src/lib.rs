@@ -291,4 +291,43 @@ impl Workspace {
 
         Ok(serializable_packages)
     }
+
+    // Given a path (relative to the workspace root), returns the
+    // package that contains it.
+    //
+    // This is a naive implementation that simply "iterates-up". If this function is
+    // expected to be called many times for files that are deep within the same
+    // package, we could optimize this by caching the containing-package of
+    // every ancestor.
+    #[napi]
+    pub async fn find_package_by_path(&self, path: String) -> Result<Package, Error> {
+        let known_packages_by_path = self
+            .find_packages()
+            .await?
+            .into_iter()
+            .map(|p| {
+                (
+                    AnchoredSystemPath::new(&p.relative_path)
+                        .unwrap()
+                        .to_owned(),
+                    p,
+                )
+            })
+            .collect::<HashMap<AnchoredSystemPathBuf, Package>>();
+        let mut relative_path = AnchoredSystemPath::new(&path).unwrap().clean();
+
+        loop {
+            if let Some(pkg) = known_packages_by_path.get(&relative_path) {
+                return Ok(pkg.clone());
+            }
+            match relative_path.parent() {
+                Some(parent) => relative_path = parent.to_owned(),
+                None => {
+                    return Err(Error::from_reason(
+                        "iterated to the root of the workspace and found no package",
+                    ))
+                }
+            }
+        }
+    }
 }

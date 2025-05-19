@@ -60,4 +60,5 @@ export class Workspace {
     base?: string | undefined | null,
     optimizeGlobalInvalidations?: boolean | undefined | null
   ): Promise<Array<Package>>;
+  findPackageByPath(path: string): Promise<Package>;
 }
