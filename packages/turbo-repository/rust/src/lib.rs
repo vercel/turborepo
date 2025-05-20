@@ -292,13 +292,13 @@ impl Workspace {
         Ok(serializable_packages)
     }
 
-    // Given a path (relative to the workspace root), returns the
-    // package that contains it.
-    //
-    // This is a naive implementation that simply "iterates-up". If this function is
-    // expected to be called many times for files that are deep within the same
-    // package, we could optimize this by caching the containing-package of
-    // every ancestor.
+    /// Given a path (relative to the workspace root), returns the
+    /// package that contains it.
+    ///
+    /// This is a naive implementation that simply "iterates-up". If this function is
+    /// expected to be called many times for files that are deep within the same
+    /// package, we could optimize this by caching the containing-package of
+    /// every ancestor.
     #[napi]
     pub async fn find_package_by_path(&self, path: String) -> Result<Package, Error> {
         let package_mapper = DefaultPackageChangeMapper::new(&self.graph);
