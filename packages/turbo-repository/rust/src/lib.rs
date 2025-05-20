@@ -11,7 +11,7 @@ use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
 use turborepo_repository::{
     change_mapper::{
         ChangeMapper, DefaultPackageChangeMapper, DefaultPackageChangeMapperWithLockfile,
-        LockfileContents, PackageChanges,
+        LockfileContents, PackageChangeMapper, PackageChanges,
     },
     inference::RepoState as WorkspaceState,
     package_graph::{PackageGraph, PackageName, PackageNode, WorkspacePackage, ROOT_PKG_NAME},
@@ -301,32 +301,28 @@ impl Workspace {
     // every ancestor.
     #[napi]
     pub async fn find_package_by_path(&self, path: String) -> Result<Package, Error> {
-        let known_packages_by_path = self
-            .find_packages()
-            .await?
-            .into_iter()
-            .map(|p| {
-                (
-                    AnchoredSystemPath::new(&p.relative_path)
-                        .unwrap()
-                        .to_owned(),
-                    p,
-                )
-            })
-            .collect::<HashMap<AnchoredSystemPathBuf, Package>>();
-        let mut relative_path = AnchoredSystemPath::new(&path).unwrap().clean();
-
-        loop {
-            if let Some(pkg) = known_packages_by_path.get(&relative_path) {
-                return Ok(pkg.clone());
-            }
-            match relative_path.parent() {
-                Some(parent) => relative_path = parent.to_owned(),
-                None => {
-                    return Err(Error::from_reason(
-                        "iterated to the root of the workspace and found no package",
-                    ))
-                }
+        let package_mapper = DefaultPackageChangeMapper::new(&self.graph);
+        let anchored_path = AnchoredSystemPath::new(&path)
+            .map_err(|e| Error::from_reason(e.to_string()))?
+            .clean();
+        match package_mapper.detect_package(&anchored_path) {
+            turborepo_repository::change_mapper::PackageMapping::All(
+                _all_package_change_reason,
+            ) => Err(Error::from_reason("file belongs to many packages")),
+            turborepo_repository::change_mapper::PackageMapping::None => Err(Error::from_reason(
+                "iterated to the root of the workspace and found no package",
+            )),
+            turborepo_repository::change_mapper::PackageMapping::Package((package, _reason)) => {
+                let workspace_root = match AbsoluteSystemPath::new(&self.absolute_path) {
+                    Ok(path) => path,
+                    Err(e) => return Err(Error::from_reason(e.to_string())),
+                };
+                let package_path = workspace_root.resolve(&package.path);
+                Ok(Package::new(
+                    package.name.to_string(),
+                    workspace_root,
+                    &package_path,
+                ))
             }
         }
     }
