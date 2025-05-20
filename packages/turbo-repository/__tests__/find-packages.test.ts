@@ -39,6 +39,8 @@ describe("findPackages", () => {
       ],
       ["apps/app/src/util/non-typescript-file.txt", "app-a"],
       ["apps/app/src/a-directory", "app-a"],
+      ["apps/app/package.json", "app-a"],
+      ["apps/app/tsconfig.json", "app-a"],
       ["apps/app", "app-a"], // The root of a package is still "within" a package!
       ["apps/app/", "app-a"], // Trailing-slash should be ignored
       ["packages/ui/pretty-stuff.css", "ui"],
@@ -53,6 +55,8 @@ describe("findPackages", () => {
       ["apps/../apps/app/src", "app-a"],
       ["apps/app/src/util/../../../../apps/app", "app-a"],
       ["not a legal ^&(^) path", undefined],
+      ["package.json", undefined],
+      ["tsconfig.json", undefined],
     ]) {
       if (result === undefined) {
         assert.rejects(
