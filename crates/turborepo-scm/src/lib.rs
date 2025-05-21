@@ -2,6 +2,7 @@
 #![feature(io_error_more)]
 #![feature(assert_matches)]
 #![deny(clippy::all)]
+#![allow(clippy::result_large_err)]
 
 //! Turborepo's library for interacting with source control management (SCM).
 //! Currently we only support git. We use SCM for finding changed files,
