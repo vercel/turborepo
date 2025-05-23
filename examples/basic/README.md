@@ -38,7 +38,13 @@ To build all apps and packages, run the following command:
 
 ```
 cd my-turborepo
-pnpm build
+npx turbo build
+```
+
+You can build a specific package by using a [filter](https://turborepo.com/docs/crafting-your-repository/running-tasks#using-filters):
+
+```
+npx turbo build --filter=docs
 ```
 
 ### Develop
@@ -47,7 +53,13 @@ To develop all apps and packages, run the following command:
 
 ```
 cd my-turborepo
-pnpm dev
+npx turbo dev
+```
+
+You can develop a specific package by using a [filter](https://turborepo.com/docs/crafting-your-repository/running-tasks#using-filters):
+
+```
+npx turbo dev --filter=web
 ```
 
 ### Remote Caching
