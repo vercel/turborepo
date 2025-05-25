@@ -76,6 +76,8 @@ pub enum Error {
     SignalListener(#[from] turborepo_signals::listeners::Error),
     #[error(transparent)]
     Dialoguer(#[from] dialoguer::Error),
+    #[error("{0}")]
+    Parse(String),
 }
 
 const MAX_CHARS_PER_TASK_LINE: usize = 100;

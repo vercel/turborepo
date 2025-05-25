@@ -1,6 +1,7 @@
 use std::{collections::HashSet, fs, io};
 
 use camino::Utf8PathBuf;
+use regex::Regex;
 use serde_json::{json, Value};
 use thiserror::Error;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
@@ -16,6 +17,8 @@ pub enum TypeScriptError {
     Io(#[from] io::Error),
     #[error("JSON error: {0}")]
     Json(#[from] serde_json::Error),
+    #[error("Parse error: {0}")]
+    Parse(String),
 }
 
 impl From<TypeScriptError> for cli::Error {
@@ -23,8 +26,22 @@ impl From<TypeScriptError> for cli::Error {
         match err {
             TypeScriptError::Io(e) => cli::Error::Path(e.into()),
             TypeScriptError::Json(e) => cli::Error::SerdeJson(e),
+            TypeScriptError::Parse(e) => cli::Error::Parse(e),
         }
     }
+}
+
+/// Parse JSON with support for trailing commas and comments
+fn parse_json_with_comments(content: &str) -> Result<Value, TypeScriptError> {
+    // First, remove all comments
+    let comment_regex = Regex::new(r"(?m)//.*$|/\*[\s\S]*?\*/").unwrap();
+    let content = comment_regex.replace_all(content, "");
+
+    // Then, remove trailing commas before closing brackets and braces
+    let trailing_comma_regex = Regex::new(r",(\s*[}\]])").unwrap();
+    let content = trailing_comma_regex.replace_all(&content, "$1");
+
+    serde_json::from_str(&content).map_err(|e| TypeScriptError::Parse(e.to_string()))
 }
 
 fn get_all_dependencies(package_json: &Value) -> HashSet<String> {
@@ -57,9 +74,10 @@ fn update_tsconfig_references(
     package_paths: &[(String, AbsoluteSystemPathBuf)],
 ) -> Result<(), TypeScriptError> {
     let tsconfig_content = fs::read_to_string(tsconfig_path)?;
-    let mut tsconfig: Value = serde_json::from_str(&tsconfig_content)?;
+    let tsconfig = parse_json_with_comments(&tsconfig_content)?;
 
     // Create references array if it doesn't exist
+    let mut tsconfig = tsconfig;
     if !tsconfig["references"].is_array() {
         tsconfig["references"] = Value::Array(vec![]);
     }
@@ -185,6 +203,7 @@ pub async fn run_typescript(
 
                     // Only process packages that have a tsconfig.json
                     if tsconfig_path.exists() {
+                        println!("Updating project references for package: {}", pkg_name);
                         // Read package.json
                         let package_json_content =
                             fs::read_to_string(&package_json_path).map_err(TypeScriptError::Io)?;
