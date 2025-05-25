@@ -1658,7 +1658,7 @@ pub async fn run(
             let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
             event.track_ui_mode(base.opts.run_opts.ui_mode);
             let child_event = event.child();
-            typescript::run_typescript(config.clone(), &base, child_event)?;
+            typescript::run_typescript(config.clone(), &base, child_event).await?;
             Ok(0)
         }
         Command::Watch {
