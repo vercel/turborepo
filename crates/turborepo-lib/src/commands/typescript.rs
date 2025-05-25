@@ -1,8 +1,8 @@
-use std::{collections::HashSet, fs, io};
+use std::{collections::HashSet, fs, io, path::PathBuf};
 
 use camino::Utf8PathBuf;
-use regex::Regex;
-use serde_json::{json, Value};
+use oxc_resolver::{ProjectReferenceSerde, TsConfigSerde};
+use serde_json::Value;
 use thiserror::Error;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_repository::package_graph::PackageNode;
@@ -19,6 +19,8 @@ pub enum TypeScriptError {
     Json(#[from] serde_json::Error),
     #[error("Parse error: {0}")]
     Parse(String),
+    #[error("Resolve error: {0}")]
+    Resolve(String),
 }
 
 impl From<TypeScriptError> for cli::Error {
@@ -27,21 +29,9 @@ impl From<TypeScriptError> for cli::Error {
             TypeScriptError::Io(e) => cli::Error::Path(e.into()),
             TypeScriptError::Json(e) => cli::Error::SerdeJson(e),
             TypeScriptError::Parse(e) => cli::Error::Parse(e),
+            TypeScriptError::Resolve(e) => cli::Error::Parse(e),
         }
     }
-}
-
-/// Parse JSON with support for trailing commas and comments
-fn parse_json_with_comments(content: &str) -> Result<Value, TypeScriptError> {
-    // First, remove all comments
-    let comment_regex = Regex::new(r"(?m)//.*$|/\*[\s\S]*?\*/").unwrap();
-    let content = comment_regex.replace_all(content, "");
-
-    // Then, remove trailing commas before closing brackets and braces
-    let trailing_comma_regex = Regex::new(r",(\s*[}\]])").unwrap();
-    let content = trailing_comma_regex.replace_all(&content, "$1");
-
-    serde_json::from_str(&content).map_err(|e| TypeScriptError::Parse(e.to_string()))
 }
 
 fn get_all_dependencies(package_json: &Value) -> HashSet<String> {
@@ -73,26 +63,15 @@ fn update_tsconfig_references(
     dependencies: &HashSet<String>,
     package_paths: &[(String, AbsoluteSystemPathBuf)],
 ) -> Result<(), TypeScriptError> {
-    let tsconfig_content = fs::read_to_string(tsconfig_path)?;
-    let tsconfig = parse_json_with_comments(&tsconfig_content)?;
-
-    // Create references array if it doesn't exist
-    let mut tsconfig = tsconfig;
-    if !tsconfig["references"].is_array() {
-        tsconfig["references"] = Value::Array(vec![]);
-    }
-
-    let references = tsconfig["references"].as_array_mut().unwrap();
+    let mut tsconfig_content = fs::read_to_string(tsconfig_path)?;
+    let mut tsconfig =
+        TsConfigSerde::parse(false, tsconfig_path.as_std_path(), &mut tsconfig_content)?;
 
     // Keep track of existing paths to avoid duplicates
-    let mut existing_paths: HashSet<String> = references
+    let mut existing_paths: HashSet<String> = tsconfig
+        .references
         .iter()
-        .filter_map(|ref_obj| {
-            ref_obj
-                .get("path")
-                .and_then(|p| p.as_str())
-                .map(String::from)
-        })
+        .map(|ref_obj| ref_obj.path.to_string_lossy().into_owned())
         .collect();
 
     // Get the current package's directory
@@ -142,9 +121,11 @@ fn update_tsconfig_references(
                 if let Some(path_str) = relative_path {
                     // Only add if this path isn't already referenced
                     if !existing_paths.contains(&path_str) {
-                        references.push(json!({
-                            "path": path_str
-                        }));
+                        let path_buf = PathBuf::from(path_str.clone());
+                        tsconfig.references.push(ProjectReferenceSerde {
+                            path: path_buf,
+                            tsconfig: None,
+                        });
                         existing_paths.insert(path_str);
                     }
                 } else {
@@ -158,7 +139,22 @@ fn update_tsconfig_references(
     }
 
     // Write back the updated tsconfig
-    let updated_content = serde_json::to_string_pretty(&tsconfig)?;
+    let mut json: serde_json::Value = serde_json::from_str(&tsconfig_content)?;
+
+    // Update the references array
+    let references: Vec<serde_json::Value> = tsconfig
+        .references
+        .iter()
+        .map(|ref_obj| {
+            serde_json::json!({
+                "path": ref_obj.path.to_string_lossy()
+            })
+        })
+        .collect();
+
+    json["references"] = serde_json::json!(references);
+
+    let updated_content = serde_json::to_string_pretty(&json)?;
     fs::write(tsconfig_path, updated_content)?;
 
     Ok(())
