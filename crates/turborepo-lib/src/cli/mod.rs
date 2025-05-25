@@ -749,6 +749,12 @@ pub enum Command {
         /// The query to run, either a file path or a query string
         query: Option<String>,
     },
+    /// TypeScript-related commands
+    TypeScript {
+        /// The path to the TypeScript configuration file
+        #[clap(long)]
+        config: Option<Utf8PathBuf>,
+    },
     Watch {
         #[clap(flatten)]
         execution_args: Box<ExecutionArgs>,
@@ -1645,6 +1651,15 @@ pub async fn run(
             let query = query::run(base, event, query, variables.as_deref(), schema).await?;
 
             Ok(query)
+        }
+        Command::TypeScript { config } => {
+            let event = CommandEventBuilder::new("typescript").with_parent(&root_telemetry);
+            event.track_call();
+            let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
+            event.track_ui_mode(base.opts.run_opts.ui_mode);
+            let child_event = event.child();
+            query::run_typescript(config, &base, child_event)?;
+            Ok(0)
         }
         Command::Watch {
             execution_args,
