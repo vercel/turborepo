@@ -30,6 +30,7 @@ pub(crate) mod query;
 pub(crate) mod run;
 pub(crate) mod scan;
 pub(crate) mod telemetry;
+pub(crate) mod typescript;
 pub(crate) mod unlink;
 
 #[derive(Debug, Clone)]

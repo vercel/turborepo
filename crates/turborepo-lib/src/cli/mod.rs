@@ -29,7 +29,7 @@ use crate::{
     cli::error::print_potential_tasks,
     commands::{
         bin, boundaries, clone, config, daemon, generate, info, link, login, logout, ls, prune,
-        query, run, scan, telemetry, unlink, CommandBase,
+        query, run, scan, telemetry, typescript, unlink, CommandBase,
     },
     get_version,
     run::watch::WatchClient,
@@ -1658,7 +1658,7 @@ pub async fn run(
             let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
             event.track_ui_mode(base.opts.run_opts.ui_mode);
             let child_event = event.child();
-            query::run_typescript(config, &base, child_event)?;
+            typescript::run_typescript(config.clone(), &base, child_event)?;
             Ok(0)
         }
         Command::Watch {
