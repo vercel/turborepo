@@ -43,14 +43,15 @@ familiar with Turborepo.
 
 We recommend you install `turbo` both globally and into your repository's root for the best developer experience.
 
-<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
-  <Tab value="npm">
+<PackageManagerTabs>
+  <Tab value="pnpm">
+      Ensure you have created a `pnpm-workspace.yaml` file before you begin the installation. Failure to have this file will result in an error that says: ` --workspace-root may only be used inside a workspace`.
 
     ```bash title="Terminal"
     # Global install
-    npm install turbo --global
+    pnpm add turbo --global
     # Install in repository
-    npm install turbo --save-dev
+    pnpm add turbo --save-dev --workspace-root
     ```
 
   </Tab>
@@ -64,18 +65,27 @@ We recommend you install `turbo` both globally and into your repository's root f
     ```
 
   </Tab>
-  <Tab value="pnpm">
-      Ensure you have created a `pnpm-workspace.yaml` file before you begin the installation. Failure to have this file will result in an error that says: ` --workspace-root may only be used inside a workspace`.
+  <Tab value="npm">
 
     ```bash title="Terminal"
     # Global install
-    pnpm add turbo --global
+    npm install turbo --global
     # Install in repository
-    pnpm add turbo --save-dev --workspace-root
+    npm install turbo --save-dev
     ```
 
   </Tab>
-</Tabs>
+  <Tab value="bun (Beta)">
+
+    ```bash title="Terminal"
+    # Global install
+    bun install turbo --global
+    # Install in repository
+    bun install turbo --dev
+    ```
+
+  </Tab>
+</PackageManagerTabs>
 
 To learn more about why we recommend both installations, visit the [Installation page](/docs/getting-started/installation).
 
@@ -185,11 +195,49 @@ Add `.turbo` to your `.gitignore` file. The `turbo` CLI uses these folders for p
 
 Turborepo optimizes your repository using information from your package manager. To declare which package manager you're using, add a [`packageManager`](https://nodejs.org/api/packages.html#packagemanager) field to your root `package.json` if you don't have one already.
 
+<PackageManagerTabs>
+
+<Tab value="pnpm">
+
+```diff title="package.json"
+{
++  "packageManager": "pnpm@10.0.0"
+}
+```
+
+</Tab>
+
+<Tab value="yarn">
+
+```diff title="package.json"
+{
++  "packageManager": "yarn@1.22.19"
+}
+```
+
+</Tab>
+
+<Tab value="npm">
+
 ```diff title="package.json"
 {
 +  "packageManager": "npm@8.5.0"
 }
 ```
+
+</Tab>
+
+<Tab value="bun (Beta)">
+
+```diff title="package.json"
+{
++  "packageManager": "bun@1.2.0"
+}
+```
+
+</Tab>
+
+</PackageManagerTabs>
 
 <Callout type="good-to-know">
   Depending on your repository, you may need to use the

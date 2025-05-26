@@ -278,7 +278,8 @@ The root `package.json` is the base for your workspace. Below is a common exampl
   "devDependencies": {
     "turbo": "latest"
   },
-  "packageManager": "yarn@1.22.19"
+  "packageManager": "yarn@1.22.19",
+  "workspaces": ["apps/*", "packages/*"]
 }
 ```
 
@@ -297,7 +298,8 @@ The root `package.json` is the base for your workspace. Below is a common exampl
   "devDependencies": {
     "turbo": "latest"
   },
-  "packageManager": "npm@10.0.0"
+  "packageManager": "npm@10.0.0",
+  "workspaces": ["apps/*", "packages/*"]
 }
 ```
 
@@ -316,7 +318,8 @@ The root `package.json` is the base for your workspace. Below is a common exampl
   "devDependencies": {
     "turbo": "latest"
   },
-  "packageManager": "bun@1.2.0"
+  "packageManager": "bun@1.2.0",
+  "workspaces": ["apps/*", "packages/*"]
 }
 ```
 
