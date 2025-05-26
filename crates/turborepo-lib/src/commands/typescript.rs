@@ -77,49 +77,29 @@ fn update_tsconfig_references(
     // Get the current package's directory
     let current_package_dir = tsconfig_path.parent().unwrap();
 
-    // Add references for each dependency that has a tsconfig.json
-    for dep in dependencies {
-        if let Some((_, dep_path)) = package_paths.iter().find(|(name, _)| name == dep) {
+    // Special case for root package
+    if package_name == "//" {
+        // Add references to all packages in the repository
+        for (_, dep_path) in package_paths {
             let dep_tsconfig = dep_path.join_component("tsconfig.json");
             if dep_tsconfig.exists() {
-                // Calculate relative path from current package to dependency
+                // Calculate relative path from root to package
                 let relative_path = if let Ok(path) = dep_path
                     .as_path()
                     .strip_prefix(current_package_dir.as_path())
                 {
-                    // If dependency is a child of current package
-                    Some(format!("./{}", path.to_string()))
-                } else if let Ok(path) = current_package_dir
-                    .as_path()
-                    .strip_prefix(dep_path.as_path())
-                {
-                    // If current package is a child of dependency
-                    Some(format!("../{}", path.to_string()))
+                    let path_str = format!("./{}", path.to_string());
+                    // Skip adding reference to root directory
+                    if path_str != "./" {
+                        Some(path_str)
+                    } else {
+                        None
+                    }
                 } else {
-                    // If neither is a child of the other, calculate the common ancestor
-                    let current_components: Vec<_> = current_package_dir.components().collect();
-                    let dep_components: Vec<_> = dep_path.components().collect();
-
-                    // Find the common prefix
-                    let common_prefix_len = current_components
-                        .iter()
-                        .zip(dep_components.iter())
-                        .take_while(|(a, b)| a == b)
-                        .count();
-
-                    // Calculate the number of ".." needed
-                    let up_count = current_components.len() - common_prefix_len;
-                    let down_path = dep_components[common_prefix_len..]
-                        .iter()
-                        .map(|c| c.as_str())
-                        .collect::<Vec<_>>()
-                        .join("/");
-
-                    Some(format!("{}../{}", "../".repeat(up_count), down_path))
+                    None
                 };
 
                 if let Some(path_str) = relative_path {
-                    // Only add if this path isn't already referenced
                     if !existing_paths.contains(&path_str) {
                         let path_buf = PathBuf::from(path_str.clone());
                         tsconfig.references.push(ProjectReferenceSerde {
@@ -128,11 +108,69 @@ fn update_tsconfig_references(
                         });
                         existing_paths.insert(path_str);
                     }
-                } else {
-                    println!(
-                        "Warning: Could not create relative path for dependency {} in package {}",
-                        dep, package_name
-                    );
+                }
+            }
+        }
+    } else {
+        // Regular package case - add references for each dependency that has a
+        // tsconfig.json
+        for dep in dependencies {
+            if let Some((_, dep_path)) = package_paths.iter().find(|(name, _)| name == dep) {
+                let dep_tsconfig = dep_path.join_component("tsconfig.json");
+                if dep_tsconfig.exists() {
+                    // Calculate relative path from current package to dependency
+                    let relative_path = if let Ok(path) = dep_path
+                        .as_path()
+                        .strip_prefix(current_package_dir.as_path())
+                    {
+                        // If dependency is a child of current package
+                        Some(format!("./{}", path.to_string()))
+                    } else if let Ok(path) = current_package_dir
+                        .as_path()
+                        .strip_prefix(dep_path.as_path())
+                    {
+                        // If current package is a child of dependency
+                        Some(format!("../{}", path.to_string()))
+                    } else {
+                        // If neither is a child of the other, calculate the common ancestor
+                        let current_components: Vec<_> = current_package_dir.components().collect();
+                        let dep_components: Vec<_> = dep_path.components().collect();
+
+                        // Find the common prefix
+                        let common_prefix_len = current_components
+                            .iter()
+                            .zip(dep_components.iter())
+                            .take_while(|(a, b)| a == b)
+                            .count();
+
+                        // Calculate the number of ".." needed
+                        let up_count = current_components.len() - common_prefix_len;
+                        let down_path = dep_components[common_prefix_len..]
+                            .iter()
+                            .map(|c| c.as_str())
+                            .collect::<Vec<_>>()
+                            .join("/");
+
+                        Some(format!("{}{}", "../".repeat(up_count), down_path))
+                    };
+
+                    if let Some(path_str) = relative_path {
+                        // Only add if this path isn't already referenced
+                        if !existing_paths.contains(&path_str) {
+                            let path_buf = PathBuf::from(path_str.clone());
+                            tsconfig.references.push(ProjectReferenceSerde {
+                                path: path_buf,
+                                tsconfig: None,
+                            });
+                            existing_paths.insert(path_str);
+                        }
+                    } else {
+                        println!(
+                            "Warning: Could not create relative path for dependency {} in package \
+                             {}",
+                            dep, package_name
+                        );
+                    }
                 }
             }
         }
@@ -141,8 +179,8 @@ fn update_tsconfig_references(
     // Write back the updated tsconfig
     let mut json: serde_json::Value = serde_json::from_str(&tsconfig_content)?;
 
-    // Update the references array
-    let references: Vec<serde_json::Value> = tsconfig
+    // Update the references array and sort alphabetically by path
+    let mut references: Vec<serde_json::Value> = tsconfig
         .references
         .iter()
         .map(|ref_obj| {
@@ -152,7 +190,19 @@ fn update_tsconfig_references(
         })
         .collect();
 
+    // Sort references alphabetically by path
+    references.sort_by(|a, b| {
+        let path_a = a["path"].as_str().unwrap_or("");
+        let path_b = b["path"].as_str().unwrap_or("");
+        path_a.cmp(path_b)
+    });
+
     json["references"] = serde_json::json!(references);
+
+    // Add empty files array for root package
+    if package_name == "//" {
+        json["files"] = serde_json::json!([]);
+    }
 
     let updated_content = serde_json::to_string_pretty(&json)?;
     fs::write(tsconfig_path, updated_content)?;
@@ -188,6 +238,20 @@ pub async fn run_typescript(
         }
     }
 
+    // Create root tsconfig.json if it doesn't exist
+    let root_tsconfig = base.repo_root.join_component("tsconfig.json");
+    if !root_tsconfig.exists() {
+        let root_config = serde_json::json!({
+            "files": [],
+            "references": []
+        });
+        fs::write(
+            &root_tsconfig,
+            serde_json::to_string_pretty(&root_config).map_err(TypeScriptError::Json)?,
+        )
+        .map_err(TypeScriptError::Io)?;
+    }
+
     // Second pass: update tsconfig.json files
     for node in run.pkg_dep_graph().node_indices() {
         if let Some(package_node) = run.pkg_dep_graph().get_package_by_index(node) {
@@ -199,7 +263,6 @@ pub async fn run_typescript(
 
                     // Only process packages that have a tsconfig.json
                     if tsconfig_path.exists() {
-                        println!("Updating project references for package: {}", pkg_name);
                         // Read package.json
                         let package_json_content =
                             fs::read_to_string(&package_json_path).map_err(TypeScriptError::Io)?;
@@ -216,8 +279,6 @@ pub async fn run_typescript(
                             &dependencies,
                             &package_paths,
                         )?;
-
-                        println!("Updated project references for package: {}", pkg_name);
                     }
                 }
             }
