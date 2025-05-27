@@ -2,9 +2,8 @@ use std::{backtrace::Backtrace, env};
 
 use itertools::Itertools;
 use miette::{Diagnostic, SourceSpan};
-use tracing::warn;
 use turbopath::AbsoluteSystemPathBuf;
-use turborepo_ui::{ceprintln, ColorConfig, YELLOW};
+use turborepo_ui::ColorConfig;
 
 use super::Error;
 
@@ -146,12 +145,16 @@ impl ShimArgs {
             } else if arg == "--debug" {
                 return Err(Error::UnsupportedFlag {
                     flag: "--debug".to_string(),
-                    suggestion: "Use --verbosity instead.".to_string(),
+                    suggestion: "Please use --verbosity instead.\n if you are trying to pass \
+                                 `--debug` as a value, use `-- --debug`."
+                        .to_string(),
                 });
             } else if arg == "--verbose" {
                 return Err(Error::UnsupportedFlag {
                     flag: "--verbose".to_string(),
-                    suggestion: "Use --verbosity instead.".to_string(),
+                    suggestion: "Please use --verbosity instead.\n if you are trying to pass \
+                                 `--verbose` as a value, use `-- --verbose`."
+                        .to_string(),
                 });
             } else {
                 remaining_turbo_args.push(arg);
