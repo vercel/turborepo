@@ -57,7 +57,7 @@ Make sure exit code is 2 when no args are passed
         --trace <TRACE>
             Specify a file to save a pprof trace
         --verbosity <COUNT>
-            Verbosity level
+            Verbosity level. Useful when debugging Turborepo or creating logs for reports
         --dangerously-disable-package-manager-check
             Allow for missing `packageManager` in `package.json`
         --root-turbo-json <ROOT_TURBO_JSON>
