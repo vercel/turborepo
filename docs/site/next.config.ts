@@ -545,6 +545,53 @@ const config: NextConfig = {
         destination: "/docs/guides/ci-vendors/travis-ci",
         permanent: true,
       },
+      {
+        source: "/remote-cache",
+        destination: "/docs/core-concepts/remote-caching",
+        permanent: true,
+      },
+      {
+        source: "/docs/troubleshooting",
+        destination: "/docs/reference",
+        permanent: true,
+      },
+      {
+        source: "/docs/platform-environment-variables",
+        destination:
+          "/docs/crafting-your-repository/using-environment-variables#platform-environment-variables",
+        permanent: true,
+      },
+      {
+        source: "/docs/platform-environment-variables",
+        destination:
+          "/docs/crafting-your-repository/using-environment-variables#platform-environment-variables",
+        permanent: true,
+      },
+      {
+        source: "/docs/handbook",
+        destination: "/docs/crafting-your-repository",
+        permanent: true,
+      },
+      {
+        source: "/docs/reference/codemods",
+        destination: "/docs/reference/turbo-codemod",
+        permanent: true,
+      },
+      {
+        source: "/docs/getting-started/from-example",
+        destination: "/docs/getting-started/examples",
+        permanent: true,
+      },
+      {
+        source: "/docs/getting-started/create-new",
+        destination: "/docs/getting-started/installation",
+        permanent: true,
+      },
+      {
+        source: "/docs/reference/command-line-reference/run",
+        destination: "/docs/reference/run",
+        permanent: true,
+      },
     ];
   },
 };
