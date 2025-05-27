@@ -146,12 +146,12 @@ impl ShimArgs {
             } else if arg == "--debug" {
                 return Err(Error::UnsupportedFlag {
                     flag: "--debug".to_string(),
-                    suggestion: "Please use --verbosity instead.".to_string(),
+                    suggestion: "Use --verbosity instead.".to_string(),
                 });
             } else if arg == "--verbose" {
                 return Err(Error::UnsupportedFlag {
                     flag: "--verbose".to_string(),
-                    suggestion: "Please use --verbosity instead.".to_string(),
+                    suggestion: "Use --verbosity instead.".to_string(),
                 });
             } else {
                 remaining_turbo_args.push(arg);
