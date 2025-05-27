@@ -278,7 +278,7 @@ pub struct Verbosity {
         value_name = "COUNT"
     )]
     /// Verbosity level. Useful when debugging Turborepo or creating logs for
-    /// issue reports.
+    /// issue reports
     pub verbosity: Option<u8>,
     #[clap(
         short = 'v',

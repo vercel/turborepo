@@ -57,7 +57,7 @@ Test help flag
         --trace <TRACE>
             Specify a file to save a pprof trace
         --verbosity <COUNT>
-            Verbosity level. Useful when debugging Turborepo or creating logs for issue reports.
+            Verbosity level. Useful when debugging Turborepo or creating logs for issue reports
         --dangerously-disable-package-manager-check
             Allow for missing `packageManager` in `package.json`
         --root-turbo-json <ROOT_TURBO_JSON>
@@ -201,7 +201,7 @@ Test help flag
             Specify a file to save a pprof trace
   
         --verbosity <COUNT>
-            Verbosity level. Useful when debugging Turborepo or creating logs for issue reports.
+            Verbosity level. Useful when debugging Turborepo or creating logs for issue reports
   
         --dangerously-disable-package-manager-check
             Allow for missing `packageManager` in `package.json`.
@@ -368,7 +368,7 @@ Test help flag for link command
         --trace <TRACE>
             Specify a file to save a pprof trace
         --verbosity <COUNT>
-            Verbosity level. Useful when debugging Turborepo or creating logs for issue reports.
+            Verbosity level. Useful when debugging Turborepo or creating logs for issue reports
         --dangerously-disable-package-manager-check
             Allow for missing `packageManager` in `package.json`
         --root-turbo-json <ROOT_TURBO_JSON>
@@ -416,7 +416,7 @@ Test help flag for unlink command
         --trace <TRACE>
             Specify a file to save a pprof trace
         --verbosity <COUNT>
-            Verbosity level. Useful when debugging Turborepo or creating logs for issue reports.
+            Verbosity level. Useful when debugging Turborepo or creating logs for issue reports
         --dangerously-disable-package-manager-check
             Allow for missing `packageManager` in `package.json`
         --root-turbo-json <ROOT_TURBO_JSON>
@@ -468,7 +468,7 @@ Test help flag for login command
         --trace <TRACE>
             Specify a file to save a pprof trace
         --verbosity <COUNT>
-            Verbosity level. Useful when debugging Turborepo or creating logs for issue reports.
+            Verbosity level. Useful when debugging Turborepo or creating logs for issue reports
         --dangerously-disable-package-manager-check
             Allow for missing `packageManager` in `package.json`
         --root-turbo-json <ROOT_TURBO_JSON>
@@ -516,7 +516,7 @@ Test help flag for logout command
         --trace <TRACE>
             Specify a file to save a pprof trace
         --verbosity <COUNT>
-            Verbosity level. Useful when debugging Turborepo or creating logs for issue reports.
+            Verbosity level. Useful when debugging Turborepo or creating logs for issue reports
         --dangerously-disable-package-manager-check
             Allow for missing `packageManager` in `package.json`
         --root-turbo-json <ROOT_TURBO_JSON>
