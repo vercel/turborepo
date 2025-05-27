@@ -277,7 +277,8 @@ pub struct Verbosity {
         conflicts_with = "v",
         value_name = "COUNT"
     )]
-    /// Verbosity level
+    /// Verbosity level. Useful when debugging Turborepo or creating logs for
+    /// issue reports.
     pub verbosity: Option<u8>,
     #[clap(
         short = 'v',

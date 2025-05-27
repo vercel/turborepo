@@ -2,8 +2,9 @@ use std::{backtrace::Backtrace, env};
 
 use itertools::Itertools;
 use miette::{Diagnostic, SourceSpan};
+use tracing::warn;
 use turbopath::AbsoluteSystemPathBuf;
-use turborepo_ui::ColorConfig;
+use turborepo_ui::{ceprintln, ColorConfig, YELLOW};
 
 use super::Error;
 
@@ -142,6 +143,16 @@ impl ShimArgs {
                 // `--root-turbo-json=./path/to/turbo.json`, that entire chunk
                 // is a single arg, so we need to split it up.
                 root_turbo_json = Some(AbsoluteSystemPathBuf::from_unknown(&invocation_dir, path));
+            } else if arg == "--debug" {
+                return Err(Error::UnsupportedFlag {
+                    flag: "--debug".to_string(),
+                    suggestion: "Please use --verbosity instead.".to_string(),
+                });
+            } else if arg == "--verbose" {
+                return Err(Error::UnsupportedFlag {
+                    flag: "--verbose".to_string(),
+                    suggestion: "Please use --verbosity instead.".to_string(),
+                });
             } else {
                 remaining_turbo_args.push(arg);
             }
