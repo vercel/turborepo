@@ -36,11 +36,13 @@ const algoliaClient = algosearch(
 );
 
 const getDomain = () => {
-  if (process.env.VERCEL_ENV === "production") {
+  // Only "Production" environment
+  if (process.env.VERCEL_TARGET_ENV === "production") {
     return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;
   }
 
-  if (process.env.VERCEL_ENV === "preview") {
+  // All other environments on Vercel (Previews and Custom Environments)
+  if (process.env.VERCEL_ENV) {
     return `https://${process.env.VERCEL_URL}`;
   }
 
