@@ -35,6 +35,16 @@ const algoliaClient = algosearch(
   process.env.ALGOLIA_API_KEY
 );
 
+// Ensure a non-production target environment cannot sync to a production-looking Algolia index
+if (
+  process.env.VERCEL_TARGET_ENV !== "production" &&
+  process.env.NEXT_PUBLIC_ALGOLIA_INDEX?.includes("production")
+) {
+  throw new Error(
+    "Writing to the production Algolia index when building for an environment that is not production is not permitted."
+  );
+}
+
 const getDomain = () => {
   // Only "Production" environment
   if (process.env.VERCEL_TARGET_ENV === "production") {
