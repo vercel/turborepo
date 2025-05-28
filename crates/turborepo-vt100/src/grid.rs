@@ -820,11 +820,7 @@ impl Grid {
         let in_scroll_region = self.in_scroll_region();
         // need to account for clamping by both row_clamp_top and by
         // saturating_sub
-        let extra_lines = if count > self.pos.row {
-            count - self.pos.row
-        } else {
-            0
-        };
+        let extra_lines = count.saturating_sub(self.pos.row);
         self.pos.row = self.pos.row.saturating_sub(count);
         let lines = self.row_clamp_top(in_scroll_region);
         self.scroll_down(lines + extra_lines);

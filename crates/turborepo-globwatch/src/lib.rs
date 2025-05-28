@@ -18,7 +18,6 @@
     unused_must_use,
     unsafe_code
 )]
-#![feature(extract_if)]
 
 use std::{
     collections::HashMap,
