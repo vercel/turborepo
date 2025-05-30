@@ -2,11 +2,12 @@
   "$schema": "https://turborepo.com/schema.json",
   "ui": "tui",
   "globalPassThroughEnv": ["PNPM_HOME"],
+  "envMode": "loose",
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
-      "outputs": [".svelte-kit/**", ".vercel/**"]
+      "outputs": [".svelte-kit/**", ".vercel/**"],
     },
     "lint": {
       "dependsOn": ["^lint"]
