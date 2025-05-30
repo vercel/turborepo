@@ -33,6 +33,7 @@ struct ColorSelectorInner {
 }
 
 impl ColorSelector {
+    #[allow(clippy::let_and_return)]
     pub fn color_for_key(&self, key: &str) -> &'static Style {
         if let Some(style) = self.inner.read().expect("lock poisoned").color(key) {
             return style;

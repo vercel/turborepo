@@ -146,7 +146,7 @@ impl std::io::Write for TaskSender {
 
         self.handle
             .output(task, buf.to_vec())
-            .map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "receiver dropped"))?;
+            .map_err(|_| std::io::Error::other("receiver dropped"))?;
         Ok(buf.len())
     }
 
