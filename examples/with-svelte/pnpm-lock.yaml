@@ -15,8 +15,8 @@ importers:
         specifier: ^3.4.0
         version: 3.4.0(prettier@3.5.3)(svelte@5.33.5)
       turbo:
-        specifier: ^2.5.0
-        version: 2.5.3
+        specifier: 2.5.4-canary.1
+        version: 2.5.4-canary.1
 
   apps/docs:
     dependencies:
@@ -129,7 +129,7 @@ importers:
         version: 10.1.5(eslint@9.27.0)
       eslint-config-turbo:
         specifier: ^2.5.0
-        version: 2.5.3(eslint@9.27.0)(turbo@2.5.3)
+        version: 2.5.3(eslint@9.27.0)(turbo@2.5.4-canary.1)
       eslint-plugin-svelte:
         specifier: ^2.46.1
         version: 2.46.1(eslint@9.27.0)(svelte@5.33.5)
@@ -1318,38 +1318,38 @@ packages:
   tslib@2.8.1:
     resolution: {integrity: sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w==}
 
-  turbo-darwin-64@2.5.3:
-    resolution: {integrity: sha512-YSItEVBUIvAGPUDpAB9etEmSqZI3T6BHrkBkeSErvICXn3dfqXUfeLx35LfptLDEbrzFUdwYFNmt8QXOwe9yaw==}
+  turbo-darwin-64@2.5.4-canary.1:
+    resolution: {integrity: sha512-b8rQQ3KYinPYPLQbClpnl4ZabFwgBKtzdQPxj7OSS8CB1ZVXsnHkbs0OEOVB39h6Eyh7ZEaLsOpRkiHasejdpQ==}
     cpu: [x64]
     os: [darwin]
 
-  turbo-darwin-arm64@2.5.3:
-    resolution: {integrity: sha512-5PefrwHd42UiZX7YA9m1LPW6x9YJBDErXmsegCkVp+GjmWrADfEOxpFrGQNonH3ZMj77WZB2PVE5Aw3gA+IOhg==}
+  turbo-darwin-arm64@2.5.4-canary.1:
+    resolution: {integrity: sha512-Jfg22qjKAjuebt1m5k1v2Sw4Wumv85Vi7Hn7nz5aZC40aNljciUKRq7Tcu2KdZ5i80rQ1bQwbbPHn6gk8l/eUQ==}
     cpu: [arm64]
     os: [darwin]
 
-  turbo-linux-64@2.5.3:
-    resolution: {integrity: sha512-M9xigFgawn5ofTmRzvjjLj3Lqc05O8VHKuOlWNUlnHPUltFquyEeSkpQNkE/vpPdOR14AzxqHbhhxtfS4qvb1w==}
+  turbo-linux-64@2.5.4-canary.1:
+    resolution: {integrity: sha512-520zE55wYILNmJZXeMN4nHfSMgijs83xpqp/K/upbvh/4PHDamua4fUtTU6Uo/UQPuOX2nZL8z7zzhyLTwvdJw==}
     cpu: [x64]
     os: [linux]
 
-  turbo-linux-arm64@2.5.3:
-    resolution: {integrity: sha512-auJRbYZ8SGJVqvzTikpg1bsRAsiI9Tk0/SDkA5Xgg0GdiHDH/BOzv1ZjDE2mjmlrO/obr19Dw+39OlMhwLffrw==}
+  turbo-linux-arm64@2.5.4-canary.1:
+    resolution: {integrity: sha512-9EFv3CdH0+/omL/Z9nTVgaLH8hi4X3uqLt/ESarznI1edRJIP+B4z2VvVQQ5+t+qQY7ZkBHXTijSCELwlMAtcg==}
     cpu: [arm64]
     os: [linux]
 
-  turbo-windows-64@2.5.3:
-    resolution: {integrity: sha512-arLQYohuHtIEKkmQSCU9vtrKUg+/1TTstWB9VYRSsz+khvg81eX6LYHtXJfH/dK7Ho6ck+JaEh5G+QrE1jEmCQ==}
+  turbo-windows-64@2.5.4-canary.1:
+    resolution: {integrity: sha512-/LhN0zZiO2eDDm2+SX1aCW8ByPov+upH3YBZTaHWuGYT8reWtly/1M4kFPviYOPrR5o1EUntw9/Zilm32A9Nzg==}
     cpu: [x64]
     os: [win32]
 
-  turbo-windows-arm64@2.5.3:
-    resolution: {integrity: sha512-3JPn66HAynJ0gtr6H+hjY4VHpu1RPKcEwGATvGUTmLmYSYBQieVlnGDRMMoYN066YfyPqnNGCfhYbXfH92Cm0g==}
+  turbo-windows-arm64@2.5.4-canary.1:
+    resolution: {integrity: sha512-XfxZM7KvBkkiGoYOopI4lUsR6lNYNdah04VWQh17AEvJpba1e5HfCIBgp2J1gKTNn3/vP9mFBi5QfsIypHYuyQ==}
     cpu: [arm64]
     os: [win32]
 
-  turbo@2.5.3:
-    resolution: {integrity: sha512-iHuaNcq5GZZnr3XDZNuu2LSyCzAOPwDuo5Qt+q64DfsTP1i3T2bKfxJhni2ZQxsvAoxRbuUK5QetJki4qc5aYA==}
+  turbo@2.5.4-canary.1:
+    resolution: {integrity: sha512-pGMHtr+wMi2Uza8MxrlOwD+ib1xCKcvAexxrr8hY0O1OqDp+6FuE3rE5seXD0YaTMg3ecbgC5cMD0xs5/McanQ==}
     hasBin: true
 
   type-check@0.4.0:
@@ -2048,11 +2048,11 @@ snapshots:
     dependencies:
       eslint: 9.27.0
 
-  eslint-config-turbo@2.5.3(eslint@9.27.0)(turbo@2.5.3):
+  eslint-config-turbo@2.5.3(eslint@9.27.0)(turbo@2.5.4-canary.1):
     dependencies:
       eslint: 9.27.0
-      eslint-plugin-turbo: 2.5.3(eslint@9.27.0)(turbo@2.5.3)
-      turbo: 2.5.3
+      eslint-plugin-turbo: 2.5.3(eslint@9.27.0)(turbo@2.5.4-canary.1)
+      turbo: 2.5.4-canary.1
 
   eslint-plugin-svelte@2.46.1(eslint@9.27.0)(svelte@5.33.5):
     dependencies:
@@ -2073,11 +2073,11 @@ snapshots:
     transitivePeerDependencies:
       - ts-node
 
-  eslint-plugin-turbo@2.5.3(eslint@9.27.0)(turbo@2.5.3):
+  eslint-plugin-turbo@2.5.3(eslint@9.27.0)(turbo@2.5.4-canary.1):
     dependencies:
       dotenv: 16.0.3
       eslint: 9.27.0
-      turbo: 2.5.3
+      turbo: 2.5.4-canary.1
 
   eslint-scope@7.2.2:
     dependencies:
@@ -2552,32 +2552,32 @@ snapshots:
 
   tslib@2.8.1: {}
 
-  turbo-darwin-64@2.5.3:
+  turbo-darwin-64@2.5.4-canary.1:
     optional: true
 
-  turbo-darwin-arm64@2.5.3:
+  turbo-darwin-arm64@2.5.4-canary.1:
     optional: true
 
-  turbo-linux-64@2.5.3:
+  turbo-linux-64@2.5.4-canary.1:
     optional: true
 
-  turbo-linux-arm64@2.5.3:
+  turbo-linux-arm64@2.5.4-canary.1:
     optional: true
 
-  turbo-windows-64@2.5.3:
+  turbo-windows-64@2.5.4-canary.1:
     optional: true
 
-  turbo-windows-arm64@2.5.3:
+  turbo-windows-arm64@2.5.4-canary.1:
     optional: true
 
-  turbo@2.5.3:
+  turbo@2.5.4-canary.1:
     optionalDependencies:
-      turbo-darwin-64: 2.5.3
-      turbo-darwin-arm64: 2.5.3
-      turbo-linux-64: 2.5.3
-      turbo-linux-arm64: 2.5.3
-      turbo-windows-64: 2.5.3
-      turbo-windows-arm64: 2.5.3
+      turbo-darwin-64: 2.5.4-canary.1
+      turbo-darwin-arm64: 2.5.4-canary.1
+      turbo-linux-64: 2.5.4-canary.1
+      turbo-linux-arm64: 2.5.4-canary.1
+      turbo-windows-64: 2.5.4-canary.1
+      turbo-windows-arm64: 2.5.4-canary.1
 
   type-check@0.4.0:
     dependencies:

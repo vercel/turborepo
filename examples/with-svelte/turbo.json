@@ -1,7 +1,6 @@
 {
   "$schema": "https://turborepo.com/schema.json",
   "ui": "tui",
-  "globalPassThroughEnv": ["PNPM_HOME", "NPM_CONFIG_STORE_DIR"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
