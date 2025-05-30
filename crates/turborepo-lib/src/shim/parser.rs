@@ -142,6 +142,20 @@ impl ShimArgs {
                 // `--root-turbo-json=./path/to/turbo.json`, that entire chunk
                 // is a single arg, so we need to split it up.
                 root_turbo_json = Some(AbsoluteSystemPathBuf::from_unknown(&invocation_dir, path));
+            } else if arg == "--debug" {
+                return Err(Error::UnsupportedFlag {
+                    flag: "--debug".to_string(),
+                    suggestion: "Please use --verbosity instead.\n if you are trying to pass \
+                                 `--debug` as a value, use `-- --debug`."
+                        .to_string(),
+                });
+            } else if arg == "--verbose" {
+                return Err(Error::UnsupportedFlag {
+                    flag: "--verbose".to_string(),
+                    suggestion: "Please use --verbosity instead.\n if you are trying to pass \
+                                 `--verbose` as a value, use `-- --verbose`."
+                        .to_string(),
+                });
             } else {
                 remaining_turbo_args.push(arg);
             }

@@ -53,6 +53,8 @@ pub enum Error {
         #[label = "Requires a path to be passed after it"]
         flag_range: SourceSpan,
     },
+    #[error("The {flag} flag is not supported. {suggestion}")]
+    UnsupportedFlag { flag: String, suggestion: String },
     #[error(transparent)]
     #[diagnostic(transparent)]
     Cli(#[from] cli::Error),
