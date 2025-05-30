@@ -479,6 +479,8 @@ impl<'a> TaskHasher<'a> {
                     "PROGRAMDATA",
                     "SYSTEMROOT",
                     "SYSTEMDRIVE",
+                    "PNPM_HOME",
+                    "NPM_CONFIG_STORE_DIR",
                 ];
                 let pass_through_env_vars = self.env_at_execution_start.pass_through_env(
                     builtin_pass_through,
