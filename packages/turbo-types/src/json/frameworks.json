@@ -93,7 +93,8 @@
       "STORMKIT",
       "NOW_BUILDER",
       "ZEABUR",
-      "RENDER"
+      "RENDER",
+      "LAUNCH_EDITOR"
     ],
     "dependencyMatch": {
       "strategy": "some",
@@ -148,7 +149,10 @@
   {
     "slug": "vue",
     "name": "Vue",
-    "envWildcards": ["VUE_APP_*"],
+    "envWildcards": [
+      "VUE_APP_*",
+      "LAUNCH_EDITOR"
+    ],
     "dependencyMatch": {
       "strategy": "all",
       "dependencies": ["@vue/cli-service"]
