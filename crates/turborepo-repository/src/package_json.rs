@@ -202,6 +202,7 @@ impl PackageJson {
             .iter()
             .flatten()
             .chain(self.optional_dependencies.iter().flatten())
+            .chain(self.peer_dependencies.iter().flatten())
             .chain(self.dependencies.iter().flatten())
     }
 
