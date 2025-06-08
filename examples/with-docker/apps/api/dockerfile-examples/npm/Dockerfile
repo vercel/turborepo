@@ -1,5 +1,5 @@
 # ───────────────────────────────────────────────────────
-# PNPM-based build
+# NPM-based build
 # ───────────────────────────────────────────────────────
 FROM node:18-alpine AS base
 
@@ -7,19 +7,12 @@ FROM node:18-alpine AS base
 # Make sure you update this Dockerfile, the Dockerfile in the web workspace and copy that over to Dockerfile in the docs.
 
 FROM base AS builder
-RUN apk update && apk add --no-cache libc6-compat
+# Check https://github.com/nodejs/docker-node/tree/b4117f9333da4138b03a546ec926ef50a31506c3#nodealpine to understand why libc6-compat might be needed.
+RUN apk update
+RUN apk add --no-cache libc6-compat
+# Set working directory
 WORKDIR /app
-
-# Set PNPM_HOME to a directory that exists
-ENV PNPM_HOME=/pnpm
-RUN mkdir -p /pnpm && \
-    echo "export PATH=$PNPM_HOME:$PATH" >> /etc/profile
-
-# Install pnpm and turbo globally
-RUN corepack enable && corepack prepare pnpm@latest --activate
-RUN pnpm config set global-bin-dir $PNPM_HOME
-RUN pnpm add -g turbo
-
+RUN npm install -g turbo
 COPY . .
 RUN turbo prune api --docker
 
@@ -31,7 +24,7 @@ WORKDIR /app
 
 # First install dependencies (as they change less often)
 COPY --from=builder /app/out/json/ .
-RUN pnpm install
+RUN npm install
 
 # Build the project and its dependencies
 COPY --from=builder /app/out/full/ .
@@ -43,7 +36,7 @@ COPY --from=builder /app/out/full/ .
 # ARG TURBO_TOKEN
 # ENV TURBO_TOKEN=$TURBO_TOKEN
 
-RUN pnpm turbo build
+RUN npx turbo build
 
 FROM base AS runner
 WORKDIR /app

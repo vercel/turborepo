@@ -28,7 +28,13 @@ Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
 
 ### Docker
 
-This repo is configured to be built with Docker, and Docker compose. To build all apps in this repo:
+This repo is configured to be built with Docker, and Docker compose.
+Inside each app [web & api] there is a folder called: `dockerfile-examples` with example dockerfiles for npm, pnpm, and yarn. These files are used to build the docker images and they are accessible from the `scripts/use-dockerfile.js` script. to The use-dockerfile.js script is accessible from the package.json with the following scripts:
+
+- `use-pnpm-dockerfile`
+- `use-yarn-dockerfile`
+- `use-npm-dockerfile`
+  Once you run these scripts you can delete the `dockerfile-examples` folder if you'd like and the subsequent commands in your package.jsob. By default this app comes with yarn as the package maanger which is what the directions below are configured for.
 
 ```
 # Install dependencies
