@@ -1,50 +1,56 @@
 # ───────────────────────────────────────────────────────
-# PNPM-based build
+# YARN-based build
 # ───────────────────────────────────────────────────────
 
 FROM node:18-alpine AS base
-# Enable Corepack and pin pnpm to the version in packageManager
-RUN corepack enable \
- && corepack prepare pnpm@10.10.0 --activate
 
-# Builder stage
+# This Dockerfile is copy-pasted into our main docs at /docs/handbook/deploying-with-docker.
+# Make sure you update both files!
+
 FROM base AS builder
-RUN apk update && apk add --no-cache libc6-compat
+# Check https://github.com/nodejs/docker-node/tree/b4117f9333da4138b03a546ec926ef50a31506c3#nodealpine to understand why libc6-compat might be needed.
+RUN apk update
+RUN apk add --no-cache libc6-compat
+# Set working directory
 WORKDIR /app
-
-# Install Turbo CLI
-RUN pnpm add -g turbo
-
+RUN yarn global add turbo
 COPY . .
-# Prune only the web workspace for Docker
 RUN turbo prune web --docker
 
-# Installer stage
+# Add lockfile and package.json's of isolated subworkspace
 FROM base AS installer
-RUN apk update && apk add --no-cache libc6-compat
+RUN apk update
+RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
-# Copy lockfiles and package.jsons
+# First install the dependencies (as they change less often)
 COPY --from=builder /app/out/json/ .
-# Install dependencies
-RUN pnpm install --frozen-lockfile
+RUN yarn install
 
-# Copy full workspace and build
+# Build the project
 COPY --from=builder /app/out/full/ .
-RUN pnpm turbo build
 
-# Runner stage
+# Uncomment and use build args to enable remote caching
+# ARG TURBO_TEAM
+# ENV TURBO_TEAM=$TURBO_TEAM
+
+# ARG TURBO_TOKEN
+# ENV TURBO_TOKEN=$TURBO_TOKEN
+
+RUN yarn turbo build
+
 FROM base AS runner
 WORKDIR /app
 
-# Create non-root user
-RUN addgroup --system --gid 1001 nodejs \
- && adduser  --system --uid 1001 nextjs
+# Don't run production as root
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 nextjs
 USER nextjs
 
-# Copy only what's needed to run Next.js standalone
+# Automatically leverage output traces to reduce image size
+# https://nextjs.org/docs/advanced-features/output-file-tracing
 COPY --from=installer --chown=nextjs:nodejs /app/apps/web/.next/standalone ./
-COPY --from=installer --chown=nextjs:nodejs /app/apps/web/.next/static    ./apps/web/.next/static
-COPY --from=installer --chown=nextjs:nodejs /app/apps/web/public         ./apps/web/public
+COPY --from=installer --chown=nextjs:nodejs /app/apps/web/.next/static ./apps/web/.next/static
+COPY --from=installer --chown=nextjs:nodejs /app/apps/web/public ./apps/web/public
 
-CMD ["node", "apps/web/server.js"]
+CMD node apps/web/server.js

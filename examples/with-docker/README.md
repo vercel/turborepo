@@ -43,12 +43,16 @@ yarn install
 # Create a network, which allows containers to communicate
 # with each other, by using their container name as a hostname
 docker network create app_network
+or run the `docker:network` command in the package.json
 
-# Build prod using new BuildKit engine
+# Build **prod** using new BuildKit engine
 COMPOSE_DOCKER_CLI_BUILD=1 DOCKER_BUILDKIT=1 docker-compose -f docker-compose.yml build
 
-# Start prod in detached mode
+# Start **prod** in detached mode
 docker-compose -f docker-compose.yml up -d
+
+for **development** you can run this command to start the app in dev mode
+docker-compose -f docker-compose.yml up -d or run the `docker:up` command in the package.json
 ```
 
 Open http://localhost:3000.
