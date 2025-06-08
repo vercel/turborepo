@@ -1,0 +1,27 @@
+{
+  "name": "with-docker",
+  "version": "0.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "turbo run build",
+    "clean": "turbo run clean",
+    "dev": "turbo run dev",
+    "format": "prettier --write \"**/*.{ts,tsx,md}\"",
+    "lint": "turbo run lint",
+    "test": "turbo run test"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "prettier": "^3.2.5",
+    "turbo": "^2.5.4"
+  },
+  "packageManager": "yarn@1.22.19",
+  "engines": {
+    "node": ">=14.0.0",
+    "npm": ">=7.0.0"
+  }
+}
