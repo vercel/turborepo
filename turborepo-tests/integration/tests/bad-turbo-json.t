@@ -93,13 +93,6 @@ Run build with syntax errors in turbo.json
   turbo_json_parse_error
   
     x Failed to parse turbo.json.
-    |->   x Expected a property but instead found ','.
-    |      ,-[turbo.json:2:50]
-    |    1 | {
-    |    2 |   "$schema": "https://turborepo.com/schema.json",,
-    |      :                                                  ^
-    |    3 |   "globalDependencies": ["foo.txt"],
-    |      `----
     |->   x expected `,` but instead found `42`
     |       ,-[turbo.json:12:46]
     |    11 |     "my-app#build": {
