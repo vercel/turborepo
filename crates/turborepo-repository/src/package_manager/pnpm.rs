@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use node_semver::{Range, Version};
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, RelativeUnixPath};
 
@@ -139,9 +139,28 @@ pub fn get_default_exclusions() -> &'static [&'static str] {
 #[serde(rename_all = "camelCase")]
 struct PnpmWorkspace {
     pub packages: Vec<String>,
+    #[serde(deserialize_with = "bool_or_str")]
     link_workspace_packages: Option<bool>,
     pub patched_dependencies:
         Option<std::collections::BTreeMap<String, turbopath::RelativeUnixPathBuf>>,
+}
+
+fn bool_or_str<'de, D>(deserializer: D) -> Result<Option<bool>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum StringOrBool {
+        Str(String),
+        Bool(bool),
+    }
+
+    Ok(match Option::<StringOrBool>::deserialize(deserializer)? {
+        None => None,
+        Some(StringOrBool::Bool(value)) => Some(value),
+        Some(StringOrBool::Str(value)) => Some(value == "deep"),
+    })
 }
 
 impl PnpmWorkspace {
@@ -355,5 +374,17 @@ mod test {
             .unwrap();
         let actual = link_workspace_packages(PnpmVersion::Pnpm9, repo_root);
         assert!(actual);
+    }
+
+    #[test]
+    fn test_workspace_yaml_supports_deep() {
+        let tmpdir = tempfile::tempdir().unwrap();
+        let repo_root = AbsoluteSystemPath::from_std_path(tmpdir.path()).unwrap();
+        repo_root
+            .join_component(WORKSPACE_CONFIGURATION_PATH)
+            .create_with_contents("linkWorkspacePackages: deep\npackages:\n  - \"apps/*\"\n")
+            .unwrap();
+        let actual = link_workspace_packages(PnpmVersion::Pnpm9, repo_root);
+        assert!(actual, "deep should be treated as true");
     }
 }
