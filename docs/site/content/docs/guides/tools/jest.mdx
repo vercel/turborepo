@@ -73,7 +73,7 @@ Both the `apps/web` and `packages/ui` have their own test suites, so we'll add a
 <Tab value="web">
 ```json title="./apps/web/package.json"
 {
-  "name": "web"
+  "name": "web",
   "scripts": {
     "test": "jest"
   },
@@ -86,7 +86,7 @@ Both the `apps/web` and `packages/ui` have their own test suites, so we'll add a
 <Tab value="@repo/ui">
 ```json title="./packages/ui/package.json"
 {
-  "name": "@repo/ui"
+  "name": "@repo/ui",
   "scripts": {
     "test": "jest"
   },
@@ -122,11 +122,11 @@ Because of this difference, we recommend specifying **two separate Turborepo tas
 <Tab value="web">
 ```json title="./apps/web/package.json"
 {
-  "name": "web"
+  "name": "web",
   "scripts": {
     "test": "jest",
     "test:watch": "jest --watch" // [!code highlight]
-  }
+  },
   "devDependencies": {
     "jest": "latest"
   }
@@ -136,7 +136,7 @@ Because of this difference, we recommend specifying **two separate Turborepo tas
 <Tab value="@repo/ui">
 ```json title="./packages/ui/package.json"
 {
-  "name": "@repo/ui"
+  "name": "@repo/ui",
   "scripts": {
     "test": "jest",
     "test:watch": "jest --watch" // [!code highlight]
