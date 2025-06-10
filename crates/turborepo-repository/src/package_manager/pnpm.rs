@@ -111,7 +111,7 @@ pub fn link_workspace_packages(pnpm_version: PnpmVersion, repo_root: &AbsoluteSy
                 .ok()
         })
         .flatten()
-        .and_then(|config| config.link_workspace_packages);
+        .and_then(|config| config.link_workspace_packages());
     workspace_config
         .or(npmrc_config.link_workspace_packages)
         // The default for pnpm 9 is false if not explicitly set
@@ -139,9 +139,16 @@ pub fn get_default_exclusions() -> &'static [&'static str] {
 #[serde(rename_all = "camelCase")]
 struct PnpmWorkspace {
     pub packages: Vec<String>,
-    link_workspace_packages: Option<bool>,
+    link_workspace_packages: Option<LinkWorkspacePackages>,
     pub patched_dependencies:
         Option<std::collections::BTreeMap<String, turbopath::RelativeUnixPathBuf>>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum LinkWorkspacePackages {
+    Bool(bool),
+    Str(String),
 }
 
 impl PnpmWorkspace {
@@ -149,6 +156,14 @@ impl PnpmWorkspace {
         let workspace_yaml_path = repo_root.join_component(WORKSPACE_CONFIGURATION_PATH);
         let workspace_yaml = workspace_yaml_path.read_to_string()?;
         Ok(serde_yaml::from_str(&workspace_yaml)?)
+    }
+
+    fn link_workspace_packages(&self) -> Option<bool> {
+        let config = self.link_workspace_packages.as_ref()?;
+        match config {
+            LinkWorkspacePackages::Bool(value) => Some(*value),
+            LinkWorkspacePackages::Str(value) => Some(value == "deep"),
+        }
     }
 }
 
@@ -290,7 +305,7 @@ mod test {
         let config: PnpmWorkspace =
             serde_yaml::from_str("linkWorkspacePackages: true\npackages:\n  - \"apps/*\"\n")
                 .unwrap();
-        assert_eq!(config.link_workspace_packages, Some(true));
+        assert_eq!(config.link_workspace_packages(), Some(true));
         assert_eq!(config.packages, vec!["apps/*".to_string()]);
     }
 
@@ -355,5 +370,17 @@ mod test {
             .unwrap();
         let actual = link_workspace_packages(PnpmVersion::Pnpm9, repo_root);
         assert!(actual);
+    }
+
+    #[test]
+    fn test_workspace_yaml_supports_deep() {
+        let tmpdir = tempfile::tempdir().unwrap();
+        let repo_root = AbsoluteSystemPath::from_std_path(tmpdir.path()).unwrap();
+        repo_root
+            .join_component(WORKSPACE_CONFIGURATION_PATH)
+            .create_with_contents("linkWorkspacePackages: deep\npackages:\n  - \"apps/*\"\n")
+            .unwrap();
+        let actual = link_workspace_packages(PnpmVersion::Pnpm9, repo_root);
+        assert!(actual, "deep should be treated as true");
     }
 }
