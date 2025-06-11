@@ -93,7 +93,7 @@ export async function GET(req: NextApiRequest): Promise<Response> {
             }}
           >
             <div style={{ marginRight: 12 }}>by</div>
-            <VercelLogo fill="white" height={30} />
+            <VercelLogo fill="white" height={25} />
           </div>
         </div>
       ),
