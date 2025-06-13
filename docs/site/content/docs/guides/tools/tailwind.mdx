@@ -250,10 +250,15 @@ Create a `build` and `dev` task that runs the scripts for building of components
 
 <Tab value="styles.css">
 
-This file is small! It makes sure that Tailwind CSS runs for the package.
+This `styles.css` contains component-level styles for the shared UI library.
+
+<Callout type="info">
+  Do not import Tailwind CSS here. It should only be imported by the consuming
+  application to avoid style duplication issues.
+</Callout>
 
 ```css title="./packages/ui/src/index.css"
-@import 'tailwindcss';
+/* Component-level styles for the UI package */
 ```
 
 </Tab>
@@ -272,7 +277,7 @@ Install the packages you've created into your application.
 <Tab value="pnpm">
 
 ```bash title="Terminal"
-pnpm install @repo/ui @repo/tailwind-config --save-dev --filter=@repo/ui --filter=web
+pnpm add @repo/ui @repo/tailwind-config --save-dev --filter=@repo/ui --filter=web
 ```
 
 </Tab>

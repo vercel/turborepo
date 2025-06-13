@@ -295,7 +295,9 @@ impl RawTurboJson {
     pub fn parse(text: &str, file_path: &str) -> Result<RawTurboJson, Error> {
         let result = deserialize_from_json_str::<RawTurboJson>(
             text,
-            JsonParserOptions::default().with_allow_comments(),
+            JsonParserOptions::default()
+                .with_allow_comments()
+                .with_allow_trailing_commas(),
             file_path,
         );
 
