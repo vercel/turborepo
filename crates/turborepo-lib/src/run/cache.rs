@@ -126,6 +126,7 @@ impl RunCache {
             task_id,
             task_output_logs,
             caching_disabled,
+            persistent: task_definition.persistent,
             log_file_path,
             daemon_client: self.daemon_client.clone(),
             ui: self.ui,
@@ -153,6 +154,7 @@ pub struct TaskCache {
     hash: String,
     task_output_logs: OutputLogsMode,
     caching_disabled: bool,
+    persistent: bool,
     log_file_path: AbsoluteSystemPathBuf,
     daemon_client: Option<DaemonClient<DaemonConnector>>,
     ui: ColorConfig,
@@ -223,7 +225,8 @@ impl TaskCache {
             if !matches!(
                 self.task_output_logs,
                 OutputLogsMode::None | OutputLogsMode::ErrorsOnly
-            ) {
+            ) && !self.persistent
+            {
                 terminal_output.status(
                     &format!(
                         "cache bypass, force executing {}",
