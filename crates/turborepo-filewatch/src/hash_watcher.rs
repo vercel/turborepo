@@ -17,15 +17,13 @@ use tokio::{
 use tracing::{debug, trace};
 use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf};
 use turborepo_repository::discovery::DiscoveryResponse;
-use turborepo_scm::{
-    package_deps::{GitHashes, INPUT_INCLUDE_DEFAULT_FILES},
-    Error as SCMError, SCM,
-};
+use turborepo_scm::{package_deps::INPUT_INCLUDE_DEFAULT_FILES, Error as SCMError, GitHashes, SCM};
 
 use crate::{
     debouncer::Debouncer,
     globwatcher::{GlobError, GlobSet},
     package_watcher::DiscoveryData,
+    scm_resource::SCMResource,
     NotifyError, OptionalWatch,
 };
 
@@ -90,13 +88,13 @@ impl HashSpec {
 
 #[derive(Error, Debug)]
 pub enum Error {
-    #[error("package hashing encountered an error: {0}")]
+    #[error("Package hashing encountered an error: {0}")]
     HashingError(String),
-    #[error("file hashing is not available: {0}")]
+    #[error("File hashing is not available: {0}")]
     Unavailable(String),
-    #[error("package not found: {} {:?}", .0.package_path, .0.inputs)]
+    #[error("Package not found: {} {:?}", .0.package_path, .0.inputs)]
     UnknownPackage(HashSpec),
-    #[error("unsupported: glob traverses out of the package")]
+    #[error("Unsupported: glob traverses out of the package")]
     UnsupportedGlob,
 }
 
@@ -155,7 +153,7 @@ struct Subscriber {
     repo_root: AbsoluteSystemPathBuf,
     package_discovery: watch::Receiver<Option<DiscoveryData>>,
     query_rx: mpsc::Receiver<Query>,
-    scm: SCM,
+    scm: SCMResource,
     next_version: AtomicUsize,
 }
 
@@ -327,7 +325,7 @@ impl Subscriber {
         Self {
             repo_root,
             package_discovery,
-            scm,
+            scm: SCMResource::new(scm),
             query_rx,
             next_version: AtomicUsize::new(0),
         }
@@ -532,12 +530,20 @@ impl Subscriber {
         let debouncer_copy = debouncer.clone();
         tokio::task::spawn(async move {
             debouncer_copy.debounce().await;
+            let scm_permit = scm.acquire_scm().await;
+            // We awkwardly copy the actual SCM instance since we're sending it to a
+            // different thread which requires it be 'static.
+            let scm_instance = scm_permit.clone();
             // Package hashing involves blocking IO calls, so run on a blocking thread.
-            tokio::task::spawn_blocking(move || {
+            let blocking_handle = tokio::task::spawn_blocking(move || {
                 let telemetry = None;
                 let inputs = spec.inputs.as_inputs();
-                let result =
-                    scm.get_package_file_hashes(&repo_root, &spec.package_path, &inputs, telemetry);
+                let result = scm_instance.get_package_file_hashes(
+                    &repo_root,
+                    &spec.package_path,
+                    &inputs,
+                    telemetry,
+                );
                 trace!("hashing complete for {:?}", spec);
                 let _ = tx.blocking_send(HashUpdate {
                     spec,
@@ -545,6 +551,10 @@ impl Subscriber {
                     result,
                 });
             });
+            // We wait for the git task to finish so `scm_permit` only gets dropped once the
+            // resource is no longer being used.
+            // We should not shut down if a SCM task panics
+            blocking_handle.await.ok();
         });
         (version, debouncer)
     }
@@ -678,7 +688,7 @@ mod tests {
     use turbopath::{
         AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeUnixPathBuf,
     };
-    use turborepo_scm::{package_deps::GitHashes, SCM};
+    use turborepo_scm::{GitHashes, SCM};
 
     use super::{FileHashes, HashState};
     use crate::{
@@ -803,7 +813,7 @@ mod tests {
             .unwrap();
         repo.branch("test-branch", &current_commit, false).unwrap();
         repo.set_head("refs/heads/test-branch").unwrap();
-        commit_all(&repo);
+        commit_all(repo);
     }
 
     #[tokio::test]

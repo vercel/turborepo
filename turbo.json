@@ -1,7 +1,7 @@
 {
-  "$schema": "https://turbo.build/schema.json",
+  "$schema": "https://turborepo.com/schema.json",
   "ui": "tui",
-  // The following are used by tools such as pnpm, gh actions to setup pnpm, and the Go toolchain
+  // The following are used by tools such as pnpm, gh actions to setup pnpm, etc.
   "globalPassThroughEnv": [
     "Path",
     "APPDATA",
@@ -9,7 +9,6 @@
     "TMPDIR",
     "HOME",
     "TMP",
-    "GOROOT",
     "USERPROFILE",
     "SCCACHE_GHA_ENABLED",
     "SCCACHE_BUCKET",
@@ -198,7 +197,6 @@
         "**/*tslint.json"
       ]
     },
-
     "//#check:toml": {},
     "check-types": {
       "dependsOn": ["^build"]
@@ -218,8 +216,5 @@
     "topo": {
       "dependsOn": ["^topo"]
     }
-  },
-  "experimentalSpaces": {
-    "id": "space_WTrAuWxqVUapGgZDX7KiZV1v"
   }
 }

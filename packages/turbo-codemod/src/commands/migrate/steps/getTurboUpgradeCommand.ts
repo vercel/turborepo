@@ -1,5 +1,5 @@
 import path from "node:path";
-import { readJsonSync, existsSync } from "fs-extra";
+import fs from "fs-extra";
 import { gte } from "semver";
 import {
   getAvailablePackageManagers,
@@ -56,8 +56,8 @@ function getLocalUpgradeCommand({
           `turbo@${to}`,
           installType === "devDependencies" && "--dev",
         ]);
-        // yarn 1.x
       }
+      // yarn 1.x
       return renderCommand([
         "yarn",
         "add",
@@ -94,12 +94,12 @@ function getLocalUpgradeCommand({
 function getInstallType({ root }: { root: string }): InstallType | undefined {
   // read package.json to make sure we have a reference to turbo
   const packageJsonPath = path.join(root, "package.json");
-  if (!existsSync(packageJsonPath)) {
+  if (!fs.existsSync(packageJsonPath)) {
     logger.error(`Unable to find package.json at ${packageJsonPath}`);
     return undefined;
   }
 
-  const packageJson = readJsonSync(packageJsonPath) as PackageJson;
+  const packageJson = fs.readJsonSync(packageJsonPath) as PackageJson;
   const isDevDependency =
     packageJson.devDependencies && "turbo" in packageJson.devDependencies;
   const isDependency =
@@ -126,7 +126,7 @@ export async function getTurboUpgradeCommand({
   project: Project;
   to?: string;
 }) {
-  const turboBinaryPathFromGlobal = exec(`turbo bin`, {
+  const turboBinaryPathFromGlobal = exec("turbo bin", {
     cwd: project.paths.root,
     stdio: "pipe",
   });

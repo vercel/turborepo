@@ -1,7 +1,7 @@
 import path from "node:path";
-import { existsSync } from "fs-extra";
+import fs from "fs-extra";
 import { getTurboConfigs } from "@turbo/utils";
-import type { Schema, SchemaV1 } from "@turbo/types/src/types/config";
+import type { SchemaV2, SchemaV1 } from "@turbo/types";
 import type { Transformer, TransformerArgs } from "../types";
 import { getTransformerHelpers } from "../utils/getTransformerHelpers";
 import type { TransformerResults } from "../runner";
@@ -12,7 +12,7 @@ const TRANSFORMER = "rename-pipeline";
 const DESCRIPTION = 'Rename the "pipeline" key to "tasks" in `turbo.json`';
 const INTRODUCED_IN = "2.0.0-canary.0";
 
-function migrateConfig(config: SchemaV1): Schema {
+function migrateConfig(config: SchemaV1): SchemaV2 {
   const { pipeline, ...rest } = config;
 
   return { ...rest, tasks: pipeline };
@@ -28,15 +28,15 @@ export function transformer({
     options,
   });
 
-  log.info(`Renaming \`pipeline\` key in turbo.json to \`tasks\``);
+  log.info("Renaming `pipeline` key in turbo.json to `tasks`");
   const turboConfigPath = path.join(root, "turbo.json");
-  if (!existsSync(turboConfigPath)) {
+  if (!fs.existsSync(turboConfigPath)) {
     return runner.abortTransform({
       reason: `No turbo.json found at ${root}. Is the path correct?`,
     });
   }
 
-  const _turboJson: SchemaV1 | Schema = loadTurboJson(turboConfigPath);
+  const _turboJson: SchemaV1 | SchemaV2 = loadTurboJson(turboConfigPath);
   if ("tasks" in _turboJson) {
     // Don't do anything
     log.info("turbo.json already has a tasks key, exiting");

@@ -8,7 +8,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     let capnpc_result = capnpc::CompilerCommand::new()
         .file("./src/hash/proto.capnp")
-        .import_path("./src/hash/std") // we need to include the 'stdlib' for capnp-go
         .default_parent_module(vec!["hash".to_string()])
         .run();
 

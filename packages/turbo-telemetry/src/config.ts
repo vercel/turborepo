@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, rmSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { logger } from "@turbo/utils";
-import { gray } from "picocolors";
+import picocolors from "picocolors";
 import { z } from "zod";
 import utils from "./utils";
 
@@ -23,7 +23,7 @@ type Config = z.infer<typeof ConfigSchema>;
  * NOTE: This package is a direct port of the telemetry config struct from the turbo-telemetry crate. Any changes
  * made here should be reflected in the turbo-telemetry crate as well.
  *
- * https://github.com/vercel/turbo/blob/main/crates/turborepo-telemetry/src/config.rs
+ * https://github.com/vercel/turborepo/blob/main/crates/turborepo-telemetry/src/config.rs
  */
 export class TelemetryConfig {
   config: Config;
@@ -167,7 +167,7 @@ export class TelemetryConfig {
       logger.grey(
         "You can learn more, including how to opt-out if you'd not like to participate in this anonymous program, by visiting the following URL:"
       );
-      logger.underline(gray("https://turbo.build/repo/docs/telemetry"));
+      logger.underline(picocolors.gray("https://turborepo.com/docs/telemetry"));
     }
 
     this.alertShown();

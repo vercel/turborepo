@@ -6,7 +6,8 @@ use std::{
 use console::Style;
 use turbopath::AbsoluteSystemPath;
 use turborepo_ui::{
-    LogWriter, OutputClient, OutputClientBehavior, OutputSink, PrefixedUI, PrefixedWriter, UI,
+    ColorConfig, LogWriter, OutputClient, OutputClientBehavior, OutputSink, PrefixedUI,
+    PrefixedWriter,
 };
 
 #[test]
@@ -71,8 +72,8 @@ fn echo_task(
     // this output will not appear in a task's log file.
     let output_prefix = Style::new().apply_to(format!("{task_name} > "));
     let warn_prefix = Style::new().apply_to(format!("{task_name} warning > "));
-    let ui = UI::new(true);
-    let mut prefix_ui = PrefixedUI::new(ui, client.stdout(), client.stderr())
+    let color_config = ColorConfig::new(true);
+    let mut prefix_ui = PrefixedUI::new(color_config, client.stdout(), client.stderr())
         .with_output_prefix(output_prefix.clone())
         .with_warn_prefix(warn_prefix);
 
@@ -82,7 +83,11 @@ fn echo_task(
     // log file
     let mut task_logger = LogWriter::default();
     task_logger.with_log_file(log_file).unwrap();
-    task_logger.with_writer(PrefixedWriter::new(ui, output_prefix, client.stdout()));
+    task_logger.with_writer(PrefixedWriter::new(
+        color_config,
+        output_prefix,
+        client.stdout(),
+    ));
 
     let mut cmd = Command::new("echo");
     cmd.args(["hello", "from", task_name]);

@@ -281,17 +281,17 @@ where
 
     pub fn as_filtrate(&self) -> Option<&Filtrate<S::Filtrate>> {
         match self {
-            Separation::Filtrate(ref filtrate) => Some(filtrate),
+            Separation::Filtrate(filtrate) => Some(filtrate),
             _ => None,
         }
     }
 
     pub fn as_ref(&self) -> Separation<(&S::Filtrate, &S::Residue)> {
         match self {
-            Separation::Filtrate(ref filtrate) => {
+            Separation::Filtrate(filtrate) => {
                 Separation::Filtrate(Filtrate::new(filtrate.as_ref()))
             }
-            Separation::Residue(ref residue) => Separation::Residue(Residue::new(residue.as_ref())),
+            Separation::Residue(residue) => Separation::Residue(Residue::new(residue.as_ref())),
         }
     }
 
@@ -415,7 +415,7 @@ where
 ///
 /// **This trait provides the only API for implementing a
 /// [`SeparatingFilter`].** [`Iterator`]s can implement this trait for a
-/// transitive [`SeparatingFilter`] implemention that provides all items
+/// transitive [`SeparatingFilter`] implementation that provides all items
 /// as filtrate. This bridges [`Iterator`]s into the input of a separating
 /// filter. See the [`filtrate`] function for the output analog.
 ///
@@ -490,14 +490,14 @@ impl<T> TreeResidue<T> {
 
     pub fn as_ref(&self) -> TreeResidue<&T> {
         match self {
-            TreeResidue::Node(ref residue) => TreeResidue::Node(residue),
-            TreeResidue::Tree(ref residue) => TreeResidue::Tree(residue),
+            TreeResidue::Node(residue) => TreeResidue::Node(residue),
+            TreeResidue::Tree(residue) => TreeResidue::Tree(residue),
         }
     }
 
     pub fn get(&self) -> &T {
         match self {
-            TreeResidue::Node(ref residue) | TreeResidue::Tree(ref residue) => residue,
+            TreeResidue::Node(residue) | TreeResidue::Tree(residue) => residue,
         }
     }
 }

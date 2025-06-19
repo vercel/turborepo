@@ -57,11 +57,14 @@ impl Membership {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum Role {
-    Member,
+    // ordered by access-level
     Owner,
-    Viewer,
+    Admin,
+    Member,
     Developer,
+    Contributor,
     Billing,
+    Viewer,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -82,25 +85,8 @@ impl Team {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Space {
-    pub id: String,
-    pub name: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TeamsResponse {
     pub teams: Vec<Team>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SpacesResponse {
-    pub spaces: Vec<Space>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SpaceRun {
-    pub id: String,
-    pub url: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

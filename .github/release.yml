@@ -1,0 +1,37 @@
+# Used to auto generate turborepo release notes
+
+changelog:
+  exclude:
+    labels:
+      - "area: ci"
+      - "release: turborepo"
+      - "release-notes-ignore"
+  categories:
+    - title: Docs
+      labels:
+        - "area: docs"
+        - "area: site"
+    - title: create-turbo
+      labels:
+        - "pkg: create-turbo"
+    - title: turbo-ignore
+      labels:
+        - "pkg: turbo-ignore"
+    - title: "@turbo/codemod"
+      labels:
+        - "pkg: turbo-codemod"
+    - title: "eslint"
+      labels:
+        - "pkg: turbo-eslint"
+    - title: "@turbo/repository"
+      labels:
+        - "pkg: turbo-repository"
+    - title: "@turbo/telemetry"
+      labels:
+        - "pkg: turbo-telemetry"
+    - title: Examples
+      labels:
+        - "area: examples"
+    - title: Changelog
+      labels:
+        - "*"

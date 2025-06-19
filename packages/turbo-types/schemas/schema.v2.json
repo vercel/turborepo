@@ -1,0 +1,391 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$ref": "#/definitions/Schema",
+  "definitions": {
+    "Schema": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/RootSchema"
+        },
+        {
+          "$ref": "#/definitions/WorkspaceSchema"
+        }
+      ]
+    },
+    "RootSchema": {
+      "type": "object",
+      "properties": {
+        "$schema": {
+          "type": "string",
+          "default": "https://turborepo.com/schema.v2.json"
+        },
+        "tasks": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/Pipeline",
+            "description": "The name of a task that can be executed by turbo. If turbo finds a workspace package with a package.json scripts object with a matching key, it will apply the pipeline task configuration to that npm script during execution."
+          },
+          "description": "An object representing the task dependency graph of your project. turbo interprets these conventions to schedule, execute, and cache the outputs of tasks in your project.\n\nDocumentation: https://turborepo.com/docs/reference/configuration#tasks",
+          "default": {}
+        },
+        "globalDependencies": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "A list of globs to include in the set of implicit global hash dependencies.\n\nThe contents of these files will be included in the global hashing algorithm and affect the hashes of all tasks.\n\nThis is useful for busting the cache based on:\n\n- .env files (not in Git)\n\n- any root level file that impacts package tasks that are not represented in the traditional dependency graph (e.g. a root tsconfig.json, jest.config.ts, .eslintrc, etc.)\n\nDocumentation: https://turborepo.com/docs/reference/configuration#globaldependencies",
+          "default": []
+        },
+        "globalEnv": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/EnvWildcard"
+          },
+          "description": "A list of environment variables for implicit global hash dependencies.\n\nThe variables included in this list will affect all task hashes.\n\nDocumentation: https://turborepo.com/docs/reference/configuration#globalenv",
+          "default": []
+        },
+        "globalPassThroughEnv": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/EnvWildcard"
+              }
+            }
+          ],
+          "description": "An allowlist of environment variables that should be made to all tasks, but should not contribute to the task's cache key, e.g. `AWS_SECRET_KEY`.\n\nDocumentation: https://turborepo.com/docs/reference/configuration#globalpassthroughenv",
+          "default": null
+        },
+        "remoteCache": {
+          "$ref": "#/definitions/RemoteCache",
+          "description": "Configuration options that control how turbo interfaces with the remote cache.\n\nDocumentation: https://turborepo.com/docs/core-concepts/remote-caching",
+          "default": {}
+        },
+        "ui": {
+          "$ref": "#/definitions/UI",
+          "description": "Enable use of the UI for `turbo`.\n\nDocumentation: https://turborepo.com/docs/reference/configuration#ui",
+          "default": "stream"
+        },
+        "concurrency": {
+          "type": "string",
+          "description": "Set/limit the maximum concurrency for task execution. Must be an integer greater than or equal to `1` or a percentage value like `50%`.\n\n - Use `1` to force serial execution (one task at a time).  - Use `100%` to use all available logical processors.\n\nDocumentation: https://turborepo.com/docs/reference/configuration#concurrency",
+          "default": "10"
+        },
+        "dangerouslyDisablePackageManagerCheck": {
+          "type": "boolean",
+          "description": "Disable check for `packageManager` in root `package.json`\n\nThis is highly discouraged as it leaves `turbo` dependent on system configuration to infer the correct package manager.\n\nSome turbo features are disabled if this is set to true.",
+          "default": false
+        },
+        "cacheDir": {
+          "$ref": "#/definitions/RelativeUnixPath",
+          "description": "Specify the filesystem cache directory.\n\nDocumentation: https://turborepo.com/docs/reference/configuration#cachedir",
+          "default": ".turbo/cache"
+        },
+        "daemon": {
+          "type": "boolean",
+          "description": "Turborepo runs a background process to pre-calculate some expensive operations. This standalone process (daemon) is a performance optimization, and not required for proper functioning of `turbo`.\n\nDocumentation: https://turborepo.com/docs/reference/configuration#daemon",
+          "default": false
+        },
+        "envMode": {
+          "$ref": "#/definitions/EnvMode",
+          "description": "Turborepo's Environment Modes allow you to control which environment variables are available to a task at runtime:\n\n- `\"strict\"`: Filter environment variables to only those that are specified in the `env` and `globalEnv` keys in `turbo.json`.\n- `\"loose\"`: Allow all environment variables for the process to be available.\n\nDocumentation: https://turborepo.com/docs/reference/configuration#envmode",
+          "default": "strict"
+        },
+        "boundaries": {
+          "$ref": "#/definitions/RootBoundariesConfig",
+          "description": "Configuration for `turbo boundaries`. Allows users to restrict a package's dependencies and dependents"
+        },
+        "noUpdateNotifier": {
+          "type": "boolean",
+          "description": "When set to `true`, disables the update notification that appears when a new version of `turbo` is available.\n\nDocumentation: https://turborepo.com/docs/reference/configuration#noupdatenotifier",
+          "default": false
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "tasks"
+      ]
+    },
+    "Pipeline": {
+      "type": "object",
+      "properties": {
+        "dependsOn": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The list of tasks that this task depends on.\n\nPrefixing an item in dependsOn with a ^ prefix tells turbo that this task depends on the package's topological dependencies completing the task first. (e.g. \"A package's build tasks should only run once all of its workspace dependencies have completed their own build commands.\")\n\nItems in dependsOn without a ^ prefix express the relationships between tasks within the same package (e.g. \"A package's test and lint commands depend on its own build being completed first.\")\n\nDocumentation: https://turborepo.com/docs/reference/configuration#dependson",
+          "default": []
+        },
+        "env": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/EnvWildcard"
+          },
+          "description": "A list of environment variables that this task depends on.\n\nNote: If you are migrating from a turbo version 1.5 or below, you may be used to prefixing your variables with a $. You no longer need to use the $ prefix. (e.g. $GITHUB_TOKEN → GITHUB_TOKEN)\n\nDocumentation: https://turborepo.com/docs/reference/configuration#env",
+          "default": []
+        },
+        "passThroughEnv": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/EnvWildcard"
+              }
+            }
+          ],
+          "description": "An allowlist of environment variables that should be made available in this task's environment, but should not contribute to the task's cache key, e.g. `AWS_SECRET_KEY`.\n\nDocumentation: https://turborepo.com/docs/reference/configuration#passthroughenv",
+          "default": null
+        },
+        "outputs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The set of glob patterns indicating a task's cacheable filesystem outputs.\n\nTurborepo captures task logs for all tasks. This enables us to cache tasks whose runs produce no artifacts other than logs (such as linters). Logs are always treated as a cacheable artifact and never need to be specified.\n\nDocumentation: https://turborepo.com/docs/reference/configuration#outputs",
+          "default": []
+        },
+        "cache": {
+          "type": "boolean",
+          "description": "Whether or not to cache the outputs of the task.\n\nSetting cache to false is useful for long-running \"watch\" or development mode tasks.\n\nDocumentation: https://turborepo.com/docs/reference/configuration#cache",
+          "default": true
+        },
+        "inputs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The set of glob patterns to consider as inputs to this task.\n\nChanges to files covered by these globs will cause a cache miss and the task will be rerun.\n\nIf a file has been changed that is **not** included in the set of globs, it will not cause a cache miss.\n\nIf omitted or empty, all files in the package are considered as inputs.\n\nDocumentation: https://turborepo.com/docs/reference/configuration#inputs",
+          "default": []
+        },
+        "outputLogs": {
+          "$ref": "#/definitions/OutputLogs",
+          "description": "Output mode for the task.\n\n\"full\": Displays all output\n\n\"hash-only\": Show only the hashes of the tasks\n\n\"new-only\": Only show output from cache misses\n\n\"errors-only\": Only show output from task failures\n\n\"none\": Hides all task output\n\nDocumentation: https://turborepo.com/docs/reference/run#--output-logs-option",
+          "default": "full"
+        },
+        "persistent": {
+          "type": "boolean",
+          "description": "Indicates whether the task exits or not. Setting `persistent` to `true` tells turbo that this is a long-running task and will ensure that other tasks cannot depend on it.\n\nDocumentation: https://turborepo.com/docs/reference/configuration#persistent",
+          "default": false
+        },
+        "interactive": {
+          "type": "boolean",
+          "description": "Mark a task as interactive allowing it to receive input from stdin. Interactive tasks must be marked with \"cache\": false as the input they receive from stdin can change the outcome of the task.\n\nDocumentation: https://turborepo.com/docs/reference/configuration#interactive",
+          "default": false
+        },
+        "interruptible": {
+          "type": "boolean",
+          "description": "Label a persistent task as interruptible to allow it to be restarted by `turbo watch`. `turbo watch` watches for changes to your packages and automatically restarts tasks that are affected. However, if a task is persistent, it will not be restarted by default. To enable restarting persistent tasks, set `interruptible` to true.\n\nDocumentation: https://turborepo.com/docs/reference/configuration#interruptible",
+          "default": false
+        },
+        "with": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "A list of tasks that will run alongside this task.\n\nTasks in this list will not be run until completion before this task starts execution.\n\nDocumentation: https://turborepo.com/docs/reference/configuration#with",
+          "default": []
+        }
+      },
+      "additionalProperties": false
+    },
+    "EnvWildcard": {
+      "type": "string"
+    },
+    "OutputLogs": {
+      "type": "string",
+      "enum": [
+        "full",
+        "hash-only",
+        "new-only",
+        "errors-only",
+        "none"
+      ]
+    },
+    "RemoteCache": {
+      "type": "object",
+      "properties": {
+        "signature": {
+          "type": "boolean",
+          "description": "Indicates if signature verification is enabled for requests to the remote cache. When `true`, Turborepo will sign every uploaded artifact using the value of the environment variable `TURBO_REMOTE_CACHE_SIGNATURE_KEY`. Turborepo will reject any downloaded artifacts that have an invalid signature or are missing a signature.",
+          "default": false
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "Indicates if the remote cache is enabled. When `false`, Turborepo will disable all remote cache operations, even if the repo has a valid token. If true, remote caching is enabled, but still requires the user to login and link their repo to a remote cache. Documentation: https://turborepo.com/docs/core-concepts/remote-caching",
+          "default": true
+        },
+        "preflight": {
+          "type": "boolean",
+          "description": "When enabled, any HTTP request will be preceded by an OPTIONS request to determine if the request is supported by the endpoint.\n\nDocumentation: https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS#preflighted_requests",
+          "default": false
+        },
+        "apiUrl": {
+          "type": "string",
+          "description": "Set endpoint for API calls to the remote cache. Documentation: https://turborepo.com/docs/core-concepts/remote-caching#self-hosting",
+          "default": "https://vercel.com/api"
+        },
+        "loginUrl": {
+          "type": "string",
+          "description": "Set endpoint for requesting tokens during `turbo login`. Documentation: https://turborepo.com/docs/core-concepts/remote-caching#self-hosting",
+          "default": "https://vercel.com"
+        },
+        "timeout": {
+          "type": "number",
+          "description": "Sets a timeout for remote cache operations. Value is given in seconds and only whole values are accepted. If `0` is passed, then there is no timeout for any cache operations.",
+          "default": 30
+        },
+        "uploadTimeout": {
+          "type": "number",
+          "description": "Sets a timeout for remote cache uploads. Value is given in seconds and only whole values are accepted. If `0` is passed, then there is no timeout for any remote cache uploads.",
+          "default": 60
+        },
+        "teamId": {
+          "type": "string",
+          "description": "The ID of the Remote Cache team. Value will be passed as `teamId` in the querystring for all Remote Cache HTTP calls. Must start with `team_` or it will not be used."
+        },
+        "teamSlug": {
+          "type": "string",
+          "description": "The slug of the Remote Cache team. Value will be passed as `slug` in the querystring for all Remote Cache HTTP calls."
+        }
+      },
+      "additionalProperties": false
+    },
+    "UI": {
+      "type": "string",
+      "enum": [
+        "tui",
+        "stream"
+      ]
+    },
+    "RelativeUnixPath": {
+      "type": "string",
+      "description": "This is a relative Unix-style path (e.g. `./src/index.ts` or `src/index.ts`).  Absolute paths (e.g. `/tmp/foo`) are not valid."
+    },
+    "EnvMode": {
+      "type": "string",
+      "enum": [
+        "strict",
+        "loose"
+      ]
+    },
+    "RootBoundariesConfig": {
+      "type": "object",
+      "properties": {
+        "implicitDependencies": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Declares any implicit dependencies, i.e. any dependency not declared in a package.json. These can include dependencies automatically injected by a framework or a testing library."
+        },
+        "tags": {
+          "$ref": "#/definitions/BoundariesRulesMap",
+          "description": "The boundaries rules for tags. Restricts which packages can import a tag and which packages a tag can import"
+        }
+      },
+      "additionalProperties": false
+    },
+    "BoundariesRulesMap": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "dependencies": {
+            "$ref": "#/definitions/Permissions",
+            "description": "Rules for a tag's dependencies. Restricts which packages a tag can import"
+          },
+          "dependents": {
+            "$ref": "#/definitions/Permissions",
+            "description": "Rules for a tag's dependents. Restricts which packages can import this tag."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "Permissions": {
+      "type": "object",
+      "properties": {
+        "allow": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Lists which tags are allowed. Any tag not included will be banned If omitted, all tags are permitted"
+        },
+        "deny": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Lists which tags are banned."
+        }
+      },
+      "additionalProperties": false
+    },
+    "WorkspaceSchema": {
+      "type": "object",
+      "properties": {
+        "$schema": {
+          "type": "string",
+          "default": "https://turborepo.com/schema.v2.json"
+        },
+        "tasks": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/Pipeline",
+            "description": "The name of a task that can be executed by turbo. If turbo finds a workspace package with a package.json scripts object with a matching key, it will apply the pipeline task configuration to that npm script during execution."
+          },
+          "description": "An object representing the task dependency graph of your project. turbo interprets these conventions to schedule, execute, and cache the outputs of tasks in your project.\n\nDocumentation: https://turborepo.com/docs/reference/configuration#tasks",
+          "default": {}
+        },
+        "extends": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "This key is only available in Workspace Configs and cannot be used in your root turbo.json.\n\nTells turbo to extend your root `turbo.json` and overrides with the keys provided in your Workspace Configs.\n\nCurrently, only the \"//\" value is allowed.",
+          "default": [
+            "//"
+          ]
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Used to tag a package for boundaries rules. Boundaries rules can restrict which packages a tag group can import or be imported by."
+        },
+        "boundaries": {
+          "$ref": "#/definitions/BoundariesConfig",
+          "description": "Configuration for `turbo boundaries` that is specific to this package"
+        }
+      },
+      "required": [
+        "extends",
+        "tasks"
+      ],
+      "additionalProperties": false,
+      "description": "A `turbo.json` file in a package in the monorepo (not the root)"
+    },
+    "BoundariesConfig": {
+      "type": "object",
+      "properties": {
+        "implicitDependencies": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Declares any implicit dependencies, i.e. any dependency not declared in a package.json. These can include dependencies automatically injected by a framework or a testing library."
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

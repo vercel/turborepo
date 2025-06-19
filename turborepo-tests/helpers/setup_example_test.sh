@@ -19,60 +19,70 @@ if [ -z "$package_manager" ]; then
   exit 1
 fi
 
-# Use the right command for each package manager
+echo "node --version: $(node --version)"
+
+temp_dir=$(mktemp -d)
+echo "Created temporary directory: $temp_dir"
+
+# Convert to the right package manager
 if [ "$package_manager" == "npm" ]; then
-  package_manager_command="npm install"
+  package_manager_command="npx @turbo/workspaces convert . npm --ignore-unchanged-package-manager"
 elif [ "$package_manager" == "pnpm" ]; then
+  # We use pnpm in our examples and its safe to assume we will continue to do so.
+  # We can save ourselves the network call.
   package_manager_command="pnpm install"
 elif [ "$package_manager" == "yarn" ]; then
-  package_manager_command="yarn"
+  package_manager_command="npx @turbo/workspaces convert . yarn --ignore-unchanged-package-manager"
 fi
 
-# All examples implement these two tasks
-# and it's reasonable to assume that they will continue to do so
-turbo_command="turbo build lint"
+# Special case for non-monorepo since it isn't a pnpm workspace itself
+if [ "$package_manager" == "pnpm" ] && [ "$example_path" == "non-monorepo" ]; then
+  package_manager_command="pnpm install --ignore-workspace"
+fi
 
-# Head into a temporary directory
-mkdir -p ../../examples-tests-tmp
-cd ../../examples-tests-tmp
+# with-svelte is flaky when building and check types at the same time, because the build process of Svelte involves type generation
+# If the types are generating while the type checking happens, it can cause flakes.
+# We'll have to accept this gap in our coverage.
+if [ "$example_path" == "with-svelte" ]; then
+  turbo_command="turbo build lint --continue --output-logs=errors-only"
+else
+  # The rest of the examples implement these three tasks and look safe to test in parallel
+  turbo_command="turbo build lint check-types --continue --output-logs=errors-only"
+fi
 
-# Start up a fresh directory for the test
-rm -rf "$example_path" || true
 rsync -avq \
---exclude='node_modules' \
---exclude="dist" \
---exclude=".turbo" \
---exclude=".expo" \
---exclude=".cache" \
---exclude=".next" \
-"../examples/$example_path" "."
+  --exclude='node_modules' \
+  --exclude="dist" \
+  --exclude=".turbo" \
+  --exclude=".expo" \
+  --exclude=".cache" \
+  --exclude=".next" \
+  "../../examples/$example_path" "$temp_dir/$example_path-$package_manager"
 
-cd "$example_path"
-"../../turborepo-tests/helpers/setup_git.sh" .
+cd "$temp_dir/$example_path-$package_manager/$example_path"
 
-# Make /tmp dir for writing dump logs
-mkdir -p ./tmp
-echo "/tmp/" >> ".gitignore"
+# Run package manager conversion
+$package_manager_command
 
 # Simulating the user's first run and dumping logs to a file
-$package_manager_command >./tmp/install.txt 2>&1
-$turbo_command >./tmp/grep-me-for-miss.txt
+$turbo_command 2>&1 | tee ../run-1.txt
 
 # We don't want to hit cache on first run because we're acting like a user.
 # A user would never hit cache on first run. Why should we?
-if grep -q ">>> FULL TURBO" ./tmp/grep-me-for-miss.txt; then
-  echo "A FULL TURBO was found. This test is misconfigured (since it can hit a cache)."
-  echo "Dumping logs:"
-  cat ./tmp/grep-me-for-miss.txt >&2
+if grep -q ">>> FULL TURBO" ../run-1.txt; then
+  echo "[ERROR] A 'FULL TURBO' was found. This test must be misconfigured since it hit a cache on what was expected to be the very first run."
+  echo "Logs can be found in $temp_dir"
   exit 1
 fi
 
-# Simulating the user's second run
-$turbo_command >./tmp/grep-me-for-hit.txt
+# Simulating the user's second run and dumping logs to a file
+$turbo_command 2>&1 | tee ../run-2.txt
 
 # Make sure the user hits FULL TURBO on the second go
-if ! grep -q ">>> FULL TURBO" ./tmp/grep-me-for-hit.txt; then
-  echo "No FULL TURBO was found. Dumping logs:"
-  cat ./tmp/grep-me-for-hit.txt >&2
+if ! grep -q ">>> FULL TURBO" ../run-2.txt; then
+  echo "[ERROR] No 'FULL TURBO' was found.  This indicates that at least one 'cache miss' occurred on the second run when all tasks were expected to be 'cache hit'."
+  echo "Logs can be found in $temp_dir"
   exit 1
 fi
+
+echo "Logs can be found in $temp_dir"

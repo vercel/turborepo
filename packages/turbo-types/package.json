@@ -1,35 +1,36 @@
 {
   "name": "@turbo/types",
-  "version": "2.0.10",
+  "version": "2.5.5-canary.0",
   "description": "Turborepo types",
-  "homepage": "https://turbo.build/repo",
+  "homepage": "https://turborepo.com",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/vercel/turbo",
+    "url": "https://github.com/vercel/turborepo",
     "directory": "packages/turbo-types"
   },
   "bugs": {
-    "url": "https://github.com/vercel/turbo/issues"
+    "url": "https://github.com/vercel/turborepo/issues"
   },
   "main": "src/index.ts",
   "types": "src/index.ts",
-  "bin": {
-    "turbo-types-generate": "./src/scripts/codegen.js"
-  },
   "scripts": {
+    "build": "tsc && pnpm generate-schema",
     "lint": "eslint src/",
-    "lint:prettier": "prettier -c . --cache"
-  },
-  "dependencies": {
-    "ts-json-schema-generator": "1.1.2"
+    "lint:prettier": "prettier -c . --cache",
+    "generate-schema": "tsx scripts/generate-schema.ts",
+    "copy-schema": "cp schemas/schema.json ../turbo/schema.json"
   },
   "devDependencies": {
     "@turbo/eslint-config": "workspace:*",
-    "@turbo/tsconfig": "workspace:*"
+    "@turbo/tsconfig": "workspace:*",
+    "@types/node": "^20",
+    "ts-json-schema-generator": "2.3.0",
+    "tsx": "4.19.1"
   },
   "files": [
-    "src"
+    "src",
+    "schemas"
   ],
   "publishConfig": {
     "access": "public"

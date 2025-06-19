@@ -92,6 +92,7 @@ export interface Options {
   dry?: boolean;
   skipInstall?: boolean;
   interactive?: boolean;
+  ignoreUnchangedPackageManager?: boolean;
 }
 
 export interface PackageManagerInstallDetails {

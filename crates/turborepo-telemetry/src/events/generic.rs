@@ -25,6 +25,7 @@ pub enum DaemonInitStatus {
 pub struct GenericEventBuilder {
     id: String,
     parent_id: Option<String>,
+    is_ci: bool,
 }
 
 impl Identifiable for GenericEventBuilder {
@@ -40,6 +41,10 @@ impl EventBuilder for GenericEventBuilder {
     }
 
     fn track(&self, event: Event) {
+        if self.is_ci && !event.send_in_ci {
+            return;
+        }
+
         let val = match event.is_sensitive {
             EventType::Sensitive => TelemetryConfig::one_way_hash(&event.value),
             EventType::NonSensitive => event.value.to_string(),
@@ -63,6 +68,7 @@ impl Default for GenericEventBuilder {
         Self {
             id: Uuid::new_v4().to_string(),
             parent_id: None,
+            is_ci: turborepo_ci::is_ci(),
         }
     }
 }
@@ -78,6 +84,7 @@ impl GenericEventBuilder {
             key: "execution".to_string(),
             value: "started".to_string(),
             is_sensitive: EventType::NonSensitive,
+            send_in_ci: false,
         });
         self
     }
@@ -87,24 +94,7 @@ impl GenericEventBuilder {
             key: "execution".to_string(),
             value: "ended".to_string(),
             is_sensitive: EventType::NonSensitive,
-        });
-        self
-    }
-
-    pub fn track_success(&self) -> &Self {
-        self.track(Event {
-            key: "execution".to_string(),
-            value: "succeeded".to_string(),
-            is_sensitive: EventType::NonSensitive,
-        });
-        self
-    }
-
-    pub fn track_failure(&self) -> &Self {
-        self.track(Event {
-            key: "execution".to_string(),
-            value: "failed".to_string(),
-            is_sensitive: EventType::NonSensitive,
+            send_in_ci: false,
         });
         self
     }
@@ -114,6 +104,7 @@ impl GenericEventBuilder {
             key: "platform".to_string(),
             value: platform.to_string(),
             is_sensitive: EventType::NonSensitive,
+            send_in_ci: true,
         });
         self
     }
@@ -123,6 +114,7 @@ impl GenericEventBuilder {
             key: "cpu_count".to_string(),
             value: cpus.to_string(),
             is_sensitive: EventType::NonSensitive,
+            send_in_ci: true,
         });
         self
     }
@@ -132,6 +124,7 @@ impl GenericEventBuilder {
             key: "turbo_version".to_string(),
             value: version.to_string(),
             is_sensitive: EventType::NonSensitive,
+            send_in_ci: true,
         });
         self
     }
@@ -142,6 +135,7 @@ impl GenericEventBuilder {
             key: format!("arg:{}", arg),
             value: if is_set { "set" } else { "default" }.to_string(),
             is_sensitive: EventType::NonSensitive,
+            send_in_ci: true,
         });
         self
     }
@@ -151,6 +145,7 @@ impl GenericEventBuilder {
             key: format!("arg:{}", arg),
             value: val.to_string(),
             is_sensitive,
+            send_in_ci: true,
         });
         self
     }
@@ -161,6 +156,7 @@ impl GenericEventBuilder {
             key: "is_linked".to_string(),
             value: if is_linked { "true" } else { "false" }.to_string(),
             is_sensitive: EventType::NonSensitive,
+            send_in_ci: true,
         });
         self
     }
@@ -174,6 +170,7 @@ impl GenericEventBuilder {
             } else {
                 EventType::Sensitive
             },
+            send_in_ci: true,
         });
         self
     }
@@ -184,6 +181,8 @@ impl GenericEventBuilder {
                 key: "ci".to_string(),
                 value: ci.to_string(),
                 is_sensitive: EventType::NonSensitive,
+                // yo dawg
+                send_in_ci: true,
             });
         }
         self
@@ -194,6 +193,7 @@ impl GenericEventBuilder {
             key: "run_type".to_string(),
             value: if is_dry { "dry" } else { "full" }.to_string(),
             is_sensitive: EventType::NonSensitive,
+            send_in_ci: true,
         });
         self
     }
@@ -208,6 +208,7 @@ impl GenericEventBuilder {
                 DaemonInitStatus::Disabled => "disabled".to_string(),
             },
             is_sensitive: EventType::NonSensitive,
+            send_in_ci: false,
         });
         self
     }
@@ -218,6 +219,7 @@ impl GenericEventBuilder {
             key: "error".to_string(),
             value: error.to_string(),
             is_sensitive: EventType::NonSensitive,
+            send_in_ci: true,
         });
         self
     }

@@ -193,7 +193,7 @@ impl AbsoluteSystemPath {
 
     pub fn try_exists(&self) -> Result<bool, PathError> {
         // try_exists is an experimental API and not yet in fs_err
-        Ok(std::fs::try_exists(&self.0)?)
+        Ok(std::fs::exists(&self.0)?)
     }
 
     pub fn extension(&self) -> Option<&str> {
@@ -248,6 +248,8 @@ impl AbsoluteSystemPath {
         )
     }
 
+    /// Note: This does not handle resolutions, so `../` in a path won't
+    /// resolve.
     pub fn anchor(&self, path: &AbsoluteSystemPath) -> Result<AnchoredSystemPathBuf, PathError> {
         AnchoredSystemPathBuf::new(self, path)
     }
@@ -441,22 +443,6 @@ impl AbsoluteSystemPath {
         fs::read_to_string(&self.0)
     }
 
-    /// Attempts to read a file, and:
-    /// If the file does not exist it returns the default value.
-    /// For all other scenarios passes through the `read_to_string` results.
-    pub fn read_existing_to_string_or<I>(
-        &self,
-        default_value: Result<I, io::Error>,
-    ) -> Result<String, io::Error>
-    where
-        I: Into<String>,
-    {
-        match self.read_existing_to_string()? {
-            Some(contents) => Ok(contents),
-            None => default_value.map(|value| value.into()),
-        }
-    }
-
     /// Attempts to read a file returning None if the file does not exist
     /// For all other scenarios passes through the `read_to_string` results.
     pub fn read_existing_to_string(&self) -> Result<Option<String>, io::Error> {
@@ -602,7 +588,7 @@ mod tests {
 
     #[test]
     fn test_read_non_existing_to_string() -> Result<()> {
-        let test_dir = tempdir::TempDir::new("read-existing")?;
+        let test_dir = tempfile::TempDir::with_prefix("read-existing")?;
         let test_path = test_dir.path().join("foo");
         let path = AbsoluteSystemPathBuf::new(test_path.to_str().unwrap())?;
         assert_eq!(path.read_existing_to_string()?, None);
@@ -611,7 +597,7 @@ mod tests {
 
     #[test]
     fn test_read_existing_to_string() -> Result<()> {
-        let test_dir = tempdir::TempDir::new("read-existing")?;
+        let test_dir = tempfile::TempDir::with_prefix("read-existing")?;
         let test_path = test_dir.path().join("foo");
         let path = AbsoluteSystemPathBuf::new(test_path.to_str().unwrap())?;
         path.create_with_contents("hi there!")?;
@@ -642,7 +628,7 @@ mod tests {
             mode: Option<Permissions>,
             expected: Permissions,
         ) -> Result<()> {
-            let test_dir = tempdir::TempDir::new("mkdir-all")?;
+            let test_dir = tempfile::TempDir::with_prefix("mkdir-all")?;
 
             let test_path = test_dir.path().join("foo");
 

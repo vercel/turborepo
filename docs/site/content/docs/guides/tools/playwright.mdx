@@ -1,0 +1,147 @@
+---
+title: Playwright
+description: Learn how to use Playwright in a Turborepo.
+---
+
+import { Tabs, Tab, PackageManagerTabs } from '#components/tabs';
+
+[Playwright](https://playwright.dev/) enables reliable end-to-end testing for modern web apps.
+
+We recommend creating a Playwright package for each test suite that you'd like to run in your monorepo. This may mean suites broken up per-application, per-domain, or some other scheme, according to your needs. If you are unsure, start with creating a Playwright package per-application.
+
+## Handling Playwright's environment variables
+
+Playwright requires several environment variables to run correctly. To ensure that these variables are available within your tasks in [Strict Mode](/docs/crafting-your-repository/using-environment-variables#strict-mode), you'll want to add them to your pass through variables using [`passThroughEnv`](/docs/reference/configuration#passthroughenv) in your end-to-end task or [`globalPassThroughEnv`](/docs/reference/configuration#globalpassthroughenv) globally, depending on your scoping preferences.
+
+<Tabs items={["Only in end-to-end task", "Globally"]}>
+
+<Tab value="Only in end-to-end task">
+
+The configuration below using `passThroughEnv` will allow environment variables that start with `PLAYWRIGHT_` into **the `e2e` task** and **will not affect hashing**.
+
+```json title="./turbo.json"
+{
+  "tasks": {
+    "e2e": {
+      "passThroughEnv": ["PLAYWRIGHT_*"]
+    }
+  }
+}
+```
+
+</Tab>
+<Tab value="Globally">
+
+The configuration below using `globalPassThroughEnv` will allow environment variables that start with `PLAYWRIGHT_` into **all tasks** and **will not affect hashing**.
+
+```json title="./turbo.json"
+{
+  "globalPassThroughEnv": ["PLAYWRIGHT_*"]
+}
+```
+
+</Tab>
+
+</Tabs>
+
+Note that pass through variables are used since we don't want to miss cache in situations where these Playwright-internal variables change. For example,`PLAYWRIGHT_BROWSERS_PATH` is used to locate browser binaries used by Playwright, and we don't want to miss cache if this location changes.
+
+## Designing the task graph
+
+We want to ensure the proper caching behavior for our end-to-end suites. Specifically, we want to make sure of cache misses in a few key situations:
+
+- If test suites change, cache gets missed.
+- If code tested by the suites changes, cache gets missed.
+
+The first requirement will be met naturally since the hash for the task will change when test code is changed. However, the second requirement means you need to ensure end-to-end tests depend on changes in application source code.
+
+This relationship can be expressed in `turbo.json` and the end-to-end suite's `package.json`.
+
+<Tabs items={["turbo.json", "package.json" ]}>
+
+<Tab value="turbo.json">
+
+```json title="./turbo.json"
+{
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"]
+    },
+    "e2e": {
+      "dependsOn": ["^build"] // [!code highlight]
+    }
+  }
+}
+```
+
+</Tab>
+
+<Tab value="package.json">
+
+```json title="./tooling/playwright-web/package.json"
+{
+  "name": "@repo/playwright-web"
+  "dependencies": {
+    "web": "workspace:*" // [!code highlight]
+  }
+}
+```
+
+</Tab>
+
+</Tabs>
+
+Later on, when you want to run your end-to-end tests, use [the `--only` flag](/docs/reference/run#--only) to run end-to-end tests without running the application's build first. As an example, your command may look like `turbo run e2e --filter=@repo/playwright-myapp --only`.
+
+## Sharing Playwright utilities
+
+You can also create a common package for shared utilities that you need in your end-to-end test suites. We recommend using `peerDependencies` in this shared package so that you can get access to Playwright used in consumers without having to install Playwright into the shared package itself.
+
+<PackageManagerTabs>
+
+<Tab value="pnpm">
+```json title="./packages/playwright-utilities/package.json"
+{
+  "name": "@repo/playwright-utilities",
+  "peerDependencies": {
+    "playwright": "workspace:*"
+}
+}
+```
+</Tab>
+
+<Tab value="yarn">
+```json title="./packages/playwright-utilities/package.json"
+{
+  "name": "@repo/playwright-utilities",
+  "peerDependencies": {
+    "playwright": "*"
+}
+}
+```
+</Tab>
+
+<Tab value="npm">
+```json title="./packages/playwright-utilities/package.json"
+{
+ "name": "@repo/playwright-utilities",
+ "peerDependencies": {
+   "playwright": "*"
+}
+}
+```
+
+</Tab>
+
+<Tab value="bun (Beta)">
+```json title="./packages/playwright-utilities/package.json"
+{
+  "name": "@repo/playwright-utilities",
+  "peerDependencies": {
+    "playwright": "workspace:*"
+}
+}
+```
+</Tab>
+
+</PackageManagerTabs>

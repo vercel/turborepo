@@ -31,17 +31,17 @@ function Gradient({
 const LINKS = [
   {
     title: "Docs",
-    href: "https://turbo.build/repo/docs",
+    href: "https://turborepo.com/docs",
     description: "Find in-depth information about Turborepo features and API.",
   },
   {
     title: "Learn",
-    href: "https://turbo.build/repo/docs/handbook",
+    href: "https://turborepo.com/docs/handbook",
     description: "Learn more about monorepos with our handbook.",
   },
   {
     title: "Templates",
-    href: "https://turbo.build/repo/docs/getting-started/from-example",
+    href: "https://turborepo.com/docs/getting-started/from-example",
     description: "Choose from over 15 examples and deploy with a single click.",
   },
   {

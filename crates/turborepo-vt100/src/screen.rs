@@ -698,7 +698,7 @@ impl Screen {
     pub fn row_wrapped(&self, row: u16) -> bool {
         self.grid()
             .visible_row(row)
-            .map_or(false, crate::row::Row::wrapped)
+            .is_some_and(crate::row::Row::wrapped)
     }
 
     /// Returns the terminal's window title.
@@ -1294,7 +1294,7 @@ impl Screen {
 
     // CSI h
     #[allow(clippy::unused_self)]
-    pub(crate) fn sm(&mut self, params: &vte::Params) {
+    pub(crate) fn sm(&self, params: &vte::Params) {
         // nothing, i think?
         if log::log_enabled!(log::Level::Debug) {
             log::debug!(
@@ -1353,7 +1353,7 @@ impl Screen {
 
     // CSI l
     #[allow(clippy::unused_self)]
-    pub(crate) fn rm(&mut self, params: &vte::Params) {
+    pub(crate) fn rm(&self, params: &vte::Params) {
         // nothing, i think?
         if log::log_enabled!(log::Level::Debug) {
             log::debug!(
@@ -1619,5 +1619,34 @@ fn u16_to_u8(i: u16) -> Option<u8> {
     } else {
         // safe because we just ensured that the value fits in a u8
         Some(i.try_into().unwrap())
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::screen;
+
+    use super::*;
+
+    #[test]
+    fn test_visible_row_matches_visible_rows() {
+        // do some fuzzing
+        let rows = 10;
+        let scrollback = 100;
+        let mut parser = crate::Parser::new(rows, 10, scrollback);
+        for i in 1..120 {
+            parser.process(format!("{i}\n\n").as_bytes());
+        }
+        for i in 0..scrollback {
+            let screen = parser.screen_mut();
+            screen.set_scrollback(i);
+            let grid = screen.grid();
+            for row_ix in 0..rows {
+                assert_eq!(
+                    grid.visible_row(row_ix),
+                    grid.visible_rows().nth(usize::from(row_ix))
+                );
+            }
+        }
     }
 }

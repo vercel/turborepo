@@ -35,11 +35,11 @@ pub(crate) struct Entry {
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("missing resolution for entry {0}")]
+    #[error("Missing resolution for entry {0}.")]
     MissingResolution(String),
-    #[error("multiple entry {0} has fields that should only appear in metadata")]
+    #[error("Multiple entry {0} has fields that should only appear in metadata.")]
     InvalidMetadataFields(String),
-    #[error("lockfile missing {METADATA_KEY} entry")]
+    #[error("Lockfile missing {METADATA_KEY} entry.")]
     MissingMetadata,
 }
 

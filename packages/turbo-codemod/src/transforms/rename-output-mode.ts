@@ -1,8 +1,7 @@
 import path from "node:path";
-import { readJsonSync, existsSync } from "fs-extra";
+import fs from "fs-extra";
 import { type PackageJson, getTurboConfigs } from "@turbo/utils";
-import type { OutputMode } from "@turbo/types";
-import type { SchemaV1 } from "@turbo/types/src/types/config";
+import type { PipelineV2, SchemaV1 } from "@turbo/types";
 import type { Transformer, TransformerArgs } from "../types";
 import { getTransformerHelpers } from "../utils/getTransformerHelpers";
 import type { TransformerResults } from "../runner";
@@ -17,9 +16,7 @@ const INTRODUCED_IN = "2.0.0-canary.0";
 function migrateConfig(config: SchemaV1) {
   for (const [_, taskDef] of Object.entries(config.pipeline)) {
     if (Object.prototype.hasOwnProperty.call(taskDef, "outputMode")) {
-      //@ts-expect-error - outputMode is no longer in the schema
-      taskDef.outputLogs = taskDef.outputMode as OutputMode;
-      //@ts-expect-error - outputMode is no longer in the schema
+      (taskDef as PipelineV2).outputLogs = taskDef.outputMode;
       delete taskDef.outputMode;
     }
   }
@@ -43,7 +40,7 @@ export function transformer({
   let packageJSON = {};
 
   try {
-    packageJSON = readJsonSync(packageJsonPath) as PackageJson;
+    packageJSON = fs.readJsonSync(packageJsonPath) as PackageJson;
   } catch (e) {
     // readJSONSync probably failed because the file doesn't exist
   }
@@ -55,9 +52,9 @@ export function transformer({
     });
   }
 
-  log.info(`Renaming \`outputMode\` key in task config to \`outputLogs\``);
+  log.info("Renaming `outputMode` key in task config to `outputLogs`");
   const turboConfigPath = path.join(root, "turbo.json");
-  if (!existsSync(turboConfigPath)) {
+  if (!fs.existsSync(turboConfigPath)) {
     return runner.abortTransform({
       reason: `No turbo.json found at ${root}. Is the path correct?`,
     });

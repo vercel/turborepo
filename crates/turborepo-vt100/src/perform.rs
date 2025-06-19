@@ -165,11 +165,7 @@ impl vte::Perform for WrappedScreen {
 
 fn canonicalize_params_1(params: &vte::Params, default: u16) -> u16 {
     let first = params.iter().next().map_or(0, |x| *x.first().unwrap_or(&0));
-    if first == 0 {
-        default
-    } else {
-        first
-    }
+    if first == 0 { default } else { first }
 }
 
 fn canonicalize_params_2(
@@ -237,8 +233,8 @@ impl<'a, T: crate::callbacks::Callbacks> WrappedScreenWithCallbacks<'a, T> {
     }
 }
 
-impl<'a, T: crate::callbacks::Callbacks> vte::Perform
-    for WrappedScreenWithCallbacks<'a, T>
+impl<T: crate::callbacks::Callbacks> vte::Perform
+    for WrappedScreenWithCallbacks<'_, T>
 {
     fn print(&mut self, c: char) {
         if c == '\u{fffd}' || ('\u{80}'..'\u{a0}').contains(&c) {
@@ -272,7 +268,7 @@ impl<'a, T: crate::callbacks::Callbacks> vte::Perform
         ignore: bool,
         c: char,
     ) {
-        if intermediates.first().is_none() && c == 't' {
+        if intermediates.is_empty() && c == 't' {
             let mut iter = params.iter();
             let op = iter.next().and_then(|x| x.first().copied());
             if op == Some(8) {

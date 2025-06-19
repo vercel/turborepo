@@ -1,0 +1,23 @@
+---
+source: crates/turborepo/tests/query.rs
+expression: query_output
+---
+{
+  "data": {
+    "file": {
+      "path": "with_prefix.ts",
+      "dependencies": {
+        "files": {
+          "items": [
+            {
+              "path": "bar.js"
+            },
+            {
+              "path": "foo.js"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

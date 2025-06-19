@@ -3,6 +3,16 @@ on:
   push:
     branches: [main]
   pull_request:
+    paths:
+      - ".github/actions/**"
+      - .github/workflows/lint.yml
+      - "**/*.{yml,yaml,md,mdx,js,jsx,ts,tsx,json,toml,css}"
+      - pnpm-lock.yaml
+      - package.json
+      - "Cargo.**"
+      - "crates/**"
+      - ".cargo/**"
+      - rust-toolchain
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
@@ -14,60 +24,9 @@ permissions:
   pull-requests: read
 
 jobs:
-  determine_jobs:
-    name: Determine jobs to run
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-
-      - name: CI related changes
-        id: ci
-        uses: technote-space/get-diff-action@v6
-        with:
-          PATTERNS: |
-            .github/actions/**
-            .github/workflows/lint.yml
-
-      - name: Rust related changes
-        id: rust
-        uses: technote-space/get-diff-action@v6
-        with:
-          PATTERNS: |
-            pnpm-lock.yaml
-            package.json
-            Cargo.**
-            crates/**
-            shim/**
-            xtask/**
-            .cargo/**
-            rust-toolchain
-            !**.md
-            !**.mdx
-
-      - name: Formatting related changes
-        id: format
-        uses: technote-space/get-diff-action@v6
-        with:
-          PATTERNS: |
-            **/*.{yml,yaml,md,mdx,js,jsx,ts,tsx,json,toml,css}
-
-    outputs:
-      rust: ${{ steps.ci.outputs.diff != '' || steps.rust.outputs.diff != '' }}
-      format: ${{ steps.ci.outputs.diff != '' || steps.format.outputs.diff != '' }}
-
   rust_lint:
-    needs: [determine_jobs]
-    if: needs.determine_jobs.outputs.rust == 'true'
     name: Rust lints
-    runs-on:
-      - "self-hosted"
-      - "linux"
-      - "x64"
-      - "metal"
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -85,19 +44,13 @@ jobs:
         run: npx @taplo/cli@0.5.2 format --check
 
       - name: Check licenses
-        uses: EmbarkStudios/cargo-deny-action@v1
+        uses: EmbarkStudios/cargo-deny-action@v2
         with:
           command: check licenses
 
   format_lint:
     name: Formatting
-    runs-on:
-      - "self-hosted"
-      - "linux"
-      - "x64"
-      - "metal"
-    needs: determine_jobs
-    if: needs.determine_jobs.outputs.format == 'true'
+    runs-on: ubuntu-latest
     env:
       TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
       TURBO_TEAM: ${{ vars.TURBO_TEAM }}
@@ -110,21 +63,14 @@ jobs:
         uses: ./.github/actions/setup-node
         with:
           extra-flags: --no-optional
-          node-version: "20"
 
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
 
       - name: Lint
-        # Filters some packages out, but not sure why
+        # Manually set TURBO_API to an empty string to override Hetzner env
         run: |
-          turbo run lint \
-          --filter=!@vercel/devlow-bench \
-          --filter=!@vercel/experimental-nft-next-plugin \
-          --filter=!@vercel/experimental-nft-next-plugin \
-          --filter=!turbopack-bump-action \
-          --filter=!next-integration-stat \
-          --env-mode=strict
+          TURBO_API= turbo run lint --env-mode=strict
 
   cleanup:
     name: Cleanup

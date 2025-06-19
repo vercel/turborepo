@@ -9,7 +9,8 @@
   "debug.javascript.unmapMissingSources": true,
   "files.associations": {
     "libturbo.h": "c",
-    "turbo.json": "jsonc"
+    "turbo.json": "jsonc",
+    "*.t.err": "cram"
   },
   "[cram]": {
     "editor.trimAutoWhitespace": false,
@@ -17,8 +18,11 @@
     "files.insertFinalNewline": false,
     "files.trimTrailingWhitespace": false
   },
-  "search.exclude": {
-    "crates/turbopack-tests/tests/snapshot/**": true
-  },
-  "typescript.tsdk": "node_modules/typescript/lib"
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "json.schemas": [
+    {
+      "fileMatch": ["turbo.json"],
+      "url": "./packages/turbo-types/schemas/schema.json"
+    }
+  ]
 }

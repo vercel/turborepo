@@ -1,0 +1,44 @@
+---
+source: crates/turborepo/tests/boundaries.rs
+expression: query_output
+---
+{
+  "data": {
+    "boundaries": {
+      "items": [
+        {
+          "message": "Package `@vercel/unsafe-package` found with tag listed in denylist for `my-app`: `unsafe`",
+          "import": "@vercel/unsafe-package"
+        },
+        {
+          "message": "Package `module-package` found without any tag listed in allowlist for `my-app`",
+          "import": "module-package"
+        },
+        {
+          "message": "cannot import package `module-package` because it is not a dependency",
+          "import": "module-package"
+        },
+        {
+          "message": "import `!` leaves the package",
+          "import": "!"
+        },
+        {
+          "message": "import `../../packages/another/index.jsx` leaves the package",
+          "import": "../../packages/another/index.jsx"
+        },
+        {
+          "message": "import `@/../../packages/another/index.jsx` leaves the package",
+          "import": "@/../../packages/another/index.jsx"
+        },
+        {
+          "message": "importing from a type declaration package, but import is not declared as a type-only import",
+          "import": "ship"
+        },
+        {
+          "message": "importing from a type declaration package, but import is not declared as a type-only import",
+          "import": "@types/ship"
+        }
+      ]
+    }
+  }
+}

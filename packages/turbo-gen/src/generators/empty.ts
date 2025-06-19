@@ -1,6 +1,6 @@
 import path from "node:path";
-import { writeFileSync, mkdirSync } from "fs-extra";
-import { bold } from "picocolors";
+import fs from "fs-extra";
+import picocolors from "picocolors";
 import { logger, type PackageJson, type DependencyGroups } from "@turbo/utils";
 import { gatherAddRequirements } from "../utils/gatherAddRequirements";
 import type { TurboGeneratorArguments } from "./types";
@@ -32,21 +32,21 @@ export async function generate({ project, opts }: TurboGeneratorArguments) {
   });
 
   // write the directory
-  mkdirSync(location.absolute, { recursive: true });
+  fs.mkdirSync(location.absolute, { recursive: true });
 
   // create package.json
-  writeFileSync(
+  fs.writeFileSync(
     path.join(location.absolute, "package.json"),
     JSON.stringify(packageJson, null, 2)
   );
 
   // create README
-  writeFileSync(path.join(location.absolute, "README.md"), `# \`${name}\``);
+  fs.writeFileSync(path.join(location.absolute, "README.md"), `# \`${name}\``);
 
   logger.log();
   logger.log(
-    `${bold(logger.turboGradient(">>> Success!"))} Created ${name} at "${
-      location.relative
-    }"`
+    `${picocolors.bold(
+      logger.turboGradient(">>> Success!")
+    )} Created ${name} at "${location.relative}"`
   );
 }

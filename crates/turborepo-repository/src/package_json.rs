@@ -18,7 +18,7 @@ use turborepo_unescape::UnescapedString;
 #[serde(rename_all = "camelCase")]
 pub struct PackageJson {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
+    pub name: Option<Spanned<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub version: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -54,7 +54,7 @@ pub struct PnpmConfig {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserializable)]
 pub struct RawPackageJson {
-    pub name: Option<UnescapedString>,
+    pub name: Option<Spanned<UnescapedString>>,
     pub version: Option<UnescapedString>,
     pub package_manager: Option<Spanned<UnescapedString>>,
     pub dependencies: Option<BTreeMap<String, UnescapedString>>,
@@ -79,11 +79,11 @@ pub struct RawPnpmConfig {
 
 #[derive(Debug, thiserror::Error, Diagnostic)]
 pub enum Error {
-    #[error("unable to read package.json: {0}")]
+    #[error("Unable to read package.json: {0}")]
     Io(#[from] std::io::Error),
-    #[error("unable to parse package.json: {0}")]
+    #[error("Unable to parse package.json: {0}")]
     Json(#[from] serde_json::Error),
-    #[error("unable to parse package.json")]
+    #[error("Unable to parse package.json.")]
     #[diagnostic(code(package_json_parse_error))]
     Parse(#[related] Vec<ParseDiagnostic>),
 }
@@ -111,7 +111,7 @@ impl WithMetadata for RawPackageJson {
 impl From<RawPackageJson> for PackageJson {
     fn from(raw: RawPackageJson) -> Self {
         Self {
-            name: raw.name.map(|s| s.into()),
+            name: raw.name.map(|s| s.map(|s| s.into())),
             version: raw.version.map(|s| s.into()),
             package_manager: raw.package_manager.map(|s| s.map(|s| s.into())),
             dependencies: raw
@@ -159,7 +159,7 @@ impl From<RawPnpmConfig> for PnpmConfig {
 
 impl PackageJson {
     pub fn load(path: &AbsoluteSystemPath) -> Result<PackageJson, Error> {
-        tracing::debug!("loading package.json from {}", path);
+        tracing::trace!("loading package.json from {}", path);
         let contents = path.read_to_string()?;
         Self::load_from_str(&contents, path.as_str())
     }
@@ -174,6 +174,7 @@ impl PackageJson {
                     .map(|d| {
                         d.with_file_source_code(contents)
                             .with_file_path(path)
+                            .as_ref()
                             .into()
                     })
                     .collect(),

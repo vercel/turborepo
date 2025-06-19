@@ -4,16 +4,17 @@ use std::{collections::HashMap, fs::OpenOptions, io::Write, net::SocketAddr, syn
 
 use anyhow::Result;
 use axum::{
-    extract::{BodyStream, Path},
-    http::{HeaderMap, HeaderValue, StatusCode},
-    routing::{get, head, options, patch, post, put},
+    body::Body,
+    extract::Path,
+    http::{header::CONTENT_LENGTH, HeaderMap, HeaderValue, StatusCode},
+    routing::{get, head, options, post, put},
     Json, Router,
 };
 use futures_util::StreamExt;
-use tokio::sync::Mutex;
+use tokio::{net::TcpListener, sync::Mutex};
 use turborepo_vercel_api::{
-    AnalyticsEvent, CachingStatus, CachingStatusResponse, Membership, Role, Space, SpaceRun,
-    SpacesResponse, Team, TeamsResponse, User, UserResponse, VerificationResponse,
+    AnalyticsEvent, CachingStatus, CachingStatusResponse, Membership, Role, Team, TeamsResponse,
+    User, UserResponse, VerificationResponse,
 };
 
 pub const EXPECTED_TOKEN: &str = "expected_token";
@@ -26,11 +27,6 @@ pub const EXPECTED_TEAM_ID: &str = "expected_team_id";
 pub const EXPECTED_TEAM_SLUG: &str = "expected_team_slug";
 pub const EXPECTED_TEAM_NAME: &str = "expected_team_name";
 pub const EXPECTED_TEAM_CREATED_AT: u64 = 0;
-
-pub const EXPECTED_SPACE_ID: &str = "expected_space_id";
-pub const EXPECTED_SPACE_NAME: &str = "expected_space_name";
-pub const EXPECTED_SPACE_RUN_ID: &str = "expected_space_run_id";
-pub const EXPECTED_SPACE_RUN_URL: &str = "https://example.com";
 
 pub const EXPECTED_SSO_TEAM_ID: &str = "expected_sso_team_id";
 pub const EXPECTED_SSO_TEAM_SLUG: &str = "expected_sso_team_slug";
@@ -76,57 +72,6 @@ pub async fn start_test_server(port: u16) -> Result<()> {
             }),
         )
         .route(
-            "/v0/spaces",
-            get(|| async move {
-                Json(SpacesResponse {
-                    spaces: vec![Space {
-                        id: EXPECTED_SPACE_ID.to_string(),
-                        name: EXPECTED_SPACE_NAME.to_string(),
-                    }],
-                })
-            }),
-        )
-        .route(
-            "/v0/spaces/:space_id/runs",
-            post(|Path(space_id): Path<String>| async move {
-                if space_id != EXPECTED_SPACE_ID {
-                    return (StatusCode::NOT_FOUND, Json(None));
-                }
-
-                (
-                    StatusCode::OK,
-                    Json(Some(SpaceRun {
-                        id: EXPECTED_SPACE_RUN_ID.to_string(),
-                        url: EXPECTED_SPACE_RUN_URL.to_string(),
-                    })),
-                )
-            }),
-        )
-        .route(
-            "/v0/spaces/:space_id/runs/:run_id",
-            patch(
-                |Path((space_id, run_id)): Path<(String, String)>| async move {
-                    if space_id != EXPECTED_SPACE_ID || run_id != EXPECTED_SPACE_RUN_ID {
-                        return StatusCode::NOT_FOUND;
-                    }
-
-                    StatusCode::OK
-                },
-            ),
-        )
-        .route(
-            "/v0/spaces/:space_id/runs/:run_id/tasks",
-            post(
-                |Path((space_id, run_id)): Path<(String, String)>| async move {
-                    if space_id != EXPECTED_SPACE_ID || run_id != EXPECTED_SPACE_RUN_ID {
-                        return StatusCode::NOT_FOUND;
-                    }
-
-                    StatusCode::OK
-                },
-            ),
-        )
-        .route(
             "/v8/artifacts/status",
             get(|| async {
                 Json(CachingStatusResponse {
@@ -146,7 +91,7 @@ pub async fn start_test_server(port: u16) -> Result<()> {
         .route(
             "/v8/artifacts/:hash",
             put(
-                |Path(hash): Path<String>, headers: HeaderMap, mut body: BodyStream| async move {
+                |Path(hash): Path<String>, headers: HeaderMap, body: Body| async move {
                     let root_path = put_tempdir_ref.path();
                     let file_path = root_path.join(&hash);
                     let mut file = OpenOptions::new()
@@ -161,10 +106,16 @@ pub async fn start_test_server(port: u16) -> Result<()> {
                         .and_then(|duration| duration.parse::<u32>().ok())
                         .expect("x-artifact-duration header is missing");
 
+                    assert!(
+                        headers.get(CONTENT_LENGTH).is_some(),
+                        "expected to get content-length"
+                    );
+
                     let mut durations_map = put_durations_ref.lock().await;
                     durations_map.insert(hash.clone(), duration);
 
-                    while let Some(item) = body.next().await {
+                    let mut body_stream = body.into_data_stream();
+                    while let Some(item) = body_stream.next().await {
                         let chunk = item.unwrap();
                         file.write_all(&chunk).unwrap();
                     }
@@ -275,11 +226,10 @@ pub async fn start_test_server(port: u16) -> Result<()> {
         );
 
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
+    let listener = TcpListener::bind(addr).await?;
     // We print the port so integration tests can use it
     println!("{}", port);
-    axum_server::bind(addr)
-        .serve(app.into_make_service())
-        .await?;
+    axum::serve(listener, app).await?;
 
     Ok(())
 }

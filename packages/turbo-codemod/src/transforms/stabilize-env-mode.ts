@@ -1,15 +1,12 @@
 import path from "node:path";
-import { readJsonSync, existsSync } from "fs-extra";
+import fs from "fs-extra";
 import { type PackageJson, getTurboConfigs } from "@turbo/utils";
-import type {
-  SchemaV1,
-  RootSchemaV1,
-  Pipeline,
-} from "@turbo/types/src/types/config";
+import type { SchemaV1, RootSchemaV1, Pipeline } from "@turbo/types";
 import type { Transformer, TransformerArgs } from "../types";
 import { getTransformerHelpers } from "../utils/getTransformerHelpers";
 import type { TransformerResults } from "../runner";
 import { loadTurboJson } from "../utils/loadTurboJson";
+import { isPipelineKeyMissing } from "../utils/is-pipeline-key-missing";
 
 // transformer details
 const TRANSFORMER = "stabilize-env-mode";
@@ -30,7 +27,11 @@ type ExperimentalSchema = Omit<SchemaV1, "pipeline"> & {
   pipeline: Record<string, ExperimentalPipeline>;
 };
 
-function migrateRootConfig(config: ExperimentalRootSchema) {
+export function migrateRootConfig(config: ExperimentalRootSchema) {
+  if (isPipelineKeyMissing(config)) {
+    return config;
+  }
+
   const oldConfig = config.experimentalGlobalPassThroughEnv;
   const newConfig = config.globalPassThroughEnv;
   // Set to an empty array is meaningful, so we have undefined as an option here.
@@ -62,7 +63,11 @@ function migrateRootConfig(config: ExperimentalRootSchema) {
   return migrateTaskConfigs(config);
 }
 
-function migrateTaskConfigs(config: ExperimentalSchema) {
+export function migrateTaskConfigs(config: ExperimentalSchema) {
+  if (isPipelineKeyMissing(config)) {
+    return config;
+  }
+
   for (const [_, taskDef] of Object.entries(config.pipeline)) {
     const oldConfig = taskDef.experimentalPassThroughEnv;
     const newConfig = taskDef.passThroughEnv;
@@ -114,7 +119,7 @@ export function transformer({
   let packageJSON = {};
 
   try {
-    packageJSON = readJsonSync(packageJsonPath) as PackageJson;
+    packageJSON = fs.readJsonSync(packageJsonPath) as PackageJson;
   } catch (e) {
     // readJSONSync probably failed because the file doesn't exist
   }
@@ -130,7 +135,7 @@ export function transformer({
     "Rewriting `experimentalPassThroughEnv` and `experimentalGlobalPassThroughEnv`"
   );
   const turboConfigPath = path.join(root, "turbo.json");
-  if (!existsSync(turboConfigPath)) {
+  if (!fs.existsSync(turboConfigPath)) {
     return runner.abortTransform({
       reason: `No turbo.json found at ${root}. Is the path correct?`,
     });

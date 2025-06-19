@@ -2,6 +2,7 @@
 #![feature(io_error_more)]
 #![feature(assert_matches)]
 #![deny(clippy::all)]
+#![allow(clippy::result_large_err)]
 
 //! Turborepo's library for interacting with source control management (SCM).
 //! Currently we only support git. We use SCM for finding changed files,
@@ -9,6 +10,7 @@
 
 use std::{
     backtrace::{self, Backtrace},
+    collections::HashMap,
     io::Read,
     process::{Child, Command},
 };
@@ -18,6 +20,7 @@ use thiserror::Error;
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError, RelativeUnixPathBuf};
 
+pub mod clone;
 pub mod git;
 mod hash_object;
 mod ls_tree;
@@ -27,43 +30,46 @@ mod status;
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("git error on {1}: {0}")]
+    #[cfg(feature = "git2")]
+    #[error("Git error on {1}: {0}")]
     Git2(
         #[source] git2::Error,
         String,
         #[backtrace] backtrace::Backtrace,
     ),
-    #[error("git error: {0}")]
+    #[error("Git error: {0}")]
     Git(String, #[backtrace] backtrace::Backtrace),
     #[error(
-        "{0} is not part of a git repository. git is required for operations based on source \
+        "{0} is not part of a Git repository. Git is required for operations based on source \
          control"
     )]
     GitRequired(AbsoluteSystemPathBuf),
-    #[error(
-        "git command failed due to unsupported git version. Upgrade to git 2.18 or newer: {0}"
-    )]
+    #[error("Git command failed due to unsupported version. Upgrade to git 2.18 or newer: {0}")]
     GitVersion(String),
-    #[error("io error: {0}")]
+    #[error("I/O error: {0}")]
     Io(#[from] std::io::Error, #[backtrace] backtrace::Backtrace),
-    #[error("path error: {0}")]
+    #[error("Path error: {0}")]
     Path(#[from] PathError, #[backtrace] backtrace::Backtrace),
-    #[error("could not find git binary")]
+    #[error("Could not find git binary")]
     GitBinaryNotFound(#[from] which::Error),
     #[error("encoding error: {0}")]
     Encoding(
         #[from] std::string::FromUtf8Error,
         #[backtrace] backtrace::Backtrace,
     ),
-    #[error("package traversal error: {0}")]
+    #[error("Package traversal error: {0}")]
     Ignore(#[from] ignore::Error, #[backtrace] backtrace::Backtrace),
-    #[error("invalid glob: {0}")]
+    #[error("Invalid glob: {0}")]
     Glob(#[source] Box<wax::BuildError>, backtrace::Backtrace),
-    #[error("invalid globwalk pattern: {0}")]
+    #[error("Invalid globwalk pattern: {0}")]
     Globwalk(#[from] globwalk::GlobError),
     #[error(transparent)]
     Walk(#[from] globwalk::WalkError),
+    #[error("Unable to resolve base branch. Please set with `TURBO_SCM_BASE`.")]
+    UnableToResolveRef,
 }
+
+pub type GitHashes = HashMap<RelativeUnixPathBuf, String>;
 
 impl From<wax::BuildError> for Error {
     fn from(value: wax::BuildError) -> Self {
@@ -76,6 +82,7 @@ impl Error {
         Error::Git(s.into(), Backtrace::capture())
     }
 
+    #[cfg(feature = "git2")]
     pub(crate) fn git2_error_context(error: git2::Error, error_context: String) -> Self {
         Error::Git2(error, error_context, Backtrace::capture())
     }
@@ -103,7 +110,29 @@ pub(crate) fn wait_for_success<R: Read, T>(
         // In this case, we don't care about waiting for the child to exit,
         // we need to kill it. It's possible that we didn't read all of the output,
         // or that the child process doesn't know to exit.
-        child.kill()?;
+        // For good measure close off `stdin`
+        child.stdin.take();
+        match child.kill() {
+            Ok(()) => {
+                // If we successfully sent the signal, then we wait for process to exit
+                // Do not error if wait fails as that can indicate the pid has already been
+                // reaped.
+                child.wait().ok();
+            }
+            Err(e) => {
+                debug!("failed to kill git process: {e}");
+                // There are exactly 3 reasons why killing a child could fail:
+                // - Invalid signal number (Unix only, would indicate Rust stdlib is faulty)
+                // - Insufficient permission (Windows + Unix) (Not sure how this could happen
+                //   given we're talking about a child process)
+                // - Process has already exited (Windows + Unix)
+                // The final option is by far the most likely in which case `try_call` is a
+                // nonblocking option that will reap the child pid if it has
+                // already exited. We use this over `wait` to avoid blocking on a process
+                // exiting which possibly did not receive our kill signal.
+                child.try_wait().ok();
+            }
+        };
         let stderr_output = read_git_error_to_string(stderr);
         let stderr_text = stderr_output
             .map(|stderr| format!(" stderr: {}", stderr))
@@ -144,7 +173,7 @@ pub(crate) fn wait_for_success<R: Read, T>(
 }
 
 #[derive(Debug, Clone)]
-pub struct Git {
+pub struct GitRepo {
     root: AbsoluteSystemPathBuf,
     bin: AbsoluteSystemPathBuf,
 }
@@ -157,7 +186,7 @@ enum GitError {
     Root(AbsoluteSystemPathBuf, Error),
 }
 
-impl Git {
+impl GitRepo {
     fn find(path_in_repo: &AbsoluteSystemPath) -> Result<Self, GitError> {
         // If which produces an invalid absolute path, it's not an execution error, it's
         // a programming error. We expect it to always give us an absolute path
@@ -209,17 +238,19 @@ fn find_git_root(turbo_root: &AbsoluteSystemPath) -> Result<AbsoluteSystemPathBu
 
 #[derive(Debug, Clone)]
 pub enum SCM {
-    Git(Git),
+    Git(GitRepo),
     Manual,
 }
 
 impl SCM {
     #[tracing::instrument]
     pub fn new(path_in_repo: &AbsoluteSystemPath) -> SCM {
-        Git::find(path_in_repo).map(SCM::Git).unwrap_or_else(|e| {
-            debug!("{}, continuing with manual hashing", e);
-            SCM::Manual
-        })
+        GitRepo::find(path_in_repo)
+            .map(SCM::Git)
+            .unwrap_or_else(|e| {
+                debug!("{}, continuing with manual hashing", e);
+                SCM::Manual
+            })
     }
 
     pub fn is_manual(&self) -> bool {

@@ -14,7 +14,7 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "lint": "eslint . --max-warnings 0",
-    "clean": "rm -rf .turbo && rm -rf node_modules && rm -rf dist"
+    "clean": "rm -rf .turbo node_modules dist"
   },
   "devDependencies": {
     "@repo/eslint-config": "workspace:*",
@@ -23,7 +23,7 @@
     "eslint": "^8.57.0",
     "@repo/typescript-config": "workspace:*",
     "tsup": "^8.0.2",
-    "typescript": "^5.3.3"
+    "typescript": "5.5.4"
   },
   "dependencies": {
     "react": "^18.2.0"

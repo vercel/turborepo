@@ -52,6 +52,7 @@ Validate that we got a full task summary for the failed task with an error in .e
     "directory": "apps(\/|\\\\)my-app", (re)
     "dependencies": [],
     "dependents": [],
+    "with": [],
     "resolvedTaskDefinition": {
       "outputs": [],
       "cache": true,
@@ -59,6 +60,7 @@ Validate that we got a full task summary for the failed task with an error in .e
       "inputs": [],
       "outputLogs": "full",
       "persistent": false,
+      "interruptible": false,
       "env": [],
       "passThroughEnv": null,
       "interactive": false
@@ -96,7 +98,7 @@ Don't use --filter here, so we can validate that both tasks attempted to run
 success should be 1, and attempted should be 2
   $ cat $SUMMARY | jq '.execution'
   {
-    "command": "turbo run maybefails --continue",
+    "command": "turbo run maybefails --continue=always",
     "repoPath": "",
     "success": 1,
     "failed": 1,

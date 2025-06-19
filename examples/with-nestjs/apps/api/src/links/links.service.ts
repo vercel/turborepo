@@ -11,20 +11,20 @@ export class LinksService {
     {
       id: 0,
       title: 'Docs',
-      url: 'https://turbo.build/repo/docs',
+      url: 'https://turborepo.com/docs',
       description:
         'Find in-depth information about Turborepo features and API.',
     },
     {
       id: 1,
       title: 'Learn',
-      url: 'https://turbo.build/repo/docs/handbook',
+      url: 'https://turborepo.com/docs/handbook',
       description: 'Learn more about monorepos with our handbook.',
     },
     {
       id: 2,
       title: 'Templates',
-      url: 'https://turbo.build/repo/docs/getting-started/from-example',
+      url: 'https://turborepo.com/docs/getting-started/from-example',
       description:
         'Choose from over 15 examples and deploy with a single click.',
     },

@@ -1,4 +1,7 @@
-import path from "path";
+import path from "node:path";
+import childProcess from "node:child_process";
+import { setupTestFixtures } from "@turbo/test-utils";
+import { describe, it, expect, jest } from "@jest/globals";
 import {
   DEFAULT_IGNORE,
   GIT_REPO_COMMAND,
@@ -7,8 +10,6 @@ import {
   isInMercurialRepository,
   tryGitInit,
 } from "../src/utils/git";
-import childProcess from "child_process";
-import { setupTestFixtures } from "@turbo/test-utils";
 
 describe("git", () => {
   // just to make sure this doesn't get lost

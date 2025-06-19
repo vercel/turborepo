@@ -11,17 +11,18 @@ use convert_case::{Case, Casing};
 use miette::Diagnostic;
 use struct_iterable::Iterable;
 use thiserror::Error;
-use turbopath::AnchoredSystemPath;
+use tracing::log::warn;
 use turborepo_errors::{ParseDiagnostic, WithMetadata};
 use turborepo_unescape::UnescapedString;
 
 use crate::{
+    boundaries::{BoundariesConfig, Permissions, Rule},
     run::task_id::TaskName,
     turbo_json::{Pipeline, RawTaskDefinition, RawTurboJson, Spanned},
 };
 
 #[derive(Debug, Error, Diagnostic)]
-#[error("failed to parse turbo json")]
+#[error("Failed to parse turbo.json.")]
 #[diagnostic(code(turbo_json_parse_error))]
 pub struct Error {
     #[related]
@@ -101,20 +102,39 @@ impl WithMetadata for RawTurboJson {
     fn add_text(&mut self, text: Arc<str>) {
         self.span.add_text(text.clone());
         self.extends.add_text(text.clone());
+        self.tags.add_text(text.clone());
+        if let Some(tags) = &mut self.tags {
+            tags.value.add_text(text.clone());
+        }
         self.global_dependencies.add_text(text.clone());
         self.global_env.add_text(text.clone());
         self.global_pass_through_env.add_text(text.clone());
+        self.boundaries.add_text(text.clone());
+        if let Some(boundaries) = &mut self.boundaries {
+            boundaries.value.add_text(text.clone());
+        }
+
         self.tasks.add_text(text.clone());
+        self.cache_dir.add_text(text.clone());
         self.pipeline.add_text(text);
     }
 
     fn add_path(&mut self, path: Arc<str>) {
         self.span.add_path(path.clone());
         self.extends.add_path(path.clone());
+        self.tags.add_path(path.clone());
+        if let Some(tags) = &mut self.tags {
+            tags.value.add_path(path.clone());
+        }
         self.global_dependencies.add_path(path.clone());
         self.global_env.add_path(path.clone());
         self.global_pass_through_env.add_path(path.clone());
+        self.boundaries.add_path(path.clone());
+        if let Some(boundaries) = &mut self.boundaries {
+            boundaries.value.add_path(path.clone());
+        }
         self.tasks.add_path(path.clone());
+        self.cache_dir.add_path(path.clone());
         self.pipeline.add_path(path);
     }
 }
@@ -135,6 +155,92 @@ impl WithMetadata for Pipeline {
     }
 }
 
+impl WithMetadata for BoundariesConfig {
+    fn add_text(&mut self, text: Arc<str>) {
+        self.tags.add_text(text.clone());
+        if let Some(tags) = &mut self.tags {
+            for rule in tags.as_inner_mut().values_mut() {
+                rule.add_text(text.clone());
+                rule.value.add_text(text.clone());
+            }
+        }
+        self.implicit_dependencies.add_text(text.clone());
+        if let Some(implicit_dependencies) = &mut self.implicit_dependencies {
+            for dep in implicit_dependencies.as_inner_mut() {
+                dep.add_text(text.clone());
+            }
+        }
+    }
+
+    fn add_path(&mut self, path: Arc<str>) {
+        self.tags.add_path(path.clone());
+        if let Some(tags) = &mut self.tags {
+            for rule in tags.as_inner_mut().values_mut() {
+                rule.add_path(path.clone());
+                rule.value.add_path(path.clone());
+            }
+        }
+        self.implicit_dependencies.add_path(path.clone());
+        if let Some(implicit_dependencies) = &mut self.implicit_dependencies {
+            for dep in implicit_dependencies.as_inner_mut() {
+                dep.add_path(path.clone());
+            }
+        }
+    }
+}
+
+impl WithMetadata for Rule {
+    fn add_text(&mut self, text: Arc<str>) {
+        self.dependencies.add_text(text.clone());
+        if let Some(dependencies) = &mut self.dependencies {
+            dependencies.value.add_text(text.clone());
+        }
+
+        self.dependents.add_text(text.clone());
+        if let Some(dependents) = &mut self.dependents {
+            dependents.value.add_text(text.clone());
+        }
+    }
+
+    fn add_path(&mut self, path: Arc<str>) {
+        self.dependencies.add_path(path.clone());
+        if let Some(dependencies) = &mut self.dependencies {
+            dependencies.value.add_path(path.clone());
+        }
+
+        self.dependents.add_path(path.clone());
+        if let Some(dependents) = &mut self.dependents {
+            dependents.value.add_path(path);
+        }
+    }
+}
+
+impl WithMetadata for Permissions {
+    fn add_text(&mut self, text: Arc<str>) {
+        self.allow.add_text(text.clone());
+        if let Some(allow) = &mut self.allow {
+            allow.value.add_text(text.clone());
+        }
+
+        self.deny.add_text(text.clone());
+        if let Some(deny) = &mut self.deny {
+            deny.value.add_text(text.clone());
+        }
+    }
+
+    fn add_path(&mut self, path: Arc<str>) {
+        self.allow.add_path(path.clone());
+        if let Some(allow) = &mut self.allow {
+            allow.value.add_path(path.clone());
+        }
+
+        self.deny.add_path(path.clone());
+        if let Some(deny) = &mut self.deny {
+            deny.value.add_path(path.clone());
+        }
+    }
+}
+
 impl WithMetadata for RawTaskDefinition {
     fn add_text(&mut self, text: Arc<str>) {
         self.depends_on.add_text(text.clone());
@@ -145,9 +251,11 @@ impl WithMetadata for RawTaskDefinition {
         self.inputs.add_text(text.clone());
         self.pass_through_env.add_text(text.clone());
         self.persistent.add_text(text.clone());
+        self.interruptible.add_text(text.clone());
         self.outputs.add_text(text.clone());
         self.output_logs.add_text(text.clone());
-        self.interactive.add_text(text);
+        self.interactive.add_text(text.clone());
+        self.with.add_text(text);
     }
 
     fn add_path(&mut self, path: Arc<str>) {
@@ -159,9 +267,11 @@ impl WithMetadata for RawTaskDefinition {
         self.inputs.add_path(path.clone());
         self.pass_through_env.add_path(path.clone());
         self.persistent.add_path(path.clone());
+        self.interruptible.add_path(path.clone());
         self.outputs.add_path(path.clone());
         self.output_logs.add_path(path.clone());
-        self.interactive.add_path(path);
+        self.interactive.add_path(path.clone());
+        self.with.add_path(path);
     }
 }
 
@@ -170,7 +280,7 @@ impl RawTurboJson {
     #[cfg(test)]
     pub fn parse_from_serde(value: serde_json::Value) -> Result<RawTurboJson, Error> {
         let json_string = serde_json::to_string(&value).expect("should be able to serialize");
-        Self::parse(&json_string, AnchoredSystemPath::new("turbo.json").unwrap())
+        Self::parse(&json_string, "turbo.json")
     }
     /// Parses a turbo.json file into the raw representation with span info
     /// attached.
@@ -182,11 +292,13 @@ impl RawTurboJson {
     ///   display, so doesn't need to actually be a correct path.
     ///
     /// returns: Result<RawTurboJson, Error>
-    pub fn parse(text: &str, file_path: &AnchoredSystemPath) -> Result<RawTurboJson, Error> {
+    pub fn parse(text: &str, file_path: &str) -> Result<RawTurboJson, Error> {
         let result = deserialize_from_json_str::<RawTurboJson>(
             text,
-            JsonParserOptions::default().with_allow_comments(),
-            file_path.as_str(),
+            JsonParserOptions::default()
+                .with_allow_comments()
+                .with_allow_trailing_commas(),
+            file_path,
         );
 
         if !result.diagnostics().is_empty() {
@@ -195,7 +307,8 @@ impl RawTurboJson {
                 .into_iter()
                 .map(|d| {
                     d.with_file_source_code(text)
-                        .with_file_path(file_path.as_str())
+                        .with_file_path(file_path)
+                        .as_ref()
                         .into()
                 })
                 .collect();
@@ -205,6 +318,7 @@ impl RawTurboJson {
                 backtrace: backtrace::Backtrace::capture(),
             });
         }
+
         // It's highly unlikely that biome would fail to produce a deserialized value
         // *and* not return any errors, but it's still possible. In that case, we
         // just print that there is an error and return.
@@ -213,8 +327,12 @@ impl RawTurboJson {
             backtrace: backtrace::Backtrace::capture(),
         })?;
 
+        if turbo_json.experimental_spaces.is_some() {
+            warn!("`experimentalSpaces` key in turbo.json is deprecated and does not do anything")
+        }
+
         turbo_json.add_text(Arc::from(text));
-        turbo_json.add_path(Arc::from(file_path.as_str()));
+        turbo_json.add_path(Arc::from(file_path));
 
         Ok(turbo_json)
     }

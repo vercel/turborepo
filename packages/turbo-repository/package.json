@@ -2,11 +2,11 @@
   "name": "turborepo-repository",
   "version": "0.0.1",
   "description": "",
-  "bugs": "https://github.com/vercel/turbo/issues",
-  "homepage": "https://turbo.build/repo",
+  "bugs": "https://github.com/vercel/turborepo/issues",
+  "homepage": "https://turborepo.com",
   "scripts": {
-    "build": "napi build --platform -p turborepo-napi --cargo-cwd ../../ --cargo-name turborepo_napi native --js false --dts ../js/index.d.ts && mkdir -p js/dist && cp js/index.js js/dist/index.js && cp js/index.d.ts js/dist/index.d.ts",
-    "build:release": "napi build --release --platform -p turborepo-napi --cargo-cwd ../../ --cargo-name turborepo_napi native --js false",
+    "build": "bash scripts/build.sh --dts ../js/index.d.ts",
+    "build:release": "bash scripts/build.sh --release",
     "package": "node scripts/publish.mjs",
     "test": "node --import tsx --test __tests__/*.test.ts"
   },
@@ -17,7 +17,8 @@
     "@napi-rs/cli": "^2.16.3",
     "execa": "^8.0.1",
     "fs-extra": "^11.1.1",
-    "tsx": "^4.7.2"
+    "prettier": "^3.2.5",
+    "tsx": "4.19.1"
   },
   "main": "dist/index.js",
   "napi": {

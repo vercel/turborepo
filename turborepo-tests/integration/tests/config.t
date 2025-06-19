@@ -13,10 +13,14 @@ Run test run
     "timeout": 30,
     "uploadTimeout": 60,
     "enabled": true,
-    "spacesId": null,
-    "ui": false,
+    "ui": "stream",
     "packageManager": "npm",
-    "daemon": null
+    "daemon": null,
+    "envMode": "strict",
+    "scmBase": null,
+    "scmHead": null,
+    "cacheDir": ".turbo[\\/]+cache", (re)
+    "concurrency": null
   }
 
 Run test run with api overloaded
@@ -44,10 +48,10 @@ Use our custom turbo config with an invalid env var
 
 Run build with invalid env var
   $ ${TURBO} build
-  invalid_env_prefix (https://turbo.build/messages/invalid-env-prefix)
+  invalid_env_prefix (https://turborepo.com/messages/invalid-env-prefix)
   
     x Environment variables should not be prefixed with "$"
-     ,-[turbo.json:6:1]
+     ,-[turbo.json:7:27]
    6 |     "build": {
    7 |       "env": ["NODE_ENV", "$FOOBAR"],
      :                           ^^^^|^^^^
@@ -76,3 +80,47 @@ Add flag: `--daemon`
 Add flag: `--no-daemon`
   $ ${TURBO} --no-daemon config | jq .daemon
   false
+
+Confirm that the envMode is `strict` by default
+  $ ${TURBO} config | jq .envMode
+  "strict"
+
+Add env var: `TURBO_ENV_MODE=loose`
+  $ TURBO_ENV_MODE=loose ${TURBO} config | jq .envMode
+  "loose"
+
+Add flag: `--env-mode=loose`
+  $ ${TURBO} --env-mode=loose config | jq .envMode
+  "loose"
+
+Add env var `TURBO_SCM_BASE=HEAD`
+  $ TURBO_SCM_BASE="HEAD" ${TURBO} config | jq .scmBase
+  "HEAD"
+
+Add env var `TURBO_SCM_HEAD=my-branch`
+  $ TURBO_SCM_HEAD="my-branch" ${TURBO} config | jq .scmHead
+  "my-branch"
+
+No cacheDir by default
+  $ ${TURBO} config | jq -r .cacheDir
+  .turbo[\\/]cache (re)
+
+Add env var: `TURBO_CACHE_DIR`
+  $ TURBO_CACHE_DIR=FifthDimension/Nebulo9 ${TURBO} config | jq -r .cacheDir
+  FifthDimension[\\/]Nebulo9 (re)
+
+Add flag: `--cache-dir`
+  $ ${TURBO} --cache-dir FifthDimension/Nebulo9 config | jq -r .cacheDir
+  FifthDimension[\\/]Nebulo9 (re)
+
+No concurrency by default
+  $ ${TURBO} config | jq -r .concurrency
+  null
+
+Add env var: `TURBO_CONCURRENCY`
+  $ TURBO_CONCURRENCY=5 ${TURBO} config | jq -r .concurrency
+  5
+
+Add flag: `--concurrency`
+  $ ${TURBO} --concurrency=5 config | jq -r .concurrency
+  5

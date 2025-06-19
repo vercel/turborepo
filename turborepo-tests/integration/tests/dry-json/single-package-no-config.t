@@ -52,9 +52,9 @@ Setup
         "cliArguments": [],
         "outputs": null,
         "excludedOutputs": null,
-        "logFile": "\.turbo(\/|\\\\)turbo-build\.log", (re)
         "dependencies": [],
         "dependents": [],
+        "with": [],
         "resolvedTaskDefinition": {
           "outputs": [],
           "cache": false,
@@ -62,6 +62,7 @@ Setup
           "inputs": [],
           "outputLogs": "full",
           "persistent": false,
+          "interruptible": false,
           "env": [],
           "passThroughEnv": null,
           "interactive": false

@@ -1,0 +1,23 @@
+---
+source: crates/turborepo/tests/query.rs
+expression: query_output
+---
+{
+  "data": {
+    "file": {
+      "path": "button.tsx",
+      "dependents": {
+        "files": {
+          "items": [
+            {
+              "path": "invalid.ts"
+            },
+            {
+              "path": "main.ts"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

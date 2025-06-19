@@ -4,7 +4,7 @@ use chrono::{DateTime, Local};
 use serde::Serialize;
 use tokio::sync::mpsc;
 use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath};
-use turborepo_ui::{color, cprintln, BOLD, BOLD_GREEN, BOLD_RED, MAGENTA, UI, YELLOW};
+use turborepo_ui::{color, cprintln, ColorConfig, BOLD, BOLD_GREEN, BOLD_RED, MAGENTA, YELLOW};
 
 use super::TurboDuration;
 use crate::run::{summary::task::TaskSummary, task_id::TaskId};
@@ -72,7 +72,12 @@ impl<'a> ExecutionSummary<'a> {
 
     /// We implement this on `ExecutionSummary` and not `RunSummary` because
     /// the `execution` field is nullable (due to normalize).
-    pub fn print(&self, ui: UI, path: AbsoluteSystemPathBuf, failed_tasks: Vec<&TaskSummary>) {
+    pub fn print(
+        &self,
+        ui: ColorConfig,
+        path: AbsoluteSystemPathBuf,
+        failed_tasks: Vec<&TaskSummary>,
+    ) {
         let maybe_full_turbo = if self.cached == self.attempted && self.attempted > 0 {
             match std::env::var("TERM_PROGRAM").as_deref() {
                 Ok("Apple_Terminal") => color!(ui, MAGENTA, ">>> FULL TURBO").to_string(),

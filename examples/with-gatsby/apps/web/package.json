@@ -6,7 +6,7 @@
     "dev": "gatsby develop",
     "build": "gatsby build",
     "start": "gatsby develop",
-    "typecheck": "tsc --noEmit",
+    "check-types": "tsc --noEmit",
     "lint": "eslint src/ --max-warnings 0"
   },
   "dependencies": {
@@ -23,6 +23,6 @@
     "@types/react-dom": "^18.2.19",
     "eslint": "^8.57.0",
     "gatsby-plugin-compile-es6-packages": "^2.1.1",
-    "typescript": "^5.3.3"
+    "typescript": "5.5.4"
   }
 }

@@ -1,4 +1,7 @@
-use std::{borrow::Cow, fmt};
+use std::{
+    borrow::{Borrow, Cow},
+    fmt,
+};
 
 use serde::{Deserialize, Serialize};
 use turborepo_repository::package_graph::{PackageName, ROOT_PKG_NAME};
@@ -125,6 +128,14 @@ impl<'a> TaskId<'a> {
             task: static_cow(task),
         }
     }
+
+    /// Borrows a TaskId reference as a TaskId
+    pub fn as_borrowed(&self) -> TaskId {
+        let TaskId { package, task } = self;
+        let package = shorten_cow(package);
+        let task = shorten_cow(task);
+        TaskId { package, task }
+    }
 }
 
 impl<'a> TryFrom<&'a str> for TaskId<'a> {
@@ -168,6 +179,16 @@ fn static_cow<'a, T: 'a + ToOwned + ?Sized>(cow: Cow<'a, T>) -> Cow<'static, T> 
     match cow {
         Cow::Borrowed(x) => Cow::Owned(x.to_owned()),
         Cow::Owned(x) => Cow::Owned(x),
+    }
+}
+
+// Utility method for changing &'a Cow<'b, T> to Cow<'a, T>
+// 'b must outlive 'a
+#[allow(clippy::ptr_arg)]
+fn shorten_cow<'a, 'b: 'a, T: ToOwned + ?Sized>(cow: &'a Cow<'b, T>) -> Cow<'a, T> {
+    match cow {
+        Cow::Borrowed(x) => Cow::Borrowed(x),
+        Cow::Owned(x) => Cow::Borrowed(x.borrow()),
     }
 }
 
@@ -239,7 +260,7 @@ impl<'a> TaskName<'a> {
 
     pub fn in_workspace(&self, workspace: &str) -> bool {
         self.task_id()
-            .map_or(true, |task_id| task_id.package() == workspace)
+            .is_none_or(|task_id| task_id.package() == workspace)
     }
 
     pub fn into_owned(self) -> TaskName<'static> {

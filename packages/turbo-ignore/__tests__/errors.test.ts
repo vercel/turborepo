@@ -1,3 +1,4 @@
+import { describe, it, expect } from "@jest/globals";
 import { shouldWarn, NON_FATAL_ERRORS } from "../src/errors";
 
 describe("shouldWarn()", () => {

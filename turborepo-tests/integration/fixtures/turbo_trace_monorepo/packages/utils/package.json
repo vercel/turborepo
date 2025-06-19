@@ -1,0 +1,15 @@
+{
+  "name": "utils",
+  "scripts": {
+    "build": "echo building",
+    "maybefails": "echo didnotfail"
+  },
+  "main": "index.ts",
+  "exports": {
+    ".": "./index.ts",
+    "./my-hook": "./my-hook.ts",
+    "./sword": {
+      "types": "./types.ts"
+    }
+  }
+}

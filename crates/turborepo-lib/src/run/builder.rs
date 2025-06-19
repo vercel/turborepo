@@ -1,31 +1,34 @@
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     io::{ErrorKind, IsTerminal},
     sync::Arc,
     time::SystemTime,
 };
 
 use chrono::Local;
-use tracing::debug;
-use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath};
+use tracing::{debug, warn};
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_analytics::{start_analytics, AnalyticsHandle, AnalyticsSender};
 use turborepo_api_client::{APIAuth, APIClient};
 use turborepo_cache::AsyncCache;
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_errors::Spanned;
+use turborepo_process::ProcessManager;
 use turborepo_repository::{
+    change_mapper::PackageInclusionReason,
     package_graph::{PackageGraph, PackageName},
     package_json,
     package_json::PackageJson,
 };
 use turborepo_scm::SCM;
+use turborepo_signals::{SignalHandler, SignalSubscriber};
 use turborepo_telemetry::events::{
     command::CommandEventBuilder,
     generic::{DaemonInitStatus, GenericEventBuilder},
     repo::{RepoEventBuilder, RepoType},
     EventBuilder, TrackedErrors,
 };
-use turborepo_ui::{ColorSelector, UI};
+use turborepo_ui::{ColorConfig, ColorSelector};
 #[cfg(feature = "daemon-package-discovery")]
 use {
     crate::run::package_discovery::DaemonPackageDiscovery,
@@ -40,12 +43,11 @@ use crate::{
     cli::DryRunMode,
     commands::CommandBase,
     engine::{Engine, EngineBuilder},
+    microfrontends::MicrofrontendsConfigs,
     opts::Opts,
-    process::ProcessManager,
     run::{scope, task_access::TaskAccess, task_id::TaskName, Error, Run, RunCache},
     shim::TurboState,
-    signal::{SignalHandler, SignalSubscriber},
-    turbo_json::TurboJson,
+    turbo_json::{TurboJson, TurboJsonLoader, UIMode},
     DaemonConnector,
 };
 
@@ -54,9 +56,8 @@ pub struct RunBuilder {
     opts: Opts,
     api_auth: Option<APIAuth>,
     repo_root: AbsoluteSystemPathBuf,
-    ui: UI,
+    color_config: ColorConfig,
     version: &'static str,
-    experimental_ui: bool,
     api_client: APIClient,
     analytics_sender: Option<AnalyticsSender>,
     // In watch mode, we can have a changed package that we want to serve as an entrypoint.
@@ -64,42 +65,48 @@ pub struct RunBuilder {
     // this package.
     entrypoint_packages: Option<HashSet<PackageName>>,
     should_print_prelude_override: Option<bool>,
-    allow_missing_package_manager: bool,
+    // In query, we don't want to validate the engine. Defaults to `true`
+    should_validate_engine: bool,
+    // If true, we will add all tasks to the graph, even if they are not specified
+    add_all_tasks: bool,
 }
 
 impl RunBuilder {
     pub fn new(base: CommandBase) -> Result<Self, Error> {
         let api_client = base.api_client()?;
 
-        let opts = Opts::new(&base)?;
+        let opts = base.opts();
         let api_auth = base.api_auth()?;
-        let config = base.config()?;
-        let allow_missing_package_manager = config.allow_no_package_manager();
 
         let version = base.version();
-        let experimental_ui = config.ui();
         let processes = ProcessManager::new(
             // We currently only use a pty if the following are met:
             // - we're attached to a tty
             atty::is(atty::Stream::Stdout) &&
             // - if we're on windows, we're using the UI
-            (!cfg!(windows) || experimental_ui),
+            (!cfg!(windows) || matches!(opts.run_opts.ui_mode, UIMode::Tui)),
         );
-        let CommandBase { repo_root, ui, .. } = base;
+
+        let CommandBase {
+            repo_root,
+            color_config: ui,
+            opts,
+            ..
+        } = base;
 
         Ok(Self {
             processes,
             opts,
             api_client,
             repo_root,
-            ui,
+            color_config: ui,
             version,
-            experimental_ui,
             api_auth,
             analytics_sender: None,
             entrypoint_packages: None,
             should_print_prelude_override: None,
-            allow_missing_package_manager,
+            should_validate_engine: true,
+            add_all_tasks: false,
         })
     }
 
@@ -113,6 +120,16 @@ impl RunBuilder {
         self
     }
 
+    pub fn add_all_tasks(mut self) -> Self {
+        self.add_all_tasks = true;
+        self
+    }
+
+    pub fn do_not_validate_engine(mut self) -> Self {
+        self.should_validate_engine = false;
+        self
+    }
+
     fn connect_process_manager(&self, signal_subscriber: SignalSubscriber) {
         let manager = self.processes.clone();
         tokio::spawn(async move {
@@ -121,9 +138,51 @@ impl RunBuilder {
         });
     }
 
+    fn will_execute_tasks(&self) -> bool {
+        self.opts.run_opts.dry_run.is_none() && self.opts.run_opts.graph.is_none()
+    }
+
     pub fn with_analytics_sender(mut self, analytics_sender: Option<AnalyticsSender>) -> Self {
         self.analytics_sender = analytics_sender;
         self
+    }
+
+    pub fn calculate_filtered_packages(
+        repo_root: &AbsoluteSystemPath,
+        opts: &Opts,
+        pkg_dep_graph: &PackageGraph,
+        scm: &SCM,
+        root_turbo_json: &TurboJson,
+    ) -> Result<HashMap<PackageName, PackageInclusionReason>, Error> {
+        let (mut filtered_pkgs, is_all_packages) = scope::resolve_packages(
+            &opts.scope_opts,
+            repo_root,
+            pkg_dep_graph,
+            scm,
+            root_turbo_json,
+        )?;
+
+        if is_all_packages {
+            for target in opts.run_opts.tasks.iter() {
+                let mut task_name = TaskName::from(target.as_str());
+                // If it's not a package task, we convert to a root task
+                if !task_name.is_package_task() {
+                    task_name = task_name.into_root_task()
+                }
+
+                if root_turbo_json.tasks.contains_key(&task_name) {
+                    filtered_pkgs.insert(
+                        PackageName::Root,
+                        PackageInclusionReason::RootTask {
+                            task: task_name.to_string(),
+                        },
+                    );
+                    break;
+                }
+            }
+        };
+
+        Ok(filtered_pkgs)
     }
 
     // Starts analytics and returns handle. This is not included in the main `build`
@@ -173,7 +232,7 @@ impl RunBuilder {
         run_telemetry.track_is_linked(is_linked);
         run_telemetry.track_arg_usage(
             "dangerously_allow_missing_package_manager",
-            self.allow_missing_package_manager,
+            self.opts.repo_opts.allow_no_package_manager,
         );
         // we only track the remote cache if we're linked because this defaults to
         // Vercel
@@ -234,11 +293,11 @@ impl RunBuilder {
         let mut pkg_dep_graph = {
             let builder = PackageGraph::builder(&self.repo_root, root_package_json.clone())
                 .with_single_package_mode(self.opts.run_opts.single_package)
-                .with_allow_no_package_manager(self.allow_missing_package_manager);
+                .with_allow_no_package_manager(self.opts.repo_opts.allow_no_package_manager);
 
             // Daemon package discovery depends on packageManager existing in package.json
             let graph = if cfg!(feature = "daemon-package-discovery")
-                && !self.allow_missing_package_manager
+                && !self.opts.repo_opts.allow_no_package_manager
             {
                 match (&daemon, self.opts.run_opts.daemon) {
                     (None, Some(true)) => {
@@ -304,9 +363,16 @@ impl RunBuilder {
             }
         };
 
-        repo_telemetry.track_package_manager(pkg_dep_graph.package_manager().to_string());
+        repo_telemetry.track_package_manager(pkg_dep_graph.package_manager().name().to_string());
         repo_telemetry.track_size(pkg_dep_graph.len());
         run_telemetry.track_run_type(self.opts.run_opts.dry_run.is_some());
+        let micro_frontend_configs =
+            MicrofrontendsConfigs::from_disk(&self.repo_root, &pkg_dep_graph)
+                .inspect_err(|err| {
+                    warn!("Ignoring invalid microfrontends configuration: {err}");
+                })
+                .ok()
+                .flatten();
 
         let scm = scm.await.expect("detecting scm panicked");
         let async_cache = AsyncCache::new(
@@ -321,48 +387,72 @@ impl RunBuilder {
         let task_access = TaskAccess::new(self.repo_root.clone(), async_cache.clone(), &scm);
         task_access.restore_config().await;
 
-        let root_turbo_json = TurboJson::load(
-            &self.repo_root,
-            AnchoredSystemPath::empty(),
-            &root_package_json,
-            is_single_package,
-        )?;
+        let root_turbo_json_path = self.opts.repo_opts.root_turbo_json_path.clone();
+
+        let turbo_json_loader = if task_access.is_enabled() {
+            TurboJsonLoader::task_access(
+                self.repo_root.clone(),
+                root_turbo_json_path.clone(),
+                root_package_json.clone(),
+            )
+        } else if is_single_package {
+            TurboJsonLoader::single_package(
+                self.repo_root.clone(),
+                root_turbo_json_path.clone(),
+                root_package_json.clone(),
+            )
+        } else if !root_turbo_json_path.exists() &&
+        // Infer a turbo.json if allowing no turbo.json is explicitly allowed or if MFE configs are discovered
+        (self.opts.repo_opts.allow_no_turbo_json || micro_frontend_configs.is_some())
+        {
+            TurboJsonLoader::workspace_no_turbo_json(
+                self.repo_root.clone(),
+                pkg_dep_graph.packages(),
+                micro_frontend_configs.clone(),
+            )
+        } else if let Some(micro_frontends) = &micro_frontend_configs {
+            TurboJsonLoader::workspace_with_microfrontends(
+                self.repo_root.clone(),
+                root_turbo_json_path.clone(),
+                pkg_dep_graph.packages(),
+                micro_frontends.clone(),
+            )
+        } else {
+            TurboJsonLoader::workspace(
+                self.repo_root.clone(),
+                root_turbo_json_path.clone(),
+                pkg_dep_graph.packages(),
+            )
+        };
+
+        let root_turbo_json = turbo_json_loader.load(&PackageName::Root)?.clone();
 
         pkg_dep_graph.validate()?;
 
-        let filtered_pkgs = {
-            let (mut filtered_pkgs, is_all_packages) = scope::resolve_packages(
-                &self.opts.scope_opts,
-                &self.repo_root,
-                &pkg_dep_graph,
-                &scm,
-                &root_turbo_json,
-            )?;
-
-            if is_all_packages {
-                for target in self.opts.run_opts.tasks.iter() {
-                    let mut task_name = TaskName::from(target.as_str());
-                    // If it's not a package task, we convert to a root task
-                    if !task_name.is_package_task() {
-                        task_name = task_name.into_root_task()
-                    }
-
-                    if root_turbo_json.tasks.contains_key(&task_name) {
-                        filtered_pkgs.insert(PackageName::Root);
-                        break;
-                    }
-                }
-            };
-
-            filtered_pkgs
-        };
+        let filtered_pkgs = Self::calculate_filtered_packages(
+            &self.repo_root,
+            &self.opts,
+            &pkg_dep_graph,
+            &scm,
+            &root_turbo_json,
+        )?;
 
         let env_at_execution_start = EnvironmentVariableMap::infer();
-        let mut engine = self.build_engine(&pkg_dep_graph, &root_turbo_json, &filtered_pkgs)?;
+        let mut engine = self.build_engine(
+            &pkg_dep_graph,
+            &root_turbo_json,
+            filtered_pkgs.keys(),
+            &turbo_json_loader,
+        )?;
 
         if self.opts.run_opts.parallel {
             pkg_dep_graph.remove_package_dependencies();
-            engine = self.build_engine(&pkg_dep_graph, &root_turbo_json, &filtered_pkgs)?;
+            engine = self.build_engine(
+                &pkg_dep_graph,
+                &root_turbo_json,
+                filtered_pkgs.keys(),
+                &turbo_json_loader,
+            )?;
         }
 
         let color_selector = ColorSelector::default();
@@ -370,21 +460,21 @@ impl RunBuilder {
         let run_cache = Arc::new(RunCache::new(
             async_cache,
             &self.repo_root,
-            &self.opts.runcache_opts,
+            self.opts.runcache_opts,
+            &self.opts.cache_opts,
             color_selector,
             daemon.clone(),
-            self.ui,
+            self.color_config,
             self.opts.run_opts.dry_run.is_some(),
         ));
 
-        let should_print_prelude = self.should_print_prelude_override.unwrap_or_else(|| {
-            self.opts.run_opts.dry_run.is_none() && self.opts.run_opts.graph.is_none()
-        });
+        let should_print_prelude = self
+            .should_print_prelude_override
+            .unwrap_or_else(|| self.will_execute_tasks());
 
         Ok(Run {
             version: self.version,
-            ui: self.ui,
-            experimental_ui: self.experimental_ui,
+            color_config: self.color_config,
             start_at,
             processes: self.processes,
             run_telemetry,
@@ -394,8 +484,9 @@ impl RunBuilder {
             api_client: self.api_client,
             api_auth: self.api_auth,
             env_at_execution_start,
-            filtered_pkgs,
+            filtered_pkgs: filtered_pkgs.keys().cloned().collect(),
             pkg_dep_graph: Arc::new(pkg_dep_graph),
+            turbo_json_loader,
             root_turbo_json,
             scm,
             engine: Arc::new(engine),
@@ -403,33 +494,41 @@ impl RunBuilder {
             signal_handler: signal_handler.clone(),
             daemon,
             should_print_prelude,
+            micro_frontend_configs,
         })
     }
 
-    fn build_engine(
+    fn build_engine<'a>(
         &self,
         pkg_dep_graph: &PackageGraph,
         root_turbo_json: &TurboJson,
-        filtered_pkgs: &HashSet<PackageName>,
+        filtered_pkgs: impl Iterator<Item = &'a PackageName>,
+        turbo_json_loader: &TurboJsonLoader,
     ) -> Result<Engine, Error> {
-        let mut engine = EngineBuilder::new(
+        let tasks = self.opts.run_opts.tasks.iter().map(|task| {
+            // TODO: Pull span info from command
+            Spanned::new(TaskName::from(task.as_str()).into_owned())
+        });
+        let mut builder = EngineBuilder::new(
             &self.repo_root,
             pkg_dep_graph,
+            turbo_json_loader,
             self.opts.run_opts.single_package,
         )
         .with_root_tasks(root_turbo_json.tasks.keys().cloned())
-        .with_turbo_jsons(Some(
-            Some((PackageName::Root, root_turbo_json.clone()))
-                .into_iter()
-                .collect(),
-        ))
         .with_tasks_only(self.opts.run_opts.only)
-        .with_workspaces(filtered_pkgs.clone().into_iter().collect())
-        .with_tasks(self.opts.run_opts.tasks.iter().map(|task| {
-            // TODO: Pull span info from command
-            Spanned::new(TaskName::from(task.as_str()).into_owned())
-        }))
-        .build()?;
+        .with_workspaces(filtered_pkgs.cloned().collect())
+        .with_tasks(tasks);
+
+        if self.add_all_tasks {
+            builder = builder.add_all_tasks();
+        }
+
+        if !self.should_validate_engine {
+            builder = builder.do_not_validate_engine();
+        }
+
+        let mut engine = builder.build()?;
 
         // If we have an initial task, we prune out the engine to only
         // tasks that are reachable from that initial task.
@@ -437,12 +536,13 @@ impl RunBuilder {
             engine = engine.create_engine_for_subgraph(entrypoint_packages);
         }
 
-        if !self.opts.run_opts.parallel {
+        if !self.opts.run_opts.parallel && self.should_validate_engine {
             engine
                 .validate(
                     pkg_dep_graph,
                     self.opts.run_opts.concurrency,
-                    self.experimental_ui,
+                    self.opts.run_opts.ui_mode,
+                    self.will_execute_tasks(),
                 )
                 .map_err(Error::EngineValidation)?;
         }

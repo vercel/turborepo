@@ -1,6 +1,7 @@
 use std::fmt::Display;
 
 use serde::{Deserialize, Serialize};
+use turborepo_ci;
 use turborepo_vercel_api::telemetry::{TelemetryCommandEvent, TelemetryEvent};
 use uuid::Uuid;
 
@@ -12,6 +13,7 @@ pub struct CommandEventBuilder {
     id: String,
     command: String,
     parent_id: Option<String>,
+    is_ci: bool,
 }
 
 impl Identifiable for CommandEventBuilder {
@@ -27,6 +29,10 @@ impl EventBuilder for CommandEventBuilder {
     }
 
     fn track(&self, event: Event) {
+        if self.is_ci && !event.send_in_ci {
+            return;
+        }
+
         let val = match event.is_sensitive {
             EventType::Sensitive => TelemetryConfig::one_way_hash(&event.value),
             EventType::NonSensitive => event.value.to_string(),
@@ -52,6 +58,7 @@ impl EventBuilder for CommandEventBuilder {
 pub enum LoginMethod {
     SSO,
     Standard,
+    Manual,
 }
 
 impl CommandEventBuilder {
@@ -60,6 +67,7 @@ impl CommandEventBuilder {
             id: Uuid::new_v4().to_string(),
             command: command.to_string(),
             parent_id: None,
+            is_ci: turborepo_ci::is_ci(),
         }
     }
 
@@ -68,6 +76,7 @@ impl CommandEventBuilder {
             key: "command".to_string(),
             value: "called".to_string(),
             is_sensitive: EventType::NonSensitive,
+            send_in_ci: true,
         });
         self
     }
@@ -78,6 +87,7 @@ impl CommandEventBuilder {
             key: format!("arg:{}", arg),
             value: if is_set { "set" } else { "default" }.to_string(),
             is_sensitive: EventType::NonSensitive,
+            send_in_ci: true,
         });
         self
     }
@@ -87,6 +97,18 @@ impl CommandEventBuilder {
             key: format!("arg:{}", arg),
             value: val.to_string(),
             is_sensitive,
+            send_in_ci: true,
+        });
+        self
+    }
+
+    // ui
+    pub fn track_ui_mode(&self, val: impl Display) -> &Self {
+        self.track(Event {
+            key: "ui".to_string(),
+            value: val.to_string(),
+            is_sensitive: EventType::NonSensitive,
+            send_in_ci: false,
         });
         self
     }
@@ -97,6 +119,7 @@ impl CommandEventBuilder {
             key: "action".to_string(),
             value: if enabled { "enabled" } else { "disabled" }.to_string(),
             is_sensitive: EventType::NonSensitive,
+            send_in_ci: false,
         });
         self
     }
@@ -107,6 +130,7 @@ impl CommandEventBuilder {
             key: "option".to_string(),
             value: option.to_string(),
             is_sensitive: EventType::NonSensitive,
+            send_in_ci: false,
         });
         self
     }
@@ -116,6 +140,7 @@ impl CommandEventBuilder {
             key: "tag".to_string(),
             value: tag.to_string(),
             is_sensitive: EventType::NonSensitive,
+            send_in_ci: false,
         });
         self
     }
@@ -127,8 +152,10 @@ impl CommandEventBuilder {
             value: match method {
                 LoginMethod::SSO => "sso".to_string(),
                 LoginMethod::Standard => "standard".to_string(),
+                LoginMethod::Manual => "manual".to_string(),
             },
             is_sensitive: EventType::NonSensitive,
+            send_in_ci: false,
         });
         self
     }
@@ -139,6 +166,7 @@ impl CommandEventBuilder {
             key: "success".to_string(),
             value: succeeded.to_string(),
             is_sensitive: EventType::NonSensitive,
+            send_in_ci: false,
         });
         self
     }

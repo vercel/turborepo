@@ -27,7 +27,3 @@ To create a test for a new example:
 3. Run `pnpm install` for the repository so the new package is added to the workspace.
 4. Edit the `test` script to path to the directory you are interested in and use the package manager for that example.
 5. Run `turbo test --filter="@turborepo-examples-tests/*"` in your terminal to make sure all is well!
-
-### Limitations
-
-We currently do not test the examples that use Docker. We may choose to do this in the future.

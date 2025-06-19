@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-use miette::Diagnostic;
+use miette::{Diagnostic, Report};
 use petgraph::graph::{Graph, NodeIndex};
 use tracing::{warn, Instrument};
 use turbopath::{
@@ -10,8 +10,7 @@ use turborepo_graph_utils as graph;
 use turborepo_lockfiles::Lockfile;
 
 use super::{
-    dep_splitter::DependencySplitter, npmrc::NpmRc, PackageGraph, PackageInfo, PackageName,
-    PackageNode,
+    dep_splitter::DependencySplitter, PackageGraph, PackageInfo, PackageName, PackageNode,
 };
 use crate::{
     discovery::{
@@ -33,7 +32,7 @@ pub struct PackageGraphBuilder<'a, T> {
 
 #[derive(Debug, Diagnostic, thiserror::Error)]
 pub enum Error {
-    #[error("could not resolve workspaces")]
+    #[error("Could not resolve workspaces.")]
     #[diagnostic(transparent)]
     PackageManager(#[from] crate::package_manager::Error),
     #[error(
@@ -45,14 +44,14 @@ pub enum Error {
         path: String,
         existing_path: String,
     },
-    #[error("path error: {0}")]
+    #[error("Path error: {0}")]
     Path(#[from] turbopath::PathError),
     #[diagnostic(transparent)]
     #[error(transparent)]
     PackageJson(#[from] crate::package_json::Error),
     #[error("package.json must have a name field:\n{0}")]
     PackageJsonMissingName(AbsoluteSystemPathBuf),
-    #[error("Invalid package dependency graph: {0}")]
+    #[error("Invalid package dependency graph:")]
     InvalidPackageGraph(#[source] graph::Error),
     #[error(transparent)]
     Lockfile(#[from] turborepo_lockfiles::Error),
@@ -79,6 +78,12 @@ impl<'a> PackageGraphBuilder<'a, LocalPackageDiscoveryBuilder> {
     pub fn with_allow_no_package_manager(mut self, allow_no_package_manager: bool) -> Self {
         self.package_discovery
             .with_allow_no_package_manager(allow_no_package_manager);
+        self
+    }
+
+    pub fn with_package_manager(mut self, package_manager: PackageManager) -> Self {
+        self.package_discovery
+            .with_package_manager(Some(package_manager));
         self
     }
 }
@@ -120,7 +125,7 @@ impl<'a, P> PackageGraphBuilder<'a, P> {
     }
 }
 
-impl<'a, T> PackageGraphBuilder<'a, T>
+impl<T> PackageGraphBuilder<'_, T>
 where
     T: PackageDiscoveryBuilder,
     T::Output: Send + Sync,
@@ -164,7 +169,7 @@ enum ResolvedWorkspaces {}
 // Allows us to collect all transitive deps
 enum ResolvedLockfile {}
 
-impl<'a, S, T> BuildState<'a, S, T> {
+impl<S, T> BuildState<'_, S, T> {
     fn add_node(&mut self, node: PackageNode) -> NodeIndex {
         let idx = self.workspace_graph.add_node(node.clone());
         self.node_lookup.insert(node, idx);
@@ -238,7 +243,8 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedPackageManager, T> {
         let name = PackageName::Other(
             json.name
                 .clone()
-                .ok_or(Error::PackageJsonMissingName(package_json_path))?,
+                .ok_or(Error::PackageJsonMissingName(package_json_path))?
+                .into_inner(),
         );
         let entry = PackageInfo {
             package_json: json,
@@ -350,18 +356,8 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
     #[tracing::instrument(skip(self))]
     fn connect_internal_dependencies(
         &mut self,
-        package_manager: PackageManager,
+        package_manager: &PackageManager,
     ) -> Result<(), Error> {
-        let npmrc = match package_manager {
-            PackageManager::Pnpm | PackageManager::Pnpm6 | PackageManager::Pnpm9 => {
-                let npmrc_path = self.repo_root.join_component(".npmrc");
-                match npmrc_path.read_existing_to_string().ok().flatten() {
-                    Some(contents) => NpmRc::from_reader(contents.as_bytes()).ok(),
-                    None => None,
-                }
-            }
-            _ => None,
-        };
         let split_deps = self
             .workspaces
             .iter()
@@ -374,7 +370,6 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
                         &entry.package_json_path,
                         &self.workspaces,
                         package_manager,
-                        npmrc.as_ref(),
                         entry.package_json.all_dependencies(),
                     ),
                 )
@@ -444,15 +439,15 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
             .discover_packages()
             .await?
             .package_manager;
-        self.connect_internal_dependencies(package_manager)?;
+        self.connect_internal_dependencies(&package_manager)?;
 
         let lockfile = match self.populate_lockfile().await {
             Ok(lockfile) => Some(lockfile),
             Err(e) => {
                 warn!(
                     "Issues occurred when constructing package graph. Turbo will function, but \
-                     some features may not be available: {}",
-                    e
+                     some features may not be available:\n {:?}",
+                    Report::new(e)
                 );
                 None
             }
@@ -481,7 +476,7 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
     }
 }
 
-impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedLockfile, T> {
+impl<T: PackageDiscovery> BuildState<'_, ResolvedLockfile, T> {
     fn all_external_dependencies(&self) -> Result<HashMap<String, HashMap<String, String>>, Error> {
         self.workspaces
             .values()
@@ -565,8 +560,7 @@ impl Dependencies {
         repo_root: &AbsoluteSystemPath,
         workspace_json_path: &AnchoredSystemPathBuf,
         workspaces: &HashMap<PackageName, PackageInfo>,
-        package_manager: PackageManager,
-        npmrc: Option<&NpmRc>,
+        package_manager: &PackageManager,
         dependencies: I,
     ) -> Self {
         let resolved_workspace_json_path = repo_root.resolve(workspace_json_path);
@@ -576,7 +570,7 @@ impl Dependencies {
         let mut internal = HashSet::new();
         let mut external = BTreeMap::new();
         let splitter =
-            DependencySplitter::new(repo_root, workspace_dir, workspaces, package_manager, npmrc);
+            DependencySplitter::new(repo_root, workspace_dir, workspaces, package_manager);
         for (name, version) in dependencies.into_iter() {
             if let Some(workspace) = splitter.is_internal(name, version) {
                 internal.insert(workspace);
@@ -602,6 +596,8 @@ impl PackageInfo {
 #[cfg(test)]
 mod test {
     use std::assert_matches::assert_matches;
+
+    use turborepo_errors::Spanned;
 
     use super::*;
 
@@ -630,7 +626,7 @@ mod test {
         let builder = PackageGraphBuilder::new(
             &root,
             PackageJson {
-                name: Some("root".into()),
+                name: Some(Spanned::new("root".into())),
                 ..Default::default()
             },
         )
@@ -640,14 +636,14 @@ mod test {
             map.insert(
                 root.join_component("a"),
                 PackageJson {
-                    name: Some("foo".into()),
+                    name: Some(Spanned::new("foo".into())),
                     ..Default::default()
                 },
             );
             map.insert(
                 root.join_component("b"),
                 PackageJson {
-                    name: Some("foo".into()),
+                    name: Some(Spanned::new("foo".into())),
                     ..Default::default()
                 },
             );

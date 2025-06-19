@@ -1,0 +1,21 @@
+---
+source: crates/turborepo/tests/query.rs
+expression: query_output
+---
+{
+  "data": {
+    "packages": {
+      "items": [
+        {
+          "name": "another"
+        },
+        {
+          "name": "my-app"
+        },
+        {
+          "name": "util"
+        }
+      ]
+    }
+  }
+}

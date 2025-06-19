@@ -1,0 +1,11 @@
+{
+  "name": "monorepo",
+  "scripts": {
+    "something": "turbo run build"
+  },
+  "packageManager": "npm@10.5.0",
+  "workspaces": [
+    "apps/**",
+    "packages/**"
+  ]
+}

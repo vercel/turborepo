@@ -96,7 +96,7 @@ export function getPlop({
     // add in all the workspace configs
     workspaceConfigs.forEach((c) => {
       try {
-        plop?.load(c.config, {
+        plop.load(c.config, {
           destBasePath: c.root,
           force: false,
         });

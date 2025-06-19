@@ -1,4 +1,4 @@
-import type { EnvWildcard } from "@turbo/types/src/types/config";
+import type { EnvWildcard } from "@turbo/types";
 
 const reRegExpChar = /[\\^$.*+?()[\]{}|]/g;
 const reHasRegExpChar = RegExp(reRegExpChar.source);

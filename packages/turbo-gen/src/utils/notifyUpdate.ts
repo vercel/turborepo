@@ -1,4 +1,4 @@
-import { yellow, bold } from "picocolors";
+import picocolors from "picocolors";
 import checkForUpdate from "update-check";
 import { logger } from "@turbo/utils";
 import cliPkgJson from "../../package.json";
@@ -11,7 +11,11 @@ export async function notifyUpdate(): Promise<void> {
     if (res?.latest) {
       logger.log();
       logger.log(
-        yellow(bold(`A new version of \`${cliPkgJson.name}\` is available!`))
+        picocolors.yellow(
+          picocolors.bold(
+            `A new version of \`${cliPkgJson.name}\` is available!`
+          )
+        )
       );
       logger.log();
     }

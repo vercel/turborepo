@@ -27,7 +27,7 @@ pub enum WalkType {
 }
 
 pub use walkdir::Error as WalkDirError;
-use wax::walk::Entry;
+use wax::walk::{Entry, EntryResidue};
 
 #[derive(Debug, thiserror::Error)]
 pub enum WalkError {
@@ -282,7 +282,26 @@ pub struct GlobError {
     reason: String,
 }
 
-/// ValidatedGlob represents an input string that we have either validated or
+#[derive(Debug, Default, Copy, Clone)]
+pub struct Settings {
+    /// Don't recurse into a directory if it contains a `package.json` file.
+    /// NOTE: If globbing from the root of a workspace, this setting will cause
+    /// us to not recurse into the individual packages. Therefore, only use this
+    /// setting if you are globbing in an individual package at not at the
+    /// workspace root.
+    ignore_nested_packages: bool,
+}
+
+impl Settings {
+    pub fn ignore_nested_packages(mut self) -> Self {
+        self.ignore_nested_packages = true;
+        self
+    }
+}
+
+/// ValidatedGlob.
+///
+/// Represents an input string that we have either validated or
 /// modified to fit our constraints. It does not _yet_ validate that the glob is
 /// a valid glob pattern, just that we have checked for unix format, ':'s, clean
 /// paths, etc.
@@ -338,6 +357,18 @@ impl FromStr for ValidatedGlob {
     }
 }
 
+pub fn globwalk_with_settings(
+    base_path: &AbsoluteSystemPath,
+    include: &[ValidatedGlob],
+    exclude: &[ValidatedGlob],
+    walk_type: WalkType,
+    settings: Settings,
+) -> Result<HashSet<AbsoluteSystemPathBuf>, WalkError> {
+    let include = include.iter().map(|i| i.inner.clone()).collect::<Vec<_>>();
+    let exclude = exclude.iter().map(|e| e.inner.clone()).collect::<Vec<_>>();
+    globwalk_internal(base_path, &include, &exclude, walk_type, settings)
+}
+
 pub fn globwalk(
     base_path: &AbsoluteSystemPath,
     include: &[ValidatedGlob],
@@ -346,7 +377,7 @@ pub fn globwalk(
 ) -> Result<HashSet<AbsoluteSystemPathBuf>, WalkError> {
     let include = include.iter().map(|i| i.inner.clone()).collect::<Vec<_>>();
     let exclude = exclude.iter().map(|e| e.inner.clone()).collect::<Vec<_>>();
-    globwalk_internal(base_path, &include, &exclude, walk_type)
+    globwalk_internal(base_path, &include, &exclude, walk_type, Default::default())
 }
 
 #[tracing::instrument]
@@ -355,6 +386,7 @@ pub fn globwalk_internal(
     include: &[String],
     exclude: &[String],
     walk_type: WalkType,
+    settings: Settings,
 ) -> Result<HashSet<AbsoluteSystemPathBuf>, WalkError> {
     let (base_path_new, include_paths, exclude_paths) =
         preprocess_paths_and_globs(base_path, include, exclude)?;
@@ -374,7 +406,15 @@ pub fn globwalk_internal(
         // Use flat_map_iter as we only want parallelism for walking the globs and not iterating
         // over the results.
         // See https://docs.rs/rayon/latest/rayon/iter/trait.ParallelIterator.html#method.flat_map_iter
-        .flat_map_iter(|glob| walk_glob(walk_type, &base_path_new, ex_patterns.clone(), glob))
+        .flat_map_iter(|glob| {
+            walk_glob(
+                walk_type,
+                &base_path_new,
+                ex_patterns.clone(),
+                glob,
+                settings,
+            )
+        })
         .collect()
 }
 
@@ -384,16 +424,32 @@ fn walk_glob(
     base_path_new: &Path,
     ex_patterns: Vec<Glob>,
     glob: Glob,
+    settings: Settings,
 ) -> Vec<Result<AbsoluteSystemPathBuf, WalkError>> {
-    glob.walk(base_path_new)
+    let iter = glob
+        .walk(base_path_new)
         .not(ex_patterns)
         .unwrap_or_else(|e| {
             // Per docs, only fails if exclusion list is too large, since we're using
             // pre-compiled globs
             panic!("Failed to compile exclusion globs: {}", e,)
+        });
+
+    if settings.ignore_nested_packages {
+        iter.filter_entry(|entry| {
+            let path = entry.path();
+            if path.is_dir() && path != base_path_new && path.join("package.json").exists() {
+                return Some(EntryResidue::Tree);
+            }
+
+            None
         })
         .filter_map(|entry| visit_file(walk_type, entry))
         .collect::<Vec<_>>()
+    } else {
+        iter.filter_map(|entry| visit_file(walk_type, entry))
+            .collect::<Vec<_>>()
+    }
 }
 
 #[tracing::instrument]
@@ -407,7 +463,7 @@ fn visit_file(
         Err(e) => {
             let io_err = std::io::Error::from(e);
             match io_err.kind() {
-                // Ignore DNE and permission errors
+                // Ignore missing file and permission errors
                 std::io::ErrorKind::NotFound | std::io::ErrorKind::PermissionDenied => None,
                 _ => Some(Err(io_err.into())),
             }
@@ -420,13 +476,13 @@ mod test {
     use std::{collections::HashSet, str::FromStr};
 
     use itertools::Itertools;
-    use tempdir::TempDir;
+    use tempfile::TempDir;
     use test_case::test_case;
     use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 
     use crate::{
         add_doublestar_to_dir, collapse_path, escape_glob_literals, fix_glob_pattern, globwalk,
-        ValidatedGlob, WalkError, WalkType,
+        Settings, ValidatedGlob, WalkError, WalkType,
     };
 
     #[cfg(unix)]
@@ -463,10 +519,10 @@ mod test {
     #[test_case("/a/b/.", "/a/b", 2 ; "test path with leading / and ending with dot segment")]
     #[test_case("/a/.././b", "/b", 0 ; "test path with leading / and mixed and consecutive dot and dotdot segments")]
     #[test_case("/a/b/c/../../d/e/f/g/h/i/../j", "/a/d/e/f/g/h/j", 1 ; "leading collapse followed by shorter one")]
-    fn test_collapse_path(glob: &str, expected: &str, earliest_collapsed_segement: usize) {
+    fn test_collapse_path(glob: &str, expected: &str, earliest_collapsed_segment: usize) {
         let (glob, segment) = collapse_path(glob).unwrap();
         assert_eq!(glob, expected);
-        assert_eq!(segment, earliest_collapsed_segement);
+        assert_eq!(segment, earliest_collapsed_segment);
     }
 
     #[test_case("../a/b" ; "test path starting with ../ segment should return None")]
@@ -531,8 +587,8 @@ mod test {
     }
 
     /// set up a globwalk test in a tempdir, returning the path to the tempdir
-    fn setup() -> tempdir::TempDir {
-        let tmp = tempdir::TempDir::new("globwalk").unwrap();
+    fn setup() -> tempfile::TempDir {
+        let tmp = tempfile::TempDir::with_prefix("globwalk").unwrap();
 
         let directories = ["a/b/c", "a/c", "abc", "axbxcxdxe/xxx", "axbxcxdxexxx", "b"];
 
@@ -710,7 +766,8 @@ mod test {
         &["*.txt"],
         &[],
         &["/test.txt"],
-        &["/test.txt"]
+        &["/test.txt"],
+        Default::default()
         ; "hello world"
     )]
     #[test_case(
@@ -719,7 +776,8 @@ mod test {
         &["subdir/test.txt", "test.txt"],
         &[],
         &["/subdir/test.txt", "/test.txt"],
-        &["/subdir/test.txt", "/test.txt"]
+        &["/subdir/test.txt", "/test.txt"],
+        Default::default()
         ; "bullet files"
     )]
     #[test_case(&[
@@ -752,7 +810,8 @@ mod test {
             "/repos/some-app/packages/colors/package.json",
             "/repos/some-app/packages/faker/package.json",
             "/repos/some-app/packages/left-pad/package.json",
-        ]
+        ],
+        Default::default()
         ; "finding workspace package.json files"
     )]
     #[test_case(&[
@@ -790,7 +849,8 @@ mod test {
             "/repos/some-app/packages/colors/package.json",
             "/repos/some-app/packages/faker/package.json",
             "/repos/some-app/packages/left-pad/package.json",
-        ]
+        ],
+        Default::default()
         ; "excludes unexpected workspace package.json files"
     )]
     #[test_case(&[
@@ -830,8 +890,26 @@ mod test {
             "/repos/some-app/packages/left-pad/package.json",
             "/repos/some-app/packages/xzibit/package.json",
             "/repos/some-app/packages/xzibit/packages/yo-dawg/package.json",
-        ]
+        ],
+        Default::default()
         ; "nested packages work")]
+    #[test_case(&[
+            "/external/file.txt",
+            "/repos/some-app/package.json",
+            "/repos/some-app/index.js",
+            "/repos/some-app/just-a-dir/index.js",
+            "/repos/some-app/packages/xzibit/package.json",
+            "/repos/some-app/packages/xzibit/index.js",
+            "/repos/some-app/packages/colors/package.json",
+            "/repos/some-app/packages/colors/index.js",
+        ],
+        "/repos/some-app/",
+        &["**/*.js"],
+        &[],
+        &["/repos/some-app/index.js", "/repos/some-app/just-a-dir/index.js"],
+        &["/repos/some-app/index.js", "/repos/some-app/just-a-dir/index.js"],
+        Settings::default().ignore_nested_packages()
+        ; "ignore nested workspaces setting only matches top level package")]
     #[test_case(&[
             "/external/file.txt",
             "/repos/some-app/apps/docs/package.json",
@@ -869,7 +947,8 @@ mod test {
             "/repos/some-app/packages/left-pad/package.json",
             "/repos/some-app/packages/xzibit/package.json",
             "/repos/some-app/packages/xzibit/packages/yo-dawg/package.json",
-        ]
+        ],
+        Default::default()
         ; "includes do not override excludes")]
     #[test_case(&[
             "/external/file.txt",
@@ -918,7 +997,8 @@ mod test {
             "/repos/some-app/dist/js/node_modules/browserify.js",
             "/repos/some-app/public/dist/css/index.css",
             "/repos/some-app/public/dist/images/rick_astley.jpg",
-        ]
+        ],
+        Default::default()
         ; "output globbing grabs the desired content"
     )]
     #[test_case(&[
@@ -943,7 +1023,8 @@ mod test {
             "/repos/some-app/dist/js/index.js",
             "/repos/some-app/dist/js/lib.js",
             "/repos/some-app/dist/js/node_modules/browserify.js",
-        ]
+        ],
+        Default::default()
         ; "passing ** captures all children")]
     #[test_case(&[
             "/repos/some-app/dist/index.html",
@@ -968,7 +1049,8 @@ mod test {
             "/repos/some-app/dist/js/index.js",
             "/repos/some-app/dist/js/lib.js",
             "/repos/some-app/dist/js/node_modules/browserify.js",
-        ]
+        ],
+        Default::default()
         ; "passing just a directory captures no children")]
     #[test_case(&[
             "/repos/some-app/dist/index.html",
@@ -988,13 +1070,16 @@ mod test {
             "/repos/some-app/dist/js/index.js",
             "/repos/some-app/dist/js/lib.js",
             "/repos/some-app/dist/js/node_modules/browserify.js",
-        ] ; "redundant includes do not duplicate")]
+        ],
+        Default::default()
+        ; "redundant includes do not duplicate"
+    )]
     #[test_case(&[
             "/repos/some-app/dist/index.html",
             "/repos/some-app/dist/js/index.js",
             "/repos/some-app/dist/js/lib.js",
             "/repos/some-app/dist/js/node_modules/browserify.js",
-        ], "/repos/some-app/", &["**"], &["**"], &[ ], &[ ] ; "exclude everything, include everything")]
+        ], "/repos/some-app/", &["**"], &["**"], &[ ], &[ ], Default::default() ; "exclude everything, include everything")]
     #[test_case(&[
             "/repos/some-app/dist/index.html",
             "/repos/some-app/dist/js/index.js",
@@ -1010,7 +1095,8 @@ mod test {
         ],
         &[
             "/repos/some-app/dist/index.html",
-        ]
+        ],
+        Default::default()
         ; "passing just a directory to exclude prevents capture of children")]
     #[test_case(&[
             "/repos/some-app/dist/index.html",
@@ -1026,7 +1112,8 @@ mod test {
             "/repos/some-app/dist/index.html",
             // "/repos/some-app/dist/js",
         ],
-        &["/repos/some-app/dist/index.html",]
+        &["/repos/some-app/dist/index.html",],
+        Default::default()
         ; "passing ** to exclude prevents capture of children")]
     #[test_case(&[
             "/repos/some-app/dist/index.html",
@@ -1038,7 +1125,8 @@ mod test {
         &["**"],
         &["./"],
         &[],
-        &[]
+        &[],
+        Default::default()
         ; "exclude everything with folder . applies at base path"
     )]
     #[test_case(&[
@@ -1051,7 +1139,8 @@ mod test {
         &["**"],
         &["./dist"],
         &["repos/some-app"],
-        &[]
+        &[],
+        Default::default()
         ; "exclude everything with traversal applies at a non-base path"
     )]
     #[test_case(&[
@@ -1064,7 +1153,8 @@ mod test {
         &["**"],
         &["dist/../"],
         &[],
-        &[]
+        &[],
+        Default::default()
         ; "exclude everything with folder traversal (..) applies at base path"
     )]
     #[test_case(&[
@@ -1089,7 +1179,8 @@ mod test {
             "/repos/some-app/dist/js/index.js",
             "/repos/some-app/dist/js/lib.js",
             "/repos/some-app/dist/js/node_modules/browserify.js",
-        ]
+        ],
+        Default::default()
         ; "traversal works within base path"
     )]
     #[test_case(&[
@@ -1115,7 +1206,8 @@ mod test {
             "/repos/some-app/dist/js/index.js",
             "/repos/some-app/dist/js/lib.js",
             "/repos/some-app/dist/js/node_modules/browserify.js",
-        ]
+        ],
+        Default::default()
         ; "self references work (.)"
     )]
     #[test_case(&[
@@ -1127,7 +1219,7 @@ mod test {
         ], "/repos/some-app/", &["*"], &[ ], &[
             "/repos/some-app/dist",
             "/repos/some-app/package.json",
-        ], &["/repos/some-app/package.json"] ; "depth of 1 includes handles folders properly")]
+        ], &["/repos/some-app/package.json"], Default::default() ; "depth of 1 includes handles folders properly")]
     #[test_case(&[
             "/repos/some-app/package.json",
             "/repos/some-app/dist/index.html",
@@ -1143,7 +1235,8 @@ mod test {
             "/repos/some-app/dist",
             "/repos/some-app/package.json",
         ],
-        &["/repos/some-app/package.json"]
+        &["/repos/some-app/package.json"],
+        Default::default()
         ; "depth of 1 excludes prevents capturing folders")]
     #[test_case(&[
             "/repos/some-app/dist/index.html",
@@ -1168,7 +1261,8 @@ mod test {
             "/repos/some-app/dist/js/index.js",
             "/repos/some-app/dist/js/lib.js",
             "/repos/some-app/dist/js/node_modules/browserify.js",
-        ]
+        ],
+        Default::default()
         ; "No-trailing slash basePath works")]
     #[test_case(&[
             "/repos/some-app/included.txt",
@@ -1177,7 +1271,7 @@ mod test {
             "/repos/some-app/included.txt",
         ], &[
             "/repos/some-app/included.txt",
-        ] ; "exclude single file")]
+        ], Default::default() ; "exclude single file")]
     #[test_case(&[
             "/repos/some-app/one/included.txt",
             "/repos/some-app/one/two/included.txt",
@@ -1201,7 +1295,7 @@ mod test {
             "/repos/some-app/one/included.txt",
             "/repos/some-app/one/two/included.txt",
             "/repos/some-app/one/two/three/included.txt",
-        ] ; "exclude nested single file")]
+        ], Default::default() ; "exclude nested single file")]
     #[test_case(&[
             "/repos/some-app/one/included.txt",
             "/repos/some-app/one/two/included.txt",
@@ -1209,7 +1303,7 @@ mod test {
             "/repos/some-app/one/excluded.txt",
             "/repos/some-app/one/two/excluded.txt",
             "/repos/some-app/one/two/three/excluded.txt",
-        ], "/repos/some-app", &["**"], &["**"], &[], &[] ; "exclude everything")]
+        ], "/repos/some-app", &["**"], &["**"], &[], &[], Default::default() ; "exclude everything")]
     #[test_case(&[
             "/repos/some-app/one/included.txt",
             "/repos/some-app/one/two/included.txt",
@@ -1217,7 +1311,7 @@ mod test {
             "/repos/some-app/one/excluded.txt",
             "/repos/some-app/one/two/excluded.txt",
             "/repos/some-app/one/two/three/excluded.txt",
-        ], "/repos/some-app", &["**"], &["**/"], &[], &[] ; "exclude everything with slash")]
+        ], "/repos/some-app", &["**"], &["**/"], &[], &[], Default::default() ; "exclude everything with slash")]
     #[test_case(&[
             "/repos/some-app/foo/bar",
             "/repos/some-app/some-foo/bar",
@@ -1232,7 +1326,8 @@ mod test {
         ],
         &[
             "/repos/some-app/included",
-        ]
+        ],
+        Default::default()
         ; "exclude everything with leading star"
     )]
     #[test_case(&[
@@ -1250,7 +1345,8 @@ mod test {
         ],
         &[
             "/repos/some-app/included",
-        ]
+        ],
+        Default::default()
         ; "exclude everything with trailing star"
     )]
     fn glob_walk_files(
@@ -1260,6 +1356,7 @@ mod test {
         exclude: &[&str],
         expected: &[&str],
         expected_files: &[&str],
+        settings: Settings,
     ) {
         let dir = setup_files(files);
         let base_path = base_path.trim_start_matches('/');
@@ -1277,7 +1374,9 @@ mod test {
             (crate::WalkType::Files, expected_files),
             (crate::WalkType::All, expected),
         ] {
-            let success = super::globwalk(&path, &include, &exclude, walk_type).unwrap();
+            let success =
+                super::globwalk_with_settings(&path, &include, &exclude, walk_type, settings)
+                    .unwrap();
 
             let success = success
                 .iter()
@@ -1343,12 +1442,12 @@ mod test {
         // TODO: this test needs to be implemented...
     }
 
-    fn setup_files(files: &[&str]) -> tempdir::TempDir {
+    fn setup_files(files: &[&str]) -> tempfile::TempDir {
         setup_files_with_prefix("globwalk", files)
     }
 
-    fn setup_files_with_prefix(prefix: &str, files: &[&str]) -> tempdir::TempDir {
-        let tmp = tempdir::TempDir::new(prefix).unwrap();
+    fn setup_files_with_prefix(prefix: &str, files: &[&str]) -> tempfile::TempDir {
+        let tmp = tempfile::TempDir::with_prefix(prefix).unwrap();
         for file in files {
             let file = file.trim_start_matches('/');
             let path = tmp.path().join(file);
@@ -1493,7 +1592,7 @@ mod test {
     #[test_case("foo/", true, "foo/**" ; "dir slash")]
     #[test_case("f[o0]o", true, "f[o0]o" ; "non-literal")]
     fn test_add_double_star(glob: &str, is_dir: bool, expected: &str) {
-        let tmpdir = TempDir::new("doublestar").unwrap();
+        let tmpdir = TempDir::with_prefix("doublestar").unwrap();
         let base = AbsoluteSystemPath::new(tmpdir.path().to_str().unwrap()).unwrap();
 
         let foo = base.join_component("foo");

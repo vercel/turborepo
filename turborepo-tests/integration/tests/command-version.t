@@ -8,6 +8,6 @@ Test version matches that of version.txt
 
 TODO: resolve ambiguity
   $ ${TURBO} -v
-    x No command specified
+    x No command specified.
   
   [1]

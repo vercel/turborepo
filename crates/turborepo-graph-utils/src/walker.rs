@@ -14,14 +14,14 @@ use tracing::log::trace;
 pub struct Walker<N, S> {
     marker: std::marker::PhantomData<S>,
     cancel: watch::Sender<bool>,
-    node_events: Option<mpsc::Receiver<(N, oneshot::Sender<()>)>>,
+    node_events: Option<mpsc::Receiver<(N, oneshot::Sender<bool>)>>,
     join_handles: FuturesUnordered<JoinHandle<()>>,
 }
 
 pub struct Start;
 pub struct Walking;
 
-pub type WalkMessage<N> = (N, oneshot::Sender<()>);
+pub type WalkMessage<N> = (N, oneshot::Sender<bool>);
 
 // These constraint might look very stiff, but since all of the petgraph graph
 // types use integers as node ids and GraphBase already constraints these types
@@ -37,7 +37,7 @@ impl<N: Eq + Hash + Copy + Send + 'static> Walker<N, Start> {
         let mut rxs = HashMap::new();
         for node in graph.node_identifiers() {
             // Each node can finish at most once so we set the capacity to 1
-            let (tx, rx) = broadcast::channel::<()>(1);
+            let (tx, rx) = broadcast::channel::<bool>(1);
             txs.insert(node, tx);
             rxs.insert(node, rx);
         }
@@ -76,8 +76,14 @@ impl<N: Eq + Hash + Copy + Send + 'static> Walker<N, Start> {
                     results = deps_fut => {
                         for res in results {
                             match res {
-                                // No errors from reading dependency channels
-                                Ok(()) => (),
+                                // Dependency channel signaled this subgraph is terminal;
+                                // let our dependents know too (if any)
+                                Ok(false) => {
+                                    tx.send(false).ok();
+                                    return;
+                                }
+                                // Otherwise continue
+                                Ok(true) => (),
                                 // A dependency finished without sending a finish
                                 // Could happen if a cancel is sent and is racing with deps
                                 // so we interpret this as a cancel.
@@ -95,7 +101,7 @@ impl<N: Eq + Hash + Copy + Send + 'static> Walker<N, Start> {
                             }
                         }
 
-                        let (callback_tx, callback_rx) = oneshot::channel::<()>();
+                        let (callback_tx, callback_rx) = oneshot::channel::<bool>();
                         // do some err handling with the send failure?
                         if node_tx.send((node, callback_tx)).await.is_err() {
                             // Receiving end of node channel has been closed/dropped
@@ -104,14 +110,15 @@ impl<N: Eq + Hash + Copy + Send + 'static> Walker<N, Start> {
                             trace!("Receiver was dropped before walk finished without calling cancel");
                             return;
                         }
-                        if callback_rx.await.is_err() {
+                        let Ok(callback_result) = callback_rx.await else {
                             // If the caller drops the callback sender without signaling
                             // that the node processing is finished we assume that it is finished.
-                            trace!("Callback sender was dropped without sending a finish signal")
-                        }
+                            trace!("Callback sender was dropped without sending a finish signal");
+                            return;
+                        };
                         // Send errors indicate that there are no receivers which
                         // happens when this node has no dependents
-                        tx.send(()).ok();
+                        tx.send(callback_result).ok();
                     }
                 }
             }));
@@ -204,7 +211,7 @@ mod test {
         let (walker, mut node_emitter) = walker.walk();
         while let Some((index, done)) = node_emitter.recv().await {
             visited.push(index);
-            done.send(()).unwrap();
+            done.send(true).unwrap();
         }
         walker.wait().await.unwrap();
         assert_eq!(visited, vec![c, b, a]);
@@ -228,7 +235,7 @@ mod test {
             walker.cancel().unwrap();
 
             visited.push(index);
-            done.send(()).unwrap();
+            done.send(true).unwrap();
         }
         assert_eq!(visited, vec![c]);
         let Walker { join_handles, .. } = walker;
@@ -272,16 +279,16 @@ mod test {
                 tokio::spawn(async move {
                     is_b_done.await.unwrap();
                     visited.lock().unwrap().push(index);
-                    done.send(()).unwrap();
+                    done.send(true).unwrap();
                 });
             } else if index == b {
                 // send the signal that b is finished
                 visited.lock().unwrap().push(index);
-                done.send(()).unwrap();
+                done.send(true).unwrap();
                 b_done.take().unwrap().send(()).unwrap();
             } else {
                 visited.lock().unwrap().push(index);
-                done.send(()).unwrap();
+                done.send(true).unwrap();
             }
         }
         walker.wait().await.unwrap();
@@ -322,12 +329,12 @@ mod test {
                 tokio::spawn(async move {
                     is_b_done.await.unwrap();
                     visited.lock().unwrap().push(index);
-                    done.send(()).unwrap();
+                    done.send(true).unwrap();
                 });
             } else if index == b {
                 // send the signal that b is finished
                 visited.lock().unwrap().push(index);
-                done.send(()).unwrap();
+                done.send(true).unwrap();
                 b_done.take().unwrap().send(()).unwrap();
             } else if index == a {
                 // don't mark as done until d finishes
@@ -336,19 +343,69 @@ mod test {
                 tokio::spawn(async move {
                     is_d_done.await.unwrap();
                     visited.lock().unwrap().push(index);
-                    done.send(()).unwrap();
+                    done.send(true).unwrap();
                 });
             } else if index == d {
                 // send the signal that b is finished
                 visited.lock().unwrap().push(index);
-                done.send(()).unwrap();
+                done.send(true).unwrap();
                 d_done.take().unwrap().send(()).unwrap();
             } else {
                 visited.lock().unwrap().push(index);
-                done.send(()).unwrap();
+                done.send(true).unwrap();
             }
         }
         walker.wait().await.unwrap();
         assert_eq!(visited.lock().unwrap().as_slice(), &[c, b, e, d, a]);
+    }
+
+    #[tokio::test]
+    async fn test_dependent_cancellation() {
+        // a -- b -- c -- f
+        //   \          /
+        //    - d -- e -
+        let mut g = Graph::new();
+        let a = g.add_node("a");
+        let b = g.add_node("b");
+        let c = g.add_node("c");
+        let d = g.add_node("d");
+        let e = g.add_node("e");
+        let f = g.add_node("f");
+        g.add_edge(a, b, ());
+        g.add_edge(b, c, ());
+        g.add_edge(a, d, ());
+        g.add_edge(d, e, ());
+        g.add_edge(c, f, ());
+        g.add_edge(e, f, ());
+
+        // We intentionally wait to mark c as finished until e has been finished
+        let walker = Walker::new(&g);
+        let visited = Arc::new(Mutex::new(Vec::new()));
+        let (walker, mut node_emitter) = walker.walk();
+        let (e_done, is_e_done) = oneshot::channel::<()>();
+        let mut e_done = Some(e_done);
+        let mut is_e_done = Some(is_e_done);
+        while let Some((index, done)) = node_emitter.recv().await {
+            if index == c {
+                // don't mark as done until we get the signal that e is finished
+                let is_e_done = is_e_done.take().unwrap();
+                let visited = visited.clone();
+                tokio::spawn(async move {
+                    is_e_done.await.unwrap();
+                    visited.lock().unwrap().push(index);
+                    done.send(true).unwrap();
+                });
+            } else if index == e {
+                // send the signal that e is finished, and cancel its dependents
+                visited.lock().unwrap().push(index);
+                done.send(false).unwrap();
+                e_done.take().unwrap().send(()).unwrap();
+            } else {
+                visited.lock().unwrap().push(index);
+                done.send(true).unwrap();
+            }
+        }
+        walker.wait().await.unwrap();
+        assert_eq!(visited.lock().unwrap().as_slice(), &[f, e, c, b]);
     }
 }

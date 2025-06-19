@@ -1,12 +1,29 @@
 name: "Install Global Turbo"
 description: "Installs turbo globally. Expects Node and npm to already be installed"
 
+inputs:
+  turbo-version:
+    description: "Specify a Turbo version or tag (e.g., 2.0.5, latest, beta, canary)"
+    required: false
+    default: ""
+
 runs:
   using: "composite"
   steps:
+    - name: Determine Turbo Version
+      id: determine-version
+      shell: bash
+      run: |
+        if [[ -n "${{ inputs.turbo-version }}" ]]; then
+          VERSION="${{ inputs.turbo-version }}"
+        else
+          VERSION=$(npm view turbo --json | jq -r '.versions | map(select(test("^2\\."))) | last')
+          echo "No version provided, using latest 2.x version: $VERSION"
+        fi
+        echo "TURBO_VERSION=$VERSION" >> $GITHUB_ENV
+
     - name: Install Turbo globally
       shell: bash
       run: |
-        VERSION=$(npm view turbo --json | jq -r '.versions | map(select(test("2."))) | last')
-        echo "Latest published version: $VERSION"
-        npm i -g turbo@$VERSION
+        echo "Installing turbo@$TURBO_VERSION..."
+        npm i -g turbo@$TURBO_VERSION

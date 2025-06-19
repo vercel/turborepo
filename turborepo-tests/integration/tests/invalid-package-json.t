@@ -5,7 +5,7 @@ Clear name field
   $ mv apps/my-app/package.json apps/my-app/package.json.old
   $ mv package.json.new apps/my-app/package.json
 Build should fail due to missing name field
-  $ ${TURBO} build 1> ERR
+  $ ${TURBO} build 2> ERR
   [1]
   $ grep -F --quiet 'x package.json must have a name field:' ERR
 
@@ -17,18 +17,20 @@ Clear add invalid packageManager field
   $ mv package.json.new package.json
 
 Build should fail due to invalid packageManager field (sed removes the square brackets)
-  $ ${TURBO} build 2>&1 | sed  's/\[\([^]]*\)\]/\\1/g'
+  $ ${TURBO} build 2> ERR
+  [1]
+  $ sed  's/\[\([^]]*\)\]/\\1/g' < ERR
   invalid_package_manager_field
   
-    x could not resolve workspaces
-    `-> could not parse the packageManager field in package.json, expected to
-        match regular expression (?P<manager>bun|npm|pnpm|yarn)@(?P<version>\d+
-        \.\d+\.\d+(-.+)?)
+    x Could not resolve workspaces.
+    `-> Could not parse the `packageManager` field in package.json, expected to
+        match regular expression `(?P<manager>bun|npm|pnpm|yarn)@(?P<version>\d+
+        \.\d+\.\d+(-.+)?|https?://.+)`.
      ,-\1
    5 |   },
    6 |   "packageManager": "bower@8.19.4",
      :                     ^^^^^^^|^^^^^^
-     :                            `-- invalid `packageManager` field
+     :                            `-- Invalid `packageManager` field
    7 |   "workspaces": [
      `----
   
@@ -37,13 +39,15 @@ Add invalid packageManager field that passes the regex.
   $ jq '.packageManager = "npm@0.3.211111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111"' package.json > package.json.new
   $ mv package.json.new package.json
 
-  $ ${TURBO} build 2>&1 | sed  's/\[\([^]]*\)\]/\(\1)/g'
+  $ ${TURBO} build 2> ERR
+  [1]
+  $ sed  's/\[\([^]]*\)\]/\(\1)/g' < ERR
   invalid_semantic_version
   
-    x could not resolve workspaces
-    `-> invalid semantic version: Failed to parse an integer component of a
+    x Could not resolve workspaces.
+    `-> Invalid semantic version: Failed to parse an integer component of a
         semver string: number too large to fit in target type
-     ,-\(.*package.json:5:1\) (re)
+     ,-\(.*package.json:6:21\) (re)
    5 |   },
    6 |   "packageManager": "npm@0.3.211111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111",
      :                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^|^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -59,16 +63,18 @@ Add a trailing comma
   $ echo "{ \"name\": \"foobar\", }" > package.json.new
   $ mv package.json.new apps/my-app/package.json
 Build should fail due to trailing comma (sed replaces square brackets with parentheses)
-  $ ${TURBO} build 2>&1 | sed  's/\[\([^]]*\)\]/\(\1)/g'
+  $ ${TURBO} build 2> ERR
+  [1]
+  $ sed  's/\[\([^]]*\)\]/\(\1)/g' < ERR
   package_json_parse_error
   
-    x unable to parse package.json
-  
-  Error:   x Expected a property but instead found '}'.
-     ,-\(.*package.json:1:1\) (re)
-   1 | { "name": "foobar", }
-     :                     ^
-     `----
+    x Unable to parse package.json.
+    `->   x Expected a property but instead found '}'.
+           ,-\[.* (re)
+        .*package.json:1:21\] (re)
+         1 | { "name": "foobar", }
+           :                     ^
+           `----
   
 
 

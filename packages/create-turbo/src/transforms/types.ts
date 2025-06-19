@@ -21,10 +21,20 @@ export interface TransformInput {
   opts: CreateCommandOptions;
 }
 
+export interface MetaJson {
+  maintainedByCoreTeam?: string;
+  name?: string;
+  description?: string;
+  featured?: boolean;
+  boost?: boolean;
+  template?: boolean;
+}
+
 export interface TransformResponse {
   // errors should be thrown as instances of TransformError
   result: "not-applicable" | "success";
   name: string;
+  metaJson?: MetaJson;
 }
 
 export type TransformResult = Promise<TransformResponse>;

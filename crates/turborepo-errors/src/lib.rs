@@ -1,6 +1,8 @@
 use std::{
     fmt::Display,
-    ops::{Deref, Range},
+    iter,
+    iter::Once,
+    ops::{Deref, DerefMut, Range},
     sync::Arc,
 };
 
@@ -9,7 +11,15 @@ use miette::{Diagnostic, NamedSource, SourceSpan};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-pub const TURBO_SITE: &str = "https://turbo.build";
+/// Base URL for links supplied in error messages. You can use the TURBO_SITE
+/// environment variable at compile time to set a base URL for easier debugging.
+///
+/// When TURBO_SITE is not provided at compile time, the production site will be
+/// used.
+pub const TURBO_SITE: &str = match option_env!("TURBO_SITE") {
+    Some(url) => url,
+    None => "https://turborepo.com",
+};
 
 /// A little helper to convert from biome's syntax errors to miette.
 #[derive(Debug, Error, Diagnostic)]
@@ -17,23 +27,23 @@ pub const TURBO_SITE: &str = "https://turbo.build";
 pub struct ParseDiagnostic {
     message: String,
     #[source_code]
-    source_code: NamedSource,
+    source_code: NamedSource<String>,
     #[label]
     label: Option<SourceSpan>,
 }
 
-struct BiomeMessage<'a>(&'a biome_diagnostics::Error);
+struct BiomeMessage<'a, T: ?Sized>(&'a T);
 
-impl Display for BiomeMessage<'_> {
+impl<T: biome_diagnostics::Diagnostic + ?Sized> Display for BiomeMessage<'_, T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.0.description(f)
     }
 }
 
-impl From<biome_diagnostics::Error> for ParseDiagnostic {
-    fn from(diagnostic: biome_diagnostics::Error) -> Self {
+impl<T: biome_diagnostics::Diagnostic + ?Sized> From<&'_ T> for ParseDiagnostic {
+    fn from(diagnostic: &T) -> Self {
         let location = diagnostic.location();
-        let message = BiomeMessage(&diagnostic).to_string();
+        let message = BiomeMessage(diagnostic).to_string();
         let path = location
             .resource
             .and_then(|r| r.as_file().map(|p| p.to_string()))
@@ -68,6 +78,24 @@ pub struct Spanned<T> {
     pub text: Option<Arc<str>>,
 }
 
+impl<T> IntoIterator for Spanned<T> {
+    type Item = T;
+    type IntoIter = Once<T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        iter::once(self.value)
+    }
+}
+
+impl<'a, T> IntoIterator for &'a Spanned<T> {
+    type Item = &'a T;
+    type IntoIter = Once<&'a T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        iter::once(&self.value)
+    }
+}
+
 impl<T: Deserializable> Deserializable for Spanned<T> {
     fn deserialize(
         value: &impl DeserializableValue,
@@ -82,6 +110,12 @@ impl<T: Deserializable> Deserializable for Spanned<T> {
             path: None,
             text: None,
         })
+    }
+}
+
+impl Spanned<String> {
+    pub fn as_str(&self) -> &str {
+        self.value.as_str()
     }
 }
 
@@ -160,11 +194,11 @@ impl<T> Spanned<T> {
     /// Gets the span and the text if both exist. If either doesn't exist, we
     /// return `None` for the span and an empty string for the text, since
     /// miette doesn't accept an `Option<String>` for `#[source_code]`
-    pub fn span_and_text(&self, default_path: &str) -> (Option<SourceSpan>, NamedSource) {
+    pub fn span_and_text(&self, default_path: &str) -> (Option<SourceSpan>, NamedSource<String>) {
         let path = self.path.as_ref().map_or(default_path, |p| p.as_ref());
         match self.range.clone().zip(self.text.as_ref()) {
             Some((range, text)) => (Some(range.into()), NamedSource::new(path, text.to_string())),
-            None => (None, NamedSource::new(path, String::new())),
+            None => (None, NamedSource::new(path, Default::default())),
         }
     }
 
@@ -175,6 +209,11 @@ impl<T> Spanned<T> {
             path: self.path,
             text: self.text,
         }
+    }
+
+    /// Gets a mutable ref to the inner value
+    pub fn as_inner_mut(&mut self) -> &mut T {
+        &mut self.value
     }
 }
 
@@ -191,6 +230,13 @@ impl<T> Deref for Spanned<T> {
         &self.value
     }
 }
+
+impl<T> DerefMut for Spanned<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.value
+    }
+}
+
 pub trait WithMetadata {
     fn add_text(&mut self, text: Arc<str>);
     fn add_path(&mut self, path: Arc<str>);

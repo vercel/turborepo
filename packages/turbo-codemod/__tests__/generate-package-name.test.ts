@@ -1,3 +1,4 @@
+import { describe, it, expect } from "@jest/globals";
 import { getNewPkgName } from "../src/transforms/add-package-names";
 
 describe("getNewPkgName", () => {

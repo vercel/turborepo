@@ -218,6 +218,7 @@ mod tests {
     use std::{assert_matches::assert_matches, time::Duration};
 
     use anyhow::Result;
+    use camino::Utf8PathBuf;
     use futures::future::try_join_all;
     use tempfile::tempdir;
     use turbopath::AbsoluteSystemPathBuf;
@@ -226,7 +227,8 @@ mod tests {
 
     use crate::{
         test_cases::{get_test_cases, TestCase},
-        AsyncCache, CacheHitMetadata, CacheOpts, CacheSource, RemoteCacheOpts,
+        AsyncCache, CacheActions, CacheConfig, CacheHitMetadata, CacheOpts, CacheSource,
+        RemoteCacheOpts,
     };
 
     #[tokio::test]
@@ -253,10 +255,17 @@ mod tests {
         let hash = format!("{}-no-fs", test_case.hash);
 
         let opts = CacheOpts {
-            override_dir: None,
-            remote_cache_read_only: false,
-            skip_remote: false,
-            skip_filesystem: true,
+            cache_dir: Utf8PathBuf::from(".turbo/cache"),
+            cache: CacheConfig {
+                local: CacheActions {
+                    read: false,
+                    write: false,
+                },
+                remote: CacheActions {
+                    read: true,
+                    write: true,
+                },
+            },
             workers: 10,
             remote_cache_opts: Some(RemoteCacheOpts {
                 unused_team_id: Some("my-team".to_string()),
@@ -335,10 +344,17 @@ mod tests {
         let hash = format!("{}-no-remote", test_case.hash);
 
         let opts = CacheOpts {
-            override_dir: None,
-            remote_cache_read_only: false,
-            skip_remote: true,
-            skip_filesystem: false,
+            cache_dir: Utf8PathBuf::from(".turbo/cache"),
+            cache: CacheConfig {
+                local: CacheActions {
+                    read: true,
+                    write: true,
+                },
+                remote: CacheActions {
+                    read: false,
+                    write: false,
+                },
+            },
             workers: 10,
             remote_cache_opts: Some(RemoteCacheOpts {
                 unused_team_id: Some("my-team".to_string()),
@@ -427,10 +443,17 @@ mod tests {
         let hash = format!("{}-both", test_case.hash);
 
         let opts = CacheOpts {
-            override_dir: None,
-            remote_cache_read_only: false,
-            skip_remote: false,
-            skip_filesystem: false,
+            cache_dir: Utf8PathBuf::from(".turbo/cache"),
+            cache: CacheConfig {
+                local: CacheActions {
+                    read: true,
+                    write: true,
+                },
+                remote: CacheActions {
+                    read: true,
+                    write: true,
+                },
+            },
             workers: 10,
             remote_cache_opts: Some(RemoteCacheOpts {
                 unused_team_id: Some("my-team".to_string()),

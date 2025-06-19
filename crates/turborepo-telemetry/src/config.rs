@@ -6,17 +6,17 @@
 /// NOTE: There is a port of this crate that is used to instrument node
 /// projects. Any changes made here should be reflected there as well.
 ///
-/// https://github.com/vercel/turbo/blob/main/packages/turbo-telemetry/src/config.ts
+/// https://github.com/vercel/turborepo/blob/main/packages/turbo-telemetry/src/config.ts
 use std::env;
 
 use chrono::{DateTime, Utc};
 pub use config::{Config, ConfigError, File, FileFormat};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use tracing::{debug, error};
+use tracing::{error, trace};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_dirs::config_dir;
-use turborepo_ui::{color, BOLD, GREY, UI, UNDERLINE};
+use turborepo_ui::{color, ColorConfig, BOLD, GREY, UNDERLINE};
 use uuid::Uuid;
 
 static DEBUG_ENV_VAR: &str = "TURBO_TELEMETRY_DEBUG";
@@ -67,7 +67,7 @@ impl TelemetryConfig {
     }
 
     pub fn new(config_path: AbsoluteSystemPathBuf) -> Result<TelemetryConfig, ConfigError> {
-        debug!("Telemetry config path: {}", config_path);
+        trace!("Telemetry config path: {}", config_path);
         if !config_path.exists() {
             write_new_config(&config_path)?;
         }
@@ -134,36 +134,41 @@ impl TelemetryConfig {
         one_way_hash_with_salt(&tmp_salt, input)
     }
 
-    pub fn show_alert(&mut self, ui: UI) {
+    pub fn show_alert(&mut self, color_config: ColorConfig) {
         if !self.has_seen_alert() && self.is_enabled() && Self::is_telemetry_warning_enabled() {
             eprintln!(
                 "\n{}\n{}\n{}\n{}\n{}\n",
-                color!(ui, BOLD, "{}", "Attention:"),
+                color!(color_config, BOLD, "{}", "Attention:"),
                 color!(
-                    ui,
+                    color_config,
                     GREY,
                     "{}",
                     "Turborepo now collects completely anonymous telemetry regarding usage."
                 ),
                 color!(
-                    ui,
+                    color_config,
                     GREY,
                     "{}",
                     "This information is used to shape the Turborepo roadmap and prioritize \
                      features."
                 ),
                 color!(
-                    ui,
+                    color_config,
                     GREY,
                     "{}",
                     "You can learn more, including how to opt-out if you'd not like to \
                      participate in this anonymous program, by visiting the following URL:"
                 ),
                 color!(
-                    ui,
+                    color_config,
                     UNDERLINE,
                     "{}",
-                    color!(ui, GREY, "{}", "https://turbo.build/repo/docs/telemetry")
+                    color!(
+                        color_config,
+                        GREY,
+                        "{}",
+                        "https://turborepo.com/docs/telemetry"
+                    )
                 ),
             );
 

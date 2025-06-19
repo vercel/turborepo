@@ -8,28 +8,25 @@ mod duration;
 mod execution;
 mod global_hash;
 mod scm;
-mod spaces;
 mod task;
 mod task_factory;
 use std::{collections::HashSet, io, io::Write};
 
 use chrono::{DateTime, Local};
 pub use duration::TurboDuration;
-pub use execution::{TaskExecutionSummary, TaskTracker};
+pub use execution::TaskTracker;
 pub use global_hash::GlobalHashSummary;
 use itertools::Itertools;
 use serde::Serialize;
-pub use spaces::{SpacesTaskClient, SpacesTaskInformation};
 use svix_ksuid::{Ksuid, KsuidLike};
 use tabwriter::TabWriter;
 use thiserror::Error;
 use tracing::{error, log::warn};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath};
-use turborepo_api_client::{spaces::CreateSpaceRunPayload, APIAuth, APIClient};
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_repository::package_graph::{PackageGraph, PackageName};
 use turborepo_scm::SCM;
-use turborepo_ui::{color, cprintln, cwriteln, BOLD, BOLD_CYAN, GREY, UI};
+use turborepo_ui::{color, cprintln, cwriteln, ColorConfig, BOLD, BOLD_CYAN, GREY};
 
 use self::{
     execution::TaskState, task::SinglePackageTaskSummary, task_factory::TaskSummaryFactory,
@@ -43,7 +40,6 @@ use crate::{
     run::summary::{
         execution::{ExecutionSummary, ExecutionTracker},
         scm::SCMState,
-        spaces::{SpaceRequest, SpacesClient, SpacesClientHandle},
         task::TaskSummary,
     },
     task_hash::TaskHashTracker,
@@ -51,23 +47,19 @@ use crate::{
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("failed to write run summary {0}")]
+    #[error("Failed to write run summary. Reason: {0}")]
     IO(#[from] io::Error),
-    #[error("failed to serialize run summary to JSON")]
+    #[error("Failed to serialize run summary to JSON.")]
     Serde(#[from] serde_json::Error),
-    #[error("missing workspace {0}")]
+    #[error("Missing workspace: {0}")]
     MissingWorkspace(PackageName),
-    #[error("request took too long to resolve: {0}")]
+    #[error("Failed to close state thread.")]
+    StateThread(#[from] tokio::task::JoinError),
+    #[error("Request took too long to resolve: {0}")]
     Timeout(#[from] tokio::time::error::Elapsed),
-    #[error("failed to send spaces request: {0}")]
-    SpacesRequest(#[from] turborepo_api_client::Error),
-    #[error("failed to close spaces client")]
-    SpacesClientClose(#[from] tokio::task::JoinError),
-    #[error("failed to contact spaces client")]
-    SpacesClientSend(#[from] tokio::sync::mpsc::error::SendError<SpaceRequest>),
-    #[error("failed to parse environment variables")]
+    #[error("Failed to parse environment variables.")]
     Env(#[source] turborepo_env::Error),
-    #[error("failed to construct task summary: {0}")]
+    #[error("Failed to construct task summary: {0}")]
     TaskSummary(#[from] task_factory::Error),
 }
 
@@ -106,8 +98,6 @@ pub struct RunSummary<'a> {
     should_save: bool,
     #[serde(skip)]
     run_type: RunType,
-    #[serde(skip)]
-    spaces_client_handle: Option<SpacesClientHandle>,
 }
 
 /// We use this to track the run, so it's constructed before the run.
@@ -117,8 +107,7 @@ pub struct RunTracker {
     version: &'static str,
     started_at: DateTime<Local>,
     execution_tracker: ExecutionTracker,
-    spaces_client_handle: Option<SpacesClientHandle>,
-    user: String,
+    user: Option<String>,
     synthesized_command: String,
 }
 
@@ -127,33 +116,13 @@ impl RunTracker {
     pub fn new(
         started_at: DateTime<Local>,
         synthesized_command: String,
-        package_inference_root: Option<&AnchoredSystemPath>,
         env_at_execution_start: &EnvironmentVariableMap,
         repo_root: &AbsoluteSystemPath,
         version: &'static str,
-        spaces_id: Option<String>,
-        spaces_api_client: APIClient,
-        api_auth: Option<APIAuth>,
-        user: String,
+        user: Option<String>,
         scm: &SCM,
     ) -> Self {
         let scm = SCMState::get(env_at_execution_start, scm, repo_root);
-
-        let spaces_client_handle =
-            SpacesClient::new(spaces_id.clone(), spaces_api_client, api_auth).and_then(
-                |spaces_client| {
-                    let payload = CreateSpaceRunPayload::new(
-                        started_at,
-                        synthesized_command.clone(),
-                        package_inference_root,
-                        scm.branch.clone(),
-                        scm.sha.clone(),
-                        version.to_string(),
-                        user.clone(),
-                    );
-                    spaces_client.start(payload).ok()
-                },
-            );
 
         RunTracker {
             scm,
@@ -162,7 +131,6 @@ impl RunTracker {
             execution_tracker: ExecutionTracker::new(),
             user,
             synthesized_command,
-            spaces_client_handle,
         }
     }
 
@@ -188,7 +156,7 @@ impl RunTracker {
         task_factory: TaskSummaryFactory<'a>,
     ) -> Result<RunSummary<'a>, Error> {
         let single_package = run_opts.single_package;
-        let should_save = run_opts.summarize.flatten().is_some_and(|s| s);
+        let should_save = run_opts.summarize;
 
         let run_type = match run_opts.dry_run {
             None => RunType::Real,
@@ -224,12 +192,11 @@ impl RunTracker {
             tasks,
             global_hash_summary,
             scm: self.scm,
-            user: self.user,
+            user: self.user.unwrap_or_default(),
             monorepo: !single_package,
             repo_root,
             should_save,
             run_type,
-            spaces_client_handle: self.spaces_client_handle,
         })
     }
 
@@ -248,7 +215,7 @@ impl RunTracker {
         self,
         exit_code: i32,
         pkg_dep_graph: &PackageGraph,
-        ui: UI,
+        ui: ColorConfig,
         repo_root: &'a AbsoluteSystemPath,
         package_inference_root: Option<&AnchoredSystemPath>,
         run_opts: &'a RunOpts,
@@ -292,16 +259,6 @@ impl RunTracker {
 
     pub fn track_task(&self, task_id: TaskId<'static>) -> TaskTracker<()> {
         self.execution_tracker.task_tracker(task_id)
-    }
-
-    pub fn spaces_enabled(&self) -> bool {
-        self.spaces_client_handle.is_some()
-    }
-
-    pub fn spaces_task_client(&self) -> Option<SpacesTaskClient> {
-        self.spaces_client_handle
-            .as_ref()
-            .map(|handle| handle.task_client())
     }
 }
 
@@ -360,7 +317,7 @@ impl<'a> RunSummary<'a> {
         end_time: DateTime<Local>,
         exit_code: i32,
         pkg_dep_graph: &PackageGraph,
-        ui: UI,
+        ui: ColorConfig,
         is_watch: bool,
     ) -> Result<(), Error> {
         if matches!(self.run_type, RunType::DryJson | RunType::DryText) {
@@ -381,41 +338,7 @@ impl<'a> RunSummary<'a> {
             }
         }
 
-        if let Some(spaces_client_handle) = self.spaces_client_handle.take() {
-            self.send_to_space(spaces_client_handle, end_time, exit_code)
-                .await;
-        }
-
         Ok(())
-    }
-
-    #[tracing::instrument(skip_all)]
-    async fn send_to_space(
-        &self,
-        spaces_client_handle: SpacesClientHandle,
-        ended_at: DateTime<Local>,
-        exit_code: i32,
-    ) {
-        let spinner = tokio::spawn(async {
-            tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
-            turborepo_ui::start_spinner("...sending run summary...");
-        });
-
-        // We log the error here but don't fail because
-        // failing to send the space shouldn't fail the run.
-        if let Err(err) = spaces_client_handle.finish_run(exit_code, ended_at).await {
-            warn!("Error sending to space: {}", err);
-        };
-
-        let result = spaces_client_handle.close().await;
-
-        spinner.abort();
-
-        Self::print_errors(&result.errors);
-
-        if let Some(run) = result.run {
-            println!("Run: {}\n", run.url);
-        }
     }
 
     fn print_errors(errors: &[Error]) {
@@ -428,7 +351,11 @@ impl<'a> RunSummary<'a> {
         }
     }
 
-    fn close_dry_run(&mut self, pkg_dep_graph: &PackageGraph, ui: UI) -> Result<(), Error> {
+    fn close_dry_run(
+        &mut self,
+        pkg_dep_graph: &PackageGraph,
+        ui: ColorConfig,
+    ) -> Result<(), Error> {
         if matches!(self.run_type, RunType::DryJson) {
             let rendered = self.format_json()?;
 
@@ -439,7 +366,11 @@ impl<'a> RunSummary<'a> {
         self.format_and_print_text(pkg_dep_graph, ui)
     }
 
-    fn format_and_print_text(&mut self, pkg_dep_graph: &PackageGraph, ui: UI) -> Result<(), Error> {
+    fn format_and_print_text(
+        &mut self,
+        pkg_dep_graph: &PackageGraph,
+        ui: ColorConfig,
+    ) -> Result<(), Error> {
         self.normalize();
 
         if self.monorepo {
@@ -612,7 +543,7 @@ impl<'a> RunSummary<'a> {
                 ui,
                 GREY,
                 "  Log File\t=\t{}",
-                task.shared.log_file
+                task.shared.log_file.as_deref().unwrap_or_default()
             )?;
 
             let dependencies = if !self.monorepo {
@@ -638,6 +569,10 @@ impl<'a> RunSummary<'a> {
             };
 
             cwriteln!(tab_writer, ui, GREY, "  Dependents\t=\t{}", dependents)?;
+
+            let with = task.shared.with.iter().join(", ");
+            cwriteln!(tab_writer, ui, GREY, "  With\t=\t{}", with)?;
+
             cwriteln!(
                 tab_writer,
                 ui,
@@ -770,7 +705,7 @@ impl<'a> RunSummary<'a> {
                 task.shared
                     .execution
                     .as_ref()
-                    .map_or(false, |e| e.is_failure())
+                    .is_some_and(|e| e.is_failure())
             })
             .collect()
     }

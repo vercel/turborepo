@@ -6,26 +6,26 @@ use std::{
 
 use thiserror::Error;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
-use turborepo_ui::{cprintln, cwrite, cwriteln, BOLD, BOLD_YELLOW_REVERSE, UI, YELLOW};
+use turborepo_ui::{cprintln, cwrite, cwriteln, ColorConfig, BOLD, BOLD_YELLOW_REVERSE, YELLOW};
 use which::which;
 
 use crate::{engine::Engine, opts::GraphOpts, spawn_child};
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("failed to produce graph output: {0}")]
+    #[error("Failed to produce graph output: {0}")]
     GraphOutput(#[source] std::io::Error),
-    #[error("invalid graph filename {raw_filename}: {reason}")]
+    #[error("Invalid graph filename {raw_filename}: {reason}")]
     InvalidFilename {
         raw_filename: String,
         reason: String,
     },
-    #[error("failed to spawn graphviz (dot): {0}")]
+    #[error("Failed to spawn graphviz (dot): {0}")]
     Graphviz(io::Error),
 }
 
 pub(crate) fn write_graph(
-    ui: UI,
+    ui: ColorConfig,
     graph_opts: &GraphOpts,
     engine: &Engine,
     single_package: bool,
@@ -59,10 +59,10 @@ pub(crate) fn write_graph(
     Ok(())
 }
 
-fn write_graphviz_warning(ui: UI) -> Result<(), io::Error> {
+fn write_graphviz_warning(color_config: ColorConfig) -> Result<(), io::Error> {
     let stderr = io::stderr();
-    cwrite!(&stderr, ui, BOLD_YELLOW_REVERSE, " WARNING ")?;
-    cwriteln!(&stderr, ui, YELLOW, " `turbo` uses Graphviz to generate an image of your\ngraph, but Graphviz isn't installed on this machine.\n\nYou can download Graphviz from https://graphviz.org/download.\n\nIn the meantime, you can use this string output with an\nonline Dot graph viewer.")?;
+    cwrite!(&stderr, color_config, BOLD_YELLOW_REVERSE, " WARNING ")?;
+    cwriteln!(&stderr, color_config, YELLOW, " `turbo` uses Graphviz to generate an image of your\ngraph, but Graphviz isn't installed on this machine.\n\nYou can download Graphviz from https://graphviz.org/download.\n\nIn the meantime, you can use this string output with an\nonline Dot graph viewer.")?;
     Ok(())
 }
 

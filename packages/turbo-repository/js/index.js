@@ -26,7 +26,10 @@ function isMusl() {
       return true;
     }
   } else {
+    const orig = process.report.excludeNetwork;
+    process.report.excludeNetwork = true;
     const { glibcVersionRuntime } = process.report.getReport().header;
+    process.report.excludeNetwork = orig;
     if (typeof glibcVersionRuntime === "string") {
       try {
         // We support glibc v2.26+
@@ -115,8 +118,9 @@ switch (platform) {
 
 nativeBinding = loadViaSuffix(suffix);
 
-const { PackageManagerRoot, PackageManager, Workspace } = nativeBinding;
+const { PackageDetails, PackageManager, Workspace, Package } = nativeBinding;
 
-module.exports.PackageManagerRoot = PackageManagerRoot;
 module.exports.PackageManager = PackageManager;
 module.exports.Workspace = Workspace;
+module.exports.PackageDetails = PackageDetails;
+module.exports.Package = Package;

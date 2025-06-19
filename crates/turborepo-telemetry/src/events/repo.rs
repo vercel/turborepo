@@ -15,6 +15,7 @@ pub struct RepoEventBuilder {
     id: String,
     repo: String,
     parent_id: Option<String>,
+    is_ci: bool,
 }
 
 impl Identifiable for RepoEventBuilder {
@@ -56,6 +57,7 @@ impl RepoEventBuilder {
             id: Uuid::new_v4().to_string(),
             repo: TelemetryConfig::one_way_hash(repo_identifier),
             parent_id: None,
+            is_ci: turborepo_ci::is_ci(),
         }
     }
 
@@ -64,6 +66,7 @@ impl RepoEventBuilder {
             key: "package_manager".to_string(),
             value: name.to_string(),
             is_sensitive: EventType::NonSensitive,
+            send_in_ci: true,
         });
         self
     }
@@ -76,6 +79,7 @@ impl RepoEventBuilder {
                 RepoType::Monorepo => "monorepo".to_string(),
             },
             is_sensitive: EventType::NonSensitive,
+            send_in_ci: false,
         });
         self
     }
@@ -85,6 +89,7 @@ impl RepoEventBuilder {
             key: "workspace_count".to_string(),
             value: size.to_string(),
             is_sensitive: EventType::NonSensitive,
+            send_in_ci: false,
         });
         self
     }

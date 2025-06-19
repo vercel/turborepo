@@ -1,19 +1,20 @@
 {
+  "name": "with-svelte",
   "private": true,
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
     "lint": "turbo run lint",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "check-types": "turbo run check-types"
   },
   "devDependencies": {
-    "prettier": "^3.2.5",
-    "prettier-plugin-svelte": "^3.2.2",
-    "turbo": "^2.0.8"
+    "prettier": "^3.5.0",
+    "prettier-plugin-svelte": "^3.4.0",
+    "turbo": "2.5.4"
   },
-  "packageManager": "pnpm@8.15.6",
+  "packageManager": "pnpm@10.0.0",
   "engines": {
     "node": ">=18"
-  },
-  "name": "with-svelte"
+  }
 }

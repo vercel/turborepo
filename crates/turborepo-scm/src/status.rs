@@ -1,3 +1,6 @@
+// This module does not require git2, but is only used by modules that require
+// git2
+#![cfg(feature = "git2")]
 use std::{
     io::{BufRead, BufReader, Read},
     process::{Command, Stdio},
@@ -6,9 +9,9 @@ use std::{
 use nom::Finish;
 use turbopath::{AbsoluteSystemPath, RelativeUnixPathBuf};
 
-use crate::{package_deps::GitHashes, wait_for_success, Error, Git};
+use crate::{wait_for_success, Error, GitHashes, GitRepo};
 
-impl Git {
+impl GitRepo {
     #[tracing::instrument(skip(self, root_path, hashes))]
     pub(crate) fn append_git_status(
         &self,
@@ -94,7 +97,7 @@ fn nom_parse_status(i: &[u8]) -> nom::IResult<&[u8], StatusEntry<'_>> {
     let (i, _) = nom::character::complete::space1(i)?;
     let (i, filename) = nom::bytes::complete::is_not("\0")(i)?;
     // We explicitly support a missing terminator
-    let (i, _) = nom::combinator::opt(nom::bytes::complete::tag(&[b'\0']))(i)?;
+    let (i, _) = nom::combinator::opt(nom::bytes::complete::tag(b"\0"))(i)?;
     Ok((
         i,
         StatusEntry {
@@ -111,7 +114,7 @@ mod tests {
     use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPathBuf, RelativeUnixPathBufTestExt};
 
     use super::read_status;
-    use crate::package_deps::GitHashes;
+    use crate::GitHashes;
 
     #[test]
     fn test_status() {

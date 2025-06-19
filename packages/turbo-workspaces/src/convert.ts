@@ -1,4 +1,4 @@
-import { yellow } from "picocolors";
+import picocolors from "picocolors";
 import { MANAGERS } from "./managers";
 import type {
   Project,
@@ -36,43 +36,48 @@ export async function convertProject({
     `Converting project from ${project.packageManager} to ${convertTo.name}.`
   );
 
-  if (project.packageManager === convertTo.name) {
-    throw new ConvertError("You are already using this package manager", {
-      type: "package_manager-already_in_use",
-    });
-  }
+  if (!options?.ignoreUnchangedPackageManager) {
+    if (project.packageManager === convertTo.name) {
+      throw new ConvertError("You are already using this package manager", {
+        type: "package_manager-already_in_use",
+      });
+    }
 
-  if (!convertTo.version) {
-    throw new ConvertError(
-      `${convertTo.name} is not installed, or could not be located`,
-      {
-        type: "package_manager-could_not_be_found",
-      }
-    );
+    if (!convertTo.version) {
+      throw new ConvertError(
+        `${convertTo.name} is not installed, or could not be located`,
+        {
+          type: "package_manager-could_not_be_found",
+        }
+      );
+    }
   }
 
   // this cast is safe since we've just verified that the version exists above
   const to = convertTo as AvailablePackageManagerDetails;
 
   // remove old workspace data
-  await MANAGERS[project.packageManager].remove({
-    project,
-    to,
-    logger,
-    options,
-  });
+  if (!options?.ignoreUnchangedPackageManager) {
+    await MANAGERS[project.packageManager].remove({
+      project,
+      to,
+      logger,
+      options,
+    });
+  }
 
   // create new workspace data
   await MANAGERS[to.name].create({ project, to, logger, options });
-
   logger.mainStep("Installing dependencies");
   if (!options?.skipInstall) {
     await MANAGERS[to.name].convertLock({ project, to, logger, options });
     await install({ project, to, logger, options });
   } else {
-    logger.subStep(yellow("Skipping install"));
+    logger.subStep(picocolors.yellow("Skipping install"));
   }
 
   logger.mainStep(`Cleaning up ${project.packageManager} workspaces`);
-  await MANAGERS[project.packageManager].clean({ project, logger });
+  if (project.packageManager !== convertTo.name) {
+    await MANAGERS[project.packageManager].clean({ project, logger });
+  }
 }

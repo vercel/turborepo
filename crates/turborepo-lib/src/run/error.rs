@@ -14,7 +14,7 @@ use crate::{
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
-    #[error("invalid task configuration")]
+    #[error("Invalid task configuration")]
     EngineValidation(#[related] Vec<ValidateError>),
     #[error(transparent)]
     Graph(#[from] graph_visualizer::Error),
@@ -52,10 +52,14 @@ pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Visitor(#[from] task_graph::VisitorError),
-    #[error("error registering signal handler: {0}")]
-    SignalHandler(std::io::Error),
+    #[error(transparent)]
+    SignalHandler(#[from] turborepo_signals::listeners::Error),
     #[error(transparent)]
     Daemon(#[from] daemon::DaemonError),
     #[error(transparent)]
+    UI(#[from] turborepo_ui::Error),
+    #[error(transparent)]
     Tui(#[from] tui::Error),
+    #[error("Failed to read microfrontends configuration: {0}")]
+    MicroFrontends(#[from] turborepo_microfrontends::Error),
 }

@@ -1,7 +1,7 @@
 [package]
 name = "turborepo-api-client"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 license = "MIT"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -10,8 +10,10 @@ native-tls = ["reqwest/native-tls"]
 rustls-tls = ["reqwest/rustls-tls-native-roots"]
 
 [dev-dependencies]
-http = "0.2.9"
+anyhow = { workspace = true }
+http = "1.1.0"
 httpmock = { workspace = true }
+insta = { workspace = true }
 port_scanner = { workspace = true }
 test-case = { workspace = true }
 turborepo-vercel-api-mock = { workspace = true }
@@ -20,7 +22,6 @@ turborepo-vercel-api-mock = { workspace = true }
 workspace = true
 
 [dependencies]
-anyhow = { workspace = true }
 bytes.workspace = true
 chrono = { workspace = true, features = ["serde"] }
 lazy_static = { workspace = true }

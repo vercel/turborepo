@@ -21,9 +21,15 @@ pub struct PnpmLockfile {
     #[serde(skip_serializing_if = "Option::is_none")]
     settings: Option<LockfileSettings>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    catalogs: Option<Map<String, Map<String, Dependency>>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pnpmfile_checksum: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     never_built_dependencies: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     only_built_dependencies: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    ignored_optional_dependencies: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     overrides: Option<Map<String, String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -102,7 +108,7 @@ pub struct PackageSnapshot {
     version: Option<String>,
 
     // In lockfile v7, this portion of package is stored in the top level
-    // `shapshots` map as opposed to being stored inline.
+    // `snapshots` map as opposed to being stored inline.
     #[serde(flatten)]
     snapshot: PackageSnapshotV7,
 
@@ -295,6 +301,7 @@ impl PnpmLockfile {
         let mut pruned_patches = Map::new();
         for dependency in pruned_packages.keys() {
             let dp = DepPath::parse(self.version(), dependency.as_str())?;
+
             let patch_key = format!("{}@{}", dp.name, dp.version);
             if let Some(patch) = patches.get(&patch_key).filter(|patch| {
                 // In V7 patch hash isn't included in packages key, so no need to check
@@ -302,6 +309,12 @@ impl PnpmLockfile {
                     || dp.patch_hash() == Some(&patch.hash)
             }) {
                 pruned_patches.insert(patch_key, patch.clone());
+                continue;
+            }
+
+            let version_less_key = dp.name.to_string();
+            if let Some(patch) = patches.get(&version_less_key) {
+                pruned_patches.insert(version_less_key, patch.clone());
             }
         }
         Ok(pruned_patches)
@@ -482,12 +495,15 @@ impl crate::Lockfile for PnpmLockfile {
             lockfile_version: self.lockfile_version.clone(),
             never_built_dependencies: self.never_built_dependencies.clone(),
             only_built_dependencies: self.only_built_dependencies.clone(),
+            ignored_optional_dependencies: self.ignored_optional_dependencies.clone(),
             overrides: self.overrides.clone(),
             package_extensions_checksum: self.package_extensions_checksum.clone(),
             patched_dependencies: patches,
             snapshots: pruned_snapshots,
             time: None,
             settings: self.settings.clone(),
+            pnpmfile_checksum: self.pnpmfile_checksum.clone(),
+            catalogs: self.catalogs.clone(),
         }))
     }
 
@@ -523,6 +539,16 @@ impl crate::Lockfile for PnpmLockfile {
             // grab the first one we find.
             .find_map(|project| project.dependencies.turbo_version())?;
         Some(turbo_version.to_owned())
+    }
+
+    fn human_name(&self, package: &crate::Package) -> Option<String> {
+        if matches!(self.version(), SupportedLockfileVersion::V7AndV9) {
+            Some(package.key.clone())
+        } else {
+            // TODO: this is really hacky and doesn't properly handle v5 as it uses `/` as
+            // the delimiter between name and version
+            Some(package.key.strip_prefix('/')?.to_owned())
+        }
     }
 }
 
@@ -622,6 +648,7 @@ mod tests {
     const PNPM_V9: &[u8] = include_bytes!("../../fixtures/pnpm-v9.yaml").as_slice();
     const PNPM6_TURBO: &[u8] = include_bytes!("../../fixtures/pnpm6turbo.yaml").as_slice();
     const PNPM8_TURBO: &[u8] = include_bytes!("../../fixtures/pnpm8turbo.yaml").as_slice();
+    const PNPM10_PATCH: &[u8] = include_bytes!("../../fixtures/pnpm-10-patch.lock").as_slice();
 
     use super::*;
     use crate::{Lockfile, Package};
@@ -634,6 +661,7 @@ mod tests {
     #[test_case(PNPM_V7_PEER)]
     #[test_case(PNPM_V7_PATCH)]
     #[test_case(PNPM_V9)]
+    #[test_case(PNPM10_PATCH)]
     fn test_roundtrip(fixture: &[u8]) {
         let lockfile = PnpmLockfile::from_bytes(fixture).unwrap();
         let serialized_lockfile = serde_yaml::to_string(&lockfile).unwrap();
@@ -652,6 +680,18 @@ mod tests {
                 RelativeUnixPathBuf::new("patches/@babel__core@7.20.12.patch").unwrap(),
                 RelativeUnixPathBuf::new("patches/is-odd@3.0.1.patch").unwrap(),
                 RelativeUnixPathBuf::new("patches/moleculer@0.14.28.patch").unwrap(),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_unversioned_patches() {
+        let lockfile = PnpmLockfile::from_bytes(PNPM10_PATCH).unwrap();
+        assert_eq!(
+            lockfile.patches().unwrap(),
+            vec![
+                RelativeUnixPathBuf::new("patches/is-number@7.0.0.patch").unwrap(),
+                RelativeUnixPathBuf::new("patches/is-odd.patch").unwrap(),
             ]
         );
     }
@@ -967,6 +1007,34 @@ mod tests {
     }
 
     #[test]
+    fn test_prune_patches_v10() {
+        let lockfile = PnpmLockfile::from_bytes(PNPM10_PATCH).unwrap();
+        let pruned = lockfile
+            .subgraph(
+                &["packages/pkg-a".into()],
+                &["is-odd@3.0.1(patch_hash=e861997dbe1a5bbcd8e52a8ebab33faf7531f71876fb8dd37694f3d11da81de2)".into(), "is-number@6.0.0".into()],
+            )
+            .unwrap();
+        assert_eq!(
+            pruned.patches().unwrap(),
+            vec![RelativeUnixPathBuf::new("patches/is-odd.patch").unwrap()]
+        );
+
+        let pruned = lockfile
+            .subgraph(
+                &["packages/pkg-b".into()],
+                &["is-number@7.0.\
+                   0(patch_hash=0bae9732f8037300debc03db26de9b8823a5dc7bb7c3a6a346d9462c70167a75)"
+                    .into()],
+            )
+            .unwrap();
+        assert_eq!(
+            pruned.patches().unwrap(),
+            vec![RelativeUnixPathBuf::new("patches/is-number@7.0.0.patch").unwrap()]
+        )
+    }
+
+    #[test]
     fn test_pnpm_alias_overlap() {
         let lockfile = PnpmLockfile::from_bytes(PNPM_ABSOLUTE).unwrap();
         let closures = crate::all_transitive_closures(
@@ -1267,5 +1335,152 @@ c:
     fn test_turbo_version(lockfile: &[u8], expected: Option<&str>) {
         let lockfile = PnpmLockfile::from_bytes(lockfile).unwrap();
         assert_eq!(lockfile.turbo_version().as_deref(), expected);
+    }
+
+    #[test]
+    fn test_catalog_support() {
+        let lockfile =
+            PnpmLockfile::from_bytes(include_bytes!("../../fixtures/pnpm-catalog.yaml")).unwrap();
+
+        // Test resolving a package from the default catalog
+        let react = lockfile
+            .resolve_package("apps/docs", "react", "catalog:")
+            .unwrap()
+            .unwrap();
+        assert_eq!(react.version, "19.1.0");
+
+        // Test resolving a package that's not in the catalog
+        let not_in_catalog = lockfile
+            .resolve_package("apps/docs", "not-in-catalog", "catalog:")
+            .unwrap();
+        assert!(not_in_catalog.is_none());
+
+        // Test resolving from non-existent catalog
+        let non_existent_catalog = lockfile
+            .resolve_package("apps/docs", "react", "catalog:non-existent")
+            .unwrap();
+        assert!(non_existent_catalog.is_none());
+    }
+
+    #[test]
+    fn test_multiple_catalogs() {
+        let lockfile =
+            PnpmLockfile::from_bytes(include_bytes!("../../fixtures/pnpm-multiple-catalogs.yaml"))
+                .unwrap();
+
+        // Test resolving from default catalog
+        let react = lockfile
+            .resolve_package("apps/blog", "react", "catalog:")
+            .unwrap()
+            .unwrap();
+        assert_eq!(react.version, "19.1.0");
+
+        // Test resolving from specific catalog
+        let eslint = lockfile
+            .resolve_package("packages/logger", "eslint", "catalog:eslint")
+            .unwrap()
+            .unwrap();
+        assert_eq!(eslint.version, "9.26.0");
+
+        // Tests a peer dep
+        let react_dom = lockfile
+            .resolve_package("packages/ui", "react-dom", "catalog:reactdommm")
+            .unwrap()
+            .unwrap();
+        assert_eq!(react_dom.version, "19.1.0(react@19.1.0)");
+
+        // Test resolving a package that's not in the catalog
+        let not_in_catalog = lockfile.resolve_package("apps/docs", "not-in-catalog", "catalog:");
+        assert_eq!(
+            not_in_catalog.unwrap_err().to_string(),
+            crate::Error::MissingWorkspace("apps/docs".to_string()).to_string()
+        );
+
+        // Test resolving from non-existent catalog
+        let non_existent_catalog =
+            lockfile.resolve_package("apps/docs", "react", "catalog:non-existent");
+        assert_eq!(
+            non_existent_catalog.unwrap_err().to_string(),
+            crate::Error::MissingWorkspace("apps/docs".to_string()).to_string()
+        );
+    }
+
+    #[test]
+    fn test_catalog_peer_dependencies() {
+        let lockfile =
+            PnpmLockfile::from_bytes(include_bytes!("../../fixtures/pnpm-multiple-catalogs.yaml"))
+                .unwrap();
+
+        // Test resolving a package with peer dependencies from catalog
+        let react_dom = lockfile
+            .resolve_package("apps/admin", "react-dom", "catalog:reactdommm")
+            .unwrap()
+            .unwrap();
+        assert_eq!(react_dom.version, "19.1.0(react@19.1.0)");
+
+        // Test resolving a package from default catalog
+        let react = lockfile
+            .resolve_package("apps/admin", "react", "catalog:")
+            .unwrap()
+            .unwrap();
+        assert_eq!(react.version, "19.1.0");
+
+        // Test resolving a package from a specific catalog
+        let typescript = lockfile
+            .resolve_package("apps/admin", "typescript", "catalog:typescript5")
+            .unwrap()
+            .unwrap();
+        assert_eq!(typescript.version, "5.8.2");
+    }
+
+    #[test]
+    fn test_catalog_peer_dependency_resolution() {
+        let lockfile =
+            PnpmLockfile::from_bytes(include_bytes!("../../fixtures/pnpm-multiple-catalogs.yaml"))
+                .unwrap();
+
+        // Test resolving a package with peer dependencies
+        let react_dom = lockfile
+            .resolve_package("apps/admin", "react-dom", "catalog:reactdommm")
+            .unwrap()
+            .unwrap();
+        assert_eq!(react_dom.version, "19.1.0(react@19.1.0)");
+
+        // Test resolving a package from default catalog
+        let react = lockfile
+            .resolve_package("apps/blog", "react", "catalog:")
+            .unwrap()
+            .unwrap();
+        assert_eq!(react.version, "19.1.0");
+
+        // Test resolving a package from a specific catalog
+        let eslint = lockfile
+            .resolve_package("apps/admin", "eslint", "catalog:eslint")
+            .unwrap()
+            .unwrap();
+        assert_eq!(eslint.version, "9.26.0");
+
+        // Test resolving a package that doesn't exist
+        let missing = lockfile.resolve_package("apps/docs", "missing-package", "catalog:");
+        assert_eq!(
+            missing.unwrap_err().to_string(),
+            crate::Error::MissingWorkspace("apps/docs".to_string()).to_string()
+        );
+
+        // Test resolving from non-existent catalog
+        let non_existent_catalog =
+            lockfile.resolve_package("apps/docs", "react", "catalog:non-existent");
+        assert_eq!(
+            non_existent_catalog.unwrap_err().to_string(),
+            crate::Error::MissingWorkspace("apps/docs".to_string()).to_string()
+        );
+
+        // Test resolving a package with a non-existent peer dependency
+        let missing_peer =
+            lockfile.resolve_package("apps/docs", "non-existent", "catalog:reactdommm");
+        assert_eq!(
+            missing_peer.unwrap_err().to_string(),
+            crate::Error::MissingWorkspace("apps/docs".to_string()).to_string()
+        );
     }
 }

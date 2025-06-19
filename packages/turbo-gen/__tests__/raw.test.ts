@@ -1,3 +1,4 @@
+import { describe, it, expect, jest } from "@jest/globals";
 import { raw } from "../src/commands/raw";
 import * as run from "../src/commands/run";
 import * as workspace from "../src/commands/workspace";
@@ -135,7 +136,7 @@ describe("raw", () => {
       },
     },
   ];
-  test.each(testMatrix)(
+  it.each(testMatrix)(
     "$command and $options calls $target with $calledWith",
     async ({ command, options, target, calledWith }) => {
       // mock generation functions, we only care if they are called,

@@ -352,7 +352,7 @@ impl<'t> InvariantFragment<'t> {
 
     pub fn as_string(&self) -> &Cow<'t, str> {
         match self {
-            InvariantFragment::Nominal(ref text) | InvariantFragment::Structural(ref text) => text,
+            InvariantFragment::Nominal(text) | InvariantFragment::Structural(text) => text,
         }
     }
 }
@@ -382,7 +382,7 @@ impl<'t> PartialEq for InvariantFragment<'t> {
         use InvariantFragment::{Nominal, Structural};
 
         match (self, other) {
-            (Nominal(ref left), Nominal(ref right)) => {
+            (Nominal(left), Nominal(right)) => {
                 if PATHS_ARE_CASE_INSENSITIVE {
                     // This comparison uses Unicode simple case folding. It
                     // would be better to use full case folding (and better
@@ -397,7 +397,7 @@ impl<'t> PartialEq for InvariantFragment<'t> {
                     left == right
                 }
             }
-            (Structural(ref left), Structural(ref right)) => left == right,
+            (Structural(left), Structural(right)) => left == right,
             _ => false,
         }
     }
@@ -442,14 +442,14 @@ impl<T> Variance<T> {
 
     pub fn as_invariance(&self) -> Option<&T> {
         match self {
-            Variance::Invariant(ref invariant) => Some(invariant),
+            Variance::Invariant(invariant) => Some(invariant),
             _ => None,
         }
     }
 
     pub fn boundedness(&self) -> Boundedness {
         match self {
-            Variance::Variant(ref boundedness) => *boundedness,
+            Variance::Variant(boundedness) => *boundedness,
             _ => Boundedness::Closed,
         }
     }
@@ -487,8 +487,8 @@ where
 {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (Variance::Invariant(ref left), Variance::Invariant(ref right)) => left == right,
-            (Variance::Variant(ref left), Variance::Variant(ref right)) => left == right,
+            (Variance::Invariant(left), Variance::Invariant(right)) => left == right,
+            (Variance::Variant(left), Variance::Variant(right)) => left == right,
             _ => false,
         }
     }

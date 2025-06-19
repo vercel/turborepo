@@ -1,7 +1,7 @@
 [package]
 name = "turborepo-filewatch"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 license = "MIT"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -14,14 +14,14 @@ futures = { version = "0.3.26" }
 itertools = { workspace = true }
 nibble_vec = "0.1.0"
 notify = { workspace = true }
+num_cpus = { workspace = true }
 radix_trie = { workspace = true }
 thiserror = "1.0.38"
 tokio = { workspace = true, features = ["full", "time"] }
 tracing = "0.1.37"
-tracing-test = "0.2.4"
 turbopath = { workspace = true }
 turborepo-repository = { version = "0.1.0", path = "../turborepo-repository" }
-turborepo-scm = { workspace = true }
+turborepo-scm = { workspace = true, features = ["git2"] }
 walkdir = "2.3.3"
 wax = { workspace = true }
 
@@ -36,9 +36,10 @@ version = "1.0.4"
 version = "0.2.4"
 
 [dev-dependencies]
-git2 = { version = "0.16.1", default-features = false }
+git2 = { workspace = true, default-features = false }
 tempfile = { workspace = true }
 tokio-scoped = "0.2.0"
+tracing-test = "0.2.4"
 
 [features]
 default = ["macos_fsevent"]

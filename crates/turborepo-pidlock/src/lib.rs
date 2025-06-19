@@ -251,8 +251,8 @@ mod tests {
         unsafe { libc::getpid() as u32 }
     }
 
-    fn make_pid_path() -> (tempdir::TempDir, PathBuf) {
-        let tmp = tempdir::TempDir::new("pidlock").unwrap();
+    fn make_pid_path() -> (tempfile::TempDir, PathBuf) {
+        let tmp = tempfile::TempDir::with_prefix("pidlock").unwrap();
         let path = tmp.path().join("pidfile");
         (tmp, path)
     }
@@ -354,7 +354,7 @@ mod tests {
             .open(path.clone())
             .expect("Could not open file for writing");
 
-        file.write_all(&format!("{}", thread_rng().gen::<i32>()).into_bytes()[..])
+        file.write_all(&format!("{}", thread_rng().r#gen::<i32>()).into_bytes()[..])
             .unwrap();
 
         drop(file);

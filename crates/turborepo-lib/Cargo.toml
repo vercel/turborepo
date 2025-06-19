@@ -19,10 +19,10 @@ daemon-file-hashing = []
 anyhow = { workspace = true, features = ["backtrace"] }
 assert_cmd = { workspace = true }
 async-stream = "0.3.4"
+insta = { workspace = true }
 itertools = { workspace = true }
 port_scanner = { workspace = true }
 pretty_assertions = { workspace = true }
-tempdir = "0.3.7"
 tempfile = { workspace = true }
 test-case = { workspace = true }
 tracing-test = { version = "0.2.4", features = ["no-env-filter"] }
@@ -33,6 +33,8 @@ turborepo-vercel-api-mock = { workspace = true }
 workspace = true
 
 [dependencies]
+async-graphql = { workspace = true }
+async-graphql-axum = { workspace = true }
 atty = { workspace = true }
 axum = { workspace = true }
 biome_deserialize = { workspace = true }
@@ -51,12 +53,14 @@ const_format = "0.2.30"
 convert_case = "0.6.0"
 crossterm = "0.26"
 ctrlc = { version = "3.4.0", features = ["termination"] }
-dialoguer = { workspace = true, features = ["fuzzy-select"] }
+derive_setters = { workspace = true }
+dialoguer = { workspace = true, features = ["fuzzy-select", "password"] }
 dirs-next = "2.0.0"
 dunce = { workspace = true }
 either = { workspace = true }
-futures = "0.3.30"
+futures = { workspace = true }
 futures-core = "0.3.30"
+git2 = { workspace = true, default-features = false }
 globwalk = { version = "0.1.0", path = "../turborepo-globwalk" }
 globwatch = { path = "../turborepo-globwatch" }
 go-parse-duration = "0.1.1"
@@ -65,19 +69,20 @@ human-panic = "1.2.1"
 human_format = "1.1.0"
 humantime = "2.1.0"
 ignore = "0.4.22"
+indicatif = { workspace = true }
 itertools = { workspace = true }
 jsonc-parser = { version = "0.21.0" }
 lazy_static = { workspace = true }
 libc = "0.2.140"
+merge = { workspace = true }
 miette = { workspace = true, features = ["fancy"] }
-nix = "0.26.2"
 notify = { workspace = true }
-num_cpus = "1.15.0"
+num_cpus = { workspace = true }
 owo-colors = { workspace = true }
+oxc_resolver = { workspace = true }
 path-clean = "1.0.1"
 petgraph = { workspace = true }
 pidlock = { path = "../turborepo-pidlock" }
-portable-pty = "0.8.1"
 pprof = { version = "0.12.1", features = [
   "prost-codec",
   "frame-pointer",
@@ -96,6 +101,10 @@ sha2 = { workspace = true }
 shared_child = "1.0.0"
 struct_iterable = "0.1.1"
 svix-ksuid = { version = "0.7.0", features = ["serde"] }
+swc_common = { workspace = true }
+swc_ecma_ast = { workspace = true, features = ["serde-impl"] }
+swc_ecma_parser = { workspace = true }
+swc_ecma_visit = { workspace = true }
 sysinfo = "0.27.7"
 tabwriter = "1.3.0"
 thiserror = "1.0.38"
@@ -106,10 +115,12 @@ tokio-stream = { version = "0.1.12", features = ["net"] }
 tokio-util = { version = "0.7.7", features = ["compat"] }
 tonic = { version = "0.11.0", features = ["transport"] }
 tower = "0.4.13"
+tower-http = { version = "0.5.2", features = ["cors"] }
 tracing-appender = "0.2.2"
 tracing-chrome = "0.7.1"
 tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
 tracing.workspace = true
+turbo-trace = { workspace = true }
 turbo-updater = { workspace = true }
 turbopath = { workspace = true }
 turborepo-analytics = { path = "../turborepo-analytics" }
@@ -121,11 +132,16 @@ turborepo-dirs = { path = "../turborepo-dirs" }
 turborepo-env = { workspace = true }
 turborepo-errors = { workspace = true }
 turborepo-filewatch = { path = "../turborepo-filewatch" }
+turborepo-fixed-map = { workspace = true }
+turborepo-frameworks = { workspace = true }
 turborepo-fs = { path = "../turborepo-fs" }
 turborepo-graph-utils = { path = "../turborepo-graph-utils" }
 turborepo-lockfiles = { workspace = true }
+turborepo-microfrontends = { workspace = true }
+turborepo-process = { workspace = true }
 turborepo-repository = { path = "../turborepo-repository" }
-turborepo-scm = { workspace = true }
+turborepo-scm = { workspace = true, features = ["git2"] }
+turborepo-signals = { workspace = true }
 turborepo-telemetry = { path = "../turborepo-telemetry" }
 turborepo-ui = { workspace = true }
 turborepo-unescape = { workspace = true }
@@ -140,9 +156,6 @@ which = { workspace = true }
 [target.'cfg(target_os = "windows")'.dependencies]
 uds_windows = "1.0.2"
 async-io = "1.12.0"
-
-[target.'cfg(target_os = "windows")'.dev-dependencies]
-winapi = "0.3.9"
 
 [build-dependencies]
 capnpc = "0.18.0"

@@ -1,4 +1,5 @@
 {
+  "name": "kitchen-sink",
   "private": true,
   "scripts": {
     "build": "turbo run build",
@@ -7,15 +8,14 @@
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "lint": "turbo run lint",
     "test": "turbo run test",
-    "typecheck": "turbo run typecheck"
+    "check-types": "turbo run check-types"
   },
   "devDependencies": {
-    "prettier": "^3.2.5",
-    "turbo": "^2.0.5"
+    "prettier": "^3.5.3",
+    "turbo": "^2.5.0"
   },
   "packageManager": "pnpm@8.15.6",
   "engines": {
     "node": ">=18"
-  },
-  "name": "kitchen-sink"
+  }
 }

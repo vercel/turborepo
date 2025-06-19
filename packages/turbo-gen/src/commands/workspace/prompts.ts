@@ -1,5 +1,5 @@
 import path from "node:path";
-import { readJsonSync } from "fs-extra";
+import fs from "fs-extra";
 import { prompt, Separator } from "inquirer";
 import { minimatch } from "minimatch";
 import validName from "validate-npm-package-name";
@@ -53,7 +53,7 @@ export async function type({
   return prompt<{ answer: WorkspaceType }>({
     type: "list",
     name: "answer",
-    message: message ?? `What type of workspace should be added?`,
+    message: message ?? "What type of workspace should be added?",
     choices: [
       {
         name: "app",
@@ -233,7 +233,7 @@ export async function dependencies({
   });
 
   const sourcePackageJson = workspaceSource
-    ? (readJsonSync(workspaceSource.paths.packageJson) as PackageJson)
+    ? (fs.readJsonSync(workspaceSource.paths.packageJson) as PackageJson)
     : undefined;
 
   for (const group of dependencyGroups) {

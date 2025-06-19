@@ -6,9 +6,9 @@ use std::{
 use nom::Finish;
 use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPathBuf};
 
-use crate::{package_deps::GitHashes, wait_for_success, Error, Git};
+use crate::{wait_for_success, Error, GitHashes, GitRepo};
 
-impl Git {
+impl GitRepo {
     #[tracing::instrument(skip(self))]
     pub fn git_ls_tree(&self, root_path: &AbsoluteSystemPathBuf) -> Result<GitHashes, Error> {
         let mut hashes = GitHashes::new();
@@ -72,7 +72,7 @@ fn nom_parse_ls_tree(i: &[u8]) -> nom::IResult<&[u8], LsTreeEntry<'_>> {
     let (i, _) = nom::bytes::complete::take(1usize)(i)?;
     let (i, filename) = nom::bytes::complete::is_not("\0")(i)?;
     // We explicitly support a missing terminator
-    let (i, _) = nom::combinator::opt(nom::bytes::complete::tag(&[b'\0']))(i)?;
+    let (i, _) = nom::combinator::opt(nom::bytes::complete::tag(b"\0"))(i)?;
     Ok((i, LsTreeEntry { filename, hash }))
 }
 
@@ -82,7 +82,7 @@ mod tests {
 
     use turbopath::RelativeUnixPathBuf;
 
-    use crate::{ls_tree::read_ls_tree, package_deps::GitHashes};
+    use crate::{ls_tree::read_ls_tree, GitHashes};
 
     fn to_hash_map(pairs: &[(&str, &str)]) -> GitHashes {
         HashMap::from_iter(

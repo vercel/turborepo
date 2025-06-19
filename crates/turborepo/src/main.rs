@@ -1,3 +1,4 @@
+// Bump all rust changes
 #![deny(clippy::all)]
 
 use std::process;
@@ -11,7 +12,7 @@ fn main() -> Result<()> {
     std::panic::set_hook(Box::new(turborepo_lib::panic_handler));
 
     let exit_code = turborepo_lib::main().unwrap_or_else(|err| {
-        println!("{:?}", Report::new(err));
+        eprintln!("{:?}", Report::new(err));
         1
     });
 

@@ -1,9 +1,9 @@
+use camino::Utf8Path;
 use serde::Serialize;
-use turborepo_repository::{
-    package_graph::PackageGraph, package_json::PackageJson, package_manager::PackageManager,
-};
+use turbopath::AbsoluteSystemPathBuf;
+use turborepo_repository::{package_graph::PackageGraph, package_json::PackageJson};
 
-use crate::{cli, commands::CommandBase};
+use crate::{cli, cli::EnvMode, commands::CommandBase, turbo_json::UIMode, Args};
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -17,21 +17,25 @@ struct ConfigOutput<'a> {
     timeout: u64,
     upload_timeout: u64,
     enabled: bool,
-    spaces_id: Option<&'a str>,
-    ui: bool,
-    package_manager: PackageManager,
+    ui: UIMode,
+    package_manager: &'static str,
     daemon: Option<bool>,
+    env_mode: EnvMode,
+    scm_base: Option<&'a str>,
+    scm_head: Option<&'a str>,
+    cache_dir: &'a Utf8Path,
+    concurrency: Option<&'a str>,
 }
 
-pub async fn run(base: CommandBase) -> Result<(), cli::Error> {
-    let config = base.config()?;
-    let root_package_json = PackageJson::load(&base.repo_root.join_component("package.json"))?;
+pub async fn run(repo_root: AbsoluteSystemPathBuf, args: Args) -> Result<(), cli::Error> {
+    let config = CommandBase::load_config(&repo_root, &args)?;
+    let root_package_json = PackageJson::load(&repo_root.join_component("package.json"))?;
 
-    let package_graph = PackageGraph::builder(&base.repo_root, root_package_json)
+    let package_graph = PackageGraph::builder(&repo_root, root_package_json)
         .build()
         .await?;
 
-    let package_manager = package_graph.package_manager();
+    let package_manager = package_graph.package_manager().name();
 
     println!(
         "{}",
@@ -45,10 +49,14 @@ pub async fn run(base: CommandBase) -> Result<(), cli::Error> {
             timeout: config.timeout(),
             upload_timeout: config.upload_timeout(),
             enabled: config.enabled(),
-            spaces_id: config.spaces_id(),
             ui: config.ui(),
-            package_manager: *package_manager,
+            package_manager,
             daemon: config.daemon,
+            env_mode: config.env_mode(),
+            scm_base: config.scm_base(),
+            scm_head: config.scm_head(),
+            cache_dir: config.cache_dir(),
+            concurrency: config.concurrency.as_deref()
         })?
     );
     Ok(())

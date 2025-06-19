@@ -37,7 +37,7 @@ Can depend on root tasks
 Can't depend on a missing root task
   $ ${TURBO} run build3 --graph > BUILD3 2>&1
   [1]
-  $ cat BUILD3 | grep --quiet --only-match 'x //#not-exists needs an entry in turbo.json before it can be depended on'
+  $ cat BUILD3 | grep --quiet --only-match 'x //#not-exists requires an entry in turbo.json before it can be depended on'
   $ cat BUILD3 | grep --quiet --only-match 'because it is a task declared in the root package.json'
 
 Package tasks can depend on things

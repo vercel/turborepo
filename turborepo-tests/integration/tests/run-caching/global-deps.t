@@ -11,6 +11,7 @@ Run a build to get a local cache.
   Cached:    0 cached, 1 total
     Time:\s+[.0-9]+m?s  (re)
   
+   WARNING  no output files found for task my-app#build. Please check your `outputs` key in `turbo.json`
 
 Run again to get cache hit
   $ SOME_ENV_VAR=hi ${TURBO} run build --output-logs=none --filter=my-app
@@ -33,3 +34,4 @@ Run again without env var to get cache miss
   Cached:    0 cached, 1 total
     Time:\s+[.0-9]+m?s  (re)
   
+   WARNING  no output files found for task my-app#build. Please check your `outputs` key in `turbo.json`

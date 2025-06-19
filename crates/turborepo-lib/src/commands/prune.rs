@@ -16,19 +16,19 @@ use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_ui::BOLD;
 
 use super::CommandBase;
-use crate::turbo_json::RawTurboJson;
+use crate::turbo_json::{RawTurboJson, CONFIG_FILE, CONFIG_FILE_JSONC};
 
 pub const DEFAULT_OUTPUT_DIR: &str = "out";
 
 #[derive(Debug, thiserror::Error, Diagnostic)]
 pub enum Error {
-    #[error("io error while pruning: {0}")]
+    #[error("I/O error while pruning: {0}")]
     Io(#[from] std::io::Error),
     #[error("File system error while pruning. The error from the operating system is: {0}")]
     Fs(#[from] turborepo_fs::Error),
-    #[error("json error while pruning: {0}")]
+    #[error("JSON error while pruning: {0}")]
     Json(#[from] serde_json::Error),
-    #[error("path error while pruning: {0}")]
+    #[error("Path error while pruning: {0}")]
     Path(#[from] turbopath::PathError),
     #[error(transparent)]
     #[diagnostic(transparent)]
@@ -39,16 +39,14 @@ pub enum Error {
     PackageGraph(#[from] package_graph::Error),
     #[error(transparent)]
     Lockfile(#[from] turborepo_lockfiles::Error),
-    #[error("turbo doesn't support workspaces at file system root")]
+    #[error("`turbo` does not support workspaces at file system root.")]
     WorkspaceAtFilesystemRoot,
-    #[error("at least one target must be specified")]
+    #[error("At least one target must be specified.")]
     NoWorkspaceSpecified,
-    #[error("invalid scope: package with name {0} in package.json not found")]
+    #[error("Invalid scope. Package with name {0} in `package.json` not found.")]
     MissingWorkspace(PackageName),
-    #[error("Cannot prune without parsed lockfile")]
+    #[error("Cannot prune without parsed lockfile.")]
     MissingLockfile,
-    #[error("Prune is not supported for Bun")]
-    BunUnsupported,
     #[error("Unable to read config: {0}")]
     Config(#[from] crate::config::Error),
 }
@@ -85,7 +83,12 @@ fn package_json() -> &'static AnchoredSystemPath {
 
 fn turbo_json() -> &'static AnchoredSystemPath {
     static PATH: OnceLock<&'static AnchoredSystemPath> = OnceLock::new();
-    PATH.get_or_init(|| AnchoredSystemPath::new("turbo.json").unwrap())
+    PATH.get_or_init(|| AnchoredSystemPath::new(CONFIG_FILE).unwrap())
+}
+
+fn turbo_jsonc() -> &'static AnchoredSystemPath {
+    static PATH: OnceLock<&'static AnchoredSystemPath> = OnceLock::new();
+    PATH.get_or_init(|| AnchoredSystemPath::new(CONFIG_FILE_JSONC).unwrap())
 }
 
 pub async fn prune(
@@ -93,24 +96,18 @@ pub async fn prune(
     scope: &[String],
     docker: bool,
     output_dir: &str,
+    use_gitignore: bool,
     telemetry: CommandEventBuilder,
 ) -> Result<(), Error> {
     telemetry.track_arg_usage("docker", docker);
     telemetry.track_arg_usage("out-dir", output_dir != DEFAULT_OUTPUT_DIR);
 
-    let prune = Prune::new(base, scope, docker, output_dir, telemetry).await?;
-
-    if matches!(
-        prune.package_graph.package_manager(),
-        turborepo_repository::package_manager::PackageManager::Bun
-    ) {
-        return Err(Error::BunUnsupported);
-    }
+    let prune = Prune::new(base, scope, docker, output_dir, use_gitignore, telemetry).await?;
 
     println!(
         "Generating pruned monorepo for {} in {}",
-        base.ui.apply(BOLD.apply_to(scope.join(", "))),
-        base.ui.apply(BOLD.apply_to(&prune.out_directory)),
+        base.color_config.apply(BOLD.apply_to(scope.join(", "))),
+        base.color_config.apply(BOLD.apply_to(&prune.out_directory)),
     );
 
     if let Some(workspace_config_path) = prune
@@ -199,10 +196,15 @@ pub async fn prune(
             original_patches,
             pruned_patches
         );
-        let pruned_json = prune
-            .package_graph
-            .package_manager()
-            .prune_patched_packages(prune.package_graph.root_package_json(), &pruned_patches);
+
+        let repo_root = &prune.root;
+        let package_manager = prune.package_graph.package_manager();
+
+        let pruned_json = package_manager.prune_patched_packages(
+            prune.package_graph.root_package_json(),
+            &pruned_patches,
+            repo_root,
+        );
         let mut pruned_json_contents = serde_json::to_string_pretty(&pruned_json)?;
         // Add trailing newline to match Go behavior
         pruned_json_contents.push('\n');
@@ -244,6 +246,7 @@ struct Prune<'a> {
     full_directory: AbsoluteSystemPathBuf,
     docker: bool,
     scope: &'a [String],
+    use_gitignore: bool,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -261,9 +264,10 @@ impl<'a> Prune<'a> {
         scope: &'a [String],
         docker: bool,
         output_dir: &str,
+        use_gitignore: bool,
         telemetry: CommandEventBuilder,
     ) -> Result<Self, Error> {
-        let allow_missing_package_manager = base.config()?.allow_no_package_manager();
+        let allow_missing_package_manager = base.opts().repo_opts.allow_no_package_manager;
         telemetry.track_arg_usage(
             "dangerously-allow-missing-package-manager",
             allow_missing_package_manager,
@@ -299,7 +303,11 @@ impl<'a> Prune<'a> {
             };
             trace!(
                 "target: {}",
-                info.package_json.name.as_deref().unwrap_or_default()
+                info.package_json
+                    .name
+                    .as_ref()
+                    .map(|name| name.as_str())
+                    .unwrap_or_default()
             );
             trace!("workspace package.json: {}", &info.package_json_path);
             trace!(
@@ -327,6 +335,7 @@ impl<'a> Prune<'a> {
             full_directory,
             docker,
             scope,
+            use_gitignore,
         })
     }
 
@@ -373,10 +382,10 @@ impl<'a> Prune<'a> {
             return Ok(());
         }
         let full_to = self.full_directory.resolve(path);
-        turborepo_fs::recursive_copy(&from_path, full_to)?;
+        turborepo_fs::recursive_copy(&from_path, full_to, self.use_gitignore)?;
         if matches!(destination, Some(CopyDestination::All)) {
             let out_to = self.out_directory.resolve(path);
-            turborepo_fs::recursive_copy(&from_path, out_to)?;
+            turborepo_fs::recursive_copy(&from_path, out_to, self.use_gitignore)?;
         }
         if self.docker
             && matches!(
@@ -385,7 +394,7 @@ impl<'a> Prune<'a> {
             )
         {
             let docker_to = self.docker_directory().resolve(path);
-            turborepo_fs::recursive_copy(&from_path, docker_to)?;
+            turborepo_fs::recursive_copy(&from_path, docker_to, self.use_gitignore)?;
         }
         Ok(())
     }
@@ -400,7 +409,7 @@ impl<'a> Prune<'a> {
         let target_dir = self.full_directory.resolve(&relative_workspace_dir);
         target_dir.create_dir_all_with_permissions(metadata.permissions())?;
 
-        turborepo_fs::recursive_copy(original_dir, &target_dir)?;
+        turborepo_fs::recursive_copy(original_dir, &target_dir, self.use_gitignore)?;
 
         if self.docker {
             let docker_workspace_dir = self.docker_directory().resolve(&relative_workspace_dir);
@@ -436,24 +445,32 @@ impl<'a> Prune<'a> {
     }
 
     fn copy_turbo_json(&self, workspaces: &[String]) -> Result<(), Error> {
-        let anchored_turbo_path = turbo_json();
-        let original_turbo_path = self.root.resolve(anchored_turbo_path);
-        let new_turbo_path = self.full_directory.resolve(anchored_turbo_path);
-
-        let turbo_json_contents = match original_turbo_path.read_to_string() {
-            Ok(contents) => contents,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                // If turbo.json doesn't exist skip copying
-                return Ok(());
-            }
-            Err(e) => return Err(e.into()),
+        let Some((turbo_json, turbo_json_name)) = self
+            .get_turbo_json(turbo_json())
+            .transpose()
+            .or_else(|| self.get_turbo_json(turbo_jsonc()).transpose())
+            .transpose()?
+        else {
+            return Ok(());
         };
 
-        let turbo_json = RawTurboJson::parse(&turbo_json_contents, anchored_turbo_path)?;
-
         let pruned_turbo_json = turbo_json.prune_tasks(workspaces);
+        let new_turbo_path = self.full_directory.resolve(turbo_json_name);
         new_turbo_path.create_with_contents(serde_json::to_string_pretty(&pruned_turbo_json)?)?;
 
         Ok(())
+    }
+
+    fn get_turbo_json<'b>(
+        &self,
+        turbo_json_name: &'b AnchoredSystemPath,
+    ) -> Result<Option<(RawTurboJson, &'b AnchoredSystemPath)>, Error> {
+        let original_turbo_path = self.root.resolve(turbo_json_name);
+        let Some(turbo_json_contents) = original_turbo_path.read_existing_to_string()? else {
+            return Ok(None);
+        };
+
+        let turbo_json = RawTurboJson::parse(&turbo_json_contents, turbo_json_name.as_str())?;
+        Ok(Some((turbo_json, turbo_json_name)))
     }
 }

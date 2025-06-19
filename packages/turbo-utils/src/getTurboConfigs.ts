@@ -2,24 +2,30 @@ import fs from "node:fs";
 import path from "node:path";
 import yaml from "js-yaml";
 import { sync } from "fast-glob";
-import type { LegacySchema, Pipeline } from "@turbo/types/src/types/config";
 import JSON5 from "json5";
+import type {
+  BaseSchemaV1,
+  PipelineV1,
+  SchemaV1,
+  BaseSchemaV2,
+  PipelineV2,
+} from "@turbo/types";
 import * as logger from "./logger";
 import { getTurboRoot } from "./getTurboRoot";
 import type { PackageJson, PNPMWorkspaceConfig } from "./types";
 
-const ROOT_GLOB = "turbo.json";
+const ROOT_GLOB = "{turbo.json,turbo.jsonc}";
 const ROOT_WORKSPACE_GLOB = "package.json";
 
 export interface WorkspaceConfig {
   workspaceName: string;
   workspacePath: string;
   isWorkspaceRoot: boolean;
-  turboConfig?: LegacySchema;
+  turboConfig?: SchemaV1;
 }
 
 export interface TurboConfig {
-  config: LegacySchema;
+  config: SchemaV1;
   turboConfigPath: string;
   workspacePath: string;
   isRootConfig: boolean;
@@ -77,7 +83,7 @@ export function getTurboConfigs(cwd?: string, opts?: Options): TurboConfigs {
   if (turboRoot) {
     const workspaceGlobs = getWorkspaceGlobs(turboRoot);
     const workspaceConfigGlobs = workspaceGlobs.map(
-      (glob) => `${glob}/turbo.json`
+      (glob) => `${glob}/${ROOT_GLOB}`
     );
 
     const configPaths = sync([ROOT_GLOB, ...workspaceConfigGlobs], {
@@ -88,21 +94,43 @@ export function getTurboConfigs(cwd?: string, opts?: Options): TurboConfigs {
       suppressErrors: true,
     }).map((configPath) => path.join(turboRoot, configPath));
 
-    configPaths.forEach((configPath) => {
+    // Check for both turbo.json and turbo.jsonc in the same directory
+    const configPathsByDir: Record<string, Array<string>> = {};
+
+    // Group config paths by directory
+    for (const configPath of configPaths) {
+      const dir = path.dirname(configPath);
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- configPathsByDir[dir] can be undefined
+      if (!configPathsByDir[dir]) {
+        configPathsByDir[dir] = [];
+      }
+      configPathsByDir[dir].push(configPath);
+    }
+
+    // Process each directory
+    for (const [dir, dirConfigPaths] of Object.entries(configPathsByDir)) {
+      // If both turbo.json and turbo.jsonc exist in the same directory, throw an error
+      if (dirConfigPaths.length > 1) {
+        const errorMessage = `Found both turbo.json and turbo.jsonc in the same directory: ${dir}\nPlease use either turbo.json or turbo.jsonc, but not both.`;
+        logger.error(errorMessage);
+        throw new Error(errorMessage);
+      }
+
+      const configPath = dirConfigPaths[0];
       try {
         const raw = fs.readFileSync(configPath, "utf8");
-        // eslint-disable-next-line import/no-named-as-default-member -- json5 exports different objects depending on if you're using esm or cjs (https://github.com/json5/json5/issues/240)
-        const turboJsonContent: LegacySchema = JSON5.parse(raw);
+
+        const turboJsonContent: SchemaV1 = JSON5.parse(raw);
         // basic config validation
         const isRootConfig = path.dirname(configPath) === turboRoot;
         if (isRootConfig) {
           // invalid - root config with extends
           if ("extends" in turboJsonContent) {
-            return;
+            continue;
           }
         } else if (!("extends" in turboJsonContent)) {
           // invalid - workspace config with no extends
-          return;
+          continue;
         }
         configs.push({
           config: turboJsonContent,
@@ -114,7 +142,7 @@ export function getTurboConfigs(cwd?: string, opts?: Options): TurboConfigs {
         // if we can't read or parse the config, just ignore it with a warning
         logger.warn(e);
       }
-    });
+    }
   }
 
   if (cacheEnabled && cwd) {
@@ -151,7 +179,7 @@ export function getWorkspaceConfigs(
       suppressErrors: true,
     }).map((configPath) => path.join(turboRoot, configPath));
 
-    configPaths.forEach((configPath) => {
+    for (const configPath of configPaths) {
       try {
         const rawPackageJson = fs.readFileSync(configPath, "utf8");
         const packageJsonContent = JSON.parse(rawPackageJson) as PackageJson;
@@ -160,29 +188,48 @@ export function getWorkspaceConfigs(
         const workspacePath = path.dirname(configPath);
         const isWorkspaceRoot = workspacePath === turboRoot;
 
-        // Try and get turbo.json
+        // Try and get turbo.json or turbo.jsonc
         const turboJsonPath = path.join(workspacePath, "turbo.json");
-        let rawTurboJson = null;
-        let turboConfig: LegacySchema | undefined;
-        try {
-          rawTurboJson = fs.readFileSync(turboJsonPath, "utf8");
-          // eslint-disable-next-line import/no-named-as-default-member -- json5 exports different objects depending on if you're using esm or cjs (https://github.com/json5/json5/issues/240)
-          turboConfig = JSON5.parse(rawTurboJson);
+        const turboJsoncPath = path.join(workspacePath, "turbo.jsonc");
 
-          if (turboConfig) {
-            // basic config validation
-            if (isWorkspaceRoot) {
-              // invalid - root config with extends
-              if ("extends" in turboConfig) {
-                return;
+        // Check if both files exist
+        const turboJsonExists = fs.existsSync(turboJsonPath);
+        const turboJsoncExists = fs.existsSync(turboJsoncPath);
+
+        if (turboJsonExists && turboJsoncExists) {
+          const errorMessage = `Found both turbo.json and turbo.jsonc in the same directory: ${workspacePath}\nPlease use either turbo.json or turbo.jsonc, but not both.`;
+          logger.error(errorMessage);
+          throw new Error(errorMessage);
+        }
+
+        let rawTurboJson = null;
+        let turboConfig: SchemaV1 | undefined;
+
+        try {
+          if (turboJsonExists) {
+            rawTurboJson = fs.readFileSync(turboJsonPath, "utf8");
+          } else if (turboJsoncExists) {
+            rawTurboJson = fs.readFileSync(turboJsoncPath, "utf8");
+          }
+
+          if (rawTurboJson) {
+            turboConfig = JSON5.parse(rawTurboJson);
+
+            if (turboConfig) {
+              // basic config validation
+              if (isWorkspaceRoot) {
+                // invalid - root config with extends
+                if ("extends" in turboConfig) {
+                  continue;
+                }
+              } else if (!("extends" in turboConfig)) {
+                // invalid - workspace config with no extends
+                continue;
               }
-            } else if (!("extends" in turboConfig)) {
-              // invalid - workspace config with no extends
-              return;
             }
           }
         } catch (e) {
-          // It is fine for there to not be a turbo.json.
+          // It is fine for there to not be a turbo.json or turbo.jsonc.
         }
 
         configs.push({
@@ -195,7 +242,7 @@ export function getWorkspaceConfigs(
         // if we can't read or parse the config, just ignore it with a warning
         logger.warn(e);
       }
-    });
+    }
   }
 
   if (cacheEnabled && cwd) {
@@ -205,9 +252,11 @@ export function getWorkspaceConfigs(
   return configs;
 }
 
-export function forEachTaskDef(
-  config: LegacySchema,
-  f: (value: [string, Pipeline]) => void
+export function forEachTaskDef<BaseSchema extends BaseSchemaV1 | BaseSchemaV2>(
+  config: BaseSchema,
+  f: (
+    value: [string, BaseSchema extends BaseSchemaV1 ? PipelineV1 : PipelineV2]
+  ) => void
 ): void {
   if ("pipeline" in config) {
     Object.entries(config.pipeline).forEach(f);

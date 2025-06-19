@@ -540,15 +540,16 @@ impl FilterAnyProgram {
         use FilterAnyProgram::{Exhaustive, Nonexhaustive, Partitioned};
 
         match self {
-            Exhaustive(ref exhaustive) | Partitioned { ref exhaustive, .. }
+            Exhaustive(exhaustive) | Partitioned { exhaustive, .. }
                 if exhaustive.is_match(candidate.as_ref()) =>
             {
                 Some(EntryResidue::Tree)
             }
-            Nonexhaustive(ref nonexhaustive)
-            | Partitioned {
-                ref nonexhaustive, ..
-            } if nonexhaustive.is_match(candidate.as_ref()) => Some(EntryResidue::File),
+            Nonexhaustive(nonexhaustive) | Partitioned { nonexhaustive, .. }
+                if nonexhaustive.is_match(candidate.as_ref()) =>
+            {
+                Some(EntryResidue::File)
+            }
             _ => None,
         }
     }

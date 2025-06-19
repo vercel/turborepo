@@ -25,16 +25,17 @@ Check
     Cached \(Remote\)                = false\s* (re)
     Command                        = echo building > foo.txt\s* (re)
     Outputs                        =\s* (re)
-    Log File                       = .turbo(\/|\\)turbo-build.log\s* (re)
+    Log File                       = 
     Dependencies                   =\s* (re)
     Dependents                     =\s* (re)
+    With                           =\s* (re)
     Inputs Files Considered        = 4\s* (re)
     Env Vars                       = 
     Env Vars Values                = 
     Inferred Env Vars Values       = 
     Passed Through Env Vars        = 
     Passed Through Env Vars Values = 
-    Resolved Task Definition       = {"outputs":[],"cache":false,"dependsOn":[],"inputs":[],"outputLogs":"full","persistent":false,"env":[],"passThroughEnv":null,"interactive":false}
+    Resolved Task Definition       = {"outputs":[],"cache":false,"dependsOn":[],"inputs":[],"outputLogs":"full","persistent":false,"interruptible":false,"env":[],"passThroughEnv":null,"interactive":false}
     Framework                      = 
 
   $ ${TURBO} run build --graph

@@ -10,8 +10,8 @@
     "esbuild-base": "esbuild ./src/extension.ts --bundle --main-fields=module,main --outfile=out/main.js --external:vscode --format=cjs --platform=node",
     "esbuild": "npm run esbuild-base -- --sourcemap",
     "esbuild-watch": "npm run esbuild-base -- --sourcemap --watch",
-    "package": "pnpm vsce package --no-dependencies --baseContentUrl https://github.com/vercel/turbo/raw/HEAD/packages/turbo-vsc",
-    "publish": "pnpm vsce publish --no-dependencies --baseContentUrl https://github.com/vercel/turbo/raw/HEAD/packages/turbo-vsc",
+    "package": "pnpm vsce package --no-dependencies --baseContentUrl https://github.com/vercel/turborepo/raw/HEAD/packages/turbo-vsc",
+    "publish": "pnpm vsce publish --no-dependencies --baseContentUrl https://github.com/vercel/turborepo/raw/HEAD/packages/turbo-vsc",
     "copy-darwin-arm64": "cp out/artifacts/turborepo-lsp-aarch64-apple-darwin/turborepo-lsp out/turborepo-lsp-darwin-arm64 && chmod +x out/turborepo-lsp-darwin-arm64",
     "copy-darwin-x64": "cp out/artifacts/turborepo-lsp-x86_64-apple-darwin/turborepo-lsp out/turborepo-lsp-darwin-x64 && chmod +x out/turborepo-lsp-darwin-x64",
     "copy-win32-x64": "cp out/artifacts/turborepo-lsp-x86_64-pc-windows-msvc/turborepo-lsp.exe out/turborepo-lsp-win32-x64.exe",
@@ -32,11 +32,11 @@
   ],
   "icon": "resources/icon.png",
   "bugs": {
-    "url": "https://github.com/vercel/turbo/issues"
+    "url": "https://github.com/vercel/turborepo/issues"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/vercel/turbo",
+    "url": "https://github.com/vercel/turborepo",
     "directory": "packages/turbo-vsc"
   },
   "author": "Vercel",

@@ -47,7 +47,7 @@ impl Default for SpinnerState {
 //     use super::*;
 //
 //     #[test]
-//     fn test_inital_update() {
+//     fn test_initial_update() {
 //         let mut spinner = SpinnerState::new();
 //         assert!(spinner.last_render.is_none());
 //         assert_eq!(spinner.frame, 0);

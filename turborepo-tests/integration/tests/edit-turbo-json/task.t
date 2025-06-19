@@ -6,7 +6,7 @@ Baseline task hashes
   $ ${TURBO} build --dry=json | jq -r '.tasks | sort_by(.taskId)[] | {taskId, hash}'
   {
     "taskId": "another#build",
-    "hash": "3639431fdcdf9f9e"
+    "hash": "e9a99dd97d223d88"
   }
   {
     "taskId": "my-app#build",
@@ -22,7 +22,7 @@ Change only my-app#build
   $ ${TURBO} build --dry=json | jq -r '.tasks | sort_by(.taskId)[] | {taskId, hash}'
   {
     "taskId": "another#build",
-    "hash": "3639431fdcdf9f9e"
+    "hash": "e9a99dd97d223d88"
   }
   {
     "taskId": "my-app#build",
@@ -38,7 +38,7 @@ Change my-app#build dependsOn
   $ ${TURBO} build --dry=json | jq -r '.tasks | sort_by(.taskId)[] | {taskId, hash}'
   {
     "taskId": "another#build",
-    "hash": "3639431fdcdf9f9e"
+    "hash": "e9a99dd97d223d88"
   }
   {
     "taskId": "my-app#build",
@@ -54,7 +54,7 @@ Non-materially modifying the dep graph does nothing.
   $ ${TURBO} build --dry=json | jq -r '.tasks | sort_by(.taskId)[] | {taskId, hash}'
   {
     "taskId": "another#build",
-    "hash": "3639431fdcdf9f9e"
+    "hash": "e9a99dd97d223d88"
   }
   {
     "taskId": "my-app#build",
@@ -71,7 +71,7 @@ Change util#build impacts itself and my-app
   $ ${TURBO} build --dry=json | jq -r '.tasks | sort_by(.taskId)[] | {taskId, hash}'
   {
     "taskId": "another#build",
-    "hash": "3639431fdcdf9f9e"
+    "hash": "e9a99dd97d223d88"
   }
   {
     "taskId": "my-app#build",

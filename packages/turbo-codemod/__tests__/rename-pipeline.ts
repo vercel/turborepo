@@ -1,4 +1,5 @@
 import { setupTestFixtures } from "@turbo/test-utils";
+import { describe, it, expect } from "@jest/globals";
 import { transformer } from "../src/transforms/rename-pipeline";
 
 describe("rename-pipeline", () => {
@@ -20,7 +21,7 @@ describe("rename-pipeline", () => {
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turbo.build/schema.json",
+      $schema: "https://turborepo.com/schema.json",
       globalDependencies: ["important.txt"],
       tasks: {
         build: {
@@ -31,8 +32,8 @@ describe("rename-pipeline", () => {
 
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toMatchInlineSnapshot(`
-      Object {
-        "turbo.json": Object {
+      {
+        "turbo.json": {
           "action": "modified",
           "additions": 1,
           "deletions": 1,
@@ -54,7 +55,7 @@ describe("rename-pipeline", () => {
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turbo.build/schema.json",
+      $schema: "https://turborepo.com/schema.json",
       tasks: {
         build: {
           dependsOn: ["^build"],
@@ -73,7 +74,7 @@ describe("rename-pipeline", () => {
     });
 
     expect(JSON.parse(read("apps/web/turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turbo.build/schema.json",
+      $schema: "https://turborepo.com/schema.json",
       extends: ["//"],
       tasks: {
         build: {
@@ -83,7 +84,7 @@ describe("rename-pipeline", () => {
     });
 
     expect(JSON.parse(read("packages/ui/turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turbo.build/schema.json",
+      $schema: "https://turborepo.com/schema.json",
       extends: ["//"],
       tasks: {
         test: {
@@ -94,23 +95,23 @@ describe("rename-pipeline", () => {
 
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toMatchInlineSnapshot(`
-      Object {
-        "apps/docs/turbo.json": Object {
+      {
+        "apps/docs/turbo.json": {
           "action": "modified",
           "additions": 1,
           "deletions": 1,
         },
-        "apps/web/turbo.json": Object {
+        "apps/web/turbo.json": {
           "action": "modified",
           "additions": 1,
           "deletions": 1,
         },
-        "packages/ui/turbo.json": Object {
+        "packages/ui/turbo.json": {
           "action": "modified",
           "additions": 1,
           "deletions": 1,
         },
-        "turbo.json": Object {
+        "turbo.json": {
           "action": "modified",
           "additions": 1,
           "deletions": 1,
@@ -153,7 +154,7 @@ describe("rename-pipeline", () => {
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turbo.build/schema.json",
+      $schema: "https://turborepo.com/schema.json",
       tasks: {
         build: {
           outputs: ["dist"],

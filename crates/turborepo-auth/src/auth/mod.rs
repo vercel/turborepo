@@ -8,7 +8,7 @@ pub use sso::*;
 #[cfg(test)]
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::{CacheClient, Client, TokenClient};
-use turborepo_ui::UI;
+use turborepo_ui::ColorConfig;
 
 use crate::LoginServer;
 
@@ -16,7 +16,7 @@ const VERCEL_TOKEN_DIR: &str = "com.vercel.cli";
 const VERCEL_TOKEN_FILE: &str = "auth.json";
 
 pub struct LoginOptions<'a, T: Client + TokenClient + CacheClient> {
-    pub ui: &'a UI,
+    pub color_config: &'a ColorConfig,
     pub login_url: &'a str,
     pub api_client: &'a T,
     pub login_server: &'a dyn LoginServer,
@@ -27,13 +27,13 @@ pub struct LoginOptions<'a, T: Client + TokenClient + CacheClient> {
 }
 impl<'a, T: Client + TokenClient + CacheClient> LoginOptions<'a, T> {
     pub fn new(
-        ui: &'a UI,
+        color_config: &'a ColorConfig,
         login_url: &'a str,
         api_client: &'a T,
         login_server: &'a dyn LoginServer,
     ) -> Self {
         Self {
-            ui,
+            color_config,
             login_url,
             api_client,
             login_server,
@@ -46,7 +46,7 @@ impl<'a, T: Client + TokenClient + CacheClient> LoginOptions<'a, T> {
 
 /// Options for logging out.
 pub struct LogoutOptions<T> {
-    pub ui: UI,
+    pub color_config: ColorConfig,
     pub api_client: T,
     /// If we should invalidate the token on the server.
     pub invalidate: bool,

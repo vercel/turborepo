@@ -5,7 +5,7 @@ use turbopath::{
     RelativeUnixPathBuf,
 };
 
-use super::{npmrc::NpmRc, PackageInfo, PackageName};
+use super::{PackageInfo, PackageName};
 use crate::package_manager::PackageManager;
 
 pub struct DependencySplitter<'a> {
@@ -20,21 +20,19 @@ impl<'a> DependencySplitter<'a> {
         repo_root: &'a AbsoluteSystemPath,
         workspace_dir: &'a AbsoluteSystemPath,
         workspaces: &'a HashMap<PackageName, PackageInfo>,
-        package_manager: PackageManager,
-        npmrc: Option<&'a NpmRc>,
+        package_manager: &PackageManager,
     ) -> Self {
+        let link_workspace_packages = package_manager.link_workspace_packages(repo_root);
         Self {
             repo_root,
             workspace_dir,
             workspaces,
-            link_workspace_packages: npmrc
-                .and_then(|npmrc| npmrc.link_workspace_packages)
-                .unwrap_or(!matches!(package_manager, PackageManager::Pnpm9)),
+            link_workspace_packages,
         }
     }
 
     pub fn is_internal(&self, name: &str, version: &str) -> Option<PackageName> {
-        // If link_workspace_packages isn't set any version wihtout workspace protocol
+        // If link_workspace_packages isn't set any version without workspace protocol
         // is considered external.
         if !self.link_workspace_packages && !version.starts_with("workspace:") {
             return None;
@@ -145,7 +143,7 @@ impl<'a> DependencyVersion<'a> {
         // behavior before this additional logic was added.
 
         // TODO: extend this to support the `enableTransparentWorkspaces` yarn option
-        self.protocol.map_or(false, |p| p != "npm")
+        self.protocol.is_some_and(|p| p != "npm")
     }
 
     fn matches_workspace_package(
@@ -172,9 +170,14 @@ impl<'a> DependencyVersion<'a> {
                 false
             }
             _ if self.version == "*" => true,
+            _ if package_version.is_empty() => {
+                // The workspace version of this package does not contain a version, no version
+                // based constraints will match it so it must be external.
+                false
+            }
             _ => {
                 // If we got this far, then we need to check the workspace package version to
-                // see it satisfies the dependencies range to determin whether
+                // see it satisfies the dependencies range to determine whether
                 // or not it's an internal or external dependency.
                 let constraint = node_semver::Range::parse(self.version);
                 let version = node_semver::Version::parse(package_version);
@@ -188,13 +191,13 @@ impl<'a> DependencyVersion<'a> {
                 constraint
                     .ok()
                     .zip(version.ok())
-                    .map_or(true, |(constraint, version)| constraint.satisfies(&version))
+                    .is_none_or(|(constraint, version)| constraint.satisfies(&version))
             }
         }
     }
 }
 
-impl<'a> fmt::Display for DependencyVersion<'a> {
+impl fmt::Display for DependencyVersion<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.protocol {
             Some(protocol) => f.write_fmt(format_args!("{}:{}", protocol, self.version)),
@@ -222,9 +225,9 @@ mod test {
     #[test_case("1.2.3", None, "npm:^1.2.3", Some("@scope/foo"), true ; "handles npm protocol with satisfied semver range")]
     #[test_case("2.3.4", None, "npm:^1.2.3", None, true ; "handles npm protocol with not satisfied semver range")]
     #[test_case("1.2.3", None, "1.2.2-alpha-123abcd.0", None, true ; "handles pre-release versions")]
-    // for backwards compatability with the code before versions were verified
+    // for backwards compatibility with the code before versions were verified
     #[test_case("sometag", None, "1.2.3", Some("@scope/foo"), true ; "handles non-semver package version")]
-    // for backwards compatability with the code before versions were verified
+    // for backwards compatibility with the code before versions were verified
     #[test_case("1.2.3", None, "sometag", Some("@scope/foo"), true ; "handles non-semver dependency version")]
     #[test_case("1.2.3", None, "file:../libB", Some("@scope/foo"), true ; "handles file:.. inside repo")]
     #[test_case("1.2.3", None, "file:../../../otherproject", None, true ; "handles file:.. outside repo")]
@@ -232,10 +235,11 @@ mod test {
     #[test_case("1.2.3", None, "link:../../../otherproject", None, true ; "handles link:.. outside repo")]
     #[test_case("0.0.0-development", None, "*", Some("@scope/foo"), true ; "handles development versions")]
     #[test_case("1.2.3", Some("foo"), "workspace:@scope/foo@*", Some("@scope/foo"), true ; "handles pnpm alias star")]
-    #[test_case("1.2.3", Some("foo"), "workspace:@scope/foo@~", Some("@scope/foo"), true ; "handles pnpm alias tilda")]
+    #[test_case("1.2.3", Some("foo"), "workspace:@scope/foo@~", Some("@scope/foo"), true ; "handles pnpm alias tilde")]
     #[test_case("1.2.3", Some("foo"), "workspace:@scope/foo@^", Some("@scope/foo"), true ; "handles pnpm alias caret")]
     #[test_case("1.2.3", None, "1.2.3", None, false ; "no workspace linking")]
     #[test_case("1.2.3", None, "workspace:1.2.3", Some("@scope/foo"), false ; "no workspace linking with protocol")]
+    #[test_case("", None, "1.2.3", None, true ; "no workspace package version")]
     fn test_matches_workspace_package(
         package_version: &str,
         dependency_name: Option<&str>,

@@ -5,7 +5,7 @@ use reqwest::Url;
 use tokio::sync::OnceCell;
 use tracing::{debug, warn};
 use turborepo_api_client::{CacheClient, Client, TokenClient};
-use turborepo_ui::{start_spinner, BOLD, UI};
+use turborepo_ui::{start_spinner, ColorConfig, BOLD};
 
 use crate::{auth::extract_vercel_token, error, ui, LoginOptions, Token};
 
@@ -23,7 +23,7 @@ pub async fn login<T: Client + TokenClient + CacheClient>(
 ) -> Result<Token, Error> {
     let LoginOptions {
         api_client,
-        ui,
+        color_config,
         login_url: login_url_configuration,
         login_server,
         existing_token,
@@ -37,12 +37,12 @@ pub async fn login<T: Client + TokenClient + CacheClient>(
     //
     // In the future I want to make the Token have some non-skewable information and
     // be able to get rid of this, but it works for now.
-    let valid_token_callback = |message: &str, ui: &UI| {
+    let valid_token_callback = |message: &str, color_config: &ColorConfig| {
         let message = message.to_string();
-        let ui = *ui;
+        let color_config = *color_config;
         move |user_email: &str| {
-            println!("{}", ui.apply(BOLD.apply_to(message)));
-            ui::print_cli_authorized(user_email, &ui);
+            println!("{}", color_config.apply(BOLD.apply_to(message)));
+            ui::print_cli_authorized(user_email, &color_config);
         }
     };
 
@@ -54,7 +54,7 @@ pub async fn login<T: Client + TokenClient + CacheClient>(
             if token
                 .is_valid(
                     api_client,
-                    Some(valid_token_callback("Existing token found!", ui)),
+                    Some(valid_token_callback("Existing token found!", color_config)),
                 )
                 .await?
             {
@@ -70,7 +70,10 @@ pub async fn login<T: Client + TokenClient + CacheClient>(
                 if token
                     .is_valid(
                         api_client,
-                        Some(valid_token_callback("Existing Vercel token found!", ui)),
+                        Some(valid_token_callback(
+                            "Existing Vercel token found!",
+                            color_config,
+                        )),
                     )
                     .await?
                 {
@@ -132,7 +135,7 @@ pub async fn login<T: Client + TokenClient + CacheClient>(
         .await
         .map_err(Error::FailedToFetchUser)?;
 
-    ui::print_cli_authorized(&user_response.user.email, ui);
+    ui::print_cli_authorized(&user_response.user.email, color_config);
 
     Ok(Token::new(token.into()))
 }
@@ -144,8 +147,8 @@ mod tests {
     use async_trait::async_trait;
     use reqwest::{Method, RequestBuilder, Response};
     use turborepo_vercel_api::{
-        CachingStatus, CachingStatusResponse, Membership, Role, SpacesResponse, Team,
-        TeamsResponse, User, UserResponse, VerifiedSsoUser,
+        CachingStatus, CachingStatusResponse, Membership, Role, Team, TeamsResponse, User,
+        UserResponse, VerifiedSsoUser,
     };
     use turborepo_vercel_api_mock::start_test_server;
 
@@ -244,13 +247,6 @@ mod tests {
         fn add_ci_header(_request_builder: RequestBuilder) -> RequestBuilder {
             unimplemented!("add_ci_header")
         }
-        async fn get_spaces(
-            &self,
-            _token: &str,
-            _team_id: Option<&str>,
-        ) -> turborepo_api_client::Result<SpacesResponse> {
-            unimplemented!("get_spaces")
-        }
         async fn verify_sso_token(
             &self,
             token: &str,
@@ -320,6 +316,7 @@ mod tests {
                 > + Send
                 + Sync
                 + 'static,
+            _body_len: usize,
             _duration: u64,
             _tag: Option<&str>,
             _token: &str,
@@ -362,7 +359,7 @@ mod tests {
     async fn test_login() {
         let port = port_scanner::request_open_port().unwrap();
         let api_server = tokio::spawn(start_test_server(port));
-        let ui = UI::new(false);
+        let color_config = ColorConfig::new(false);
         let url = format!("http://localhost:{port}");
 
         let api_client = MockApiClient::new();
@@ -370,7 +367,7 @@ mod tests {
         let login_server = MockLoginServer {
             hits: Arc::new(0.into()),
         };
-        let mut options = LoginOptions::new(&ui, &url, &api_client, &login_server);
+        let mut options = LoginOptions::new(&color_config, &url, &api_client, &login_server);
 
         let token = login(&options).await.unwrap();
         assert_matches!(token, Token::New(..));

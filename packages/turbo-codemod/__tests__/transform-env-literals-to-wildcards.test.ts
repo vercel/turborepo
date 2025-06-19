@@ -1,10 +1,72 @@
 import { setupTestFixtures } from "@turbo/test-utils";
-import { transformer } from "../src/transforms/transform-env-literals-to-wildcards";
+import { describe, it, expect } from "@jest/globals";
+import type { SchemaV2 } from "@turbo/types";
+import {
+  transformer,
+  migrateTaskConfigs,
+  migrateRootConfig,
+} from "../src/transforms/transform-env-literals-to-wildcards";
 
 describe.only("transform-env-literals-to-wildcards", () => {
   const { useFixture } = setupTestFixtures({
     directory: __dirname,
     test: "transform-env-literals-to-wildcards",
+  });
+
+  it("skips migrateTaskConfigs when no pipeline key", () => {
+    const config: SchemaV2 = {
+      $schema: "./docs/public/schema.json",
+      globalDependencies: ["$GLOBAL_ENV_KEY"],
+      tasks: {
+        test: {
+          outputs: ["coverage/**/*"],
+          dependsOn: ["^build"],
+        },
+        lint: {
+          outputs: [],
+        },
+        dev: {
+          cache: false,
+        },
+        build: {
+          outputs: ["dist/**/*", ".next/**/*", "!.next/cache/**"],
+          dependsOn: ["^build", "$TASK_ENV_KEY", "$ANOTHER_ENV_KEY"],
+        },
+      },
+    };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument -- Testing a situation outside of types that users can get themselves into at runtime
+    const doneConfig = migrateTaskConfigs(config as any);
+
+    expect(doneConfig).toEqual(config);
+  });
+
+  it("skips migrateRootConfigs when no pipeline key", () => {
+    const config: SchemaV2 = {
+      $schema: "./docs/public/schema.json",
+      globalDependencies: ["$GLOBAL_ENV_KEY"],
+      tasks: {
+        test: {
+          outputs: ["coverage/**/*"],
+          dependsOn: ["^build"],
+        },
+        lint: {
+          outputs: [],
+        },
+        dev: {
+          cache: false,
+        },
+        build: {
+          outputs: ["dist/**/*", ".next/**/*", "!.next/cache/**"],
+          dependsOn: ["^build", "$TASK_ENV_KEY", "$ANOTHER_ENV_KEY"],
+        },
+      },
+    };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument -- Testing a situation outside of types that users can get themselves into at runtime
+    const doneConfig = migrateRootConfig(config as any);
+
+    expect(doneConfig).toEqual(config);
   });
 
   it("migrates wildcards has-empty", () => {
@@ -20,7 +82,7 @@ describe.only("transform-env-literals-to-wildcards", () => {
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turbo.build/schema.json",
+      $schema: "https://turborepo.com/schema.json",
       globalEnv: [],
       globalPassThroughEnv: [],
       pipeline: {
@@ -33,8 +95,8 @@ describe.only("transform-env-literals-to-wildcards", () => {
 
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toMatchInlineSnapshot(`
-      Object {
-        "turbo.json": Object {
+      {
+        "turbo.json": {
           "action": "unchanged",
           "additions": 0,
           "deletions": 0,
@@ -56,7 +118,7 @@ describe.only("transform-env-literals-to-wildcards", () => {
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turbo.build/schema.json",
+      $schema: "https://turborepo.com/schema.json",
       pipeline: {
         build: {},
       },
@@ -64,8 +126,8 @@ describe.only("transform-env-literals-to-wildcards", () => {
 
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toMatchInlineSnapshot(`
-      Object {
-        "turbo.json": Object {
+      {
+        "turbo.json": {
           "action": "unchanged",
           "additions": 0,
           "deletions": 0,
@@ -87,7 +149,7 @@ describe.only("transform-env-literals-to-wildcards", () => {
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turbo.build/schema.json",
+      $schema: "https://turborepo.com/schema.json",
       globalEnv: ["NO!", "\\!!!", "\\!!!"],
       globalPassThroughEnv: ["DOES", "\\*\\*BOLD\\*\\*", "WORK"],
       pipeline: {
@@ -100,8 +162,8 @@ describe.only("transform-env-literals-to-wildcards", () => {
 
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toMatchInlineSnapshot(`
-      Object {
-        "turbo.json": Object {
+      {
+        "turbo.json": {
           "action": "modified",
           "additions": 4,
           "deletions": 4,
@@ -123,7 +185,7 @@ describe.only("transform-env-literals-to-wildcards", () => {
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turbo.build/schema.json",
+      $schema: "https://turborepo.com/schema.json",
       globalEnv: ["\\!\\*!\\*"],
       globalPassThroughEnv: ["\\!\\*!\\*"],
       pipeline: {
@@ -156,18 +218,18 @@ describe.only("transform-env-literals-to-wildcards", () => {
 
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toMatchInlineSnapshot(`
-      Object {
-        "apps/docs/turbo.json": Object {
+      {
+        "apps/docs/turbo.json": {
           "action": "modified",
           "additions": 2,
           "deletions": 2,
         },
-        "apps/website/turbo.json": Object {
+        "apps/website/turbo.json": {
           "action": "modified",
           "additions": 2,
           "deletions": 2,
         },
-        "turbo.json": Object {
+        "turbo.json": {
           "action": "modified",
           "additions": 4,
           "deletions": 4,

@@ -32,9 +32,9 @@ pub struct DiscoveryResponse {
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
-    #[error("discovery unavailable")]
+    #[error("Discovery unavailable")]
     Unavailable,
-    #[error("discovery failed: {0}")]
+    #[error("Discovery failed: {0}")]
     Failed(Box<dyn std::error::Error + Send + Sync>),
 }
 
@@ -104,6 +104,11 @@ impl LocalPackageDiscoveryBuilder {
     pub fn with_allow_no_package_manager(&mut self, allow_missing_package_manager: bool) {
         self.allow_missing_package_manager = allow_missing_package_manager;
     }
+
+    pub fn with_package_manager(&mut self, package_manager: Option<PackageManager>) -> &mut Self {
+        self.package_manager = package_manager;
+        self
+    }
 }
 
 impl PackageDiscoveryBuilder for LocalPackageDiscoveryBuilder {
@@ -120,7 +125,7 @@ impl PackageDiscoveryBuilder for LocalPackageDiscoveryBuilder {
                 if self.allow_missing_package_manager {
                     PackageManager::read_or_detect_package_manager(&package_json, &self.repo_root)?
                 } else {
-                    PackageManager::get_package_manager(&package_json)?
+                    PackageManager::get_package_manager(&self.repo_root, &package_json)?
                 }
             }
         };
@@ -143,7 +148,7 @@ impl PackageDiscovery for LocalPackageDiscovery {
             Err(package_manager::Error::Workspace(_)) => {
                 return Ok(DiscoveryResponse {
                     workspaces: vec![],
-                    package_manager: self.package_manager,
+                    package_manager: self.package_manager.clone(),
                 })
             }
             Err(e) => return Err(Error::Failed(Box::new(e))),
@@ -168,7 +173,7 @@ impl PackageDiscovery for LocalPackageDiscovery {
             .await
             .map(|workspaces| DiscoveryResponse {
                 workspaces,
-                package_manager: self.package_manager,
+                package_manager: self.package_manager.clone(),
             })
     }
 

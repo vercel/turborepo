@@ -1,0 +1,49 @@
+name: Update examples to latest
+
+on:
+  workflow_dispatch:
+
+jobs:
+  update-examples-pr:
+    name: "Update examples PR"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-node
+
+      - name: Upgrade corepack
+        shell: bash
+        run: |
+          npm install --force --global corepack@latest
+          npm config get prefix >> $GITHUB_PATH
+
+      - name: Configure git
+        run: |
+          git config --global user.name 'Turbobot'
+          git config --global user.email 'turbobot@vercel.com'
+
+      - name: Make branch
+        id: branch
+        run: |
+          git checkout -b post-release-bump-examples
+          echo "STAGE_BRANCH=$(git branch --show-current)" >> $GITHUB_OUTPUT
+
+      - name: Run upgrade script
+        run: bash scripts/update-examples-dep.sh
+
+      - name: Commit and push
+        run: |
+          git commit -am "release(turborepo): update examples to latest"
+          git pull origin main
+          git push origin ${{ steps.branch.outputs.STAGE_BRANCH }}
+
+      - name: Create pull request
+        id: pr
+        uses: thomaseizinger/create-pull-request@master
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          head: ${{ steps.branch.outputs.STAGE_BRANCH }}
+          base: main
+          title: "release(turborepo): update examples to latest"
+      - name: PR link
+        run: echo ${{ steps.pr.outputs.html_url }}

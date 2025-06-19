@@ -79,6 +79,6 @@ export function getTTFTData(filePath: string, runID: string): TTFTData {
   const commitDetails = getCommitDetails();
   data.commitSha = commitDetails.commitSha;
   data.commitTimestamp = commitDetails.commitTimestamp;
-  data.url = `https://github.com/vercel/turbo/actions/runs/${runID}`;
+  data.url = `https://github.com/vercel/turborepo/actions/runs/${runID}`;
   return data;
 }

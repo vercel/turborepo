@@ -27,7 +27,9 @@ pub const VERCEL_TOKEN_FILE: &str = "auth.json";
 pub const TURBO_TOKEN_DIR: &str = "turborepo";
 pub const TURBO_TOKEN_FILE: &str = "config.json";
 
-/// Token is the result of a successful login or an existing token. This acts as
+/// Token.
+///
+/// It's the result of a successful login or an existing token. This acts as
 /// a wrapper for a bunch of token operations, like validation. We explicitly do
 /// not store any information about the underlying token for a few reasons, like
 /// having a token invalidated on the web but not locally.
@@ -60,8 +62,12 @@ impl Token {
 
         match path.read_existing_to_string()? {
             Some(content) => {
-                let wrapper = serde_json::from_str::<TokenWrapper>(&content)
-                    .map_err(Error::InvalidTokenFileFormat)?;
+                let wrapper = serde_json::from_str::<TokenWrapper>(&content).map_err(|err| {
+                    Error::InvalidTokenFileFormat {
+                        path: path.to_string(),
+                        source: err,
+                    }
+                })?;
                 if let Some(token) = wrapper.token {
                     Ok(Self::Existing(token))
                 } else {
@@ -84,7 +90,7 @@ impl Token {
     /// * `valid_message_fn` - An optional callback that gets called if the
     ///   token is valid. It will be passed the user's email.
     // TODO(voz): This should do a `get_user` or `get_teams` instead of the caller
-    // doing it. The reason we don't do it here is becuase the caller
+    // doing it. The reason we don't do it here is because the caller
     // needs to do printing and requires the user struct, which we don't want to
     // return here.
     pub async fn is_valid<T: Client + TokenClient + CacheClient>(
@@ -96,8 +102,10 @@ impl Token {
         // passed in a user's email if the token is valid.
         valid_message_fn: Option<impl FnOnce(&str)>,
     ) -> Result<bool, Error> {
-        let (is_active, has_cache_access) =
-            tokio::try_join!(self.is_active(client), self.has_cache_access(client, None))?;
+        let (is_active, has_cache_access) = tokio::try_join!(
+            self.is_active(client),
+            self.has_cache_access(client, None, None)
+        )?;
         if !is_active || !has_cache_access {
             return Ok(false);
         }
@@ -107,6 +115,33 @@ impl Token {
             message_callback(&user.email);
         }
         Ok(true)
+    }
+
+    async fn handle_sso_token_error<T: TokenClient>(
+        &self,
+        client: &T,
+        error: reqwest::Error,
+    ) -> Result<bool, Error> {
+        if error.status() == Some(reqwest::StatusCode::FORBIDDEN) {
+            let metadata = self.fetch_metadata(client).await?;
+            if !metadata.token_type.is_empty() {
+                return Err(Error::APIError(turborepo_api_client::Error::InvalidToken {
+                    status: error
+                        .status()
+                        .unwrap_or(reqwest::StatusCode::FORBIDDEN)
+                        .as_u16(),
+                    url: error
+                        .url()
+                        .map(|u| u.to_string())
+                        .unwrap_or("Unknown url".to_string()),
+                    message: error.to_string(),
+                }));
+            }
+        }
+
+        Err(Error::APIError(turborepo_api_client::Error::ReqwestError(
+            error,
+        )))
     }
 
     /// This is the same as `is_valid`, but also checks if the token is valid
@@ -145,7 +180,9 @@ impl Token {
                     return Err(Error::SSOTeamNotFound(sso_team.to_owned()));
                 }
 
-                let has_cache_access = self.has_cache_access(client, Some(info)).await?;
+                let has_cache_access = self
+                    .has_cache_access(client, Some(info.id), Some(info.slug))
+                    .await?;
                 if !is_active || !has_cache_access {
                     return Ok(false);
                 }
@@ -156,7 +193,12 @@ impl Token {
 
                 Ok(true)
             }
-            (Err(e), _) | (_, Err(e)) => Err(Error::APIError(e)),
+            (Err(e), _) | (_, Err(e)) => match e {
+                turborepo_api_client::Error::ReqwestError(e) => {
+                    self.handle_sso_token_error(client, e).await
+                }
+                e => Err(Error::APIError(e)),
+            },
         }
     }
 
@@ -174,16 +216,12 @@ impl Token {
     /// Checks if the token has access to the cache. This is a separate check
     /// from `is_active` because it's possible for a token to be active but not
     /// have access to the cache.
-    pub async fn has_cache_access<'a, T: CacheClient>(
+    pub async fn has_cache_access<T: CacheClient>(
         &self,
         client: &T,
-        team_info: Option<TeamInfo<'a>>,
+        team_id: Option<&str>,
+        team_slug: Option<&str>,
     ) -> Result<bool, Error> {
-        let (team_id, team_slug) = match team_info {
-            Some(TeamInfo { id, slug }) => (Some(id), Some(slug)),
-            None => (None, None),
-        };
-
         match client
             .get_caching_status(self.into_inner(), team_id, team_slug)
             .await
@@ -262,8 +300,7 @@ fn is_token_active(metadata: &ResponseTokenMetadata, current_time: u128) -> bool
     // Not all scopes have an expiration date, so we need to check if all of them
     // are expired. If there isn't an expiration date, we assume they are infinite
     // and therefore cannot be expired.
-    let all_scopes_active =
-        earliest_expiration.map_or(true, |expiration| current_time < expiration);
+    let all_scopes_active = earliest_expiration.is_none_or(|expiration| current_time < expiration);
 
     all_scopes_active && (active_at <= current_time)
 }
@@ -272,6 +309,7 @@ fn is_token_active(metadata: &ResponseTokenMetadata, current_time: u128) -> bool
 mod tests {
     use std::backtrace::Backtrace;
 
+    use insta::assert_snapshot;
     use reqwest::{Method, Response};
     use tempfile::tempdir;
     use turbopath::AbsoluteSystemPathBuf;
@@ -369,11 +407,12 @@ mod tests {
         file_path.create_with_contents("not a valid json").unwrap();
 
         let result = Token::from_file(&file_path);
-        assert!(
-            matches!(result, Err(Error::InvalidTokenFileFormat(_))),
-            "Expected Err(Error::InvalidTokenFileFormat), got {:?}",
-            result
-        );
+        let mut err = result.unwrap_err();
+        if let Error::InvalidTokenFileFormat { path, .. } = &mut err {
+            // Overriding temporary path so we can use snapshot for error message
+            *path = "/path/to/bad.json".to_owned();
+        }
+        assert_snapshot!(err, @"'/path/to/bad.json' is an invalid token file: expected ident at line 1 column 2");
     }
 
     #[test]
@@ -431,6 +470,7 @@ mod tests {
                 > + Send
                 + Sync
                 + 'static,
+            _body_len: usize,
             _duration: u64,
             _tag: Option<&str>,
             _token: &str,
@@ -492,12 +532,14 @@ mod tests {
         };
 
         let token = Token::Existing("existing_token".to_string());
-        let team_info = Some(TeamInfo {
+        let team_info = TeamInfo {
             id: "team_id",
             slug: "team_slug",
-        });
+        };
 
-        let result = token.has_cache_access(&mock, team_info).await;
+        let result = token
+            .has_cache_access(&mock, Some(team_info.id), Some(team_info.slug))
+            .await;
         assert!(result.is_ok());
         assert!(result.unwrap());
     }
@@ -509,12 +551,14 @@ mod tests {
         };
 
         let token = Token::Existing("existing_token".to_string());
-        let team_info = Some(TeamInfo {
+        let team_info = TeamInfo {
             id: "team_id",
             slug: "team_slug",
-        });
+        };
 
-        let result = token.has_cache_access(&mock, team_info).await;
+        let result = token
+            .has_cache_access(&mock, Some(team_info.id), Some(team_info.slug))
+            .await;
         assert!(result.is_ok());
         assert!(!result.unwrap());
     }
@@ -526,13 +570,272 @@ mod tests {
         };
 
         let token = Token::Existing("existing_token".to_string());
-        let team_info = Some(TeamInfo {
+        let team_info = TeamInfo {
             id: "team_id",
             slug: "team_slug",
-        });
+        };
 
-        let result = token.has_cache_access(&mock, team_info).await;
+        let result = token
+            .has_cache_access(&mock, Some(team_info.id), Some(team_info.slug))
+            .await;
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), Error::APIError(_)));
+    }
+
+    struct MockTokenClient {
+        metadata_response: Option<ResponseTokenMetadata>,
+        should_fail: bool,
+    }
+
+    impl TokenClient for MockTokenClient {
+        async fn get_metadata(
+            &self,
+            _token: &str,
+        ) -> turborepo_api_client::Result<ResponseTokenMetadata> {
+            if self.should_fail {
+                return Err(turborepo_api_client::Error::UnknownStatus {
+                    code: "error".to_string(),
+                    message: "Failed to get metadata".to_string(),
+                    backtrace: Backtrace::capture(),
+                });
+            }
+
+            if let Some(metadata) = &self.metadata_response {
+                Ok(metadata.clone())
+            } else {
+                Ok(ResponseTokenMetadata {
+                    id: "test".to_string(),
+                    name: "test".to_string(),
+                    token_type: "test".to_string(),
+                    origin: "test".to_string(),
+                    scopes: vec![],
+                    active_at: current_unix_time() - 100,
+                    created_at: 0,
+                })
+            }
+        }
+
+        async fn delete_token(&self, _token: &str) -> turborepo_api_client::Result<()> {
+            if self.should_fail {
+                return Err(turborepo_api_client::Error::UnknownStatus {
+                    code: "error".to_string(),
+                    message: "Failed to delete token".to_string(),
+                    backtrace: Backtrace::capture(),
+                });
+            }
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn test_token_invalidate() {
+        let token = Token::new("test-token".to_string());
+
+        // Test successful invalidation
+        let client = MockTokenClient {
+            metadata_response: None,
+            should_fail: false,
+        };
+        assert!(token.invalidate(&client).await.is_ok());
+
+        // Test failed invalidation
+        let client = MockTokenClient {
+            metadata_response: None,
+            should_fail: true,
+        };
+        assert!(token.invalidate(&client).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_token_is_active() {
+        let token = Token::new("test-token".to_string());
+        let current_time = current_unix_time();
+
+        // Test active token
+        let client = MockTokenClient {
+            metadata_response: Some(ResponseTokenMetadata {
+                id: "test".to_string(),
+                name: "test".to_string(),
+                token_type: "test".to_string(),
+                origin: "test".to_string(),
+                scopes: vec![],
+                active_at: current_time - 100,
+                created_at: 0,
+            }),
+            should_fail: false,
+        };
+        assert!(token.is_active(&client).await.unwrap());
+
+        // Test inactive token (future active_at)
+        let client = MockTokenClient {
+            metadata_response: Some(ResponseTokenMetadata {
+                active_at: current_time + 1000,
+                ..ResponseTokenMetadata {
+                    id: "test".to_string(),
+                    name: "test".to_string(),
+                    token_type: "test".to_string(),
+                    origin: "test".to_string(),
+                    scopes: vec![],
+                    created_at: 0,
+                    active_at: 0,
+                }
+            }),
+            should_fail: false,
+        };
+        assert!(!token.is_active(&client).await.unwrap());
+
+        // Test failed metadata fetch
+        let client = MockTokenClient {
+            metadata_response: None,
+            should_fail: true,
+        };
+        assert!(token.is_active(&client).await.is_err());
+    }
+
+    #[test]
+    fn test_from_file_with_empty_token() {
+        let tmp_dir = tempdir().expect("Failed to create temp dir");
+        let tmp_path = tmp_dir.path().join("empty_token.json");
+        let file_path = AbsoluteSystemPathBuf::try_from(tmp_path)
+            .expect("Failed to create AbsoluteSystemPathBuf");
+        // TODO: This should probably be failing. An empty string is an empty token.
+        file_path.create_with_contents(r#"{"token": ""}"#).unwrap();
+
+        let result = Token::from_file(&file_path).expect("Failed to read token from file");
+        assert!(matches!(result, Token::Existing(ref t) if t.is_empty()));
+    }
+
+    #[test]
+    fn test_from_file_with_missing_token_field() {
+        let tmp_dir = tempdir().expect("Failed to create temp dir");
+        let tmp_path = tmp_dir.path().join("missing_token.json");
+        let file_path = AbsoluteSystemPathBuf::try_from(tmp_path)
+            .expect("Failed to create AbsoluteSystemPathBuf");
+        file_path
+            .create_with_contents(r#"{"other_field": "value"}"#)
+            .unwrap();
+
+        let result = Token::from_file(&file_path);
+        assert!(matches!(result, Err(Error::TokenNotFound)));
+    }
+
+    struct MockSSOTokenClient {
+        metadata_response: Option<ResponseTokenMetadata>,
+    }
+
+    impl TokenClient for MockSSOTokenClient {
+        async fn get_metadata(
+            &self,
+            _token: &str,
+        ) -> turborepo_api_client::Result<ResponseTokenMetadata> {
+            if let Some(metadata) = &self.metadata_response {
+                Ok(metadata.clone())
+            } else {
+                Ok(ResponseTokenMetadata {
+                    id: "test".to_string(),
+                    name: "test".to_string(),
+                    token_type: "".to_string(),
+                    origin: "test".to_string(),
+                    scopes: vec![],
+                    active_at: current_unix_time() - 100,
+                    created_at: 0,
+                })
+            }
+        }
+
+        async fn delete_token(&self, _token: &str) -> turborepo_api_client::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn test_handle_sso_token_error_forbidden_with_invalid_token_error() {
+        let token = Token::new("test-token".to_string());
+        let client = MockSSOTokenClient {
+            metadata_response: Some(ResponseTokenMetadata {
+                id: "test".to_string(),
+                name: "test".to_string(),
+                token_type: "sso".to_string(),
+                origin: "test".to_string(),
+                scopes: vec![],
+                active_at: current_unix_time() - 100,
+                created_at: 0,
+            }),
+        };
+
+        let errorful_response = reqwest::Response::from(
+            http::Response::builder()
+                .status(reqwest::StatusCode::FORBIDDEN)
+                .body("")
+                .unwrap(),
+        );
+
+        let result = token
+            .handle_sso_token_error(&client, errorful_response.error_for_status().unwrap_err())
+            .await;
+        assert!(matches!(
+            result,
+            Err(Error::APIError(
+                turborepo_api_client::Error::InvalidToken { .. }
+            ))
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_handle_sso_token_error_forbidden_without_token_type() {
+        let token = Token::new("test-token".to_string());
+        let client = MockSSOTokenClient {
+            metadata_response: Some(ResponseTokenMetadata {
+                id: "test".to_string(),
+                name: "test".to_string(),
+                token_type: "".to_string(),
+                origin: "test".to_string(),
+                scopes: vec![],
+                active_at: current_unix_time() - 100,
+                created_at: 0,
+            }),
+        };
+
+        let errorful_response = reqwest::Response::from(
+            http::Response::builder()
+                .status(reqwest::StatusCode::FORBIDDEN)
+                .body("")
+                .unwrap(),
+        );
+
+        let result = token
+            .handle_sso_token_error(&client, errorful_response.error_for_status().unwrap_err())
+            .await;
+        assert!(matches!(
+            result,
+            Err(Error::APIError(turborepo_api_client::Error::ReqwestError(
+                _
+            )))
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_handle_sso_token_error_non_forbidden() {
+        let token = Token::new("test-token".to_string());
+        let client = MockSSOTokenClient {
+            metadata_response: None,
+        };
+
+        let errorful_response = reqwest::Response::from(
+            http::Response::builder()
+                .status(reqwest::StatusCode::INTERNAL_SERVER_ERROR)
+                .body("")
+                .unwrap(),
+        );
+
+        let result = token
+            .handle_sso_token_error(&client, errorful_response.error_for_status().unwrap_err())
+            .await;
+        assert!(matches!(
+            result,
+            Err(Error::APIError(turborepo_api_client::Error::ReqwestError(
+                _
+            )))
+        ));
     }
 }

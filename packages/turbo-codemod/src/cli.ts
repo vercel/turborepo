@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { red } from "picocolors";
+import picocolors from "picocolors";
 import { logger } from "@turbo/utils";
 import { Command } from "commander";
 import cliPkg from "../package.json";
@@ -69,7 +69,7 @@ codemodCli
   .then(notifyUpdate)
   .catch(async (reason) => {
     logger.log();
-    logger.log(red("Unexpected error. Please report it as a bug:"));
+    logger.log(picocolors.red("Unexpected error. Please report it as a bug:"));
     logger.log(reason);
 
     logger.log();

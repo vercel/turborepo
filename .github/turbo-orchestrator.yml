@@ -30,26 +30,14 @@
 
 labeler:
   labels:
-    # owned-by
-    - label: "owned-by: turborepo"
-      when:
-        isAnyFileOwnedByMatch: '@vercel\/turbo-oss'
-    - label: "owned-by: turbopack"
-      when:
-        isAnyFileOwnedByMatch: '@vercel\/turbopack'
-
-    # created-by
-    - label: "created-by: turbopack"
-      when:
-        isPRAuthorMatch: "^(arlyon|bgw|ForsakenHarmony|kdy1|LichuAcu|mischnic|padmaia|sokra|wbinnssmith)$"
-    - label: "created-by: turborepo"
-      when:
-        isPRAuthorMatch: "^(anthonyshew|dimitropoulos|tknickman|chris-olszewski|NicholasLYang|Zertsov|paulogdm|codybrouwers)$"
-
-    # needs: triage when not any of the turbopack or turborepo team
+    # needs: triage when not any of the turborepo team
     - label: "needs: triage"
       when:
-        isNotPRAuthorMatch: "^(arlyon|bgw|ForsakenHarmony|kdy1|LichuAcu|mischnic|padmaia|sokra|wbinnssmith|anthonyshew|dimitropoulos|tknickman|chris-olszewski|NicholasLYang|Zertsov|paulogdm|codybrouwers)$"
+        isNotPRAuthorMatch: "^(padmaia|anthonyshew|dimitropoulos|tknickman|chris-olszewski|NicholasLYang)$"
+    # Removes the PR from release notes when its chore or ci
+    - label: "release-notes-ignore"
+      when:
+        isPRTitleMatch: "^(?:(\bchore\b|\bci\b)|.*?\\((\bchore\b|\bci\b)\\)).*?:"
 
     # areas
     - label: "area: ci"
@@ -101,3 +89,5 @@ events:
     turbo:
       - runWorkflow: bench-turborepo.yml
         when: any
+      - runWorkflow: update-examples-on-release.yml
+        when: latest

@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type { PackageJson } from "@turbo/utils";
 import { parse as JSON5Parse } from "json5";
-import { error, info } from "./logger";
+import { error, info, warn } from "./logger";
 import type { TurboIgnoreOptions } from "./types";
 
 export function getTurboVersion(
@@ -23,8 +23,13 @@ export function getTurboVersion(
     const devDependencies = packageJson.devDependencies?.turbo;
     turboVersion = dependencies || devDependencies;
     if (turboVersion !== undefined) {
-      info(`Inferred turbo version "${turboVersion}" from "package.json"`);
-      return turboVersion;
+      if (!turboVersion.startsWith("catalog:")) {
+        info(`Inferred turbo version "${turboVersion}" from "package.json"`);
+        return turboVersion;
+      }
+      warn(
+        "Cannot infer turbo version due to use of `catalog` protocol. Remove `turbo` from your PNPM catalog to ensure correct turbo version is used"
+      );
     }
   } catch (e) {
     error(

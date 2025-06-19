@@ -2,7 +2,7 @@
 name = "turborepo-cache"
 version = "0.1.0"
 license = "MIT"
-edition = "2021"
+edition = "2024"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [features]
@@ -13,10 +13,12 @@ rustls-tls = ["turborepo-api-client/rustls-tls"]
 [dev-dependencies]
 anyhow = { workspace = true, features = ["backtrace"] }
 futures = { workspace = true }
+insta = { workspace = true }
 libc = "0.2.146"
 port_scanner = { workspace = true }
 tempfile = { workspace = true }
 test-case = { workspace = true }
+turborepo-vercel-api = { workspace = true }
 turborepo-vercel-api-mock = { workspace = true }
 
 [lints]
@@ -28,6 +30,7 @@ bytes.workspace = true
 camino = { workspace = true }
 futures = { workspace = true }
 hmac = "0.12.1"
+miette = { workspace = true }
 os_str_bytes = "6.5.0"
 path-clean = { workspace = true }
 petgraph = "0.6.3"

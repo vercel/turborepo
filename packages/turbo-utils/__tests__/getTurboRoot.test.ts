@@ -1,6 +1,7 @@
-import path from "path";
-import { getTurboRoot } from "../src/getTurboRoot";
+import path from "node:path";
 import { setupTestFixtures } from "@turbo/test-utils";
+import { describe, it, expect } from "@jest/globals";
+import { getTurboRoot } from "../src/getTurboRoot";
 
 describe("getTurboConfigs", () => {
   const { useFixture } = setupTestFixtures({
@@ -8,7 +9,7 @@ describe("getTurboConfigs", () => {
     test: "common",
   });
 
-  test.each([[""], ["child"]])(
+  it.each([[""], ["child"]])(
     "finds the root in a non-monorepo (%s)",
     (repoPath) => {
       const { root } = useFixture({ fixture: `single-package` });
@@ -17,7 +18,7 @@ describe("getTurboConfigs", () => {
     }
   );
 
-  test.each([
+  it.each([
     [""],
     ["apps"],
     ["apps/docs"],

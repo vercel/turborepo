@@ -7,7 +7,7 @@ use std::{
     collections::{HashMap, HashSet},
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc, Mutex,
+        Arc, Mutex, OnceLock,
     },
     time::{Duration, Instant},
 };
@@ -61,10 +61,11 @@ pub enum CloseReason {
 /// a general API and close this up.
 #[derive(Clone)]
 pub struct FileWatching {
+    repo_root: AbsoluteSystemPathBuf,
     watcher: Arc<FileSystemWatcher>,
     pub glob_watcher: Arc<GlobWatcher>,
     pub package_watcher: Arc<PackageWatcher>,
-    pub package_changes_watcher: Arc<PackageChangesWatcher>,
+    pub package_changes_watcher: OnceLock<Arc<PackageChangesWatcher>>,
     pub hash_watcher: Arc<HashWatcher>,
 }
 
@@ -136,19 +137,27 @@ impl FileWatching {
             scm,
         ));
 
-        let package_changes_watcher = Arc::new(PackageChangesWatcher::new(
-            repo_root,
-            recv.clone(),
-            hash_watcher.clone(),
-        ));
-
         Ok(FileWatching {
+            repo_root,
             watcher,
             glob_watcher,
             package_watcher,
-            package_changes_watcher,
+            package_changes_watcher: OnceLock::new(),
             hash_watcher,
         })
+    }
+
+    pub fn get_or_init_package_changes_watcher(&self) -> Arc<PackageChangesWatcher> {
+        self.package_changes_watcher
+            .get_or_init(|| {
+                let recv = self.watcher.watch();
+                Arc::new(PackageChangesWatcher::new(
+                    self.repo_root.clone(),
+                    recv,
+                    self.hash_watcher.clone(),
+                ))
+            })
+            .clone()
     }
 }
 
@@ -591,11 +600,11 @@ impl proto::turbod_server::Turbod for TurboGrpcServiceInner {
     ) -> Result<tonic::Response<Self::PackageChangesStream>, tonic::Status> {
         let mut package_changes_rx = self
             .file_watching
-            .package_changes_watcher
+            .get_or_init_package_changes_watcher()
             .package_changes()
             .await;
 
-        let (tx, rx) = mpsc::channel(1024);
+        let (tx, rx) = mpsc::channel(4096);
 
         tx.send(Ok(proto::PackageChangeEvent {
             event: Some(proto::package_change_event::Event::RediscoverPackages(

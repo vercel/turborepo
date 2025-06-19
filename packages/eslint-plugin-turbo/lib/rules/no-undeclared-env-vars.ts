@@ -1,9 +1,17 @@
 import path from "node:path";
+import { readFileSync } from "node:fs";
 import type { Rule } from "eslint";
 import type { Node, MemberExpression } from "estree";
-import { logger } from "@turbo/utils";
+import { type PackageJson, logger, searchUp } from "@turbo/utils";
+import { frameworks } from "@turbo/types";
 import { RULES } from "../constants";
 import { Project, getWorkspaceFromFilePath } from "../utils/calculate-inputs";
+
+const debug = process.env.RUNNER_DEBUG
+  ? logger.info
+  : (_: string) => {
+      /* noop */
+    };
 
 export interface RuleContextWithOptions extends Rule.RuleContext {
   options: Array<{
@@ -19,7 +27,7 @@ const meta: Rule.RuleMetaData = {
       "Do not allow the use of `process.env` without including the env key in any turbo.json",
     category: "Configuration Issues",
     recommended: true,
-    url: `https://github.com/vercel/turbo/tree/main/packages/eslint-plugin-turbo/docs/rules/${RULES.noUndeclaredEnvVars}.md`,
+    url: `https://github.com/vercel/turborepo/tree/main/packages/eslint-plugin-turbo/docs/rules/${RULES.noUndeclaredEnvVars}.md`,
   },
   schema: [
     {
@@ -67,11 +75,88 @@ function normalizeCwd(
   return undefined;
 }
 
+/** for a given `package.json` file path, this will compile a Set of that package's listed dependencies */
+const packageJsonDependencies = (filePath: string): Set<string> => {
+  // get the contents of the package.json
+  let packageJsonString;
+
+  try {
+    packageJsonString = readFileSync(filePath, "utf-8");
+  } catch (e) {
+    logger.error(`Could not read package.json at ${filePath}`);
+    return new Set();
+  }
+
+  let packageJson: PackageJson;
+  try {
+    packageJson = JSON.parse(packageJsonString) as PackageJson;
+  } catch (e) {
+    logger.error(`Could not parse package.json at ${filePath}`);
+    return new Set();
+  }
+
+  return (
+    [
+      "dependencies",
+      "devDependencies",
+      "peerDependencies",
+      // intentionally not including `optionalDependencies` or `bundleDependencies` because at the time of writing they are not used for any of the frameworks we support
+    ] as const
+  )
+    .flatMap((key) => Object.keys(packageJson[key] ?? {}))
+    .reduce((acc, dependency) => acc.add(dependency), new Set<string>());
+};
+
+/**
+ * Turborepo does some nice framework detection based on the dependencies in the package.json.  This function ports that logic to this ESLint rule.
+ *
+ * Imagine you have a Vue app.  That means you have Vue in your `package.json` dependencies.  This function will return a list of regular expressions that match the environment variables that Vue depends on, which is information encoded into the `frameworks.json` file.  In Vue's case, it would return the regex `VUE_APP_*` since you have `@vue/cli-service` in your dependencies.
+ */
+const frameworkEnvMatches = (filePath: string): Set<RegExp> => {
+  const directory = path.dirname(filePath);
+  const packageJsonDir = searchUp({ cwd: directory, target: "package.json" });
+  if (!packageJsonDir) {
+    logger.error(`Could not determine package for ${filePath}`);
+    return new Set<RegExp>();
+  }
+  debug(`found package.json in: ${packageJsonDir}`);
+
+  const dependencies = packageJsonDependencies(
+    `${packageJsonDir}/package.json`
+  );
+  const hasDependency = (dep: string) => dependencies.has(dep);
+  debug(`dependencies for ${filePath}: ${Array.from(dependencies).join(",")}`);
+
+  return frameworks.reduce(
+    (
+      acc,
+      {
+        dependencyMatch: { dependencies: searchDependencies, strategy },
+        envWildcards,
+      }
+    ) => {
+      const hasMatch =
+        strategy === "all"
+          ? searchDependencies.every(hasDependency)
+          : searchDependencies.some(hasDependency);
+
+      if (hasMatch) {
+        return new Set([
+          ...acc,
+          ...envWildcards.map((envWildcard) => RegExp(envWildcard)),
+        ]);
+      }
+      return acc;
+    },
+    new Set<RegExp>()
+  );
+};
+
 function create(context: RuleContextWithOptions): Rule.RuleListener {
   const { options } = context;
 
   const allowList: Array<string> = options[0]?.allowList || [];
-  const regexAllowList: Array<RegExp> = [];
+  let regexAllowList: Array<RegExp> = [];
   allowList.forEach((allowed) => {
     try {
       regexAllowList.push(new RegExp(allowed));
@@ -80,6 +165,17 @@ function create(context: RuleContextWithOptions): Rule.RuleListener {
       logger.error(`Unable to convert "${allowed}" to regex`);
     }
   });
+
+  const filename = context.getFilename();
+  debug(`Checking file: ${filename}`);
+
+  const matches = frameworkEnvMatches(filename);
+  regexAllowList = [...regexAllowList, ...matches];
+  debug(
+    `Allow list: ${regexAllowList.map((r) => r.source).join(",")}, ${
+      regexAllowList.length
+    }`
+  );
 
   const cwd = normalizeCwd(
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- needed to support older eslint versions
@@ -167,6 +263,10 @@ function create(context: RuleContextWithOptions): Rule.RuleListener {
   };
 
   return {
+    Program() {
+      // Reload project configuration so that changes show in the user's editor
+      project.reload();
+    },
     MemberExpression(node) {
       // we only care about complete process env declarations and non-computed keys
       if (isProcessEnv(node) || isImportMetaEnv(node)) {

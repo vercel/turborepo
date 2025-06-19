@@ -1,5 +1,6 @@
 import { setupTestFixtures } from "@turbo/test-utils";
 import { type Schema } from "@turbo/types";
+import { describe, it, expect } from "@jest/globals";
 import { transformer } from "../src/transforms/rename-output-mode";
 
 describe("rename-output-mode", () => {
@@ -20,7 +21,7 @@ describe("rename-output-mode", () => {
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turbo.build/schema.json",
+      $schema: "https://turborepo.com/schema.json",
       pipeline: {
         "build-one": {
           outputLogs: "hash-only",
@@ -34,8 +35,8 @@ describe("rename-output-mode", () => {
 
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toMatchInlineSnapshot(`
-      Object {
-        "turbo.json": Object {
+      {
+        "turbo.json": {
           "action": "modified",
           "additions": 2,
           "deletions": 2,
@@ -57,7 +58,7 @@ describe("rename-output-mode", () => {
     });
 
     expect(readJson("turbo.json") || "{}").toStrictEqual({
-      $schema: "https://turbo.build/schema.json",
+      $schema: "https://turborepo.com/schema.json",
       pipeline: {
         "build-one": {
           outputLogs: "new-only",
@@ -70,7 +71,7 @@ describe("rename-output-mode", () => {
     });
 
     expect(readJson("apps/docs/turbo.json") || "{}").toStrictEqual({
-      $schema: "https://turbo.build/schema.json",
+      $schema: "https://turborepo.com/schema.json",
       extends: ["//"],
       pipeline: {
         build: {},
@@ -78,7 +79,7 @@ describe("rename-output-mode", () => {
     });
 
     expect(readJson("apps/web/turbo.json") || "{}").toStrictEqual({
-      $schema: "https://turbo.build/schema.json",
+      $schema: "https://turborepo.com/schema.json",
       extends: ["//"],
       pipeline: {
         build: {
@@ -88,7 +89,7 @@ describe("rename-output-mode", () => {
     });
 
     expect(readJson("packages/ui/turbo.json") || "{}").toStrictEqual({
-      $schema: "https://turbo.build/schema.json",
+      $schema: "https://turborepo.com/schema.json",
       extends: ["//"],
       pipeline: {
         "build-three": {
@@ -99,23 +100,23 @@ describe("rename-output-mode", () => {
 
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toMatchInlineSnapshot(`
-      Object {
-        "apps/docs/turbo.json": Object {
+      {
+        "apps/docs/turbo.json": {
           "action": "unchanged",
           "additions": 0,
           "deletions": 0,
         },
-        "apps/web/turbo.json": Object {
+        "apps/web/turbo.json": {
           "action": "modified",
           "additions": 1,
           "deletions": 0,
         },
-        "packages/ui/turbo.json": Object {
+        "packages/ui/turbo.json": {
           "action": "modified",
           "additions": 1,
           "deletions": 1,
         },
-        "turbo.json": Object {
+        "turbo.json": {
           "action": "modified",
           "additions": 2,
           "deletions": 2,
@@ -143,8 +144,8 @@ describe("rename-output-mode", () => {
 
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toMatchInlineSnapshot(`
-      Object {
-        "turbo.json": Object {
+      {
+        "turbo.json": {
           "action": "skipped",
           "additions": 2,
           "deletions": 2,
@@ -166,7 +167,7 @@ describe("rename-output-mode", () => {
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turbo.build/schema.json",
+      $schema: "https://turborepo.com/schema.json",
       pipeline: {
         "build-one": {
           outputLogs: "hash-only",
@@ -180,8 +181,8 @@ describe("rename-output-mode", () => {
 
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toMatchInlineSnapshot(`
-      Object {
-        "turbo.json": Object {
+      {
+        "turbo.json": {
           "action": "modified",
           "additions": 2,
           "deletions": 2,
@@ -209,8 +210,8 @@ describe("rename-output-mode", () => {
 
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toMatchInlineSnapshot(`
-      Object {
-        "turbo.json": Object {
+      {
+        "turbo.json": {
           "action": "skipped",
           "additions": 2,
           "deletions": 2,
@@ -232,7 +233,7 @@ describe("rename-output-mode", () => {
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turbo.build/schema.json",
+      $schema: "https://turborepo.com/schema.json",
       pipeline: {
         "build-one": {
           outputLogs: "errors-only",
@@ -270,8 +271,8 @@ describe("rename-output-mode", () => {
 
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toMatchInlineSnapshot(`
-      Object {
-        "turbo.json": Object {
+      {
+        "turbo.json": {
           "action": "modified",
           "additions": 10,
           "deletions": 10,
@@ -293,15 +294,15 @@ describe("rename-output-mode", () => {
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turbo.build/schema.json",
+      $schema: "https://turborepo.com/schema.json",
       globalDependencies: ["$NEXT_PUBLIC_API_KEY", "$STRIPE_API_KEY", ".env"],
       pipeline: {},
     });
 
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toMatchInlineSnapshot(`
-      Object {
-        "turbo.json": Object {
+      {
+        "turbo.json": {
           "action": "unchanged",
           "additions": 0,
           "deletions": 0,
@@ -323,7 +324,7 @@ describe("rename-output-mode", () => {
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turbo.build/schema.json",
+      $schema: "https://turborepo.com/schema.json",
       pipeline: {
         "build-one": {
           dependsOn: ["build-two"],
@@ -339,8 +340,8 @@ describe("rename-output-mode", () => {
 
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toMatchInlineSnapshot(`
-      Object {
-        "turbo.json": Object {
+      {
+        "turbo.json": {
           "action": "unchanged",
           "additions": 0,
           "deletions": 0,

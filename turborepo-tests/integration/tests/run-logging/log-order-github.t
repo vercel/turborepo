@@ -1,7 +1,7 @@
 # Setup
   $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh ordered
 
-# Build as if we are in Github Actions
+# Build as if we are in GitHub Actions
 Note that we need to use (re) for lines that start with '> '
 because otherwise prysk interprets them as multiline commands
   $ GITHUB_ACTIONS=1 ${TURBO} run build --force

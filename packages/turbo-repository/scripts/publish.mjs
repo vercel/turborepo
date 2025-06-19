@@ -2,8 +2,7 @@
 
 import path from "path";
 import { execa } from "execa";
-import { copy } from "fs-extra";
-import { readFile, writeFile } from "fs/promises";
+import fs from "fs-extra";
 
 const cwd = process.cwd();
 let platform = process.argv[process.argv.length - 1];
@@ -18,7 +17,7 @@ console.log("platform", platform);
   try {
     // TODO: version
     let version = JSON.parse(
-      await readFile(path.join(cwd, "js", "package.json"))
+      await fs.readFile(path.join(cwd, "js", "package.json"))
     ).version;
 
     // Copy binaries to package folders, update version, and publish
@@ -26,15 +25,17 @@ console.log("platform", platform);
 
     try {
       let binaryName = `repository.${platform}.node`;
-      await copy(
+      await fs.copy(
         path.join(cwd, "native/@turbo", binaryName),
         path.join(nativePackagesDir, platform, binaryName)
       );
       let pkg = JSON.parse(
-        await readFile(path.join(nativePackagesDir, platform, "package.json"))
+        await fs.readFile(
+          path.join(nativePackagesDir, platform, "package.json")
+        )
       );
       pkg.version = version;
-      await writeFile(
+      await fs.writeFile(
         path.join(nativePackagesDir, platform, "package.json"),
         JSON.stringify(pkg, null, 2)
       );

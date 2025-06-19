@@ -1,0 +1,20 @@
+---
+source: crates/turborepo/tests/query.rs
+expression: query_output
+---
+{
+  "data": {
+    "file": {
+      "path": "circular.ts",
+      "dependencies": {
+        "files": {
+          "items": [
+            {
+              "path": "circular2.ts"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

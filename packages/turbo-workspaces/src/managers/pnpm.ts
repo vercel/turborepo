@@ -1,5 +1,5 @@
 import path from "node:path";
-import { writeJSONSync, writeFileSync, existsSync, rmSync, rm } from "fs-extra";
+import fs from "fs-extra";
 import execa from "execa";
 import { ConvertError } from "../errors";
 import { updateDependencies } from "../updateDependencies";
@@ -45,8 +45,8 @@ async function detect(args: DetectArgs): Promise<boolean> {
     workspaceRoot: args.workspaceRoot,
   });
   return (
-    existsSync(lockFile) ||
-    existsSync(workspaceFile) ||
+    fs.existsSync(lockFile) ||
+    fs.existsSync(workspaceFile) ||
     packageManager === PACKAGE_MANAGER_DETAILS.name
   );
 }
@@ -112,11 +112,11 @@ async function create(args: CreateArgs): Promise<void> {
 
   // write the changes
   if (!options?.dry) {
-    writeJSONSync(project.paths.packageJson, packageJson, { spaces: 2 });
+    fs.writeJSONSync(project.paths.packageJson, packageJson, { spaces: 2 });
 
     if (hasWorkspaces) {
       logger.rootStep(`adding "pnpm-workspace.yaml"`);
-      writeFileSync(
+      fs.writeFileSync(
         path.join(project.paths.root, "pnpm-workspace.yaml"),
         `packages:\n${project.workspaceData.globs
           .map((w) => `  - "${w}"`)
@@ -167,7 +167,7 @@ async function remove(args: RemoveArgs): Promise<void> {
   if (project.paths.workspaceConfig && hasWorkspaces) {
     logger.subStep(`removing "pnpm-workspace.yaml"`);
     if (!options?.dry) {
-      rmSync(project.paths.workspaceConfig, { force: true });
+      fs.rmSync(project.paths.workspaceConfig, { force: true });
     }
   }
 
@@ -177,7 +177,7 @@ async function remove(args: RemoveArgs): Promise<void> {
   delete packageJson.packageManager;
 
   if (!options?.dry) {
-    writeJSONSync(project.paths.packageJson, packageJson, { spaces: 2 });
+    fs.writeJSONSync(project.paths.packageJson, packageJson, { spaces: 2 });
 
     // collect all workspace node_modules directories
     const allModulesDirs = [
@@ -188,7 +188,9 @@ async function remove(args: RemoveArgs): Promise<void> {
     try {
       logger.subStep(`removing "node_modules"`);
       await Promise.all(
-        allModulesDirs.map((dir) => rm(dir, { recursive: true, force: true }))
+        allModulesDirs.map((dir) =>
+          fs.rm(dir, { recursive: true, force: true })
+        )
       );
     } catch (err) {
       throw new ConvertError("Failed to remove node_modules", {
@@ -211,7 +213,7 @@ async function clean(args: CleanArgs): Promise<void> {
     `removing ${path.relative(project.paths.root, project.paths.lockfile)}`
   );
   if (!options?.dry) {
-    rmSync(project.paths.lockfile, { force: true });
+    fs.rmSync(project.paths.lockfile, { force: true });
   }
 }
 
@@ -233,7 +235,7 @@ async function convertLock(args: ConvertArgs): Promise<void> {
   };
 
   const importLockfile = async (): Promise<void> => {
-    if (!options?.dry && existsSync(project.paths.lockfile)) {
+    if (!options?.dry && fs.existsSync(project.paths.lockfile)) {
       try {
         await execa(PACKAGE_MANAGER_DETAILS.name, ["import"], {
           stdio: "ignore",
@@ -258,7 +260,7 @@ async function convertLock(args: ConvertArgs): Promise<void> {
       await bunLockToYarnLock({ project, options });
       await importLockfile();
       // remove the intermediate yarn lockfile
-      rmSync(path.join(project.paths.root, "yarn.lock"), { force: true });
+      fs.rmSync(path.join(project.paths.root, "yarn.lock"), { force: true });
       break;
     case "npm":
       // convert npm -> pnpm

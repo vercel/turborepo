@@ -2,12 +2,30 @@
 
 set -eo pipefail
 
-FIXTURE_NAME="${1-basic_monorepo}"
+INSTALL_DEPS=true
+ARGS=()
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --no-install)
+      INSTALL_DEPS=false
+      shift # past the option
+      ;;
+    *)
+      ARGS+=("$1")
+      shift
+  esac
+done
+
+
+FIXTURE_NAME="${ARGS[0]-basic_monorepo}"
 
 # Default to version of npm installed with Node 18.20.2
+# If CI is failing, check that this version is the same as
+# the CI runner's version of npm
 PACKAGE_MANAGER="npm@10.5.0"
-if [[ $2 != "" ]]; then
-  PACKAGE_MANAGER="$2"
+if [[ "${ARGS[1]}" != "" ]]; then
+  PACKAGE_MANAGER="${ARGS[1]}"
 fi
 
 THIS_DIR=$(dirname "${BASH_SOURCE[0]}")
@@ -26,7 +44,9 @@ fi
 "${TURBOREPO_TESTS_DIR}/helpers/copy_fixture.sh" "${TARGET_DIR}" "${FIXTURE_NAME}" "${TURBOREPO_TESTS_DIR}/integration/fixtures"
 "${TURBOREPO_TESTS_DIR}/helpers/setup_git.sh" "${TARGET_DIR}"
 "${TURBOREPO_TESTS_DIR}/helpers/setup_package_manager.sh" "${TARGET_DIR}" "$PACKAGE_MANAGER"
-"${TURBOREPO_TESTS_DIR}/helpers/install_deps.sh" "$PACKAGE_MANAGER"
+if $INSTALL_DEPS; then
+  "${TURBOREPO_TESTS_DIR}/helpers/install_deps.sh" "$PACKAGE_MANAGER"
+fi
 
 # Set TURBO env var, it is used by tests to run the binary
 if [[ "${OSTYPE}" == "msys" ]]; then

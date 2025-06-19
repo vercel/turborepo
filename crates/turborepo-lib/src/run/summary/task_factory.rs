@@ -28,9 +28,9 @@ pub struct TaskSummaryFactory<'a> {
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("no workspace found for {0}")]
+    #[error("No workspace found for {0}")]
     MissingWorkspace(String),
-    #[error("no task definition found for {0}")]
+    #[error("No task definition found for {0}")]
     MissingTask(TaskId<'static>),
 }
 
@@ -125,7 +125,11 @@ impl<'a> TaskSummaryFactory<'a> {
             .expanded_outputs(task_id)
             .unwrap_or_default();
 
-        let framework = self.hash_tracker.framework(task_id).unwrap_or_default();
+        let framework = self
+            .hash_tracker
+            .framework(task_id)
+            .map(|framework| framework.to_string())
+            .unwrap_or_default();
         let hash = self
             .hash_tracker
             .hash(task_id)
@@ -146,11 +150,21 @@ impl<'a> TaskSummaryFactory<'a> {
 
         let (dependencies, dependents) = self.dependencies_and_dependents(task_id, display_task);
 
-        let log_file = {
+        let log_file = task_definition.cache.then(|| {
             let path = workspace_info.package_path().to_owned();
             let relative_log_file = TaskDefinition::workspace_relative_log_file(task_id.task());
             path.join(&relative_log_file).to_string()
-        };
+        });
+
+        let with = task_definition
+            .with
+            .as_ref()
+            .map(|with| {
+                with.iter()
+                    .map(|task| task.as_inner().to_string())
+                    .collect()
+            })
+            .unwrap_or_default();
 
         Ok(SharedTaskSummary {
             hash,
@@ -176,6 +190,7 @@ impl<'a> TaskSummaryFactory<'a> {
             framework,
             dependencies,
             dependents,
+            with,
             env_mode: self.global_env_mode,
             environment_variables: TaskEnvVarSummary::new(
                 task_definition,
