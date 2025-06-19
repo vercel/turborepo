@@ -200,10 +200,11 @@ impl WatchClient {
                     // if notify exits, then continue per usual
                     // if persist exits, then we break out of loop with a
                     select! {
-                        _ = notify_run.notified() => {},
+                        biased;
                         _ = persistent => {
                             break;
                         }
+                        _ = notify_run.notified() => {},
                     }
                 } else {
                     notify_run.notified().await;
