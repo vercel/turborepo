@@ -9,7 +9,7 @@ Prune the project
   Generating pruned monorepo for a in .*out (re)
    - Added a
 
-Verify that .pnp.cjs isn't coppied causing unnecessary cache misses
+Verify that .pnp.cjs isn't copied causing unnecessary cache misses
   $ ls -A out/
   package.json
   packages
