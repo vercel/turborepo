@@ -9,6 +9,7 @@
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "format": "prettier -c . --cache --ignore-path=.prettierignore",
+    "format:fix": "prettier -c . --write --cache --ignore-path=.prettierignore",
     "check:toml": "taplo format --check",
     "docs:dev": "turbo run dev --filter=turborepo-docs",
     "turbo": "pnpm run build:turbo && node turbow.js",

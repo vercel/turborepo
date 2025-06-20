@@ -53,10 +53,10 @@ For example, imagine your monorepo has a Next.js app and a SvelteKit app, and yo
 {
   "pipeline": {
     "build": {
-      "dependsOn": ["^codegen"]
+      "dependsOn": ["^codegen"],
       // no need to define outputs here!
-    }
-  }
+    },
+  },
 }
 ```
 
@@ -66,9 +66,9 @@ For example, imagine your monorepo has a Next.js app and a SvelteKit app, and yo
   "pipeline": {
     "build": {
       // dependsOn is inherited from root
-      "outputs": [".next/**", "!.next/cache/**"]
-    }
-  }
+      "outputs": [".next/**", "!.next/cache/**"],
+    },
+  },
 }
 ```
 
@@ -78,9 +78,9 @@ For example, imagine your monorepo has a Next.js app and a SvelteKit app, and yo
   "pipeline": {
     "build": {
       // dependsOn is inherited from root
-      "outputs": [".svelte-kit/**"]
-    }
-  }
+      "outputs": [".svelte-kit/**"],
+    },
+  },
 }
 ```
 

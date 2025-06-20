@@ -24,8 +24,8 @@ key:
     "build": {
       // Custom configuration for the build task in this package
     },
-    "special-task": {} // New task specific to this package
-  }
+    "special-task": {}, // New task specific to this package
+  },
 }
 ```
 
@@ -51,9 +51,9 @@ with a single `turbo.json` at the root like this:
 {
   "tasks": {
     "build": {
-      "outputs": [".next/**", "!.next/cache/**", ".svelte-kit/**"]
-    }
-  }
+      "outputs": [".next/**", "!.next/cache/**", ".svelte-kit/**"],
+    },
+  },
 }
 ```
 
@@ -69,9 +69,9 @@ configuration in the SvelteKit package in `apps/my-svelte-kit-app/turbo.json`:
   "extends": ["//"],
   "tasks": {
     "build": {
-      "outputs": [".svelte-kit/**"]
-    }
-  }
+      "outputs": [".svelte-kit/**"],
+    },
+  },
 }
 ```
 
@@ -160,14 +160,14 @@ app again. With a package-specific task, you might configure your root
     "build": {
       "outputLogs": "hash-only",
       "inputs": ["src/**"],
-      "outputs": [".next/**", "!.next/cache/**"]
+      "outputs": [".next/**", "!.next/cache/**"],
     },
     "my-sveltekit-app#build": {
       "outputLogs": "hash-only", // must duplicate this
       "inputs": ["src/**"], // must duplicate this
-      "outputs": [".svelte-kit/**"]
-    }
-  }
+      "outputs": [".svelte-kit/**"],
+    },
+  },
 }
 ```
 
@@ -230,8 +230,8 @@ Package Configuration for `my-nextjs-app`:
     },
     "build": {
       // ✅ just use the task name!
-    }
-  }
+    },
+  },
 }
 ```
 
@@ -241,9 +241,9 @@ Note that the `build` task can still depend on a package-specific task:
 {
   "tasks": {
     "build": {
-      "dependsOn": ["some-pkg#compile"] // [!code highlight]
-    }
-  }
+      "dependsOn": ["some-pkg#compile"], // [!code highlight]
+    },
+  },
 }
 ```
 

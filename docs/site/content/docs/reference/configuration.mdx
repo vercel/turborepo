@@ -19,7 +19,7 @@ Configure the behavior of `turbo` by using a `turbo.json` file in your Workspace
 
 ```jsonc title="./apps/web/turbo.json"
 {
-  "extends": ["//"]
+  "extends": ["//"],
 }
 ```
 
@@ -32,7 +32,7 @@ Extend from the root `turbo.json` to create specific configuration for a package
 
 ```jsonc title="./turbo.json"
 {
-  "globalDependencies": [".env", "tsconfig.json"]
+  "globalDependencies": [".env", "tsconfig.json"],
 }
 ```
 
@@ -49,7 +49,7 @@ By default, only the root package.json and lockfile are included in [the global 
 
 ```jsonc title="./turbo.json"
 {
-  "globalEnv": ["GITHUB_TOKEN", "PACKAGE_VERSION", "NODE_ENV"]
+  "globalEnv": ["GITHUB_TOKEN", "PACKAGE_VERSION", "NODE_ENV"],
 }
 ```
 
@@ -61,7 +61,7 @@ For more on wildcard and negation syntax, [see the `env` section](#env).
 
 ```jsonc title="./turbo.json"
 {
-  "globalPassThroughEnv": ["AWS_SECRET_KEY", "GITHUB_TOKEN"]
+  "globalPassThroughEnv": ["AWS_SECRET_KEY", "GITHUB_TOKEN"],
 }
 ```
 
@@ -115,7 +115,7 @@ Set/limit the maximum concurrency for task execution. Must be an integer greater
 
 ```jsonc title="./turbo.json"
 {
-  "concurrency": "1"
+  "concurrency": "1",
 }
 ```
 
@@ -129,7 +129,7 @@ To help with incremental migration or in situations where you can't use the `pac
 
 ```jsonc title="./turbo.json"
 {
-  "dangerouslyDisablePackageManagerCheck": true
+  "dangerouslyDisablePackageManagerCheck": true,
 }
 ```
 
@@ -149,7 +149,7 @@ Specify the filesystem cache directory.
 
 ```jsonc title="./turbo.json"
 {
-  "cacheDir": ".turbo/cache"
+  "cacheDir": ".turbo/cache",
 }
 ```
 
@@ -161,7 +161,7 @@ Turborepo runs a background process to pre-calculate some expensive operations. 
 
 ```jsonc title="./turbo.json"
 {
-  "daemon": true
+  "daemon": true,
 }
 ```
 
@@ -181,7 +181,7 @@ Turborepo's Environment Modes allow you to control which environment variables a
 
 ```jsonc title="./turbo.json"
 {
-  "envMode": "strict"
+  "envMode": "strict",
 }
 ```
 
@@ -191,7 +191,7 @@ Read more about [Environment Modes](/docs/crafting-your-repository/using-environ
 
 ```jsonc title="./apps/web/turbo.json"
 {
-  "tags": ["utils"]
+  "tags": ["utils"],
 }
 ```
 
@@ -215,17 +215,17 @@ In the example below, we've defined three tasks under the `tasks` key: `build`, 
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**"],
     },
     "test": {
       "outputs": ["coverage/**"],
-      "dependsOn": ["build"]
+      "dependsOn": ["build"],
     },
     "dev": {
       "cache": false,
-      "persistent": true
-    }
-  }
+      "persistent": true,
+    },
+  },
 }
 ```
 
@@ -247,9 +247,9 @@ Prefixing a string in `dependsOn` with a `^` tells `turbo` that the task must wa
 {
   "tasks": {
     "build": {
-      "dependsOn": ["^build"]
-    }
-  }
+      "dependsOn": ["^build"],
+    },
+  },
 }
 ```
 
@@ -263,9 +263,9 @@ Task names without the `^` prefix describe a task that depends on a different ta
 {
   "tasks": {
     "test": {
-      "dependsOn": ["lint", "build"]
-    }
-  }
+      "dependsOn": ["lint", "build"],
+    },
+  },
 }
 ```
 
@@ -295,12 +295,12 @@ The list of environment variables a task depends on.
 {
   "tasks": {
     "build": {
-      "env": ["DATABASE_URL"] // Impacts hash of all build tasks
+      "env": ["DATABASE_URL"], // Impacts hash of all build tasks
     },
     "web#build": {
-      "env": ["API_SERVICE_KEY"] // Impacts hash of web's build task
-    }
-  }
+      "env": ["API_SERVICE_KEY"], // Impacts hash of web's build task
+    },
+  },
 }
 ```
 
@@ -364,9 +364,9 @@ An allowlist of environment variables that should be made available to this task
   "tasks": {
     "build": {
       // Values will be available within `build` scripts
-      "passThroughEnv": ["AWS_SECRET_KEY", "GITHUB_TOKEN"]
-    }
-  }
+      "passThroughEnv": ["AWS_SECRET_KEY", "GITHUB_TOKEN"],
+    },
+  },
 }
 ```
 
@@ -387,9 +387,9 @@ See [`$TURBO_ROOT$`](#turbo_root) if output paths need to be relative to the rep
   "tasks": {
     "build": {
       // Cache all files emitted to the packages's `dist` directory
-      "outputs": ["dist/**"]
-    }
-  }
+      "outputs": ["dist/**"],
+    },
+  },
 }
 ```
 
@@ -405,13 +405,13 @@ Defines if task outputs should be cached. Setting `cache` to false is useful for
 {
   "tasks": {
     "build": {
-      "outputs": [".svelte-kit/**", "dist/**"] // File outputs will be cached
+      "outputs": [".svelte-kit/**", "dist/**"], // File outputs will be cached
     },
     "dev": {
       "cache": false, // No outputs will be cached
-      "persistent": true
-    }
-  }
+      "persistent": true,
+    },
+  },
 }
 ```
 
@@ -427,9 +427,9 @@ Visit the [file glob specification](/docs/reference/globs) for more information 
 {
   "tasks": {
     "test": {
-      "inputs": ["src/**/*.ts", "src/**/*.tsx", "test/**/*.ts"]
-    }
-  }
+      "inputs": ["src/**/*.ts", "src/**/*.tsx", "test/**/*.ts"],
+    },
+  },
 }
 ```
 
@@ -449,9 +449,9 @@ the special string `$TURBO_DEFAULT$` within the `inputs` array to restore `turbo
   "tasks": {
     "check-types": {
       // Consider all default inputs except the package's README
-      "inputs": ["$TURBO_DEFAULT$", "!README.md"]
-    }
-  }
+      "inputs": ["$TURBO_DEFAULT$", "!README.md"],
+    },
+  },
 }
 ```
 
@@ -466,9 +466,9 @@ Starting a file glob with `$TURBO_ROOT$` will change the glob to be relative to 
   "tasks": {
     "check-types": {
       // Consider all Typescript files in `src/` and the root tsconfig.json as inputs
-      "inputs": ["$TURBO_ROOT$/tsconfig.json", "src/**/*.ts"]
-    }
-  }
+      "inputs": ["$TURBO_ROOT$/tsconfig.json", "src/**/*.ts"],
+    },
+  },
 }
 ```
 
@@ -490,9 +490,9 @@ Set output logging verbosity. Can be overridden by the [`--output-logs`](/docs/r
 {
   "tasks": {
     "build": {
-      "outputLogs": "new-only"
-    }
-  }
+      "outputLogs": "new-only",
+    },
+  },
 }
 ```
 
@@ -510,9 +510,9 @@ This option is most useful for development servers or other "watch" tasks.
 {
   "tasks": {
     "dev": {
-      "persistent": true
-    }
-  }
+      "persistent": true,
+    },
+  },
 }
 ```
 
@@ -531,9 +531,9 @@ This option is most useful for scripts that can be manipulated while they are ru
   "tasks": {
     "test:watch": {
       "interactive": true,
-      "persistent": true
-    }
-  }
+      "persistent": true,
+    },
+  },
 }
 ```
 
@@ -593,10 +593,10 @@ You can add an allowlist and a denylist:
         // permit only packages with the `ui` tag
         "allow": ["ui"],
         // and ban packages with the `unsafe` tag
-        "deny": ["unsafe"]
-      }
-    }
-  }
+        "deny": ["unsafe"],
+      },
+    },
+  },
 }
 ```
 
@@ -608,10 +608,10 @@ Both the allowlist and the denylist can be omitted.
     "utils": {
       "dependencies": {
         // only packages with the `unsafe` tag are banned, all other packages permitted
-        "deny": ["unsafe"]
-      }
-    }
-  }
+        "deny": ["unsafe"],
+      },
+    },
+  },
 }
 ```
 
@@ -623,10 +623,10 @@ Rules can also be added for a tag's dependents, i.e. packages that import this t
     "utils": {
       "dependents": {
         // only packages with the `web` tag can import packages with the `utils` tag
-        "allow": ["web"]
-      }
-    }
-  }
+        "allow": ["web"],
+      },
+    },
+  },
 }
 ```
 
@@ -636,7 +636,7 @@ The global `remoteCache` option has a variety of fields for configuring remote c
 
 ```jsonc title="./turbo.json"
 {
-  "remoteCache": {}
+  "remoteCache": {},
 }
 ```
 

@@ -77,7 +77,7 @@ Let's assume that the Next.js `docs-site` renders the markdown files from the `.
     // ... omitted for brevity
     "build": {
       "dependsOn": ["^build"],
-      "outputs": [".next/**", "!.next/cache/**", "dist/**"]
+      "outputs": [".next/**", "!.next/cache/**", "dist/**"],
     },
     "docs#build": {
       "dependsOn": ["^build"],
@@ -88,10 +88,10 @@ Let's assume that the Next.js `docs-site` renders the markdown files from the `.
         "../../docs/**/*.md",
         "pages/**",
         "components/**",
-        "package.json"
-      ]
-    }
-  }
+        "package.json",
+      ],
+    },
+  },
 }
 ```
 
@@ -129,17 +129,17 @@ A sample pipeline that defines the root script `check-examples` and opts the roo
   "$schema": "https://turborepo.com/schema.json",
   "pipeline": {
     "build": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build"],
     },
     "test": {
       "dependsOn": ["^build"],
-      "outputs": []
+      "outputs": [],
     },
     // This will cause the "test" script from all workspace package.json's
     // AND the root package.json to be included when "turbo run test" is run
     "//#test": {
       "dependsOn": [],
-      "outputs": []
+      "outputs": [],
     },
     // This will cause the "check-examples" script in the root package.json
     // to be run when "turbo run check-examples" is run. Since a general
@@ -156,10 +156,10 @@ A sample pipeline that defines the root script `check-examples` and opts the roo
         "examples/**/*.js",
         "examples/**/*.yaml",
         "cli/**/*.ts",
-        "./scripts/run-example.sh"
-      ]
-    }
-  }
+        "./scripts/run-example.sh",
+      ],
+    },
+  },
 }
 ```
 
