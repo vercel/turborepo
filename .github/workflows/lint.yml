@@ -67,10 +67,6 @@ jobs:
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
 
-        # TODO: This shouldn't be necessary, but something is wrong that is causing the binary to be missing
-      - name: Install Biome
-        run: pnpm add -w @biomejs/cli-linux-x64@2.0.0
-
       - name: Lint
         # Manually set TURBO_API to an empty string to override Hetzner env
         run: |
