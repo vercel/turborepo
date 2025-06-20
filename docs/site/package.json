@@ -11,7 +11,6 @@
     "build": "next build --turbopack",
     "check-spelling": "spellchecker --files '**/*.mdx' --files '!content/blog/*.mdx' --files '!content/docs/acknowledgments.mdx' --files '!node_modules/**' --files '!content/extra/terms.mdx' --files '!content/extra/governance.mdx' --files '!content/extra/privacy.mdx' --dictionaries 'dictionary.txt' --no-suggestions --quiet",
     "dev": "next dev --turbopack",
-    "lint:prettier": "prettier --write -c . --cache --ignore-path=../../.prettierignore",
     "index-docs": "node --experimental-strip-types ./scripts/sync-algolia.ts",
     "rss": "node --experimental-strip-types scripts/generate-rss.ts",
     "schema": "node --experimental-strip-types  scripts/copy-json-schema.ts",

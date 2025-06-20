@@ -26,8 +26,7 @@
   "scripts": {
     "test": "jest",
     "build": "tsup && tsc --declaration",
-    "check-types": "tsc --noEmit",
-    "lint:prettier": "prettier -c . --cache --ignore-path=../../.prettierignore"
+    "check-types": "tsc --noEmit"
   },
   "dependencies": {
     "dotenv": "16.0.3"

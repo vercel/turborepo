@@ -20,8 +20,7 @@
   "types": "src/index.ts",
   "scripts": {
     "test": "node --import tsx --test src/*.test.ts",
-    "check-types": "tsc --noEmit",
-    "lint:prettier": "prettier -c . --cache --ignore-path=../../.prettierignore"
+    "check-types": "tsc --noEmit"
   },
   "dependencies": {
     "ci-info": "^4.0.0",

@@ -1,0 +1,60 @@
+{
+  "$schema": "https://turborepo.com/schema.json",
+  "ui": "tui",
+  // The following are used by tools such as pnpm, gh actions to setup pnpm, etc.
+  "globalPassThroughEnv": [
+    "Path",
+    "APPDATA",
+    "LOCALAPPDATA",
+    "TMPDIR",
+    "HOME",
+    "TMP",
+    "USERPROFILE",
+    "SCCACHE_GHA_ENABLED",
+    "SCCACHE_BUCKET",
+    "SCCACHE_REGION",
+    "AWS_ACCESS_KEY_ID",
+    "AWS_SECRET_ACCESS_KEY",
+    "RUSTC_WRAPPER",
+    "CARGO_INCREMENTAL",
+    "ACTIONS_CACHE_URL",
+    "ACTIONS_RUNTIME_TOKEN"
+  ],
+  // This is probably overkill, but we do things per-platform often enough that we should segment
+  // everything by OS and RUNNER_OS. This will segment between GH actions and everything else for now.
+  "globalEnv": ["OS", "RUNNER_OS"],
+  "tasks": {
+    "test": {
+      "outputs": ["coverage/**/*"],
+
+      "env": ["NODE_VERSION"],
+
+      // ^build is generically set here, we haven't fully enumerated which workspaces
+      // actually need to build before running tests.
+      "dependsOn": ["^build"]
+    },
+    "//#lint": {
+      "dependsOn": ["//#format", "//#check:toml"]
+    },
+    "//#format": {},
+    "//#check:toml": {},
+    "check-types": {
+      "dependsOn": ["^build", "topo"]
+    },
+    "//#build:ts": {
+      "outputs": ["packages/**/dist"]
+    },
+    "build:ts": {
+      "outputs": ["dist/**/*"]
+    },
+    "build": {
+      "outputs": ["dist/**/*", ".next/**/*"],
+      "dependsOn": ["^build"]
+    },
+    // This is a synthetic tasks that lets us pull in other workspaces as dependencies
+    // So changes in internal workspaces that we depend on, will trigger this task.
+    "topo": {
+      "dependsOn": ["^topo"]
+    }
+  }
+}
