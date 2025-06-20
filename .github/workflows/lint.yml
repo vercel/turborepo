@@ -69,7 +69,7 @@ jobs:
 
         # TODO: This shouldn't be necessary, but something is wrong that is causing the binary to be missing
       - name: Install Biome
-        run: pnpm install @biomejs/cli-linux-x64
+        run: pnpm install -w @biomejs/cli-linux-x64@2.0.0
 
       - name: Lint
         # Manually set TURBO_API to an empty string to override Hetzner env
