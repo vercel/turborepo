@@ -567,7 +567,7 @@ impl TryFrom<RawTurboJson> for TurboJson {
         if is_workspace_config {
             if let Some(future_flags) = raw_turbo.future_flags {
                 let (span, text) = future_flags.span_and_text("turbo.json");
-                return Err(Error::FutureFlagsInWorkspace { span, text });
+                return Err(Error::FutureFlagsInPackage { span, text });
             }
         }
         let mut global_env = HashSet::new();

@@ -229,7 +229,7 @@ pub enum Error {
         "The \"futureFlags\" key can only be used in the root turbo.json. Please remove it from \
          Package Configurations."
     )]
-    FutureFlagsInWorkspace {
+    FutureFlagsInPackage {
         #[label("futureFlags key found here")]
         span: Option<SourceSpan>,
         #[source_code]
