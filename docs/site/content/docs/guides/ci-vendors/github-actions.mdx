@@ -229,7 +229,7 @@ Create a file called `.github/workflows/ci.yml` in your repository with the foll
 
 </PackageManagerTabs>
 
-## Remote Caching
+## Remote Caching with Vercel Remote Cache
 
 To use Remote Caching with GitHub Actions, add the following environment variables to your GitHub Actions workflow
 to make them available to your `turbo` commands.
@@ -294,9 +294,9 @@ jobs:
 </Step>
 </Steps>
 
-## Caching with GitHub actions/cache
+## Remote Caching with GitHub actions/cache
 
-The following steps exemplify how you could use [actions/cache](https://github.com/actions/cache) to cache your monorepo artifacts on GitHub.
+The following steps show how you could use [actions/cache](https://github.com/actions/cache) to cache your monorepo artifacts on GitHub.
 
 <Steps>
 <Step>
@@ -318,7 +318,7 @@ Example `package.json` with a `build` script:
 
 </Step>
 <Step>
-Configure your GitHub pipeline with a step which utilizes the `actions/cache@v4` action before the build steps of your CI file.
+Configure your GitHub pipeline with a step which uses the `actions/cache@v4` action before the build steps of your CI file.
 
 - Make sure that the `path` attribute set within the `actions/cache` action matches the output location above. In the example below, `path` was set to `.turbo`.
 - State the cache key for the current run under the `key` attribute. In the example below, we used a combination of the runner os and GitHub sha as the cache key.
