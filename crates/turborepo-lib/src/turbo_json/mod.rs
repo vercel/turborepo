@@ -165,7 +165,7 @@ pub struct RawTurboJson {
     pub concurrency: Option<String>,
 
     #[serde(skip_serializing_if = "Option::is_none", rename = "futureFlags")]
-    pub future_flags: Option<serde_json::Value>,
+    pub future_flags: Option<Spanned<serde_json::Value>>,
 
     #[deserializable(rename = "//")]
     #[serde(skip)]
@@ -560,6 +560,15 @@ impl TryFrom<RawTurboJson> for TurboJson {
         if let Some(pipeline) = raw_turbo.pipeline {
             let (span, text) = pipeline.span_and_text("turbo.json");
             return Err(Error::PipelineField { span, text });
+        }
+
+        // Check if futureFlags is used in a workspace config (which has extends field)
+        let is_workspace_config = raw_turbo.extends.is_some();
+        if is_workspace_config {
+            if let Some(future_flags) = raw_turbo.future_flags {
+                let (span, text) = future_flags.span_and_text("turbo.json");
+                return Err(Error::FutureFlagsInWorkspace { span, text });
+            }
         }
         let mut global_env = HashSet::new();
         let mut global_file_dependencies = HashSet::new();
@@ -1363,6 +1372,36 @@ mod tests {
     }
 
     #[test]
+    fn test_future_flags_not_allowed_in_workspace() {
+        let json = r#"{
+            "extends": ["//"],
+            "tasks": {
+                "build": {}
+            },
+            "futureFlags": {
+                "newFeature": true
+            }
+        }"#;
+
+        let deserialized_result = deserialize_from_json_str(
+            json,
+            JsonParserOptions::default().with_allow_comments(),
+            "turbo.json",
+        );
+        let raw_turbo_json: RawTurboJson = deserialized_result.into_deserialized().unwrap();
+
+        // Try to convert to TurboJson - this should fail
+        let turbo_json_result = TurboJson::try_from(raw_turbo_json);
+        assert!(turbo_json_result.is_err());
+
+        let error = turbo_json_result.unwrap_err();
+        let error_str = error.to_string();
+        assert!(
+            error_str.contains("The \"futureFlags\" key can only be used in the root turbo.json")
+        );
+    }
+
+    #[test]
     fn test_deserialize_future_flags() {
         let json = r#"{
             "tasks": {
@@ -1384,8 +1423,11 @@ mod tests {
         // Verify that futureFlags is parsed correctly
         assert!(raw_turbo_json.future_flags.is_some());
         let future_flags = raw_turbo_json.future_flags.as_ref().unwrap();
-        assert_eq!(future_flags["newFeature"], json!(true));
-        assert_eq!(future_flags["experimentalOption"], json!("value"));
+        assert_eq!(future_flags.as_inner()["newFeature"], json!(true));
+        assert_eq!(
+            future_flags.as_inner()["experimentalOption"],
+            json!("value")
+        );
 
         // Verify that the futureFlags field doesn't cause errors during conversion to
         // TurboJson
