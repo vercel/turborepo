@@ -164,6 +164,9 @@ pub struct RawTurboJson {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub concurrency: Option<String>,
 
+    #[serde(skip_serializing_if = "Option::is_none", rename = "futureFlags")]
+    pub future_flags: Option<serde_json::Value>,
+
     #[deserializable(rename = "//")]
     #[serde(skip)]
     _comment: Option<String>,
@@ -1357,6 +1360,37 @@ mod tests {
             Err(e) => Err(e.to_string()),
         };
         assert_eq!(actual, expected.map_err(|s| s.to_owned()));
+    }
+
+    #[test]
+    fn test_deserialize_future_flags() {
+        let json = r#"{
+            "tasks": {
+                "build": {}
+            },
+            "futureFlags": {
+                "newFeature": true,
+                "experimentalOption": "value"
+            }
+        }"#;
+
+        let deserialized_result = deserialize_from_json_str(
+            json,
+            JsonParserOptions::default().with_allow_comments(),
+            "turbo.json",
+        );
+        let raw_turbo_json: RawTurboJson = deserialized_result.into_deserialized().unwrap();
+
+        // Verify that futureFlags is parsed correctly
+        assert!(raw_turbo_json.future_flags.is_some());
+        let future_flags = raw_turbo_json.future_flags.as_ref().unwrap();
+        assert_eq!(future_flags["newFeature"], json!(true));
+        assert_eq!(future_flags["experimentalOption"], json!("value"));
+
+        // Verify that the futureFlags field doesn't cause errors during conversion to
+        // TurboJson
+        let turbo_json = TurboJson::try_from(raw_turbo_json);
+        assert!(turbo_json.is_ok());
     }
 
     #[test]
