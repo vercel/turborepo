@@ -1,0 +1,296 @@
+---
+title: deps-sync
+description: API reference for the `turbo deps-sync` command
+---
+
+import { Callout } from '#components/callout';
+
+Ensure that all dependencies across workspace packages are synchronized and consistent.
+
+```bash title="Terminal"
+turbo deps-sync
+```
+
+The `deps-sync` command analyzes all packages in your workspace and detects version conflicts between dependencies. It helps maintain consistency across your monorepo by identifying when the same dependency is used with different versions in different packages.
+
+## Overview
+
+Dependency version drift is a common problem in monorepos where the same dependency can end up with different versions across packages. This can lead to:
+
+- **Bundle bloat** from multiple versions of the same package
+- **Type conflicts** when packages expect different versions
+- **Runtime errors** from incompatible API changes
+- **Security vulnerabilities** from outdated versions
+
+The `deps-sync` command helps you maintain a clean, consistent dependency graph across your entire workspace.
+
+## What it checks
+
+By default, `deps-sync` analyzes the following dependency types:
+
+- `dependencies` - Runtime dependencies
+- `devDependencies` - Development dependencies
+- `optionalDependencies` - Optional dependencies
+
+<Callout type="info">
+  `peerDependencies` are excluded from analysis since they're meant to be
+  provided by the consuming application and often intentionally have different
+  version ranges.
+</Callout>
+
+## Examples
+
+### Basic usage
+
+```bash title="Terminal"
+turbo deps-sync
+```
+
+When conflicts are found, you'll see output like this:
+
+```bash title="Terminal"
+🔍 Scanning workspace packages for dependency conflicts...
+
+  typescript:
+    5.4.5 →
+      @repo/ui (devDependencies)
+      @repo/utils (devDependencies)
+    5.5.4 →
+      web (devDependencies)
+      api (devDependencies)
+
+  @types/node:
+    ^18.17.0 →
+      @repo/ui (devDependencies)
+      api (devDependencies)
+    ^20.5.0 →
+      web (devDependencies)
+      @repo/utils (devDependencies)
+
+💡 To fix these conflicts, ensure all packages use the same version for each dependency.
+
+❌ Found 2 dependency conflicts.
+```
+
+When no conflicts are found:
+
+```bash title="Terminal"
+🔍 Scanning workspace packages for dependency conflicts...
+
+✅ All dependencies are in sync!
+```
+
+## Configuration
+
+You can configure `deps-sync` behavior by adding a `depsSync` section to your `turbo.json`:
+
+```json title="turbo.json"
+{
+  "$schema": "https://turbo.build/schema.json",
+  "depsSync": {
+    "pinnedDependencies": {
+      "typescript": {
+        "version": "5.5.4",
+        "exceptions": ["legacy-app"]
+      },
+      "@types/node": {
+        "version": "^20",
+        "exceptions": ["old-service"]
+      }
+    },
+    "ignoredDependencies": [
+      {
+        "dependency": "react",
+        "packages": ["storybook-config"]
+      }
+    ]
+  }
+}
+```
+
+### Pinned Dependencies
+
+Pin specific dependencies to exact versions across all packages:
+
+```json title="turbo.json"
+{
+  "depsSync": {
+    "pinnedDependencies": {
+      "typescript": {
+        "version": "5.5.4"
+      }
+    }
+  }
+}
+```
+
+This will flag any package that uses a different version of TypeScript as a conflict.
+
+#### Exceptions
+
+Exclude specific packages from pinning rules:
+
+```json title="turbo.json"
+{
+  "depsSync": {
+    "pinnedDependencies": {
+      "typescript": {
+        "version": "5.5.4",
+        "exceptions": ["legacy-app", "old-service"]
+      }
+    }
+  }
+}
+```
+
+The packages `legacy-app` and `old-service` can use any version of TypeScript without being flagged as conflicts.
+
+### Ignored Dependencies
+
+Ignore specific dependencies in specific packages:
+
+```json title="turbo.json"
+{
+  "depsSync": {
+    "ignoredDependencies": [
+      {
+        "dependency": "react",
+        "packages": ["storybook-config"]
+      },
+      {
+        "dependency": "webpack",
+        "packages": ["build-scripts", "dev-tools"]
+      }
+    ]
+  }
+}
+```
+
+This will exclude `react` conflicts in the `storybook-config` package and `webpack` conflicts in the `build-scripts` and `dev-tools` packages.
+
+## Configuration Options
+
+### `pinnedDependencies`
+
+An object where keys are dependency names and values are pinning configurations.
+
+```typescript title="huh"
+{
+  [dependencyName: string]: {
+    version: string;        // The version to pin to
+    exceptions?: string[];  // Packages exempt from this rule
+  }
+}
+```
+
+**Default behavior**: Pinning applies to all packages unless explicitly excepted.
+
+### `ignoredDependencies`
+
+An array of dependencies to ignore in specific packages.
+
+```typescript title="huh"
+{
+  dependency: string;    // Name of the dependency to ignore
+  packages: string[];    // Packages where conflicts should be ignored
+}[]
+```
+
+**Default behavior**: Must explicitly specify which packages to ignore.
+
+## Exit Codes
+
+- `0` - No dependency conflicts found
+- `1` - Dependency conflicts detected
+
+This makes it easy to use in CI/CD pipelines:
+
+```bash title="Terminal"
+turbo deps-sync && echo "Dependencies are in sync!" || echo "Fix dependency conflicts before merging"
+```
+
+## Integration with CI/CD
+
+Add `deps-sync` to your CI pipeline to prevent dependency drift:
+
+```yaml title=".github/workflows/ci.yml"
+name: CI
+on: [push, pull_request]
+
+jobs:
+  deps-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm install
+      - run: turbo deps-sync
+```
+
+## Best Practices
+
+### 1. Start with analysis
+
+Run `turbo deps-sync` without configuration first to understand the current state of your dependencies.
+
+### 2. Pin critical dependencies
+
+Pin dependencies that are critical for consistency:
+
+```json title="turbo.json"
+{
+  "depsSync": {
+    "pinnedDependencies": {
+      "typescript": { "version": "5.5.4" },
+      "react": { "version": "^18.0.0" },
+      "@types/node": { "version": "^20" }
+    }
+  }
+}
+```
+
+### 3. Use exceptions sparingly
+
+Only add exceptions for packages that genuinely need different versions:
+
+```json title="turbo.json"
+{
+  "depsSync": {
+    "pinnedDependencies": {
+      "react": {
+        "version": "^18.0.0",
+        "exceptions": ["legacy-dashboard"] // Still on React 17
+      }
+    }
+  }
+}
+```
+
+### 4. Ignore test/build utilities
+
+Ignore dependencies that are only used for tooling in specific packages:
+
+```json title="turbo.json"
+{
+  "depsSync": {
+    "ignoredDependencies": [
+      {
+        "dependency": "webpack",
+        "packages": ["build-config"]
+      }
+    ]
+  }
+}
+```
+
+## Comparison to other tools
+
+`turbo deps-sync` is inspired by and compatible with other dependency synchronization tools:
+
+- **[Manypkg](https://github.com/Thinkmill/manypkg)** - Similar functionality with different configuration
+- **[Syncpack](https://github.com/JamieMason/syncpack)** - More advanced formatting and fixing capabilities
+- **[Sherif](https://github.com/QuiiBz/sherif)** - Lightweight dependency checker
+
+The advantage of `turbo deps-sync` is native integration with Turborepo's workspace detection and `turbo.json` configuration.

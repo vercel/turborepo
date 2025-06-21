@@ -77,6 +77,7 @@ impl Default for DepsSyncConfig {
 #[derive(Debug, Clone)]
 struct DependencyInfo {
     package_name: String,
+    package_path: String,
     dependency_name: String,
     version: String,
     dep_type: DependencyType,
@@ -103,12 +104,13 @@ impl std::fmt::Display for DependencyType {
 struct DependencyUsage {
     package_name: String,
     version: String,
-    dependency_type: DependencyType,
+    package_path: String,
 }
 
 struct DependencyConflict {
     dependency_name: String,
     conflicting_packages: Vec<DependencyUsage>,
+    conflict_reason: Option<String>,
 }
 
 pub async fn run(base: &CommandBase) -> Result<i32, Error> {
@@ -134,7 +136,10 @@ pub async fn run(base: &CommandBase) -> Result<i32, Error> {
 }
 
 async fn load_deps_sync_config(repo_root: &AbsoluteSystemPath) -> Result<DepsSyncConfig, Error> {
-    let turbo_json_path = repo_root.join_component("turbo.json");
+    let config_opts = crate::config::ConfigurationOptions::default();
+    let turbo_json_path = config_opts
+        .root_turbo_json_path(repo_root)
+        .map_err(|e| Error::Config(e))?;
 
     let raw_turbo_json = match RawTurboJson::read(repo_root, &turbo_json_path)? {
         Some(turbo_json) => turbo_json,
@@ -172,6 +177,12 @@ async fn collect_all_dependencies(
                         .to_string()
                 });
 
+            // Convert absolute path to relative path from repo root
+            let relative_package_path = repo_root
+                .anchor(package_json_path.parent().unwrap())
+                .map(|p| p.to_string())
+                .unwrap_or_else(|_| package_json_path.parent().unwrap().to_string());
+
             // Read raw JSON to get all dependency types
             let raw_content = std::fs::read_to_string(package_json_path)?;
             let raw_json: Value = serde_json::from_str(&raw_content)?;
@@ -182,6 +193,7 @@ async fn collect_all_dependencies(
                     if let Some(version_str) = version.as_str() {
                         all_deps.push(DependencyInfo {
                             package_name: package_name.clone(),
+                            package_path: relative_package_path.clone(),
                             dependency_name: dep_name.clone(),
                             version: version_str.to_string(),
                             dep_type: DependencyType::Dependencies,
@@ -195,6 +207,7 @@ async fn collect_all_dependencies(
                     if let Some(version_str) = version.as_str() {
                         all_deps.push(DependencyInfo {
                             package_name: package_name.clone(),
+                            package_path: relative_package_path.clone(),
                             dependency_name: dep_name.clone(),
                             version: version_str.to_string(),
                             dep_type: DependencyType::DevDependencies,
@@ -215,6 +228,7 @@ async fn collect_all_dependencies(
                     if let Some(version_str) = version.as_str() {
                         all_deps.push(DependencyInfo {
                             package_name: package_name.clone(),
+                            package_path: relative_package_path.clone(),
                             dependency_name: dep_name.clone(),
                             version: version_str.to_string(),
                             dep_type: DependencyType::OptionalDependencies,
@@ -243,6 +257,16 @@ fn apply_configuration_filters(
                     return false;
                 }
             }
+
+            // Exclude pinned dependencies from regular conflict analysis
+            // They will be handled separately by find_pinned_version_conflicts
+            if config
+                .pinned_dependencies
+                .contains_key(&dep.dependency_name)
+            {
+                return false;
+            }
+
             true
         })
         .cloned()
@@ -270,7 +294,7 @@ fn find_pinned_version_conflicts(
                     conflicting_packages.push(DependencyUsage {
                         package_name: dep.package_name.clone(),
                         version: dep.version.clone(),
-                        dependency_type: dep.dep_type.clone(),
+                        package_path: dep.package_path.clone(),
                     });
                 }
             }
@@ -280,6 +304,7 @@ fn find_pinned_version_conflicts(
             conflicts.push(DependencyConflict {
                 dependency_name: dep_name.clone(),
                 conflicting_packages,
+                conflict_reason: Some(format!("pinned to {}", pinned_config.version)),
             });
         }
     }
@@ -298,7 +323,7 @@ fn find_dependency_conflicts(all_deps: &[DependencyInfo]) -> Vec<DependencyConfl
             .push(DependencyUsage {
                 package_name: dep.package_name.clone(),
                 version: dep.version.clone(),
-                dependency_type: dep.dep_type.clone(),
+                package_path: dep.package_path.clone(),
             });
     }
 
@@ -313,6 +338,7 @@ fn find_dependency_conflicts(all_deps: &[DependencyInfo]) -> Vec<DependencyConfl
             conflicts.push(DependencyConflict {
                 dependency_name: dep_name,
                 conflicting_packages: usages,
+                conflict_reason: None,
             });
         }
     }
@@ -326,7 +352,56 @@ fn find_dependency_conflicts(all_deps: &[DependencyInfo]) -> Vec<DependencyConfl
 fn print_conflicts(conflicts: &[DependencyConflict], color_config: ColorConfig) {
     use turborepo_ui::{BOLD, BOLD_RED, CYAN, YELLOW};
 
+    let mut regular_conflicts = Vec::new();
+    let mut pinned_conflicts = Vec::new();
+
+    // Separate conflicts by type for clearer messaging
     for conflict in conflicts {
+        if conflict.conflict_reason.is_some() {
+            pinned_conflicts.push(conflict);
+        } else {
+            regular_conflicts.push(conflict);
+        }
+    }
+
+    // Print pinned dependency violations first
+    for conflict in &pinned_conflicts {
+        let dep_name = if color_config.should_strip_ansi {
+            conflict.dependency_name.clone()
+        } else {
+            format!("{}", BOLD.apply_to(&conflict.dependency_name))
+        };
+
+        if let Some(reason) = &conflict.conflict_reason {
+            println!("  {} ({})", dep_name, reason);
+        } else {
+            println!("  {}:", dep_name);
+        }
+
+        for usage in &conflict.conflicting_packages {
+            let version_display = if color_config.should_strip_ansi {
+                usage.version.clone()
+            } else {
+                format!("{}", YELLOW.apply_to(&usage.version))
+            };
+
+            let package_display = if color_config.should_strip_ansi {
+                format!("{} ({})", usage.package_name, usage.package_path)
+            } else {
+                format!(
+                    "{} ({})",
+                    CYAN.apply_to(&usage.package_name),
+                    usage.package_path
+                )
+            };
+
+            println!("    {} → {}", version_display, package_display);
+        }
+        println!();
+    }
+
+    // Print regular version conflicts
+    for conflict in &regular_conflicts {
         let dep_name = if color_config.should_strip_ansi {
             conflict.dependency_name.clone()
         } else {
@@ -336,12 +411,12 @@ fn print_conflicts(conflicts: &[DependencyConflict], color_config: ColorConfig) 
         println!("  {}:", dep_name);
 
         // Group by version for cleaner output
-        let mut version_groups: HashMap<String, Vec<(String, DependencyType)>> = HashMap::new();
+        let mut version_groups: HashMap<String, Vec<(String, String)>> = HashMap::new();
         for usage in &conflict.conflicting_packages {
             version_groups
                 .entry(usage.version.clone())
                 .or_default()
-                .push((usage.package_name.clone(), usage.dependency_type.clone()));
+                .push((usage.package_name.clone(), usage.package_path.clone()));
         }
 
         let mut sorted_versions: Vec<_> = version_groups.into_iter().collect();
@@ -356,21 +431,17 @@ fn print_conflicts(conflicts: &[DependencyConflict], color_config: ColorConfig) 
 
             println!("    {} →", version_display);
 
-            for (package_name, dep_type) in packages {
+            for (package_name, package_path) in packages {
                 let package_display = if color_config.should_strip_ansi {
-                    format!("{} ({})", package_name, dep_type)
+                    format!("{} ({})", package_name, package_path)
                 } else {
-                    format!("{} ({})", CYAN.apply_to(&package_name), dep_type)
+                    format!("{} ({})", CYAN.apply_to(&package_name), package_path)
                 };
                 println!("      {}", package_display);
             }
         }
         println!();
     }
-
-    println!(
-        "💡 To fix these conflicts, ensure all packages use the same version for each dependency."
-    );
 
     let error_prefix = if color_config.should_strip_ansi {
         "❌"
