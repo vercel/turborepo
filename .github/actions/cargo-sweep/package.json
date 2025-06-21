@@ -6,7 +6,6 @@
     "build:main": "ncc build src/main.js -o dist/main --source-map",
     "build:post": "ncc build src/post.js -o dist/post --source-map",
     "prepare": "pnpm run build:main && pnpm run build:post",
-    "lint": "eslint src/",
     "lint:prettier": "prettier -c . --cache --ignore-path=../../../.prettierignore"
   },
   "dependencies": {
@@ -14,7 +13,6 @@
     "@actions/exec": "^1.1.1"
   },
   "devDependencies": {
-    "@turbo/eslint-config": "workspace:*",
     "@vercel/ncc": "^0.36.0"
   }
 }

@@ -1,16 +1,10 @@
 {
   "extends": "@turbo/tsconfig/library.json",
   "skipLibCheck": true,
-  "include": [
-    "./src/**/*"
-  ],
-  "exclude": [
-    "./src/templates/**/*"
-  ],
+  "include": ["./src/**/*"],
+  "exclude": ["./src/templates/**/*"],
   "compilerOptions": {
     "rootDir": ".",
-    "lib": [
-      "ES2020"
-    ],
+    "lib": ["ES2020"]
   }
 }

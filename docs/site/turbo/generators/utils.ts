@@ -32,7 +32,7 @@ export async function releasePostStats(answers: Answers): Promise<string> {
         {
           remote_cache_minutes_saved: number;
           local_cache_minutes_saved: number;
-        }
+        },
       ];
     },
   ]);

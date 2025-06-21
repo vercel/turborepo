@@ -1,14 +1,10 @@
 {
   "$schema": "../docs/public/schema.json",
-  "extends": [
-    "//"
-  ],
+  "extends": ["//"],
   "tasks": {
     // A task that is used for detecting if any turborepo Rust sources change
     "rust-src": {
-      "env": [
-        "RUNNER_OS"
-      ],
+      "env": ["RUNNER_OS"],
       "inputs": [
         "$TURBO_ROOT$/version.txt",
         "$TURBO_ROOT$/crates/**/*.rs",
@@ -16,19 +12,17 @@
         "$TURBO_ROOT$/crates/*/Cargo.toml",
         "$TURBO_ROOT$/Cargo.toml",
         "$TURBO_ROOT$/Cargo.lock",
-        "!$TURBO_ROOT$/crates/**/target"
-      ]
+        "!$TURBO_ROOT$/crates/**/target",
+      ],
     },
     "build": {
       "outputs": [
         "$TURBO_ROOT$/target/debug/turbo",
         "$TURBO_ROOT$/target/debug/turbo.exe",
         "$TURBO_ROOT$/target/release/turbo",
-        "$TURBO_ROOT$/target/release/turbo.exe"
+        "$TURBO_ROOT$/target/release/turbo.exe",
       ],
-      "dependsOn": [
-        "rust-src"
-      ],
+      "dependsOn": ["rust-src"],
       "passThroughEnv": [
         "ProgramData",
         // sccache related flags
@@ -37,12 +31,12 @@
         "RUSTC_WRAPPER",
         "CARGO_INCREMENTAL",
         "AWS_ACCESS_KEY_ID",
-        "AWS_SECRET_ACCESS_KEY"
-      ]
+        "AWS_SECRET_ACCESS_KEY",
+      ],
     },
     "release-native": {
       "dependsOn": ["@turbo/releaser#build"],
-      "cache": false
-    }
-  }
+      "cache": false,
+    },
+  },
 }

@@ -20,9 +20,7 @@
   "types": "src/index.ts",
   "scripts": {
     "test": "node --import tsx --test src/*.test.ts",
-    "lint": "eslint src/",
-    "check-types": "tsc --noEmit",
-    "lint:prettier": "prettier -c . --cache --ignore-path=../../.prettierignore"
+    "check-types": "tsc --noEmit"
   },
   "dependencies": {
     "ci-info": "^4.0.0",
@@ -31,7 +29,6 @@
     "zod": "^3.22.4"
   },
   "devDependencies": {
-    "@turbo/eslint-config": "workspace:*",
     "@turbo/test-utils": "workspace:*",
     "@turbo/tsconfig": "workspace:*",
     "@turbo/types": "workspace:*",
