@@ -479,6 +479,9 @@ impl<'a> TaskHasher<'a> {
                     "PROGRAMDATA",
                     "SYSTEMROOT",
                     "SYSTEMDRIVE",
+                    "USERPROFILE",
+                    "HOMEDRIVE",
+                    "HOMEPATH",
                     "PNPM_HOME",
                     "NPM_CONFIG_STORE_DIR",
                 ];
