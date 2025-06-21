@@ -562,7 +562,7 @@ impl TryFrom<RawTurboJson> for TurboJson {
             return Err(Error::PipelineField { span, text });
         }
 
-        // Check if futureFlags is used in a workspace config (which has extends field)
+        // `futureFlags` key is only allowed in root turbo.json
         let is_workspace_config = raw_turbo.extends.is_some();
         if is_workspace_config {
             if let Some(future_flags) = raw_turbo.future_flags {
