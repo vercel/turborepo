@@ -42,7 +42,7 @@ cd my-turborepo
 # With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
 turbo build
 
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed
+# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
 npx turbo build
 yarn dlx turbo build
 pnpm exec turbo build
@@ -54,7 +54,7 @@ You can build a specific package by using a [filter](https://turborepo.com/docs/
 # With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
 turbo build --filter=docs
 
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed
+# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
 npx turbo build --filter=docs
 yarn exec turbo build --filter=docs
 pnpm exec turbo build --filter=docs
@@ -70,7 +70,7 @@ cd my-turborepo
 # With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
 turbo dev
 
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed
+# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
 npx turbo dev
 yarn exec turbo dev
 pnpm exec turbo dev
@@ -82,7 +82,7 @@ You can develop a specific package by using a [filter](https://turborepo.com/doc
 # With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
 turbo dev --filter=web
 
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed
+# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
 npx turbo dev --filter=web
 yarn exec turbo dev --filter=web
 pnpm exec turbo dev --filter=web
@@ -103,7 +103,7 @@ cd my-turborepo
 # With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
 turbo login
 
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed
+# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
 npx turbo login
 yarn exec turbo login
 pnpm exec turbo login
@@ -117,7 +117,7 @@ Next, you can link your Turborepo to your Remote Cache by running the following 
 # With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
 turbo link
 
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed
+# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
 npx turbo link
 yarn exec turbo link
 pnpm exec turbo link
