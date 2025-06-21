@@ -196,18 +196,6 @@ fn find_dependency_conflicts(all_deps: &[DependencyInfo]) -> Vec<DependencyConfl
 fn print_conflicts(conflicts: &[DependencyConflict], color_config: ColorConfig) {
     use turborepo_ui::{BOLD, BOLD_RED, CYAN, YELLOW};
 
-    let error_prefix = if color_config.should_strip_ansi {
-        "❌"
-    } else {
-        &format!("{}", BOLD_RED.apply_to("❌"))
-    };
-
-    println!(
-        "{} Found {} dependency conflicts:\n",
-        error_prefix,
-        conflicts.len()
-    );
-
     for conflict in conflicts {
         let dep_name = if color_config.should_strip_ansi {
             conflict.dependency_name.clone()
@@ -252,6 +240,18 @@ fn print_conflicts(conflicts: &[DependencyConflict], color_config: ColorConfig) 
 
     println!(
         "💡 To fix these conflicts, ensure all packages use the same version for each dependency."
+    );
+
+    let error_prefix = if color_config.should_strip_ansi {
+        "❌"
+    } else {
+        &format!("{}", BOLD_RED.apply_to("❌"))
+    };
+
+    println!(
+        "\n{} Found {} dependency conflicts.",
+        error_prefix,
+        conflicts.len()
     );
 }
 
