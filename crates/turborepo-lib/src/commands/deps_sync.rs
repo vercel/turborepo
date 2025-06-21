@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
+use biome_deserialize_macros::Deserializable;
 use serde_json::Value;
 use thiserror::Error;
 use turbopath::AbsoluteSystemPath;
@@ -10,6 +11,7 @@ use turborepo_repository::{
 use turborepo_ui::ColorConfig;
 
 use super::CommandBase;
+use crate::turbo_json::RawTurboJson;
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -23,6 +25,53 @@ pub enum Error {
     Discovery(#[from] turborepo_repository::discovery::Error),
     #[error("Failed to resolve package manager: {0}")]
     PackageManager(#[from] turborepo_repository::package_manager::Error),
+    #[error("Failed to read turbo.json: {0}")]
+    Config(#[from] crate::config::Error),
+}
+
+#[derive(Debug, Clone, Deserializable, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DepsSyncConfig {
+    /// Dependencies that should be pinned to a specific version across all
+    /// packages by default. Packages can be excluded using the `exceptions`
+    /// field.
+    #[serde(default)]
+    pub pinned_dependencies: HashMap<String, PinnedDependency>,
+    /// Dependencies that should be ignored in specific packages
+    #[serde(default)]
+    pub ignored_dependencies: Vec<IgnoredDependency>,
+}
+
+#[derive(Debug, Clone, Default, Deserializable, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PinnedDependency {
+    /// The version to pin this dependency to
+    #[serde(default)]
+    pub version: String,
+    /// Packages where this dependency should NOT be pinned (exceptions to the
+    /// rule)
+    #[serde(default)]
+    pub exceptions: Vec<String>,
+}
+
+#[derive(Debug, Clone, Default, Deserializable, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IgnoredDependency {
+    /// The name of the dependency to ignore
+    #[serde(default)]
+    pub dependency: String,
+    /// The packages where this dependency should be ignored
+    #[serde(default)]
+    pub packages: Vec<String>,
+}
+
+impl Default for DepsSyncConfig {
+    fn default() -> Self {
+        Self {
+            pinned_dependencies: HashMap::new(),
+            ignored_dependencies: Vec::new(),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -50,9 +99,16 @@ impl std::fmt::Display for DependencyType {
     }
 }
 
+#[derive(Debug, Clone)]
+struct DependencyUsage {
+    package_name: String,
+    version: String,
+    dependency_type: DependencyType,
+}
+
 struct DependencyConflict {
     dependency_name: String,
-    versions: Vec<(String, String, DependencyType)>, // package_name, version, dep_type
+    conflicting_packages: Vec<DependencyUsage>,
 }
 
 pub async fn run(base: &CommandBase) -> Result<i32, Error> {
@@ -60,16 +116,32 @@ pub async fn run(base: &CommandBase) -> Result<i32, Error> {
 
     println!("🔍 Scanning workspace packages for dependency conflicts...\n");
 
+    let config = load_deps_sync_config(&base.repo_root).await?;
     let all_deps = collect_all_dependencies(&base.repo_root).await?;
-    let conflicts = find_dependency_conflicts(&all_deps);
+    let filtered_deps = apply_configuration_filters(&all_deps, &config);
+    let conflicts = find_dependency_conflicts(&filtered_deps);
+    let pinned_conflicts = find_pinned_version_conflicts(&all_deps, &config);
 
-    if conflicts.is_empty() {
+    let all_conflicts: Vec<_> = conflicts.into_iter().chain(pinned_conflicts).collect();
+
+    if all_conflicts.is_empty() {
         print_success("✅ All dependencies are in sync!", color_config);
         Ok(0)
     } else {
-        print_conflicts(&conflicts, color_config);
+        print_conflicts(&all_conflicts, color_config);
         Ok(1)
     }
+}
+
+async fn load_deps_sync_config(repo_root: &AbsoluteSystemPath) -> Result<DepsSyncConfig, Error> {
+    let turbo_json_path = repo_root.join_component("turbo.json");
+
+    let raw_turbo_json = match RawTurboJson::read(repo_root, &turbo_json_path)? {
+        Some(turbo_json) => turbo_json,
+        None => return Ok(DepsSyncConfig::default()),
+    };
+
+    Ok(raw_turbo_json.deps_sync.unwrap_or_default())
 }
 
 async fn collect_all_dependencies(
@@ -156,33 +228,91 @@ async fn collect_all_dependencies(
     Ok(all_deps)
 }
 
+fn apply_configuration_filters(
+    dependencies: &[DependencyInfo],
+    config: &DepsSyncConfig,
+) -> Vec<DependencyInfo> {
+    dependencies
+        .iter()
+        .filter(|dep| {
+            // Check if this dependency should be ignored in this package
+            for ignored in &config.ignored_dependencies {
+                if ignored.dependency == dep.dependency_name
+                    && ignored.packages.contains(&dep.package_name)
+                {
+                    return false;
+                }
+            }
+            true
+        })
+        .cloned()
+        .collect()
+}
+
+fn find_pinned_version_conflicts(
+    dependencies: &[DependencyInfo],
+    config: &DepsSyncConfig,
+) -> Vec<DependencyConflict> {
+    let mut conflicts = Vec::new();
+
+    for (dep_name, pinned_config) in &config.pinned_dependencies {
+        let mut conflicting_packages = Vec::new();
+
+        for dep in dependencies {
+            if dep.dependency_name == *dep_name {
+                // Check if this package is exempted from the pinned version
+                if pinned_config.exceptions.contains(&dep.package_name) {
+                    continue;
+                }
+
+                // Check if the version matches the pinned version
+                if dep.version != pinned_config.version {
+                    conflicting_packages.push(DependencyUsage {
+                        package_name: dep.package_name.clone(),
+                        version: dep.version.clone(),
+                        dependency_type: dep.dep_type.clone(),
+                    });
+                }
+            }
+        }
+
+        if !conflicting_packages.is_empty() {
+            conflicts.push(DependencyConflict {
+                dependency_name: dep_name.clone(),
+                conflicting_packages,
+            });
+        }
+    }
+
+    conflicts
+}
+
 fn find_dependency_conflicts(all_deps: &[DependencyInfo]) -> Vec<DependencyConflict> {
-    let mut dependency_map: HashMap<String, Vec<(String, String, DependencyType)>> = HashMap::new();
+    let mut dependency_map: HashMap<String, Vec<DependencyUsage>> = HashMap::new();
 
     // Group dependencies by name
     for dep in all_deps {
         dependency_map
             .entry(dep.dependency_name.clone())
             .or_default()
-            .push((
-                dep.package_name.clone(),
-                dep.version.clone(),
-                dep.dep_type.clone(),
-            ));
+            .push(DependencyUsage {
+                package_name: dep.package_name.clone(),
+                version: dep.version.clone(),
+                dependency_type: dep.dep_type.clone(),
+            });
     }
 
     let mut conflicts = Vec::new();
 
     // Find conflicts (same dependency with different versions)
-    for (dep_name, versions) in dependency_map {
+    for (dep_name, usages) in dependency_map {
         // Check if we have multiple different versions
-        let unique_versions: HashSet<&String> =
-            versions.iter().map(|(_, version, _)| version).collect();
+        let unique_versions: HashSet<&String> = usages.iter().map(|usage| &usage.version).collect();
 
         if unique_versions.len() > 1 {
             conflicts.push(DependencyConflict {
                 dependency_name: dep_name,
-                versions,
+                conflicting_packages: usages,
             });
         }
     }
@@ -207,11 +337,11 @@ fn print_conflicts(conflicts: &[DependencyConflict], color_config: ColorConfig) 
 
         // Group by version for cleaner output
         let mut version_groups: HashMap<String, Vec<(String, DependencyType)>> = HashMap::new();
-        for (package_name, version, dep_type) in &conflict.versions {
+        for usage in &conflict.conflicting_packages {
             version_groups
-                .entry(version.clone())
+                .entry(usage.version.clone())
                 .or_default()
-                .push((package_name.clone(), dep_type.clone()));
+                .push((usage.package_name.clone(), usage.dependency_type.clone()));
         }
 
         let mut sorted_versions: Vec<_> = version_groups.into_iter().collect();

@@ -1,0 +1,25 @@
+{
+  // Configuration for turbo deps-sync command
+  "pinnedDependencies": {
+    // Pin these dependencies to specific versions across all packages
+    "typescript": {
+      "version": "5.5.4",
+      "exceptions": []
+    },
+    "@types/node": {
+      "version": "^20",
+      "exceptions": ["turborepo-docs", "link-checker"]
+    }
+  },
+  "ignoredDependencies": [
+    // Ignore specific dependencies in specific packages
+    {
+      "dependency": "@turbo/tsconfig",
+      "packages": ["turborepo-docs"]
+    },
+    {
+      "dependency": "zod",
+      "packages": ["@turbo/telemetry", "turborepo-docs"]
+    }
+  ]
+}
