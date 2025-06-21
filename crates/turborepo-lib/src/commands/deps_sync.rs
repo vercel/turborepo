@@ -1,0 +1,265 @@
+use std::collections::{HashMap, HashSet};
+
+use serde_json::Value;
+use thiserror::Error;
+use turbopath::AbsoluteSystemPath;
+use turborepo_repository::{
+    discovery::{LocalPackageDiscoveryBuilder, PackageDiscovery, PackageDiscoveryBuilder},
+    package_json::PackageJson,
+};
+use turborepo_ui::ColorConfig;
+
+use super::CommandBase;
+
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error("Failed to read package.json: {0}")]
+    PackageJsonRead(#[from] turborepo_repository::package_json::Error),
+    #[error("Failed to read file: {0}")]
+    FileRead(#[from] std::io::Error),
+    #[error("Failed to parse JSON: {0}")]
+    JsonParse(#[from] serde_json::Error),
+    #[error("Failed to discover packages: {0}")]
+    Discovery(#[from] turborepo_repository::discovery::Error),
+    #[error("Failed to resolve package manager: {0}")]
+    PackageManager(#[from] turborepo_repository::package_manager::Error),
+}
+
+#[derive(Debug, Clone)]
+struct DependencyInfo {
+    package_name: String,
+    dependency_name: String,
+    version: String,
+    dep_type: DependencyType,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+enum DependencyType {
+    Dependencies,
+    DevDependencies,
+    OptionalDependencies,
+}
+
+impl std::fmt::Display for DependencyType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DependencyType::Dependencies => write!(f, "dependencies"),
+            DependencyType::DevDependencies => write!(f, "devDependencies"),
+            DependencyType::OptionalDependencies => write!(f, "optionalDependencies"),
+        }
+    }
+}
+
+struct DependencyConflict {
+    dependency_name: String,
+    versions: Vec<(String, String, DependencyType)>, // package_name, version, dep_type
+}
+
+pub async fn run(base: &CommandBase) -> Result<i32, Error> {
+    let color_config = base.color_config;
+
+    println!("🔍 Scanning workspace packages for dependency conflicts...\n");
+
+    let all_deps = collect_all_dependencies(&base.repo_root).await?;
+    let conflicts = find_dependency_conflicts(&all_deps);
+
+    if conflicts.is_empty() {
+        print_success("✅ All dependencies are in sync!", color_config);
+        Ok(0)
+    } else {
+        print_conflicts(&conflicts, color_config);
+        Ok(1)
+    }
+}
+
+async fn collect_all_dependencies(
+    repo_root: &AbsoluteSystemPath,
+) -> Result<Vec<DependencyInfo>, Error> {
+    let mut all_deps = Vec::new();
+
+    // Use workspace discovery to find only workspace packages
+    let discovery = LocalPackageDiscoveryBuilder::new(repo_root.to_owned(), None, None).build()?;
+    let workspace_response = discovery.discover_packages().await?;
+
+    // Process each workspace package
+    for workspace_data in workspace_response.workspaces {
+        let package_json_path = &workspace_data.package_json;
+
+        if let Ok(package_json) = PackageJson::load(package_json_path) {
+            let package_name = package_json
+                .name
+                .as_ref()
+                .map(|s| s.as_str().to_string())
+                .unwrap_or_else(|| {
+                    // Use directory name as fallback
+                    package_json_path
+                        .parent()
+                        .unwrap()
+                        .file_name()
+                        .unwrap_or("unknown")
+                        .to_string()
+                });
+
+            // Read raw JSON to get all dependency types
+            let raw_content = std::fs::read_to_string(package_json_path)?;
+            let raw_json: Value = serde_json::from_str(&raw_content)?;
+
+            // Extract dependencies of each type
+            if let Some(deps) = raw_json.get("dependencies").and_then(|v| v.as_object()) {
+                for (dep_name, version) in deps {
+                    if let Some(version_str) = version.as_str() {
+                        all_deps.push(DependencyInfo {
+                            package_name: package_name.clone(),
+                            dependency_name: dep_name.clone(),
+                            version: version_str.to_string(),
+                            dep_type: DependencyType::Dependencies,
+                        });
+                    }
+                }
+            }
+
+            if let Some(dev_deps) = raw_json.get("devDependencies").and_then(|v| v.as_object()) {
+                for (dep_name, version) in dev_deps {
+                    if let Some(version_str) = version.as_str() {
+                        all_deps.push(DependencyInfo {
+                            package_name: package_name.clone(),
+                            dependency_name: dep_name.clone(),
+                            version: version_str.to_string(),
+                            dep_type: DependencyType::DevDependencies,
+                        });
+                    }
+                }
+            }
+
+            // Skip peerDependencies - they're meant to be provided by the consuming
+            // application and often intentionally have different version
+            // constraints
+
+            if let Some(opt_deps) = raw_json
+                .get("optionalDependencies")
+                .and_then(|v| v.as_object())
+            {
+                for (dep_name, version) in opt_deps {
+                    if let Some(version_str) = version.as_str() {
+                        all_deps.push(DependencyInfo {
+                            package_name: package_name.clone(),
+                            dependency_name: dep_name.clone(),
+                            version: version_str.to_string(),
+                            dep_type: DependencyType::OptionalDependencies,
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(all_deps)
+}
+
+fn find_dependency_conflicts(all_deps: &[DependencyInfo]) -> Vec<DependencyConflict> {
+    let mut dependency_map: HashMap<String, Vec<(String, String, DependencyType)>> = HashMap::new();
+
+    // Group dependencies by name
+    for dep in all_deps {
+        dependency_map
+            .entry(dep.dependency_name.clone())
+            .or_default()
+            .push((
+                dep.package_name.clone(),
+                dep.version.clone(),
+                dep.dep_type.clone(),
+            ));
+    }
+
+    let mut conflicts = Vec::new();
+
+    // Find conflicts (same dependency with different versions)
+    for (dep_name, versions) in dependency_map {
+        // Check if we have multiple different versions
+        let unique_versions: HashSet<&String> =
+            versions.iter().map(|(_, version, _)| version).collect();
+
+        if unique_versions.len() > 1 {
+            conflicts.push(DependencyConflict {
+                dependency_name: dep_name,
+                versions,
+            });
+        }
+    }
+
+    // Sort conflicts by dependency name for consistent output
+    conflicts.sort_by(|a, b| a.dependency_name.cmp(&b.dependency_name));
+
+    conflicts
+}
+
+fn print_conflicts(conflicts: &[DependencyConflict], color_config: ColorConfig) {
+    use turborepo_ui::{BOLD, BOLD_RED, CYAN, YELLOW};
+
+    let error_prefix = if color_config.should_strip_ansi {
+        "❌"
+    } else {
+        &format!("{}", BOLD_RED.apply_to("❌"))
+    };
+
+    println!(
+        "{} Found {} dependency conflicts:\n",
+        error_prefix,
+        conflicts.len()
+    );
+
+    for conflict in conflicts {
+        let dep_name = if color_config.should_strip_ansi {
+            conflict.dependency_name.clone()
+        } else {
+            format!("{}", BOLD.apply_to(&conflict.dependency_name))
+        };
+
+        println!("  {}:", dep_name);
+
+        // Group by version for cleaner output
+        let mut version_groups: HashMap<String, Vec<(String, DependencyType)>> = HashMap::new();
+        for (package_name, version, dep_type) in &conflict.versions {
+            version_groups
+                .entry(version.clone())
+                .or_default()
+                .push((package_name.clone(), dep_type.clone()));
+        }
+
+        let mut sorted_versions: Vec<_> = version_groups.into_iter().collect();
+        sorted_versions.sort_by(|a, b| a.0.cmp(&b.0));
+
+        for (version, packages) in sorted_versions {
+            let version_display = if color_config.should_strip_ansi {
+                version
+            } else {
+                format!("{}", YELLOW.apply_to(&version))
+            };
+
+            println!("    {} →", version_display);
+
+            for (package_name, dep_type) in packages {
+                let package_display = if color_config.should_strip_ansi {
+                    format!("{} ({})", package_name, dep_type)
+                } else {
+                    format!("{} ({})", CYAN.apply_to(&package_name), dep_type)
+                };
+                println!("      {}", package_display);
+            }
+        }
+        println!();
+    }
+
+    println!(
+        "💡 To fix these conflicts, ensure all packages use the same version for each dependency."
+    );
+}
+
+fn print_success(message: &str, color_config: ColorConfig) {
+    if color_config.should_strip_ansi {
+        println!("{}", message);
+    } else {
+        use turborepo_ui::BOLD_GREEN;
+        println!("{}", BOLD_GREEN.apply_to(message));
+    }
+}

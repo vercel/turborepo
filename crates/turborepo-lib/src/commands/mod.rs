@@ -19,6 +19,7 @@ pub(crate) mod boundaries;
 pub(crate) mod clone;
 pub(crate) mod config;
 pub(crate) mod daemon;
+pub(crate) mod deps_sync;
 pub(crate) mod generate;
 pub(crate) mod info;
 pub(crate) mod link;
