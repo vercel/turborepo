@@ -38,13 +38,26 @@ To build all apps and packages, run the following command:
 
 ```
 cd my-turborepo
+
+# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
+turbo build
+
+# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed
 npx turbo build
+yarn dlx turbo build
+pnpm exec turbo build
 ```
 
 You can build a specific package by using a [filter](https://turborepo.com/docs/crafting-your-repository/running-tasks#using-filters):
 
 ```
+# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
+turbo build --filter=docs
+
+# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed
 npx turbo build --filter=docs
+yarn exec turbo build --filter=docs
+pnpm exec turbo build --filter=docs
 ```
 
 ### Develop
@@ -53,13 +66,26 @@ To develop all apps and packages, run the following command:
 
 ```
 cd my-turborepo
+
+# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
+turbo dev
+
+# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed
 npx turbo dev
+yarn exec turbo dev
+pnpm exec turbo dev
 ```
 
 You can develop a specific package by using a [filter](https://turborepo.com/docs/crafting-your-repository/running-tasks#using-filters):
 
 ```
+# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
+turbo dev --filter=web
+
+# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed
 npx turbo dev --filter=web
+yarn exec turbo dev --filter=web
+pnpm exec turbo dev --filter=web
 ```
 
 ### Remote Caching
@@ -73,7 +99,14 @@ By default, Turborepo will cache locally. To enable Remote Caching you will need
 
 ```
 cd my-turborepo
+
+# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
+turbo login
+
+# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed
 npx turbo login
+yarn exec turbo login
+pnpm exec turbo login
 ```
 
 This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
@@ -81,7 +114,13 @@ This will authenticate the Turborepo CLI with your [Vercel account](https://verc
 Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
 
 ```
+# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
+turbo link
+
+# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed
 npx turbo link
+yarn exec turbo link
+pnpm exec turbo link
 ```
 
 ## Useful Links
