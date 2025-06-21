@@ -34,15 +34,10 @@
             "type": "string"
           },
           "description": "This key is only available in Workspace Configs and cannot be used in your root turbo.json.\n\nTells turbo to extend your root `turbo.json` and overrides with the keys provided in your Workspace Configs.\n\nCurrently, only the \"//\" value is allowed.",
-          "default": [
-            "//"
-          ]
+          "default": ["//"]
         }
       },
-      "required": [
-        "extends",
-        "pipeline"
-      ],
+      "required": ["extends", "pipeline"],
       "additionalProperties": false
     },
     "PipelineV1": {
@@ -141,13 +136,7 @@
     },
     "OutputModeV1": {
       "type": "string",
-      "enum": [
-        "full",
-        "hash-only",
-        "new-only",
-        "errors-only",
-        "none"
-      ]
+      "enum": ["full", "hash-only", "new-only", "errors-only", "none"]
     },
     "RootSchemaV1": {
       "type": "object",
@@ -223,9 +212,7 @@
         }
       },
       "additionalProperties": false,
-      "required": [
-        "pipeline"
-      ]
+      "required": ["pipeline"]
     },
     "RemoteCacheV1": {
       "type": "object",
