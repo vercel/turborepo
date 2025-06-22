@@ -35,12 +35,12 @@ pub struct DepsSyncConfig {
     /// Dependencies that should be pinned to a specific version across all
     /// packages by default. Packages can be excluded using the `exceptions`
     /// field.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub pinned_dependencies: HashMap<String, PinnedDependency>,
     /// Dependencies that should be ignored in specific packages.
     /// The `exceptions` field lists the packages where the dependency should be
     /// ignored.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub ignored_dependencies: HashMap<String, IgnoredDependency>,
 }
 
@@ -60,7 +60,7 @@ pub struct PinnedDependency {
 #[serde(rename_all = "camelCase")]
 pub struct IgnoredDependency {
     /// Packages where this dependency should be ignored
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub exceptions: Vec<String>,
 }
 
@@ -113,12 +113,36 @@ struct DependencyConflict {
     conflict_reason: Option<String>,
 }
 
-pub async fn run(base: &CommandBase) -> Result<i32, Error> {
+pub async fn run(base: &CommandBase, allowlist: bool) -> Result<i32, Error> {
     let color_config = base.color_config;
 
-    println!("🔍 Scanning workspace packages for dependency conflicts...\n");
+    println!("🔍 Scanning workspace packages for dependency conflicts...");
 
     let config = load_deps_sync_config(&base.repo_root).await?;
+
+    // Print ignored dependencies count if any exist
+    if !config.ignored_dependencies.is_empty() {
+        let ignored_count = config.ignored_dependencies.len();
+        let dependency_word = if ignored_count == 1 {
+            "dependency"
+        } else {
+            "dependencies"
+        };
+        let message = format!(
+            "→ {} ignored {} in `turbo.json`",
+            ignored_count, dependency_word
+        );
+
+        if color_config.should_strip_ansi {
+            println!("{}", message);
+        } else {
+            use turborepo_ui::GREY;
+            println!("{}", GREY.apply_to(&message));
+        }
+    }
+
+    println!();
+
     let all_deps = collect_all_dependencies(&base.repo_root).await?;
     let conflicts = find_dependency_conflicts(&all_deps, &config);
     let pinned_conflicts = find_pinned_version_conflicts(&all_deps, &config);
@@ -127,6 +151,20 @@ pub async fn run(base: &CommandBase) -> Result<i32, Error> {
 
     if all_conflicts.is_empty() {
         print_success("✅ All dependencies are in sync!", color_config);
+        Ok(0)
+    } else if allowlist {
+        // Generate allowlist configuration instead of reporting conflicts
+        let allowlist_config = generate_allowlist_config(&all_conflicts, &config);
+        write_allowlist_config(&base.repo_root, &allowlist_config).await?;
+
+        print_success(
+            &format!(
+                "✅ Generated allowlist configuration for {} conflicts in turbo.json. \
+                 Dependencies are now synchronized!",
+                all_conflicts.len()
+            ),
+            color_config,
+        );
         Ok(0)
     } else {
         print_conflicts(&all_conflicts, color_config);
@@ -489,6 +527,99 @@ fn print_success(message: &str, color_config: ColorConfig) {
     }
 }
 
+fn generate_allowlist_config(
+    conflicts: &[DependencyConflict],
+    current_config: &DepsSyncConfig,
+) -> DepsSyncConfig {
+    let mut new_config = DepsSyncConfig {
+        pinned_dependencies: HashMap::new(),
+        ignored_dependencies: HashMap::new(),
+    };
+
+    // Only copy existing pinned dependencies that are being modified
+    for conflict in conflicts {
+        if conflict.conflict_reason.is_some() {
+            // This is a pinned dependency conflict
+            // Copy the existing pinned dependency and add exceptions
+            if let Some(existing_pinned_dep) = current_config
+                .pinned_dependencies
+                .get(&conflict.dependency_name)
+            {
+                let mut pinned_dep = existing_pinned_dep.clone();
+                for usage in &conflict.conflicting_packages {
+                    if !pinned_dep.exceptions.contains(&usage.package_name) {
+                        pinned_dep.exceptions.push(usage.package_name.clone());
+                    }
+                }
+                new_config
+                    .pinned_dependencies
+                    .insert(conflict.dependency_name.clone(), pinned_dep);
+            }
+        } else {
+            // This is a regular version conflict
+            // Add the dependency to ignored_dependencies with all conflicting packages as
+            // exceptions
+            let package_names: Vec<String> = conflict
+                .conflicting_packages
+                .iter()
+                .map(|usage| usage.package_name.clone())
+                .collect();
+
+            new_config.ignored_dependencies.insert(
+                conflict.dependency_name.clone(),
+                IgnoredDependency {
+                    exceptions: package_names,
+                },
+            );
+        }
+    }
+
+    // Also copy any existing ignored dependencies
+    for (dep_name, ignored_dep) in &current_config.ignored_dependencies {
+        if !new_config.ignored_dependencies.contains_key(dep_name) {
+            new_config
+                .ignored_dependencies
+                .insert(dep_name.clone(), ignored_dep.clone());
+        }
+    }
+
+    // Copy any existing pinned dependencies that weren't modified
+    for (dep_name, pinned_dep) in &current_config.pinned_dependencies {
+        if !new_config.pinned_dependencies.contains_key(dep_name) {
+            new_config
+                .pinned_dependencies
+                .insert(dep_name.clone(), pinned_dep.clone());
+        }
+    }
+
+    new_config
+}
+
+async fn write_allowlist_config(
+    repo_root: &AbsoluteSystemPath,
+    config: &DepsSyncConfig,
+) -> Result<(), Error> {
+    let config_opts = crate::config::ConfigurationOptions::default();
+    let turbo_json_path = config_opts
+        .root_turbo_json_path(repo_root)
+        .map_err(|e| Error::Config(e))?;
+
+    // Read the current turbo.json file
+    let mut raw_turbo_json = match RawTurboJson::read(repo_root, &turbo_json_path)? {
+        Some(turbo_json) => turbo_json,
+        None => RawTurboJson::default(),
+    };
+
+    // Update the deps_sync configuration
+    raw_turbo_json.deps_sync = Some(config.clone());
+
+    // Write the updated configuration back to the file
+    let json_content = serde_json::to_string_pretty(&raw_turbo_json)?;
+    std::fs::write(&turbo_json_path, json_content)?;
+
+    Ok(())
+}
+
 #[test]
 fn test_ignored_dependencies_with_exceptions() {
     let dependencies = vec![
@@ -758,5 +889,65 @@ mod tests {
         assert_eq!(conflict.conflicting_packages.len(), 1);
         assert_eq!(conflict.conflicting_packages[0].package_name, "app2");
         assert_eq!(conflict.conflicting_packages[0].version, "16.0.0");
+    }
+
+    #[test]
+    fn test_generate_allowlist_config() {
+        let conflicts = vec![
+            // Regular version conflict
+            DependencyConflict {
+                dependency_name: "lodash".to_string(),
+                conflicting_packages: vec![
+                    DependencyUsage {
+                        package_name: "app1".to_string(),
+                        version: "4.17.0".to_string(),
+                        package_path: "packages/app1".to_string(),
+                    },
+                    DependencyUsage {
+                        package_name: "app2".to_string(),
+                        version: "4.18.0".to_string(),
+                        package_path: "packages/app2".to_string(),
+                    },
+                ],
+                conflict_reason: None,
+            },
+            // Pinned dependency conflict
+            DependencyConflict {
+                dependency_name: "react".to_string(),
+                conflicting_packages: vec![DependencyUsage {
+                    package_name: "app3".to_string(),
+                    version: "17.0.0".to_string(),
+                    package_path: "packages/app3".to_string(),
+                }],
+                conflict_reason: Some("pinned to 18.0.0".to_string()),
+            },
+        ];
+
+        let current_config = DepsSyncConfig {
+            pinned_dependencies: HashMap::from([(
+                "react".to_string(),
+                PinnedDependency {
+                    version: "18.0.0".to_string(),
+                    exceptions: vec![],
+                },
+            )]),
+            ignored_dependencies: HashMap::new(),
+        };
+
+        let allowlist_config = generate_allowlist_config(&conflicts, &current_config);
+
+        // lodash should be added to ignored_dependencies with all conflicting packages
+        // as exceptions
+        assert!(allowlist_config.ignored_dependencies.contains_key("lodash"));
+        let lodash_exceptions = &allowlist_config.ignored_dependencies["lodash"].exceptions;
+        assert_eq!(lodash_exceptions.len(), 2);
+        assert!(lodash_exceptions.contains(&"app1".to_string()));
+        assert!(lodash_exceptions.contains(&"app2".to_string()));
+
+        // app3 should be added to react's exceptions
+        assert!(allowlist_config.pinned_dependencies.contains_key("react"));
+        assert!(allowlist_config.pinned_dependencies["react"]
+            .exceptions
+            .contains(&"app3".to_string()));
     }
 }
