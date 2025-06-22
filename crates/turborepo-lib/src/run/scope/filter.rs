@@ -1213,7 +1213,7 @@ mod test {
             TestChangeDetector::new(&[]),
         );
         let packages = resolver.get_filtered_packages(vec![TargetSelector {
-            parent_dir: Some(AnchoredSystemPathBuf::try_from("pakcages/*").unwrap()),
+            parent_dir: Some(AnchoredSystemPathBuf::try_from("packages/*").unwrap()),
             ..Default::default()
         }]);
 
