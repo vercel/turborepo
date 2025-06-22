@@ -37,9 +37,11 @@ pub struct DepsSyncConfig {
     /// field.
     #[serde(default)]
     pub pinned_dependencies: HashMap<String, PinnedDependency>,
-    /// Dependencies that should be ignored in specific packages
+    /// Dependencies that should be ignored in specific packages.
+    /// The `exceptions` field lists the packages where the dependency should be
+    /// ignored.
     #[serde(default)]
-    pub ignored_dependencies: Vec<IgnoredDependency>,
+    pub ignored_dependencies: HashMap<String, IgnoredDependency>,
 }
 
 #[derive(Debug, Clone, Default, Deserializable, serde::Deserialize, serde::Serialize)]
@@ -57,19 +59,16 @@ pub struct PinnedDependency {
 #[derive(Debug, Clone, Default, Deserializable, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct IgnoredDependency {
-    /// The name of the dependency to ignore
+    /// Packages where this dependency should be ignored
     #[serde(default)]
-    pub dependency: String,
-    /// The packages where this dependency should be ignored
-    #[serde(default)]
-    pub packages: Vec<String>,
+    pub exceptions: Vec<String>,
 }
 
 impl Default for DepsSyncConfig {
     fn default() -> Self {
         Self {
             pinned_dependencies: HashMap::new(),
-            ignored_dependencies: Vec::new(),
+            ignored_dependencies: HashMap::new(),
         }
     }
 }
@@ -121,8 +120,7 @@ pub async fn run(base: &CommandBase) -> Result<i32, Error> {
 
     let config = load_deps_sync_config(&base.repo_root).await?;
     let all_deps = collect_all_dependencies(&base.repo_root).await?;
-    let filtered_deps = apply_configuration_filters(&all_deps, &config);
-    let conflicts = find_dependency_conflicts(&filtered_deps);
+    let conflicts = find_dependency_conflicts(&all_deps, &config);
     let pinned_conflicts = find_pinned_version_conflicts(&all_deps, &config);
 
     let all_conflicts: Vec<_> = conflicts.into_iter().chain(pinned_conflicts).collect();
@@ -250,18 +248,11 @@ fn apply_configuration_filters(
     dependencies
         .iter()
         .filter(|dep| {
-            // Check if this dependency should be ignored in this package
-            for ignored in &config.ignored_dependencies {
-                if ignored.dependency == dep.dependency_name {
-                    // Check for "*" wildcard - ignore for all packages
-                    if ignored.packages.contains(&"*".to_string()) {
-                        return false;
-                    }
-
-                    // Check for direct package name match
-                    if ignored.packages.contains(&dep.package_name) {
-                        return false;
-                    }
+            // Check if this dependency should be ignored
+            if let Some(ignored_config) = config.ignored_dependencies.get(&dep.dependency_name) {
+                // If this package is NOT in the exceptions list, then ignore it
+                if !ignored_config.exceptions.contains(&dep.package_name) {
+                    return false;
                 }
             }
 
@@ -297,25 +288,12 @@ fn find_pinned_version_conflicts(
                 }
 
                 // Check if this dependency is ignored for this package
-                let mut is_ignored = false;
-                for ignored in &config.ignored_dependencies {
-                    if ignored.dependency == dep.dependency_name {
-                        // Check for "*" wildcard - ignore for all packages
-                        if ignored.packages.contains(&"*".to_string()) {
-                            is_ignored = true;
-                            break;
-                        }
-
-                        // Check for direct package name match
-                        if ignored.packages.contains(&dep.package_name) {
-                            is_ignored = true;
-                            break;
-                        }
+                if let Some(ignored_config) = config.ignored_dependencies.get(&dep.dependency_name)
+                {
+                    // If this package IS in the exceptions list, then ignore it
+                    if ignored_config.exceptions.contains(&dep.package_name) {
+                        continue;
                     }
-                }
-
-                if is_ignored {
-                    continue;
                 }
 
                 // Check if the version matches the pinned version
@@ -341,11 +319,22 @@ fn find_pinned_version_conflicts(
     conflicts
 }
 
-fn find_dependency_conflicts(all_deps: &[DependencyInfo]) -> Vec<DependencyConflict> {
+fn find_dependency_conflicts(
+    all_deps: &[DependencyInfo],
+    config: &DepsSyncConfig,
+) -> Vec<DependencyConflict> {
     let mut dependency_map: HashMap<String, Vec<DependencyUsage>> = HashMap::new();
 
     // Group dependencies by name
     for dep in all_deps {
+        // Skip pinned dependencies - they're handled separately
+        if config
+            .pinned_dependencies
+            .contains_key(&dep.dependency_name)
+        {
+            continue;
+        }
+
         dependency_map
             .entry(dep.dependency_name.clone())
             .or_default()
@@ -364,11 +353,33 @@ fn find_dependency_conflicts(all_deps: &[DependencyInfo]) -> Vec<DependencyConfl
         let unique_versions: HashSet<&String> = usages.iter().map(|usage| &usage.version).collect();
 
         if unique_versions.len() > 1 {
-            conflicts.push(DependencyConflict {
-                dependency_name: dep_name,
-                conflicting_packages: usages,
-                conflict_reason: None,
-            });
+            // Check if this dependency has ignored packages, and filter them out
+            let filtered_usages =
+                if let Some(ignored_config) = config.ignored_dependencies.get(&dep_name) {
+                    usages
+                        .into_iter()
+                        .filter(|usage| {
+                            // Keep packages that are NOT in the exceptions list (i.e., not ignored)
+                            !ignored_config.exceptions.contains(&usage.package_name)
+                        })
+                        .collect()
+                } else {
+                    usages
+                };
+
+            // Only create a conflict if we still have multiple versions after filtering
+            if filtered_usages.len() > 1 {
+                let unique_filtered_versions: HashSet<&String> =
+                    filtered_usages.iter().map(|usage| &usage.version).collect();
+
+                if unique_filtered_versions.len() > 1 {
+                    conflicts.push(DependencyConflict {
+                        dependency_name: dep_name,
+                        conflicting_packages: filtered_usages,
+                        conflict_reason: None,
+                    });
+                }
+            }
         }
     }
 
@@ -397,7 +408,7 @@ fn print_conflicts(conflicts: &[DependencyConflict], color_config: ColorConfig) 
         if let Some(reason) = &conflict.conflict_reason {
             println!("  {} ({})", dep_name, reason);
         } else {
-            println!("  {}:", dep_name);
+            println!("  {} (version mismatch)", dep_name);
         }
 
         if conflict.conflict_reason.is_some() {
@@ -479,7 +490,7 @@ fn print_success(message: &str, color_config: ColorConfig) {
 }
 
 #[test]
-fn test_ignored_dependencies_regular_syntax_still_works() {
+fn test_ignored_dependencies_with_exceptions() {
     let dependencies = vec![
         DependencyInfo {
             package_name: "app1".to_string(),
@@ -499,37 +510,50 @@ fn test_ignored_dependencies_regular_syntax_still_works() {
 
     let config = DepsSyncConfig {
         pinned_dependencies: HashMap::new(),
-        ignored_dependencies: vec![IgnoredDependency {
-            dependency: "lodash".to_string(),
-            packages: vec!["app1".to_string()], // Regular syntax (no prefix)
-        }],
+        ignored_dependencies: HashMap::from([(
+            "lodash".to_string(),
+            IgnoredDependency {
+                exceptions: vec!["app1".to_string()],
+            },
+        )]),
     };
 
-    let filtered_deps = apply_configuration_filters(&dependencies, &config);
+    let conflicts = find_dependency_conflicts(&dependencies, &config);
 
-    // Should have lodash dependency for app2 only
-    assert_eq!(filtered_deps.len(), 1);
-    assert_eq!(filtered_deps[0].package_name, "app2");
-    assert_eq!(filtered_deps[0].dependency_name, "lodash");
+    // Should have conflict for lodash since app1 is not ignored (it's in
+    // exceptions)
+    assert_eq!(conflicts.len(), 1);
+    assert_eq!(conflicts[0].dependency_name, "lodash");
+    assert_eq!(conflicts[0].conflicting_packages.len(), 2);
+
+    // Both packages should be in the conflict (app1 is not ignored, app2 is ignored
+    // but still shown)
+    let package_names: Vec<_> = conflicts[0]
+        .conflicting_packages
+        .iter()
+        .map(|p| &p.package_name)
+        .collect();
+    assert!(package_names.contains(&&"app1".to_string()));
+    assert!(package_names.contains(&&"app2".to_string()));
 }
 
 #[test]
 fn test_pinned_and_ignored_dependencies_no_conflicts() {
-    // Test that dependencies that are both pinned and ignored don't show up in
-    // diagnostics
+    // Test that dependencies that are both pinned and ignored work correctly with
+    // exceptions
     let dependencies = vec![
         DependencyInfo {
             package_name: "app1".to_string(),
             package_path: "packages/app1".to_string(),
             dependency_name: "react".to_string(),
-            version: "17.0.0".to_string(), // Wrong version but should be ignored
+            version: "17.0.0".to_string(), // Wrong version but app1 is in exceptions (NOT ignored)
             dep_type: DependencyType::Dependencies,
         },
         DependencyInfo {
             package_name: "app2".to_string(),
             package_path: "packages/app2".to_string(),
             dependency_name: "react".to_string(),
-            version: "16.0.0".to_string(), // Wrong version and should show conflict
+            version: "16.0.0".to_string(), // Wrong version but app2 is ignored
             dep_type: DependencyType::Dependencies,
         },
         DependencyInfo {
@@ -552,22 +576,24 @@ fn test_pinned_and_ignored_dependencies_no_conflicts() {
 
     let config = DepsSyncConfig {
         pinned_dependencies,
-        ignored_dependencies: vec![IgnoredDependency {
-            dependency: "react".to_string(),
-            packages: vec!["app1".to_string()], // app1 is ignored, app2 is not
-        }],
+        ignored_dependencies: HashMap::from([(
+            "react".to_string(),
+            IgnoredDependency {
+                exceptions: vec!["app1".to_string()],
+            },
+        )]),
     };
 
     let pinned_conflicts = find_pinned_version_conflicts(&dependencies, &config);
 
-    // Should only have conflict for app2 (app1 is ignored, app3 has correct
-    // version)
+    // Should only have conflict for app1 (app1 is in exceptions so NOT ignored,
+    // app2 is ignored, app3 has correct version)
     assert_eq!(pinned_conflicts.len(), 1);
     let conflict = &pinned_conflicts[0];
     assert_eq!(conflict.dependency_name, "react");
     assert_eq!(conflict.conflicting_packages.len(), 1);
-    assert_eq!(conflict.conflicting_packages[0].package_name, "app2");
-    assert_eq!(conflict.conflicting_packages[0].version, "16.0.0");
+    assert_eq!(conflict.conflicting_packages[0].package_name, "app1");
+    assert_eq!(conflict.conflicting_packages[0].version, "17.0.0");
 }
 
 #[cfg(test)]
@@ -577,7 +603,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_ignored_dependencies_wildcard_all_packages() {
+    fn test_ignored_dependencies_all_packages() {
         let dependencies = vec![
             DependencyInfo {
                 package_name: "app1".to_string(),
@@ -604,22 +630,23 @@ mod tests {
 
         let config = DepsSyncConfig {
             pinned_dependencies: HashMap::new(),
-            ignored_dependencies: vec![IgnoredDependency {
-                dependency: "lodash".to_string(),
-                packages: vec!["*".to_string()], // Ignore lodash for ALL packages
-            }],
+            ignored_dependencies: HashMap::from([(
+                "lodash".to_string(),
+                IgnoredDependency {
+                    exceptions: vec![], // No exceptions - ignore lodash in ALL packages
+                },
+            )]),
         };
 
-        let filtered_deps = apply_configuration_filters(&dependencies, &config);
+        let conflicts = find_dependency_conflicts(&dependencies, &config);
 
-        // Should only have react dependency (lodash filtered out from all packages)
-        assert_eq!(filtered_deps.len(), 1);
-        assert_eq!(filtered_deps[0].dependency_name, "react");
-        assert_eq!(filtered_deps[0].package_name, "app3");
+        // Should have no conflicts since lodash is ignored in all packages (no
+        // exceptions)
+        assert_eq!(conflicts.len(), 0);
     }
 
     #[test]
-    fn test_ignored_dependencies_specific_packages() {
+    fn test_ignored_dependencies_with_specific_exceptions() {
         let dependencies = vec![
             DependencyInfo {
                 package_name: "app1".to_string(),
@@ -646,19 +673,32 @@ mod tests {
 
         let config = DepsSyncConfig {
             pinned_dependencies: HashMap::new(),
-            ignored_dependencies: vec![IgnoredDependency {
-                dependency: "lodash".to_string(),
-                packages: vec!["app2".to_string(), "app3".to_string()], /* Ignore lodash for
-                                                                         * specific packages */
-            }],
+            ignored_dependencies: HashMap::from([(
+                "lodash".to_string(),
+                IgnoredDependency {
+                    exceptions: vec!["app2".to_string(), "app3".to_string()],
+                },
+            )]),
         };
 
-        let filtered_deps = apply_configuration_filters(&dependencies, &config);
+        let conflicts = find_dependency_conflicts(&dependencies, &config);
 
-        // Should have lodash dependency for app1 only (app2 and app3 filtered out)
-        assert_eq!(filtered_deps.len(), 1);
-        assert_eq!(filtered_deps[0].package_name, "app1");
-        assert_eq!(filtered_deps[0].dependency_name, "lodash");
+        // Should have conflict for lodash since app2 and app3 are not ignored (they're
+        // in exceptions)
+        assert_eq!(conflicts.len(), 1);
+        assert_eq!(conflicts[0].dependency_name, "lodash");
+        assert_eq!(conflicts[0].conflicting_packages.len(), 3);
+
+        // All packages should be in the conflict (app2/app3 are not ignored, app1 is
+        // ignored but still shown)
+        let package_names: Vec<_> = conflicts[0]
+            .conflicting_packages
+            .iter()
+            .map(|p| &p.package_name)
+            .collect();
+        assert!(package_names.contains(&&"app1".to_string()));
+        assert!(package_names.contains(&&"app2".to_string()));
+        assert!(package_names.contains(&&"app3".to_string()));
     }
 
     #[test]
@@ -700,10 +740,12 @@ mod tests {
 
         let config = DepsSyncConfig {
             pinned_dependencies,
-            ignored_dependencies: vec![IgnoredDependency {
-                dependency: "react".to_string(),
-                packages: vec!["app1".to_string()], // app1 is ignored, app2 is not
-            }],
+            ignored_dependencies: HashMap::from([(
+                "react".to_string(),
+                IgnoredDependency {
+                    exceptions: vec!["app1".to_string()],
+                },
+            )]),
         };
 
         let pinned_conflicts = find_pinned_version_conflicts(&dependencies, &config);
