@@ -5,7 +5,9 @@ use serde_json::Value;
 use thiserror::Error;
 use turbopath::AbsoluteSystemPath;
 use turborepo_repository::{
-    discovery::{LocalPackageDiscoveryBuilder, PackageDiscovery, PackageDiscoveryBuilder},
+    discovery::{
+        DiscoveryResponse, LocalPackageDiscoveryBuilder, PackageDiscovery, PackageDiscoveryBuilder,
+    },
     package_json::PackageJson,
 };
 use turborepo_ui::ColorConfig;
@@ -27,6 +29,11 @@ pub enum Error {
     PackageManager(#[from] turborepo_repository::package_manager::Error),
     #[error("Failed to read turbo.json: {0}")]
     Config(#[from] crate::config::Error),
+    #[error(
+        "deps-sync is not needed for single-package workspaces. This command analyzes dependency \
+         conflicts across multiple packages in a workspace."
+    )]
+    SinglePackageWorkspace,
 }
 
 #[derive(Debug, Clone, Deserializable, serde::Deserialize, serde::Serialize)]
@@ -120,6 +127,15 @@ pub async fn run(base: &CommandBase, allowlist: bool) -> Result<i32, Error> {
 
     let config = load_deps_sync_config(&base.repo_root).await?;
 
+    // Check if this is a single-package workspace
+    let discovery =
+        LocalPackageDiscoveryBuilder::new(base.repo_root.to_owned(), None, None).build()?;
+    let workspace_response = discovery.discover_packages().await?;
+
+    if workspace_response.workspaces.len() <= 1 {
+        return Err(Error::SinglePackageWorkspace);
+    }
+
     // Print ignored dependencies count if any exist
     if !config.ignored_dependencies.is_empty() {
         let ignored_count = config.ignored_dependencies.len();
@@ -143,7 +159,7 @@ pub async fn run(base: &CommandBase, allowlist: bool) -> Result<i32, Error> {
 
     println!();
 
-    let all_deps = collect_all_dependencies(&base.repo_root).await?;
+    let all_deps = collect_all_dependencies(&base.repo_root, workspace_response).await?;
     let conflicts = find_dependency_conflicts(&all_deps, &config);
     let pinned_conflicts = find_pinned_version_conflicts(&all_deps, &config);
 
@@ -188,12 +204,9 @@ async fn load_deps_sync_config(repo_root: &AbsoluteSystemPath) -> Result<DepsSyn
 
 async fn collect_all_dependencies(
     repo_root: &AbsoluteSystemPath,
+    workspace_response: DiscoveryResponse,
 ) -> Result<Vec<DependencyInfo>, Error> {
     let mut all_deps = Vec::new();
-
-    // Use workspace discovery to find only workspace packages
-    let discovery = LocalPackageDiscoveryBuilder::new(repo_root.to_owned(), None, None).build()?;
-    let workspace_response = discovery.discover_packages().await?;
 
     // Process each workspace package
     for workspace_data in workspace_response.workspaces {
