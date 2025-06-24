@@ -372,7 +372,7 @@ async fn collect_package_dependencies(
         })?;
 
     let package_name = extract_package_name(&package_json, package_json_path);
-    let relative_package_path = calculate_relative_path(repo_root, package_json_path);
+    let relative_package_path = calculate_relative_path(repo_root, package_json_path)?;
 
     let raw_content = std::fs::read_to_string(package_json_path).map_err(|e| Error::FileRead {
         path: package_json_path.to_string(),
@@ -414,11 +414,10 @@ fn extract_package_name(
 fn calculate_relative_path(
     repo_root: &AbsoluteSystemPath,
     package_json_path: &AbsoluteSystemPath,
-) -> String {
-    repo_root
-        .anchor(package_json_path.parent().unwrap())
-        .map(|p| p.to_string())
-        .unwrap_or_else(|_| package_json_path.parent().unwrap().to_string())
+) -> Result<String, Error> {
+    let package_dir = package_json_path.parent().unwrap();
+    let relative_path = repo_root.anchor(package_dir)?;
+    Ok(relative_path.to_string())
 }
 
 fn extract_dependencies_from_json(

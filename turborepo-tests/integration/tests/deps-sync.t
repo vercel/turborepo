@@ -16,7 +16,7 @@ Test deps-sync with no conflicts (basic monorepo)
   ✅ All dependencies are in sync!
 
 Test deps-sync with version conflicts
-  $ . ${TESTDIR}/../../helpers/copy_fixture.sh $(pwd) deps_sync_version_conflicts ${TESTDIR}/../fixtures
+  $ . ${TESTDIR}/../../helpers/copy_fixture.sh $(pwd) deps_sync_version_conflicts
 
   $ ${TURBO} deps-sync
   🔍 Scanning workspace packages for dependency conflicts...
