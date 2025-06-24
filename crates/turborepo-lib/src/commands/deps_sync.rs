@@ -199,14 +199,14 @@ impl From<OptimizedConfig> for DepsSyncConfig {
 pub async fn run(base: &CommandBase, allowlist: bool) -> Result<i32, Error> {
     let color_config = base.color_config;
 
+    // Validate workspace has multiple packages first, before printing any messages
+    let workspace_response = discover_workspace_packages(&base.repo_root).await?;
+    validate_multi_package_workspace(&workspace_response)?;
+
     println!("{}", SCANNING_MESSAGE);
 
     let deps_sync_config = load_deps_sync_config(&base.repo_root).await?;
     let optimized_config = OptimizedConfig::from(deps_sync_config);
-
-    // Validate workspace has multiple packages
-    let workspace_response = discover_workspace_packages(&base.repo_root).await?;
-    validate_multi_package_workspace(&workspace_response)?;
 
     // Print configuration summary
     print_configuration_summary(&optimized_config, color_config);
