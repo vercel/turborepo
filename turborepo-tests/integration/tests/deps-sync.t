@@ -27,7 +27,8 @@ Test deps-sync with version conflicts
       4.17.21 →
         another (packages/another)
   
-  ✅ All dependencies are in sync!
+  ❌ Found 1 dependency conflicts.
+  [1]
 
 Test deps-sync with allowlist generation
   $ ${TURBO} deps-sync --allowlist
@@ -97,7 +98,8 @@ Test deps-sync with pinned dependencies
       4.17.20 → util (packages[\\/]util) (re)
       4.17.21 → another (packages[\\/]another) (re)
   
-  ✅ All dependencies are in sync!
+  ❌ Found 1 dependency conflicts.
+  [1]
 
 Test deps-sync with allowlist for pinned dependencies
   $ ${TURBO} deps-sync --allowlist
@@ -133,7 +135,7 @@ Verify pinned dependency exceptions were added
 
 Test help text
   $ ${TURBO} deps-sync --help
-  Analyze dependency conflicts across workspace packages
+  Check that all dependencies across workspaces are synchronized
   
   Usage: turbo deps-sync [OPTIONS]
   
