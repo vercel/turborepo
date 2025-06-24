@@ -4,7 +4,6 @@ use biome_deserialize_macros::Deserializable;
 use serde_json::Value;
 use thiserror::Error;
 use turbopath::AbsoluteSystemPath;
-use turborepo_errors::Spanned;
 use turborepo_repository::{
     discovery::{
         DiscoveryResponse, LocalPackageDiscoveryBuilder, PackageDiscovery, PackageDiscoveryBuilder,
@@ -54,7 +53,7 @@ pub enum Error {
     SinglePackageWorkspace,
 }
 
-#[derive(Debug, Clone, Deserializable, serde::Deserialize, serde::Serialize)]
+#[derive(Debug, Clone, Deserializable, serde::Deserialize, serde::Serialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct DepsSyncConfig {
     /// Dependencies that should be pinned to a specific version across all
@@ -96,16 +95,6 @@ pub struct IgnoredDependency {
     /// Packages where this dependency should be ignored
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub exceptions: Vec<String>,
-}
-
-impl Default for DepsSyncConfig {
-    fn default() -> Self {
-        Self {
-            pinned_dependencies: HashMap::new(),
-            ignored_dependencies: HashMap::new(),
-            include_optional_dependencies: false,
-        }
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -248,7 +237,7 @@ async fn load_deps_sync_config(repo_root: &AbsoluteSystemPath) -> Result<DepsSyn
     let config_opts = crate::config::ConfigurationOptions::default();
     let turbo_json_path = config_opts
         .root_turbo_json_path(repo_root)
-        .map_err(|e| Error::Config(e))?;
+        .map_err(Error::Config)?;
 
     let raw_turbo_json = match RawTurboJson::read(repo_root, &turbo_json_path)? {
         Some(turbo_json) => turbo_json,
@@ -819,13 +808,11 @@ async fn write_allowlist_config(
     let config_opts = crate::config::ConfigurationOptions::default();
     let turbo_json_path = config_opts
         .root_turbo_json_path(repo_root)
-        .map_err(|e| Error::Config(e))?;
+        .map_err(Error::Config)?;
 
     // Read the current turbo.json file
-    let mut raw_turbo_json = match RawTurboJson::read(repo_root, &turbo_json_path)? {
-        Some(turbo_json) => turbo_json,
-        None => RawTurboJson::default(),
-    };
+    let mut raw_turbo_json: crate::turbo_json::RawTurboJson =
+        (RawTurboJson::read(repo_root, &turbo_json_path)?).unwrap_or_default();
 
     // Update the deps_sync configuration
     raw_turbo_json.deps_sync = Some(config.clone());
@@ -1394,6 +1381,7 @@ mod tests {
     #[test]
     fn test_extract_package_name_fallback() {
         use turbopath::AbsoluteSystemPath;
+        use turborepo_errors::Spanned;
 
         // Test with package.json without name
         let package_json = PackageJson {
