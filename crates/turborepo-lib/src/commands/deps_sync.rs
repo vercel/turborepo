@@ -4,6 +4,7 @@ use biome_deserialize_macros::Deserializable;
 use serde_json::Value;
 use thiserror::Error;
 use turbopath::AbsoluteSystemPath;
+use turborepo_errors::Spanned;
 use turborepo_repository::{
     discovery::{
         DiscoveryResponse, LocalPackageDiscoveryBuilder, PackageDiscovery, PackageDiscoveryBuilder,
@@ -73,7 +74,9 @@ pub struct DepsSyncConfig {
     pub include_optional_dependencies: bool,
 }
 
-#[derive(Debug, Clone, Default, Deserializable, serde::Deserialize, serde::Serialize)]
+#[derive(
+    Debug, Clone, Default, PartialEq, Deserializable, serde::Deserialize, serde::Serialize,
+)]
 #[serde(rename_all = "camelCase")]
 pub struct PinnedDependency {
     /// The version to pin this dependency to
@@ -85,7 +88,9 @@ pub struct PinnedDependency {
     pub exceptions: Vec<String>,
 }
 
-#[derive(Debug, Clone, Default, Deserializable, serde::Deserialize, serde::Serialize)]
+#[derive(
+    Debug, Clone, Default, PartialEq, Deserializable, serde::Deserialize, serde::Serialize,
+)]
 #[serde(rename_all = "camelCase")]
 pub struct IgnoredDependency {
     /// Packages where this dependency should be ignored
@@ -613,8 +618,8 @@ fn filter_ignored_packages(
         usages
             .into_iter()
             .filter(|usage| {
-                // Keep packages that are NOT in the exceptions list (i.e., not ignored)
-                !exception_set.contains(&usage.package_name)
+                // Keep packages that ARE in the exceptions list (i.e., should not be ignored)
+                exception_set.contains(&usage.package_name)
             })
             .collect()
     } else {
@@ -837,4 +842,697 @@ async fn write_allowlist_config(
     })?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::*;
+
+    // Helper function to create test dependency info
+    fn create_dependency_info(
+        package_name: &str,
+        package_path: &str,
+        dependency_name: &str,
+        version: &str,
+        dependency_type: DependencyType,
+    ) -> DependencyInfo {
+        DependencyInfo {
+            package_name: package_name.to_string(),
+            package_path: package_path.to_string(),
+            dependency_name: dependency_name.to_string(),
+            version: version.to_string(),
+            dependency_type,
+        }
+    }
+
+    // Helper function to create optimized config
+    fn create_optimized_config(config: DepsSyncConfig) -> OptimizedConfig {
+        OptimizedConfig::from(config)
+    }
+
+    #[test]
+    fn test_deps_sync_config_default() {
+        let config = DepsSyncConfig::default();
+        assert!(config.pinned_dependencies.is_empty());
+        assert!(config.ignored_dependencies.is_empty());
+        assert!(!config.include_optional_dependencies);
+    }
+
+    #[test]
+    fn test_optimized_config_conversion() {
+        let mut config = DepsSyncConfig::default();
+        config.pinned_dependencies.insert(
+            "react".to_string(),
+            PinnedDependency {
+                version: "18.0.0".to_string(),
+                exceptions: vec!["package-a".to_string()],
+            },
+        );
+        config.ignored_dependencies.insert(
+            "lodash".to_string(),
+            IgnoredDependency {
+                exceptions: vec!["package-b".to_string()],
+            },
+        );
+
+        let optimized = OptimizedConfig::from(config.clone());
+        assert!(optimized.pinned_dependency_names.contains("react"));
+        assert_eq!(
+            optimized.pinned_exception_sets.get("react").unwrap(),
+            &["package-a".to_string()].into_iter().collect()
+        );
+        assert_eq!(
+            optimized.ignored_exception_sets.get("lodash").unwrap(),
+            &["package-b".to_string()].into_iter().collect()
+        );
+
+        let back_to_config = DepsSyncConfig::from(optimized);
+        assert_eq!(
+            config.pinned_dependencies,
+            back_to_config.pinned_dependencies
+        );
+        assert_eq!(
+            config.ignored_dependencies,
+            back_to_config.ignored_dependencies
+        );
+    }
+
+    #[test]
+    fn test_extract_dependencies_from_json_basic() {
+        let json = json!({
+            "dependencies": {
+                "react": "18.0.0",
+                "lodash": "4.17.21"
+            },
+            "devDependencies": {
+                "typescript": "5.0.0"
+            }
+        });
+
+        let config = create_optimized_config(DepsSyncConfig::default());
+        let deps = extract_dependencies_from_json(&json, "test-package", "./test", &config);
+
+        assert_eq!(deps.len(), 3);
+
+        let react_dep = deps.iter().find(|d| d.dependency_name == "react").unwrap();
+        assert_eq!(react_dep.version, "18.0.0");
+        assert_eq!(react_dep.dependency_type, DependencyType::Dependencies);
+
+        let typescript_dep = deps
+            .iter()
+            .find(|d| d.dependency_name == "typescript")
+            .unwrap();
+        assert_eq!(
+            typescript_dep.dependency_type,
+            DependencyType::DevDependencies
+        );
+    }
+
+    #[test]
+    fn test_extract_dependencies_with_optional_dependencies() {
+        let json = json!({
+            "dependencies": {
+                "react": "18.0.0"
+            },
+            "optionalDependencies": {
+                "fsevents": "2.3.2"
+            }
+        });
+
+        // Test without including optional dependencies
+        let config_without_optional = create_optimized_config(DepsSyncConfig::default());
+        let deps_without = extract_dependencies_from_json(
+            &json,
+            "test-package",
+            "./test",
+            &config_without_optional,
+        );
+        assert_eq!(deps_without.len(), 1);
+        assert!(deps_without.iter().all(|d| d.dependency_name != "fsevents"));
+
+        // Test with including optional dependencies
+        let mut config_with_optional = DepsSyncConfig::default();
+        config_with_optional.include_optional_dependencies = true;
+        let config_with_optional = create_optimized_config(config_with_optional);
+        let deps_with =
+            extract_dependencies_from_json(&json, "test-package", "./test", &config_with_optional);
+        assert_eq!(deps_with.len(), 2);
+
+        let fsevents_dep = deps_with
+            .iter()
+            .find(|d| d.dependency_name == "fsevents")
+            .unwrap();
+        assert_eq!(
+            fsevents_dep.dependency_type,
+            DependencyType::OptionalDependencies
+        );
+    }
+
+    #[test]
+    fn test_should_ignore_dependency() {
+        let mut config = DepsSyncConfig::default();
+        config.ignored_dependencies.insert(
+            "test-lib".to_string(),
+            IgnoredDependency {
+                exceptions: vec!["package-a".to_string()],
+            },
+        );
+        let optimized_config = create_optimized_config(config);
+
+        let dep_in_exception = create_dependency_info(
+            "package-a",
+            "./package-a",
+            "test-lib",
+            "1.0.0",
+            DependencyType::Dependencies,
+        );
+        let dep_not_in_exception = create_dependency_info(
+            "package-b",
+            "./package-b",
+            "test-lib",
+            "1.0.0",
+            DependencyType::Dependencies,
+        );
+        let dep_not_ignored = create_dependency_info(
+            "package-c",
+            "./package-c",
+            "other-lib",
+            "1.0.0",
+            DependencyType::Dependencies,
+        );
+
+        // Package in exception should NOT be ignored
+        assert!(!should_ignore_dependency(
+            &dep_in_exception,
+            &optimized_config
+        ));
+
+        // Package not in exception should be ignored
+        assert!(should_ignore_dependency(
+            &dep_not_in_exception,
+            &optimized_config
+        ));
+
+        // Dependency not in ignored list should not be ignored
+        assert!(!should_ignore_dependency(
+            &dep_not_ignored,
+            &optimized_config
+        ));
+    }
+
+    #[test]
+    fn test_is_exempt_from_pinned_dependency() {
+        let mut config = DepsSyncConfig::default();
+        config.pinned_dependencies.insert(
+            "react".to_string(),
+            PinnedDependency {
+                version: "18.0.0".to_string(),
+                exceptions: vec!["legacy-package".to_string()],
+            },
+        );
+        let optimized_config = create_optimized_config(config);
+
+        let exempt_dep = create_dependency_info(
+            "legacy-package",
+            "./legacy",
+            "react",
+            "17.0.0",
+            DependencyType::Dependencies,
+        );
+        let non_exempt_dep = create_dependency_info(
+            "modern-package",
+            "./modern",
+            "react",
+            "17.0.0",
+            DependencyType::Dependencies,
+        );
+
+        assert!(is_exempt_from_pinned_dependency(
+            &exempt_dep,
+            &optimized_config
+        ));
+        assert!(!is_exempt_from_pinned_dependency(
+            &non_exempt_dep,
+            &optimized_config
+        ));
+    }
+
+    #[test]
+    fn test_find_version_conflicts_simple() {
+        let dependencies = vec![
+            create_dependency_info(
+                "pkg-a",
+                "./pkg-a",
+                "lodash",
+                "4.17.20",
+                DependencyType::Dependencies,
+            ),
+            create_dependency_info(
+                "pkg-b",
+                "./pkg-b",
+                "lodash",
+                "4.17.21",
+                DependencyType::Dependencies,
+            ),
+            create_dependency_info(
+                "pkg-c",
+                "./pkg-c",
+                "react",
+                "18.0.0",
+                DependencyType::Dependencies,
+            ),
+            create_dependency_info(
+                "pkg-d",
+                "./pkg-d",
+                "react",
+                "18.0.0",
+                DependencyType::Dependencies,
+            ),
+        ];
+
+        let config = create_optimized_config(DepsSyncConfig::default());
+        let conflicts = find_version_conflicts(&dependencies, &config);
+
+        assert_eq!(conflicts.len(), 1);
+        let lodash_conflict = &conflicts[0];
+        assert_eq!(lodash_conflict.dependency_name, "lodash");
+        assert_eq!(lodash_conflict.conflicting_packages.len(), 2);
+        assert!(lodash_conflict.conflict_reason.is_none());
+    }
+
+    #[test]
+    fn test_find_version_conflicts_with_ignored_dependencies() {
+        let dependencies = vec![
+            create_dependency_info(
+                "pkg-a",
+                "./pkg-a",
+                "lodash",
+                "4.17.20",
+                DependencyType::Dependencies,
+            ),
+            create_dependency_info(
+                "pkg-b",
+                "./pkg-b",
+                "lodash",
+                "4.17.21",
+                DependencyType::Dependencies,
+            ),
+            create_dependency_info(
+                "pkg-c",
+                "./pkg-c",
+                "lodash",
+                "4.17.22",
+                DependencyType::Dependencies,
+            ),
+        ];
+
+        let mut config = DepsSyncConfig::default();
+        config.ignored_dependencies.insert(
+            "lodash".to_string(),
+            IgnoredDependency {
+                exceptions: vec!["pkg-a".to_string(), "pkg-b".to_string()],
+            },
+        );
+        let optimized_config = create_optimized_config(config);
+
+        let conflicts = find_version_conflicts(&dependencies, &optimized_config);
+
+        // Should find conflict between pkg-a and pkg-b (they are exceptions so not
+        // ignored) pkg-c is ignored completely, so no conflict involving it
+        assert_eq!(conflicts.len(), 1);
+        let lodash_conflict = &conflicts[0];
+        assert_eq!(lodash_conflict.conflicting_packages.len(), 2);
+        assert!(lodash_conflict
+            .conflicting_packages
+            .iter()
+            .any(|p| p.package_name == "pkg-a"));
+        assert!(lodash_conflict
+            .conflicting_packages
+            .iter()
+            .any(|p| p.package_name == "pkg-b"));
+        assert!(!lodash_conflict
+            .conflicting_packages
+            .iter()
+            .any(|p| p.package_name == "pkg-c"));
+    }
+
+    #[test]
+    fn test_find_pinned_version_conflicts() {
+        let dependencies = vec![
+            create_dependency_info(
+                "pkg-a",
+                "./pkg-a",
+                "react",
+                "17.0.0",
+                DependencyType::Dependencies,
+            ),
+            create_dependency_info(
+                "pkg-b",
+                "./pkg-b",
+                "react",
+                "18.0.0",
+                DependencyType::Dependencies,
+            ),
+            create_dependency_info(
+                "pkg-c",
+                "./pkg-c",
+                "react",
+                "16.0.0",
+                DependencyType::Dependencies,
+            ),
+        ];
+
+        let mut config = DepsSyncConfig::default();
+        config.pinned_dependencies.insert(
+            "react".to_string(),
+            PinnedDependency {
+                version: "18.0.0".to_string(),
+                exceptions: vec![],
+            },
+        );
+        let optimized_config = create_optimized_config(config);
+
+        let conflicts = find_pinned_version_conflicts(&dependencies, &optimized_config);
+
+        assert_eq!(conflicts.len(), 1);
+        let react_conflict = &conflicts[0];
+        assert_eq!(react_conflict.dependency_name, "react");
+        assert_eq!(react_conflict.conflicting_packages.len(), 2);
+
+        // Should include pkg-a and pkg-c (wrong versions), but not pkg-b (correct
+        // version)
+        assert!(react_conflict
+            .conflicting_packages
+            .iter()
+            .any(|p| p.package_name == "pkg-a"));
+        assert!(react_conflict
+            .conflicting_packages
+            .iter()
+            .any(|p| p.package_name == "pkg-c"));
+        assert!(!react_conflict
+            .conflicting_packages
+            .iter()
+            .any(|p| p.package_name == "pkg-b"));
+
+        assert!(react_conflict.conflict_reason.is_some());
+        assert!(react_conflict
+            .conflict_reason
+            .as_ref()
+            .unwrap()
+            .contains("pinned to 18.0.0"));
+    }
+
+    #[test]
+    fn test_find_pinned_version_conflicts_with_exceptions() {
+        let dependencies = vec![
+            create_dependency_info(
+                "pkg-a",
+                "./pkg-a",
+                "react",
+                "17.0.0",
+                DependencyType::Dependencies,
+            ),
+            create_dependency_info(
+                "pkg-b",
+                "./pkg-b",
+                "react",
+                "18.0.0",
+                DependencyType::Dependencies,
+            ),
+            create_dependency_info(
+                "legacy-pkg",
+                "./legacy",
+                "react",
+                "16.0.0",
+                DependencyType::Dependencies,
+            ),
+        ];
+
+        let mut config = DepsSyncConfig::default();
+        config.pinned_dependencies.insert(
+            "react".to_string(),
+            PinnedDependency {
+                version: "18.0.0".to_string(),
+                exceptions: vec!["legacy-pkg".to_string()],
+            },
+        );
+        let optimized_config = create_optimized_config(config);
+
+        let conflicts = find_pinned_version_conflicts(&dependencies, &optimized_config);
+
+        assert_eq!(conflicts.len(), 1);
+        let react_conflict = &conflicts[0];
+
+        // Should only include pkg-a (legacy-pkg is exempt)
+        assert_eq!(react_conflict.conflicting_packages.len(), 1);
+        assert_eq!(react_conflict.conflicting_packages[0].package_name, "pkg-a");
+    }
+
+    #[test]
+    fn test_generate_allowlist_config_for_version_conflicts() {
+        let conflicts = vec![DependencyConflict {
+            dependency_name: "lodash".to_string(),
+            conflicting_packages: vec![
+                DependencyUsage {
+                    package_name: "pkg-a".to_string(),
+                    version: "4.17.20".to_string(),
+                    package_path: "./pkg-a".to_string(),
+                },
+                DependencyUsage {
+                    package_name: "pkg-b".to_string(),
+                    version: "4.17.21".to_string(),
+                    package_path: "./pkg-b".to_string(),
+                },
+            ],
+            conflict_reason: None,
+        }];
+
+        let current_config = DepsSyncConfig::default();
+        let allowlist_config = generate_allowlist_config(&conflicts, &current_config);
+
+        assert_eq!(allowlist_config.ignored_dependencies.len(), 1);
+        let lodash_ignored = allowlist_config.ignored_dependencies.get("lodash").unwrap();
+        assert_eq!(lodash_ignored.exceptions.len(), 2);
+        assert!(lodash_ignored.exceptions.contains(&"pkg-a".to_string()));
+        assert!(lodash_ignored.exceptions.contains(&"pkg-b".to_string()));
+    }
+
+    #[test]
+    fn test_generate_allowlist_config_for_pinned_conflicts() {
+        let conflicts = vec![DependencyConflict {
+            dependency_name: "react".to_string(),
+            conflicting_packages: vec![DependencyUsage {
+                package_name: "pkg-a".to_string(),
+                version: "17.0.0".to_string(),
+                package_path: "./pkg-a".to_string(),
+            }],
+            conflict_reason: Some("pinned to 18.0.0".to_string()),
+        }];
+
+        let mut current_config = DepsSyncConfig::default();
+        current_config.pinned_dependencies.insert(
+            "react".to_string(),
+            PinnedDependency {
+                version: "18.0.0".to_string(),
+                exceptions: vec![],
+            },
+        );
+
+        let allowlist_config = generate_allowlist_config(&conflicts, &current_config);
+
+        assert_eq!(allowlist_config.pinned_dependencies.len(), 1);
+        let react_pinned = allowlist_config.pinned_dependencies.get("react").unwrap();
+        assert_eq!(react_pinned.version, "18.0.0");
+        assert_eq!(react_pinned.exceptions.len(), 1);
+        assert!(react_pinned.exceptions.contains(&"pkg-a".to_string()));
+    }
+
+    #[test]
+    fn test_generate_allowlist_config_preserves_existing_config() {
+        let conflicts = vec![];
+
+        let mut current_config = DepsSyncConfig::default();
+        current_config.pinned_dependencies.insert(
+            "vue".to_string(),
+            PinnedDependency {
+                version: "3.0.0".to_string(),
+                exceptions: vec!["legacy-vue-pkg".to_string()],
+            },
+        );
+        current_config.ignored_dependencies.insert(
+            "moment".to_string(),
+            IgnoredDependency {
+                exceptions: vec!["time-pkg".to_string()],
+            },
+        );
+
+        let allowlist_config = generate_allowlist_config(&conflicts, &current_config);
+
+        // Should preserve existing configuration even with no conflicts
+        assert_eq!(allowlist_config.pinned_dependencies.len(), 1);
+        assert_eq!(allowlist_config.ignored_dependencies.len(), 1);
+        assert_eq!(
+            allowlist_config
+                .pinned_dependencies
+                .get("vue")
+                .unwrap()
+                .version,
+            "3.0.0"
+        );
+        assert_eq!(
+            allowlist_config
+                .ignored_dependencies
+                .get("moment")
+                .unwrap()
+                .exceptions,
+            vec!["time-pkg".to_string()]
+        );
+    }
+
+    #[test]
+    fn test_extract_package_name_fallback() {
+        use turbopath::AbsoluteSystemPath;
+
+        // Test with package.json without name
+        let package_json = PackageJson {
+            name: None,
+            ..Default::default()
+        };
+
+        let path = AbsoluteSystemPath::new("/test/my-package/package.json").unwrap();
+        let name = extract_package_name(&package_json, path);
+        assert_eq!(name, "my-package");
+
+        // Test with package.json with name
+        let package_json = PackageJson {
+            name: Some(Spanned::new("@scope/actual-name".to_string())),
+            ..Default::default()
+        };
+
+        let name = extract_package_name(&package_json, path);
+        assert_eq!(name, "@scope/actual-name");
+    }
+
+    #[test]
+    fn test_group_packages_by_version() {
+        let packages = vec![
+            DependencyUsage {
+                package_name: "pkg-a".to_string(),
+                version: "1.0.0".to_string(),
+                package_path: "./pkg-a".to_string(),
+            },
+            DependencyUsage {
+                package_name: "pkg-b".to_string(),
+                version: "1.0.0".to_string(),
+                package_path: "./pkg-b".to_string(),
+            },
+            DependencyUsage {
+                package_name: "pkg-c".to_string(),
+                version: "2.0.0".to_string(),
+                package_path: "./pkg-c".to_string(),
+            },
+        ];
+
+        let groups = group_packages_by_version(&packages);
+
+        assert_eq!(groups.len(), 2);
+        assert_eq!(groups.get("1.0.0").unwrap().len(), 2);
+        assert_eq!(groups.get("2.0.0").unwrap().len(), 1);
+
+        let v1_packages = groups.get("1.0.0").unwrap();
+        assert!(v1_packages.contains(&("pkg-a".to_string(), "./pkg-a".to_string())));
+        assert!(v1_packages.contains(&("pkg-b".to_string(), "./pkg-b".to_string())));
+    }
+
+    #[test]
+    fn test_dependency_type_display() {
+        assert_eq!(DependencyType::Dependencies.to_string(), "dependencies");
+        assert_eq!(
+            DependencyType::DevDependencies.to_string(),
+            "devDependencies"
+        );
+        assert_eq!(
+            DependencyType::OptionalDependencies.to_string(),
+            "optionalDependencies"
+        );
+    }
+
+    #[test]
+    fn test_build_dependency_usage_map_excludes_pinned() {
+        let dependencies = vec![
+            create_dependency_info(
+                "pkg-a",
+                "./pkg-a",
+                "react",
+                "18.0.0",
+                DependencyType::Dependencies,
+            ),
+            create_dependency_info(
+                "pkg-b",
+                "./pkg-b",
+                "lodash",
+                "4.17.21",
+                DependencyType::Dependencies,
+            ),
+        ];
+
+        let mut config = DepsSyncConfig::default();
+        config.pinned_dependencies.insert(
+            "react".to_string(),
+            PinnedDependency {
+                version: "18.0.0".to_string(),
+                exceptions: vec![],
+            },
+        );
+        let optimized_config = create_optimized_config(config);
+
+        let usage_map = build_dependency_usage_map(&dependencies, &optimized_config);
+
+        // Should only include lodash, not react (since react is pinned)
+        assert_eq!(usage_map.len(), 1);
+        assert!(usage_map.contains_key("lodash"));
+        assert!(!usage_map.contains_key("react"));
+    }
+
+    #[test]
+    fn test_filter_ignored_packages() {
+        let usages = vec![
+            DependencyUsage {
+                package_name: "pkg-a".to_string(),
+                version: "1.0.0".to_string(),
+                package_path: "./pkg-a".to_string(),
+            },
+            DependencyUsage {
+                package_name: "pkg-b".to_string(),
+                version: "1.0.0".to_string(),
+                package_path: "./pkg-b".to_string(),
+            },
+            DependencyUsage {
+                package_name: "pkg-c".to_string(),
+                version: "1.0.0".to_string(),
+                package_path: "./pkg-c".to_string(),
+            },
+        ];
+
+        let mut config = DepsSyncConfig::default();
+        config.ignored_dependencies.insert(
+            "test-dep".to_string(),
+            IgnoredDependency {
+                exceptions: vec!["pkg-a".to_string(), "pkg-b".to_string()],
+            },
+        );
+        let optimized_config = create_optimized_config(config);
+
+        let filtered = filter_ignored_packages("test-dep".to_string(), usages, &optimized_config);
+
+        // Should keep packages that are in the exception set (should not be ignored)
+        // pkg-a and pkg-b are in the exception set, so they should be kept
+        // pkg-c is not in the exception set, so it should be filtered out
+        assert_eq!(filtered.len(), 2);
+        assert!(filtered.iter().any(|u| u.package_name == "pkg-a"));
+        assert!(filtered.iter().any(|u| u.package_name == "pkg-b"));
+        assert!(!filtered.iter().any(|u| u.package_name == "pkg-c"));
+    }
 }
