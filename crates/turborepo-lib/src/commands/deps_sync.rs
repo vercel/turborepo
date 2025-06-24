@@ -15,14 +15,32 @@ use turborepo_ui::ColorConfig;
 use super::CommandBase;
 use crate::turbo_json::RawTurboJson;
 
+// Constants for better maintainability
+const DEPENDENCY_TYPES: [&str; 3] = ["dependencies", "devDependencies", "optionalDependencies"];
+const SUCCESS_PREFIX: &str = "✅";
+const ERROR_PREFIX: &str = "❌";
+const SCANNING_MESSAGE: &str = "🔍 Scanning workspace packages for dependency conflicts...";
+
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("Failed to read package.json: {0}")]
-    PackageJsonRead(#[from] turborepo_repository::package_json::Error),
-    #[error("Failed to read file: {0}")]
-    FileRead(#[from] std::io::Error),
-    #[error("Failed to parse JSON: {0}")]
-    JsonParse(#[from] serde_json::Error),
+    #[error("Failed to read package.json at {path}: {source}")]
+    PackageJsonRead {
+        path: String,
+        #[source]
+        source: turborepo_repository::package_json::Error,
+    },
+    #[error("Failed to read file at {path}: {source}")]
+    FileRead {
+        path: String,
+        #[source]
+        source: std::io::Error,
+    },
+    #[error("Failed to parse JSON in {path}: {source}")]
+    JsonParse {
+        path: String,
+        #[source]
+        source: serde_json::Error,
+    },
     #[error("Failed to discover packages: {0}")]
     Discovery(#[from] turborepo_repository::discovery::Error),
     #[error("Failed to resolve package manager: {0}")]
@@ -86,7 +104,7 @@ struct DependencyInfo {
     package_path: String,
     dependency_name: String,
     version: String,
-    dep_type: DependencyType,
+    dependency_type: DependencyType,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -120,72 +138,96 @@ struct DependencyConflict {
     conflict_reason: Option<String>,
 }
 
+/// Performance optimization: Create lookup sets for faster exception checking
+#[derive(Debug)]
+struct OptimizedConfig {
+    pinned_dependencies: HashMap<String, PinnedDependency>,
+    ignored_dependencies: HashMap<String, IgnoredDependency>,
+    // Optimized lookup sets
+    pinned_dependency_names: HashSet<String>,
+    ignored_exception_sets: HashMap<String, HashSet<String>>,
+    pinned_exception_sets: HashMap<String, HashSet<String>>,
+}
+
+impl From<DepsSyncConfig> for OptimizedConfig {
+    fn from(config: DepsSyncConfig) -> Self {
+        let pinned_dependency_names = config.pinned_dependencies.keys().cloned().collect();
+
+        let ignored_exception_sets = config
+            .ignored_dependencies
+            .iter()
+            .map(|(dep_name, ignored_dep)| {
+                (
+                    dep_name.clone(),
+                    ignored_dep.exceptions.iter().cloned().collect(),
+                )
+            })
+            .collect();
+
+        let pinned_exception_sets = config
+            .pinned_dependencies
+            .iter()
+            .map(|(dep_name, pinned_dep)| {
+                (
+                    dep_name.clone(),
+                    pinned_dep.exceptions.iter().cloned().collect(),
+                )
+            })
+            .collect();
+
+        Self {
+            pinned_dependencies: config.pinned_dependencies,
+            ignored_dependencies: config.ignored_dependencies,
+            pinned_dependency_names,
+            ignored_exception_sets,
+            pinned_exception_sets,
+        }
+    }
+}
+
+impl From<OptimizedConfig> for DepsSyncConfig {
+    fn from(config: OptimizedConfig) -> Self {
+        Self {
+            pinned_dependencies: config.pinned_dependencies,
+            ignored_dependencies: config.ignored_dependencies,
+        }
+    }
+}
+
 pub async fn run(base: &CommandBase, allowlist: bool) -> Result<i32, Error> {
     let color_config = base.color_config;
 
-    println!("🔍 Scanning workspace packages for dependency conflicts...");
+    println!("{}", SCANNING_MESSAGE);
 
-    let config = load_deps_sync_config(&base.repo_root).await?;
+    let deps_sync_config = load_deps_sync_config(&base.repo_root).await?;
+    let optimized_config = OptimizedConfig::from(deps_sync_config);
 
-    // Check if this is a single-package workspace
-    let discovery =
-        LocalPackageDiscoveryBuilder::new(base.repo_root.to_owned(), None, None).build()?;
-    let workspace_response = discovery.discover_packages().await?;
+    // Validate workspace has multiple packages
+    let workspace_response = discover_workspace_packages(&base.repo_root).await?;
+    validate_multi_package_workspace(&workspace_response)?;
 
-    if workspace_response.workspaces.len() <= 1 {
-        return Err(Error::SinglePackageWorkspace);
-    }
+    // Print configuration summary
+    print_configuration_summary(&optimized_config, color_config);
 
-    // Print ignored dependencies count if any exist
-    if !config.ignored_dependencies.is_empty() {
-        let ignored_count = config.ignored_dependencies.len();
-        let dependency_word = if ignored_count == 1 {
-            "dependency"
-        } else {
-            "dependencies"
-        };
-        let message = format!(
-            "→ {} ignored {} in `turbo.json`",
-            ignored_count, dependency_word
-        );
+    // Collect and analyze dependencies
+    let all_dependencies = collect_all_dependencies(&base.repo_root, workspace_response).await?;
+    let version_conflicts = find_version_conflicts(&all_dependencies, &optimized_config);
+    let pinned_conflicts = find_pinned_version_conflicts(&all_dependencies, &optimized_config);
 
-        if color_config.should_strip_ansi {
-            println!("{}", message);
-        } else {
-            use turborepo_ui::GREY;
-            println!("{}", GREY.apply_to(&message));
-        }
-    }
+    let all_conflicts: Vec<_> = version_conflicts
+        .into_iter()
+        .chain(pinned_conflicts)
+        .collect();
 
-    println!();
-
-    let all_deps = collect_all_dependencies(&base.repo_root, workspace_response).await?;
-    let conflicts = find_dependency_conflicts(&all_deps, &config);
-    let pinned_conflicts = find_pinned_version_conflicts(&all_deps, &config);
-
-    let all_conflicts: Vec<_> = conflicts.into_iter().chain(pinned_conflicts).collect();
-
-    if all_conflicts.is_empty() {
-        print_success("✅ All dependencies are in sync!", color_config);
-        Ok(0)
-    } else if allowlist {
-        // Generate allowlist configuration instead of reporting conflicts
-        let allowlist_config = generate_allowlist_config(&all_conflicts, &config);
-        write_allowlist_config(&base.repo_root, &allowlist_config).await?;
-
-        print_success(
-            &format!(
-                "✅ Generated allowlist configuration for {} conflicts in turbo.json. \
-                 Dependencies are now synchronized!",
-                all_conflicts.len()
-            ),
-            color_config,
-        );
-        Ok(0)
-    } else {
-        print_conflicts(&all_conflicts, color_config);
-        Ok(1)
-    }
+    // Handle results
+    handle_analysis_results(
+        all_conflicts,
+        allowlist,
+        &base.repo_root,
+        &optimized_config.into(),
+        color_config,
+    )
+    .await
 }
 
 async fn load_deps_sync_config(repo_root: &AbsoluteSystemPath) -> Result<DepsSyncConfig, Error> {
@@ -202,165 +244,257 @@ async fn load_deps_sync_config(repo_root: &AbsoluteSystemPath) -> Result<DepsSyn
     Ok(raw_turbo_json.deps_sync.unwrap_or_default())
 }
 
+async fn discover_workspace_packages(
+    repo_root: &AbsoluteSystemPath,
+) -> Result<DiscoveryResponse, Error> {
+    let discovery = LocalPackageDiscoveryBuilder::new(repo_root.to_owned(), None, None).build()?;
+    discovery
+        .discover_packages()
+        .await
+        .map_err(Error::Discovery)
+}
+
+fn validate_multi_package_workspace(workspace_response: &DiscoveryResponse) -> Result<(), Error> {
+    if workspace_response.workspaces.len() <= 1 {
+        return Err(Error::SinglePackageWorkspace);
+    }
+    Ok(())
+}
+
+fn print_configuration_summary(config: &OptimizedConfig, color_config: ColorConfig) {
+    if !config.ignored_dependencies.is_empty() {
+        let ignored_count = config.ignored_dependencies.len();
+        let dependency_word = if ignored_count == 1 {
+            "dependency"
+        } else {
+            "dependencies"
+        };
+        let message = format!(
+            "→ {} ignored {} in `turbo.json`",
+            ignored_count, dependency_word
+        );
+
+        print_colored_message(&message, color_config, MessageType::Info);
+    }
+    println!();
+}
+
+enum MessageType {
+    Success,
+    Error,
+    Info,
+}
+
+fn print_colored_message(message: &str, color_config: ColorConfig, message_type: MessageType) {
+    if color_config.should_strip_ansi {
+        println!("{}", message);
+    } else {
+        use turborepo_ui::{BOLD_GREEN, BOLD_RED, GREY};
+        let styled_message = match message_type {
+            MessageType::Success => format!("{}", BOLD_GREEN.apply_to(message)),
+            MessageType::Error => format!("{}", BOLD_RED.apply_to(message)),
+            MessageType::Info => format!("{}", GREY.apply_to(message)),
+        };
+        println!("{}", styled_message);
+    }
+}
+
+async fn handle_analysis_results(
+    conflicts: Vec<DependencyConflict>,
+    allowlist: bool,
+    repo_root: &AbsoluteSystemPath,
+    config: &DepsSyncConfig,
+    color_config: ColorConfig,
+) -> Result<i32, Error> {
+    if conflicts.is_empty() {
+        print_colored_message(
+            "✅ All dependencies are in sync!",
+            color_config,
+            MessageType::Success,
+        );
+        Ok(0)
+    } else if allowlist {
+        generate_and_write_allowlist(conflicts, repo_root, config, color_config).await
+    } else {
+        print_conflicts(&conflicts, color_config);
+        Ok(1)
+    }
+}
+
+async fn generate_and_write_allowlist(
+    conflicts: Vec<DependencyConflict>,
+    repo_root: &AbsoluteSystemPath,
+    current_config: &DepsSyncConfig,
+    color_config: ColorConfig,
+) -> Result<i32, Error> {
+    let allowlist_config = generate_allowlist_config(&conflicts, current_config);
+    write_allowlist_config(repo_root, &allowlist_config).await?;
+
+    let success_message = format!(
+        "✅ Generated allowlist configuration for {} conflicts in turbo.json. Dependencies are \
+         now synchronized!",
+        conflicts.len()
+    );
+    print_colored_message(&success_message, color_config, MessageType::Success);
+    Ok(0)
+}
+
 async fn collect_all_dependencies(
     repo_root: &AbsoluteSystemPath,
     workspace_response: DiscoveryResponse,
 ) -> Result<Vec<DependencyInfo>, Error> {
-    let mut all_deps = Vec::new();
+    let mut all_dependencies = Vec::new();
 
-    // Process each workspace package
     for workspace_data in workspace_response.workspaces {
-        let package_json_path = &workspace_data.package_json;
+        let package_dependencies =
+            collect_package_dependencies(repo_root, &workspace_data.package_json).await?;
+        all_dependencies.extend(package_dependencies);
+    }
 
-        if let Ok(package_json) = PackageJson::load(package_json_path) {
-            let package_name = package_json
-                .name
-                .as_ref()
-                .map(|s| s.as_str().to_string())
-                .unwrap_or_else(|| {
-                    // Use directory name as fallback
-                    package_json_path
-                        .parent()
-                        .unwrap()
-                        .file_name()
-                        .unwrap_or("unknown")
-                        .to_string()
-                });
+    Ok(all_dependencies)
+}
 
-            // Convert absolute path to relative path from repo root
-            let relative_package_path = repo_root
-                .anchor(package_json_path.parent().unwrap())
-                .map(|p| p.to_string())
-                .unwrap_or_else(|_| package_json_path.parent().unwrap().to_string());
+async fn collect_package_dependencies(
+    repo_root: &AbsoluteSystemPath,
+    package_json_path: &AbsoluteSystemPath,
+) -> Result<Vec<DependencyInfo>, Error> {
+    let package_json =
+        PackageJson::load(package_json_path).map_err(|e| Error::PackageJsonRead {
+            path: package_json_path.to_string(),
+            source: e,
+        })?;
 
-            // Read raw JSON to get all dependency types
-            let raw_content = std::fs::read_to_string(package_json_path)?;
-            let raw_json: Value = serde_json::from_str(&raw_content)?;
+    let package_name = extract_package_name(&package_json, package_json_path);
+    let relative_package_path = calculate_relative_path(repo_root, package_json_path);
 
-            // Extract dependencies of each type
-            if let Some(deps) = raw_json.get("dependencies").and_then(|v| v.as_object()) {
-                for (dep_name, version) in deps {
-                    if let Some(version_str) = version.as_str() {
-                        all_deps.push(DependencyInfo {
-                            package_name: package_name.clone(),
-                            package_path: relative_package_path.clone(),
-                            dependency_name: dep_name.clone(),
-                            version: version_str.to_string(),
-                            dep_type: DependencyType::Dependencies,
-                        });
-                    }
-                }
-            }
+    let raw_content = std::fs::read_to_string(package_json_path).map_err(|e| Error::FileRead {
+        path: package_json_path.to_string(),
+        source: e,
+    })?;
 
-            if let Some(dev_deps) = raw_json.get("devDependencies").and_then(|v| v.as_object()) {
-                for (dep_name, version) in dev_deps {
-                    if let Some(version_str) = version.as_str() {
-                        all_deps.push(DependencyInfo {
-                            package_name: package_name.clone(),
-                            package_path: relative_package_path.clone(),
-                            dependency_name: dep_name.clone(),
-                            version: version_str.to_string(),
-                            dep_type: DependencyType::DevDependencies,
-                        });
-                    }
-                }
-            }
+    let raw_json: Value = serde_json::from_str(&raw_content).map_err(|e| Error::JsonParse {
+        path: package_json_path.to_string(),
+        source: e,
+    })?;
 
-            // Skip peerDependencies - they're meant to be provided by the consuming
-            // application and often intentionally have different version
-            // constraints
+    Ok(extract_dependencies_from_json(
+        &raw_json,
+        &package_name,
+        &relative_package_path,
+    ))
+}
 
-            if let Some(opt_deps) = raw_json
-                .get("optionalDependencies")
-                .and_then(|v| v.as_object())
-            {
-                for (dep_name, version) in opt_deps {
-                    if let Some(version_str) = version.as_str() {
-                        all_deps.push(DependencyInfo {
-                            package_name: package_name.clone(),
-                            package_path: relative_package_path.clone(),
-                            dependency_name: dep_name.clone(),
-                            version: version_str.to_string(),
-                            dep_type: DependencyType::OptionalDependencies,
-                        });
-                    }
+fn extract_package_name(
+    package_json: &PackageJson,
+    package_json_path: &AbsoluteSystemPath,
+) -> String {
+    package_json
+        .name
+        .as_ref()
+        .map(|s| s.as_str().to_string())
+        .unwrap_or_else(|| {
+            // Use directory name as fallback
+            package_json_path
+                .parent()
+                .unwrap()
+                .file_name()
+                .unwrap_or("unknown")
+                .to_string()
+        })
+}
+
+fn calculate_relative_path(
+    repo_root: &AbsoluteSystemPath,
+    package_json_path: &AbsoluteSystemPath,
+) -> String {
+    repo_root
+        .anchor(package_json_path.parent().unwrap())
+        .map(|p| p.to_string())
+        .unwrap_or_else(|_| package_json_path.parent().unwrap().to_string())
+}
+
+fn extract_dependencies_from_json(
+    raw_json: &Value,
+    package_name: &str,
+    relative_package_path: &str,
+) -> Vec<DependencyInfo> {
+    let mut dependencies = Vec::new();
+
+    for (field_name, dependency_type) in &[
+        ("dependencies", DependencyType::Dependencies),
+        ("devDependencies", DependencyType::DevDependencies),
+        ("optionalDependencies", DependencyType::OptionalDependencies),
+    ] {
+        if let Some(deps) = raw_json.get(field_name).and_then(|v| v.as_object()) {
+            for (dependency_name, version) in deps {
+                if let Some(version_str) = version.as_str() {
+                    dependencies.push(DependencyInfo {
+                        package_name: package_name.to_string(),
+                        package_path: relative_package_path.to_string(),
+                        dependency_name: dependency_name.clone(),
+                        version: version_str.to_string(),
+                        dependency_type: dependency_type.clone(),
+                    });
                 }
             }
         }
     }
 
-    Ok(all_deps)
+    dependencies
 }
 
-fn apply_configuration_filters(
-    dependencies: &[DependencyInfo],
-    config: &DepsSyncConfig,
-) -> Vec<DependencyInfo> {
-    dependencies
-        .iter()
-        .filter(|dep| {
-            // Check if this dependency should be ignored
-            if let Some(ignored_config) = config.ignored_dependencies.get(&dep.dependency_name) {
-                // If this package is NOT in the exceptions list, then ignore it
-                if !ignored_config.exceptions.contains(&dep.package_name) {
-                    return false;
-                }
-            }
+/// Check if a dependency should be ignored based on configuration
+fn should_ignore_dependency(dependency: &DependencyInfo, config: &OptimizedConfig) -> bool {
+    if let Some(exception_set) = config
+        .ignored_exception_sets
+        .get(&dependency.dependency_name)
+    {
+        // If package is in exceptions list, do NOT ignore it
+        !exception_set.contains(&dependency.package_name)
+    } else if config
+        .ignored_dependencies
+        .contains_key(&dependency.dependency_name)
+    {
+        // If dependency is in ignored list but no exceptions, ignore it
+        true
+    } else {
+        // Not in ignored list at all
+        false
+    }
+}
 
-            // Exclude pinned dependencies from regular conflict analysis
-            // They will be handled separately by find_pinned_version_conflicts
-            if config
-                .pinned_dependencies
-                .contains_key(&dep.dependency_name)
-            {
-                return false;
-            }
-
-            true
-        })
-        .cloned()
-        .collect()
+/// Check if a package is exempt from a pinned dependency
+fn is_exempt_from_pinned_dependency(dependency: &DependencyInfo, config: &OptimizedConfig) -> bool {
+    config
+        .pinned_exception_sets
+        .get(&dependency.dependency_name)
+        .map(|exception_set| exception_set.contains(&dependency.package_name))
+        .unwrap_or(false)
 }
 
 fn find_pinned_version_conflicts(
     dependencies: &[DependencyInfo],
-    config: &DepsSyncConfig,
+    config: &OptimizedConfig,
 ) -> Vec<DependencyConflict> {
     let mut conflicts = Vec::new();
 
-    for (dep_name, pinned_config) in &config.pinned_dependencies {
-        let mut conflicting_packages = Vec::new();
-
-        for dep in dependencies {
-            if dep.dependency_name == *dep_name {
-                // Check if this package is exempted from the pinned version
-                if pinned_config.exceptions.contains(&dep.package_name) {
-                    continue;
-                }
-
-                // Check if this dependency is ignored for this package
-                if let Some(ignored_config) = config.ignored_dependencies.get(&dep.dependency_name)
-                {
-                    // If this package IS in the exceptions list, then ignore it
-                    if ignored_config.exceptions.contains(&dep.package_name) {
-                        continue;
-                    }
-                }
-
-                // Check if the version matches the pinned version
-                if dep.version != pinned_config.version {
-                    conflicting_packages.push(DependencyUsage {
-                        package_name: dep.package_name.clone(),
-                        version: dep.version.clone(),
-                        package_path: dep.package_path.clone(),
-                    });
-                }
-            }
-        }
+    for (dependency_name, pinned_config) in &config.pinned_dependencies {
+        let conflicting_packages = dependencies
+            .iter()
+            .filter(|dep| dep.dependency_name == *dependency_name)
+            .filter(|dep| !is_exempt_from_pinned_dependency(dep, config))
+            .filter(|dep| !should_ignore_dependency(dep, config))
+            .filter(|dep| dep.version != pinned_config.version)
+            .map(|dep| DependencyUsage {
+                package_name: dep.package_name.clone(),
+                version: dep.version.clone(),
+                package_path: dep.package_path.clone(),
+            })
+            .collect::<Vec<_>>();
 
         if !conflicting_packages.is_empty() {
             conflicts.push(DependencyConflict {
-                dependency_name: dep_name.clone(),
+                dependency_name: dependency_name.clone(),
                 conflicting_packages,
                 conflict_reason: Some(format!("pinned to {}", pinned_config.version)),
             });
@@ -370,174 +504,219 @@ fn find_pinned_version_conflicts(
     conflicts
 }
 
-fn find_dependency_conflicts(
-    all_deps: &[DependencyInfo],
-    config: &DepsSyncConfig,
+fn find_version_conflicts(
+    all_dependencies: &[DependencyInfo],
+    config: &OptimizedConfig,
 ) -> Vec<DependencyConflict> {
-    let mut dependency_map: HashMap<String, Vec<DependencyUsage>> = HashMap::new();
-
-    // Group dependencies by name
-    for dep in all_deps {
-        // Skip pinned dependencies - they're handled separately
-        if config
-            .pinned_dependencies
-            .contains_key(&dep.dependency_name)
-        {
-            continue;
-        }
-
-        dependency_map
-            .entry(dep.dependency_name.clone())
-            .or_default()
-            .push(DependencyUsage {
-                package_name: dep.package_name.clone(),
-                version: dep.version.clone(),
-                package_path: dep.package_path.clone(),
-            });
-    }
-
+    let dependency_usage_map = build_dependency_usage_map(all_dependencies, config);
     let mut conflicts = Vec::new();
 
-    // Find conflicts (same dependency with different versions)
-    for (dep_name, usages) in dependency_map {
-        // Check if we have multiple different versions
-        let unique_versions: HashSet<&String> = usages.iter().map(|usage| &usage.version).collect();
-
-        if unique_versions.len() > 1 {
-            // Check if this dependency has ignored packages, and filter them out
-            let filtered_usages =
-                if let Some(ignored_config) = config.ignored_dependencies.get(&dep_name) {
-                    usages
-                        .into_iter()
-                        .filter(|usage| {
-                            // Keep packages that are NOT in the exceptions list (i.e., not ignored)
-                            !ignored_config.exceptions.contains(&usage.package_name)
-                        })
-                        .collect()
-                } else {
-                    usages
-                };
-
-            // Only create a conflict if we still have multiple versions after filtering
-            if filtered_usages.len() > 1 {
-                let unique_filtered_versions: HashSet<&String> =
-                    filtered_usages.iter().map(|usage| &usage.version).collect();
-
-                if unique_filtered_versions.len() > 1 {
-                    conflicts.push(DependencyConflict {
-                        dependency_name: dep_name,
-                        conflicting_packages: filtered_usages,
-                        conflict_reason: None,
-                    });
-                }
-            }
+    for (dependency_name, usages) in dependency_usage_map {
+        let version_conflict = analyze_version_conflict(dependency_name, usages, config);
+        if let Some(conflict) = version_conflict {
+            conflicts.push(conflict);
         }
     }
 
     // Sort conflicts by dependency name for consistent output
     conflicts.sort_by(|a, b| a.dependency_name.cmp(&b.dependency_name));
-
     conflicts
 }
 
+fn build_dependency_usage_map(
+    all_dependencies: &[DependencyInfo],
+    config: &OptimizedConfig,
+) -> HashMap<String, Vec<DependencyUsage>> {
+    let mut dependency_map: HashMap<String, Vec<DependencyUsage>> = HashMap::new();
+
+    for dependency in all_dependencies {
+        // Skip pinned dependencies - they're handled separately
+        if config
+            .pinned_dependency_names
+            .contains(&dependency.dependency_name)
+        {
+            continue;
+        }
+
+        dependency_map
+            .entry(dependency.dependency_name.clone())
+            .or_default()
+            .push(DependencyUsage {
+                package_name: dependency.package_name.clone(),
+                version: dependency.version.clone(),
+                package_path: dependency.package_path.clone(),
+            });
+    }
+
+    dependency_map
+}
+
+fn analyze_version_conflict(
+    dependency_name: String,
+    usages: Vec<DependencyUsage>,
+    config: &OptimizedConfig,
+) -> Option<DependencyConflict> {
+    // Check if we have multiple different versions
+    let unique_versions: HashSet<&String> = usages.iter().map(|usage| &usage.version).collect();
+
+    if unique_versions.len() <= 1 {
+        return None;
+    }
+
+    // Filter out ignored packages
+    let filtered_usages = filter_ignored_packages(dependency_name.clone(), usages, config);
+
+    if filtered_usages.len() <= 1 {
+        return None;
+    }
+
+    // Check if we still have multiple versions after filtering
+    let unique_filtered_versions: HashSet<&String> =
+        filtered_usages.iter().map(|usage| &usage.version).collect();
+
+    if unique_filtered_versions.len() > 1 {
+        Some(DependencyConflict {
+            dependency_name,
+            conflicting_packages: filtered_usages,
+            conflict_reason: None,
+        })
+    } else {
+        None
+    }
+}
+
+fn filter_ignored_packages(
+    dependency_name: String,
+    usages: Vec<DependencyUsage>,
+    config: &OptimizedConfig,
+) -> Vec<DependencyUsage> {
+    if let Some(exception_set) = config.ignored_exception_sets.get(&dependency_name) {
+        usages
+            .into_iter()
+            .filter(|usage| {
+                // Keep packages that are NOT in the exceptions list (i.e., not ignored)
+                !exception_set.contains(&usage.package_name)
+            })
+            .collect()
+    } else {
+        usages
+    }
+}
+
 fn print_conflicts(conflicts: &[DependencyConflict], color_config: ColorConfig) {
-    use std::collections::HashMap;
-
-    use turborepo_ui::{BOLD, BOLD_RED, CYAN, YELLOW};
-
     // Sort all conflicts alphabetically by dependency name
     let mut sorted_conflicts = conflicts.to_vec();
     sorted_conflicts.sort_by(|a, b| a.dependency_name.cmp(&b.dependency_name));
 
     for conflict in &sorted_conflicts {
-        let dep_name = if color_config.should_strip_ansi {
-            conflict.dependency_name.clone()
-        } else {
-            format!("{}", BOLD.apply_to(&conflict.dependency_name))
-        };
-
-        if let Some(reason) = &conflict.conflict_reason {
-            println!("  {} ({})", dep_name, reason);
-        } else {
-            println!("  {} (version mismatch)", dep_name);
-        }
-
-        if conflict.conflict_reason.is_some() {
-            // For pinned dependencies, show each package directly
-            for usage in &conflict.conflicting_packages {
-                let version_display = if color_config.should_strip_ansi {
-                    usage.version.clone()
-                } else {
-                    format!("{}", YELLOW.apply_to(&usage.version))
-                };
-
-                let package_display = if color_config.should_strip_ansi {
-                    format!("{} ({})", usage.package_name, usage.package_path)
-                } else {
-                    format!(
-                        "{} ({})",
-                        CYAN.apply_to(&usage.package_name),
-                        usage.package_path
-                    )
-                };
-
-                println!("    {} → {}", version_display, package_display);
-            }
-        } else {
-            // For regular conflicts, group by version for cleaner output
-            let mut version_groups: HashMap<String, Vec<(String, String)>> = HashMap::new();
-            for usage in &conflict.conflicting_packages {
-                version_groups
-                    .entry(usage.version.clone())
-                    .or_default()
-                    .push((usage.package_name.clone(), usage.package_path.clone()));
-            }
-
-            let mut sorted_versions: Vec<_> = version_groups.into_iter().collect();
-            sorted_versions.sort_by(|a, b| a.0.cmp(&b.0));
-
-            for (version, packages) in sorted_versions {
-                let version_display = if color_config.should_strip_ansi {
-                    version
-                } else {
-                    format!("{}", YELLOW.apply_to(&version))
-                };
-
-                println!("    {} →", version_display);
-
-                for (package_name, package_path) in packages {
-                    let package_display = if color_config.should_strip_ansi {
-                        format!("{} ({})", package_name, package_path)
-                    } else {
-                        format!("{} ({})", CYAN.apply_to(&package_name), package_path)
-                    };
-                    println!("      {}", package_display);
-                }
-            }
-        }
+        print_single_conflict(conflict, color_config);
         println!();
     }
 
-    let error_prefix = if color_config.should_strip_ansi {
-        "❌"
+    print_conflict_summary(conflicts.len(), color_config);
+}
+
+fn print_single_conflict(conflict: &DependencyConflict, color_config: ColorConfig) {
+    let formatted_dependency_name = format_dependency_name(&conflict.dependency_name, color_config);
+
+    if let Some(reason) = &conflict.conflict_reason {
+        println!("  {} ({})", formatted_dependency_name, reason);
+        print_pinned_conflict_packages(&conflict.conflicting_packages, color_config);
     } else {
-        &format!("{}", BOLD_RED.apply_to("❌"))
+        println!("  {} (version mismatch)", formatted_dependency_name);
+        print_version_conflict_packages(&conflict.conflicting_packages, color_config);
+    }
+}
+
+fn format_dependency_name(dependency_name: &str, color_config: ColorConfig) -> String {
+    if color_config.should_strip_ansi {
+        dependency_name.to_string()
+    } else {
+        use turborepo_ui::BOLD;
+        format!("{}", BOLD.apply_to(dependency_name))
+    }
+}
+
+fn print_pinned_conflict_packages(
+    conflicting_packages: &[DependencyUsage],
+    color_config: ColorConfig,
+) {
+    for usage in conflicting_packages {
+        let version_display = format_version(&usage.version, color_config);
+        let package_display =
+            format_package_info(&usage.package_name, &usage.package_path, color_config);
+        println!("    {} → {}", version_display, package_display);
+    }
+}
+
+fn print_version_conflict_packages(
+    conflicting_packages: &[DependencyUsage],
+    color_config: ColorConfig,
+) {
+    let version_groups = group_packages_by_version(conflicting_packages);
+    let mut sorted_versions: Vec<_> = version_groups.into_iter().collect();
+    sorted_versions.sort_by(|a, b| a.0.cmp(&b.0));
+
+    for (version, packages) in sorted_versions {
+        let version_display = format_version(&version, color_config);
+        println!("    {} →", version_display);
+
+        for (package_name, package_path) in packages {
+            let package_display = format_package_info(&package_name, &package_path, color_config);
+            println!("      {}", package_display);
+        }
+    }
+}
+
+fn group_packages_by_version(
+    conflicting_packages: &[DependencyUsage],
+) -> HashMap<String, Vec<(String, String)>> {
+    let mut version_groups: HashMap<String, Vec<(String, String)>> = HashMap::new();
+
+    for usage in conflicting_packages {
+        version_groups
+            .entry(usage.version.clone())
+            .or_default()
+            .push((usage.package_name.clone(), usage.package_path.clone()));
+    }
+
+    version_groups
+}
+
+fn format_version(version: &str, color_config: ColorConfig) -> String {
+    if color_config.should_strip_ansi {
+        version.to_string()
+    } else {
+        use turborepo_ui::YELLOW;
+        format!("{}", YELLOW.apply_to(version))
+    }
+}
+
+fn format_package_info(
+    package_name: &str,
+    package_path: &str,
+    color_config: ColorConfig,
+) -> String {
+    if color_config.should_strip_ansi {
+        format!("{} ({})", package_name, package_path)
+    } else {
+        use turborepo_ui::CYAN;
+        format!("{} ({})", CYAN.apply_to(package_name), package_path)
+    }
+}
+
+fn print_conflict_summary(conflict_count: usize, color_config: ColorConfig) {
+    let error_prefix = if color_config.should_strip_ansi {
+        ERROR_PREFIX
+    } else {
+        use turborepo_ui::BOLD_RED;
+        &format!("{}", BOLD_RED.apply_to(ERROR_PREFIX))
     };
 
     println!(
         "\n{} Found {} dependency conflicts.",
-        error_prefix,
-        conflicts.len()
+        error_prefix, conflict_count
     );
-}
-
-fn print_success(message: &str, color_config: ColorConfig) {
-    if color_config.should_strip_ansi {
-        println!("{}", message);
-    } else {
-        use turborepo_ui::BOLD_GREEN;
-        println!("{}", BOLD_GREEN.apply_to(message));
-    }
 }
 
 fn generate_allowlist_config(
@@ -641,18 +820,18 @@ fn test_ignored_dependencies_with_exceptions() {
             package_path: "packages/app1".to_string(),
             dependency_name: "lodash".to_string(),
             version: "4.17.0".to_string(),
-            dep_type: DependencyType::Dependencies,
+            dependency_type: DependencyType::Dependencies,
         },
         DependencyInfo {
             package_name: "app2".to_string(),
             package_path: "packages/app2".to_string(),
             dependency_name: "lodash".to_string(),
             version: "4.18.0".to_string(),
-            dep_type: DependencyType::Dependencies,
+            dependency_type: DependencyType::Dependencies,
         },
     ];
 
-    let config = DepsSyncConfig {
+    let deps_sync_config = DepsSyncConfig {
         pinned_dependencies: HashMap::new(),
         ignored_dependencies: HashMap::from([(
             "lodash".to_string(),
@@ -661,8 +840,9 @@ fn test_ignored_dependencies_with_exceptions() {
             },
         )]),
     };
+    let config = OptimizedConfig::from(deps_sync_config);
 
-    let conflicts = find_dependency_conflicts(&dependencies, &config);
+    let conflicts = find_version_conflicts(&dependencies, &config);
 
     // Should have conflict for lodash since app1 is not ignored (it's in
     // exceptions)
@@ -691,21 +871,21 @@ fn test_pinned_and_ignored_dependencies_no_conflicts() {
             package_path: "packages/app1".to_string(),
             dependency_name: "react".to_string(),
             version: "17.0.0".to_string(), // Wrong version but app1 is in exceptions (NOT ignored)
-            dep_type: DependencyType::Dependencies,
+            dependency_type: DependencyType::Dependencies,
         },
         DependencyInfo {
             package_name: "app2".to_string(),
             package_path: "packages/app2".to_string(),
             dependency_name: "react".to_string(),
             version: "16.0.0".to_string(), // Wrong version but app2 is ignored
-            dep_type: DependencyType::Dependencies,
+            dependency_type: DependencyType::Dependencies,
         },
         DependencyInfo {
             package_name: "app3".to_string(),
             package_path: "packages/app3".to_string(),
             dependency_name: "react".to_string(),
             version: "18.0.0".to_string(), // Correct version - no conflict
-            dep_type: DependencyType::Dependencies,
+            dependency_type: DependencyType::Dependencies,
         },
     ];
 
@@ -718,7 +898,7 @@ fn test_pinned_and_ignored_dependencies_no_conflicts() {
         },
     );
 
-    let config = DepsSyncConfig {
+    let deps_sync_config = DepsSyncConfig {
         pinned_dependencies,
         ignored_dependencies: HashMap::from([(
             "react".to_string(),
@@ -727,6 +907,7 @@ fn test_pinned_and_ignored_dependencies_no_conflicts() {
             },
         )]),
     };
+    let config = OptimizedConfig::from(deps_sync_config);
 
     let pinned_conflicts = find_pinned_version_conflicts(&dependencies, &config);
 
@@ -754,25 +935,25 @@ mod tests {
                 package_path: "packages/app1".to_string(),
                 dependency_name: "lodash".to_string(),
                 version: "4.17.0".to_string(),
-                dep_type: DependencyType::Dependencies,
+                dependency_type: DependencyType::Dependencies,
             },
             DependencyInfo {
                 package_name: "app2".to_string(),
                 package_path: "packages/app2".to_string(),
                 dependency_name: "lodash".to_string(),
                 version: "4.18.0".to_string(),
-                dep_type: DependencyType::Dependencies,
+                dependency_type: DependencyType::Dependencies,
             },
             DependencyInfo {
                 package_name: "app3".to_string(),
                 package_path: "packages/app3".to_string(),
                 dependency_name: "react".to_string(),
                 version: "18.0.0".to_string(),
-                dep_type: DependencyType::Dependencies,
+                dependency_type: DependencyType::Dependencies,
             },
         ];
 
-        let config = DepsSyncConfig {
+        let deps_sync_config = DepsSyncConfig {
             pinned_dependencies: HashMap::new(),
             ignored_dependencies: HashMap::from([(
                 "lodash".to_string(),
@@ -781,8 +962,9 @@ mod tests {
                 },
             )]),
         };
+        let config = OptimizedConfig::from(deps_sync_config);
 
-        let conflicts = find_dependency_conflicts(&dependencies, &config);
+        let conflicts = find_version_conflicts(&dependencies, &config);
 
         // Should have no conflicts since lodash is ignored in all packages (no
         // exceptions)
@@ -797,25 +979,25 @@ mod tests {
                 package_path: "packages/app1".to_string(),
                 dependency_name: "lodash".to_string(),
                 version: "4.17.0".to_string(),
-                dep_type: DependencyType::Dependencies,
+                dependency_type: DependencyType::Dependencies,
             },
             DependencyInfo {
                 package_name: "app2".to_string(),
                 package_path: "packages/app2".to_string(),
                 dependency_name: "lodash".to_string(),
                 version: "4.18.0".to_string(),
-                dep_type: DependencyType::Dependencies,
+                dependency_type: DependencyType::Dependencies,
             },
             DependencyInfo {
                 package_name: "app3".to_string(),
                 package_path: "packages/app3".to_string(),
                 dependency_name: "lodash".to_string(),
                 version: "4.19.0".to_string(),
-                dep_type: DependencyType::Dependencies,
+                dependency_type: DependencyType::Dependencies,
             },
         ];
 
-        let config = DepsSyncConfig {
+        let deps_sync_config = DepsSyncConfig {
             pinned_dependencies: HashMap::new(),
             ignored_dependencies: HashMap::from([(
                 "lodash".to_string(),
@@ -824,8 +1006,9 @@ mod tests {
                 },
             )]),
         };
+        let config = OptimizedConfig::from(deps_sync_config);
 
-        let conflicts = find_dependency_conflicts(&dependencies, &config);
+        let conflicts = find_version_conflicts(&dependencies, &config);
 
         // Should have conflict for lodash since app2 and app3 are not ignored (they're
         // in exceptions)
@@ -855,21 +1038,21 @@ mod tests {
                 package_path: "packages/app1".to_string(),
                 dependency_name: "react".to_string(),
                 version: "17.0.0".to_string(), // Wrong version but should be ignored
-                dep_type: DependencyType::Dependencies,
+                dependency_type: DependencyType::Dependencies,
             },
             DependencyInfo {
                 package_name: "app2".to_string(),
                 package_path: "packages/app2".to_string(),
                 dependency_name: "react".to_string(),
                 version: "16.0.0".to_string(), // Wrong version and should show conflict
-                dep_type: DependencyType::Dependencies,
+                dependency_type: DependencyType::Dependencies,
             },
             DependencyInfo {
                 package_name: "app3".to_string(),
                 package_path: "packages/app3".to_string(),
                 dependency_name: "react".to_string(),
                 version: "18.0.0".to_string(), // Correct version - no conflict
-                dep_type: DependencyType::Dependencies,
+                dependency_type: DependencyType::Dependencies,
             },
         ];
 
@@ -882,7 +1065,7 @@ mod tests {
             },
         );
 
-        let config = DepsSyncConfig {
+        let deps_sync_config = DepsSyncConfig {
             pinned_dependencies,
             ignored_dependencies: HashMap::from([(
                 "react".to_string(),
@@ -891,6 +1074,7 @@ mod tests {
                 },
             )]),
         };
+        let config = OptimizedConfig::from(deps_sync_config);
 
         let pinned_conflicts = find_pinned_version_conflicts(&dependencies, &config);
 
