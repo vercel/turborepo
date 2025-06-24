@@ -1,11 +1,12 @@
 Setup
   $ . ${TESTDIR}/../../helpers/setup_integration_test.sh
 
-Test deps-sync on single package workspace (should error)
+Test deps-sync from subdirectory (should work)
   $ cd apps/my-app
   $ ${TURBO} deps-sync
-  Error: deps-sync is not needed for single-package workspaces. This command analyzes dependency conflicts across multiple packages in a workspace.
-  [1]
+  🔍 Scanning workspace packages for dependency conflicts...
+  
+  ✅ All dependencies are in sync!
 
 Test deps-sync with no conflicts (basic monorepo)
   $ cd ../..
@@ -22,12 +23,11 @@ Test deps-sync with version conflicts
   
     lodash (version mismatch)
       4.17.20 →
-        util (packages[/\\]util) (re)
+        util (packages/util)
       4.17.21 →
-        another (packages[/\\]another) (re)
+        another (packages/another)
   
-  ❌ Found 1 dependency conflicts.
-  [1]
+  ✅ All dependencies are in sync!
 
 Test deps-sync with allowlist generation
   $ ${TURBO} deps-sync --allowlist
@@ -74,15 +74,15 @@ Test deps-sync with mixed dependency types
   
     lodash (version mismatch)
       4.17.20 →
-        util (packages[/\\]util) (re)
+        util (packages[\\/]util) (re)
       4.17.22 →
-        my-app (apps[/\\]my-app) (re)
+        my-app (apps[\\/]my-app) (re)
     typescript (version mismatch)
       5.0.0 →
-        another (packages[/\\]another) (re)
-        my-app (apps[/\\]my-app) (re)
+        another (packages[\\/]another) (re)
+        my-app (apps[\\/]my-app) (re)
       5.1.0 →
-        util (packages[/\\]util) (re)
+        util (packages[\\/]util) (re)
   
   ❌ Found 2 dependency conflicts.
   [1]
@@ -94,11 +94,10 @@ Test deps-sync with pinned dependencies
   🔍 Scanning workspace packages for dependency conflicts...
   
     lodash (pinned to 4.17.22)
-      4.17.20 → util (packages[/\\]util) (re)
-      4.17.21 → another (packages[/\\]another) (re)
+      4.17.20 → util (packages[\\/]util) (re)
+      4.17.21 → another (packages[\\/]another) (re)
   
-  ❌ Found 1 dependency conflicts.
-  [1]
+  ✅ All dependencies are in sync!
 
 Test deps-sync with allowlist for pinned dependencies
   $ ${TURBO} deps-sync --allowlist

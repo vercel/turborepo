@@ -40,6 +40,8 @@ pub enum Error {
         #[source]
         source: serde_json::Error,
     },
+    #[error("Failed to get path: {0}")]
+    Path(#[from] turbopath::PathError),
     #[error("Failed to discover packages: {0}")]
     Discovery(#[from] turborepo_repository::discovery::Error),
     #[error("Failed to resolve package manager: {0}")]
@@ -1380,7 +1382,7 @@ mod tests {
 
     #[test]
     fn test_extract_package_name_fallback() {
-        use turbopath::AbsoluteSystemPath;
+        use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
         use turborepo_errors::Spanned;
 
         // Test with package.json without name
