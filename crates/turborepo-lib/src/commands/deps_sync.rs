@@ -15,7 +15,6 @@ use turborepo_ui::ColorConfig;
 use super::CommandBase;
 use crate::turbo_json::RawTurboJson;
 
-// Constants for better maintainability
 const DEPENDENCY_TYPES: [&str; 3] = ["dependencies", "devDependencies", "optionalDependencies"];
 const SUCCESS_PREFIX: &str = "✅";
 const ERROR_PREFIX: &str = "❌";
@@ -67,6 +66,11 @@ pub struct DepsSyncConfig {
     /// ignored.
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub ignored_dependencies: HashMap<String, IgnoredDependency>,
+    /// Whether to include optionalDependencies in conflict analysis.
+    /// Defaults to false since optional dependencies are often
+    /// platform-specific and should gracefully handle version differences.
+    #[serde(default)]
+    pub include_optional_dependencies: bool,
 }
 
 #[derive(Debug, Clone, Default, Deserializable, serde::Deserialize, serde::Serialize)]
@@ -94,6 +98,7 @@ impl Default for DepsSyncConfig {
         Self {
             pinned_dependencies: HashMap::new(),
             ignored_dependencies: HashMap::new(),
+            include_optional_dependencies: false,
         }
     }
 }
@@ -143,6 +148,7 @@ struct DependencyConflict {
 struct OptimizedConfig {
     pinned_dependencies: HashMap<String, PinnedDependency>,
     ignored_dependencies: HashMap<String, IgnoredDependency>,
+    include_optional_dependencies: bool,
     // Optimized lookup sets
     pinned_dependency_names: HashSet<String>,
     ignored_exception_sets: HashMap<String, HashSet<String>>,
@@ -178,6 +184,7 @@ impl From<DepsSyncConfig> for OptimizedConfig {
         Self {
             pinned_dependencies: config.pinned_dependencies,
             ignored_dependencies: config.ignored_dependencies,
+            include_optional_dependencies: config.include_optional_dependencies,
             pinned_dependency_names,
             ignored_exception_sets,
             pinned_exception_sets,
@@ -190,6 +197,7 @@ impl From<OptimizedConfig> for DepsSyncConfig {
         Self {
             pinned_dependencies: config.pinned_dependencies,
             ignored_dependencies: config.ignored_dependencies,
+            include_optional_dependencies: config.include_optional_dependencies,
         }
     }
 }
@@ -210,7 +218,8 @@ pub async fn run(base: &CommandBase, allowlist: bool) -> Result<i32, Error> {
     print_configuration_summary(&optimized_config, color_config);
 
     // Collect and analyze dependencies
-    let all_dependencies = collect_all_dependencies(&base.repo_root, workspace_response).await?;
+    let all_dependencies =
+        collect_all_dependencies(&base.repo_root, workspace_response, &optimized_config).await?;
     let version_conflicts = find_version_conflicts(&all_dependencies, &optimized_config);
     let pinned_conflicts = find_pinned_version_conflicts(&all_dependencies, &optimized_config);
 
@@ -342,12 +351,13 @@ async fn generate_and_write_allowlist(
 async fn collect_all_dependencies(
     repo_root: &AbsoluteSystemPath,
     workspace_response: DiscoveryResponse,
+    config: &OptimizedConfig,
 ) -> Result<Vec<DependencyInfo>, Error> {
     let mut all_dependencies = Vec::new();
 
     for workspace_data in workspace_response.workspaces {
         let package_dependencies =
-            collect_package_dependencies(repo_root, &workspace_data.package_json).await?;
+            collect_package_dependencies(repo_root, &workspace_data.package_json, config).await?;
         all_dependencies.extend(package_dependencies);
     }
 
@@ -357,6 +367,7 @@ async fn collect_all_dependencies(
 async fn collect_package_dependencies(
     repo_root: &AbsoluteSystemPath,
     package_json_path: &AbsoluteSystemPath,
+    config: &OptimizedConfig,
 ) -> Result<Vec<DependencyInfo>, Error> {
     let package_json =
         PackageJson::load(package_json_path).map_err(|e| Error::PackageJsonRead {
@@ -381,6 +392,7 @@ async fn collect_package_dependencies(
         &raw_json,
         &package_name,
         &relative_package_path,
+        config,
     ))
 }
 
@@ -417,14 +429,21 @@ fn extract_dependencies_from_json(
     raw_json: &Value,
     package_name: &str,
     relative_package_path: &str,
+    config: &OptimizedConfig,
 ) -> Vec<DependencyInfo> {
     let mut dependencies = Vec::new();
 
-    for (field_name, dependency_type) in &[
+    let mut dependency_types = vec![
         ("dependencies", DependencyType::Dependencies),
         ("devDependencies", DependencyType::DevDependencies),
-        ("optionalDependencies", DependencyType::OptionalDependencies),
-    ] {
+    ];
+
+    // Only include optionalDependencies if the configuration allows it
+    if config.include_optional_dependencies {
+        dependency_types.push(("optionalDependencies", DependencyType::OptionalDependencies));
+    }
+
+    for (field_name, dependency_type) in &dependency_types {
         if let Some(deps) = raw_json.get(field_name).and_then(|v| v.as_object()) {
             for (dependency_name, version) in deps {
                 if let Some(version_str) = version.as_str() {
@@ -726,6 +745,7 @@ fn generate_allowlist_config(
     let mut new_config = DepsSyncConfig {
         pinned_dependencies: HashMap::new(),
         ignored_dependencies: HashMap::new(),
+        include_optional_dependencies: current_config.include_optional_dependencies,
     };
 
     // Only copy existing pinned dependencies that are being modified
@@ -806,8 +826,15 @@ async fn write_allowlist_config(
     raw_turbo_json.deps_sync = Some(config.clone());
 
     // Write the updated configuration back to the file
-    let json_content = serde_json::to_string_pretty(&raw_turbo_json)?;
-    std::fs::write(&turbo_json_path, json_content)?;
+    let json_content =
+        serde_json::to_string_pretty(&raw_turbo_json).map_err(|e| Error::JsonParse {
+            path: turbo_json_path.to_string(),
+            source: e,
+        })?;
+    std::fs::write(&turbo_json_path, json_content).map_err(|e| Error::FileRead {
+        path: turbo_json_path.to_string(),
+        source: e,
+    })?;
 
     Ok(())
 }
@@ -839,6 +866,7 @@ fn test_ignored_dependencies_with_exceptions() {
                 exceptions: vec!["app1".to_string()],
             },
         )]),
+        include_optional_dependencies: false,
     };
     let config = OptimizedConfig::from(deps_sync_config);
 
@@ -906,6 +934,7 @@ fn test_pinned_and_ignored_dependencies_no_conflicts() {
                 exceptions: vec!["app1".to_string()],
             },
         )]),
+        include_optional_dependencies: false,
     };
     let config = OptimizedConfig::from(deps_sync_config);
 
@@ -961,6 +990,7 @@ mod tests {
                     exceptions: vec![], // No exceptions - ignore lodash in ALL packages
                 },
             )]),
+            include_optional_dependencies: false,
         };
         let config = OptimizedConfig::from(deps_sync_config);
 
@@ -1005,6 +1035,7 @@ mod tests {
                     exceptions: vec!["app2".to_string(), "app3".to_string()],
                 },
             )]),
+            include_optional_dependencies: false,
         };
         let config = OptimizedConfig::from(deps_sync_config);
 
@@ -1073,6 +1104,7 @@ mod tests {
                     exceptions: vec!["app1".to_string()],
                 },
             )]),
+            include_optional_dependencies: false,
         };
         let config = OptimizedConfig::from(deps_sync_config);
 
@@ -1086,6 +1118,71 @@ mod tests {
         assert_eq!(conflict.conflicting_packages.len(), 1);
         assert_eq!(conflict.conflicting_packages[0].package_name, "app2");
         assert_eq!(conflict.conflicting_packages[0].version, "16.0.0");
+    }
+
+    #[test]
+    fn test_include_optional_dependencies_config() {
+        // Test that optionalDependencies are excluded by default
+        let config_exclude_optional = DepsSyncConfig {
+            pinned_dependencies: HashMap::new(),
+            ignored_dependencies: HashMap::new(),
+            include_optional_dependencies: false,
+        };
+        let optimized_config = OptimizedConfig::from(config_exclude_optional);
+
+        let raw_json = serde_json::json!({
+            "dependencies": {
+                "react": "^18.0.0"
+            },
+            "devDependencies": {
+                "typescript": "^4.0.0"
+            },
+            "optionalDependencies": {
+                "fsevents": "^2.3.0"
+            }
+        });
+
+        let dependencies = extract_dependencies_from_json(
+            &raw_json,
+            "test-package",
+            "packages/test",
+            &optimized_config,
+        );
+
+        // Should only have 2 dependencies (not 3), excluding optionalDependencies
+        assert_eq!(dependencies.len(), 2);
+        assert!(dependencies.iter().any(|d| d.dependency_name == "react"));
+        assert!(dependencies
+            .iter()
+            .any(|d| d.dependency_name == "typescript"));
+        assert!(!dependencies.iter().any(|d| d.dependency_name == "fsevents"));
+
+        // Test that optionalDependencies are included when configured
+        let config_include_optional = DepsSyncConfig {
+            pinned_dependencies: HashMap::new(),
+            ignored_dependencies: HashMap::new(),
+            include_optional_dependencies: true,
+        };
+        let optimized_config_include = OptimizedConfig::from(config_include_optional);
+
+        let dependencies_with_optional = extract_dependencies_from_json(
+            &raw_json,
+            "test-package",
+            "packages/test",
+            &optimized_config_include,
+        );
+
+        // Should have all 3 dependencies, including optionalDependencies
+        assert_eq!(dependencies_with_optional.len(), 3);
+        assert!(dependencies_with_optional
+            .iter()
+            .any(|d| d.dependency_name == "react"));
+        assert!(dependencies_with_optional
+            .iter()
+            .any(|d| d.dependency_name == "typescript"));
+        assert!(dependencies_with_optional
+            .iter()
+            .any(|d| d.dependency_name == "fsevents"));
     }
 
     #[test]
@@ -1129,6 +1226,7 @@ mod tests {
                 },
             )]),
             ignored_dependencies: HashMap::new(),
+            include_optional_dependencies: false,
         };
 
         let allowlist_config = generate_allowlist_config(&conflicts, &current_config);
