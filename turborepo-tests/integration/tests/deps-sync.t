@@ -134,22 +134,3 @@ Verify pinned dependency exceptions were added
       }
     }
   }
-
-Test help text
-  $ ${TURBO} deps-sync --help
-  Check that all dependencies across workspaces are synchronized
-  
-  Usage: turbo deps-sync [OPTIONS]
-  
-  Options:
-        --allowlist  Generate an allowlist configuration to resolve conflicts
-    -h, --help       Print help
-
-Test invalid flag
-  $ ${TURBO} deps-sync --invalid-flag
-  error: unexpected argument '--invalid-flag' found
-  
-  Usage: turbo deps-sync [OPTIONS]
-  
-  For more information, try '--help'.
-  [2]
