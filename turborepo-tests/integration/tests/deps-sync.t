@@ -27,8 +27,8 @@ Test deps-sync with version conflicts
       4.17.21 →
         another (packages/another)
   
-  ❌ Found 1 dependency conflicts.
-  [1]
+  
+  \xe2\x9d\x8c Found 1 dependency conflicts. (no-eol) (esc)
 
 Test deps-sync with allowlist generation
   $ ${TURBO} deps-sync --allowlist
@@ -85,7 +85,8 @@ Test deps-sync with mixed dependency types
       5.1.0 →
         util (packages[\\/]util) (re)
   
-  ❌ Found 2 dependency conflicts.
+  
+  \xe2\x9d\x8c Found 2 dependency conflicts. (no-eol) (esc)
   [1]
 
 Test deps-sync with pinned dependencies
@@ -98,7 +99,8 @@ Test deps-sync with pinned dependencies
       4.17.20 → util (packages[\\/]util) (re)
       4.17.21 → another (packages[\\/]another) (re)
   
-  ❌ Found 1 dependency conflicts.
+  
+  \xe2\x9d\x8c Found 1 dependency conflicts. (no-eol) (esc)
   [1]
 
 Test deps-sync with allowlist for pinned dependencies
