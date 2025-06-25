@@ -11,6 +11,7 @@ Make sure exit code is 2 when no args are passed
     bin         Get the path to the Turbo binary
     completion  Generate the autocompletion script for the specified shell
     daemon      Runs the Turborepo background daemon
+    deps-sync   Check that all dependencies across workspaces are synchronized
     generate    Generate a new app / package
     telemetry   Enable or disable anonymous telemetry
     scan        Turbo your monorepo by running a number of 'repo lints' to identify common issues, suggest fixes, and improve performance
