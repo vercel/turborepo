@@ -187,8 +187,24 @@ impl WatchClient {
         let notify_event = notify_run.clone();
 
         let event_fut = async {
+            let mut first_rediscover = true;
             while let Some(event) = events.next().await {
                 let event = event?;
+
+                // Skip the first RediscoverPackages event which is sent immediately by the
+                // daemon when we connect. The file watcher will send the real
+                // one.
+                if first_rediscover {
+                    if matches!(
+                        event.event,
+                        Some(proto::package_change_event::Event::RediscoverPackages(_))
+                    ) {
+                        first_rediscover = false;
+                        continue;
+                    }
+                    first_rediscover = false;
+                }
+
                 Self::handle_change_event(&changed_packages, event.event.unwrap())?;
                 notify_event.notify_one();
             }
@@ -205,10 +221,11 @@ impl WatchClient {
                     // if notify exits, then continue per usual
                     // if persist exits, then we break out of loop with a
                     select! {
-                        _ = notify_run.notified() => {},
+                        biased;
                         _ = persistent => {
                             break;
                         }
+                        _ = notify_run.notified() => {},
                     }
                 } else {
                     notify_run.notified().await;
