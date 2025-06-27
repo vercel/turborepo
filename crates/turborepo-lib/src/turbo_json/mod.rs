@@ -164,13 +164,17 @@ pub struct RawTurboJson {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub concurrency: Option<String>,
 
-    #[serde(skip_serializing_if = "Option::is_none", rename = "futureFlags")]
-    pub future_flags: Option<Spanned<serde_json::Value>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub future_flags: Option<Spanned<FutureFlags>>,
 
     #[deserializable(rename = "//")]
     #[serde(skip)]
     _comment: Option<String>,
 }
+
+#[derive(Serialize, Default, Debug, Clone, Iterable, Deserializable, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct FutureFlags {}
 
 #[derive(Serialize, Default, Debug, PartialEq, Clone)]
 #[serde(transparent)]
@@ -883,8 +887,8 @@ mod tests {
     use turborepo_unescape::UnescapedString;
 
     use super::{
-        replace_turbo_root_token_in_string, validate_with_has_no_topo, Pipeline, RawTurboJson,
-        SpacesJson, Spanned, TurboJson, UIMode,
+        replace_turbo_root_token_in_string, validate_with_has_no_topo, FutureFlags, Pipeline,
+        RawTurboJson, SpacesJson, Spanned, TurboJson, UIMode,
     };
     use crate::{
         boundaries::BoundariesConfig,
@@ -1408,8 +1412,7 @@ mod tests {
                 "build": {}
             },
             "futureFlags": {
-                "newFeature": true,
-                "experimentalOption": "value"
+                "bestFeature": true
             }
         }"#;
 
@@ -1423,11 +1426,7 @@ mod tests {
         // Verify that futureFlags is parsed correctly
         assert!(raw_turbo_json.future_flags.is_some());
         let future_flags = raw_turbo_json.future_flags.as_ref().unwrap();
-        assert_eq!(future_flags.as_inner()["newFeature"], json!(true));
-        assert_eq!(
-            future_flags.as_inner()["experimentalOption"],
-            json!("value")
-        );
+        assert_eq!(future_flags.as_inner(), &FutureFlags {});
 
         // Verify that the futureFlags field doesn't cause errors during conversion to
         // TurboJson
