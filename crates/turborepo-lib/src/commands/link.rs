@@ -221,11 +221,7 @@ pub async fn link(
     let no_preexisting_slug =
         unset_path(&no_preexisting_id, &["teamslug"], false)?.unwrap_or(no_preexisting_id);
 
-    let after = set_path(
-        &no_preexisting_slug,
-        &["teamId"],
-        &format!("\"{}\"", team_id),
-    )?;
+    let after = set_path(&no_preexisting_slug, &["teamId"], &format!("\"{team_id}\""))?;
     let local_config_path = base.local_config_path();
     local_config_path
         .ensure_dir()
@@ -347,7 +343,7 @@ fn should_link_remote_cache(base: &CommandBase, location: &str) -> Result<bool, 
 fn enable_caching(url: &str) -> Result<(), Error> {
     webbrowser::open(url).map_err(|err| Error::OpenBrowser(url.to_string(), err))?;
 
-    println!("Visit {} in your browser to enable Remote Caching", url);
+    println!("Visit {url} in your browser to enable Remote Caching");
 
     // We return an error no matter what
     Err(Error::EnableCaching)
