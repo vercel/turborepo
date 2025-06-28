@@ -241,7 +241,7 @@ impl TelemetryConfig {
 
 fn default_config_path() -> Result<AbsoluteSystemPathBuf, ConfigError> {
     let config_dir = config_dir()
-        .map_err(|e| ConfigError::Message(format!("Invalid config directory: {}", e)))?
+        .map_err(|e| ConfigError::Message(format!("Invalid config directory: {e}")))?
         .ok_or(ConfigError::Message(
             "Unable to find telemetry config directory".to_string(),
         ))?;
@@ -271,7 +271,7 @@ pub fn is_debug() -> bool {
 }
 
 fn one_way_hash_with_salt(salt: &str, input: &str) -> String {
-    let salted = format!("{}{}", salt, input);
+    let salted = format!("{salt}{input}");
     let mut hasher = Sha256::new();
     hasher.update(salted.as_bytes());
     let generic = hasher.finalize();

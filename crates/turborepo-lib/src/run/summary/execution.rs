@@ -155,7 +155,7 @@ impl<'a> ExecutionSummary<'a> {
 
         println!();
         for line in lines {
-            println!("{}", line);
+            println!("{line}");
         }
 
         println!();

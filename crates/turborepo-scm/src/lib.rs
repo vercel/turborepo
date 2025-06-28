@@ -135,7 +135,7 @@ pub(crate) fn wait_for_success<R: Read, T>(
         };
         let stderr_output = read_git_error_to_string(stderr);
         let stderr_text = stderr_output
-            .map(|stderr| format!(" stderr: {}", stderr))
+            .map(|stderr| format!(" stderr: {stderr}"))
             .unwrap_or_default();
         let err_text = format!(
             "'{}' in {}{}{}",
@@ -155,7 +155,7 @@ pub(crate) fn wait_for_success<R: Read, T>(
     // We successfully parsed, but the command failed.
     let stderr_output = read_git_error_to_string(stderr);
     let stderr_text = stderr_output
-        .map(|stderr| format!(" stderr: {}", stderr))
+        .map(|stderr| format!(" stderr: {stderr}"))
         .unwrap_or_default();
     if matches!(exit_status.code(), Some(129)) {
         return Err(Error::GitVersion(stderr_text));
@@ -165,10 +165,10 @@ pub(crate) fn wait_for_success<R: Read, T>(
             .code()
             .map(|code| code.to_string())
             .unwrap_or("unknown".to_string());
-        format!(" exited with code {}", code)
+        format!(" exited with code {code}")
     };
     let path_text = root_path.as_ref();
-    let err_text = format!("'{}' in {}{}{}", command, path_text, exit_text, stderr_text);
+    let err_text = format!("'{command}' in {path_text}{exit_text}{stderr_text}");
     Err(Error::Git(err_text, Backtrace::capture()))
 }
 
@@ -217,8 +217,7 @@ fn find_git_root(turbo_root: &AbsoluteSystemPath) -> Result<AbsoluteSystemPathBu
     if !rev_parse.status.success() {
         let stderr = String::from_utf8_lossy(&rev_parse.stderr);
         return Err(Error::git_error(format!(
-            "git rev-parse --show-cdup error: {}",
-            stderr
+            "git rev-parse --show-cdup error: {stderr}"
         )));
     }
     let cursor = std::io::Cursor::new(rev_parse.stdout);
@@ -230,8 +229,7 @@ fn find_git_root(turbo_root: &AbsoluteSystemPath) -> Result<AbsoluteSystemPathBu
     } else {
         let stderr = String::from_utf8_lossy(&rev_parse.stderr);
         Err(Error::git_error(format!(
-            "git rev-parse --show-cdup error: no values on stdout. stderr: {}",
-            stderr
+            "git rev-parse --show-cdup error: no values on stdout. stderr: {stderr}"
         )))
     }
 }

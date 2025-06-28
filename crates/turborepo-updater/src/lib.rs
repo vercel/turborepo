@@ -69,11 +69,7 @@ impl Registry for NPMRegistry {
         let full_name = pkg.to_string();
         let split_name: Vec<&str> = full_name.split('/').collect();
         let name = split_name[1];
-        let url = format!(
-            "https://turborepo.com/api/binaries/version?name={name}&tag={tag}",
-            name = name,
-            tag = tag
-        );
+        let url = format!("https://turborepo.com/api/binaries/version?name={name}&tag={tag}");
 
         let result: NpmVersionData = http.get(&url)?;
         Ok(Some(result.version))
@@ -139,7 +135,7 @@ pub fn display_update_check(
         );
 
         if let Some(footer) = footer {
-            return ui::message(&format!("{}\n{}", msg, footer));
+            return ui::message(&format!("{msg}\n{footer}"));
         }
 
         return ui::message(&msg);
@@ -160,7 +156,7 @@ pub fn check_for_updates(
     // owner (in the supported owner/name format) to be channel/name.
     let parsed_version = SemVerVersion::parse(current_version)?;
     let tag = get_tag_from_version(&parsed_version.pre);
-    let package_name = format!("{}/{}", tag, package_name);
+    let package_name = format!("{tag}/{package_name}");
 
     let timeout = timeout.unwrap_or(DEFAULT_TIMEOUT);
     let interval = interval.unwrap_or(DEFAULT_INTERVAL);

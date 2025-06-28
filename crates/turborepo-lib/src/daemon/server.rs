@@ -127,7 +127,7 @@ impl FileWatching {
         ));
         let package_watcher = Arc::new(
             PackageWatcher::new(repo_root.clone(), recv.clone(), cookie_writer)
-                .map_err(|e| WatchError::Setup(format!("{:?}", e)))?,
+                .map_err(|e| WatchError::Setup(format!("{e:?}")))?,
         );
         let scm = SCM::new(&repo_root);
         let hash_watcher = Arc::new(HashWatcher::new(
@@ -466,8 +466,7 @@ impl proto::turbod_server::Turbod for TurboGrpcServiceInner {
             Ok(tonic::Response::new(proto::HelloResponse {}))
         } else {
             Err(tonic::Status::failed_precondition(format!(
-                "version mismatch. Client {} Server {}",
-                client_version, server_version
+                "version mismatch. Client {client_version} Server {server_version}"
             )))
         }
     }
@@ -612,7 +611,7 @@ impl proto::turbod_server::Turbod for TurboGrpcServiceInner {
             )),
         }))
         .await
-        .map_err(|e| tonic::Status::unavailable(format!("{}", e)))?;
+        .map_err(|e| tonic::Status::unavailable(format!("{e}")))?;
 
         tokio::spawn(async move {
             loop {

@@ -309,7 +309,7 @@ impl<'a> TaskHasher<'a> {
                 .get("TURBO_CI_VENDOR_ENV_KEY")
                 .filter(|prefix| !prefix.is_empty())
             {
-                let computed_exclude = format!("!{}*", exclude_prefix);
+                let computed_exclude = format!("!{exclude_prefix}*");
                 debug!(
                     "excluding environment variables matching wildcard {}",
                     computed_exclude
