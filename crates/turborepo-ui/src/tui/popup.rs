@@ -68,10 +68,8 @@ pub fn popup(area: Rect) -> List<'static> {
         let binds_not_visible = BIND_LIST.len().saturating_sub(available_height);
 
         let pluralize = if binds_not_visible > 1 { "s" } else { "" };
-        let message = format!(
-            " {} more bind{}. Make your terminal taller. ",
-            binds_not_visible, pluralize
-        );
+        let message =
+            format!(" {binds_not_visible} more bind{pluralize}. Make your terminal taller. ");
         Line::from(message)
     } else {
         Line::from("")

@@ -109,7 +109,7 @@ impl Display for MissingWorkspaceError {
                  defined in the root package.json"
             }
         };
-        write!(f, "{}", err)
+        write!(f, "{err}")
     }
 }
 

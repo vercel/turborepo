@@ -53,7 +53,7 @@ async fn main() -> Result<(), PathError> {
         std::process::exit(1);
     } else {
         for file in result.files.keys() {
-            println!("{}", file);
+            println!("{file}");
         }
     }
 

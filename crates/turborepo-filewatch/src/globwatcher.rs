@@ -31,7 +31,7 @@ pub struct GlobSet {
 impl GlobSet {
     pub fn as_inputs(&self) -> Vec<String> {
         let mut inputs: Vec<String> = self.include.keys().cloned().collect();
-        inputs.extend(self.exclude_raw.iter().map(|s| format!("!{}", s)));
+        inputs.extend(self.exclude_raw.iter().map(|s| format!("!{s}")));
         inputs
     }
 
