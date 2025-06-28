@@ -120,7 +120,7 @@ pub async fn print_potential_tasks(
 
         let packages = color!(color_config, GREY, "{}", packages_str);
 
-        println!("  {}\n    {}", task, packages)
+        println!("  {task}\n    {packages}")
     }
 
     Ok(())

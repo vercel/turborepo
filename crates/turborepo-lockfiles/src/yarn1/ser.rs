@@ -74,7 +74,7 @@ impl fmt::Display for Yarn1Lockfile {
             let wrapped_keys = keys.into_iter().map(maybe_wrap).collect::<Vec<_>>();
             let key_line = wrapped_keys.join(", ");
 
-            f.write_fmt(format_args!("\n{}:\n{}\n", key_line, entry))?;
+            f.write_fmt(format_args!("\n{key_line}:\n{entry}\n"))?;
         }
         Ok(())
     }

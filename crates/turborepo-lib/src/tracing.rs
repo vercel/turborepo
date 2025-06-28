@@ -317,9 +317,9 @@ impl<'a, FG: Color, BG: Color> Visit for MessageVisitor<'a, FG, BG> {
         if field.name() == "message" {
             if self.colorize {
                 let value = value.fg::<FG>().bg::<BG>();
-                let _ = write!(self.writer, "{:?}", value);
+                let _ = write!(self.writer, "{value:?}");
             } else {
-                let _ = write!(self.writer, "{:?}", value);
+                let _ = write!(self.writer, "{value:?}");
             }
         }
     }
@@ -332,9 +332,9 @@ fn write_string<FG: Color, BG: Color>(
 ) -> Result<(), std::fmt::Error> {
     if colorize {
         let value = value.fg::<FG>().bg::<BG>();
-        write!(writer, "{} ", value)
+        write!(writer, "{value} ")
     } else {
-        write!(writer, "{} ", value)
+        write!(writer, "{value} ")
     }
 }
 

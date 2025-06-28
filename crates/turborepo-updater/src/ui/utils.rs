@@ -62,7 +62,7 @@ pub fn render_message(
         // Used when term width is unknown.
         Layout::Unknown => {
             for line in lines.iter() {
-                println!("{}", line);
+                println!("{line}");
             }
         }
 
@@ -74,7 +74,7 @@ pub fn render_message(
                 if *line_display_width == 0 {
                     println!("{}", SPACE.repeat(width));
                 } else {
-                    println!("{}", line);
+                    println!("{line}");
                 }
             }
             x_border(width, BorderAlignment::Divider);

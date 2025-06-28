@@ -102,14 +102,14 @@ impl LoginServer for DefaultLoginServer {
 fn get_token_and_redirect(payload: SsoPayload) -> Result<(Option<String>, Url), Error> {
     let location_stub = "https://vercel.com/notifications/cli-login/turbo/";
     if let Some(login_error) = payload.login_error {
-        let mut url = Url::parse(&format!("{}failed", location_stub))?;
+        let mut url = Url::parse(&format!("{location_stub}failed"))?;
         url.query_pairs_mut()
             .append_pair("loginError", login_error.as_str());
         return Ok((None, url));
     }
 
     if let Some(sso_email) = payload.sso_email {
-        let mut url = Url::parse(&format!("{}incomplete", location_stub))?;
+        let mut url = Url::parse(&format!("{location_stub}incomplete"))?;
         url.query_pairs_mut()
             .append_pair("ssoEmail", sso_email.as_str());
         if let Some(team_name) = payload.team_name {
@@ -123,7 +123,7 @@ fn get_token_and_redirect(payload: SsoPayload) -> Result<(Option<String>, Url), 
 
         return Ok((None, url));
     }
-    let mut url = Url::parse(&format!("{}success", location_stub))?;
+    let mut url = Url::parse(&format!("{location_stub}success"))?;
     if let Some(email) = payload.email {
         url.query_pairs_mut().append_pair("email", email.as_str());
     }
