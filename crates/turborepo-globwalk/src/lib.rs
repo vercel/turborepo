@@ -154,7 +154,7 @@ pub fn fix_glob_pattern(pattern: &str) -> String {
     // strips trailing _unix_ slashes from windows paths, rather than
     // "converting" (leaving) them.
     let p0 = if needs_trailing_slash {
-        format!("{}/", converted)
+        format!("{converted}/")
     } else {
         converted.to_string()
     };
@@ -219,14 +219,14 @@ fn add_trailing_double_star(exclude_paths: &mut Vec<String>, glob: &str) {
         if stripped.ends_with("**") {
             exclude_paths.push(stripped.to_string());
         } else {
-            exclude_paths.push(format!("{}**", glob));
+            exclude_paths.push(format!("{glob}**"));
         }
     } else if glob.ends_with("/**") {
         exclude_paths.push(glob.to_string());
     } else {
         // Match Go globby behavior. If the glob doesn't already end in /**, add it
         // We use the unix style operator as wax expects unix style paths
-        exclude_paths.push(format!("{}/**", glob));
+        exclude_paths.push(format!("{glob}/**"));
         exclude_paths.push(glob.to_string());
     }
 }
@@ -432,7 +432,7 @@ fn walk_glob(
         .unwrap_or_else(|e| {
             // Per docs, only fails if exclusion list is too large, since we're using
             // pre-compiled globs
-            panic!("Failed to compile exclusion globs: {}", e,)
+            panic!("Failed to compile exclusion globs: {e}")
         });
 
     if settings.ignore_nested_packages {

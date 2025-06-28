@@ -31,7 +31,7 @@ fn call_turbo_gen(command: &str, tag: &String, raw_args: &str) -> Result<i32, Er
     let npx_path = which("npx").map_err(Error::NpxNotFound)?;
     let mut npx = Command::new(npx_path);
     npx.arg("--yes")
-        .arg(format!("@turbo/gen@{}", tag))
+        .arg(format!("@turbo/gen@{tag}"))
         .arg("raw")
         .arg(command)
         .args(["--json", raw_args])
