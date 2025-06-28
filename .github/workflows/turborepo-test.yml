@@ -239,6 +239,9 @@ jobs:
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
+      - name: Install Global Turbo
+        uses: ./.github/actions/install-global-turbo
+
       - name: Build turbo-types schemas
         run: |
           turbo build --filter=@turbo/types
