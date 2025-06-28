@@ -224,6 +224,34 @@ jobs:
         run: |
           cargo check --workspace
 
+  turbo_types_check:
+    name: Turborepo types codegen check
+    needs:
+      - find-changes
+    if: ${{ needs.find-changes.outputs.rest == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Turborepo Environment
+        uses: ./.github/actions/setup-turborepo-environment
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Build turbo-types schemas
+        run: |
+          turbo build --filter=@turbo/types
+
+      - name: Check for uncommitted changes
+        run: |
+          if ! git diff --exit-code; then
+            echo "::error::Generated schema files are out of sync with TypeScript types"
+            echo "::error::Please run 'turbo build --filter=@turbo/types' and commit the changes"
+            git diff
+            exit 1
+          fi
+
   rust_test:
     strategy:
       fail-fast: false
@@ -384,6 +412,7 @@ jobs:
       - integration
       - rust_lint
       - rust_check
+      - turbo_types_check
       - rust_test
       - basic-example
       - kitchen-sink-example
@@ -410,6 +439,7 @@ jobs:
           subjob ${{needs.integration.result}}
           subjob ${{needs.rust_lint.result}}
           subjob ${{needs.rust_check.result}}
+          subjob ${{needs.turbo_types_check.result}}
           subjob ${{needs.rust_test.result}}
           subjob ${{needs.basic-example.result}}
           subjob ${{needs.kitchen-sink-example.result}}
