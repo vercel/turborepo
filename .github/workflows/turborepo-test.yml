@@ -225,7 +225,7 @@ jobs:
           cargo check --workspace
 
   turbo_types_check:
-    name: Turborepo types codegen check
+    name: "@turbo/types codegen check"
     needs:
       - find-changes
     if: ${{ needs.find-changes.outputs.rest == 'true' }}
