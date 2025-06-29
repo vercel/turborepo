@@ -47,7 +47,6 @@ where
     Ok(())
 }
 
-/// Helper function to validate a Spanned field
 fn validate_spanned_field<T>(
     field: &Option<Spanned<T>>,
     field_name: &'static str,
@@ -63,8 +62,6 @@ fn validate_spanned_field<T>(
     Ok(())
 }
 
-/// Helper function to validate a Vec field by creating a temporary Spanned
-/// wrapper
 fn validate_vec_field<T>(
     field: &Option<Vec<Spanned<T>>>,
     field_name: &'static str,
@@ -81,8 +78,6 @@ fn validate_vec_field<T>(
     Ok(())
 }
 
-/// Helper function to validate a plain field by creating a temporary Spanned
-/// wrapper
 fn validate_plain_field<T>(field: &Option<T>, field_name: &'static str) -> Result<(), Error> {
     if let Some(field_value) = field {
         let field_spanned = Spanned::new(field_value);
@@ -635,17 +630,14 @@ impl TryFrom<RawTurboJson> for TurboJson {
                 return Err(Error::FutureFlagsInPackage { span, text });
             }
 
-            // Validate Vec fields
             validate_vec_field(&config.global_dependencies, "globalDependencies")?;
             validate_vec_field(&config.global_env, "globalEnv")?;
             validate_vec_field(&config.global_pass_through_env, "globalPassThroughEnv")?;
 
-            // Validate Spanned fields
             validate_spanned_field(&config.cache_dir, "cacheDir")?;
             validate_spanned_field(&config.daemon, "daemon")?;
             validate_spanned_field(&config.boundaries, "boundaries")?;
 
-            // Validate plain fields
             validate_plain_field(&config.ui, "ui")?;
             validate_plain_field(&config.no_update_notifier, "noUpdateNotifier")?;
             validate_plain_field(&config.concurrency, "concurrency")?;
@@ -1548,7 +1540,6 @@ mod tests {
     fn test_validate_root_only_field_utility() {
         use crate::config::Error;
 
-        // Test that the utility function works for workspace configs (should error)
         let workspace_config = RawTurboJson {
             extends: Some(Spanned::new(vec![UnescapedString::from("//")])),
             future_flags: Some(Spanned::new(FutureFlags {}).with_range(10..20)),
@@ -1564,7 +1555,6 @@ mod tests {
         });
         assert!(result.is_err());
 
-        // Test that the utility function works for root configs (should pass)
         let root_config = RawTurboJson {
             extends: None, // No extends means it's a root config
             future_flags: Some(Spanned::new(FutureFlags {})),
@@ -1581,7 +1571,6 @@ mod tests {
         });
         assert!(result.is_ok());
 
-        // Test with a different field type (Spanned<bool> via reference)
         let result = super::validate_root_only_field(&root_config, |config| {
             if let Some(daemon) = &config.daemon {
                 let (span, text) = daemon.span_and_text("turbo.json");
@@ -1591,7 +1580,6 @@ mod tests {
         });
         assert!(result.is_ok());
 
-        // Test that the utility function works when the field is None (should pass)
         let config_without_field = RawTurboJson {
             extends: Some(Spanned::new(vec![UnescapedString::from("//")])),
             future_flags: None,
@@ -1607,7 +1595,6 @@ mod tests {
         });
         assert!(result.is_ok());
 
-        // Test with multiple fields using the simplified approach
         let result = super::validate_root_only_field(&workspace_config, |config| {
             if let Some(future_flags) = &config.future_flags {
                 let (span, text) = future_flags.span_and_text("turbo.json");
@@ -1623,7 +1610,6 @@ mod tests {
     fn test_root_only_fields_validation() {
         use crate::config::Error;
 
-        // Test that root-only fields are rejected in package configurations
         let package_config_with_root_only_fields = RawTurboJson {
             extends: Some(Spanned::new(vec![UnescapedString::from("//")])),
             global_dependencies: Some(vec![Spanned::new(UnescapedString::from("./global.dep"))]),
@@ -1642,12 +1628,9 @@ mod tests {
             ..Default::default()
         };
 
-        // This should fail because it has extends (making it a package config) but also
-        // has root-only fields
         let result = TurboJson::try_from(package_config_with_root_only_fields);
         assert!(result.is_err());
 
-        // Test that root configs can have these fields
         let root_config_with_root_only_fields = RawTurboJson {
             extends: None, // No extends means it's a root config
             global_dependencies: Some(vec![Spanned::new(UnescapedString::from("./global.dep"))]),
@@ -1666,7 +1649,6 @@ mod tests {
             ..Default::default()
         };
 
-        // This should succeed because it's a root config
         let result = TurboJson::try_from(root_config_with_root_only_fields);
         assert!(result.is_ok());
     }
