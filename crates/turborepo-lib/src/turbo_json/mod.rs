@@ -36,6 +36,41 @@ use crate::{boundaries::BoundariesConfig, config::UnnecessaryPackageTaskSyntaxEr
 const TURBO_ROOT: &str = "$TURBO_ROOT$";
 const TURBO_ROOT_SLASH: &str = "$TURBO_ROOT$/";
 
+/// Validates that a field is only present in root turbo.json files (not
+/// workspace configs). Workspace configs are identified by the presence of an
+/// `extends` field.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// // Validate that futureFlags is only in root configs
+/// validate_root_only_field(&raw_turbo, &raw_turbo.future_flags, |span, text| {
+///     Error::FutureFlagsInPackage { span, text }
+/// })?;
+///
+/// // Can be used for other fields that should only be in root configs
+/// validate_root_only_field(&raw_turbo, &raw_turbo.some_other_field, |span, text| {
+///     Error::SomeOtherFieldInPackage { span, text }
+/// })?;
+/// ```
+fn validate_root_only_field<T, F>(
+    raw_turbo: &RawTurboJson,
+    field: &Option<Spanned<T>>,
+    error_constructor: F,
+) -> Result<(), Error>
+where
+    F: FnOnce(Option<SourceSpan>, NamedSource<String>) -> Error,
+{
+    let is_workspace_config = raw_turbo.extends.is_some();
+    if is_workspace_config {
+        if let Some(field_value) = field {
+            let (span, text) = field_value.span_and_text("turbo.json");
+            return Err(error_constructor(span, text));
+        }
+    }
+    Ok(())
+}
+
 #[derive(Serialize, Deserialize, Debug, Default, PartialEq, Clone, Deserializable)]
 #[serde(rename_all = "camelCase")]
 pub struct SpacesJson {
@@ -567,13 +602,9 @@ impl TryFrom<RawTurboJson> for TurboJson {
         }
 
         // `futureFlags` key is only allowed in root turbo.json
-        let is_workspace_config = raw_turbo.extends.is_some();
-        if is_workspace_config {
-            if let Some(future_flags) = raw_turbo.future_flags {
-                let (span, text) = future_flags.span_and_text("turbo.json");
-                return Err(Error::FutureFlagsInPackage { span, text });
-            }
-        }
+        validate_root_only_field(&raw_turbo, &raw_turbo.future_flags, |span, text| {
+            Error::FutureFlagsInPackage { span, text }
+        })?;
         let mut global_env = HashSet::new();
         let mut global_file_dependencies = HashSet::new();
 
@@ -1458,5 +1489,52 @@ mod tests {
             error.to_string(),
             "`with` cannot use dependency relationships."
         );
+    }
+
+    #[test]
+    fn test_validate_root_only_field_utility() {
+        use crate::config::Error;
+
+        // Test that the utility function works for workspace configs (should error)
+        let workspace_config = RawTurboJson {
+            extends: Some(Spanned::new(vec![UnescapedString::from("//")])),
+            future_flags: Some(Spanned::new(FutureFlags {}).with_range(10..20)),
+            ..Default::default()
+        };
+
+        let result = super::validate_root_only_field(
+            &workspace_config,
+            &workspace_config.future_flags,
+            |span, text| Error::FutureFlagsInPackage { span, text },
+        );
+        assert!(result.is_err());
+
+        // Test that the utility function works for root configs (should pass)
+        let root_config = RawTurboJson {
+            extends: None, // No extends means it's a root config
+            future_flags: Some(Spanned::new(FutureFlags {})),
+            ..Default::default()
+        };
+
+        let result = super::validate_root_only_field(
+            &root_config,
+            &root_config.future_flags,
+            |span, text| Error::FutureFlagsInPackage { span, text },
+        );
+        assert!(result.is_ok());
+
+        // Test that the utility function works when the field is None (should pass)
+        let config_without_field = RawTurboJson {
+            extends: Some(Spanned::new(vec![UnescapedString::from("//")])),
+            future_flags: None,
+            ..Default::default()
+        };
+
+        let result = super::validate_root_only_field(
+            &config_without_field,
+            &config_without_field.future_flags,
+            |span, text| Error::FutureFlagsInPackage { span, text },
+        );
+        assert!(result.is_ok());
     }
 }
