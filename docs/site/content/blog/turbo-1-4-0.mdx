@@ -62,9 +62,9 @@ For example, consider a monorepo with three workspaces: a Next.js project, a Cre
 {
   "pipeline": {
     "build": {
-      "dependsOn": ["^build"]
-    }
-  }
+      "dependsOn": ["^build"],
+    },
+  },
 }
 ```
 
@@ -81,7 +81,7 @@ To get started, extend from `eslint-config-turbo` in your root [`eslintrc`](http
 ```jsonc title=".eslint.config.js"
 {
   // Automatically flag env vars missing from turbo.json
-  "extends": ["next/core-web-vitals", "turbo"]
+  "extends": ["next/core-web-vitals", "turbo"],
 }
 ```
 
@@ -93,8 +93,8 @@ If you prefer more control over the rules - use can install and configure the `e
   "plugins": ["turbo"],
   "rules": {
     // Automatically flag env vars missing from turbo.json
-    "turbo/no-undeclared-env-vars": "error"
-  }
+    "turbo/no-undeclared-env-vars": "error",
+  },
 }
 ```
 

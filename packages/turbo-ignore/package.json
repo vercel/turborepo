@@ -21,16 +21,13 @@
   "scripts": {
     "build": "tsup",
     "test": "jest",
-    "lint": "eslint src __tests__",
-    "check-types": "tsc --noEmit",
-    "lint:prettier": "prettier -c . --cache --ignore-path=../../.prettierignore"
+    "check-types": "tsc --noEmit"
   },
   "dependencies": {
     "json5": "^2.2.3"
   },
   "devDependencies": {
     "@jest/globals": "^29.7.0",
-    "@turbo/eslint-config": "workspace:*",
     "@turbo/telemetry": "workspace:*",
     "@turbo/test-utils": "workspace:*",
     "@turbo/tsconfig": "workspace:*",
