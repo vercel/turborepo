@@ -359,7 +359,7 @@ impl<'a> RunSummary<'a> {
         if matches!(self.run_type, RunType::DryJson) {
             let rendered = self.format_json()?;
 
-            println!("{}", rendered);
+            println!("{rendered}");
             return Ok(());
         }
 
@@ -386,7 +386,7 @@ impl<'a> RunSummary<'a> {
                     .ok_or_else(|| Error::MissingWorkspace((*pkg).to_owned()))?
                     .package_path();
 
-                writeln!(tab_writer, "{}\t{}", pkg, dir)?;
+                writeln!(tab_writer, "{pkg}\t{dir}")?;
             }
             tab_writer.flush()?;
         }
