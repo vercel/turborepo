@@ -577,12 +577,154 @@ impl TryFrom<RawTurboJson> for TurboJson {
             return Err(Error::PipelineField { span, text });
         }
 
-        // `futureFlags` key is only allowed in root turbo.json
+        // Validate root-only fields
         validate_root_only_field(&raw_turbo, |config| {
+            // `futureFlags` key is only allowed in root turbo.json
             if let Some(future_flags) = &config.future_flags {
                 let (span, text) = future_flags.span_and_text("turbo.json");
                 return Err(Error::FutureFlagsInPackage { span, text });
             }
+
+            // `globalDependencies` key is only allowed in root turbo.json
+            if let Some(global_dependencies) = &config.global_dependencies {
+                // For Vec fields, create a temporary Spanned that covers the whole array
+                let global_dependencies_spanned = Spanned::new(global_dependencies);
+                let (span, text) = global_dependencies_spanned.span_and_text("turbo.json");
+                return Err(Error::RootOnlyField {
+                    field: "globalDependencies",
+                    span,
+                    text,
+                });
+            }
+
+            // `globalEnv` key is only allowed in root turbo.json
+            if let Some(global_env) = &config.global_env {
+                // For Vec fields, create a temporary Spanned that covers the whole array
+                let global_env_spanned = Spanned::new(global_env);
+                let (span, text) = global_env_spanned.span_and_text("turbo.json");
+                return Err(Error::RootOnlyField {
+                    field: "globalEnv",
+                    span,
+                    text,
+                });
+            }
+
+            // `globalPassThroughEnv` key is only allowed in root turbo.json
+            if let Some(global_pass_through_env) = &config.global_pass_through_env {
+                // For Vec fields, create a temporary Spanned that covers the whole array
+                let global_pass_through_env_spanned = Spanned::new(global_pass_through_env);
+                let (span, text) = global_pass_through_env_spanned.span_and_text("turbo.json");
+                return Err(Error::RootOnlyField {
+                    field: "globalPassThroughEnv",
+                    span,
+                    text,
+                });
+            }
+
+            // `ui` key is only allowed in root turbo.json
+            if let Some(ui) = &config.ui {
+                // Create a temporary Spanned for ui since it's not wrapped
+                let ui_spanned = Spanned::new(ui);
+                let (span, text) = ui_spanned.span_and_text("turbo.json");
+                return Err(Error::RootOnlyField {
+                    field: "ui",
+                    span,
+                    text,
+                });
+            }
+
+            // `noUpdateNotifier` key is only allowed in root turbo.json
+            if let Some(no_update_notifier) = &config.no_update_notifier {
+                // Create a temporary Spanned for no_update_notifier since it's not wrapped
+                let no_update_notifier_spanned = Spanned::new(no_update_notifier);
+                let (span, text) = no_update_notifier_spanned.span_and_text("turbo.json");
+                return Err(Error::RootOnlyField {
+                    field: "noUpdateNotifier",
+                    span,
+                    text,
+                });
+            }
+
+            // `concurrency` key is only allowed in root turbo.json
+            if let Some(concurrency) = &config.concurrency {
+                // Create a temporary Spanned for concurrency since it's not wrapped
+                let concurrency_spanned = Spanned::new(concurrency);
+                let (span, text) = concurrency_spanned.span_and_text("turbo.json");
+                return Err(Error::RootOnlyField {
+                    field: "concurrency",
+                    span,
+                    text,
+                });
+            }
+
+            // `dangerouslyDisablePackageManagerCheck` key is only allowed in root
+            // turbo.json
+            if let Some(allow_no_package_manager) = &config.allow_no_package_manager {
+                // Create a temporary Spanned for allow_no_package_manager since it's not
+                // wrapped
+                let allow_no_package_manager_spanned = Spanned::new(allow_no_package_manager);
+                let (span, text) = allow_no_package_manager_spanned.span_and_text("turbo.json");
+                return Err(Error::RootOnlyField {
+                    field: "dangerouslyDisablePackageManagerCheck",
+                    span,
+                    text,
+                });
+            }
+
+            // `cacheDir` key is only allowed in root turbo.json
+            if let Some(cache_dir) = &config.cache_dir {
+                let (span, text) = cache_dir.span_and_text("turbo.json");
+                return Err(Error::RootOnlyField {
+                    field: "cacheDir",
+                    span,
+                    text,
+                });
+            }
+
+            // `daemon` key is only allowed in root turbo.json
+            if let Some(daemon) = &config.daemon {
+                let (span, text) = daemon.span_and_text("turbo.json");
+                return Err(Error::RootOnlyField {
+                    field: "daemon",
+                    span,
+                    text,
+                });
+            }
+
+            // `envMode` key is only allowed in root turbo.json
+            if let Some(env_mode) = &config.env_mode {
+                // Create a temporary Spanned for env_mode since it's not wrapped
+                let env_mode_spanned = Spanned::new(env_mode);
+                let (span, text) = env_mode_spanned.span_and_text("turbo.json");
+                return Err(Error::RootOnlyField {
+                    field: "envMode",
+                    span,
+                    text,
+                });
+            }
+
+            // `boundaries` key is only allowed in root turbo.json
+            if let Some(boundaries) = &config.boundaries {
+                let (span, text) = boundaries.span_and_text("turbo.json");
+                return Err(Error::RootOnlyField {
+                    field: "boundaries",
+                    span,
+                    text,
+                });
+            }
+
+            // `remoteCache` key is only allowed in root turbo.json
+            if let Some(remote_cache) = &config.remote_cache {
+                // Create a temporary Spanned for remote_cache since it's not wrapped
+                let remote_cache_spanned = Spanned::new(remote_cache);
+                let (span, text) = remote_cache_spanned.span_and_text("turbo.json");
+                return Err(Error::RootOnlyField {
+                    field: "remoteCache",
+                    span,
+                    text,
+                });
+            }
+
             Ok(())
         })?;
         let mut global_env = HashSet::new();
@@ -1544,5 +1686,57 @@ mod tests {
             Ok(())
         });
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_root_only_fields_validation() {
+        use crate::config::Error;
+
+        // Test that root-only fields are rejected in package configurations
+        let package_config_with_root_only_fields = RawTurboJson {
+            extends: Some(Spanned::new(vec![UnescapedString::from("//")])),
+            global_dependencies: Some(vec![Spanned::new(UnescapedString::from("./global.dep"))]),
+            global_env: Some(vec![Spanned::new(UnescapedString::from("GLOBAL_VAR"))]),
+            global_pass_through_env: Some(vec![Spanned::new(UnescapedString::from("PASS_VAR"))]),
+            ui: Some(UIMode::Tui),
+            no_update_notifier: Some(true),
+            concurrency: Some("50%".to_string()),
+            allow_no_package_manager: Some(true),
+            cache_dir: Some(Spanned::new(UnescapedString::from(".turbo/cache"))),
+            daemon: Some(Spanned::new(true)),
+            env_mode: Some(crate::cli::EnvMode::Strict),
+            boundaries: Some(Spanned::new(crate::boundaries::BoundariesConfig::default())),
+            remote_cache: Some(super::RawRemoteCacheOptions::default()),
+            future_flags: Some(Spanned::new(FutureFlags {})),
+            ..Default::default()
+        };
+
+        // This should fail because it has extends (making it a package config) but also
+        // has root-only fields
+        let result = TurboJson::try_from(package_config_with_root_only_fields);
+        assert!(result.is_err());
+
+        // Test that root configs can have these fields
+        let root_config_with_root_only_fields = RawTurboJson {
+            extends: None, // No extends means it's a root config
+            global_dependencies: Some(vec![Spanned::new(UnescapedString::from("./global.dep"))]),
+            global_env: Some(vec![Spanned::new(UnescapedString::from("GLOBAL_VAR"))]),
+            global_pass_through_env: Some(vec![Spanned::new(UnescapedString::from("PASS_VAR"))]),
+            ui: Some(UIMode::Tui),
+            no_update_notifier: Some(true),
+            concurrency: Some("50%".to_string()),
+            allow_no_package_manager: Some(true),
+            cache_dir: Some(Spanned::new(UnescapedString::from(".turbo/cache"))),
+            daemon: Some(Spanned::new(true)),
+            env_mode: Some(crate::cli::EnvMode::Strict),
+            boundaries: Some(Spanned::new(crate::boundaries::BoundariesConfig::default())),
+            remote_cache: Some(super::RawRemoteCacheOptions::default()),
+            future_flags: Some(Spanned::new(FutureFlags {})),
+            ..Default::default()
+        };
+
+        // This should succeed because it's a root config
+        let result = TurboJson::try_from(root_config_with_root_only_fields);
+        assert!(result.is_ok());
     }
 }
