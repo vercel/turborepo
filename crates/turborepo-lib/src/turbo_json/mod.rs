@@ -36,35 +36,6 @@ use crate::{boundaries::BoundariesConfig, config::UnnecessaryPackageTaskSyntaxEr
 const TURBO_ROOT: &str = "$TURBO_ROOT$";
 const TURBO_ROOT_SLASH: &str = "$TURBO_ROOT$/";
 
-/// Validates that a field is only present in root turbo.json files (not
-/// workspace configs). Workspace configs are identified by the presence of an
-/// `extends` field.
-///
-/// # Example
-///
-/// ```rust,ignore
-/// // Validate that futureFlags is only in root configs
-/// validate_root_only_field(&raw_turbo, |config| {
-///     if let Some(future_flags) = &config.future_flags {
-///         let (span, text) = future_flags.span_and_text("turbo.json");
-///         return Err(Error::FutureFlagsInPackage { span, text });
-///     }
-///     Ok(())
-/// })?;
-///
-/// // Validate multiple fields at once
-/// validate_root_only_field(&raw_turbo, |config| {
-///     if let Some(future_flags) = &config.future_flags {
-///         let (span, text) = future_flags.span_and_text("turbo.json");
-///         return Err(Error::FutureFlagsInPackage { span, text });
-///     }
-///     if let Some(daemon) = &config.daemon {
-///         let (span, text) = daemon.span_and_text("turbo.json");
-///         return Err(Error::DaemonInPackage { span, text });
-///     }
-///     Ok(())
-/// })?;
-/// ```
 fn validate_root_only_field<F>(raw_turbo: &RawTurboJson, validator: F) -> Result<(), Error>
 where
     F: FnOnce(&RawTurboJson) -> Result<(), Error>,
