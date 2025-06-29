@@ -190,6 +190,13 @@ export interface RootSchema extends BaseSchema {
    * @defaultValue `false`
    */
   noUpdateNotifier?: boolean;
+
+  /**
+   * Opt into breaking changes prior to major releases, experimental features, and beta features.
+   *
+   * @defaultValue `{}`
+   */
+  futureFlags?: Record<string, unknown>;
 }
 
 export interface Pipeline {

@@ -226,6 +226,16 @@ pub enum Error {
         text: NamedSource<String>,
     },
     #[error(
+        "The \"futureFlags\" key can only be used in the root turbo.json. Please remove it from \
+         Package Configurations."
+    )]
+    FutureFlagsInPackage {
+        #[label("futureFlags key found here")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource<String>,
+    },
+    #[error(
         "TURBO_TUI_SCROLLBACK_LENGTH: Invalid value. Use a number for how many lines to keep in \
          scrollback."
     )]
