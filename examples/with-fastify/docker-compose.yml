@@ -1,0 +1,30 @@
+version: "3"
+
+services:
+  api:
+    container_name: api
+    build:
+      context: .
+      dockerfile: ./apps/api/Dockerfile
+    restart: always
+    ports:
+      - 3001:3001
+    networks:
+      - app_network
+
+  fastify-api:
+    container_name: fastify-api
+    build:
+      context: .
+      dockerfile: ./apps/fastify-api/Dockerfile
+    restart: always
+    ports:
+      - 3002:3002
+    networks:
+      - app_network
+
+# Define a network, which allows containers to communicate
+# with each other, by using their container name as a hostname, more in readme
+networks:
+  app_network:
+    external: true
