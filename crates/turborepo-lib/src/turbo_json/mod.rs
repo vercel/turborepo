@@ -1599,7 +1599,6 @@ mod tests {
                 let (span, text) = future_flags.span_and_text("turbo.json");
                 return Err(Error::FutureFlagsInPackage { span, text });
             }
-            // Could validate more fields here if needed
             Ok(())
         });
         assert!(result.is_err());
