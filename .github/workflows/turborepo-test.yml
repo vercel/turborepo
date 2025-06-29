@@ -131,11 +131,8 @@ jobs:
         run: git config --global core.autocrlf input
       - uses: actions/checkout@v4
 
-      - name: Setup Turborepo Environment
-        uses: ./.github/actions/setup-turborepo-environment
-        with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-          node-version: "18.20.2" # TODO: Update integration tests with changed log output in Node.js 22
+      - name: "Setup Node"
+        uses: ./.github/actions/setup-node
 
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
