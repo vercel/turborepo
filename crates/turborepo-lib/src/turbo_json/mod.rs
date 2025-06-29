@@ -44,29 +44,34 @@ const TURBO_ROOT_SLASH: &str = "$TURBO_ROOT$/";
 ///
 /// ```rust,ignore
 /// // Validate that futureFlags is only in root configs
-/// validate_root_only_field(&raw_turbo, &raw_turbo.future_flags, |span, text| {
-///     Error::FutureFlagsInPackage { span, text }
+/// validate_root_only_field(&raw_turbo, |config| {
+///     if let Some(future_flags) = &config.future_flags {
+///         let (span, text) = future_flags.span_and_text("turbo.json");
+///         return Err(Error::FutureFlagsInPackage { span, text });
+///     }
+///     Ok(())
 /// })?;
 ///
-/// // Can be used for other fields that should only be in root configs
-/// validate_root_only_field(&raw_turbo, &raw_turbo.some_other_field, |span, text| {
-///     Error::SomeOtherFieldInPackage { span, text }
+/// // Validate multiple fields at once
+/// validate_root_only_field(&raw_turbo, |config| {
+///     if let Some(future_flags) = &config.future_flags {
+///         let (span, text) = future_flags.span_and_text("turbo.json");
+///         return Err(Error::FutureFlagsInPackage { span, text });
+///     }
+///     if let Some(daemon) = &config.daemon {
+///         let (span, text) = daemon.span_and_text("turbo.json");
+///         return Err(Error::DaemonInPackage { span, text });
+///     }
+///     Ok(())
 /// })?;
 /// ```
-fn validate_root_only_field<T, F>(
-    raw_turbo: &RawTurboJson,
-    field: &Option<Spanned<T>>,
-    error_constructor: F,
-) -> Result<(), Error>
+fn validate_root_only_field<F>(raw_turbo: &RawTurboJson, validator: F) -> Result<(), Error>
 where
-    F: FnOnce(Option<SourceSpan>, NamedSource<String>) -> Error,
+    F: FnOnce(&RawTurboJson) -> Result<(), Error>,
 {
     let is_workspace_config = raw_turbo.extends.is_some();
     if is_workspace_config {
-        if let Some(field_value) = field {
-            let (span, text) = field_value.span_and_text("turbo.json");
-            return Err(error_constructor(span, text));
-        }
+        validator(raw_turbo)?;
     }
     Ok(())
 }
@@ -602,8 +607,12 @@ impl TryFrom<RawTurboJson> for TurboJson {
         }
 
         // `futureFlags` key is only allowed in root turbo.json
-        validate_root_only_field(&raw_turbo, &raw_turbo.future_flags, |span, text| {
-            Error::FutureFlagsInPackage { span, text }
+        validate_root_only_field(&raw_turbo, |config| {
+            if let Some(future_flags) = &config.future_flags {
+                let (span, text) = future_flags.span_and_text("turbo.json");
+                return Err(Error::FutureFlagsInPackage { span, text });
+            }
+            Ok(())
         })?;
         let mut global_env = HashSet::new();
         let mut global_file_dependencies = HashSet::new();
@@ -1502,25 +1511,40 @@ mod tests {
             ..Default::default()
         };
 
-        let result = super::validate_root_only_field(
-            &workspace_config,
-            &workspace_config.future_flags,
-            |span, text| Error::FutureFlagsInPackage { span, text },
-        );
+        let result = super::validate_root_only_field(&workspace_config, |config| {
+            if let Some(future_flags) = &config.future_flags {
+                let (span, text) = future_flags.span_and_text("turbo.json");
+                return Err(Error::FutureFlagsInPackage { span, text });
+            }
+            Ok(())
+        });
         assert!(result.is_err());
 
         // Test that the utility function works for root configs (should pass)
         let root_config = RawTurboJson {
             extends: None, // No extends means it's a root config
             future_flags: Some(Spanned::new(FutureFlags {})),
+            daemon: Some(Spanned::new(true)),
             ..Default::default()
         };
 
-        let result = super::validate_root_only_field(
-            &root_config,
-            &root_config.future_flags,
-            |span, text| Error::FutureFlagsInPackage { span, text },
-        );
+        let result = super::validate_root_only_field(&root_config, |config| {
+            if let Some(future_flags) = &config.future_flags {
+                let (span, text) = future_flags.span_and_text("turbo.json");
+                return Err(Error::FutureFlagsInPackage { span, text });
+            }
+            Ok(())
+        });
+        assert!(result.is_ok());
+
+        // Test with a different field type (Spanned<bool> via reference)
+        let result = super::validate_root_only_field(&root_config, |config| {
+            if let Some(daemon) = &config.daemon {
+                let (span, text) = daemon.span_and_text("turbo.json");
+                return Err(Error::FutureFlagsInPackage { span, text });
+            }
+            Ok(())
+        });
         assert!(result.is_ok());
 
         // Test that the utility function works when the field is None (should pass)
@@ -1530,11 +1554,24 @@ mod tests {
             ..Default::default()
         };
 
-        let result = super::validate_root_only_field(
-            &config_without_field,
-            &config_without_field.future_flags,
-            |span, text| Error::FutureFlagsInPackage { span, text },
-        );
+        let result = super::validate_root_only_field(&config_without_field, |config| {
+            if let Some(future_flags) = &config.future_flags {
+                let (span, text) = future_flags.span_and_text("turbo.json");
+                return Err(Error::FutureFlagsInPackage { span, text });
+            }
+            Ok(())
+        });
         assert!(result.is_ok());
+
+        // Test with multiple fields using the simplified approach
+        let result = super::validate_root_only_field(&workspace_config, |config| {
+            if let Some(future_flags) = &config.future_flags {
+                let (span, text) = future_flags.span_and_text("turbo.json");
+                return Err(Error::FutureFlagsInPackage { span, text });
+            }
+            // Could validate more fields here if needed
+            Ok(())
+        });
+        assert!(result.is_err());
     }
 }
