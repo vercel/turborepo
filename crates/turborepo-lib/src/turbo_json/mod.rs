@@ -621,7 +621,6 @@ impl TryFrom<RawTurboJson> for TurboJson {
             return Err(Error::PipelineField { span, text });
         }
 
-        // Validate root-only fields
         validate_root_only_field(&raw_turbo, |config| {
             // `futureFlags` key is only allowed in root turbo.json (keep special error for
             // backwards compatibility)
