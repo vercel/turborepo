@@ -622,13 +622,6 @@ impl TryFrom<RawTurboJson> for TurboJson {
         }
 
         validate_root_only_field(&raw_turbo, |config| {
-            // `futureFlags` key is only allowed in root turbo.json (keep special error for
-            // backwards compatibility)
-            if let Some(future_flags) = &config.future_flags {
-                let (span, text) = future_flags.span_and_text("turbo.json");
-                return Err(Error::FutureFlagsInPackage { span, text });
-            }
-
             validate_vec_field(&config.global_dependencies, "globalDependencies")?;
             validate_vec_field(&config.global_env, "globalEnv")?;
             validate_vec_field(&config.global_pass_through_env, "globalPassThroughEnv")?;
@@ -636,6 +629,7 @@ impl TryFrom<RawTurboJson> for TurboJson {
             validate_spanned_field(&config.cache_dir, "cacheDir")?;
             validate_spanned_field(&config.daemon, "daemon")?;
             validate_spanned_field(&config.boundaries, "boundaries")?;
+            validate_spanned_field(&config.future_flags, "futureFlags")?;
 
             validate_plain_field(&config.ui, "ui")?;
             validate_plain_field(&config.no_update_notifier, "noUpdateNotifier")?;
@@ -1475,9 +1469,9 @@ mod tests {
 
         let error = turbo_json_result.unwrap_err();
         let error_str = error.to_string();
-        assert!(
-            error_str.contains("The \"futureFlags\" key can only be used in the root turbo.json")
-        );
+        // The generic RootOnlyField error should contain both "futureFlags" and "root
+        // turbo.json"
+        assert!(error_str.contains("futureFlags") && error_str.contains("root turbo.json"));
     }
 
     #[test]
@@ -1537,8 +1531,6 @@ mod tests {
 
     #[test]
     fn test_validate_root_only_field_utility() {
-        use crate::config::Error;
-
         let workspace_config = RawTurboJson {
             extends: Some(Spanned::new(vec![UnescapedString::from("//")])),
             future_flags: Some(Spanned::new(FutureFlags {}).with_range(10..20)),
@@ -1546,11 +1538,7 @@ mod tests {
         };
 
         let result = super::validate_root_only_field(&workspace_config, |config| {
-            if let Some(future_flags) = &config.future_flags {
-                let (span, text) = future_flags.span_and_text("turbo.json");
-                return Err(Error::FutureFlagsInPackage { span, text });
-            }
-            Ok(())
+            super::validate_spanned_field(&config.future_flags, "futureFlags")
         });
         assert!(result.is_err());
 
@@ -1562,20 +1550,12 @@ mod tests {
         };
 
         let result = super::validate_root_only_field(&root_config, |config| {
-            if let Some(future_flags) = &config.future_flags {
-                let (span, text) = future_flags.span_and_text("turbo.json");
-                return Err(Error::FutureFlagsInPackage { span, text });
-            }
-            Ok(())
+            super::validate_spanned_field(&config.future_flags, "futureFlags")
         });
         assert!(result.is_ok());
 
         let result = super::validate_root_only_field(&root_config, |config| {
-            if let Some(daemon) = &config.daemon {
-                let (span, text) = daemon.span_and_text("turbo.json");
-                return Err(Error::FutureFlagsInPackage { span, text });
-            }
-            Ok(())
+            super::validate_spanned_field(&config.daemon, "daemon")
         });
         assert!(result.is_ok());
 
@@ -1586,28 +1566,18 @@ mod tests {
         };
 
         let result = super::validate_root_only_field(&config_without_field, |config| {
-            if let Some(future_flags) = &config.future_flags {
-                let (span, text) = future_flags.span_and_text("turbo.json");
-                return Err(Error::FutureFlagsInPackage { span, text });
-            }
-            Ok(())
+            super::validate_spanned_field(&config.future_flags, "futureFlags")
         });
         assert!(result.is_ok());
 
         let result = super::validate_root_only_field(&workspace_config, |config| {
-            if let Some(future_flags) = &config.future_flags {
-                let (span, text) = future_flags.span_and_text("turbo.json");
-                return Err(Error::FutureFlagsInPackage { span, text });
-            }
-            Ok(())
+            super::validate_spanned_field(&config.future_flags, "futureFlags")
         });
         assert!(result.is_err());
     }
 
     #[test]
     fn test_root_only_fields_validation() {
-        use crate::config::Error;
-
         let package_config_with_root_only_fields = RawTurboJson {
             extends: Some(Spanned::new(vec![UnescapedString::from("//")])),
             global_dependencies: Some(vec![Spanned::new(UnescapedString::from("./global.dep"))]),
