@@ -102,6 +102,12 @@
           "type": "boolean",
           "description": "When set to `true`, disables the update notification that appears when a new version of `turbo` is available.\n\nDocumentation: https://turborepo.com/docs/reference/configuration#noupdatenotifier",
           "default": false
+        },
+        "futureFlags": {
+          "type": "object",
+          "additionalProperties": {},
+          "description": "Opt into breaking changes prior to major releases, experimental features, and beta features.",
+          "default": {}
         }
       },
       "additionalProperties": false,
