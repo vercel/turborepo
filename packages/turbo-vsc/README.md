@@ -16,7 +16,7 @@ Every task in your pipeline can be followed to find its references.
 
 Get instant feedback if you write incorrect globs, refer to non-existent packages or tasks, and more.
 
-![A screenshot of a VSCode editor notifying of an invalid glob syntax.](resources/globs.png)
+![A screnshot of a VSCode editor notifying of an invalid glob syntax.](resources/globs.png)
 
 #### Contextual codemods
 
