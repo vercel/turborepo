@@ -525,7 +525,6 @@ impl FsEventWatcher {
                         cur_runloop,
                         cf::kCFRunLoopDefaultMode,
                     );
-
                     if fs::FSEventStreamStart(stream) == FALSE {
                         panic!("FSEventStream failed to start");
                     }
@@ -537,7 +536,6 @@ impl FsEventWatcher {
                         .expect("Unable to send runloop to watcher");
 
                     cf::CFRunLoopRun();
-
                     fs::FSEventStreamStop(stream);
                     fs::FSEventStreamInvalidate(stream);
                     fs::FSEventStreamRelease(stream);

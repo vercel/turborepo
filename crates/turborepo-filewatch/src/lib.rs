@@ -534,14 +534,7 @@ async fn wait_for_cookie(
     tracing::debug!("Cookie file created, waiting for filesystem event");
 
     // Dynamic timeout based on filesystem characteristics
-    let timeout_duration = if cookie_dir.to_string().starts_with("/Volumes/") {
-        // External volume detected - use longer timeout
-        tracing::debug!("External volume detected, using extended cookie timeout (6 seconds)");
-        Duration::from_secs(6)
-    } else {
-        // Standard timeout
-        Duration::from_secs(2)
-    };
+    let timeout_duration = Duration::from_secs(2);
 
     let timeout = tokio::time::sleep(timeout_duration);
     let mut event_count = 0;
