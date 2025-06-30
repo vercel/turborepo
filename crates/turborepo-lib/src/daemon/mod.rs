@@ -78,15 +78,6 @@ fn daemon_file_root_cross_volume_aware(
             .join_component(repo_hash);
     }
 
-    // Check if we should use cross-volume compatibility mode
-    if std::env::var("TURBO_ALLOW_CROSS_VOLUME_WATCH").is_ok() {
-        tracing::debug!("Cross-volume mode enabled, placing daemon in repo directory");
-        // Place daemon in the repo's .turbo directory to ensure same volume
-        return repo_root
-            .join_components(&[".turbo", "daemon-runtime"])
-            .join_component(repo_hash);
-    }
-
     // Auto-detect cross-volume scenario on macOS
     #[cfg(target_os = "macos")]
     {
@@ -100,7 +91,7 @@ fn daemon_file_root_cross_volume_aware(
             let repo_device = repo_metadata.dev();
 
             if temp_device != repo_device {
-                tracing::info!(
+                tracing::debug!(
                     "Cross-volume scenario detected (temp: {}, repo: {}), placing daemon in repo \
                      directory",
                     temp_device,

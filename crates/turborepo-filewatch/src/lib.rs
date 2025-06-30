@@ -533,20 +533,11 @@ async fn wait_for_cookie(
 
     tracing::debug!("Cookie file created, waiting for filesystem event");
 
-    // Detect if we're on a potentially slower filesystem (external volumes, network
-    // drives, etc.) and adjust timeout accordingly
-    let timeout_duration = if cookie_path
-        .as_std_path()
-        .to_string_lossy()
-        .starts_with("/Volumes/")
-    {
+    // Dynamic timeout based on filesystem characteristics
+    let timeout_duration = if cookie_dir.to_string_lossy().starts_with("/Volumes/") {
         // External volume detected - use longer timeout
-        tracing::info!("External volume detected, using extended cookie timeout (6 seconds)");
+        tracing::debug!("External volume detected, using extended cookie timeout (6 seconds)");
         Duration::from_secs(6)
-    } else if std::env::var("TURBO_ALLOW_CROSS_VOLUME_WATCH").is_ok() {
-        // Cross-volume mode enabled - use longer timeout
-        tracing::info!("Cross-volume mode enabled, using extended cookie timeout (4 seconds)");
-        Duration::from_secs(4)
     } else {
         // Standard timeout
         Duration::from_secs(2)
