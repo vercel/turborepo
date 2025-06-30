@@ -236,6 +236,17 @@ pub enum Error {
         text: NamedSource<String>,
     },
     #[error(
+        "The \"{field}\" key can only be used in the root turbo.json. Please remove it from \
+         Package Configurations."
+    )]
+    RootOnlyField {
+        field: &'static str,
+        #[label("{field} key found here")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource<String>,
+    },
+    #[error(
         "TURBO_TUI_SCROLLBACK_LENGTH: Invalid value. Use a number for how many lines to keep in \
          scrollback."
     )]

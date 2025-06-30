@@ -36,6 +36,61 @@ use crate::{boundaries::BoundariesConfig, config::UnnecessaryPackageTaskSyntaxEr
 const TURBO_ROOT: &str = "$TURBO_ROOT$";
 const TURBO_ROOT_SLASH: &str = "$TURBO_ROOT$/";
 
+fn validate_root_only_field<F>(raw_turbo: &RawTurboJson, validator: F) -> Result<(), Error>
+where
+    F: FnOnce(&RawTurboJson) -> Result<(), Error>,
+{
+    let is_workspace_config = raw_turbo.extends.is_some();
+    if is_workspace_config {
+        validator(raw_turbo)?;
+    }
+    Ok(())
+}
+
+fn validate_spanned_field<T>(
+    field: &Option<Spanned<T>>,
+    field_name: &'static str,
+) -> Result<(), Error> {
+    if let Some(field_value) = field {
+        let (span, text) = field_value.span_and_text("turbo.json");
+        return Err(Error::RootOnlyField {
+            field: field_name,
+            span,
+            text,
+        });
+    }
+    Ok(())
+}
+
+fn validate_vec_field<T>(
+    field: &Option<Vec<Spanned<T>>>,
+    field_name: &'static str,
+) -> Result<(), Error> {
+    if let Some(field_value) = field {
+        let field_spanned = Spanned::new(field_value);
+        let (span, text) = field_spanned.span_and_text("turbo.json");
+        return Err(Error::RootOnlyField {
+            field: field_name,
+            span,
+            text,
+        });
+    }
+    Ok(())
+}
+
+fn validate_plain_field<T>(field: &Option<T>, field_name: &'static str) -> Result<(), Error> {
+    if let Some(field_value) = field {
+        let field_spanned = Spanned::new(field_value);
+        let (span, text) = field_spanned.span_and_text("turbo.json");
+        return Err(Error::RootOnlyField {
+            field: field_name,
+            span,
+            text,
+        });
+    }
+    Ok(())
+}
+
 #[derive(Serialize, Deserialize, Debug, Default, PartialEq, Clone, Deserializable)]
 #[serde(rename_all = "camelCase")]
 pub struct SpacesJson {
@@ -566,14 +621,28 @@ impl TryFrom<RawTurboJson> for TurboJson {
             return Err(Error::PipelineField { span, text });
         }
 
-        // `futureFlags` key is only allowed in root turbo.json
-        let is_workspace_config = raw_turbo.extends.is_some();
-        if is_workspace_config {
-            if let Some(future_flags) = raw_turbo.future_flags {
-                let (span, text) = future_flags.span_and_text("turbo.json");
-                return Err(Error::FutureFlagsInPackage { span, text });
-            }
-        }
+        validate_root_only_field(&raw_turbo, |config| {
+            validate_vec_field(&config.global_dependencies, "globalDependencies")?;
+            validate_vec_field(&config.global_env, "globalEnv")?;
+            validate_vec_field(&config.global_pass_through_env, "globalPassThroughEnv")?;
+
+            validate_spanned_field(&config.cache_dir, "cacheDir")?;
+            validate_spanned_field(&config.daemon, "daemon")?;
+            validate_spanned_field(&config.boundaries, "boundaries")?;
+            validate_spanned_field(&config.future_flags, "futureFlags")?;
+
+            validate_plain_field(&config.ui, "ui")?;
+            validate_plain_field(&config.no_update_notifier, "noUpdateNotifier")?;
+            validate_plain_field(&config.concurrency, "concurrency")?;
+            validate_plain_field(
+                &config.allow_no_package_manager,
+                "dangerouslyDisablePackageManagerCheck",
+            )?;
+            validate_plain_field(&config.env_mode, "envMode")?;
+            validate_plain_field(&config.remote_cache, "remoteCache")?;
+
+            Ok(())
+        })?;
         let mut global_env = HashSet::new();
         let mut global_file_dependencies = HashSet::new();
 
@@ -1400,9 +1469,9 @@ mod tests {
 
         let error = turbo_json_result.unwrap_err();
         let error_str = error.to_string();
-        assert!(
-            error_str.contains("The \"futureFlags\" key can only be used in the root turbo.json")
-        );
+        // The generic RootOnlyField error should contain both "futureFlags" and "root
+        // turbo.json"
+        assert!(error_str.contains("futureFlags") && error_str.contains("root turbo.json"));
     }
 
     #[test]
@@ -1458,5 +1527,97 @@ mod tests {
             error.to_string(),
             "`with` cannot use dependency relationships."
         );
+    }
+
+    #[test]
+    fn test_validate_root_only_field_utility() {
+        let workspace_config = RawTurboJson {
+            extends: Some(Spanned::new(vec![UnescapedString::from("//")])),
+            future_flags: Some(Spanned::new(FutureFlags {}).with_range(10..20)),
+            ..Default::default()
+        };
+
+        let result = super::validate_root_only_field(&workspace_config, |config| {
+            super::validate_spanned_field(&config.future_flags, "futureFlags")
+        });
+        assert!(result.is_err());
+
+        let root_config = RawTurboJson {
+            extends: None, // No extends means it's a root config
+            future_flags: Some(Spanned::new(FutureFlags {})),
+            daemon: Some(Spanned::new(true)),
+            ..Default::default()
+        };
+
+        let result = super::validate_root_only_field(&root_config, |config| {
+            super::validate_spanned_field(&config.future_flags, "futureFlags")
+        });
+        assert!(result.is_ok());
+
+        let result = super::validate_root_only_field(&root_config, |config| {
+            super::validate_spanned_field(&config.daemon, "daemon")
+        });
+        assert!(result.is_ok());
+
+        let config_without_field = RawTurboJson {
+            extends: Some(Spanned::new(vec![UnescapedString::from("//")])),
+            future_flags: None,
+            ..Default::default()
+        };
+
+        let result = super::validate_root_only_field(&config_without_field, |config| {
+            super::validate_spanned_field(&config.future_flags, "futureFlags")
+        });
+        assert!(result.is_ok());
+
+        let result = super::validate_root_only_field(&workspace_config, |config| {
+            super::validate_spanned_field(&config.future_flags, "futureFlags")
+        });
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_root_only_fields_validation() {
+        let package_config_with_root_only_fields = RawTurboJson {
+            extends: Some(Spanned::new(vec![UnescapedString::from("//")])),
+            global_dependencies: Some(vec![Spanned::new(UnescapedString::from("./global.dep"))]),
+            global_env: Some(vec![Spanned::new(UnescapedString::from("GLOBAL_VAR"))]),
+            global_pass_through_env: Some(vec![Spanned::new(UnescapedString::from("PASS_VAR"))]),
+            ui: Some(UIMode::Tui),
+            no_update_notifier: Some(true),
+            concurrency: Some("50%".to_string()),
+            allow_no_package_manager: Some(true),
+            cache_dir: Some(Spanned::new(UnescapedString::from(".turbo/cache"))),
+            daemon: Some(Spanned::new(true)),
+            env_mode: Some(crate::cli::EnvMode::Strict),
+            boundaries: Some(Spanned::new(crate::boundaries::BoundariesConfig::default())),
+            remote_cache: Some(super::RawRemoteCacheOptions::default()),
+            future_flags: Some(Spanned::new(FutureFlags {})),
+            ..Default::default()
+        };
+
+        let result = TurboJson::try_from(package_config_with_root_only_fields);
+        assert!(result.is_err());
+
+        let root_config_with_root_only_fields = RawTurboJson {
+            extends: None, // No extends means it's a root config
+            global_dependencies: Some(vec![Spanned::new(UnescapedString::from("./global.dep"))]),
+            global_env: Some(vec![Spanned::new(UnescapedString::from("GLOBAL_VAR"))]),
+            global_pass_through_env: Some(vec![Spanned::new(UnescapedString::from("PASS_VAR"))]),
+            ui: Some(UIMode::Tui),
+            no_update_notifier: Some(true),
+            concurrency: Some("50%".to_string()),
+            allow_no_package_manager: Some(true),
+            cache_dir: Some(Spanned::new(UnescapedString::from(".turbo/cache"))),
+            daemon: Some(Spanned::new(true)),
+            env_mode: Some(crate::cli::EnvMode::Strict),
+            boundaries: Some(Spanned::new(crate::boundaries::BoundariesConfig::default())),
+            remote_cache: Some(super::RawRemoteCacheOptions::default()),
+            future_flags: Some(Spanned::new(FutureFlags {})),
+            ..Default::default()
+        };
+
+        let result = TurboJson::try_from(root_config_with_root_only_fields);
+        assert!(result.is_ok());
     }
 }
