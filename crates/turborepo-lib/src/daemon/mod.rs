@@ -50,34 +50,7 @@ fn repo_hash(repo_root: &AbsoluteSystemPath) -> String {
     hex::encode(&hasher.finalize()[..8])
 }
 
-fn daemon_file_root(repo_hash: &str) -> AbsoluteSystemPathBuf {
-    // Check for explicit daemon directory override
-    if let Ok(daemon_dir) = std::env::var("TURBO_DAEMON_DIR") {
-        return AbsoluteSystemPathBuf::new(&daemon_dir)
-            .expect("TURBO_DAEMON_DIR must be a valid path")
-            .join_component("turbod")
-            .join_component(repo_hash);
-    }
-
-    AbsoluteSystemPathBuf::new(std::env::temp_dir().to_str().expect("UTF-8 path"))
-        .expect("temp dir is valid")
-        .join_component("turbod")
-        .join_component(repo_hash)
-}
-
-// New function to handle cross-volume daemon placement
-fn daemon_file_root_cross_volume_aware(
-    repo_root: &AbsoluteSystemPath,
-    repo_hash: &str,
-) -> AbsoluteSystemPathBuf {
-    // Check for explicit daemon directory override first
-    if let Ok(daemon_dir) = std::env::var("TURBO_DAEMON_DIR") {
-        return AbsoluteSystemPathBuf::new(&daemon_dir)
-            .expect("TURBO_DAEMON_DIR must be a valid path")
-            .join_component("turbod")
-            .join_component(repo_hash);
-    }
-
+fn daemon_file_root(repo_root: &AbsoluteSystemPath, repo_hash: &str) -> AbsoluteSystemPathBuf {
     // Auto-detect cross-volume scenario on macOS
     #[cfg(target_os = "macos")]
     {
@@ -125,7 +98,7 @@ fn daemon_log_file_and_folder(
 impl Paths {
     pub fn from_repo_root(repo_root: &AbsoluteSystemPath) -> Self {
         let repo_hash = repo_hash(repo_root);
-        let daemon_root = daemon_file_root_cross_volume_aware(repo_root, &repo_hash);
+        let daemon_root = daemon_file_root(repo_root, &repo_hash);
         let (log_file, log_folder) = daemon_log_file_and_folder(repo_root, &repo_hash);
         Self {
             pid_file: daemon_root.join_component("turbod.pid"),
