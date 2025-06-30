@@ -28,7 +28,6 @@
 use std::{
     fmt::{Debug, Display},
     future::IntoFuture,
-    path::Path,
     sync::Arc,
     time::Duration,
 };
@@ -87,6 +86,12 @@ pub enum WatchError {
     WalkDir(#[from] walkdir::Error),
     #[error("filewatching failed to start: {0}")]
     Setup(String),
+    #[error("filewatching I/O error: {0}")]
+    Io(#[from] std::io::Error),
+    #[error("filewatching timeout: {duration:?}")]
+    Timeout { duration: Duration },
+    #[error("filewatching channel closed")]
+    ChannelClosed,
 }
 
 // We want to broadcast the errors we get, but notify::Error does not implement
@@ -212,16 +217,43 @@ impl FileSystemWatcher {
 fn setup_cookie_dir(cookie_dir: &AbsoluteSystemPath) -> Result<(), WatchError> {
     // We need to ensure that the cookie directory is cleared out first so
     // that we can start over with cookies.
-    tracing::debug!("setting up the cookie dir");
+    tracing::debug!("setting up the cookie dir: {}", cookie_dir);
+
+    // Add device information for debugging cross-volume issues
+    #[cfg(target_os = "macos")]
+    {
+        if let Ok(parent_metadata) =
+            std::fs::metadata(cookie_dir.parent().unwrap_or(cookie_dir).as_std_path())
+        {
+            use std::os::unix::fs::MetadataExt;
+            let device_id = parent_metadata.dev();
+            tracing::debug!("Cookie directory parent device ID: {}", device_id);
+        }
+    }
 
     if cookie_dir.exists() {
+        tracing::debug!("Cookie directory exists, removing: {}", cookie_dir);
         cookie_dir.remove_dir_all().map_err(|e| {
             WatchError::Setup(format!("failed to clear cookie dir {}: {}", cookie_dir, e))
         })?;
     }
+
+    tracing::debug!("Creating cookie directory: {}", cookie_dir);
     cookie_dir.create_dir_all().map_err(|e| {
         WatchError::Setup(format!("failed to setup cookie dir {}: {}", cookie_dir, e))
     })?;
+
+    // Log final device information
+    #[cfg(target_os = "macos")]
+    {
+        if let Ok(cookie_dir_metadata) = std::fs::metadata(cookie_dir.as_std_path()) {
+            use std::os::unix::fs::MetadataExt;
+            let device_id = cookie_dir_metadata.dev();
+            tracing::debug!("Created cookie directory device ID: {}", device_id);
+        }
+    }
+
+    tracing::debug!("Successfully set up cookie directory: {}", cookie_dir);
     Ok(())
 }
 
@@ -233,10 +265,14 @@ async fn watch_events(
     exit_signal: tokio::sync::oneshot::Receiver<()>,
     broadcast_sender: broadcast::Sender<Result<Event, NotifyError>>,
 ) {
+    tracing::debug!("Starting watch_events loop for root: {}", _watch_root);
     let mut exit_signal = exit_signal;
     'outer: loop {
         tokio::select! {
-            _ = &mut exit_signal => break 'outer,
+            _ = &mut exit_signal => {
+                tracing::debug!("watch_events loop exiting due to exit signal");
+                break 'outer;
+            }
             Some(event) = recv_file_events.recv().into_future() => {
                 // we don't care if we fail to send, it just means no one is currently watching
                 let _ = broadcast_sender.send(event.map_err(NotifyError::from));
@@ -424,14 +460,32 @@ fn run_watcher(
     root: &AbsoluteSystemPath,
     sender: mpsc::Sender<EventResult>,
 ) -> Result<Backend, WatchError> {
+    tracing::debug!("Creating filesystem watcher for root: {}", root);
+
+    // Log device information for debugging cross-volume issues
+    #[cfg(target_os = "macos")]
+    {
+        if let Ok(root_metadata) = std::fs::metadata(root.as_std_path()) {
+            use std::os::unix::fs::MetadataExt;
+            let device_id = root_metadata.dev();
+            tracing::debug!("Watch root device ID: {}", device_id);
+        }
+    }
+
     let mut watcher = make_watcher(move |res| {
         let _ = sender.blocking_send(res);
     })?;
 
+    tracing::debug!("Setting up recursive watch for root: {}", root);
     watch_recursively(root, &mut watcher)?;
 
     #[cfg(feature = "watch_ancestors")]
-    watch_parents(root, &mut watcher)?;
+    {
+        tracing::debug!("Setting up ancestor watches for root: {}", root);
+        watch_parents(root, &mut watcher)?;
+    }
+
+    tracing::debug!("Successfully created filesystem watcher for root: {}", root);
     Ok(watcher)
 }
 
@@ -442,7 +496,13 @@ fn make_watcher<F: EventHandler>(event_handler: F) -> Result<Backend, notify::Er
 
 #[cfg(target_os = "macos")]
 fn make_watcher<F: EventHandler>(event_handler: F) -> Result<Backend, notify::Error> {
-    FsEventWatcher::new(event_handler, notify::Config::default())
+    tracing::debug!("Creating FSEventWatcher for macOS");
+    let watcher = FsEventWatcher::new(event_handler, notify::Config::default());
+    match &watcher {
+        Ok(_) => tracing::debug!("Successfully created FSEventWatcher"),
+        Err(e) => tracing::error!("Failed to create FSEventWatcher: {}", e),
+    }
+    watcher
 }
 
 /// wait_for_cookie performs a roundtrip through the filewatching mechanism.
@@ -454,34 +514,88 @@ async fn wait_for_cookie(
 ) -> Result<(), WatchError> {
     // TODO: should this be passed in? Currently the caller guarantees that the
     // directory is empty, but it could be the responsibility of the
-    // filewatcher...
+    // filewatcher..
     let cookie_path = cookie_dir.join_component(".turbo-cookie");
-    cookie_path.create_with_contents("cookie").map_err(|e| {
-        WatchError::Setup(format!("failed to write cookie to {}: {}", cookie_path, e))
-    })?;
-    loop {
-        let event = tokio::time::timeout(Duration::from_millis(2000), recv.recv())
-            .await
-            .map_err(|e| WatchError::Setup(format!("waiting for cookie timed out: {}", e)))?
-            .ok_or_else(|| {
-                WatchError::Setup(
-                    "filewatching closed before cookie file  was observed".to_string(),
-                )
-            })?
-            .map_err(|err| {
-                WatchError::Setup(format!("initial watch encountered errors: {}", err))
-            })?;
-        if event.paths.iter().any(|path| {
-            let path: &Path = path;
-            path == (&cookie_path as &AbsoluteSystemPath)
-        }) {
-            // We don't need to stop everything if we failed to remove the cookie file
-            // for some reason. We can warn about it though.
-            if let Err(e) = cookie_path.remove() {
-                warn!("failed to remove cookie file {}", e);
-            }
-            return Ok(());
+
+    tracing::debug!("Creating cookie file at: {}", cookie_path);
+
+    // Check device information for debugging cross-volume issues
+    #[cfg(target_os = "macos")]
+    {
+        if let Ok(cookie_dir_metadata) = std::fs::metadata(cookie_dir.as_std_path()) {
+            use std::os::unix::fs::MetadataExt;
+            let device_id = cookie_dir_metadata.dev();
+            tracing::debug!("Cookie directory device ID: {}", device_id);
         }
+    }
+
+    std::fs::write(&cookie_path, "turbo")?;
+
+    tracing::debug!("Cookie file created, waiting for filesystem event");
+
+    // Detect if we're on a potentially slower filesystem (external volumes, network
+    // drives, etc.) and adjust timeout accordingly
+    let timeout_duration = if cookie_path
+        .as_std_path()
+        .to_string_lossy()
+        .starts_with("/Volumes/")
+    {
+        // External volume detected - use longer timeout
+        tracing::info!("External volume detected, using extended cookie timeout (6 seconds)");
+        Duration::from_secs(6)
+    } else if std::env::var("TURBO_ALLOW_CROSS_VOLUME_WATCH").is_ok() {
+        // Cross-volume mode enabled - use longer timeout
+        tracing::info!("Cross-volume mode enabled, using extended cookie timeout (4 seconds)");
+        Duration::from_secs(4)
+    } else {
+        // Standard timeout
+        Duration::from_secs(2)
+    };
+
+    let timeout = tokio::time::sleep(timeout_duration);
+    let mut event_count = 0;
+
+    tokio::select! {
+        _ = timeout => {
+            tracing::error!(
+                "Cookie timeout after {} events in {}ms. This may indicate a cross-volume or case-sensitive filesystem issue. Cookie path: {}, Cookie dir: {}",
+                event_count,
+                timeout_duration.as_millis(),
+                cookie_path,
+                cookie_dir
+            );
+            Err(WatchError::Timeout {
+                duration: timeout_duration,
+            })
+        }
+        result = async {
+            loop {
+                match recv.recv().await {
+                    Some(Ok(event)) => {
+                        event_count += 1;
+                        tracing::trace!("Cookie wait: received event #{}: {:?}", event_count, event);
+
+                                                 for path in event.paths.iter() {
+                             tracing::trace!("Cookie wait: checking path: {} against cookie: {}", path.display(), cookie_path);
+                             if path == cookie_path.as_std_path() {
+                                 tracing::debug!("Cookie event detected after {} events", event_count);
+                                 return Ok(());
+                             }
+                         }
+                    }
+                    Some(Err(e)) => {
+                        tracing::warn!("Cookie wait: received error event #{}: {}", event_count + 1, e);
+                        // Continue waiting for cookie event even if there are errors
+                        // unless it's a critical error that indicates the watcher has failed
+                        event_count += 1;
+                    }
+                    None => {
+                        tracing::error!("Cookie wait: event channel closed after {} events", event_count);
+                        return Err(WatchError::ChannelClosed);
+                    }
+                }
+            }
+        } => result,
     }
 }
 

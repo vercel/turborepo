@@ -94,6 +94,7 @@ impl fmt::Debug for FsEventWatcher {
             .field("event_handler", &Arc::as_ptr(&self.event_handler))
             .field("runloop", &self.runloop)
             .field("recursive_info", &self.recursive_info)
+            .field("device", &self.device)
             .finish()
     }
 }
@@ -384,25 +385,93 @@ impl FsEventWatcher {
 
     // https://github.com/thibaudgg/rb-fsevent/blob/master/ext/fsevent_watch/main.c
     fn append_path(&mut self, path: &Path, recursive_mode: RecursiveMode) -> Result<()> {
+        tracing::debug!("FSEvents: Attempting to watch path: {}", path.display());
+
         let device = match std::fs::symlink_metadata(path) {
             Err(e) if e.kind() == ErrorKind::NotFound => {
+                tracing::error!(
+                    "FSEvents: Path not found when getting device: {}",
+                    path.display()
+                );
                 Err(Error::path_not_found().add_path(path.into()))
             }
-            Err(e) => Err(Error::io(e)),
-            Ok(metadata) => Ok(metadata.dev() as i32),
+            Err(e) => {
+                tracing::error!(
+                    "FSEvents: IO error getting device for path {}: {}",
+                    path.display(),
+                    e
+                );
+                Err(Error::io(e))
+            }
+            Ok(metadata) => {
+                let device_id = metadata.dev() as i32;
+                tracing::debug!(
+                    "FSEvents: Got device ID {} for path: {}",
+                    device_id,
+                    path.display()
+                );
+                Ok(device_id)
+            }
         }?;
 
+        // Check for environment variable to allow cross-volume watching
+        // This can be useful for case-sensitive volumes or external drives that may
+        // have device ID detection issues
+        let allow_cross_volume = std::env::var("TURBO_ALLOW_CROSS_VOLUME_WATCH")
+            .map(|v| v == "1" || v.to_lowercase() == "true")
+            .unwrap_or(false);
+
         if self.device.is_none() {
+            tracing::debug!("FSEvents: Setting initial device ID to: {}", device);
             self.device = Some(device);
         } else if self.device != Some(device) {
-            return Err(Error::generic("cannot watch multiple devices"));
+            if allow_cross_volume {
+                tracing::warn!(
+                    "FSEvents: Device mismatch! Current device: {:?}, new device: {} for path: \
+                     {}. Cross-volume watching is enabled via TURBO_ALLOW_CROSS_VOLUME_WATCH. \
+                     This may have reduced performance on case-sensitive or external volumes.",
+                    self.device,
+                    device,
+                    path.display()
+                );
+                // Continue without updating device ID to allow cross-volume
+                // watching
+            } else {
+                tracing::error!(
+                    "FSEvents: Device mismatch! Current device: {:?}, new device: {} for path: \
+                     {}. This may indicate a cross-volume issue on case-sensitive or external \
+                     volumes. Consider setting TURBO_ALLOW_CROSS_VOLUME_WATCH=1 to allow \
+                     cross-volume watching.",
+                    self.device,
+                    device,
+                    path.display()
+                );
+                return Err(Error::generic("cannot watch multiple devices"));
+            }
+        } else {
+            tracing::debug!(
+                "FSEvents: Device ID {} matches existing device for path: {}",
+                device,
+                path.display()
+            );
         }
+
         let canonical_path = path.to_path_buf().canonicalize()?;
+        tracing::debug!(
+            "FSEvents: Canonical path: {} -> {}",
+            path.display(),
+            canonical_path.display()
+        );
+
         let str_path = path.to_str().unwrap();
         unsafe {
             let mut err: cf::CFErrorRef = ptr::null_mut();
             let cf_path = cf::str_path_to_cfstring_ref(str_path, &mut err);
             if cf_path.is_null() {
+                tracing::error!(
+                    "FSEvents: Failed to create CFString for path: {}",
+                    path.display()
+                );
                 // Most likely the directory was deleted, or permissions changed,
                 // while the above code was running.
                 cf::CFRelease(err as cf::CFRef);
@@ -412,18 +481,34 @@ impl FsEventWatcher {
             cf::CFRelease(cf_path);
         }
         let is_recursive = matches!(recursive_mode, RecursiveMode::Recursive);
-        self.recursive_info.insert(canonical_path, is_recursive);
+        self.recursive_info
+            .insert(canonical_path.clone(), is_recursive);
+
+        tracing::debug!(
+            "FSEvents: Successfully added path to watch list: {} (recursive: {})",
+            canonical_path.display(),
+            is_recursive
+        );
         Ok(())
     }
 
     fn run(&mut self) -> Result<()> {
-        if unsafe { cf::CFArrayGetCount(self.paths) } == 0 {
+        let path_count = unsafe { cf::CFArrayGetCount(self.paths) };
+        if path_count == 0 {
+            tracing::error!("FSEvents: No paths to watch");
             // TODO: Reconstruct and add paths to error
             return Err(Error::path_not_found());
         }
+
         let device = self
             .device
             .ok_or_else(|| Error::generic("no device set for stream"))?;
+
+        tracing::debug!(
+            "FSEvents: Starting stream with {} paths on device {}",
+            path_count,
+            device
+        );
 
         // We need to associate the stream context with our callback in order to
         // propagate events to the rest of the system. This will be owned by the
@@ -443,18 +528,78 @@ impl FsEventWatcher {
             copy_description: None,
         };
 
-        let stream = unsafe {
-            fs::FSEventStreamCreateRelativeToDevice(
-                cf::kCFAllocatorDefault,
-                callback,
-                &stream_context,
-                device,
-                self.paths,
-                self.since_when,
-                self.latency,
-                self.flags,
-            )
+        // Check if we should use cross-volume compatible mode
+        let use_cross_volume_mode = std::env::var("TURBO_ALLOW_CROSS_VOLUME_WATCH").is_ok();
+
+        tracing::debug!("FSEvents: Cross-volume mode: {}", use_cross_volume_mode);
+
+        // First, try creating a device-relative stream (original behavior)
+        // If cross-volume mode is enabled, skip device-relative and go straight to
+        // standard
+        let stream = if use_cross_volume_mode {
+            tracing::info!("FSEvents: Using cross-volume compatible FSEventStreamCreate");
+            // Use the standard FSEventStreamCreate for cross-volume compatibility
+            unsafe {
+                fs::FSEventStreamCreate(
+                    cf::kCFAllocatorDefault,
+                    callback,
+                    &stream_context,
+                    self.paths,
+                    self.since_when,
+                    self.latency,
+                    self.flags,
+                )
+            }
+        } else {
+            tracing::debug!("FSEvents: Creating FSEventStream with device {}", device);
+            let device_stream = unsafe {
+                fs::FSEventStreamCreateRelativeToDevice(
+                    cf::kCFAllocatorDefault,
+                    callback,
+                    &stream_context,
+                    device,
+                    self.paths,
+                    self.since_when,
+                    self.latency,
+                    self.flags,
+                )
+            };
+
+            // If device-relative stream creation failed, try the standard approach
+            if device_stream.is_null() {
+                tracing::warn!(
+                    "FSEvents: Failed to create device-relative FSEventStream for device {}. This \
+                     may indicate a cross-volume or case-sensitive filesystem issue. Falling back \
+                     to standard FSEventStream creation.",
+                    device
+                );
+
+                unsafe {
+                    fs::FSEventStreamCreate(
+                        cf::kCFAllocatorDefault,
+                        callback,
+                        &stream_context,
+                        self.paths,
+                        self.since_when,
+                        self.latency,
+                        self.flags,
+                    )
+                }
+            } else {
+                tracing::debug!("FSEvents: Successfully created device-relative FSEventStream");
+                device_stream
+            }
         };
+
+        if stream.is_null() {
+            tracing::error!(
+                "FSEvents: Failed to create FSEventStream (both device-relative and standard \
+                 methods failed)"
+            );
+            return Err(Error::generic("failed to create FSEventStream"));
+        }
+
+        tracing::debug!("FSEvents: Successfully created FSEventStream");
 
         // Wrapper to help send CFRef types across threads.
         struct CFSendWrapper(cf::CFRef);
@@ -484,9 +629,16 @@ impl FsEventWatcher {
                         cur_runloop,
                         cf::kCFRunLoopDefaultMode,
                     );
+
+                    tracing::debug!("FSEvents: Starting FSEventStream...");
                     if fs::FSEventStreamStart(stream) == FALSE {
+                        tracing::error!("FSEvents: FSEventStream failed to start");
                         panic!("FSEventStream failed to start");
                     }
+
+                    tracing::debug!(
+                        "FSEvents: FSEventStream started successfully, entering run loop"
+                    );
 
                     // the calling to CFRunLoopRun will be terminated by CFRunLoopStop call in
                     // drop()
@@ -495,6 +647,8 @@ impl FsEventWatcher {
                         .expect("Unable to send runloop to watcher");
 
                     cf::CFRunLoopRun();
+
+                    tracing::debug!("FSEvents: Run loop exited, cleaning up stream");
                     fs::FSEventStreamStop(stream);
                     fs::FSEventStreamInvalidate(stream);
                     fs::FSEventStreamRelease(stream);
@@ -503,6 +657,7 @@ impl FsEventWatcher {
         // block until runloop has been sent
         self.runloop = Some((rl_rx.recv().unwrap().0, thread_handle));
 
+        tracing::debug!("FSEvents: FSEventStream thread started and run loop is active");
         Ok(())
     }
 
@@ -545,6 +700,10 @@ unsafe fn callback_impl(
     let info = info as *const StreamContextInfo;
     let event_handler = unsafe { &(*info).event_handler };
 
+    if num_events > 0 {
+        tracing::trace!("FSEvents: Processing {} filesystem events", num_events);
+    }
+
     for p in 0..num_events {
         let raw_path = unsafe { CStr::from_ptr(*event_paths.add(p)) }
             .to_str()
@@ -556,15 +715,30 @@ unsafe fn callback_impl(
             panic!("Unable to decode StreamFlags: {}", flag);
         });
 
+        tracing::trace!(
+            "FSEvents: Event for path {} with flags {:?}",
+            path.display(),
+            flag
+        );
+
         let mut handle_event = false;
-        for (p, r) in unsafe { &(*info).recursive_info } {
-            if path.starts_with(p) {
-                if *r || &path == p {
+        for (watched_path, is_recursive) in unsafe { &(*info).recursive_info } {
+            if path.starts_with(watched_path) {
+                if *is_recursive || &path == watched_path {
                     handle_event = true;
+                    tracing::trace!(
+                        "FSEvents: Event matches watched path {} (recursive: {})",
+                        watched_path.display(),
+                        is_recursive
+                    );
                     break;
                 } else if let Some(parent_path) = path.parent() {
-                    if parent_path == p {
+                    if parent_path == watched_path {
                         handle_event = true;
+                        tracing::trace!(
+                            "FSEvents: Event parent matches watched path {}",
+                            watched_path.display()
+                        );
                         break;
                     }
                 }
@@ -572,12 +746,24 @@ unsafe fn callback_impl(
         }
 
         if !handle_event {
+            tracing::trace!(
+                "FSEvents: Ignoring event for path {} (not in watched paths)",
+                path.display()
+            );
             continue;
         }
 
-        for ev in translate_flags(flag, true).into_iter() {
+        let events = translate_flags(flag, true);
+        tracing::trace!(
+            "FSEvents: Translated to {} event(s) for path {}",
+            events.len(),
+            path.display()
+        );
+
+        for ev in events.into_iter() {
             // TODO: precise
             let ev = ev.add_path(path.clone());
+            tracing::trace!("FSEvents: Dispatching event: {:?}", ev);
             let mut event_handler = event_handler.lock().expect("lock not to be poisoned");
             event_handler.handle_event(Ok(ev));
         }
