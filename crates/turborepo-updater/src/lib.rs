@@ -90,10 +90,8 @@ fn get_tag_from_version(pre: &semver::Prerelease) -> VersionTag {
 fn should_skip_notification() -> bool {
     NOTIFIER_DISABLE_VARS
         .iter()
+        .chain(ENVIRONMENTAL_DISABLE_VARS.iter())
         .any(|var| std::env::var(var).is_ok())
-        || ENVIRONMENTAL_DISABLE_VARS
-            .iter()
-            .any(|var| std::env::var(var).is_ok())
         || !atty::is(atty::Stream::Stdout)
 }
 
