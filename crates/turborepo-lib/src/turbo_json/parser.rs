@@ -342,9 +342,7 @@ impl RawTurboJson {
     /// are used in the correct configuration types.
     ///
     /// This uses an allowlist approach - ALL fields must be explicitly
-    /// categorized. When adding new fields to RawTurboJson, developers MUST
-    /// add them to one of the allowlists below, forcing explicit
-    /// categorization decisions.
+    /// categorized.
     pub fn validate_field_placement(&self) -> Result<(), FieldPlacementError> {
         let is_workspace_config = self.extends.is_some();
 
