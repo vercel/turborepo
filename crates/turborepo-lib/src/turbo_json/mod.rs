@@ -41,7 +41,7 @@ pub const CONFIG_FILE_JSONC: &str = "turbo.jsonc";
 const ENV_PIPELINE_DELIMITER: &str = "$";
 const TOPOLOGICAL_PIPELINE_DELIMITER: &str = "^";
 
-/// Given a directory path, determines which turbo config file to use.
+/// Given a directory path, determines which turbo.json configuration file to use.
 /// Returns an error if both turbo.json and turbo.jsonc exist in the same directory.
 /// Returns the path to the config file to use, defaulting to turbo.json if neither exists.
 pub fn resolve_turbo_config_path(

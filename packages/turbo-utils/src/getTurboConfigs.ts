@@ -18,7 +18,7 @@ const ROOT_GLOB = "{turbo.json,turbo.jsonc}";
 const ROOT_WORKSPACE_GLOB = "package.json";
 
 /**
- * Given a directory path, determines which turbo config file to use.
+ * Given a directory path, determines which turbo.json configuration file to use.
  * Throws an error if both turbo.json and turbo.jsonc exist in the same directory.
  * Returns the path to the config file to use, or null if neither exists.
  */
