@@ -45,6 +45,22 @@ fn create_unknown_key_diagnostic_from_struct<T: Iterable>(
     DeserializationDiagnostic::new_unknown_key(unknown_key, range, &allowed_keys_borrowed)
 }
 
+fn create_field_placement_error_message(field_name: &str, is_root_only: bool) -> String {
+    if is_root_only {
+        format!(
+            "The \"{}\" field can only be used in the root turbo.json. Please remove it from \
+             Package Configurations.",
+            field_name
+        )
+    } else {
+        format!(
+            "The \"{}\" field can only be used in Package Configurations. Please remove it from \
+             the root turbo.json.",
+            field_name
+        )
+    }
+}
+
 impl Deserializable for TaskName<'static> {
     fn deserialize(
         value: &impl DeserializableValue,
@@ -282,6 +298,77 @@ impl RawTurboJson {
         let json_string = serde_json::to_string(&value).expect("should be able to serialize");
         Self::parse(&json_string, "turbo.json")
     }
+
+    /// Validates field placement to ensure root-only and package-only fields
+    /// are used in the correct configuration types
+    pub fn validate_field_placement(&self) -> Result<(), String> {
+        let is_workspace_config = self.extends.is_some();
+        let mut errors = Vec::new();
+
+        if is_workspace_config {
+            // Check for root-only fields in workspace configuration
+            if self.global_dependencies.is_some() {
+                errors.push(create_field_placement_error_message(
+                    "globalDependencies",
+                    true,
+                ));
+            }
+            if self.global_env.is_some() {
+                errors.push(create_field_placement_error_message("globalEnv", true));
+            }
+            if self.global_pass_through_env.is_some() {
+                errors.push(create_field_placement_error_message(
+                    "globalPassThroughEnv",
+                    true,
+                ));
+            }
+            if self.cache_dir.is_some() {
+                errors.push(create_field_placement_error_message("cacheDir", true));
+            }
+            if self.daemon.is_some() {
+                errors.push(create_field_placement_error_message("daemon", true));
+            }
+            if self.boundaries.is_some() {
+                errors.push(create_field_placement_error_message("boundaries", true));
+            }
+            if self.ui.is_some() {
+                errors.push(create_field_placement_error_message("ui", true));
+            }
+            if self.no_update_notifier.is_some() {
+                errors.push(create_field_placement_error_message(
+                    "noUpdateNotifier",
+                    true,
+                ));
+            }
+            if self.concurrency.is_some() {
+                errors.push(create_field_placement_error_message("concurrency", true));
+            }
+            if self.allow_no_package_manager.is_some() {
+                errors.push(create_field_placement_error_message(
+                    "dangerouslyDisablePackageManagerCheck",
+                    true,
+                ));
+            }
+            if self.env_mode.is_some() {
+                errors.push(create_field_placement_error_message("envMode", true));
+            }
+            if self.remote_cache.is_some() {
+                errors.push(create_field_placement_error_message("remoteCache", true));
+            }
+        } else {
+            // Check for package-only fields in root configuration
+            if self.tags.is_some() {
+                errors.push(create_field_placement_error_message("tags", false));
+            }
+        }
+
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors.join(" "))
+        }
+    }
+
     /// Parses a turbo.json file into the raw representation with span info
     /// attached.
     ///
@@ -333,6 +420,14 @@ impl RawTurboJson {
 
         turbo_json.add_text(Arc::from(text));
         turbo_json.add_path(Arc::from(file_path));
+
+        // Validate field placement
+        if let Err(_field_placement_error) = turbo_json.validate_field_placement() {
+            return Err(Error {
+                diagnostics: vec![],
+                backtrace: std::backtrace::Backtrace::capture(),
+            });
+        }
 
         Ok(turbo_json)
     }

@@ -1459,4 +1459,57 @@ mod tests {
             "`with` cannot use dependency relationships."
         );
     }
+
+    #[test]
+    fn test_field_placement_validation_via_parser() {
+        // Test root-only field in package config
+        let json = r#"{
+            "extends": ["//"],
+            "globalEnv": ["NODE_ENV"],
+            "tasks": {
+                "build": {}
+            }
+        }"#;
+
+        let result = RawTurboJson::parse(json, "turbo.json");
+        assert!(result.is_err());
+        let error = result.unwrap_err();
+        assert!(error.to_string().contains("Failed to parse turbo.json"));
+
+        // Test package-only field in root config
+        let json = r#"{
+            "tags": ["utility"],
+            "tasks": {
+                "build": {}
+            }
+        }"#;
+
+        let result = RawTurboJson::parse(json, "turbo.json");
+        assert!(result.is_err());
+        let error = result.unwrap_err();
+        assert!(error.to_string().contains("Failed to parse turbo.json"));
+
+        // Test valid root config
+        let json = r#"{
+            "globalEnv": ["NODE_ENV"],
+            "tasks": {
+                "build": {}
+            }
+        }"#;
+
+        let result = RawTurboJson::parse(json, "turbo.json");
+        assert!(result.is_ok());
+
+        // Test valid package config
+        let json = r#"{
+            "extends": ["//"],
+            "tags": ["my-tag"],
+            "tasks": {
+                "build": {}
+            }
+        }"#;
+
+        let result = RawTurboJson::parse(json, "turbo.json");
+        assert!(result.is_ok());
+    }
 }
