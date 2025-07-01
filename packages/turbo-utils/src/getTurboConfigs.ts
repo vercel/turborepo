@@ -18,13 +18,14 @@ const ROOT_GLOB = "{turbo.json,turbo.jsonc}";
 const ROOT_WORKSPACE_GLOB = "package.json";
 
 /**
- * Given a directory path, determines which turbo.json configuration file to use.
- * Throws an error if both turbo.json and turbo.jsonc exist in the same directory.
+ * Given a directory path, determines which turbo config file to use.
+ * Returns error information if both turbo.json and turbo.jsonc exist in the same directory.
  * Returns the path to the config file to use, or null if neither exists.
  */
 function resolveTurboConfigPath(dirPath: string): {
   configPath: string | null;
   configExists: boolean;
+  error?: string;
 } {
   const turboJsonPath = path.join(dirPath, "turbo.json");
   const turboJsoncPath = path.join(dirPath, "turbo.jsonc");
@@ -34,8 +35,7 @@ function resolveTurboConfigPath(dirPath: string): {
 
   if (turboJsonExists && turboJsoncExists) {
     const errorMessage = `Found both turbo.json and turbo.jsonc in the same directory: ${dirPath}\nPlease use either turbo.json or turbo.jsonc, but not both.`;
-    logger.error(errorMessage);
-    throw new Error(errorMessage);
+    return { configPath: null, configExists: false, error: errorMessage };
   }
 
   if (turboJsonExists) {
@@ -221,12 +221,18 @@ export function getWorkspaceConfigs(
         const isWorkspaceRoot = workspacePath === turboRoot;
 
         // Try and get turbo.json or turbo.jsonc
-        const { configPath: turboConfigPath, configExists } = resolveTurboConfigPath(workspacePath);
+        const { configPath: turboConfigPath, configExists, error } = resolveTurboConfigPath(workspacePath);
 
         let rawTurboJson = null;
         let turboConfig: SchemaV1 | undefined;
 
         try {
+          // Handle the case where both files exist (reproducing original behavior)
+          if (error) {
+            logger.error(error);
+            throw new Error(error);
+          }
+
           if (configExists && turboConfigPath) {
             rawTurboJson = fs.readFileSync(turboConfigPath, "utf8");
           }
