@@ -27,6 +27,14 @@ use crate::{
     task_graph::{TaskDefinition, TaskOutputs},
 };
 
+/// Parameters for creating a task cache
+pub struct TaskCacheParams<'a> {
+    pub task_definition: &'a TaskDefinition,
+    pub workspace_info: &'a PackageInfo,
+    pub task_id: TaskId<'static>,
+    pub hash: &'a str,
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("Failed to replay logs: {0}")]
@@ -96,14 +104,14 @@ impl RunCache {
         }
     }
 
-    pub fn task_cache(
-        self: &Arc<Self>,
-        // TODO: Group these in a struct
-        task_definition: &TaskDefinition,
-        workspace_info: &PackageInfo,
-        task_id: TaskId<'static>,
-        hash: &str,
-    ) -> TaskCache {
+    pub fn task_cache(self: &Arc<Self>, params: TaskCacheParams) -> TaskCache {
+        let TaskCacheParams {
+            task_definition,
+            workspace_info,
+            task_id,
+            hash,
+        } = params;
+
         let log_file_path = self
             .repo_root
             .resolve(workspace_info.package_path())

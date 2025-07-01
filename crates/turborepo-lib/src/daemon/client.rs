@@ -46,17 +46,22 @@ impl<T> DaemonClient<T> {
     /// Interrogate the server for its version.
     #[tracing::instrument(skip(self))]
     pub(super) async fn handshake(&mut self) -> Result<(), DaemonError> {
+        // Generate a unique session ID using process ID and current timestamp
+        let session_id = format!("{}_{}", std::process::id(), std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis());
+        
         let _ret = self
             .client
             .hello(proto::HelloRequest {
                 version: proto::VERSION.to_string(),
+                session_id,
                 // minor version means that we need the daemon server to have at least the
                 // same features as us, but it can have more. it is unlikely that we will
                 // ever want to change the version range but we can tune it if, for example,
                 // we need to lock to a specific minor version.
                 supported_version_range: proto::VersionRange::Minor.into(),
-                // todo(arlyon): add session id
-                ..Default::default()
             })
             .await?;
 
