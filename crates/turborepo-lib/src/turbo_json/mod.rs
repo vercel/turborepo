@@ -41,17 +41,18 @@ pub const CONFIG_FILE_JSONC: &str = "turbo.jsonc";
 const ENV_PIPELINE_DELIMITER: &str = "$";
 const TOPOLOGICAL_PIPELINE_DELIMITER: &str = "^";
 
-/// Given a directory path, determines which turbo.json configuration file to use.
-/// Returns an error if both turbo.json and turbo.jsonc exist in the same directory.
-/// Returns the path to the config file to use, defaulting to turbo.json if neither exists.
+/// Given a directory path, determines which turbo.json configuration file to
+/// use. Returns an error if both turbo.json and turbo.jsonc exist in the same
+/// directory. Returns the path to the config file to use, defaulting to
+/// turbo.json if neither exists.
 pub fn resolve_turbo_config_path(
     dir_path: &turbopath::AbsoluteSystemPath,
 ) -> Result<turbopath::AbsoluteSystemPathBuf, crate::config::Error> {
     use crate::config::Error;
-    
+
     let turbo_json_path = dir_path.join_component(CONFIG_FILE);
     let turbo_jsonc_path = dir_path.join_component(CONFIG_FILE_JSONC);
-    
+
     let turbo_json_exists = turbo_json_path.try_exists()?;
     let turbo_jsonc_exists = turbo_jsonc_path.try_exists()?;
 
