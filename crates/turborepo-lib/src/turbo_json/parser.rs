@@ -21,6 +21,38 @@ use crate::{
     turbo_json::{Pipeline, RawTaskDefinition, RawTurboJson, Spanned},
 };
 
+// Field placement constants for turbo.json validation
+// When adding new fields to RawTurboJson, you MUST add them to one of
+// these allowlists.
+
+/// Fields that can only be used in the root turbo.json
+const ROOT_ONLY_FIELDS: &[&str] = &[
+    "globalDependencies",
+    "globalEnv",
+    "globalPassThroughEnv",
+    "ui",
+    "noUpdateNotifier",
+    "concurrency",
+    "dangerouslyDisablePackageManagerCheck",
+    "cacheDir",
+    "daemon",
+    "envMode",
+    "remoteCache",
+    "boundaries",
+];
+
+/// Fields that can only be used in Package Configurations
+const PACKAGE_ONLY_FIELDS: &[&str] = &["tags", "extends"];
+
+/// Fields that can be used in both root and package configurations
+const UNIVERSAL_FIELDS: &[&str] = &[
+    "$schema",
+    "tasks",
+    "experimentalSpaces",
+    "pipeline",
+    "futureFlags",
+];
+
 #[derive(Debug, Error, Diagnostic)]
 #[error("Failed to parse turbo.json.")]
 #[diagnostic(code(turbo_json_parse_error))]
@@ -43,6 +75,29 @@ fn create_unknown_key_diagnostic_from_struct<T: Iterable>(
     let allowed_keys_borrowed = allowed_keys.iter().map(|s| s.as_str()).collect::<Vec<_>>();
 
     DeserializationDiagnostic::new_unknown_key(unknown_key, range, &allowed_keys_borrowed)
+}
+
+fn create_field_placement_error_message(field_name: &str, is_root_only: bool) -> String {
+    if is_root_only {
+        format!(
+            "The \"{}\" field can only be used in the root turbo.json. Please remove it from \
+             Package Configurations.",
+            field_name
+        )
+    } else {
+        format!(
+            "The \"{}\" field can only be used in Package Configurations. Please remove it from \
+             the root turbo.json.",
+            field_name
+        )
+    }
+}
+
+#[derive(Debug)]
+pub struct FieldPlacementError {
+    pub message: String,
+    pub range: Option<std::ops::Range<usize>>,
+    pub field_name: String,
 }
 
 impl Deserializable for TaskName<'static> {
@@ -100,42 +155,47 @@ impl DeserializationVisitor for PipelineVisitor {
 
 impl WithMetadata for RawTurboJson {
     fn add_text(&mut self, text: Arc<str>) {
+        // Apply to all direct fields
         self.span.add_text(text.clone());
         self.extends.add_text(text.clone());
         self.tags.add_text(text.clone());
-        if let Some(tags) = &mut self.tags {
-            tags.value.add_text(text.clone());
-        }
         self.global_dependencies.add_text(text.clone());
         self.global_env.add_text(text.clone());
         self.global_pass_through_env.add_text(text.clone());
         self.boundaries.add_text(text.clone());
-        if let Some(boundaries) = &mut self.boundaries {
-            boundaries.value.add_text(text.clone());
-        }
-
         self.tasks.add_text(text.clone());
         self.cache_dir.add_text(text.clone());
-        self.pipeline.add_text(text);
+        self.pipeline.add_text(text.clone());
+
+        // Apply to nested values in optional fields
+        if let Some(tags) = &mut self.tags {
+            tags.value.add_text(text.clone());
+        }
+        if let Some(boundaries) = &mut self.boundaries {
+            boundaries.value.add_text(text);
+        }
     }
 
     fn add_path(&mut self, path: Arc<str>) {
+        // Apply to all direct fields
         self.span.add_path(path.clone());
         self.extends.add_path(path.clone());
         self.tags.add_path(path.clone());
-        if let Some(tags) = &mut self.tags {
-            tags.value.add_path(path.clone());
-        }
         self.global_dependencies.add_path(path.clone());
         self.global_env.add_path(path.clone());
         self.global_pass_through_env.add_path(path.clone());
         self.boundaries.add_path(path.clone());
-        if let Some(boundaries) = &mut self.boundaries {
-            boundaries.value.add_path(path.clone());
-        }
         self.tasks.add_path(path.clone());
         self.cache_dir.add_path(path.clone());
-        self.pipeline.add_path(path);
+        self.pipeline.add_path(path.clone());
+
+        // Apply to nested values in optional fields
+        if let Some(tags) = &mut self.tags {
+            tags.value.add_path(path.clone());
+        }
+        if let Some(boundaries) = &mut self.boundaries {
+            boundaries.value.add_path(path);
+        }
     }
 }
 
@@ -282,6 +342,152 @@ impl RawTurboJson {
         let json_string = serde_json::to_string(&value).expect("should be able to serialize");
         Self::parse(&json_string, "turbo.json")
     }
+
+    /// Validates root-only package-only fields
+    /// are used in the correct configuration types.
+    ///
+    /// This uses an allowlist approach - ALL fields must be explicitly
+    /// categorized.
+    pub fn validate_field_placement(&self) -> Result<(), FieldPlacementError> {
+        let is_workspace_config = self.extends.is_some();
+
+        let validate_field_placement = |field_name: &str,
+                                        range: Option<std::ops::Range<usize>>|
+         -> Result<(), FieldPlacementError> {
+            if UNIVERSAL_FIELDS.contains(&field_name) {
+                // Universal field - allowed everywhere
+            } else if ROOT_ONLY_FIELDS.contains(&field_name) {
+                if is_workspace_config {
+                    return Err(FieldPlacementError {
+                        message: create_field_placement_error_message(field_name, true),
+                        range,
+                        field_name: field_name.to_string(),
+                    });
+                }
+            } else if PACKAGE_ONLY_FIELDS.contains(&field_name) {
+                if !is_workspace_config {
+                    return Err(FieldPlacementError {
+                        message: create_field_placement_error_message(field_name, false),
+                        range,
+                        field_name: field_name.to_string(),
+                    });
+                }
+            } else {
+                return Err(FieldPlacementError {
+                    message: format!(
+                        "Field '{}' is not categorized in field placement validation. Please add \
+                         it to one of the constants: ROOT_ONLY_FIELDS, PACKAGE_ONLY_FIELDS, or \
+                         UNIVERSAL_FIELDS at the top of this file.",
+                        field_name
+                    ),
+                    range,
+                    field_name: field_name.to_string(),
+                });
+            }
+            Ok(())
+        };
+
+        // Define field descriptors for all possible fields
+        let field_descriptors = [
+            ("$schema", self.schema.as_ref().map(|f| f.range.clone())),
+            (
+                "experimentalSpaces",
+                self.experimental_spaces.as_ref().map(|f| f.range.clone()),
+            ),
+            ("extends", self.extends.as_ref().map(|f| f.range.clone())),
+            ("tasks", self.tasks.as_ref().map(|f| f.range.clone())),
+            (
+                "remoteCache",
+                self.remote_cache.as_ref().map(|f| f.range.clone()),
+            ),
+            ("ui", self.ui.as_ref().map(|f| f.range.clone())),
+            (
+                "dangerouslyDisablePackageManagerCheck",
+                self.allow_no_package_manager
+                    .as_ref()
+                    .map(|f| f.range.clone()),
+            ),
+            ("daemon", self.daemon.as_ref().map(|f| f.range.clone())),
+            ("envMode", self.env_mode.as_ref().map(|f| f.range.clone())),
+            ("cacheDir", self.cache_dir.as_ref().map(|f| f.range.clone())),
+            (
+                "noUpdateNotifier",
+                self.no_update_notifier.as_ref().map(|f| f.range.clone()),
+            ),
+            ("tags", self.tags.as_ref().map(|f| f.range.clone())),
+            (
+                "boundaries",
+                self.boundaries.as_ref().map(|f| f.range.clone()),
+            ),
+            (
+                "concurrency",
+                self.concurrency.as_ref().map(|f| f.range.clone()),
+            ),
+            (
+                "futureFlags",
+                self.future_flags.as_ref().map(|f| f.range.clone()),
+            ),
+            ("pipeline", self.pipeline.as_ref().map(|f| f.range.clone())),
+            (
+                "globalDependencies",
+                self.global_dependencies.as_ref().and_then(|deps| {
+                    if deps.is_empty() {
+                        None // Skip validation for empty arrays
+                    } else {
+                        // Try to create a range from first to last element
+                        let first_range = deps.first().and_then(|elem| elem.range.as_ref());
+                        let last_range = deps.last().and_then(|elem| elem.range.as_ref());
+                        match (first_range, last_range) {
+                            (Some(first), Some(last)) => Some(Some(first.start..last.end)),
+                            _ => Some(None), // Present but no complete span info
+                        }
+                    }
+                }),
+            ),
+            (
+                "globalEnv",
+                self.global_env.as_ref().and_then(|env| {
+                    if env.is_empty() {
+                        None // Skip validation for empty arrays
+                    } else {
+                        // Try to create a range from first to last element
+                        let first_range = env.first().and_then(|elem| elem.range.as_ref());
+                        let last_range = env.last().and_then(|elem| elem.range.as_ref());
+                        match (first_range, last_range) {
+                            (Some(first), Some(last)) => Some(Some(first.start..last.end)),
+                            _ => Some(None), // Present but no complete span info
+                        }
+                    }
+                }),
+            ),
+            (
+                "globalPassThroughEnv",
+                self.global_pass_through_env.as_ref().and_then(|env| {
+                    if env.is_empty() {
+                        None // Skip validation for empty arrays
+                    } else {
+                        // Try to create a range from first to last element
+                        let first_range = env.first().and_then(|elem| elem.range.as_ref());
+                        let last_range = env.last().and_then(|elem| elem.range.as_ref());
+                        match (first_range, last_range) {
+                            (Some(first), Some(last)) => Some(Some(first.start..last.end)),
+                            _ => Some(None), // Present but no complete span info
+                        }
+                    }
+                }),
+            ),
+        ];
+
+        // Validate only fields that are present
+        for (field_name, range_option) in field_descriptors {
+            if let Some(range) = range_option {
+                validate_field_placement(field_name, range)?;
+            }
+        }
+
+        Ok(())
+    }
+
     /// Parses a turbo.json file into the raw representation with span info
     /// attached.
     ///
@@ -333,6 +539,29 @@ impl RawTurboJson {
 
         turbo_json.add_text(Arc::from(text));
         turbo_json.add_path(Arc::from(file_path));
+
+        // Validate field placement
+        if let Err(field_placement_error) = turbo_json.validate_field_placement() {
+            // Create a proper diagnostic with the field placement error message and span
+            let diagnostic = if let Some(range) = field_placement_error.range {
+                // Convert Range<usize> to TextRange (u32)
+                let text_range =
+                    TextRange::new((range.start as u32).into(), (range.end as u32).into());
+                DeserializationDiagnostic::new(field_placement_error.message)
+                    .with_range(text_range)
+                    .with_file_source_code(text)
+                    .with_file_path(file_path)
+            } else {
+                DeserializationDiagnostic::new(field_placement_error.message)
+                    .with_file_source_code(text)
+                    .with_file_path(file_path)
+            };
+
+            return Err(Error {
+                diagnostics: vec![diagnostic.as_ref().into()],
+                backtrace: std::backtrace::Backtrace::capture(),
+            });
+        }
 
         Ok(turbo_json)
     }
