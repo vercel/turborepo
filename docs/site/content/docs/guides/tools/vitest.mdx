@@ -221,9 +221,41 @@ Because of this, you'll need to use [Root Tasks](/docs/crafting-your-repository/
 
 You can combine the benefits of both approaches by implementing a hybrid solution. This approach unifies local development using Vitest's Projects feature while preserving Turborepo's caching in CI. This comes at the tradeoff of slightly more configuration and a mixed task running model in the repository.
 
-First, create a shared configuration file since individual projects can't extend the root config when using projects:
+First, create a shared configuration package since individual projects can't extend the root config when using projects. Create a new package for your shared Vitest configuration:
 
-```ts title="./vitest.shared.ts"
+```json title="./packages/vitest-config/package.json"
+{
+  "name": "@repo/vitest-config",
+  "version": "0.0.0",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "vitest": "latest"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:*",
+    "typescript": "latest"
+  }
+}
+```
+
+```json title="./packages/vitest-config/tsconfig.json"
+{
+  "extends": "@repo/typescript-config/base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src"
+  },
+  "include": ["src"],
+  "exclude": ["dist", "node_modules"]
+}
+```
+
+```ts title="./packages/vitest-config/src/index.ts"
 export const sharedConfig = {
   test: {
     globals: true,
@@ -238,7 +270,7 @@ Then, create your root Vitest configuration using projects:
 
 ```ts title="./vitest.config.ts"
 import { defineConfig } from 'vitest/config';
-import { sharedConfig } from './vitest.shared';
+import { sharedConfig } from '@repo/vitest-config';
 
 export default defineConfig({
   ...sharedConfig,
@@ -255,11 +287,26 @@ export default defineConfig({
 });
 ```
 
-In this setup, your packages maintain their individual Vitest configurations that import the shared config:
+In this setup, your packages maintain their individual Vitest configurations that import the shared config. First, install the shared config package:
+
+```json title="./packages/ui/package.json"
+{
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest --watch"
+  },
+  "devDependencies": {
+    "@repo/vitest-config": "workspace:*",
+    "vitest": "latest"
+  }
+}
+```
+
+Then create the Vitest configuration:
 
 ```ts title="./packages/ui/vitest.config.ts"
 import { defineConfig } from 'vitest/config';
-import { sharedConfig } from '../../vitest.shared';
+import { sharedConfig } from '@repo/vitest-config';
 
 export default defineConfig({
   ...sharedConfig,
@@ -270,13 +317,22 @@ export default defineConfig({
 });
 ```
 
-And their package.json scripts:
+Make sure to update your `turbo.json` to include the new configuration package in the dependency graph:
 
-```json title="./packages/ui/package.json"
+```json title="./turbo.json"
 {
-  "scripts": {
-    "test": "vitest run",
-    "test:watch": "vitest --watch"
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**"]
+    },
+    "test": {
+      "dependsOn": ["^test", "@repo/vitest-config#build"]
+    },
+    "test:watch": {
+      "cache": false,
+      "persistent": true
+    }
   }
 }
 ```
