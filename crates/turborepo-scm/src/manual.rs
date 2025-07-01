@@ -15,18 +15,27 @@ use crate::{Error, GitHashes};
 fn git_like_hash_file(path: &AbsoluteSystemPath) -> Result<String, Error> {
     let mut hasher = Sha1::new();
     let mut f = path.open()?;
-    let mut buffer = Vec::new();
-    // Note that read_to_end reads the target if f is a symlink. Currently, this can
-    // happen when we are hashing a specific set of files, which in turn only
-    // happens for handling dotEnv files. It is likely that in the future we
-    // will want to ensure that the target is better accounted for in the set of
-    // inputs to the task. Manual hashing, as well as global deps and other
-    // places that support globs all ignore symlinks.
-    let size = f.read_to_end(&mut buffer)?;
+    
+    // Get file size first for git blob header
+    let metadata = f.metadata()?;
+    let size = metadata.len();
+    
+    // Write git blob header
     hasher.update("blob ".as_bytes());
     hasher.update(size.to_string().as_bytes());
     hasher.update([b'\0']);
-    hasher.update(buffer.as_slice());
+    
+    // Stream the file content in chunks to avoid loading entire file into memory
+    // This is a significant performance improvement for large files
+    let mut buffer = [0u8; 8192]; // 8KB buffer - optimal for most file systems
+    loop {
+        let bytes_read = f.read(&mut buffer)?;
+        if bytes_read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..bytes_read]);
+    }
+    
     let result = hasher.finalize();
     Ok(result.encode_hex::<String>())
 }
