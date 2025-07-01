@@ -36,6 +36,36 @@ use crate::{boundaries::BoundariesConfig, config::UnnecessaryPackageTaskSyntaxEr
 const TURBO_ROOT: &str = "$TURBO_ROOT$";
 const TURBO_ROOT_SLASH: &str = "$TURBO_ROOT$/";
 
+pub const CONFIG_FILE: &str = "turbo.json";
+pub const CONFIG_FILE_JSONC: &str = "turbo.jsonc";
+const ENV_PIPELINE_DELIMITER: &str = "$";
+const TOPOLOGICAL_PIPELINE_DELIMITER: &str = "^";
+
+/// Given a directory path, determines which turbo config file to use.
+/// Returns an error if both turbo.json and turbo.jsonc exist in the same directory.
+/// Returns the path to the config file to use, defaulting to turbo.json if neither exists.
+pub fn resolve_turbo_config_path(
+    dir_path: &turbopath::AbsoluteSystemPath,
+) -> Result<turbopath::AbsoluteSystemPathBuf, crate::config::Error> {
+    use crate::config::Error;
+    
+    let turbo_json_path = dir_path.join_component(CONFIG_FILE);
+    let turbo_jsonc_path = dir_path.join_component(CONFIG_FILE_JSONC);
+    
+    let turbo_json_exists = turbo_json_path.try_exists()?;
+    let turbo_jsonc_exists = turbo_jsonc_path.try_exists()?;
+
+    match (turbo_json_exists, turbo_jsonc_exists) {
+        (true, true) => Err(Error::MultipleTurboConfigs {
+            directory: dir_path.to_string(),
+        }),
+        (true, false) => Ok(turbo_json_path),
+        (false, true) => Ok(turbo_jsonc_path),
+        // Default to turbo.json if neither exists
+        (false, false) => Ok(turbo_json_path),
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Default, PartialEq, Clone, Deserializable)]
 #[serde(rename_all = "camelCase")]
 pub struct SpacesJson {
@@ -311,11 +341,6 @@ impl RawTaskDefinition {
         set_field!(self, other, with);
     }
 }
-
-pub const CONFIG_FILE: &str = "turbo.json";
-pub const CONFIG_FILE_JSONC: &str = "turbo.jsonc";
-const ENV_PIPELINE_DELIMITER: &str = "$";
-const TOPOLOGICAL_PIPELINE_DELIMITER: &str = "^";
 
 impl TryFrom<Vec<Spanned<UnescapedString>>> for TaskOutputs {
     type Error = Error;
