@@ -22,8 +22,8 @@ use crate::{
 };
 
 // Field placement constants for turbo.json validation
-// When adding new fields to RawTurboJson, developers MUST add them to one of
-// these allowlists, forcing explicit categorization decisions.
+// When adding new fields to RawTurboJson, you MUST add them to one of
+// these allowlists.
 
 /// Fields that can only be used in the root turbo.json
 const ROOT_ONLY_FIELDS: &[&str] = &[
@@ -155,42 +155,47 @@ impl DeserializationVisitor for PipelineVisitor {
 
 impl WithMetadata for RawTurboJson {
     fn add_text(&mut self, text: Arc<str>) {
+        // Apply to all direct fields
         self.span.add_text(text.clone());
         self.extends.add_text(text.clone());
         self.tags.add_text(text.clone());
-        if let Some(tags) = &mut self.tags {
-            tags.value.add_text(text.clone());
-        }
         self.global_dependencies.add_text(text.clone());
         self.global_env.add_text(text.clone());
         self.global_pass_through_env.add_text(text.clone());
         self.boundaries.add_text(text.clone());
-        if let Some(boundaries) = &mut self.boundaries {
-            boundaries.value.add_text(text.clone());
-        }
-
         self.tasks.add_text(text.clone());
         self.cache_dir.add_text(text.clone());
-        self.pipeline.add_text(text);
+        self.pipeline.add_text(text.clone());
+
+        // Apply to nested values in optional fields
+        if let Some(tags) = &mut self.tags {
+            tags.value.add_text(text.clone());
+        }
+        if let Some(boundaries) = &mut self.boundaries {
+            boundaries.value.add_text(text);
+        }
     }
 
     fn add_path(&mut self, path: Arc<str>) {
+        // Apply to all direct fields
         self.span.add_path(path.clone());
         self.extends.add_path(path.clone());
         self.tags.add_path(path.clone());
-        if let Some(tags) = &mut self.tags {
-            tags.value.add_path(path.clone());
-        }
         self.global_dependencies.add_path(path.clone());
         self.global_env.add_path(path.clone());
         self.global_pass_through_env.add_path(path.clone());
         self.boundaries.add_path(path.clone());
-        if let Some(boundaries) = &mut self.boundaries {
-            boundaries.value.add_path(path.clone());
-        }
         self.tasks.add_path(path.clone());
         self.cache_dir.add_path(path.clone());
-        self.pipeline.add_path(path);
+        self.pipeline.add_path(path.clone());
+
+        // Apply to nested values in optional fields
+        if let Some(tags) = &mut self.tags {
+            tags.value.add_path(path.clone());
+        }
+        if let Some(boundaries) = &mut self.boundaries {
+            boundaries.value.add_path(path);
+        }
     }
 }
 
@@ -338,7 +343,7 @@ impl RawTurboJson {
         Self::parse(&json_string, "turbo.json")
     }
 
-    /// Validates field placement to ensure root-only and package-only fields
+    /// Validates root-only package-only fields
     /// are used in the correct configuration types.
     ///
     /// This uses an allowlist approach - ALL fields must be explicitly
@@ -346,12 +351,6 @@ impl RawTurboJson {
     pub fn validate_field_placement(&self) -> Result<(), FieldPlacementError> {
         let is_workspace_config = self.extends.is_some();
 
-        // This function ensures ALL fields are explicitly categorized
-        // by checking each field individually. If you add a new field to
-        // RawTurboJson, you MUST add a check here and put it in one of the
-        // allowlists defined at the top of this file, forcing explicit categorization.
-
-        // Helper function to validate field placement and extract range info
         let validate_field_placement = |field_name: &str,
                                         range: Option<std::ops::Range<usize>>|
          -> Result<(), FieldPlacementError> {
@@ -388,148 +387,83 @@ impl RawTurboJson {
             Ok(())
         };
 
-        // Helper function to check fields with span information
-        let check_spanned_field = |field_name: &str,
-                                   range: Option<std::ops::Range<usize>>|
-         -> Result<(), FieldPlacementError> {
-            validate_field_placement(field_name, range)
-        };
-
-        // Helper function to check fields without span information
-        let check_field =
-            |field: &Option<_>, field_name: &str| -> Result<(), FieldPlacementError> {
-                if field.is_some() {
-                    if UNIVERSAL_FIELDS.contains(&field_name) {
-                        // Universal field - allowed everywhere
-                    } else if ROOT_ONLY_FIELDS.contains(&field_name) {
-                        if is_workspace_config {
-                            return Err(FieldPlacementError {
-                                message: create_field_placement_error_message(field_name, true),
-                                range: None,
-                                field_name: field_name.to_string(),
-                            });
-                        }
-                    } else if PACKAGE_ONLY_FIELDS.contains(&field_name) {
-                        if !is_workspace_config {
-                            return Err(FieldPlacementError {
-                                message: create_field_placement_error_message(field_name, false),
-                                range: None,
-                                field_name: field_name.to_string(),
-                            });
-                        }
-                    } else {
-                        return Err(FieldPlacementError {
-                            message: format!(
-                                "Field '{}' is not categorized in field placement validation. \
-                                 Please add it to one of the constants: ROOT_ONLY_FIELDS, \
-                                 PACKAGE_ONLY_FIELDS, or UNIVERSAL_FIELDS at the top of this file.",
-                                field_name
-                            ),
-                            range: None,
-                            field_name: field_name.to_string(),
-                        });
-                    }
-                }
-                Ok(())
-            };
-
-        // Check every field in RawTurboJson - if you add a field, you MUST add it here
-        // Fields with span information:
-        if self.schema.is_some() {
-            check_spanned_field(
-                "$schema",
-                self.schema.as_ref().and_then(|f| f.range.clone()),
-            )?;
-        }
-        if self.experimental_spaces.is_some() {
-            check_spanned_field(
+        // Define field descriptors for all possible fields
+        let field_descriptors = [
+            ("$schema", self.schema.as_ref().map(|f| f.range.clone())),
+            (
                 "experimentalSpaces",
-                self.experimental_spaces
-                    .as_ref()
-                    .and_then(|f| f.range.clone()),
-            )?;
-        }
-        if self.extends.is_some() {
-            check_spanned_field(
-                "extends",
-                self.extends.as_ref().and_then(|f| f.range.clone()),
-            )?;
-        }
-        if self.tasks.is_some() {
-            check_spanned_field("tasks", self.tasks.as_ref().and_then(|f| f.range.clone()))?;
-        }
-        if self.remote_cache.is_some() {
-            check_spanned_field(
+                self.experimental_spaces.as_ref().map(|f| f.range.clone()),
+            ),
+            ("extends", self.extends.as_ref().map(|f| f.range.clone())),
+            ("tasks", self.tasks.as_ref().map(|f| f.range.clone())),
+            (
                 "remoteCache",
-                self.remote_cache.as_ref().and_then(|f| f.range.clone()),
-            )?;
-        }
-        if self.ui.is_some() {
-            check_spanned_field("ui", self.ui.as_ref().and_then(|f| f.range.clone()))?;
-        }
-        if self.allow_no_package_manager.is_some() {
-            check_spanned_field(
+                self.remote_cache.as_ref().map(|f| f.range.clone()),
+            ),
+            ("ui", self.ui.as_ref().map(|f| f.range.clone())),
+            (
                 "dangerouslyDisablePackageManagerCheck",
                 self.allow_no_package_manager
                     .as_ref()
-                    .and_then(|f| f.range.clone()),
-            )?;
-        }
-        if self.daemon.is_some() {
-            check_spanned_field("daemon", self.daemon.as_ref().and_then(|f| f.range.clone()))?;
-        }
-        if self.env_mode.is_some() {
-            check_spanned_field(
-                "envMode",
-                self.env_mode.as_ref().and_then(|f| f.range.clone()),
-            )?;
-        }
-        if self.cache_dir.is_some() {
-            check_spanned_field(
-                "cacheDir",
-                self.cache_dir.as_ref().and_then(|f| f.range.clone()),
-            )?;
-        }
-        if self.no_update_notifier.is_some() {
-            check_spanned_field(
+                    .map(|f| f.range.clone()),
+            ),
+            ("daemon", self.daemon.as_ref().map(|f| f.range.clone())),
+            ("envMode", self.env_mode.as_ref().map(|f| f.range.clone())),
+            ("cacheDir", self.cache_dir.as_ref().map(|f| f.range.clone())),
+            (
                 "noUpdateNotifier",
-                self.no_update_notifier
-                    .as_ref()
-                    .and_then(|f| f.range.clone()),
-            )?;
-        }
-        if self.tags.is_some() {
-            check_spanned_field("tags", self.tags.as_ref().and_then(|f| f.range.clone()))?;
-        }
-        if self.boundaries.is_some() {
-            check_spanned_field(
+                self.no_update_notifier.as_ref().map(|f| f.range.clone()),
+            ),
+            ("tags", self.tags.as_ref().map(|f| f.range.clone())),
+            (
                 "boundaries",
-                self.boundaries.as_ref().and_then(|f| f.range.clone()),
-            )?;
-        }
-        if self.concurrency.is_some() {
-            check_spanned_field(
+                self.boundaries.as_ref().map(|f| f.range.clone()),
+            ),
+            (
                 "concurrency",
-                self.concurrency.as_ref().and_then(|f| f.range.clone()),
-            )?;
-        }
-        if self.future_flags.is_some() {
-            check_spanned_field(
+                self.concurrency.as_ref().map(|f| f.range.clone()),
+            ),
+            (
                 "futureFlags",
-                self.future_flags.as_ref().and_then(|f| f.range.clone()),
-            )?;
-        }
-        if self.pipeline.is_some() {
-            check_spanned_field(
-                "pipeline",
-                self.pipeline.as_ref().and_then(|f| f.range.clone()),
-            )?;
-        }
+                self.future_flags.as_ref().map(|f| f.range.clone()),
+            ),
+            ("pipeline", self.pipeline.as_ref().map(|f| f.range.clone())),
+            // TODO: These fields should be `Option<Spanned<Vec<T>>>` instead of
+            // `Option<Vec<Spanned<T>>>` for consistency with other fields. This would
+            // allow proper span information for the field itself. This is a breaking
+            // change that needs to be coordinated with the struct definition in mod.rs
+            (
+                "globalDependencies",
+                if self.global_dependencies.is_some() {
+                    Some(None)
+                } else {
+                    None
+                },
+            ),
+            (
+                "globalEnv",
+                if self.global_env.is_some() {
+                    Some(None)
+                } else {
+                    None
+                },
+            ),
+            (
+                "globalPassThroughEnv",
+                if self.global_pass_through_env.is_some() {
+                    Some(None)
+                } else {
+                    None
+                },
+            ),
+        ];
 
-        // Fields without span information (lists with individual spanned items):
-        check_field(&self.global_dependencies, "globalDependencies")?;
-        check_field(&self.global_env, "globalEnv")?;
-        check_field(&self.global_pass_through_env, "globalPassThroughEnv")?;
+        // Validate only fields that are present
+        for (field_name, range_option) in field_descriptors {
+            if let Some(range) = range_option {
+                validate_field_placement(field_name, range)?;
+            }
+        }
 
         Ok(())
     }
