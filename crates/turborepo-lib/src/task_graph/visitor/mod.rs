@@ -268,12 +268,10 @@ impl<'a> Visitor<'a> {
                 .env(&info, task_env_mode, task_definition)?;
 
             let task_cache = self.run_cache.task_cache(
-                crate::run::TaskCacheParams {
-                    task_definition,
-                    workspace_info,
-                    task_id: info.clone(),
-                    hash: &task_hash,
-                }
+                task_definition,
+                workspace_info,
+                info.clone(),
+                &task_hash,
             );
 
             // Drop to avoid holding the span across an await

@@ -27,13 +27,7 @@ use crate::{
     task_graph::{TaskDefinition, TaskOutputs},
 };
 
-/// Parameters for creating a task cache
-pub struct TaskCacheParams<'a> {
-    pub task_definition: &'a TaskDefinition,
-    pub workspace_info: &'a PackageInfo,
-    pub task_id: TaskId<'static>,
-    pub hash: &'a str,
-}
+
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -104,13 +98,15 @@ impl RunCache {
         }
     }
 
-    pub fn task_cache(self: &Arc<Self>, params: TaskCacheParams) -> TaskCache {
-        let TaskCacheParams {
-            task_definition,
-            workspace_info,
-            task_id,
-            hash,
-        } = params;
+    /// Return the TaskCache associated with this task execution
+    // TODO: Group these in a struct
+    pub fn task_cache(
+        self: &Arc<Self>,
+        task_definition: &TaskDefinition,
+        workspace_info: &PackageInfo,
+        task_id: TaskId<'static>,
+        hash: &str,
+    ) -> TaskCache {
 
         let log_file_path = self
             .repo_root

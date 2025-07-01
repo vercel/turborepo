@@ -20,7 +20,7 @@ use std::{
     time::Duration,
 };
 
-pub use cache::{CacheOutput, ConfigCache, Error as CacheError, RunCache, TaskCache, TaskCacheParams};
+pub use cache::{CacheOutput, ConfigCache, Error as CacheError, RunCache, TaskCache};
 use chrono::{DateTime, Local};
 use futures::StreamExt;
 use rayon::iter::ParallelBridge;
