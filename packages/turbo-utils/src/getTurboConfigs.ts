@@ -227,7 +227,7 @@ export function getWorkspaceConfigs(
         let turboConfig: SchemaV1 | undefined;
 
         try {
-          // Handle the case where both files exist (reproducing original behavior)
+          // TODO: Our code was allowing both config files to exist. This is a bug, needs to be fixed.
           if (error) {
             logger.error(error);
             throw new Error(error);
