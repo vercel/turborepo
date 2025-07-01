@@ -61,6 +61,13 @@ fn create_field_placement_error_message(field_name: &str, is_root_only: bool) ->
     }
 }
 
+#[derive(Debug)]
+pub struct FieldPlacementError {
+    pub message: String,
+    pub range: Option<std::ops::Range<usize>>,
+    pub field_name: String,
+}
+
 impl Deserializable for TaskName<'static> {
     fn deserialize(
         value: &impl DeserializableValue,
@@ -300,73 +307,160 @@ impl RawTurboJson {
     }
 
     /// Validates field placement to ensure root-only and package-only fields
-    /// are used in the correct configuration types
-    pub fn validate_field_placement(&self) -> Result<(), String> {
+    /// are used in the correct configuration types.
+    ///
+    /// This uses an allowlist approach - ALL fields must be explicitly
+    /// categorized. When adding new fields to RawTurboJson, developers MUST
+    /// add them to one of the allowlists below, forcing explicit
+    /// categorization decisions.
+    pub fn validate_field_placement(&self) -> Result<(), FieldPlacementError> {
+        use std::collections::HashSet;
+
+        // Define explicit allowlists for each field category
+        let root_only_fields: HashSet<&str> = [
+            "globalDependencies",
+            "globalEnv",
+            "globalPassThroughEnv",
+            "ui",
+            "noUpdateNotifier",
+            "concurrency",
+            "dangerouslyDisablePackageManagerCheck",
+            "cacheDir",
+            "daemon",
+            "envMode",
+            "remoteCache",
+            "boundaries",
+        ]
+        .iter()
+        .copied()
+        .collect();
+
+        let package_only_fields: HashSet<&str> = ["tags", "extends"].iter().copied().collect();
+
+        let universal_fields: HashSet<&str> = [
+            "$schema",
+            "tasks",
+            "experimentalSpaces",
+            "pipeline",
+            "futureFlags",
+        ]
+        .iter()
+        .copied()
+        .collect();
+
         let is_workspace_config = self.extends.is_some();
-        let mut errors = Vec::new();
 
-        if is_workspace_config {
-            // Check for root-only fields in workspace configuration
-            if self.global_dependencies.is_some() {
-                errors.push(create_field_placement_error_message(
-                    "globalDependencies",
-                    true,
-                ));
-            }
-            if self.global_env.is_some() {
-                errors.push(create_field_placement_error_message("globalEnv", true));
-            }
-            if self.global_pass_through_env.is_some() {
-                errors.push(create_field_placement_error_message(
-                    "globalPassThroughEnv",
-                    true,
-                ));
-            }
-            if self.cache_dir.is_some() {
-                errors.push(create_field_placement_error_message("cacheDir", true));
-            }
-            if self.daemon.is_some() {
-                errors.push(create_field_placement_error_message("daemon", true));
-            }
-            if self.boundaries.is_some() {
-                errors.push(create_field_placement_error_message("boundaries", true));
-            }
-            if self.ui.is_some() {
-                errors.push(create_field_placement_error_message("ui", true));
-            }
-            if self.no_update_notifier.is_some() {
-                errors.push(create_field_placement_error_message(
-                    "noUpdateNotifier",
-                    true,
-                ));
-            }
-            if self.concurrency.is_some() {
-                errors.push(create_field_placement_error_message("concurrency", true));
-            }
-            if self.allow_no_package_manager.is_some() {
-                errors.push(create_field_placement_error_message(
-                    "dangerouslyDisablePackageManagerCheck",
-                    true,
-                ));
-            }
-            if self.env_mode.is_some() {
-                errors.push(create_field_placement_error_message("envMode", true));
-            }
-            if self.remote_cache.is_some() {
-                errors.push(create_field_placement_error_message("remoteCache", true));
-            }
-        } else {
-            // Check for package-only fields in root configuration
-            if self.tags.is_some() {
-                errors.push(create_field_placement_error_message("tags", false));
-            }
+        // This function ensures ALL fields are explicitly categorized
+        // by checking each field individually. If you add a new field to
+        // RawTurboJson, you MUST add a check here and put it in one of the
+        // allowlists above, forcing explicit categorization.
+
+        // Helper macro to check fields with span information
+        macro_rules! check_spanned_field {
+            ($field:expr, $field_name:expr) => {
+                if let Some(field) = &$field {
+                    if universal_fields.contains($field_name) {
+                        // Universal field - allowed everywhere
+                    } else if root_only_fields.contains($field_name) {
+                        if is_workspace_config {
+                            return Err(FieldPlacementError {
+                                message: create_field_placement_error_message($field_name, true),
+                                range: field.range.clone(),
+                                field_name: $field_name.to_string(),
+                            });
+                        }
+                    } else if package_only_fields.contains($field_name) {
+                        if !is_workspace_config {
+                            return Err(FieldPlacementError {
+                                message: create_field_placement_error_message($field_name, false),
+                                range: field.range.clone(),
+                                field_name: $field_name.to_string(),
+                            });
+                        }
+                    } else {
+                        return Err(FieldPlacementError {
+                            message: format!(
+                                "Field '{}' is not categorized in field placement validation. \
+                                 Please add it to one of the allowlists: root_only_fields, \
+                                 package_only_fields, or universal_fields in \
+                                 validate_field_placement()",
+                                $field_name
+                            ),
+                            range: field.range.clone(),
+                            field_name: $field_name.to_string(),
+                        });
+                    }
+                }
+            };
         }
 
-        if errors.is_empty() {
-            Ok(())
-        } else {
-            Err(errors.join(" "))
+        // Helper macro to check fields without span information
+        macro_rules! check_field {
+            ($field:expr, $field_name:expr) => {
+                if $field.is_some() {
+                    if universal_fields.contains($field_name) {
+                        // Universal field - allowed everywhere
+                    } else if root_only_fields.contains($field_name) {
+                        if is_workspace_config {
+                            return Err(FieldPlacementError {
+                                message: create_field_placement_error_message($field_name, true),
+                                range: None,
+                                field_name: $field_name.to_string(),
+                            });
+                        }
+                    } else if package_only_fields.contains($field_name) {
+                        if !is_workspace_config {
+                            return Err(FieldPlacementError {
+                                message: create_field_placement_error_message($field_name, false),
+                                range: None,
+                                field_name: $field_name.to_string(),
+                            });
+                        }
+                    } else {
+                        return Err(FieldPlacementError {
+                            message: format!(
+                                "Field '{}' is not categorized in field placement validation. \
+                                 Please add it to one of the allowlists: root_only_fields, \
+                                 package_only_fields, or universal_fields in \
+                                 validate_field_placement()",
+                                $field_name
+                            ),
+                            range: None,
+                            field_name: $field_name.to_string(),
+                        });
+                    }
+                }
+            };
         }
+
+        // Check every field in RawTurboJson - if you add a field, you MUST add it here
+        // Fields with span information:
+        check_spanned_field!(self.schema, "$schema");
+        check_spanned_field!(self.experimental_spaces, "experimentalSpaces");
+        check_spanned_field!(self.extends, "extends");
+        check_spanned_field!(self.tasks, "tasks");
+        check_spanned_field!(self.remote_cache, "remoteCache");
+        check_spanned_field!(self.ui, "ui");
+        check_spanned_field!(
+            self.allow_no_package_manager,
+            "dangerouslyDisablePackageManagerCheck"
+        );
+        check_spanned_field!(self.daemon, "daemon");
+        check_spanned_field!(self.env_mode, "envMode");
+        check_spanned_field!(self.cache_dir, "cacheDir");
+        check_spanned_field!(self.no_update_notifier, "noUpdateNotifier");
+        check_spanned_field!(self.tags, "tags");
+        check_spanned_field!(self.boundaries, "boundaries");
+        check_spanned_field!(self.concurrency, "concurrency");
+        check_spanned_field!(self.future_flags, "futureFlags");
+        check_spanned_field!(self.pipeline, "pipeline");
+
+        // Fields without span information (lists with individual spanned items):
+        check_field!(self.global_dependencies, "globalDependencies");
+        check_field!(self.global_env, "globalEnv");
+        check_field!(self.global_pass_through_env, "globalPassThroughEnv");
+
+        Ok(())
     }
 
     /// Parses a turbo.json file into the raw representation with span info
@@ -422,9 +516,24 @@ impl RawTurboJson {
         turbo_json.add_path(Arc::from(file_path));
 
         // Validate field placement
-        if let Err(_field_placement_error) = turbo_json.validate_field_placement() {
+        if let Err(field_placement_error) = turbo_json.validate_field_placement() {
+            // Create a proper diagnostic with the field placement error message and span
+            let diagnostic = if let Some(range) = field_placement_error.range {
+                // Convert Range<usize> to TextRange (u32)
+                let text_range =
+                    TextRange::new((range.start as u32).into(), (range.end as u32).into());
+                DeserializationDiagnostic::new(field_placement_error.message)
+                    .with_range(text_range)
+                    .with_file_source_code(text)
+                    .with_file_path(file_path)
+            } else {
+                DeserializationDiagnostic::new(field_placement_error.message)
+                    .with_file_source_code(text)
+                    .with_file_path(file_path)
+            };
+
             return Err(Error {
-                diagnostics: vec![],
+                diagnostics: vec![diagnostic.as_ref().into()],
                 backtrace: std::backtrace::Backtrace::capture(),
             });
         }

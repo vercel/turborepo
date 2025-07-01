@@ -17,7 +17,7 @@ impl<'a> TurboJsonReader<'a> {
         turbo_json: RawTurboJson,
     ) -> Result<ConfigurationOptions, Error> {
         let mut opts = if let Some(remote_cache_options) = &turbo_json.remote_cache {
-            remote_cache_options.into()
+            remote_cache_options.as_inner().into()
         } else {
             ConfigurationOptions::default()
         };
@@ -38,12 +38,16 @@ impl<'a> TurboJsonReader<'a> {
 
         // Don't allow token to be set for shared config.
         opts.token = None;
-        opts.ui = turbo_json.ui;
-        opts.allow_no_package_manager = turbo_json.allow_no_package_manager;
+        opts.ui = turbo_json.ui.map(|ui| *ui.as_inner());
+        opts.allow_no_package_manager = turbo_json
+            .allow_no_package_manager
+            .map(|allow| *allow.as_inner());
         opts.daemon = turbo_json.daemon.map(|daemon| *daemon.as_inner());
-        opts.env_mode = turbo_json.env_mode;
+        opts.env_mode = turbo_json.env_mode.map(|env_mode| *env_mode.as_inner());
         opts.cache_dir = cache_dir;
-        opts.concurrency = turbo_json.concurrency;
+        opts.concurrency = turbo_json
+            .concurrency
+            .map(|concurrency| concurrency.into_inner());
         Ok(opts)
     }
 }
