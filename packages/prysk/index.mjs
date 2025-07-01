@@ -1,8 +1,8 @@
 import { execSync } from "child_process";
 import path from "node:path";
 
-// TODO: make this customizable?
-const DIRECTORY = process.cwd();
+// Allow customization via environment variable or default to current working directory
+const DIRECTORY = process.env.PRYSK_DIRECTORY || process.cwd();
 
 const VENV_NAME = ".cram_env";
 
