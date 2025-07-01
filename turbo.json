@@ -25,10 +25,9 @@
   "globalEnv": ["OS", "RUNNER_OS"],
   "tasks": {
     "test": {
+      "inputs": ["$TURBO_DEFAULT$", ".env*"],
       "outputs": ["coverage/**/*"],
-
       "env": ["NODE_VERSION"],
-
       // ^build is generically set here, we haven't fully enumerated which workspaces
       // actually need to build before running tests.
       "dependsOn": ["^build"]
@@ -36,11 +35,13 @@
 
     // run prettier check before eslint
     "lint": {
+      "inputs": ["$TURBO_DEFAULT$", ".env*"],
       "dependsOn": ["lint:prettier", "^build"]
     },
 
     // root lint task runs toml check
     "//#lint": {
+      "inputs": ["$TURBO_DEFAULT$", ".env*"],
       "dependsOn": ["//#check:toml"]
     },
 
@@ -197,23 +198,30 @@
         "**/*tslint.json"
       ]
     },
-    "//#check:toml": {},
+    "//#check:toml": {
+      "inputs": ["$TURBO_DEFAULT$", ".env*"]
+    },
     "check-types": {
+      "inputs": ["$TURBO_DEFAULT$", ".env*"],
       "dependsOn": ["^build"]
     },
     "//#build:ts": {
+      "inputs": ["$TURBO_DEFAULT$", ".env*"],
       "outputs": ["packages/**/dist"]
     },
     "build:ts": {
+      "inputs": ["$TURBO_DEFAULT$", ".env*"],
       "outputs": ["dist/**/*"]
     },
     "build": {
+      "inputs": ["$TURBO_DEFAULT$", ".env*"],
       "outputs": ["dist/**/*", ".next/**/*"],
       "dependsOn": ["^build"]
     },
     // This is a synthetic tasks that lets us pull in other workspaces as dependencies
     // So changes in internal workspaces that we depend on, will trigger this task.
     "topo": {
+      "inputs": ["$TURBO_DEFAULT$", ".env*"],
       "dependsOn": ["^topo"]
     }
   }
