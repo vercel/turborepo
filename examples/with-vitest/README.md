@@ -6,10 +6,35 @@ This Turborepo starter is maintained by the Turborepo core team.
 
 This example is based on the `basic` example (`npx create-turbo@latest`) to demonstrate how to use Vitest and get the most out of Turborepo's caching.
 
-For this reason, the only commands in the root package.json are `turbo run test` and `turbo run view-report`.
+This example demonstrates two approaches to Vitest configuration:
 
-`turbo run test`: Runs the test in each package using Turborepo.
-`turbo run view-report`: Collects coverage from each package and shows it in a merged report.
+1. **Package-level caching (Recommended)**: Each package has its own Vitest configuration that imports shared settings from `@repo/vitest-config`. This approach leverages Turborepo's caching effectively.
+
+2. **Vitest Projects**: A root `vitest.config.ts` uses Vitest's projects feature for unified test running during development.
+
+## Getting Started
+
+First, install dependencies and build the shared configuration package:
+
+```bash
+pnpm install
+pnpm build --filter=@repo/vitest-config
+```
+
+## Available Commands
+
+- `pnpm test`: Runs tests in each package using Turborepo (leverages caching)
+- `pnpm test:projects`: Same as above, explicitly named for the package-level approach  
+- `pnpm test:projects:watch`: Runs tests using Vitest's projects feature in watch mode
+- `pnpm view-report`: Collects coverage from each package and shows it in a merged report
+
+## Configuration Structure
+
+The example uses a shared `@repo/vitest-config` package that exports:
+
+- `sharedConfig`: Base configuration with coverage settings
+- `baseConfig`: For Node.js packages (like `math`)
+- `uiConfig`: For packages requiring jsdom environment (like `web`, `docs`)
 
 ### Remote Caching
 
