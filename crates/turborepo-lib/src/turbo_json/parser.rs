@@ -428,33 +428,53 @@ impl RawTurboJson {
                 self.future_flags.as_ref().map(|f| f.range.clone()),
             ),
             ("pipeline", self.pipeline.as_ref().map(|f| f.range.clone())),
-            // TODO: These fields should be `Option<Spanned<Vec<T>>>` instead of
-            // `Option<Vec<Spanned<T>>>` for consistency with other fields. This would
-            // allow proper span information for the field itself. This is a breaking
-            // change that needs to be coordinated with the struct definition in mod.rs
             (
                 "globalDependencies",
-                if self.global_dependencies.is_some() {
-                    Some(None)
-                } else {
-                    None
-                },
+                self.global_dependencies.as_ref().and_then(|deps| {
+                    if deps.is_empty() {
+                        None // Skip validation for empty arrays
+                    } else {
+                        // Try to create a range from first to last element
+                        let first_range = deps.first().and_then(|elem| elem.range.as_ref());
+                        let last_range = deps.last().and_then(|elem| elem.range.as_ref());
+                        match (first_range, last_range) {
+                            (Some(first), Some(last)) => Some(Some(first.start..last.end)),
+                            _ => Some(None), // Present but no complete span info
+                        }
+                    }
+                }),
             ),
             (
                 "globalEnv",
-                if self.global_env.is_some() {
-                    Some(None)
-                } else {
-                    None
-                },
+                self.global_env.as_ref().and_then(|env| {
+                    if env.is_empty() {
+                        None // Skip validation for empty arrays
+                    } else {
+                        // Try to create a range from first to last element
+                        let first_range = env.first().and_then(|elem| elem.range.as_ref());
+                        let last_range = env.last().and_then(|elem| elem.range.as_ref());
+                        match (first_range, last_range) {
+                            (Some(first), Some(last)) => Some(Some(first.start..last.end)),
+                            _ => Some(None), // Present but no complete span info
+                        }
+                    }
+                }),
             ),
             (
                 "globalPassThroughEnv",
-                if self.global_pass_through_env.is_some() {
-                    Some(None)
-                } else {
-                    None
-                },
+                self.global_pass_through_env.as_ref().and_then(|env| {
+                    if env.is_empty() {
+                        None // Skip validation for empty arrays
+                    } else {
+                        // Try to create a range from first to last element
+                        let first_range = env.first().and_then(|elem| elem.range.as_ref());
+                        let last_range = env.last().and_then(|elem| elem.range.as_ref());
+                        match (first_range, last_range) {
+                            (Some(first), Some(last)) => Some(Some(first.start..last.end)),
+                            _ => Some(None), // Present but no complete span info
+                        }
+                    }
+                }),
             ),
         ];
 
