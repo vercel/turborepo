@@ -1,0 +1,23 @@
+# syntax=docker/dockerfile:1-labs
+FROM node:18 AS build
+RUN --mount=type=cache,target=/root/.npm npm install -g @microsoft/rush@5
+WORKDIR /app
+COPY ./npm-packages ./npm-packages
+# Install dependencies and build
+WORKDIR /app/npm-packages/dashboard-self-hosted
+RUN rush install
+ENV NODE_ENV=production
+RUN rush build -t dashboard-self-hosted
+RUN rush-pnpm deploy --legacy --filter=dashboard-self-hosted --prod /tmp/deploy
+
+FROM node:18-alpine
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 nextjs
+COPY --from=build --chown=nextjs:nodejs /tmp/deploy/ /app/
+WORKDIR /app
+RUN cp /app/.next/standalone/server.js .
+USER nextjs
+EXPOSE 6791
+ENV PORT=6791
+ENV HOSTNAME=0.0.0.0
+CMD ["node", "./server.js"]

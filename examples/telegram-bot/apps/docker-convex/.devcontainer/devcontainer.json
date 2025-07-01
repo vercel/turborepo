@@ -1,0 +1,52 @@
+{
+  "name": "Convex In Codespaces",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:1-20-bullseye",
+  "features": {
+    "ghcr.io/devcontainers/features/git:1": {},
+    "ghcr.io/devcontainers/features/github-cli:1": {},
+    "ghcr.io/devcontainers-extra/features/pnpm:2": {},
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {
+      "privileged": true
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-vscode.vscode-typescript-next",
+        "bradlc.vscode-tailwindcss",
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "ms-vscode.vscode-json",
+        "GitHub.copilot",
+        "GitHub.copilot-chat"
+      ],
+      "settings": {
+        "typescript.preferences.includePackageJsonAutoImports": "on"
+      }
+    }
+  },
+
+  "forwardPorts": [3210, 3211, 5173, 6791],
+  "appPort": [5173, 6791],
+  "portsAttributes": {
+    "5173": {
+      "label": "Vite Dev Server",
+      "onAutoForward": "openBrowser"
+    },
+    "6791": {
+      "label": "Self-hosted Convex Dashboard",
+      "onAutoForward": "notify"
+    },
+    "3210": {
+      "label": "Self-hosted Convex Cloud Origin",
+      "onAutoForward": "silent"
+    },
+    "3211": {
+      "label": "Self-hosted Convex Site Origin",
+      "onAutoForward": "silent"
+    }
+  },
+  "postCreateCommand": ".devcontainer/post-create.sh",
+  "postStartCommand": ".devcontainer/post-start.sh",
+  "remoteUser": "node"
+}

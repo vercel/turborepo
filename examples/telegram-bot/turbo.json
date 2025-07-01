@@ -1,0 +1,104 @@
+{
+  "$schema": "https://turborepo.com/schema.json",
+  "ui": "tui",
+  "globalDependencies": [".env", ".env.local", ".env.example"],
+  "globalEnv": [
+    "NODE_ENV",
+    "TELEGRAM_TOKEN",
+    "CONVEX_URL",
+    "NEXT_PUBLIC_CONVEX_URL",
+    "CONVEX_INSTANCE_SECRET"
+  ],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        ".env*",
+        "src/**",
+        "app/**",
+        "convex/**",
+        "public/**",
+        "*.config.*",
+        "tsconfig.json",
+        "package.json"
+      ],
+      "outputs": [
+        ".next/**",
+        "!.next/cache/**",
+        "dist/**",
+        "build/**",
+        "convex/_generated/**"
+      ],
+      "env": ["NODE_ENV", "NEXT_PUBLIC_CONVEX_URL"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true,
+      "env": [
+        "NODE_ENV",
+        "TELEGRAM_TOKEN",
+        "CONVEX_URL",
+        "NEXT_PUBLIC_CONVEX_URL",
+        "CONVEX_INSTANCE_SECRET"
+      ]
+    },
+    "start": {
+      "cache": false,
+      "persistent": true,
+      "dependsOn": ["build"]
+    },
+    "lint": {
+      "dependsOn": ["^lint"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "src/**",
+        "app/**",
+        "convex/**",
+        "*.config.*",
+        ".eslintrc*",
+        "eslint.config.*"
+      ],
+      "outputs": []
+    },
+    "check-types": {
+      "dependsOn": ["^check-types"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "src/**",
+        "app/**",
+        "convex/**",
+        "tsconfig.json",
+        "*.d.ts"
+      ],
+      "outputs": []
+    },
+    "test": {
+      "dependsOn": ["^build"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "src/**",
+        "app/**",
+        "convex/**",
+        "__tests__/**",
+        "*.test.*",
+        "*.spec.*"
+      ],
+      "outputs": ["coverage/**"]
+    },
+    "clean": {
+      "cache": false,
+      "outputs": []
+    },
+    "deploy-functions": {
+      "dependsOn": ["^build"],
+      "inputs": [
+        "convex/**",
+        "convex.json",
+        ".env*"
+      ],
+      "outputs": ["convex/_generated/**"],
+      "env": ["CONVEX_URL", "CONVEX_INSTANCE_SECRET"]
+    }
+  }
+}

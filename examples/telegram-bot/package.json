@@ -1,0 +1,50 @@
+{
+  "name": "go-convex-telegram-turborepo",
+  "private": true,
+  "scripts": {
+    "setup-init": "./setup.sh",
+    "docker:manage": "./docker-manager.sh",
+    "get-admin-key": "docker compose exec convex-backend ./generate_admin_key.sh",
+    "docker:reset": "docker compose down -v && docker system prune -af",
+    
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "format": "prettier --write \"**/*.{ts,tsx,md}\"",
+    "check-types": "turbo run check-types",
+    
+    "dev:web": "cd apps/web && pnpm dev",
+    "dev:convex": "cd apps/docker-convex && pnpm self-hosted:setup && pnpm deploy-functions",
+    "dev:bot": "cd apps/golang-telegram-bot && make dev",
+    "dev:all": "turbo run dev --parallel",
+    
+    "start:web": "cd apps/web && pnpm start",
+    "start:convex": "cd apps/docker-convex && pnpm self-hosted:setup",
+    "start:bot": "cd apps/golang-telegram-bot && make start",
+    
+    "build:web": "cd apps/web && pnpm build",
+    "build:convex": "cd apps/docker-convex && pnpm deploy-functions",
+    "build:bot": "cd apps/golang-telegram-bot && make build",
+    
+    "install:all": "pnpm install && cd apps/golang-telegram-bot && make install",
+    "clean:all": "turbo run clean && cd apps/golang-telegram-bot && make clean",
+    
+  
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f",
+    "docker:restart-bot": "docker compose restart telegram-bot",
+    "docker:build": "docker compose up --build -d",
+    "convex:deploy": "cd apps/docker-convex && CONVEX_URL=http://localhost:3210 pnpm convex dev --once",
+    "test:api": "curl http://localhost:3210/api/health && echo '' && curl http://localhost:3210/api/telegram/messages"
+  },
+  "devDependencies": {
+    "prettier": "^3.6.0",
+    "turbo": "^2.5.4",
+    "typescript": "5.8.2"
+  },
+  "packageManager": "pnpm@9.0.0",
+  "engines": {
+    "node": ">=18"
+  }
+}

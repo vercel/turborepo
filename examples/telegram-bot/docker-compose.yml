@@ -1,0 +1,111 @@
+version: "3.8"
+
+name: telegram-bot
+
+services:
+  # Convex Backend Service
+  convex-backend:
+    image: ghcr.io/get-convex/convex-backend:c1a7ac393888d743e704de56cf569a154b4526d4
+    stop_grace_period: 10s
+    stop_signal: SIGINT
+    ports:
+      - "${CONVEX_PORT:-3210}:3210"
+      - "${CONVEX_SITE_PROXY_PORT:-3211}:3211"
+    volumes:
+      - convex_data:/convex/data
+      - ./apps/docker-convex/admin-key:/convex/admin-key
+    environment:
+      - INSTANCE_NAME=${CONVEX_INSTANCE_NAME:-convex-telegram-bot}
+      - INSTANCE_SECRET=${CONVEX_INSTANCE_SECRET:-0000000000000000000000000000000000000000000000000000000000000000}
+      - CONVEX_RELEASE_VERSION_DEV=${CONVEX_RELEASE_VERSION_DEV:-}
+      - ACTIONS_USER_TIMEOUT_SECS=${ACTIONS_USER_TIMEOUT_SECS:-}
+      - CONVEX_CLOUD_ORIGIN=${CONVEX_CLOUD_ORIGIN:-http://127.0.0.1:3210}
+      - CONVEX_SITE_ORIGIN=${CONVEX_SITE_ORIGIN:-http://127.0.0.1:3211}
+      - DATABASE_URL=${DATABASE_URL:-}
+      - DISABLE_BEACON=${DISABLE_BEACON:-true}
+      - REDACT_LOGS_TO_CLIENT=${REDACT_LOGS_TO_CLIENT:-false}
+      - DO_NOT_REQUIRE_SSL=${DO_NOT_REQUIRE_SSL:-true}
+      - POSTGRES_URL=${POSTGRES_URL:-}
+      - MYSQL_URL=${MYSQL_URL:-}
+      - RUST_LOG=${RUST_LOG:-info}
+      - RUST_BACKTRACE=${RUST_BACKTRACE:-}
+      - AWS_REGION=${AWS_REGION:-}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
+      - AWS_SESSION_TOKEN=${AWS_SESSION_TOKEN:-}
+      - S3_STORAGE_EXPORTS_BUCKET=${S3_STORAGE_EXPORTS_BUCKET:-}
+      - S3_STORAGE_SNAPSHOT_IMPORTS_BUCKET=${S3_STORAGE_SNAPSHOT_IMPORTS_BUCKET:-}
+      - S3_STORAGE_MODULES_BUCKET=${S3_STORAGE_MODULES_BUCKET:-}
+      - S3_STORAGE_FILES_BUCKET=${S3_STORAGE_FILES_BUCKET:-}
+      - S3_STORAGE_SEARCH_BUCKET=${S3_STORAGE_SEARCH_BUCKET:-}
+      - S3_ENDPOINT_URL=${S3_ENDPOINT_URL:-}
+      - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
+    healthcheck:
+      test: curl -f http://localhost:3210/version
+      interval: 5s
+      start_period: 10s
+    networks:
+      - telegram-bot-network
+
+  # Convex Dashboard Service
+  convex-dashboard:
+    image: ghcr.io/get-convex/convex-dashboard:c1a7ac393888d743e704de56cf569a154b4526d4
+    stop_grace_period: 10s
+    stop_signal: SIGINT
+    ports:
+      - "${CONVEX_DASHBOARD_PORT:-6791}:6791"
+    environment:
+      - NEXT_PUBLIC_DEPLOYMENT_URL=${NEXT_PUBLIC_DEPLOYMENT_URL:-http://127.0.0.1:3210}
+    depends_on:
+      convex-backend:
+        condition: service_healthy
+    networks:
+      - telegram-bot-network
+
+  # Golang Telegram Bot Service
+  telegram-bot:
+    build:
+      context: ./apps/golang-telegram-bot
+      dockerfile: Dockerfile
+    environment:
+      - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
+      - CONVEX_URL=${CONVEX_URL:-http://convex-backend:3211}
+      - CONVEX_INSTANCE_SECRET=${CONVEX_INSTANCE_SECRET:-0000000000000000000000000000000000000000000000000000000000000000}
+    depends_on:
+      convex-backend:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - telegram-bot-network
+
+  # Next.js Web Dashboard Service
+  web-dashboard:
+    build:
+      context: .
+      dockerfile: ./apps/web/Dockerfile # Fixed path
+      args:
+        - NEXT_PUBLIC_CONVEX_URL=http://localhost:3210
+        - NEXT_PUBLIC_TELEGRAM_BOT_USERNAME=${TELEGRAM_BOT_USERNAME}
+    ports:
+      - "${WEB_DASHBOARD_PORT:-3000}:3000"
+    environment:
+      - NEXT_PUBLIC_CONVEX_URL=http://localhost:3210
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_TOKEN}
+      - NEXT_PUBLIC_TELEGRAM_BOT_USERNAME=${TELEGRAM_BOT_USERNAME}
+      - CONVEX_URL=http://convex-backend:3211
+      - NODE_ENV=production
+      - NEXT_PUBLIC_CONVEX_DASHBOARD_PORT=${CONVEX_DASHBOARD_PORT:-6791}
+      - NEXT_PUBLIC_CONVEX_PORT=${CONVEX_PORT:-3210}
+    depends_on:
+      convex-backend:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - telegram-bot-network
+
+volumes:
+  convex_data:
+
+networks:
+  telegram-bot-network:
+    driver: bridge

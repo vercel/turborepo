@@ -1,0 +1,31 @@
+{
+  "name": "docker-convex-boilerplate",
+  "version": "1.0.0",
+  "description": "Self-hosted Convex database boilerplate with Docker",
+  "scripts": {
+    "dev": "pnpm run self-hosted:setup && pnpm run deploy-functions",
+    "build": "pnpm run deploy-functions",
+    "start": "pnpm run self-hosted:setup",
+    "clean": "docker compose down && docker system prune -af --volumes",
+    "docker:up": "docker compose --env-file .env.docker up -d",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f",
+    "docker:generate-admin-key": "docker compose exec convex-backend ./generate_admin_key.sh",
+    "docker:reset-images": "docker compose down && docker system prune -af --volumes",
+    "docker:reset-full": "pnpm run docker:reset-images",
+    "self-hosted:setup": "pnpm run docker:up && echo 'Waiting for backend to start...' && sleep 10 && pnpm run docker:generate-admin-key",
+    "self-hosted:stop": "docker compose down",
+    "self-hosted:reset": "pnpm run self-hosted:stop && pnpm run docker:reset-full",
+    "deploy-functions": "convex dev --once",
+    "post-create": "./.devcontainer/post-create.sh",
+    "post-start": "./.devcontainer/post-start.sh"
+  },
+  "dependencies": {
+    "convex": "1.24.8",
+    "prettier": "3.5.2"
+  },
+  "devDependencies": {
+    "@types/node": "^18.17.0",
+    "typescript": "~5.0.3"
+  }
+}
