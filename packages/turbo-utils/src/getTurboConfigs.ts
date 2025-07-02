@@ -221,7 +221,11 @@ export function getWorkspaceConfigs(
         const isWorkspaceRoot = workspacePath === turboRoot;
 
         // Try and get turbo.json or turbo.jsonc
-        const { configPath: turboConfigPath, configExists, error } = resolveTurboConfigPath(workspacePath);
+        const {
+          configPath: turboConfigPath,
+          configExists,
+          error,
+        } = resolveTurboConfigPath(workspacePath);
 
         let rawTurboJson = null;
         let turboConfig: SchemaV1 | undefined;
