@@ -26,7 +26,7 @@ use turborepo_repository::package_graph::PackageName;
 pub use crate::turbo_json::{RawTurboJson, UIMode};
 use crate::{
     cli::{EnvMode, LogOrder},
-    turbo_json::{CONFIG_FILE, CONFIG_FILE_JSONC},
+    turbo_json::{resolve_turbo_config_path, CONFIG_FILE, CONFIG_FILE_JSONC},
 };
 
 #[derive(Debug, Error, Diagnostic)]
@@ -454,7 +454,7 @@ impl ConfigurationOptions {
             return Ok(path.clone());
         }
 
-        crate::turbo_json::resolve_turbo_config_path(repo_root)
+        resolve_turbo_config_path(repo_root)
     }
 
     pub fn allow_no_turbo_json(&self) -> bool {

@@ -10,7 +10,7 @@ use crate::{
     cli,
     config::{ConfigurationOptions, Error as ConfigError, TurborepoConfigBuilder},
     opts::Opts,
-    turbo_json::{CONFIG_FILE, CONFIG_FILE_JSONC},
+    turbo_json::{resolve_turbo_config_path, CONFIG_FILE, CONFIG_FILE_JSONC},
     Args,
 };
 
@@ -146,7 +146,7 @@ impl CommandBase {
         self.repo_root.join_component("package.json")
     }
     fn root_turbo_json_path(&self) -> Result<AbsoluteSystemPathBuf, ConfigError> {
-        crate::turbo_json::resolve_turbo_config_path(&self.repo_root)
+        resolve_turbo_config_path(&self.repo_root)
     }
 
     pub fn api_auth(&self) -> Result<Option<APIAuth>, ConfigError> {
