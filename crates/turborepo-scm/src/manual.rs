@@ -15,16 +15,16 @@ use crate::{Error, GitHashes};
 fn git_like_hash_file(path: &AbsoluteSystemPath) -> Result<String, Error> {
     let mut hasher = Sha1::new();
     let mut f = path.open()?;
-    
+
     // Get file size first for git blob header
     let metadata = f.metadata()?;
     let size = metadata.len();
-    
+
     // Write git blob header
     hasher.update("blob ".as_bytes());
     hasher.update(size.to_string().as_bytes());
     hasher.update([b'\0']);
-    
+
     // Stream the file content in chunks to avoid loading entire file into memory
     // This is a significant performance improvement for large files
     let mut buffer = [0u8; 8192]; // 8KB buffer - optimal for most file systems
@@ -35,7 +35,7 @@ fn git_like_hash_file(path: &AbsoluteSystemPath) -> Result<String, Error> {
         }
         hasher.update(&buffer[..bytes_read]);
     }
-    
+
     let result = hasher.finalize();
     Ok(result.encode_hex::<String>())
 }
