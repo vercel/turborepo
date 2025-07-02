@@ -358,48 +358,58 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
         &mut self,
         package_manager: &PackageManager,
     ) -> Result<(), Error> {
-        let split_deps = self
-            .workspaces
-            .iter()
-            .map(|(name, entry)| {
-                // TODO avoid clone
-                (
-                    name.clone(),
-                    Dependencies::new(
-                        self.repo_root,
-                        &entry.package_json_path,
-                        &self.workspaces,
-                        package_manager,
-                        entry.package_json.all_dependencies(),
-                    ),
-                )
-            })
-            .collect::<Vec<_>>();
-        for (name, deps) in split_deps {
+        // Build a direct mapping from PackageName to NodeIndex to avoid clones
+        // This eliminates the need to construct PackageNode::Workspace for lookups
+        let mut name_to_node_idx = std::collections::HashMap::new();
+        for (package_node, &node_idx) in &self.node_lookup {
+            if let PackageNode::Workspace(package_name) = package_node {
+                name_to_node_idx.insert(package_name, node_idx);
+            }
+        }
+        
+        // Cache the root node index since it's used frequently
+        let root_idx = *self
+            .node_lookup
+            .get(&PackageNode::Root)
+            .expect("root node should have index");
+        
+        // Pre-compute all dependencies and process them immediately to avoid borrowing conflicts
+        let workspace_names: Vec<_> = self.workspaces.keys().cloned().collect();
+        
+        for name in workspace_names {
+            let entry = &self.workspaces[&name];
+            let deps = Dependencies::new(
+                self.repo_root,
+                &entry.package_json_path,
+                &self.workspaces,
+                package_manager,
+                entry.package_json.all_dependencies(),
+            );
+            
+            // Get the node index without additional clones
+            let node_idx = *name_to_node_idx
+                .get(&name)
+                .expect("unable to find workspace node index");
+            
+            let Dependencies { internal, external } = deps;
+                
+            if internal.is_empty() {
+                self.workspace_graph.add_edge(node_idx, root_idx, ());
+            }
+            
+            for dependency in internal {
+                let dependency_idx = *name_to_node_idx
+                    .get(&dependency)
+                    .expect("unable to find dependency node index");
+                self.workspace_graph
+                    .add_edge(node_idx, dependency_idx, ());
+            }
+            
+            // Update the entry with external dependencies
             let entry = self
                 .workspaces
                 .get_mut(&name)
-                .expect("workspace present in ");
-            let Dependencies { internal, external } = deps;
-            let node_idx = self
-                .node_lookup
-                .get(&PackageNode::Workspace(name))
-                .expect("unable to find workspace node index");
-            if internal.is_empty() {
-                let root_idx = self
-                    .node_lookup
-                    .get(&PackageNode::Root)
-                    .expect("root node should have index");
-                self.workspace_graph.add_edge(*node_idx, *root_idx, ());
-            }
-            for dependency in internal {
-                let dependency_idx = self
-                    .node_lookup
-                    .get(&PackageNode::Workspace(dependency))
-                    .expect("unable to find workspace node index");
-                self.workspace_graph
-                    .add_edge(*node_idx, *dependency_idx, ());
-            }
+                .expect("workspace present in map");
             entry.unresolved_external_dependencies = Some(external);
         }
 
