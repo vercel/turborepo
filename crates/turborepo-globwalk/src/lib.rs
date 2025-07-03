@@ -147,8 +147,8 @@ pub fn fix_glob_pattern(pattern: &str) -> String {
     let needs_trailing_slash = pattern.ends_with('/') || pattern.ends_with('\\');
 
     // Normalize leading ./ patterns for consistent workspace matching
-    let normalized_pattern = if pattern.starts_with("./") {
-        &pattern[2..]
+    let normalized_pattern = if let Some(stripped) = pattern.strip_prefix("./") {
+        stripped
     } else {
         pattern
     };
