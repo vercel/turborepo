@@ -531,8 +531,8 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
         // compatibility
         let normalized_parent_dir_pattern = parent_dir_unix.as_deref().and_then(|path| {
             let path_str = path.as_str();
-            if path_str.starts_with("./") {
-                Some(path_str[2..].to_string())
+            if let Some(stripped) = path_str.strip_prefix("./") {
+                Some(stripped.to_string())
             } else if !path_str.starts_with('.') {
                 // Also try with ./ prefix to match workspace globs that might have it
                 Some(format!("./{}", path_str))
