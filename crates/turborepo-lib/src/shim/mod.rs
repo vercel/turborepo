@@ -135,7 +135,21 @@ fn run_correct_turbo(
         let should_warn_on_global = env::var(TURBO_GLOBAL_WARNING_DISABLED)
             .map_or(true, |disable| !matches!(disable.as_str(), "1" | "true"));
         if should_warn_on_global {
-            warn!("No locally installed `turbo` found. Using version: {version}.");
+            if let Some(declared_version) = declared_version {
+                warn!(
+                    "No locally installed `turbo` found in your repository. Using globally \
+                     installed version ({version}), which can cause unexpected \
+                     behavior.\n\nInstalling the version in your repository ({declared_version}) \
+                     before calling `turbo` will result in more predictable behavior across \
+                     environments."
+                );
+            } else {
+                warn!(
+                    "No locally installed `turbo` found in your repository. Using globally \
+                     installed version ({version}). Using a specified version in your repository \
+                     will result in more predictable behavior."
+                );
+            }
         }
         Ok(cli::run(Some(repo_state), subscriber, ui)?)
     }
