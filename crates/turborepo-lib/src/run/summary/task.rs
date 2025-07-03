@@ -77,6 +77,7 @@ pub(crate) struct SharedTaskSummary<T> {
     pub directory: Option<String>,
     pub dependencies: Vec<T>,
     pub dependents: Vec<T>,
+    pub with: Vec<String>,
     pub resolved_task_definition: TaskSummaryTaskDefinition,
     pub expanded_outputs: Vec<AnchoredSystemPathBuf>,
     pub framework: String,
@@ -235,6 +236,7 @@ impl From<SharedTaskSummary<TaskId<'static>>> for SharedTaskSummary<String> {
             execution,
             env_mode,
             environment_variables,
+            with,
             ..
         } = value;
         Self {
@@ -257,6 +259,7 @@ impl From<SharedTaskSummary<TaskId<'static>>> for SharedTaskSummary<String> {
                 .into_iter()
                 .map(|task_id| task_id.task().to_string())
                 .collect(),
+            with,
             resolved_task_definition,
             framework,
             execution,
@@ -285,7 +288,7 @@ impl From<TaskDefinition> for TaskSummaryTaskDefinition {
             interruptible,
             interactive,
             env_mode,
-            siblings: _,
+            with: _,
         } = value;
 
         let mut outputs = inclusions;

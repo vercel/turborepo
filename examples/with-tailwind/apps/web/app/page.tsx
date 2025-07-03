@@ -1,38 +1,22 @@
 import Image from "next/image";
 import { Card } from "@repo/ui/card";
-
-function Gradient({
-  conic,
-  className,
-  small,
-}: {
-  small?: boolean;
-  conic?: boolean;
-  className?: string;
-}) {
-  return (
-    <span
-      className={`absolute mix-blend-normal will-change-[filter] rounded-[100%] ${
-        small ? "blur-[32px]" : "blur-[75px]"
-      } ${conic ? "bg-glow-conic" : ""} ${className ?? ""}`}
-    />
-  );
-}
+import { Gradient } from "@repo/ui/gradient";
+import { TurborepoLogo } from "@repo/ui/turborepo-logo";
 
 const LINKS = [
   {
     title: "Docs",
-    href: "https://turbo.build/repo/docs",
+    href: "https://turborepo.com/docs",
     description: "Find in-depth information about Turborepo features and API.",
   },
   {
     title: "Learn",
-    href: "https://turbo.build/repo/docs/handbook",
+    href: "https://turborepo.com/docs/handbook",
     description: "Learn more about monorepos with our handbook.",
   },
   {
     title: "Templates",
-    href: "https://turbo.build/repo/docs/getting-started/from-example",
+    href: "https://turborepo.com/docs/getting-started/from-example",
     description: "Choose from over 15 examples and deploy with a single click.",
   },
   {
@@ -47,11 +31,11 @@ export default function Page() {
   return (
     <main className="flex flex-col items-center justify-between min-h-screen p-24">
       <div className="z-10 items-center justify-between w-full max-w-5xl font-mono text-sm lg:flex">
-        <p className="fixed top-0 left-0 flex justify-center w-full px-4 pt-8 pb-6 border-b bg-gradient-to-b backdrop-blur-2xl border-neutral-800 bg-zinc-800/30 from-inherit lg:static lg:w-auto lg:rounded-xl lg:border lg:bg-gray-200 lg:p-4">
+        <p className="fixed top-0 left-0 flex justify-center w-full px-4 pt-8 pb-6 border backdrop-blur-2xl border-neutral-800 from-inherit lg:static lg:w-auto lg:rounded-xl lg:p-4">
           examples/with-tailwind -&nbsp;
           <code className="font-mono font-bold">web</code>
         </p>
-        <div className="fixed bottom-0 left-0 flex items-end justify-center w-full h-48 bg-gradient-to-t from-black via-black lg:static lg:h-auto lg:w-auto lg:bg-none">
+        <div className="fixed bottom-0 left-0 flex items-end justify-center w-full h-48 lg:static lg:h-auto lg:w-auto">
           <a
             className="flex gap-2 p-8 pointer-events-none place-items-center lg:pointer-events-auto lg:p-0"
             href="https://vercel.com?utm_source=create-turbo&utm_medium=basic&utm_campaign=create-turbo"
@@ -61,7 +45,7 @@ export default function Page() {
             By{" "}
             <Image
               alt="Vercel Logo"
-              className="invert"
+              className="dark:invert"
               height={24}
               priority
               src="/vercel.svg"
@@ -90,14 +74,8 @@ export default function Page() {
               />
             </div>
 
-            <div className="w-[120px] h-[120px] z-50">
-              <Image
-                alt=""
-                height={120}
-                priority
-                src="turborepo.svg"
-                width={120}
-              />
+            <div className="flex justify-center items-center z-50">
+              <TurborepoLogo />
             </div>
           </div>
           <Gradient
@@ -106,7 +84,7 @@ export default function Page() {
           />
           <div className="z-50 flex flex-col items-center justify-center gap-5 px-6 text-center lg:gap-6">
             <svg
-              className="w-[160px] md:w-[200px] fill-white"
+              className="w-[160px] md:w-[200px] fill-black dark:fill-white"
               viewBox="0 0 506 50"
               width={200}
               xmlns="http://www.w3.org/2000/svg"

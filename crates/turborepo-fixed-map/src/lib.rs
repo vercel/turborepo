@@ -34,7 +34,7 @@ impl<K: Ord, V> FixedMap<K, V> {
 
     /// Insert a value for a key.
     ///
-    /// There is no guarentee that the provided value will be the one returned.
+    /// There is no guarantee that the provided value will be the one returned.
     pub fn insert(&self, key: &K, value: V) -> Result<&V, UnknownKey> {
         let item_index = self
             .inner

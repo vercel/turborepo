@@ -5,27 +5,41 @@ impl From<BoundariesDiagnostic> for Diagnostic {
     fn from(diagnostic: BoundariesDiagnostic) -> Self {
         let message = diagnostic.to_string();
         match diagnostic {
-            BoundariesDiagnostic::NotTypeOnlyImport { import, span, text } => Diagnostic {
+            BoundariesDiagnostic::NotTypeOnlyImport {
+                import,
+                span,
+                text: _,
+                path,
+            } => Diagnostic {
                 message,
-                path: Some(text.name().to_string()),
+                path: Some(path.to_string()),
                 start: Some(span.offset()),
                 end: Some(span.offset() + span.len()),
                 import: Some(import),
                 reason: None,
             },
-            BoundariesDiagnostic::PackageNotFound { name, span, text } => Diagnostic {
+            BoundariesDiagnostic::PackageNotFound {
+                name,
+                span,
+                text: _,
+                path,
+            } => Diagnostic {
                 message,
-                path: Some(text.name().to_string()),
+                path: Some(path.to_string()),
                 start: Some(span.offset()),
                 end: Some(span.offset() + span.len()),
                 import: Some(name.to_string()),
                 reason: None,
             },
             BoundariesDiagnostic::ImportLeavesPackage {
-                import, span, text, ..
+                import,
+                span,
+                text: _,
+                path,
+                ..
             } => Diagnostic {
                 message,
-                path: Some(text.name().to_string()),
+                path: Some(path.to_string()),
                 start: Some(span.offset()),
                 end: Some(span.offset() + span.len()),
                 import: Some(import),
@@ -75,6 +89,22 @@ impl From<BoundariesDiagnostic> for Diagnostic {
                 path: Some(path),
                 start: None,
                 end: None,
+                import: None,
+                reason: None,
+            },
+            BoundariesDiagnostic::TagSharesPackageName { tag, tag_span, .. } => Diagnostic {
+                message,
+                path: None,
+                start: tag_span.map(|span| span.offset()),
+                end: tag_span.map(|span| span.offset() + span.len()),
+                import: None,
+                reason: Some(tag),
+            },
+            BoundariesDiagnostic::PackageBoundariesHasTags { span, text: _ } => Diagnostic {
+                message,
+                path: None,
+                start: span.map(|span| span.offset()),
+                end: span.map(|span| span.offset() + span.len()),
                 import: None,
                 reason: None,
             },

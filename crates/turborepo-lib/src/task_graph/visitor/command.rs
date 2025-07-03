@@ -1,16 +1,20 @@
-use std::{collections::HashSet, path::PathBuf};
+use std::{
+    collections::{HashMap, HashSet},
+    path::PathBuf,
+};
 
 use tracing::debug;
 use turbopath::AbsoluteSystemPath;
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_microfrontends::MICROFRONTENDS_PACKAGE;
-use turborepo_repository::package_graph::{PackageGraph, PackageInfo, PackageName};
+use turborepo_process::Command;
+use turborepo_repository::{
+    package_graph::{PackageGraph, PackageInfo, PackageName},
+    package_manager::PackageManager,
+};
 
 use super::Error;
-use crate::{
-    engine::Engine, microfrontends::MicrofrontendsConfigs, opts::TaskArgs, process::Command,
-    run::task_id::TaskId,
-};
+use crate::{microfrontends::MicrofrontendsConfigs, opts::TaskArgs, run::task_id::TaskId};
 
 pub trait CommandProvider {
     fn command(
@@ -155,37 +159,29 @@ impl<'a> CommandProvider for PackageGraphCommandProvider<'a> {
 }
 
 #[derive(Debug)]
-pub struct MicroFrontendProxyProvider<'a> {
+pub struct MicroFrontendProxyProvider<'a, T> {
     repo_root: &'a AbsoluteSystemPath,
-    package_graph: &'a PackageGraph,
+    package_graph: &'a T,
     tasks_in_graph: HashSet<TaskId<'a>>,
     mfe_configs: &'a MicrofrontendsConfigs,
 }
 
-impl<'a> MicroFrontendProxyProvider<'a> {
-    pub fn new(
+impl<'a, T: PackageInfoProvider> MicroFrontendProxyProvider<'a, T> {
+    pub fn new<'b>(
         repo_root: &'a AbsoluteSystemPath,
-        package_graph: &'a PackageGraph,
-        engine: &Engine,
+        package_graph: &'a T,
+        tasks_in_graph: impl Iterator<Item = &'b TaskId<'static>>,
         micro_frontends_configs: &'a MicrofrontendsConfigs,
     ) -> Self {
-        let tasks_in_graph = engine
-            .tasks()
-            .filter_map(|task| match task {
-                crate::engine::TaskNode::Task(task_id) => Some(task_id),
-                crate::engine::TaskNode::Root => None,
-            })
-            .cloned()
-            .collect();
         Self {
             repo_root,
             package_graph,
-            tasks_in_graph,
+            tasks_in_graph: tasks_in_graph.cloned().collect(),
             mfe_configs: micro_frontends_configs,
         }
     }
 
-    fn dev_tasks(&self, task_id: &TaskId) -> Option<&HashSet<TaskId<'static>>> {
+    fn dev_tasks(&self, task_id: &TaskId) -> Option<&HashMap<TaskId<'static>, String>> {
         (task_id.task() == "proxy")
             .then(|| self.mfe_configs.get(task_id.package()))
             .flatten()
@@ -206,7 +202,7 @@ impl<'a> MicroFrontendProxyProvider<'a> {
     }
 }
 
-impl<'a> CommandProvider for MicroFrontendProxyProvider<'a> {
+impl<'a, T: PackageInfoProvider> CommandProvider for MicroFrontendProxyProvider<'a, T> {
     fn command(
         &self,
         task_id: &TaskId,
@@ -230,10 +226,11 @@ impl<'a> CommandProvider for MicroFrontendProxyProvider<'a> {
                     .unwrap_or_default(),
             });
         }
-        let local_apps = dev_tasks
-            .iter()
-            .filter(|task| self.tasks_in_graph.contains(task))
-            .map(|task| task.package());
+        let local_apps = dev_tasks.iter().filter_map(|(task, app_name)| {
+            self.tasks_in_graph
+                .contains(task)
+                .then_some(app_name.as_str())
+        });
         let package_dir = self.repo_root.resolve(package_info.package_path());
         let mfe_config_filename = self
             .mfe_configs
@@ -269,11 +266,31 @@ impl<'a> CommandProvider for MicroFrontendProxyProvider<'a> {
     }
 }
 
+/// A trait for fetching package information required to execute commands
+pub trait PackageInfoProvider {
+    fn package_manager(&self) -> &PackageManager;
+
+    fn package_info(&self, name: &PackageName) -> Option<&PackageInfo>;
+}
+
+impl PackageInfoProvider for PackageGraph {
+    fn package_manager(&self) -> &PackageManager {
+        PackageGraph::package_manager(self)
+    }
+
+    fn package_info(&self, name: &PackageName) -> Option<&PackageInfo> {
+        PackageGraph::package_info(self, name)
+    }
+}
+
 #[cfg(test)]
 mod test {
     use std::ffi::OsStr;
 
     use insta::assert_snapshot;
+    use turbopath::AnchoredSystemPath;
+    use turborepo_microfrontends::Config;
+    use turborepo_repository::package_json::PackageJson;
 
     use super::*;
 
@@ -362,5 +379,87 @@ mod test {
             .command(&task_id, EnvironmentVariableMap::default())
             .unwrap();
         assert!(cmd.is_none(), "expected no cmd, got {cmd:?}");
+    }
+
+    #[test]
+    fn test_mfe_application_passed() {
+        let repo_root = AbsoluteSystemPath::new(if cfg!(windows) {
+            "C:\\repo-root"
+        } else {
+            "/tmp/repo-root"
+        })
+        .unwrap();
+        struct MockPackageInfo(PackageInfo);
+        impl PackageInfoProvider for MockPackageInfo {
+            fn package_manager(&self) -> &PackageManager {
+                &PackageManager::Npm
+            }
+
+            fn package_info(&self, name: &PackageName) -> Option<&PackageInfo> {
+                match name {
+                    PackageName::Root => unimplemented!(),
+                    PackageName::Other(name) => match name.as_str() {
+                        "web" | "docs" => Some(&self.0),
+                        _ => None,
+                    },
+                }
+            }
+        }
+        let mut config = Config::from_str(
+            r#"
+        {
+            "applications": {
+                "web-app": {
+                    "packageName": "web"
+                },
+                "docs-app": {
+                    "packageName": "docs",
+                    "routes": []
+                }
+            }
+        }"#,
+            "microfrontends.json",
+        )
+        .unwrap();
+        config.set_path(AnchoredSystemPath::new("microfrontends.json").unwrap());
+        let microfrontends_configs = MicrofrontendsConfigs::from_configs(
+            ["web", "docs"].iter().copied().collect(),
+            std::iter::once(("web", Ok(Some(config)))),
+        )
+        .unwrap()
+        .unwrap();
+
+        let mock_package_info = MockPackageInfo(PackageInfo {
+            package_json: PackageJson {
+                dependencies: Some(
+                    vec![(MICROFRONTENDS_PACKAGE.to_owned(), "1.0.0".to_owned())]
+                        .into_iter()
+                        .collect(),
+                ),
+                ..Default::default()
+            },
+            package_json_path: AnchoredSystemPath::new("package.json").unwrap().to_owned(),
+            unresolved_external_dependencies: None,
+            transitive_dependencies: None,
+        });
+        let mut factory = CommandFactory::new();
+        factory.add_provider(MicroFrontendProxyProvider::new(
+            repo_root,
+            &mock_package_info,
+            [TaskId::new("docs", "dev"), TaskId::new("web", "proxy")].iter(),
+            &microfrontends_configs,
+        ));
+        let cmd = factory
+            .command(
+                &TaskId::new("web", "proxy"),
+                EnvironmentVariableMap::default(),
+            )
+            .unwrap()
+            .unwrap();
+        assert!(
+            cmd.label().ends_with("--names docs-app"),
+            "Expected command to use application name instead of package name: {}",
+            cmd.label(),
+        );
     }
 }

@@ -11,7 +11,7 @@ use clap::ValueEnum;
 use miette::{NamedSource, SourceSpan};
 use serde::{Deserialize, Serialize};
 use struct_iterable::Iterable;
-use turbopath::AbsoluteSystemPath;
+use turbopath::{AbsoluteSystemPath, RelativeUnixPath};
 use turborepo_errors::Spanned;
 use turborepo_repository::package_graph::ROOT_PKG_NAME;
 use turborepo_unescape::UnescapedString;
@@ -31,7 +31,10 @@ pub mod parser;
 
 pub use loader::TurboJsonLoader;
 
-use crate::{boundaries::RootBoundariesConfig, config::UnnecessaryPackageTaskSyntaxError};
+use crate::{boundaries::BoundariesConfig, config::UnnecessaryPackageTaskSyntaxError};
+
+const TURBO_ROOT: &str = "$TURBO_ROOT$";
+const TURBO_ROOT_SLASH: &str = "$TURBO_ROOT$/";
 
 #[derive(Serialize, Deserialize, Debug, Default, PartialEq, Clone, Deserializable)]
 #[serde(rename_all = "camelCase")]
@@ -54,7 +57,7 @@ pub struct TurboJson {
     text: Option<Arc<str>>,
     path: Option<Arc<str>>,
     pub(crate) tags: Option<Spanned<Vec<Spanned<String>>>>,
-    pub(crate) boundaries: Option<Spanned<RootBoundariesConfig>>,
+    pub(crate) boundaries: Option<Spanned<BoundariesConfig>>,
     pub(crate) extends: Spanned<Vec<String>>,
     pub(crate) global_deps: Vec<String>,
     pub(crate) global_env: Vec<String>,
@@ -150,15 +153,28 @@ pub struct RawTurboJson {
     pub cache_dir: Option<Spanned<UnescapedString>>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub no_update_notifier: Option<bool>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub tags: Option<Spanned<Vec<Spanned<String>>>>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub boundaries: Option<Spanned<RootBoundariesConfig>>,
+    pub boundaries: Option<Spanned<BoundariesConfig>>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub concurrency: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub future_flags: Option<Spanned<FutureFlags>>,
 
     #[deserializable(rename = "//")]
     #[serde(skip)]
     _comment: Option<String>,
 }
+
+#[derive(Serialize, Default, Debug, Clone, Iterable, Deserializable, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct FutureFlags {}
 
 #[derive(Serialize, Default, Debug, PartialEq, Clone)]
 #[serde(transparent)]
@@ -256,8 +272,8 @@ pub struct RawTaskDefinition {
     #[serde(skip)]
     env_mode: Option<EnvMode>,
     // This can currently only be set internally and isn't a part of turbo.json
-    #[serde(skip)]
-    siblings: Option<Vec<Spanned<UnescapedString>>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    with: Option<Vec<Spanned<UnescapedString>>>,
 }
 
 macro_rules! set_field {
@@ -292,7 +308,7 @@ impl RawTaskDefinition {
         set_field!(self, other, pass_through_env);
         set_field!(self, other, interactive);
         set_field!(self, other, env_mode);
-        set_field!(self, other, siblings);
+        set_field!(self, other, with);
     }
 }
 
@@ -343,10 +359,12 @@ impl TryFrom<Vec<Spanned<UnescapedString>>> for TaskOutputs {
     }
 }
 
-impl TryFrom<RawTaskDefinition> for TaskDefinition {
-    type Error = Error;
-
-    fn try_from(raw_task: RawTaskDefinition) -> Result<Self, Error> {
+impl TaskDefinition {
+    pub fn from_raw(
+        mut raw_task: RawTaskDefinition,
+        path_to_repo_root: &RelativeUnixPath,
+    ) -> Result<Self, Error> {
+        replace_turbo_root_token(&mut raw_task, path_to_repo_root)?;
         let outputs = raw_task.outputs.unwrap_or_default().try_into()?;
 
         let cache = raw_task.cache.is_none_or(|c| c.into_inner());
@@ -438,8 +456,8 @@ impl TryFrom<RawTaskDefinition> for TaskDefinition {
             })
             .transpose()?;
 
-        let siblings = raw_task.siblings.map(|siblings| {
-            siblings
+        let with = raw_task.with.map(|with_tasks| {
+            with_tasks
                 .into_iter()
                 .map(|sibling| {
                     let (sibling, span) = sibling.split();
@@ -461,7 +479,7 @@ impl TryFrom<RawTaskDefinition> for TaskDefinition {
             interruptible: *interruptible,
             interactive,
             env_mode: raw_task.env_mode,
-            siblings,
+            with,
         })
     }
 }
@@ -470,8 +488,10 @@ impl RawTurboJson {
     pub(crate) fn read(
         repo_root: &AbsoluteSystemPath,
         path: &AbsoluteSystemPath,
-    ) -> Result<RawTurboJson, Error> {
-        let contents = path.read_to_string()?;
+    ) -> Result<Option<RawTurboJson>, Error> {
+        let Some(contents) = path.read_existing_to_string()? else {
+            return Ok(None);
+        };
         // Anchoring the path can fail if the path resides outside of the repository
         // Just display absolute path in that case.
         let root_relative_path = repo_root.anchor(path).map_or_else(
@@ -480,7 +500,7 @@ impl RawTurboJson {
         );
         let raw_turbo_json = RawTurboJson::parse(&contents, &root_relative_path)?;
 
-        Ok(raw_turbo_json)
+        Ok(Some(raw_turbo_json))
     }
 
     /// Produces a new turbo.json without any tasks that reference non-existent
@@ -545,6 +565,15 @@ impl TryFrom<RawTurboJson> for TurboJson {
             let (span, text) = pipeline.span_and_text("turbo.json");
             return Err(Error::PipelineField { span, text });
         }
+
+        // `futureFlags` key is only allowed in root turbo.json
+        let is_workspace_config = raw_turbo.extends.is_some();
+        if is_workspace_config {
+            if let Some(future_flags) = raw_turbo.future_flags {
+                let (span, text) = future_flags.span_and_text("turbo.json");
+                return Err(Error::FutureFlagsInPackage { span, text });
+            }
+        }
         let mut global_env = HashSet::new();
         let mut global_file_dependencies = HashSet::new();
 
@@ -572,6 +601,8 @@ impl TryFrom<RawTurboJson> for TurboJson {
             }
         }
 
+        let tasks = raw_turbo.tasks.clone().unwrap_or_default();
+
         Ok(TurboJson {
             text: raw_turbo.span.text,
             path: raw_turbo.span.path,
@@ -598,7 +629,7 @@ impl TryFrom<RawTurboJson> for TurboJson {
 
                 global_deps
             },
-            tasks: raw_turbo.tasks.unwrap_or_default(),
+            tasks,
             // copy these over, we don't need any changes here.
             extends: raw_turbo
                 .extends
@@ -627,9 +658,11 @@ impl TurboJson {
     pub(crate) fn read(
         repo_root: &AbsoluteSystemPath,
         path: &AbsoluteSystemPath,
-    ) -> Result<TurboJson, Error> {
-        let raw_turbo_json = RawTurboJson::read(repo_root, path)?;
-        raw_turbo_json.try_into()
+    ) -> Result<Option<TurboJson>, Error> {
+        let Some(raw_turbo_json) = RawTurboJson::read(repo_root, path)? else {
+            return Ok(None);
+        };
+        TurboJson::try_from(raw_turbo_json).map(Some)
     }
 
     pub fn task(&self, task_id: &TaskId, task_name: &TaskName) -> Option<RawTaskDefinition> {
@@ -668,25 +701,23 @@ impl TurboJson {
                     )))])
                 }),
                 persistent: Some(Spanned::new(true)),
+                env_mode: Some(EnvMode::Loose),
                 ..Default::default()
             }),
         );
     }
 
-    /// Adds a sibling relationship from task to sibling
-    pub fn with_sibling(&mut self, task: TaskName<'static>, sibling: &TaskName) {
+    /// Adds a "with" relationship from `task` to `with`
+    pub fn with_task(&mut self, task: TaskName<'static>, with: &TaskName) {
         if self.extends.is_empty() {
             self.extends = Spanned::new(vec!["//".into()]);
         }
 
         let task_definition = self.tasks.entry(task).or_default();
 
-        let siblings = task_definition
-            .as_inner_mut()
-            .siblings
-            .get_or_insert_default();
+        let with_tasks = task_definition.as_inner_mut().with.get_or_insert_default();
 
-        siblings.push(Spanned::new(UnescapedString::from(sibling.to_string())))
+        with_tasks.push(Spanned::new(UnescapedString::from(with.to_string())))
     }
 }
 
@@ -739,6 +770,23 @@ pub fn validate_extends(turbo_json: &TurboJson) -> Vec<Error> {
     }
 }
 
+pub fn validate_with_has_no_topo(turbo_json: &TurboJson) -> Vec<Error> {
+    turbo_json
+        .tasks
+        .iter()
+        .flat_map(|(_, definition)| {
+            definition.with.iter().flatten().filter_map(|with_task| {
+                if with_task.starts_with(TOPOLOGICAL_PIPELINE_DELIMITER) {
+                    let (span, text) = with_task.span_and_text("turbo.json");
+                    Some(Error::InvalidTaskWith { span, text })
+                } else {
+                    None
+                }
+            })
+        })
+        .collect()
+}
+
 fn gather_env_vars(
     vars: Vec<Spanned<impl Into<String>>>,
     key: &str,
@@ -765,19 +813,85 @@ fn gather_env_vars(
     Ok(())
 }
 
+// Takes an input/output glob that might start with TURBO_ROOT_PREFIX
+// and swap it with the relative path to the turbo root.
+fn replace_turbo_root_token_in_string(
+    input: &mut Spanned<UnescapedString>,
+    path_to_repo_root: &RelativeUnixPath,
+) -> Result<(), Error> {
+    let turbo_root_index = input.find(TURBO_ROOT);
+    if let Some(index) = turbo_root_index {
+        if !input.as_inner()[index..].starts_with(TURBO_ROOT_SLASH) {
+            let (span, text) = input.span_and_text("turbo.json");
+            return Err(Error::InvalidTurboRootNeedsSlash { span, text });
+        }
+    }
+    match turbo_root_index {
+        Some(0) => {
+            // Replace
+            input
+                .as_inner_mut()
+                .replace_range(..TURBO_ROOT.len(), path_to_repo_root.as_str());
+            Ok(())
+        }
+        // Handle negations
+        Some(1) if input.starts_with('!') => {
+            input
+                .as_inner_mut()
+                .replace_range(1..TURBO_ROOT.len() + 1, path_to_repo_root.as_str());
+            Ok(())
+        }
+        // We do not allow for TURBO_ROOT to be used in the middle of a glob
+        Some(_) => {
+            let (span, text) = input.span_and_text("turbo.json");
+            Err(Error::InvalidTurboRootUse { span, text })
+        }
+        None => Ok(()),
+    }
+}
+
+fn replace_turbo_root_token(
+    task_definition: &mut RawTaskDefinition,
+    path_to_repo_root: &RelativeUnixPath,
+) -> Result<(), Error> {
+    for input in task_definition
+        .inputs
+        .iter_mut()
+        .flat_map(|inputs| inputs.iter_mut())
+    {
+        replace_turbo_root_token_in_string(input, path_to_repo_root)?;
+    }
+
+    for output in task_definition
+        .outputs
+        .iter_mut()
+        .flat_map(|outputs| outputs.iter_mut())
+    {
+        replace_turbo_root_token_in_string(output, path_to_repo_root)?;
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use anyhow::Result;
     use biome_deserialize::json::deserialize_from_json_str;
     use biome_json_parser::JsonParserOptions;
     use pretty_assertions::assert_eq;
     use serde_json::json;
     use test_case::test_case;
+    use turbopath::RelativeUnixPath;
     use turborepo_unescape::UnescapedString;
 
-    use super::{RawTurboJson, SpacesJson, Spanned, TurboJson, UIMode};
+    use super::{
+        replace_turbo_root_token_in_string, validate_with_has_no_topo, FutureFlags, Pipeline,
+        RawTurboJson, SpacesJson, Spanned, TurboJson, UIMode,
+    };
     use crate::{
-        boundaries::RootBoundariesConfig,
+        boundaries::BoundariesConfig,
         cli::OutputLogsMode,
         run::task_id::TaskName,
         task_graph::{TaskDefinition, TaskOutputs},
@@ -787,7 +901,7 @@ mod tests {
     #[test_case("{}", "empty boundaries")]
     #[test_case(r#"{"tags": {} }"#, "empty tags")]
     #[test_case(
-        r#"{"tags": { "my-tag": { "dependencies": { "allow": ["my-package"] } } } }"#,
+        r#"{"tags": { "my-tag": { "dependencies": { "allow": ["my-package"] } } }"#,
         "tags and dependencies"
     )]
     #[test_case(
@@ -816,15 +930,43 @@ mod tests {
     }"#,
         "tags and dependents"
     )]
+    #[test_case(
+        r#"{
+            "implicitDependencies": ["my-package"],
+        }"#,
+        "implicit dependencies"
+    )]
+    #[test_case(
+        r#"{
+            "implicitDependencies": ["my-package"],
+            "tags": {
+                "my-tag": {
+                    "dependents": {
+                        "allow": ["my-package"],
+                        "deny": ["my-other-package"]
+                    }
+                }
+            },
+        }"#,
+        "implicit dependencies and tags"
+    )]
+    #[test_case(
+        r#"{
+          "dependencies": {
+              "allow": ["my-package"]
+          }
+      }"#,
+        "package rule"
+    )]
     fn test_deserialize_boundaries(json: &str, name: &str) {
         let deserialized_result = deserialize_from_json_str(
             json,
             JsonParserOptions::default().with_allow_comments(),
             "turbo.json",
         );
-        let raw_task_definition: RootBoundariesConfig =
+        let raw_boundaries_config: BoundariesConfig =
             deserialized_result.into_deserialized().unwrap();
-        insta::assert_json_snapshot!(name.replace(' ', "_"), raw_task_definition);
+        insta::assert_json_snapshot!(name.replace(' ', "_"), raw_boundaries_config);
     }
 
     #[test_case(
@@ -866,7 +1008,7 @@ mod tests {
             interactive: Some(Spanned::new(true).with_range(309..313)),
             interruptible: Some(Spanned::new(true).with_range(342..346)),
             env_mode: None,
-            siblings: None,
+            with: None,
         },
         TaskDefinition {
           env: vec!["OS".to_string()],
@@ -884,7 +1026,7 @@ mod tests {
           interactive: true,
           interruptible: true,
           env_mode: None,
-          siblings: None,
+          with: None,
         }
       ; "full"
     )]
@@ -912,7 +1054,7 @@ mod tests {
             interruptible: Some(Spanned::new(true).with_range(352..356)),
             interactive: None,
             env_mode: None,
-            siblings: None,
+            with: None,
         },
         TaskDefinition {
             env: vec!["OS".to_string()],
@@ -930,9 +1072,48 @@ mod tests {
             interruptible: true,
             interactive: false,
             env_mode: None,
-            siblings: None,
+            with: None,
         }
       ; "full (windows)"
+    )]
+    #[test_case(
+        r#"{
+            "inputs": ["$TURBO_ROOT$/config.txt"],
+            "outputs": ["$TURBO_ROOT$/coverage/**", "!$TURBO_ROOT$/coverage/index.html"]
+        }"#,
+        RawTaskDefinition {
+            inputs: Some(vec![Spanned::new(UnescapedString::from("$TURBO_ROOT$/config.txt")).with_range(25..50)]),
+            outputs: Some(vec![
+                Spanned::new(UnescapedString::from("$TURBO_ROOT$/coverage/**")).with_range(77..103),
+                Spanned::new(UnescapedString::from("!$TURBO_ROOT$/coverage/index.html")).with_range(105..140),
+            ]),
+            ..RawTaskDefinition::default()
+        },
+        TaskDefinition {
+            inputs: vec!["../../config.txt".to_owned()],
+            outputs: TaskOutputs {
+                inclusions: vec!["../../coverage/**".to_owned()],
+                exclusions: vec!["../../coverage/index.html".to_owned()],
+            },
+            ..TaskDefinition::default()
+        }
+    ; "turbo root"
+    )]
+    #[test_case(
+        r#"{
+            "with": ["proxy"]
+        }"#,
+        RawTaskDefinition {
+            with: Some(vec![
+                Spanned::new(UnescapedString::from("proxy")).with_range(23..30),
+            ]),
+            ..RawTaskDefinition::default()
+        },
+        TaskDefinition {
+            with: Some(vec![Spanned::new(TaskName::from("proxy")).with_range(23..30)]),
+            ..TaskDefinition::default()
+        }
+    ; "with task"
     )]
     fn test_deserialize_task_definition(
         task_definition_content: &str,
@@ -948,7 +1129,8 @@ mod tests {
             deserialized_result.into_deserialized().unwrap();
         assert_eq!(raw_task_definition, expected_raw_task_definition);
 
-        let task_definition: TaskDefinition = raw_task_definition.try_into()?;
+        let task_definition =
+            TaskDefinition::from_raw(raw_task_definition, RelativeUnixPath::new("../..").unwrap())?;
         assert_eq!(task_definition, expected_task_definition);
 
         Ok(())
@@ -1141,12 +1323,12 @@ mod tests {
     #[test]
     fn test_with_sibling_empty() {
         let mut json = TurboJson::default();
-        json.with_sibling(TaskName::from("dev"), &TaskName::from("api#server"));
+        json.with_task(TaskName::from("dev"), &TaskName::from("api#server"));
         let dev_task = json.tasks.get(&TaskName::from("dev"));
         assert!(dev_task.is_some());
         let dev_task = dev_task.unwrap().as_inner();
         assert_eq!(
-            dev_task.siblings.as_ref().unwrap().as_slice(),
+            dev_task.with.as_ref().unwrap().as_slice(),
             &[Spanned::new(UnescapedString::from("api#server"))]
         );
     }
@@ -1161,14 +1343,120 @@ mod tests {
                 ..Default::default()
             }),
         );
-        json.with_sibling(TaskName::from("dev"), &TaskName::from("api#server"));
+        json.with_task(TaskName::from("dev"), &TaskName::from("api#server"));
         let dev_task = json.tasks.get(&TaskName::from("dev"));
         assert!(dev_task.is_some());
         let dev_task = dev_task.unwrap().as_inner();
         assert_eq!(dev_task.persistent, Some(Spanned::new(true)));
         assert_eq!(
-            dev_task.siblings.as_ref().unwrap().as_slice(),
+            dev_task.with.as_ref().unwrap().as_slice(),
             &[Spanned::new(UnescapedString::from("api#server"))]
+        );
+    }
+
+    #[test_case("index.ts", Ok("index.ts") ; "no token")]
+    #[test_case("$TURBO_ROOT$/config.txt", Ok("../../config.txt") ; "valid token")]
+    #[test_case("!$TURBO_ROOT$/README.md", Ok("!../../README.md") ; "negation")]
+    #[test_case("../$TURBO_ROOT$/config.txt", Err("\"$TURBO_ROOT$\" must be used at the start of glob.") ; "invalid token")]
+    #[test_case("$TURBO_ROOT$config.txt", Err("\"$TURBO_ROOT$\" must be followed by a '/'.") ; "trailing slash")]
+    fn test_replace_turbo_root(input: &'static str, expected: Result<&str, &str>) {
+        let mut spanned_string = Spanned::new(UnescapedString::from(input))
+            .with_path(Arc::from("turbo.json"))
+            .with_text(format!("\"{input}\""))
+            .with_range(1..(input.len()));
+        let result = replace_turbo_root_token_in_string(
+            &mut spanned_string,
+            RelativeUnixPath::new("../..").unwrap(),
+        );
+        let actual = match result {
+            Ok(()) => Ok(spanned_string.as_inner().as_ref()),
+            Err(e) => Err(e.to_string()),
+        };
+        assert_eq!(actual, expected.map_err(|s| s.to_owned()));
+    }
+
+    #[test]
+    fn test_future_flags_not_allowed_in_workspace() {
+        let json = r#"{
+            "extends": ["//"],
+            "tasks": {
+                "build": {}
+            },
+            "futureFlags": {
+                "newFeature": true
+            }
+        }"#;
+
+        let deserialized_result = deserialize_from_json_str(
+            json,
+            JsonParserOptions::default().with_allow_comments(),
+            "turbo.json",
+        );
+        let raw_turbo_json: RawTurboJson = deserialized_result.into_deserialized().unwrap();
+
+        // Try to convert to TurboJson - this should fail
+        let turbo_json_result = TurboJson::try_from(raw_turbo_json);
+        assert!(turbo_json_result.is_err());
+
+        let error = turbo_json_result.unwrap_err();
+        let error_str = error.to_string();
+        assert!(
+            error_str.contains("The \"futureFlags\" key can only be used in the root turbo.json")
+        );
+    }
+
+    #[test]
+    fn test_deserialize_future_flags() {
+        let json = r#"{
+            "tasks": {
+                "build": {}
+            },
+            "futureFlags": {
+                "bestFeature": true
+            }
+        }"#;
+
+        let deserialized_result = deserialize_from_json_str(
+            json,
+            JsonParserOptions::default().with_allow_comments(),
+            "turbo.json",
+        );
+        let raw_turbo_json: RawTurboJson = deserialized_result.into_deserialized().unwrap();
+
+        // Verify that futureFlags is parsed correctly
+        assert!(raw_turbo_json.future_flags.is_some());
+        let future_flags = raw_turbo_json.future_flags.as_ref().unwrap();
+        assert_eq!(future_flags.as_inner(), &FutureFlags {});
+
+        // Verify that the futureFlags field doesn't cause errors during conversion to
+        // TurboJson
+        let turbo_json = TurboJson::try_from(raw_turbo_json);
+        assert!(turbo_json.is_ok());
+    }
+
+    #[test]
+    fn test_validate_with_has_no_topo() {
+        let turbo_json = TurboJson {
+            tasks: Pipeline(
+                vec![(
+                    TaskName::from("dev"),
+                    Spanned::new(RawTaskDefinition {
+                        with: Some(vec![Spanned::new(UnescapedString::from("^proxy"))]),
+                        ..Default::default()
+                    }),
+                )]
+                .into_iter()
+                .collect(),
+            ),
+            ..Default::default()
+        };
+
+        let errs = validate_with_has_no_topo(&turbo_json);
+        assert_eq!(errs.len(), 1);
+        let error = &errs[0];
+        assert_eq!(
+            error.to_string(),
+            "`with` cannot use dependency relationships."
         );
     }
 }

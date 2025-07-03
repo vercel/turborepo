@@ -10,6 +10,7 @@ use tracing::{debug, Span};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
 use turborepo_cache::CacheHitMetadata;
 use turborepo_env::{BySource, DetailedMap, EnvironmentVariableMap};
+use turborepo_frameworks::{infer_framework, Slug as FrameworkSlug};
 use turborepo_repository::package_graph::{PackageInfo, PackageName};
 use turborepo_scm::SCM;
 use turborepo_telemetry::events::{
@@ -19,7 +20,6 @@ use turborepo_telemetry::events::{
 use crate::{
     cli::EnvMode,
     engine::TaskNode,
-    framework::infer_framework,
     hash::{FileHashes, LockFilePackages, TaskHashable, TurboHash},
     opts::RunOpts,
     run::task_id::TaskId,
@@ -228,7 +228,7 @@ pub struct TaskHashTrackerState {
     package_task_env_vars: HashMap<TaskId<'static>, DetailedMap>,
     package_task_hashes: HashMap<TaskId<'static>, String>,
     #[serde(skip)]
-    package_task_framework: HashMap<TaskId<'static>, String>,
+    package_task_framework: HashMap<TaskId<'static>, FrameworkSlug>,
     #[serde(skip)]
     package_task_outputs: HashMap<TaskId<'static>, Vec<AnchoredSystemPathBuf>>,
     #[serde(skip)]
@@ -297,9 +297,9 @@ impl<'a> TaskHasher<'a> {
                     framework.slug(),
                     framework.env(self.env_at_execution_start)
                 );
-                telemetry.track_framework(framework.slug());
+                telemetry.track_framework(framework.slug().to_string());
             });
-        let framework_slug = framework.map(|f| f.slug().to_string());
+        let framework_slug = framework.map(|f| f.slug());
 
         let env_vars = if let Some(framework) = framework {
             let mut computed_wildcards = framework.env(self.env_at_execution_start);
@@ -479,6 +479,11 @@ impl<'a> TaskHasher<'a> {
                     "PROGRAMDATA",
                     "SYSTEMROOT",
                     "SYSTEMDRIVE",
+                    "USERPROFILE",
+                    "HOMEDRIVE",
+                    "HOMEPATH",
+                    "PNPM_HOME",
+                    "NPM_CONFIG_STORE_DIR",
                 ];
                 let pass_through_env_vars = self.env_at_execution_start.pass_through_env(
                     builtin_pass_through,
@@ -570,7 +575,7 @@ impl TaskHashTracker {
         task_id: TaskId<'static>,
         env_vars: DetailedMap,
         hash: String,
-        framework_slug: Option<String>,
+        framework_slug: Option<FrameworkSlug>,
     ) {
         let mut state = self.state.lock().expect("hash tracker mutex poisoned");
         state
@@ -589,7 +594,7 @@ impl TaskHashTracker {
         state.package_task_env_vars.get(task_id).cloned()
     }
 
-    pub fn framework(&self, task_id: &TaskId) -> Option<String> {
+    pub fn framework(&self, task_id: &TaskId) -> Option<FrameworkSlug> {
         let state = self.state.lock().expect("hash tracker mutex poisoned");
         state.package_task_framework.get(task_id).cloned()
     }

@@ -1,4 +1,7 @@
-use std::{fmt, fmt::Display, ops::Deref};
+use std::{
+    fmt::{self, Display},
+    ops::{Deref, DerefMut},
+};
 
 use biome_deserialize::{Deserializable, DeserializableValue, DeserializationDiagnostic};
 
@@ -21,12 +24,19 @@ impl AsRef<str> for UnescapedString {
 }
 
 impl Deref for UnescapedString {
-    type Target = str;
+    type Target = String;
 
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
+
+impl DerefMut for UnescapedString {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
 fn unescape_str(s: String) -> Result<String, serde_json::Error> {
     let wrapped_s = format!("\"{}\"", s);
 

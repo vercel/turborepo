@@ -28,6 +28,7 @@ Check
     Log File                       = 
     Dependencies                   =\s* (re)
     Dependents                     =\s* (re)
+    With                           =\s* (re)
     Inputs Files Considered        = 4\s* (re)
     Env Vars                       = 
     Env Vars Values                = 

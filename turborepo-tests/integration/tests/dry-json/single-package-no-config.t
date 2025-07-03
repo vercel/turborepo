@@ -54,6 +54,7 @@ Setup
         "excludedOutputs": null,
         "dependencies": [],
         "dependents": [],
+        "with": [],
         "resolvedTaskDefinition": {
           "outputs": [],
           "cache": false,

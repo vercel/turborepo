@@ -4,7 +4,8 @@
       "web": {
         "dependencies": {
           "allow": [
-            "types"
+            "types",
+            "@vercel/package-as-tag"
           ],
           "deny": [
             "unsafe"
@@ -15,6 +16,11 @@
         }
       },
       "types": {
+        "dependencies": {
+          "deny": [
+            "@vercel/package-as-tag"
+          ]
+        },
         "dependents": {
           "allow": [
             "web"

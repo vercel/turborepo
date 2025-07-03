@@ -21,7 +21,7 @@ Thank you for your interest in contributing to Turborepo!
 
 ## General dependencies
 
-You will need to have these dependences installed on your machine to work on this repository:
+You will need to have these dependencies installed on your machine to work on this repository:
 
 - [Rust](https://www.rust-lang.org/tools/install) ([Repository toolchain](https://github.com/vercel/turborepo/blob/main/rust-toolchain.toml))
 - [NodeJS](https://nodejs.org/en) v20
@@ -192,7 +192,7 @@ Contributing to examples helps the Turborepo community by showcasing how to use 
 > [!IMPORTANT]
 > As Turborepo usage has grown, the community has contributed more and more examples to the repository. While this is exciting for us on the core team, we're unable to maintain the full surface area of every example, given the constant updates across the breadth of tooling that Turborepo works with in the examples.
 >
-> Because of this, a handful of the examples are explictly marked as maintained by the core team. For the rest, we work with the community to keep them as up to date and correct as possible. If you find a problem with a community-supported template, we ask that you do not open a GitHub Issue for it. Instead, please open a pull request with the needed fixes.
+> Because of this, a handful of the examples are explicitly marked as maintained by the core team. For the rest, we work with the community to keep them as up to date and correct as possible. If you find a problem with a community-supported template, we ask that you do not open a GitHub Issue for it. Instead, please open a pull request with the needed fixes.
 
 The `basic` example is the default used by `create-turbo`.
 
@@ -224,7 +224,7 @@ Key characteristics of a great example include:
 - One technology added to the `basic` example
 - An updated README at the root of the example directory. Make sure to include any steps required to run the example
 - All tasks in `turbo.json` in the example run successfully without any code changes needed
-- Works with every package manager listed in our [Support Policy](https://turbo.build/repo/docs/getting-started/support-policy#package-managers)
+- Works with every package manager listed in our [Support Policy](https://turborepo.com/docs/getting-started/support-policy#package-managers)
 
 Once you've created your example (with prior approval, as discussed above), you can submit a pull request to the repository.
 

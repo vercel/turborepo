@@ -57,7 +57,7 @@ Test help flag
         --trace <TRACE>
             Specify a file to save a pprof trace
         --verbosity <COUNT>
-            Verbosity level
+            Verbosity level. Useful when debugging Turborepo or creating logs for issue reports
         --dangerously-disable-package-manager-check
             Allow for missing `packageManager` in `package.json`
         --root-turbo-json <ROOT_TURBO_JSON>
@@ -109,7 +109,7 @@ Test help flag
         --env-mode [<ENV_MODE>]
             Environment variable mode. Use "loose" to pass the entire existing environment. Use "strict" to use an allowlist specified in turbo.json [possible values: loose, strict]
     -F, --filter <FILTER>
-            Use the given selector to specify package(s) to act as entry points. The syntax mirrors pnpm's syntax, and additional documentation and examples can be found in turbo's documentation https://turbo.build/repo/docs/reference/command-line-reference/run#--filter
+            Use the given selector to specify package(s) to act as entry points. The syntax mirrors pnpm's syntax, and additional documentation and examples can be found in turbo's documentation https://turborepo.com/docs/reference/command-line-reference/run#--filter
         --affected
             Filter to only packages that are affected by changes between the current branch and `main`
         --output-logs <OUTPUT_LOGS>
@@ -201,7 +201,7 @@ Test help flag
             Specify a file to save a pprof trace
   
         --verbosity <COUNT>
-            Verbosity level
+            Verbosity level. Useful when debugging Turborepo or creating logs for issue reports
   
         --dangerously-disable-package-manager-check
             Allow for missing `packageManager` in `package.json`.
@@ -297,7 +297,7 @@ Test help flag
             [possible values: loose, strict]
   
     -F, --filter <FILTER>
-            Use the given selector to specify package(s) to act as entry points. The syntax mirrors pnpm's syntax, and additional documentation and examples can be found in turbo's documentation https://turbo.build/repo/docs/reference/command-line-reference/run#--filter
+            Use the given selector to specify package(s) to act as entry points. The syntax mirrors pnpm's syntax, and additional documentation and examples can be found in turbo's documentation https://turborepo.com/docs/reference/command-line-reference/run#--filter
   
         --affected
             Filter to only packages that are affected by changes between the current branch and `main`
@@ -368,7 +368,7 @@ Test help flag for link command
         --trace <TRACE>
             Specify a file to save a pprof trace
         --verbosity <COUNT>
-            Verbosity level
+            Verbosity level. Useful when debugging Turborepo or creating logs for issue reports
         --dangerously-disable-package-manager-check
             Allow for missing `packageManager` in `package.json`
         --root-turbo-json <ROOT_TURBO_JSON>
@@ -416,7 +416,7 @@ Test help flag for unlink command
         --trace <TRACE>
             Specify a file to save a pprof trace
         --verbosity <COUNT>
-            Verbosity level
+            Verbosity level. Useful when debugging Turborepo or creating logs for issue reports
         --dangerously-disable-package-manager-check
             Allow for missing `packageManager` in `package.json`
         --root-turbo-json <ROOT_TURBO_JSON>
@@ -468,7 +468,7 @@ Test help flag for login command
         --trace <TRACE>
             Specify a file to save a pprof trace
         --verbosity <COUNT>
-            Verbosity level
+            Verbosity level. Useful when debugging Turborepo or creating logs for issue reports
         --dangerously-disable-package-manager-check
             Allow for missing `packageManager` in `package.json`
         --root-turbo-json <ROOT_TURBO_JSON>
@@ -516,7 +516,7 @@ Test help flag for logout command
         --trace <TRACE>
             Specify a file to save a pprof trace
         --verbosity <COUNT>
-            Verbosity level
+            Verbosity level. Useful when debugging Turborepo or creating logs for issue reports
         --dangerously-disable-package-manager-check
             Allow for missing `packageManager` in `package.json`
         --root-turbo-json <ROOT_TURBO_JSON>

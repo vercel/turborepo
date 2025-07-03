@@ -1,6 +1,6 @@
 {
   "name": "eslint-plugin-turbo",
-  "version": "2.4.5-canary.2",
+  "version": "2.5.5-canary.0",
   "description": "ESLint plugin for Turborepo",
   "keywords": [
     "turbo",
@@ -25,7 +25,7 @@
   ],
   "scripts": {
     "test": "jest",
-    "build": "tsup",
+    "build": "tsup && tsc --declaration",
     "check-types": "tsc --noEmit",
     "lint": "eslint lib/",
     "lint:prettier": "prettier -c . --cache --ignore-path=../../.prettierignore"

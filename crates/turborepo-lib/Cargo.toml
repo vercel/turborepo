@@ -69,13 +69,13 @@ human-panic = "1.2.1"
 human_format = "1.1.0"
 humantime = "2.1.0"
 ignore = "0.4.22"
+indicatif = { workspace = true }
 itertools = { workspace = true }
 jsonc-parser = { version = "0.21.0" }
 lazy_static = { workspace = true }
 libc = "0.2.140"
 merge = { workspace = true }
 miette = { workspace = true, features = ["fancy"] }
-nix = "0.26.2"
 notify = { workspace = true }
 num_cpus = { workspace = true }
 owo-colors = { workspace = true }
@@ -83,7 +83,6 @@ oxc_resolver = { workspace = true }
 path-clean = "1.0.1"
 petgraph = { workspace = true }
 pidlock = { path = "../turborepo-pidlock" }
-portable-pty = "0.8.1"
 pprof = { version = "0.12.1", features = [
   "prost-codec",
   "frame-pointer",
@@ -134,10 +133,12 @@ turborepo-env = { workspace = true }
 turborepo-errors = { workspace = true }
 turborepo-filewatch = { path = "../turborepo-filewatch" }
 turborepo-fixed-map = { workspace = true }
+turborepo-frameworks = { workspace = true }
 turborepo-fs = { path = "../turborepo-fs" }
 turborepo-graph-utils = { path = "../turborepo-graph-utils" }
 turborepo-lockfiles = { workspace = true }
 turborepo-microfrontends = { workspace = true }
+turborepo-process = { workspace = true }
 turborepo-repository = { path = "../turborepo-repository" }
 turborepo-scm = { workspace = true, features = ["git2"] }
 turborepo-signals = { workspace = true }
@@ -155,9 +156,6 @@ which = { workspace = true }
 [target.'cfg(target_os = "windows")'.dependencies]
 uds_windows = "1.0.2"
 async-io = "1.12.0"
-
-[target.'cfg(target_os = "windows")'.dev-dependencies]
-windows-sys = { version = "0.59", features = ["Win32_System_Threading"] }
 
 [build-dependencies]
 capnpc = "0.18.0"

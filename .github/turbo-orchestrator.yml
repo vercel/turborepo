@@ -34,6 +34,10 @@ labeler:
     - label: "needs: triage"
       when:
         isNotPRAuthorMatch: "^(padmaia|anthonyshew|dimitropoulos|tknickman|chris-olszewski|NicholasLYang)$"
+    # Removes the PR from release notes when its chore or ci
+    - label: "release-notes-ignore"
+      when:
+        isPRTitleMatch: "^(?:(\bchore\b|\bci\b)|.*?\\((\bchore\b|\bci\b)\\)).*?:"
 
     # areas
     - label: "area: ci"

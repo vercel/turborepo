@@ -37,8 +37,12 @@ impl InputOptions<'_> {
         match event {
             crossterm::event::Event::Key(k) => translate_key_event(self, k),
             crossterm::event::Event::Mouse(m) => match m.kind {
-                crossterm::event::MouseEventKind::ScrollDown => Some(Event::ScrollDown),
-                crossterm::event::MouseEventKind::ScrollUp => Some(Event::ScrollUp),
+                crossterm::event::MouseEventKind::ScrollDown => {
+                    Some(Event::ScrollWithMomentum(Direction::Down))
+                }
+                crossterm::event::MouseEventKind::ScrollUp => {
+                    Some(Event::ScrollWithMomentum(Direction::Up))
+                }
                 crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left)
                 | crossterm::event::MouseEventKind::Drag(crossterm::event::MouseButton::Left) => {
                     Some(Event::Mouse(m))
@@ -112,6 +116,10 @@ fn translate_key_event(options: InputOptions, key_event: KeyEvent) -> Option<Eve
         KeyCode::Char('h') => Some(Event::ToggleSidebar),
         KeyCode::Char('u') => Some(Event::ScrollUp),
         KeyCode::Char('d') => Some(Event::ScrollDown),
+        KeyCode::PageUp | KeyCode::Char('U') => Some(Event::PageUp),
+        KeyCode::PageDown | KeyCode::Char('D') => Some(Event::PageDown),
+        KeyCode::Char('t') => Some(Event::JumpToLogsTop),
+        KeyCode::Char('b') => Some(Event::JumpToLogsBottom),
         KeyCode::Char('m') => Some(Event::ToggleHelpPopup),
         KeyCode::Char('p') => Some(Event::TogglePinnedTask),
         KeyCode::Up | KeyCode::Char('k') => Some(Event::Up),

@@ -1,0 +1,29 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+#nd-page
+  > article
+  > div.prose
+  > div
+  > div
+  > div.min-w-0.flex-1
+  > form
+  > div.flex.flex-row.items-center.gap-2.text-sm
+  > button {
+  color: white !important;
+}
+
+.dark {
+  #nd-page
+    > article
+    > div.prose
+    > div
+    > div
+    > div.min-w-0.flex-1
+    > form
+    > div.flex.flex-row.items-center.gap-2.text-sm
+    > button {
+    color: black !important;
+  }
+}

@@ -36,6 +36,7 @@ jobs:
         node-version:
           - 18
           - 20
+          - 22
     env:
       TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
       TURBO_TEAM: ${{ vars.TURBO_TEAM }}
@@ -58,7 +59,6 @@ jobs:
       - name: "Setup Node"
         uses: ./.github/actions/setup-node
         with:
-          extra-flags: --no-optional
           node-version: ${{ matrix.node-version }}
         env:
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
@@ -72,7 +72,7 @@ jobs:
         # to run when turbo core changes. This job (`js_packages`) does not run on turborpeo core
         # changes, and we don't want to enable that beahvior for _all_ our JS packages.
         run: |
-          TURBO_API= turbo run check-types test --filter="!turborepo-repository" --filter={./packages/*}...[${{ github.event.pull_request.base.sha || 'HEAD^1' }}] --color --env-mode=strict
+          TURBO_API= turbo run check-types test build --filter="!turborepo-repository" --filter={./packages/*}...[${{ github.event.pull_request.base.sha || 'HEAD^1' }}] --color --env-mode=strict
         env:
           NODE_VERSION: ${{ matrix.node-version }}
 

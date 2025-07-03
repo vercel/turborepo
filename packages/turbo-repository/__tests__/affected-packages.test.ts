@@ -59,6 +59,22 @@ describe("affectedPackages", () => {
     });
   }
 
+  it("does not require packageManager for npm", async () => {
+    const dir = path.resolve(__dirname, "./fixtures/npm-monorepo");
+    const workspace = await Workspace.find(dir);
+
+    const reduced: PackageReduced[] = (
+      await workspace.affectedPackages(["apps/app/file.txt"])
+    ).map((pkg) => {
+      return {
+        name: pkg.name,
+        relativePath: pkg.relativePath,
+      };
+    });
+
+    assert.deepEqual(reduced, [{ name: "app-a", relativePath: "apps/app" }]);
+  });
+
   describe("optimizedLockfileUpdates", () => {
     it("errors if not provided comparison ref", async () => {
       const dir = path.resolve(__dirname, "./fixtures/monorepo");

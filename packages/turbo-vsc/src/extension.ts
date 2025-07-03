@@ -367,11 +367,11 @@ async function promptGlobalTurbo(useLocalTurbo: boolean) {
       );
 
       if (message === "Open Docs") {
-        env.openExternal(Uri.parse("https://turbo.build/repo/docs/installing"));
+        env.openExternal(Uri.parse("https://turborepo.com/docs/installing"));
       }
     }
   } else if (answer === "Open Docs") {
-    env.openExternal(Uri.parse("https://turbo.build/repo/docs/installing"));
+    env.openExternal(Uri.parse("https://turborepo.com/docs/installing"));
   } else if (answer === "Open Settings") {
     commands.executeCommand("workbench.action.openSettings", "turbo.path");
   }

@@ -74,6 +74,8 @@ pub enum Error {
     Opts(#[from] crate::opts::Error),
     #[error(transparent)]
     SignalListener(#[from] turborepo_signals::listeners::Error),
+    #[error(transparent)]
+    Dialoguer(#[from] dialoguer::Error),
 }
 
 const MAX_CHARS_PER_TASK_LINE: usize = 100;

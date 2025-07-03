@@ -1,16 +1,21 @@
+#![allow(clippy::sliced_string_as_bytes)]
+
 mod config;
 mod imports;
 mod tags;
 mod tsconfig;
 
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
+    fs::OpenOptions,
+    io::Write,
     sync::{Arc, LazyLock, Mutex},
 };
 
-pub use config::{Permissions, RootBoundariesConfig, Rule};
+pub use config::{BoundariesConfig, Permissions, Rule};
 use git2::Repository;
 use globwalk::Settings;
+use indicatif::{ProgressBar, ProgressIterator};
 use miette::{Diagnostic, NamedSource, Report, SourceSpan};
 use regex::Regex;
 use swc_common::{
@@ -25,18 +30,26 @@ use swc_ecma_visit::VisitWith;
 use thiserror::Error;
 use tracing::log::warn;
 use turbo_trace::{ImportFinder, Tracer};
-use turbopath::AbsoluteSystemPathBuf;
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_errors::Spanned;
 use turborepo_repository::package_graph::{PackageInfo, PackageName, PackageNode};
 use turborepo_ui::{color, ColorConfig, BOLD_GREEN, BOLD_RED};
 
 use crate::{
-    boundaries::{tags::ProcessedRulesMap, tsconfig::TsConfigLoader},
+    boundaries::{imports::DependencyLocations, tags::ProcessedRulesMap, tsconfig::TsConfigLoader},
     run::Run,
 };
 
 #[derive(Clone, Debug, Error, Diagnostic)]
 pub enum SecondaryDiagnostic {
+    #[error("package `{package} is defined here")]
+    PackageDefinedHere {
+        package: String,
+        #[label]
+        package_span: Option<SourceSpan>,
+        #[source_code]
+        package_text: NamedSource<String>,
+    },
     #[error("consider adding one of the following tags listed here")]
     Allowlist {
         #[label]
@@ -55,6 +68,24 @@ pub enum SecondaryDiagnostic {
 
 #[derive(Clone, Debug, Error, Diagnostic)]
 pub enum BoundariesDiagnostic {
+    #[error("Package boundaries rules cannot have `tags` key")]
+    PackageBoundariesHasTags {
+        #[label("tags defined here")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource<String>,
+    },
+    #[error("Tag `{tag}` cannot share the same name as package `{package}`")]
+    TagSharesPackageName {
+        tag: String,
+        package: String,
+        #[label("tag defined here")]
+        tag_span: Option<SourceSpan>,
+        #[source_code]
+        tag_text: NamedSource<String>,
+        #[related]
+        secondary: [SecondaryDiagnostic; 1],
+    },
     #[error("Path `{path}` is not valid UTF-8. Turborepo only supports UTF-8 paths.")]
     InvalidPath { path: String },
     #[error(
@@ -96,6 +127,7 @@ pub enum BoundariesDiagnostic {
     )]
     #[help("add `type` to the import declaration")]
     NotTypeOnlyImport {
+        path: AbsoluteSystemPathBuf,
         import: String,
         #[label("package imported here")]
         span: SourceSpan,
@@ -104,6 +136,7 @@ pub enum BoundariesDiagnostic {
     },
     #[error("cannot import package `{name}` because it is not a dependency")]
     PackageNotFound {
+        path: AbsoluteSystemPathBuf,
         name: String,
         #[label("package imported here")]
         span: SourceSpan,
@@ -115,6 +148,7 @@ pub enum BoundariesDiagnostic {
         "`{import}` resolves to path `{resolved_import_path}` which is outside of `{package_name}`"
     ))]
     ImportLeavesPackage {
+        path: AbsoluteSystemPathBuf,
         import: String,
         resolved_import_path: String,
         package_name: PackageName,
@@ -141,6 +175,19 @@ pub enum Error {
     GlobWalk(#[from] globwalk::WalkError),
     #[error("failed to read file: {0}")]
     FileNotFound(AbsoluteSystemPathBuf),
+    #[error("failed to write to file: {0}")]
+    FileWrite(AbsoluteSystemPathBuf),
+}
+
+impl BoundariesDiagnostic {
+    pub fn path_and_span(&self) -> Option<(&AbsoluteSystemPath, SourceSpan)> {
+        match self {
+            Self::ImportLeavesPackage { path, span, .. } => Some((path, *span)),
+            Self::PackageNotFound { path, span, .. } => Some((path, *span)),
+            Self::NotTypeOnlyImport { path, span, .. } => Some((path, *span)),
+            _ => None,
+        }
+    }
 }
 
 static PACKAGE_NAME_REGEX: LazyLock<Regex> = LazyLock::new(|| {
@@ -210,14 +257,21 @@ impl BoundariesResult {
 }
 
 impl Run {
-    pub async fn check_boundaries(&self) -> Result<BoundariesResult, Error> {
-        let package_tags = self.get_package_tags();
+    pub async fn check_boundaries(&self, show_progress: bool) -> Result<BoundariesResult, Error> {
         let rules_map = self.get_processed_rules_map();
         let packages: Vec<_> = self.pkg_dep_graph().packages().collect();
         let repo = Repository::discover(self.repo_root()).ok().map(Mutex::new);
         let mut result = BoundariesResult::default();
+        let global_implicit_dependencies = self.get_implicit_dependencies(&PackageName::Root);
 
-        for (package_name, package_info) in packages {
+        let progress = if show_progress {
+            println!("Checking packages...");
+            ProgressBar::new(packages.len() as u64)
+        } else {
+            ProgressBar::hidden()
+        };
+
+        for (package_name, package_info) in packages.into_iter().progress_with(progress) {
             if !self.filtered_pkgs().contains(package_name)
                 || matches!(package_name, PackageName::Root)
             {
@@ -228,8 +282,8 @@ impl Run {
                 &repo,
                 package_name,
                 package_info,
-                &package_tags,
                 &rules_map,
+                &global_implicit_dependencies,
                 &mut result,
             )
             .await?;
@@ -251,6 +305,19 @@ impl Run {
         None
     }
 
+    pub fn get_implicit_dependencies(&self, pkg: &PackageName) -> HashMap<String, Spanned<()>> {
+        self.turbo_json_loader()
+            .load(pkg)
+            .ok()
+            .and_then(|turbo_json| turbo_json.boundaries.as_ref())
+            .and_then(|boundaries| boundaries.implicit_dependencies.as_ref())
+            .into_iter()
+            .flatten()
+            .flatten()
+            .map(|dep| dep.clone().split())
+            .collect::<HashMap<_, _>>()
+    }
+
     /// Either returns a list of errors and number of files checked or a single,
     /// fatal error
     async fn check_package(
@@ -258,29 +325,28 @@ impl Run {
         repo: &Option<Mutex<Repository>>,
         package_name: &PackageName,
         package_info: &PackageInfo,
-        all_package_tags: &HashMap<PackageName, Spanned<Vec<Spanned<String>>>>,
         tag_rules: &Option<ProcessedRulesMap>,
+        global_implicit_dependencies: &HashMap<String, Spanned<()>>,
         result: &mut BoundariesResult,
     ) -> Result<(), Error> {
-        self.check_package_files(repo, package_name, package_info, result)
-            .await?;
+        let implicit_dependencies = self.get_implicit_dependencies(package_name);
+        self.check_package_files(
+            repo,
+            package_name,
+            package_info,
+            implicit_dependencies,
+            global_implicit_dependencies,
+            result,
+        )
+        .await?;
 
-        if let Some(current_package_tags) = all_package_tags.get(package_name) {
-            if let Some(tag_rules) = tag_rules {
-                result.diagnostics.extend(self.check_package_tags(
-                    PackageNode::Workspace(package_name.clone()),
-                    current_package_tags,
-                    all_package_tags,
-                    tag_rules,
-                )?);
-            } else {
-                // NOTE: if we use tags for something other than boundaries, we should remove
-                // this warning
-                warn!(
-                    "No boundaries rules found, but package {} has tags",
-                    package_name
-                );
-            }
+        if let Ok(turbo_json) = self.turbo_json_loader().load(package_name) {
+            result.diagnostics.extend(self.check_package_tags(
+                PackageNode::Workspace(package_name.clone()),
+                &package_info.package_json,
+                turbo_json.tags.as_ref(),
+                tag_rules.as_ref(),
+            )?);
         }
 
         result.packages_checked += 1;
@@ -297,6 +363,8 @@ impl Run {
         repo: &Option<Mutex<Repository>>,
         package_name: &PackageName,
         package_info: &PackageInfo,
+        implicit_dependencies: HashMap<String, Spanned<()>>,
+        global_implicit_dependencies: &HashMap<String, Spanned<()>>,
         result: &mut BoundariesResult,
     ) -> Result<(), Error> {
         let package_root = self.repo_root().resolve(package_info.package_path());
@@ -393,6 +461,14 @@ impl Run {
             // Visit the AST and find imports
             let mut finder = ImportFinder::default();
             module.visit_with(&mut finder);
+            let dependency_locations = DependencyLocations {
+                internal_dependencies: &internal_dependencies,
+                package_json: &package_info.package_json,
+                implicit_dependencies: &implicit_dependencies,
+                global_implicit_dependencies,
+                unresolved_external_dependencies,
+            };
+
             for (import, span, import_type) in finder.imports() {
                 self.check_import(
                     &comments,
@@ -406,9 +482,7 @@ impl Run {
                     span,
                     file_path,
                     &file_content,
-                    package_info,
-                    &internal_dependencies,
-                    unresolved_external_dependencies,
+                    dependency_locations,
                     &resolver,
                 )?;
             }
@@ -422,6 +496,59 @@ impl Run {
         }
 
         result.files_checked += files.len();
+
+        Ok(())
+    }
+
+    pub fn patch_file(
+        &self,
+        file_path: &AbsoluteSystemPath,
+        file_patches: Vec<(SourceSpan, String)>,
+    ) -> Result<(), Error> {
+        // Deduplicate and sort by offset
+        let file_patches = file_patches
+            .into_iter()
+            .map(|(span, patch)| (span.offset(), patch))
+            .collect::<BTreeMap<usize, String>>();
+
+        let contents = file_path
+            .read_to_string()
+            .map_err(|_| Error::FileNotFound(file_path.to_owned()))?;
+
+        let mut options = OpenOptions::new();
+        options.read(true).write(true).truncate(true);
+        let mut file = file_path
+            .open_with_options(options)
+            .map_err(|_| Error::FileNotFound(file_path.to_owned()))?;
+
+        let mut last_idx = 0;
+        for (idx, reason) in file_patches {
+            let contents_before_span = &contents[last_idx..idx];
+
+            // Find the last newline before the span (note this is the index into the slice,
+            // not the full file)
+            let newline_idx = contents_before_span.rfind('\n');
+
+            // If newline exists, we write all the contents before newline
+            if let Some(newline_idx) = newline_idx {
+                file.write_all(contents[last_idx..(last_idx + newline_idx)].as_bytes())
+                    .map_err(|_| Error::FileWrite(file_path.to_owned()))?;
+                file.write_all(b"\n")
+                    .map_err(|_| Error::FileWrite(file_path.to_owned()))?;
+            }
+
+            file.write_all(b"// @boundaries-ignore ")
+                .map_err(|_| Error::FileWrite(file_path.to_owned()))?;
+            file.write_all(reason.as_bytes())
+                .map_err(|_| Error::FileWrite(file_path.to_owned()))?;
+            file.write_all(b"\n")
+                .map_err(|_| Error::FileWrite(file_path.to_owned()))?;
+
+            last_idx = idx;
+        }
+
+        file.write_all(contents[last_idx..].as_bytes())
+            .map_err(|_| Error::FileWrite(file_path.to_owned()))?;
 
         Ok(())
     }

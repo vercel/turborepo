@@ -74,6 +74,7 @@ Setup
     "directory": "apps(\/|\\\\)my-app", (re)
     "dependencies": [],
     "dependents": [],
+    "with": [],
     "resolvedTaskDefinition": {
       "outputs": [
         "apple.json",
@@ -131,6 +132,7 @@ Setup
     "directory": "packages(\/|\\\\)util", (re)
     "dependencies": [],
     "dependents": [],
+    "with": [],
     "resolvedTaskDefinition": {
       "outputs": [],
       "cache": true,

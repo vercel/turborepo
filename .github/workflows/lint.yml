@@ -63,7 +63,6 @@ jobs:
         uses: ./.github/actions/setup-node
         with:
           extra-flags: --no-optional
-          node-version: "20"
 
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo

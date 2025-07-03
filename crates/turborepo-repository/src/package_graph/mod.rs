@@ -70,7 +70,10 @@ pub struct PackageInfo {
 
 impl PackageInfo {
     pub fn package_name(&self) -> Option<String> {
-        self.package_json.name.clone()
+        self.package_json
+            .name
+            .as_ref()
+            .map(|name| name.as_inner().clone())
     }
 
     pub fn package_json_path(&self) -> &AnchoredSystemPath {
@@ -156,7 +159,7 @@ impl PackageGraph {
             if matches!(package_name, PackageName::Root) {
                 continue;
             }
-            let name = info.package_json.name.as_deref();
+            let name = info.package_json.name.as_ref().map(|name| name.as_str());
             match name {
                 Some("") | None => {
                     let package_json_path = self.repo_root.resolve(info.package_json_path());
@@ -620,6 +623,7 @@ mod test {
     use std::assert_matches::assert_matches;
 
     use serde_json::json;
+    use turborepo_errors::Spanned;
 
     use super::*;
     use crate::discovery::PackageDiscovery;
@@ -649,7 +653,7 @@ mod test {
         let pkg_graph = PackageGraph::builder(
             &root,
             PackageJson {
-                name: Some("my-package".to_owned()),
+                name: Some(Spanned::new("my-package".to_owned())),
                 ..Default::default()
             },
         )

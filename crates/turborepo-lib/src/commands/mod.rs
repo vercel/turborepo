@@ -122,6 +122,10 @@ impl CommandBase {
             )
             .with_run_summary(args.run_args().and_then(|args| args.summarize()))
             .with_allow_no_turbo_json(args.allow_no_turbo_json.then_some(true))
+            .with_concurrency(
+                args.execution_args()
+                    .and_then(|args| args.concurrency.clone()),
+            )
             .build()
     }
 

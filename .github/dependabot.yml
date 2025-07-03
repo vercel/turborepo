@@ -47,12 +47,15 @@ updates:
           - "minor"
     ignore:
       # Types are just...broken?
+      - dependency-name: "express"
       - dependency-name: "@types/express"
       # Remix is behind on updating these peer deps and npm doesn't like it
       - dependency-name: "react"
       - dependency-name: "react-dom"
       - dependency-name: "@types/react"
       - dependency-name: "@types/react-dom"
+      # TODO: Investigate why upgrading breaks admin:build
+      - dependency-name: "bunchee"
       # We can't upgrade versions of this due to npm
       - dependency-name: "vite"
 

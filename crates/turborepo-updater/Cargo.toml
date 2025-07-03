@@ -22,6 +22,7 @@ reqwest = { workspace = true, features = ["json", "blocking"] }
 semver = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 thiserror = { workspace = true }
+turborepo-repository = { path = "../turborepo-repository" }
 update-informer = { git = "https://github.com/nicholaslyang/update-informer.git", default-features = false, features = [
   "reqwest",
 ] }

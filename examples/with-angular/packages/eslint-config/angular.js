@@ -4,7 +4,7 @@ const project = resolve(process.cwd(), 'tsconfig.app.json');
 
 /**
  * This is a custom ESLint configuration for use with
- * Angular applcations
+ * Angular applications
  */
 
 /** @type {import("eslint").Linter.Config} */

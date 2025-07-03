@@ -30,6 +30,7 @@ use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_api_client::{APIAuth, APIClient};
 use turborepo_ci::Vendor;
 use turborepo_env::EnvironmentVariableMap;
+use turborepo_process::ProcessManager;
 use turborepo_repository::package_graph::{PackageGraph, PackageName, PackageNode};
 use turborepo_scm::SCM;
 use turborepo_signals::{listeners::get_signal, SignalHandler};
@@ -45,7 +46,6 @@ use crate::{
     engine::Engine,
     microfrontends::MicrofrontendsConfigs,
     opts::Opts,
-    process::ProcessManager,
     run::{global_hash::get_global_hash_inputs, summary::RunTracker, task_access::TaskAccess},
     task_graph::Visitor,
     task_hash::{get_external_deps_hash, get_internal_deps_hash, PackageInputsHashes},
@@ -268,9 +268,17 @@ impl Run {
 
         let (sender, receiver) = TuiSender::new();
         let color_config = self.color_config;
+        let scrollback_len = self.opts.tui_opts.scrollback_length;
         let repo_root = self.repo_root.clone();
         let handle = tokio::task::spawn(async move {
-            Ok(tui::run_app(task_names, receiver, color_config, &repo_root).await?)
+            Ok(tui::run_app(
+                task_names,
+                receiver,
+                color_config,
+                &repo_root,
+                scrollback_len,
+            )
+            .await?)
         });
 
         Ok(Some((sender, handle)))

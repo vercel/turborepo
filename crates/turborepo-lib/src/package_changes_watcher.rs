@@ -23,7 +23,7 @@ use turborepo_repository::{
 };
 use turborepo_scm::GitHashes;
 
-use crate::turbo_json::{TurboJson, TurboJsonLoader, CONFIG_FILE};
+use crate::turbo_json::{TurboJson, TurboJsonLoader, CONFIG_FILE, CONFIG_FILE_JSONC};
 
 #[derive(Clone)]
 pub enum PackageChangeEvent {
@@ -74,7 +74,7 @@ impl PackageChangesWatcher {
 enum ChangedFiles {
     All,
     // Trie doesn't support PathBuf as a key on Windows, so we need to use `String`
-    Some(Trie<String, ()>),
+    Some(Box<Trie<String, ()>>),
 }
 
 impl ChangedFiles {
@@ -88,7 +88,7 @@ impl ChangedFiles {
 
 impl Default for ChangedFiles {
     fn default() -> Self {
-        ChangedFiles::Some(Trie::new())
+        ChangedFiles::Some(Box::new(Trie::new()))
     }
 }
 
@@ -171,9 +171,30 @@ impl Subscriber {
             return None;
         };
 
+        let turbo_json_path = self.repo_root.join_component(CONFIG_FILE);
+        let turbo_jsonc_path = self.repo_root.join_component(CONFIG_FILE_JSONC);
+
+        let turbo_json_exists = turbo_json_path.exists();
+        let turbo_jsonc_exists = turbo_jsonc_path.exists();
+
+        // TODO: Dedupe places where we search for turbo.json and turbo.jsonc
+        // There are now several places where we do this in the codebase
+        let config_path = match (turbo_json_exists, turbo_jsonc_exists) {
+            (true, true) => {
+                tracing::warn!(
+                    "Found both turbo.json and turbo.jsonc in {}. Using turbo.json for watching.",
+                    self.repo_root
+                );
+                turbo_json_path
+            }
+            (true, false) => turbo_json_path,
+            (false, true) => turbo_jsonc_path,
+            (false, false) => turbo_json_path, // Default to turbo.json
+        };
+
         let root_turbo_json = TurboJsonLoader::workspace(
             self.repo_root.clone(),
-            self.repo_root.join_component(CONFIG_FILE),
+            config_path,
             pkg_dep_graph.packages(),
         )
         .load(&PackageName::Root)
@@ -325,6 +346,39 @@ impl Subscriber {
                 if trie.get(gitignore_path.as_str()).is_some() {
                     let (new_root_gitignore, _) = Gitignore::new(&gitignore_path);
                     root_gitignore = new_root_gitignore;
+                }
+
+                // Check for changes to turbo.json or turbo.jsonc, and trigger rediscovery if
+                // either changed
+                let turbo_json_path = self.repo_root.join_component(CONFIG_FILE);
+                let turbo_jsonc_path = self.repo_root.join_component(CONFIG_FILE_JSONC);
+
+                if trie.get(turbo_json_path.as_str()).is_some()
+                    || trie.get(turbo_jsonc_path.as_str()).is_some()
+                {
+                    tracing::info!(
+                        "Detected change to turbo configuration file. Triggering rediscovery."
+                    );
+                    let _ = self
+                        .package_change_events_tx
+                        .send(PackageChangeEvent::Rediscover);
+
+                    match self.initialize_repo_state().await {
+                        Some((new_repo_state, new_gitignore)) => {
+                            repo_state = new_repo_state;
+                            root_gitignore = new_gitignore;
+                            change_mapper = match repo_state.get_change_mapper() {
+                                Some(change_mapper) => change_mapper,
+                                None => {
+                                    break;
+                                }
+                            };
+                        }
+                        None => {
+                            break;
+                        }
+                    }
+                    continue;
                 }
 
                 let changed_files: HashSet<_> = trie

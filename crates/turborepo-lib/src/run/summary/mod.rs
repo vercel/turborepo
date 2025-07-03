@@ -569,6 +569,10 @@ impl<'a> RunSummary<'a> {
             };
 
             cwriteln!(tab_writer, ui, GREY, "  Dependents\t=\t{}", dependents)?;
+
+            let with = task.shared.with.iter().join(", ");
+            cwriteln!(tab_writer, ui, GREY, "  With\t=\t{}", with)?;
+
             cwriteln!(
                 tab_writer,
                 ui,

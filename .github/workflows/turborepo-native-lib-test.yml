@@ -27,6 +27,7 @@ jobs:
         node-version:
           - 18
           - 20
+          - 22
     env:
       TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
       TURBO_TEAM: ${{ vars.TURBO_TEAM }}

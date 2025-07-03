@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     sync::Arc,
 };
 
@@ -10,8 +10,9 @@ use oxc_resolver::{ResolveError, Resolver, TsConfig};
 use swc_common::{comments::SingleThreadedComments, SourceFile, Span};
 use turbo_trace::ImportType;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf, PathRelation, RelativeUnixPath};
+use turborepo_errors::Spanned;
 use turborepo_repository::{
-    package_graph::{PackageInfo, PackageName, PackageNode},
+    package_graph::{PackageName, PackageNode},
     package_json::PackageJson,
 };
 
@@ -19,6 +20,64 @@ use crate::{
     boundaries::{tsconfig::TsConfigLoader, BoundariesDiagnostic, BoundariesResult, Error},
     run::Run,
 };
+
+/// All the places a dependency can be declared
+#[derive(Clone, Copy)]
+pub struct DependencyLocations<'a> {
+    pub(crate) internal_dependencies: &'a HashSet<&'a PackageNode>,
+    pub(crate) package_json: &'a PackageJson,
+    pub(crate) unresolved_external_dependencies: Option<&'a BTreeMap<String, String>>,
+    pub(crate) implicit_dependencies: &'a HashMap<String, Spanned<()>>,
+    pub(crate) global_implicit_dependencies: &'a HashMap<String, Spanned<()>>,
+}
+
+impl<'a> DependencyLocations<'a> {
+    /// Go through all the possible places a package could be declared to see if
+    /// it's a valid import. We don't use `oxc_resolver` because there are some
+    /// cases where you can resolve a package that isn't declared properly.
+    fn is_dependency(&self, package_name: &PackageNode) -> bool {
+        self.internal_dependencies.contains(package_name)
+            || self
+                .unresolved_external_dependencies
+                .is_some_and(|external_dependencies| {
+                    external_dependencies.contains_key(package_name.as_package_name().as_str())
+                })
+            || self
+                .package_json
+                .dependencies
+                .as_ref()
+                .is_some_and(|dependencies| {
+                    dependencies.contains_key(package_name.as_package_name().as_str())
+                })
+            || self
+                .package_json
+                .dev_dependencies
+                .as_ref()
+                .is_some_and(|dev_dependencies| {
+                    dev_dependencies.contains_key(package_name.as_package_name().as_str())
+                })
+            || self
+                .package_json
+                .peer_dependencies
+                .as_ref()
+                .is_some_and(|peer_dependencies| {
+                    peer_dependencies.contains_key(package_name.as_package_name().as_str())
+                })
+            || self
+                .package_json
+                .optional_dependencies
+                .as_ref()
+                .is_some_and(|optional_dependencies| {
+                    optional_dependencies.contains_key(package_name.as_package_name().as_str())
+                })
+            || self
+                .implicit_dependencies
+                .contains_key(package_name.as_package_name().as_str())
+            || self
+                .global_implicit_dependencies
+                .contains_key(package_name.as_package_name().as_str())
+    }
+}
 
 impl Run {
     /// Checks if the given import can be resolved as a tsconfig path alias,
@@ -79,9 +138,7 @@ impl Run {
         span: &Span,
         file_path: &AbsoluteSystemPath,
         file_content: &str,
-        package_info: &PackageInfo,
-        internal_dependencies: &HashSet<&PackageNode>,
-        unresolved_external_dependencies: Option<&BTreeMap<String, String>>,
+        dependency_locations: DependencyLocations<'_>,
         resolver: &Resolver,
     ) -> Result<(), Error> {
         // If the import is prefixed with `@boundaries-ignore`, we ignore it, but print
@@ -154,9 +211,7 @@ impl Run {
                 span,
                 file_path,
                 file_content,
-                &package_info.package_json,
-                internal_dependencies,
-                unresolved_external_dependencies,
+                dependency_locations,
                 resolver,
             )
         } else {
@@ -196,6 +251,7 @@ impl Run {
                     .to_string();
 
             Ok(Some(BoundariesDiagnostic::ImportLeavesPackage {
+                path: file_path.to_owned(),
                 import: import.to_string(),
                 resolved_import_path,
                 package_name: package_name.to_owned(),
@@ -205,45 +261,6 @@ impl Run {
         } else {
             Ok(None)
         }
-    }
-
-    /// Go through all the possible places a package could be declared to see if
-    /// it's a valid import. We don't use `oxc_resolver` because there are some
-    /// cases where you can resolve a package that isn't declared properly.
-    fn is_dependency(
-        internal_dependencies: &HashSet<&PackageNode>,
-        package_json: &PackageJson,
-        unresolved_external_dependencies: Option<&BTreeMap<String, String>>,
-        package_name: &PackageNode,
-    ) -> bool {
-        internal_dependencies.contains(&package_name)
-            || unresolved_external_dependencies.is_some_and(|external_dependencies| {
-                external_dependencies.contains_key(package_name.as_package_name().as_str())
-            })
-            || package_json
-                .dependencies
-                .as_ref()
-                .is_some_and(|dependencies| {
-                    dependencies.contains_key(package_name.as_package_name().as_str())
-                })
-            || package_json
-                .dev_dependencies
-                .as_ref()
-                .is_some_and(|dev_dependencies| {
-                    dev_dependencies.contains_key(package_name.as_package_name().as_str())
-                })
-            || package_json
-                .peer_dependencies
-                .as_ref()
-                .is_some_and(|peer_dependencies| {
-                    peer_dependencies.contains_key(package_name.as_package_name().as_str())
-                })
-            || package_json
-                .optional_dependencies
-                .as_ref()
-                .is_some_and(|optional_dependencies| {
-                    optional_dependencies.contains_key(package_name.as_package_name().as_str())
-                })
     }
 
     fn get_package_name(import: &str) -> String {
@@ -266,15 +283,14 @@ impl Run {
         span: SourceSpan,
         file_path: &AbsoluteSystemPath,
         file_content: &str,
-        package_json: &PackageJson,
-        internal_dependencies: &HashSet<&PackageNode>,
-        unresolved_external_dependencies: Option<&BTreeMap<String, String>>,
+        dependency_locations: DependencyLocations<'_>,
         resolver: &Resolver,
     ) -> Option<BoundariesDiagnostic> {
         let package_name = Self::get_package_name(import);
 
         if package_name.starts_with("@types/") && matches!(import_type, ImportType::Value) {
             return Some(BoundariesDiagnostic::NotTypeOnlyImport {
+                path: file_path.to_owned(),
                 import: import.to_string(),
                 span,
                 text: NamedSource::new(file_path.as_str(), file_content.to_string()),
@@ -282,12 +298,7 @@ impl Run {
         }
         let package_name = PackageNode::Workspace(PackageName::Other(package_name));
         let folder = file_path.parent().expect("file_path should have a parent");
-        let is_valid_dependency = Self::is_dependency(
-            internal_dependencies,
-            package_json,
-            unresolved_external_dependencies,
-            &package_name,
-        );
+        let is_valid_dependency = dependency_locations.is_dependency(&package_name);
 
         if !is_valid_dependency
             && !matches!(
@@ -300,17 +311,13 @@ impl Run {
                 "@types/{}",
                 package_name.as_package_name().as_str()
             )));
-            let is_types_dependency = Self::is_dependency(
-                internal_dependencies,
-                package_json,
-                unresolved_external_dependencies,
-                &types_package_name,
-            );
+            let is_types_dependency = dependency_locations.is_dependency(&types_package_name);
 
             if is_types_dependency {
                 return match import_type {
                     ImportType::Type => None,
                     ImportType::Value => Some(BoundariesDiagnostic::NotTypeOnlyImport {
+                        path: file_path.to_owned(),
                         import: import.to_string(),
                         span,
                         text: NamedSource::new(file_path.as_str(), file_content.to_string()),
@@ -319,6 +326,7 @@ impl Run {
             }
 
             return Some(BoundariesDiagnostic::PackageNotFound {
+                path: file_path.to_owned(),
                 name: package_name.to_string(),
                 span,
                 text: NamedSource::new(file_path.as_str(), file_content.to_string()),

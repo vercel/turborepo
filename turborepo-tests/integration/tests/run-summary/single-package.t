@@ -85,7 +85,8 @@ Check
     "outputs",
     "resolvedTaskDefinition",
     "task",
-    "taskId"
+    "taskId",
+    "with"
   ]
 
   $ echo $TASK_SUMMARY | jq '.execution'

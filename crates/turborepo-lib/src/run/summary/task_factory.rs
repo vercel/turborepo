@@ -125,7 +125,11 @@ impl<'a> TaskSummaryFactory<'a> {
             .expanded_outputs(task_id)
             .unwrap_or_default();
 
-        let framework = self.hash_tracker.framework(task_id).unwrap_or_default();
+        let framework = self
+            .hash_tracker
+            .framework(task_id)
+            .map(|framework| framework.to_string())
+            .unwrap_or_default();
         let hash = self
             .hash_tracker
             .hash(task_id)
@@ -152,6 +156,16 @@ impl<'a> TaskSummaryFactory<'a> {
             path.join(&relative_log_file).to_string()
         });
 
+        let with = task_definition
+            .with
+            .as_ref()
+            .map(|with| {
+                with.iter()
+                    .map(|task| task.as_inner().to_string())
+                    .collect()
+            })
+            .unwrap_or_default();
+
         Ok(SharedTaskSummary {
             hash,
             inputs: expanded_inputs.into_iter().collect(),
@@ -176,6 +190,7 @@ impl<'a> TaskSummaryFactory<'a> {
             framework,
             dependencies,
             dependents,
+            with,
             env_mode: self.global_env_mode,
             environment_variables: TaskEnvVarSummary::new(
                 task_definition,

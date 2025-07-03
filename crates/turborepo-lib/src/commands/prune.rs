@@ -47,8 +47,6 @@ pub enum Error {
     MissingWorkspace(PackageName),
     #[error("Cannot prune without parsed lockfile.")]
     MissingLockfile,
-    #[error("`prune` is not supported for Bun.")]
-    BunUnsupported,
     #[error("Unable to read config: {0}")]
     Config(#[from] crate::config::Error),
 }
@@ -105,13 +103,6 @@ pub async fn prune(
     telemetry.track_arg_usage("out-dir", output_dir != DEFAULT_OUTPUT_DIR);
 
     let prune = Prune::new(base, scope, docker, output_dir, use_gitignore, telemetry).await?;
-
-    if matches!(
-        prune.package_graph.package_manager(),
-        turborepo_repository::package_manager::PackageManager::Bun
-    ) {
-        return Err(Error::BunUnsupported);
-    }
 
     println!(
         "Generating pruned monorepo for {} in {}",
@@ -205,10 +196,15 @@ pub async fn prune(
             original_patches,
             pruned_patches
         );
-        let pruned_json = prune
-            .package_graph
-            .package_manager()
-            .prune_patched_packages(prune.package_graph.root_package_json(), &pruned_patches);
+
+        let repo_root = &prune.root;
+        let package_manager = prune.package_graph.package_manager();
+
+        let pruned_json = package_manager.prune_patched_packages(
+            prune.package_graph.root_package_json(),
+            &pruned_patches,
+            repo_root,
+        );
         let mut pruned_json_contents = serde_json::to_string_pretty(&pruned_json)?;
         // Add trailing newline to match Go behavior
         pruned_json_contents.push('\n');
@@ -307,7 +303,11 @@ impl<'a> Prune<'a> {
             };
             trace!(
                 "target: {}",
-                info.package_json.name.as_deref().unwrap_or_default()
+                info.package_json
+                    .name
+                    .as_ref()
+                    .map(|name| name.as_str())
+                    .unwrap_or_default()
             );
             trace!("workspace package.json: {}", &info.package_json_path);
             trace!(

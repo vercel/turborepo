@@ -394,6 +394,13 @@ impl Engine<Built> {
         self.task_graph.node_weights()
     }
 
+    pub fn task_ids(&self) -> impl Iterator<Item = &TaskId<'static>> {
+        self.tasks().filter_map(|task| match task {
+            crate::engine::TaskNode::Task(task_id) => Some(task_id),
+            crate::engine::TaskNode::Root => None,
+        })
+    }
+
     /// Return all tasks that have a command to be run
     pub fn tasks_with_command(&self, pkg_graph: &PackageGraph) -> Vec<String> {
         self.tasks()
@@ -421,6 +428,7 @@ impl Engine<Built> {
         package_graph: &PackageGraph,
         concurrency: u32,
         ui_mode: UIMode,
+        will_execute_tasks: bool,
     ) -> Result<(), Vec<ValidateError>> {
         // TODO(olszewski) once this is hooked up to a real run, we should
         // see if using rayon to parallelize would provide a speedup
@@ -510,14 +518,16 @@ impl Engine<Built> {
 
         // there must always be at least one concurrency 'slot' available for
         // non-persistent tasks otherwise we get race conditions
-        if persistent_count >= concurrency {
+        if will_execute_tasks && persistent_count >= concurrency {
             validation_errors.push(ValidateError::PersistentTasksExceedConcurrency {
                 persistent_count,
                 concurrency,
             })
         }
 
-        validation_errors.extend(self.validate_interactive(ui_mode));
+        if will_execute_tasks {
+            validation_errors.extend(self.validate_interactive(ui_mode));
+        }
 
         validation_errors.sort();
 
@@ -638,7 +648,7 @@ mod test {
                     };
 
                     let package = PackageJson {
-                        name: Some(name.to_string()),
+                        name: Some(Spanned::new(name.to_string())),
                         scripts,
                         ..Default::default()
                     };
@@ -706,20 +716,91 @@ mod test {
 
         // if our limit is less than, it should fail
         engine
-            .validate(&graph, 1, UIMode::Stream)
+            .validate(&graph, 1, UIMode::Stream, true)
             .expect_err("not enough");
 
         // if our limit is less than, it should fail
         engine
-            .validate(&graph, 2, UIMode::Stream)
+            .validate(&graph, 2, UIMode::Stream, true)
             .expect_err("not enough");
 
         // we have two persistent tasks, and a slot for all other tasks, so this should
         // pass
-        engine.validate(&graph, 3, UIMode::Stream).expect("ok");
+        engine
+            .validate(&graph, 3, UIMode::Stream, true)
+            .expect("ok");
 
         // if our limit is greater, then it should pass
-        engine.validate(&graph, 4, UIMode::Stream).expect("ok");
+        engine
+            .validate(&graph, 4, UIMode::Stream, true)
+            .expect("ok");
+    }
+
+    #[tokio::test]
+    async fn test_interactive_validation() {
+        let tmp = tempfile::TempDir::new().unwrap();
+
+        let mut engine = Engine::new();
+
+        // add two packages with a persistent build task
+        for package in ["a", "b"] {
+            let task_id = TaskId::new(package, "build");
+            engine.get_index(&task_id);
+            engine.add_definition(
+                task_id,
+                TaskDefinition {
+                    persistent: true,
+                    interactive: true,
+                    ..Default::default()
+                },
+            );
+        }
+
+        let engine = engine.seal();
+
+        let graph_builder = PackageGraph::builder(
+            AbsoluteSystemPath::from_std_path(tmp.path()).unwrap(),
+            PackageJson::default(),
+        )
+        .with_package_discovery(DummyDiscovery(&tmp));
+
+        let graph = graph_builder.build().await.unwrap();
+
+        assert!(engine.validate(&graph, 3, UIMode::Stream, false).is_ok());
+        assert!(engine.validate(&graph, 3, UIMode::Stream, true).is_err());
+    }
+
+    #[tokio::test]
+    async fn test_dry_run_skips_concurrency_validation() {
+        let tmp = tempfile::TempDir::new().unwrap();
+
+        let mut engine = Engine::new();
+
+        // add two packages with a persistent build task
+        for package in ["a", "b"] {
+            let task_id = TaskId::new(package, "build");
+            engine.get_index(&task_id);
+            engine.add_definition(
+                task_id,
+                TaskDefinition {
+                    persistent: true,
+                    ..Default::default()
+                },
+            );
+        }
+
+        let engine = engine.seal();
+
+        let graph_builder = PackageGraph::builder(
+            AbsoluteSystemPath::from_std_path(tmp.path()).unwrap(),
+            PackageJson::default(),
+        )
+        .with_package_discovery(DummyDiscovery(&tmp));
+
+        let graph = graph_builder.build().await.unwrap();
+
+        assert!(engine.validate(&graph, 1, UIMode::Stream, false).is_ok());
+        assert!(engine.validate(&graph, 1, UIMode::Stream, true).is_err());
     }
 
     #[tokio::test]

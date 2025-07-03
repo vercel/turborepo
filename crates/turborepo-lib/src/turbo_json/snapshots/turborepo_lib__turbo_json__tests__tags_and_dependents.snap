@@ -1,11 +1,10 @@
 ---
 source: crates/turborepo-lib/src/turbo_json/mod.rs
-expression: raw_task_definition
+expression: raw_boundaries_config
 ---
 {
   "tags": {
     "my-tag": {
-      "dependencies": null,
       "dependents": {
         "allow": [
           "my-package"

@@ -1,0 +1,152 @@
+---
+title: SvelteKit
+description: Learn more about using SvelteKit in your monorepo.
+---
+
+import { PackageManagerTabs, Tab } from '#components/tabs';
+import { Callout } from '#components/callout';
+
+[SvelteKit](https://kit.svelte.dev/) is a framework for rapidly developing robust, performant web applications using Svelte.
+
+## Quickstart
+
+To get started with SvelteKit in a Turborepo quickly, use [the `with-svelte` example](https://github.com/vercel/turborepo/tree/main/examples/with-svelte):
+
+<PackageManagerTabs>
+
+<Tab value="pnpm">
+
+```bash title="Terminal"
+pnpm dlx create-turbo@latest -e with-svelte
+```
+
+</Tab>
+
+<Tab value="yarn">
+
+```bash title="Terminal"
+yarn dlx create-turbo@latest -e with-svelte
+```
+
+</Tab>
+
+<Tab value="npm">
+
+```bash title="Terminal"
+npx create-turbo@latest -e with-svelte
+```
+
+</Tab>
+
+<Tab value="bun (Beta)">
+
+```bash title="Terminal"
+bunx create-turbo@latest -e with-svelte
+```
+
+</Tab>
+</PackageManagerTabs>
+
+## Adding a SvelteKit application to an existing repository
+
+Use [`npm create svelte`](https://kit.svelte.dev/docs/creating-a-project) to set up a new SvelteKit application in a package. From the root of your repository, run:
+
+<PackageManagerTabs>
+
+<Tab value="pnpm">
+
+```bash title="Terminal"
+pnpm dlx sv create
+```
+
+</Tab>
+
+<Tab value="yarn">
+
+```bash title="Terminal"
+yarn dlx sv create
+```
+
+</Tab>
+
+<Tab value="npm">
+
+```bash title="Terminal"
+npx sv create
+```
+
+</Tab>
+
+<Tab value="bun (Beta)">
+
+```bash title="Terminal"
+bunx sv create
+```
+
+</Tab>
+</PackageManagerTabs>
+
+## Integrating with your repository
+
+To add [Internal Packages](/docs/core-concepts/internal-packages) to your new application, install them into the app with your package manager:
+
+<PackageManagerTabs>
+
+<Tab value="pnpm">
+
+```diff title="./apps/my-app/package.json"
+{
+  "name": "my-app",
+  "dependencies": {
++   "@repo/ui": "workspace:*"
+  }
+}
+```
+
+</Tab>
+
+<Tab value="yarn">
+
+```diff title="./apps/my-app/package.json"
+{
+  "name": "my-app",
+  "dependencies": {
++   "@repo/ui": "*"
+  }
+}
+```
+
+</Tab>
+
+<Tab value="npm">
+
+```diff title="./apps/my-app/package.json"
+{
+ "name": "my-app",
+  "dependencies": {
++   "@repo/ui": "*"
+  }
+}
+```
+
+</Tab>
+
+<Tab value="bun (Beta)">
+
+```diff title="./apps/my-app/package.json"
+{
+ "name": "my-app",
+  "dependencies": {
++   "@repo/ui": "workspace:*"
+  }
+}
+```
+
+</Tab>
+</PackageManagerTabs>
+
+Make sure to run your package manager's install command. You also may need to update `scripts` in `package.json` to fit your use case in your repository.
+
+### Customizing tasks
+
+By default, the new application will use the tasks defined in the root `turbo.json`. If you'd like to configure tasks differently for the new application, use [Package Configurations](/docs/reference/package-configurations).

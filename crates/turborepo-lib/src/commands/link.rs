@@ -76,7 +76,7 @@ pub(crate) const REMOTE_CACHING_INFO: &str =
     "Remote Caching makes your caching multiplayer,\nsharing build outputs and logs between \
      developers and CI/CD systems.\n\nBuild and deploy faster.";
 pub(crate) const REMOTE_CACHING_URL: &str =
-    "https://turbo.build/repo/docs/core-concepts/remote-caching";
+    "https://turborepo.com/docs/core-concepts/remote-caching";
 
 /// Verifies that caching status for a team is enabled, or prompts the user to
 /// enable it.

@@ -3,6 +3,7 @@ use std::collections::VecDeque;
 use serde::Deserialize;
 
 use super::{PackageEntry, PackageInfo};
+use crate::bun::RootInfo;
 // Comment explaining entry schemas taken from bun.lock.zig
 // first index is resolution for each type of package
 // npm         -> [
@@ -32,6 +33,8 @@ impl<'de> Deserialize<'de> for PackageEntry {
             Info(Box<PackageInfo>),
         }
         let mut vals = VecDeque::<Vals>::deserialize(deserializer)?;
+
+        // First value is always the package key
         let key = vals
             .pop_front()
             .ok_or_else(|| de::Error::custom("expected package entry to not be empty"))?;
@@ -44,19 +47,54 @@ impl<'de> Deserialize<'de> for PackageEntry {
             Vals::Str(_) => None,
             Vals::Info(package_info) => Some(*package_info),
         };
-        // For workspace packages deps are second element, rest have them as third
-        // element
-        let info = vals
-            .pop_front()
-            .and_then(val_to_info)
-            .or_else(|| vals.pop_front().and_then(val_to_info));
+
+        let mut registry = None;
+        let mut info = None;
+
+        // Special case: root packages have a unique second value, so we handle it here
+        if key.ends_with("@root:") {
+            let root = vals.pop_front().and_then(|val| {
+                serde_json::from_value::<RootInfo>(match val {
+                    Vals::Info(info) => {
+                        serde_json::to_value(info.other).expect("failed to convert info to value")
+                    }
+                    _ => return None,
+                })
+                .ok()
+            });
+            return Ok(Self {
+                ident: key,
+                info,
+                registry,
+                checksum: None,
+                root,
+            });
+        }
+
+        // The second value can be either registry (string) or info (object)
+        if let Some(val) = vals.pop_front() {
+            match val {
+                Vals::Str(reg) => registry = Some(reg),
+                Vals::Info(package_info) => info = Some(*package_info),
+            }
+        };
+
+        // Info will be next if we haven't already found it
+        if info.is_none() {
+            info = vals.pop_front().and_then(val_to_info);
+        }
+
+        // Checksum is last
+        let checksum = vals.pop_front().and_then(|val| match val {
+            Vals::Str(sha) => Some(sha),
+            Vals::Info(_) => None,
+        });
+
         Ok(Self {
             ident: key,
             info,
-            // The rest are only necessary for serializing a lockfile and aren't needed until adding
-            // `prune` support
-            registry: None,
-            checksum: None,
+            registry,
+            checksum,
             root: None,
         })
     }
@@ -110,14 +148,24 @@ mod test {
         PackageEntry,
         PackageEntry {
             ident: "is-odd@3.0.1".into(),
-            registry: None,
+            registry: Some("".into()),
             info: Some(PackageInfo {
                 dependencies: Some(("is-number".into(), "^6.0.0".into()))
                     .into_iter()
                     .collect(),
+                dev_dependencies: Some(("is-bigint".into(), "1.1.0".into()))
+                    .into_iter()
+                    .collect(),
+                peer_dependencies: Some(("is-even".into(), "1.0.0".into()))
+                    .into_iter()
+                    .collect(),
+                optional_peers: Some("is-even".into()).into_iter().collect(),
+                optional_dependencies: Some(("is-regexp".into(), "1.0.0".into()))
+                    .into_iter()
+                    .collect(),
                 ..Default::default()
             }),
-            checksum: None,
+            checksum: Some("sha".into()),
             root: None,
         }
     );
@@ -138,10 +186,26 @@ mod test {
             root: None,
         }
     );
+
+    fixture!(
+        root_pkg,
+        PackageEntry,
+        PackageEntry {
+            ident: "some-package@root:".into(),
+            root: Some(RootInfo {
+                bin: Some("bin".into()),
+                bin_dir: Some("binDir".into()),
+            }),
+            info: None,
+            registry: None,
+            checksum: None,
+        }
+    );
     #[test_case(json!({"name": "bun-test", "devDependencies": {"turbo": "^2.3.3"}}), basic_workspace() ; "basic")]
     #[test_case(json!({"name": "docs", "version": "0.1.0"}), workspace_with_version() ; "with version")]
-    #[test_case(json!(["is-odd@3.0.1", "", {"dependencies": {"is-number": "^6.0.0"}}, "sha"]), registry_pkg() ; "registry package")]
+    #[test_case(json!(["is-odd@3.0.1", "", {"dependencies": {"is-number": "^6.0.0"}, "devDependencies": {"is-bigint": "1.1.0"}, "peerDependencies": {"is-even": "1.0.0"}, "optionalDependencies": {"is-regexp": "1.0.0"}, "optionalPeers": ["is-even"]}, "sha"]), registry_pkg() ; "registry package")]
     #[test_case(json!(["docs", {"dependencies": {"is-odd": "3.0.1"}}]), workspace_pkg() ; "workspace package")]
+    #[test_case(json!(["some-package@root:", {"bin": "bin", "binDir": "binDir"}]), root_pkg() ; "root package")]
     fn test_deserialization<T: for<'a> Deserialize<'a> + PartialEq + std::fmt::Debug>(
         input: serde_json::Value,
         expected: &T,

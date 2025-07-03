@@ -13,6 +13,7 @@ use turborepo_api_client::{APIAuth, APIClient};
 use turborepo_cache::AsyncCache;
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_errors::Spanned;
+use turborepo_process::ProcessManager;
 use turborepo_repository::{
     change_mapper::PackageInclusionReason,
     package_graph::{PackageGraph, PackageName},
@@ -44,7 +45,6 @@ use crate::{
     engine::{Engine, EngineBuilder},
     microfrontends::MicrofrontendsConfigs,
     opts::Opts,
-    process::ProcessManager,
     run::{scope, task_access::TaskAccess, task_id::TaskName, Error, Run, RunCache},
     shim::TurboState,
     turbo_json::{TurboJson, TurboJsonLoader, UIMode},
@@ -136,6 +136,10 @@ impl RunBuilder {
             let _guard = signal_subscriber.listen().await;
             manager.stop().await;
         });
+    }
+
+    fn will_execute_tasks(&self) -> bool {
+        self.opts.run_opts.dry_run.is_none() && self.opts.run_opts.graph.is_none()
     }
 
     pub fn with_analytics_sender(mut self, analytics_sender: Option<AnalyticsSender>) -> Self {
@@ -464,9 +468,9 @@ impl RunBuilder {
             self.opts.run_opts.dry_run.is_some(),
         ));
 
-        let should_print_prelude = self.should_print_prelude_override.unwrap_or_else(|| {
-            self.opts.run_opts.dry_run.is_none() && self.opts.run_opts.graph.is_none()
-        });
+        let should_print_prelude = self
+            .should_print_prelude_override
+            .unwrap_or_else(|| self.will_execute_tasks());
 
         Ok(Run {
             version: self.version,
@@ -538,6 +542,7 @@ impl RunBuilder {
                     pkg_dep_graph,
                     self.opts.run_opts.concurrency,
                     self.opts.run_opts.ui_mode,
+                    self.will_execute_tasks(),
                 )
                 .map_err(Error::EngineValidation)?;
         }

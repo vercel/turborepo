@@ -6,6 +6,7 @@ import { getTransformerHelpers } from "../utils/getTransformerHelpers";
 import type { TransformerResults } from "../runner";
 import type { Transformer, TransformerArgs } from "../types";
 import { loadTurboJson } from "../utils/loadTurboJson";
+import { isPipelineKeyMissing } from "../utils/is-pipeline-key-missing";
 
 // transformer details
 const TRANSFORMER = "migrate-env-var-dependencies";
@@ -14,6 +15,10 @@ const DESCRIPTION =
 const INTRODUCED_IN = "1.5.0";
 
 export function hasLegacyEnvVarDependencies(config: SchemaV1) {
+  if (isPipelineKeyMissing(config)) {
+    return { hasKeys: false };
+  }
+
   const dependsOn = [
     "extends" in config ? [] : config.globalDependencies,
     Object.values(config.pipeline).flatMap(
@@ -93,6 +98,10 @@ export function migrateGlobal(config: SchemaV1) {
 }
 
 export function migrateConfig(config: SchemaV1) {
+  if (isPipelineKeyMissing(config)) {
+    return config;
+  }
+
   const migratedConfig = migrateGlobal(config);
   Object.keys(config.pipeline).forEach((pipelineKey) => {
     config.pipeline;

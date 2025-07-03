@@ -9,7 +9,7 @@ Run build with package task in non-root turbo.json
   [1]
   $ sed  's/\[\([^]]*\)\]/\(\1)/g' < error.txt
     x Invalid turbo.json configuration
-    `-> unnecessary_package_task_syntax (https://turbo.build/messages/
+    `-> unnecessary_package_task_syntax (https://turborepo.com/messages/
         unnecessary-package-task-syntax)
         
           x "my-app#build". Use "build" instead.
@@ -38,7 +38,7 @@ Run build with invalid env var
   $ ${TURBO} build 2> error.txt
   [1]
   $ sed  's/\[\([^]]*\)\]/\(\1)/g' < error.txt
-  invalid_env_prefix (https://turbo.build/messages/invalid-env-prefix)
+  invalid_env_prefix (https://turborepo.com/messages/invalid-env-prefix)
   
     x Environment variables should not be prefixed with "$"
      ,-(turbo.json:7:27)
@@ -56,7 +56,7 @@ Run in single package mode even though we have a task with package syntax
   $ ${TURBO} build --single-package 2> error.txt
   [1]
   $ sed  's/\[\([^]]*\)\]/\(\1)/g' < error.txt
-  package_task_in_single_package_mode (https://turbo.build/messages/package-task-in-single-package-mode)
+  package_task_in_single_package_mode (https://turborepo.com/messages/package-task-in-single-package-mode)
   
     x Package tasks (<package>#<task>) are not allowed in single-package
     | repositories: found //#something
@@ -93,13 +93,6 @@ Run build with syntax errors in turbo.json
   turbo_json_parse_error
   
     x Failed to parse turbo.json.
-    |->   x Expected a property but instead found ','.
-    |      ,-[turbo.json:2:48]
-    |    1 | {
-    |    2 |   "$schema": "https://turbo.build/schema.json",,
-    |      :                                                ^
-    |    3 |   "globalDependencies": ["foo.txt"],
-    |      `----
     |->   x expected `,` but instead found `42`
     |       ,-[turbo.json:12:46]
     |    11 |     "my-app#build": {

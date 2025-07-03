@@ -277,7 +277,8 @@ pub struct Verbosity {
         conflicts_with = "v",
         value_name = "COUNT"
     )]
-    /// Verbosity level
+    /// Verbosity level. Useful when debugging Turborepo or creating logs for
+    /// issue reports
     pub verbosity: Option<u8>,
     #[clap(
         short = 'v',
@@ -495,10 +496,10 @@ impl Args {
 
     /// Fetch the execution args supplied to the command
     pub fn execution_args(&self) -> Option<&ExecutionArgs> {
-        if let Some(Command::Run { execution_args, .. }) = &self.command {
-            Some(execution_args)
-        } else {
-            self.execution_args.as_ref()
+        match &self.command {
+            Some(Command::Run { execution_args, .. }) => Some(execution_args),
+            Some(Command::Watch { execution_args, .. }) => Some(execution_args),
+            _ => self.execution_args.as_ref(),
         }
     }
 
@@ -587,6 +588,10 @@ pub enum Command {
     Boundaries {
         #[clap(short = 'F', long, group = "scope-filter-group")]
         filter: Vec<String>,
+        #[clap(long, value_enum, default_missing_value = "prompt", num_args = 0..=1, require_equals = true)]
+        ignore: Option<BoundariesIgnore>,
+        #[clap(long, requires = "ignore")]
+        reason: Option<String>,
     },
     #[clap(hide = true)]
     Clone {
@@ -649,7 +654,7 @@ pub enum Command {
         /// Use the given selector to specify package(s) to act as
         /// entry points. The syntax mirrors pnpm's syntax, and
         /// additional documentation and examples can be found in
-        /// turbo's documentation https://turbo.build/repo/docs/reference/command-line-reference/run#--filter
+        /// turbo's documentation https://turborepo.com/docs/reference/command-line-reference/run#--filter
         #[clap(short = 'F', long, group = "scope-filter-group")]
         filter: Vec<String>,
         /// Get insight into a specific package, such as
@@ -759,6 +764,15 @@ pub enum Command {
         #[clap(long, value_enum)]
         target: Option<LinkTarget>,
     },
+}
+
+#[derive(Copy, Clone, Debug, Default, ValueEnum, Serialize, Eq, PartialEq)]
+pub enum BoundariesIgnore {
+    /// Adds a `@boundaries-ignore` comment everywhere possible
+    All,
+    /// Prompts user if they want to add `@boundaries-ignore` comment
+    #[default]
+    Prompt,
 }
 
 #[derive(Parser, Clone, Debug, Default, Serialize, PartialEq)]
@@ -882,7 +896,7 @@ pub struct ExecutionArgs {
     /// Use the given selector to specify package(s) to act as
     /// entry points. The syntax mirrors pnpm's syntax, and
     /// additional documentation and examples can be found in
-    /// turbo's documentation https://turbo.build/repo/docs/reference/command-line-reference/run#--filter
+    /// turbo's documentation https://turborepo.com/docs/reference/command-line-reference/run#--filter
     #[clap(short = 'F', long, group = "scope-filter-group")]
     pub filter: Vec<String>,
 
@@ -1391,13 +1405,15 @@ pub async fn run(
 
             Ok(0)
         }
-        Command::Boundaries { .. } => {
+        Command::Boundaries { ignore, reason, .. } => {
             let event = CommandEventBuilder::new("boundaries").with_parent(&root_telemetry);
+            let ignore = *ignore;
+            let reason = reason.clone();
 
             event.track_call();
             let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
 
-            Ok(boundaries::run(base, event).await?)
+            Ok(boundaries::run(base, event, ignore, reason).await?)
         }
         Command::Clone {
             url,
@@ -1465,7 +1481,7 @@ pub async fn run(
             telemetry::configure(command, &mut base, child_event);
             Ok(0)
         }
-        Command::Scan {} => {
+        Command::Scan => {
             let event = CommandEventBuilder::new("scan").with_parent(&root_telemetry);
             event.track_call();
             let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
@@ -3320,6 +3336,22 @@ mod test {
     #[test_case::test_case(&["turbo", "--filter=foo", "boundaries"], false; "execution args")]
     #[test_case::test_case(&["turbo", "--no-daemon", "boundaries"], false; "run args")]
     fn test_no_run_args_before_boundaries(args: &[&str], is_okay: bool) {
+        let os_args = args.iter().map(|s| OsString::from(*s)).collect();
+        let cli = Args::parse(os_args);
+        if is_okay {
+            cli.unwrap();
+        } else {
+            let err = cli.unwrap_err();
+            assert_snapshot!(args.join("-").as_str(), err);
+        }
+    }
+
+    #[test_case::test_case(&["turbo", "boundaries"], true; "empty")]
+    #[test_case::test_case(&["turbo", "boundaries", "--ignore"], true; "with ignore")]
+    #[test_case::test_case(&["turbo", "boundaries", "--ignore=all"], true; "with ignore all")]
+    #[test_case::test_case(&["turbo", "boundaries", "--ignore=prompt"], true; "with ignore prompt")]
+    #[test_case::test_case(&["turbo", "boundaries", "--filter", "ui"], true; "with filter")]
+    fn test_boundaries(args: &[&str], is_okay: bool) {
         let os_args = args.iter().map(|s| OsString::from(*s)).collect();
         let cli = Args::parse(os_args);
         if is_okay {

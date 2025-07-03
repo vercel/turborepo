@@ -6,7 +6,7 @@ sed replaces the square brackets with parentheses so prysk can parse the file pa
   \xe2\x80\xa2 Packages in scope: //, another, my-app, util (esc)
   \xe2\x80\xa2 Running something in 4 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  recursive_turbo_invocations (https://turbo.build/messages/recursive-turbo-invocations)
+  recursive_turbo_invocations (https://turborepo.com/messages/recursive-turbo-invocations)
   
     x Your `package.json` script looks like it invokes a Root Task (//
     | #something), creating a loop of `turbo` invocations. You likely have

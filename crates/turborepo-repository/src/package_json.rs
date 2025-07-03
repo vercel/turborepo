@@ -18,7 +18,7 @@ use turborepo_unescape::UnescapedString;
 #[serde(rename_all = "camelCase")]
 pub struct PackageJson {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
+    pub name: Option<Spanned<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub version: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -54,7 +54,7 @@ pub struct PnpmConfig {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserializable)]
 pub struct RawPackageJson {
-    pub name: Option<UnescapedString>,
+    pub name: Option<Spanned<UnescapedString>>,
     pub version: Option<UnescapedString>,
     pub package_manager: Option<Spanned<UnescapedString>>,
     pub dependencies: Option<BTreeMap<String, UnescapedString>>,
@@ -111,7 +111,7 @@ impl WithMetadata for RawPackageJson {
 impl From<RawPackageJson> for PackageJson {
     fn from(raw: RawPackageJson) -> Self {
         Self {
-            name: raw.name.map(|s| s.into()),
+            name: raw.name.map(|s| s.map(|s| s.into())),
             version: raw.version.map(|s| s.into()),
             package_manager: raw.package_manager.map(|s| s.map(|s| s.into())),
             dependencies: raw

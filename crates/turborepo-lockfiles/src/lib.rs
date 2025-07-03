@@ -1,4 +1,3 @@
-#![feature(trait_upcasting)]
 #![deny(clippy::all)]
 // the pest proc macro adds an empty doc comment.
 #![allow(clippy::empty_docs)]

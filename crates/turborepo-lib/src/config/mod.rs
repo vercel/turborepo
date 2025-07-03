@@ -74,8 +74,8 @@ pub enum Error {
     #[error(transparent)]
     PackageJson(#[from] turborepo_repository::package_json::Error),
     #[error(
-        "Could not find turbo.json or turbo.jsonc.\nFollow directions at https://turbo.build/repo/docs to create \
-         one."
+        "Could not find turbo.json or turbo.jsonc.\nFollow directions at https://turborepo.com/docs \
+         to create one."
     )]
     NoTurboJSON,
     #[error(
@@ -204,12 +204,49 @@ pub enum Error {
     },
     #[error("Cannot load turbo.json for {0} in single package mode.")]
     InvalidTurboJsonLoad(PackageName),
+    #[error("\"$TURBO_ROOT$\" must be used at the start of glob.")]
+    InvalidTurboRootUse {
+        #[label("\"$TURBO_ROOT$\" must be used at the start of glob.")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource<String>,
+    },
+    #[error("\"$TURBO_ROOT$\" must be followed by a '/'.")]
+    InvalidTurboRootNeedsSlash {
+        #[label("\"$TURBO_ROOT$\" must be followed by a '/'.")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource<String>,
+    },
+    #[error("`with` cannot use dependency relationships.")]
+    InvalidTaskWith {
+        #[label("Remove `^` from start of task name.")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource<String>,
+    },
+    #[error(
+        "The \"futureFlags\" key can only be used in the root turbo.json. Please remove it from \
+         Package Configurations."
+    )]
+    FutureFlagsInPackage {
+        #[label("futureFlags key found here")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource<String>,
+    },
+    #[error(
+        "TURBO_TUI_SCROLLBACK_LENGTH: Invalid value. Use a number for how many lines to keep in \
+         scrollback."
+    )]
+    InvalidTuiScrollbackLength(#[source] std::num::ParseIntError),
 }
 
 const DEFAULT_API_URL: &str = "https://vercel.com/api";
 const DEFAULT_LOGIN_URL: &str = "https://vercel.com";
 const DEFAULT_TIMEOUT: u64 = 30;
 const DEFAULT_UPLOAD_TIMEOUT: u64 = 60;
+const DEFAULT_TUI_SCROLLBACK_LENGTH: u64 = 2048;
 
 // We intentionally don't derive Serialize so that different parts
 // of the code that want to display the config can tune how they
@@ -269,6 +306,9 @@ pub struct ConfigurationOptions {
     pub(crate) remote_cache_read_only: Option<bool>,
     pub(crate) run_summary: Option<bool>,
     pub(crate) allow_no_turbo_json: Option<bool>,
+    pub(crate) tui_scrollback_length: Option<u64>,
+    pub(crate) concurrency: Option<String>,
+    pub(crate) no_update_notifier: Option<bool>,
 }
 
 #[derive(Default)]
@@ -323,6 +363,11 @@ impl ConfigurationOptions {
     /// Note: 0 implies no timeout
     pub fn upload_timeout(&self) -> u64 {
         self.upload_timeout.unwrap_or(DEFAULT_UPLOAD_TIMEOUT)
+    }
+
+    pub fn tui_scrollback_length(&self) -> u64 {
+        self.tui_scrollback_length
+            .unwrap_or(DEFAULT_TUI_SCROLLBACK_LENGTH)
     }
 
     pub fn ui(&self) -> UIMode {
@@ -428,6 +473,10 @@ impl ConfigurationOptions {
 
     pub fn allow_no_turbo_json(&self) -> bool {
         self.allow_no_turbo_json.unwrap_or_default()
+    }
+
+    pub fn no_update_notifier(&self) -> bool {
+        self.no_update_notifier.unwrap_or_default()
     }
 }
 

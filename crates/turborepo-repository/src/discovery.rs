@@ -104,6 +104,11 @@ impl LocalPackageDiscoveryBuilder {
     pub fn with_allow_no_package_manager(&mut self, allow_missing_package_manager: bool) {
         self.allow_missing_package_manager = allow_missing_package_manager;
     }
+
+    pub fn with_package_manager(&mut self, package_manager: Option<PackageManager>) -> &mut Self {
+        self.package_manager = package_manager;
+        self
+    }
 }
 
 impl PackageDiscoveryBuilder for LocalPackageDiscoveryBuilder {

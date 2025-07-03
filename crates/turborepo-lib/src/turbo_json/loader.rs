@@ -288,27 +288,18 @@ fn load_from_file(
             let turbo_json = TurboJson::read(repo_root, &turbo_json_path);
             let turbo_jsonc = TurboJson::read(repo_root, &turbo_jsonc_path);
 
-            // If both are present, error as we don't know which to use
-            if turbo_json.is_ok() && turbo_jsonc.is_ok() {
-                return Err(Error::MultipleTurboConfigs {
-                    directory: turbo_json_dir_path.to_string(),
-                });
-            }
-
-            // Attempt to use the turbo.json that was successfully parsed
-            turbo_json.or(turbo_jsonc)
+            select_turbo_json(turbo_json_dir_path, turbo_json, turbo_jsonc)
         }
         LoadTurboJsonPath::File(turbo_json_path) => TurboJson::read(repo_root, turbo_json_path),
     };
 
     // Handle errors or success
     match result {
-        // If the file didn't exist, throw a custom error here instead of propagating
-        Err(Error::Io(_)) => Err(Error::NoTurboJSON),
         // There was an error, and we don't have any chance of recovering
         Err(e) => Err(e),
+        Ok(None) => Err(Error::NoTurboJSON),
         // We're not synthesizing anything and there was no error, we're done
-        Ok(turbo) => Ok(turbo),
+        Ok(Some(turbo)) => Ok(turbo),
     }
 }
 
@@ -322,7 +313,7 @@ fn load_from_root_package_json(
         // Note: this will have to change to support task inference in a monorepo
         // for now, we're going to error on any "root" tasks and turn non-root tasks into root
         // tasks
-        Ok(mut turbo_json) => {
+        Ok(Some(mut turbo_json)) => {
             let mut pipeline = Pipeline::default();
             for (task_name, task_definition) in turbo_json.tasks {
                 if task_name.is_package_task() {
@@ -343,7 +334,7 @@ fn load_from_root_package_json(
             turbo_json
         }
         // turbo.json doesn't exist, but we're going try to synthesize something
-        Err(Error::Io(_)) => TurboJson::default(),
+        Ok(None) => TurboJson::default(),
         // some other happened, we can't recover
         Err(e) => {
             return Err(e);
@@ -417,7 +408,7 @@ fn load_task_access_trace_turbo_json(
     let turbo_from_trace = TurboJson::read(repo_root, &trace_json_path);
 
     // check the zero config case (turbo trace file, but no turbo.json file)
-    if let Ok(turbo_from_trace) = turbo_from_trace {
+    if let Ok(Some(turbo_from_trace)) = turbo_from_trace {
         if !turbo_json_path.exists() {
             debug!("Using turbo.json synthesized from trace file");
             return Ok(turbo_from_trace);
@@ -426,14 +417,50 @@ fn load_task_access_trace_turbo_json(
     load_from_root_package_json(repo_root, turbo_json_path, root_package_json)
 }
 
+// Helper for selecting the correct turbo.json read result
+fn select_turbo_json(
+    turbo_json_dir_path: &AbsoluteSystemPath,
+    turbo_json: Result<Option<TurboJson>, Error>,
+    turbo_jsonc: Result<Option<TurboJson>, Error>,
+) -> Result<Option<TurboJson>, Error> {
+    debug!(
+        "path: {}, turbo_json: {:?}, turbo_jsonc: {:?}",
+        turbo_json_dir_path.as_str(),
+        turbo_json.as_ref().map(|v| v.as_ref().map(|_| ())),
+        turbo_jsonc.as_ref().map(|v| v.as_ref().map(|_| ()))
+    );
+    match (turbo_json, turbo_jsonc) {
+        // If both paths contain valid turbo.json error
+        (Ok(Some(_)), Ok(Some(_))) => Err(Error::MultipleTurboConfigs {
+            directory: turbo_json_dir_path.to_string(),
+        }),
+        // If turbo.json is valid and turbo.jsonc is missing or invalid, use turbo.json
+        (Ok(Some(turbo_json)), Ok(None)) | (Ok(Some(turbo_json)), Err(_)) => Ok(Some(turbo_json)),
+        // If turbo.jsonc is valid and turbo.json is missing or invalid, use turbo.jsonc
+        (Ok(None), Ok(Some(turbo_jsonc))) | (Err(_), Ok(Some(turbo_jsonc))) => {
+            Ok(Some(turbo_jsonc))
+        }
+        // If neither are present, then choose nothing
+        (Ok(None), Ok(None)) => Ok(None),
+        // If only one has an error return the failure
+        (Err(e), Ok(None)) | (Ok(None), Err(e)) => Err(e),
+        // If both fail then just return error for `turbo.json`
+        (Err(e), Err(_)) => Err(e),
+    }
+}
+
 #[cfg(test)]
 mod test {
-    use std::{collections::BTreeMap, fs};
+    use std::{
+        collections::{BTreeMap, HashSet},
+        fs,
+    };
 
     use anyhow::Result;
     use insta::assert_snapshot;
     use tempfile::tempdir;
     use test_case::test_case;
+    use turbopath::RelativeUnixPath;
     use turborepo_unescape::UnescapedString;
 
     use super::*;
@@ -616,7 +643,7 @@ mod test {
 
         assert_eq!(
             expected_root_build,
-            TaskDefinition::try_from(root_build.clone())?
+            TaskDefinition::from_raw(root_build.clone(), RelativeUnixPath::new(".").unwrap())?
         );
 
         Ok(())
@@ -796,6 +823,7 @@ mod test {
         .collect();
 
         let microfrontends_configs = MicrofrontendsConfigs::from_configs(
+            HashSet::from_iter(["web", "docs"].iter().copied()),
             vec![
                 (
                     "web",
@@ -843,7 +871,7 @@ mod test {
                     // Make sure proxy is in there
                     if task_name == "dev" {
                         assert_eq!(
-                            def.siblings.as_ref().unwrap().first().unwrap().as_inner(),
+                            def.with.as_ref().unwrap().first().unwrap().as_inner(),
                             &UnescapedString::from("web#proxy")
                         )
                     }
@@ -862,7 +890,7 @@ mod test {
                         Some(false)
                     );
                     assert_eq!(
-                        def.siblings.as_ref().unwrap().first().unwrap().as_inner(),
+                        def.with.as_ref().unwrap().first().unwrap().as_inner(),
                         &UnescapedString::from("web#proxy")
                     )
                 } else {
@@ -934,5 +962,37 @@ mod test {
         assert!(result.is_ok());
 
         Ok(())
+    }
+
+    #[test]
+    fn test_invalid_workspace_turbo_json() {
+        let root_dir = tempdir().unwrap();
+        let repo_root = AbsoluteSystemPath::from_std_path(root_dir.path()).unwrap();
+        let a_turbo_json = repo_root.join_components(&["packages", "a", "turbo.json"]);
+        a_turbo_json.ensure_dir().unwrap();
+        let packages = vec![(
+            PackageName::from("a"),
+            a_turbo_json.parent().unwrap().to_owned(),
+        )]
+        .into_iter()
+        .collect();
+
+        a_turbo_json
+            .create_with_contents(r#"{"tasks": {"build": {"lol": true}}}"#)
+            .unwrap();
+
+        let loader = TurboJsonLoader {
+            repo_root: repo_root.to_owned(),
+            cache: FixedMap::new(vec![PackageName::Root, PackageName::from("a")].into_iter()),
+            strategy: Strategy::Workspace {
+                packages,
+                micro_frontends_configs: None,
+            },
+        };
+        let result = loader.load(&PackageName::from("a"));
+        assert!(
+            matches!(result.unwrap_err(), Error::TurboJsonParseError(_)),
+            "expected parsing to fail due to unknown key"
+        );
     }
 }

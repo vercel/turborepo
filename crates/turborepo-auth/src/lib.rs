@@ -62,8 +62,12 @@ impl Token {
 
         match path.read_existing_to_string()? {
             Some(content) => {
-                let wrapper = serde_json::from_str::<TokenWrapper>(&content)
-                    .map_err(Error::InvalidTokenFileFormat)?;
+                let wrapper = serde_json::from_str::<TokenWrapper>(&content).map_err(|err| {
+                    Error::InvalidTokenFileFormat {
+                        path: path.to_string(),
+                        source: err,
+                    }
+                })?;
                 if let Some(token) = wrapper.token {
                     Ok(Self::Existing(token))
                 } else {
@@ -305,6 +309,7 @@ fn is_token_active(metadata: &ResponseTokenMetadata, current_time: u128) -> bool
 mod tests {
     use std::backtrace::Backtrace;
 
+    use insta::assert_snapshot;
     use reqwest::{Method, Response};
     use tempfile::tempdir;
     use turbopath::AbsoluteSystemPathBuf;
@@ -402,11 +407,12 @@ mod tests {
         file_path.create_with_contents("not a valid json").unwrap();
 
         let result = Token::from_file(&file_path);
-        assert!(
-            matches!(result, Err(Error::InvalidTokenFileFormat(_))),
-            "Expected Err(Error::InvalidTokenFileFormat), got {:?}",
-            result
-        );
+        let mut err = result.unwrap_err();
+        if let Error::InvalidTokenFileFormat { path, .. } = &mut err {
+            // Overriding temporary path so we can use snapshot for error message
+            *path = "/path/to/bad.json".to_owned();
+        }
+        assert_snapshot!(err, @"'/path/to/bad.json' is an invalid token file: expected ident at line 1 column 2");
     }
 
     #[test]

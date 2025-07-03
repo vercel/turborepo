@@ -1,7 +1,7 @@
 //! Turborepo's telemetry library. Handles sending anonymous telemetry events to
 //! the Vercel API in the background.
 //!
-//! More detail is available at https://turbo.build/repo/docs/telemetry.
+//! More detail is available at https://turborepo.com/docs/telemetry.
 
 #![feature(error_generic_member_access)]
 
