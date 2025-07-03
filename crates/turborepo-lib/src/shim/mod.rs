@@ -135,7 +135,51 @@ fn run_correct_turbo(
         let should_warn_on_global = env::var(TURBO_GLOBAL_WARNING_DISABLED)
             .map_or(true, |disable| !matches!(disable.as_str(), "1" | "true"));
         if should_warn_on_global {
-            warn!("No locally installed `turbo` found. Using version: {version}.");
+            // Check if the project declares a turbo version in package.json
+            let declared_version = repo_state.root_package_json
+                .dependencies
+                .as_ref()
+                .and_then(|deps| deps.get("turbo"))
+                .or_else(|| {
+                    repo_state.root_package_json
+                        .dev_dependencies
+                        .as_ref()
+                        .and_then(|deps| deps.get("turbo"))
+                });
+
+            // Get package manager-specific install command
+            let install_cmd = match package_manager {
+                Ok(PackageManager::Npm) => "npm install",
+                Ok(PackageManager::Yarn) => "yarn add",
+                Ok(PackageManager::Berry) => "yarn add",
+                Ok(PackageManager::Pnpm) | Ok(PackageManager::Pnpm6) | Ok(PackageManager::Pnpm9) => "pnpm add",
+                Ok(PackageManager::Bun) => "bun add",
+                Err(_) => "npm install", // fallback to npm
+            };
+
+            let dev_flag = match package_manager {
+                Ok(PackageManager::Npm) => "--save-dev",
+                Ok(PackageManager::Yarn) | Ok(PackageManager::Berry) => "--dev",
+                Ok(PackageManager::Pnpm) | Ok(PackageManager::Pnpm6) | Ok(PackageManager::Pnpm9) => "--save-dev",
+                Ok(PackageManager::Bun) => "--dev",
+                Err(_) => "--save-dev", // fallback to npm
+            };
+
+            if let Some(declared_version) = declared_version {
+                warn!(
+                    "No locally installed `turbo` found. Using global version: {version}.\n\
+                     Your project specifies `turbo@{declared_version}` in package.json, which may be different.\n\
+                     To avoid version mismatches, install turbo locally:\n  \
+                     {install_cmd} turbo@{declared_version} {dev_flag}"
+                );
+            } else {
+                warn!(
+                    "No locally installed `turbo` found. Using global version: {version}.\n\
+                     Global and local turbo versions may be different, which can cause unexpected behavior.\n\
+                     Consider installing turbo locally:\n  \
+                     {install_cmd} turbo {dev_flag}"
+                );
+            }
         }
         Ok(cli::run(Some(repo_state), subscriber, ui)?)
     }
