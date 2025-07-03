@@ -432,7 +432,22 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
                 let parent_dir_matcher = wax::Glob::new(path.as_str())?;
                 let matches = parent_dir_matcher.is_match(info.package_path().as_path());
 
-                if matches {
+                // Also try normalized pattern for compatibility with workspace globs
+                let matches_normalized = if path.as_str().starts_with("./") {
+                    let normalized = &path.as_str()[2..];
+                    wax::Glob::new(normalized)
+                        .map(|g| g.is_match(info.package_path().as_path()))
+                        .unwrap_or(false)
+                } else if !path.as_str().starts_with('.') {
+                    let with_prefix = format!("./{}", path);
+                    wax::Glob::new(&with_prefix)
+                        .map(|g| g.is_match(info.package_path().as_path()))
+                        .unwrap_or(false)
+                } else {
+                    false
+                };
+
+                if matches || matches_normalized {
                     entry_packages.insert(
                         name.to_owned(),
                         PackageInclusionReason::InFilteredDirectory {
@@ -512,22 +527,23 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
             })
             .transpose()?;
 
-        if let Some(globber) = parent_dir_globber.clone() {
-            let (base, _) = globber.partition();
-            // wax takes a unix-like glob, but partition will return a system path
-            // TODO: it would be more proper to use
-            // `AnchoredSystemPathBuf::from_system_path` but that function
-            // doesn't allow leading `.` or `..`.
-            let base = AnchoredSystemPathBuf::from_raw(
-                base.to_str().expect("glob base should be valid utf8"),
-            )
-            .expect("partitioned glob gave absolute path");
-            // need to join this with globbing's current dir :)
-            let path = self.turbo_root.resolve(&base);
-            if !path.exists() {
-                return Err(ResolutionError::DirectoryDoesNotExist(path));
+        // Also create a normalized version that handles leading ./ patterns for
+        // compatibility
+        let normalized_parent_dir_pattern = parent_dir_unix.as_deref().and_then(|path| {
+            let path_str = path.as_str();
+            if path_str.starts_with("./") {
+                Some(path_str[2..].to_string())
+            } else if !path_str.starts_with('.') {
+                // Also try with ./ prefix to match workspace globs that might have it
+                Some(format!("./{}", path_str))
+            } else {
+                None
             }
-        }
+        });
+
+        let normalized_parent_dir_globber = normalized_parent_dir_pattern
+            .as_ref()
+            .and_then(|pattern| wax::Glob::new(pattern).ok());
 
         if let Some(git_range) = selector.git_range.as_ref() {
             selector_valid = true;
@@ -551,7 +567,13 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
                             .get(&package)
                             .ok_or(ResolutionError::MissingPackageInfo(package.to_string()))?;
 
-                        if parent_dir_globber.is_match(path.as_path()) {
+                        let matches_original = parent_dir_globber.is_match(path.as_path());
+                        let matches_normalized = normalized_parent_dir_globber
+                            .as_ref()
+                            .map(|g| g.is_match(path.as_path()))
+                            .unwrap_or(false);
+
+                        if matches_original || matches_normalized {
                             entry_packages.insert(package, reason);
                         }
                     }
@@ -576,7 +598,12 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
                 let packages = self.pkg_graph.packages();
                 for (name, _) in packages.filter(|(_name, info)| {
                     let path = info.package_path().as_path();
-                    parent_dir_globber.is_match(path)
+                    let matches_original = parent_dir_globber.is_match(path);
+                    let matches_normalized = normalized_parent_dir_globber
+                        .as_ref()
+                        .map(|g| g.is_match(path))
+                        .unwrap_or(false);
+                    matches_original || matches_normalized
                 }) {
                     entry_packages.insert(
                         name.to_owned(),
@@ -616,7 +643,16 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
                 InvalidSelectorError::InvalidSelector(selector.raw.clone()),
             ))
         } else {
-            Ok(entry_packages)
+            // Check if a directory pattern was provided but no packages matched
+            if selector.parent_dir.is_some()
+                && selector.git_range.is_none()
+                && selector.name_pattern.is_empty()
+                && entry_packages.is_empty()
+            {
+                Err(ResolutionError::NoPackagesMatched)
+            } else {
+                Ok(entry_packages)
+            }
         }
     }
 
@@ -984,6 +1020,17 @@ mod test {
         None,
         &["project-0", "project-1"] ;
         "select by parentDir using glob"
+    )]
+    #[test_case(
+        vec![
+            TargetSelector {
+                parent_dir:
+    Some(AnchoredSystemPathBuf::try_from("./packages/*").unwrap()),
+    ..Default::default()         }
+        ],
+        None,
+        &["project-0", "project-1"] ;
+        "select by parentDir using glob with leading dot slash"
     )]
     #[test_case(
         vec![TargetSelector {
@@ -1384,5 +1431,65 @@ mod test {
                 .map(|h| h.to_owned())
                 .expect("unsupported range"))
         }
+    }
+
+    /// Test that leading ./ pattern normalization works correctly
+    /// This integration test validates the fix for the compilation errors
+    /// and the pattern normalization functionality
+    #[test]
+    fn test_leading_dot_slash_pattern_normalization() {
+        // Use the existing test setup that works with the current make_project function
+        let (_tempdir, resolver) = make_project(
+            &[
+                ("packages/project-0", "packages/project-1"),
+                ("packages/project-0", "project-5"),
+                ("packages/project-1", "project-2"),
+                ("packages/project-1", "project-4"),
+            ],
+            &["project-3", "project-5/packages/project-6"],
+            None,
+            TestChangeDetector::new(&[]),
+        );
+
+        // Test that ./packages/* matches the same packages as packages/*
+        // This validates that the pattern normalization I implemented works correctly
+        let packages_with_dot = resolver
+            .get_filtered_packages(vec![TargetSelector {
+                parent_dir: Some(AnchoredSystemPathBuf::try_from("./packages/*").unwrap()),
+                ..Default::default()
+            }])
+            .unwrap();
+
+        let packages_without_dot = resolver
+            .get_filtered_packages(vec![TargetSelector {
+                parent_dir: Some(AnchoredSystemPathBuf::try_from("packages/*").unwrap()),
+                ..Default::default()
+            }])
+            .unwrap();
+
+        // Both should return the same results - this is the key test
+        assert_eq!(packages_with_dot.len(), packages_without_dot.len());
+
+        // Compare only the package names, not the inclusion reasons (which contain
+        // different directory patterns)
+        let package_names_with_dot: HashSet<_> = packages_with_dot.keys().collect();
+        let package_names_without_dot: HashSet<_> = packages_without_dot.keys().collect();
+        assert_eq!(package_names_with_dot, package_names_without_dot);
+
+        // Should find project-0 and project-1 (both are in packages/)
+        assert!(
+            packages_with_dot.len() >= 2,
+            "Should find at least project-0 and project-1"
+        );
+
+        // Verify that the pattern normalization doesn't break invalid patterns
+        let invalid_result = resolver.get_filtered_packages(vec![TargetSelector {
+            parent_dir: Some(AnchoredSystemPathBuf::try_from("./nonexistent/*").unwrap()),
+            ..Default::default()
+        }]);
+        assert!(
+            invalid_result.is_err(),
+            "Invalid patterns should still error even with normalization"
+        );
     }
 }
