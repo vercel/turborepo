@@ -635,21 +635,6 @@ dependencies = [
 
 [[package]]
 name = "axum-server"
-version = "0.4.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bace45b270e36e3c27a190c65883de6dfc9f1d18c829907c127464815dc67b24"
-dependencies = [
- "bytes",
- "futures-util",
- "http 0.2.11",
- "http-body 0.4.5",
- "hyper 0.14.28",
- "tokio",
- "tower-service",
-]
-
-[[package]]
-name = "axum-server"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "56bac90848f6a9393ac03c63c640925c4b7c8ca21654de40d53f55964667c7d8"
@@ -1353,26 +1338,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "const-random"
-version = "0.1.17"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5aaf16c9c2c612020bcfd042e170f6e32de9b9d75adb5277cdbbd2e2c8c8299a"
-dependencies = [
- "const-random-macro",
-]
-
-[[package]]
-name = "const-random-macro"
-version = "0.1.16"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f9d839f2a20b0aee515dc581a6172f2321f96cab76c1a38a4c584a194955390e"
-dependencies = [
- "getrandom 0.2.10",
- "once_cell",
- "tiny-keccak",
-]
-
-[[package]]
 name = "const_format"
 version = "0.2.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1545,12 +1510,6 @@ checksum = "acdd7c62a3665c7f6830a51635d9ac9b23ed385797f70a83bb8bafe9c572ab2b"
 dependencies = [
  "winapi",
 ]
-
-[[package]]
-name = "crunchy"
-version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7a81dae078cea95a014a339291cec439d2f232ebe854a9d672b796c6afafa9b7"
 
 [[package]]
 name = "crypto-common"
@@ -1821,15 +1780,6 @@ dependencies = [
  "libc",
  "redox_users",
  "winapi",
-]
-
-[[package]]
-name = "dlv-list"
-version = "0.5.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "442039f5147480ba31067cb00ada1adae6892028e40e45fc5de7b7df6dcc1b5f"
-dependencies = [
- "const-random",
 ]
 
 [[package]]
@@ -3736,16 +3686,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
 
 [[package]]
-name = "ordered-multimap"
-version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a4d6a8c22fc714f0c2373e6091bf6f5e9b37b1bc0b1184874b7e0a4e303d318f"
-dependencies = [
- "dlv-list",
- "hashbrown 0.14.5",
-]
-
-[[package]]
 name = "os_info"
 version = "3.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4658,16 +4598,6 @@ dependencies = [
  "spin",
  "untrusted",
  "windows-sys 0.48.0",
-]
-
-[[package]]
-name = "rust-ini"
-version = "0.20.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3e0698206bcb8882bf2a9ecb4c1e7785db57ff052297085a6efd4fe42302068a"
-dependencies = [
- "cfg-if",
- "ordered-multimap",
 ]
 
 [[package]]
@@ -5857,15 +5787,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tiny-keccak"
-version = "2.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2c9d3793400a45f954c52e73d068316d76b6f4e36977e3fcebb13a2721e80237"
-dependencies = [
- "crunchy",
-]
-
-[[package]]
 name = "tinyvec"
 version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6407,7 +6328,6 @@ version = "0.1.0"
 dependencies = [
  "camino",
  "clap",
- "futures",
  "globwalk",
  "miette",
  "oxc_resolver 4.2.0",
@@ -6428,7 +6348,6 @@ version = "0.1.0"
 dependencies = [
  "atty",
  "console",
- "reqwest",
  "semver 1.0.23",
  "serde",
  "thiserror 1.0.63",
@@ -6442,9 +6361,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "biome_deserialize 0.6.0",
- "biome_deserialize_macros 0.6.0",
- "biome_diagnostics",
- "biome_json_parser",
  "camino",
  "dunce",
  "fs-err",
@@ -6478,7 +6394,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bytes",
- "chrono",
  "http 1.1.0",
  "httpmock",
  "insta",
@@ -6493,9 +6408,7 @@ dependencies = [
  "thiserror 1.0.63",
  "tokio",
  "tokio-stream",
- "tokio-util",
  "tracing",
- "turbopath",
  "turborepo-ci",
  "turborepo-vercel-api",
  "turborepo-vercel-api-mock",
@@ -6509,7 +6422,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "axum 0.7.5",
- "axum-server 0.7.1",
+ "axum-server",
  "chrono",
  "hostname",
  "http 1.1.0",
@@ -6610,7 +6523,6 @@ version = "0.1.0"
 dependencies = [
  "biome_deserialize 0.6.0",
  "biome_diagnostics",
- "biome_json_parser",
  "miette",
  "serde",
  "serde_json",
@@ -6626,9 +6538,7 @@ dependencies = [
  "fsevent-sys",
  "futures",
  "git2",
- "itertools 0.10.5",
  "libc",
- "nibble_vec",
  "notify",
  "num_cpus",
  "radix_trie",
@@ -6679,7 +6589,6 @@ dependencies = [
  "futures",
  "insta",
  "itertools 0.10.5",
- "log",
  "petgraph",
  "thiserror 1.0.63",
  "tokio",
@@ -6721,10 +6630,8 @@ dependencies = [
  "dunce",
  "either",
  "futures",
- "futures-core",
  "git2",
  "globwalk",
- "globwatch",
  "go-parse-duration",
  "hex",
  "human-panic",
@@ -6871,11 +6778,9 @@ dependencies = [
  "biome_deserialize_macros 0.6.0",
  "biome_diagnostics",
  "biome_json_parser",
- "biome_json_syntax",
  "insta",
  "pretty_assertions",
  "serde",
- "serde_json",
  "tempfile",
  "test-case",
  "thiserror 1.0.63",
@@ -6929,7 +6834,6 @@ dependencies = [
  "biome_deserialize_macros 0.6.0",
  "biome_diagnostics",
  "biome_json_parser",
- "biome_json_syntax",
  "either",
  "globwalk",
  "itertools 0.10.5",
@@ -6939,7 +6843,6 @@ dependencies = [
  "petgraph",
  "pretty_assertions",
  "regex",
- "rust-ini",
  "serde",
  "serde_json",
  "serde_yaml",
@@ -7026,11 +6929,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-graphql",
- "async-graphql-axum",
- "async-stream",
  "atty",
  "axum 0.7.5",
- "axum-server 0.7.1",
  "base64 0.22.1",
  "chrono",
  "clipboard-win",
@@ -7040,7 +6940,6 @@ dependencies = [
  "futures",
  "indicatif",
  "indoc",
- "itertools 0.10.5",
  "lazy_static",
  "nix 0.26.2",
  "ratatui",
@@ -7064,7 +6963,6 @@ name = "turborepo-unescape"
 version = "0.1.0"
 dependencies = [
  "biome_deserialize 0.6.0",
- "biome_diagnostics",
  "serde",
  "serde_json",
 ]
@@ -7087,7 +6985,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum 0.7.5",
- "axum-server 0.4.7",
  "futures-util",
  "port_scanner",
  "tempfile",
