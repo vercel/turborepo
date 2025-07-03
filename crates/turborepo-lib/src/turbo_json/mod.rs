@@ -70,37 +70,52 @@ pub struct TurboJson {
 #[serde(rename_all = "camelCase")]
 pub(crate) struct RawRemoteCacheOptions {
     #[serde(skip_serializing_if = "Option::is_none")]
-    api_url: Option<String>,
+    api_url: Option<Spanned<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    login_url: Option<String>,
+    login_url: Option<Spanned<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    team_slug: Option<String>,
+    team_slug: Option<Spanned<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    team_id: Option<String>,
+    team_id: Option<Spanned<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    signature: Option<bool>,
+    signature: Option<Spanned<bool>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    preflight: Option<bool>,
+    preflight: Option<Spanned<bool>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    timeout: Option<u64>,
+    timeout: Option<Spanned<u64>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    enabled: Option<bool>,
+    enabled: Option<Spanned<bool>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    upload_timeout: Option<u64>,
+    upload_timeout: Option<Spanned<u64>>,
 }
 
 impl From<&RawRemoteCacheOptions> for ConfigurationOptions {
     fn from(remote_cache_opts: &RawRemoteCacheOptions) -> Self {
         Self {
-            api_url: remote_cache_opts.api_url.clone(),
-            login_url: remote_cache_opts.login_url.clone(),
-            team_slug: remote_cache_opts.team_slug.clone(),
-            team_id: remote_cache_opts.team_id.clone(),
-            signature: remote_cache_opts.signature,
-            preflight: remote_cache_opts.preflight,
-            timeout: remote_cache_opts.timeout,
-            upload_timeout: remote_cache_opts.upload_timeout,
-            enabled: remote_cache_opts.enabled,
+            api_url: remote_cache_opts
+                .api_url
+                .as_ref()
+                .map(|s| s.as_inner().clone()),
+            login_url: remote_cache_opts
+                .login_url
+                .as_ref()
+                .map(|s| s.as_inner().clone()),
+            team_slug: remote_cache_opts
+                .team_slug
+                .as_ref()
+                .map(|s| s.as_inner().clone()),
+            team_id: remote_cache_opts
+                .team_id
+                .as_ref()
+                .map(|s| s.as_inner().clone()),
+            signature: remote_cache_opts.signature.as_ref().map(|s| *s.as_inner()),
+            preflight: remote_cache_opts.preflight.as_ref().map(|s| *s.as_inner()),
+            timeout: remote_cache_opts.timeout.as_ref().map(|s| *s.as_inner()),
+            upload_timeout: remote_cache_opts
+                .upload_timeout
+                .as_ref()
+                .map(|s| *s.as_inner()),
+            enabled: remote_cache_opts.enabled.as_ref().map(|s| *s.as_inner()),
             ..Self::default()
         }
     }
@@ -139,21 +154,21 @@ pub struct RawTurboJson {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) remote_cache: Option<RawRemoteCacheOptions>,
     #[serde(skip_serializing_if = "Option::is_none", rename = "ui")]
-    pub ui: Option<UIMode>,
+    pub ui: Option<Spanned<UIMode>>,
     #[serde(
         skip_serializing_if = "Option::is_none",
         rename = "dangerouslyDisablePackageManagerCheck"
     )]
-    pub allow_no_package_manager: Option<bool>,
+    pub allow_no_package_manager: Option<Spanned<bool>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub daemon: Option<Spanned<bool>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub env_mode: Option<EnvMode>,
+    pub env_mode: Option<Spanned<EnvMode>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cache_dir: Option<Spanned<UnescapedString>>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub no_update_notifier: Option<bool>,
+    pub no_update_notifier: Option<Spanned<bool>>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tags: Option<Spanned<Vec<Spanned<String>>>>,
@@ -162,7 +177,7 @@ pub struct RawTurboJson {
     pub boundaries: Option<Spanned<BoundariesConfig>>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub concurrency: Option<String>,
+    pub concurrency: Option<Spanned<String>>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub future_flags: Option<Spanned<FutureFlags>>,
@@ -270,7 +285,7 @@ pub struct RawTaskDefinition {
     // TODO: Remove this once we have the ability to load task definitions directly
     // instead of deriving them from a TurboJson
     #[serde(skip)]
-    env_mode: Option<EnvMode>,
+    env_mode: Option<Spanned<EnvMode>>,
     // This can currently only be set internally and isn't a part of turbo.json
     #[serde(skip_serializing_if = "Option::is_none")]
     with: Option<Vec<Spanned<UnescapedString>>>,
@@ -478,7 +493,7 @@ impl TaskDefinition {
             persistent,
             interruptible: *interruptible,
             interactive,
-            env_mode: raw_task.env_mode,
+            env_mode: raw_task.env_mode.map(|mode| *mode.as_inner()),
             with,
         })
     }
@@ -701,7 +716,7 @@ impl TurboJson {
                     )))])
                 }),
                 persistent: Some(Spanned::new(true)),
-                env_mode: Some(EnvMode::Loose),
+                env_mode: Some(Spanned::new(EnvMode::Loose)),
                 ..Default::default()
             }),
         );
@@ -1243,7 +1258,7 @@ mod tests {
     #[test_case(r#"{}"#, None ; "missing")]
     fn test_ui(json: &str, expected: Option<UIMode>) {
         let json = RawTurboJson::parse(json, "").unwrap();
-        assert_eq!(json.ui, expected);
+        assert_eq!(json.ui.as_ref().map(|ui| *ui.as_inner()), expected);
     }
 
     #[test_case(r#"{ "experimentalSpaces": { "id": "hello-world" } }"#, Some(SpacesJson { id: Some("hello-world".to_string().into()) }))]
@@ -1275,7 +1290,12 @@ mod tests {
     #[test_case(r#"{}"#, None ; "missing")]
     fn test_allow_no_package_manager_serde(json_str: &str, expected: Option<bool>) {
         let json = RawTurboJson::parse(json_str, "").unwrap();
-        assert_eq!(json.allow_no_package_manager, expected);
+        assert_eq!(
+            json.allow_no_package_manager
+                .as_ref()
+                .map(|allow| *allow.as_inner()),
+            expected
+        );
         let serialized = serde_json::to_string(&json).unwrap();
         assert_eq!(serialized, json_str);
     }

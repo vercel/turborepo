@@ -18,7 +18,7 @@ use turborepo_unescape::UnescapedString;
 use crate::{
     boundaries::{BoundariesConfig, Permissions, Rule},
     run::task_id::TaskName,
-    turbo_json::{Pipeline, RawTaskDefinition, RawTurboJson, Spanned},
+    turbo_json::{Pipeline, RawRemoteCacheOptions, RawTaskDefinition, RawTurboJson, Spanned},
 };
 
 #[derive(Debug, Error, Diagnostic)]
@@ -116,7 +116,15 @@ impl WithMetadata for RawTurboJson {
 
         self.tasks.add_text(text.clone());
         self.cache_dir.add_text(text.clone());
-        self.pipeline.add_text(text);
+        self.pipeline.add_text(text.clone());
+        self.remote_cache.add_text(text.clone());
+        self.ui.add_text(text.clone());
+        self.allow_no_package_manager.add_text(text.clone());
+        self.daemon.add_text(text.clone());
+        self.env_mode.add_text(text.clone());
+        self.no_update_notifier.add_text(text.clone());
+        self.concurrency.add_text(text.clone());
+        self.future_flags.add_text(text);
     }
 
     fn add_path(&mut self, path: Arc<str>) {
@@ -135,7 +143,15 @@ impl WithMetadata for RawTurboJson {
         }
         self.tasks.add_path(path.clone());
         self.cache_dir.add_path(path.clone());
-        self.pipeline.add_path(path);
+        self.pipeline.add_path(path.clone());
+        self.remote_cache.add_path(path.clone());
+        self.ui.add_path(path.clone());
+        self.allow_no_package_manager.add_path(path.clone());
+        self.daemon.add_path(path.clone());
+        self.env_mode.add_path(path.clone());
+        self.no_update_notifier.add_path(path.clone());
+        self.concurrency.add_path(path.clone());
+        self.future_flags.add_path(path);
     }
 }
 
@@ -272,6 +288,32 @@ impl WithMetadata for RawTaskDefinition {
         self.output_logs.add_path(path.clone());
         self.interactive.add_path(path.clone());
         self.with.add_path(path);
+    }
+}
+
+impl WithMetadata for RawRemoteCacheOptions {
+    fn add_text(&mut self, text: Arc<str>) {
+        self.api_url.add_text(text.clone());
+        self.login_url.add_text(text.clone());
+        self.team_slug.add_text(text.clone());
+        self.team_id.add_text(text.clone());
+        self.signature.add_text(text.clone());
+        self.preflight.add_text(text.clone());
+        self.timeout.add_text(text.clone());
+        self.enabled.add_text(text.clone());
+        self.upload_timeout.add_text(text);
+    }
+
+    fn add_path(&mut self, path: Arc<str>) {
+        self.api_url.add_path(path.clone());
+        self.login_url.add_path(path.clone());
+        self.team_slug.add_path(path.clone());
+        self.team_id.add_path(path.clone());
+        self.signature.add_path(path.clone());
+        self.preflight.add_path(path.clone());
+        self.timeout.add_path(path.clone());
+        self.enabled.add_path(path.clone());
+        self.upload_timeout.add_path(path);
     }
 }
 

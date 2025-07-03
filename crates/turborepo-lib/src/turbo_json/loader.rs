@@ -372,7 +372,7 @@ fn root_turbo_json_from_scripts(scripts: &[String]) -> Result<TurboJson, Error> 
             task_name,
             Spanned::new(RawTaskDefinition {
                 cache: Some(Spanned::new(false)),
-                env_mode: Some(EnvMode::Loose),
+                env_mode: Some(Spanned::new(EnvMode::Loose)),
                 ..Default::default()
             }),
         );
@@ -391,7 +391,7 @@ fn workspace_turbo_json_from_scripts(scripts: &[String]) -> Result<TurboJson, Er
             task_name,
             Spanned::new(RawTaskDefinition {
                 cache: Some(Spanned::new(false)),
-                env_mode: Some(EnvMode::Loose),
+                env_mode: Some(Spanned::new(EnvMode::Loose)),
                 ..Default::default()
             }),
         );
