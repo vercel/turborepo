@@ -322,9 +322,7 @@ impl RawTaskDefinition {
         set_field!(self, other, env);
         set_field!(self, other, pass_through_env);
         set_field!(self, other, interactive);
-        if let Some(env_mode) = other.env_mode {
-            self.env_mode = env_mode.into();
-        }
+        set_field!(self, other, env_mode)
         set_field!(self, other, with);
     }
 }
