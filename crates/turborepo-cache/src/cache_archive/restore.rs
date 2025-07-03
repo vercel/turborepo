@@ -936,7 +936,7 @@ mod tests {
     }
 
     #[test]
-    fn test_gh_8476() {
+    fn test_restore_with_existing_symlink_does_not_overwrite_target() {
         let input_dir = tempdir().unwrap();
         let input_files = &[
             TarFile::Directory {
