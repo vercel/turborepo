@@ -134,6 +134,20 @@ fn run_correct_turbo(
         debug!("Running command as global turbo");
         let should_warn_on_global = env::var(TURBO_GLOBAL_WARNING_DISABLED)
             .map_or(true, |disable| !matches!(disable.as_str(), "1" | "true"));
+
+        let declared_version = repo_state
+            .root_package_json
+            .dependencies
+            .as_ref()
+            .and_then(|deps| deps.get("turbo"))
+            .or_else(|| {
+                repo_state
+                    .root_package_json
+                    .dev_dependencies
+                    .as_ref()
+                    .and_then(|deps| deps.get("turbo"))
+            });
+
         if should_warn_on_global {
             if let Some(declared_version) = declared_version {
                 warn!(
