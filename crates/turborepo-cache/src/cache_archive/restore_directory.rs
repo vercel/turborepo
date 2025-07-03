@@ -97,12 +97,31 @@ impl CachedDirTree {
         // at this location that would cause cache restoration to the wrong location.
         if let Ok(metadata) = resolved_name.symlink_metadata() {
             if metadata.is_symlink() {
+                debug!(
+                    "Found symlink at directory location {:?}, checking if it should be removed",
+                    resolved_name
+                );
+
                 // Check if the symlink points to a sibling directory (like dist -> src)
                 if let Ok(link_target) = resolved_name.read_link() {
+                    debug!(
+                        "Symlink target: {:?}, is_relative: {}, components: {:?}",
+                        link_target,
+                        link_target.is_relative(),
+                        link_target.components().collect::<Vec<_>>()
+                    );
+
                     let is_relative = link_target.is_relative();
                     let is_sibling = is_relative
                         && link_target.components().count() == 1
                         && !link_target.as_str().starts_with('.');
+
+                    debug!(
+                        "Symlink analysis: is_relative={}, is_sibling={}, target='{}'",
+                        is_relative,
+                        is_sibling,
+                        link_target.as_str()
+                    );
 
                     if is_sibling {
                         debug!(
@@ -110,10 +129,32 @@ impl CachedDirTree {
                              correct cache restoration",
                             resolved_name
                         );
-                        if fs::remove_file(resolved_name.as_path()).is_ok() {
-                            debug!("Successfully removed symlink at {:?}", resolved_name);
+
+                        // On Windows, directory symlinks need to be removed with remove_dir()
+                        // On other platforms, use remove_file() for symlinks
+                        #[cfg(windows)]
+                        let removal_result = fs::remove_dir(resolved_name.as_path());
+                        #[cfg(not(windows))]
+                        let removal_result = fs::remove_file(resolved_name.as_path());
+
+                        match removal_result {
+                            Ok(()) => {
+                                debug!("Successfully removed symlink at {:?}", resolved_name);
+                            }
+                            Err(e) => {
+                                debug!("Failed to remove symlink at {:?}: {}", resolved_name, e);
+                                // Continue anyway - the directory creation
+                                // might still work
+                            }
                         }
+                    } else {
+                        debug!(
+                            "Symlink at {:?} is not a sibling symlink, leaving it intact",
+                            resolved_name
+                        );
                     }
+                } else {
+                    debug!("Could not read symlink target at {:?}", resolved_name);
                 }
             }
         }
