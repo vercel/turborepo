@@ -635,21 +635,6 @@ dependencies = [
 
 [[package]]
 name = "axum-server"
-version = "0.4.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bace45b270e36e3c27a190c65883de6dfc9f1d18c829907c127464815dc67b24"
-dependencies = [
- "bytes",
- "futures-util",
- "http 0.2.11",
- "http-body 0.4.5",
- "hyper 0.14.28",
- "tokio",
- "tower-service",
-]
-
-[[package]]
-name = "axum-server"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "56bac90848f6a9393ac03c63c640925c4b7c8ca21654de40d53f55964667c7d8"
@@ -1354,9 +1339,9 @@ dependencies = [
 
 [[package]]
 name = "const-random"
-version = "0.1.17"
+version = "0.1.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5aaf16c9c2c612020bcfd042e170f6e32de9b9d75adb5277cdbbd2e2c8c8299a"
+checksum = "87e00182fe74b066627d63b85fd550ac2998d4b0bd86bfed477a0ae4c7c71359"
 dependencies = [
  "const-random-macro",
 ]
@@ -1548,9 +1533,9 @@ dependencies = [
 
 [[package]]
 name = "crunchy"
-version = "0.2.2"
+version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7a81dae078cea95a014a339291cec439d2f232ebe854a9d672b796c6afafa9b7"
+checksum = "460fbee9c2c2f33933d720630a6a0bac33ba7053db5344fac858d4b8952d77d5"
 
 [[package]]
 name = "crypto-common"
@@ -3737,9 +3722,9 @@ checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
 
 [[package]]
 name = "ordered-multimap"
-version = "0.7.1"
+version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a4d6a8c22fc714f0c2373e6091bf6f5e9b37b1bc0b1184874b7e0a4e303d318f"
+checksum = "49203cdcae0030493bad186b28da2fa25645fa276a51b6fec8010d281e02ef79"
 dependencies = [
  "dlv-list",
  "hashbrown 0.14.5",
@@ -6407,7 +6392,6 @@ version = "0.1.0"
 dependencies = [
  "camino",
  "clap",
- "futures",
  "globwalk",
  "miette",
  "oxc_resolver 4.2.0",
@@ -6478,7 +6462,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bytes",
- "chrono",
  "http 1.1.0",
  "httpmock",
  "insta",
@@ -6493,9 +6476,7 @@ dependencies = [
  "thiserror 1.0.63",
  "tokio",
  "tokio-stream",
- "tokio-util",
  "tracing",
- "turbopath",
  "turborepo-ci",
  "turborepo-vercel-api",
  "turborepo-vercel-api-mock",
@@ -6509,7 +6490,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "axum 0.7.5",
- "axum-server 0.7.1",
+ "axum-server",
  "chrono",
  "hostname",
  "http 1.1.0",
@@ -6610,7 +6591,6 @@ version = "0.1.0"
 dependencies = [
  "biome_deserialize 0.6.0",
  "biome_diagnostics",
- "biome_json_parser",
  "miette",
  "serde",
  "serde_json",
@@ -6626,9 +6606,7 @@ dependencies = [
  "fsevent-sys",
  "futures",
  "git2",
- "itertools 0.10.5",
  "libc",
- "nibble_vec",
  "notify",
  "num_cpus",
  "radix_trie",
@@ -6679,7 +6657,6 @@ dependencies = [
  "futures",
  "insta",
  "itertools 0.10.5",
- "log",
  "petgraph",
  "thiserror 1.0.63",
  "tokio",
@@ -6724,7 +6701,6 @@ dependencies = [
  "futures-core",
  "git2",
  "globwalk",
- "globwatch",
  "go-parse-duration",
  "hex",
  "human-panic",
@@ -6871,11 +6847,9 @@ dependencies = [
  "biome_deserialize_macros 0.6.0",
  "biome_diagnostics",
  "biome_json_parser",
- "biome_json_syntax",
  "insta",
  "pretty_assertions",
  "serde",
- "serde_json",
  "tempfile",
  "test-case",
  "thiserror 1.0.63",
@@ -6929,7 +6903,6 @@ dependencies = [
  "biome_deserialize_macros 0.6.0",
  "biome_diagnostics",
  "biome_json_parser",
- "biome_json_syntax",
  "either",
  "globwalk",
  "itertools 0.10.5",
@@ -7026,11 +6999,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-graphql",
- "async-graphql-axum",
- "async-stream",
  "atty",
  "axum 0.7.5",
- "axum-server 0.7.1",
  "base64 0.22.1",
  "chrono",
  "clipboard-win",
@@ -7040,7 +7010,6 @@ dependencies = [
  "futures",
  "indicatif",
  "indoc",
- "itertools 0.10.5",
  "lazy_static",
  "nix 0.26.2",
  "ratatui",
@@ -7064,7 +7033,6 @@ name = "turborepo-unescape"
 version = "0.1.0"
 dependencies = [
  "biome_deserialize 0.6.0",
- "biome_diagnostics",
  "serde",
  "serde_json",
 ]
@@ -7087,7 +7055,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum 0.7.5",
- "axum-server 0.4.7",
  "futures-util",
  "port_scanner",
  "tempfile",
