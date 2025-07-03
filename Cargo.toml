@@ -14,6 +14,9 @@ members = [
 turborepo-libraries = ["path:crates/turborepo-*"]
 turborepo = ["path:crates/turborepo*"]
 
+[workspace.lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(debug_assert)'] }
+
 [workspace.lints.clippy]
 too_many_arguments = "allow"
 
@@ -41,7 +44,7 @@ strip = true
 # ref: https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#inheriting-a-dependency-from-a-workspace
 [workspace.dependencies]
 async-recursion = "1.0.2"
-miette = { version = "5.10.0", features = ["fancy"] }
+miette = { version = "7.5.0", features = ["fancy"] }
 markdown = "1.0.0-alpha.18"
 
 turbo-trace = { path = "crates/turbo-trace" }
@@ -54,14 +57,18 @@ turborepo-cache = { path = "crates/turborepo-cache" }
 turborepo-ci = { path = "crates/turborepo-ci" }
 turborepo-env = { path = "crates/turborepo-env" }
 turborepo-errors = { path = "crates/turborepo-errors" }
+turborepo-fixed-map = { path = "crates/turborepo-fixed-map" }
+turborepo-frameworks = { path = "crates/turborepo-frameworks" }
 turborepo-fs = { path = "crates/turborepo-fs" }
 turborepo-lib = { path = "crates/turborepo-lib", default-features = false }
 turborepo-lockfiles = { path = "crates/turborepo-lockfiles" }
 turborepo-microfrontends = { path = "crates/turborepo-microfrontends" }
+turborepo-process = { path = "crates/turborepo-process" }
 turborepo-repository = { path = "crates/turborepo-repository" }
 turborepo-ui = { path = "crates/turborepo-ui" }
 turborepo-unescape = { path = "crates/turborepo-unescape" }
 turborepo-scm = { path = "crates/turborepo-scm" }
+turborepo-signals = { path = "crates/turborepo-signals" }
 wax = { path = "crates/turborepo-wax" }
 turborepo-vercel-api = { path = "crates/turborepo-vercel-api" }
 turborepo-vercel-api-mock = { path = "crates/turborepo-vercel-api-mock" }
@@ -75,8 +82,8 @@ async-compression = { version = "0.3.13", default-features = false, features = [
   "gzip",
   "tokio",
 ] }
-async-graphql = "7.0.7"
-async-graphql-axum = "7.0.7"
+async-graphql = "7.0.16"
+async-graphql-axum = "7.0.16"
 async-trait = "0.1.64"
 atty = "0.2.14"
 axum = "0.7.5"
@@ -85,7 +92,9 @@ biome_console = { version = "0.5.7" }
 biome_deserialize = { version = "0.6.0", features = ["serde"] }
 biome_deserialize_macros = { version = "0.6.0" }
 biome_diagnostics = { version = "0.5.7" }
+biome_formatter = { version = "0.5.7" }
 biome_json_parser = { version = "0.5.7" }
+biome_json_formatter = { version = "0.5.7" }
 biome_json_syntax = { version = "0.5.7" }
 bytes = "1.1.0"
 camino = { version = "1.1.4", features = ["serde1"] }
@@ -101,8 +110,9 @@ derive_setters = "0.1.6"
 dialoguer = "0.11.0"
 dunce = "1.0.3"
 either = "1.9.0"
-futures = "0.3.26"
+futures = "0.3.30"
 futures-retry = "0.6.0"
+git2 = { version = "0.20.0", default-features = false }
 hex = "0.4.3"
 httpmock = { version = "0.6.8", default-features = false }
 indexmap = "1.9.2"
@@ -117,10 +127,11 @@ notify = "6.1.1"
 num_cpus = "1.15.0"
 once_cell = "1.17.1"
 owo-colors = "3.5.0"
+oxc_resolver = "4.2.0"
 parking_lot = "0.12.1"
 path-clean = "1.0.1"
 pathdiff = "0.2.1"
-petgraph = "0.6.3"
+petgraph = "0.6.5"
 pin-project-lite = "0.2.9"
 port_scanner = "0.1.5"
 predicates = "2.1.5"
@@ -165,3 +176,8 @@ urlencoding = "2.1.2"
 webbrowser = "0.8.7"
 which = "4.4.0"
 unicode-segmentation = "1.10.1"
+
+
+# Needed until a fix for https://github.com/async-graphql/async-graphql/issues/1703 is published
+[patch.crates-io]
+async-graphql = { git = "https://github.com/yasamoka/async-graphql.git", rev = "15fed95142019722e7da2c214ff9d8e2e755c9e5" }

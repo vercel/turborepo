@@ -1,7 +1,7 @@
-import { bold, green, red } from "picocolors";
+import picocolors from "picocolors";
 import { logger } from "@turbo/utils";
 import { type Command, Argument } from "commander";
-import { type TelemetryClient } from "./client";
+import type { TelemetryClient } from "./client";
 
 const DEFAULT_CHOICE = "status" as const;
 const CHOICES = ["enable", "disable", DEFAULT_CHOICE] as const;
@@ -14,7 +14,11 @@ interface TelemetryCLIOptions {
 function status(options: TelemetryCLIOptions) {
   const isEnabled = options.telemetry?.config.isEnabled();
   logger.log(
-    `Status: ${isEnabled ? bold(green("Enabled")) : bold(red("Disabled"))}`
+    `Status: ${
+      isEnabled
+        ? picocolors.bold(picocolors.green("Enabled"))
+        : picocolors.bold(picocolors.red("Disabled"))
+    }`
   );
   logger.log();
   if (isEnabled) {
@@ -26,7 +30,7 @@ function status(options: TelemetryCLIOptions) {
       "You have opted-out of Turborepo anonymous telemetry. No data will be collected from your machine."
     );
   }
-  logger.log("Learn more: https://turbo.build/repo/docs/telemetry");
+  logger.log("Learn more: https://turborepo.com/docs/telemetry");
 }
 
 function telemetry(action: TelemetryCLIAction, options: TelemetryCLIOptions) {

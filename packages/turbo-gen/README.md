@@ -1,6 +1,6 @@
-# `@turbo/gen`
+https://turborepo.com/docs/guides/generating-code# `@turbo/gen`
 
-Types for working with [Turborepo Generators](https://turbo.build/repo/docs/core-concepts/monorepos/code-generation).
+Types for working with [Turborepo Generators](https://turborepo.com/docs/guides/generating-code).
 
 ## Usage
 
@@ -31,8 +31,8 @@ export default function generator(plop: PlopTypes.NodePlopAPI): void {
 }
 ```
 
-Learn more about Turborepo Generators in the [docs](https://turbo.build/repo/docs/core-concepts/monorepos/code-generation)
+Learn more about Turborepo Generators in the [docs](https://turborepo.com/docs/guides/generating-code)
 
 ---
 
-For more information about Turborepo, visit [turbo.build](https://turbo.build) and follow us on X ([@turborepo](https://x.com/turborepo))!
+For more information about Turborepo, visit [turborepo.com](https://turborepo.com) and follow us on X ([@turborepo](https://x.com/turborepo))!

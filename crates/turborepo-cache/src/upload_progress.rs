@@ -56,13 +56,13 @@ where
                 // same as `curr_gen_index` but we can't borrow `self` twice
                 let (curr_gen, index) = {
                     // usize fits 570 million years of milliseconds since start on 64 bit
-                    let gen = (this.start.elapsed().as_millis() as usize) / INTERVAL;
-                    (gen, gen % BUCKETS)
+                    let r#gen = (this.start.elapsed().as_millis() as usize) / INTERVAL;
+                    (r#gen, r#gen % BUCKETS)
                 };
                 let mut state = this.state.lock().unwrap();
-                let (gen, value) = &mut state.1[index];
-                if *gen != curr_gen {
-                    *gen = curr_gen;
+                let (r#gen, value) = &mut state.1[index];
+                if *r#gen != curr_gen {
+                    *r#gen = curr_gen;
                     *value = item.len();
                 } else {
                     *value += item.len();
@@ -149,7 +149,7 @@ impl<const BUCKETS: usize, const INTERVAL: usize> UploadProgressQuery<BUCKETS, I
             let s = s.lock().unwrap();
             let total_bytes =
                 s.1.iter()
-                    .filter(|(gen, _)| *gen >= min_gen)
+                    .filter(|(r#gen, _)| *r#gen >= min_gen)
                     .map(|(_, bytes)| *bytes)
                     .sum::<usize>();
 

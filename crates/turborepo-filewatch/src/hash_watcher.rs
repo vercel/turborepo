@@ -17,10 +17,7 @@ use tokio::{
 use tracing::{debug, trace};
 use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf};
 use turborepo_repository::discovery::DiscoveryResponse;
-use turborepo_scm::{
-    package_deps::{GitHashes, INPUT_INCLUDE_DEFAULT_FILES},
-    Error as SCMError, SCM,
-};
+use turborepo_scm::{package_deps::INPUT_INCLUDE_DEFAULT_FILES, Error as SCMError, GitHashes, SCM};
 
 use crate::{
     debouncer::Debouncer,
@@ -91,13 +88,13 @@ impl HashSpec {
 
 #[derive(Error, Debug)]
 pub enum Error {
-    #[error("package hashing encountered an error: {0}")]
+    #[error("Package hashing encountered an error: {0}")]
     HashingError(String),
-    #[error("file hashing is not available: {0}")]
+    #[error("File hashing is not available: {0}")]
     Unavailable(String),
-    #[error("package not found: {} {:?}", .0.package_path, .0.inputs)]
+    #[error("Package not found: {} {:?}", .0.package_path, .0.inputs)]
     UnknownPackage(HashSpec),
-    #[error("unsupported: glob traverses out of the package")]
+    #[error("Unsupported: glob traverses out of the package")]
     UnsupportedGlob,
 }
 
@@ -691,7 +688,7 @@ mod tests {
     use turbopath::{
         AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeUnixPathBuf,
     };
-    use turborepo_scm::{package_deps::GitHashes, SCM};
+    use turborepo_scm::{GitHashes, SCM};
 
     use super::{FileHashes, HashState};
     use crate::{

@@ -1,5 +1,5 @@
 import path from "node:path";
-import { existsSync, writeJSONSync, rmSync, rm } from "fs-extra";
+import fs from "fs-extra";
 import { ConvertError } from "../errors";
 import { updateDependencies } from "../updateDependencies";
 import type {
@@ -43,7 +43,7 @@ async function detect(args: DetectArgs): Promise<boolean> {
     workspaceRoot: args.workspaceRoot,
   });
   return (
-    existsSync(lockFile) || packageManager === PACKAGE_MANAGER_DETAILS.name
+    fs.existsSync(lockFile) || packageManager === PACKAGE_MANAGER_DETAILS.name
   );
 }
 
@@ -135,7 +135,7 @@ async function create(args: CreateArgs): Promise<void> {
     packageJson.workspaces = project.workspaceData.globs;
 
     if (!options?.dry) {
-      writeJSONSync(project.paths.packageJson, packageJson, { spaces: 2 });
+      fs.writeJSONSync(project.paths.packageJson, packageJson, { spaces: 2 });
     }
 
     // root dependencies
@@ -153,7 +153,7 @@ async function create(args: CreateArgs): Promise<void> {
       updateDependencies({ workspace, project, to, logger, options });
     });
   } else if (!options?.dry) {
-    writeJSONSync(project.paths.packageJson, packageJson, { spaces: 2 });
+    fs.writeJSONSync(project.paths.packageJson, packageJson, { spaces: 2 });
   }
 }
 
@@ -190,7 +190,7 @@ async function remove(args: RemoveArgs): Promise<void> {
   delete packageJson.packageManager;
 
   if (!options?.dry) {
-    writeJSONSync(project.paths.packageJson, packageJson, { spaces: 2 });
+    fs.writeJSONSync(project.paths.packageJson, packageJson, { spaces: 2 });
 
     // collect all workspace node_modules directories
     const allModulesDirs = [
@@ -200,7 +200,9 @@ async function remove(args: RemoveArgs): Promise<void> {
     try {
       logger.subStep(`removing "node_modules"`);
       await Promise.all(
-        allModulesDirs.map((dir) => rm(dir, { recursive: true, force: true }))
+        allModulesDirs.map((dir) =>
+          fs.rm(dir, { recursive: true, force: true })
+        )
       );
     } catch (err) {
       throw new ConvertError("Failed to remove node_modules", {
@@ -223,7 +225,7 @@ async function clean(args: CleanArgs): Promise<void> {
     `removing ${path.relative(project.paths.root, project.paths.lockfile)}`
   );
   if (!options?.dry) {
-    rmSync(project.paths.lockfile, { force: true });
+    fs.rmSync(project.paths.lockfile, { force: true });
   }
 }
 

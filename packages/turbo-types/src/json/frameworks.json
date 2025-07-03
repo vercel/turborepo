@@ -39,6 +39,12 @@
     "slug": "nextjs",
     "name": "Next.js",
     "envWildcards": ["NEXT_PUBLIC_*"],
+    "envConditionals": [
+      {
+        "when": { "key": "VERCEL_SKEW_PROTECTION_ENABLED", "value": "1" },
+        "include": ["VERCEL_DEPLOYMENT_ID"]
+      }
+    ],
     "dependencyMatch": {
       "strategy": "all",
       "dependencies": ["next"]
@@ -47,7 +53,20 @@
   {
     "slug": "nitro",
     "name": "Nitro",
-    "envWildcards": ["NITRO_*"],
+    "envWildcards": [
+      "NITRO_*",
+      "SERVER_*",
+      "AWS_APP_ID",
+      "INPUT_AZURE_STATIC_WEB_APPS_API_TOKEN",
+      "CLEAVR",
+      "CF_PAGES",
+      "FIREBASE_APP_HOSTING",
+      "NETLIFY",
+      "STORMKIT",
+      "NOW_BUILDER",
+      "ZEABUR",
+      "RENDER"
+    ],
     "dependencyMatch": {
       "strategy": "some",
       "dependencies": [
@@ -61,7 +80,22 @@
   {
     "slug": "nuxtjs",
     "name": "Nuxt.js",
-    "envWildcards": ["NUXT_*", "NITRO_*"],
+    "envWildcards": [
+      "NUXT_*",
+      "NITRO_*",
+      "SERVER_*",
+      "AWS_APP_ID",
+      "INPUT_AZURE_STATIC_WEB_APPS_API_TOKEN",
+      "CLEAVR",
+      "CF_PAGES",
+      "FIREBASE_APP_HOSTING",
+      "NETLIFY",
+      "STORMKIT",
+      "NOW_BUILDER",
+      "ZEABUR",
+      "RENDER",
+      "LAUNCH_EDITOR"
+    ],
     "dependencyMatch": {
       "strategy": "some",
       "dependencies": ["nuxt", "nuxt-edge", "nuxt3", "nuxt3-edge"]
@@ -115,7 +149,7 @@
   {
     "slug": "vue",
     "name": "Vue",
-    "envWildcards": ["VUE_APP_*"],
+    "envWildcards": ["VUE_APP_*", "LAUNCH_EDITOR"],
     "dependencyMatch": {
       "strategy": "all",
       "dependencies": ["@vue/cli-service"]

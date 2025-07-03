@@ -14,10 +14,103 @@ permissions:
   pull-requests: read
 
 jobs:
+  find-changes:
+    name: Find path changes
+    runs-on: ubuntu-latest
+    outputs:
+      docs: ${{ steps.filter.outputs.docs }}
+      basic-example: ${{ steps.filter.outputs.basic-example }}
+      kitchen-sink-example: ${{ steps.filter.outputs.kitchen-sink-example }}
+      non-monorepo-example: ${{ steps.filter.outputs.non-monorepo-example }}
+      with-svelte-example: ${{ steps.filter.outputs.with-svelte-example }}
+      with-tailwind-example: ${{ steps.filter.outputs.with-tailwind-example }}
+      rest: ${{ steps.filter.outputs.rest }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check path changes
+        id: filter
+        run: |
+          # Determine the base and head commits to compare
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            # For pull requests, compare the base branch to the current HEAD
+            git fetch origin ${{ github.base_ref }}
+            BASE_COMMIT="origin/${{ github.base_ref }}"
+            HEAD_COMMIT="HEAD"
+          else
+            # For pushes, use the before and after SHAs
+            BASE_COMMIT="${{ github.event.before }}"
+            HEAD_COMMIT="${{ github.event.after }}"
+          fi
+
+          echo "Comparing changes between $BASE_COMMIT and $HEAD_COMMIT"
+
+          # Function to check if files in given paths have changed
+          check_path_changes() {
+            local name=$1
+            shift
+            local paths=("$@")
+
+            # Create a command that checks all paths
+            local cmd="git diff --name-only $BASE_COMMIT $HEAD_COMMIT -- "
+            for path in "${paths[@]}"; do
+              cmd+="\"$path\" "
+            done
+
+            # Run the command and check if there are any results
+            if eval "$cmd" | grep -q .; then
+              echo "$name=true" >> $GITHUB_OUTPUT
+              echo "Changes detected in $name paths"
+            else
+              echo "$name=false" >> $GITHUB_OUTPUT
+              echo "No changes in $name paths"
+            fi
+          }
+
+          # Function to make path checking more readable
+          check_paths() {
+            local name=$1
+            local path_string=$2
+
+            # Convert the comma-separated string to an array
+            IFS=',' read -ra path_array <<< "$path_string"
+
+            # Call the check_path_changes function with the name and paths
+            check_path_changes "$name" "${path_array[@]}"
+          }
+
+          # Check each path pattern with a more readable syntax
+          echo "Checking path patterns..."
+
+          check_paths "docs" "docs/"
+          check_paths "basic-example" "examples/basic/,turborepo-tests/example-basic-*/,turborepo-tests/helpers/"
+          check_paths "kitchen-sink-example" "examples/kitchen-sink/,turborepo-tests/example-kitchen-sink-*/,turborepo-tests/helpers/"
+          check_paths "non-monorepo-example" "examples/non-monorepo/,turborepo-tests/example-non-monorepo-*/,turborepo-tests/helpers/"
+          check_paths "with-svelte-example" "examples/with-svelte/,turborepo-tests/example-with-svelte-*/,turborepo-tests/helpers/"
+          check_paths "with-tailwind-example" "examples/with-tailwind/,turborepo-tests/example-with-svelte-*/,turborepo-tests/helpers/"
+
+          # Handle the "rest" pattern - files that are NOT in examples/ or docs/
+          CHANGED_FILES=$(git diff --name-only $BASE_COMMIT $HEAD_COMMIT)
+
+          # Filter to only include files that do NOT start with examples/ or docs/
+          FILES_NOT_IN_EXAMPLES_OR_DOCS=$(echo "$CHANGED_FILES" | grep -v -E "^(examples/|docs/)" || true)
+
+          if [ -n "$FILES_NOT_IN_EXAMPLES_OR_DOCS" ]; then
+            echo "rest=true" >> $GITHUB_OUTPUT
+            echo "Changes detected outside examples/ and docs/ directories"
+          else
+            echo "rest=false" >> $GITHUB_OUTPUT
+            echo "No changes outside examples/ and docs/ directories"
+          fi
+
   integration:
     name: Turborepo Integration
+    needs:
+      - find-changes
     runs-on: ${{ matrix.os.runner }}
     timeout-minutes: 45
+    if: ${{ needs.find-changes.outputs.rest == 'true' }}
     strategy:
       fail-fast: false
       matrix:
@@ -42,7 +135,7 @@ jobs:
         uses: ./.github/actions/setup-turborepo-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
-          node-version: "18.20.2"
+          node-version: "18.20.2" # TODO: Update integration tests with changed log output in Node.js 22
 
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
@@ -80,57 +173,18 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
-  examples:
-    name: Turborepo Examples
-    timeout-minutes: 40
-
+  rust_lint:
+    name: Rust lints
+    needs:
+      - find-changes
+    if: ${{ needs.find-changes.outputs.rest == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Disable corepack. actions/setup-node invokes other package managers and
-      # that causes corepack to throw an error, so we disable it first.
-      - name: Disable corepack
-        shell: bash
-        run: corepack disable
-
       - name: Setup Turborepo Environment
         uses: ./.github/actions/setup-turborepo-environment
-        with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-          node-version: "18.20.2"
-
-      - name: Install Global Turbo
-        uses: ./.github/actions/install-global-turbo
-
-      - name: Check examples
-        shell: bash
-        # Concurrency being 1 is a big hammer here.
-        # It's a quick fix for non-deterministic behaviors we're seeing around package resolution.
-        # We could likely do some hacking to reparallelize this, but it's not worth it right now.
-        run: turbo run test --filter="@turborepo-examples-tests/*" --continue --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }} --env-mode=strict --concurrency=1
-
-      # Disable corepack again. actions/setup-node's "Post" step runs at the end of
-      # this job invokes other package managers, and corepack throws an error.
-      # (corepack was enabled from inside the tests above).
-      - name: Disable corepack again
-        shell: bash
-        run: corepack disable
-
-  rust_lint:
-    name: Rust lints
-    runs-on:
-      - "self-hosted"
-      - "linux"
-      - "x64"
-      - "metal"
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Rust
-        uses: ./.github/actions/setup-rust
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
@@ -142,7 +196,7 @@ jobs:
         run: npx @taplo/cli@0.5.2 format --check
 
       - name: Check licenses
-        uses: EmbarkStudios/cargo-deny-action@v1
+        uses: EmbarkStudios/cargo-deny-action@v2
         with:
           command: check licenses
 
@@ -153,11 +207,10 @@ jobs:
   rust_check:
     # We test dependency changes only on main
     name: Turborepo rust check
-    runs-on:
-      - "self-hosted"
-      - "linux"
-      - "x64"
-      - "metal"
+    needs:
+      - find-changes
+    if: ${{ needs.find-changes.outputs.rest == 'true' }}
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -166,11 +219,39 @@ jobs:
         uses: ./.github/actions/setup-turborepo-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
-          node-version: "18.20.2"
 
       - name: Run cargo check
         run: |
           cargo check --workspace
+
+  turbo_types_check:
+    name: "@turbo/types codegen check"
+    needs:
+      - find-changes
+    if: ${{ needs.find-changes.outputs.rest == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: "Setup Node"
+        uses: ./.github/actions/setup-node
+
+      - name: Install Global Turbo
+        uses: ./.github/actions/install-global-turbo
+
+      - name: Build turbo-types schemas
+        run: |
+          turbo build --filter=@turbo/types
+
+      - name: Check for uncommitted changes
+        run: |
+          if ! git diff --exit-code; then
+            echo "::error::Generated schema files are out of sync with TypeScript types"
+            echo "::error::Please run 'turbo build --filter=@turbo/types' and commit the changes"
+            git diff
+            exit 1
+          fi
 
   rust_test:
     strategy:
@@ -178,19 +259,15 @@ jobs:
       matrix:
         os:
           - name: ubuntu
-            runner:
-              - "self-hosted"
-              - "linux"
-              - "x64"
-              - "metal"
-            nextest: linux
+            runner: ubuntu-latest
           - name: macos
             runner: macos-13
-            nextest: mac
           - name: windows
             runner: windows-latest
-            nextest: windows-tar
     runs-on: ${{ matrix.os.runner }}
+    needs:
+      - find-changes
+    if: ${{ needs.find-changes.outputs.rest == 'true' }}
     name: Turborepo Rust testing on ${{ matrix.os.name }}
     steps:
       - name: Set git to use LF line endings
@@ -206,7 +283,6 @@ jobs:
         uses: ./.github/actions/setup-turborepo-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
-          node-version: "18.20.2"
 
       - name: Run sccache-cache
         uses: mozilla-actions/sccache-action@v0.0.6
@@ -233,16 +309,117 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
+  basic-example:
+    name: "`basic` example"
+    timeout-minutes: 40
+    needs:
+      - find-changes
+    if: ${{ needs.find-changes.outputs.basic-example == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: "Run `basic` example tests"
+        uses: ./.github/actions/examples-tests
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          turbo-token: "${{ secrets.TURBO_TOKEN }}"
+          turbo-team: "${{ vars.TURBO_TEAM }}"
+          test-filter: "@turborepo-examples-tests/basic-*"
+
+  kitchen-sink-example:
+    name: "`kitchen-sink` example"
+    needs:
+      - find-changes
+    timeout-minutes: 40
+    if: ${{ needs.find-changes.outputs.kitchen-sink-example == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: "Run `kitchen-sink` example tests"
+        uses: ./.github/actions/examples-tests
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          turbo-token: "${{ secrets.TURBO_TOKEN }}"
+          turbo-team: "${{ vars.TURBO_TEAM }}"
+          test-filter: "@turborepo-examples-tests/kitchen-sink-*"
+
+  non-monorepo-example:
+    name: "`non-monorepo` example"
+    timeout-minutes: 40
+    needs:
+      - find-changes
+    if: ${{ needs.find-changes.outputs.non-monorepo-example == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: "Run `non-monorepo` example tests"
+        uses: ./.github/actions/examples-tests
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          turbo-token: "${{ secrets.TURBO_TOKEN }}"
+          turbo-team: "${{ vars.TURBO_TEAM }}"
+          test-filter: "@turborepo-examples-tests/non-monorepo-*"
+
+  with-svelte-example:
+    name: "`with-svelte` example"
+    timeout-minutes: 40
+    needs:
+      - find-changes
+    if: ${{ needs.find-changes.outputs.with-svelte-example == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: "Run `with-svelte` example tests"
+        uses: ./.github/actions/examples-tests
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          turbo-token: "${{ secrets.TURBO_TOKEN }}"
+          turbo-team: "${{ vars.TURBO_TEAM }}"
+          test-filter: "@turborepo-examples-tests/with-svelte-*"
+
+  with-tailwind-example:
+    name: "`with-tailwind` example"
+    timeout-minutes: 40
+    needs:
+      - find-changes
+    if: ${{ needs.find-changes.outputs.with-tailwind-example == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: "Run `with-tailwind` example tests"
+        uses: ./.github/actions/examples-tests
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          turbo-token: "${{ secrets.TURBO_TOKEN }}"
+          turbo-team: "${{ vars.TURBO_TEAM }}"
+          test-filter: "@turborepo-examples-tests/with-tailwind-*"
+
   summary:
     name: Turborepo Test Summary
     runs-on: ubuntu-latest
     if: always()
     needs:
+      - find-changes
       - integration
-      - examples
       - rust_lint
       - rust_check
+      - turbo_types_check
       - rust_test
+      - basic-example
+      - kitchen-sink-example
+      - non-monorepo-example
+      - with-svelte-example
+      - with-tailwind-example
     steps:
       - name: Compute info
         id: info
@@ -261,13 +438,18 @@ jobs:
           }
 
           subjob ${{needs.integration.result}}
-          subjob ${{needs.examples.result}}
           subjob ${{needs.rust_lint.result}}
           subjob ${{needs.rust_check.result}}
+          subjob ${{needs.turbo_types_check.result}}
           subjob ${{needs.rust_test.result}}
+          subjob ${{needs.basic-example.result}}
+          subjob ${{needs.kitchen-sink-example.result}}
+          subjob ${{needs.non-monorepo-example.result}}
+          subjob ${{needs.with-svelte-example.result}}
+          subjob ${{needs.with-tailwind-example.result}}
 
           if [ "$cancelled" = "true" ]; then
-              echo "cancelled=true" >> $GITHUB_OUTPUT
+            echo "cancelled=true" >> $GITHUB_OUTPUT
           elif [ "$failure" = "true" ]; then
             echo "failure=true" >> $GITHUB_OUTPUT
           else

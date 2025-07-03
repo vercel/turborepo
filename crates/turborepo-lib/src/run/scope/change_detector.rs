@@ -5,7 +5,7 @@ use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 use turborepo_repository::{
     change_mapper::{
         AllPackageChangeReason, ChangeMapper, DefaultPackageChangeMapper, Error,
-        GlobalDepsPackageChangeMapper, LockfileChange, PackageChanges, PackageInclusionReason,
+        GlobalDepsPackageChangeMapper, LockfileContents, PackageChanges, PackageInclusionReason,
     },
     package_graph::{PackageGraph, PackageName},
 };
@@ -52,13 +52,12 @@ impl<'a> ScopeChangeDetector<'a> {
     }
 
     /// Gets the lockfile content from SCM if it has changed.
-    /// Does *not* error if cannot get content, instead just
-    /// returns an empty lockfile change
-    fn get_lockfile_contents(
+    /// Does *not* error if cannot get content.
+    pub fn get_lockfile_contents(
         &self,
         from_ref: Option<&str>,
         changed_files: &HashSet<AnchoredSystemPathBuf>,
-    ) -> Option<LockfileChange> {
+    ) -> LockfileContents {
         let lockfile_path = self
             .pkg_graph
             .package_manager()
@@ -70,23 +69,21 @@ impl<'a> ScopeChangeDetector<'a> {
             &lockfile_path,
         ) {
             debug!("lockfile did not change");
-            return None;
+            return LockfileContents::Unchanged;
         }
 
-        let lockfile_path = self
-            .pkg_graph
-            .package_manager()
-            .lockfile_path(self.turbo_root);
-
         let Ok(content) = self.scm.previous_content(from_ref, &lockfile_path) else {
-            return Some(LockfileChange::Empty);
+            debug!("lockfile did change but could not get previous content");
+            return LockfileContents::UnknownChange;
         };
 
-        Some(LockfileChange::WithContent(content))
+        debug!("lockfile changed, have the previous content");
+        LockfileContents::Changed(content)
     }
 }
 
 impl<'a> GitChangeDetector for ScopeChangeDetector<'a> {
+    /// get the actual changed packages between two git refs
     fn changed_packages(
         &self,
         from_ref: Option<&str>,
@@ -104,7 +101,7 @@ impl<'a> GitChangeDetector for ScopeChangeDetector<'a> {
             merge_base,
         )? {
             Err(InvalidRange { from_ref, to_ref }) => {
-                debug!("all packages changed");
+                debug!("invalid ref range, defaulting to all packages changed");
                 return Ok(self
                     .pkg_graph
                     .packages()

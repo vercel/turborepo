@@ -26,11 +26,7 @@ permissions:
 jobs:
   rust_lint:
     name: Rust lints
-    runs-on:
-      - "self-hosted"
-      - "linux"
-      - "x64"
-      - "metal"
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -48,17 +44,13 @@ jobs:
         run: npx @taplo/cli@0.5.2 format --check
 
       - name: Check licenses
-        uses: EmbarkStudios/cargo-deny-action@v1
+        uses: EmbarkStudios/cargo-deny-action@v2
         with:
           command: check licenses
 
   format_lint:
     name: Formatting
-    runs-on:
-      - "self-hosted"
-      - "linux"
-      - "x64"
-      - "metal"
+    runs-on: ubuntu-latest
     env:
       TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
       TURBO_TEAM: ${{ vars.TURBO_TEAM }}
@@ -71,7 +63,6 @@ jobs:
         uses: ./.github/actions/setup-node
         with:
           extra-flags: --no-optional
-          node-version: "20"
 
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo

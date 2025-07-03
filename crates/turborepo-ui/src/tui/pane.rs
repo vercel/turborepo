@@ -11,6 +11,8 @@ const EXIT_INTERACTIVE_HINT: &str = "Ctrl-z - Stop interacting";
 const ENTER_INTERACTIVE_HINT: &str = "i - Interact";
 const HAS_SELECTION: &str = "c - Copy selection";
 const SCROLL_LOGS: &str = "u/d - Scroll logs";
+const PAGE_LOGS: &str = "U/D - Page logs";
+const JUMP_IN_LOGS: &str = "t/b - Jump to top/bottom";
 const TASK_LIST_HIDDEN: &str = "h - Show task list";
 
 pub struct TerminalPane<'a, W> {
@@ -33,6 +35,10 @@ impl<'a, W> TerminalPane<'a, W> {
             task_name,
             has_sidebar,
         }
+    }
+
+    fn has_stdin(&self) -> bool {
+        self.terminal_output.stdin.is_some()
     }
 
     fn footer(&self) -> Line {
@@ -60,7 +66,10 @@ impl<'a, W> TerminalPane<'a, W> {
 
         match self.section {
             LayoutSections::Pane => build_message_vec(&[EXIT_INTERACTIVE_HINT]),
-            LayoutSections::TaskList => build_message_vec(&[ENTER_INTERACTIVE_HINT, SCROLL_LOGS]),
+            LayoutSections::TaskList if self.has_stdin() => {
+                build_message_vec(&[ENTER_INTERACTIVE_HINT, SCROLL_LOGS, PAGE_LOGS, JUMP_IN_LOGS])
+            }
+            LayoutSections::TaskList => build_message_vec(&[SCROLL_LOGS, PAGE_LOGS, JUMP_IN_LOGS]),
             LayoutSections::Search { results, .. } => {
                 Line::from(format!("/ {}", results.query())).left_aligned()
             }
@@ -68,7 +77,7 @@ impl<'a, W> TerminalPane<'a, W> {
     }
 }
 
-impl<'a, W> Widget for &TerminalPane<'a, W> {
+impl<W> Widget for &TerminalPane<'_, W> {
     fn render(self, area: ratatui::prelude::Rect, buf: &mut ratatui::prelude::Buffer)
     where
         Self: Sized,
@@ -84,5 +93,30 @@ impl<'a, W> Widget for &TerminalPane<'a, W> {
 
         let term = PseudoTerminal::new(screen).block(block);
         term.render(area, buf)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_footer_interactive() {
+        let term: TerminalOutput<Vec<u8>> = TerminalOutput::new(16, 16, Some(Vec::new()), 2048);
+        let pane = TerminalPane::new(&term, "foo", &LayoutSections::TaskList, true);
+        assert_eq!(
+            String::from(pane.footer()),
+            "   i - Interact   u/d - Scroll logs   U/D - Page logs   t/b - Jump to top/bottom"
+        );
+    }
+
+    #[test]
+    fn test_footer_non_interactive() {
+        let term: TerminalOutput<Vec<u8>> = TerminalOutput::new(16, 16, None, 2048);
+        let pane = TerminalPane::new(&term, "foo", &LayoutSections::TaskList, true);
+        assert_eq!(
+            String::from(pane.footer()),
+            "   u/d - Scroll logs   U/D - Page logs   t/b - Jump to top/bottom"
+        );
     }
 }

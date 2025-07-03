@@ -1,5 +1,5 @@
 import path from "node:path";
-import { readJsonSync, existsSync } from "fs-extra";
+import fs from "fs-extra";
 import { type PackageJson } from "@turbo/utils";
 import type { Schema } from "@turbo/types";
 import type { TransformerResults } from "../runner";
@@ -25,17 +25,17 @@ export function transformer({
   log.info(`Migrating "package.json" "turbo" key to "turbo.json" file...`);
   const turboConfigPath = path.join(root, "turbo.json");
   const rootPackageJsonPath = path.join(root, "package.json");
-  if (!existsSync(rootPackageJsonPath)) {
+  if (!fs.existsSync(rootPackageJsonPath)) {
     return runner.abortTransform({
       reason: `No package.json found at ${root}. Is the path correct?`,
     });
   }
 
   // read files
-  const rootPackageJson = readJsonSync(rootPackageJsonPath) as PackageJson;
+  const rootPackageJson = fs.readJsonSync(rootPackageJsonPath) as PackageJson;
   let rootTurboJson = null;
   try {
-    rootTurboJson = readJsonSync(turboConfigPath) as Schema;
+    rootTurboJson = fs.readJsonSync(turboConfigPath) as Schema;
   } catch (err) {
     rootTurboJson = null;
   }

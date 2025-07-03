@@ -58,9 +58,14 @@ impl<W: Write> Write for LogWriter<W> {
             (Some(log_file), None) => log_file.write(buf),
             (None, Some(prefixed_writer)) => prefixed_writer.write(buf),
             (None, None) => {
-                // Should this be an error or even a panic?
-                debug!("no log file or prefixed writer");
-                Ok(0)
+                debug!(
+                    "No log file or prefixed writer to write to. This should only happen when \
+                     both caching is disabled and output logs are set to none."
+                );
+
+                // Returning the buffer's length so callers don't think this is a failure to
+                // create the buffer
+                Ok(buf.len())
             }
         }
     }
@@ -114,6 +119,48 @@ pub fn replay_logs<W: Write>(
     Ok(())
 }
 
+/// Replay logs, but enforce crlf line endings
+// TODO: refactor to share code with `replay_logs`
+pub fn replay_logs_with_crlf<W: Write>(
+    mut output: W,
+    log_file_name: &AbsoluteSystemPath,
+) -> Result<(), Error> {
+    debug!("start replaying logs");
+
+    let log_file = File::open(log_file_name).map_err(|err| {
+        warn!("error opening log file: {:?}", err);
+        Error::CannotReadLogs(err)
+    })?;
+
+    let mut log_reader = BufReader::new(log_file);
+
+    let mut buffer = Vec::new();
+    loop {
+        let num_bytes = log_reader
+            .read_until(b'\n', &mut buffer)
+            .map_err(Error::CannotReadLogs)?;
+        if num_bytes == 0 {
+            break;
+        }
+
+        let line_without_lf = buffer.strip_suffix(b"\n").unwrap_or(&buffer);
+        let line_without_crlf = line_without_lf
+            .strip_suffix(b"\r")
+            .unwrap_or(line_without_lf);
+
+        output
+            .write_all(line_without_crlf)
+            .map_err(Error::CannotReadLogs)?;
+        output.write_all(b"\r\n").map_err(Error::CannotReadLogs)?;
+
+        buffer.clear();
+    }
+
+    debug!("finish replaying logs");
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use std::{fs, io::Write};
@@ -123,7 +170,8 @@ mod tests {
     use turbopath::AbsoluteSystemPathBuf;
 
     use crate::{
-        logs::replay_logs, ColorConfig, LogWriter, PrefixedUI, PrefixedWriter, BOLD, CYAN,
+        logs::replay_logs, replay_logs_with_crlf, ColorConfig, LogWriter, PrefixedUI,
+        PrefixedWriter, BOLD, CYAN,
     };
 
     #[test]
@@ -200,6 +248,36 @@ mod tests {
         replay_logs(prefixed_ui.output_prefixed_writer(), &log_file_path)?;
 
         assert_eq!(output, [b'>', 0, 159, 146, 150, b'\n']);
+        Ok(())
+    }
+
+    #[test]
+    fn test_replay_logs_crlf() -> Result<()> {
+        let dir = tempdir()?;
+        let log_file_path = AbsoluteSystemPathBuf::try_from(dir.path().join("test.txt"))?;
+        fs::write(&log_file_path, "\none fish\ntwo fish\nred fish\nblue fish")?;
+        let mut output = Vec::new();
+        replay_logs_with_crlf(&mut output, &log_file_path)?;
+        let output_str = std::str::from_utf8(&output)?;
+        assert_eq!(
+            output_str,
+            "\r\none fish\r\ntwo fish\r\nred fish\r\nblue fish\r\n"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_replay_logs_crlf_noop() -> Result<()> {
+        let dir = tempdir()?;
+        let log_file_path = AbsoluteSystemPathBuf::try_from(dir.path().join("test.txt"))?;
+        let contents = "\r\none fish\r\ntwo fish\r\nred fish\r\nblue fish\r\n";
+        fs::write(&log_file_path, contents)?;
+        let mut output = Vec::new();
+        replay_logs_with_crlf(&mut output, &log_file_path)?;
+        let output_str = std::str::from_utf8(&output)?;
+        assert_eq!(output_str, contents,);
+
         Ok(())
     }
 }

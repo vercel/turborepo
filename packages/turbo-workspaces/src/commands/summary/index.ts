@@ -1,6 +1,6 @@
 import path from "node:path";
 import inquirer from "inquirer";
-import { bold, dim, italic, underline } from "picocolors";
+import picocolors from "picocolors";
 import { Logger } from "../../logger";
 import { directoryInfo } from "../../utils";
 import { getWorkspaceDetails } from "../../getWorkspaceDetails";
@@ -24,7 +24,7 @@ export async function summaryCommand(directory: SummaryCommandArgument) {
       if (exists) {
         return true;
       }
-      return `Directory ${dim(`(${absolute})`)} does not exist`;
+      return `Directory ${picocolors.dim(`(${absolute})`)} does not exist`;
     },
     filter: (d: string) => d.trim(),
   });
@@ -34,7 +34,7 @@ export async function summaryCommand(directory: SummaryCommandArgument) {
     directory: selectedDirectory,
   });
   if (!exists) {
-    logger.error(`Directory ${dim(`(${root})`)} does not exist`);
+    logger.error(`Directory ${picocolors.dim(`(${root})`)} does not exist`);
     return process.exit(1);
   }
 
@@ -54,7 +54,9 @@ export async function summaryCommand(directory: SummaryCommandArgument) {
   });
 
   const renderWorkspace = (w: Workspace) => {
-    return `${w.name} (${italic(`./${path.relative(root, w.paths.root)}`)})`;
+    return `${w.name} (${picocolors.italic(
+      `./${path.relative(root, w.paths.root)}`
+    )})`;
   };
 
   const renderDirectory = ({
@@ -66,23 +68,28 @@ export async function summaryCommand(directory: SummaryCommandArgument) {
     dir: string;
     workspaces: Array<Workspace>;
   }) => {
-    logger.indented(2, `${number}. ${bold(dir)}`);
+    logger.indented(2, `${number}. ${picocolors.bold(dir)}`);
     workspaces.forEach((workspace, idx) => {
       logger.indented(3, `${idx + 1}. ${renderWorkspace(workspace)}`);
     });
   };
 
   // repo header
-  logger.header(`Repository Summary`);
-  logger.indented(1, `${underline(project.name)}:`);
+  logger.header("Repository Summary");
+  logger.indented(1, `${picocolors.underline(project.name)}:`);
   // workspace manager header
   logger.indented(
     1,
-    `Package Manager: ${bold(italic(project.packageManager))}`
+    `Package Manager: ${picocolors.bold(
+      picocolors.italic(project.packageManager)
+    )}`
   );
   if (hasWorkspaces) {
     // workspaces header
-    logger.indented(1, `Workspaces (${bold(numWorkspaces.toString())}):`);
+    logger.indented(
+      1,
+      `Workspaces (${picocolors.bold(numWorkspaces.toString())}):`
+    );
     Object.keys(workspacesByDirectory).forEach((dir, idx) => {
       renderDirectory({
         number: idx + 1,

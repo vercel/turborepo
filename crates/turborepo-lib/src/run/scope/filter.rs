@@ -713,6 +713,7 @@ mod test {
     use tempfile::TempDir;
     use test_case::test_case;
     use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeUnixPathBuf};
+    use turborepo_errors::Spanned;
     use turborepo_repository::{
         change_mapper::PackageInclusionReason,
         discovery::PackageDiscovery,
@@ -806,7 +807,7 @@ mod test {
                         RelativeUnixPathBuf::new(format!("{package_path}/package.json")).unwrap(),
                     ),
                     PackageJson {
-                        name: Some(name.to_string()),
+                        name: Some(Spanned::new(name.to_string())),
                         dependencies: dependencies.get(name).map(|v| {
                             v.iter()
                                 .map(|name| (name.to_string(), "*".to_string()))

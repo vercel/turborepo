@@ -1,8 +1,8 @@
 {
   "name": "@turbo/types",
-  "version": "2.3.4-canary.5",
+  "version": "2.5.5-canary.0",
   "description": "Turborepo types",
-  "homepage": "https://turbo.build/repo",
+  "homepage": "https://turborepo.com",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -18,7 +18,8 @@
     "build": "tsc && pnpm generate-schema",
     "lint": "eslint src/",
     "lint:prettier": "prettier -c . --cache",
-    "generate-schema": "tsx scripts/generate-schema.ts"
+    "generate-schema": "tsx scripts/generate-schema.ts",
+    "copy-schema": "cp schemas/schema.json ../turbo/schema.json"
   },
   "devDependencies": {
     "@turbo/eslint-config": "workspace:*",

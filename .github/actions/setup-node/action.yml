@@ -16,7 +16,6 @@ inputs:
   node-version:
     description: "Node version to install"
     required: false
-    default: "18"
 
 runs:
   using: "composite"
@@ -27,11 +26,13 @@ runs:
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
+        # node-version-file is the default, but can be overridden using node-version
+        node-version-file: "package.json"
         node-version: ${{ inputs.node-version }}
         cache: pnpm
 
     - name: Upgrade corepack
-      if: ${{ inputs.enable-corepack == 'true' && inputs.node-version == '16' }}
+      if: ${{ inputs.enable-corepack == 'true' }}
       shell: bash
       # Forcibly upgrade our available version of corepack.
       # The bundled version in node 16 has known issues.

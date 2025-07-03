@@ -1,3 +1,4 @@
+// Bump all rust changes
 #![deny(clippy::all)]
 
 use std::process;

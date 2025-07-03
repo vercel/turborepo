@@ -248,6 +248,8 @@ impl AbsoluteSystemPath {
         )
     }
 
+    /// Note: This does not handle resolutions, so `../` in a path won't
+    /// resolve.
     pub fn anchor(&self, path: &AbsoluteSystemPath) -> Result<AnchoredSystemPathBuf, PathError> {
         AnchoredSystemPathBuf::new(self, path)
     }

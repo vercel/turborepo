@@ -354,7 +354,7 @@ mod tests {
             .open(path.clone())
             .expect("Could not open file for writing");
 
-        file.write_all(&format!("{}", thread_rng().gen::<i32>()).into_bytes()[..])
+        file.write_all(&format!("{}", thread_rng().r#gen::<i32>()).into_bytes()[..])
             .unwrap();
 
         drop(file);

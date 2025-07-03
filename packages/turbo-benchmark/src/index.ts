@@ -10,7 +10,7 @@ import {
   writeSync,
 } from "node:fs";
 import path from "node:path";
-import { copySync } from "fs-extra";
+import fs from "fs-extra";
 import { stringify } from "ndjson";
 import {
   DEFAULT_EXEC_OPTS,
@@ -99,7 +99,7 @@ function saveCache() {
   }
   // copy the current cache to the backup
   if (existsSync(DEFAULT_CACHE_PATH)) {
-    copySync(DEFAULT_CACHE_PATH, ALT_CACHE_PATH, { recursive: true });
+    fs.copySync(DEFAULT_CACHE_PATH, ALT_CACHE_PATH, { recursive: true });
   } else {
     // make an empty cache
     mkdirSync(ALT_CACHE_PATH, { recursive: true });
@@ -112,7 +112,7 @@ function restoreSavedCache() {
     rmSync(DEFAULT_CACHE_PATH, { recursive: true });
   }
   // Copy the backed-up cache to the real cache
-  copySync(ALT_CACHE_PATH, DEFAULT_CACHE_PATH, { recursive: true });
+  fs.copySync(ALT_CACHE_PATH, DEFAULT_CACHE_PATH, { recursive: true });
 }
 
 function cachedBuildWithDelta(): Array<Timing> {

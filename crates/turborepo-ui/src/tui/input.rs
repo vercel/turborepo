@@ -31,14 +31,18 @@ pub fn start_crossterm_stream(tx: mpsc::Sender<crossterm::event::Event>) -> Opti
     }))
 }
 
-impl<'a> InputOptions<'a> {
+impl InputOptions<'_> {
     /// Maps a crossterm::event::Event to a tui::Event
     pub fn handle_crossterm_event(self, event: crossterm::event::Event) -> Option<Event> {
         match event {
             crossterm::event::Event::Key(k) => translate_key_event(self, k),
             crossterm::event::Event::Mouse(m) => match m.kind {
-                crossterm::event::MouseEventKind::ScrollDown => Some(Event::ScrollDown),
-                crossterm::event::MouseEventKind::ScrollUp => Some(Event::ScrollUp),
+                crossterm::event::MouseEventKind::ScrollDown => {
+                    Some(Event::ScrollWithMomentum(Direction::Down))
+                }
+                crossterm::event::MouseEventKind::ScrollUp => {
+                    Some(Event::ScrollWithMomentum(Direction::Up))
+                }
                 crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left)
                 | crossterm::event::MouseEventKind::Drag(crossterm::event::MouseButton::Left) => {
                     Some(Event::Mouse(m))
@@ -112,6 +116,10 @@ fn translate_key_event(options: InputOptions, key_event: KeyEvent) -> Option<Eve
         KeyCode::Char('h') => Some(Event::ToggleSidebar),
         KeyCode::Char('u') => Some(Event::ScrollUp),
         KeyCode::Char('d') => Some(Event::ScrollDown),
+        KeyCode::PageUp | KeyCode::Char('U') => Some(Event::PageUp),
+        KeyCode::PageDown | KeyCode::Char('D') => Some(Event::PageDown),
+        KeyCode::Char('t') => Some(Event::JumpToLogsTop),
+        KeyCode::Char('b') => Some(Event::JumpToLogsBottom),
         KeyCode::Char('m') => Some(Event::ToggleHelpPopup),
         KeyCode::Char('p') => Some(Event::TogglePinnedTask),
         KeyCode::Up | KeyCode::Char('k') => Some(Event::Up),
@@ -136,19 +144,19 @@ fn ctrl_c() -> Option<Event> {
 
 #[cfg(windows)]
 fn ctrl_c() -> Option<Event> {
-    use winapi::{
-        shared::minwindef::{BOOL, DWORD, TRUE},
-        um::wincon,
+    use windows_sys::Win32::{
+        Foundation::{BOOL, TRUE},
+        System::Console::GenerateConsoleCtrlEvent,
     };
     // First parameter corresponds to what event to generate, 0 is a Ctrl-C
-    let ctrl_c_event: DWORD = 0x0;
+    let ctrl_c_event = 0x0;
     // Second parameter corresponds to which process group to send the event to.
     // If 0 is passed the event gets sent to every process connected to the current
     // Console.
-    let process_group_id: DWORD = 0x0;
+    let process_group_id = 0x0;
     let success: BOOL = unsafe {
         // See docs https://learn.microsoft.com/en-us/windows/console/generateconsolectrlevent
-        wincon::GenerateConsoleCtrlEvent(ctrl_c_event, process_group_id)
+        GenerateConsoleCtrlEvent(ctrl_c_event, process_group_id)
     };
     if success == TRUE {
         None

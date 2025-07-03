@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use itertools::Itertools;
 use tracing::warn;
 use turbopath::{AbsoluteSystemPath, RelativeUnixPath, RelativeUnixPathBuf};
-use turborepo_microfrontends::{Config as MFEConfig, Error, MICROFRONTENDS_PACKAGES};
+use turborepo_microfrontends::{Config as MFEConfig, Error, MICROFRONTENDS_PACKAGE};
 use turborepo_repository::package_graph::{PackageGraph, PackageName};
 
 use crate::{
@@ -20,7 +20,9 @@ pub struct MicrofrontendsConfigs {
 
 #[derive(Debug, Clone, Default, PartialEq)]
 struct ConfigInfo {
-    tasks: HashSet<TaskId<'static>>,
+    // A map from tasks declared in the configuration to the application that they belong to
+    tasks: HashMap<TaskId<'static>, String>,
+    ports: HashMap<TaskId<'static>, u16>,
     version: &'static str,
     path: Option<RelativeUnixPathBuf>,
 }
@@ -31,24 +33,33 @@ impl MicrofrontendsConfigs {
         repo_root: &AbsoluteSystemPath,
         package_graph: &PackageGraph,
     ) -> Result<Option<Self>, Error> {
-        Self::from_configs(package_graph.packages().map(|(name, info)| {
-            (
-                name.as_str(),
-                MFEConfig::load_from_dir(repo_root, info.package_path()),
-            )
-        }))
+        let package_names = package_graph
+            .packages()
+            .map(|(name, _)| name.as_str())
+            .collect();
+        Self::from_configs(
+            package_names,
+            package_graph.packages().map(|(name, info)| {
+                (
+                    name.as_str(),
+                    MFEConfig::load_from_dir(repo_root, info.package_path()),
+                )
+            }),
+        )
     }
 
     /// Constructs a collection of configurations from a list of configurations
     pub fn from_configs<'a>(
+        package_names: HashSet<&str>,
         configs: impl Iterator<Item = (&'a str, Result<Option<MFEConfig>, Error>)>,
     ) -> Result<Option<Self>, Error> {
         let PackageGraphResult {
             configs,
             missing_default_apps,
+            missing_applications,
             unsupported_version,
             mfe_package,
-        } = PackageGraphResult::new(configs)?;
+        } = PackageGraphResult::new(package_names, configs)?;
 
         for (package, err) in unsupported_version {
             warn!("Ignoring {package}: {err}");
@@ -61,21 +72,26 @@ impl MicrofrontendsConfigs {
             );
         }
 
+        if !missing_applications.is_empty() {
+            warn!(
+                "Unable to find packages referenced in 'microfrontends.json' in workspace. Local \
+                 proxy will not route to the following applications if they are running locally: \
+                 {}",
+                missing_applications.join(", ")
+            );
+        }
+
         Ok((!configs.is_empty()).then_some(Self {
             configs,
             mfe_package,
         }))
     }
 
-    pub fn contains_package(&self, package_name: &str) -> bool {
-        self.configs.contains_key(package_name)
-    }
-
-    pub fn configs(&self) -> impl Iterator<Item = (&String, &HashSet<TaskId<'static>>)> {
+    pub fn configs(&self) -> impl Iterator<Item = (&String, &HashMap<TaskId<'static>, String>)> {
         self.configs.iter().map(|(pkg, info)| (pkg, &info.tasks))
     }
 
-    pub fn get(&self, package_name: &str) -> Option<&HashSet<TaskId<'static>>> {
+    pub fn get(&self, package_name: &str) -> Option<&HashMap<TaskId<'static>, String>> {
         let info = self.configs.get(package_name)?;
         Some(&info.tasks)
     }
@@ -83,13 +99,19 @@ impl MicrofrontendsConfigs {
     pub fn task_has_mfe_proxy(&self, task_id: &TaskId) -> bool {
         self.configs
             .values()
-            .any(|info| info.tasks.contains(task_id))
+            .any(|info| info.tasks.contains_key(task_id))
     }
 
     pub fn config_filename(&self, package_name: &str) -> Option<&RelativeUnixPath> {
         let info = self.configs.get(package_name)?;
         let path = info.path.as_ref()?;
         Some(path)
+    }
+
+    pub fn dev_task_port(&self, task_id: &TaskId) -> Option<u16> {
+        self.configs
+            .values()
+            .find_map(|config| config.ports.get(task_id).copied())
     }
 
     pub fn update_turbo_json(
@@ -128,7 +150,7 @@ impl MicrofrontendsConfigs {
             if let Some(dev) = dev {
                 // If this package has a dev task that's part of the MFE, then we make sure the
                 // proxy gets included in the task graph.
-                turbo_json.with_sibling(
+                turbo_json.with_task(
                     TaskName::from(dev.task()).into_owned(),
                     &proxy.as_task_name(),
                 );
@@ -145,7 +167,7 @@ impl MicrofrontendsConfigs {
         package_name: &PackageName,
     ) -> Option<FindResult<'a>> {
         let results = self.configs.iter().filter_map(|(config, info)| {
-            let dev_task = info.tasks.iter().find_map(|task| {
+            let dev_task = info.tasks.iter().find_map(|(task, _)| {
                 (task.package() == package_name.as_str()).then(|| FindResult {
                     dev: Some(task.as_borrowed()),
                     proxy: TaskId::new(config, "proxy"),
@@ -179,26 +201,26 @@ impl MicrofrontendsConfigs {
 struct PackageGraphResult {
     configs: HashMap<String, ConfigInfo>,
     missing_default_apps: Vec<String>,
+    missing_applications: Vec<String>,
     unsupported_version: Vec<(String, String)>,
     mfe_package: Option<&'static str>,
 }
 
 impl PackageGraphResult {
     fn new<'a>(
+        packages_in_graph: HashSet<&str>,
         packages: impl Iterator<Item = (&'a str, Result<Option<MFEConfig>, Error>)>,
     ) -> Result<Self, Error> {
         let mut configs = HashMap::new();
         let mut referenced_default_apps = HashSet::new();
+        let mut referenced_packages = HashSet::new();
         let mut unsupported_version = Vec::new();
         let mut mfe_package = None;
         // We sort packages to ensure deterministic behavior
         let sorted_packages = packages.sorted_by(|(a, _), (b, _)| a.cmp(b));
         for (package_name, config) in sorted_packages {
-            if let Some(pkg) = MICROFRONTENDS_PACKAGES
-                .iter()
-                .find(|static_pkg| package_name == **static_pkg)
-            {
-                mfe_package = Some(*pkg);
+            if package_name == MICROFRONTENDS_PACKAGE {
+                mfe_package = Some(MICROFRONTENDS_PACKAGE);
             }
 
             let Some(config) = config.or_else(|err| match err {
@@ -219,6 +241,8 @@ impl PackageGraphResult {
             if let Some(path) = config.path() {
                 info.path = Some(path.to_unix());
             }
+            referenced_packages.insert(package_name.to_string());
+            referenced_packages.extend(info.tasks.keys().map(|task| task.package().to_string()));
             configs.insert(package_name.to_string(), info);
         }
         let default_apps_found = configs.keys().cloned().collect();
@@ -227,9 +251,15 @@ impl PackageGraphResult {
             .cloned()
             .collect::<Vec<_>>();
         missing_default_apps.sort();
+        let mut missing_applications = referenced_packages
+            .into_iter()
+            .filter(|package| !packages_in_graph.contains(package.as_str()))
+            .collect::<Vec<_>>();
+        missing_applications.sort();
         Ok(Self {
             configs,
             missing_default_apps,
+            missing_applications,
             unsupported_version,
             mfe_package,
         })
@@ -245,18 +275,21 @@ struct FindResult<'a> {
 
 impl ConfigInfo {
     fn new(config: &MFEConfig) -> Self {
-        let tasks = config
-            .development_tasks()
-            .map(|(application, options)| {
-                let dev_task = options.unwrap_or("dev");
-                TaskId::new(application, dev_task).into_owned()
-            })
-            .collect();
+        let mut ports = HashMap::new();
+        let mut tasks = HashMap::new();
+        for dev_task in config.development_tasks() {
+            let task = TaskId::new(dev_task.package, dev_task.task.unwrap_or("dev")).into_owned();
+            if let Some(port) = config.port(dev_task.application_name) {
+                ports.insert(task.clone(), port);
+            }
+            tasks.insert(task, dev_task.application_name.to_owned());
+        }
         let version = config.version();
 
         Self {
             tasks,
             version,
+            ports,
             path: None,
         }
     }
@@ -265,10 +298,7 @@ impl ConfigInfo {
 #[cfg(test)]
 mod test {
     use serde_json::json;
-    use test_case::test_case;
-    use turborepo_microfrontends::{
-        MICROFRONTENDS_PACKAGE_EXTERNAL, MICROFRONTENDS_PACKAGE_INTERNAL,
-    };
+    use turborepo_microfrontends::MICROFRONTENDS_PACKAGE;
 
     use super::*;
 
@@ -277,11 +307,13 @@ mod test {
             {
                 let mut _map = std::collections::HashMap::new();
                 $(
-                    let mut _dev_tasks = std::collections::HashSet::new();
+                    let mut _dev_tasks = std::collections::HashMap::new();
                     for _dev_task in $dev_tasks.as_slice() {
-                        _dev_tasks.insert(crate::run::task_id::TaskName::from(*_dev_task).task_id().unwrap().into_owned());
+                        let _dev_task_id = crate::run::task_id::TaskName::from(*_dev_task).task_id().unwrap().into_owned();
+                        let _dev_application = _dev_task_id.package().to_owned();
+                        _dev_tasks.insert(_dev_task_id, _dev_application);
                     }
-                    _map.insert($config_owner.to_string(), ConfigInfo { tasks: _dev_tasks, version: "2", path: None });
+                    _map.insert($config_owner.to_string(), ConfigInfo { tasks: _dev_tasks, version: "1", path: None, ports: std::collections::HashMap::new() });
                 )+
                 _map
             }
@@ -303,7 +335,7 @@ mod test {
         pub const fn new(package_name: &'static str) -> Self {
             Self {
                 package_name,
-                version: "2",
+                version: "1",
                 result: None,
             }
         }
@@ -357,64 +389,30 @@ mod test {
         }
     }
 
-    const NON_MFE_PKG: PackageUpdateTest = PackageUpdateTest::new("other-pkg");
-    const MFE_CONFIG_PKG: PackageUpdateTest = PackageUpdateTest::new("z-config-pkg")
-        .v1()
-        .proxy_only("z-config-pkg#proxy");
-    const MFE_CONFIG_PKG_DEV_TASK: PackageUpdateTest =
-        PackageUpdateTest::new("web").dev("web#dev", "web#proxy");
-    const DEFAULT_APP_PROXY: PackageUpdateTest =
-        PackageUpdateTest::new("docs").dev("docs#serve", "web#proxy");
-    const DEFAULT_APP_PROXY_AND_DEV: PackageUpdateTest =
-        PackageUpdateTest::new("web").dev("web#dev", "web#proxy");
-
-    #[test_case(NON_MFE_PKG)]
-    #[test_case(MFE_CONFIG_PKG)]
-    #[test_case(MFE_CONFIG_PKG_DEV_TASK)]
-    #[test_case(DEFAULT_APP_PROXY)]
-    #[test_case(DEFAULT_APP_PROXY_AND_DEV)]
-    fn test_package_turbo_json_update(test: PackageUpdateTest) {
-        let mut configs = mfe_configs!(
-            "z-config-pkg" => ["web#dev", "docs#dev"],
-            "web" => ["web#dev", "docs#serve"]
-        );
-        configs.get_mut("z-config-pkg").unwrap().version = "1";
-        let mfe = MicrofrontendsConfigs {
-            configs,
-            mfe_package: None,
-        };
-        assert_eq!(
-            mfe.package_turbo_json_update(&test.package_name()),
-            test.expected()
-        );
-    }
-
     #[test]
     fn test_mfe_package_is_found() {
         let result = PackageGraphResult::new(
-            vec![
-                // These should never be present in the same graph, but if for some reason they
-                // are, we defer to the external variant.
-                (MICROFRONTENDS_PACKAGE_EXTERNAL, Ok(None)),
-                (MICROFRONTENDS_PACKAGE_INTERNAL, Ok(None)),
-            ]
-            .into_iter(),
+            HashSet::default(),
+            vec![(MICROFRONTENDS_PACKAGE, Ok(None))].into_iter(),
         )
         .unwrap();
-        assert_eq!(result.mfe_package, Some(MICROFRONTENDS_PACKAGE_EXTERNAL));
+        assert_eq!(result.mfe_package, Some(MICROFRONTENDS_PACKAGE));
     }
 
     #[test]
     fn test_no_mfe_package() {
-        let result =
-            PackageGraphResult::new(vec![("foo", Ok(None)), ("bar", Ok(None))].into_iter())
-                .unwrap();
+        let result = PackageGraphResult::new(
+            HashSet::default(),
+            vec![("foo", Ok(None)), ("bar", Ok(None))].into_iter(),
+        )
+        .unwrap();
         assert_eq!(result.mfe_package, None);
     }
 
     #[test]
     fn test_unsupported_versions_ignored() {
         let result = PackageGraphResult::new(
+            HashSet::default(),
             vec![("foo", Err(Error::UnsupportedVersion("bad version".into())))].into_iter(),
         )
         .unwrap();
@@ -424,6 +422,7 @@ mod test {
     #[test]
     fn test_child_configs_with_missing_default() {
         let result = PackageGraphResult::new(
+            HashSet::default(),
             vec![(
                 "child",
                 Err(Error::ChildConfig {
@@ -440,6 +439,7 @@ mod test {
     #[test]
     fn test_io_err_stops_traversal() {
         let result = PackageGraphResult::new(
+            HashSet::default(),
             vec![
                 (
                     "a",
@@ -464,7 +464,7 @@ mod test {
     fn test_dev_task_collection() {
         let config = MFEConfig::from_str(
             &serde_json::to_string_pretty(&json!({
-                "version": "2",
+                "version": "1",
                 "applications": {
                     "web": {},
                     "docs": {
@@ -478,13 +478,94 @@ mod test {
             "something.txt",
         )
         .unwrap();
-        let result = PackageGraphResult::new(vec![("web", Ok(Some(config)))].into_iter()).unwrap();
+        let mut result = PackageGraphResult::new(
+            HashSet::default(),
+            vec![("web", Ok(Some(config)))].into_iter(),
+        )
+        .unwrap();
+        result
+            .configs
+            .values_mut()
+            .for_each(|config| config.ports.clear());
         assert_eq!(
             result.configs,
             mfe_configs!(
                 "web" => ["web#dev", "docs#serve"]
             )
         )
+    }
+
+    #[test]
+    fn test_missing_packages() {
+        let config = MFEConfig::from_str(
+            &serde_json::to_string_pretty(&json!({
+                "version": "1",
+                "applications": {
+                    "web": {},
+                    "docs": {
+                        "development": {
+                            "task": "serve"
+                        }
+                    }
+                }
+            }))
+            .unwrap(),
+            "something.txt",
+        )
+        .unwrap();
+        let missing_result = PackageGraphResult::new(
+            HashSet::default(),
+            vec![("web", Ok(Some(config.clone())))].into_iter(),
+        )
+        .unwrap();
+        assert_eq!(missing_result.missing_applications, vec!["docs", "web"]);
+        let found_result = PackageGraphResult::new(
+            HashSet::from_iter(["docs", "web"].iter().copied()),
+            vec![("web", Ok(Some(config)))].into_iter(),
+        )
+        .unwrap();
+        assert!(
+            found_result.missing_applications.is_empty(),
+            "Expected no missing applications: {:?}",
+            found_result.missing_applications
+        );
+    }
+
+    #[test]
+    fn test_port_collection() {
+        let config = MFEConfig::from_str(
+            &serde_json::to_string_pretty(&json!({
+                "version": "1",
+                "applications": {
+                    "web": {},
+                    "docs": {
+                        "development": {
+                            "task": "serve",
+                            "local": {
+                                "port": 3030
+                            }
+                        }
+                    }
+                }
+            }))
+            .unwrap(),
+            "something.txt",
+        )
+        .unwrap();
+        let result = PackageGraphResult::new(
+            HashSet::default(),
+            vec![("web", Ok(Some(config)))].into_iter(),
+        )
+        .unwrap();
+        let web_ports = result.configs["web"].ports.clone();
+        assert_eq!(
+            web_ports.get(&TaskId::new("docs", "serve")).copied(),
+            Some(3030)
+        );
+        assert_eq!(
+            web_ports.get(&TaskId::new("web", "dev")).copied(),
+            Some(5588)
+        );
     }
 
     #[test]
@@ -507,57 +588,5 @@ mod test {
             .update_turbo_json(&PackageName::Root, Ok(turbo_json))
             .unwrap();
         assert_eq!(actual.global_deps, &["web/microfrontends.json".to_owned()]);
-    }
-
-    #[test]
-    fn test_v2_and_v1() {
-        let config_v2 = MFEConfig::from_str(
-            &serde_json::to_string_pretty(&json!({
-                "version": "2",
-                "applications": {
-                    "web": {},
-                    "docs": {
-                        "development": {
-                            "task": "serve"
-                        }
-                    }
-                }
-            }))
-            .unwrap(),
-            "something.txt",
-        )
-        .unwrap();
-        let config_v1 = MFEConfig::from_str(
-            &serde_json::to_string_pretty(&json!({
-                "version": "1",
-                "applications": {
-                    "web": {},
-                    "docs": {
-                        "development": {
-                            "task": "serve"
-                        }
-                    }
-                }
-            }))
-            .unwrap(),
-            "something.txt",
-        )
-        .unwrap();
-        let result = PackageGraphResult::new(
-            vec![
-                ("web", Ok(Some(config_v2))),
-                ("docs", Ok(None)),
-                ("mfe-config", Ok(Some(config_v1))),
-            ]
-            .into_iter(),
-        )
-        .unwrap();
-        let mut expected = mfe_configs!(
-            "web" => ["web#dev", "docs#serve"],
-            "mfe-config" => ["web#dev", "docs#serve"]
-        );
-        expected.get_mut("mfe-config").unwrap().version = "1";
-
-        assert_eq!(result.configs, expected,)
     }
 }

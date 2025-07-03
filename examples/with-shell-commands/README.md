@@ -1,6 +1,6 @@
 # Turborepo starter with shell commands
 
-This is an official starter Turborepo meant for debugging, learning, and exploring.
+This Turborepo starter is maintained by the Turborepo core team. This template is great for issue reproductions and exploring building task graphs without frameworks.
 
 ## Using this example
 
@@ -34,9 +34,9 @@ This Turborepo includes the following packages:
 
 ### Some scripts to try
 
-If you haven't yet, [install global `turbo`](https://turbo.build/repo/docs/installing#install-globally) to run tasks.
+If you haven't yet, [install global `turbo`](https://turborepo.com/docs/installing#install-globally) to run tasks.
 
-- `turbo build lint typecheck`: Runs all tasks in the default graph.
+- `turbo build lint check-types`: Runs all tasks in the default graph.
 - `turbo build`: A basic command to build `app-a` and `app-b` in parallel.
 - `turbo build --filter=app-a`: Building only `app-a` and its dependencies.
 - `turbo lint`: A basic command for running lints in all packages in parallel.

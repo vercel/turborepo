@@ -6,7 +6,7 @@ export const metadata = {
   title: "Store | Kitchen Sink",
 };
 
-export default function Store(): JSX.Element {
+export default function Store() {
   log("Hey! This is the Store page.");
 
   return (
@@ -18,7 +18,7 @@ export default function Store(): JSX.Element {
       <CounterButton />
       <p className="description">
         Built With{" "}
-        <Link href="https://turbo.build/repo" newTab>
+        <Link href="https://turborepo.com" newTab>
           Turborepo
         </Link>
         {" & "}

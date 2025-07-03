@@ -17,7 +17,7 @@ struct CurrentRun<'a> {
 }
 
 #[Object]
-impl<'a> CurrentRun<'a> {
+impl CurrentRun<'_> {
     async fn tasks(&self) -> Vec<RunTask> {
         self.state
             .lock()

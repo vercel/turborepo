@@ -58,6 +58,7 @@ impl EventBuilder for CommandEventBuilder {
 pub enum LoginMethod {
     SSO,
     Standard,
+    Manual,
 }
 
 impl CommandEventBuilder {
@@ -101,6 +102,17 @@ impl CommandEventBuilder {
         self
     }
 
+    // ui
+    pub fn track_ui_mode(&self, val: impl Display) -> &Self {
+        self.track(Event {
+            key: "ui".to_string(),
+            value: val.to_string(),
+            is_sensitive: EventType::NonSensitive,
+            send_in_ci: false,
+        });
+        self
+    }
+
     // telemetry
     pub fn track_telemetry_config(&self, enabled: bool) -> &Self {
         self.track(Event {
@@ -140,6 +152,7 @@ impl CommandEventBuilder {
             value: match method {
                 LoginMethod::SSO => "sso".to_string(),
                 LoginMethod::Standard => "standard".to_string(),
+                LoginMethod::Manual => "manual".to_string(),
             },
             is_sensitive: EventType::NonSensitive,
             send_in_ci: false,

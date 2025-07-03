@@ -1,4 +1,3 @@
-#![feature(trait_upcasting)]
 #![deny(clippy::all)]
 // the pest proc macro adds an empty doc comment.
 #![allow(clippy::empty_docs)]
@@ -65,6 +64,15 @@ pub trait Lockfile: Send + Sync + Any + std::fmt::Debug {
 
     /// Return any turbo version found in the lockfile
     fn turbo_version(&self) -> Option<String>;
+
+    /// A human friendly version of a lockfile key.
+    /// Usually of the form `package@version`, but version might include
+    /// additional information to convey difference from other packages in
+    /// the lockfile e.g. differing peer dependencies.
+    #[allow(unused)]
+    fn human_name(&self, package: &Package) -> Option<String> {
+        None
+    }
 }
 
 /// Takes a lockfile, and a map of workspace directory paths -> (package name,

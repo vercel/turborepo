@@ -2,7 +2,6 @@ mod command;
 mod error;
 mod exec;
 mod output;
-
 use std::{
     borrow::Cow,
     collections::HashSet,
@@ -11,6 +10,7 @@ use std::{
 };
 
 use console::{Style, StyledObject};
+use convert_case::{Case, Casing};
 use error::{TaskError, TaskWarning};
 use exec::ExecContextFactory;
 use futures::{stream::FuturesUnordered, StreamExt};
@@ -23,6 +23,8 @@ use tracing::{debug, error, warn, Span};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath};
 use turborepo_ci::{Vendor, VendorBehavior};
 use turborepo_env::{platform::PlatformEnv, EnvironmentVariableMap};
+use turborepo_errors::TURBO_SITE;
+use turborepo_process::ProcessManager;
 use turborepo_repository::package_graph::{PackageGraph, PackageName, ROOT_PKG_NAME};
 use turborepo_telemetry::events::{
     generic::GenericEventBuilder, task::PackageTaskEventBuilder, EventBuilder, TrackedErrors,
@@ -36,7 +38,6 @@ use crate::{
     engine::{Engine, ExecutionOptions},
     microfrontends::MicrofrontendsConfigs,
     opts::RunOpts,
-    process::ProcessManager,
     run::{
         global_hash::GlobalHashableInputs,
         summary::{self, GlobalHashSummary, RunTracker},
@@ -51,7 +52,6 @@ use crate::{
 pub struct Visitor<'a> {
     color_cache: ColorSelector,
     dry: bool,
-    global_env: EnvironmentVariableMap,
     global_env_mode: EnvMode,
     manager: ProcessManager,
     run_opts: &'a RunOpts,
@@ -70,38 +70,52 @@ pub struct Visitor<'a> {
 }
 
 #[derive(Debug, thiserror::Error, Diagnostic)]
+#[error(
+    "Your `package.json` script looks like it invokes a Root Task ({task_name}), creating a loop \
+     of `turbo` invocations. You likely have misconfigured your scripts and tasks or your package \
+     manager's Workspace structure."
+)]
+#[diagnostic(
+    code(recursive_turbo_invocations),
+    url(
+            "{}/messages/{}",
+            TURBO_SITE, self.code().unwrap().to_string().to_case(Case::Kebab)
+    )
+)]
+pub struct RecursiveTurboError {
+    pub task_name: String,
+    pub command: String,
+    #[label("This script calls `turbo`, which calls the script, which calls `turbo`...")]
+    pub span: Option<SourceSpan>,
+    #[source_code]
+    pub text: NamedSource<String>,
+}
+
+#[derive(Debug, thiserror::Error, Diagnostic)]
 pub enum Error {
-    #[error("cannot find package {package_name} for task {task_id}")]
+    #[error("Cannot find package {package_name} for task {task_id}.")]
     MissingPackage {
         package_name: PackageName,
         task_id: TaskId<'static>,
     },
-    #[error(
-        "root task {task_name} ({command}) looks like it invokes turbo and might cause a loop"
-    )]
-    RecursiveTurbo {
-        task_name: String,
-        command: String,
-        #[label("task found here")]
-        span: Option<SourceSpan>,
-        #[source_code]
-        text: NamedSource,
-    },
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    RecursiveTurbo(Box<RecursiveTurboError>),
     #[error("Could not find definition for task")]
     MissingDefinition,
-    #[error("error while executing engine: {0}")]
+    #[error("Error while executing engine: {0}")]
     Engine(#[from] crate::engine::ExecuteError),
     #[error(transparent)]
     TaskHash(#[from] task_hash::Error),
     #[error(transparent)]
     RunSummary(#[from] summary::Error),
-    #[error("internal errors encountered: {0}")]
+    #[error("Internal errors encountered: {0}")]
     InternalErrors(String),
-    #[error("unable to find package manager binary: {0}")]
+    #[error("Unable to find package manager binary: {0}")]
     Which(#[from] which::Error),
     #[error(
         "'{package}' is configured with a {mfe_config_filename}, but doesn't have \
-         '@vercel/microfrontends' listed as a dependency"
+         '@vercel/microfrontends' listed as a dependency."
     )]
     MissingMFEDependency {
         package: String,
@@ -136,6 +150,7 @@ impl<'a> Visitor<'a> {
             run_opts,
             env_at_execution_start,
             global_hash,
+            global_env,
         );
 
         let sink = Self::sink(run_opts);
@@ -162,7 +177,6 @@ impl<'a> Visitor<'a> {
             sink,
             task_hasher,
             color_config,
-            global_env,
             ui_sender,
             is_watch,
             warnings: Default::default(),
@@ -215,12 +229,13 @@ impl<'a> Visitor<'a> {
                 Some(cmd) if info.package() == ROOT_PKG_NAME && turbo_regex().is_match(cmd) => {
                     package_task_event.track_error(TrackedErrors::RecursiveError);
                     let (span, text) = cmd.span_and_text("package.json");
-                    return Err(Error::RecursiveTurbo {
+
+                    return Err(Error::RecursiveTurbo(Box::new(RecursiveTurboError {
                         task_name: info.to_string(),
                         command: cmd.to_string(),
                         span,
                         text,
-                    });
+                    })));
                 }
                 _ => (),
             }
@@ -248,9 +263,9 @@ impl<'a> Visitor<'a> {
             // We do this calculation earlier than we do in Go due to the `task_hasher`
             // being !Send. In the future we can look at doing this right before
             // task execution instead.
-            let execution_env =
-                self.task_hasher
-                    .env(&info, task_env_mode, task_definition, &self.global_env)?;
+            let execution_env = self
+                .task_hasher
+                .env(&info, task_env_mode, task_definition)?;
 
             let task_cache = self.run_cache.task_cache(
                 task_definition,
@@ -301,7 +316,6 @@ impl<'a> Visitor<'a> {
                     };
 
                     let tracker = self.run_tracker.track_task(info.clone().into_owned());
-                    let spaces_client = self.run_tracker.spaces_task_client();
                     let parent_span = Span::current();
                     let execution_telemetry = package_task_event.child();
 
@@ -312,7 +326,6 @@ impl<'a> Visitor<'a> {
                                 tracker,
                                 output_client,
                                 callback,
-                                spaces_client,
                                 &execution_telemetry,
                             )
                             .await
@@ -357,7 +370,6 @@ impl<'a> Visitor<'a> {
 
     /// Finishes visiting the tasks, creates the run summary, and either
     /// prints, saves, or sends it to spaces.
-
     #[allow(clippy::too_many_arguments)]
     #[tracing::instrument(skip(
         self,
@@ -442,9 +454,6 @@ impl<'a> Visitor<'a> {
         vendor_behavior: Option<&VendorBehavior>,
     ) -> OutputClient<impl std::io::Write> {
         let behavior = match self.run_opts.log_order {
-            crate::opts::ResolvedLogOrder::Stream if self.run_tracker.spaces_enabled() => {
-                turborepo_ui::OutputClientBehavior::InMemoryBuffer
-            }
             crate::opts::ResolvedLogOrder::Stream => {
                 turborepo_ui::OutputClientBehavior::Passthrough
             }

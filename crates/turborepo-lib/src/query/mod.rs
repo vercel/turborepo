@@ -1,5 +1,8 @@
+mod boundaries;
+mod external_package;
 mod file;
 mod package;
+mod package_graph;
 mod server;
 mod task;
 
@@ -11,35 +14,39 @@ use std::{
 
 use async_graphql::{http::GraphiQLSource, *};
 use axum::{response, response::IntoResponse};
-use miette::Diagnostic;
+use external_package::ExternalPackage;
+use itertools::Itertools;
 use package::Package;
+use package_graph::{Edge, PackageGraph};
 pub use server::run_server;
 use thiserror::Error;
 use tokio::select;
 use turbo_trace::TraceError;
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_repository::{change_mapper::AllPackageChangeReason, package_graph::PackageName};
+use turborepo_signals::SignalHandler;
 
 use crate::{
     get_version,
     query::{file::File, task::RepositoryTask},
     run::{builder::RunBuilder, Run},
-    signal::SignalHandler,
 };
 
-#[derive(Error, Debug, Diagnostic)]
+#[derive(Error, Debug, miette::Diagnostic)]
 pub enum Error {
-    #[error("failed to get file dependencies")]
+    #[error(transparent)]
+    Boundaries(#[from] crate::boundaries::Error),
+    #[error("Failed to get file dependencies")]
     Trace(#[related] Vec<TraceError>),
-    #[error("no signal handler")]
+    #[error("No signal handler.")]
     NoSignalHandler,
-    #[error("file `{0}` not found")]
+    #[error("File `{0}` not found.")]
     FileNotFound(String),
-    #[error("failed to start GraphQL server")]
+    #[error("Failed to start GraphQL server.")]
     Server(#[from] io::Error),
-    #[error("package not found: {0}")]
+    #[error("Package not found: {0}")]
     PackageNotFound(PackageName),
-    #[error("failed to serialize result: {0}")]
+    #[error("Failed to serialize result: {0}")]
     Serde(#[from] serde_json::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
@@ -52,8 +59,10 @@ pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Resolution(#[from] crate::run::scope::filter::ResolutionError),
-    #[error("failed to parse file: {0:?}")]
+    #[error("Failed to parse file: {0:?}")]
     Parse(swc_ecma_parser::error::Error),
+    #[error(transparent)]
+    SignalListener(#[from] turborepo_signals::listeners::Error),
 }
 
 pub struct RepositoryQuery {
@@ -64,6 +73,82 @@ impl RepositoryQuery {
     pub fn new(run: Arc<Run>) -> Self {
         Self { run }
     }
+
+    fn convert_change_reason(
+        &self,
+        reason: turborepo_repository::change_mapper::PackageInclusionReason,
+    ) -> PackageChangeReason {
+        match reason {
+            turborepo_repository::change_mapper::PackageInclusionReason::All(
+                AllPackageChangeReason::GlobalDepsChanged { file },
+            ) => PackageChangeReason::GlobalDepsChanged(GlobalDepsChanged {
+                file_path: file.to_string(),
+            }),
+            turborepo_repository::change_mapper::PackageInclusionReason::All(
+                AllPackageChangeReason::DefaultGlobalFileChanged { file },
+            ) => PackageChangeReason::DefaultGlobalFileChanged(DefaultGlobalFileChanged {
+                file_path: file.to_string(),
+            }),
+            turborepo_repository::change_mapper::PackageInclusionReason::All(
+                AllPackageChangeReason::LockfileChangeDetectionFailed,
+            ) => {
+                PackageChangeReason::LockfileChangeDetectionFailed(LockfileChangeDetectionFailed {
+                    empty: false,
+                })
+            }
+            turborepo_repository::change_mapper::PackageInclusionReason::All(
+                AllPackageChangeReason::GitRefNotFound { from_ref, to_ref },
+            ) => PackageChangeReason::GitRefNotFound(GitRefNotFound { from_ref, to_ref }),
+            turborepo_repository::change_mapper::PackageInclusionReason::All(
+                AllPackageChangeReason::LockfileChangedWithoutDetails,
+            ) => {
+                PackageChangeReason::LockfileChangedWithoutDetails(LockfileChangedWithoutDetails {
+                    empty: false,
+                })
+            }
+            turborepo_repository::change_mapper::PackageInclusionReason::All(
+                AllPackageChangeReason::RootInternalDepChanged { root_internal_dep },
+            ) => PackageChangeReason::RootInternalDepChanged(RootInternalDepChanged {
+                root_internal_dep: root_internal_dep.to_string(),
+            }),
+            turborepo_repository::change_mapper::PackageInclusionReason::RootTask { task } => {
+                PackageChangeReason::RootTask(RootTask {
+                    task_name: task.to_string(),
+                })
+            }
+            turborepo_repository::change_mapper::PackageInclusionReason::ConservativeRootLockfileChanged => {
+                PackageChangeReason::ConservativeRootLockfileChanged(ConservativeRootLockfileChanged { empty: false })
+            }
+            turborepo_repository::change_mapper::PackageInclusionReason::LockfileChanged { removed, added } => {
+                let removed = removed.into_iter().map(|package| ExternalPackage::new(self.run.clone(), package)).collect::<Array<_>>();
+                let added = added.into_iter().map(|package| ExternalPackage::new(self.run.clone(), package)).collect::<Array<_>>();
+                PackageChangeReason::LockfileChanged(LockfileChanged { empty: false, removed, added })
+            }
+            turborepo_repository::change_mapper::PackageInclusionReason::DependencyChanged {
+                dependency,
+            } => PackageChangeReason::DependencyChanged(DependencyChanged {
+                dependency_name: dependency.to_string(),
+            }),
+            turborepo_repository::change_mapper::PackageInclusionReason::DependentChanged {
+                dependent,
+            } => PackageChangeReason::DependentChanged(DependentChanged {
+                dependent_name: dependent.to_string(),
+            }),
+            turborepo_repository::change_mapper::PackageInclusionReason::FileChanged { file } => {
+                PackageChangeReason::FileChanged(FileChanged {
+                    file_path: file.to_string(),
+                })
+            }
+            turborepo_repository::change_mapper::PackageInclusionReason::InFilteredDirectory {
+                directory,
+            } => PackageChangeReason::InFilteredDirectory(InFilteredDirectory {
+                directory_path: directory.to_string(),
+            }),
+            turborepo_repository::change_mapper::PackageInclusionReason::IncludedByFilter {
+                filters,
+            } => PackageChangeReason::IncludedByFilter(IncludedByFilter { filters }),
+        }
+    }
 }
 
 #[derive(Debug, SimpleObject)]
@@ -71,10 +156,21 @@ impl RepositoryQuery {
 #[graphql(concrete(name = "Packages", params(Package)))]
 #[graphql(concrete(name = "ChangedPackages", params(ChangedPackage)))]
 #[graphql(concrete(name = "Files", params(File)))]
-#[graphql(concrete(name = "TraceErrors", params(file::TraceError)))]
+#[graphql(concrete(name = "ExternalPackages", params(ExternalPackage)))]
+#[graphql(concrete(name = "Diagnostics", params(Diagnostic)))]
+#[graphql(concrete(name = "Edges", params(Edge)))]
 pub struct Array<T: OutputType> {
     items: Vec<T>,
     length: usize,
+}
+
+impl<T: ObjectType> From<Vec<T>> for Array<T> {
+    fn from(value: Vec<T>) -> Self {
+        Self {
+            length: value.len(),
+            items: value,
+        }
+    }
 }
 
 impl<T: OutputType> Deref for Array<T> {
@@ -295,7 +391,8 @@ impl PackagePredicate {
         let less_than = self
             .less_than
             .as_ref()
-            .map(|pair| Self::check_greater_than(pkg, &pair.field, &pair.value));
+            .map(|pair| Self::check_less_than(pkg, &pair.field, &pair.value));
+
         let not = self.not.as_ref().map(|predicate| !predicate.check(pkg));
         let has = self
             .has
@@ -375,6 +472,8 @@ struct ConservativeRootLockfileChanged {
 struct LockfileChanged {
     /// This is a nothing field
     empty: bool,
+    removed: Array<ExternalPackage>,
+    added: Array<ExternalPackage>,
 }
 
 #[derive(SimpleObject)]
@@ -416,79 +515,6 @@ enum PackageChangeReason {
     InFilteredDirectory(InFilteredDirectory),
 }
 
-impl From<turborepo_repository::change_mapper::PackageInclusionReason> for PackageChangeReason {
-    fn from(value: turborepo_repository::change_mapper::PackageInclusionReason) -> Self {
-        match value {
-            turborepo_repository::change_mapper::PackageInclusionReason::All(
-                AllPackageChangeReason::GlobalDepsChanged { file },
-            ) => PackageChangeReason::GlobalDepsChanged(GlobalDepsChanged {
-                file_path: file.to_string(),
-            }),
-            turborepo_repository::change_mapper::PackageInclusionReason::All(
-                AllPackageChangeReason::DefaultGlobalFileChanged { file },
-            ) => PackageChangeReason::DefaultGlobalFileChanged(DefaultGlobalFileChanged {
-                file_path: file.to_string(),
-            }),
-            turborepo_repository::change_mapper::PackageInclusionReason::All(
-                AllPackageChangeReason::LockfileChangeDetectionFailed,
-            ) => {
-                PackageChangeReason::LockfileChangeDetectionFailed(LockfileChangeDetectionFailed {
-                    empty: false,
-                })
-            }
-            turborepo_repository::change_mapper::PackageInclusionReason::All(
-                AllPackageChangeReason::GitRefNotFound { from_ref, to_ref },
-            ) => PackageChangeReason::GitRefNotFound(GitRefNotFound { from_ref, to_ref }),
-            turborepo_repository::change_mapper::PackageInclusionReason::All(
-                AllPackageChangeReason::LockfileChangedWithoutDetails,
-            ) => {
-                PackageChangeReason::LockfileChangedWithoutDetails(LockfileChangedWithoutDetails {
-                    empty: false,
-                })
-            }
-            turborepo_repository::change_mapper::PackageInclusionReason::All(
-                AllPackageChangeReason::RootInternalDepChanged { root_internal_dep },
-            ) => PackageChangeReason::RootInternalDepChanged(RootInternalDepChanged {
-                root_internal_dep: root_internal_dep.to_string(),
-            }),
-            turborepo_repository::change_mapper::PackageInclusionReason::RootTask { task } => {
-                PackageChangeReason::RootTask(RootTask {
-                    task_name: task.to_string(),
-                })
-            }
-            turborepo_repository::change_mapper::PackageInclusionReason::ConservativeRootLockfileChanged => {
-                PackageChangeReason::ConservativeRootLockfileChanged(ConservativeRootLockfileChanged { empty: false })
-            }
-            turborepo_repository::change_mapper::PackageInclusionReason::LockfileChanged => {
-                PackageChangeReason::LockfileChanged(LockfileChanged { empty: false })
-            }
-            turborepo_repository::change_mapper::PackageInclusionReason::DependencyChanged {
-                dependency,
-            } => PackageChangeReason::DependencyChanged(DependencyChanged {
-                dependency_name: dependency.to_string(),
-            }),
-            turborepo_repository::change_mapper::PackageInclusionReason::DependentChanged {
-                dependent,
-            } => PackageChangeReason::DependentChanged(DependentChanged {
-                dependent_name: dependent.to_string(),
-            }),
-            turborepo_repository::change_mapper::PackageInclusionReason::FileChanged { file } => {
-                PackageChangeReason::FileChanged(FileChanged {
-                    file_path: file.to_string(),
-                })
-            }
-            turborepo_repository::change_mapper::PackageInclusionReason::InFilteredDirectory {
-                directory,
-            } => PackageChangeReason::InFilteredDirectory(InFilteredDirectory {
-                directory_path: directory.to_string(),
-            }),
-            turborepo_repository::change_mapper::PackageInclusionReason::IncludedByFilter {
-                filters,
-            } => PackageChangeReason::IncludedByFilter(IncludedByFilter { filters }),
-        }
-    }
-}
-
 #[derive(SimpleObject)]
 struct ChangedPackage {
     reason: PackageChangeReason,
@@ -518,14 +544,14 @@ impl RepositoryQuery {
         .map(|(package, reason)| {
             Ok(ChangedPackage {
                 package: Package::new(self.run.clone(), package)?,
-                reason: reason.into(),
+                reason: self.convert_change_reason(reason),
             })
         })
         .filter(|package: &Result<ChangedPackage, Error>| {
             let Ok(package) = package.as_ref() else {
                 return true;
             };
-            filter.as_ref().map_or(true, |f| f.check(&package.package))
+            filter.as_ref().is_none_or(|f| f.check(&package.package))
         })
         .collect::<Result<Array<_>, _>>()?;
 
@@ -541,6 +567,27 @@ impl RepositoryQuery {
 
     async fn version(&self) -> &'static str {
         get_version()
+    }
+
+    /// Check boundaries for all packages.
+    async fn boundaries(&self) -> Result<Array<Diagnostic>, Error> {
+        match self.run.check_boundaries(false).await {
+            Ok(result) => Ok(result
+                .diagnostics
+                .into_iter()
+                .map(|b| b.into())
+                .sorted_by(|a: &Diagnostic, b: &Diagnostic| a.message.cmp(&b.message))
+                .collect()),
+            Err(err) => Err(Error::Boundaries(err)),
+        }
+    }
+
+    async fn package_graph(
+        &self,
+        center: Option<String>,
+        filter: Option<PackagePredicate>,
+    ) -> PackageGraph {
+        PackageGraph::new(self.run.clone(), center, filter)
     }
 
     async fn file(&self, path: String) -> Result<File, Error> {
@@ -571,7 +618,7 @@ impl RepositoryQuery {
             .pkg_dep_graph()
             .packages()
             .map(|(name, _)| Package::new(self.run.clone(), name.clone()))
-            .filter(|pkg| pkg.as_ref().map_or(false, |pkg| filter.check(pkg)))
+            .filter(|pkg| pkg.as_ref().is_ok_and(|pkg| filter.check(pkg)))
             .collect::<Result<Array<_>, _>>()?;
         packages.sort_by(|a, b| a.get_name().cmp(b.get_name()));
 
@@ -599,4 +646,14 @@ pub async fn run_query_server(run: Run, signal: SignalHandler) -> Result<(), Err
     }
 
     Ok(())
+}
+
+#[derive(SimpleObject, Debug, Default)]
+pub struct Diagnostic {
+    pub message: String,
+    pub reason: Option<String>,
+    pub path: Option<String>,
+    pub import: Option<String>,
+    pub start: Option<usize>,
+    pub end: Option<usize>,
 }

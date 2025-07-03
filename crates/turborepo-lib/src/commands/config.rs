@@ -17,7 +17,6 @@ struct ConfigOutput<'a> {
     timeout: u64,
     upload_timeout: u64,
     enabled: bool,
-    spaces_id: Option<&'a str>,
     ui: UIMode,
     package_manager: &'static str,
     daemon: Option<bool>,
@@ -25,6 +24,7 @@ struct ConfigOutput<'a> {
     scm_base: Option<&'a str>,
     scm_head: Option<&'a str>,
     cache_dir: &'a Utf8Path,
+    concurrency: Option<&'a str>,
 }
 
 pub async fn run(repo_root: AbsoluteSystemPathBuf, args: Args) -> Result<(), cli::Error> {
@@ -49,7 +49,6 @@ pub async fn run(repo_root: AbsoluteSystemPathBuf, args: Args) -> Result<(), cli
             timeout: config.timeout(),
             upload_timeout: config.upload_timeout(),
             enabled: config.enabled(),
-            spaces_id: config.spaces_id(),
             ui: config.ui(),
             package_manager,
             daemon: config.daemon,
@@ -57,6 +56,7 @@ pub async fn run(repo_root: AbsoluteSystemPathBuf, args: Args) -> Result<(), cli
             scm_base: config.scm_base(),
             scm_head: config.scm_head(),
             cache_dir: config.cache_dir(),
+            concurrency: config.concurrency.as_deref()
         })?
     );
     Ok(())

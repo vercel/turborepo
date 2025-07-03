@@ -22,24 +22,24 @@ use super::Lockfile;
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("unable to parse yaml: {0}")]
+    #[error("Unable to parse yaml: {0}")]
     Parse(#[from] serde_yaml::Error),
-    #[error("unable to parse identifier: {0}")]
+    #[error("Unable to parse identifier: {0}")]
     Identifiers(#[from] identifiers::Error),
-    #[error("unable to find original package in patch locator {0}")]
+    #[error("Unable to find original package in patch locator {0}")]
     PatchMissingOriginalLocator(Locator<'static>),
-    #[error("unable to parse resolutions field: {0}")]
+    #[error("Unable to parse resolutions field: {0}")]
     Resolutions(#[from] resolution::Error),
-    #[error("unable to find entry for {0}")]
+    #[error("Unable to find entry for {0}")]
     MissingPackageForLocator(Locator<'static>),
-    #[error("unable to find any locator for {0}")]
+    #[error("Unable to find any locator for {0}")]
     MissingLocator(Descriptor<'static>),
     #[error("Descriptor collision {descriptor} and {other}")]
     DescriptorCollision {
         descriptor: Descriptor<'static>,
         other: String,
     },
-    #[error("unable to parse as patch reference: {0}")]
+    #[error("Unable to parse as patch reference: {0}")]
     InvalidPatchReference(String),
 }
 
@@ -440,9 +440,7 @@ impl Lockfile for BerryLockfile {
             .locator_for_workspace_path(workspace_path)
             .ok_or_else(|| crate::Error::MissingWorkspace(workspace_path.to_string()))?;
 
-        let dependency = self
-            .resolve_dependency(workspace_locator, name, version)
-            .map_err(Error::from)?;
+        let dependency = self.resolve_dependency(workspace_locator, name, version)?;
 
         let Some(locator) = self.resolutions.get(&dependency) else {
             return Ok(None);
@@ -530,6 +528,14 @@ impl Lockfile for BerryLockfile {
             .find(|key| turbo_ident == key.ident)?;
         let entry = self.locator_package.get(key)?;
         Some(entry.version.clone())
+    }
+
+    fn human_name(&self, package: &crate::Package) -> Option<String> {
+        let locator = Locator::try_from(package.key.as_str()).ok()?;
+        let berry_package = self.locator_package.get(&locator)?;
+        let name = locator.ident.to_string();
+        let version = &berry_package.version;
+        Some(format!("{name}@{version}"))
     }
 }
 

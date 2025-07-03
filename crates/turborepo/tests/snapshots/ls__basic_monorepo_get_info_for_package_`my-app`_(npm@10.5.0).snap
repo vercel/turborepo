@@ -1,0 +1,29 @@
+---
+source: crates/turborepo/tests/ls.rs
+expression: query_output
+---
+{
+  "packages": [
+    {
+      "name": "my-app",
+      "path": "apps/my-app",
+      "tasks": {
+        "count": 2,
+        "items": [
+          {
+            "name": "build",
+            "command": "echo building"
+          },
+          {
+            "name": "maybefails",
+            "command": "exit 4"
+          }
+        ]
+      },
+      "dependencies": [
+        "util"
+      ],
+      "dependents": []
+    }
+  ]
+}

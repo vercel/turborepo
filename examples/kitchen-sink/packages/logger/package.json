@@ -1,17 +1,31 @@
 {
   "name": "@repo/logger",
   "version": "0.0.0",
+  "type": "module",
   "private": true,
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
   "files": [
-    "dist/**"
+    "dist"
   ],
+  "main": "./dist/es/index.js",
+  "module": "./dist/es/index.js",
+  "types": "./dist/es/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/es/index.d.ts",
+        "default": "./dist/es/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/index.d.cts",
+        "default": "./dist/cjs/index.cjs"
+      }
+    }
+  },
   "scripts": {
-    "build": "tsup",
-    "dev": "tsup --watch",
+    "build": "bunchee",
+    "dev": "bunchee --watch",
     "lint": "eslint src/",
-    "typecheck": "tsc --noEmit",
+    "check-types": "tsc --noEmit",
     "test": "jest"
   },
   "jest": {
@@ -22,9 +36,10 @@
     "@repo/eslint-config": "workspace:*",
     "@repo/jest-presets": "workspace:*",
     "@repo/typescript-config": "workspace:*",
-    "@types/node": "^20.11.24",
+    "@types/node": "^22.15.3",
+    "bunchee": "^6.4.0",
+    "eslint": "^9.30.0",
     "jest": "^29.7.0",
-    "tsup": "^8.0.2",
-    "typescript": "5.5.4"
+    "typescript": "5.8.2"
   }
 }

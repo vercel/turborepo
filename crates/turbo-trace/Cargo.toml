@@ -1,7 +1,7 @@
 [package]
 name = "turbo-trace"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 license = "MIT"
 
 [dependencies]
@@ -10,7 +10,7 @@ clap = { version = "4.5.17", features = ["derive"] }
 futures = { workspace = true }
 globwalk = { version = "0.1.0", path = "../turborepo-globwalk" }
 miette = { workspace = true, features = ["fancy"] }
-oxc_resolver = { version = "2.1.0" }
+oxc_resolver = { workspace = true }
 swc_common = { workspace = true, features = ["concurrent", "tty-emitter"] }
 swc_ecma_ast = { workspace = true }
 swc_ecma_parser = { workspace = true }

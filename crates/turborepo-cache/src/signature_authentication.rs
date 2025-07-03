@@ -244,7 +244,7 @@ mod tests {
     }
 
     fn test_signature(test_case: TestCase) -> Result<()> {
-        env::set_var("TURBO_REMOTE_CACHE_SIGNATURE_KEY", test_case.secret_key);
+        unsafe { env::set_var("TURBO_REMOTE_CACHE_SIGNATURE_KEY", test_case.secret_key) };
         let signature = ArtifactSignatureAuthenticator {
             team_id: test_case.team_id.to_vec(),
             secret_key_override: None,
@@ -261,7 +261,7 @@ mod tests {
         assert!(!signature.validate(hash, artifact_body, &bad_tag)?);
 
         // Change the key
-        env::set_var("TURBO_REMOTE_CACHE_SIGNATURE_KEY", "some other key");
+        unsafe { env::set_var("TURBO_REMOTE_CACHE_SIGNATURE_KEY", "some other key") };
 
         // Confirm that the tag is no longer valid
         assert!(!signature.validate_tag(hash, artifact_body, tag.as_ref())?);

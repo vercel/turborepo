@@ -1,0 +1,24 @@
+---
+source: crates/turborepo/tests/ls.rs
+expression: query_output
+---
+{
+  "packageManager": "npm",
+  "packages": {
+    "count": 3,
+    "items": [
+      {
+        "name": "another",
+        "path": "packages/another"
+      },
+      {
+        "name": "my-app",
+        "path": "apps/my-app"
+      },
+      {
+        "name": "util",
+        "path": "packages/util"
+      }
+    ]
+  }
+}

@@ -1,7 +1,7 @@
 import path from "node:path";
 import type { CopyFilterAsync } from "fs-extra";
-import { rm, writeJSON, readJSON, copy, existsSync } from "fs-extra";
-import { bold } from "picocolors";
+import fs from "fs-extra";
+import picocolors from "picocolors";
 import {
   createProject,
   logger,
@@ -34,8 +34,10 @@ export async function generate({ project, opts }: TurboGeneratorArguments) {
     });
 
     try {
-      if (existsSync(newPackageJsonPath)) {
-        const packageJson = (await readJSON(newPackageJsonPath)) as PackageJson;
+      if (fs.existsSync(newPackageJsonPath)) {
+        const packageJson = (await fs.readJSON(
+          newPackageJsonPath
+        )) as PackageJson;
         if (packageJson.workspaces) {
           throw new Error(
             "New workspace root detected - unexpected 'workspaces' field in package.json"
@@ -45,7 +47,7 @@ export async function generate({ project, opts }: TurboGeneratorArguments) {
         throw new Error("New workspace is missing a package.json file");
       }
 
-      if (existsSync(path.join(location.absolute, "pnpm-workspace.yaml"))) {
+      if (fs.existsSync(path.join(location.absolute, "pnpm-workspace.yaml"))) {
         throw new Error(
           "New workspace root detected - unexpected pnpm-workspace.yaml"
         );
@@ -58,7 +60,7 @@ export async function generate({ project, opts }: TurboGeneratorArguments) {
       logger.error(message);
 
       // rollback changes
-      await rm(location.absolute, { recursive: true, force: true });
+      await fs.rm(location.absolute, { recursive: true, force: true });
       return;
     }
   } else if (source) {
@@ -69,14 +71,14 @@ export async function generate({ project, opts }: TurboGeneratorArguments) {
       `Creating "${name}" from "${source.name}"...`
     );
     loader.start();
-    await copy(source.paths.root, location.absolute, {
+    await fs.copy(source.paths.root, location.absolute, {
       filter: filterFunc,
     });
     loader.stop();
   }
 
   // update package.json with new name
-  const packageJson = (await readJSON(newPackageJsonPath)) as PackageJson;
+  const packageJson = (await fs.readJSON(newPackageJsonPath)) as PackageJson;
   packageJson.name = name;
 
   // update dependencies
@@ -86,12 +88,12 @@ export async function generate({ project, opts }: TurboGeneratorArguments) {
       packageJson[group as keyof DependencyGroups] = deps;
     }
   });
-  await writeJSON(newPackageJsonPath, packageJson, { spaces: 2 });
+  await fs.writeJSON(newPackageJsonPath, packageJson, { spaces: 2 });
 
   logger.log();
   logger.log(
-    `${bold(logger.turboGradient(">>> Success!"))} Created ${name} at "${
-      location.relative
-    }"`
+    `${picocolors.bold(
+      logger.turboGradient(">>> Success!")
+    )} Created ${name} at "${location.relative}"`
   );
 }

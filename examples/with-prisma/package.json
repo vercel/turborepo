@@ -11,6 +11,7 @@
   "scripts": {
     "build": "turbo run build",
     "db:migrate:deploy": "turbo run db:migrate:deploy",
+    "db:migrate:dev": "turbo run db:migrate:dev",
     "db:push": "turbo run db:push",
     "db:seed": "turbo run db:seed",
     "dev": "turbo run dev",
@@ -20,9 +21,9 @@
   },
   "devDependencies": {
     "prettier": "^3.2.5",
-    "prisma": "5.10.2",
+    "prisma": "latest",
     "tsx": "4.19.1",
-    "turbo": "^2.0.3"
+    "turbo": "2.5.0"
   },
   "engines": {
     "node": ">=18"
@@ -30,6 +31,6 @@
   "packageManager": "yarn@1.22.19",
   "name": "with-prisma",
   "dependencies": {
-    "@prisma/client": "5.10.2"
+    "@prisma/client": "latest"
   }
 }

@@ -9,16 +9,17 @@ pub enum Error {
     #[error("Unable to parse JSON: {0}")]
     JsonParse(String),
     #[error(
-        "Unsupported micro-frontends configuration version: {0}. Supported versions: \
+        "Unsupported microfrontends configuration version: {0}. Supported versions: \
          {SUPPORTED_VERSIONS:?}"
     )]
     UnsupportedVersion(String),
-    #[error("Configuration references config located in package {reference}")]
+    #[error("Configuration references config located in package {reference}.")]
     ChildConfig { reference: String },
-    #[error("Cannot parse config with version '{actual}' as version '{expected}'")]
+    #[error("`{path}`: Cannot parse config with version '{actual}' as version '{expected}'.")]
     InvalidVersion {
         expected: &'static str,
         actual: String,
+        path: String,
     },
 }
 
@@ -27,7 +28,7 @@ impl Error {
     pub fn biome_error(errors: Vec<biome_diagnostics::Error>) -> Self {
         let error_messages = errors
             .into_iter()
-            .map(|err| ParseDiagnostic::from(err).to_string())
+            .map(|err| ParseDiagnostic::from(err.as_ref()).to_string())
             .collect::<Vec<_>>();
         Self::JsonParse(error_messages.join("\n"))
     }

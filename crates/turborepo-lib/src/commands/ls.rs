@@ -5,20 +5,20 @@ use serde::Serialize;
 use thiserror::Error;
 use turbopath::AnchoredSystemPath;
 use turborepo_repository::package_graph::{PackageName, PackageNode};
+use turborepo_signals::{listeners::get_signal, SignalHandler};
 use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_ui::{color, cprint, cprintln, ColorConfig, BOLD, BOLD_GREEN, GREY};
 
 use crate::{
     cli,
     cli::OutputFormat,
-    commands::{run::get_signal, CommandBase},
+    commands::CommandBase,
     run::{builder::RunBuilder, Run},
-    signal::SignalHandler,
 };
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
-    #[error("package `{package}` not found")]
+    #[error("Package `{package}` not found.")]
     PackageNotFound { package: String },
 }
 
@@ -79,9 +79,11 @@ struct PackageTask<'a> {
 struct PackageDetails<'a> {
     #[serde(skip)]
     color_config: ColorConfig,
+    path: &'a AnchoredSystemPath,
     name: &'a str,
     tasks: Vec<PackageTask<'a>>,
     dependencies: Vec<&'a str>,
+    dependents: Vec<&'a str>,
 }
 
 #[derive(Clone, Serialize)]
@@ -92,15 +94,19 @@ struct PackageDetailsList<'a> {
 #[derive(Serialize)]
 struct PackageDetailsDisplay<'a> {
     name: &'a str,
+    path: &'a AnchoredSystemPath,
     tasks: ItemsWithCount<PackageTask<'a>>,
     dependencies: Vec<&'a str>,
+    dependents: Vec<&'a str>,
 }
 
 impl<'a> From<PackageDetails<'a>> for PackageDetailsDisplay<'a> {
     fn from(val: PackageDetails<'a>) -> Self {
         PackageDetailsDisplay {
             name: val.name,
+            path: val.path,
             dependencies: val.dependencies,
+            dependents: val.dependents,
             tasks: ItemsWithCount {
                 count: val.tasks.len(),
                 items: val.tasks,
@@ -232,6 +238,12 @@ impl<'a> PackageDetails<'a> {
             })?;
 
         let transitive_dependencies = package_graph.transitive_closure(Some(&package_node));
+        let package_path = package_graph
+            .package_info(package_node.as_package_name())
+            .ok_or_else(|| Error::PackageNotFound {
+                package: package.to_string(),
+            })?
+            .package_path();
 
         let mut package_dep_names: Vec<&str> = transitive_dependencies
             .into_iter()
@@ -243,10 +255,23 @@ impl<'a> PackageDetails<'a> {
             .collect();
         package_dep_names.sort();
 
+        let mut package_rdep_names: Vec<&str> = package_graph
+            .ancestors(&package_node)
+            .into_iter()
+            .filter_map(|dependent| match dependent {
+                PackageNode::Root | PackageNode::Workspace(PackageName::Root) => None,
+                PackageNode::Workspace(PackageName::Other(dep_name)) if dep_name == package => None,
+                PackageNode::Workspace(PackageName::Other(dep_name)) => Some(dep_name.as_str()),
+            })
+            .collect();
+        package_rdep_names.sort();
+
         Ok(Self {
             color_config,
+            path: package_path,
             name: package,
             dependencies: package_dep_names,
+            dependents: package_rdep_names,
             tasks: package_json
                 .scripts
                 .iter()
@@ -263,6 +288,8 @@ impl<'a> PackageDetails<'a> {
         } else {
             self.dependencies.join(", ")
         };
+
+        cprintln!(self.color_config, GREY, "{} ", self.path);
         println!(
             "{} {}: {}",
             name,

@@ -108,7 +108,7 @@ pub struct CacheHitMetadata {
     pub time_saved: u64,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize)]
 pub struct CacheActions {
     pub read: bool,
     pub write: bool,
@@ -134,7 +134,7 @@ impl CacheActions {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Default)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Default, Serialize)]
 pub struct CacheConfig {
     pub local: CacheActions,
     pub remote: CacheActions,
@@ -172,7 +172,7 @@ impl Default for CacheActions {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct CacheOpts {
     pub cache_dir: Utf8PathBuf,
     pub cache: CacheConfig,

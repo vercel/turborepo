@@ -23,7 +23,7 @@ impl<T> Debouncer<T> {
     pub fn query(&mut self) -> Option<T> {
         if self
             .start
-            .map_or(false, |start| start.elapsed() >= self.duration)
+            .is_some_and(|start| start.elapsed() >= self.duration)
         {
             self.start = None;
             self.value.take()

@@ -2,7 +2,7 @@
 
 import http from "node:http";
 import https from "node:https";
-import { bold } from "picocolors";
+import picocolors from "picocolors";
 import { Command, Option } from "commander";
 import { logger } from "@turbo/utils";
 import {
@@ -27,9 +27,9 @@ const createTurboCli = new Command();
 
 // create
 createTurboCli
-  .name(bold(logger.turboGradient("create-turbo")))
+  .name(picocolors.bold(logger.turboGradient("create-turbo")))
   .description("Create a new Turborepo")
-  .usage(`${bold("<project-directory>")} [options]`)
+  .usage(`${picocolors.bold("<project-directory>")} [options]`)
   .hook("preAction", async (_, thisAction) => {
     const { telemetry } = await initTelemetry<"create-turbo">({
       packageInfo: {

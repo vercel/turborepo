@@ -25,9 +25,10 @@ Check
     Cached \(Remote\)                = false\s* (re)
     Command                        = echo building > foo.txt\s* (re)
     Outputs                        =\s* (re)
-    Log File                       = .turbo(\/|\\)turbo-build.log\s* (re)
+    Log File                       = 
     Dependencies                   =\s* (re)
     Dependents                     =\s* (re)
+    With                           =\s* (re)
     Inputs Files Considered        = 4\s* (re)
     Env Vars                       = 
     Env Vars Values                = 

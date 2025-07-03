@@ -1,6 +1,6 @@
 {
   "name": "eslint-config-turbo",
-  "version": "2.3.4-canary.5",
+  "version": "2.5.5-canary.0",
   "description": "ESLint config for Turborepo",
   "repository": {
     "type": "git",
@@ -11,7 +11,8 @@
     "url": "https://github.com/vercel/turborepo/issues"
   },
   "scripts": {
-    "lint": "eslint ./index.js",
+    "build": "bunchee",
+    "lint": "eslint src",
     "lint:prettier": "prettier -c . --cache --ignore-path=../../.prettierignore"
   },
   "keywords": [
@@ -21,10 +22,28 @@
     "eslintconfig",
     "eslint-config"
   ],
-  "main": "index.js",
+  "main": "./dist/cjs/index.js",
   "exports": {
-    "./flat": "./flat/index.js",
-    ".": "./index.js"
+    "./flat": {
+      "import": {
+        "types": "./dist/es/flat.d.mts",
+        "default": "./dist/es/flat.mjs"
+      },
+      "require": {
+        "types": "./dist/cjs/flat.d.ts",
+        "default": "./dist/cjs/flat.js"
+      }
+    },
+    ".": {
+      "import": {
+        "types": "./dist/es/index.d.mts",
+        "default": "./dist/es/index.mjs"
+      },
+      "require": {
+        "types": "./dist/cjs/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      }
+    }
   },
   "author": "Vercel",
   "dependencies": {
@@ -37,6 +56,14 @@
   "license": "MIT",
   "devDependencies": {
     "@turbo/eslint-config": "workspace:*",
-    "@types/eslint": "^8.44.2"
-  }
+    "@turbo/tsconfig": "workspace:*",
+    "@types/eslint": "^8.56.10",
+    "@types/node": "^20",
+    "bunchee": "^6.3.4"
+  },
+  "files": [
+    "dist"
+  ],
+  "module": "./dist/es/index.mjs",
+  "types": "./dist/cjs/index.d.ts"
 }

@@ -1,6 +1,7 @@
 use std::backtrace;
 
 use camino::Utf8PathBuf;
+use serde::Serialize;
 use thiserror::Error;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 use turborepo_api_client::APIAuth;
@@ -8,33 +9,34 @@ use turborepo_cache::{CacheOpts, RemoteCacheOpts};
 
 use crate::{
     cli::{
-        Command, DryRunMode, EnvMode, ExecutionArgs, LogOrder, LogPrefix, OutputLogsMode, RunArgs,
+        Command, ContinueMode, DryRunMode, EnvMode, ExecutionArgs, LogOrder, LogPrefix,
+        OutputLogsMode, RunArgs,
     },
     config::ConfigurationOptions,
-    run::task_id::TaskId,
-    turbo_json::UIMode,
+    run::task_id::{TaskId, TaskName},
+    turbo_json::{UIMode, CONFIG_FILE},
     Args,
 };
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("Expected run command")]
+    #[error("Expected `run` command.")]
     ExpectedRun(#[backtrace] backtrace::Backtrace),
     #[error(transparent)]
     ParseFloat(#[from] std::num::ParseFloatError),
     #[error(
-        "invalid percentage value for --concurrency CLI flag. This should be a percentage of CPU \
-         cores, between 1% and 100% : {1}"
+        "Invalid percentage value for `--concurrency` flag. This should be a percentage of CPU \
+         cores, between 1% and 100%: {1}"
     )]
     InvalidConcurrencyPercentage(#[backtrace] backtrace::Backtrace, f64),
     #[error(
-        "invalid value for --concurrency CLI flag. This should be a positive integer greater than \
+        "Invalid value for `--concurrency` flag. This should be a positive integer greater than \
          or equal to 1: {1}"
     )]
     ConcurrencyOutOfBounds(#[backtrace] backtrace::Backtrace, String),
     #[error(
         "Cannot set `cache` config and other cache options (`force`, `remoteOnly`, \
-         `remoteCacheReadOnly`) at the same time"
+         `remoteCacheReadOnly`) at the same time."
     )]
     OverlappingCacheOptions,
     #[error(transparent)]
@@ -43,7 +45,7 @@ pub enum Error {
     Config(#[from] crate::config::Error),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct APIClientOpts {
     pub api_url: String,
     pub timeout: u64,
@@ -55,7 +57,7 @@ pub struct APIClientOpts {
     pub preflight: bool,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct RepoOpts {
     pub root_turbo_json_path: AbsoluteSystemPathBuf,
     pub allow_no_package_manager: bool,
@@ -65,7 +67,7 @@ pub struct RepoOpts {
 /// The fully resolved options for Turborepo. This is the combination of config,
 /// including all the layers (env, args, defaults, etc.), and the command line
 /// arguments.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct Opts {
     pub repo_opts: RepoOpts,
     pub api_client_opts: APIClientOpts,
@@ -73,6 +75,7 @@ pub struct Opts {
     pub run_opts: RunOpts,
     pub runcache_opts: RunCacheOpts,
     pub scope_opts: ScopeOpts,
+    pub tui_opts: TuiOpts,
 }
 
 impl Opts {
@@ -91,8 +94,12 @@ impl Opts {
             cmd.push_str(" --parallel");
         }
 
-        if self.run_opts.continue_on_error {
-            cmd.push_str(" --continue");
+        match self.run_opts.continue_on_error {
+            ContinueMode::Always => cmd.push_str(" --continue=always"),
+            ContinueMode::DependenciesSuccessful => {
+                cmd.push_str(" --continue=dependencies-successful")
+            }
+            _ => (),
         }
 
         if let Some(dry) = self.run_opts.dry_run {
@@ -135,12 +142,21 @@ impl Opts {
                 run_args,
                 execution_args,
             }) => (execution_args, run_args),
+            Some(Command::Watch { execution_args, .. }) => (execution_args, &Box::default()),
             Some(Command::Ls {
                 affected, filter, ..
             }) => {
                 let execution_args = ExecutionArgs {
                     filter: filter.clone(),
                     affected: *affected,
+                    ..Default::default()
+                };
+
+                (&Box::new(execution_args), &Box::default())
+            }
+            Some(Command::Boundaries { filter, .. }) => {
+                let execution_args = ExecutionArgs {
+                    filter: filter.clone(),
                     ..Default::default()
                 };
 
@@ -162,6 +178,7 @@ impl Opts {
         let runcache_opts = RunCacheOpts::from(inputs);
         let api_client_opts = APIClientOpts::from(inputs);
         let repo_opts = RepoOpts::from(inputs);
+        let tui_opts = TuiOpts::from(inputs);
 
         Ok(Self {
             repo_opts,
@@ -170,6 +187,7 @@ impl Opts {
             scope_opts,
             runcache_opts,
             api_client_opts,
+            tui_opts,
         })
     }
 }
@@ -183,7 +201,7 @@ struct OptsInputs<'a> {
     api_auth: &'a Option<APIAuth>,
 }
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, Serialize)]
 pub struct RunCacheOpts {
     pub(crate) task_output_logs_override: Option<OutputLogsMode>,
 }
@@ -196,7 +214,7 @@ impl<'a> From<OptsInputs<'a>> for RunCacheOpts {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub struct RunOpts {
     pub(crate) tasks: Vec<String>,
     pub(crate) concurrency: u32,
@@ -206,7 +224,7 @@ pub struct RunOpts {
     // Whether or not to infer the framework for each workspace.
     pub(crate) framework_inference: bool,
     pub profile: Option<String>,
-    pub(crate) continue_on_error: bool,
+    pub(crate) continue_on_error: ContinueMode,
     pub(crate) pass_through_args: Vec<String>,
     pub(crate) only: bool,
     pub(crate) dry_run: Option<DryRunMode>,
@@ -216,7 +234,6 @@ pub struct RunOpts {
     pub log_prefix: ResolvedLogPrefix,
     pub log_order: ResolvedLogOrder,
     pub summarize: bool,
-    pub(crate) experimental_space_id: Option<String>,
     pub is_github_actions: bool,
     pub ui_mode: UIMode,
 }
@@ -244,7 +261,7 @@ impl<'a> TaskArgs<'a> {
             && self
                 .tasks
                 .iter()
-                .any(|task| task.as_str() == task_id.task())
+                .any(|task| TaskName::from(task.as_str()).task() == task_id.task())
         {
             Some(self.pass_through_args)
         } else {
@@ -253,19 +270,19 @@ impl<'a> TaskArgs<'a> {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub enum GraphOpts {
     Stdout,
     File(String),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 pub enum ResolvedLogOrder {
     Stream,
     Grouped,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize)]
 pub enum ResolvedLogPrefix {
     Task,
     None,
@@ -273,7 +290,10 @@ pub enum ResolvedLogPrefix {
 
 impl<'a> From<OptsInputs<'a>> for RepoOpts {
     fn from(inputs: OptsInputs<'a>) -> Self {
-        let root_turbo_json_path = inputs.config.root_turbo_json_path(inputs.repo_root);
+        let root_turbo_json_path = inputs
+            .config
+            .root_turbo_json_path(inputs.repo_root)
+            .unwrap_or_else(|_| inputs.repo_root.join_component(CONFIG_FILE));
         let allow_no_package_manager = inputs.config.allow_no_package_manager();
         let allow_no_turbo_json = inputs.config.allow_no_turbo_json();
 
@@ -292,7 +312,7 @@ impl<'a> TryFrom<OptsInputs<'a>> for RunOpts {
 
     fn try_from(inputs: OptsInputs) -> Result<Self, Self::Error> {
         let concurrency = inputs
-            .execution_args
+            .config
             .concurrency
             .as_deref()
             .map(parse_concurrency)
@@ -332,11 +352,6 @@ impl<'a> TryFrom<OptsInputs<'a>> for RunOpts {
             log_prefix,
             log_order,
             summarize: inputs.config.run_summary(),
-            experimental_space_id: inputs
-                .run_args
-                .experimental_space_id
-                .clone()
-                .or(inputs.config.spaces_id().map(|s| s.to_owned())),
             framework_inference: inputs.execution_args.framework_inference,
             concurrency,
             parallel: inputs.run_args.parallel,
@@ -387,7 +402,7 @@ impl From<LogPrefix> for ResolvedLogPrefix {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub struct ScopeOpts {
     pub pkg_inference_root: Option<AnchoredSystemPathBuf>,
     pub global_deps: Vec<String>,
@@ -462,6 +477,7 @@ impl<'a> TryFrom<OptsInputs<'a>> for CacheOpts {
             return Err(Error::OverlappingCacheOptions);
         }
 
+        // defaults to fully enabled cache
         let mut cache = cache.unwrap_or_default();
 
         if inputs.config.remote_only() {
@@ -482,11 +498,10 @@ impl<'a> TryFrom<OptsInputs<'a>> for CacheOpts {
         if !is_linked {
             cache.remote.read = false;
             cache.remote.write = false;
-        } else if let Some(enabled) = inputs.config.enabled {
-            // We're linked, but if the user has explicitly enabled or disabled, use that
-            // value
-            cache.remote.read = enabled;
-            cache.remote.write = enabled;
+        } else if let Some(false) = inputs.config.enabled {
+            // We're linked, but if the user has explicitly disabled remote cache
+            cache.remote.read = false;
+            cache.remote.write = false;
         };
 
         if inputs.config.remote_cache_read_only() {
@@ -527,20 +542,38 @@ impl ScopeOpts {
     }
 }
 
+#[derive(Clone, Debug, Serialize)]
+pub struct TuiOpts {
+    pub(crate) scrollback_length: u64,
+}
+
+impl<'a> From<OptsInputs<'a>> for TuiOpts {
+    fn from(inputs: OptsInputs) -> Self {
+        TuiOpts {
+            scrollback_length: inputs.config.tui_scrollback_length(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
+    use clap::Parser;
+    use itertools::Itertools;
+    use serde_json::json;
+    use tempfile::TempDir;
     use test_case::test_case;
     use turbopath::AbsoluteSystemPathBuf;
-    use turborepo_cache::CacheOpts;
+    use turborepo_cache::{CacheActions, CacheConfig, CacheOpts};
     use turborepo_ui::ColorConfig;
 
-    use super::{APIClientOpts, RepoOpts, RunOpts};
+    use super::{APIClientOpts, RepoOpts, RunOpts, TaskArgs};
     use crate::{
-        cli::{Command, DryRunMode, RunArgs},
+        cli::{Command, ContinueMode, DryRunMode, RunArgs},
         commands::CommandBase,
         config::ConfigurationOptions,
-        opts::{Opts, RunCacheOpts, ScopeOpts},
-        turbo_json::UIMode,
+        opts::{Opts, RunCacheOpts, ScopeOpts, TuiOpts},
+        run::task_id::TaskId,
+        turbo_json::{UIMode, CONFIG_FILE},
         Args,
     };
 
@@ -551,7 +584,7 @@ mod test {
         only: bool,
         pass_through_args: Vec<String>,
         parallel: bool,
-        continue_on_error: bool,
+        continue_on_error: ContinueMode,
         dry_run: Option<DryRunMode>,
         affected: Option<(String, String)>,
     }
@@ -593,10 +626,20 @@ mod test {
             filter_patterns: vec!["my-app".to_string()],
             tasks: vec!["build".to_string()],
             parallel: true,
-            continue_on_error: true,
+            continue_on_error: ContinueMode::Always,
             ..Default::default()
             },
-        "turbo run build --filter=my-app --parallel --continue"
+        "turbo run build --filter=my-app --parallel --continue=always"
+    )]
+    #[test_case(
+        TestCaseOpts{
+            filter_patterns: vec!["my-app".to_string()],
+            tasks: vec!["build".to_string()],
+            parallel: true,
+            continue_on_error: ContinueMode::DependenciesSuccessful,
+            ..Default::default()
+            },
+        "turbo run build --filter=my-app --parallel --continue=dependencies-successful"
     )]
     #[test_case(
         TestCaseOpts{
@@ -652,7 +695,6 @@ mod test {
             log_prefix: crate::opts::ResolvedLogPrefix::Task,
             log_order: crate::opts::ResolvedLogOrder::Stream,
             summarize: false,
-            experimental_space_id: None,
             is_github_actions: false,
             daemon: None,
         };
@@ -672,7 +714,13 @@ mod test {
                 .map(|(base, head)| (Some(base), Some(head))),
         };
         let config = ConfigurationOptions::default();
-        let root_turbo_json_path = config.root_turbo_json_path(&AbsoluteSystemPathBuf::default());
+        let root_turbo_json_path = config
+            .root_turbo_json_path(&AbsoluteSystemPathBuf::default())
+            .unwrap_or_else(|_| AbsoluteSystemPathBuf::default().join_component(CONFIG_FILE));
+
+        let tui_opts = TuiOpts {
+            scrollback_length: 2048,
+        };
 
         let opts = Opts {
             repo_opts: RepoOpts {
@@ -694,6 +742,7 @@ mod test {
             run_opts,
             cache_opts,
             runcache_opts,
+            tui_opts,
         };
         let synthesized = opts.synthesize_command();
         assert_eq!(synthesized, expected);
@@ -770,6 +819,136 @@ mod test {
         .map(|base| base.opts().cache_opts.cache);
 
         insta::assert_debug_snapshot!(name, cache_config);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_cache_config_force_remote_enable() -> Result<(), anyhow::Error> {
+        let tmpdir = TempDir::new()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(tmpdir.path())?;
+
+        repo_root.join_component(CONFIG_FILE).create_with_contents(
+            serde_json::to_string_pretty(&serde_json::json!({
+                "remoteCache": { "enabled": true }
+            }))?,
+        )?;
+
+        let mut args = Args::default();
+        args.command = Some(Command::Run {
+            execution_args: Box::default(),
+            run_args: Box::new(RunArgs {
+                force: Some(Some(true)),
+                ..Default::default()
+            }),
+        });
+
+        // set token and team to simulate a logged in/linked user
+        args.token = Some("token".to_string());
+        args.team = Some("team".to_string());
+
+        let base = CommandBase::new(args, repo_root, "1.0.0", ColorConfig::new(false))?;
+        let actual = base.opts().cache_opts.cache;
+
+        assert_eq!(
+            actual,
+            CacheConfig {
+                remote: CacheActions {
+                    read: false,
+                    write: true
+                },
+                local: CacheActions {
+                    read: false,
+                    write: true
+                }
+            }
+        );
+
+        Ok(())
+    }
+
+    #[test_case(
+        vec!["turbo", "watch", "build"];
+        "watch"
+    )]
+    #[test_case(
+        vec!["turbo", "run", "build"];
+        "run"
+    )]
+    #[test_case(
+        vec!["turbo", "ls", "--filter", "foo"];
+        "ls"
+    )]
+    #[test_case(
+        vec!["turbo", "boundaries", "--filter", "foo"];
+        "boundaries"
+    )]
+    fn test_derive_opts_from_args(args_str: Vec<&str>) -> Result<(), anyhow::Error> {
+        let args = Args::try_parse_from(&args_str)?;
+        let opts = Opts::new(
+            &AbsoluteSystemPathBuf::default(),
+            &args,
+            ConfigurationOptions::default(),
+        )?;
+
+        insta::assert_json_snapshot!(
+            args_str.iter().join("_"),
+            json!({ "tasks": opts.run_opts.tasks, "filter_patterns": opts.scope_opts.filter_patterns  })
+        );
+
+        Ok(())
+    }
+
+    #[test_case(
+        vec!["build".to_string()],
+        vec!["passthrough".to_string()],
+        TaskId::new("web", "build"),
+        Some(vec!["passthrough".to_string()]);
+        "single task"
+    )]
+    #[test_case(
+        vec!["lint".to_string(), "build".to_string()],
+        vec!["passthrough".to_string()],
+        TaskId::new("web", "build"),
+        Some(vec!["passthrough".to_string()]);
+        "multiple tasks"
+    )]
+    #[test_case(
+        vec!["test".to_string()],
+        vec!["passthrough".to_string()],
+        TaskId::new("web", "build"),
+        None;
+        "different task"
+    )]
+    #[test_case(
+        vec!["web#build".to_string()],
+        vec!["passthrough".to_string()],
+        TaskId::new("web", "build"),
+        Some(vec!["passthrough".to_string()]);
+        "task with package"
+    )]
+    #[test_case(
+        vec!["lint".to_string()],
+        vec![],
+        TaskId::new("ui", "lint"),
+        None;
+        "no passthrough args"
+    )]
+    fn test_get_args_for_tasks(
+        tasks: Vec<String>,
+        pass_through_args: Vec<String>,
+        expected_task: TaskId<'static>,
+        expected_args: Option<Vec<String>>,
+    ) -> Result<(), anyhow::Error> {
+        let task_opts = TaskArgs {
+            tasks: &tasks,
+            pass_through_args: &pass_through_args,
+        };
+
+        assert_eq!(
+            task_opts.args_for_task(&expected_task),
+            expected_args.as_deref()
+        );
 
         Ok(())
     }

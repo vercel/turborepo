@@ -2,10 +2,6 @@
 # From what I can tell, we are forced into approaching it this way
 # because of the many workspace roots.
 
-# The GHA at .github/workflows/examples-autoaprove-and-automerge.yml
-# is responsible for merging them all to one umbrella PR
-# on the branch #dependabot-updates.
-
 version: 2
 updates:
   - package-ecosystem: "npm"
@@ -15,34 +11,19 @@ updates:
     labels:
       - "area: examples"
     open-pull-requests-limit: 1
+    pull-request-branch-name:
+      separator: "-"
     versioning-strategy: "increase"
     allow:
       - dependency-type: "direct"
     assignees:
       - "anthonyshew"
-    target-branch: dependabot-updates
     groups:
-      basic-example-dependencies:
+      basic:
         patterns:
           - "*"
-
-  - package-ecosystem: "npm"
-    directory: "/examples/design-system"
-    schedule:
-      interval: "weekly"
-    labels:
-      - "area: examples"
-    open-pull-requests-limit: 1
-    versioning-strategy: "increase"
-    allow:
-      - dependency-type: "direct"
-    assignees:
-      - "anthonyshew"
-    target-branch: dependabot-updates
-    groups:
-      design-system-example-dependencies:
-        patterns:
-          - "*"
+        update-types:
+          - "minor"
 
   - package-ecosystem: "npm"
     directory: "/examples/kitchen-sink"
@@ -51,16 +32,32 @@ updates:
     labels:
       - "area: examples"
     open-pull-requests-limit: 1
+    pull-request-branch-name:
+      separator: "-"
     versioning-strategy: "increase"
     allow:
       - dependency-type: "direct"
     assignees:
       - "anthonyshew"
-    target-branch: dependabot-updates
     groups:
-      kitchen-sink-example-dependencies:
+      kitchen-sink:
         patterns:
           - "*"
+        update-types:
+          - "minor"
+    ignore:
+      # Types are just...broken?
+      - dependency-name: "express"
+      - dependency-name: "@types/express"
+      # Remix is behind on updating these peer deps and npm doesn't like it
+      - dependency-name: "react"
+      - dependency-name: "react-dom"
+      - dependency-name: "@types/react"
+      - dependency-name: "@types/react-dom"
+      # TODO: Investigate why upgrading breaks admin:build
+      - dependency-name: "bunchee"
+      # We can't upgrade versions of this due to npm
+      - dependency-name: "vite"
 
   - package-ecosystem: "npm"
     directory: "/examples/non-monorepo"
@@ -69,160 +66,19 @@ updates:
     labels:
       - "area: examples"
     open-pull-requests-limit: 1
+    pull-request-branch-name:
+      separator: "-"
     versioning-strategy: "increase"
     allow:
       - dependency-type: "direct"
     assignees:
       - "anthonyshew"
-    target-branch: dependabot-updates
     groups:
-      non-monorepo-example-dependencies:
+      non-monorepo:
         patterns:
           - "*"
-
-  - package-ecosystem: "npm"
-    directory: "/examples/with-berry"
-    schedule:
-      interval: "weekly"
-    labels:
-      - "area: examples"
-    open-pull-requests-limit: 1
-    versioning-strategy: "increase"
-    allow:
-      - dependency-type: "direct"
-    assignees:
-      - "anthonyshew"
-    target-branch: dependabot-updates
-    groups:
-      with-berry-example-dependencies:
-        patterns:
-          - "*"
-
-  - package-ecosystem: "npm"
-    directory: "/examples/with-changesets"
-    schedule:
-      interval: "weekly"
-    labels:
-      - "area: examples"
-    open-pull-requests-limit: 1
-    versioning-strategy: "increase"
-    allow:
-      - dependency-type: "direct"
-    assignees:
-      - "anthonyshew"
-    target-branch: dependabot-updates
-    groups:
-      with-changesets-example-dependencies:
-        patterns:
-          - "*"
-
-  - package-ecosystem: "npm"
-    directory: "/examples/with-docker"
-    schedule:
-      interval: "weekly"
-    labels:
-      - "area: examples"
-    open-pull-requests-limit: 1
-    versioning-strategy: "increase"
-    allow:
-      - dependency-type: "direct"
-    assignees:
-      - "anthonyshew"
-    target-branch: dependabot-updates
-    groups:
-      with-docker-example-dependencies:
-        patterns:
-          - "*"
-
-  - package-ecosystem: "npm"
-    directory: "/examples/with-gatsby"
-    schedule:
-      interval: "weekly"
-    labels:
-      - "area: examples"
-    open-pull-requests-limit: 1
-    versioning-strategy: "increase"
-    allow:
-      - dependency-type: "direct"
-    assignees:
-      - "anthonyshew"
-    target-branch: dependabot-updates
-    groups:
-      with-gatsby-example-dependencies:
-        patterns:
-          - "*"
-
-  - package-ecosystem: "npm"
-    directory: "/examples/with-npm"
-    schedule:
-      interval: "weekly"
-    labels:
-      - "area: examples"
-    open-pull-requests-limit: 1
-    versioning-strategy: "increase"
-    allow:
-      - dependency-type: "direct"
-    assignees:
-      - "anthonyshew"
-    target-branch: dependabot-updates
-    groups:
-      with-npm-example-dependencies:
-        patterns:
-          - "*"
-
-  - package-ecosystem: "npm"
-    directory: "/examples/with-prisma"
-    schedule:
-      interval: "weekly"
-    labels:
-      - "area: examples"
-    open-pull-requests-limit: 1
-    versioning-strategy: "increase"
-    allow:
-      - dependency-type: "direct"
-    assignees:
-      - "anthonyshew"
-    target-branch: dependabot-updates
-    groups:
-      with-prisma-example-dependencies:
-        patterns:
-          - "*"
-
-  - package-ecosystem: "npm"
-    directory: "/examples/with-react-native-web"
-    schedule:
-      interval: "weekly"
-    labels:
-      - "area: examples"
-    open-pull-requests-limit: 1
-    versioning-strategy: "increase"
-    allow:
-      - dependency-type: "direct"
-    assignees:
-      - "anthonyshew"
-    target-branch: dependabot-updates
-    groups:
-      react-native-example-dependencies:
-        patterns:
-          - "*"
-
-  - package-ecosystem: "npm"
-    directory: "/examples/with-rollup"
-    schedule:
-      interval: "weekly"
-    labels:
-      - "area: examples"
-    open-pull-requests-limit: 1
-    versioning-strategy: "increase"
-    allow:
-      - dependency-type: "direct"
-    assignees:
-      - "anthonyshew"
-    target-branch: dependabot-updates
-    groups:
-      with-rollup-example-dependencies:
-        patterns:
-          - "*"
+        update-types:
+          - "minor"
 
   - package-ecosystem: "npm"
     directory: "/examples/with-shell-commands"
@@ -231,16 +87,19 @@ updates:
     labels:
       - "area: examples"
     open-pull-requests-limit: 1
+    pull-request-branch-name:
+      separator: "-"
     versioning-strategy: "increase"
     allow:
       - dependency-type: "direct"
     assignees:
       - "anthonyshew"
-    target-branch: dependabot-updates
     groups:
-      with-shell-commands-example-dependencies:
+      with-shell-commands:
         patterns:
           - "*"
+        update-types:
+          - "minor"
 
   - package-ecosystem: "npm"
     directory: "/examples/with-svelte"
@@ -249,16 +108,19 @@ updates:
     labels:
       - "area: examples"
     open-pull-requests-limit: 1
+    pull-request-branch-name:
+      separator: "-"
     versioning-strategy: "increase"
     allow:
       - dependency-type: "direct"
     assignees:
       - "anthonyshew"
-    target-branch: dependabot-updates
     groups:
-      with-svelte-example-dependencies:
+      with-svelte:
         patterns:
           - "*"
+        update-types:
+          - "minor"
 
   - package-ecosystem: "npm"
     directory: "/examples/with-tailwind"
@@ -267,67 +129,16 @@ updates:
     labels:
       - "area: examples"
     open-pull-requests-limit: 1
+    pull-request-branch-name:
+      separator: "-"
     versioning-strategy: "increase"
     allow:
       - dependency-type: "direct"
     assignees:
       - "anthonyshew"
-    target-branch: dependabot-updates
     groups:
-      with-tailwind-example-dependencies:
+      with-tailwind:
         patterns:
           - "*"
-
-  - package-ecosystem: "npm"
-    directory: "/examples/with-vite"
-    schedule:
-      interval: "weekly"
-    labels:
-      - "area: examples"
-    open-pull-requests-limit: 1
-    versioning-strategy: "increase"
-    allow:
-      - dependency-type: "direct"
-    assignees:
-      - "anthonyshew"
-    target-branch: dependabot-updates
-    groups:
-      with-vite-example-dependencies:
-        patterns:
-          - "*"
-
-  - package-ecosystem: "npm"
-    directory: "/examples/with-vue-nuxt"
-    schedule:
-      interval: "weekly"
-    labels:
-      - "area: examples"
-    open-pull-requests-limit: 1
-    versioning-strategy: "increase"
-    allow:
-      - dependency-type: "direct"
-    assignees:
-      - "anthonyshew"
-    target-branch: dependabot-updates
-    groups:
-      with-vue-nuxt-example-dependencies:
-        patterns:
-          - "*"
-
-  - package-ecosystem: "npm"
-    directory: "/examples/with-yarn"
-    schedule:
-      interval: "weekly"
-    labels:
-      - "area: examples"
-    open-pull-requests-limit: 1
-    versioning-strategy: "increase"
-    allow:
-      - dependency-type: "direct"
-    assignees:
-      - "anthonyshew"
-    target-branch: dependabot-updates
-    groups:
-      with-yarn-example-dependencies:
-        patterns:
-          - "*"
+        update-types:
+          - "minor"

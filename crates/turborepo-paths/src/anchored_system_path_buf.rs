@@ -73,6 +73,8 @@ impl<'a> From<&'a AnchoredSystemPathBuf> for wax::CandidatePath<'a> {
 }
 
 impl AnchoredSystemPathBuf {
+    /// Note: This does not handle resolutions, so `../` in a path won't
+    /// resolve.
     pub fn new(
         root: impl AsRef<AbsoluteSystemPath>,
         path: impl AsRef<AbsoluteSystemPath>,
@@ -125,8 +127,7 @@ impl AnchoredSystemPathBuf {
         let traverse_count = these_components.len() - prefix_len;
         // For every remaining non-matching segment in self, add a directory traversal
         // Then, add every non-matching segment from other
-        let path = std::iter::repeat(Utf8Component::ParentDir)
-            .take(traverse_count)
+        let path = std::iter::repeat_n(Utf8Component::ParentDir, traverse_count)
             .chain(other_components.into_iter().skip(prefix_len))
             .collect::<Utf8PathBuf>();
 

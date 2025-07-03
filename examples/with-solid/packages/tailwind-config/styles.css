@@ -1,0 +1,63 @@
+@import "tailwindcss";
+
+@theme {
+    --font-sans: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+    --font-serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    --font-Inter: ui-Inter, system-ui, Inter, sans-serif;
+
+    --color-white: #fff;
+    --color-black: #000;
+    --color-brown: #1F1F1F;
+    --color-warm: #D1CFBF;
+    --color-hue: #F76F53;
+    --color-lichen: #2E6F40;
+    --color-lush: #CFFFDC;
+    --color-tropic: #253D2C;
+    --color-success: #68BA7F;
+    --color-error: #fc3c3c;
+    --color-disabled: #f8f7f7;
+    --color-info: #0b63a2;
+
+    --font-tall: 60px;
+    --font-xxxxl: 50px;
+    --font-xxxl: 32px;
+    --font-xxl: 28px;
+    --font-xl: 24px;
+    --font-lg: 20px;
+    --font-md: 18px;
+    --font-normal: 16px;
+    --font-sm: 14px;
+    --font-xs: 12px;
+    --font-xxs: 10px;
+}
+
+* {
+    user-select: none;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    font-family: var(--font-Inter);
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+input[type="file"] {
+    display: none;
+}
+
+/* Chrome, Safari, Edge, Opera */
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+/* Firefox */
+input[type="number"] {
+    -moz-appearance: textfield;
+}

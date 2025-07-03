@@ -26,6 +26,7 @@ module.exports = {
       "error",
       { peerDependencies: true, includeTypes: true },
     ],
+    "import/no-named-as-default-member": ["off"],
   },
   overrides: [
     {

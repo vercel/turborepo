@@ -23,7 +23,7 @@ use thiserror::Error;
 pub use crate::{
     color_selector::ColorSelector,
     line::LineWriter,
-    logs::{replay_logs, LogWriter},
+    logs::{replay_logs, replay_logs_with_crlf, LogWriter},
     output::{OutputClient, OutputClientBehavior, OutputSink, OutputWriter},
     prefixed::{PrefixedUI, PrefixedWriter},
     tui::{TaskTable, TerminalPane},
@@ -35,9 +35,9 @@ pub enum Error {
     Tui(#[from] tui::Error),
     #[error(transparent)]
     Wui(#[from] wui::Error),
-    #[error("cannot read logs: {0}")]
+    #[error("Cannot read logs: {0}")]
     CannotReadLogs(#[source] std::io::Error),
-    #[error("cannot write logs: {0}")]
+    #[error("Cannot write logs: {0}")]
     CannotWriteLogs(#[source] std::io::Error),
 }
 
@@ -51,7 +51,7 @@ pub fn start_spinner(message: &str) -> ProgressBar {
     pb.set_style(
         ProgressStyle::default_spinner()
             // For more spinners check out the cli-spinners project:
-            // https://github.com/sindresorhus/cli-spinners/blob/master/spinners.json
+            // https://github.com/sindresorhus/cli-spinners/blob/main/spinners.json
             .tick_strings(&[
                 "   ",
                 GREY.apply_to(">  ").to_string().as_str(),

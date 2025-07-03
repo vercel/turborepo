@@ -10,16 +10,16 @@ use thiserror::Error;
 use tokio::{select, sync::Notify, task::JoinHandle};
 use tracing::{instrument, trace, warn};
 use turborepo_repository::package_graph::PackageName;
+use turborepo_signals::{listeners::get_signal, SignalHandler};
 use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_ui::sender::UISender;
 
 use crate::{
-    commands::{self, CommandBase},
+    commands::CommandBase,
     daemon::{proto, DaemonConnectorError, DaemonError},
     get_version, opts,
     run::{self, builder::RunBuilder, scope::target_selector::InvalidSelectorError, Run},
-    signal::SignalHandler,
-    turbo_json::CONFIG_FILE,
+    turbo_json::{CONFIG_FILE, CONFIG_FILE_JSONC},
     DaemonConnector, DaemonPaths,
 };
 
@@ -54,6 +54,7 @@ pub struct WatchClient {
     handler: SignalHandler,
     ui_sender: Option<UISender>,
     ui_handle: Option<JoinHandle<Result<(), turborepo_ui::Error>>>,
+    experimental_write_cache: bool,
 }
 
 struct RunHandle {
@@ -63,57 +64,70 @@ struct RunHandle {
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
-    #[error("failed to connect to daemon")]
+    #[error("Failed to connect to daemon.")]
     #[diagnostic(transparent)]
     Daemon(#[from] DaemonError),
-    #[error("failed to connect to daemon")]
+    #[error("Failed to connect to daemon.")]
     DaemonConnector(#[from] DaemonConnectorError),
-    #[error("failed to decode message from daemon")]
+    #[error("Failed to decode message from daemon.")]
     Decode(#[from] prost::DecodeError),
-    #[error("could not get current executable")]
+    #[error("Could not get current executable.")]
     CurrentExe(std::io::Error),
-    #[error("could not start turbo")]
+    #[error("Could not start `turbo`.")]
     Start(std::io::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Run(#[from] run::Error),
-    #[error("`--since` is not supported in watch mode")]
+    #[error("`--since` is not supported in Watch Mode.")]
     SinceNotSupported,
     #[error(transparent)]
     Opts(#[from] opts::Error),
-    #[error("invalid filter pattern")]
+    #[error("Invalid filter pattern")]
     InvalidSelector(#[from] InvalidSelectorError),
-    #[error("filter cannot contain a git range in watch mode")]
+    #[error("Filter cannot contain a git range in Watch Mode.")]
     GitRangeInFilter {
         #[source_code]
         filter: String,
         #[label]
         span: SourceSpan,
     },
-    #[error("daemon connection closed")]
+    #[error("Daemon connection closed.")]
     ConnectionClosed,
-    #[error("failed to subscribe to signal handler, shutting down")]
+    #[error("Failed to subscribe to signal handler. Shutting down.")]
     NoSignalHandler,
-    #[error("watch interrupted due to signal")]
+    #[error("Watch interrupted due to signal.")]
     SignalInterrupt,
-    #[error("package change error")]
+    #[error("Package change error.")]
     PackageChange(#[from] tonic::Status),
     #[error(transparent)]
     UI(#[from] turborepo_ui::Error),
-    #[error("could not connect to UI thread: {0}")]
+    #[error("Could not connect to UI thread: {0}")]
     UISend(String),
-    #[error("cannot use root turbo.json at {0} with watch mode")]
+    #[error("Cannot use non-standard turbo configuration at {0} with Watch Mode.")]
     NonStandardTurboJsonPath(String),
-    #[error("invalid config: {0}")]
+    #[error("Invalid config: {0}")]
     Config(#[from] crate::config::Error),
+    #[error(transparent)]
+    SignalListener(#[from] turborepo_signals::listeners::Error),
 }
 
 impl WatchClient {
-    pub async fn new(base: CommandBase, telemetry: CommandEventBuilder) -> Result<Self, Error> {
-        let signal = commands::run::get_signal()?;
+    pub async fn new(
+        base: CommandBase,
+        experimental_write_cache: bool,
+        telemetry: CommandEventBuilder,
+    ) -> Result<Self, Error> {
+        let signal = get_signal()?;
         let handler = SignalHandler::new(signal);
 
-        if base.opts.repo_opts.root_turbo_json_path != base.repo_root.join_component(CONFIG_FILE) {
+        // Check if the turbo.json path is the standard one (either turbo.json or
+        // turbo.jsonc)
+        let standard_path_json = base.repo_root.join_component(CONFIG_FILE);
+        let standard_path_jsonc = base.repo_root.join_component(CONFIG_FILE_JSONC);
+
+        if base.opts.repo_opts.root_turbo_json_path != standard_path_json
+            && base.opts.repo_opts.root_turbo_json_path != standard_path_jsonc
+        {
             return Err(Error::NonStandardTurboJsonPath(
                 base.opts.repo_opts.root_turbo_json_path.to_string(),
             ));
@@ -147,6 +161,7 @@ impl WatchClient {
             connector,
             handler,
             telemetry,
+            experimental_write_cache,
             persistent_tasks_handle: None,
             ui_sender,
             ui_handle,
@@ -285,8 +300,10 @@ impl WatchClient {
                     .collect();
 
                 let mut opts = self.base.opts().clone();
-                opts.cache_opts.cache.remote.write = false;
-                opts.cache_opts.cache.local.write = false;
+                if !self.experimental_write_cache {
+                    opts.cache_opts.cache.remote.write = false;
+                    opts.cache_opts.cache.remote.read = false;
+                }
 
                 let new_base = CommandBase::from_opts(
                     opts,
@@ -319,8 +336,10 @@ impl WatchClient {
             }
             ChangedPackages::All => {
                 let mut opts = self.base.opts().clone();
-                opts.cache_opts.cache.remote.write = false;
-                opts.cache_opts.cache.local.write = false;
+                if !self.experimental_write_cache {
+                    opts.cache_opts.cache.remote.write = false;
+                    opts.cache_opts.cache.remote.read = false;
+                }
 
                 let base = CommandBase::from_opts(
                     opts,

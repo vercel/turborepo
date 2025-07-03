@@ -44,7 +44,7 @@ impl HTTPCache {
         let signer_verifier = if opts
             .remote_cache_opts
             .as_ref()
-            .map_or(false, |remote_cache_opts| remote_cache_opts.signature)
+            .is_some_and(|remote_cache_opts| remote_cache_opts.signature)
         {
             Some(ArtifactSignatureAuthenticator {
                 team_id: api_auth
@@ -415,7 +415,7 @@ mod test {
                 backtrace: Backtrace::capture(),
             },
         );
-        assert_snapshot!(err.to_string(), @"failed to contact remote cache: unknown status unknown: Special message");
+        assert_snapshot!(err.to_string(), @"failed to contact remote cache: Unknown status unknown: Special message");
     }
 
     #[test]

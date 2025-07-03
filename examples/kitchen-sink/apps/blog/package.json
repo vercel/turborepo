@@ -1,37 +1,38 @@
 {
   "name": "blog",
+  "version": "0.0.0",
   "private": true,
   "sideEffects": false,
   "type": "module",
   "scripts": {
     "build": "remix vite:build",
     "dev": "remix vite:dev",
-    "typecheck": "tsc"
+    "check-types": "tsc --noEmit",
+    "lint": "eslint app/ --max-warnings 0"
   },
   "dependencies": {
-    "@remix-run/node": "^2.9.2",
-    "@remix-run/react": "^2.9.2",
-    "@remix-run/server-runtime": "^2.9.2",
+    "@remix-run/node": "^2.15.2",
+    "@remix-run/react": "^2.15.2",
+    "@remix-run/server-runtime": "^2.15.2",
     "@repo/ui": "workspace:*",
-    "@vercel/analytics": "^1.2.2",
-    "@vercel/remix": "2.9.2-patch.2",
-    "isbot": "^4",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "@vercel/analytics": "^1.5.0",
+    "@vercel/remix": "2.16.6",
+    "isbot": "^5.1.23",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
   },
   "devDependencies": {
-    "@remix-run/dev": "^2.9.2",
-    "@remix-run/eslint-config": "^2.9.2",
-    "@types/react": "^18.2.20",
-    "@types/react-dom": "^18.2.7",
-    "@typescript-eslint/eslint-plugin": "^6.7.4",
-    "@typescript-eslint/parser": "^6.7.4",
-    "@vercel/remix": "2.9.2-patch.2",
-    "autoprefixer": "^10.4.19",
-    "eslint": "^8.38.0",
-    "typescript": "5.5.4",
-    "vite": "^5.1.0",
-    "vite-tsconfig-paths": "^4.2.1"
+    "@remix-run/dev": "^2.15.2",
+    "@repo/eslint-config": "workspace:*",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@typescript-eslint/eslint-plugin": "^8.35.0",
+    "@typescript-eslint/parser": "^8.35.0",
+    "autoprefixer": "^10.4.20",
+    "eslint": "^9.30.0",
+    "typescript": "5.8.2",
+    "vite": "^5.4.14",
+    "vite-tsconfig-paths": "4.2.1"
   },
   "engines": {
     "node": ">=18.0.0"

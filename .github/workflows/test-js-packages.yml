@@ -30,16 +30,13 @@ jobs:
       matrix:
         os:
           - name: ubuntu
-            runner:
-              - "self-hosted"
-              - "linux"
-              - "x64"
-              - "metal"
+            runner: ubuntu-latest
           - name: macos
             runner: macos-13
         node-version:
           - 18
           - 20
+          - 22
     env:
       TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
       TURBO_TEAM: ${{ vars.TURBO_TEAM }}
@@ -62,7 +59,6 @@ jobs:
       - name: "Setup Node"
         uses: ./.github/actions/setup-node
         with:
-          extra-flags: --no-optional
           node-version: ${{ matrix.node-version }}
         env:
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
@@ -76,7 +72,7 @@ jobs:
         # to run when turbo core changes. This job (`js_packages`) does not run on turborpeo core
         # changes, and we don't want to enable that beahvior for _all_ our JS packages.
         run: |
-          TURBO_API= turbo run check-types test --filter="!turborepo-repository" --filter={./packages/*}...[${{ github.event.pull_request.base.sha || 'HEAD^1' }}] --color --env-mode=strict
+          TURBO_API= turbo run check-types test build --filter="!turborepo-repository" --filter={./packages/*}...[${{ github.event.pull_request.base.sha || 'HEAD^1' }}] --color --env-mode=strict
         env:
           NODE_VERSION: ${{ matrix.node-version }}
 
@@ -88,8 +84,6 @@ jobs:
       - js_packages
     steps:
       - name: Compute info
-        id: info
-        if: always()
         run: |
           cancelled=false
           failure=false
@@ -106,17 +100,12 @@ jobs:
           subjob ${{needs.js_packages.result}}
 
           if [ "$cancelled" = "true" ]; then
-              echo "cancelled=true" >> $GITHUB_OUTPUT
+            echo "Job was cancelled."
+            exit 0
           elif [ "$failure" = "true" ]; then
-            echo "failure=true" >> $GITHUB_OUTPUT
+            echo "Job failed."
+            exit 1
           else
-            echo "success=true" >> $GITHUB_OUTPUT
+            echo "Job succeeded."
+            exit 0
           fi
-
-      - name: Failed
-        if: steps.info.outputs.failure == 'true'
-        run: exit 1
-
-      - name: Succeeded
-        if: steps.info.outputs.success == 'true'
-        run: echo Ok

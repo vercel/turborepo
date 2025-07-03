@@ -27,7 +27,7 @@ export type Transformer = {
 
 ## Writing a Transform
 
-Transforms are ran using the [TransformRunner](../runner/Runner.ts). This class is designed to make writing transforms as simple as possible by abstracting away all of the boilerplate that determines what should be logged, saved, or output as a result.
+Transforms are run using the [TransformRunner](../runner/Runner.ts). This class is designed to make writing transforms as simple as possible by abstracting away all of the boilerplate that determines what should be logged, saved, or output as a result.
 
 To use the TransformRunner:
 

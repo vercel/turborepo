@@ -5,25 +5,35 @@
   "license": "MIT",
   "sideEffects": false,
   "files": [
-    "dist/**"
+    "dist/**",
+    "dist"
   ],
   "exports": {
     "./counter-button": {
-      "types": "./src/counter-button/index.tsx",
-      "require": "./dist/counter-button/index.js",
-      "import": "./dist/counter-button/index.mjs"
+      "import": {
+        "types": "./dist/es/counter-button.d.mts",
+        "default": "./dist/es/counter-button.mjs"
+      },
+      "require": {
+        "types": "./dist/cjs/counter-button.d.ts",
+        "default": "./dist/cjs/counter-button.js"
+      }
     },
     "./link": {
-      "types": "./src/link/index.tsx",
-      "require": "./dist/link/index.js",
-      "import": "./dist/link/index.mjs"
+      "import": {
+        "types": "./dist/es/link.d.mts",
+        "default": "./dist/es/link.mjs"
+      },
+      "require": {
+        "types": "./dist/cjs/link.d.ts",
+        "default": "./dist/cjs/link.js"
+      }
     }
   },
   "scripts": {
-    "build": "tsup",
-    "clean": "rm -rf dist",
-    "dev": "tsup --watch",
-    "typecheck": "tsc --noEmit",
+    "build": "bunchee",
+    "dev": "bunchee --watch",
+    "check-types": "tsc --noEmit",
     "lint": "eslint src/",
     "test": "jest"
   },
@@ -35,13 +45,16 @@
     "@repo/eslint-config": "workspace:*",
     "@repo/jest-presets": "workspace:*",
     "@repo/typescript-config": "workspace:*",
-    "@types/node": "^20.11.24",
-    "@types/react": "^18.2.62",
-    "@types/react-dom": "^18.2.19",
+    "@types/node": "^22.15.3",
+    "bunchee": "^6.4.0",
+    "eslint": "^9.30.0",
     "jest": "^29.7.0",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "tsup": "^8.0.2",
-    "typescript": "5.5.4"
+    "typescript": "5.8.2"
+  },
+  "peerDependencies": {
+    "@types/react": ">=18",
+    "@types/react-dom": ">=18",
+    "react": ">=18",
+    "react-dom": ">=18"
   }
 }

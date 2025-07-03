@@ -1,7 +1,7 @@
 [package]
 name = "turborepo-lockfiles"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 license = "MIT"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -10,6 +10,10 @@ license = "MIT"
 workspace = true
 
 [dependencies]
+biome_formatter = { workspace = true }
+biome_json_formatter = { workspace = true }
+biome_json_parser = { workspace = true }
+itertools = { workspace = true }
 nom = "7"
 pest = "2.7.9"
 pest_derive = "2.7.9"
@@ -22,8 +26,8 @@ serde_yaml = "0.9.27"
 thiserror = "1.0.38"
 tracing.workspace = true
 turbopath = { path = "../turborepo-paths" }
+turborepo-errors = { workspace = true }
 
 [dev-dependencies]
-itertools = { workspace = true }
 pretty_assertions = "1.3"
 test-case = "3.1.0"

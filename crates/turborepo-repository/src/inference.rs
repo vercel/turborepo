@@ -23,7 +23,7 @@ pub struct RepoState {
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("Failed to find repository root containing {0}")]
+    #[error("Failed to find repository root containing {0}.")]
     NotFound(AbsoluteSystemPathBuf),
 }
 

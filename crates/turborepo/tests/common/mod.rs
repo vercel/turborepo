@@ -37,25 +37,30 @@ pub fn setup_fixture(
     Ok(())
 }
 
-/// Executes a command with different arguments in a specific fixture and
-/// package manager and snapshots the output as JSON.
+/// Executes a command and snapshots the output as JSON.
+///
+/// Takes fixture, package manager, and command, and sets of arguments.
 /// Creates a snapshot file for each set of arguments.
 /// Note that the command must return valid JSON
 #[macro_export]
-macro_rules! check_json {
-    ($fixture:expr, $package_manager:expr, $command:expr, $($name:expr => $query:expr,)*) => {
+macro_rules! check_json_output {
+    ($fixture:expr, $package_manager:expr, $command:expr, $($name:expr => [$($query:expr),*$(,)?],)*) => {
         {
             let tempdir = tempfile::tempdir()?;
-            crate::common::setup_fixture($fixture, $package_manager, tempdir.path())?;
+            $crate::common::setup_fixture($fixture, $package_manager, tempdir.path())?;
             $(
-                println!("Running command: `turbo {} {}` in {}", $command, $query, $fixture);
-                let output = assert_cmd::Command::cargo_bin("turbo")?
-                    .arg($command)
-                    .arg($query)
-                    .current_dir(tempdir.path())
-                    .output()?;
+                let mut command = assert_cmd::Command::cargo_bin("turbo")?;
 
-                let stdout = String::from_utf8(output.stdout)?;
+                command
+                    .arg($command);
+
+                $(
+                    command.arg($query);
+                )*
+
+                let output = command.current_dir(tempdir.path()).output()?;
+
+                let stdout = String::from_utf8_lossy(&output.stdout);
                 let stderr = String::from_utf8_lossy(&output.stderr);
 
                 println!("stderr: {}", stderr);
@@ -67,7 +72,13 @@ macro_rules! check_json {
                     $name.replace(' ', "_"),
                     $package_manager
                 );
-                insta::assert_json_snapshot!(test_name, query_output);
+
+                insta::with_settings!({ filters => vec![(r"\\\\", "/")]}, {
+                    insta::assert_json_snapshot!(
+                        format!("{}", test_name),
+                        query_output
+                    )
+                });
             )*
         }
     }

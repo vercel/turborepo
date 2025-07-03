@@ -1,6 +1,6 @@
 # Turborepo Docker starter
 
-This is an official Docker starter Turborepo.
+This is a community-maintained example. If you experience a problem, please submit a pull request with a fix. GitHub Issues will be closed.
 
 ## Using this example
 
@@ -50,8 +50,8 @@ Open http://localhost:3000.
 To shutdown all running containers:
 
 ```
-# Stop all running containers
-docker kill $(docker ps -q) && docker rm $(docker ps -a -q)
+# Stop running containers started by docker-compse
+ docker-compose -f docker-compose.yml down
 ```
 
 ### Remote Caching

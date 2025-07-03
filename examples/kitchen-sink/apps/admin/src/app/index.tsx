@@ -1,9 +1,8 @@
-import React from "react";
 import "./styles.css";
 import { CounterButton } from "@repo/ui/counter-button";
 import { Link } from "@repo/ui/link";
 
-function App(): JSX.Element {
+function App() {
   return (
     <div className="container">
       <h1 className="title">
@@ -13,7 +12,7 @@ function App(): JSX.Element {
       <CounterButton />
       <p className="description">
         Built With{" "}
-        <Link href="https://turbo.build/repo" newTab>
+        <Link href="https://turborepo.com" newTab>
           Turborepo
         </Link>
         {" & "}

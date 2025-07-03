@@ -10,10 +10,13 @@ use crate::{
     cli,
     config::{ConfigurationOptions, Error as ConfigError, TurborepoConfigBuilder},
     opts::Opts,
+    turbo_json::{CONFIG_FILE, CONFIG_FILE_JSONC},
     Args,
 };
 
 pub(crate) mod bin;
+pub(crate) mod boundaries;
+pub(crate) mod clone;
 pub(crate) mod config;
 pub(crate) mod daemon;
 pub(crate) mod generate;
@@ -119,6 +122,10 @@ impl CommandBase {
             )
             .with_run_summary(args.run_args().and_then(|args| args.summarize()))
             .with_allow_no_turbo_json(args.allow_no_turbo_json.then_some(true))
+            .with_concurrency(
+                args.execution_args()
+                    .and_then(|args| args.concurrency.clone()),
+            )
             .build()
     }
 
@@ -138,8 +145,27 @@ impl CommandBase {
     fn root_package_json_path(&self) -> AbsoluteSystemPathBuf {
         self.repo_root.join_component("package.json")
     }
-    fn root_turbo_json_path(&self) -> AbsoluteSystemPathBuf {
-        self.repo_root.join_component("turbo.json")
+    fn root_turbo_json_path(&self) -> Result<AbsoluteSystemPathBuf, ConfigError> {
+        let turbo_json_path = self.repo_root.join_component(CONFIG_FILE);
+        let turbo_jsonc_path = self.repo_root.join_component(CONFIG_FILE_JSONC);
+
+        let turbo_json_exists = turbo_json_path.exists();
+        let turbo_jsonc_exists = turbo_jsonc_path.exists();
+
+        if turbo_json_exists && turbo_jsonc_exists {
+            return Err(ConfigError::MultipleTurboConfigs {
+                directory: self.repo_root.to_string(),
+            });
+        }
+
+        if turbo_json_exists {
+            Ok(turbo_json_path)
+        } else if turbo_jsonc_exists {
+            Ok(turbo_jsonc_path)
+        } else {
+            Ok(turbo_json_path) // Default to turbo.json path even if it doesn't
+                                // exist
+        }
     }
 
     pub fn api_auth(&self) -> Result<Option<APIAuth>, ConfigError> {

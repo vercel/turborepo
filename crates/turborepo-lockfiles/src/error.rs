@@ -2,7 +2,7 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("Workspace '{0}' not found in lockfile")]
+    #[error("Workspace '{0}' not found in lockfile.")]
     MissingWorkspace(String),
     #[error("No lockfile entry found for '{0}'")]
     MissingPackage(String),
@@ -10,9 +10,11 @@ pub enum Error {
     MissingVersion(String),
     #[error("Unable to convert from json: {0}")]
     JsonError(#[from] serde_json::Error),
+    #[error("Unable to convert from json: {0}")]
+    BiomeJsonError(String),
     #[error("Unable to convert to yaml: {0}")]
     Yaml(#[from] serde_yaml::Error),
-    #[error("Turbo doesn't support npm lockfiles without a 'packages' field")]
+    #[error("Turborepo doesn't support npm lockfiles without a 'packages' field")]
     UnsupportedNpmVersion,
     #[error(transparent)]
     Pnpm(#[from] crate::pnpm::Error),
@@ -22,6 +24,6 @@ pub enum Error {
     Bun(#[from] crate::bun::Error),
     #[error(transparent)]
     Berry(#[from] crate::berry::Error),
-    #[error("lockfile contains invalid path: {0}")]
+    #[error("Lockfile contains invalid path: {0}")]
     Path(#[from] turbopath::PathError),
 }

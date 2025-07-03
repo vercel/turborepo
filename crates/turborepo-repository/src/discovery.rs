@@ -32,9 +32,9 @@ pub struct DiscoveryResponse {
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
-    #[error("discovery unavailable")]
+    #[error("Discovery unavailable")]
     Unavailable,
-    #[error("discovery failed: {0}")]
+    #[error("Discovery failed: {0}")]
     Failed(Box<dyn std::error::Error + Send + Sync>),
 }
 
@@ -103,6 +103,11 @@ impl LocalPackageDiscoveryBuilder {
 
     pub fn with_allow_no_package_manager(&mut self, allow_missing_package_manager: bool) {
         self.allow_missing_package_manager = allow_missing_package_manager;
+    }
+
+    pub fn with_package_manager(&mut self, package_manager: Option<PackageManager>) -> &mut Self {
+        self.package_manager = package_manager;
+        self
     }
 }
 

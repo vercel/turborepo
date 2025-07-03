@@ -11,7 +11,7 @@ use tokio::{
 };
 use turbo_updater::check_for_updates;
 use turbopath::AbsoluteSystemPathBuf;
-use turborepo_scm::Git;
+use turborepo_scm::GitRepo;
 
 use crate::{
     commands::{
@@ -157,7 +157,7 @@ impl Diagnostic for GitDaemonDiagnostic {
                     // get the current setting
                     let stdout = Stdio::piped();
 
-                    let Ok(git_path) = Git::find_bin() else {
+                    let Ok(git_path) = GitRepo::find_bin() else {
                         return Err("git not found");
                     };
 
@@ -221,7 +221,7 @@ impl Diagnostic for GitDaemonDiagnostic {
                     if fsmonitor.trim() != "true" || untrackedcache.trim() != "true" {
                         chan.log_line("Git FS Monitor not configured".to_string())
                             .await;
-                        chan.log_line( "For more information, see https://turbo.build/repo/docs/reference/command-line-reference/scan#fs-monitor".to_string()).await;
+                        chan.log_line( "For more information, see https://turborepo.com/docs/reference/command-line-reference/scan#fs-monitor".to_string()).await;
                         let Some(resp) = chan
                             .request(
                                 "Configure it for this repo now?".to_string(),
@@ -372,7 +372,7 @@ impl Diagnostic for LSPDiagnostic {
                 Ok(None) => {
                     chan.log_line("Unable to find LSP instance".to_string())
                         .await;
-                    chan.log_line( "For more information, see https://turbo.build/repo/docs/reference/command-line-reference/scan#lsp".to_string()).await;
+                    chan.log_line( "For more information, see https://turborepo.com/docs/reference/command-line-reference/scan#lsp".to_string()).await;
                     chan.failed("Turborepo Extension is not running".to_string())
                         .await;
                 }
@@ -426,14 +426,7 @@ impl Diagnostic for RemoteCacheDiagnostic {
                     return;
                 };
                 stopped.await.unwrap();
-                let link_res = link(
-                    &mut base,
-                    None,
-                    false,
-                    false,
-                    crate::cli::LinkTarget::RemoteCache,
-                )
-                .await;
+                let link_res = link(&mut base, None, false, false).await;
                 resume.send(()).unwrap();
                 link_res
             };

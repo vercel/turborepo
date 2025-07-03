@@ -6,6 +6,7 @@ const project = new Project(process.cwd());
 const cacheKey = project.valid() ? project.key() : Math.random();
 
 const config = {
+  name: "turbo/recommended",
   rules: {
     [`turbo/${RULES.noUndeclaredEnvVars}`]: "error",
   },

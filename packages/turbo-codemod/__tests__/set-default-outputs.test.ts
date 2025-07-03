@@ -1,13 +1,45 @@
 import { setupTestFixtures } from "@turbo/test-utils";
-import { type Schema } from "@turbo/types";
+import { SchemaV2, type Schema } from "@turbo/types";
 import { describe, it, expect } from "@jest/globals";
-import { transformer } from "../src/transforms/set-default-outputs";
+import {
+  transformer,
+  migrateConfig,
+} from "../src/transforms/set-default-outputs";
 
 describe("set-default-outputs", () => {
   const { useFixture } = setupTestFixtures({
     directory: __dirname,
     test: "set-default-outputs",
   });
+
+  it("skips when no pipeline key", () => {
+    const config: SchemaV2 = {
+      $schema: "./docs/public/schema.json",
+      globalDependencies: ["$GLOBAL_ENV_KEY"],
+      tasks: {
+        test: {
+          outputs: ["coverage/**/*"],
+          dependsOn: ["^build"],
+        },
+        lint: {
+          outputs: [],
+        },
+        dev: {
+          cache: false,
+        },
+        build: {
+          outputs: ["dist/**/*", ".next/**/*", "!.next/cache/**"],
+          dependsOn: ["^build", "$TASK_ENV_KEY", "$ANOTHER_ENV_KEY"],
+        },
+      },
+    };
+
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any -- Testing a situation outside of types that users can get themselves into at runtime
+    const doneConfig = migrateConfig(config as any);
+
+    expect(doneConfig).toEqual(config);
+  });
+
   it("migrates turbo.json outputs - basic", () => {
     // load the fixture for the test
     const { root, read } = useFixture({
@@ -21,7 +53,7 @@ describe("set-default-outputs", () => {
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turbo.build/schema.json",
+      $schema: "https://turborepo.com/schema.json",
       pipeline: {
         "build-one": {
           outputs: ["foo"],
@@ -58,7 +90,7 @@ describe("set-default-outputs", () => {
     });
 
     expect(readJson("turbo.json") || "{}").toStrictEqual({
-      $schema: "https://turbo.build/schema.json",
+      $schema: "https://turborepo.com/schema.json",
       pipeline: {
         "build-one": {
           outputs: ["foo"],
@@ -71,7 +103,7 @@ describe("set-default-outputs", () => {
     });
 
     expect(readJson("apps/docs/turbo.json") || "{}").toStrictEqual({
-      $schema: "https://turbo.build/schema.json",
+      $schema: "https://turborepo.com/schema.json",
       extends: ["//"],
       pipeline: {
         build: {
@@ -81,7 +113,7 @@ describe("set-default-outputs", () => {
     });
 
     expect(readJson("apps/web/turbo.json") || "{}").toStrictEqual({
-      $schema: "https://turbo.build/schema.json",
+      $schema: "https://turborepo.com/schema.json",
       extends: ["//"],
       pipeline: {
         build: {},
@@ -89,7 +121,7 @@ describe("set-default-outputs", () => {
     });
 
     expect(readJson("packages/ui/turbo.json") || "{}").toStrictEqual({
-      $schema: "https://turbo.build/schema.json",
+      $schema: "https://turborepo.com/schema.json",
       extends: ["//"],
       pipeline: {
         "build-three": {
@@ -167,7 +199,7 @@ describe("set-default-outputs", () => {
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turbo.build/schema.json",
+      $schema: "https://turborepo.com/schema.json",
       pipeline: {
         "build-one": {
           outputs: ["foo"],
@@ -233,7 +265,7 @@ describe("set-default-outputs", () => {
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turbo.build/schema.json",
+      $schema: "https://turborepo.com/schema.json",
       pipeline: {
         "build-one": {
           outputs: ["foo"],
@@ -294,7 +326,7 @@ describe("set-default-outputs", () => {
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turbo.build/schema.json",
+      $schema: "https://turborepo.com/schema.json",
       globalDependencies: ["$NEXT_PUBLIC_API_KEY", "$STRIPE_API_KEY", ".env"],
       pipeline: {},
     });
@@ -324,7 +356,7 @@ describe("set-default-outputs", () => {
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turbo.build/schema.json",
+      $schema: "https://turborepo.com/schema.json",
       pipeline: {
         "build-one": {
           dependsOn: ["build-two"],

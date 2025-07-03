@@ -1,0 +1,26 @@
+{
+  "private": true,
+  "type": "module",
+  "exports": "./dist/index.js",
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "check-links": "cd ../site/content && node --experimental-strip-types ../../link-checker/src/validate-docs-links.ts"
+  },
+  "devDependencies": {
+    "@types/node": "22.7.8",
+    "typescript": "5.5.4"
+  },
+  "dependencies": {
+    "github-slugger": "2.0.0",
+    "gray-matter": "4.0.3",
+    "hast-util-select": "^6.0.3",
+    "rehype-parse": "^9.0.1",
+    "rehype-raw": "7.0.0",
+    "remark-parse": "11.0.0",
+    "remark-rehype": "11.1.1",
+    "unified": "11.0.5",
+    "unist-util-visit": "5.0.0"
+  }
+}

@@ -7,8 +7,6 @@ use super::{
     Error,
 };
 
-const SCROLLBACK_LEN: usize = 1024;
-
 pub struct TerminalOutput<W> {
     output: Vec<u8>,
     pub parser: vt100::Parser,
@@ -17,6 +15,7 @@ pub struct TerminalOutput<W> {
     pub output_logs: Option<OutputLogs>,
     pub task_result: Option<TaskResult>,
     pub cache_result: Option<CacheResult>,
+    pub scrollback_len: u64,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -27,15 +26,16 @@ enum LogBehavior {
 }
 
 impl<W> TerminalOutput<W> {
-    pub fn new(rows: u16, cols: u16, stdin: Option<W>) -> Self {
+    pub fn new(rows: u16, cols: u16, stdin: Option<W>, scrollback_len: u64) -> Self {
         Self {
             output: Vec::new(),
-            parser: vt100::Parser::new(rows, cols, SCROLLBACK_LEN),
+            parser: vt100::Parser::new(rows, cols, scrollback_len as usize),
             stdin,
             status: None,
             output_logs: None,
             task_result: None,
             cache_result: None,
+            scrollback_len,
         }
     }
 
@@ -58,7 +58,8 @@ impl<W> TerminalOutput<W> {
     pub fn resize(&mut self, rows: u16, cols: u16) {
         if self.parser.screen().size() != (rows, cols) {
             let scrollback = self.parser.screen().scrollback();
-            let mut new_parser = vt100::Parser::new(rows, cols, SCROLLBACK_LEN);
+            let scrollback_len = self.scrollback_len as usize;
+            let mut new_parser = vt100::Parser::new(rows, cols, scrollback_len);
             new_parser.process(&self.output);
             new_parser.screen_mut().set_scrollback(scrollback);
             // Completely swap out the old vterm with a new correctly sized one
@@ -67,10 +68,14 @@ impl<W> TerminalOutput<W> {
     }
 
     pub fn scroll(&mut self, direction: Direction) -> Result<(), Error> {
+        self.scroll_by(direction, 1)
+    }
+
+    pub fn scroll_by(&mut self, direction: Direction, magnitude: usize) -> Result<(), Error> {
         let scrollback = self.parser.screen().scrollback();
         let new_scrollback = match direction {
-            Direction::Up => scrollback + 1,
-            Direction::Down => scrollback.saturating_sub(1),
+            Direction::Up => scrollback.saturating_add(magnitude),
+            Direction::Down => scrollback.saturating_sub(magnitude),
         };
         self.parser.screen_mut().set_scrollback(new_scrollback);
         Ok(())
@@ -106,15 +111,16 @@ impl<W> TerminalOutput<W> {
             LogBehavior::Full => {
                 let screen = self.parser.entire_screen();
                 let (_, cols) = screen.size();
-                stdout.write_all("┌".as_bytes())?;
+                stdout.write_all("┌─".as_bytes())?;
                 stdout.write_all(title.as_bytes())?;
                 stdout.write_all(b"\r\n")?;
                 for row in screen.rows_formatted(0, cols) {
-                    stdout.write_all("│ ".as_bytes())?;
                     stdout.write_all(&row)?;
                     stdout.write_all(b"\r\n")?;
                 }
-                stdout.write_all("└────>\r\n".as_bytes())?;
+                stdout.write_all("└─ ".as_bytes())?;
+                stdout.write_all(task_name.as_bytes())?;
+                stdout.write_all(" ──\r\n".as_bytes())?;
             }
             LogBehavior::Status => {
                 stdout.write_all(title.as_bytes())?;
@@ -129,7 +135,7 @@ impl<W> TerminalOutput<W> {
         self.parser
             .screen()
             .selected_text()
-            .map_or(false, |s| !s.is_empty())
+            .is_some_and(|s| !s.is_empty())
     }
 
     pub fn handle_mouse(&mut self, event: crossterm::event::MouseEvent) -> Result<(), Error> {

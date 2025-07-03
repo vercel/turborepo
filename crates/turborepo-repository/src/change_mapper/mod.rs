@@ -7,24 +7,39 @@ use std::{
 };
 
 pub use package::{
-    DefaultPackageChangeMapper, Error, GlobalDepsPackageChangeMapper, PackageChangeMapper,
-    PackageMapping,
+    DefaultPackageChangeMapper, DefaultPackageChangeMapperWithLockfile, Error,
+    GlobalDepsPackageChangeMapper, PackageChangeMapper, PackageMapping,
 };
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 use wax::Program;
 
-use crate::package_graph::{ChangedPackagesError, PackageGraph, PackageName, WorkspacePackage};
+use crate::package_graph::{
+    ChangedPackagesError, ExternalDependencyChange, PackageGraph, PackageName, WorkspacePackage,
+};
 
 mod package;
 
-const DEFAULT_GLOBAL_DEPS: [&str; 2] = ["package.json", "turbo.json"];
+const DEFAULT_GLOBAL_DEPS: &[&str] = ["package.json", "turbo.json", "turbo.jsonc"].as_slice();
 
 // We may not be able to load the lockfile contents, but we
 // still want to be able to express a generic change.
 pub enum LockfileChange {
     Empty,
-    WithContent(Vec<u8>),
+    ChangedPackages(HashSet<turborepo_lockfiles::Package>),
+}
+
+/// This describes the state of a change to a lockfile.
+pub enum LockfileContents {
+    /// We know the lockfile did not change
+    Unchanged,
+    /// We know the lockfile changed but don't have the file contents of the
+    /// previous lockfile (i.e. `git status`, or perhaps a lockfile that was
+    /// deleted or otherwise inaccessible with the information we have)
+    UnknownChange,
+    /// We know the lockfile changed and have the contents of the previous
+    /// lockfile
+    Changed(Vec<u8>),
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
@@ -37,7 +52,10 @@ pub enum PackageInclusionReason {
     /// the lockfile changed.
     ConservativeRootLockfileChanged,
     /// The lockfile changed and caused this package to be invalidated
-    LockfileChanged,
+    LockfileChanged {
+        removed: Vec<turborepo_lockfiles::Package>,
+        added: Vec<turborepo_lockfiles::Package>,
+    },
     /// A transitive dependency of this package changed
     DependencyChanged { dependency: PackageName },
     /// A transitive dependent of this package changed
@@ -117,7 +135,7 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
     pub fn changed_packages(
         &self,
         changed_files: HashSet<AnchoredSystemPathBuf>,
-        lockfile_change: Option<LockfileChange>,
+        lockfile_contents: LockfileContents,
     ) -> Result<PackageChanges, ChangeMapError> {
         if let Some(file) = Self::default_global_file_changed(&changed_files) {
             debug!("global file changed");
@@ -131,15 +149,16 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
         // get filtered files and add the packages that contain them
         let filtered_changed_files = self.filter_ignored_files(changed_files.iter())?;
 
+        // calculate lockfile_change here based on changed_files
         match self.get_changed_packages(filtered_changed_files.into_iter()) {
             PackageChanges::All(reason) => Ok(PackageChanges::All(reason)),
 
             PackageChanges::Some(mut changed_pkgs) => {
-                match lockfile_change {
-                    Some(LockfileChange::WithContent(content)) => {
+                match lockfile_contents {
+                    LockfileContents::Changed(previous_lockfile_contents) => {
                         // if we run into issues, don't error, just assume all packages have changed
                         let Ok(lockfile_changes) =
-                            self.get_changed_packages_from_lockfile(&content)
+                            self.get_changed_packages_from_lockfile(&previous_lockfile_contents)
                         else {
                             debug!(
                                 "unable to determine lockfile changes, assuming all packages \
@@ -155,22 +174,39 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
                         );
                         merge_changed_packages(
                             &mut changed_pkgs,
-                            lockfile_changes
-                                .into_iter()
-                                .map(|pkg| (pkg, PackageInclusionReason::LockfileChanged)),
+                            lockfile_changes.into_iter().map(|change| {
+                                let ExternalDependencyChange {
+                                    package,
+                                    added,
+                                    removed,
+                                } = change;
+                                (
+                                    package,
+                                    PackageInclusionReason::LockfileChanged { added, removed },
+                                )
+                            }),
                         );
 
                         Ok(PackageChanges::Some(changed_pkgs))
                     }
 
                     // We don't have the actual contents, so just invalidate everything
-                    Some(LockfileChange::Empty) => {
-                        debug!("no previous lockfile available, assuming all packages changed");
+                    LockfileContents::UnknownChange => {
+                        // this can happen in a blobless checkout
+                        debug!(
+                            "we know the lockfile changed but we don't have the contents so we \
+                             have to assume all packages changed and rebuild everything"
+                        );
                         Ok(PackageChanges::All(
                             AllPackageChangeReason::LockfileChangedWithoutDetails,
                         ))
                     }
-                    None => Ok(PackageChanges::Some(changed_pkgs)),
+
+                    // We don't know if the lockfile changed or not, so we can't assume anything
+                    LockfileContents::Unchanged => {
+                        debug!("the lockfile did not change");
+                        Ok(PackageChanges::Some(changed_pkgs))
+                    }
                 }
             }
         }
@@ -226,7 +262,7 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
     fn get_changed_packages_from_lockfile(
         &self,
         lockfile_content: &[u8],
-    ) -> Result<Vec<WorkspacePackage>, ChangeMapError> {
+    ) -> Result<Vec<ExternalDependencyChange>, ChangeMapError> {
         let previous_lockfile = self
             .pkg_graph
             .package_manager()

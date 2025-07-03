@@ -7,13 +7,13 @@ use wax::{Any, Glob, Program as _};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("invalid workspace glob {fixed}: {err}")]
+    #[error("Invalid workspace glob {fixed}: {err}")]
     Glob {
         fixed: String,
         #[source]
         err: Box<wax::BuildError>,
     },
-    #[error("invalid globwalk pattern {0}")]
+    #[error("Invalid globwalk pattern {0}")]
     Globwalk(#[from] globwalk::GlobError),
     #[error(transparent)]
     WalkError(#[from] globwalk::WalkError),
@@ -147,7 +147,7 @@ impl WorkspaceGlobs {
     pub fn get_package_jsons(
         &self,
         repo_root: &AbsoluteSystemPath,
-    ) -> Result<impl Iterator<Item = AbsoluteSystemPathBuf>, Error> {
+    ) -> Result<impl Iterator<Item = AbsoluteSystemPathBuf> + use<>, Error> {
         let files = globwalk::globwalk(
             repo_root,
             &self.package_json_inclusions,

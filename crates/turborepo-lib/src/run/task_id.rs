@@ -260,7 +260,7 @@ impl<'a> TaskName<'a> {
 
     pub fn in_workspace(&self, workspace: &str) -> bool {
         self.task_id()
-            .map_or(true, |task_id| task_id.package() == workspace)
+            .is_none_or(|task_id| task_id.package() == workspace)
     }
 
     pub fn into_owned(self) -> TaskName<'static> {

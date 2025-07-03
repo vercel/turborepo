@@ -1,5 +1,5 @@
 {
-  "$schema": "https://turbo.build/schema.json",
+  "$schema": "https://turborepo.com/schema.json",
   "ui": "tui",
   // The following are used by tools such as pnpm, gh actions to setup pnpm, etc.
   "globalPassThroughEnv": [
@@ -197,7 +197,6 @@
         "**/*tslint.json"
       ]
     },
-
     "//#check:toml": {},
     "check-types": {
       "dependsOn": ["^build"]
@@ -217,8 +216,5 @@
     "topo": {
       "dependsOn": ["^topo"]
     }
-  },
-  "experimentalSpaces": {
-    "id": "space_WTrAuWxqVUapGgZDX7KiZV1v"
   }
 }

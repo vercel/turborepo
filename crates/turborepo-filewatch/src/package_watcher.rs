@@ -177,10 +177,11 @@ enum State {
 const INVALIDATION_PATHS: &[&str] = &[
     "package.json",
     "pnpm-workspace.yaml",
-    "pnpm-lock.yaml",
-    "package-lock.json",
-    "yarn.lock",
-    "bun.lockb",
+    package_manager::pnpm::LOCKFILE,
+    package_manager::npm::LOCKFILE,
+    package_manager::yarn::LOCKFILE,
+    package_manager::bun::LOCKFILE_BINARY,
+    package_manager::bun::LOCKFILE,
 ];
 
 impl Subscriber {
@@ -448,13 +449,15 @@ impl Subscriber {
             tracing::debug!("handling change to workspace {path_workspace}");
             let package_json = path_workspace.join_component("package.json");
             let turbo_json = path_workspace.join_component("turbo.json");
+            let turbo_jsonc = path_workspace.join_component("turbo.jsonc");
 
-            let (package_exists, turbo_exists) = join!(
+            let (package_exists, turbo_json_exists, turbo_jsonc_exists) = join!(
                 // It's possible that an IO error could occur other than the file not existing, but
                 // we will treat it like the file doesn't exist. It's possible we'll need to
                 // revisit this, depending on what kind of errors occur.
                 tokio::fs::try_exists(&package_json).map(|result| result.unwrap_or(false)),
-                tokio::fs::try_exists(&turbo_json)
+                tokio::fs::try_exists(&turbo_json),
+                tokio::fs::try_exists(&turbo_jsonc)
             );
 
             changed |= if package_exists {
@@ -463,7 +466,14 @@ impl Subscriber {
                         path_workspace.to_owned(),
                         WorkspaceData {
                             package_json,
-                            turbo_json: turbo_exists.unwrap_or_default().then_some(turbo_json),
+                            turbo_json: turbo_json_exists
+                                .unwrap_or_default()
+                                .then_some(turbo_json)
+                                .or_else(|| {
+                                    turbo_jsonc_exists
+                                        .unwrap_or_default()
+                                        .then_some(turbo_jsonc)
+                                }),
                         },
                     )
                     .is_none()

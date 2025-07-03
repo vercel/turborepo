@@ -1,4 +1,4 @@
-import { bold, cyan, dim, gray } from "picocolors";
+import picocolors from "picocolors";
 import { prompt } from "inquirer";
 import { logger } from "@turbo/utils";
 import { loadTransformers } from "../../utils/loadTransformers";
@@ -17,7 +17,9 @@ export async function transform(
 ) {
   const transforms = loadTransformers();
   if (options.list) {
-    logger.log(transforms.map((t) => `- ${cyan(t.name)}`).join("\n"));
+    logger.log(
+      transforms.map((t) => `- ${picocolors.cyan(t.name)}`).join("\n")
+    );
     return process.exit(0);
   }
 
@@ -41,7 +43,7 @@ export async function transform(
         if (exists) {
           return true;
         }
-        return `Directory ${dim(`(${absolute})`)} does not exist`;
+        return `Directory ${picocolors.dim(`(${absolute})`)} does not exist`;
       },
       filter: (d: string) => d.trim(),
     },
@@ -52,9 +54,9 @@ export async function transform(
       when: !transformName,
       pageSize: transforms.length,
       choices: transforms.map((t) => ({
-        name: `${bold(t.name)} - ${gray(t.description)} ${gray(
-          `(${t.introducedIn})`
-        )}`,
+        name: `${picocolors.bold(t.name)} - ${picocolors.gray(
+          t.description
+        )} ${picocolors.gray(`(${t.introducedIn})`)}`,
         value: t.name,
       })),
     },
@@ -69,7 +71,7 @@ export async function transform(
     directory: selectedDirectory,
   });
   if (!exists) {
-    logger.error(`Directory ${dim(`(${root})`)} does not exist`);
+    logger.error(`Directory ${picocolors.dim(`(${root})`)} does not exist`);
     return process.exit(1);
   }
 
@@ -79,7 +81,9 @@ export async function transform(
   // validate transforms
   if (!transformData) {
     logger.error(
-      `Invalid transform choice ${dim(`(${transformName})`)}, pick one of:`
+      `Invalid transform choice ${picocolors.dim(
+        `(${transformName})`
+      )}, pick one of:`
     );
     logger.error(transformKeys.map((key) => `- ${key}`).join("\n"));
     return process.exit(1);

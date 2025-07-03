@@ -1,0 +1,54 @@
+---
+source: crates/turborepo/tests/query.rs
+expression: query_output
+---
+{
+  "data": {
+    "package": {
+      "tasks": {
+        "items": [
+          {
+            "fullName": "app-a#build",
+            "allDependencies": {
+              "items": []
+            }
+          },
+          {
+            "fullName": "app-a#custom",
+            "allDependencies": {
+              "items": []
+            }
+          },
+          {
+            "fullName": "app-a#test",
+            "allDependencies": {
+              "items": [
+                {
+                  "fullName": "app-a#prepare"
+                },
+                {
+                  "fullName": "lib-a#build0"
+                },
+                {
+                  "fullName": "lib-a#prepare"
+                },
+                {
+                  "fullName": "lib-b#build0"
+                },
+                {
+                  "fullName": "lib-b#prepare"
+                },
+                {
+                  "fullName": "lib-d#build0"
+                },
+                {
+                  "fullName": "lib-d#prepare"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  }
+}

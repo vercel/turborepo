@@ -4,8 +4,8 @@ Setup
 
 Run without --root-turbo-json should fail
   $ ${TURBO} build
-    x Could not find turbo.json.
-    | Follow directions at https://turbo.build/repo/docs to create one
+    x Could not find turbo.json or turbo.jsonc.
+    | Follow directions at https://turborepo.com/docs to create one.
   
   [1]
 

@@ -4,25 +4,29 @@ use itertools::Itertools;
 use miette::Diagnostic;
 use thiserror::Error;
 use turborepo_repository::package_graph;
+use turborepo_signals::{listeners::get_signal, SignalHandler};
 use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_ui::{color, BOLD, GREY};
 
 use crate::{
-    commands::{bin, generate, link, ls, prune, run::get_signal, CommandBase},
+    commands::{bin, generate, link, login, ls, prune, CommandBase},
     daemon::DaemonError,
     query,
     rewrite_json::RewriteError,
     run,
     run::{builder::RunBuilder, watch},
-    signal::SignalHandler,
 };
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
-    #[error("No command specified")]
+    #[error("No command specified.")]
     NoCommand(#[backtrace] backtrace::Backtrace),
     #[error("{0}")]
     Bin(#[from] bin::Error, #[backtrace] backtrace::Backtrace),
+    #[error(transparent)]
+    Boundaries(#[from] crate::boundaries::Error),
+    #[error(transparent)]
+    Clone(#[from] crate::commands::clone::Error),
     #[error(transparent)]
     Path(#[from] turbopath::PathError),
     #[error(transparent)]
@@ -45,6 +49,8 @@ pub enum Error {
     #[diagnostic(transparent)]
     Ls(#[from] ls::Error),
     #[error(transparent)]
+    Login(#[from] login::Error),
+    #[error(transparent)]
     Link(#[from] link::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
@@ -66,6 +72,10 @@ pub enum Error {
     Watch(#[from] watch::Error),
     #[error(transparent)]
     Opts(#[from] crate::opts::Error),
+    #[error(transparent)]
+    SignalListener(#[from] turborepo_signals::listeners::Error),
+    #[error(transparent)]
+    Dialoguer(#[from] dialoguer::Error),
 }
 
 const MAX_CHARS_PER_TASK_LINE: usize = 100;

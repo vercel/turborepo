@@ -1,7 +1,7 @@
 [package]
 name = "turborepo-ui"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 license = "MIT"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -28,7 +28,7 @@ crossterm = { version = "0.27.0", features = ["event-stream"] }
 dialoguer = { workspace = true }
 futures = { workspace = true }
 indicatif = { workspace = true }
-itertools.workspace = true
+itertools = { workspace = true }
 lazy_static = { workspace = true }
 nix = { version = "0.26.2", features = ["signal"] }
 ratatui = { workspace = true }
@@ -42,7 +42,7 @@ turbopath = { workspace = true }
 turborepo-ci = { workspace = true }
 turborepo-vt100 = { workspace = true }
 which = { workspace = true }
-winapi = "0.3.9"
 
 [target."cfg(windows)".dependencies]
 clipboard-win = "5.3.1"
+windows-sys = { version = "0.59", features = ["Win32_System_Console"] }

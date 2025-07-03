@@ -1,5 +1,5 @@
 import path from "node:path";
-import { ensureDirSync, existsSync } from "fs-extra";
+import fs from "fs-extra";
 import { setupTestFixtures } from "@turbo/test-utils";
 import type { PackageJson } from "@turbo/utils";
 import { describe, it, expect, jest } from "@jest/globals";
@@ -92,7 +92,7 @@ describe("managers", () => {
         expect(project.packageManager).toEqual(fixtureManager);
 
         if (withNodeModules) {
-          ensureDirSync(project.paths.nodeModules);
+          fs.ensureDirSync(project.paths.nodeModules);
         }
 
         await MANAGERS[fixtureManager].remove({
@@ -106,7 +106,7 @@ describe("managers", () => {
         });
 
         if (withNodeModules) {
-          expect(existsSync(project.paths.nodeModules)).toEqual(dry);
+          expect(fs.existsSync(project.paths.nodeModules)).toEqual(dry);
         }
 
         const packageJson = readJson<PackageJson>(project.paths.packageJson);
@@ -166,13 +166,13 @@ describe("managers", () => {
           MANAGERS[toManager].read({ workspaceRoot: path.join(root) });
         if (shouldThrow) {
           if (toManager === "pnpm") {
-            await expect(read).rejects.toThrow(`Not a pnpm project`);
+            await expect(read).rejects.toThrow("Not a pnpm project");
           } else if (toManager === "yarn") {
-            await expect(read).rejects.toThrow(`Not a yarn project`);
+            await expect(read).rejects.toThrow("Not a yarn project");
           } else if (toManager === "bun") {
-            await expect(read).rejects.toThrow(`Not a bun project`);
+            await expect(read).rejects.toThrow("Not a bun project");
           } else {
-            await expect(read).rejects.toThrow(`Not an npm project`);
+            await expect(read).rejects.toThrow("Not an npm project");
           }
           return;
         }
@@ -248,13 +248,13 @@ describe("managers", () => {
           MANAGERS[toManager].read({ workspaceRoot: root });
         if (shouldThrow) {
           if (toManager === "pnpm") {
-            await expect(read).rejects.toThrow(`Not a pnpm project`);
+            await expect(read).rejects.toThrow("Not a pnpm project");
           } else if (toManager === "yarn") {
-            await expect(read).rejects.toThrow(`Not a yarn project`);
+            await expect(read).rejects.toThrow("Not a yarn project");
           } else if (toManager === "bun") {
-            await expect(read).rejects.toThrow(`Not a bun project`);
+            await expect(read).rejects.toThrow("Not a bun project");
           } else {
-            await expect(read).rejects.toThrow(`Not an npm project`);
+            await expect(read).rejects.toThrow("Not an npm project");
           }
           return;
         }
@@ -331,7 +331,7 @@ describe("managers", () => {
           },
         });
 
-        expect(existsSync(project.paths.lockfile)).toEqual(dry);
+        expect(fs.existsSync(project.paths.lockfile)).toEqual(dry);
       }
     );
   });

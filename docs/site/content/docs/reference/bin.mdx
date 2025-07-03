@@ -1,0 +1,14 @@
+---
+title: bin
+description: API reference for the `turbo bin` command
+---
+
+Get the path to the `turbo` binary.
+
+```bash title="Terminal"
+turbo bin
+```
+
+When using [**global `turbo`**](/docs/getting-started/installation#global-installation), this will be the path to the global `turbo` binary. You're likely to see a path to the global directory of the package manager you used to install `turbo`.
+
+When using [**local `turbo`**](/docs/getting-started/installation#repository-installation), this will be the path to the local `turbo` binary. When `turbo` is installed in your repository, it is likely to be a path to `node_modules`.

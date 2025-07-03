@@ -1,6 +1,6 @@
 # Turborepo starter with Rollup
 
-This is an official starter Turborepo, showing how Turborepo can be used with Rollup for bundling a `ui` package.
+This is a community-maintained example. If you experience a problem, please submit a pull request with a fix. GitHub Issues will be closed.
 
 ## Using this example
 

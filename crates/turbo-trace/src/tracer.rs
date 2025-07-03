@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, fmt, sync::Arc};
 
 use camino::{Utf8Path, Utf8PathBuf};
 use globwalk::WalkType;
@@ -38,7 +38,7 @@ pub struct Tracer {
     source_map: Arc<SourceMap>,
     cwd: AbsoluteSystemPathBuf,
     errors: Vec<TraceError>,
-    import_type: ImportType,
+    import_type: ImportTraceType,
 }
 
 #[derive(Clone, Debug, Error, Diagnostic)]
@@ -48,7 +48,7 @@ pub enum TraceError {
     #[error("failed to read file: {0}")]
     FileNotFound(AbsoluteSystemPathBuf),
     #[error(transparent)]
-    PathEncoding(Arc<PathError>),
+    PathError(Arc<PathError>),
     #[error("tracing a root file `{0}`, no parent found")]
     RootFile(AbsoluteSystemPathBuf),
     #[error("failed to resolve import to `{import}` in `{file_path}`")]
@@ -95,10 +95,19 @@ pub struct TraceResult {
     pub files: HashMap<AbsoluteSystemPathBuf, SeenFile>,
 }
 
+impl fmt::Debug for TraceResult {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("TraceResult")
+            .field("files", &self.files)
+            .field("errors", &self.errors)
+            .finish()
+    }
+}
+
 /// The type of imports to trace.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[allow(dead_code)]
-pub enum ImportType {
+pub enum ImportTraceType {
     /// Trace all imports.
     All,
     /// Trace only `import type` imports
@@ -122,14 +131,14 @@ impl Tracer {
             files,
             ts_config,
             cwd,
-            import_type: ImportType::All,
+            import_type: ImportTraceType::All,
             errors: Vec::new(),
             source_map: Arc::new(SourceMap::default()),
         }
     }
 
     #[allow(dead_code)]
-    pub fn set_import_type(&mut self, import_type: ImportType) {
+    pub fn set_import_type(&mut self, import_type: ImportTraceType) {
         self.import_type = import_type;
     }
 
@@ -139,7 +148,7 @@ impl Tracer {
         errors: &mut Vec<TraceError>,
         resolver: &Resolver,
         file_path: &AbsoluteSystemPath,
-        import_type: ImportType,
+        import_type: ImportTraceType,
     ) -> Option<(Vec<AbsoluteSystemPathBuf>, SeenFile)> {
         // Read the file content
         let Ok(file_content) = tokio::fs::read_to_string(&file_path).await else {
@@ -163,6 +172,7 @@ impl Tracer {
         } else {
             Syntax::Es(EsSyntax {
                 jsx: true,
+                import_attributes: true,
                 ..Default::default()
             })
         };
@@ -191,7 +201,7 @@ impl Tracer {
         // Convert found imports/requires to absolute paths and add them to files to
         // visit
         let mut files = Vec::new();
-        for (import, span) in finder.imports() {
+        for (import, span, _) in finder.imports() {
             debug!("processing {} in {}", import, file_path);
             let Some(file_dir) = file_path.parent() else {
                 errors.push(TraceError::RootFile(file_path.to_owned()));
@@ -203,7 +213,7 @@ impl Tracer {
                     match resolved.into_path_buf().try_into().map_err(Arc::new) {
                         Ok(path) => files.push(path),
                         Err(err) => {
-                            errors.push(TraceError::PathEncoding(err));
+                            errors.push(TraceError::PathError(err));
                             continue;
                         }
                     }
@@ -253,7 +263,7 @@ impl Tracer {
                     errors.push(TraceError::Resolve {
                         import: import.to_string(),
                         file_path: file_path.to_string(),
-                        span: SourceSpan::new(start.into(), (end - start).into()),
+                        span: SourceSpan::new(start.into(), end - start),
                         text: file_content.clone(),
                         reason: err.to_string(),
                     });
@@ -344,7 +354,7 @@ impl Tracer {
         }
     }
 
-    pub fn create_resolver(&mut self) -> Resolver {
+    pub fn create_resolver(ts_config: Option<&AbsoluteSystemPath>) -> Resolver {
         let mut options = ResolveOptions::default()
             .with_builtin_modules(true)
             .with_force_extension(EnforceExtension::Disabled)
@@ -362,9 +372,9 @@ impl Tracer {
             // We add a bunch so oxc_resolver can resolve all kinds of imports.
             .with_condition_names(&["import", "require", "node", "types", "default"]);
 
-        if let Some(ts_config) = self.ts_config.take() {
+        if let Some(ts_config) = ts_config {
             options.tsconfig = Some(TsconfigOptions {
-                config_file: ts_config.into(),
+                config_file: ts_config.as_std_path().into(),
                 references: TsconfigReferences::Auto,
             });
         }
@@ -374,7 +384,7 @@ impl Tracer {
 
     pub async fn trace(mut self, max_depth: Option<usize>) -> TraceResult {
         let mut seen: HashMap<AbsoluteSystemPathBuf, SeenFile> = HashMap::new();
-        let resolver = self.create_resolver();
+        let resolver = Self::create_resolver(self.ts_config.as_deref());
 
         while let Some((file_path, file_depth)) = self.files.pop() {
             if let Some(max_depth) = max_depth {
@@ -393,7 +403,7 @@ impl Tracer {
         }
     }
 
-    pub async fn reverse_trace(mut self) -> TraceResult {
+    pub async fn reverse_trace(self) -> TraceResult {
         let files = match globwalk::globwalk(
             &self.cwd,
             &[
@@ -420,7 +430,7 @@ impl Tracer {
 
         let mut futures = JoinSet::new();
 
-        let resolver = Arc::new(self.create_resolver());
+        let resolver = Arc::new(Self::create_resolver(self.ts_config.as_deref()));
         let source_map = self.source_map.clone();
         let shared_self = Arc::new(self);
 
@@ -444,7 +454,22 @@ impl Tracer {
                     return (errors, None);
                 };
 
-                for import in imported_files {
+                for mut import in imported_files {
+                    // Windows has this annoying habit of abbreviating paths
+                    // like `C:\Users\Admini~1` instead of `C:\Users\Administrator`
+                    // We canonicalize to get the proper, full length path
+                    if cfg!(windows) {
+                        match import.to_realpath() {
+                            Ok(path) => {
+                                import = path;
+                            }
+                            Err(err) => {
+                                errors.push(TraceError::PathError(Arc::new(err)));
+                                return (errors, None);
+                            }
+                        }
+                    }
+
                     if shared_self
                         .files
                         .iter()
