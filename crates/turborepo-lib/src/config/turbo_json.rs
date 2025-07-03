@@ -38,12 +38,14 @@ impl<'a> TurboJsonReader<'a> {
 
         // Don't allow token to be set for shared config.
         opts.token = None;
-        opts.ui = turbo_json.ui;
-        opts.allow_no_package_manager = turbo_json.allow_no_package_manager;
+        opts.ui = turbo_json.ui.map(|ui| *ui.as_inner());
+        opts.allow_no_package_manager = turbo_json
+            .allow_no_package_manager
+            .map(|allow| *allow.as_inner());
         opts.daemon = turbo_json.daemon.map(|daemon| *daemon.as_inner());
-        opts.env_mode = turbo_json.env_mode;
+        opts.env_mode = turbo_json.env_mode.map(|mode| *mode.as_inner());
         opts.cache_dir = cache_dir;
-        opts.concurrency = turbo_json.concurrency;
+        opts.concurrency = turbo_json.concurrency.map(|c| c.as_inner().clone());
         Ok(opts)
     }
 }
