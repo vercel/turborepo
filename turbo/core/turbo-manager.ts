@@ -57,7 +57,8 @@ export class TurboManager extends SimpleEventEmitter {
     this.isEnabled = this.configManager.getConfig().defaultEnabled;
     
     this.setupConfigListener();
-    this.startMetricsUpdates();
+    // Don't start metrics updates automatically to avoid keeping process alive
+    // this.startMetricsUpdates();
 
     if (this.isEnabled) {
       this.applyTurboOptimizations();
@@ -280,12 +281,29 @@ export class TurboManager extends SimpleEventEmitter {
     });
   }
 
-  private startMetricsUpdates(): void {
-    // Update metrics every 5 seconds
+  /**
+   * Start automatic metrics updates (optional)
+   * Call this if you want periodic performance updates
+   */
+  startMetricsUpdates(intervalMs: number = 5000): void {
+    if (this.metricsUpdateInterval) {
+      clearInterval(this.metricsUpdateInterval);
+    }
+    
     this.metricsUpdateInterval = setInterval(() => {
       const metrics = PerformanceUtils.getMetrics();
       this.emit('turbo:performance-update', metrics);
-    }, 5000);
+    }, intervalMs);
+  }
+
+  /**
+   * Stop automatic metrics updates
+   */
+  stopMetricsUpdates(): void {
+    if (this.metricsUpdateInterval) {
+      clearInterval(this.metricsUpdateInterval);
+      this.metricsUpdateInterval = null;
+    }
   }
   // Type-safe event methods
   on<K extends keyof TurboEvents>(event: K, listener: (data: TurboEvents[K]) => void): this {
