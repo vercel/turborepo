@@ -1,4 +1,4 @@
-use std::{backtrace::Backtrace, ffi::OsString, io};
+use std::{backtrace::Backtrace, ffi::OsString, fs, io};
 
 use camino::Utf8Component;
 use tar::Entry;
@@ -92,6 +92,32 @@ impl CachedDirTree {
         //
         // This could _still_ error, but we don't care.
         let resolved_name = anchor.resolve(processed_name);
+
+        // Before attempting to create the directory, check if there's a symlink
+        // at this location that would cause cache restoration to the wrong location.
+        if let Ok(metadata) = resolved_name.symlink_metadata() {
+            if metadata.is_symlink() {
+                // Check if the symlink points to a sibling directory (like dist -> src)
+                if let Ok(link_target) = resolved_name.read_link() {
+                    let is_relative = link_target.is_relative();
+                    let is_sibling = is_relative
+                        && link_target.components().count() == 1
+                        && !link_target.as_str().starts_with('.');
+
+                    if is_sibling {
+                        debug!(
+                            "Found sibling symlink at directory location {:?}, removing to ensure \
+                             correct cache restoration",
+                            resolved_name
+                        );
+                        if fs::remove_file(resolved_name.as_path()).is_ok() {
+                            debug!("Successfully removed symlink at {:?}", resolved_name);
+                        }
+                    }
+                }
+            }
+        }
+
         let directory_exists = resolved_name.try_exists();
         if matches!(directory_exists, Ok(false)) {
             resolved_name.create_dir_all()?;
