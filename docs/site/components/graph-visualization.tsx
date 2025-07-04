@@ -8,6 +8,7 @@ import {
   Handle,
   Position,
 } from "@xyflow/react";
+import type { Node } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { Card } from "./card";
 import { Button } from "./button";
@@ -33,17 +34,32 @@ interface GraphVisualizationProps {
 const CustomNode = ({
   data,
 }: {
-  data: { label: string; isRoot?: boolean };
+  data: {
+    label: string;
+    isRoot?: boolean;
+    isHighlighted?: boolean;
+    isFaded?: boolean;
+  };
 }) => {
+  const getNodeClasses = () => {
+    const baseClasses =
+      "relative px-3 py-2 rounded-lg border-2 font-medium text-sm shadow-sm transition-all duration-200";
+    const colorClasses = data.isRoot
+      ? "bg-red-500 text-white border-red-600"
+      : "bg-blue-500 text-white border-blue-600";
+
+    let stateClasses = "opacity-100";
+    if (data.isFaded) {
+      stateClasses = "opacity-10";
+    } else if (data.isHighlighted) {
+      stateClasses = "opacity-100 ring-2 ring-yellow-400 ring-offset-2";
+    }
+
+    return `${baseClasses} ${colorClasses} ${stateClasses}`;
+  };
+
   return (
-    <div
-      className={`relative px-3 py-2 rounded-lg border-2 font-medium text-sm shadow-sm ${
-        data.isRoot
-          ? "bg-red-500 text-white border-red-600"
-          : "bg-blue-500 text-white border-blue-600"
-      }`}
-      style={{ minWidth: 80, minHeight: 40 }}
-    >
+    <div className={getNodeClasses()} style={{ minWidth: 80, minHeight: 40 }}>
       {/* Handles on all four sides */}
       <Handle type="target" position={Position.Top} id="top" />
       <Handle type="target" position={Position.Left} id="left" />
@@ -70,6 +86,7 @@ export function GraphVisualization({ className }: GraphVisualizationProps) {
   const [loading, setLoading] = useState(false);
   const [inputMethod, setInputMethod] = useState<"upload" | "paste">("paste");
   const [pastedData, setPastedData] = useState("");
+  const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const parseGraphQLResponse = (jsonString: string): GraphData => {
@@ -274,6 +291,21 @@ export function GraphVisualization({ className }: GraphVisualizationProps) {
       );
     });
 
+    // Build adjacency lists for hover highlighting
+    const directConnections = new Map<string, Set<string>>();
+    graphData.nodes.forEach((node) => {
+      directConnections.set(node.id, new Set());
+    });
+
+    graphData.edges.forEach((edge) => {
+      const sourceConnections = directConnections.get(edge.source);
+      const targetConnections = directConnections.get(edge.target);
+      if (sourceConnections && targetConnections) {
+        sourceConnections.add(edge.target);
+        targetConnections.add(edge.source);
+      }
+    });
+
     // Position nodes in hierarchical layout
     const nodeSpacingX = 200;
     const levelSpacing = 200;
@@ -306,6 +338,23 @@ export function GraphVisualization({ className }: GraphVisualizationProps) {
       // Store for edge direction
       nodePositions.set(node.id, { x, y });
 
+      // Determine if node should be highlighted or faded based on hover state
+      let isHighlighted = false;
+      let isFaded = false;
+
+      if (hoveredNodeId) {
+        const hoveredConnections = directConnections.get(hoveredNodeId);
+        if (hoveredConnections) {
+          if (node.id === hoveredNodeId) {
+            isHighlighted = true;
+          } else if (hoveredConnections.has(node.id)) {
+            isHighlighted = true;
+          } else {
+            isFaded = true;
+          }
+        }
+      }
+
       return {
         id: node.id,
         type: "custom",
@@ -313,6 +362,8 @@ export function GraphVisualization({ className }: GraphVisualizationProps) {
         data: {
           label: node.label,
           isRoot,
+          isHighlighted,
+          isFaded,
         },
         style: {
           width: Math.max(80, Math.min(200, 80 + degree * 10)),
@@ -347,6 +398,23 @@ export function GraphVisualization({ className }: GraphVisualizationProps) {
           }
           return null;
         }
+
+        // Determine if edge should be faded based on hover state
+        let isFaded = false;
+        if (hoveredNodeId) {
+          const hoveredConnections = directConnections.get(hoveredNodeId);
+          if (hoveredConnections) {
+            // Edge is relevant if either source or target is the hovered node or directly connected
+            const isSourceRelevant =
+              edge.source === hoveredNodeId ||
+              hoveredConnections.has(edge.source);
+            const isTargetRelevant =
+              edge.target === hoveredNodeId ||
+              hoveredConnections.has(edge.target);
+            isFaded = !(isSourceRelevant && isTargetRelevant);
+          }
+        }
+
         // Determine which handle to use for source and target
         const sourceHandle = getHandleDirection(sourcePos, targetPos);
         const targetHandle = getHandleDirection(targetPos, sourcePos);
@@ -361,14 +429,15 @@ export function GraphVisualization({ className }: GraphVisualizationProps) {
             stroke: "#3b82f6",
             strokeWidth: 2,
             strokeDasharray: "5,5", // Dashed line to show dependency direction
+            opacity: isFaded ? 0.3 : 1,
+            transition: "opacity 0.2s ease-in-out",
           },
-          animated: true, // Animate the flow to show direction
         };
       })
       .filter(Boolean);
 
     return { nodes: flowNodes, edges: flowEdges };
-  }, [graphData]);
+  }, [graphData, hoveredNodeId]);
 
   const clearGraph = () => {
     setGraphData(null);
@@ -468,6 +537,12 @@ export function GraphVisualization({ className }: GraphVisualizationProps) {
                 fitView
                 attributionPosition="bottom-left"
                 proOptions={{ hideAttribution: true }}
+                onNodeMouseEnter={(_: React.MouseEvent, node: Node) => {
+                  setHoveredNodeId(node.id);
+                }}
+                onNodeMouseLeave={() => {
+                  setHoveredNodeId(null);
+                }}
               >
                 <Controls />
                 <Background color="#f1f5f9" gap={16} />
