@@ -1483,4 +1483,85 @@ c:
             crate::Error::MissingWorkspace("apps/docs".to_string()).to_string()
         );
     }
+
+    #[test]
+    fn test_subgraph_with_empty_workspace_packages() {
+        let lockfile = PnpmLockfile::from_bytes(PNPM8).unwrap();
+
+        // Test subgraph with no workspace packages
+        let subgraph = lockfile.subgraph(&[], &["/is-odd@3.0.1".into()]).unwrap();
+        let pnpm_subgraph = (subgraph.as_ref() as &dyn Any)
+            .downcast_ref::<PnpmLockfile>()
+            .unwrap();
+
+        // Should only contain root importer
+        assert_eq!(pnpm_subgraph.importers.len(), 1);
+        assert!(pnpm_subgraph.importers.contains_key("."));
+
+        // Should contain the requested package
+        assert!(pnpm_subgraph
+            .packages
+            .as_ref()
+            .unwrap()
+            .contains_key("/is-odd@3.0.1"));
+    }
+
+    #[test]
+    fn test_subgraph_with_missing_package() {
+        let lockfile = PnpmLockfile::from_bytes(PNPM8).unwrap();
+
+        // Test subgraph with non-existent package
+        let result = lockfile.subgraph(&["packages/a".into()], &["nonexistent-package".into()]);
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            crate::Error::MissingPackage(_)
+        ));
+    }
+
+    #[test]
+    fn test_resolve_package_with_invalid_workspace() {
+        let lockfile = PnpmLockfile::from_bytes(PNPM8).unwrap();
+
+        // Test with invalid workspace
+        let result = lockfile.resolve_package("invalid/workspace", "is-odd", "^3.0.1");
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            crate::Error::MissingWorkspace(_)
+        ));
+    }
+
+    #[test]
+    fn test_global_change_detection() {
+        let lockfile1 = PnpmLockfile::from_bytes(PNPM8).unwrap();
+        let lockfile2 = PnpmLockfile::from_bytes(PNPM8_6).unwrap();
+
+        // Different lockfiles should show global change
+        assert!(lockfile1.global_change(&lockfile2));
+
+        // Same lockfile should not show global change
+        assert!(!lockfile1.global_change(&lockfile1));
+    }
+
+    #[test]
+    fn test_all_dependencies_with_invalid_key() {
+        let lockfile = PnpmLockfile::from_bytes(PNPM8).unwrap();
+
+        // Test with invalid package key
+        let result = lockfile.all_dependencies("invalid-package-key").unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_workspace_link_resolution() {
+        let lockfile = PnpmLockfile::from_bytes(PNPM8).unwrap();
+
+        // Test workspace link resolution - current implementation returns None
+        // for workspace links since they're not actual packages in the lockfile
+        let workspace_dep = lockfile
+            .resolve_package("packages/a", "c", "workspace:*")
+            .unwrap();
+        assert!(workspace_dep.is_none());
+    }
 }
