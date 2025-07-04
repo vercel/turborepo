@@ -112,61 +112,60 @@ export function GraphVisualization({
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Need to parse dynamic JSON response
       const parsed = JSON.parse(jsonString);
 
-      // Handle turbo query GraphQL response format
+      // Handle direct packageGraph format
       // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access -- GraphQL response structure is dynamic
-      if (parsed.data?.packageGraph) {
+      if (parsed.packageGraph) {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access -- GraphQL response structure is dynamic
-        const packageGraph = parsed.data.packageGraph;
-        const nodes: GraphData["nodes"] = [];
-        const edges: GraphData["edges"] = [];
-
-        // Extract nodes from packageGraph.nodes.items
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access -- GraphQL response structure is dynamic
-        if (packageGraph.nodes?.items) {
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access -- GraphQL response structure is dynamic
-          packageGraph.nodes.items.forEach((item: { name: string }) => {
-            if (item.name) {
-              nodes.push({
-                id: item.name,
-                label: item.name,
-                name: item.name,
-              });
-            }
-          });
-        }
-
-        // Extract edges from packageGraph.edges.items
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access -- GraphQL response structure is dynamic
-        if (packageGraph.edges?.items) {
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access -- GraphQL response structure is dynamic
-          packageGraph.edges.items.forEach(
-            (item: { source: string; target: string }) => {
-              if (item.source && item.target) {
-                edges.push({
-                  source: item.source,
-                  target: item.target,
-                });
-              }
-            }
-          );
-        }
-
-        return { nodes, edges };
-      }
-
-      // Handle direct format (for backwards compatibility)
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access -- Backwards compatibility with unknown structure
-      if (parsed.nodes && parsed.edges) {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-return -- Backwards compatibility with unknown structure
-        return parsed;
+        const packageGraph = parsed.packageGraph;
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- GraphQL response structure is dynamic
+        return extractGraphData(packageGraph);
       }
 
       throw new Error(
-        "Invalid GraphQL response format. Expected data.packageGraph structure."
+        "Invalid GraphQL response format. Expected packageGraph structure."
       );
     } catch (e) {
       throw new Error("Invalid JSON format or unsupported structure");
     }
+  };
+
+  const extractGraphData = (packageGraph: {
+    nodes?: { items?: Array<{ name: string }> };
+    edges?: { items?: Array<{ source: string; target: string }> };
+  }): GraphData => {
+    const nodes: GraphData["nodes"] = [];
+    const edges: GraphData["edges"] = [];
+
+    // Extract nodes from packageGraph.nodes.items
+
+    if (packageGraph.nodes?.items) {
+      packageGraph.nodes.items.forEach((item: { name: string }) => {
+        if (item.name) {
+          nodes.push({
+            id: item.name,
+            label: item.name,
+            name: item.name,
+          });
+        }
+      });
+    }
+
+    // Extract edges from packageGraph.edges.items
+
+    if (packageGraph.edges?.items) {
+      packageGraph.edges.items.forEach(
+        (item: { source: string; target: string }) => {
+          if (item.source && item.target) {
+            edges.push({
+              source: item.source,
+              target: item.target,
+            });
+          }
+        }
+      );
+    }
+
+    return { nodes, edges };
   };
 
   const parseGraphData = (content: string): GraphData => {

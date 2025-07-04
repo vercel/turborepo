@@ -23,7 +23,7 @@ export const Page = () => {
 
   return (
     <>
-      <GraphVisualization initialData={decodedPayload} />;
+      <GraphVisualization initialData={decodedPayload} />
     </>
   );
 };
