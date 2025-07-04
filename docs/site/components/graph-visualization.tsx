@@ -1,7 +1,13 @@
 "use client";
 
 import { useState, useRef, useMemo } from "react";
-import { ReactFlow, Controls, Background } from "@xyflow/react";
+import {
+  ReactFlow,
+  Controls,
+  Background,
+  Handle,
+  Position,
+} from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { Card } from "./card";
 import { Button } from "./button";
@@ -37,9 +43,11 @@ const CustomNode = ({
           : "bg-blue-500 text-white border-blue-600"
       }`}
     >
+      <Handle type="target" position={Position.Top} />
       {data.label.length > 20
         ? `${data.label.substring(0, 18)}...`
         : data.label}
+      <Handle type="source" position={Position.Bottom} />
     </div>
   );
 };
@@ -185,15 +193,20 @@ export function GraphVisualization({ className }: GraphVisualizationProps) {
       );
     });
 
-    // Create hierarchical layout
-    const flowNodes = graphData.nodes.map((node) => {
+    // Create grid layout for better edge visibility
+    const nodesPerRow = 6;
+    const nodeSpacingX = 220;
+    const nodeSpacingY = 120;
+    const flowNodes = graphData.nodes.map((node, idx) => {
       const degree = nodeDegrees.get(node.id) || 0;
       const isRoot = node.id === "//";
-
       return {
         id: node.id,
         type: "custom",
-        position: { x: 0, y: 0 }, // Will be positioned by layout
+        position: {
+          x: (idx % nodesPerRow) * nodeSpacingX,
+          y: Math.floor(idx / nodesPerRow) * nodeSpacingY + 100,
+        },
         data: {
           label: node.label,
           isRoot,
@@ -204,13 +217,37 @@ export function GraphVisualization({ className }: GraphVisualizationProps) {
       };
     });
 
-    const flowEdges = graphData.edges.map((edge, index) => ({
-      id: `edge-${index}`,
-      source: edge.source,
-      target: edge.target,
-      type: "smoothstep",
-      style: { stroke: "#6b7280", strokeWidth: 2 },
-    }));
+    // Edges are generated from the parsed graph data and should match node IDs
+    const flowEdges = graphData.edges.map((edge, index) => {
+      if (
+        !flowNodes.find((n) => n.id === edge.source) ||
+        !flowNodes.find((n) => n.id === edge.target)
+      ) {
+        if (typeof window !== "undefined") {
+          // eslint-disable-next-line no-console
+          console.warn("Edge references missing node:", edge);
+        }
+      }
+
+      return {
+        id: `edge-${index}`,
+        source: String(edge.source),
+        target: String(edge.target),
+        type: "default", // force default edge type
+        style: { stroke: "#ff0000", strokeWidth: 3 }, // bright red
+      };
+    });
+
+    // Add a hardcoded debug edge between the first two nodes
+    if (flowNodes.length > 1) {
+      flowEdges.push({
+        id: "debug-edge",
+        source: flowNodes[0].id,
+        target: flowNodes[1].id,
+        type: "default",
+        style: { stroke: "#00ff00", strokeWidth: 4 }, // bright green
+      });
+    }
 
     return { nodes: flowNodes, edges: flowEdges };
   }, [graphData]);
