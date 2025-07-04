@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useMemo } from "react";
+import { useState, useRef, useMemo, useEffect } from "react";
 import {
   ReactFlow,
   Controls,
@@ -28,6 +28,7 @@ interface GraphData {
 
 interface GraphVisualizationProps {
   className?: string;
+  initialData?: string | null;
 }
 
 // Custom node component for better styling
@@ -80,7 +81,10 @@ const nodeTypes = {
   custom: CustomNode,
 };
 
-export function GraphVisualization({ className }: GraphVisualizationProps) {
+export function GraphVisualization({
+  className,
+  initialData,
+}: GraphVisualizationProps) {
   const [graphData, setGraphData] = useState<GraphData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -88,6 +92,20 @@ export function GraphVisualization({ className }: GraphVisualizationProps) {
   const [pastedData, setPastedData] = useState("");
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Handle initial data from URL
+  useEffect(() => {
+    if (initialData) {
+      try {
+        const parsed = parseGraphData(initialData);
+        setGraphData(parsed);
+      } catch (err) {
+        setError(
+          err instanceof Error ? err.message : "Failed to parse initial data"
+        );
+      }
+    }
+  }, [initialData]);
 
   const parseGraphQLResponse = (jsonString: string): GraphData => {
     try {

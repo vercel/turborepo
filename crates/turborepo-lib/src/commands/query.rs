@@ -12,7 +12,7 @@ use crate::{
     commands::CommandBase,
     query,
     query::{Error, RepositoryQuery},
-    run::builder::RunBuilder,
+    run::{builder::RunBuilder, Run},
 };
 
 const SCHEMA_QUERY: &str = "query IntrospectionQuery {
@@ -160,6 +160,7 @@ pub async fn run(
     query: Option<String>,
     variables_path: Option<&Utf8Path>,
     include_schema: bool,
+    graph: bool,
 ) -> Result<i32, Error> {
     let signal = get_signal()?;
     let handler = SignalHandler::new(signal);
@@ -168,6 +169,11 @@ pub async fn run(
         .add_all_tasks()
         .do_not_validate_engine();
     let run = run_builder.build(&handler, telemetry).await?;
+
+    if graph {
+        return handle_graph_mode(run).await;
+    }
+
     let query = query.as_deref().or(include_schema.then_some(SCHEMA_QUERY));
     if let Some(query) = query {
         let trimmed_query = query.trim();
@@ -214,4 +220,89 @@ pub async fn run(
     }
 
     Ok(0)
+}
+
+async fn handle_graph_mode(run: Run) -> Result<i32, Error> {
+    use std::process::Command;
+
+    use base64::{engine::general_purpose::STANDARD, Engine as _};
+
+    // Create the GraphQL schema
+    let schema = Schema::new(
+        RepositoryQuery::new(Arc::new(run)),
+        EmptyMutation,
+        EmptySubscription,
+    );
+
+    // Query to get package graph data
+    let graph_query = r#"
+        query {
+            packageGraph {
+                nodes {
+                    items {
+                        name
+                        path
+                    }
+                }
+                edges {
+                    items {
+                        source
+                        target
+                    }
+                }
+            }
+        }
+    "#;
+
+    let request = Request::new(graph_query);
+    let result = schema.execute(request).await;
+
+    if !result.errors.is_empty() {
+        for error in result.errors {
+            eprintln!("GraphQL error: {}", error.message);
+        }
+        return Ok(1);
+    }
+
+    // Serialize and base64 encode the graph data
+    let graph_data = serde_json::to_string(&result.data)?;
+    let encoded_data = STANDARD.encode(graph_data.as_bytes());
+
+    // Determine the base URL based on environment
+    let is_dev = std::env::var("NODE_ENV")
+        .map(|v| v == "development")
+        .unwrap_or(false)
+        || std::env::var("CARGO_PROFILE")
+            .map(|v| v == "dev")
+            .unwrap_or(false);
+    let base_url = if is_dev {
+        "http://localhost:3000"
+    } else {
+        "https://turborepo.com"
+    };
+
+    let graph_url = format!("{}/graph?data={}", base_url, encoded_data);
+
+    // Open the URL in the default browser
+    let status = if cfg!(target_os = "windows") {
+        Command::new("cmd")
+            .args(&["/C", "start", &graph_url])
+            .status()
+    } else if cfg!(target_os = "macos") {
+        Command::new("open").arg(&graph_url).status()
+    } else {
+        Command::new("xdg-open").arg(&graph_url).status()
+    };
+
+    match status {
+        Ok(_) => {
+            println!("Opening {} with your package graph data...", graph_url);
+            Ok(0)
+        }
+        Err(e) => {
+            eprintln!("Failed to open browser: {}", e);
+            println!("Please manually open: {}", graph_url);
+            Ok(0)
+        }
+    }
 }
