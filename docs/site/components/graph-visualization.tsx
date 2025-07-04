@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useMemo } from "react";
+import { ReactFlow, Controls, Background } from "@xyflow/react";
+import "@xyflow/react/dist/style.css";
 import { Card } from "./card";
 import { Button } from "./button";
 import { Callout } from "./callout";
@@ -21,6 +23,31 @@ interface GraphVisualizationProps {
   className?: string;
 }
 
+// Custom node component for better styling
+const CustomNode = ({
+  data,
+}: {
+  data: { label: string; isRoot?: boolean };
+}) => {
+  return (
+    <div
+      className={`px-3 py-2 rounded-lg border-2 font-medium text-sm shadow-sm ${
+        data.isRoot
+          ? "bg-red-500 text-white border-red-600"
+          : "bg-blue-500 text-white border-blue-600"
+      }`}
+    >
+      {data.label.length > 20
+        ? `${data.label.substring(0, 18)}...`
+        : data.label}
+    </div>
+  );
+};
+
+const nodeTypes = {
+  custom: CustomNode,
+};
+
 export function GraphVisualization({ className }: GraphVisualizationProps) {
   const [graphData, setGraphData] = useState<GraphData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -28,7 +55,6 @@ export function GraphVisualization({ className }: GraphVisualizationProps) {
   const [inputMethod, setInputMethod] = useState<"upload" | "paste">("paste");
   const [pastedData, setPastedData] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const svgRef = useRef<SVGSVGElement>(null);
 
   const parseGraphQLResponse = (jsonString: string): GraphData => {
     try {
@@ -51,9 +77,7 @@ export function GraphVisualization({ className }: GraphVisualizationProps) {
             if (item.name) {
               nodes.push({
                 id: item.name,
-
                 label: item.name,
-
                 name: item.name,
               });
             }
@@ -69,7 +93,6 @@ export function GraphVisualization({ className }: GraphVisualizationProps) {
               if (item.source && item.target) {
                 edges.push({
                   source: item.source,
-
                   target: item.target,
                 });
               }
@@ -147,442 +170,49 @@ export function GraphVisualization({ className }: GraphVisualizationProps) {
     }
   };
 
-  const renderGraph = () => {
-    if (!graphData || !svgRef.current) return;
+  // Convert graph data to XYFlow format
+  const flowData = useMemo(() => {
+    if (!graphData) return { nodes: [], edges: [] };
 
-    const svg = svgRef.current;
-    const width = 1000;
-    const height = 800;
+    // Calculate node degrees for sizing
+    const nodeDegrees = new Map<string, number>();
+    graphData.nodes.forEach((node) => {
+      nodeDegrees.set(
+        node.id,
+        graphData.edges.filter(
+          (edge) => edge.source === node.id || edge.target === node.id
+        ).length
+      );
+    });
 
-    // Clear previous content
-    svg.innerHTML = "";
+    // Create hierarchical layout
+    const flowNodes = graphData.nodes.map((node) => {
+      const degree = nodeDegrees.get(node.id) || 0;
+      const isRoot = node.id === "//";
 
-    // Enhanced hierarchical layout algorithm
-    const nodes = graphData.nodes.map((node) => ({
-      ...node,
-      x: 0,
-      y: 0,
-      vx: 0,
-      vy: 0,
-      degree: 0,
-      layer: 0,
-      dependencyDepth: 0,
+      return {
+        id: node.id,
+        type: "custom",
+        position: { x: 0, y: 0 }, // Will be positioned by layout
+        data: {
+          label: node.label,
+          isRoot,
+        },
+        style: {
+          width: Math.max(80, Math.min(200, 80 + degree * 10)),
+        },
+      };
+    });
+
+    const flowEdges = graphData.edges.map((edge, index) => ({
+      id: `edge-${index}`,
+      source: edge.source,
+      target: edge.target,
+      type: "smoothstep",
+      style: { stroke: "#6b7280", strokeWidth: 2 },
     }));
 
-    // Calculate node degrees and dependency relationships
-    nodes.forEach((node) => {
-      node.degree = graphData.edges.filter(
-        (edge) => edge.source === node.id || edge.target === node.id
-      ).length;
-    });
-
-    // Calculate dependency depth for hierarchical layering
-    const calculateDependencyDepth = () => {
-      const dependencyMap = new Map<string, Array<string>>();
-      const dependentMap = new Map<string, Array<string>>();
-
-      // Build dependency and dependent maps
-      nodes.forEach((node) => {
-        dependencyMap.set(node.id, []);
-        dependentMap.set(node.id, []);
-      });
-
-      graphData.edges.forEach((edge) => {
-        // In our graph, arrow points from dependent to dependency
-        dependencyMap.get(edge.source)?.push(edge.target);
-        dependentMap.get(edge.target)?.push(edge.source);
-      });
-
-      // Identify terminal nodes (no outgoing edges)
-      const terminalNodes = new Set(nodes.map((n) => n.id));
-      graphData.edges.forEach((edge) => {
-        terminalNodes.delete(edge.source);
-      });
-
-      // Calculate depth using topological approach
-      const visited = new Set<string>();
-      const depths = new Map<string, number>();
-
-      const calculateDepth = (nodeId: string): number => {
-        const existingDepth = depths.get(nodeId);
-        if (existingDepth !== undefined) return existingDepth;
-        if (visited.has(nodeId)) return 0; // Cycle detection
-
-        visited.add(nodeId);
-        const dependencies = dependencyMap.get(nodeId) || [];
-
-        // Terminal nodes should be at the top (depth 0)
-        if (terminalNodes.has(nodeId)) {
-          depths.set(nodeId, 0);
-          visited.delete(nodeId);
-          return 0;
-        }
-
-        if (dependencies.length === 0) {
-          // Non-terminal nodes with no dependencies get pushed down
-          const depth =
-            Math.max(...Array.from(depths.values(), (d) => d || 0)) + 1;
-          depths.set(nodeId, depth);
-          visited.delete(nodeId);
-          return depth;
-        }
-
-        const maxDepth = Math.max(
-          ...dependencies.map((dep) => calculateDepth(dep))
-        );
-        const newDepth = maxDepth + 1;
-        depths.set(nodeId, newDepth);
-        visited.delete(nodeId);
-        return newDepth;
-      };
-
-      // Calculate depth for all nodes
-      nodes.forEach((node) => {
-        if (!depths.has(node.id)) {
-          node.dependencyDepth = calculateDepth(node.id);
-        } else {
-          node.dependencyDepth = depths.get(node.id) || 0;
-        }
-      });
-
-      return Math.max(...nodes.map((n) => n.dependencyDepth));
-    };
-
-    const maxDepth = calculateDependencyDepth();
-
-    // Group nodes into layers based on dependency depth
-    const layers: Array<Array<(typeof nodes)[0]>> = [];
-    for (let i = 0; i <= maxDepth; i++) {
-      layers[i] = nodes.filter((node) => node.dependencyDepth === i);
-    }
-
-    // Position nodes in hierarchical layers
-    const layerHeight =
-      layers.length > 1 ? (height - 160) / (layers.length - 1) : 0;
-    const padding = 80;
-
-    layers.forEach((layer, layerIndex) => {
-      const y = padding + layerIndex * layerHeight;
-      const layerWidth = width - 2 * padding;
-      const nodeSpacing =
-        layer.length > 1 ? layerWidth / (layer.length - 1) : 0;
-
-      layer.forEach((node, nodeIndex) => {
-        node.layer = layerIndex;
-        if (layer.length === 1) {
-          node.x = width / 2;
-        } else {
-          node.x = padding + nodeIndex * nodeSpacing;
-        }
-        node.y = y;
-
-        // Add small random offset to prevent perfect alignment
-        node.x += (Math.random() - 0.5) * 20;
-        node.y += (Math.random() - 0.5) * 15;
-      });
-    });
-
-    const edges = graphData.edges
-      .map((edge) => ({
-        ...edge,
-        source: nodes.find((n) => n.id === edge.source),
-        target: nodes.find((n) => n.id === edge.target),
-      }))
-      .filter((e) => e.source && e.target);
-
-    // Hierarchical physics simulation with constrained movement
-    const simulate = () => {
-      const iterations = 100;
-      const horizontalRepulsion = -400;
-      const verticalConstraint = 0.3; // Strength of layer constraint
-
-      for (let i = 0; i < iterations; i++) {
-        const alpha = Math.max(0.02, 1 - i / iterations);
-
-        // Reset forces
-        nodes.forEach((node) => {
-          node.vx = 0;
-          node.vy = 0;
-        });
-
-        // Link forces - attract connected nodes but respect hierarchy
-        edges.forEach((edge) => {
-          if (!edge.source || !edge.target) return;
-
-          const dx = edge.target.x - edge.source.x;
-          const dy = edge.target.y - edge.source.y;
-
-          // Horizontal attraction
-          const horizontalForce = dx * alpha * 0.05;
-          edge.source.vx += horizontalForce;
-          edge.target.vx -= horizontalForce;
-
-          // Gentle vertical attraction (less strong to maintain layers)
-          const verticalForce = dy * alpha * 0.02;
-          edge.source.vy += verticalForce;
-          edge.target.vy -= verticalForce;
-        });
-
-        // Horizontal repulsion within layers (prevent overlap)
-        nodes.forEach((nodeA, idx) => {
-          nodes.forEach((nodeB, jdx) => {
-            if (idx >= jdx) return;
-
-            // Stronger repulsion for nodes in the same layer
-            const sameLayer = nodeA.layer === nodeB.layer;
-            const dx = nodeB.x - nodeA.x;
-            const dy = nodeB.y - nodeA.y;
-            const distance = Math.sqrt(dx * dx + dy * dy) || 0.1;
-
-            if (sameLayer && Math.abs(dx) < 200) {
-              const force =
-                (horizontalRepulsion * alpha) / (distance * distance);
-              const fx = (dx / distance) * force;
-
-              nodeA.vx -= fx;
-              nodeB.vx += fx;
-            }
-
-            // Prevent vertical overlap between layers
-            if (Math.abs(dy) < 60 && Math.abs(dx) < 100) {
-              const force = (-200 * alpha) / (distance * distance);
-              const fy = (dy / distance) * force;
-
-              nodeA.vy -= fy;
-              nodeB.vy += fy;
-            }
-          });
-        });
-
-        // Layer constraint - pull nodes back to their designated layer
-        layers.forEach((layer, layerIndex) => {
-          const targetY = padding + layerIndex * layerHeight;
-          layer.forEach((node) => {
-            const dy = targetY - node.y;
-            node.vy += dy * verticalConstraint * alpha;
-          });
-        });
-
-        // Update positions with constrained movement
-        nodes.forEach((node) => {
-          // Stronger horizontal damping, gentler vertical damping
-          node.vx *= 0.8;
-          node.vy *= 0.9;
-
-          node.x += node.vx;
-          node.y += node.vy;
-
-          // Keep within bounds
-          const boundaryPadding = 60;
-          node.x = Math.max(
-            boundaryPadding,
-            Math.min(width - boundaryPadding, node.x)
-          );
-
-          // Constrain vertical movement to stay near layer
-          const targetY = padding + node.layer * layerHeight;
-          const maxVerticalDeviation = 40;
-          node.y = Math.max(
-            targetY - maxVerticalDeviation,
-            Math.min(targetY + maxVerticalDeviation, node.y)
-          );
-        });
-      }
-
-      // Final horizontal spacing adjustment within layers
-      layers.forEach((layer) => {
-        if (layer.length <= 1) return;
-
-        // Sort by current x position
-        layer.sort((a, b) => a.x - b.x);
-
-        // Adjust spacing to prevent overlaps
-        const minSpacing = 110;
-        for (let i = 1; i < layer.length; i++) {
-          const prev = layer[i - 1];
-          const curr = layer[i];
-          const distance = curr.x - prev.x;
-
-          if (distance < minSpacing) {
-            const adjustment = (minSpacing - distance) / 2;
-            prev.x -= adjustment;
-            curr.x += adjustment;
-
-            // Keep within bounds
-            const boundaryPadding = 60;
-            prev.x = Math.max(boundaryPadding, prev.x);
-            curr.x = Math.min(width - boundaryPadding, curr.x);
-          }
-        }
-      });
-    };
-
-    simulate();
-
-    // Render nodes
-    nodes.forEach((node) => {
-      const group = document.createElementNS("http://www.w3.org/2000/svg", "g");
-      group.setAttribute("data-node-id", node.id);
-      group.classList.add("node-group");
-      group.style.cursor = "pointer";
-      group.style.pointerEvents = "all";
-
-      // Node circle with size based on degree
-      const nodeRadius = Math.max(
-        15,
-        Math.min(25, 15 + (node.degree || 0) * 1.5)
-      );
-      const circle = document.createElementNS(
-        "http://www.w3.org/2000/svg",
-        "circle"
-      );
-      circle.setAttribute("cx", node.x.toString());
-      circle.setAttribute("cy", node.y.toString());
-      circle.setAttribute("r", nodeRadius.toString());
-      circle.setAttribute("fill", node.id === "//" ? "#ef4444" : "#3b82f6");
-      circle.setAttribute("stroke", "#1f2937");
-      circle.setAttribute("stroke-width", "2");
-      circle.setAttribute("opacity", "0.9");
-      circle.classList.add("node-circle");
-      group.appendChild(circle);
-
-      // Background for text to improve readability
-      const textContent =
-        node.label.length > 20
-          ? `${node.label.substring(0, 18)}...`
-          : node.label;
-      const textWidth = textContent.length * 6.5;
-      const textBg = document.createElementNS(
-        "http://www.w3.org/2000/svg",
-        "rect"
-      );
-      textBg.setAttribute("x", (node.x - textWidth / 2 - 2).toString());
-      textBg.setAttribute("y", (node.y + nodeRadius + 8).toString());
-      textBg.setAttribute("width", (textWidth + 4).toString());
-      textBg.setAttribute("height", "16");
-      textBg.setAttribute("fill", "rgba(255, 255, 255, 0.9)");
-      textBg.setAttribute("rx", "2");
-      textBg.classList.add("node-text-bg");
-      group.appendChild(textBg);
-
-      // Node label
-      const text = document.createElementNS(
-        "http://www.w3.org/2000/svg",
-        "text"
-      );
-      text.setAttribute("x", node.x.toString());
-      text.setAttribute("y", (node.y + nodeRadius + 18).toString());
-      text.setAttribute("text-anchor", "middle");
-      text.setAttribute("font-size", "11");
-      text.setAttribute("font-family", "system-ui, -apple-system, sans-serif");
-      text.setAttribute("fill", "#1f2937");
-      text.setAttribute("font-weight", "500");
-      text.textContent = textContent;
-      text.classList.add("node-text");
-      group.appendChild(text);
-
-      // Add hover interaction
-      const findDirectConnections = (nodeId: string): Set<string> => {
-        const connected = new Set<string>();
-
-        // Only add direct dependencies and dependents
-        graphData.edges.forEach((edge) => {
-          if (edge.source === nodeId) {
-            connected.add(edge.target);
-          }
-          if (edge.target === nodeId) {
-            connected.add(edge.source);
-          }
-        });
-
-        return connected;
-      };
-
-      const highlightConnectedNodes = (event: MouseEvent) => {
-        event.stopPropagation();
-        const connectedNodes: Set<string> = findDirectConnections(node.id);
-
-        // First reset any existing highlights
-        svg.querySelectorAll(".faded").forEach((el) => {
-          el.classList.remove("faded");
-        });
-
-        // Fade out unconnected nodes and their edges
-        svg.querySelectorAll(".node-group").forEach((g: Element) => {
-          const nodeId = g.getAttribute("data-node-id");
-          if (nodeId && !connectedNodes.has(nodeId) && nodeId !== node.id) {
-            g.classList.add("faded");
-          }
-        });
-
-        edges.forEach((edge, index) => {
-          const line = svg.querySelector(`[data-edge-index="${index}"]`);
-          if (!line) return;
-
-          const isConnected =
-            edge.source &&
-            edge.target &&
-            connectedNodes.has(edge.source.id) &&
-            connectedNodes.has(edge.target.id);
-
-          if (!isConnected) {
-            line.classList.add("faded");
-          }
-        });
-      };
-
-      const resetHighlight = (event: MouseEvent) => {
-        event.stopPropagation();
-        svg.querySelectorAll(".faded").forEach((el) => {
-          el.classList.remove("faded");
-        });
-      };
-
-      group.addEventListener("mouseenter", highlightConnectedNodes);
-      group.addEventListener("mouseleave", resetHighlight);
-
-      svg.appendChild(group);
-    });
-
-    // Add styles for hover effects
-    const style = document.createElementNS(
-      "http://www.w3.org/2000/svg",
-      "style"
-    );
-    style.textContent = `
-      .node-group { transition: opacity 0.2s; pointer-events: all; }
-      .node-group.faded { opacity: 0.15; }
-      line { transition: opacity 0.2s; }
-      line.faded { opacity: 0.1; }
-    `;
-    svg.appendChild(style);
-
-    // Render edges
-    graphData.edges.forEach((edge, index) => {
-      const sourceNode = nodes.find((n) => n.id === edge.source);
-      const targetNode = nodes.find((n) => n.id === edge.target);
-      if (!sourceNode || !targetNode) return;
-
-      const line = document.createElementNS(
-        "http://www.w3.org/2000/svg",
-        "line"
-      );
-      line.setAttribute("x1", sourceNode.x.toString());
-      line.setAttribute("y1", sourceNode.y.toString());
-      line.setAttribute("x2", targetNode.x.toString());
-      line.setAttribute("y2", targetNode.y.toString());
-      line.setAttribute("stroke", "#6b7280");
-      line.setAttribute("stroke-width", "2");
-      line.setAttribute("data-edge-index", index.toString());
-      line.style.pointerEvents = "none"; // Prevent edges from interfering with hover
-      svg.appendChild(line);
-    });
-  };
-
-  useEffect(() => {
-    if (graphData) {
-      renderGraph();
-    }
+    return { nodes: flowNodes, edges: flowEdges };
   }, [graphData]);
 
   const clearGraph = () => {
@@ -675,14 +305,18 @@ export function GraphVisualization({ className }: GraphVisualizationProps) {
               </Button>
             </div>
 
-            <div className="overflow-auto">
-              <svg
-                ref={svgRef}
-                width="1000"
-                height="800"
-                viewBox="0 0 1000 800"
-                className="border bg-white rounded"
-              />
+            <div className="h-[600px] border bg-white rounded">
+              <ReactFlow
+                nodes={flowData.nodes}
+                edges={flowData.edges}
+                nodeTypes={nodeTypes}
+                fitView
+                attributionPosition="bottom-left"
+                proOptions={{ hideAttribution: true }}
+              >
+                <Controls />
+                <Background color="#f1f5f9" gap={16} />
+              </ReactFlow>
             </div>
 
             <div className="mt-4 text-sm text-gray-600">
@@ -699,8 +333,8 @@ export function GraphVisualization({ className }: GraphVisualizationProps) {
                   Packages (size = connection count)
                 </li>
                 <li>
-                  <strong>Layout:</strong> Top layers = independent packages,
-                  bottom layers = dependent packages
+                  <strong>Layout:</strong> Automatic hierarchical layout with
+                  drag & drop support
                 </li>
                 <li>Arrows point from dependents to dependencies</li>
               </ul>
