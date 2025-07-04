@@ -404,6 +404,8 @@ export function GraphVisualization({ className }: GraphVisualizationProps) {
       const group = document.createElementNS("http://www.w3.org/2000/svg", "g");
       group.setAttribute("data-node-id", node.id);
       group.classList.add("node-group");
+      group.style.cursor = "pointer";
+      group.style.pointerEvents = "all";
 
       // Node circle with size based on degree
       const nodeRadius = Math.max(
@@ -460,33 +462,35 @@ export function GraphVisualization({ className }: GraphVisualizationProps) {
       group.appendChild(text);
 
       // Add hover interaction
-      const findConnectedNodes = (
-        nodeId: string,
-        visited = new Set<string>()
-      ): Set<string> => {
-        if (visited.has(nodeId)) return visited;
-        visited.add(nodeId);
+      const findDirectConnections = (nodeId: string): Set<string> => {
+        const connected = new Set<string>();
 
-        // Find all directly connected nodes (both dependencies and dependents)
-        edges.forEach((edge) => {
-          if (edge.source?.id === nodeId && edge.target) {
-            findConnectedNodes(edge.target.id, visited);
+        // Only add direct dependencies and dependents
+        graphData.edges.forEach((edge) => {
+          if (edge.source === nodeId) {
+            connected.add(edge.target);
           }
-          if (edge.target?.id === nodeId && edge.source) {
-            findConnectedNodes(edge.source.id, visited);
+          if (edge.target === nodeId) {
+            connected.add(edge.source);
           }
         });
 
-        return visited;
+        return connected;
       };
 
-      const highlightConnectedNodes = () => {
-        const connectedNodes = findConnectedNodes(node.id);
+      const highlightConnectedNodes = (event: MouseEvent) => {
+        event.stopPropagation();
+        const connectedNodes: Set<string> = findDirectConnections(node.id);
+
+        // First reset any existing highlights
+        svg.querySelectorAll(".faded").forEach((el) => {
+          el.classList.remove("faded");
+        });
 
         // Fade out unconnected nodes and their edges
         svg.querySelectorAll(".node-group").forEach((g: Element) => {
           const nodeId = g.getAttribute("data-node-id");
-          if (nodeId && !connectedNodes.has(nodeId)) {
+          if (nodeId && !connectedNodes.has(nodeId) && nodeId !== node.id) {
             g.classList.add("faded");
           }
         });
@@ -497,8 +501,8 @@ export function GraphVisualization({ className }: GraphVisualizationProps) {
 
           const isConnected =
             edge.source &&
-            connectedNodes.has(edge.source.id) &&
             edge.target &&
+            connectedNodes.has(edge.source.id) &&
             connectedNodes.has(edge.target.id);
 
           if (!isConnected) {
@@ -507,7 +511,8 @@ export function GraphVisualization({ className }: GraphVisualizationProps) {
         });
       };
 
-      const resetHighlight = () => {
+      const resetHighlight = (event: MouseEvent) => {
+        event.stopPropagation();
         svg.querySelectorAll(".faded").forEach((el) => {
           el.classList.remove("faded");
         });
@@ -525,54 +530,33 @@ export function GraphVisualization({ className }: GraphVisualizationProps) {
       "style"
     );
     style.textContent = `
-      .node-group { transition: opacity 0.2s; }
-      .node-group.faded { opacity: 0.2; }
+      .node-group { transition: opacity 0.2s; pointer-events: all; }
+      .node-group.faded { opacity: 0.15; }
       line { transition: opacity 0.2s; }
       line.faded { opacity: 0.1; }
     `;
     svg.appendChild(style);
 
     // Render edges (moved after nodes to be on top)
-    edges.forEach((edge, index) => {
-      if (!edge.source || !edge.target) return;
+    graphData.edges.forEach((edge, index) => {
+      const sourceNode = nodes.find((n) => n.id === edge.source);
+      const targetNode = nodes.find((n) => n.id === edge.target);
+      if (!sourceNode || !targetNode) return;
 
       const line = document.createElementNS(
         "http://www.w3.org/2000/svg",
         "line"
       );
-      line.setAttribute("x1", edge.source.x.toString());
-      line.setAttribute("y1", edge.source.y.toString());
-      line.setAttribute("x2", edge.target.x.toString());
-      line.setAttribute("y2", edge.target.y.toString());
+      line.setAttribute("x1", sourceNode.x.toString());
+      line.setAttribute("y1", sourceNode.y.toString());
+      line.setAttribute("x2", targetNode.x.toString());
+      line.setAttribute("y2", targetNode.y.toString());
       line.setAttribute("stroke", "#6b7280");
       line.setAttribute("stroke-width", "2");
-      line.setAttribute("marker-end", "url(#arrowhead)");
       line.setAttribute("data-edge-index", index.toString());
+      line.style.pointerEvents = "none"; // Prevent edges from interfering with hover
       svg.appendChild(line);
     });
-
-    // Add arrow marker definition
-    const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
-    const marker = document.createElementNS(
-      "http://www.w3.org/2000/svg",
-      "marker"
-    );
-    marker.setAttribute("id", "arrowhead");
-    marker.setAttribute("markerWidth", "10");
-    marker.setAttribute("markerHeight", "7");
-    marker.setAttribute("refX", "10");
-    marker.setAttribute("refY", "3.5");
-    marker.setAttribute("orient", "auto");
-
-    const polygon = document.createElementNS(
-      "http://www.w3.org/2000/svg",
-      "polygon"
-    );
-    polygon.setAttribute("points", "0 0, 10 3.5, 0 7");
-    polygon.setAttribute("fill", "#6b7280");
-    marker.appendChild(polygon);
-    defs.appendChild(marker);
-    svg.appendChild(defs);
   };
 
   useEffect(() => {
