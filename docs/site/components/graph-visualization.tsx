@@ -193,6 +193,12 @@ export function GraphVisualization({ className }: GraphVisualizationProps) {
         dependentMap.get(edge.target)?.push(edge.source);
       });
 
+      // Identify terminal nodes (no outgoing edges)
+      const terminalNodes = new Set(nodes.map((n) => n.id));
+      graphData.edges.forEach((edge) => {
+        terminalNodes.delete(edge.source);
+      });
+
       // Calculate depth using topological approach
       const visited = new Set<string>();
       const depths = new Map<string, number>();
@@ -205,10 +211,20 @@ export function GraphVisualization({ className }: GraphVisualizationProps) {
         visited.add(nodeId);
         const dependencies = dependencyMap.get(nodeId) || [];
 
-        if (dependencies.length === 0) {
+        // Terminal nodes should be at the top (depth 0)
+        if (terminalNodes.has(nodeId)) {
           depths.set(nodeId, 0);
           visited.delete(nodeId);
           return 0;
+        }
+
+        if (dependencies.length === 0) {
+          // Non-terminal nodes with no dependencies get pushed down
+          const depth =
+            Math.max(...Array.from(depths.values(), (d) => d || 0)) + 1;
+          depths.set(nodeId, depth);
+          visited.delete(nodeId);
+          return depth;
         }
 
         const maxDepth = Math.max(
@@ -222,7 +238,11 @@ export function GraphVisualization({ className }: GraphVisualizationProps) {
 
       // Calculate depth for all nodes
       nodes.forEach((node) => {
-        node.dependencyDepth = calculateDepth(node.id);
+        if (!depths.has(node.id)) {
+          node.dependencyDepth = calculateDepth(node.id);
+        } else {
+          node.dependencyDepth = depths.get(node.id) || 0;
+        }
       });
 
       return Math.max(...nodes.map((n) => n.dependencyDepth));
@@ -537,7 +557,7 @@ export function GraphVisualization({ className }: GraphVisualizationProps) {
     `;
     svg.appendChild(style);
 
-    // Render edges (moved after nodes to be on top)
+    // Render edges
     graphData.edges.forEach((edge, index) => {
       const sourceNode = nodes.find((n) => n.id === edge.source);
       const targetNode = nodes.find((n) => n.id === edge.target);
