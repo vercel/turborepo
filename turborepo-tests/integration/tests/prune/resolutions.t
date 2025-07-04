@@ -4,13 +4,13 @@ Setup
   $ export TURBO_GLOBAL_WARNING_DISABLED=1
 
 Prune a
-We expect to no longer have the non-resolved is-odd descriptor and
-only have the override that has been set
+We expect both the original and resolved descriptors to be preserved
+when there are yarn resolutions
   $ ${TURBO} prune a
   Generating pruned monorepo for a in .*out (re)
    - Added a
-  $ grep -F '"is-odd@npm:' out/yarn.lock
-  "is-odd@npm:3.0.0":
+  $ grep -F '"is-odd@' out/yarn.lock
+  "is-odd@^0.1.2, is-odd@npm:3.0.0":
     resolution: "is-odd@npm:3.0.0"
 
 
