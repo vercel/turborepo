@@ -268,14 +268,8 @@ async fn handle_graph_mode(run: Run) -> Result<i32, Error> {
     let graph_data = serde_json::to_string(&result.data)?;
     let encoded_data = STANDARD.encode(graph_data.as_bytes());
 
-    // Determine the base URL based on environment
-    let is_dev = std::env::var("NODE_ENV")
-        .map(|v| v == "development")
-        .unwrap_or(false)
-        || std::env::var("CARGO_PROFILE")
-            .map(|v| v == "dev")
-            .unwrap_or(false);
-    let base_url = if is_dev {
+    // Determine the base URL based on build profile
+    let base_url = if cfg!(debug_assertions) {
         "http://localhost:3000"
     } else {
         "https://turborepo.com"
@@ -296,12 +290,12 @@ async fn handle_graph_mode(run: Run) -> Result<i32, Error> {
 
     match status {
         Ok(_) => {
-            println!("Opening {} with your package graph data...", graph_url);
+            println!("Opening {} with your package graph data...", base_url);
             Ok(0)
         }
         Err(e) => {
             eprintln!("Failed to open browser: {}", e);
-            println!("Please manually open: {}", graph_url);
+            println!("Please manually open: {}", base_url);
             Ok(0)
         }
     }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   ReactFlow,
   Controls,
@@ -10,9 +10,6 @@ import {
 } from "@xyflow/react";
 import type { Node } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { Card } from "./card";
-import { Button } from "./button";
-import { Callout } from "./callout";
 
 interface GraphData {
   nodes: Array<{
@@ -86,12 +83,7 @@ export function GraphVisualization({
   initialData,
 }: GraphVisualizationProps) {
   const [graphData, setGraphData] = useState<GraphData | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [inputMethod, setInputMethod] = useState<"upload" | "paste">("paste");
-  const [pastedData, setPastedData] = useState("");
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Handle initial data from URL
   useEffect(() => {
@@ -100,9 +92,7 @@ export function GraphVisualization({
         const parsed = parseGraphData(initialData);
         setGraphData(parsed);
       } catch (err) {
-        setError(
-          err instanceof Error ? err.message : "Failed to parse initial data"
-        );
+        // Silently handle parsing errors
       }
     }
   }, [initialData]);
@@ -176,48 +166,6 @@ export function GraphVisualization({
       return parseGraphQLResponse(trimmed);
     }
     throw new Error('Please provide JSON output from "turbo query" command.');
-  };
-
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    setLoading(true);
-    setError(null);
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const content = (e.target?.result as string) || "";
-        const parsed = parseGraphData(content);
-        setGraphData(parsed);
-      } catch (err) {
-        setError(
-          err instanceof Error ? err.message : "Failed to parse graph data"
-        );
-      } finally {
-        setLoading(false);
-      }
-    };
-    reader.readAsText(file);
-  };
-
-  const handlePasteData = () => {
-    if (!pastedData.trim()) return;
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      const parsed = parseGraphData(pastedData);
-      setGraphData(parsed);
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to parse graph data"
-      );
-    } finally {
-      setLoading(false);
-    }
   };
 
   // Convert graph data to XYFlow format
@@ -472,178 +420,27 @@ export function GraphVisualization({
     return { nodes: flowNodes, edges: flowEdges };
   }, [graphData, hoveredNodeId]);
 
-  const clearGraph = () => {
-    setGraphData(null);
-    setError(null);
-    setPastedData("");
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
-  };
-
   return (
     <div className={className}>
-      <Card className="p-6">
-        <h3 className="text-lg font-semibold mb-4">
-          Upload Package Graph Data
-        </h3>
-
-        {/* Input method selector */}
-        <div className="flex gap-4 mb-4">
-          <Button
-            variant={inputMethod === "upload" ? "default" : "outline"}
-            onClick={() => {
-              setInputMethod("upload");
-            }}
-          >
-            Upload File
-          </Button>
-          <Button
-            variant={inputMethod === "paste" ? "default" : "outline"}
-            onClick={() => {
-              setInputMethod("paste");
-            }}
-          >
-            Paste Data
-          </Button>
-        </div>
-
-        {/* File upload */}
-        {inputMethod === "upload" && (
-          <div className="mb-4">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".json"
-              onChange={handleFileUpload}
-              className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-            />
-            <p className="text-sm text-gray-500 mt-2">
-              Upload a JSON file with the output from <code>turbo query</code>
-            </p>
-          </div>
-        )}
-
-        {/* Paste data */}
-        {inputMethod === "paste" && (
-          <div className="mb-4">
-            <textarea
-              value={pastedData}
-              onChange={(e) => {
-                setPastedData(e.target.value);
-              }}
-              placeholder='Paste the JSON output from "turbo query" here...'
-              className="w-full h-32 p-3 border rounded-md font-mono text-sm"
-            />
-            <Button
-              onClick={handlePasteData}
-              disabled={!pastedData.trim() || loading}
-              className="mt-2"
-            >
-              {loading ? "Processing..." : "Visualize Package Graph"}
-            </Button>
-          </div>
-        )}
-
-        {/* Error display */}
-        {error && (
-          <Callout type="error" className="mb-4">
-            {error}
-          </Callout>
-        )}
-
-        {/* Graph display */}
-        {graphData && (
-          <div className="border rounded-md p-4 bg-gray-50">
-            <div className="flex justify-between items-center mb-4">
-              <h4 className="font-semibold">Package Dependency Graph</h4>
-              <Button variant="outline" onClick={clearGraph}>
-                Clear
-              </Button>
-            </div>
-
-            <div className="h-[600px] border bg-white rounded">
-              <ReactFlow
-                nodes={flowData.nodes}
-                edges={flowData.edges}
-                nodeTypes={nodeTypes}
-                fitView
-                attributionPosition="bottom-left"
-                proOptions={{ hideAttribution: true }}
-                onNodeMouseEnter={(_: React.MouseEvent, node: Node) => {
-                  setHoveredNodeId(node.id);
-                }}
-                onNodeMouseLeave={() => {
-                  setHoveredNodeId(null);
-                }}
-              >
-                <Controls />
-                <Background color="#f1f5f9" gap={16} />
-              </ReactFlow>
-            </div>
-
-            <div className="mt-4 text-sm text-gray-600">
-              <p>
-                <strong>Legend:</strong>
-              </p>
-              <ul className="list-disc ml-4 mt-2">
-                <li>
-                  <span className="inline-block w-3 h-3 bg-red-500 rounded-full mr-2"></span>
-                  Root package (//)
-                </li>
-                <li>
-                  <span className="inline-block w-3 h-3 bg-blue-500 rounded-full mr-2"></span>
-                  Packages (size = connection count)
-                </li>
-                <li>
-                  <strong>Layout:</strong> Organic hierarchical layout with
-                  centrality-based positioning
-                </li>
-                <li>
-                  <strong>Edges:</strong> Thicker lines = more important
-                  connections, dashed = less critical
-                </li>
-                <li>
-                  Nodes are positioned by importance within dependency levels
-                </li>
-                <li>Hover over nodes to highlight their direct connections</li>
-              </ul>
-            </div>
-          </div>
-        )}
-
-        {/* Instructions */}
-        {!graphData && (
-          <div className="mt-4">
-            <h4 className="font-semibold mb-2">
-              How to Generate Package Graph Data
-            </h4>
-            <div className="space-y-2 text-sm">
-              <p>Use this command to get package graph data:</p>
-              <pre className="bg-gray-100 p-3 rounded text-xs overflow-x-auto">
-                <code>{`turbo query '{
-  packageGraph {
-    nodes {
-      items {
-        name
-      }
-    }
-    edges {
-      items {
-        source
-        target
-      }
-    }
-  }
-}'`}</code>
-              </pre>
-              <p className="text-gray-600">
-                Copy the entire JSON response and paste it above.
-              </p>
-            </div>
-          </div>
-        )}
-      </Card>
+      <div className="h-[600px] border bg-white rounded">
+        <ReactFlow
+          nodes={flowData.nodes}
+          edges={flowData.edges}
+          nodeTypes={nodeTypes}
+          fitView
+          attributionPosition="bottom-left"
+          proOptions={{ hideAttribution: true }}
+          onNodeMouseEnter={(_: React.MouseEvent, node: Node) => {
+            setHoveredNodeId(node.id);
+          }}
+          onNodeMouseLeave={() => {
+            setHoveredNodeId(null);
+          }}
+        >
+          <Controls />
+          <Background color="#f1f5f9" gap={16} />
+        </ReactFlow>
+      </div>
     </div>
   );
 }
