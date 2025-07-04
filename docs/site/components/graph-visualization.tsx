@@ -306,42 +306,51 @@ export function GraphVisualization({ className }: GraphVisualizationProps) {
       }
     });
 
-    // Position nodes in hierarchical layout
-    const nodeSpacingX = 200;
-    const levelSpacing = 200;
+    // --- Calculate node widths for each node (same as in style) ---
+    const nodeWidths = new Map<string, number>();
+    graphData.nodes.forEach((node) => {
+      const degree = nodeDegrees.get(node.id) || 0;
+      nodeWidths.set(node.id, Math.max(70, Math.min(180, 70 + degree * 8)));
+    });
+    const nodeHeights = new Map<string, number>();
+    graphData.nodes.forEach((node) => {
+      const degree = nodeDegrees.get(node.id) || 0;
+      nodeHeights.set(node.id, Math.max(40, Math.min(60, 40 + degree * 2)));
+    });
 
-    // Map nodeId to position for edge direction calculation
-    const nodePositions = new Map<string, { x: number; y: number }>();
+    // --- Compute x positions for each node in each level to avoid overlap ---
+    const levelSpacing = 180;
+    const minGap = 32; // Minimum gap between nodes
+    const levelNodePositions = new Map<string, { x: number; y: number }>();
+    levels.forEach((level, levelIndex) => {
+      // Get widths for all nodes in this level
+      const widths = level.map((id) => nodeWidths.get(id) || 100);
+      const totalWidth =
+        widths.reduce((a, b) => a + b, 0) + minGap * (level.length - 1);
+      let currentX = -totalWidth / 2;
+      level.forEach((id, i) => {
+        // Add deterministic jitter for organic look
+        const jitter = ((id.charCodeAt(0) + id.length) % 40) - 20;
+        const width = widths[i];
+        // Add deterministic variation to level spacing for more organic feel
+        const levelVariation = ((id.charCodeAt(0) + levelIndex) % 20) - 10;
+        const y = levelIndex * levelSpacing + 50 + levelVariation;
+        // Center node at currentX + width/2
+        levelNodePositions.set(id, { x: currentX + width / 2 + jitter, y });
+        currentX += width + minGap;
+      });
+    });
 
     const flowNodes = graphData.nodes.map((node) => {
-      const degree = nodeDegrees.get(node.id) || 0;
+      // Use precomputed position
+      const pos = levelNodePositions.get(node.id) || { x: 0, y: 0 };
+      const width = nodeWidths.get(node.id) || 100;
+      const height = nodeHeights.get(node.id) || 40;
       const isRoot = node.id === "//";
-
-      // Find which level this node belongs to
-      let levelIndex = 0;
-      let positionInLevel = 0;
-
-      for (let i = 0; i < levels.length; i++) {
-        const level = levels[i];
-        const nodeIndex = level.indexOf(node.id);
-        if (nodeIndex !== -1) {
-          levelIndex = i;
-          positionInLevel = nodeIndex;
-          break;
-        }
-      }
-
-      // Calculate position
-      const x = positionInLevel * nodeSpacingX + 100;
-      const y = levelIndex * levelSpacing + 100;
-
-      // Store for edge direction
-      nodePositions.set(node.id, { x, y });
 
       // Determine if node should be highlighted or faded based on hover state
       let isHighlighted = false;
       let isFaded = false;
-
       if (hoveredNodeId) {
         const hoveredConnections = directConnections.get(hoveredNodeId);
         if (hoveredConnections) {
@@ -358,7 +367,7 @@ export function GraphVisualization({ className }: GraphVisualizationProps) {
       return {
         id: node.id,
         type: "custom",
-        position: { x, y },
+        position: pos,
         data: {
           label: node.label,
           isRoot,
@@ -366,7 +375,8 @@ export function GraphVisualization({ className }: GraphVisualizationProps) {
           isFaded,
         },
         style: {
-          width: Math.max(80, Math.min(200, 80 + degree * 10)),
+          width,
+          height,
         },
       };
     });
@@ -389,8 +399,8 @@ export function GraphVisualization({ className }: GraphVisualizationProps) {
     // Create edges with proper styling and handle positions
     const flowEdges = graphData.edges
       .map((edge, index) => {
-        const sourcePos = nodePositions.get(edge.source);
-        const targetPos = nodePositions.get(edge.target);
+        const sourcePos = levelNodePositions.get(edge.source);
+        const targetPos = levelNodePositions.get(edge.target);
         if (!sourcePos || !targetPos) {
           if (typeof window !== "undefined") {
             // eslint-disable-next-line no-console -- Debug warning for missing nodes
@@ -418,6 +428,11 @@ export function GraphVisualization({ className }: GraphVisualizationProps) {
         // Determine which handle to use for source and target
         const sourceHandle = getHandleDirection(sourcePos, targetPos);
         const targetHandle = getHandleDirection(targetPos, sourcePos);
+        // Calculate edge importance based on node degrees
+        const sourceDegree = nodeDegrees.get(edge.source) || 0;
+        const targetDegree = nodeDegrees.get(edge.target) || 0;
+        const edgeImportance = Math.min(sourceDegree + targetDegree, 8);
+
         return {
           id: `edge-${index}`,
           source: String(edge.source),
@@ -427,10 +442,11 @@ export function GraphVisualization({ className }: GraphVisualizationProps) {
           type: "default",
           style: {
             stroke: "#3b82f6",
-            strokeWidth: 2,
-            strokeDasharray: "5,5", // Dashed line to show dependency direction
-            opacity: isFaded ? 0.3 : 1,
-            transition: "opacity 0.2s ease-in-out",
+            strokeWidth: Math.max(1, Math.min(4, edgeImportance * 0.3)),
+            strokeDasharray: edgeImportance > 4 ? "none" : "3,3", // Solid lines for important connections
+            opacity: isFaded ? 0.2 : 0.8,
+            transition:
+              "opacity 0.2s ease-in-out, stroke-width 0.2s ease-in-out",
           },
         };
       })
@@ -563,16 +579,17 @@ export function GraphVisualization({ className }: GraphVisualizationProps) {
                   Packages (size = connection count)
                 </li>
                 <li>
-                  <strong>Layout:</strong> Hierarchical DAG layout -
-                  dependencies at top, dependents below
+                  <strong>Layout:</strong> Organic hierarchical layout with
+                  centrality-based positioning
                 </li>
                 <li>
-                  Animated arrows show dependency direction (dependents →
-                  dependencies)
+                  <strong>Edges:</strong> Thicker lines = more important
+                  connections, dashed = less critical
                 </li>
                 <li>
-                  Nodes are arranged in levels based on their dependency depth
+                  Nodes are positioned by importance within dependency levels
                 </li>
+                <li>Hover over nodes to highlight their direct connections</li>
               </ul>
             </div>
           </div>
