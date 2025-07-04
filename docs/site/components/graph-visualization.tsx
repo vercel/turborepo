@@ -37,17 +37,25 @@ const CustomNode = ({
 }) => {
   return (
     <div
-      className={`px-3 py-2 rounded-lg border-2 font-medium text-sm shadow-sm ${
+      className={`relative px-3 py-2 rounded-lg border-2 font-medium text-sm shadow-sm ${
         data.isRoot
           ? "bg-red-500 text-white border-red-600"
           : "bg-blue-500 text-white border-blue-600"
       }`}
+      style={{ minWidth: 80, minHeight: 40 }}
     >
-      <Handle type="target" position={Position.Top} />
+      {/* Handles on all four sides */}
+      <Handle type="target" position={Position.Top} id="top" />
+      <Handle type="target" position={Position.Left} id="left" />
+      <Handle type="target" position={Position.Right} id="right" />
+      <Handle type="target" position={Position.Bottom} id="bottom" />
+      <Handle type="source" position={Position.Top} id="top" />
+      <Handle type="source" position={Position.Left} id="left" />
+      <Handle type="source" position={Position.Right} id="right" />
+      <Handle type="source" position={Position.Bottom} id="bottom" />
       {data.label.length > 20
         ? `${data.label.substring(0, 18)}...`
         : data.label}
-      <Handle type="source" position={Position.Bottom} />
     </div>
   );
 };
@@ -270,6 +278,9 @@ export function GraphVisualization({ className }: GraphVisualizationProps) {
     const nodeSpacingX = 200;
     const levelSpacing = 200;
 
+    // Map nodeId to position for edge direction calculation
+    const nodePositions = new Map<string, { x: number; y: number }>();
+
     const flowNodes = graphData.nodes.map((node) => {
       const degree = nodeDegrees.get(node.id) || 0;
       const isRoot = node.id === "//";
@@ -292,6 +303,9 @@ export function GraphVisualization({ className }: GraphVisualizationProps) {
       const x = positionInLevel * nodeSpacingX + 100;
       const y = levelIndex * levelSpacing + 100;
 
+      // Store for edge direction
+      nodePositions.set(node.id, { x, y });
+
       return {
         id: node.id,
         type: "custom",
@@ -306,31 +320,52 @@ export function GraphVisualization({ className }: GraphVisualizationProps) {
       };
     });
 
-    // Create edges with proper styling
-    const flowEdges = graphData.edges.map((edge, index) => {
-      if (
-        !flowNodes.find((n) => n.id === edge.source) ||
-        !flowNodes.find((n) => n.id === edge.target)
-      ) {
-        if (typeof window !== "undefined") {
-          // eslint-disable-next-line no-console -- Debug warning for missing nodes
-          console.warn("Edge references missing node:", edge);
-        }
+    // Helper to determine handle side based on direction
+    function getHandleDirection(
+      from: { x: number; y: number },
+      to: { x: number; y: number }
+    ) {
+      const dx = to.x - from.x;
+      const dy = to.y - from.y;
+      if (Math.abs(dx) > Math.abs(dy)) {
+        // Horizontal is dominant
+        return dx > 0 ? "right" : "left";
       }
+      // Vertical is dominant
+      return dy > 0 ? "bottom" : "top";
+    }
 
-      return {
-        id: `edge-${index}`,
-        source: String(edge.source),
-        target: String(edge.target),
-        type: "default",
-        style: {
-          stroke: "#3b82f6",
-          strokeWidth: 2,
-          strokeDasharray: "5,5", // Dashed line to show dependency direction
-        },
-        animated: true, // Animate the flow to show direction
-      };
-    });
+    // Create edges with proper styling and handle positions
+    const flowEdges = graphData.edges
+      .map((edge, index) => {
+        const sourcePos = nodePositions.get(edge.source);
+        const targetPos = nodePositions.get(edge.target);
+        if (!sourcePos || !targetPos) {
+          if (typeof window !== "undefined") {
+            // eslint-disable-next-line no-console -- Debug warning for missing nodes
+            console.warn("Edge references missing node:", edge);
+          }
+          return null;
+        }
+        // Determine which handle to use for source and target
+        const sourceHandle = getHandleDirection(sourcePos, targetPos);
+        const targetHandle = getHandleDirection(targetPos, sourcePos);
+        return {
+          id: `edge-${index}`,
+          source: String(edge.source),
+          target: String(edge.target),
+          sourceHandle,
+          targetHandle,
+          type: "default",
+          style: {
+            stroke: "#3b82f6",
+            strokeWidth: 2,
+            strokeDasharray: "5,5", // Dashed line to show dependency direction
+          },
+          animated: true, // Animate the flow to show direction
+        };
+      })
+      .filter(Boolean);
 
     return { nodes: flowNodes, edges: flowEdges };
   }, [graphData]);
