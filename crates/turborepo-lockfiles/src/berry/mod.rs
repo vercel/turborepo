@@ -280,12 +280,36 @@ impl BerryLockfile {
             {
                 //  We need to track all of the descriptors coming out the workspace
                 for (name, range) in package.dependencies.iter().flatten() {
-                    let dependency = self.resolve_dependency(locator, name, range.as_ref())?;
+                    // Create the original descriptor before resolution
+                    let mut original_dependency = Descriptor::new(name, range.as_ref())?;
+                    // If there's no protocol we attempt to find a known one
+                    if original_dependency.protocol().is_none() {
+                        if let Some(range) = self.resolver.get(&original_dependency) {
+                            original_dependency.range = range.to_string().into();
+                        }
+                    }
+                    let original_dependency = original_dependency.into_owned();
+
+                    // Apply resolutions to get the resolved dependency
+                    let resolved_dependency =
+                        self.resolve_dependency(locator, name, range.as_ref())?;
+
+                    // Get the locator for the resolved dependency
                     let dep_locator = self
                         .resolutions
-                        .get(&dependency)
-                        .ok_or_else(|| Error::MissingLocator(dependency.clone().into_owned()))?;
-                    resolutions.insert(dependency, dep_locator.clone());
+                        .get(&resolved_dependency)
+                        .ok_or_else(|| Error::MissingLocator(resolved_dependency.clone()))?;
+
+                    // Add the resolved dependency
+                    resolutions.insert(resolved_dependency.clone(), dep_locator.clone());
+
+                    // If the original descriptor is different from the resolved one,
+                    // we need to include it too so that other packages can find it
+                    if original_dependency != resolved_dependency {
+                        // The original descriptor should point to the same locator as the resolved
+                        // one because resolutions override the original dependency
+                        resolutions.insert(original_dependency, dep_locator.clone());
+                    }
                 }
 
                 // Included workspaces will always have their locator listed as a descriptor.
@@ -305,12 +329,36 @@ impl BerryLockfile {
                 .ok_or_else(|| Error::MissingPackageForLocator(locator.as_owned()))?;
 
             for (name, range) in package.dependencies.iter().flatten() {
-                let dependency = self.resolve_dependency(&locator, name, range.as_ref())?;
+                // Create the original descriptor before resolution
+                let mut original_dependency = Descriptor::new(name, range.as_ref())?;
+                // If there's no protocol we attempt to find a known one
+                if original_dependency.protocol().is_none() {
+                    if let Some(range) = self.resolver.get(&original_dependency) {
+                        original_dependency.range = range.to_string().into();
+                    }
+                }
+                let original_dependency = original_dependency.into_owned();
+
+                // Apply resolutions to get the resolved dependency
+                let resolved_dependency =
+                    self.resolve_dependency(&locator, name, range.as_ref())?;
+
+                // Get the locator for the resolved dependency
                 let dep_locator = self
                     .resolutions
-                    .get(&dependency)
-                    .ok_or_else(|| Error::MissingLocator(dependency.clone().into_owned()))?;
-                resolutions.insert(dependency, dep_locator.clone());
+                    .get(&resolved_dependency)
+                    .ok_or_else(|| Error::MissingLocator(resolved_dependency.clone()))?;
+
+                // Add the resolved dependency
+                resolutions.insert(resolved_dependency.clone(), dep_locator.clone());
+
+                // If the original descriptor is different from the resolved one,
+                // we need to include it too so that other packages can find it
+                if original_dependency != resolved_dependency {
+                    // The original descriptor should point to the same locator as the resolved one
+                    // because resolutions override the original dependency
+                    resolutions.insert(original_dependency, dep_locator.clone());
+                }
             }
 
             // If the package has an associated patch we include it in the subgraph
@@ -590,6 +638,8 @@ pub fn berry_global_change(prev_contents: &[u8], curr_contents: &[u8]) -> Result
 
 #[cfg(test)]
 mod test {
+    use std::collections::HashMap;
+
     use pretty_assertions::assert_eq;
 
     use super::*;
@@ -1171,5 +1221,481 @@ mod test {
         let data = LockfileData::from_bytes(include_bytes!("../../fixtures/berry.lock")).unwrap();
         let lockfile = BerryLockfile::new(data, None).unwrap();
         assert_eq!(lockfile.turbo_version().as_deref(), Some("1.4.6"));
+    }
+
+    #[test]
+    fn test_resolution_pruning_preserves_both_original_and_resolved_descriptors() {
+        // This test verifies the fix for GitHub issue #2791:
+        // "pruned lockfile missing resolution entries"
+        // When yarn resolutions override dependencies, both the original descriptor
+        // (as used by packages) and the resolved descriptor should be preserved
+
+        // Use the existing robust test data and add our own resolution
+        let data = LockfileData::from_bytes(include_bytes!(
+            "../../fixtures/robust-berry-resolutions.lock"
+        ))
+        .unwrap();
+
+        // Create resolutions that override ajv to use version 8 instead of 6
+        let manifest = BerryManifest {
+            resolutions: Some(
+                [("ajv".to_string(), "^8".to_string())]
+                    .iter()
+                    .cloned()
+                    .collect(),
+            ),
+        };
+
+        let lockfile = BerryLockfile::new(data, Some(manifest)).unwrap();
+
+        // Test that the resolution correctly resolves ajv to version 8
+        let resolved_ajv = lockfile
+            .resolve_package("packages/ui", "ajv", "^6.10.0")
+            .unwrap()
+            .unwrap();
+        assert_eq!(resolved_ajv.key, "ajv@npm:8.11.2");
+        assert_eq!(resolved_ajv.version, "8.11.2");
+
+        // Now test the subgraph to ensure both descriptors are preserved
+        let pruned = lockfile
+            .subgraph(
+                &["packages/ui".to_string()],
+                &[
+                    "eslint@npm:7.32.0".to_string(),
+                    "ajv@npm:8.11.2".to_string(),
+                    "@eslint/eslintrc@npm:0.4.3".to_string(),
+                    "uri-js@npm:4.4.1".to_string(),
+                    "fast-deep-equal@npm:3.1.3".to_string(),
+                    "json-schema-traverse@npm:1.0.0".to_string(),
+                    "require-from-string@npm:2.0.2".to_string(),
+                    "punycode@npm:2.1.1".to_string(),
+                ],
+            )
+            .unwrap();
+
+        // The key fix: both original descriptors (ajv@npm:^6.10.0 and ajv@npm:^6.12.4)
+        // AND the resolved descriptor (ajv@npm:^8) should be present
+
+        // Check that both original descriptors (as used by eslint and @eslint/eslintrc)
+        // are preserved
+        let eslint_ajv_descriptor = Descriptor::new("ajv", "^6.10.0").unwrap();
+        let eslintrc_ajv_descriptor = Descriptor::new("ajv", "^6.12.4").unwrap();
+
+        assert!(
+            pruned.resolutions.contains_key(&eslint_ajv_descriptor),
+            "Original ajv descriptor (^6.10.0) from eslint should be preserved in pruned lockfile"
+        );
+
+        assert!(
+            pruned.resolutions.contains_key(&eslintrc_ajv_descriptor),
+            "Original ajv descriptor (^6.12.4) from @eslint/eslintrc should be preserved in \
+             pruned lockfile"
+        );
+
+        // Check that the resolved descriptor is also preserved
+        let resolved_ajv_descriptor = Descriptor::new("ajv", "npm:^8").unwrap();
+        assert!(
+            pruned.resolutions.contains_key(&resolved_ajv_descriptor),
+            "Resolved ajv descriptor (^8) should be preserved in pruned lockfile"
+        );
+
+        // Verify that all descriptors point to the correct locator (ajv@npm:8.11.2)
+        let ajv_8_locator = Locator::try_from("ajv@npm:8.11.2").unwrap();
+        assert_eq!(
+            pruned.resolutions.get(&eslint_ajv_descriptor),
+            Some(&ajv_8_locator)
+        );
+        assert_eq!(
+            pruned.resolutions.get(&eslintrc_ajv_descriptor),
+            Some(&ajv_8_locator)
+        );
+        assert_eq!(
+            pruned.resolutions.get(&resolved_ajv_descriptor),
+            Some(&ajv_8_locator)
+        );
+
+        // Test that the pruned lockfile can still resolve packages correctly
+        let resolved_from_pruned = pruned
+            .resolve_package("packages/ui", "ajv", "^6.10.0")
+            .unwrap()
+            .unwrap();
+        assert_eq!(resolved_from_pruned.key, "ajv@npm:8.11.2");
+        assert_eq!(resolved_from_pruned.version, "8.11.2");
+    }
+
+    #[test]
+    fn test_multiple_ajv_descriptors_preserve_all_variants() {
+        // Test that multiple original descriptors for the same package are preserved
+        let data = LockfileData::from_bytes(include_bytes!(
+            "../../fixtures/robust-berry-resolutions.lock"
+        ))
+        .unwrap();
+
+        // Create resolution for ajv
+        let manifest = BerryManifest {
+            resolutions: Some(
+                [("ajv".to_string(), "^8".to_string())]
+                    .iter()
+                    .cloned()
+                    .collect(),
+            ),
+        };
+
+        let lockfile = BerryLockfile::new(data, Some(manifest)).unwrap();
+
+        let pruned = lockfile
+            .subgraph(
+                &["packages/ui".to_string()],
+                &[
+                    "eslint@npm:7.32.0".to_string(),
+                    "@eslint/eslintrc@npm:0.4.3".to_string(),
+                    "ajv@npm:8.11.2".to_string(),
+                ],
+            )
+            .unwrap();
+
+        // Test that both different original ajv descriptors are preserved
+        let ajv_original_eslint = Descriptor::new("ajv", "^6.10.0").unwrap();
+        let ajv_original_eslintrc = Descriptor::new("ajv", "^6.12.4").unwrap();
+        let ajv_resolved = Descriptor::new("ajv", "npm:^8").unwrap();
+
+        assert!(pruned.resolutions.contains_key(&ajv_original_eslint));
+        assert!(pruned.resolutions.contains_key(&ajv_original_eslintrc));
+        assert!(pruned.resolutions.contains_key(&ajv_resolved));
+
+        // Verify all point to the same resolved package
+        let ajv_8_locator = Locator::try_from("ajv@npm:8.11.2").unwrap();
+        assert_eq!(
+            pruned.resolutions.get(&ajv_original_eslint),
+            Some(&ajv_8_locator)
+        );
+        assert_eq!(
+            pruned.resolutions.get(&ajv_original_eslintrc),
+            Some(&ajv_8_locator)
+        );
+        assert_eq!(pruned.resolutions.get(&ajv_resolved), Some(&ajv_8_locator));
+
+        // Verify resolution works from both original descriptors
+        let ajv_pkg1 = pruned
+            .resolve_package("packages/ui", "ajv", "^6.10.0")
+            .unwrap()
+            .unwrap();
+        let ajv_pkg2 = pruned
+            .resolve_package("packages/ui", "ajv", "^6.12.4")
+            .unwrap()
+            .unwrap();
+        assert_eq!(ajv_pkg1.key, "ajv@npm:8.11.2");
+        assert_eq!(ajv_pkg2.key, "ajv@npm:8.11.2");
+    }
+
+    #[test]
+    fn test_resolution_with_workspace_dependencies() {
+        // Test resolution behavior with workspace dependencies
+        let data = LockfileData::from_bytes(include_bytes!(
+            "../../fixtures/robust-berry-resolutions.lock"
+        ))
+        .unwrap();
+
+        let manifest = BerryManifest {
+            resolutions: Some(
+                [("ajv".to_string(), "^8".to_string())]
+                    .iter()
+                    .cloned()
+                    .collect(),
+            ),
+        };
+
+        let lockfile = BerryLockfile::new(data, Some(manifest)).unwrap();
+
+        // Test subgraph with multiple workspace packages
+        let pruned = lockfile
+            .subgraph(
+                &["packages/ui".to_string(), "apps/docs".to_string()],
+                &[
+                    "eslint@npm:7.32.0".to_string(),
+                    "ajv@npm:8.11.2".to_string(),
+                    "react@npm:18.2.0".to_string(),
+                ],
+            )
+            .unwrap();
+
+        // Verify workspace packages are preserved
+        let ui_locator = Locator::try_from("ui@workspace:packages/ui").unwrap();
+        let docs_locator = Locator::try_from("docs@workspace:apps/docs").unwrap();
+        assert!(pruned.locator_package.contains_key(&ui_locator));
+        assert!(pruned.locator_package.contains_key(&docs_locator));
+
+        // Verify resolution still works from different workspace contexts
+        let ajv_from_ui = pruned
+            .resolve_package("packages/ui", "ajv", "^6.10.0")
+            .unwrap()
+            .unwrap();
+        let ajv_from_docs = pruned
+            .resolve_package("apps/docs", "ajv", "^6.10.0")
+            .unwrap()
+            .unwrap();
+        assert_eq!(ajv_from_ui.key, "ajv@npm:8.11.2");
+        assert_eq!(ajv_from_docs.key, "ajv@npm:8.11.2");
+    }
+
+    #[test]
+    fn test_resolution_with_transitive_dependencies() {
+        // Test that resolutions work correctly with transitive dependencies
+        let data = LockfileData::from_bytes(include_bytes!(
+            "../../fixtures/robust-berry-resolutions.lock"
+        ))
+        .unwrap();
+
+        let manifest = BerryManifest {
+            resolutions: Some(
+                [("ajv".to_string(), "^8".to_string())]
+                    .iter()
+                    .cloned()
+                    .collect(),
+            ),
+        };
+
+        let lockfile = BerryLockfile::new(data, Some(manifest)).unwrap();
+
+        // Use transitive_closure to get all dependencies
+        let deps: HashMap<String, String> = vec![("eslint".to_string(), "^7.32.0".to_string())]
+            .into_iter()
+            .collect();
+        let closure = crate::transitive_closure(&lockfile, "packages/ui", deps, false).unwrap();
+
+        // Verify ajv version 8 is in the closure (resolved from eslint's dependency)
+        assert!(closure.contains(&crate::Package {
+            key: "ajv@npm:8.11.2".into(),
+            version: "8.11.2".into()
+        }));
+
+        // Test subgraph with the closure
+        let package_keys: Vec<String> = closure.iter().map(|p| p.key.clone()).collect();
+        let pruned = lockfile
+            .subgraph(&["packages/ui".to_string()], &package_keys)
+            .unwrap();
+
+        // Verify both original and resolved descriptors are preserved
+        let ajv_original = Descriptor::new("ajv", "^6.10.0").unwrap();
+        let ajv_resolved = Descriptor::new("ajv", "npm:^8").unwrap();
+        assert!(pruned.resolutions.contains_key(&ajv_original));
+        assert!(pruned.resolutions.contains_key(&ajv_resolved));
+    }
+
+    #[test]
+    fn test_resolution_edge_cases() {
+        // Test various edge cases for resolution handling
+        let data = LockfileData::from_bytes(include_bytes!(
+            "../../fixtures/robust-berry-resolutions.lock"
+        ))
+        .unwrap();
+
+        let manifest = BerryManifest {
+            resolutions: Some(
+                [("ajv".to_string(), "^8".to_string())]
+                    .iter()
+                    .cloned()
+                    .collect(),
+            ),
+        };
+
+        let lockfile = BerryLockfile::new(data, Some(manifest)).unwrap();
+
+        // Test with empty packages list
+        let pruned_empty = lockfile
+            .subgraph(&["packages/ui".to_string()], &[])
+            .unwrap();
+
+        // Should still contain workspace package
+        let ui_locator = Locator::try_from("ui@workspace:packages/ui").unwrap();
+        assert!(pruned_empty.locator_package.contains_key(&ui_locator));
+
+        // Test with non-existent workspace
+        let pruned_nonexistent = lockfile
+            .subgraph(&["packages/nonexistent".to_string()], &[])
+            .unwrap();
+
+        // Should not crash and should have minimal content
+        assert!(!pruned_nonexistent.locator_package.is_empty()); // Root workspace should be present
+
+        // Test with package that has no dependencies
+        let pruned_minimal = lockfile
+            .subgraph(
+                &["packages/ui".to_string()],
+                &["uri-js@npm:4.4.1".to_string()],
+            )
+            .unwrap();
+
+        // Should contain the specific package
+        let uri_js_locator = Locator::try_from("uri-js@npm:4.4.1").unwrap();
+        assert!(pruned_minimal.locator_package.contains_key(&uri_js_locator));
+    }
+
+    #[test]
+    fn test_resolution_descriptor_consistency() {
+        // Test that descriptor consistency is maintained across different resolution
+        // scenarios
+        let data = LockfileData::from_bytes(include_bytes!(
+            "../../fixtures/robust-berry-resolutions.lock"
+        ))
+        .unwrap();
+
+        let manifest = BerryManifest {
+            resolutions: Some(
+                [("ajv".to_string(), "^8".to_string())]
+                    .iter()
+                    .cloned()
+                    .collect(),
+            ),
+        };
+
+        let lockfile = BerryLockfile::new(data, Some(manifest)).unwrap();
+
+        // Test multiple subgraphs with overlapping packages
+        let pruned1 = lockfile
+            .subgraph(
+                &["packages/ui".to_string()],
+                &[
+                    "eslint@npm:7.32.0".to_string(),
+                    "ajv@npm:8.11.2".to_string(),
+                ],
+            )
+            .unwrap();
+
+        let pruned2 = lockfile
+            .subgraph(
+                &["packages/ui".to_string()],
+                &[
+                    "@eslint/eslintrc@npm:0.4.3".to_string(),
+                    "ajv@npm:8.11.2".to_string(),
+                ],
+            )
+            .unwrap();
+
+        // Both should have consistent descriptor mappings
+        let ajv_8_locator = Locator::try_from("ajv@npm:8.11.2").unwrap();
+        let ajv_resolved = Descriptor::new("ajv", "npm:^8").unwrap();
+
+        assert_eq!(pruned1.resolutions.get(&ajv_resolved), Some(&ajv_8_locator));
+        assert_eq!(pruned2.resolutions.get(&ajv_resolved), Some(&ajv_8_locator));
+
+        // Test that original descriptors are preserved in both
+        let eslint_ajv = Descriptor::new("ajv", "^6.10.0").unwrap();
+        let eslintrc_ajv = Descriptor::new("ajv", "^6.12.4").unwrap();
+
+        assert!(pruned1.resolutions.contains_key(&eslint_ajv));
+        assert!(pruned2.resolutions.contains_key(&eslintrc_ajv));
+    }
+
+    #[test]
+    fn test_resolution_with_different_protocols() {
+        // Test resolution behavior with different protocol formats
+        let data = LockfileData::from_bytes(include_bytes!(
+            "../../fixtures/robust-berry-resolutions.lock"
+        ))
+        .unwrap();
+
+        let manifest = BerryManifest {
+            resolutions: Some(
+                [("ajv".to_string(), "npm:^8".to_string())] // Explicit npm protocol
+                    .iter()
+                    .cloned()
+                    .collect(),
+            ),
+        };
+
+        let lockfile = BerryLockfile::new(data, Some(manifest)).unwrap();
+
+        let pruned = lockfile
+            .subgraph(
+                &["packages/ui".to_string()],
+                &[
+                    "eslint@npm:7.32.0".to_string(),
+                    "ajv@npm:8.11.2".to_string(),
+                ],
+            )
+            .unwrap();
+
+        // Test that different protocol formats are handled correctly
+        let ajv_npm_explicit = Descriptor::new("ajv", "npm:^8").unwrap();
+        let ajv_original = Descriptor::new("ajv", "^6.10.0").unwrap();
+
+        assert!(pruned.resolutions.contains_key(&ajv_npm_explicit));
+        assert!(pruned.resolutions.contains_key(&ajv_original));
+
+        // Both should resolve to the same package
+        let ajv_8_locator = Locator::try_from("ajv@npm:8.11.2").unwrap();
+        assert_eq!(
+            pruned.resolutions.get(&ajv_npm_explicit),
+            Some(&ajv_8_locator)
+        );
+        assert_eq!(pruned.resolutions.get(&ajv_original), Some(&ajv_8_locator));
+    }
+
+    #[test]
+    fn test_resolution_preservation_stress_test() {
+        // Stress test with many packages and resolutions
+        let data = LockfileData::from_bytes(include_bytes!(
+            "../../fixtures/robust-berry-resolutions.lock"
+        ))
+        .unwrap();
+
+        let manifest = BerryManifest {
+            resolutions: Some(
+                [("ajv".to_string(), "^8".to_string())]
+                    .iter()
+                    .cloned()
+                    .collect(),
+            ),
+        };
+
+        let lockfile = BerryLockfile::new(data, Some(manifest)).unwrap();
+
+        // Create a large subgraph with packages that are known to exist
+        let large_package_list: Vec<String> = vec![
+            "eslint@npm:7.32.0",
+            "ajv@npm:8.11.2",
+            "@eslint/eslintrc@npm:0.4.3",
+            "uri-js@npm:4.4.1",
+            "fast-deep-equal@npm:3.1.3",
+            "json-schema-traverse@npm:1.0.0",
+            "require-from-string@npm:2.0.2",
+            "punycode@npm:2.1.1",
+        ]
+        .into_iter()
+        .map(|s| s.to_string())
+        .collect();
+
+        let pruned = lockfile
+            .subgraph(&["packages/ui".to_string()], &large_package_list)
+            .unwrap();
+
+        // Verify key descriptors are preserved
+        let ajv_variants = vec![
+            Descriptor::new("ajv", "^6.10.0").unwrap(),
+            Descriptor::new("ajv", "^6.12.4").unwrap(),
+            Descriptor::new("ajv", "npm:^8").unwrap(),
+        ];
+
+        for variant in ajv_variants {
+            assert!(
+                pruned.resolutions.contains_key(&variant),
+                "Descriptor {} should be preserved in large subgraph",
+                variant
+            );
+        }
+
+        // Verify all point to the same resolved package
+        let ajv_8_locator = Locator::try_from("ajv@npm:8.11.2").unwrap();
+        let ajv_resolved = Descriptor::new("ajv", "npm:^8").unwrap();
+        assert_eq!(pruned.resolutions.get(&ajv_resolved), Some(&ajv_8_locator));
+
+        // Test that resolution still works correctly
+        let resolved_ajv = pruned
+            .resolve_package("packages/ui", "ajv", "^6.10.0")
+            .unwrap()
+            .unwrap();
+        assert_eq!(resolved_ajv.key, "ajv@npm:8.11.2");
+        assert_eq!(resolved_ajv.version, "8.11.2");
     }
 }
