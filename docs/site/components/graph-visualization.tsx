@@ -182,6 +182,79 @@ export function GraphVisualization({ className }: GraphVisualizationProps) {
   const flowData = useMemo(() => {
     if (!graphData) return { nodes: [], edges: [] };
 
+    // Build adjacency lists for topological sorting
+    const inDegree = new Map<string, number>();
+    const adjacencyList = new Map<string, Array<string>>();
+
+    // Initialize
+    graphData.nodes.forEach((node) => {
+      inDegree.set(node.id, 0);
+      adjacencyList.set(node.id, []);
+    });
+
+    // Build the graph
+    graphData.edges.forEach((edge) => {
+      // In a DAG, edge.source depends on edge.target (target -> source)
+      // So we want to show target above source in the hierarchy
+      const target = edge.target;
+      const source = edge.source;
+
+      if (adjacencyList.has(target) && adjacencyList.has(source)) {
+        const targetList = adjacencyList.get(target);
+        if (targetList) {
+          targetList.push(source);
+        }
+        inDegree.set(source, (inDegree.get(source) || 0) + 1);
+      }
+    });
+
+    // Topological sort using Kahn's algorithm
+    const queue: Array<string> = [];
+    const levels: Array<Array<string>> = [];
+    const visited = new Set<string>();
+
+    // Find all nodes with no incoming edges (root nodes)
+    graphData.nodes.forEach((node) => {
+      if ((inDegree.get(node.id) || 0) === 0) {
+        queue.push(node.id);
+      }
+    });
+
+    // Process nodes level by level
+    while (queue.length > 0) {
+      const currentLevel: Array<string> = [];
+      const nextQueue: Array<string> = [];
+
+      for (const nodeId of queue) {
+        if (visited.has(nodeId)) continue;
+
+        visited.add(nodeId);
+        currentLevel.push(nodeId);
+
+        // Add neighbors to next level
+        const neighbors = adjacencyList.get(nodeId) || [];
+        for (const neighbor of neighbors) {
+          inDegree.set(neighbor, (inDegree.get(neighbor) || 1) - 1);
+          if ((inDegree.get(neighbor) || 0) === 0) {
+            nextQueue.push(neighbor);
+          }
+        }
+      }
+
+      if (currentLevel.length > 0) {
+        levels.push(currentLevel);
+      }
+      queue.splice(0, queue.length, ...nextQueue);
+    }
+
+    // Add any remaining nodes (shouldn't happen in a valid DAG, but just in case)
+    graphData.nodes.forEach((node) => {
+      if (!visited.has(node.id)) {
+        if (levels.length === 0) levels.push([]);
+        levels[levels.length - 1].push(node.id);
+      }
+    });
+
     // Calculate node degrees for sizing
     const nodeDegrees = new Map<string, number>();
     graphData.nodes.forEach((node) => {
@@ -193,20 +266,36 @@ export function GraphVisualization({ className }: GraphVisualizationProps) {
       );
     });
 
-    // Create grid layout for better edge visibility
-    const nodesPerRow = 6;
-    const nodeSpacingX = 220;
-    const nodeSpacingY = 120;
-    const flowNodes = graphData.nodes.map((node, idx) => {
+    // Position nodes in hierarchical layout
+    const nodeSpacingX = 200;
+    const levelSpacing = 200;
+
+    const flowNodes = graphData.nodes.map((node) => {
       const degree = nodeDegrees.get(node.id) || 0;
       const isRoot = node.id === "//";
+
+      // Find which level this node belongs to
+      let levelIndex = 0;
+      let positionInLevel = 0;
+
+      for (let i = 0; i < levels.length; i++) {
+        const level = levels[i];
+        const nodeIndex = level.indexOf(node.id);
+        if (nodeIndex !== -1) {
+          levelIndex = i;
+          positionInLevel = nodeIndex;
+          break;
+        }
+      }
+
+      // Calculate position
+      const x = positionInLevel * nodeSpacingX + 100;
+      const y = levelIndex * levelSpacing + 100;
+
       return {
         id: node.id,
         type: "custom",
-        position: {
-          x: (idx % nodesPerRow) * nodeSpacingX,
-          y: Math.floor(idx / nodesPerRow) * nodeSpacingY + 100,
-        },
+        position: { x, y },
         data: {
           label: node.label,
           isRoot,
@@ -217,14 +306,14 @@ export function GraphVisualization({ className }: GraphVisualizationProps) {
       };
     });
 
-    // Edges are generated from the parsed graph data and should match node IDs
+    // Create edges with proper styling
     const flowEdges = graphData.edges.map((edge, index) => {
       if (
         !flowNodes.find((n) => n.id === edge.source) ||
         !flowNodes.find((n) => n.id === edge.target)
       ) {
         if (typeof window !== "undefined") {
-          // eslint-disable-next-line no-console
+          // eslint-disable-next-line no-console -- Debug warning for missing nodes
           console.warn("Edge references missing node:", edge);
         }
       }
@@ -233,21 +322,15 @@ export function GraphVisualization({ className }: GraphVisualizationProps) {
         id: `edge-${index}`,
         source: String(edge.source),
         target: String(edge.target),
-        type: "default", // force default edge type
-        style: { stroke: "#ff0000", strokeWidth: 3 }, // bright red
+        type: "default",
+        style: {
+          stroke: "#3b82f6",
+          strokeWidth: 2,
+          strokeDasharray: "5,5", // Dashed line to show dependency direction
+        },
+        animated: true, // Animate the flow to show direction
       };
     });
-
-    // Add a hardcoded debug edge between the first two nodes
-    if (flowNodes.length > 1) {
-      flowEdges.push({
-        id: "debug-edge",
-        source: flowNodes[0].id,
-        target: flowNodes[1].id,
-        type: "default",
-        style: { stroke: "#00ff00", strokeWidth: 4 }, // bright green
-      });
-    }
 
     return { nodes: flowNodes, edges: flowEdges };
   }, [graphData]);
@@ -370,10 +453,16 @@ export function GraphVisualization({ className }: GraphVisualizationProps) {
                   Packages (size = connection count)
                 </li>
                 <li>
-                  <strong>Layout:</strong> Automatic hierarchical layout with
-                  drag & drop support
+                  <strong>Layout:</strong> Hierarchical DAG layout -
+                  dependencies at top, dependents below
                 </li>
-                <li>Arrows point from dependents to dependencies</li>
+                <li>
+                  Animated arrows show dependency direction (dependents →
+                  dependencies)
+                </li>
+                <li>
+                  Nodes are arranged in levels based on their dependency depth
+                </li>
               </ul>
             </div>
           </div>
