@@ -15,7 +15,9 @@
     "test": "turbo run test",
     "test:integration": "pnpm --filter turborepo-tests-integration exec prysk",
     "rustdoc": "RUSTDOCFLAGS=\"-Z unstable-options --enable-index-page\" cargo doc --workspace --no-deps --keep-going || true",
-    "rustdoc:open": "RUSTDOCFLAGS=\"-Z unstable-options --enable-index-page\" cargo doc --workspace --no-deps --keep-going --open"
+    "rustdoc:open": "RUSTDOCFLAGS=\"-Z unstable-options --enable-index-page\" cargo doc --workspace --no-deps --keep-going --open",
+    "coverage": "./scripts/coverage.sh",
+    "coverage:summary": "./scripts/coverage.sh --summary"
   },
   "devDependencies": {
     "@taplo/cli": "^0.5.2",
