@@ -198,13 +198,13 @@ impl<'a> RepositoryDetails<'a> {
         cprintln!(self.color_config, GREY, "({})\n", self.package_manager);
 
         for (package_name, entry) in &self.packages {
-            println!("  {} {}", package_name, GREY.apply_to(entry));
+            println!("  {package_name} {}", GREY.apply_to(entry));
         }
     }
 
     fn json_print(&self) -> Result<(), cli::Error> {
         let as_json = serde_json::to_string_pretty(&self)?;
-        println!("{}", as_json);
+        println!("{as_json}");
         Ok(())
     }
 

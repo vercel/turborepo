@@ -107,7 +107,7 @@ impl LanguageServer for Backend {
                     self.client
                         .log_message(
                             MessageType::ERROR,
-                            format!("version mismatch when connecting to daemon: {}", message),
+                            format!("version mismatch when connecting to daemon: {message}"),
                         )
                         .await;
 
@@ -120,7 +120,7 @@ impl LanguageServer for Backend {
                     self.client
                         .log_message(
                             MessageType::ERROR,
-                            format!("failed to connect to daemon: {}", e),
+                            format!("failed to connect to daemon: {e}"),
                         )
                         .await;
                     return Err(Error::internal_error());
@@ -138,8 +138,7 @@ impl LanguageServer for Backend {
                     .log_message(
                         MessageType::ERROR,
                         format!(
-                            "failed to acquire pidlock, is another lsp instance running? - {}",
-                            e
+                            "failed to acquire pidlock, is another lsp instance running? - {e}"
                         ),
                     )
                     .await;
@@ -270,7 +269,7 @@ impl LanguageServer for Backend {
         self.client
             .log_message(
                 MessageType::INFO,
-                format!("finding references for {:?}", referenced_task),
+                format!("finding references for {referenced_task:?}"),
             )
             .await;
 
@@ -342,7 +341,7 @@ impl LanguageServer for Backend {
                 }
             };
 
-            let Some(start) = data.find(&format!("\"{}\"", task)) else {
+            let Some(start) = data.find(&format!("\"{task}\"")) else {
                 continue;
             };
             let end = start + task.len() + 2;
@@ -443,7 +442,7 @@ impl LanguageServer for Backend {
     /// actions that the user can run
     async fn code_action(&self, params: CodeActionParams) -> LspResult<Option<CodeActionResponse>> {
         self.client
-            .log_message(MessageType::INFO, format!("{:#?}", params))
+            .log_message(MessageType::INFO, format!("{params:#?}"))
             .await;
 
         let mut code_actions = vec![];
@@ -877,7 +876,7 @@ impl Backend {
                     let expression = string.value.strip_prefix('!').unwrap_or(&string.value); // strip the negation
                     if let Err(glob) = wax::Glob::new(expression) {
                         diagnostics.push(Diagnostic {
-                            message: format!("Invalid glob: {}", glob),
+                            message: format!("Invalid glob: {glob}"),
                             range: convert_ranges(&rope, collapse_string_range(string.range)),
                             severity: Some(DiagnosticSeverity::ERROR),
                             ..Default::default()
@@ -949,7 +948,7 @@ fn report_invalid_packages_and_tasks(
         // we specified a package, but that package doesn't exist
         (_, Some(package)) if !packages.contains(&package) => {
             diagnostics.push(Diagnostic {
-                message: format!("The package `{}` does not exist in {:?}", package, packages),
+                message: format!("The package `{package}` does not exist in {packages:?}"),
                 range,
                 severity: Some(DiagnosticSeverity::ERROR),
                 code: Some(NumberOrString::String("turbo:no-such-package".to_string())),
@@ -966,10 +965,7 @@ fn report_invalid_packages_and_tasks(
                 .contains(&package) =>
         {
             diagnostics.push(Diagnostic {
-                message: format!(
-                    "The task `{}` does not exist in the package `{}`.",
-                    task, package
-                ),
+                message: format!("The task `{task}` does not exist in the package `{package}`."),
                 range,
                 severity: Some(DiagnosticSeverity::ERROR),
                 code: Some(NumberOrString::String(
@@ -981,7 +977,7 @@ fn report_invalid_packages_and_tasks(
         // the task doesn't exist anywhere, so we have a problem
         (None, None) => {
             diagnostics.push(Diagnostic {
-                message: format!("The task `{}` does not exist.", task),
+                message: format!("The task `{task}` does not exist."),
                 range,
                 severity: Some(DiagnosticSeverity::ERROR),
                 code: Some(NumberOrString::String("turbo:no-such-task".to_string())),
@@ -992,10 +988,7 @@ fn report_invalid_packages_and_tasks(
         // all
         (None, Some(package)) => {
             diagnostics.push(Diagnostic {
-                message: format!(
-                    "The task `{}` does not exist in the package `{}`.",
-                    task, package
-                ),
+                message: format!("The task `{task}` does not exist in the package `{package}`."),
                 range,
                 severity: Some(DiagnosticSeverity::ERROR),
                 code: Some(NumberOrString::String("turbo:no-such-task".to_string())),

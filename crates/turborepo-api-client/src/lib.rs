@@ -139,7 +139,7 @@ impl Client for APIClient {
             .client
             .get(url)
             .header("User-Agent", self.user_agent.clone())
-            .header("Authorization", format!("Bearer {}", token))
+            .header("Authorization", format!("Bearer {token}"))
             .header("Content-Type", "application/json");
         let response =
             retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout)
@@ -156,7 +156,7 @@ impl Client for APIClient {
             .get(self.make_url("/v2/teams?limit=100")?)
             .header("User-Agent", self.user_agent.clone())
             .header("Content-Type", "application/json")
-            .header("Authorization", format!("Bearer {}", token));
+            .header("Authorization", format!("Bearer {token}"));
 
         let response =
             retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout)
@@ -174,7 +174,7 @@ impl Client for APIClient {
             .get(self.make_url(&endpoint)?)
             .header("User-Agent", self.user_agent.clone())
             .header("Content-Type", "application/json")
-            .header("Authorization", format!("Bearer {}", token))
+            .header("Authorization", format!("Bearer {token}"))
             .send()
             .await?
             .error_for_status()?;
@@ -274,7 +274,7 @@ impl CacheClient for APIClient {
         team_slug: Option<&str>,
         method: Method,
     ) -> Result<Option<Response>> {
-        let mut request_url = self.make_url(&format!("/v8/artifacts/{}", hash))?;
+        let mut request_url = self.make_url(&format!("/v8/artifacts/{hash}"))?;
         let mut allow_auth = true;
 
         if self.use_preflight {
@@ -297,7 +297,7 @@ impl CacheClient for APIClient {
             .header("User-Agent", self.user_agent.clone());
 
         if allow_auth {
-            request_builder = request_builder.header("Authorization", format!("Bearer {}", token));
+            request_builder = request_builder.header("Authorization", format!("Bearer {token}"));
         }
 
         request_builder = Self::add_team_params(request_builder, team_id, team_slug);
@@ -349,7 +349,7 @@ impl CacheClient for APIClient {
         team_id: Option<&str>,
         team_slug: Option<&str>,
     ) -> Result<()> {
-        let mut request_url = self.make_url(&format!("/v8/artifacts/{}", hash))?;
+        let mut request_url = self.make_url(&format!("/v8/artifacts/{hash}"))?;
         let mut allow_auth = true;
 
         if self.use_preflight {
@@ -378,7 +378,7 @@ impl CacheClient for APIClient {
             .body(stream);
 
         if allow_auth {
-            request_builder = request_builder.header("Authorization", format!("Bearer {}", token));
+            request_builder = request_builder.header("Authorization", format!("Bearer {token}"));
         }
 
         request_builder = Self::add_team_params(request_builder, team_id, team_slug);
@@ -413,7 +413,7 @@ impl CacheClient for APIClient {
             .get(self.make_url("/v8/artifacts/status")?)
             .header("User-Agent", self.user_agent.clone())
             .header("Content-Type", "application/json")
-            .header("Authorization", format!("Bearer {}", token));
+            .header("Authorization", format!("Bearer {token}"));
 
         let request_builder = Self::add_team_params(request_builder, team_id, team_slug);
 
@@ -435,7 +435,7 @@ impl TokenClient for APIClient {
             .client
             .get(url)
             .header("User-Agent", self.user_agent.clone())
-            .header("Authorization", format!("Bearer {}", token))
+            .header("Authorization", format!("Bearer {token}"))
             .header("Content-Type", "application/json");
 
         #[derive(Deserialize, Debug)]
@@ -494,7 +494,7 @@ impl TokenClient for APIClient {
             .client
             .delete(url)
             .header("User-Agent", self.user_agent.clone())
-            .header("Authorization", format!("Bearer {}", token))
+            .header("Authorization", format!("Bearer {token}"))
             .header("Content-Type", "application/json");
 
         #[derive(Deserialize, Debug)]
@@ -614,7 +614,7 @@ impl APIClient {
             .header("User-Agent", self.user_agent.clone())
             .header("Access-Control-Request-Method", request_method)
             .header("Access-Control-Request-Headers", request_headers)
-            .header("Authorization", format!("Bearer {}", token));
+            .header("Authorization", format!("Bearer {token}"));
 
         let response =
             retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout)
@@ -696,7 +696,7 @@ impl APIClient {
             .header("Content-Type", "application/json");
 
         if allow_auth {
-            request_builder = request_builder.header("Authorization", format!("Bearer {}", token));
+            request_builder = request_builder.header("Authorization", format!("Bearer {token}"));
         }
 
         request_builder =

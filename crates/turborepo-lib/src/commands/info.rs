@@ -41,9 +41,9 @@ pub async fn run(base: CommandBase) {
         |path| path.to_string_lossy().into_owned(),
     );
 
-    println!("   Path to executable: {}", exe_path);
-    println!("   Daemon status: {}", daemon_status);
-    println!("   Package manager: {}", package_manager);
+    println!("   Path to executable: {exe_path}");
+    println!("   Daemon status: {daemon_status}");
+    println!("   Package manager: {package_manager}");
     println!();
 
     println!("Platform:");
