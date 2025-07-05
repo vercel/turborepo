@@ -94,6 +94,7 @@ impl fmt::Debug for FsEventWatcher {
             .field("event_handler", &Arc::as_ptr(&self.event_handler))
             .field("runloop", &self.runloop)
             .field("recursive_info", &self.recursive_info)
+            .field("device", &self.device)
             .finish()
     }
 }
@@ -395,9 +396,19 @@ impl FsEventWatcher {
         if self.device.is_none() {
             self.device = Some(device);
         } else if self.device != Some(device) {
-            return Err(Error::generic("cannot watch multiple devices"));
+            // Allow cross-volume watching by default - don't enforce device matching
+            // This handles case-sensitive volumes and external drives gracefully
+            tracing::debug!(
+                "FSEvents: Device mismatch detected (current: {:?}, new: {} for path: {}). \
+                 Allowing cross-volume watching.",
+                self.device,
+                device,
+                path.display()
+            );
         }
+
         let canonical_path = path.to_path_buf().canonicalize()?;
+
         let str_path = path.to_str().unwrap();
         unsafe {
             let mut err: cf::CFErrorRef = ptr::null_mut();
@@ -412,15 +423,19 @@ impl FsEventWatcher {
             cf::CFRelease(cf_path);
         }
         let is_recursive = matches!(recursive_mode, RecursiveMode::Recursive);
-        self.recursive_info.insert(canonical_path, is_recursive);
+        self.recursive_info
+            .insert(canonical_path.clone(), is_recursive);
+
         Ok(())
     }
 
     fn run(&mut self) -> Result<()> {
-        if unsafe { cf::CFArrayGetCount(self.paths) } == 0 {
+        let path_count = unsafe { cf::CFArrayGetCount(self.paths) };
+        if path_count == 0 {
             // TODO: Reconstruct and add paths to error
             return Err(Error::path_not_found());
         }
+
         let device = self
             .device
             .ok_or_else(|| Error::generic("no device set for stream"))?;
@@ -443,8 +458,10 @@ impl FsEventWatcher {
             copy_description: None,
         };
 
+        // Try creating a device-relative stream first for optimal performance,
+        // then fall back to standard FSEventStreamCreate for cross-volume compatibility
         let stream = unsafe {
-            fs::FSEventStreamCreateRelativeToDevice(
+            let device_stream = fs::FSEventStreamCreateRelativeToDevice(
                 cf::kCFAllocatorDefault,
                 callback,
                 &stream_context,
@@ -453,8 +470,32 @@ impl FsEventWatcher {
                 self.since_when,
                 self.latency,
                 self.flags,
-            )
+            );
+
+            // If device-relative stream creation failed, fall back to standard approach
+            if device_stream.is_null() {
+                tracing::debug!(
+                    "FSEvents: Device-relative stream creation failed, falling back to standard \
+                     FSEventStreamCreate for cross-volume compatibility"
+                );
+
+                fs::FSEventStreamCreate(
+                    cf::kCFAllocatorDefault,
+                    callback,
+                    &stream_context,
+                    self.paths,
+                    self.since_when,
+                    self.latency,
+                    self.flags,
+                )
+            } else {
+                device_stream
+            }
         };
+
+        if stream.is_null() {
+            return Err(Error::generic("failed to create FSEventStream"));
+        }
 
         // Wrapper to help send CFRef types across threads.
         struct CFSendWrapper(cf::CFRef);
@@ -557,13 +598,13 @@ unsafe fn callback_impl(
         });
 
         let mut handle_event = false;
-        for (p, r) in unsafe { &(*info).recursive_info } {
-            if path.starts_with(p) {
-                if *r || &path == p {
+        for (watched_path, is_recursive) in unsafe { &(*info).recursive_info } {
+            if path.starts_with(watched_path) {
+                if *is_recursive || &path == watched_path {
                     handle_event = true;
                     break;
                 } else if let Some(parent_path) = path.parent() {
-                    if parent_path == p {
+                    if parent_path == watched_path {
                         handle_event = true;
                         break;
                     }
@@ -575,7 +616,9 @@ unsafe fn callback_impl(
             continue;
         }
 
-        for ev in translate_flags(flag, true).into_iter() {
+        let events = translate_flags(flag, true);
+
+        for ev in events.into_iter() {
             // TODO: precise
             let ev = ev.add_path(path.clone());
             let mut event_handler = event_handler.lock().expect("lock not to be poisoned");

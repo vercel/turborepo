@@ -50,7 +50,35 @@ fn repo_hash(repo_root: &AbsoluteSystemPath) -> String {
     hex::encode(&hasher.finalize()[..8])
 }
 
-fn daemon_file_root(repo_hash: &str) -> AbsoluteSystemPathBuf {
+fn daemon_file_root(repo_root: &AbsoluteSystemPath, repo_hash: &str) -> AbsoluteSystemPathBuf {
+    // Auto-detect cross-volume scenario on macOS
+    #[cfg(target_os = "macos")]
+    {
+        let temp_dir = std::env::temp_dir();
+        if let (Ok(temp_metadata), Ok(repo_metadata)) = (
+            std::fs::metadata(&temp_dir),
+            std::fs::metadata(repo_root.as_std_path()),
+        ) {
+            use std::os::unix::fs::MetadataExt;
+            let temp_device = temp_metadata.dev();
+            let repo_device = repo_metadata.dev();
+
+            if temp_device != repo_device {
+                tracing::debug!(
+                    "Cross-volume scenario detected (temp: {}, repo: {}), placing daemon in repo \
+                     directory",
+                    temp_device,
+                    repo_device
+                );
+                // Place daemon in the repo's .turbo directory to ensure same volume
+                return repo_root
+                    .join_components(&[".turbo", "daemon-runtime"])
+                    .join_component(repo_hash);
+            }
+        }
+    }
+
+    // Default behavior: use system temp directory
     AbsoluteSystemPathBuf::new(std::env::temp_dir().to_str().expect("UTF-8 path"))
         .expect("temp dir is valid")
         .join_component("turbod")
@@ -70,7 +98,7 @@ fn daemon_log_file_and_folder(
 impl Paths {
     pub fn from_repo_root(repo_root: &AbsoluteSystemPath) -> Self {
         let repo_hash = repo_hash(repo_root);
-        let daemon_root = daemon_file_root(&repo_hash);
+        let daemon_root = daemon_file_root(repo_root, &repo_hash);
         let (log_file, log_folder) = daemon_log_file_and_folder(repo_root, &repo_hash);
         Self {
             pid_file: daemon_root.join_component("turbod.pid"),
