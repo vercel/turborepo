@@ -36,6 +36,10 @@ You will need to have these dependencies installed on your machine to work on th
   - Linux: `sudo apt update && sudo apt install jq zstd`
   - Windows: `choco install jq zstandard`
 - On Linux, ensure LLD (LLVM Linker) is installed, as it's not installed by default on many Linux distributions (e.g. `apt install lld`).
+- For coverage reporting, install the `llvm-tools-preview` component:
+  ```bash
+  rustup component add llvm-tools-preview
+  ```
 
 ## Structure of the repository
 
@@ -72,10 +76,16 @@ First, install Turborepo globally with your package manager of choice. For insta
 
 Now, from the root directory, you can run:
 
-- Unit tests
+- Run unit tests
 
 ```bash
   cargo test
+```
+
+- Run unit tests coverage
+
+```bash
+pnpm coverage
 ```
 
 - A module's unit tests
