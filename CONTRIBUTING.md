@@ -76,22 +76,16 @@ First, install Turborepo globally with your package manager of choice. For insta
 
 Now, from the root directory, you can run:
 
-- Unit tests
+- Run unit tests
 
 ```bash
   cargo test
 ```
 
-- Unit test coverage
+- Run unit tests coverage
 
 ```bash
 pnpm coverage
-```
-
-- Unit test coverage summary
-
-```bash
-pnpm coverage:summary
 ```
 
 - A module's unit tests
