@@ -28,8 +28,8 @@ use turborepo_ui::{ColorConfig, GREY};
 use crate::{
     cli::error::print_potential_tasks,
     commands::{
-        bin, boundaries, clone, config, daemon, generate, info, link, login, logout, ls, prune,
-        query, run, scan, telemetry, unlink, CommandBase,
+        bin, boundaries, clone, config, daemon, deps_sync, generate, info, link, login, logout, ls,
+        prune, query, run, scan, telemetry, unlink, CommandBase,
     },
     get_version,
     run::watch::WatchClient,
@@ -613,6 +613,15 @@ pub enum Command {
         idle_time: String,
         #[clap(subcommand)]
         command: Option<DaemonCommand>,
+    },
+    /// Check that all dependencies across workspaces are synchronized
+    #[clap(name = "deps-sync")]
+    DepsSync {
+        /// Generate allowlist configuration for current conflicts instead of
+        /// reporting them. This helps with incremental adoption by
+        /// writing configuration that ignores existing conflicts.
+        #[clap(long)]
+        allowlist: bool,
     },
     /// Generate a new app / package
     #[clap(aliases = ["g", "gen"])]
@@ -1440,6 +1449,14 @@ pub async fn run(
             }?;
 
             Ok(0)
+        }
+        Command::DepsSync { allowlist } => {
+            let event = CommandEventBuilder::new("deps-sync").with_parent(&root_telemetry);
+            event.track_call();
+            let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
+            event.track_ui_mode(base.opts.run_opts.ui_mode);
+
+            Ok(deps_sync::run(&base, *allowlist).await?)
         }
         Command::Generate {
             tag,

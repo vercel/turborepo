@@ -1,0 +1,199 @@
+---
+title: deps-sync
+description: API reference for the `turbo deps-sync` command
+---
+
+import { Callout } from '#components/callout';
+
+Analyze and resolve dependency version conflicts across packages in your workspace.
+
+```bash title="Terminal"
+turbo deps-sync [options]
+```
+
+The `deps-sync` command scans all packages in your workspace to identify dependencies that have conflicting versions. This helps maintain consistency across your monorepo by ensuring that shared dependencies use compatible versions.
+
+<Callout type="info">
+  This command only works with multi-package workspaces. Single-package
+  repositories don't need dependency synchronization analysis.
+</Callout>
+
+## When to use `deps-sync`
+
+Use `deps-sync` when you want to:
+
+- **Identify version conflicts**: Find dependencies that are used with different versions across packages
+- **Enforce consistency**: Ensure critical dependencies use the same version everywhere
+- **Resolve conflicts**: Generate configuration to manage unavoidable version differences
+- **Maintain compatibility**: Prevent dependency version drift in your workspace
+
+## Options
+
+### `--allowlist`
+
+Generate configuration to resolve conflicts instead of reporting them.
+
+```bash title="Terminal"
+turbo deps-sync --allowlist
+```
+
+When this flag is used, `turbo` will automatically add configuration to your `turbo.json` that resolves all detected conflicts by creating appropriate exception rules. This updates the [`depsSync`](#configuration) configuration and changes the command's exit code to `0`.
+
+## Configuration
+
+Configure dependency synchronization rules in your `turbo.json`:
+
+```json title="./turbo.json"
+{
+  "depsSync": {
+    "pinnedDependencies": {
+      "react": {
+        "version": "18.0.0",
+        "exceptions": ["legacy-app"]
+      }
+    },
+    "ignoredDependencies": {
+      "typescript": {
+        "exceptions": ["docs-site", "scripts"]
+      }
+    }
+  }
+}
+```
+
+### `pinnedDependencies`
+
+Pin specific dependencies to exact versions across all packages, with optional exceptions.
+
+```json title="./turbo.json"
+{
+  "depsSync": {
+    "pinnedDependencies": {
+      "react": {
+        "version": "18.0.0",
+        "exceptions": ["legacy-package"]
+      },
+      "typescript": {
+        "version": "5.0.0",
+        "exceptions": []
+      }
+    }
+  }
+}
+```
+
+- **`version`**: The exact version that should be used across all packages
+- **`exceptions`**: Array of package names that are exempt from this pinned version
+
+### `ignoredDependencies`
+
+Exclude specific dependencies from conflict analysis.
+
+```json title="./turbo.json"
+{
+  "depsSync": {
+    "ignoredDependencies": {
+      "eslint": {
+        "exceptions": ["web-app", "mobile-app"]
+      },
+      "jest": {
+        "exceptions": []
+      }
+    }
+  }
+}
+```
+
+- **`exceptions`**: Array of package names where this dependency should **not** be ignored (i.e., still checked for conflicts)
+
+<Callout type="good-to-know">
+  When `exceptions` is empty, the dependency is ignored in **all** packages.
+  When `exceptions` contains package names, the dependency is ignored everywhere
+  **except** in those specified packages.
+</Callout>
+
+## Analyzed dependencies
+
+The command analyzes the following dependency types from `package.json`:
+
+- **`dependencies`**: Production dependencies
+- **`devDependencies`**: Development dependencies
+- **`optionalDependencies`**: Optional dependencies
+
+<Callout type="info">
+  **`peerDependencies`** are intentionally excluded from analysis since they're
+  meant to be provided by the consuming application and often have intentionally
+  different version constraints.
+</Callout>
+
+## Exit codes
+
+- **`0`**: No conflicts found or conflicts resolved with `--allowlist`
+- **`1`**: Conflicts detected (only when not using `--allowlist`)
+
+## Examples
+
+### Basic conflict detection
+
+```bash title="Terminal"
+turbo deps-sync
+```
+
+```bash title="Output"
+🔍 Scanning workspace packages for dependency conflicts...
+
+  lodash (version mismatch)
+    4.17.0 →
+      web-app (packages/web-app)
+      mobile-app (packages/mobile-app)
+    4.18.0 →
+      admin-dashboard (packages/admin-dashboard)
+
+❌ Found 1 dependency conflicts.
+```
+
+### Auto-resolve conflicts
+
+```bash title="Terminal"
+turbo deps-sync --allowlist
+```
+
+```bash title="Output"
+🔍 Scanning workspace packages for dependency conflicts...
+
+✅ Generated allowlist configuration for 1 conflicts in turbo.json. Dependencies are now synchronized!
+```
+
+### With configuration
+
+Given this `turbo.json`:
+
+```json title="./turbo.json"
+{
+  "depsSync": {
+    "pinnedDependencies": {
+      "react": {
+        "version": "18.0.0",
+        "exceptions": ["legacy-app"]
+      }
+    },
+    "ignoredDependencies": {
+      "eslint": {
+        "exceptions": ["web-app"]
+      }
+    }
+  }
+}
+```
+
+Running `turbo deps-sync` will:
+
+- Require all packages except `legacy-app` to use React version `18.0.0`
+- Ignore ESLint version conflicts in all packages except `web-app`
+- Report conflicts for any other dependencies with mismatched versions
+
+<Callout type="good-to-know">
+  The `--allowlist` flag is particularly useful during migration or when setting
+  up dependency synchronization for the first time, as it can automatically
+  generate the initial configuration based on your current workspace state.
+</Callout>
