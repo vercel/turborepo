@@ -113,29 +113,33 @@
 
   --ds-background-100-value: 0, 0%, 100%;
   --ds-background-200-value: 0, 0%, 98%;
-  --ds-focus-border: 0 0 0 1px var(--ds-gray-alpha-600),
-    0px 0px 0px 4px rgba(0, 0, 0, 0.16);
+  --ds-focus-border:
+    0 0 0 1px var(--ds-gray-alpha-600), 0px 0px 0px 4px rgba(0, 0, 0, 0.16);
   --ds-focus-color: var(--ds-blue-700);
 
   --ds-shadow-border: 0 0 0 1px rgba(0, 0, 0, 0.08);
   --ds-shadow-border-inset: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
   --ds-shadow-small: 0px 2px 2px rgba(0, 0, 0, 0.04);
   --ds-shadow-border-small: var(--ds-shadow-border), var(--ds-shadow-small);
-  --ds-shadow-medium: 0px 2px 2px rgba(0, 0, 0, 0.04),
-    0px 8px 8px -8px rgba(0, 0, 0, 0.04);
+  --ds-shadow-medium:
+    0px 2px 2px rgba(0, 0, 0, 0.04), 0px 8px 8px -8px rgba(0, 0, 0, 0.04);
   --ds-shadow-border-medium: var(--ds-shadow-border), var(--ds-shadow-medium);
-  --ds-shadow-large: 0px 2px 2px rgba(0, 0, 0, 0.04),
-    0px 8px 16px -4px rgba(0, 0, 0, 0.04);
+  --ds-shadow-large:
+    0px 2px 2px rgba(0, 0, 0, 0.04), 0px 8px 16px -4px rgba(0, 0, 0, 0.04);
   --ds-shadow-border-large: var(--ds-shadow-border), var(--ds-shadow-large);
-  --ds-shadow-tooltip: var(--ds-shadow-border), 0px 1px 1px rgba(0, 0, 0, 0.02),
+  --ds-shadow-tooltip:
+    var(--ds-shadow-border), 0px 1px 1px rgba(0, 0, 0, 0.02),
     0px 4px 8px rgba(0, 0, 0, 0.04);
-  --ds-shadow-menu: var(--ds-shadow-border), 0px 1px 1px rgba(0, 0, 0, 0.02),
+  --ds-shadow-menu:
+    var(--ds-shadow-border), 0px 1px 1px rgba(0, 0, 0, 0.02),
     0px 4px 8px -4px rgba(0, 0, 0, 0.04), 0px 16px 24px -8px rgba(0, 0, 0, 0.06);
-  --ds-shadow-modal: var(--ds-shadow-border), 0px 1px 1px rgba(0, 0, 0, 0.02),
+  --ds-shadow-modal:
+    var(--ds-shadow-border), 0px 1px 1px rgba(0, 0, 0, 0.02),
     0px 8px 16px -4px rgba(0, 0, 0, 0.04),
     0px 24px 32px -8px rgba(0, 0, 0, 0.06);
-  --ds-shadow-fullscreen: var(--ds-shadow-border),
-    0px 1px 1px rgba(0, 0, 0, 0.02), 0px 8px 16px -4px rgba(0, 0, 0, 0.04),
+  --ds-shadow-fullscreen:
+    var(--ds-shadow-border), 0px 1px 1px rgba(0, 0, 0, 0.02),
+    0px 8px 16px -4px rgba(0, 0, 0, 0.04),
     0px 24px 32px -8px rgba(0, 0, 0, 0.06);
 }
 
@@ -365,32 +369,39 @@
 
   --ds-background-100-value: 0, 0%, 4%;
   --ds-background-200-value: 0, 0%, 0%;
-  --ds-focus-border: 0 0 0 1px var(--ds-gray-alpha-600),
+  --ds-focus-border:
+    0 0 0 1px var(--ds-gray-alpha-600),
     0px 0px 0px 4px rgba(255, 255, 255, 0.24);
   --ds-focus-color: var(--ds-blue-900);
   --ds-shadow-border-inset: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
 
   --ds-shadow-border: 0 0 0 1px rgba(255, 255, 255, 0.145);
   --ds-shadow-small: 0px 1px 2px rgba(0, 0, 0, 0.16);
-  --ds-shadow-border-small: var(--ds-shadow-border),
-    0px 1px 2px rgba(0, 0, 0, 0.16);
-  --ds-shadow-medium: 0px 2px 2px rgba(0, 0, 0, 0.32),
-    0px 8px 8px -8px rgba(0, 0, 0, 0.16);
-  --ds-shadow-border-medium: var(--ds-shadow-border),
+  --ds-shadow-border-small:
+    var(--ds-shadow-border), 0px 1px 2px rgba(0, 0, 0, 0.16);
+  --ds-shadow-medium:
     0px 2px 2px rgba(0, 0, 0, 0.32), 0px 8px 8px -8px rgba(0, 0, 0, 0.16);
-  --ds-shadow-large: 0px 2px 2px rgba(0, 0, 0, 0.04),
-    0px 8px 16px -4px rgba(0, 0, 0, 0.04);
-  --ds-shadow-border-large: var(--ds-shadow-border),
+  --ds-shadow-border-medium:
+    var(--ds-shadow-border), 0px 2px 2px rgba(0, 0, 0, 0.32),
+    0px 8px 8px -8px rgba(0, 0, 0, 0.16);
+  --ds-shadow-large:
     0px 2px 2px rgba(0, 0, 0, 0.04), 0px 8px 16px -4px rgba(0, 0, 0, 0.04);
-  --ds-shadow-tooltip: var(--ds-shadow-border), 0px 1px 1px rgba(0, 0, 0, 0.02),
+  --ds-shadow-border-large:
+    var(--ds-shadow-border), 0px 2px 2px rgba(0, 0, 0, 0.04),
+    0px 8px 16px -4px rgba(0, 0, 0, 0.04);
+  --ds-shadow-tooltip:
+    var(--ds-shadow-border), 0px 1px 1px rgba(0, 0, 0, 0.02),
     0px 4px 8px rgba(0, 0, 0, 0.04);
-  --ds-shadow-menu: var(--ds-shadow-border), 0px 1px 1px rgba(0, 0, 0, 0.02),
+  --ds-shadow-menu:
+    var(--ds-shadow-border), 0px 1px 1px rgba(0, 0, 0, 0.02),
     0px 4px 8px -4px rgba(0, 0, 0, 0.04), 0px 16px 24px -8px rgba(0, 0, 0, 0.06);
-  --ds-shadow-modal: var(--ds-shadow-border), 0px 1px 1px rgba(0, 0, 0, 0.02),
+  --ds-shadow-modal:
+    var(--ds-shadow-border), 0px 1px 1px rgba(0, 0, 0, 0.02),
     0px 8px 16px -4px rgba(0, 0, 0, 0.04),
     0px 24px 32px -8px rgba(0, 0, 0, 0.06);
-  --ds-shadow-fullscreen: var(--ds-shadow-border),
-    0px 1px 1px rgba(0, 0, 0, 0.02), 0px 8px 16px -4px rgba(0, 0, 0, 0.04),
+  --ds-shadow-fullscreen:
+    var(--ds-shadow-border), 0px 1px 1px rgba(0, 0, 0, 0.02),
+    0px 8px 16px -4px rgba(0, 0, 0, 0.04),
     0px 24px 32px -8px rgba(0, 0, 0, 0.06);
 }
 

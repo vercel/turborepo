@@ -1,0 +1,167 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.0.0/schema.json",
+  "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
+  "files": {
+    "ignoreUnknown": true
+  },
+  "formatter": {
+    "enabled": false,
+    "formatWithErrors": false,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineEnding": "lf",
+    "lineWidth": 80,
+    "attributePosition": "auto",
+    "bracketSameLine": false,
+    "bracketSpacing": true,
+    "expand": "auto",
+    "useEditorconfig": true,
+    "includes": [
+      "**",
+      "!**/.next/",
+      "!**/build/",
+      "!**/dist",
+      "!**/node_modules/",
+      "!**/target/",
+      "!**/coverage/",
+      "!**/snapshot/",
+      "!**/generated/",
+      "!**/pnpm-lock.yaml",
+      "!**/__generated__/",
+      "!./benchmark/large-monorepo",
+      "!./cli/dist-cross*",
+      "!./docs/public/schema.json",
+      "!./packages/eslint-plugin-turbo/__tests__/fixtures/",
+      "!./packages/turbo-codemod/templates/",
+      "!./docs/components/pages/pack-home/benchmark-data/data.json",
+      "!./examples/**",
+      "!**/*.hbs"
+    ]
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true,
+      "complexity": {
+        "noExtraBooleanCast": "error",
+        "noUselessCatch": "error",
+        "useArrowFunction": "off"
+      },
+      "correctness": {
+        "noConstAssign": "error",
+        "noConstructorReturn": "error",
+        "noEmptyCharacterClassInRegex": "error",
+        "noEmptyPattern": "error",
+        "noGlobalObjectCalls": "error",
+        "noInvalidConstructorSuper": "error",
+        "noInvalidBuiltinInstantiation": "error",
+        "noSetterReturn": "error",
+        "noUndeclaredVariables": "error",
+        "noUnreachable": "error",
+        "noUnreachableSuper": "error",
+        "useIsNan": "error",
+        "useValidForDirection": "error",
+        "useYield": "error"
+      },
+      "security": {
+        "noGlobalEval": "error"
+      },
+      "style": {
+        "useBlockStatements": "error",
+        "useCollapsedElseIf": "error",
+        "useConst": "error",
+        "useDefaultParameterLast": "error",
+        "useExponentiationOperator": "error",
+        "useForOf": "error",
+        "useNodejsImportProtocol": "error",
+        "useNumberNamespace": "error",
+        "useSingleVarDeclarator": "error",
+        "useTemplate": "error"
+      },
+      "suspicious": {
+        "noApproximativeNumericConstant": "error",
+        "noAssignInExpressions": "error",
+        "noAsyncPromiseExecutor": "error",
+        "noCatchAssign": "error",
+        "noClassAssign": "error",
+        "noCompareNegZero": "error",
+        "noControlCharactersInRegex": "error",
+        "noDebugger": "error",
+        "noDoubleEquals": "error",
+        "noDuplicateCase": "error",
+        "noDuplicateClassMembers": "error",
+        "noDuplicateObjectKeys": "error",
+        "noDuplicateParameters": "error",
+        "noEmptyBlockStatements": "error",
+        "noExtraNonNullAssertion": "error",
+        "noFallthroughSwitchClause": "error",
+        "noFunctionAssign": "error",
+        "noGlobalAssign": "error",
+        "noImportAssign": "error",
+        "noMisleadingCharacterClass": "error",
+        "noPrototypeBuiltins": "error",
+        "noRedeclare": "error",
+        "noSelfCompare": "error",
+        "noSparseArray": "error",
+        "useGetterReturn": "error"
+      }
+    }
+  },
+  "javascript": {
+    "formatter": {
+      "jsxQuoteStyle": "double",
+      "quoteProperties": "asNeeded",
+      "trailingCommas": "all",
+      "semicolons": "asNeeded",
+      "arrowParentheses": "always",
+      "bracketSameLine": false,
+      "quoteStyle": "single",
+      "attributePosition": "auto",
+      "bracketSpacing": true
+    },
+    "globals": ["console", "process", "Buffer", "__dirname", "__filename"]
+  },
+  "html": { "formatter": { "selfCloseVoidElements": "always" } },
+  "overrides": [
+    {
+      "includes": ["docs/**/*.mdx"],
+      "javascript": { "formatter": { "quoteStyle": "single" } }
+    },
+    {
+      "includes": [
+        "**/*.test.{js,ts,jsx,tsx}",
+        "**/__tests__/**/*.{js,ts,jsx,tsx}"
+      ],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noExplicitAny": "off"
+          }
+        }
+      }
+    }
+  ],
+  "assist": {
+    "enabled": true,
+    "actions": {
+      "source": {
+        "organizeImports": {
+          "level": "on",
+          "options": {
+            "groups": [
+              ":BUN:",
+              ":NODE:",
+              ["npm:*", "npm:*/**"],
+              ":PACKAGE_WITH_PROTOCOL:",
+              ":URL:",
+              ":PACKAGE:",
+              ["/**"],
+              ["#*", "#*/**"],
+              ":PATH:"
+            ]
+          }
+        }
+      }
+    }
+  }
+}
