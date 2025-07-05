@@ -1,7 +1,7 @@
 # turborepo-telemetry
 
 **NOTE**:
-This crate has been ported to the [turbo-telemetry](https://github.com/vercel/turborepo/blob/main/crates/turborepo-telemetry) node package.
+This crate has been ported to the [turbo-telemetry](https://github.com/vercel/turborepo/tree/main/packages/turbo-telemetry) node package.
 Any changes made here should also be made to that package as well.
 
 ## Overview
