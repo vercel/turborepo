@@ -26,7 +26,7 @@ use turborepo_repository::package_graph::PackageName;
 pub use crate::turbo_json::{RawTurboJson, UIMode};
 use crate::{
     cli::{EnvMode, LogOrder},
-    turbo_json::{CONFIG_FILE, CONFIG_FILE_JSONC},
+    turbo_json::resolve_turbo_config_path,
 };
 
 #[derive(Debug, Error, Diagnostic)]
@@ -454,21 +454,7 @@ impl ConfigurationOptions {
             return Ok(path.clone());
         }
 
-        // Check if both files exist
-        let turbo_json_path = repo_root.join_component(CONFIG_FILE);
-        let turbo_jsonc_path = repo_root.join_component(CONFIG_FILE_JSONC);
-        let turbo_json_exists = turbo_json_path.try_exists()?;
-        let turbo_jsonc_exists = turbo_jsonc_path.try_exists()?;
-
-        match (turbo_json_exists, turbo_jsonc_exists) {
-            (true, true) => Err(Error::MultipleTurboConfigs {
-                directory: repo_root.to_string(),
-            }),
-            (true, false) => Ok(turbo_json_path),
-            (false, true) => Ok(turbo_jsonc_path),
-            // Default to turbo.json if neither exists
-            (false, false) => Ok(turbo_json_path),
-        }
+        resolve_turbo_config_path(repo_root)
     }
 
     pub fn allow_no_turbo_json(&self) -> bool {
