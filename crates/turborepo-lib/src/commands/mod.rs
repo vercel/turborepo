@@ -10,7 +10,7 @@ use crate::{
     cli,
     config::{ConfigurationOptions, Error as ConfigError, TurborepoConfigBuilder},
     opts::Opts,
-    turbo_json::{resolve_turbo_config_path, CONFIG_FILE, CONFIG_FILE_JSONC},
+    turbo_json::resolve_turbo_config_path,
     Args,
 };
 

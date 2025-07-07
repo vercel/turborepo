@@ -26,7 +26,7 @@ use turborepo_repository::package_graph::PackageName;
 pub use crate::turbo_json::{RawTurboJson, UIMode};
 use crate::{
     cli::{EnvMode, LogOrder},
-    turbo_json::{resolve_turbo_config_path, CONFIG_FILE, CONFIG_FILE_JSONC},
+    turbo_json::resolve_turbo_config_path,
 };
 
 #[derive(Debug, Error, Diagnostic)]
