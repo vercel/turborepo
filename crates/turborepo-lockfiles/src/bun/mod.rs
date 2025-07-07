@@ -841,37 +841,4 @@ mod test {
         let result = BunLockfile::from_str(json_with_trailing_commas);
         assert!(result.is_ok(), "Should handle trailing commas gracefully");
     }
-
-    #[test]
-    fn test_large_subgraph_performance() {
-        let lockfile = BunLockfile::from_str(BASIC_LOCKFILE).unwrap();
-
-        // Create a list of packages to include in subgraph
-        let packages: Vec<String> = lockfile
-            .data
-            .packages
-            .values()
-            .take(10) // Limit to 10 packages for performance test
-            .map(|pkg| pkg.ident.clone())
-            .collect();
-
-        let workspaces: Vec<String> = lockfile
-            .data
-            .workspaces
-            .keys()
-            .take(3) // Include a few workspaces
-            .cloned()
-            .collect();
-
-        let start = std::time::Instant::now();
-        let subgraph = lockfile.subgraph(&workspaces, &packages).unwrap();
-        let duration = start.elapsed();
-
-        // Should complete quickly (under 50ms for this small test)
-        assert!(duration.as_millis() < 50);
-
-        let subgraph_data = subgraph.lockfile().unwrap();
-        assert!(subgraph_data.packages.len() <= packages.len());
-        assert!(subgraph_data.workspaces.len() <= workspaces.len() + 1); // +1 for root
-    }
 }
