@@ -17,6 +17,38 @@ import type { PackageJson, PNPMWorkspaceConfig } from "./types";
 const ROOT_GLOB = "{turbo.json,turbo.jsonc}";
 const ROOT_WORKSPACE_GLOB = "package.json";
 
+/**
+ * Given a directory path, determines which turbo config file to use.
+ * Returns error information if both turbo.json and turbo.jsonc exist in the same directory.
+ * Returns the path to the config file to use, or null if neither exists.
+ */
+function resolveTurboConfigPath(dirPath: string): {
+  configPath: string | null;
+  configExists: boolean;
+  error?: string;
+} {
+  const turboJsonPath = path.join(dirPath, "turbo.json");
+  const turboJsoncPath = path.join(dirPath, "turbo.jsonc");
+
+  const turboJsonExists = fs.existsSync(turboJsonPath);
+  const turboJsoncExists = fs.existsSync(turboJsoncPath);
+
+  if (turboJsonExists && turboJsoncExists) {
+    const errorMessage = `Found both turbo.json and turbo.jsonc in the same directory: ${dirPath}\nPlease use either turbo.json or turbo.jsonc, but not both.`;
+    return { configPath: null, configExists: false, error: errorMessage };
+  }
+
+  if (turboJsonExists) {
+    return { configPath: turboJsonPath, configExists: true };
+  }
+
+  if (turboJsoncExists) {
+    return { configPath: turboJsoncPath, configExists: true };
+  }
+
+  return { configPath: null, configExists: false };
+}
+
 export interface WorkspaceConfig {
   workspaceName: string;
   workspacePath: string;
@@ -189,27 +221,24 @@ export function getWorkspaceConfigs(
         const isWorkspaceRoot = workspacePath === turboRoot;
 
         // Try and get turbo.json or turbo.jsonc
-        const turboJsonPath = path.join(workspacePath, "turbo.json");
-        const turboJsoncPath = path.join(workspacePath, "turbo.jsonc");
-
-        // Check if both files exist
-        const turboJsonExists = fs.existsSync(turboJsonPath);
-        const turboJsoncExists = fs.existsSync(turboJsoncPath);
-
-        if (turboJsonExists && turboJsoncExists) {
-          const errorMessage = `Found both turbo.json and turbo.jsonc in the same directory: ${workspacePath}\nPlease use either turbo.json or turbo.jsonc, but not both.`;
-          logger.error(errorMessage);
-          throw new Error(errorMessage);
-        }
+        const {
+          configPath: turboConfigPath,
+          configExists,
+          error,
+        } = resolveTurboConfigPath(workspacePath);
 
         let rawTurboJson = null;
         let turboConfig: SchemaV1 | undefined;
 
         try {
-          if (turboJsonExists) {
-            rawTurboJson = fs.readFileSync(turboJsonPath, "utf8");
-          } else if (turboJsoncExists) {
-            rawTurboJson = fs.readFileSync(turboJsoncPath, "utf8");
+          // TODO: Our code was allowing both config files to exist. This is a bug, needs to be fixed.
+          if (error) {
+            logger.error(error);
+            throw new Error(error);
+          }
+
+          if (configExists && turboConfigPath) {
+            rawTurboJson = fs.readFileSync(turboConfigPath, "utf8");
           }
 
           if (rawTurboJson) {
