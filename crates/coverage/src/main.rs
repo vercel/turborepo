@@ -23,27 +23,59 @@ fn main() -> Result<()> {
     // Create coverage directory
     std::fs::create_dir_all(&coverage_dir)?;
 
-    // Check if llvm-tools are available
-    let llvm_profdata_path = if let Ok(output) =
-        Command::new("rustc").args(["--print", "sysroot"]).output()
-    {
-        let sysroot = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        let target = std::env::var("TARGET").unwrap_or_else(|_| "aarch64-apple-darwin".to_string());
-        let profdata_path = format!("{}/lib/rustlib/{}/bin/llvm-profdata", sysroot, target);
-        if std::path::Path::new(&profdata_path).exists() {
-            profdata_path
+    // Get rustup home
+    let home = std::env::var("HOME").unwrap_or_else(|_| "/Users/anthonyshew".to_string());
+    let rustup_home = std::env::var("RUSTUP_HOME").unwrap_or_else(|_| format!("{}/.rustup", home));
+    // Get the active toolchain (e.g., nightly-2025-03-28-aarch64-apple-darwin)
+    let toolchain = std::env::var("RUSTUP_TOOLCHAIN").unwrap_or_else(|_| {
+        // Try to get from rustup show active-toolchain
+        let output = std::process::Command::new("rustup")
+            .args(["show", "active-toolchain"])
+            .output();
+        if let Ok(out) = output {
+            let s = String::from_utf8_lossy(&out.stdout);
+            s.split_whitespace().next().unwrap_or("").to_string()
         } else {
-            "llvm-profdata".to_string()
+            "nightly".to_string()
         }
+    });
+    // Get the target triple (e.g., aarch64-apple-darwin)
+    let target = std::env::var("TARGET").unwrap_or_else(|_| {
+        // Try to get from rustc -vV
+        let output = std::process::Command::new("rustc").arg("-vV").output();
+        if let Ok(out) = output {
+            let s = String::from_utf8_lossy(&out.stdout);
+            for line in s.lines() {
+                if let Some(rest) = line.strip_prefix("host: ") {
+                    return rest.to_string();
+                }
+            }
+        }
+        // Fallback
+        "aarch64-apple-darwin".to_string()
+    });
+    let llvm_profdata_path = format!(
+        "{}/toolchains/{}/lib/rustlib/{}/bin/llvm-profdata",
+        rustup_home, toolchain, target
+    );
+    println!("[coverage debug] HOME={}", home);
+    println!("[coverage debug] RUSTUP_HOME={}", rustup_home);
+    println!("[coverage debug] RUSTUP_TOOLCHAIN={}", toolchain);
+    println!("[coverage debug] TARGET={}", target);
+    println!(
+        "[coverage debug] Checking for llvm-profdata at: {}",
+        llvm_profdata_path
+    );
+    let llvm_profdata_path = std::path::PathBuf::from(&llvm_profdata_path);
+    if llvm_profdata_path.exists() {
+        println!(
+            "[coverage debug] Found llvm-profdata at: {}",
+            llvm_profdata_path.display()
+        );
     } else {
-        "llvm-profdata".to_string()
-    };
-
-    let llvm_profdata_output = Command::new(&llvm_profdata_path).arg("--version").output();
-
-    if llvm_profdata_output.is_err() {
-        anyhow::bail!(
-            "llvm-profdata not found. Install with: rustup component add llvm-tools-preview"
+        panic!(
+            "llvm-profdata not found at: {}\n  HOME={}\n  RUSTUP_HOME={}\n  RUSTUP_TOOLCHAIN={}\n  TARGET={}\nInstall with: rustup component add llvm-tools-preview",
+            llvm_profdata_path.display(), home, rustup_home, toolchain, target
         );
     }
 
@@ -141,7 +173,9 @@ fn main() -> Result<()> {
     if args.summary {
         info!("Generating coverage summary...");
 
-        let llvm_cov_path = llvm_profdata_path.replace("llvm-profdata", "llvm-cov");
+        let llvm_cov_path = llvm_profdata_path
+            .to_string_lossy()
+            .replace("llvm-profdata", "llvm-cov");
         let mut report_cmd = Command::new(&llvm_cov_path);
         report_cmd
             .args(["report"])
@@ -170,7 +204,9 @@ fn main() -> Result<()> {
         let html_dir = coverage_dir.join("html");
         std::fs::create_dir_all(&html_dir)?;
 
-        let llvm_cov_path = llvm_profdata_path.replace("llvm-profdata", "llvm-cov");
+        let llvm_cov_path = llvm_profdata_path
+            .to_string_lossy()
+            .replace("llvm-profdata", "llvm-cov");
         let mut show_cmd = Command::new(&llvm_cov_path);
         show_cmd
             .args(["show", "--format=html"])

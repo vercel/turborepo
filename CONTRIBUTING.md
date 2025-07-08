@@ -1,14 +1,15 @@
 Thank you for your interest in contributing to Turborepo!
 
 - [General dependencies](#general-dependencies)
-- [Optional dependencies](#optional-dependencies)
+  - [Optional dependencies](#optional-dependencies)
 - [Structure of the repository](#structure-of-the-repository)
 - [Building Turborepo](#building-turborepo)
-  - [TLS implementation](#tls-implementation)
+  - [TLS Implementation](#tls-implementation)
 - [Running tests](#running-tests)
 - [Manually testing `turbo`](#manually-testing-turbo)
   - [Repositories to test with](#repositories-to-test-with)
 - [Debugging tips](#debugging-tips)
+  - [Links in error messages](#links-in-error-messages)
   - [Verbose logging](#verbose-logging)
   - [Crash logs](#crash-logs)
   - [Terminal UI debugging](#terminal-ui-debugging)
@@ -17,7 +18,7 @@ Thank you for your interest in contributing to Turborepo!
   - [Contributing to an existing example](#contributing-to-an-existing-example)
   - [Philosophy for new examples](#philosophy-for-new-examples)
     - [Designing a new example](#designing-a-new-example)
-    - [Testing examples](#testing-examples)
+  - [Testing examples](#testing-examples)
 
 ## General dependencies
 
@@ -82,16 +83,10 @@ Now, from the root directory, you can run:
   cargo test
 ```
 
-- Run unit tests coverage
+- Run unit tests with coverage
 
 ```bash
-pnpm coverage
-```
-
-Or directly with cargo:
-
-```bash
-cargo coverage --summary
+cargo coverage
 ```
 
 - A module's unit tests
