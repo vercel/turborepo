@@ -78,7 +78,7 @@ First, install Turborepo globally with your package manager of choice. For insta
 
 Now, from the root directory, you can run:
 
-- Run unit tests
+- Unit tests
 
 ```bash
   cargo test
