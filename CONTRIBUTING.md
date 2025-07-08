@@ -95,7 +95,7 @@ After running coverage tests, you can manually open the HTML report by navigatin
 You can also add `--open` to your script to automatically open the file when coverage is completed.
 
 ```bash
-cargo run --bin coverage -- --open
+cargo coverage -- --open
 ```
 
 - A module's unit tests
