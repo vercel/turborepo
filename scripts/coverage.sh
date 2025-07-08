@@ -42,14 +42,14 @@ case "${1:-full}" in
   print_step "Running tests with coverage instrumentation..."
   cd "$PROJECT_ROOT"
   RUSTFLAGS="-C instrument-coverage" LLVM_PROFILE_FILE="$COVERAGE_DIR/turbo-%m-%p.profraw" \
-    cargo test --tests --workspace --exclude "*example*" --exclude "*turborepo-tests*"
+    cargo test --tests --workspace
 
   print_step "Merging coverage data..."
   llvm-profdata merge -sparse "$COVERAGE_DIR"/*.profraw -o "$COVERAGE_DIR/turbo.profdata"
 
   print_step "Generating coverage summary..."
   BINARIES=$(RUSTFLAGS="-C instrument-coverage" cargo test --tests --no-run --message-format=json \
-    --workspace --exclude "*example*" --exclude "*turborepo-tests*" |
+    --workspace |
     jq -r "select(.profile.test == true) | .filenames[]" | grep -v dSYM || true)
 
   OBJECT_ARGS=""
@@ -63,8 +63,6 @@ case "${1:-full}" in
     --ignore-filename-regex='/.cargo/registry' \
     --ignore-filename-regex='/.cargo/git' \
     --ignore-filename-regex='/.rustup/toolchains' \
-    --ignore-filename-regex='/examples/' \
-    --ignore-filename-regex='/turborepo-tests/' \
     --ignore-filename-regex='/target/' \
     $OBJECT_ARGS
   ;;
@@ -72,14 +70,14 @@ case "${1:-full}" in
   print_step "Running tests with coverage instrumentation..."
   cd "$PROJECT_ROOT"
   RUSTFLAGS="-C instrument-coverage" LLVM_PROFILE_FILE="$COVERAGE_DIR/turbo-%m-%p.profraw" \
-    cargo test --tests --workspace --exclude "*example*" --exclude "*turborepo-tests*"
+    cargo test --tests --workspace
 
   print_step "Merging coverage data..."
   llvm-profdata merge -sparse "$COVERAGE_DIR"/*.profraw -o "$COVERAGE_DIR/turbo.profdata"
 
   print_step "Generating HTML coverage report..."
   BINARIES=$(RUSTFLAGS="-C instrument-coverage" cargo test --tests --no-run --message-format=json \
-    --workspace --exclude "*example*" --exclude "*turborepo-tests*" |
+    --workspace |
     jq -r "select(.profile.test == true) | .filenames[]" | grep -v dSYM || true)
 
   OBJECT_ARGS=""
@@ -94,8 +92,6 @@ case "${1:-full}" in
     --ignore-filename-regex='/.cargo/registry' \
     --ignore-filename-regex='/.cargo/git' \
     --ignore-filename-regex='/.rustup/toolchains' \
-    --ignore-filename-regex='/examples/' \
-    --ignore-filename-regex='/turborepo-tests/' \
     --ignore-filename-regex='/target/' \
     $OBJECT_ARGS
 
