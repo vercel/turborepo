@@ -7,11 +7,16 @@ use tracing::{info, warn};
 #[derive(Parser)]
 #[command(name = "coverage")]
 #[command(about = "Generate Rust code coverage reports")]
-struct Args {}
+struct Args {
+    /// Open the HTML report in browser when finished
+    #[arg(long)]
+    open: bool,
+}
 
 fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
 
+    let args = Args::parse();
     let project_root = std::env::current_dir()?;
     let coverage_dir = project_root.join("coverage");
 
@@ -53,10 +58,6 @@ fn main() -> Result<()> {
         "{}/toolchains/{}/lib/rustlib/{}/bin/llvm-profdata",
         rustup_home, toolchain, target
     );
-    println!("[coverage debug] HOME={}", home);
-    println!("[coverage debug] RUSTUP_HOME={}", rustup_home);
-    println!("[coverage debug] RUSTUP_TOOLCHAIN={}", toolchain);
-    println!("[coverage debug] TARGET={}", target);
     println!(
         "[coverage debug] Checking for llvm-profdata at: {}",
         llvm_profdata_path
@@ -227,6 +228,27 @@ fn main() -> Result<()> {
         "Coverage report generated at {}/html/index.html",
         coverage_dir.display()
     );
+
+    // Open HTML report if requested
+    if args.open {
+        let html_path = coverage_dir.join("html").join("index.html");
+        if html_path.exists() {
+            info!("Opening HTML report in browser...");
+            let open_status = Command::new("open")
+                .arg(html_path.to_string_lossy().as_ref())
+                .status()
+                .context("Failed to open HTML report")?;
+
+            if !open_status.success() {
+                warn!("Failed to open HTML report in browser");
+            }
+        } else {
+            warn!(
+                "HTML report not found at expected location: {}",
+                html_path.display()
+            );
+        }
+    }
 
     Ok(())
 }

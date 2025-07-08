@@ -38,6 +38,7 @@ You will need to have these dependencies installed on your machine to work on th
   - Windows: `choco install jq zstandard`
 - On Linux, ensure LLD (LLVM Linker) is installed, as it's not installed by default on many Linux distributions (e.g. `apt install lld`).
 - For coverage reporting, install the `llvm-tools-preview` component:
+
   ```bash
   rustup component add llvm-tools-preview
   ```
@@ -87,6 +88,14 @@ Now, from the root directory, you can run:
 
 ```bash
 cargo coverage
+```
+
+After running coverage tests, you can manually open the HTML report by navigating to the `coverage/html/index.html` file in your browser, or use the `--open` flag to automatically open it:
+
+You can also add `--open` to your script to automatically open the file when coverage is completed.
+
+```bash
+cargo run --bin coverage -- --open
 ```
 
 - A module's unit tests
