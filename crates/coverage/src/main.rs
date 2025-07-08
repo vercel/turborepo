@@ -7,16 +7,11 @@ use tracing::{info, warn};
 #[derive(Parser)]
 #[command(name = "coverage")]
 #[command(about = "Generate Rust code coverage reports")]
-struct Args {
-    /// Generate summary report only
-    #[arg(long)]
-    summary: bool,
-}
+struct Args {}
 
 fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
 
-    let args = Args::parse();
     let project_root = std::env::current_dir()?;
     let coverage_dir = project_root.join("coverage");
 
@@ -170,70 +165,68 @@ fn main() -> Result<()> {
         }
     }
 
-    if args.summary {
-        info!("Generating coverage summary...");
+    let llvm_cov_path = llvm_profdata_path
+        .to_string_lossy()
+        .replace("llvm-profdata", "llvm-cov");
 
-        let llvm_cov_path = llvm_profdata_path
-            .to_string_lossy()
-            .replace("llvm-profdata", "llvm-cov");
-        let mut report_cmd = Command::new(&llvm_cov_path);
-        report_cmd
-            .args(["report"])
-            .arg(format!("--instr-profile={}", profdata_path.display()))
-            .args([
-                "--ignore-filename-regex=/.cargo/registry",
-                "--ignore-filename-regex=/.cargo/git",
-                "--ignore-filename-regex=/.rustup/toolchains",
-                "--ignore-filename-regex=/target/",
-            ])
-            .args(&object_args);
+    // Generate summary report
+    info!("Generating coverage summary...");
 
-        let report_output = report_cmd
-            .current_dir(&project_root)
-            .output()
-            .context("Failed to generate coverage report")?;
+    let mut report_cmd = Command::new(&llvm_cov_path);
+    report_cmd
+        .args(["report"])
+        .arg(format!("--instr-profile={}", profdata_path.display()))
+        .args([
+            "--ignore-filename-regex=/.cargo/registry",
+            "--ignore-filename-regex=/.cargo/git",
+            "--ignore-filename-regex=/.rustup/toolchains",
+            "--ignore-filename-regex=/target/",
+        ])
+        .args(&object_args);
 
-        if !report_output.status.success() {
-            anyhow::bail!("Failed to generate coverage report");
-        }
+    let report_output = report_cmd
+        .current_dir(&project_root)
+        .output()
+        .context("Failed to generate coverage report")?;
 
-        print!("{}", String::from_utf8_lossy(&report_output.stdout));
-    } else {
-        info!("Generating HTML coverage report...");
-
-        let html_dir = coverage_dir.join("html");
-        std::fs::create_dir_all(&html_dir)?;
-
-        let llvm_cov_path = llvm_profdata_path
-            .to_string_lossy()
-            .replace("llvm-profdata", "llvm-cov");
-        let mut show_cmd = Command::new(&llvm_cov_path);
-        show_cmd
-            .args(["show", "--format=html"])
-            .arg(format!("--output-dir={}", html_dir.display()))
-            .arg(format!("--instr-profile={}", profdata_path.display()))
-            .args([
-                "--ignore-filename-regex=/.cargo/registry",
-                "--ignore-filename-regex=/.cargo/git",
-                "--ignore-filename-regex=/.rustup/toolchains",
-                "--ignore-filename-regex=/target/",
-            ])
-            .args(&object_args);
-
-        let show_status = show_cmd
-            .current_dir(&project_root)
-            .status()
-            .context("Failed to generate HTML coverage report")?;
-
-        if !show_status.success() {
-            anyhow::bail!("Failed to generate HTML coverage report");
-        }
-
-        info!(
-            "Coverage report generated at {}/html/index.html",
-            coverage_dir.display()
-        );
+    if !report_output.status.success() {
+        anyhow::bail!("Failed to generate coverage report");
     }
+
+    print!("{}", String::from_utf8_lossy(&report_output.stdout));
+
+    // Generate HTML report
+    info!("Generating HTML coverage report...");
+
+    let html_dir = coverage_dir.join("html");
+    std::fs::create_dir_all(&html_dir)?;
+
+    let mut show_cmd = Command::new(&llvm_cov_path);
+    show_cmd
+        .args(["show", "--format=html"])
+        .arg(format!("--output-dir={}", html_dir.display()))
+        .arg(format!("--instr-profile={}", profdata_path.display()))
+        .args([
+            "--ignore-filename-regex=/.cargo/registry",
+            "--ignore-filename-regex=/.cargo/git",
+            "--ignore-filename-regex=/.rustup/toolchains",
+            "--ignore-filename-regex=/target/",
+        ])
+        .args(&object_args);
+
+    let show_status = show_cmd
+        .current_dir(&project_root)
+        .status()
+        .context("Failed to generate HTML coverage report")?;
+
+    if !show_status.success() {
+        anyhow::bail!("Failed to generate HTML coverage report");
+    }
+
+    info!(
+        "Coverage report generated at {}/html/index.html",
+        coverage_dir.display()
+    );
 
     Ok(())
 }
