@@ -84,7 +84,7 @@ Now, from the root directory, you can run:
   cargo test
 ```
 
-- Run unit tests with coverage
+- Unit tests with coverage
 
 ```bash
 cargo coverage
