@@ -13,6 +13,134 @@ struct Args {
     open: bool,
 }
 
+/// Find the llvm-profdata binary using rustup
+fn find_llvm_profdata() -> Result<std::path::PathBuf> {
+    // First try to find it in PATH
+    if let Ok(output) = Command::new("which").arg("llvm-profdata").output() {
+        if output.status.success() {
+            let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if !path.is_empty() {
+                return Ok(std::path::PathBuf::from(path));
+            }
+        }
+    }
+
+    // Try to find it using rustup
+    let output = Command::new("rustup")
+        .args(["which", "llvm-profdata"])
+        .output()
+        .context("Failed to run rustup which llvm-profdata")?;
+
+    if output.status.success() {
+        let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if !path.is_empty() {
+            return Ok(std::path::PathBuf::from(path));
+        }
+    }
+
+    // Try to find it in the rustup toolchain directory
+    let rustup_home = std::env::var("RUSTUP_HOME")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|_| {
+            let home = std::env::var("HOME")
+                .map(std::path::PathBuf::from)
+                .unwrap_or_else(|_| {
+                    if cfg!(target_os = "windows") {
+                        std::path::PathBuf::from(std::env::var("USERPROFILE").unwrap_or_default())
+                    } else {
+                        std::path::PathBuf::from("/home")
+                    }
+                });
+            home.join(".rustup")
+        });
+
+    // Get the active toolchain
+    let toolchain_output = Command::new("rustup")
+        .args(["show", "active-toolchain"])
+        .output()
+        .context("Failed to get active toolchain")?;
+
+    let toolchain = if toolchain_output.status.success() {
+        String::from_utf8_lossy(&toolchain_output.stdout)
+            .split_whitespace()
+            .next()
+            .unwrap_or("stable")
+            .to_string()
+    } else {
+        "stable".to_string()
+    };
+
+    // Get the target triple
+    let target_output = Command::new("rustc")
+        .args(["-vV"])
+        .output()
+        .context("Failed to get target triple")?;
+
+    let target = if target_output.status.success() {
+        let output_str = String::from_utf8_lossy(&target_output.stdout);
+        output_str
+            .lines()
+            .find_map(|line| line.strip_prefix("host: "))
+            .unwrap_or("unknown")
+            .to_string()
+    } else {
+        "unknown".to_string()
+    };
+
+    let llvm_profdata_path = rustup_home
+        .join("toolchains")
+        .join(toolchain)
+        .join("lib")
+        .join("rustlib")
+        .join(target)
+        .join("bin")
+        .join("llvm-profdata");
+
+    if llvm_profdata_path.exists() {
+        return Ok(llvm_profdata_path);
+    }
+
+    anyhow::bail!(
+        "llvm-profdata not found. Install it with: rustup component add llvm-tools-preview"
+    );
+}
+
+/// Find the llvm-cov binary using the same approach as llvm-profdata
+fn find_llvm_cov() -> Result<std::path::PathBuf> {
+    // First try to find it in PATH
+    if let Ok(output) = Command::new("which").arg("llvm-cov").output() {
+        if output.status.success() {
+            let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if !path.is_empty() {
+                return Ok(std::path::PathBuf::from(path));
+            }
+        }
+    }
+
+    // Try to find it using rustup
+    let output = Command::new("rustup")
+        .args(["which", "llvm-cov"])
+        .output()
+        .context("Failed to run rustup which llvm-cov")?;
+
+    if output.status.success() {
+        let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if !path.is_empty() {
+            return Ok(std::path::PathBuf::from(path));
+        }
+    }
+
+    // Use the same path as llvm-profdata but with llvm-cov
+    let llvm_profdata_path = find_llvm_profdata()?;
+    let llvm_cov_path = llvm_profdata_path.parent().unwrap().join("llvm-cov");
+
+    if llvm_cov_path.exists() {
+        return Ok(llvm_cov_path);
+    }
+
+    anyhow::bail!("llvm-cov not found. Install it with: rustup component add llvm-tools-preview");
+}
+
 fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
 
@@ -23,57 +151,12 @@ fn main() -> Result<()> {
     // Create coverage directory
     std::fs::create_dir_all(&coverage_dir)?;
 
-    // Get rustup home
-    let home = std::env::var("HOME").unwrap_or_else(|_| "/Users/anthonyshew".to_string());
-    let rustup_home = std::env::var("RUSTUP_HOME").unwrap_or_else(|_| format!("{}/.rustup", home));
-    // Get the active toolchain (e.g., nightly-2025-03-28-aarch64-apple-darwin)
-    let toolchain = std::env::var("RUSTUP_TOOLCHAIN").unwrap_or_else(|_| {
-        // Try to get from rustup show active-toolchain
-        let output = std::process::Command::new("rustup")
-            .args(["show", "active-toolchain"])
-            .output();
-        if let Ok(out) = output {
-            let s = String::from_utf8_lossy(&out.stdout);
-            s.split_whitespace().next().unwrap_or("").to_string()
-        } else {
-            "nightly".to_string()
-        }
-    });
-    // Get the target triple (e.g., aarch64-apple-darwin)
-    let target = std::env::var("TARGET").unwrap_or_else(|_| {
-        // Try to get from rustc -vV
-        let output = std::process::Command::new("rustc").arg("-vV").output();
-        if let Ok(out) = output {
-            let s = String::from_utf8_lossy(&out.stdout);
-            for line in s.lines() {
-                if let Some(rest) = line.strip_prefix("host: ") {
-                    return rest.to_string();
-                }
-            }
-        }
-        // Fallback
-        "aarch64-apple-darwin".to_string()
-    });
-    let llvm_profdata_path = format!(
-        "{}/toolchains/{}/lib/rustlib/{}/bin/llvm-profdata",
-        rustup_home, toolchain, target
-    );
-    println!(
-        "[coverage debug] Checking for llvm-profdata at: {}",
-        llvm_profdata_path
-    );
-    let llvm_profdata_path = std::path::PathBuf::from(&llvm_profdata_path);
-    if llvm_profdata_path.exists() {
-        println!(
-            "[coverage debug] Found llvm-profdata at: {}",
-            llvm_profdata_path.display()
-        );
-    } else {
-        panic!(
-            "llvm-profdata not found at: {}\n  HOME={}\n  RUSTUP_HOME={}\n  RUSTUP_TOOLCHAIN={}\n  TARGET={}\nInstall with: rustup component add llvm-tools-preview",
-            llvm_profdata_path.display(), home, rustup_home, toolchain, target
-        );
-    }
+    // Find the LLVM tools
+    let llvm_profdata_path = find_llvm_profdata()?;
+    let llvm_cov_path = find_llvm_cov()?;
+
+    info!("Using llvm-profdata: {}", llvm_profdata_path.display());
+    info!("Using llvm-cov: {}", llvm_cov_path.display());
 
     info!("Running tests with coverage instrumentation...");
 
@@ -166,10 +249,6 @@ fn main() -> Result<()> {
         }
     }
 
-    let llvm_cov_path = llvm_profdata_path
-        .to_string_lossy()
-        .replace("llvm-profdata", "llvm-cov");
-
     // Generate summary report
     info!("Generating coverage summary...");
 
@@ -234,7 +313,17 @@ fn main() -> Result<()> {
         let html_path = coverage_dir.join("html").join("index.html");
         if html_path.exists() {
             info!("Opening HTML report in browser...");
-            let open_status = Command::new("open")
+
+            // Use platform-appropriate command to open the browser
+            let open_command = if cfg!(target_os = "windows") {
+                "start"
+            } else if cfg!(target_os = "macos") {
+                "open"
+            } else {
+                "xdg-open"
+            };
+
+            let open_status = Command::new(open_command)
                 .arg(html_path.to_string_lossy().as_ref())
                 .status()
                 .context("Failed to open HTML report")?;
