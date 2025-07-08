@@ -1,7 +1,7 @@
 Thank you for your interest in contributing to Turborepo!
 
 - [General dependencies](#general-dependencies)
-  - [Optional dependencies](#optional-dependencies)
+ - [Optional dependencies](#optional-dependencies)
 - [Structure of the repository](#structure-of-the-repository)
 - [Building Turborepo](#building-turborepo)
   - [TLS Implementation](#tls-implementation)
