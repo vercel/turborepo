@@ -88,6 +88,12 @@ Now, from the root directory, you can run:
 pnpm coverage
 ```
 
+Or directly with cargo:
+
+```bash
+cargo coverage --summary
+```
+
 - A module's unit tests
 
 ```bash
