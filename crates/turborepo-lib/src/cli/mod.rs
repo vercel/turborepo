@@ -399,7 +399,7 @@ impl Args {
             if run_args.no_cache {
                 warn!(
                     "--no-cache is deprecated and will be removed in a future major version. Use \
-                     --cache=local:r,remote:r"
+                     --cache=local:,remote:"
                 );
             }
             if run_args.remote_only.is_some() {
