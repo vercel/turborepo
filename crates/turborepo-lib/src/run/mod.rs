@@ -338,8 +338,8 @@ impl Run {
                                 .format(bytes_total.saturating_sub(bytes_uploaded) as f64);
 
                             spinner.set_message(format!(
-                                "...Finishing writing to cache... ({} remaining, {})",
-                                bytes_remaining, bytes_per_second
+                                "...Finishing writing to cache... ({bytes_remaining} remaining, \
+                                 {bytes_per_second})"
                             ));
                         }
                     };

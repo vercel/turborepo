@@ -84,7 +84,7 @@ impl CommandEventBuilder {
     // args
     pub fn track_arg_usage(&self, arg: &str, is_set: bool) -> &Self {
         self.track(Event {
-            key: format!("arg:{}", arg),
+            key: format!("arg:{arg}"),
             value: if is_set { "set" } else { "default" }.to_string(),
             is_sensitive: EventType::NonSensitive,
             send_in_ci: true,
@@ -94,7 +94,7 @@ impl CommandEventBuilder {
 
     pub fn track_arg_value(&self, arg: &str, val: impl Display, is_sensitive: EventType) -> &Self {
         self.track(Event {
-            key: format!("arg:{}", arg),
+            key: format!("arg:{arg}"),
             value: val.to_string(),
             is_sensitive,
             send_in_ci: true,

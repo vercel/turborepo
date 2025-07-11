@@ -62,9 +62,8 @@ fn read_status<R: Read>(
         if entry.is_delete {
             let path = path.strip_prefix(pkg_prefix).map_err(|_| {
                 Error::git_error(format!(
-                    "'git status --untracked-files --no-renames -z -- .' run in {} found a \
-                     deleted file {} that did not have the expected prefix: {}",
-                    root_path, path, pkg_prefix
+                    "'git status --untracked-files --no-renames -z -- .' run in {root_path} found \
+                     a deleted file {path} that did not have the expected prefix: {pkg_prefix}"
                 ))
             })?;
             hashes.remove(&path);
