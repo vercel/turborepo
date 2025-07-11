@@ -1,4 +1,3 @@
-// Stylesheet from components must come first for correct CSS specifity
 import "@repo/ui/styles.css";
 import "./globals.css";
 import type { Metadata } from "next";
