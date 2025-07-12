@@ -25,8 +25,8 @@ port_scanner = { workspace = true }
 pretty_assertions = { workspace = true }
 tempfile = { workspace = true }
 test-case = { workspace = true }
+tracing = { workspace = true }
 tracing-test = { version = "0.2.4", features = ["no-env-filter"] }
-tracing.workspace = true
 turborepo-vercel-api-mock = { workspace = true }
 
 [lints]
@@ -90,7 +90,7 @@ prost = "0.12.3"
 radix_trie = { workspace = true }
 rand = { workspace = true }
 rayon = "1.7.0"
-regex.workspace = true
+regex = { workspace = true }
 reqwest = { workspace = true, default-features = false, features = ["json"] }
 semver = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
@@ -115,10 +115,10 @@ tokio-util = { version = "0.7.7", features = ["compat"] }
 tonic = { version = "0.11.0", features = ["transport"] }
 tower = "0.4.13"
 tower-http = { version = "0.5.2", features = ["cors"] }
+tracing = { workspace = true }
 tracing-appender = "0.2.2"
 tracing-chrome = "0.7.1"
 tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
-tracing.workspace = true
 turbo-trace = { workspace = true }
 turbo-updater = { workspace = true }
 turbopath = { workspace = true }
@@ -147,6 +147,7 @@ turborepo-unescape = { workspace = true }
 turborepo-vercel-api = { path = "../turborepo-vercel-api" }
 twox-hash = "1.6.3"
 uds_windows = "1.0.2"
+walkdir = { workspace = true }
 wax = { workspace = true }
 webbrowser = { workspace = true }
 which = { workspace = true }

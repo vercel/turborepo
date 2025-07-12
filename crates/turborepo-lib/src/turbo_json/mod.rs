@@ -211,6 +211,9 @@ pub struct RawTurboJson {
     pub concurrency: Option<Spanned<String>>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub deps_sync: Option<crate::commands::deps_sync::DepsSyncConfig>,
+  
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub future_flags: Option<Spanned<FutureFlags>>,
 
     #[deserializable(rename = "//")]
