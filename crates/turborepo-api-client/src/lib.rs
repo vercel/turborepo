@@ -783,10 +783,11 @@ mod test {
     use anyhow::Result;
     use bytes::Bytes;
     use insta::assert_snapshot;
+    use turborepo_vercel_api::telemetry::{TelemetryEvent, TelemetryGenericEvent};
     use turborepo_vercel_api_mock::start_test_server;
     use url::Url;
 
-    use crate::{APIClient, CacheClient, Client};
+    use crate::{telemetry::TelemetryClient, APIClient, AnonAPIClient, CacheClient, Client};
 
     #[tokio::test]
     async fn test_do_preflight() -> Result<()> {
@@ -905,6 +906,90 @@ mod test {
                 None,
             )
             .await?;
+
+        handle.abort();
+        let _ = handle.await;
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_record_telemetry_success() -> Result<()> {
+        let port = port_scanner::request_open_port().unwrap();
+        let handle = tokio::spawn(start_test_server(port));
+        let base_url = format!("http://localhost:{}", port);
+
+        let client = AnonAPIClient::new(&base_url, 10, "2.0.0")?;
+
+        let events = vec![
+            TelemetryEvent::Generic(TelemetryGenericEvent {
+                id: "test-id-1".to_string(),
+                key: "test_key".to_string(),
+                value: "test_value".to_string(),
+                parent_id: None,
+            }),
+            TelemetryEvent::Generic(TelemetryGenericEvent {
+                id: "test-id-2".to_string(),
+                key: "test_key_2".to_string(),
+                value: "test_value_2".to_string(),
+                parent_id: Some("test-id-1".to_string()),
+            }),
+        ];
+
+        let result = client
+            .record_telemetry(events, "test-telemetry-id", "test-session-id")
+            .await;
+
+        assert!(result.is_ok());
+
+        handle.abort();
+        let _ = handle.await;
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_record_telemetry_empty_events() -> Result<()> {
+        let port = port_scanner::request_open_port().unwrap();
+        let handle = tokio::spawn(start_test_server(port));
+        let base_url = format!("http://localhost:{}", port);
+
+        let client = AnonAPIClient::new(&base_url, 10, "2.0.0")?;
+
+        let events = vec![];
+
+        let result = client
+            .record_telemetry(events, "test-telemetry-id", "test-session-id")
+            .await;
+
+        assert!(result.is_ok());
+
+        handle.abort();
+        let _ = handle.await;
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_record_telemetry_with_different_event_types() -> Result<()> {
+        let port = port_scanner::request_open_port().unwrap();
+        let handle = tokio::spawn(start_test_server(port));
+        let base_url = format!("http://localhost:{}", port);
+
+        let client = AnonAPIClient::new(&base_url, 10, "2.0.0")?;
+
+        let events = vec![TelemetryEvent::Generic(TelemetryGenericEvent {
+            id: "generic-id".to_string(),
+            key: "generic_key".to_string(),
+            value: "generic_value".to_string(),
+            parent_id: None,
+        })];
+
+        let result = client
+            .record_telemetry(events, "test-telemetry-id", "test-session-id")
+            .await;
+
+        assert!(result.is_ok());
 
         handle.abort();
         let _ = handle.await;
