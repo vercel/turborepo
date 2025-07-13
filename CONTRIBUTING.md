@@ -1,14 +1,15 @@
 Thank you for your interest in contributing to Turborepo!
 
 - [General dependencies](#general-dependencies)
-- [Optional dependencies](#optional-dependencies)
+ - [Optional dependencies](#optional-dependencies)
 - [Structure of the repository](#structure-of-the-repository)
 - [Building Turborepo](#building-turborepo)
-  - [TLS implementation](#tls-implementation)
+  - [TLS Implementation](#tls-implementation)
 - [Running tests](#running-tests)
 - [Manually testing `turbo`](#manually-testing-turbo)
   - [Repositories to test with](#repositories-to-test-with)
 - [Debugging tips](#debugging-tips)
+  - [Links in error messages](#links-in-error-messages)
   - [Verbose logging](#verbose-logging)
   - [Crash logs](#crash-logs)
   - [Terminal UI debugging](#terminal-ui-debugging)
@@ -17,7 +18,7 @@ Thank you for your interest in contributing to Turborepo!
   - [Contributing to an existing example](#contributing-to-an-existing-example)
   - [Philosophy for new examples](#philosophy-for-new-examples)
     - [Designing a new example](#designing-a-new-example)
-    - [Testing examples](#testing-examples)
+  - [Testing examples](#testing-examples)
 
 ## General dependencies
 
@@ -36,6 +37,11 @@ You will need to have these dependencies installed on your machine to work on th
   - Linux: `sudo apt update && sudo apt install jq zstd`
   - Windows: `choco install jq zstandard`
 - On Linux, ensure LLD (LLVM Linker) is installed, as it's not installed by default on many Linux distributions (e.g. `apt install lld`).
+- For coverage reporting, install the `llvm-tools-preview` component:
+
+  ```bash
+  rustup component add llvm-tools-preview
+  ```
 
 ## Structure of the repository
 
@@ -76,6 +82,20 @@ Now, from the root directory, you can run:
 
 ```bash
   cargo test
+```
+
+- Unit tests with coverage
+
+```bash
+cargo coverage
+```
+
+After running coverage tests, you can manually open the HTML report by navigating to the `coverage/html/index.html` file in your browser, or use the `--open` flag to automatically open it:
+
+You can also add `--open` to your script to automatically open the file when coverage is completed.
+
+```bash
+cargo coverage -- --open
 ```
 
 - A module's unit tests
