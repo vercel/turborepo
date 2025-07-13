@@ -12,6 +12,13 @@ use crate::{auth::extract_vercel_token, error, ui, LoginOptions, Token};
 const DEFAULT_HOST_NAME: &str = "127.0.0.1";
 const DEFAULT_PORT: u16 = 9789;
 
+fn get_callback_port() -> u16 {
+    std::env::var("TURBO_SSO_LOGIN_CALLBACK_PORT")
+        .ok()
+        .and_then(|port_str| port_str.parse().ok())
+        .unwrap_or(DEFAULT_PORT)
+}
+
 /// Login returns a `Token` struct. If a token is already present,
 /// we do not overwrite it and instead log that we found an existing token,
 /// setting the `exists` field to `true`.
@@ -83,7 +90,8 @@ pub async fn login<T: Client + TokenClient + CacheClient>(
         }
     }
 
-    let redirect_url = format!("http://{DEFAULT_HOST_NAME}:{DEFAULT_PORT}");
+    let port = get_callback_port();
+    let redirect_url = format!("http://{DEFAULT_HOST_NAME}:{port}");
     let mut login_url = Url::parse(login_url_configuration)?;
     let mut success_url = login_url.clone();
     success_url
@@ -117,7 +125,7 @@ pub async fn login<T: Client + TokenClient + CacheClient>(
     let token_cell = Arc::new(OnceCell::new());
     login_server
         .run(
-            DEFAULT_PORT,
+            port,
             crate::LoginType::Basic {
                 success_redirect: success_url.to_string(),
             },
