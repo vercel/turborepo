@@ -13,8 +13,8 @@ use axum::{
 use futures_util::StreamExt;
 use tokio::{net::TcpListener, sync::Mutex};
 use turborepo_vercel_api::{
-    AnalyticsEvent, CachingStatus, CachingStatusResponse, Membership, Role, Team, TeamsResponse,
-    User, UserResponse, VerificationResponse,
+    telemetry::TelemetryEvent, AnalyticsEvent, CachingStatus, CachingStatusResponse, Membership,
+    Role, Team, TeamsResponse, User, UserResponse, VerificationResponse,
 };
 
 pub const EXPECTED_TOKEN: &str = "expected_token";
@@ -40,6 +40,8 @@ pub async fn start_test_server(port: u16) -> Result<()> {
 
     let get_analytics_events_ref = Arc::new(Mutex::new(Vec::new()));
     let post_analytics_events_ref = get_analytics_events_ref.clone();
+
+    let telemetry_events_ref = Arc::new(Mutex::new(Vec::new()));
 
     let app = Router::new()
         .route(
@@ -223,6 +225,15 @@ pub async fn start_test_server(port: u16) -> Result<()> {
 
                 headers
             }),
+        )
+        .route(
+            "/api/turborepo/v1/events",
+            post(
+                |Json(telemetry_events): Json<Vec<TelemetryEvent>>| async move {
+                    telemetry_events_ref.lock().await.extend(telemetry_events);
+                    StatusCode::OK
+                },
+            ),
         );
 
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
