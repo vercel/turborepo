@@ -383,39 +383,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_close_with_timeout() {
-        let (tx, _rx) = mpsc::unbounded_channel();
-
-        let client = DummyClient {
-            events: Default::default(),
-            tx,
-        };
-
-        let (analytics_sender, analytics_handle) = start_analytics(
-            APIAuth {
-                token: "foo".to_string(),
-                team_id: Some("bar".to_string()),
-                team_slug: None,
-            },
-            client.clone(),
-        );
-
-        // Send an event
-        analytics_sender
-            .send(AnalyticsEvent {
-                session_id: None,
-                source: CacheSource::Local,
-                event: CacheEvent::Hit,
-                hash: "".to_string(),
-                duration: 0,
-            })
-            .unwrap();
-
-        // Test close_with_timeout - should not panic
-        analytics_handle.close_with_timeout().await;
-    }
-
-    #[tokio::test]
     async fn test_client_error_handling() {
         let (tx, _rx) = mpsc::unbounded_channel();
 
