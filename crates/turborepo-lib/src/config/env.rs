@@ -45,6 +45,7 @@ const TURBO_MAPPING: &[(&str, &str)] = [
     ("turbo_tui_scrollback_length", "tui_scrollback_length"),
     ("turbo_concurrency", "concurrency"),
     ("turbo_no_update_notifier", "no_update_notifier"),
+    ("turbo_sso_login_callback_port", "sso_login_callback_port"),
 ]
 .as_slice();
 
@@ -212,6 +213,14 @@ impl ResolvedConfigurationOptions for EnvVars {
             .filter(|s| !s.is_empty())
             .cloned();
 
+        let sso_login_callback_port = self
+            .output_map
+            .get("sso_login_callback_port")
+            .filter(|s| !s.is_empty())
+            .map(|s| s.parse())
+            .transpose()
+            .map_err(Error::InvalidSsoLoginCallbackPort)?;
+
         let output = ConfigurationOptions {
             api_url: self.output_map.get("api_url").cloned(),
             login_url: self.output_map.get("login_url").cloned(),
@@ -245,6 +254,7 @@ impl ResolvedConfigurationOptions for EnvVars {
             cache_dir,
             root_turbo_json_path,
             log_order,
+            sso_login_callback_port,
         };
 
         Ok(output)
@@ -339,11 +349,13 @@ mod test {
         env.insert("turbo_remote_cache_upload_timeout".into(), "200".into());
         env.insert("turbo_tui_scrollback_length".into(), "2048".into());
         env.insert("turbo_concurrency".into(), "50%".into());
+        env.insert("turbo_sso_login_callback_port".into(), "3000".into());
 
         let config = EnvVars::new(&env)
             .unwrap()
             .get_configuration_options(&ConfigurationOptions::default())
             .unwrap();
+        assert_eq!(config.sso_login_callback_port(), Some(3000));
         assert!(config.preflight());
         assert!(config.force());
         assert_eq!(config.log_order(), LogOrder::Grouped);
@@ -393,6 +405,7 @@ mod test {
         env.insert("turbo_allow_no_turbo_json".into(), "".into());
         env.insert("turbo_tui_scrollback_length".into(), "".into());
         env.insert("turbo_concurrency".into(), "".into());
+        env.insert("turbo_sso_login_callback_port".into(), "".into());
 
         let config = EnvVars::new(&env)
             .unwrap()
@@ -421,5 +434,6 @@ mod test {
             DEFAULT_TUI_SCROLLBACK_LENGTH
         );
         assert_eq!(config.concurrency, None);
+        assert_eq!(config.sso_login_callback_port(), None);
     }
 }

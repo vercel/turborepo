@@ -24,6 +24,7 @@ pub struct LoginOptions<'a, T: Client + TokenClient + CacheClient> {
     pub sso_team: Option<&'a str>,
     pub existing_token: Option<&'a str>,
     pub force: bool,
+    pub sso_login_callback_port: Option<u16>,
 }
 impl<'a, T: Client + TokenClient + CacheClient> LoginOptions<'a, T> {
     pub fn new(
@@ -40,6 +41,7 @@ impl<'a, T: Client + TokenClient + CacheClient> LoginOptions<'a, T> {
             sso_team: None,
             existing_token: None,
             force: false,
+            sso_login_callback_port: None,
         }
     }
 }

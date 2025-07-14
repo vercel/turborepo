@@ -29,6 +29,7 @@ pub async fn login<T: Client + TokenClient + CacheClient>(
         existing_token,
         force,
         sso_team: _,
+        sso_login_callback_port,
     } = *options; // Deref or we get double references for each of these
 
     // I created a closure that gives back a closure since the `is_valid` checks do
@@ -83,7 +84,8 @@ pub async fn login<T: Client + TokenClient + CacheClient>(
         }
     }
 
-    let redirect_url = format!("http://{DEFAULT_HOST_NAME}:{DEFAULT_PORT}");
+    let port = sso_login_callback_port.unwrap_or(DEFAULT_PORT);
+    let redirect_url = format!("http://{DEFAULT_HOST_NAME}:{port}");
     let mut login_url = Url::parse(login_url_configuration)?;
     let mut success_url = login_url.clone();
     success_url
@@ -117,7 +119,7 @@ pub async fn login<T: Client + TokenClient + CacheClient>(
     let token_cell = Arc::new(OnceCell::new());
     login_server
         .run(
-            DEFAULT_PORT,
+            port,
             crate::LoginType::Basic {
                 success_redirect: success_url.to_string(),
             },

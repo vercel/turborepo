@@ -35,6 +35,7 @@ pub async fn sso_login<T: Client + TokenClient + CacheClient>(
         sso_team,
         existing_token,
         force,
+        sso_login_callback_port,
     } = *options;
 
     let sso_team = sso_team.ok_or(Error::EmptySSOTeam)?;
@@ -90,7 +91,8 @@ pub async fn sso_login<T: Client + TokenClient + CacheClient>(
         }
     }
 
-    let redirect_url = format!("http://{DEFAULT_HOST_NAME}:{DEFAULT_PORT}");
+    let port = sso_login_callback_port.unwrap_or(DEFAULT_PORT);
+    let redirect_url = format!("http://{DEFAULT_HOST_NAME}:{port}");
     let mut login_url = Url::parse(login_url_configuration)?;
 
     login_url
@@ -117,7 +119,7 @@ pub async fn sso_login<T: Client + TokenClient + CacheClient>(
 
     let token_cell = Arc::new(OnceCell::new());
     login_server
-        .run(DEFAULT_PORT, crate::LoginType::SSO, token_cell.clone())
+        .run(port, crate::LoginType::SSO, token_cell.clone())
         .await?;
     spinner.finish_and_clear();
 
@@ -384,6 +386,7 @@ mod tests {
         };
         let mut options = LoginOptions {
             sso_team: Some(team),
+            sso_login_callback_port: None,
             ..LoginOptions::new(&color_config, &url, &api_client, &login_server)
         };
 
@@ -426,6 +429,7 @@ mod tests {
             existing_token: None,
             sso_team: None,
             force: false,
+            sso_login_callback_port: None,
         };
 
         let result = sso_login(&options).await;
@@ -450,6 +454,7 @@ mod tests {
             existing_token: Some("existing-token"),
             sso_team: Some("my-team"),
             force: false,
+            sso_login_callback_port: None,
         };
 
         let result = sso_login(&options).await.unwrap();
@@ -475,6 +480,7 @@ mod tests {
             existing_token: Some("existing-token"),
             sso_team: Some("my-team"),
             force: true,
+            sso_login_callback_port: None,
         };
 
         let result = sso_login(&options).await.unwrap();
