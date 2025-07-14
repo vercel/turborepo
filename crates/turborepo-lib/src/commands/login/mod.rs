@@ -56,10 +56,12 @@ async fn sso_login(base: &mut CommandBase, sso_team: &str, force: bool) -> Resul
     let api_client: APIClient = base.api_client()?;
     let color_config = base.color_config;
     let login_url_config = base.opts.api_client_opts.login_url.to_string();
+    let sso_login_callback_port = base.opts.api_client_opts.sso_login_callback_port;
     let options = LoginOptions {
         existing_token: base.opts.api_client_opts.token.as_deref(),
         sso_team: Some(sso_team),
         force,
+        sso_login_callback_port,
         ..LoginOptions::new(
             &color_config,
             &login_url_config,
@@ -83,10 +85,12 @@ async fn login_no_sso(base: &mut CommandBase, force: bool) -> Result<(), Error> 
     let color_config = base.color_config;
     let login_url_config = base.opts.api_client_opts.login_url.to_string();
     let existing_token = base.opts.api_client_opts.token.as_deref();
+    let sso_login_callback_port = base.opts.api_client_opts.sso_login_callback_port;
 
     let options = LoginOptions {
         existing_token,
         force,
+        sso_login_callback_port,
         ..LoginOptions::new(
             &color_config,
             &login_url_config,

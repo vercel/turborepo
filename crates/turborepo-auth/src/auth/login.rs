@@ -12,11 +12,8 @@ use crate::{auth::extract_vercel_token, error, ui, LoginOptions, Token};
 const DEFAULT_HOST_NAME: &str = "127.0.0.1";
 const DEFAULT_PORT: u16 = 9789;
 
-fn get_callback_port() -> u16 {
-    std::env::var("TURBO_SSO_LOGIN_CALLBACK_PORT")
-        .ok()
-        .and_then(|port_str| port_str.parse().ok())
-        .unwrap_or(DEFAULT_PORT)
+fn get_callback_port(options: &LoginOptions<'_, impl Client + TokenClient + CacheClient>) -> u16 {
+    options.sso_login_callback_port.unwrap_or(DEFAULT_PORT)
 }
 
 /// Login returns a `Token` struct. If a token is already present,
@@ -36,6 +33,7 @@ pub async fn login<T: Client + TokenClient + CacheClient>(
         existing_token,
         force,
         sso_team: _,
+        sso_login_callback_port: _,
     } = *options; // Deref or we get double references for each of these
 
     // I created a closure that gives back a closure since the `is_valid` checks do
@@ -90,7 +88,7 @@ pub async fn login<T: Client + TokenClient + CacheClient>(
         }
     }
 
-    let port = get_callback_port();
+    let port = get_callback_port(options);
     let redirect_url = format!("http://{DEFAULT_HOST_NAME}:{port}");
     let mut login_url = Url::parse(login_url_configuration)?;
     let mut success_url = login_url.clone();
