@@ -398,7 +398,7 @@ mod tests {
         );
 
         // Send an event that will cause the client to error
-        analytics_sender
+        assert!(analytics_sender
             .send(AnalyticsEvent {
                 session_id: None,
                 source: CacheSource::Local,
@@ -406,7 +406,7 @@ mod tests {
                 hash: "".to_string(),
                 duration: 0,
             })
-            .unwrap();
+            .is_ok(), "sender should swallow client errors");
 
         // Wait a bit for the error to be handled
         tokio::time::sleep(Duration::from_millis(50)).await;
