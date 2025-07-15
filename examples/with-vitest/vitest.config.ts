@@ -6,7 +6,7 @@ export default defineConfig({
   test: {
     projects: [
       {
-        root: "./packages/*",
+        root: "./packages",
         test: {
           ...sharedConfig.test,
           // Project-specific configuration for packages
@@ -14,7 +14,7 @@ export default defineConfig({
         },
       },
       {
-        root: "./apps/*",
+        root: "./apps",
         test: {
           ...sharedConfig.test,
           // Project-specific configuration for apps
