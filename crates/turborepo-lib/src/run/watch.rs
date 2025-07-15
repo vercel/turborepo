@@ -19,7 +19,7 @@ use crate::{
     daemon::{proto, DaemonConnectorError, DaemonError},
     get_version, opts,
     run::{self, builder::RunBuilder, scope::target_selector::InvalidSelectorError, Run},
-    turbo_json::{CONFIG_FILE, CONFIG_FILE_JSONC},
+    turbo_json::resolve_turbo_config_path,
     DaemonConnector, DaemonPaths,
 };
 
@@ -120,14 +120,10 @@ impl WatchClient {
         let signal = get_signal()?;
         let handler = SignalHandler::new(signal);
 
-        // Check if the turbo.json path is the standard one (either turbo.json or
-        // turbo.jsonc)
-        let standard_path_json = base.repo_root.join_component(CONFIG_FILE);
-        let standard_path_jsonc = base.repo_root.join_component(CONFIG_FILE_JSONC);
+        // Check if the turbo.json path is the standard one
+        let standard_config_path = resolve_turbo_config_path(&base.repo_root)?;
 
-        if base.opts.repo_opts.root_turbo_json_path != standard_path_json
-            && base.opts.repo_opts.root_turbo_json_path != standard_path_jsonc
-        {
+        if base.opts.repo_opts.root_turbo_json_path != standard_config_path {
             return Err(Error::NonStandardTurboJsonPath(
                 base.opts.repo_opts.root_turbo_json_path.to_string(),
             ));
