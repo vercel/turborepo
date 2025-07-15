@@ -77,7 +77,7 @@ export default function HomePage() {
           <DottedLines className="absolute top-0 bottom-0 left-0 right-0 overflow-hidden text-center flex items-center justify-center" />
           <div className="relative z-1 flex flex-col justify-center">
             <h1 className="mb-4 text-6xl font-semibold tracking-tighter text-center md:text-7xl">
-              Make ship happen
+              Make ship happen!
             </h1>
             <p className="max-w-[380px] m-auto mb-4 font-normal text-center text-gray-900 text-lg md:text-xl">
               Turborepo is the build system for JavaScript and TypeScript
