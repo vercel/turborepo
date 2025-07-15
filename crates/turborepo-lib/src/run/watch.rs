@@ -408,3 +408,212 @@ impl WatchClient {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::{collections::HashSet, sync::Mutex};
+
+    use turborepo_repository::package_graph::PackageName;
+
+    use super::{ChangedPackages, WatchClient};
+    use crate::daemon::proto;
+
+    #[test]
+    fn test_changed_packages_is_empty() {
+        // Test empty Some variant
+        let empty = ChangedPackages::Some(HashSet::new());
+        assert!(empty.is_empty());
+
+        // Test non-empty Some variant
+        let mut set = HashSet::new();
+        set.insert(PackageName::from("test-package"));
+        let non_empty = ChangedPackages::Some(set);
+        assert!(!non_empty.is_empty());
+
+        // Test All variant
+        let all = ChangedPackages::All;
+        assert!(!all.is_empty());
+    }
+
+    #[test]
+    fn test_changed_packages_default() {
+        let default = ChangedPackages::default();
+        assert!(default.is_empty());
+        if let ChangedPackages::Some(set) = default {
+            assert!(set.is_empty());
+        } else {
+            panic!("Default should be Some variant with empty set");
+        }
+    }
+
+    #[test]
+    fn test_handle_change_event_package_changed_to_empty_set() {
+        let changed_packages = Mutex::new(ChangedPackages::Some(HashSet::new()));
+        let event = proto::package_change_event::Event::PackageChanged(proto::PackageChanged {
+            package_name: "test-package".to_string(),
+        });
+
+        let result = WatchClient::handle_change_event(&changed_packages, event);
+        assert!(result.is_ok());
+
+        let guard = changed_packages.lock().unwrap();
+        if let ChangedPackages::Some(ref set) = *guard {
+            assert_eq!(set.len(), 1);
+            assert!(set.contains(&PackageName::from("test-package")));
+        } else {
+            panic!("Expected Some variant");
+        }
+    }
+
+    #[test]
+    fn test_handle_change_event_package_changed_to_existing_set() {
+        let mut initial_set = HashSet::new();
+        initial_set.insert(PackageName::from("existing-package"));
+        let changed_packages = Mutex::new(ChangedPackages::Some(initial_set));
+
+        let event = proto::package_change_event::Event::PackageChanged(proto::PackageChanged {
+            package_name: "new-package".to_string(),
+        });
+
+        let result = WatchClient::handle_change_event(&changed_packages, event);
+        assert!(result.is_ok());
+
+        let guard = changed_packages.lock().unwrap();
+        if let ChangedPackages::Some(ref set) = *guard {
+            assert_eq!(set.len(), 2);
+            assert!(set.contains(&PackageName::from("existing-package")));
+            assert!(set.contains(&PackageName::from("new-package")));
+        } else {
+            panic!("Expected Some variant");
+        }
+    }
+
+    #[test]
+    fn test_handle_change_event_package_changed_when_already_all() {
+        let changed_packages = Mutex::new(ChangedPackages::All);
+        let event = proto::package_change_event::Event::PackageChanged(proto::PackageChanged {
+            package_name: "test-package".to_string(),
+        });
+
+        let result = WatchClient::handle_change_event(&changed_packages, event);
+        assert!(result.is_ok());
+
+        let guard = changed_packages.lock().unwrap();
+        // Should remain as All and ignore the specific package
+        if let ChangedPackages::All = *guard {
+            // This is expected
+        } else {
+            panic!("Expected to remain as All variant");
+        }
+    }
+
+    #[test]
+    fn test_handle_change_event_rediscover_packages_from_some() {
+        let mut initial_set = HashSet::new();
+        initial_set.insert(PackageName::from("test-package"));
+        let changed_packages = Mutex::new(ChangedPackages::Some(initial_set));
+
+        let event =
+            proto::package_change_event::Event::RediscoverPackages(proto::RediscoverPackages {});
+
+        let result = WatchClient::handle_change_event(&changed_packages, event);
+        assert!(result.is_ok());
+
+        let guard = changed_packages.lock().unwrap();
+        if let ChangedPackages::All = *guard {
+            // This is expected
+        } else {
+            panic!("Expected All variant after rediscover");
+        }
+    }
+
+    #[test]
+    fn test_handle_change_event_rediscover_packages_from_all() {
+        let changed_packages = Mutex::new(ChangedPackages::All);
+        let event =
+            proto::package_change_event::Event::RediscoverPackages(proto::RediscoverPackages {});
+
+        let result = WatchClient::handle_change_event(&changed_packages, event);
+        assert!(result.is_ok());
+
+        let guard = changed_packages.lock().unwrap();
+        if let ChangedPackages::All = *guard {
+            // This is expected - should remain All
+        } else {
+            panic!("Expected to remain as All variant");
+        }
+    }
+
+    #[test]
+    fn test_handle_change_event_error() {
+        let changed_packages = Mutex::new(ChangedPackages::Some(HashSet::new()));
+        let error_message = "Test daemon error".to_string();
+        let event = proto::package_change_event::Event::Error(proto::PackageChangeError {
+            message: error_message.clone(),
+        });
+
+        let result = WatchClient::handle_change_event(&changed_packages, event);
+        assert!(result.is_err());
+
+        // Verify it returns an error - the specific message format is tested elsewhere
+        // The important part is that error events result in errors being returned
+        let error = result.unwrap_err();
+        assert!(matches!(error, super::Error::Daemon(_)));
+    }
+
+    #[test]
+    fn test_handle_change_event_multiple_package_changes() {
+        let changed_packages = Mutex::new(ChangedPackages::Some(HashSet::new()));
+
+        // Add first package
+        let event1 = proto::package_change_event::Event::PackageChanged(proto::PackageChanged {
+            package_name: "package-1".to_string(),
+        });
+        let result = WatchClient::handle_change_event(&changed_packages, event1);
+        assert!(result.is_ok());
+
+        // Add second package
+        let event2 = proto::package_change_event::Event::PackageChanged(proto::PackageChanged {
+            package_name: "package-2".to_string(),
+        });
+        let result = WatchClient::handle_change_event(&changed_packages, event2);
+        assert!(result.is_ok());
+
+        // Verify both packages are in the set
+        let guard = changed_packages.lock().unwrap();
+        if let ChangedPackages::Some(ref set) = *guard {
+            assert_eq!(set.len(), 2);
+            assert!(set.contains(&PackageName::from("package-1")));
+            assert!(set.contains(&PackageName::from("package-2")));
+        } else {
+            panic!("Expected Some variant");
+        }
+    }
+
+    #[test]
+    fn test_handle_change_event_duplicate_package_changes() {
+        let changed_packages = Mutex::new(ChangedPackages::Some(HashSet::new()));
+
+        // Add same package twice
+        let event1 = proto::package_change_event::Event::PackageChanged(proto::PackageChanged {
+            package_name: "duplicate-package".to_string(),
+        });
+        let result = WatchClient::handle_change_event(&changed_packages, event1);
+        assert!(result.is_ok());
+
+        let event2 = proto::package_change_event::Event::PackageChanged(proto::PackageChanged {
+            package_name: "duplicate-package".to_string(),
+        });
+        let result = WatchClient::handle_change_event(&changed_packages, event2);
+        assert!(result.is_ok());
+
+        // Verify only one instance exists (HashSet deduplication)
+        let guard = changed_packages.lock().unwrap();
+        if let ChangedPackages::Some(ref set) = *guard {
+            assert_eq!(set.len(), 1);
+            assert!(set.contains(&PackageName::from("duplicate-package")));
+        } else {
+            panic!("Expected Some variant");
+        }
+    }
+}
