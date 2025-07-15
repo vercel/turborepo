@@ -120,7 +120,6 @@ impl WatchClient {
         let signal = get_signal()?;
         let handler = SignalHandler::new(signal);
 
-        // Check if the turbo.json path is the standard one
         let standard_config_path = resolve_turbo_config_path(&base.repo_root)?;
 
         if base.opts.repo_opts.root_turbo_json_path != standard_config_path {
