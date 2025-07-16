@@ -627,7 +627,12 @@ impl RepositoryQuery {
 }
 
 pub async fn graphiql() -> impl IntoResponse {
-    response::Html(GraphiQLSource::build().endpoint("/").finish())
+    response::Html(
+        GraphiQLSource::build()
+            .version("5.0.0-rc.1")
+            .endpoint("/")
+            .finish(),
+    )
 }
 
 pub async fn run_query_server(run: Run, signal: SignalHandler) -> Result<(), Error> {
