@@ -131,7 +131,7 @@ mod tests {
 
         // Spawn server task
         let server_handle = tokio::spawn(async move {
-            if let Ok((stream, _)) = async_listener.accept().await {
+            if let Ok((stream, _)) = async_listener.await.accept().await {
                 let mut stream = stream.compat();
                 let mut buffer = [0u8; 1024];
                 if let Ok(n) = stream.read(&mut buffer).await {
