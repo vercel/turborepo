@@ -1,0 +1,8 @@
+---
+source: crates/turborepo-repository/src/package_graph/builder.rs
+assertion_line: 693
+expression: warning_message
+---
+An issue occurred while attempting to parse /my-project/package-lock.json. Turborepo will still function, but some features may not be available:
+   [31m×[0m JSON parsing error: missing field `name` at line 1 column 40
+[31m  ╰─▶ [0mmissing field `name` at line 1 column 40
