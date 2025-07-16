@@ -673,13 +673,10 @@ mod test {
 
     #[test]
     fn test_missing_name_field_warning_message() {
-        // Test the PackageJsonMissingName error case where we do have the package.json
-        // path
         let package_json_path =
             AbsoluteSystemPathBuf::new("/my-project/packages/app/package.json").unwrap();
         let missing_name_error = Error::PackageJsonMissingName(package_json_path.clone());
 
-        // This should extract the package.json path, not the lockfile path
         let fake_repo_root = AbsoluteSystemPathBuf::new("/my-project").unwrap();
         let fake_package_manager = crate::package_manager::PackageManager::Npm;
         let extracted_path = extract_file_path_from_error(
