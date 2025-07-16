@@ -59,6 +59,21 @@ pub enum Error {
     Discovery(#[from] crate::discovery::Error),
 }
 
+/// Attempts to extract the file path that caused the error from the error chain
+/// Falls back to the lockfile path if no specific file can be determined
+fn extract_file_path_from_error(
+    error: &Error,
+    package_manager: &crate::package_manager::PackageManager,
+    repo_root: &AbsoluteSystemPath,
+) -> AbsoluteSystemPathBuf {
+    match error {
+        Error::PackageJsonMissingName(path) => path.clone(),
+        // TODO: It's possible this could be returning the wrong path in some situations since its
+        // matching any other error.
+        _ => package_manager.lockfile_path(repo_root),
+    }
+}
+
 impl<'a> PackageGraphBuilder<'a, LocalPackageDiscoveryBuilder> {
     pub fn new(repo_root: &'a AbsoluteSystemPath, root_package_json: PackageJson) -> Self {
         Self {
@@ -444,11 +459,13 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
         let lockfile = match self.populate_lockfile().await {
             Ok(lockfile) => Some(lockfile),
             Err(e) => {
-                let lockfile_path = package_manager.lockfile_path(self.repo_root);
+                let problematic_file_path =
+                    extract_file_path_from_error(&e, &package_manager, self.repo_root);
+
                 warn!(
                     "An issue occurred while attempting to parse {}. Turborepo will still \
                      function, but some features may not be available:\n {:?}",
-                    lockfile_path,
+                    problematic_file_path,
                     Report::new(e)
                 );
                 None
@@ -656,37 +673,28 @@ mod test {
 
     #[test]
     fn test_missing_name_field_warning_message() {
-        // Use a hardcoded lockfile path for testing
-        let lockfile_path = AbsoluteSystemPathBuf::new("/my-project/package-lock.json").unwrap();
+        // Test the PackageJsonMissingName error case where we do have the package.json
+        // path
+        let package_json_path =
+            AbsoluteSystemPathBuf::new("/my-project/packages/app/package.json").unwrap();
+        let missing_name_error = Error::PackageJsonMissingName(package_json_path.clone());
 
-        // Create an error that simulates the "missing field `name`" scenario
-        // This represents what happens when parsing package.json files without required
-        // fields
-        #[derive(Debug, serde::Deserialize)]
-        struct TestPackageJson {
-            name: String, // This field is required, so missing it will cause the error
-            version: Option<String>,
-        }
-
-        let package_json_missing_name = r#"{"version": "1.0.0", "dependencies": {}}"#;
-
-        // Try to deserialize to get the missing name field error
-        let missing_name_error: Result<TestPackageJson, _> =
-            serde_json::from_str(package_json_missing_name);
-
-        // Convert to the type of error that would bubble up during package graph
-        // construction
-        let package_manager_error = crate::package_manager::Error::ParsingJson(
-            missing_name_error.unwrap_err(),
-            std::backtrace::Backtrace::capture(),
+        // This should extract the package.json path, not the lockfile path
+        let fake_repo_root = AbsoluteSystemPathBuf::new("/my-project").unwrap();
+        let fake_package_manager = crate::package_manager::PackageManager::Npm;
+        let extracted_path = extract_file_path_from_error(
+            &missing_name_error,
+            &fake_package_manager,
+            &fake_repo_root,
         );
+        assert_eq!(extracted_path, package_json_path);
 
         // Format the warning message as it would appear in the logs
         let warning_message = format!(
             "An issue occurred while attempting to parse {}. Turborepo will still function, but \
              some features may not be available:\n {:?}",
-            lockfile_path,
-            miette::Report::new(package_manager_error)
+            package_json_path,
+            miette::Report::new(missing_name_error)
         );
 
         // Test that the message includes the improved format and file path
