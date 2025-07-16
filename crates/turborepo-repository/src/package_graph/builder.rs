@@ -686,7 +686,6 @@ mod test {
         );
         assert_eq!(extracted_path, package_json_path);
 
-        // Format the warning message as it would appear in the logs
         let warning_message = format!(
             "An issue occurred while attempting to parse {}. Turborepo will still function, but \
              some features may not be available:\n {:?}",
@@ -694,7 +693,6 @@ mod test {
             miette::Report::new(missing_name_error)
         );
 
-        // Test that the message includes the improved format and file path
         insta::assert_snapshot!("missing_name_field_warning_message", warning_message);
     }
 }
