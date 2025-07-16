@@ -68,8 +68,8 @@ fn extract_file_path_from_error(
 ) -> AbsoluteSystemPathBuf {
     match error {
         Error::PackageJsonMissingName(path) => path.clone(),
-        // TODO: We're handling every other error here. We could handle situations where the lockfile isn't the issue better.
-        // matching any other error.
+        // TODO: We're handling every other error here. We could handle situations where the
+        // lockfile isn't the issue better.
         _ => package_manager.lockfile_path(repo_root),
     }
 }
