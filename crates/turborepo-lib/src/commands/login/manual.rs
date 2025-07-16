@@ -189,6 +189,7 @@ mod test {
             upload_timeout: 0,
             login_url: "".into(),
             preflight: false,
+            sso_login_callback_port: None,
         };
         let login_opts = ManualLoginOptions::from(&api_opts);
         assert_eq!(
@@ -212,6 +213,7 @@ mod test {
             upload_timeout: 0,
             login_url: "".into(),
             preflight: false,
+            sso_login_callback_port: None,
         };
         let login_opts = ManualLoginOptions::from(&api_opts);
         assert_eq!(

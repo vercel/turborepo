@@ -240,6 +240,8 @@ pub enum Error {
          scrollback."
     )]
     InvalidTuiScrollbackLength(#[source] std::num::ParseIntError),
+    #[error("TURBO_SSO_LOGIN_CALLBACK_PORT: Invalid value. Use a number for the callback port.")]
+    InvalidSsoLoginCallbackPort(#[source] std::num::ParseIntError),
 }
 
 const DEFAULT_API_URL: &str = "https://vercel.com/api";
@@ -309,6 +311,7 @@ pub struct ConfigurationOptions {
     pub(crate) tui_scrollback_length: Option<u64>,
     pub(crate) concurrency: Option<String>,
     pub(crate) no_update_notifier: Option<bool>,
+    pub(crate) sso_login_callback_port: Option<u16>,
 }
 
 #[derive(Default)]
@@ -463,6 +466,10 @@ impl ConfigurationOptions {
 
     pub fn no_update_notifier(&self) -> bool {
         self.no_update_notifier.unwrap_or_default()
+    }
+
+    pub fn sso_login_callback_port(&self) -> Option<u16> {
+        self.sso_login_callback_port
     }
 }
 

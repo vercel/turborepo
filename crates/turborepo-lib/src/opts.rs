@@ -55,6 +55,7 @@ pub struct APIClientOpts {
     pub team_slug: Option<String>,
     pub login_url: String,
     pub preflight: bool,
+    pub sso_login_callback_port: Option<u16>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -449,6 +450,7 @@ impl<'a> From<OptsInputs<'a>> for APIClientOpts {
         let team_id = inputs.config.team_id().map(|s| s.to_string());
         let team_slug = inputs.config.team_slug().map(|s| s.to_string());
         let login_url = inputs.config.login_url().to_string();
+        let sso_login_callback_port = inputs.config.sso_login_callback_port();
 
         APIClientOpts {
             api_url,
@@ -459,6 +461,7 @@ impl<'a> From<OptsInputs<'a>> for APIClientOpts {
             team_slug,
             login_url,
             preflight,
+            sso_login_callback_port,
         }
     }
 }
@@ -737,6 +740,7 @@ mod test {
                 team_slug: None,
                 login_url: "".to_string(),
                 preflight: false,
+                sso_login_callback_port: None,
             },
             scope_opts,
             run_opts,
