@@ -190,6 +190,6 @@ To use Vercel Remote Caching, you can get the value of these variables in a few 
 
 2. Make a second secret called `TURBO_TEAM` and enter [your Team URL](https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fsettings&title=Find+Team+URL). Copy this value as well. Both values will be used in the next step.
 
-3. Select one of the following storage services plugins and follow the instructions to set both environment variables:
+3. Select one of the following secrets storage services plugins and follow the instructions to set both environment variables:
    [AWS SSM](https://github.com/buildkite-plugins/aws-assume-role-with-web-identity-buildkite-plugin), [GC Secrets](https://github.com/buildkite-plugins/gcp-workload-identity-federation-buildkite-plugin), or [Hashicorp Vault](https://github.com/buildkite-plugins/vault-secrets-buildkite-plugin).
    If you cannot use such a service, use the Buildkite agent's `environment` hook to export secrets to a job. For more information, read [Managing pipeline secrets](https://buildkite.com/docs/pipelines/security/secrets/managing).
