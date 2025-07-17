@@ -29,6 +29,9 @@ pub enum DaemonConnectorError {
     /// The daemon is not running and will not be started.
     #[error("daemon is not running")]
     NotRunning,
+    /// Cannot kill daemon (insufficient permissions).
+    #[error("cannot kill daemon")]
+    CannotKill,
     /// There was an issue connecting to the socket.
     #[error("unable to connect to socket: {0}")]
     Socket(#[from] tonic::transport::Error),
@@ -66,6 +69,8 @@ pub struct DaemonConnector {
     /// in the event of a version mismatch).
     pub can_kill_server: bool,
     pub paths: Paths,
+    /// Optional custom turbo.json path to watch
+    pub custom_turbo_json_path: Option<turbopath::AbsoluteSystemPathBuf>,
 }
 
 impl DaemonConnector {
@@ -79,7 +84,13 @@ impl DaemonConnector {
             can_start_server,
             can_kill_server,
             paths,
+            custom_turbo_json_path: None,
         }
+    }
+
+    pub fn with_custom_turbo_json_path(mut self, path: turbopath::AbsoluteSystemPathBuf) -> Self {
+        self.custom_turbo_json_path = Some(path);
+        self
     }
 
     const CONNECT_RETRY_MAX: usize = 3;
@@ -139,10 +150,8 @@ impl DaemonConnector {
         ))
     }
 
-    /// Gets the PID of the daemon process.
-    ///
-    /// If a daemon is not running, it starts one.
-    async fn get_or_start_daemon(&self) -> Result<sysinfo::Pid, DaemonConnectorError> {
+    /// Check if a daemon is currently running and return its PID
+    async fn existing_daemon(&self) -> Result<sysinfo::Pid, DaemonConnectorError> {
         debug!("looking for pid in lockfile: {:?}", self.paths.pid_file);
 
         let pidfile = self.pid_lock();
@@ -152,23 +161,73 @@ impl DaemonConnector {
                 debug!("found pid: {}", pid);
                 Ok(sysinfo::Pid::from(pid as usize))
             }
-            None if self.can_start_server => {
-                debug!("no pid found, starting daemon");
-                Self::start_daemon().await
-            }
             None => Err(DaemonConnectorError::NotRunning),
         }
     }
 
+    /// Kill an existing daemon
+    async fn kill_daemon(&self) -> Result<(), DaemonConnectorError> {
+        if !self.can_kill_server {
+            return Err(DaemonConnectorError::CannotKill);
+        }
+
+        let pid = self.existing_daemon().await?;
+        debug!("killing existing daemon with pid: {}", pid);
+
+        // Try to connect and shut down gracefully first
+        match self.get_connection(self.paths.sock_file.clone()).await {
+            Ok(conn) => {
+                let client = DaemonClient::new(conn);
+                self.kill_live_server(client, pid).await
+            }
+            Err(_) => {
+                // If we can't connect, kill it forcefully
+                self.kill_dead_server(pid).await
+            }
+        }
+    }
+
+    /// Gets or starts a daemon process, returning its PID.
+    /// If a daemon is not running, it starts one.
+    async fn get_or_start_daemon(&self) -> Result<sysinfo::Pid, DaemonConnectorError> {
+        let existing_pid = self.existing_daemon().await;
+
+        match (existing_pid, &self.custom_turbo_json_path) {
+            // If daemon is running but we have a custom turbo.json path,
+            // we need to restart to ensure the daemon has the correct configuration
+            (Ok(pid), Some(_)) => {
+                tracing::info!(
+                    "Found existing daemon (pid: {}) but custom turbo.json path specified. \
+                     Restarting daemon to ensure correct configuration.",
+                    pid
+                );
+                self.kill_daemon().await?;
+                Self::start_daemon(self.custom_turbo_json_path.as_ref()).await
+            }
+            // If daemon is running and no custom path, use existing daemon
+            (Ok(pid), None) => Ok(pid),
+            // If daemon is not running, start it (with or without custom path)
+            (Err(_), _) => Self::start_daemon(self.custom_turbo_json_path.as_ref()).await,
+        }
+    }
+
     /// Starts the daemon process, returning its PID.
-    async fn start_daemon() -> Result<sysinfo::Pid, DaemonConnectorError> {
+    async fn start_daemon(
+        custom_turbo_json_path: Option<&turbopath::AbsoluteSystemPathBuf>,
+    ) -> Result<sysinfo::Pid, DaemonConnectorError> {
         let binary_path =
             std::env::current_exe().map_err(|e| DaemonConnectorError::Fork(e.into()))?;
         // this creates a new process group for the given command
         // in a cross platform way, directing all output to /dev/null
-        let mut group = tokio::process::Command::new(binary_path)
-            .arg("--skip-infer")
-            .arg("daemon")
+        let mut command = tokio::process::Command::new(binary_path);
+        command.arg("--skip-infer").arg("daemon");
+
+        // Pass custom turbo.json path if specified
+        if let Some(path) = custom_turbo_json_path {
+            command.arg("--turbo-json-path").arg(path.as_str());
+        }
+
+        let mut group = command
             .stderr(Stdio::null())
             .stdout(Stdio::null())
             .group()
@@ -437,7 +496,12 @@ mod test {
         let tmp_dir = tempfile::tempdir().unwrap();
         let repo_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
 
-        let connector = DaemonConnector::new(false, false, &repo_root);
+        let connector = DaemonConnector {
+            can_start_server: false,
+            can_kill_server: false,
+            paths: Paths::from_repo_root(&repo_root),
+            custom_turbo_json_path: None,
+        };
         connector.paths.pid_file.ensure_dir().unwrap();
         connector
             .paths
@@ -455,7 +519,12 @@ mod test {
     async fn handles_missing_server_connect() {
         let tmp_dir = tempfile::tempdir().unwrap();
         let repo_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
-        let connector = DaemonConnector::new(false, false, &repo_root);
+        let connector = DaemonConnector {
+            can_start_server: false,
+            can_kill_server: false,
+            paths: Paths::from_repo_root(&repo_root),
+            custom_turbo_json_path: None,
+        };
 
         assert_matches!(
             connector.connect().await,
@@ -467,7 +536,12 @@ mod test {
     async fn handles_kill_dead_server_missing_pid() {
         let tmp_dir = tempfile::tempdir().unwrap();
         let repo_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
-        let connector = DaemonConnector::new(false, false, &repo_root);
+        let connector = DaemonConnector {
+            can_start_server: false,
+            can_kill_server: false,
+            paths: Paths::from_repo_root(&repo_root),
+            custom_turbo_json_path: None,
+        };
 
         assert_matches!(
             connector.kill_dead_server(Pid::from(usize::MAX)).await,
@@ -479,7 +553,12 @@ mod test {
     async fn handles_kill_dead_server_missing_process() {
         let tmp_dir = tempfile::tempdir().unwrap();
         let repo_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
-        let connector = DaemonConnector::new(false, false, &repo_root);
+        let connector = DaemonConnector {
+            can_start_server: false,
+            can_kill_server: false,
+            paths: Paths::from_repo_root(&repo_root),
+            custom_turbo_json_path: None,
+        };
 
         connector.paths.pid_file.ensure_dir().unwrap();
         connector
@@ -505,7 +584,12 @@ mod test {
     async fn handles_kill_dead_server_wrong_process() {
         let tmp_dir = tempfile::tempdir().unwrap();
         let repo_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
-        let connector = DaemonConnector::new(false, false, &repo_root);
+        let connector = DaemonConnector {
+            can_start_server: false,
+            can_kill_server: false,
+            paths: Paths::from_repo_root(&repo_root),
+            custom_turbo_json_path: None,
+        };
 
         let proc = tokio::process::Command::new(NODE_EXE)
             .stdout(Stdio::null())
@@ -542,7 +626,12 @@ mod test {
     async fn handles_kill_dead_server() {
         let tmp_dir = tempfile::tempdir().unwrap();
         let repo_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
-        let connector = DaemonConnector::new(false, true, &repo_root);
+        let connector = DaemonConnector {
+            can_start_server: false,
+            can_kill_server: true,
+            paths: Paths::from_repo_root(&repo_root),
+            custom_turbo_json_path: None,
+        };
 
         let proc = tokio::process::Command::new(NODE_EXE)
             .stdout(Stdio::null())
@@ -682,7 +771,12 @@ mod test {
 
         let tmp_dir = tempfile::tempdir().unwrap();
         let repo_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
-        let connector = DaemonConnector::new(false, false, &repo_root);
+        let connector = DaemonConnector {
+            can_start_server: false,
+            can_kill_server: false,
+            paths: Paths::from_repo_root(&repo_root),
+            custom_turbo_json_path: None,
+        };
 
         let mut client = Endpoint::try_from("http://[::]:50051")
             .expect("this is a valid uri")

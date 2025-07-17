@@ -262,8 +262,12 @@ impl RunBuilder {
             (_, Some(true)) | (false, None) => {
                 let can_start_server = true;
                 let can_kill_server = true;
-                let connector =
-                    DaemonConnector::new(can_start_server, can_kill_server, &self.repo_root);
+                let connector = DaemonConnector {
+                    can_start_server,
+                    can_kill_server,
+                    paths: crate::daemon::Paths::from_repo_root(&self.repo_root),
+                    custom_turbo_json_path: None,
+                };
                 match (connector.connect().await, self.opts.run_opts.daemon) {
                     (Ok(client), _) => {
                         run_telemetry.track_daemon_init(DaemonInitStatus::Started);

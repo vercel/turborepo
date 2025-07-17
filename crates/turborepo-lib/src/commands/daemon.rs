@@ -33,7 +33,12 @@ pub async fn daemon_client(command: &DaemonCommand, base: &CommandBase) -> Resul
         DaemonCommand::Clean { .. } => (false, true),
     };
 
-    let connector = DaemonConnector::new(can_start_server, can_kill_server, &base.repo_root);
+    let connector = DaemonConnector {
+        can_start_server,
+        can_kill_server,
+        paths: crate::daemon::Paths::from_repo_root(&base.repo_root),
+        custom_turbo_json_path: None,
+    };
 
     match command {
         DaemonCommand::Restart => {
@@ -275,6 +280,7 @@ fn log_filename(base_filename: &str) -> Result<String, time::Error> {
 pub async fn daemon_server(
     base: &CommandBase,
     idle_time: &String,
+    turbo_json_path: Option<&camino::Utf8Path>,
     logging: &TurboSubscriber,
 ) -> Result<(), DaemonError> {
     let paths = Paths::from_repo_root(&base.repo_root);
@@ -298,8 +304,26 @@ pub async fn daemon_server(
         }
         CloseReason::Interrupt
     });
-    let server =
-        crate::daemon::TurboGrpcService::new(base.repo_root.clone(), paths, timeout, exit_signal);
+    let custom_turbo_json_path = match turbo_json_path {
+        Some(p) => match turbopath::AbsoluteSystemPathBuf::from_cwd(p) {
+            Ok(path) => Some(path),
+            Err(e) => {
+                tracing::error!("Failed to convert custom turbo.json path: {}", e);
+                return Err(DaemonError::Unavailable(format!(
+                    "Invalid turbo.json path: {}",
+                    e
+                )));
+            }
+        },
+        None => None,
+    };
+    let server = crate::daemon::TurboGrpcService::new(
+        base.repo_root.clone(),
+        paths,
+        timeout,
+        exit_signal,
+        custom_turbo_json_path,
+    );
 
     let reason = server.serve().await?;
 

@@ -47,6 +47,7 @@ impl PackageChangesWatcher {
         repo_root: AbsoluteSystemPathBuf,
         file_events_lazy: OptionalWatch<broadcast::Receiver<Result<Event, NotifyError>>>,
         hash_watcher: Arc<HashWatcher>,
+        custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
     ) -> Self {
         let (exit_tx, exit_rx) = oneshot::channel();
         let (package_change_events_tx, package_change_events_rx) =
@@ -56,6 +57,7 @@ impl PackageChangesWatcher {
             file_events_lazy,
             package_change_events_tx,
             hash_watcher,
+            custom_turbo_json_path,
         );
 
         let _handle = tokio::spawn(subscriber.watch(exit_rx));
@@ -98,6 +100,7 @@ struct Subscriber {
     repo_root: AbsoluteSystemPathBuf,
     package_change_events_tx: broadcast::Sender<PackageChangeEvent>,
     hash_watcher: Arc<HashWatcher>,
+    custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
 }
 
 // This is a workaround because `ignore` doesn't match against a path's
@@ -146,13 +149,37 @@ impl Subscriber {
         file_events_lazy: OptionalWatch<broadcast::Receiver<Result<Event, NotifyError>>>,
         package_change_events_tx: broadcast::Sender<PackageChangeEvent>,
         hash_watcher: Arc<HashWatcher>,
+        custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
     ) -> Self {
+        // Try to canonicalize the custom path to match what the file watcher reports
+        let normalized_custom_path =
+            custom_turbo_json_path.and_then(|path| match path.to_realpath() {
+                Ok(real_path) => {
+                    tracing::info!(
+                        "PackageChangesWatcher: monitoring custom turbo.json at: {} \
+                         (canonicalized: {})",
+                        path,
+                        real_path
+                    );
+                    Some(real_path)
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        "Failed to canonicalize custom turbo.json path {}: {}, using original path",
+                        path,
+                        e
+                    );
+                    Some(path)
+                }
+            });
+
         Subscriber {
             repo_root,
             file_events_lazy,
             changed_files: Default::default(),
             package_change_events_tx,
             hash_watcher,
+            custom_turbo_json_path: normalized_custom_path,
         }
     }
 
@@ -260,8 +287,20 @@ impl Subscriber {
                             self.changed_files.lock().await.borrow_mut().deref_mut()
                         {
                             for path in paths {
-                                if let Some(path) = path.to_str() {
-                                    trie.insert(path.to_string(), ());
+                                if let Some(path_str) = path.to_str() {
+                                    // Log file changes for custom turbo.json debugging
+                                    if let Some(ref custom_path) = self.custom_turbo_json_path {
+                                        if path_str == custom_path.as_str()
+                                            || path_str.ends_with("turbo.json")
+                                            || path_str.ends_with("turbo.jsonc")
+                                        {
+                                            tracing::info!(
+                                                "File watcher detected change: {}",
+                                                path_str
+                                            );
+                                        }
+                                    }
+                                    trie.insert(path_str.to_string(), ());
                                 }
                             }
                         }
@@ -353,9 +392,33 @@ impl Subscriber {
                 let turbo_json_path = self.repo_root.join_component(CONFIG_FILE);
                 let turbo_jsonc_path = self.repo_root.join_component(CONFIG_FILE_JSONC);
 
-                if trie.get(turbo_json_path.as_str()).is_some()
-                    || trie.get(turbo_jsonc_path.as_str()).is_some()
-                {
+                let standard_config_changed = trie.get(turbo_json_path.as_str()).is_some()
+                    || trie.get(turbo_jsonc_path.as_str()).is_some();
+
+                let custom_config_changed = self
+                    .custom_turbo_json_path
+                    .as_ref()
+                    .map(|path| {
+                        let path_str = path.as_str();
+                        let found = trie.get(path_str).is_some();
+                        tracing::debug!(
+                            "Checking custom turbo.json path '{}' in trie, found: {}",
+                            path_str,
+                            found
+                        );
+                        if !found {
+                            // Also try with the path keys for debugging
+                            let trie_keys: Vec<_> = trie.keys().take(10).collect();
+                            tracing::debug!(
+                                "Trie contains these paths (first 10): {:?}",
+                                trie_keys
+                            );
+                        }
+                        found
+                    })
+                    .unwrap_or(false);
+
+                if standard_config_changed || custom_config_changed {
                     tracing::info!(
                         "Detected change to turbo configuration file. Triggering rediscovery."
                     );

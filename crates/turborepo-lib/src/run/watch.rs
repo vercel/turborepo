@@ -103,8 +103,7 @@ pub enum Error {
     UI(#[from] turborepo_ui::Error),
     #[error("Could not connect to UI thread: {0}")]
     UISend(String),
-    #[error("Cannot use non-standard turbo configuration at {0} with Watch Mode.")]
-    NonStandardTurboJsonPath(String),
+
     #[error("Invalid config: {0}")]
     Config(#[from] crate::config::Error),
     #[error(transparent)]
@@ -122,11 +121,8 @@ impl WatchClient {
 
         let standard_config_path = resolve_turbo_config_path(&base.repo_root)?;
 
-        if base.opts.repo_opts.root_turbo_json_path != standard_config_path {
-            return Err(Error::NonStandardTurboJsonPath(
-                base.opts.repo_opts.root_turbo_json_path.to_string(),
-            ));
-        }
+        // Note: We now support watching custom turbo.json paths, so this check is
+        // removed
 
         if matches!(base.opts.run_opts.daemon, Some(false)) {
             warn!("daemon is required for watch, ignoring request to disable daemon");
@@ -143,11 +139,26 @@ impl WatchClient {
 
         let (ui_sender, ui_handle) = run.start_ui()?.unzip();
 
-        let connector = DaemonConnector {
+        let mut connector = DaemonConnector {
             can_start_server: true,
             can_kill_server: true,
             paths: DaemonPaths::from_repo_root(&base.repo_root),
+            custom_turbo_json_path: None,
         };
+
+        // If using a non-standard turbo.json path, pass it to the daemon
+        if base.opts.repo_opts.root_turbo_json_path != standard_config_path {
+            tracing::info!(
+                "Using custom turbo.json path: {} (standard: {})",
+                base.opts.repo_opts.root_turbo_json_path,
+                standard_config_path
+            );
+            // The root_turbo_json_path is already an AbsoluteSystemPathBuf, so use it
+            // directly
+            let custom_path = base.opts.repo_opts.root_turbo_json_path.clone();
+            tracing::info!("Passing custom turbo.json path to daemon: {}", custom_path);
+            connector = connector.with_custom_turbo_json_path(custom_path);
+        }
 
         Ok(Self {
             base,
