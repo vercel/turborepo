@@ -148,7 +148,8 @@ impl DaemonConnector {
         ))
     }
 
-    /// Gets or starts a daemon process, returning its PID.
+    /// Gets the PID of the daemon process.
+    ///
     /// If a daemon is not running, it starts one.
     async fn get_or_start_daemon(&self) -> Result<sysinfo::Pid, DaemonConnectorError> {
         debug!("looking for pid in lockfile: {:?}", self.paths.pid_file);
