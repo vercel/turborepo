@@ -10,6 +10,9 @@ license = "MPL-2.0"
 tokio = { workspace = true, features = ["net"] }
 tower = { version = "0.4.13", features = ["util"] }
 
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt", "io-util"] }
+
 
 [target.'cfg(target_os = "windows")'.dependencies]
 tokio-util = { workspace = true, features = ["compat"] }
