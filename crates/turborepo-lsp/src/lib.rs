@@ -85,12 +85,12 @@ impl LanguageServer for Backend {
                     || {
                         let can_start_server = true;
                         let can_kill_server = false;
-                        let connector = DaemonConnector {
+                        let connector = DaemonConnector::new(
                             can_start_server,
                             can_kill_server,
-                            paths: DaemonPaths::from_repo_root(&repo_root),
-                            custom_turbo_json_path: None,
-                        };
+                            &repo_root,
+                            None,
+                        );
                         connector.connect()
                     },
                 )

@@ -20,12 +20,7 @@ fn is_wsl() -> bool {
 
 pub async fn run(base: CommandBase) {
     let system = System::new_all();
-    let connector = DaemonConnector {
-        can_start_server: false,
-        can_kill_server: false,
-        paths: crate::daemon::Paths::from_repo_root(&base.repo_root),
-        custom_turbo_json_path: None,
-    };
+    let connector = DaemonConnector::new(false, false, &base.repo_root, None);
     let daemon_status = match connector.connect().await {
         Ok(_status) => "Running",
         Err(DaemonConnectorError::NotRunning) => "Not running",

@@ -75,13 +75,14 @@ impl DaemonConnector {
         can_start_server: bool,
         can_kill_server: bool,
         repo_root: &AbsoluteSystemPath,
+        custom_turbo_json_path: Option<&turbopath::AbsoluteSystemPathBuf>,
     ) -> Self {
         let paths = Paths::from_repo_root(repo_root);
         Self {
             can_start_server,
             can_kill_server,
             paths,
-            custom_turbo_json_path: None,
+            custom_turbo_json_path: custom_turbo_json_path.cloned(),
         }
     }
 
