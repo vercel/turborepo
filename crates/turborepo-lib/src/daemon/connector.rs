@@ -29,9 +29,6 @@ pub enum DaemonConnectorError {
     /// The daemon is not running and will not be started.
     #[error("daemon is not running")]
     NotRunning,
-    /// Cannot kill daemon (insufficient permissions).
-    #[error("cannot kill daemon")]
-    CannotKill,
     /// There was an issue connecting to the socket.
     #[error("unable to connect to socket: {0}")]
     Socket(#[from] tonic::transport::Error),

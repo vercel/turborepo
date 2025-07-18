@@ -288,7 +288,6 @@ impl Subscriber {
                         {
                             for path in paths {
                                 if let Some(path_str) = path.to_str() {
-                                    // Log file changes for custom turbo.json debugging
                                     if let Some(ref custom_path) = self.custom_turbo_json_path {
                                         if path_str == custom_path.as_str()
                                             || path_str.ends_with("turbo.json")

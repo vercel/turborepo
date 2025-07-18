@@ -611,7 +611,7 @@ pub enum Command {
         /// Set the idle timeout for turbod
         #[clap(long, default_value_t = String::from("4h0m0s"))]
         idle_time: String,
-        /// Path to a custom turbo.json file to watch
+        /// Path to a custom turbo.json file to watch from --root-turbo-json
         #[clap(long)]
         turbo_json_path: Option<Utf8PathBuf>,
         #[clap(subcommand)]
