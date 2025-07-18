@@ -33,12 +33,7 @@ pub async fn daemon_client(command: &DaemonCommand, base: &CommandBase) -> Resul
         DaemonCommand::Clean { .. } => (false, true),
     };
 
-    let connector = DaemonConnector {
-        can_start_server,
-        can_kill_server,
-        paths: crate::daemon::Paths::from_repo_root(&base.repo_root),
-        custom_turbo_json_path: None,
-    };
+    let connector = DaemonConnector::new(can_start_server, can_kill_server, &base.repo_root, None);
 
     match command {
         DaemonCommand::Restart => {
