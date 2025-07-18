@@ -148,8 +148,9 @@ impl DaemonConnector {
         ))
     }
 
-    /// Check if a daemon is currently running and return its PID
-    async fn existing_daemon(&self) -> Result<sysinfo::Pid, DaemonConnectorError> {
+    /// Gets or starts a daemon process, returning its PID.
+    /// If a daemon is not running, it starts one.
+    async fn get_or_start_daemon(&self) -> Result<sysinfo::Pid, DaemonConnectorError> {
         debug!("looking for pid in lockfile: {:?}", self.paths.pid_file);
 
         let pidfile = self.pid_lock();
@@ -159,36 +160,17 @@ impl DaemonConnector {
                 debug!("found pid: {}", pid);
                 Ok(sysinfo::Pid::from(pid as usize))
             }
-            None => Err(DaemonConnectorError::NotRunning),
-        }
-    }
-
-    /// Gets or starts a daemon process, returning its PID.
-    /// If a daemon is not running, it starts one.
-    async fn get_or_start_daemon(&self) -> Result<sysinfo::Pid, DaemonConnectorError> {
-        let existing_pid = self.existing_daemon().await;
-
-        match (existing_pid, &self.custom_turbo_json_path) {
-            // If daemon is running but we have a custom turbo.json path,
-            // we need to restart to ensure the daemon has the correct configuration
-            (Ok(pid), Some(_)) => {
-                tracing::info!(
-                    "Found existing daemon (pid: {}) but custom turbo.json path specified. \
-                     Restarting daemon to ensure correct configuration.",
-                    pid
-                );
-                Self::start_daemon(self.custom_turbo_json_path.as_ref()).await
+            None if self.can_start_server => {
+                debug!("no pid found, starting daemon");
+                Self::start_daemon(&self.custom_turbo_json_path).await
             }
-            // If daemon is running and no custom path, use existing daemon
-            (Ok(pid), None) => Ok(pid),
-            // If daemon is not running, start it (with or without custom path)
-            (Err(_), _) => Self::start_daemon(self.custom_turbo_json_path.as_ref()).await,
+            None => Err(DaemonConnectorError::NotRunning),
         }
     }
 
     /// Starts the daemon process, returning its PID.
     async fn start_daemon(
-        custom_turbo_json_path: Option<&turbopath::AbsoluteSystemPathBuf>,
+        custom_turbo_json_path: &Option<turbopath::AbsoluteSystemPathBuf>,
     ) -> Result<sysinfo::Pid, DaemonConnectorError> {
         let binary_path =
             std::env::current_exe().map_err(|e| DaemonConnectorError::Fork(e.into()))?;
