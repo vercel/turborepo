@@ -63,9 +63,9 @@ impl Lockfile for NpmLockfile {
             // ResolvePackage based on information coming from internal packages'
             // package.json First we check if the workspace uses a nested version of
             // the package
-            format!("{}/node_modules/{}", workspace_path, name),
+            format!("{workspace_path}/node_modules/{name}"),
             // Next we check for a top level version of the package
-            format!("node_modules/{}", name),
+            format!("node_modules/{name}"),
         ];
         possible_keys
             .into_iter()

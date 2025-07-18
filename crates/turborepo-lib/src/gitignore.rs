@@ -15,7 +15,7 @@ fn has_turbo_gitignore_entry(mut lines: io::Lines<io::BufReader<File>>) -> bool 
 }
 
 fn get_ignore_string() -> String {
-    format!("{}\n{}", TURBO_GITIGNORE_COMMENT, TURBO_GITIGNORE_ENTRY)
+    format!("{TURBO_GITIGNORE_COMMENT}\n{TURBO_GITIGNORE_ENTRY}")
 }
 
 pub fn ensure_turbo_is_gitignored(repo_root: &AbsoluteSystemPath) -> Result<(), io::Error> {

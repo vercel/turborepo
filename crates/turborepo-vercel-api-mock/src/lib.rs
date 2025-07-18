@@ -239,7 +239,7 @@ pub async fn start_test_server(port: u16) -> Result<()> {
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
     let listener = TcpListener::bind(addr).await?;
     // We print the port so integration tests can use it
-    println!("{}", port);
+    println!("{port}");
     axum::serve(listener, app).await?;
 
     Ok(())
