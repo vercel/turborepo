@@ -165,28 +165,6 @@ impl DaemonConnector {
         }
     }
 
-    /// Kill an existing daemon
-    async fn kill_daemon(&self) -> Result<(), DaemonConnectorError> {
-        if !self.can_kill_server {
-            return Err(DaemonConnectorError::CannotKill);
-        }
-
-        let pid = self.existing_daemon().await?;
-        debug!("killing existing daemon with pid: {}", pid);
-
-        // Try to connect and shut down gracefully first
-        match self.get_connection(self.paths.sock_file.clone()).await {
-            Ok(conn) => {
-                let client = DaemonClient::new(conn);
-                self.kill_live_server(client, pid).await
-            }
-            Err(_) => {
-                // If we can't connect, kill it forcefully
-                self.kill_dead_server(pid).await
-            }
-        }
-    }
-
     /// Gets or starts a daemon process, returning its PID.
     /// If a daemon is not running, it starts one.
     async fn get_or_start_daemon(&self) -> Result<sysinfo::Pid, DaemonConnectorError> {
@@ -201,7 +179,6 @@ impl DaemonConnector {
                      Restarting daemon to ensure correct configuration.",
                     pid
                 );
-                self.kill_daemon().await?;
                 Self::start_daemon(self.custom_turbo_json_path.as_ref()).await
             }
             // If daemon is running and no custom path, use existing daemon
