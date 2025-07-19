@@ -747,6 +747,9 @@ pub enum Command {
         variables: Option<Utf8PathBuf>,
         #[clap(long, conflicts_with = "query")]
         schema: bool,
+        /// Open turborepo.com/graph with the package graph data
+        #[clap(long)]
+        graph: bool,
         /// The query to run, either a file path or a query string
         query: Option<String>,
     },
@@ -1632,18 +1635,20 @@ pub async fn run(
             query,
             variables,
             schema,
+            graph,
         } => {
             warn!("query command is experimental and may change in the future");
             let query = query.clone();
             let variables = variables.clone();
             let schema = *schema;
+            let graph = *graph;
             let event = CommandEventBuilder::new("query").with_parent(&root_telemetry);
             event.track_call();
 
             let base = CommandBase::new(cli_args, repo_root, version, color_config)?;
             event.track_ui_mode(base.opts.run_opts.ui_mode);
 
-            let query = query::run(base, event, query, variables.as_deref(), schema).await?;
+            let query = query::run(base, event, query, variables.as_deref(), schema, graph).await?;
 
             Ok(query)
         }
