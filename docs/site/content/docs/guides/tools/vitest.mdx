@@ -342,10 +342,10 @@ While your root `package.json` includes scripts for running tests globally:
 ```json title="./package.json"
 {
   "scripts": {
-    "test:projects": "turbo run test",
+    "test:projects": "vitest run",
     "test:projects:watch": "vitest --watch"
   }
 }
 ```
 
-This configuration allows developers to run `pnpm test:projects:watch` at the root for a seamless local development experience using Vitest projects, while CI continues to use `turbo run test` to leverage package-level caching. **You'll still need to handle merged coverage reports manually as described in the previous section**.
+This configuration allows developers to run `pnpm test:projects` or `pnpm test:projects:watch` at the root for a seamless local development experience using Vitest projects, while CI continues to use `turbo run test` to leverage package-level caching. **You'll still need to handle merged coverage reports manually as described in the previous section**.
