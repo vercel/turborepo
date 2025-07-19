@@ -486,4 +486,33 @@ mod tests {
         let result = sso_login(&options).await.unwrap();
         assert_matches!(result, Token::New(token) if token == EXPECTED_VERIFICATION_TOKEN);
     }
+
+    #[test]
+    fn test_make_token_name() {
+        let result = make_token_name();
+
+        // The function should successfully create a token name
+        assert!(result.is_ok());
+
+        let token_name = result.unwrap();
+
+        // The token name should contain the expected pattern
+        assert!(token_name.contains("Turbo CLI on"));
+        assert!(token_name.contains("via SAML/OIDC Single Sign-On"));
+
+        // The token name should be non-empty and have reasonable length
+        assert!(!token_name.is_empty());
+        assert!(token_name.len() > 10); // Should be longer than just the static parts
+        assert!(token_name.len() < 500); // Should be reasonable length
+
+        // Test that it's consistent (calling it multiple times should work)
+        let result2 = make_token_name();
+        assert!(result2.is_ok());
+
+        // Both should have the same basic structure (though hostname might differ in
+        // edge cases)
+        let token_name2 = result2.unwrap();
+        assert!(token_name2.contains("Turbo CLI on"));
+        assert!(token_name2.contains("via SAML/OIDC Single Sign-On"));
+    }
 }
