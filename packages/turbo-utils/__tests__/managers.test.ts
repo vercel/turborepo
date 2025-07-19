@@ -1,5 +1,5 @@
-import { describe, test, expect, beforeEach, jest } from "@jest/globals";
 import os from "node:os";
+import { describe, test, expect, beforeEach, jest } from "@jest/globals";
 import execa from "execa";
 import {
   getAvailablePackageManagers,
@@ -54,120 +54,97 @@ describe("managers", () => {
       });
     });
 
-    test("should call execa with correct arguments and options", async () => {
-      mockExeca.mockResolvedValue({ stdout: "1.0.0" } as any);
+    describe("getPackageManagersBinPaths", () => {
+      test("should return bin paths for all package managers", async () => {
+        mockExeca
+          .mockResolvedValueOnce({ stdout: "3.2.1" } as any) // yarn version (berry)
+          .mockResolvedValueOnce({ stdout: "/usr/local/bin" } as any) // npm prefix
+          .mockResolvedValueOnce({ stdout: "/usr/local/pnpm" } as any) // pnpm bin
+          .mockResolvedValueOnce({ stdout: "/usr/local/bun" } as any); // bun bin
 
-      await getAvailablePackageManagers();
+        const result = await getPackageManagersBinPaths();
 
-      expect(mockExeca).toHaveBeenCalledWith("yarnpkg", ["--version"], {
-        cwd: ".",
-        env: { COREPACK_ENABLE_STRICT: "0" },
-      });
-      expect(mockExeca).toHaveBeenCalledWith("npm", ["--version"], {
-        cwd: "/tmp",
-        env: { COREPACK_ENABLE_STRICT: "0" },
-      });
-      expect(mockExeca).toHaveBeenCalledWith("pnpm", ["--version"], {
-        cwd: "/tmp",
-        env: { COREPACK_ENABLE_STRICT: "0" },
-      });
-      expect(mockExeca).toHaveBeenCalledWith("bun", ["--version"], {
-        cwd: "/tmp",
-        env: { COREPACK_ENABLE_STRICT: "0" },
-      });
-    });
-  });
-
-  describe("getPackageManagersBinPaths", () => {
-    test("should return bin paths for all package managers", async () => {
-      mockExeca
-        .mockResolvedValueOnce({ stdout: "3.2.1" } as any) // yarn version (berry)
-        .mockResolvedValueOnce({ stdout: "/usr/local/bin" } as any) // npm prefix
-        .mockResolvedValueOnce({ stdout: "/usr/local/pnpm" } as any) // pnpm bin
-        .mockResolvedValueOnce({ stdout: "/usr/local/bun" } as any); // bun bin
-
-      const result = await getPackageManagersBinPaths();
-
-      expect(result).toEqual({
-        yarn: ".yarn/releases/yarn-3.2.1.cjs",
-        npm: "/usr/local/bin",
-        pnpm: "/usr/local/pnpm",
-        bun: "/usr/local/bun",
-      });
-    });
-
-    test("should handle yarn v1 global bin path", async () => {
-      mockExeca
-        .mockResolvedValueOnce({ stdout: "1.22.19" } as any) // yarn version check
-        .mockResolvedValueOnce({ stdout: "/usr/local/bin" } as any) // npm prefix
-        .mockResolvedValueOnce({ stdout: "/usr/local/pnpm" } as any) // pnpm bin
-        .mockResolvedValueOnce({ stdout: "/usr/local/bun" } as any) // bun bin
-        .mockResolvedValueOnce({ stdout: "/usr/local/yarn" } as any); // yarn global bin
-
-      const result = await getPackageManagersBinPaths();
-
-      expect(result.yarn).toBe("/usr/local/yarn");
-      expect(result.npm).toBe("/usr/local/bin");
-      expect(result.pnpm).toBe("/usr/local/pnpm");
-      expect(result.bun).toBe("/usr/local/bun");
-    });
-
-    test("should return undefined for failed package manager checks", async () => {
-      mockExeca
-        .mockRejectedValueOnce(new Error("yarn not found")) // yarn
-        .mockRejectedValueOnce(new Error("npm not found")) // npm
-        .mockResolvedValueOnce({ stdout: "/usr/local/pnpm" } as any) // pnpm
-        .mockRejectedValueOnce(new Error("bun not found")); // bun
-
-      const result = await getPackageManagersBinPaths();
-
-      expect(result).toEqual({
-        yarn: undefined,
-        npm: undefined,
-        pnpm: "/usr/local/pnpm",
-        bun: undefined,
-      });
-    });
-
-    test("should handle yarn berry path generation correctly", async () => {
-      mockExeca
-        .mockResolvedValueOnce({ stdout: "4.0.0-rc.42" } as any) // yarn version (berry)
-        .mockResolvedValueOnce({ stdout: "/usr/local/bin" } as any) // npm prefix
-        .mockResolvedValueOnce({ stdout: "/usr/local/pnpm" } as any) // pnpm bin
-        .mockResolvedValueOnce({ stdout: "/usr/local/bun" } as any); // bun bin
-
-      const result = await getPackageManagersBinPaths();
-
-      expect(result.yarn).toBe(".yarn/releases/yarn-4.0.0-rc.42.cjs");
-    });
-
-    test("should call execa with correct commands for bin paths", async () => {
-      mockExeca.mockResolvedValue({ stdout: "1.0.0" } as any);
-
-      await getPackageManagersBinPaths();
-
-      // Verify yarn version check
-      expect(mockExeca).toHaveBeenCalledWith("yarnpkg", ["--version"], {
-        cwd: ".",
-        env: { COREPACK_ENABLE_STRICT: "0" },
+        expect(result).toEqual({
+          yarn: ".yarn/releases/yarn-3.2.1.cjs",
+          npm: "/usr/local/bin",
+          pnpm: "/usr/local/pnpm",
+          bun: "/usr/local/bun",
+        });
       });
 
-      // Verify other package manager bin path commands
-      expect(mockExeca).toHaveBeenCalledWith(
-        "npm",
-        ["config", "get", "prefix"],
-        {
+      test("should handle yarn v1 global bin path", async () => {
+        mockExeca
+          .mockResolvedValueOnce({ stdout: "1.22.19" } as any) // yarn version check
+          .mockResolvedValueOnce({ stdout: "/usr/local/bin" } as any) // npm prefix
+          .mockResolvedValueOnce({ stdout: "/usr/local/pnpm" } as any) // pnpm bin
+          .mockResolvedValueOnce({ stdout: "/usr/local/bun" } as any) // bun bin
+          .mockResolvedValueOnce({ stdout: "/usr/local/yarn" } as any); // yarn global bin
+
+        const result = await getPackageManagersBinPaths();
+
+        expect(result.yarn).toBe("/usr/local/yarn");
+        expect(result.npm).toBe("/usr/local/bin");
+        expect(result.pnpm).toBe("/usr/local/pnpm");
+        expect(result.bun).toBe("/usr/local/bun");
+      });
+
+      test("should return undefined for failed package manager checks", async () => {
+        mockExeca
+          .mockRejectedValueOnce(new Error("yarn not found")) // yarn
+          .mockRejectedValueOnce(new Error("npm not found")) // npm
+          .mockResolvedValueOnce({ stdout: "/usr/local/pnpm" } as any) // pnpm
+          .mockRejectedValueOnce(new Error("bun not found")); // bun
+
+        const result = await getPackageManagersBinPaths();
+
+        expect(result).toEqual({
+          yarn: undefined,
+          npm: undefined,
+          pnpm: "/usr/local/pnpm",
+          bun: undefined,
+        });
+      });
+
+      test("should handle yarn berry path generation correctly", async () => {
+        mockExeca
+          .mockResolvedValueOnce({ stdout: "4.0.0-rc.42" } as any) // yarn version (berry)
+          .mockResolvedValueOnce({ stdout: "/usr/local/bin" } as any) // npm prefix
+          .mockResolvedValueOnce({ stdout: "/usr/local/pnpm" } as any) // pnpm bin
+          .mockResolvedValueOnce({ stdout: "/usr/local/bun" } as any); // bun bin
+
+        const result = await getPackageManagersBinPaths();
+
+        expect(result.yarn).toBe(".yarn/releases/yarn-4.0.0-rc.42.cjs");
+      });
+
+      test("should call execa with correct commands for bin paths", async () => {
+        mockExeca.mockResolvedValue({ stdout: "1.0.0" } as any);
+
+        await getPackageManagersBinPaths();
+
+        // Verify yarn version check
+        expect(mockExeca).toHaveBeenCalledWith("yarnpkg", ["--version"], {
+          cwd: ".",
+          env: { COREPACK_ENABLE_STRICT: "0" },
+        });
+
+        // Verify other package manager bin path commands
+        expect(mockExeca).toHaveBeenCalledWith(
+          "npm",
+          ["config", "get", "prefix"],
+          {
+            cwd: "/tmp",
+            env: { COREPACK_ENABLE_STRICT: "0" },
+          }
+        );
+        expect(mockExeca).toHaveBeenCalledWith("pnpm", ["bin", "--global"], {
           cwd: "/tmp",
           env: { COREPACK_ENABLE_STRICT: "0" },
-        }
-      );
-      expect(mockExeca).toHaveBeenCalledWith("pnpm", ["bin", "--global"], {
-        cwd: "/tmp",
-        env: { COREPACK_ENABLE_STRICT: "0" },
-      });
-      expect(mockExeca).toHaveBeenCalledWith("bun", ["pm", "--g", "bin"], {
-        cwd: "/tmp",
-        env: { COREPACK_ENABLE_STRICT: "0" },
+        });
+        expect(mockExeca).toHaveBeenCalledWith("bun", ["pm", "--g", "bin"], {
+          cwd: "/tmp",
+          env: { COREPACK_ENABLE_STRICT: "0" },
+        });
       });
     });
   });
