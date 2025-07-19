@@ -111,3 +111,133 @@ impl Visit for ImportFinder {
         stmt.visit_children_with(self);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use swc_ecma_ast::Module;
+    use swc_ecma_parser::{Syntax, TsSyntax};
+    use swc_ecma_visit::VisitWith;
+
+    use super::*;
+
+    fn parse_module(code: &str) -> Module {
+        let syntax = Syntax::Typescript(TsSyntax {
+            tsx: false,
+            decorators: true,
+            ..Default::default()
+        });
+
+        let source_map = swc_common::SourceMap::default();
+        let source_file = source_map.new_source_file(
+            swc_common::FileName::Custom("test.ts".to_string()).into(),
+            code.to_string(),
+        );
+
+        let mut parser = swc_ecma_parser::Parser::new_from(swc_ecma_parser::lexer::Lexer::new(
+            syntax,
+            swc_ecma_ast::EsVersion::EsNext,
+            swc_common::input::StringInput::from(&*source_file),
+            None,
+        ));
+
+        parser.parse_module().unwrap()
+    }
+
+    #[test]
+    fn test_import_finder_types_only() {
+        let code = r#"
+            import type { Foo } from './foo';
+            import { Bar } from './bar';
+            import type { Baz } from './baz';
+        "#;
+
+        let module = parse_module(code);
+        let mut finder = ImportFinder::new(ImportTraceType::Types);
+        module.visit_with(&mut finder);
+
+        let imports = finder.imports();
+        assert_eq!(imports.len(), 2);
+        assert_eq!(imports[0].0, "./foo");
+        assert_eq!(imports[0].2, ImportType::Type);
+        assert_eq!(imports[1].0, "./baz");
+        assert_eq!(imports[1].2, ImportType::Type);
+    }
+
+    #[test]
+    fn test_import_finder_values_only() {
+        let code = r#"
+            import type { Foo } from './foo';
+            import { Bar } from './bar';
+            import type { Baz } from './baz';
+        "#;
+
+        let module = parse_module(code);
+        let mut finder = ImportFinder::new(ImportTraceType::Values);
+        module.visit_with(&mut finder);
+
+        let imports = finder.imports();
+        assert_eq!(imports.len(), 1);
+        assert_eq!(imports[0].0, "./bar");
+        assert_eq!(imports[0].2, ImportType::Value);
+    }
+
+    #[test]
+    fn test_import_finder_export_named() {
+        let code = r#"
+            export { Foo } from './foo';
+            export { Bar, Baz } from './bar';
+        "#;
+
+        let module = parse_module(code);
+        let mut finder = ImportFinder::new(ImportTraceType::All);
+        module.visit_with(&mut finder);
+
+        let imports = finder.imports();
+        assert_eq!(imports.len(), 2);
+        assert_eq!(imports[0].0, "./foo");
+        assert_eq!(imports[0].2, ImportType::Value);
+        assert_eq!(imports[1].0, "./bar");
+        assert_eq!(imports[1].2, ImportType::Value);
+    }
+
+    #[test]
+    fn test_import_finder_export_all() {
+        let code = r#"
+            export * from './foo';
+            export * as namespace from './bar';
+        "#;
+
+        let module = parse_module(code);
+        let mut finder = ImportFinder::new(ImportTraceType::All);
+        module.visit_with(&mut finder);
+
+        let imports = finder.imports();
+        assert_eq!(imports.len(), 2);
+        assert_eq!(imports[0].0, "./foo");
+        assert_eq!(imports[0].2, ImportType::Value);
+        assert_eq!(imports[1].0, "./bar");
+        assert_eq!(imports[1].2, ImportType::Value);
+    }
+
+    #[test]
+    fn test_import_finder_require_statement() {
+        let code = r#"
+            const foo = require('./foo');
+            const bar = require('./bar');
+            const baz = require('./baz');
+        "#;
+
+        let module = parse_module(code);
+        let mut finder = ImportFinder::new(ImportTraceType::All);
+        module.visit_with(&mut finder);
+
+        let imports = finder.imports();
+        assert_eq!(imports.len(), 3);
+        assert_eq!(imports[0].0, "./foo");
+        assert_eq!(imports[0].2, ImportType::Value);
+        assert_eq!(imports[1].0, "./bar");
+        assert_eq!(imports[1].2, ImportType::Value);
+        assert_eq!(imports[2].0, "./baz");
+        assert_eq!(imports[2].2, ImportType::Value);
+    }
+}
