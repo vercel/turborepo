@@ -237,7 +237,7 @@ fn main() -> Result<()> {
                                 for filename in filenames_array {
                                     if let Some(path) = filename.as_str() {
                                         if !path.contains("dSYM") {
-                                            object_args.push(format!("--object={}", path));
+                                            object_args.push(format!("--object={path}"));
                                         }
                                     }
                                 }

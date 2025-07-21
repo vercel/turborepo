@@ -55,7 +55,7 @@ impl ColorSelector {
         }
 
         let style = self.color_for_key(cache_key);
-        style.apply_to(format!("{}: ", prefix))
+        style.apply_to(format!("{prefix}: "))
     }
 }
 

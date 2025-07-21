@@ -32,7 +32,7 @@ impl fmt::Display for LockfileData {
                 true => format!("{wrapped_key}:"),
                 false => format!("? {wrapped_key}\n:"),
             };
-            write!(f, "\n{}\n{}\n", key_line, entry)?;
+            write!(f, "\n{key_line}\n{entry}\n")?;
         }
 
         Ok(())
@@ -62,7 +62,7 @@ impl fmt::Display for BerryPackage {
                 if !first {
                     writeln!(f)?;
                 }
-                write!(f, "  {field}:{whitespace}{}", value,)?;
+                write!(f, "  {field}:{whitespace}{value}")?;
                 first = false;
             }
             Ok(())

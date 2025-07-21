@@ -32,7 +32,7 @@ impl EnvironmentVariableMap {
     // This is the value that is used upstream as a task hash input,
     // so we need it to be deterministic
     pub fn to_hashable(&self) -> EnvironmentVariablePairs {
-        let mut list: Vec<_> = self.iter().map(|(k, v)| format!("{}={}", k, v)).collect();
+        let mut list: Vec<_> = self.iter().map(|(k, v)| format!("{k}={v}")).collect();
         list.sort();
 
         list
@@ -294,7 +294,7 @@ fn wildcard_to_regex_pattern(pattern: &str) -> String {
     let mut previous_index = 0;
     let mut previous_char: Option<char> = None;
 
-    for (i, char) in pattern.chars().enumerate() {
+    for (i, char) in pattern.char_indices() {
         if char == WILDCARD {
             if previous_char == Some(WILDCARD_ESCAPE) {
                 // Found a literal *

@@ -79,7 +79,7 @@ impl<W: Write> PrefixedUI<W> {
         // There's no reason to propagate this error
         // because we don't want our entire program to crash
         // due to a log failure.
-        if let Err(err) = writeln!(writer, "{}{}", prefix, message) {
+        if let Err(err) = writeln!(writer, "{prefix}{message}") {
             error!("cannot write to logs: {:?}", err);
         }
     }

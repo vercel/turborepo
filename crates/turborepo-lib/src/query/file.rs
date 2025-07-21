@@ -91,12 +91,12 @@ impl From<turbo_trace::TraceError> for Diagnostic {
                 ..Default::default()
             },
             turbo_trace::TraceError::ParseError(path, e) => Diagnostic {
-                message: format!("failed to parse file: {:?}", e),
+                message: format!("failed to parse file: {e:?}"),
                 path: Some(path.to_string()),
                 ..Default::default()
             },
             turbo_trace::TraceError::GlobError(err) => Diagnostic {
-                message: format!("failed to glob files: {}", err),
+                message: format!("failed to glob files: {err}"),
                 ..Default::default()
             },
             turbo_trace::TraceError::Resolve {

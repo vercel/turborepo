@@ -325,7 +325,7 @@ fn encode_key(key: KeyEvent) -> Vec<u8> {
                     10 => "\x1b[21",
                     11 => "\x1b[23",
                     12 => "\x1b[24",
-                    _ => panic!("unhandled fkey number {}", n),
+                    _ => panic!("unhandled fkey number {n}"),
                 };
                 let encoded_mods = encode_modifiers(mods);
                 if encoded_mods == 0 {

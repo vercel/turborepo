@@ -226,8 +226,8 @@ fn clean(pid_file: &AbsoluteSystemPath, sock_file: &AbsoluteSystemPath) -> Resul
         let result = pid_file.remove_file();
         // ignore this error
         if let Err(e) = result {
-            println!("Failed to remove pid file: {}", e);
-            println!("Please remove manually: {}", pid_file);
+            println!("Failed to remove pid file: {e}");
+            println!("Please remove manually: {pid_file}");
             success = false;
         }
     }
@@ -235,8 +235,8 @@ fn clean(pid_file: &AbsoluteSystemPath, sock_file: &AbsoluteSystemPath) -> Resul
         let result = sock_file.remove_file();
         // ignore this error
         if let Err(e) = result {
-            println!("Failed to remove socket file: {}", e);
-            println!("Please remove manually: {}", sock_file);
+            println!("Failed to remove socket file: {e}");
+            println!("Please remove manually: {sock_file}");
             success = false;
         }
     }
@@ -255,8 +255,8 @@ fn clean_logs(log_folder: &AbsoluteSystemPath) -> Result<(), DaemonError> {
     // folder just remove the contents
     // `remove_dir_all_recursive` is lifted from `std`
     log_folder.remove_dir_all().map_err(|e| {
-        println!("Failed to remove log files: {}", e);
-        println!("Please remove manually: {}", log_folder);
+        println!("Failed to remove log files: {e}");
+        println!("Please remove manually: {log_folder}");
         DaemonError::CleanFailed
     })
 }
@@ -268,7 +268,7 @@ fn log_filename(base_filename: &str) -> Result<String, time::Error> {
     let now = OffsetDateTime::now_utc();
     let format = format_description::parse("[year]-[month]-[day]")?;
     let date = now.format(&format)?;
-    Ok(format!("{}.{}", base_filename, date))
+    Ok(format!("{base_filename}.{date}"))
 }
 
 #[tracing::instrument(skip(base, logging), fields(repo_root = %base.repo_root))]

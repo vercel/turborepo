@@ -37,7 +37,7 @@ impl<'a> YarnDetector<'a> {
             .trim()
             .parse()
             .map_err(|err| Error::InvalidVersion {
-                explanation: format!("{} {}", yarn_version_output, err),
+                explanation: format!("{yarn_version_output} {err}"),
                 span: None,
                 text: NamedSource::new("yarn --version", yarn_version_output),
             })

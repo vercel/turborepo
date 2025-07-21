@@ -305,7 +305,7 @@ fn handle_cookie_file_request(
 ) {
     if let Some(req) = req {
         *serial += 1;
-        let cookie_path = root.join_component(&format!("{}.cookie", serial));
+        let cookie_path = root.join_component(&format!("{serial}.cookie"));
         let mut opts = OpenOptions::new();
         opts.truncate(true).create(true).write(true);
         let result = {
