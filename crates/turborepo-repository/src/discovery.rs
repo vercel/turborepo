@@ -327,10 +327,7 @@ mod fallback_tests {
     impl PackageDiscovery for MockDiscovery {
         async fn discover_packages(&self) -> Result<DiscoveryResponse, Error> {
             if self.should_fail {
-                Err(Error::Failed(Box::new(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    "mock error",
-                ))))
+                Err(Error::Failed(Box::new(std::io::Error::other("mock error"))))
             } else {
                 tokio::time::sleep(Duration::from_millis(100)).await;
                 self.calls.fetch_add(1, Ordering::SeqCst);

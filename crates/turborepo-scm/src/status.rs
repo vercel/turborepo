@@ -139,9 +139,9 @@ mod tests {
             let mut hashes = to_hash_map(&[(expected_filename, "some-hash")]);
             let to_hash = read_status(input.as_bytes(), &root_path, &prefix, &mut hashes).unwrap();
             if *expect_delete {
-                assert_eq!(hashes.len(), 0, "input: {}", input);
+                assert_eq!(hashes.len(), 0, "input: {input}");
             } else {
-                assert_eq!(to_hash.len(), 1, "input: {}", input);
+                assert_eq!(to_hash.len(), 1, "input: {input}");
                 let expected = prefix.join(&RelativeUnixPathBuf::new(*expected_filename).unwrap());
                 assert_eq!(to_hash[0], expected);
             }

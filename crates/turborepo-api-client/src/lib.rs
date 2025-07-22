@@ -793,7 +793,7 @@ mod test {
     async fn test_do_preflight() -> Result<()> {
         let port = port_scanner::request_open_port().unwrap();
         let handle = tokio::spawn(start_test_server(port));
-        let base_url = format!("http://localhost:{}", port);
+        let base_url = format!("http://localhost:{port}");
 
         let client = APIClient::new(
             &base_url,
@@ -806,7 +806,7 @@ mod test {
         let response = client
             .do_preflight(
                 "",
-                Url::parse(&format!("{}/preflight/absolute-location", base_url)).unwrap(),
+                Url::parse(&format!("{base_url}/preflight/absolute-location")).unwrap(),
                 "GET",
                 "Authorization, User-Agent",
             )
@@ -817,7 +817,7 @@ mod test {
         let response = client
             .do_preflight(
                 "",
-                Url::parse(&format!("{}/preflight/relative-location", base_url)).unwrap(),
+                Url::parse(&format!("{base_url}/preflight/relative-location")).unwrap(),
                 "GET",
                 "Authorization, User-Agent",
             )
@@ -830,7 +830,7 @@ mod test {
         let response = client
             .do_preflight(
                 "",
-                Url::parse(&format!("{}/preflight/allow-auth", base_url)).unwrap(),
+                Url::parse(&format!("{base_url}/preflight/allow-auth")).unwrap(),
                 "GET",
                 "Authorization, User-Agent",
             )
@@ -841,7 +841,7 @@ mod test {
         let response = client
             .do_preflight(
                 "",
-                Url::parse(&format!("{}/preflight/no-allow-auth", base_url)).unwrap(),
+                Url::parse(&format!("{base_url}/preflight/no-allow-auth")).unwrap(),
                 "GET",
                 "Authorization, User-Agent",
             )
@@ -882,7 +882,7 @@ mod test {
     async fn test_content_length() -> Result<()> {
         let port = port_scanner::request_open_port().unwrap();
         let handle = tokio::spawn(start_test_server(port));
-        let base_url = format!("http://localhost:{}", port);
+        let base_url = format!("http://localhost:{port}");
 
         let client = APIClient::new(
             &base_url,
@@ -917,7 +917,7 @@ mod test {
     async fn test_record_telemetry_success() -> Result<()> {
         let port = port_scanner::request_open_port().unwrap();
         let handle = tokio::spawn(start_test_server(port));
-        let base_url = format!("http://localhost:{}", port);
+        let base_url = format!("http://localhost:{port}");
 
         let client = AnonAPIClient::new(&base_url, 10, "2.0.0")?;
 
@@ -952,7 +952,7 @@ mod test {
     async fn test_record_telemetry_empty_events() -> Result<()> {
         let port = port_scanner::request_open_port().unwrap();
         let handle = tokio::spawn(start_test_server(port));
-        let base_url = format!("http://localhost:{}", port);
+        let base_url = format!("http://localhost:{port}");
 
         let client = AnonAPIClient::new(&base_url, 10, "2.0.0")?;
 
@@ -974,7 +974,7 @@ mod test {
     async fn test_record_telemetry_with_different_event_types() -> Result<()> {
         let port = port_scanner::request_open_port().unwrap();
         let handle = tokio::spawn(start_test_server(port));
-        let base_url = format!("http://localhost:{}", port);
+        let base_url = format!("http://localhost:{port}");
 
         let client = AnonAPIClient::new(&base_url, 10, "2.0.0")?;
 

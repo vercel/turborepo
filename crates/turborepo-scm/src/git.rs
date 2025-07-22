@@ -500,11 +500,7 @@ mod tests {
             &repo.signature().unwrap(),
             "Commit",
             &tree,
-            previous_commit
-                .as_ref()
-                .as_ref()
-                .map(std::slice::from_ref)
-                .unwrap_or_default(),
+            previous_commit.as_ref().as_slice(),
         )
         .unwrap()
     }

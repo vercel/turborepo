@@ -548,7 +548,7 @@ mod test {
         include_exp: Option<&[&str]>,
         exclude_exp: Option<&[&str]>,
     ) {
-        let raw_path = format!("{}{}", ROOT, base_path);
+        let raw_path = format!("{ROOT}{base_path}");
         let base_path = AbsoluteSystemPathBuf::new(raw_path).unwrap();
         let include = include.iter().map(|s| s.to_string()).collect_vec();
         let exclude = exclude.iter().map(|s| s.to_string()).collect_vec();
@@ -568,7 +568,7 @@ mod test {
                 include,
                 include_exp
                     .iter()
-                    .map(|s| format!("{}{}", GLOB_ROOT, s))
+                    .map(|s| format!("{GLOB_ROOT}{s}"))
                     .collect_vec()
                     .as_slice()
             );
@@ -579,7 +579,7 @@ mod test {
                 exclude,
                 exclude_exp
                     .iter()
-                    .map(|s| format!("{}{}", GLOB_ROOT, s))
+                    .map(|s| format!("{GLOB_ROOT}{s}"))
                     .collect_vec()
                     .as_slice()
             );
@@ -751,10 +751,7 @@ mod test {
         assert_eq!(
             success.len(),
             result_count,
-            "{}: expected {} matches, but got {:#?}",
-            pattern,
-            result_count,
-            success
+            "{pattern}: expected {result_count} matches, but got {success:#?}"
         );
 
         None
@@ -1395,8 +1392,7 @@ mod test {
 
             assert_eq!(
                 success, expected,
-                "\n\n{:?}: expected \n{:#?} but got \n{:#?}",
-                walk_type, expected, success
+                "\n\n{walk_type:?}: expected \n{expected:#?} but got \n{success:#?}"
             );
         }
     }
@@ -1453,7 +1449,7 @@ mod test {
             let path = tmp.path().join(file);
             let parent = path.parent().unwrap();
             std::fs::create_dir_all(parent)
-                .unwrap_or_else(|_| panic!("failed to create {:?}", parent));
+                .unwrap_or_else(|_| panic!("failed to create {parent:?}"));
             std::fs::File::create(path).unwrap();
         }
         tmp

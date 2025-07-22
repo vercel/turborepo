@@ -806,12 +806,10 @@ mod tests {
             (Ok(actual), Ok(expected)) => assert_eq!(actual, expected),
             (Err(actual), Err(expected_msg)) => assert!(
                 actual.to_string().contains(expected_msg),
-                "Expected '{}' to appear in error message: '{}'",
-                expected_msg,
-                actual,
+                "Expected '{expected_msg}' to appear in error message: '{actual}'",
             ),
             (actual, expected) => {
-                panic!("Mismatched result variants: {:?} {:?}", actual, expected)
+                panic!("Mismatched result variants: {actual:?} {expected:?}")
             }
         }
     }
@@ -939,12 +937,10 @@ mod tests {
             (Ok(actual), Ok(expected)) => assert_eq!(actual, expected),
             (Err(actual), Err(expected_msg)) => assert!(
                 actual.to_string().contains(expected_msg),
-                "Expected '{}' to appear in error message: '{}'",
-                expected_msg,
-                actual,
+                "Expected '{expected_msg}' to appear in error message: '{actual}'",
             ),
             (actual, expected) => {
-                panic!("Mismatched result variants: {:?} {:?}", actual, expected)
+                panic!("Mismatched result variants: {actual:?} {expected:?}")
             }
         }
     }

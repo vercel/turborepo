@@ -283,7 +283,7 @@ mod tests {
     fn compress_tar(archive_path: &AbsoluteSystemPathBuf) -> Result<AbsoluteSystemPathBuf> {
         let mut input_file = File::open(archive_path)?;
 
-        let output_file_path = format!("{}.zst", archive_path);
+        let output_file_path = format!("{archive_path}.zst");
         let output_file = File::create(&output_file_path)?;
 
         let mut zw = zstd::stream::Encoder::new(output_file, 0)?;
@@ -883,10 +883,7 @@ mod tests {
 
                 match (cache_reader.restore(anchor), &test.expected_output) {
                     (Ok(restored_files), Err(expected_error)) => {
-                        panic!(
-                            "expected error: {:?}, received {:?}",
-                            expected_error, restored_files
-                        );
+                        panic!("expected error: {expected_error:?}, received {restored_files:?}");
                     }
                     (Ok(restored_files), Ok(expected_files)) => {
                         assert_eq!(&restored_files, expected_files);
@@ -896,7 +893,7 @@ mod tests {
                         continue;
                     }
                     (Err(err), Ok(_)) => {
-                        panic!("unexpected error: {:?}", err);
+                        panic!("unexpected error: {err:?}");
                     }
                 };
 
