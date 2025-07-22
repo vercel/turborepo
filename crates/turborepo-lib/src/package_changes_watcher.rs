@@ -297,19 +297,8 @@ impl Subscriber {
                             self.changed_files.lock().await.borrow_mut().deref_mut()
                         {
                             for path in paths {
-                                if let Some(path_str) = path.to_str() {
-                                    if let Some(ref custom_path) = self.custom_turbo_json_path {
-                                        if path_str == custom_path.as_str()
-                                            || path_str.ends_with("turbo.json")
-                                            || path_str.ends_with("turbo.jsonc")
-                                        {
-                                            tracing::info!(
-                                                "File watcher detected change: {}",
-                                                path_str
-                                            );
-                                        }
-                                    }
-                                    trie.insert(path_str.to_string(), ());
+                                if let Some(path) = path.to_str() {
+                                    trie.insert(path.to_string(), ());
                                 }
                             }
                         }
@@ -409,21 +398,7 @@ impl Subscriber {
                     .as_ref()
                     .map(|path| {
                         let path_str = path.as_str();
-                        let found = trie.get(path_str).is_some();
-                        tracing::debug!(
-                            "Checking custom turbo.json path '{}' in trie, found: {}",
-                            path_str,
-                            found
-                        );
-                        if !found {
-                            // Also try with the path keys for debugging
-                            let trie_keys: Vec<_> = trie.keys().take(10).collect();
-                            tracing::debug!(
-                                "Trie contains these paths (first 10): {:?}",
-                                trie_keys
-                            );
-                        }
-                        found
+                        trie.get(path_str).is_some()
                     })
                     .unwrap_or(false);
 
