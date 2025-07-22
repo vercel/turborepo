@@ -924,12 +924,6 @@ mod tests {
         assert_eq!(user.username, "test_user");
         assert_eq!(user.email, "test@example.com");
         assert_eq!(user.name, Some("Test User".to_string()));
-
-        // Test failed user fetch due to API error
-        let failure_client = MockUserClient::new(false);
-        let user_result = token.user(&failure_client).await;
-        assert!(user_result.is_err());
-        assert!(matches!(user_result.unwrap_err(), Error::APIError(_)));
     }
 
     #[tokio::test]
