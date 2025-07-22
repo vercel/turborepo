@@ -23,7 +23,9 @@ use turborepo_repository::{
 };
 use turborepo_scm::GitHashes;
 
-use crate::turbo_json::{TurboJson, TurboJsonLoader, CONFIG_FILE, CONFIG_FILE_JSONC};
+use crate::turbo_json::{
+    resolve_turbo_config_path, TurboJson, TurboJsonLoader, CONFIG_FILE, CONFIG_FILE_JSONC,
+};
 
 #[derive(Clone)]
 pub enum PackageChangeEvent {
@@ -212,26 +214,19 @@ impl Subscriber {
         let config_path = if let Some(custom_path) = &self.custom_turbo_json_path {
             custom_path.clone()
         } else {
-            let turbo_json_path = self.repo_root.join_component(CONFIG_FILE);
-            let turbo_jsonc_path = self.repo_root.join_component(CONFIG_FILE_JSONC);
-
-            let turbo_json_exists = turbo_json_path.exists();
-            let turbo_jsonc_exists = turbo_jsonc_path.exists();
-
-            // TODO: Dedupe places where we search for turbo.json and turbo.jsonc
-            // There are now several places where we do this in the codebase
-            match (turbo_json_exists, turbo_jsonc_exists) {
-                (true, true) => {
+            match resolve_turbo_config_path(&self.repo_root) {
+                Ok(path) => path,
+                Err(_) => {
+                    // TODO: caIf both turbo.json and turbo.jsonc exist, log warning and default to
+                    // turbo.json to preserve existing behavior for file
+                    // watching
                     tracing::warn!(
                         "Found both turbo.json and turbo.jsonc in {}. Using turbo.json for \
                          watching.",
                         self.repo_root
                     );
-                    turbo_json_path
+                    self.repo_root.join_component(CONFIG_FILE)
                 }
-                (true, false) => turbo_json_path,
-                (false, true) => turbo_jsonc_path,
-                (false, false) => turbo_json_path, // Default to turbo.json
             }
         };
 
