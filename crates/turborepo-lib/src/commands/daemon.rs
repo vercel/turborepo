@@ -47,7 +47,7 @@ fn convert_turbo_json_path(
 pub async fn daemon_client(
     command: &DaemonCommand,
     base: &CommandBase,
-    custom_turbo_json_path: Option<&camino::Utf8Path>,
+    custom_turbo_json_path: Option<camino::Utf8PathBuf>,
 ) -> Result<(), DaemonError> {
     let (can_start_server, can_kill_server) = match command {
         DaemonCommand::Status { .. } | DaemonCommand::Logs => (false, false),
@@ -56,7 +56,7 @@ pub async fn daemon_client(
         DaemonCommand::Clean { .. } => (false, true),
     };
 
-    let custom_turbo_json_path = convert_turbo_json_path(custom_turbo_json_path)?;
+    let custom_turbo_json_path = convert_turbo_json_path(custom_turbo_json_path.as_deref())?;
 
     let connector = DaemonConnector::new(
         can_start_server,
@@ -305,7 +305,7 @@ fn log_filename(base_filename: &str) -> Result<String, time::Error> {
 pub async fn daemon_server(
     base: &CommandBase,
     idle_time: &String,
-    turbo_json_path: Option<&camino::Utf8Path>,
+    turbo_json_path: Option<camino::Utf8PathBuf>,
     logging: &TurboSubscriber,
 ) -> Result<(), DaemonError> {
     let paths = Paths::from_repo_root(&base.repo_root);
@@ -329,7 +329,7 @@ pub async fn daemon_server(
         }
         CloseReason::Interrupt
     });
-    let custom_turbo_json_path = convert_turbo_json_path(turbo_json_path)?;
+    let custom_turbo_json_path = convert_turbo_json_path(turbo_json_path.as_deref())?;
     let server = crate::daemon::TurboGrpcService::new(
         base.repo_root.clone(),
         paths,

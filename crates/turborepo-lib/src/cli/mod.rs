@@ -1443,11 +1443,10 @@ pub async fn run(
 
             match command {
                 Some(command) => {
-                    daemon::daemon_client(command, &base, turbo_json_path.as_deref()).await
+                    daemon::daemon_client(command, &base, turbo_json_path.clone()).await
                 }
                 None => {
-                    daemon::daemon_server(&base, idle_time, turbo_json_path.as_deref(), logger)
-                        .await
+                    daemon::daemon_server(&base, idle_time, turbo_json_path.clone(), logger).await
                 }
             }?;
 
