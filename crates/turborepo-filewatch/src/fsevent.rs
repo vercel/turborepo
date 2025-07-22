@@ -549,11 +549,11 @@ unsafe fn callback_impl(
         let raw_path = unsafe { CStr::from_ptr(*event_paths.add(p)) }
             .to_str()
             .expect("Invalid UTF8 string.");
-        let path = PathBuf::from(format!("/{}", raw_path));
+        let path = PathBuf::from(format!("/{raw_path}"));
 
         let flag = unsafe { *event_flags.add(p) };
         let flag = StreamFlags::from_bits(flag).unwrap_or_else(|| {
-            panic!("Unable to decode StreamFlags: {}", flag);
+            panic!("Unable to decode StreamFlags: {flag}");
         });
 
         let mut handle_event = false;
@@ -602,7 +602,7 @@ impl Watcher for FsEventWatcher {
         let (tx, rx) = std::sync::mpsc::channel();
         self.configure_raw_mode(config, tx);
         rx.recv()
-            .map_err(|err| Error::generic(&format!("internal channel disconnect: {:?}", err)))?
+            .map_err(|err| Error::generic(&format!("internal channel disconnect: {err:?}")))?
     }
 
     fn kind() -> WatcherKind {
