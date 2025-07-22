@@ -33,7 +33,7 @@ pub async fn daemon_client(command: &DaemonCommand, base: &CommandBase) -> Resul
         DaemonCommand::Clean { .. } => (false, true),
     };
 
-    let connector = DaemonConnector::new(can_start_server, can_kill_server, &base.repo_root, None);
+    let connector = DaemonConnector::new(can_start_server, can_kill_server, &base.repo_root);
 
     match command {
         DaemonCommand::Restart => {

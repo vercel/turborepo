@@ -152,23 +152,34 @@ impl Subscriber {
         custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
     ) -> Self {
         // Try to canonicalize the custom path to match what the file watcher reports
-        let normalized_custom_path = custom_turbo_json_path.map(|path| match path.to_realpath() {
-            Ok(real_path) => {
-                tracing::info!(
-                    "PackageChangesWatcher: monitoring custom turbo.json at: {} (canonicalized: \
-                     {})",
-                    path,
-                    real_path
-                );
-                real_path
-            }
-            Err(e) => {
+        let normalized_custom_path = custom_turbo_json_path.map(|path| {
+            // Check if the custom turbo.json path is outside the repository
+            if repo_root.anchor(&path).is_err() {
                 tracing::warn!(
-                    "Failed to canonicalize custom turbo.json path {}: {}, using original path",
-                    path,
-                    e
+                    "turbo.json is located outside of repository at {}. Changes to this file will \
+                     not be watched and may not trigger rebuilds in watch mode.",
+                    path
                 );
-                path
+            }
+
+            match path.to_realpath() {
+                Ok(real_path) => {
+                    tracing::info!(
+                        "PackageChangesWatcher: monitoring custom turbo.json at: {} \
+                         (canonicalized: {})",
+                        path,
+                        real_path
+                    );
+                    real_path
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        "Failed to canonicalize custom turbo.json path {}: {}, using original path",
+                        path,
+                        e
+                    );
+                    path
+                }
             }
         });
 

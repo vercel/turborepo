@@ -20,7 +20,7 @@ fn is_wsl() -> bool {
 
 pub async fn run(base: CommandBase) {
     let system = System::new_all();
-    let connector = DaemonConnector::new(false, false, &base.repo_root, None);
+    let connector = DaemonConnector::new(false, false, &base.repo_root);
     let daemon_status = match connector.connect().await {
         Ok(_status) => "Running",
         Err(DaemonConnectorError::NotRunning) => "Not running",

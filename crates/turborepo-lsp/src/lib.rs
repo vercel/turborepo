@@ -85,12 +85,8 @@ impl LanguageServer for Backend {
                     || {
                         let can_start_server = true;
                         let can_kill_server = false;
-                        let connector = DaemonConnector::new(
-                            can_start_server,
-                            can_kill_server,
-                            &repo_root,
-                            None,
-                        );
+                        let connector =
+                            DaemonConnector::new(can_start_server, can_kill_server, &repo_root);
                         connector.connect()
                     },
                 )

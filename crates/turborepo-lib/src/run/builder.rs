@@ -263,7 +263,7 @@ impl RunBuilder {
                 let can_start_server = true;
                 let can_kill_server = true;
                 let connector =
-                    DaemonConnector::new(can_start_server, can_kill_server, &self.repo_root, None);
+                    DaemonConnector::new(can_start_server, can_kill_server, &self.repo_root);
                 match (connector.connect().await, self.opts.run_opts.daemon) {
                     (Ok(client), _) => {
                         run_telemetry.track_daemon_init(DaemonInitStatus::Started);
