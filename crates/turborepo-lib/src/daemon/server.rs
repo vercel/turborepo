@@ -67,6 +67,7 @@ pub struct FileWatching {
     pub package_watcher: Arc<PackageWatcher>,
     pub package_changes_watcher: OnceLock<Arc<PackageChangesWatcher>>,
     pub hash_watcher: Arc<HashWatcher>,
+    custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
 }
 
 #[derive(Debug, Error)]
@@ -111,7 +112,10 @@ impl FileWatching {
     /// waiting for the filewatcher to be ready. Using `OptionalWatch`,
     /// dependent services can wait for resources they need to become
     /// available, and the server can start up without waiting for them.
-    pub fn new(repo_root: AbsoluteSystemPathBuf) -> Result<FileWatching, WatchError> {
+    pub fn new(
+        repo_root: AbsoluteSystemPathBuf,
+        custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
+    ) -> Result<FileWatching, WatchError> {
         let watcher = Arc::new(FileSystemWatcher::new_with_default_cookie_dir(&repo_root)?);
         let recv = watcher.watch();
 
@@ -144,6 +148,7 @@ impl FileWatching {
             package_watcher,
             package_changes_watcher: OnceLock::new(),
             hash_watcher,
+            custom_turbo_json_path,
         })
     }
 
@@ -155,6 +160,7 @@ impl FileWatching {
                     self.repo_root.clone(),
                     recv,
                     self.hash_watcher.clone(),
+                    self.custom_turbo_json_path.clone(),
                 ))
             })
             .clone()
@@ -169,6 +175,7 @@ pub struct TurboGrpcService<S> {
     paths: Paths,
     timeout: Duration,
     external_shutdown: S,
+    custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
 }
 
 impl<S> TurboGrpcService<S>
@@ -186,6 +193,7 @@ where
         paths: Paths,
         timeout: Duration,
         external_shutdown: S,
+        custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
     ) -> Self {
         // Run the actual service. It takes ownership of the struct given to it,
         // so we use a private struct with just the pieces of state needed to handle
@@ -195,6 +203,7 @@ where
             paths,
             timeout,
             external_shutdown,
+            custom_turbo_json_path,
         }
     }
 
@@ -204,6 +213,7 @@ where
             paths,
             repo_root,
             timeout,
+            custom_turbo_json_path,
         } = self;
 
         // A channel to trigger the shutdown of the gRPC server. This is handed out
@@ -211,8 +221,12 @@ where
         // well as available to the gRPC server itself to handle the shutdown RPC.
         let (trigger_shutdown, mut shutdown_signal) = mpsc::channel::<()>(1);
 
-        let (service, exit_root_watch, watch_root_handle) =
-            TurboGrpcServiceInner::new(repo_root.clone(), trigger_shutdown, paths.log_file);
+        let (service, exit_root_watch, watch_root_handle) = TurboGrpcServiceInner::new(
+            repo_root.clone(),
+            trigger_shutdown,
+            paths.log_file,
+            custom_turbo_json_path,
+        );
 
         let running = Arc::new(AtomicBool::new(true));
         let (_pid_lock, stream) =
@@ -290,12 +304,13 @@ impl TurboGrpcServiceInner {
         repo_root: AbsoluteSystemPathBuf,
         trigger_shutdown: mpsc::Sender<()>,
         log_file: AbsoluteSystemPathBuf,
+        custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
     ) -> (
         Self,
         oneshot::Sender<()>,
         JoinHandle<Result<(), WatchError>>,
     ) {
-        let file_watching = FileWatching::new(repo_root.clone()).unwrap();
+        let file_watching = FileWatching::new(repo_root.clone(), custom_turbo_json_path).unwrap();
 
         tracing::debug!("initing package discovery");
         // Note that we're cloning the Arc, not the package watcher itself
@@ -777,6 +792,7 @@ mod test {
             paths.clone(),
             Duration::from_secs(60 * 60),
             exit_signal,
+            None,
         );
 
         // the package watcher reads data from the package.json file
@@ -834,6 +850,7 @@ mod test {
             paths.clone(),
             Duration::from_millis(10),
             exit_signal,
+            None,
         );
 
         // the package watcher reads data from the package.json file
@@ -891,6 +908,7 @@ mod test {
             paths,
             Duration::from_secs(60 * 60),
             exit_signal,
+            None,
         );
 
         let handle = tokio::task::spawn(server.serve());

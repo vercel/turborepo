@@ -315,6 +315,7 @@ impl Diagnostic for DaemonDiagnostic {
                 can_kill_server: false,
                 can_start_server: true,
                 paths,
+                custom_turbo_json_path: None,
             };
 
             let mut client = match connector.connect().await {
