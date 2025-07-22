@@ -25,7 +25,11 @@ const DAEMON_NOT_RUNNING_MESSAGE: &str =
     "daemon is not running, run `turbo daemon start` to start it";
 
 /// Runs the daemon command.
-pub async fn daemon_client(command: &DaemonCommand, base: &CommandBase) -> Result<(), DaemonError> {
+pub async fn daemon_client(
+    command: &DaemonCommand,
+    base: &CommandBase,
+    custom_turbo_json_path: Option<&camino::Utf8Path>,
+) -> Result<(), DaemonError> {
     let (can_start_server, can_kill_server) = match command {
         DaemonCommand::Status { .. } | DaemonCommand::Logs => (false, false),
         DaemonCommand::Stop => (false, true),
@@ -33,7 +37,26 @@ pub async fn daemon_client(command: &DaemonCommand, base: &CommandBase) -> Resul
         DaemonCommand::Clean { .. } => (false, true),
     };
 
-    let connector = DaemonConnector::new(can_start_server, can_kill_server, &base.repo_root);
+    let custom_turbo_json_path = match custom_turbo_json_path {
+        Some(p) => match turbopath::AbsoluteSystemPathBuf::from_cwd(p) {
+            Ok(path) => Some(path),
+            Err(e) => {
+                tracing::error!("Failed to convert custom turbo.json path: {}", e);
+                return Err(DaemonError::Unavailable(format!(
+                    "Invalid turbo.json path: {}",
+                    e
+                )));
+            }
+        },
+        None => None,
+    };
+
+    let connector = DaemonConnector::new(
+        can_start_server,
+        can_kill_server,
+        &base.repo_root,
+        custom_turbo_json_path,
+    );
 
     match command {
         DaemonCommand::Restart => {

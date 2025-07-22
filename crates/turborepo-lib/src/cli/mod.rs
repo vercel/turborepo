@@ -1442,7 +1442,9 @@ pub async fn run(
             event.track_ui_mode(base.opts.run_opts.ui_mode);
 
             match command {
-                Some(command) => daemon::daemon_client(command, &base).await,
+                Some(command) => {
+                    daemon::daemon_client(command, &base, turbo_json_path.as_deref()).await
+                }
                 None => {
                     daemon::daemon_server(&base, idle_time, turbo_json_path.as_deref(), logger)
                         .await

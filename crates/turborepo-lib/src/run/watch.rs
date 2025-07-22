@@ -135,26 +135,25 @@ impl WatchClient {
 
         let (ui_sender, ui_handle) = run.start_ui()?.unzip();
 
-        let mut connector = DaemonConnector {
+        // Determine if we're using a custom turbo.json path
+        let custom_turbo_json_path =
+            if base.opts.repo_opts.root_turbo_json_path != standard_config_path {
+                tracing::info!(
+                    "Using custom turbo.json path: {} (standard: {})",
+                    base.opts.repo_opts.root_turbo_json_path,
+                    standard_config_path
+                );
+                Some(base.opts.repo_opts.root_turbo_json_path.clone())
+            } else {
+                None
+            };
+
+        let connector = DaemonConnector {
             can_start_server: true,
             can_kill_server: true,
             paths: DaemonPaths::from_repo_root(&base.repo_root),
-            custom_turbo_json_path: None,
+            custom_turbo_json_path,
         };
-
-        // If using a non-standard turbo.json path, pass it to the daemon
-        if base.opts.repo_opts.root_turbo_json_path != standard_config_path {
-            tracing::info!(
-                "Using custom turbo.json path: {} (standard: {})",
-                base.opts.repo_opts.root_turbo_json_path,
-                standard_config_path
-            );
-            // The root_turbo_json_path is already an AbsoluteSystemPathBuf, so use it
-            // directly
-            let custom_path = base.opts.repo_opts.root_turbo_json_path.clone();
-            tracing::info!("Passing custom turbo.json path to daemon: {}", custom_path);
-            connector = connector.with_custom_turbo_json_path(custom_path);
-        }
 
         Ok(Self {
             base,
