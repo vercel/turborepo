@@ -159,7 +159,7 @@ impl Subscriber {
             if repo_root.anchor(&path).is_err() {
                 tracing::warn!(
                     "turbo.json is located outside of repository at {}. Changes to this file will \
-                     not be watched and may not trigger rebuilds in watch mode.",
+                     not be watched.",
                     path
                 );
             }
