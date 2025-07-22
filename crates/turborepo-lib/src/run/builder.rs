@@ -47,7 +47,7 @@ use crate::{
     opts::Opts,
     run::{scope, task_access::TaskAccess, task_id::TaskName, Error, Run, RunCache},
     shim::TurboState,
-    turbo_json::{TurboJson, TurboJsonLoader, UIMode},
+    turbo_json::{resolve_turbo_config_path, TurboJson, TurboJsonLoader, UIMode},
     DaemonConnector,
 };
 
@@ -262,12 +262,26 @@ impl RunBuilder {
             (_, Some(true)) | (false, None) => {
                 let can_start_server = true;
                 let can_kill_server = true;
+
+                // Determine custom turbo.json path if different from standard path
+                let custom_turbo_json_path =
+                    if let Ok(standard_path) = resolve_turbo_config_path(&self.repo_root) {
+                        if self.opts.repo_opts.root_turbo_json_path != standard_path {
+                            Some(self.opts.repo_opts.root_turbo_json_path.clone())
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    };
+
                 let connector = DaemonConnector::new(
                     can_start_server,
                     can_kill_server,
                     &self.repo_root,
-                    Some(self.opts.repo_opts.root_turbo_json_path.clone()),
+                    custom_turbo_json_path,
                 );
+
                 match (connector.connect().await, self.opts.run_opts.daemon) {
                     (Ok(client), _) => {
                         run_telemetry.track_daemon_init(DaemonInitStatus::Started);
