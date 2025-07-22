@@ -400,6 +400,16 @@ impl TryFrom<Vec<Spanned<UnescapedString>>> for TaskOutputs {
     }
 }
 
+impl FromIterator<RawTaskDefinition> for RawTaskDefinition {
+    fn from_iter<T: IntoIterator<Item = RawTaskDefinition>>(iter: T) -> Self {
+        iter.into_iter()
+            .fold(RawTaskDefinition::default(), |mut def, other| {
+                def.merge(other);
+                def
+            })
+    }
+}
+
 impl TaskDefinition {
     pub fn from_raw(
         mut raw_task: RawTaskDefinition,

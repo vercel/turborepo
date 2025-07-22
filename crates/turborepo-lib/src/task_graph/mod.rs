@@ -11,39 +11,7 @@ pub use visitor::{Error as VisitorError, Visitor};
 use crate::{
     cli::{EnvMode, OutputLogsMode},
     run::task_id::{TaskId, TaskName},
-    turbo_json::RawTaskDefinition,
 };
-
-// TaskOutputs represents the patterns for including and excluding files from
-// outputs
-#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
-pub struct TaskOutputs {
-    pub inclusions: Vec<String>,
-    pub exclusions: Vec<String>,
-}
-
-impl TaskOutputs {
-    // We consider an empty outputs to be a log output and nothing else
-    pub fn is_empty(&self) -> bool {
-        self.inclusions.len() == 1
-            && self.inclusions[0].ends_with(".log")
-            && self.exclusions.is_empty()
-    }
-
-    pub fn validated_inclusions(&self) -> Result<Vec<ValidatedGlob>, GlobError> {
-        self.inclusions
-            .iter()
-            .map(|i| ValidatedGlob::from_str(i))
-            .collect()
-    }
-
-    pub fn validated_exclusions(&self) -> Result<Vec<ValidatedGlob>, GlobError> {
-        self.exclusions
-            .iter()
-            .map(|e| ValidatedGlob::from_str(e))
-            .collect()
-    }
-}
 
 // Constructed from a RawTaskDefinition
 #[derive(Debug, PartialEq, Clone, Eq)]
@@ -98,6 +66,14 @@ pub struct TaskDefinition {
     pub with: Option<Vec<Spanned<TaskName<'static>>>>,
 }
 
+// TaskOutputs represents the patterns for including and excluding files from
+// outputs
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TaskOutputs {
+    pub inclusions: Vec<String>,
+    pub exclusions: Vec<String>,
+}
+
 impl Default for TaskDefinition {
     fn default() -> Self {
         Self {
@@ -115,16 +91,6 @@ impl Default for TaskDefinition {
             env_mode: Default::default(),
             with: Default::default(),
         }
-    }
-}
-
-impl FromIterator<RawTaskDefinition> for RawTaskDefinition {
-    fn from_iter<T: IntoIterator<Item = RawTaskDefinition>>(iter: T) -> Self {
-        iter.into_iter()
-            .fold(RawTaskDefinition::default(), |mut def, other| {
-                def.merge(other);
-                def
-            })
     }
 }
 
@@ -187,6 +153,29 @@ impl TaskDefinition {
         }
 
         repo_relative_globs
+    }
+}
+
+impl TaskOutputs {
+    // We consider an empty outputs to be a log output and nothing else
+    pub fn is_empty(&self) -> bool {
+        self.inclusions.len() == 1
+            && self.inclusions[0].ends_with(".log")
+            && self.exclusions.is_empty()
+    }
+
+    pub fn validated_inclusions(&self) -> Result<Vec<ValidatedGlob>, GlobError> {
+        self.inclusions
+            .iter()
+            .map(|i| ValidatedGlob::from_str(i))
+            .collect()
+    }
+
+    pub fn validated_exclusions(&self) -> Result<Vec<ValidatedGlob>, GlobError> {
+        self.exclusions
+            .iter()
+            .map(|e| ValidatedGlob::from_str(e))
+            .collect()
     }
 }
 
