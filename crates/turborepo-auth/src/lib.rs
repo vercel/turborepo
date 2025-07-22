@@ -310,12 +310,84 @@ mod tests {
     use std::backtrace::Backtrace;
 
     use insta::assert_snapshot;
-    use reqwest::{Method, Response};
+    use reqwest::{Method, RequestBuilder, Response};
     use tempfile::tempdir;
     use turbopath::AbsoluteSystemPathBuf;
-    use turborepo_vercel_api::{token::Scope, CachingStatus, CachingStatusResponse};
+    use turborepo_vercel_api::{
+        token::Scope, CachingStatus, CachingStatusResponse, Team, TeamsResponse, User,
+        UserResponse, VerifiedSsoUser,
+    };
+    use url::Url;
 
     use super::*;
+
+    // Shared mock client that can be reused across tests
+    struct MockUserClient {
+        should_succeed: bool,
+    }
+
+    impl MockUserClient {
+        fn new(should_succeed: bool) -> Self {
+            Self { should_succeed }
+        }
+    }
+
+    impl Client for MockUserClient {
+        async fn get_user(&self, token: &str) -> turborepo_api_client::Result<UserResponse> {
+            if !self.should_succeed {
+                return Err(turborepo_api_client::Error::UnknownStatus {
+                    code: "unauthorized".to_string(),
+                    message: "Invalid token".to_string(),
+                    backtrace: Backtrace::capture(),
+                });
+            }
+
+            if token.is_empty() {
+                return Err(turborepo_api_client::Error::UnknownStatus {
+                    code: "empty_token".to_string(),
+                    message: "Token cannot be empty".to_string(),
+                    backtrace: Backtrace::capture(),
+                });
+            }
+
+            Ok(UserResponse {
+                user: User {
+                    id: "test_user_id".to_string(),
+                    username: "test_user".to_string(),
+                    email: "test@example.com".to_string(),
+                    name: Some("Test User".to_string()),
+                    created_at: Some(123456789),
+                },
+            })
+        }
+
+        async fn get_teams(&self, _token: &str) -> turborepo_api_client::Result<TeamsResponse> {
+            unimplemented!("get_teams")
+        }
+        async fn get_team(
+            &self,
+            _token: &str,
+            _team_id: &str,
+        ) -> turborepo_api_client::Result<Option<Team>> {
+            unimplemented!("get_team")
+        }
+        fn add_ci_header(_request_builder: RequestBuilder) -> RequestBuilder {
+            unimplemented!("add_ci_header")
+        }
+        async fn verify_sso_token(
+            &self,
+            _token: &str,
+            _: &str,
+        ) -> turborepo_api_client::Result<VerifiedSsoUser> {
+            unimplemented!("verify_sso_token")
+        }
+        async fn handle_403(_response: Response) -> turborepo_api_client::Error {
+            unimplemented!("handle_403")
+        }
+        fn make_url(&self, _endpoint: &str) -> turborepo_api_client::Result<Url> {
+            unimplemented!("make_url")
+        }
+    }
 
     #[test]
     fn test_is_token_active() {
@@ -841,77 +913,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_token_user_fetch() {
-        use reqwest::{RequestBuilder, Response};
-        use turborepo_vercel_api::{Team, TeamsResponse, User, UserResponse, VerifiedSsoUser};
-        use url::Url;
-
-        struct MockUserClient {
-            should_succeed: bool,
-        }
-
-        impl Client for MockUserClient {
-            async fn get_user(&self, token: &str) -> turborepo_api_client::Result<UserResponse> {
-                if !self.should_succeed {
-                    return Err(turborepo_api_client::Error::UnknownStatus {
-                        code: "unauthorized".to_string(),
-                        message: "Invalid token".to_string(),
-                        backtrace: Backtrace::capture(),
-                    });
-                }
-
-                if token.is_empty() {
-                    return Err(turborepo_api_client::Error::UnknownStatus {
-                        code: "empty_token".to_string(),
-                        message: "Token cannot be empty".to_string(),
-                        backtrace: Backtrace::capture(),
-                    });
-                }
-
-                Ok(UserResponse {
-                    user: User {
-                        id: "test_user_id".to_string(),
-                        username: "test_user".to_string(),
-                        email: "test@example.com".to_string(),
-                        name: Some("Test User".to_string()),
-                        created_at: Some(123456789),
-                    },
-                })
-            }
-
-            async fn get_teams(&self, _token: &str) -> turborepo_api_client::Result<TeamsResponse> {
-                unimplemented!("get_teams")
-            }
-            async fn get_team(
-                &self,
-                _token: &str,
-                _team_id: &str,
-            ) -> turborepo_api_client::Result<Option<Team>> {
-                unimplemented!("get_team")
-            }
-            fn add_ci_header(_request_builder: RequestBuilder) -> RequestBuilder {
-                unimplemented!("add_ci_header")
-            }
-            async fn verify_sso_token(
-                &self,
-                _token: &str,
-                _: &str,
-            ) -> turborepo_api_client::Result<VerifiedSsoUser> {
-                unimplemented!("verify_sso_token")
-            }
-            async fn handle_403(_response: Response) -> turborepo_api_client::Error {
-                unimplemented!("handle_403")
-            }
-            fn make_url(&self, _endpoint: &str) -> turborepo_api_client::Result<Url> {
-                unimplemented!("make_url")
-            }
-        }
-
         let token = Token::new("valid-token".to_string());
 
         // Test successful user fetch
-        let success_client = MockUserClient {
-            should_succeed: true,
-        };
+        let success_client = MockUserClient::new(true);
         let user_result = token.user(&success_client).await;
         assert!(user_result.is_ok());
         let user = user_result.unwrap();
@@ -921,16 +926,17 @@ mod tests {
         assert_eq!(user.name, Some("Test User".to_string()));
 
         // Test failed user fetch due to API error
-        let failure_client = MockUserClient {
-            should_succeed: false,
-        };
+        let failure_client = MockUserClient::new(false);
         let user_result = token.user(&failure_client).await;
         assert!(user_result.is_err());
         assert!(matches!(user_result.unwrap_err(), Error::APIError(_)));
+    }
 
+    #[tokio::test]
+    async fn test_token_user_fetch_with_empty_token() {
         // Test with empty token
         let empty_token = Token::new("".to_string());
-        let user_result = empty_token.user(&success_client).await;
+        let user_result = empty_token.user(&MockUserClient::new(true)).await;
         assert!(user_result.is_err());
         assert!(matches!(user_result.unwrap_err(), Error::APIError(_)));
     }
