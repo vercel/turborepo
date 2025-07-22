@@ -24,6 +24,25 @@ use crate::{
 const DAEMON_NOT_RUNNING_MESSAGE: &str =
     "daemon is not running, run `turbo daemon start` to start it";
 
+/// Converts an optional turbo.json path to an absolute system path.
+fn convert_turbo_json_path(
+    path: Option<&camino::Utf8Path>,
+) -> Result<Option<turbopath::AbsoluteSystemPathBuf>, DaemonError> {
+    match path {
+        Some(p) => match turbopath::AbsoluteSystemPathBuf::from_cwd(p) {
+            Ok(path) => Ok(Some(path)),
+            Err(e) => {
+                tracing::error!("Failed to convert custom turbo.json path: {}", e);
+                Err(DaemonError::Unavailable(format!(
+                    "Invalid turbo.json path: {}",
+                    e
+                )))
+            }
+        },
+        None => Ok(None),
+    }
+}
+
 /// Runs the daemon command.
 pub async fn daemon_client(
     command: &DaemonCommand,
@@ -37,19 +56,7 @@ pub async fn daemon_client(
         DaemonCommand::Clean { .. } => (false, true),
     };
 
-    let custom_turbo_json_path = match custom_turbo_json_path {
-        Some(p) => match turbopath::AbsoluteSystemPathBuf::from_cwd(p) {
-            Ok(path) => Some(path),
-            Err(e) => {
-                tracing::error!("Failed to convert custom turbo.json path: {}", e);
-                return Err(DaemonError::Unavailable(format!(
-                    "Invalid turbo.json path: {}",
-                    e
-                )));
-            }
-        },
-        None => None,
-    };
+    let custom_turbo_json_path = convert_turbo_json_path(custom_turbo_json_path)?;
 
     let connector = DaemonConnector::new(
         can_start_server,
@@ -322,19 +329,7 @@ pub async fn daemon_server(
         }
         CloseReason::Interrupt
     });
-    let custom_turbo_json_path = match turbo_json_path {
-        Some(p) => match turbopath::AbsoluteSystemPathBuf::from_cwd(p) {
-            Ok(path) => Some(path),
-            Err(e) => {
-                tracing::error!("Failed to convert custom turbo.json path: {}", e);
-                return Err(DaemonError::Unavailable(format!(
-                    "Invalid turbo.json path: {}",
-                    e
-                )));
-            }
-        },
-        None => None,
-    };
+    let custom_turbo_json_path = convert_turbo_json_path(turbo_json_path)?;
     let server = crate::daemon::TurboGrpcService::new(
         base.repo_root.clone(),
         paths,
