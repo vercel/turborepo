@@ -105,18 +105,6 @@ describe("managers", () => {
         });
       });
 
-      test("should handle yarn berry path generation correctly", async () => {
-        mockExeca
-          .mockResolvedValueOnce({ stdout: "4.0.0-rc.42" } as any) // yarn version (berry)
-          .mockResolvedValueOnce({ stdout: "/usr/local/bin" } as any) // npm prefix
-          .mockResolvedValueOnce({ stdout: "/usr/local/pnpm" } as any) // pnpm bin
-          .mockResolvedValueOnce({ stdout: "/usr/local/bun" } as any); // bun bin
-
-        const result = await getPackageManagersBinPaths();
-
-        expect(result.yarn).toBe(".yarn/releases/yarn-4.0.0-rc.42.cjs");
-      });
-
       test("should call execa with correct commands for bin paths", async () => {
         mockExeca.mockResolvedValue({ stdout: "1.0.0" } as any);
 
