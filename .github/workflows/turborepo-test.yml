@@ -202,7 +202,7 @@ jobs:
 
       - name: Run cargo clippy
         run: |
-          cargo clippy --workspace --features rustls-tls -- --deny clippy::all
+          cargo clippy --workspace --features rustls-tls --all-targets -- --deny clippy::all
 
   rust_check:
     # We test dependency changes only on main
