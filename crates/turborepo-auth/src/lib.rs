@@ -940,4 +940,12 @@ mod tests {
         assert!(user_result.is_err());
         assert!(matches!(user_result.unwrap_err(), Error::APIError(_)));
     }
+
+    #[tokio::test]
+    async fn test_empty_token_user_fetch_returns_api_error() {
+        let empty_token = Token::new("".to_string());
+        let user_result = empty_token.user(&MockUserClient::new(true)).await;
+        assert!(user_result.is_err());
+        assert!(matches!(user_result.unwrap_err(), Error::APIError(_)));
+    }
 }
