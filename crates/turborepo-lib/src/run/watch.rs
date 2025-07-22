@@ -103,7 +103,6 @@ pub enum Error {
     UI(#[from] turborepo_ui::Error),
     #[error("Could not connect to UI thread: {0}")]
     UISend(String),
-
     #[error("Invalid config: {0}")]
     Config(#[from] crate::config::Error),
     #[error(transparent)]
@@ -120,9 +119,6 @@ impl WatchClient {
         let handler = SignalHandler::new(signal);
 
         let standard_config_path = resolve_turbo_config_path(&base.repo_root)?;
-
-        // Note: We now support watching custom turbo.json paths, so this check is
-        // removed
 
         if matches!(base.opts.run_opts.daemon, Some(false)) {
             warn!("daemon is required for watch, ignoring request to disable daemon");
