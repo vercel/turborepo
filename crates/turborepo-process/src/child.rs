@@ -912,7 +912,7 @@ mod test {
         let trimmed_out = output_str.trim();
         let trimmed_out = trimmed_out.strip_prefix(EOT).unwrap_or(trimmed_out);
 
-        assert!(trimmed_out.contains(input), "got: {}", trimmed_out);
+        assert!(trimmed_out.contains(input), "got: {trimmed_out}");
 
         let exit = child.wait().await;
         assert_matches!(exit, Some(ChildExit::Finished(Some(0))));
@@ -1089,8 +1089,8 @@ mod test {
         // There are no ordering guarantees so we just check that both logs made it
         let expected_stdout = "hello world";
         let expected_stderr = "hello moon";
-        assert!(output.contains(expected_stdout), "got: {}", output);
-        assert!(output.contains(expected_stderr), "got: {}", output);
+        assert!(output.contains(expected_stdout), "got: {output}");
+        assert!(output.contains(expected_stderr), "got: {output}");
         assert_matches!(exit, Some(ChildExit::Finished(Some(0))));
     }
 
@@ -1136,8 +1136,7 @@ mod test {
         let trimmed_out = trimmed_out.strip_prefix(EOT).unwrap_or(trimmed_out);
         assert!(
             output.ends_with('\n'),
-            "expected newline to be added: {}",
-            output
+            "expected newline to be added: {output}"
         );
         assert_eq!(trimmed_out, "look ma, no newline!");
         assert_matches!(exit, Some(ChildExit::Finished(Some(0))));

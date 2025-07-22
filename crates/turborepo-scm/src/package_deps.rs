@@ -451,7 +451,7 @@ mod tests {
         commit_all(&repo_root);
         let git = SCM::new(&repo_root);
         let SCM::Git(git) = git else {
-            panic!("expected git, found {:?}", git);
+            panic!("expected git, found {git:?}");
         };
 
         // remove a file

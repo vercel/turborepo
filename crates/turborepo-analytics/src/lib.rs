@@ -456,10 +456,9 @@ mod tests {
             _events: Vec<AnalyticsEvent>,
         ) -> Result<(), turborepo_api_client::Error> {
             // Simulate an error using a simple error type
-            Err(turborepo_api_client::Error::ReadError(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "test error",
-            )))
+            Err(turborepo_api_client::Error::ReadError(
+                std::io::Error::other("test error"),
+            ))
         }
     }
 }

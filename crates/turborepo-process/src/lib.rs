@@ -384,8 +384,7 @@ mod test {
         // tasks return proper exit code
         assert!(
             tasks.all(|v| async { v.unwrap() == expected }).await,
-            "not all tasks returned the correct code: {:?}",
-            expected
+            "not all tasks returned the correct code: {expected:?}"
         );
     }
 

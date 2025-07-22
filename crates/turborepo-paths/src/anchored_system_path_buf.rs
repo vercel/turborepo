@@ -281,7 +281,7 @@ mod tests {
                 assert_eq!(result.as_str(), expected)
             }
             (Err(result), Err(expected)) => assert_eq!(result, expected),
-            (result, expected) => panic!("Expected {:?}, got {:?}", expected, result),
+            (result, expected) => panic!("Expected {expected:?}, got {result:?}"),
         }
     }
 }

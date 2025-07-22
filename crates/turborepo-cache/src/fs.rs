@@ -211,7 +211,7 @@ mod test {
         test_case.initialize(repo_root_path)?;
 
         let api_client = APIClient::new(
-            format!("http://localhost:{}", port),
+            format!("http://localhost:{port}"),
             Some(Duration::from_secs(200)),
             None,
             "2.0.0",

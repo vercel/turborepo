@@ -527,7 +527,7 @@ mod test {
     ) {
         for dir in dirs {
             let count = WATCH_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            let filename = dir.join_component(format!("test-{}", count).as_str());
+            let filename = dir.join_component(format!("test-{count}").as_str());
             filename.create_with_contents("hello").unwrap();
 
             expect_filesystem_event!(recv, filename, EventKind::Create(_));

@@ -441,13 +441,7 @@ mod test {
         let result = PackageGraphResult::new(
             HashSet::default(),
             vec![
-                (
-                    "a",
-                    Err(Error::Io(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        "something",
-                    ))),
-                ),
+                ("a", Err(Error::Io(std::io::Error::other("something")))),
                 (
                     "b",
                     Err(Error::ChildConfig {

@@ -375,7 +375,7 @@ mod test {
                 color,
                 no_color,
                 root_turbo_json: relative_root_turbo_json
-                    .map(|path| AbsoluteSystemPathBuf::from_unknown(&invocation_dir, path)),
+                    .map(|path| AbsoluteSystemPathBuf::from_unknown(invocation_dir, path)),
             }
         }
     }

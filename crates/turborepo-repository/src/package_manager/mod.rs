@@ -573,7 +573,7 @@ mod tests {
                 return ancestor.to_owned();
             }
         }
-        panic!("Couldn't find Turborepo root from {}", cwd);
+        panic!("Couldn't find Turborepo root from {cwd}");
     }
 
     #[test]

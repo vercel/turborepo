@@ -714,11 +714,7 @@ mod tests {
             &repo.signature().unwrap(),
             "Commit",
             &tree,
-            previous_commit
-                .as_ref()
-                .as_ref()
-                .map(std::slice::from_ref)
-                .unwrap_or_default(),
+            previous_commit.as_ref().as_slice(),
         )
         .unwrap();
     }
@@ -1037,10 +1033,7 @@ mod tests {
             }
             tokio::time::sleep(Duration::from_millis(200)).await;
         }
-        panic!(
-            "failed to get expected hashes. Error {:?}, last hashes: {:?}",
-            error, last_value
-        );
+        panic!("failed to get expected hashes. Error {error:?}, last hashes: {last_value:?}");
     }
 
     fn make_expected(expected: Vec<(&str, &str)>) -> GitHashes {

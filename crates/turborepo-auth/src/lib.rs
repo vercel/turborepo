@@ -449,8 +449,7 @@ mod tests {
             assert_eq!(
                 is_token_active(&metadata, current_time),
                 expected,
-                "Test failed for active_at: {}",
-                active_at
+                "Test failed for active_at: {active_at}"
             );
         }
     }
