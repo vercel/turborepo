@@ -672,6 +672,7 @@ mod test {
     }
 
     #[test]
+    #[cfg(unix)]
     fn test_missing_name_field_warning_message() {
         let package_json_path =
             AbsoluteSystemPathBuf::new("/my-project/packages/app/package.json").unwrap();
