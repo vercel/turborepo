@@ -137,10 +137,8 @@ impl PackageInputsHashes {
                                 .block_on(async {
                                     tokio::time::timeout(
                                         std::time::Duration::from_millis(100),
-                                        daemon.get_file_hashes(
-                                            package_path,
-                                            &task_definition.inputs.globs,
-                                        ),
+                                        daemon
+                                            .get_file_hashes(package_path, &task_definition.inputs),
                                     )
                                     .await
                                 })
@@ -193,6 +191,7 @@ impl PackageInputsHashes {
                             repo_root,
                             package_path,
                             &task_definition.inputs.globs,
+                            task_definition.inputs.default,
                             Some(scm_telemetry),
                         );
                         match local_hash_result {
@@ -543,7 +542,7 @@ pub fn get_internal_deps_hash(
 
     let file_hashes = package_dirs
         .into_par_iter()
-        .map(|package_dir| scm.get_package_file_hashes::<&str>(root, package_dir, &[], None))
+        .map(|package_dir| scm.get_package_file_hashes::<&str>(root, package_dir, &[], false, None))
         .reduce(
             || Ok(HashMap::new()),
             |acc, hashes| {

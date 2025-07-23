@@ -35,6 +35,7 @@ use crate::{boundaries::BoundariesConfig, config::UnnecessaryPackageTaskSyntaxEr
 
 const TURBO_ROOT: &str = "$TURBO_ROOT$";
 const TURBO_ROOT_SLASH: &str = "$TURBO_ROOT$/";
+pub const TURBO_DEFAULT: &str = "$TURBO_DEFAULT$";
 
 pub const CONFIG_FILE: &str = "turbo.json";
 pub const CONFIG_FILE_JSONC: &str = "turbo.jsonc";
@@ -416,20 +417,27 @@ impl TryFrom<Option<Vec<Spanned<UnescapedString>>>> for TaskInputs {
     fn try_from(inputs: Option<Vec<Spanned<UnescapedString>>>) -> Result<Self, Self::Error> {
         let mut globs = Vec::with_capacity(inputs.as_ref().map_or(0, |inputs| inputs.len()));
 
+        let mut default = false;
         for input in inputs.into_iter().flatten() {
-            if Utf8Path::new(input.as_str()).is_absolute() {
+            // If the inputs contain "$TURBO_DEFAULT$", we need to include the "default"
+            // file hashes as well. NOTE: we intentionally don't remove
+            // "$TURBO_DEFAULT$" from the inputs if it exists in the off chance that
+            // the user has a file named "$TURBO_DEFAULT$" in their package (pls
+            // no).
+            if input.as_str() == TURBO_DEFAULT {
+                default = true;
+            } else if Utf8Path::new(input.as_str()).is_absolute() {
                 let (span, text) = input.span_and_text("turbo.json");
                 return Err(Error::AbsolutePathInConfig {
                     field: "inputs",
                     span,
                     text,
                 });
-            } else {
-                globs.push(input.to_string());
             }
+            globs.push(input.to_string());
         }
 
-        Ok(TaskInputs { globs })
+        Ok(TaskInputs { globs, default })
     }
 }
 
@@ -1529,5 +1537,23 @@ mod tests {
             TaskInputs::try_from(Some(vec![Spanned::new(UnescapedString::from("/dev/null"))])),
             Err(Error::AbsolutePathInConfig { .. })
         );
+    }
+
+    #[test]
+    fn test_detects_turbo_default() {
+        let inputs = TaskInputs::try_from(Some(vec![Spanned::new(UnescapedString::from(
+            TURBO_DEFAULT,
+        ))]))
+        .unwrap();
+        assert!(inputs.default);
+    }
+
+    #[test]
+    fn test_keeps_turbo_default() {
+        let inputs = TaskInputs::try_from(Some(vec![Spanned::new(UnescapedString::from(
+            TURBO_DEFAULT,
+        ))]))
+        .unwrap();
+        assert_eq!(inputs.globs, vec![TURBO_DEFAULT.to_string()]);
     }
 }

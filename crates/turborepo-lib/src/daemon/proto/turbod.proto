@@ -141,6 +141,7 @@ message GetFileHashesRequest {
   // AnchoredSystemPathBuf
   string package_path = 1;
   repeated string input_globs = 2;
+  optional bool include_default = 3;
 }
 
 message GetFileHashesResponse {

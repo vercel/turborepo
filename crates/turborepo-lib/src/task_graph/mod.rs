@@ -78,6 +78,8 @@ pub struct TaskOutputs {
 #[derive(Debug, PartialEq, Clone, Eq, Default)]
 pub struct TaskInputs {
     pub globs: Vec<String>,
+    // Set when $TURBO_DEFAULT$ is in inputs
+    pub default: bool,
 }
 
 impl Default for TaskDefinition {
@@ -164,7 +166,15 @@ impl TaskDefinition {
 
 impl TaskInputs {
     pub fn new(globs: Vec<String>) -> Self {
-        Self { globs }
+        Self {
+            globs,
+            default: false,
+        }
+    }
+
+    pub fn with_default(mut self, default: bool) -> Self {
+        self.default = default;
+        self
     }
 }
 
