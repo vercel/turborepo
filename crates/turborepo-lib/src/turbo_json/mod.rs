@@ -1534,7 +1534,13 @@ mod tests {
     #[test]
     fn test_absolute_paths_error_in_inputs() {
         assert_matches!(
-            TaskInputs::try_from(Some(vec![Spanned::new(UnescapedString::from("/dev/null"))])),
+            TaskInputs::try_from(Some(vec![Spanned::new(UnescapedString::from(
+                if cfg!(windows) {
+                    "C:\\win32"
+                } else {
+                    "/dev/null"
+                }
+            ))])),
             Err(Error::AbsolutePathInConfig { .. })
         );
     }
