@@ -241,7 +241,7 @@ Below are examples of proper environment variable configuration for a few popula
 The `turbo.json` below expresses:
 
 - The `build` and `dev` tasks will have different hashes for changes to `MY_API_URL` and `MY_API_KEY`.
-- The `build` and `dev` tasks use the same [file loading order as Next.js](https://nextjs.org/docs/app/building-your-application/configuring/environment-variables#environment-variable-load-order), with `.env` having the most precedence.
+- The `build` and `dev` tasks include the supported .env files for Next.js.
 - The `test` task does not use environment variables, so the `env` key is omitted. (Depending on your testing structure, your `test` task may need an `env` key.)
 
 ```json title="./turbo.json"
@@ -275,7 +275,7 @@ The `turbo.json` below expresses:
 <Accordion title="Vite">
 The `turbo.json` below expresses:
 - The `build` and `dev` tasks will have different hashes for changes to `MY_API_URL` and `MY_API_KEY`.
-- The `build` and `dev` tasks use the same [file loading order as Vite](https://vitejs.dev/guide/env-and-mode#env-files), with `.env` having the most precedence.
+- The `build` and `dev` tasks include the supported .env files for Vite.
 - The `test` task does not use environment variables, so the `env` key is omitted. (Depending on your testing structure, your `test` task may need an `env` key.)
 
 ```json title="./turbo.json"
