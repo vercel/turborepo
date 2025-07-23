@@ -38,10 +38,10 @@ pub struct TaskDefinition {
 
     // Inputs indicate the list of files this Task depends on. If any of those files change
     // we can conclude that any cached outputs or logs for this Task should be invalidated.
-    pub(crate) inputs: Vec<String>,
+    pub inputs: TaskInputs,
 
     // OutputMode determines how we should log the output.
-    pub(crate) output_logs: OutputLogsMode,
+    pub output_logs: OutputLogsMode,
 
     // Persistent indicates whether the Task is expected to exit or not
     // Tasks marked Persistent do not exit (e.g. watch mode or dev servers)
@@ -72,6 +72,12 @@ pub struct TaskDefinition {
 pub struct TaskOutputs {
     pub inclusions: Vec<String>,
     pub exclusions: Vec<String>,
+}
+
+// Structure for holding the inputs for a task
+#[derive(Debug, PartialEq, Clone, Eq, Default)]
+pub struct TaskInputs {
+    pub globs: Vec<String>,
 }
 
 impl Default for TaskDefinition {
@@ -153,6 +159,12 @@ impl TaskDefinition {
         }
 
         repo_relative_globs
+    }
+}
+
+impl TaskInputs {
+    pub fn new(globs: Vec<String>) -> Self {
+        Self { globs }
     }
 }
 

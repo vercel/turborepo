@@ -137,8 +137,10 @@ impl PackageInputsHashes {
                                 .block_on(async {
                                     tokio::time::timeout(
                                         std::time::Duration::from_millis(100),
-                                        daemon
-                                            .get_file_hashes(package_path, &task_definition.inputs),
+                                        daemon.get_file_hashes(
+                                            package_path,
+                                            &task_definition.inputs.globs,
+                                        ),
                                     )
                                     .await
                                 })
@@ -190,7 +192,7 @@ impl PackageInputsHashes {
                         let local_hash_result = scm.get_package_file_hashes(
                             repo_root,
                             package_path,
-                            &task_definition.inputs,
+                            &task_definition.inputs.globs,
                             Some(scm_telemetry),
                         );
                         match local_hash_result {
