@@ -23,7 +23,7 @@ use crate::{
         task_access::TaskAccessTraceFile,
         task_id::{TaskId, TaskName},
     },
-    task_graph::{TaskDefinition, TaskOutputs},
+    task_graph::{TaskDefinition, TaskInputs, TaskOutputs},
 };
 
 mod loader;
@@ -35,6 +35,7 @@ use crate::{boundaries::BoundariesConfig, config::UnnecessaryPackageTaskSyntaxEr
 
 const TURBO_ROOT: &str = "$TURBO_ROOT$";
 const TURBO_ROOT_SLASH: &str = "$TURBO_ROOT$/";
+pub const TURBO_DEFAULT: &str = "$TURBO_DEFAULT$";
 
 pub const CONFIG_FILE: &str = "turbo.json";
 pub const CONFIG_FILE_JSONC: &str = "turbo.jsonc";
@@ -400,6 +401,46 @@ impl TryFrom<Vec<Spanned<UnescapedString>>> for TaskOutputs {
     }
 }
 
+impl FromIterator<RawTaskDefinition> for RawTaskDefinition {
+    fn from_iter<T: IntoIterator<Item = RawTaskDefinition>>(iter: T) -> Self {
+        iter.into_iter()
+            .fold(RawTaskDefinition::default(), |mut def, other| {
+                def.merge(other);
+                def
+            })
+    }
+}
+
+impl TryFrom<Option<Vec<Spanned<UnescapedString>>>> for TaskInputs {
+    type Error = Error;
+
+    fn try_from(inputs: Option<Vec<Spanned<UnescapedString>>>) -> Result<Self, Self::Error> {
+        let mut globs = Vec::with_capacity(inputs.as_ref().map_or(0, |inputs| inputs.len()));
+
+        let mut default = false;
+        for input in inputs.into_iter().flatten() {
+            // If the inputs contain "$TURBO_DEFAULT$", we need to include the "default"
+            // file hashes as well. NOTE: we intentionally don't remove
+            // "$TURBO_DEFAULT$" from the inputs if it exists in the off chance that
+            // the user has a file named "$TURBO_DEFAULT$" in their package (pls
+            // no).
+            if input.as_str() == TURBO_DEFAULT {
+                default = true;
+            } else if Utf8Path::new(input.as_str()).is_absolute() {
+                let (span, text) = input.span_and_text("turbo.json");
+                return Err(Error::AbsolutePathInConfig {
+                    field: "inputs",
+                    span,
+                    text,
+                });
+            }
+            globs.push(input.to_string());
+        }
+
+        Ok(TaskInputs { globs, default })
+    }
+}
+
 impl TaskDefinition {
     pub fn from_raw(
         mut raw_task: RawTaskDefinition,
@@ -468,23 +509,7 @@ impl TaskDefinition {
             .transpose()?
             .unwrap_or_default();
 
-        let inputs = raw_task
-            .inputs
-            .unwrap_or_default()
-            .into_iter()
-            .map(|input| {
-                if Utf8Path::new(&input.value).is_absolute() {
-                    let (span, text) = input.span_and_text("turbo.json");
-                    Err(Error::AbsolutePathInConfig {
-                        field: "inputs",
-                        span,
-                        text,
-                    })
-                } else {
-                    Ok(input.to_string())
-                }
-            })
-            .collect::<Result<Vec<_>, _>>()?;
+        let inputs = TaskInputs::try_from(raw_task.inputs)?;
 
         let pass_through_env = raw_task
             .pass_through_env
@@ -916,7 +941,7 @@ fn replace_turbo_root_token(
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
+    use std::{assert_matches::assert_matches, sync::Arc};
 
     use anyhow::Result;
     use biome_deserialize::json::deserialize_from_json_str;
@@ -929,7 +954,7 @@ mod tests {
 
     use super::{
         replace_turbo_root_token_in_string, validate_with_has_no_topo, FutureFlags, Pipeline,
-        RawTurboJson, SpacesJson, Spanned, TurboJson, UIMode,
+        RawTurboJson, SpacesJson, Spanned, TurboJson, UIMode, *,
     };
     use crate::{
         boundaries::BoundariesConfig,
@@ -1058,7 +1083,7 @@ mod tests {
               exclusions: vec![],
           },
           cache: false,
-          inputs: vec!["package/a/src/**".to_string()],
+          inputs: TaskInputs::new(vec!["package/a/src/**".to_string()]),
           output_logs: OutputLogsMode::Full,
           pass_through_env: Some(vec!["AWS_SECRET_KEY".to_string()]),
           task_dependencies: vec![Spanned::<TaskName<'_>>::new("cli#build".into()).with_range(26..37)],
@@ -1104,7 +1129,7 @@ mod tests {
                 exclusions: vec![],
             },
             cache: false,
-            inputs: vec!["package\\a\\src\\**".to_string()],
+            inputs: TaskInputs::new(vec!["package\\a\\src\\**".to_string()]),
             output_logs: OutputLogsMode::Full,
             pass_through_env: Some(vec!["AWS_SECRET_KEY".to_string()]),
             task_dependencies: vec![Spanned::<TaskName<'_>>::new("cli#build".into()).with_range(30..41)],
@@ -1131,7 +1156,7 @@ mod tests {
             ..RawTaskDefinition::default()
         },
         TaskDefinition {
-            inputs: vec!["../../config.txt".to_owned()],
+            inputs: TaskInputs::new(vec!["../../config.txt".to_owned()]),
             outputs: TaskOutputs {
                 inclusions: vec!["../../coverage/**".to_owned()],
                 exclusions: vec!["../../coverage/index.html".to_owned()],
@@ -1504,5 +1529,37 @@ mod tests {
             error.to_string(),
             "`with` cannot use dependency relationships."
         );
+    }
+
+    #[test]
+    fn test_absolute_paths_error_in_inputs() {
+        assert_matches!(
+            TaskInputs::try_from(Some(vec![Spanned::new(UnescapedString::from(
+                if cfg!(windows) {
+                    "C:\\win32"
+                } else {
+                    "/dev/null"
+                }
+            ))])),
+            Err(Error::AbsolutePathInConfig { .. })
+        );
+    }
+
+    #[test]
+    fn test_detects_turbo_default() {
+        let inputs = TaskInputs::try_from(Some(vec![Spanned::new(UnescapedString::from(
+            TURBO_DEFAULT,
+        ))]))
+        .unwrap();
+        assert!(inputs.default);
+    }
+
+    #[test]
+    fn test_keeps_turbo_default() {
+        let inputs = TaskInputs::try_from(Some(vec![Spanned::new(UnescapedString::from(
+            TURBO_DEFAULT,
+        ))]))
+        .unwrap();
+        assert_eq!(inputs.globs, vec![TURBO_DEFAULT.to_string()]);
     }
 }

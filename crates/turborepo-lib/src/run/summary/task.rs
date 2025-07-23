@@ -311,13 +311,13 @@ impl From<TaskDefinition> for TaskSummaryTaskDefinition {
         depends_on.sort();
         outputs.sort();
         env.sort();
-        inputs.sort();
+        inputs.globs.sort();
 
         Self {
             outputs,
             cache,
             depends_on,
-            inputs,
+            inputs: inputs.globs,
             output_logs,
             persistent,
             interruptible,

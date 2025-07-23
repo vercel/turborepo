@@ -506,11 +506,11 @@ impl ConfigCache {
 
         // empty inputs to get all files
         let inputs: Vec<String> = vec![];
-        let hash_object = match scm.get_package_file_hashes(repo_root, anchored_root, &inputs, None)
-        {
-            Ok(hash_object) => hash_object,
-            Err(_) => return Err(CacheError::ConfigCacheError),
-        };
+        let hash_object =
+            match scm.get_package_file_hashes(repo_root, anchored_root, &inputs, false, None) {
+                Ok(hash_object) => hash_object,
+                Err(_) => return Err(CacheError::ConfigCacheError),
+            };
 
         // return the hash
         Ok(FileHashes(hash_object).hash())

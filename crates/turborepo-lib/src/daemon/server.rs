@@ -386,8 +386,9 @@ impl TurboGrpcServiceInner {
         &self,
         package_path: String,
         inputs: Vec<String>,
+        include_default: bool,
     ) -> Result<HashMap<String, String>, RpcError> {
-        let inputs = InputGlobs::from_raw(inputs)?;
+        let inputs = InputGlobs::from_raw(inputs, include_default)?;
         let package_path = AnchoredSystemPathBuf::try_from(package_path.as_str())
             .map_err(|e| RpcError::InvalidAnchoredPath(package_path, e))?;
         let hash_spec = HashSpec {
@@ -549,7 +550,13 @@ impl proto::turbod_server::Turbod for TurboGrpcServiceInner {
     ) -> Result<tonic::Response<proto::GetFileHashesResponse>, tonic::Status> {
         let inner = request.into_inner();
         let file_hashes = self
-            .get_file_hashes(inner.package_path, inner.input_globs)
+            .get_file_hashes(
+                inner.package_path,
+                inner.input_globs,
+                // If an old client attempts to talk to a new server, assume that we should watch
+                // default files
+                inner.include_default.unwrap_or(true),
+            )
             .await?;
         Ok(tonic::Response::new(proto::GetFileHashesResponse {
             file_hashes,
