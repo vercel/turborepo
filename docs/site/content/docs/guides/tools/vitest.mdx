@@ -10,6 +10,10 @@ import { Tab, Tabs } from '#components/tabs';
 
 [Vitest](https://vitest.dev/) is a test runner from the Vite ecosystem. Integrating it with Turborepo will lead to enormous speed-ups.
 
+<Callout type="info">
+  For Vite 7.0 users, ensure you're using Vitest 3.2+ for full compatibility.
+</Callout>
+
 [The Vitest documentation](https://vitest.dev/guide/workspace) shows how to create a "Vitest Projects" configuration that runs all tests in the monorepo from one root command, enabling behavior like merged coverage reports out-of-the-box. This feature doesn't follow modern best practices for monorepos, since its designed for compatibility with Jest (whose Workspace feature was built before [package manager Workspaces](/docs/crafting-your-repository/structuring-a-repository)).
 
 <Callout type="warning">
