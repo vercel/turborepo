@@ -7,7 +7,7 @@
     "start": "ng serve --host 0.0.0.0 --port 4201",
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
-    "dev": "ng build --watch --configuration development",
+    "dev": "sleep 5 && npm run start",
     "test": "ng test",
     "lint": "eslint . --max-warnings 0",
     "clean": "rm -rf .turbo && rm -rf node_modules && rm -rf .angular"
