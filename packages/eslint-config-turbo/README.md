@@ -62,7 +62,7 @@ You can also configure rules available in the configuration:
 
 ```json
 {
-  "plugins": ["turbo"],
+  "extends": ["turbo"],
   "rules": {
     "turbo/no-undeclared-env-vars": [
       "error",
