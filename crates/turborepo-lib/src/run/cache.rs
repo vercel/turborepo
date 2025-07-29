@@ -15,6 +15,7 @@ use turborepo_cache::{
 };
 use turborepo_repository::package_graph::PackageInfo;
 use turborepo_scm::SCM;
+use turborepo_task_id::TaskId;
 use turborepo_telemetry::events::{task::PackageTaskEventBuilder, TrackedErrors};
 use turborepo_ui::{color, tui::event::CacheResult, ColorConfig, ColorSelector, LogWriter, GREY};
 
@@ -23,7 +24,6 @@ use crate::{
     daemon::{DaemonClient, DaemonConnector},
     hash::{FileHashes, TurboHash},
     opts::RunCacheOpts,
-    run::task_id::TaskId,
     task_graph::{TaskDefinition, TaskOutputs},
 };
 

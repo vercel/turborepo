@@ -6,12 +6,10 @@ use globwalk::{GlobError, ValidatedGlob};
 use serde::{Deserialize, Serialize};
 use turbopath::{AnchoredSystemPath, AnchoredSystemPathBuf, RelativeUnixPathBuf};
 use turborepo_errors::Spanned;
+use turborepo_task_id::{TaskId, TaskName};
 pub use visitor::{Error as VisitorError, Visitor};
 
-use crate::{
-    cli::{EnvMode, OutputLogsMode},
-    run::task_id::{TaskId, TaskName},
-};
+use crate::cli::{EnvMode, OutputLogsMode};
 
 // Constructed from a RawTaskDefinition
 #[derive(Debug, PartialEq, Clone, Eq)]

@@ -14,15 +14,13 @@ use struct_iterable::Iterable;
 use turbopath::{AbsoluteSystemPath, RelativeUnixPath};
 use turborepo_errors::Spanned;
 use turborepo_repository::package_graph::ROOT_PKG_NAME;
+use turborepo_task_id::{TaskId, TaskName};
 use turborepo_unescape::UnescapedString;
 
 use crate::{
     cli::{EnvMode, OutputLogsMode},
     config::{ConfigurationOptions, Error, InvalidEnvPrefixError},
-    run::{
-        task_access::TaskAccessTraceFile,
-        task_id::{TaskId, TaskName},
-    },
+    run::task_access::TaskAccessTraceFile,
     task_graph::{TaskDefinition, TaskInputs, TaskOutputs},
 };
 
@@ -950,6 +948,7 @@ mod tests {
     use serde_json::json;
     use test_case::test_case;
     use turbopath::RelativeUnixPath;
+    use turborepo_task_id::TaskName;
     use turborepo_unescape::UnescapedString;
 
     use super::{
@@ -959,7 +958,6 @@ mod tests {
     use crate::{
         boundaries::BoundariesConfig,
         cli::OutputLogsMode,
-        run::task_id::TaskName,
         task_graph::{TaskDefinition, TaskOutputs},
         turbo_json::RawTaskDefinition,
     };

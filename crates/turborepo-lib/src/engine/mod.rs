@@ -16,8 +16,9 @@ use petgraph::Graph;
 use thiserror::Error;
 use turborepo_errors::Spanned;
 use turborepo_repository::package_graph::{PackageGraph, PackageName};
+use turborepo_task_id::TaskId;
 
-use crate::{run::task_id::TaskId, task_graph::TaskDefinition, turbo_json::UIMode};
+use crate::{task_graph::TaskDefinition, turbo_json::UIMode};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum TaskNode {
@@ -612,9 +613,9 @@ mod test {
         discovery::{DiscoveryResponse, PackageDiscovery, WorkspaceData},
         package_json::PackageJson,
     };
+    use turborepo_task_id::TaskName;
 
     use super::*;
-    use crate::run::task_id::TaskName;
 
     struct DummyDiscovery<'a>(&'a TempDir);
 

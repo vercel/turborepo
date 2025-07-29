@@ -22,6 +22,7 @@ use turborepo_repository::{
 };
 use turborepo_scm::SCM;
 use turborepo_signals::{SignalHandler, SignalSubscriber};
+use turborepo_task_id::TaskName;
 use turborepo_telemetry::events::{
     command::CommandEventBuilder,
     generic::{DaemonInitStatus, GenericEventBuilder},
@@ -45,7 +46,7 @@ use crate::{
     engine::{Engine, EngineBuilder},
     microfrontends::MicrofrontendsConfigs,
     opts::Opts,
-    run::{scope, task_access::TaskAccess, task_id::TaskName, Error, Run, RunCache},
+    run::{scope, task_access::TaskAccess, Error, Run, RunCache},
     shim::TurboState,
     turbo_json::{resolve_turbo_config_path, TurboJson, TurboJsonLoader, UIMode},
     DaemonConnector,

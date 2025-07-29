@@ -4,10 +4,11 @@ use chrono::{DateTime, Local};
 use serde::Serialize;
 use tokio::sync::mpsc;
 use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath};
+use turborepo_task_id::TaskId;
 use turborepo_ui::{color, cprintln, ColorConfig, BOLD, BOLD_GREEN, BOLD_RED, MAGENTA, YELLOW};
 
 use super::TurboDuration;
-use crate::run::{summary::task::TaskSummary, task_id::TaskId};
+use crate::run::summary::task::TaskSummary;
 
 // Just used to make changing the type that gets passed to the state management
 // thread easy

@@ -8,13 +8,12 @@ use turborepo_repository::{
     package_graph::{PackageInfo, PackageName},
     package_json::PackageJson,
 };
+use turborepo_task_id::TaskName;
 
 use super::{Pipeline, RawTaskDefinition, TurboJson, CONFIG_FILE, CONFIG_FILE_JSONC};
 use crate::{
-    cli::EnvMode,
-    config::Error,
-    microfrontends::MicrofrontendsConfigs,
-    run::{task_access::TASK_ACCESS_CONFIG_PATH, task_id::TaskName},
+    cli::EnvMode, config::Error, microfrontends::MicrofrontendsConfigs,
+    run::task_access::TASK_ACCESS_CONFIG_PATH,
 };
 
 /// Structure for loading TurboJson structures.
