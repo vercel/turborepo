@@ -19,7 +19,7 @@ use turborepo_unescape::UnescapedString;
 
 use crate::{
     cli::{EnvMode, OutputLogsMode},
-    config::{ConfigurationOptions, Error, InvalidEnvPrefixError},
+    config::{Error, InvalidEnvPrefixError},
     run::task_access::TaskAccessTraceFile,
     task_graph::{TaskDefinition, TaskInputs, TaskOutputs},
 };
@@ -98,57 +98,25 @@ pub struct TurboJson {
 // Iterable is required to enumerate allowed keys
 #[derive(Clone, Debug, Default, Iterable, Serialize, Deserializable)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct RawRemoteCacheOptions {
+pub struct RawRemoteCacheOptions {
     #[serde(skip_serializing_if = "Option::is_none")]
-    api_url: Option<Spanned<String>>,
+    pub api_url: Option<Spanned<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    login_url: Option<Spanned<String>>,
+    pub login_url: Option<Spanned<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    team_slug: Option<Spanned<String>>,
+    pub team_slug: Option<Spanned<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    team_id: Option<Spanned<String>>,
+    pub team_id: Option<Spanned<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    signature: Option<Spanned<bool>>,
+    pub signature: Option<Spanned<bool>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    preflight: Option<Spanned<bool>>,
+    pub preflight: Option<Spanned<bool>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    timeout: Option<Spanned<u64>>,
+    pub timeout: Option<Spanned<u64>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    enabled: Option<Spanned<bool>>,
+    pub enabled: Option<Spanned<bool>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    upload_timeout: Option<Spanned<u64>>,
-}
-
-impl From<&RawRemoteCacheOptions> for ConfigurationOptions {
-    fn from(remote_cache_opts: &RawRemoteCacheOptions) -> Self {
-        Self {
-            api_url: remote_cache_opts
-                .api_url
-                .as_ref()
-                .map(|s| s.as_inner().clone()),
-            login_url: remote_cache_opts
-                .login_url
-                .as_ref()
-                .map(|s| s.as_inner().clone()),
-            team_slug: remote_cache_opts
-                .team_slug
-                .as_ref()
-                .map(|s| s.as_inner().clone()),
-            team_id: remote_cache_opts
-                .team_id
-                .as_ref()
-                .map(|s| s.as_inner().clone()),
-            signature: remote_cache_opts.signature.as_ref().map(|s| *s.as_inner()),
-            preflight: remote_cache_opts.preflight.as_ref().map(|s| *s.as_inner()),
-            timeout: remote_cache_opts.timeout.as_ref().map(|s| *s.as_inner()),
-            upload_timeout: remote_cache_opts
-                .upload_timeout
-                .as_ref()
-                .map(|s| *s.as_inner()),
-            enabled: remote_cache_opts.enabled.as_ref().map(|s| *s.as_inner()),
-            ..Self::default()
-        }
-    }
+    pub upload_timeout: Option<Spanned<u64>>,
 }
 
 #[derive(Serialize, Default, Debug, Clone, Iterable, Deserializable)]
@@ -182,7 +150,7 @@ pub struct RawTurboJson {
     pub pipeline: Option<Spanned<Pipeline>>,
     // Configuration options when interfacing with the remote cache
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) remote_cache: Option<RawRemoteCacheOptions>,
+    pub remote_cache: Option<RawRemoteCacheOptions>,
     #[serde(skip_serializing_if = "Option::is_none", rename = "ui")]
     pub ui: Option<Spanned<UIMode>>,
     #[serde(
