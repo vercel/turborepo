@@ -100,7 +100,7 @@ mod test {
     use tempfile::tempdir;
 
     use super::*;
-    use crate::turbo_json::CONFIG_FILE;
+    use crate::config::CONFIG_FILE;
 
     #[test]
     fn test_reads_from_default() {

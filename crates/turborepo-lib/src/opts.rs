@@ -13,8 +13,8 @@ use crate::{
         Command, ContinueMode, DryRunMode, EnvMode, ExecutionArgs, LogOrder, LogPrefix,
         OutputLogsMode, RunArgs,
     },
-    config::ConfigurationOptions,
-    turbo_json::{UIMode, CONFIG_FILE},
+    config::{ConfigurationOptions, CONFIG_FILE},
+    turbo_json::UIMode,
     Args,
 };
 
@@ -574,9 +574,9 @@ mod test {
     use crate::{
         cli::{Command, ContinueMode, DryRunMode, RunArgs},
         commands::CommandBase,
-        config::ConfigurationOptions,
+        config::{ConfigurationOptions, CONFIG_FILE},
         opts::{Opts, RunCacheOpts, ScopeOpts, TuiOpts},
-        turbo_json::{UIMode, CONFIG_FILE},
+        turbo_json::UIMode,
         Args,
     };
 

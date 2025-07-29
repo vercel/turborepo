@@ -23,8 +23,9 @@ use turborepo_repository::{
 };
 use turborepo_scm::GitHashes;
 
-use crate::turbo_json::{
-    resolve_turbo_config_path, TurboJson, TurboJsonLoader, CONFIG_FILE, CONFIG_FILE_JSONC,
+use crate::{
+    config::{resolve_turbo_config_path, CONFIG_FILE, CONFIG_FILE_JSONC},
+    turbo_json::{TurboJson, TurboJsonLoader},
 };
 
 #[derive(Clone)]

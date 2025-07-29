@@ -10,9 +10,11 @@ use turborepo_repository::{
 };
 use turborepo_task_id::TaskName;
 
-use super::{Pipeline, RawTaskDefinition, TurboJson, CONFIG_FILE, CONFIG_FILE_JSONC};
+use super::{Pipeline, RawTaskDefinition, TurboJson};
 use crate::{
-    cli::EnvMode, config::Error, microfrontends::MicrofrontendsConfigs,
+    cli::EnvMode,
+    config::{Error, CONFIG_FILE, CONFIG_FILE_JSONC},
+    microfrontends::MicrofrontendsConfigs,
     run::task_access::TASK_ACCESS_CONFIG_PATH,
 };
 

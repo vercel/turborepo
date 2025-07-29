@@ -43,12 +43,13 @@ use {
 use crate::{
     cli::DryRunMode,
     commands::CommandBase,
+    config::resolve_turbo_config_path,
     engine::{Engine, EngineBuilder},
     microfrontends::MicrofrontendsConfigs,
     opts::Opts,
     run::{scope, task_access::TaskAccess, Error, Run, RunCache},
     shim::TurboState,
-    turbo_json::{resolve_turbo_config_path, TurboJson, TurboJsonLoader, UIMode},
+    turbo_json::{TurboJson, TurboJsonLoader, UIMode},
     DaemonConnector,
 };
 
