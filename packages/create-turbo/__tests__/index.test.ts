@@ -10,6 +10,7 @@ import { CreateTurboTelemetry, TelemetryConfig } from "@turbo/telemetry";
 import * as turboUtils from "@turbo/utils";
 import { describe, it, expect, jest } from "@jest/globals";
 import type { CreateCommandArgument } from "../src/commands/create/types";
+import * as gitUtils from "../src/utils/git";
 import { create } from "../src/commands/create";
 import { getWorkspaceDetailsMockReturnValue } from "./test-utils";
 
@@ -274,5 +275,119 @@ describe("create-turbo", () => {
     mockCreateProject.mockRestore();
     mockGetWorkspaceDetails.mockRestore();
     mockExecSync.mockRestore();
+  });
+
+  it("removes .git directory when --no-git flag is used", async () => {
+    const { root } = useFixture({ fixture: "create-turbo-no-git" });
+    const packageManager = "npm";
+
+    const mockAvailablePackageManagers = jest
+      .spyOn(turboUtils, "getAvailablePackageManagers")
+      .mockResolvedValue({
+        npm: "8.19.2",
+        yarn: "1.22.10",
+        pnpm: "7.22.2",
+        bun: "1.0.1",
+      });
+
+    const mockCreateProject = jest
+      .spyOn(turboUtils, "createProject")
+      .mockResolvedValue({
+        cdPath: "",
+        hasPackageJson: true,
+        availableScripts: ["build", "test", "dev"],
+      });
+
+    const mockGetWorkspaceDetails = jest
+      .spyOn(turboWorkspaces, "getWorkspaceDetails")
+      .mockResolvedValue(
+        getWorkspaceDetailsMockReturnValue({
+          root,
+          packageManager,
+        })
+      );
+
+    const mockExecSync = jest
+      .spyOn(childProcess, "execSync")
+      .mockImplementation(() => {
+        return "success";
+      });
+
+    const mockRemoveGitDirectory = jest
+      .spyOn(gitUtils, "removeGitDirectory")
+      .mockReturnValue(true);
+
+    await create(root as CreateCommandArgument, {
+      packageManager,
+      skipInstall: true,
+      example: "default",
+      noGit: true,
+      telemetry,
+    });
+
+    expect(mockRemoveGitDirectory).toHaveBeenCalledWith(root);
+
+    mockAvailablePackageManagers.mockRestore();
+    mockCreateProject.mockRestore();
+    mockGetWorkspaceDetails.mockRestore();
+    mockExecSync.mockRestore();
+    mockRemoveGitDirectory.mockRestore();
+  });
+
+  it("does not remove .git directory when --no-git flag is not used", async () => {
+    const { root } = useFixture({ fixture: "create-turbo-with-git" });
+    const packageManager = "npm";
+
+    const mockAvailablePackageManagers = jest
+      .spyOn(turboUtils, "getAvailablePackageManagers")
+      .mockResolvedValue({
+        npm: "8.19.2",
+        yarn: "1.22.10",
+        pnpm: "7.22.2",
+        bun: "1.0.1",
+      });
+
+    const mockCreateProject = jest
+      .spyOn(turboUtils, "createProject")
+      .mockResolvedValue({
+        cdPath: "",
+        hasPackageJson: true,
+        availableScripts: ["build", "test", "dev"],
+      });
+
+    const mockGetWorkspaceDetails = jest
+      .spyOn(turboWorkspaces, "getWorkspaceDetails")
+      .mockResolvedValue(
+        getWorkspaceDetailsMockReturnValue({
+          root,
+          packageManager,
+        })
+      );
+
+    const mockExecSync = jest
+      .spyOn(childProcess, "execSync")
+      .mockImplementation(() => {
+        return "success";
+      });
+
+    const mockRemoveGitDirectory = jest
+      .spyOn(gitUtils, "removeGitDirectory")
+      .mockReturnValue(true);
+
+    await create(root as CreateCommandArgument, {
+      packageManager,
+      skipInstall: true,
+      example: "default",
+      noGit: false,
+      telemetry,
+    });
+
+    expect(mockRemoveGitDirectory).not.toHaveBeenCalled();
+
+    mockAvailablePackageManagers.mockRestore();
+    mockCreateProject.mockRestore();
+    mockGetWorkspaceDetails.mockRestore();
+    mockExecSync.mockRestore();
+    mockRemoveGitDirectory.mockRestore();
   });
 });
