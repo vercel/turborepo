@@ -24,6 +24,7 @@ use crate::{
     task_graph::{TaskDefinition, TaskInputs, TaskOutputs},
 };
 
+mod extend;
 mod loader;
 pub mod parser;
 
@@ -261,42 +262,6 @@ pub struct RawTaskDefinition {
     with: Option<Vec<Spanned<UnescapedString>>>,
 }
 
-macro_rules! set_field {
-    ($this:ident, $other:ident, $field:ident) => {{
-        if let Some(field) = $other.$field {
-            $this.$field = field.into();
-        }
-    }};
-}
-
-impl RawTaskDefinition {
-    // merge accepts a RawTaskDefinition and
-    // merges it into RawTaskDefinition.
-    pub fn merge(&mut self, other: RawTaskDefinition) {
-        set_field!(self, other, outputs);
-
-        let other_has_range = other.cache.as_ref().is_some_and(|c| c.range.is_some());
-        let self_does_not_have_range = self.cache.as_ref().is_some_and(|c| c.range.is_none());
-
-        if other.cache.is_some()
-            // If other has range info and we're missing it, carry it over
-            || (other_has_range && self_does_not_have_range)
-        {
-            self.cache = other.cache;
-        }
-        set_field!(self, other, depends_on);
-        set_field!(self, other, inputs);
-        set_field!(self, other, output_logs);
-        set_field!(self, other, persistent);
-        set_field!(self, other, interruptible);
-        set_field!(self, other, env);
-        set_field!(self, other, pass_through_env);
-        set_field!(self, other, interactive);
-        set_field!(self, other, env_mode);
-        set_field!(self, other, with);
-    }
-}
-
 impl TryFrom<Vec<Spanned<UnescapedString>>> for TaskOutputs {
     type Error = Error;
     fn try_from(outputs: Vec<Spanned<UnescapedString>>) -> Result<Self, Self::Error> {
@@ -336,16 +301,6 @@ impl TryFrom<Vec<Spanned<UnescapedString>>> for TaskOutputs {
             inclusions,
             exclusions,
         })
-    }
-}
-
-impl FromIterator<RawTaskDefinition> for RawTaskDefinition {
-    fn from_iter<T: IntoIterator<Item = RawTaskDefinition>>(iter: T) -> Self {
-        iter.into_iter()
-            .fold(RawTaskDefinition::default(), |mut def, other| {
-                def.merge(other);
-                def
-            })
     }
 }
 
