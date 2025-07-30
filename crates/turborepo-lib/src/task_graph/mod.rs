@@ -15,12 +15,12 @@ use crate::cli::{EnvMode, OutputLogsMode};
 #[derive(Debug, PartialEq, Clone, Eq)]
 pub struct TaskDefinition {
     pub outputs: TaskOutputs,
-    pub(crate) cache: bool,
+    pub cache: bool,
 
     // This field is custom-marshalled from `env` and `depends_on``
-    pub(crate) env: Vec<String>,
+    pub env: Vec<String>,
 
-    pub(crate) pass_through_env: Option<Vec<String>>,
+    pub pass_through_env: Option<Vec<String>>,
 
     // TopologicalDependencies are tasks from package dependencies.
     // E.g. "build" is a topological dependency in:
