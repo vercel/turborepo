@@ -46,53 +46,32 @@ Create a file called `.buildkite/pipeline.yml` in your repository with the follo
   <Tab value="pnpm">
 
     ```yaml title=".buildkite/pipeline.yml"
-    version: 2.1
-    workflows:
-      test:
-        jobs:
-          - test
-    jobs:
-      test:
-        steps:
-          - checkout
-          - node/install-packages
-          - run:
-            command: npm i -g pnpm
-            environment:
-              TURBO_UI: "false"
-          - run:
-            command: pnpm build
-            environment:
-              TURBO_UI: "false"
-          - run:
-            command: pnpm test
-            environment:
-              TURBO_UI: "false"
+    steps:
+      - label: ":test_tube: Test"
+        command: |
+          pnpm install
+          pnpm test
+
+      - label: ":hammer: Build"
+        command: |
+          pnpm install
+          pnpm build
     ```
 
   </Tab>
   <Tab value="yarn">
 
     ```yaml title=".buildkite/pipeline.yml"
-    version: 2.1
-    workflows:
-      test:
-        jobs:
-          - test
-    jobs:
-      test:
-        steps:
-          - checkout
-          - node/install-packages:
-            pkg-manager: yarn
-          - run:
-            command: yarn build
-            environment:
-              TURBO_UI: "false"
-          - run:
-            command: yarn test
-            environment:
-              TURBO_UI: "false"
+    steps:
+      - label: ":test_tube: Test"
+        command: |
+          yarn
+          yarn test
+
+      - label: ":hammer: Build"
+        command: |
+          yarn
+          yarn build
     ```
 
   </Tab>
@@ -100,25 +79,16 @@ Create a file called `.buildkite/pipeline.yml` in your repository with the follo
 <Tab value="npm">
 
     ```yaml title=".buildkite/pipeline.yml"
-    version: 2.1
-    workflows:
-      test:
-        jobs:
-          - test
-    jobs:
-      test:
-        steps:
-          - checkout
-          - node/install-packages
-          - run:
-            command: npm run build
-            environment:
-              TURBO_UI: "false"
+    steps:
+      - label: ":test_tube: Test"
+        command: |
+          npm install
+          npm test
 
-          - run:
-            command: npm run test
-            environment:
-              TURBO_UI: "false"
+      - label: ":hammer: Build"
+        command: |
+          npm install
+          npm run build
     ```
 
   </Tab>
@@ -126,28 +96,16 @@ Create a file called `.buildkite/pipeline.yml` in your repository with the follo
   <Tab value="bun (Beta)">
 
     ```yaml title=".buildkite/pipeline.yml"
-    version: 2.1
-    workflows:
-      test:
-        jobs:
-          - test
-    jobs:
-      test:
-        steps:
-          - checkout
-          - node/install-packages
-          - run:
-            command: npm i -g bun
-            environment:
-              TURBO_UI: "false"
-          - run:
-            command: bun run build
-            environment:
-              TURBO_UI: "false"
-          - run:
-            command: bun run test
-            environment:
-              TURBO_UI: "false"
+    steps:
+      - label: ":test_tube: Test"
+        command: |
+          bun install
+          bun run test
+
+      - label: ":hammer: Build"
+        command: |
+          bun install
+          bun run build
     ```
 
   </Tab>
@@ -186,10 +144,35 @@ To use Vercel Remote Caching, you can get the value of these variables in a few 
 
 1. Create a Scoped Access Token to your account in the [Vercel Dashboard](https://vercel.com/account/tokens). Copy the value to a safe place. You'll need it in a moment.
 
-![Vercel Access Tokens](/images/docs/vercel-create-token.png)
+   ![Vercel Access Tokens](/images/docs/vercel-create-token.png)
 
-2. Make a second secret called `TURBO_TEAM` and enter [your Team URL](https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fsettings&title=Find+Team+URL). Copy this value as well. Both values will be used in the next step.
+2. Obtain [your Team URL](https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fsettings&title=Find+Team+URL) and copy its value as well. Both values will be used in the next step.
 
-3. Select one of the following secrets storage services plugins and follow the instructions to set both environment variables:
-   [AWS SSM](https://github.com/buildkite-plugins/aws-assume-role-with-web-identity-buildkite-plugin), [GC Secrets](https://github.com/buildkite-plugins/gcp-workload-identity-federation-buildkite-plugin), or [Hashicorp Vault](https://github.com/buildkite-plugins/vault-secrets-buildkite-plugin).
-   If you cannot use such a service, use the Buildkite agent's `environment` hook to export secrets to a job. For more information, read [Managing pipeline secrets](https://buildkite.com/docs/pipelines/security/secrets/managing).
+3. In the Buildkite dashboard, create two new [Buildkite secrets](https://buildkite.com/docs/pipelines/security/secrets/buildkite-secrets), one for each value. Name them `TURBO_TOKEN` and `TURBO_TEAM`.
+
+4. Update `pipeline.yml` to fetch and apply `TURBO_TOKEN` and `TURBO_TEAM` as environment variables with the [Buildkite Secrets](https://github.com/buildkite-plugins/secrets-buildkite-plugin) plugin as shown. (For additional secret-management options, read [Managing pipeline secrets](https://buildkite.com/docs/pipelines/security/secrets/managing) in the Buildkite documentation.)
+
+   ```yaml title=".buildkite/pipeline.yml"
+   steps:
+     - label: ':test_tube: Test'
+       command: |
+         npm install
+         npm test
+       plugins:
+         - secrets:
+             variables:
+               TURBO_TOKEN: TURBO_TOKEN
+               TURBO_TEAM: TURBO_TEAM
+
+     - label: ':hammer: Build'
+       command: |
+         npm install
+         npm run build
+       plugins:
+         - secrets:
+             variables:
+               TURBO_TOKEN: TURBO_TOKEN
+               TURBO_TEAM: TURBO_TEAM
+   ```
+
+   Commit and push these changes to your repository, and on the next pipeline run, the secrets will be applied and Vercel Remote Caching will be active.
