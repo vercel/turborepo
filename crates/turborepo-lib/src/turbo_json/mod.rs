@@ -28,7 +28,7 @@ mod extend;
 mod loader;
 pub mod parser;
 
-pub use loader::TurboJsonLoader;
+pub use loader::{TurboJsonLoader, TurboJsonReader};
 
 use crate::{boundaries::BoundariesConfig, config::UnnecessaryPackageTaskSyntaxError};
 
@@ -158,7 +158,7 @@ pub struct RawTurboJson {
     _comment: Option<String>,
 }
 
-#[derive(Serialize, Default, Debug, Clone, Iterable, Deserializable, PartialEq, Eq)]
+#[derive(Serialize, Default, Debug, Copy, Clone, Iterable, Deserializable, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct FutureFlags {}
 
@@ -614,9 +614,13 @@ impl TurboJson {
 
     /// Reads a `RawTurboJson` from the given path
     /// and then converts it into `TurboJson`
-    pub(crate) fn read(
+    ///
+    /// Should never be called directly outside of this module.
+    /// `TurboJsonReader` should be used instead.
+    fn read(
         repo_root: &AbsoluteSystemPath,
         path: &AbsoluteSystemPath,
+        _future_flags: FutureFlags,
     ) -> Result<Option<TurboJson>, Error> {
         let Some(raw_turbo_json) = RawTurboJson::read(repo_root, path)? else {
             return Ok(None);
