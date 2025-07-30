@@ -13,11 +13,11 @@ use struct_iterable::Iterable;
 use thiserror::Error;
 use tracing::log::warn;
 use turborepo_errors::{ParseDiagnostic, WithMetadata};
+use turborepo_task_id::TaskName;
 use turborepo_unescape::UnescapedString;
 
 use crate::{
     boundaries::{BoundariesConfig, Permissions, Rule},
-    run::task_id::TaskName,
     turbo_json::{Pipeline, RawRemoteCacheOptions, RawTaskDefinition, RawTurboJson, Spanned},
 };
 
@@ -43,18 +43,6 @@ fn create_unknown_key_diagnostic_from_struct<T: Iterable>(
     let allowed_keys_borrowed = allowed_keys.iter().map(|s| s.as_str()).collect::<Vec<_>>();
 
     DeserializationDiagnostic::new_unknown_key(unknown_key, range, &allowed_keys_borrowed)
-}
-
-impl Deserializable for TaskName<'static> {
-    fn deserialize(
-        value: &impl DeserializableValue,
-        name: &str,
-        diagnostics: &mut Vec<DeserializationDiagnostic>,
-    ) -> Option<Self> {
-        let task_id: String = UnescapedString::deserialize(value, name, diagnostics)?.into();
-
-        Some(Self::from(task_id))
-    }
 }
 
 impl Deserializable for Pipeline {
@@ -84,7 +72,11 @@ impl DeserializationVisitor for PipelineVisitor {
         let mut result = BTreeMap::new();
         for (key, value) in members.flatten() {
             let task_name_range = value.range();
-            let task_name = TaskName::deserialize(&key, "", diagnostics)?;
+            let task_name = TaskName::from(String::from(UnescapedString::deserialize(
+                &key,
+                "",
+                diagnostics,
+            )?));
             let task_name_start: usize = task_name_range.start().into();
             let task_name_end: usize = task_name_range.end().into();
             result.insert(

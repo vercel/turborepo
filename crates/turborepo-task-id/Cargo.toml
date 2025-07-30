@@ -1,0 +1,16 @@
+[package]
+name = "turborepo-task-id"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[lints]
+workspace = true
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+thiserror = { workspace = true }
+turborepo-repository = { workspace = true }
+
+[dev-dependencies]
+test-case = { workspace = true }

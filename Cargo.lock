@@ -6805,6 +6805,7 @@ dependencies = [
  "turborepo-repository",
  "turborepo-scm",
  "turborepo-signals",
+ "turborepo-task-id",
  "turborepo-telemetry",
  "turborepo-ui",
  "turborepo-unescape",
@@ -6984,6 +6985,16 @@ dependencies = [
  "futures",
  "thiserror 1.0.63",
  "tokio",
+]
+
+[[package]]
+name = "turborepo-task-id"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "test-case",
+ "thiserror 1.0.63",
+ "turborepo-repository",
 ]
 
 [[package]]

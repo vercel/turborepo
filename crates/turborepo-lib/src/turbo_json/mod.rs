@@ -14,18 +14,17 @@ use struct_iterable::Iterable;
 use turbopath::{AbsoluteSystemPath, RelativeUnixPath};
 use turborepo_errors::Spanned;
 use turborepo_repository::package_graph::ROOT_PKG_NAME;
+use turborepo_task_id::{TaskId, TaskName};
 use turborepo_unescape::UnescapedString;
 
 use crate::{
     cli::{EnvMode, OutputLogsMode},
-    config::{ConfigurationOptions, Error, InvalidEnvPrefixError},
-    run::{
-        task_access::TaskAccessTraceFile,
-        task_id::{TaskId, TaskName},
-    },
+    config::{Error, InvalidEnvPrefixError},
+    run::task_access::TaskAccessTraceFile,
     task_graph::{TaskDefinition, TaskInputs, TaskOutputs},
 };
 
+mod extend;
 mod loader;
 pub mod parser;
 
@@ -37,36 +36,8 @@ const TURBO_ROOT: &str = "$TURBO_ROOT$";
 const TURBO_ROOT_SLASH: &str = "$TURBO_ROOT$/";
 pub const TURBO_DEFAULT: &str = "$TURBO_DEFAULT$";
 
-pub const CONFIG_FILE: &str = "turbo.json";
-pub const CONFIG_FILE_JSONC: &str = "turbo.jsonc";
 const ENV_PIPELINE_DELIMITER: &str = "$";
 const TOPOLOGICAL_PIPELINE_DELIMITER: &str = "^";
-
-/// Given a directory path, determines which turbo.json configuration file to
-/// use. Returns an error if both turbo.json and turbo.jsonc exist in the same
-/// directory. Returns the path to the config file to use, defaulting to
-/// turbo.json if neither exists.
-pub fn resolve_turbo_config_path(
-    dir_path: &turbopath::AbsoluteSystemPath,
-) -> Result<turbopath::AbsoluteSystemPathBuf, crate::config::Error> {
-    use crate::config::Error;
-
-    let turbo_json_path = dir_path.join_component(CONFIG_FILE);
-    let turbo_jsonc_path = dir_path.join_component(CONFIG_FILE_JSONC);
-
-    let turbo_json_exists = turbo_json_path.try_exists()?;
-    let turbo_jsonc_exists = turbo_jsonc_path.try_exists()?;
-
-    match (turbo_json_exists, turbo_jsonc_exists) {
-        (true, true) => Err(Error::MultipleTurboConfigs {
-            directory: dir_path.to_string(),
-        }),
-        (true, false) => Ok(turbo_json_path),
-        (false, true) => Ok(turbo_jsonc_path),
-        // Default to turbo.json if neither exists
-        (false, false) => Ok(turbo_json_path),
-    }
-}
 
 #[derive(Serialize, Deserialize, Debug, Default, PartialEq, Clone, Deserializable)]
 #[serde(rename_all = "camelCase")]
@@ -100,57 +71,25 @@ pub struct TurboJson {
 // Iterable is required to enumerate allowed keys
 #[derive(Clone, Debug, Default, Iterable, Serialize, Deserializable)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct RawRemoteCacheOptions {
+pub struct RawRemoteCacheOptions {
     #[serde(skip_serializing_if = "Option::is_none")]
-    api_url: Option<Spanned<String>>,
+    pub api_url: Option<Spanned<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    login_url: Option<Spanned<String>>,
+    pub login_url: Option<Spanned<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    team_slug: Option<Spanned<String>>,
+    pub team_slug: Option<Spanned<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    team_id: Option<Spanned<String>>,
+    pub team_id: Option<Spanned<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    signature: Option<Spanned<bool>>,
+    pub signature: Option<Spanned<bool>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    preflight: Option<Spanned<bool>>,
+    pub preflight: Option<Spanned<bool>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    timeout: Option<Spanned<u64>>,
+    pub timeout: Option<Spanned<u64>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    enabled: Option<Spanned<bool>>,
+    pub enabled: Option<Spanned<bool>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    upload_timeout: Option<Spanned<u64>>,
-}
-
-impl From<&RawRemoteCacheOptions> for ConfigurationOptions {
-    fn from(remote_cache_opts: &RawRemoteCacheOptions) -> Self {
-        Self {
-            api_url: remote_cache_opts
-                .api_url
-                .as_ref()
-                .map(|s| s.as_inner().clone()),
-            login_url: remote_cache_opts
-                .login_url
-                .as_ref()
-                .map(|s| s.as_inner().clone()),
-            team_slug: remote_cache_opts
-                .team_slug
-                .as_ref()
-                .map(|s| s.as_inner().clone()),
-            team_id: remote_cache_opts
-                .team_id
-                .as_ref()
-                .map(|s| s.as_inner().clone()),
-            signature: remote_cache_opts.signature.as_ref().map(|s| *s.as_inner()),
-            preflight: remote_cache_opts.preflight.as_ref().map(|s| *s.as_inner()),
-            timeout: remote_cache_opts.timeout.as_ref().map(|s| *s.as_inner()),
-            upload_timeout: remote_cache_opts
-                .upload_timeout
-                .as_ref()
-                .map(|s| *s.as_inner()),
-            enabled: remote_cache_opts.enabled.as_ref().map(|s| *s.as_inner()),
-            ..Self::default()
-        }
-    }
+    pub upload_timeout: Option<Spanned<u64>>,
 }
 
 #[derive(Serialize, Default, Debug, Clone, Iterable, Deserializable)]
@@ -184,7 +123,7 @@ pub struct RawTurboJson {
     pub pipeline: Option<Spanned<Pipeline>>,
     // Configuration options when interfacing with the remote cache
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) remote_cache: Option<RawRemoteCacheOptions>,
+    pub remote_cache: Option<RawRemoteCacheOptions>,
     #[serde(skip_serializing_if = "Option::is_none", rename = "ui")]
     pub ui: Option<Spanned<UIMode>>,
     #[serde(
@@ -323,42 +262,6 @@ pub struct RawTaskDefinition {
     with: Option<Vec<Spanned<UnescapedString>>>,
 }
 
-macro_rules! set_field {
-    ($this:ident, $other:ident, $field:ident) => {{
-        if let Some(field) = $other.$field {
-            $this.$field = field.into();
-        }
-    }};
-}
-
-impl RawTaskDefinition {
-    // merge accepts a RawTaskDefinition and
-    // merges it into RawTaskDefinition.
-    pub fn merge(&mut self, other: RawTaskDefinition) {
-        set_field!(self, other, outputs);
-
-        let other_has_range = other.cache.as_ref().is_some_and(|c| c.range.is_some());
-        let self_does_not_have_range = self.cache.as_ref().is_some_and(|c| c.range.is_none());
-
-        if other.cache.is_some()
-            // If other has range info and we're missing it, carry it over
-            || (other_has_range && self_does_not_have_range)
-        {
-            self.cache = other.cache;
-        }
-        set_field!(self, other, depends_on);
-        set_field!(self, other, inputs);
-        set_field!(self, other, output_logs);
-        set_field!(self, other, persistent);
-        set_field!(self, other, interruptible);
-        set_field!(self, other, env);
-        set_field!(self, other, pass_through_env);
-        set_field!(self, other, interactive);
-        set_field!(self, other, env_mode);
-        set_field!(self, other, with);
-    }
-}
-
 impl TryFrom<Vec<Spanned<UnescapedString>>> for TaskOutputs {
     type Error = Error;
     fn try_from(outputs: Vec<Spanned<UnescapedString>>) -> Result<Self, Self::Error> {
@@ -398,16 +301,6 @@ impl TryFrom<Vec<Spanned<UnescapedString>>> for TaskOutputs {
             inclusions,
             exclusions,
         })
-    }
-}
-
-impl FromIterator<RawTaskDefinition> for RawTaskDefinition {
-    fn from_iter<T: IntoIterator<Item = RawTaskDefinition>>(iter: T) -> Self {
-        iter.into_iter()
-            .fold(RawTaskDefinition::default(), |mut def, other| {
-                def.merge(other);
-                def
-            })
     }
 }
 
@@ -950,6 +843,7 @@ mod tests {
     use serde_json::json;
     use test_case::test_case;
     use turbopath::RelativeUnixPath;
+    use turborepo_task_id::TaskName;
     use turborepo_unescape::UnescapedString;
 
     use super::{
@@ -959,7 +853,6 @@ mod tests {
     use crate::{
         boundaries::BoundariesConfig,
         cli::OutputLogsMode,
-        run::task_id::TaskName,
         task_graph::{TaskDefinition, TaskOutputs},
         turbo_json::RawTaskDefinition,
     };

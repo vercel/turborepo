@@ -4,11 +4,11 @@ use serde::Serialize;
 use turbopath::{AnchoredSystemPathBuf, RelativeUnixPathBuf};
 use turborepo_cache::CacheHitMetadata;
 use turborepo_env::{DetailedMap, EnvironmentVariableMap};
+use turborepo_task_id::TaskId;
 
 use super::{execution::TaskExecutionSummary, EnvMode};
 use crate::{
     cli::OutputLogsMode,
-    run::task_id::TaskId,
     task_graph::{TaskDefinition, TaskOutputs},
 };
 
