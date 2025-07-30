@@ -7,11 +7,11 @@ use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf, RelativeUnixPathBuf};
 use turborepo_errors::{Spanned, TURBO_SITE};
 use turborepo_graph_utils as graph;
 use turborepo_repository::package_graph::{PackageGraph, PackageName, PackageNode, ROOT_PKG_NAME};
+use turborepo_task_id::{TaskId, TaskName};
 
 use super::Engine;
 use crate::{
     config,
-    run::task_id::{TaskId, TaskName},
     task_graph::TaskDefinition,
     turbo_json::{
         validate_extends, validate_no_package_task_syntax, validate_with_has_no_topo,

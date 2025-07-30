@@ -23,7 +23,10 @@ use turborepo_repository::{
 };
 use turborepo_scm::GitHashes;
 
-use crate::turbo_json::{TurboJson, TurboJsonLoader, CONFIG_FILE, CONFIG_FILE_JSONC};
+use crate::{
+    config::{resolve_turbo_config_path, CONFIG_FILE, CONFIG_FILE_JSONC},
+    turbo_json::{TurboJson, TurboJsonLoader},
+};
 
 #[derive(Clone)]
 pub enum PackageChangeEvent {
@@ -47,6 +50,7 @@ impl PackageChangesWatcher {
         repo_root: AbsoluteSystemPathBuf,
         file_events_lazy: OptionalWatch<broadcast::Receiver<Result<Event, NotifyError>>>,
         hash_watcher: Arc<HashWatcher>,
+        custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
     ) -> Self {
         let (exit_tx, exit_rx) = oneshot::channel();
         let (package_change_events_tx, package_change_events_rx) =
@@ -56,6 +60,7 @@ impl PackageChangesWatcher {
             file_events_lazy,
             package_change_events_tx,
             hash_watcher,
+            custom_turbo_json_path,
         );
 
         let _handle = tokio::spawn(subscriber.watch(exit_rx));
@@ -98,6 +103,7 @@ struct Subscriber {
     repo_root: AbsoluteSystemPathBuf,
     package_change_events_tx: broadcast::Sender<PackageChangeEvent>,
     hash_watcher: Arc<HashWatcher>,
+    custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
 }
 
 // This is a workaround because `ignore` doesn't match against a path's
@@ -146,13 +152,47 @@ impl Subscriber {
         file_events_lazy: OptionalWatch<broadcast::Receiver<Result<Event, NotifyError>>>,
         package_change_events_tx: broadcast::Sender<PackageChangeEvent>,
         hash_watcher: Arc<HashWatcher>,
+        custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
     ) -> Self {
+        // Try to canonicalize the custom path to match what the file watcher reports
+        let normalized_custom_path = custom_turbo_json_path.map(|path| {
+            // Check if the custom turbo.json path is outside the repository
+            if repo_root.anchor(&path).is_err() {
+                tracing::warn!(
+                    "turbo.json is located outside of repository at {}. Changes to this file will \
+                     not be watched.",
+                    path
+                );
+            }
+
+            match path.to_realpath() {
+                Ok(real_path) => {
+                    tracing::info!(
+                        "PackageChangesWatcher: monitoring custom turbo.json at: {} \
+                         (canonicalized: {})",
+                        path,
+                        real_path
+                    );
+                    real_path
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        "Failed to canonicalize custom turbo.json path {}: {}, using original path",
+                        path,
+                        e
+                    );
+                    path
+                }
+            }
+        });
+
         Subscriber {
             repo_root,
             file_events_lazy,
             changed_files: Default::default(),
             package_change_events_tx,
             hash_watcher,
+            custom_turbo_json_path: normalized_custom_path,
         }
     }
 
@@ -171,25 +211,24 @@ impl Subscriber {
             return None;
         };
 
-        let turbo_json_path = self.repo_root.join_component(CONFIG_FILE);
-        let turbo_jsonc_path = self.repo_root.join_component(CONFIG_FILE_JSONC);
-
-        let turbo_json_exists = turbo_json_path.exists();
-        let turbo_jsonc_exists = turbo_jsonc_path.exists();
-
-        // TODO: Dedupe places where we search for turbo.json and turbo.jsonc
-        // There are now several places where we do this in the codebase
-        let config_path = match (turbo_json_exists, turbo_jsonc_exists) {
-            (true, true) => {
-                tracing::warn!(
-                    "Found both turbo.json and turbo.jsonc in {}. Using turbo.json for watching.",
-                    self.repo_root
-                );
-                turbo_json_path
+        // Use custom turbo.json path if provided, otherwise use standard paths
+        let config_path = if let Some(custom_path) = &self.custom_turbo_json_path {
+            custom_path.clone()
+        } else {
+            match resolve_turbo_config_path(&self.repo_root) {
+                Ok(path) => path,
+                Err(_) => {
+                    // TODO: If both turbo.json and turbo.jsonc exist, log warning and default to
+                    // turbo.json to preserve existing behavior for file
+                    // watching prior to refactoring.
+                    tracing::warn!(
+                        "Found both turbo.json and turbo.jsonc in {}. Using turbo.json for \
+                         watching.",
+                        self.repo_root
+                    );
+                    self.repo_root.join_component(CONFIG_FILE)
+                }
             }
-            (true, false) => turbo_json_path,
-            (false, true) => turbo_jsonc_path,
-            (false, false) => turbo_json_path, // Default to turbo.json
         };
 
         let root_turbo_json = TurboJsonLoader::workspace(
@@ -353,9 +392,19 @@ impl Subscriber {
                 let turbo_json_path = self.repo_root.join_component(CONFIG_FILE);
                 let turbo_jsonc_path = self.repo_root.join_component(CONFIG_FILE_JSONC);
 
-                if trie.get(turbo_json_path.as_str()).is_some()
-                    || trie.get(turbo_jsonc_path.as_str()).is_some()
-                {
+                let standard_config_changed = trie.get(turbo_json_path.as_str()).is_some()
+                    || trie.get(turbo_jsonc_path.as_str()).is_some();
+
+                let custom_config_changed = self
+                    .custom_turbo_json_path
+                    .as_ref()
+                    .map(|path| {
+                        let path_str = path.as_str();
+                        trie.get(path_str).is_some()
+                    })
+                    .unwrap_or(false);
+
+                if standard_config_changed || custom_config_changed {
                     tracing::info!(
                         "Detected change to turbo configuration file. Triggering rediscovery."
                     );

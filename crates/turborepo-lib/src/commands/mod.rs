@@ -8,9 +8,11 @@ use turborepo_ui::ColorConfig;
 
 use crate::{
     cli,
-    config::{ConfigurationOptions, Error as ConfigError, TurborepoConfigBuilder},
+    config::{
+        resolve_turbo_config_path, ConfigurationOptions, Error as ConfigError,
+        TurborepoConfigBuilder,
+    },
     opts::Opts,
-    turbo_json::resolve_turbo_config_path,
     Args,
 };
 

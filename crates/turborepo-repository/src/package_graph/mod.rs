@@ -667,7 +667,7 @@ mod test {
             pkg_graph.transitive_closure(Some(&PackageNode::Workspace(PackageName::Root)));
         assert!(closure.contains(&PackageNode::Root));
         let result = pkg_graph.validate();
-        assert!(result.is_ok(), "expected ok {:?}", result);
+        assert!(result.is_ok(), "expected ok {result:?}");
     }
 
     #[tokio::test]

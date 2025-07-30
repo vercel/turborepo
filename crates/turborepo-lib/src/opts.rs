@@ -6,15 +6,15 @@ use thiserror::Error;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 use turborepo_api_client::APIAuth;
 use turborepo_cache::{CacheOpts, RemoteCacheOpts};
+use turborepo_task_id::{TaskId, TaskName};
 
 use crate::{
     cli::{
         Command, ContinueMode, DryRunMode, EnvMode, ExecutionArgs, LogOrder, LogPrefix,
         OutputLogsMode, RunArgs,
     },
-    config::ConfigurationOptions,
-    run::task_id::{TaskId, TaskName},
-    turbo_json::{UIMode, CONFIG_FILE},
+    config::{ConfigurationOptions, CONFIG_FILE},
+    turbo_json::UIMode,
     Args,
 };
 
@@ -567,16 +567,16 @@ mod test {
     use test_case::test_case;
     use turbopath::AbsoluteSystemPathBuf;
     use turborepo_cache::{CacheActions, CacheConfig, CacheOpts};
+    use turborepo_task_id::TaskId;
     use turborepo_ui::ColorConfig;
 
     use super::{APIClientOpts, RepoOpts, RunOpts, TaskArgs};
     use crate::{
         cli::{Command, ContinueMode, DryRunMode, RunArgs},
         commands::CommandBase,
-        config::ConfigurationOptions,
+        config::{ConfigurationOptions, CONFIG_FILE},
         opts::{Opts, RunCacheOpts, ScopeOpts, TuiOpts},
-        run::task_id::TaskId,
-        turbo_json::{UIMode, CONFIG_FILE},
+        turbo_json::UIMode,
         Args,
     };
 

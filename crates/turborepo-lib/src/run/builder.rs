@@ -22,6 +22,7 @@ use turborepo_repository::{
 };
 use turborepo_scm::SCM;
 use turborepo_signals::{SignalHandler, SignalSubscriber};
+use turborepo_task_id::TaskName;
 use turborepo_telemetry::events::{
     command::CommandEventBuilder,
     generic::{DaemonInitStatus, GenericEventBuilder},
@@ -42,10 +43,11 @@ use {
 use crate::{
     cli::DryRunMode,
     commands::CommandBase,
+    config::resolve_turbo_config_path,
     engine::{Engine, EngineBuilder},
     microfrontends::MicrofrontendsConfigs,
     opts::Opts,
-    run::{scope, task_access::TaskAccess, task_id::TaskName, Error, Run, RunCache},
+    run::{scope, task_access::TaskAccess, Error, Run, RunCache},
     shim::TurboState,
     turbo_json::{TurboJson, TurboJsonLoader, UIMode},
     DaemonConnector,
@@ -262,8 +264,26 @@ impl RunBuilder {
             (_, Some(true)) | (false, None) => {
                 let can_start_server = true;
                 let can_kill_server = true;
-                let connector =
-                    DaemonConnector::new(can_start_server, can_kill_server, &self.repo_root);
+
+                // Determine custom turbo.json path if different from standard path
+                let custom_turbo_json_path =
+                    if let Ok(standard_path) = resolve_turbo_config_path(&self.repo_root) {
+                        if self.opts.repo_opts.root_turbo_json_path != standard_path {
+                            Some(self.opts.repo_opts.root_turbo_json_path.clone())
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    };
+
+                let connector = DaemonConnector::new(
+                    can_start_server,
+                    can_kill_server,
+                    &self.repo_root,
+                    custom_turbo_json_path,
+                );
+
                 match (connector.connect().await, self.opts.run_opts.daemon) {
                     (Ok(client), _) => {
                         run_telemetry.track_daemon_init(DaemonInitStatus::Started);

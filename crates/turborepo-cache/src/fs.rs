@@ -73,12 +73,10 @@ impl FSCache {
         anchor: &AbsoluteSystemPath,
         hash: &str,
     ) -> Result<Option<(CacheHitMetadata, Vec<AnchoredSystemPathBuf>)>, CacheError> {
-        let uncompressed_cache_path = self
-            .cache_directory
-            .join_component(&format!("{}.tar", hash));
+        let uncompressed_cache_path = self.cache_directory.join_component(&format!("{hash}.tar"));
         let compressed_cache_path = self
             .cache_directory
-            .join_component(&format!("{}.tar.zst", hash));
+            .join_component(&format!("{hash}.tar.zst"));
 
         let cache_path = if uncompressed_cache_path.exists() {
             uncompressed_cache_path
@@ -96,7 +94,7 @@ impl FSCache {
         let meta = CacheMetadata::read(
             &self
                 .cache_directory
-                .join_component(&format!("{}-meta.json", hash)),
+                .join_component(&format!("{hash}-meta.json")),
         )?;
 
         self.log_fetch(analytics::CacheEvent::Hit, hash, meta.duration);
@@ -112,12 +110,10 @@ impl FSCache {
 
     #[tracing::instrument(skip_all)]
     pub(crate) fn exists(&self, hash: &str) -> Result<Option<CacheHitMetadata>, CacheError> {
-        let uncompressed_cache_path = self
-            .cache_directory
-            .join_component(&format!("{}.tar", hash));
+        let uncompressed_cache_path = self.cache_directory.join_component(&format!("{hash}.tar"));
         let compressed_cache_path = self
             .cache_directory
-            .join_component(&format!("{}.tar.zst", hash));
+            .join_component(&format!("{hash}.tar.zst"));
 
         if !uncompressed_cache_path.exists() && !compressed_cache_path.exists() {
             return Ok(None);
@@ -126,7 +122,7 @@ impl FSCache {
         let duration = CacheMetadata::read(
             &self
                 .cache_directory
-                .join_component(&format!("{}-meta.json", hash)),
+                .join_component(&format!("{hash}-meta.json")),
         )
         .map(|meta| meta.duration)
         .unwrap_or(0);
@@ -147,7 +143,7 @@ impl FSCache {
     ) -> Result<(), CacheError> {
         let cache_path = self
             .cache_directory
-            .join_component(&format!("{}.tar.zst", hash));
+            .join_component(&format!("{hash}.tar.zst"));
 
         let mut cache_item = CacheWriter::create(&cache_path)?;
 
@@ -157,7 +153,7 @@ impl FSCache {
 
         let metadata_path = self
             .cache_directory
-            .join_component(&format!("{}-meta.json", hash));
+            .join_component(&format!("{hash}-meta.json"));
 
         let meta = CacheMetadata {
             hash: hash.to_string(),
@@ -215,7 +211,7 @@ mod test {
         test_case.initialize(repo_root_path)?;
 
         let api_client = APIClient::new(
-            format!("http://localhost:{}", port),
+            format!("http://localhost:{port}"),
             Some(Duration::from_secs(200)),
             None,
             "2.0.0",

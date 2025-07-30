@@ -6211,17 +6211,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8df9b6e13f2d32c91b9bd719c00d1958837bc7dec474d94952798cc8e69eeec3"
 
 [[package]]
-name = "tower-uds"
-version = "0.1.0"
-dependencies = [
- "async-io",
- "tokio",
- "tokio-util",
- "tower 0.4.13",
- "uds_windows",
-]
-
-[[package]]
 name = "tracing"
 version = "0.1.40"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6816,6 +6805,7 @@ dependencies = [
  "turborepo-repository",
  "turborepo-scm",
  "turborepo-signals",
+ "turborepo-task-id",
  "turborepo-telemetry",
  "turborepo-ui",
  "turborepo-unescape",
@@ -6937,6 +6927,7 @@ dependencies = [
  "biome_json_parser",
  "either",
  "globwalk",
+ "insta",
  "itertools 0.10.5",
  "lazy-regex",
  "miette",
@@ -6994,6 +6985,16 @@ dependencies = [
  "futures",
  "thiserror 1.0.63",
  "tokio",
+]
+
+[[package]]
+name = "turborepo-task-id"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "test-case",
+ "thiserror 1.0.63",
+ "turborepo-repository",
 ]
 
 [[package]]

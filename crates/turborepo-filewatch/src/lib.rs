@@ -133,8 +133,7 @@ impl FileSystemWatcher {
 
         if root.relation_to_path(&cookie_dir) != PathRelation::Parent {
             return Err(WatchError::Setup(format!(
-                "Invalid cookie directory: {} does not contain {}",
-                root, cookie_dir
+                "Invalid cookie directory: {root} does not contain {cookie_dir}"
             )));
         }
 
@@ -216,12 +215,12 @@ fn setup_cookie_dir(cookie_dir: &AbsoluteSystemPath) -> Result<(), WatchError> {
 
     if cookie_dir.exists() {
         cookie_dir.remove_dir_all().map_err(|e| {
-            WatchError::Setup(format!("failed to clear cookie dir {}: {}", cookie_dir, e))
+            WatchError::Setup(format!("failed to clear cookie dir {cookie_dir}: {e}"))
         })?;
     }
-    cookie_dir.create_dir_all().map_err(|e| {
-        WatchError::Setup(format!("failed to setup cookie dir {}: {}", cookie_dir, e))
-    })?;
+    cookie_dir
+        .create_dir_all()
+        .map_err(|e| WatchError::Setup(format!("failed to setup cookie dir {cookie_dir}: {e}")))?;
     Ok(())
 }
 
@@ -456,21 +455,19 @@ async fn wait_for_cookie(
     // directory is empty, but it could be the responsibility of the
     // filewatcher...
     let cookie_path = cookie_dir.join_component(".turbo-cookie");
-    cookie_path.create_with_contents("cookie").map_err(|e| {
-        WatchError::Setup(format!("failed to write cookie to {}: {}", cookie_path, e))
-    })?;
+    cookie_path
+        .create_with_contents("cookie")
+        .map_err(|e| WatchError::Setup(format!("failed to write cookie to {cookie_path}: {e}")))?;
     loop {
         let event = tokio::time::timeout(Duration::from_millis(2000), recv.recv())
             .await
-            .map_err(|e| WatchError::Setup(format!("waiting for cookie timed out: {}", e)))?
+            .map_err(|e| WatchError::Setup(format!("waiting for cookie timed out: {e}")))?
             .ok_or_else(|| {
                 WatchError::Setup(
                     "filewatching closed before cookie file  was observed".to_string(),
                 )
             })?
-            .map_err(|err| {
-                WatchError::Setup(format!("initial watch encountered errors: {}", err))
-            })?;
+            .map_err(|err| WatchError::Setup(format!("initial watch encountered errors: {err}")))?;
         if event.paths.iter().any(|path| {
             let path: &Path = path;
             path == (&cookie_path as &AbsoluteSystemPath)
@@ -478,7 +475,7 @@ async fn wait_for_cookie(
             // We don't need to stop everything if we failed to remove the cookie file
             // for some reason. We can warn about it though.
             if let Err(e) = cookie_path.remove() {
-                warn!("failed to remove cookie file {}", e);
+                warn!("failed to remove cookie file {e}");
             }
             return Ok(());
         }
@@ -530,7 +527,7 @@ mod test {
     ) {
         for dir in dirs {
             let count = WATCH_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            let filename = dir.join_component(format!("test-{}", count).as_str());
+            let filename = dir.join_component(format!("test-{count}").as_str());
             filename.create_with_contents("hello").unwrap();
 
             expect_filesystem_event!(recv, filename, EventKind::Create(_));

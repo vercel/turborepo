@@ -109,7 +109,7 @@ impl Display for MissingWorkspaceError {
                  defined in the root package.json"
             }
         };
-        write!(f, "{}", err)
+        write!(f, "{err}")
     }
 }
 
@@ -573,7 +573,7 @@ mod tests {
                 return ancestor.to_owned();
             }
         }
-        panic!("Couldn't find Turborepo root from {}", cwd);
+        panic!("Couldn't find Turborepo root from {cwd}");
     }
 
     #[test]

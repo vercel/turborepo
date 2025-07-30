@@ -62,7 +62,7 @@ fn daemon_log_file_and_folder(
     repo_hash: &str,
 ) -> (AbsoluteSystemPathBuf, AbsoluteSystemPathBuf) {
     let log_folder = repo_root.join_components(&[".turbo", "daemon"]);
-    let log_file = log_folder.join_component(format!("{}-turbo.log", repo_hash).as_str());
+    let log_file = log_folder.join_component(format!("{repo_hash}-turbo.log").as_str());
 
     (log_file, log_folder)
 }

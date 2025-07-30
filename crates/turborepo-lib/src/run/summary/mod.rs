@@ -26,12 +26,12 @@ use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath};
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_repository::package_graph::{PackageGraph, PackageName};
 use turborepo_scm::SCM;
+use turborepo_task_id::TaskId;
 use turborepo_ui::{color, cprintln, cwriteln, ColorConfig, BOLD, BOLD_CYAN, GREY};
 
 use self::{
     execution::TaskState, task::SinglePackageTaskSummary, task_factory::TaskSummaryFactory,
 };
-use super::task_id::TaskId;
 use crate::{
     cli,
     cli::{DryRunMode, EnvMode},
@@ -359,7 +359,7 @@ impl<'a> RunSummary<'a> {
         if matches!(self.run_type, RunType::DryJson) {
             let rendered = self.format_json()?;
 
-            println!("{}", rendered);
+            println!("{rendered}");
             return Ok(());
         }
 
@@ -386,7 +386,7 @@ impl<'a> RunSummary<'a> {
                     .ok_or_else(|| Error::MissingWorkspace((*pkg).to_owned()))?
                     .package_path();
 
-                writeln!(tab_writer, "{}\t{}", pkg, dir)?;
+                writeln!(tab_writer, "{pkg}\t{dir}")?;
             }
             tab_writer.flush()?;
         }

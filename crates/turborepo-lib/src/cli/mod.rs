@@ -611,6 +611,9 @@ pub enum Command {
         /// Set the idle timeout for turbod
         #[clap(long, default_value_t = String::from("4h0m0s"))]
         idle_time: String,
+        /// Path to a custom turbo.json file to watch from --root-turbo-json
+        #[clap(long)]
+        turbo_json_path: Option<Utf8PathBuf>,
         #[clap(subcommand)]
         command: Option<DaemonCommand>,
     },
@@ -839,12 +842,12 @@ fn validate_graph_extension(s: &str) -> Result<String, String> {
         _ => match Utf8Path::new(s).extension() {
             Some(ext) if SUPPORTED_GRAPH_FILE_EXTENSIONS.contains(&ext) => Ok(s.to_string()),
             Some(ext) => Err(format!(
-                "Invalid file extension: '{}'. Allowed extensions are: {:?}",
-                ext, SUPPORTED_GRAPH_FILE_EXTENSIONS
+                "Invalid file extension: '{ext}'. Allowed extensions are: \
+                 {SUPPORTED_GRAPH_FILE_EXTENSIONS:?}"
             )),
             None => Err(format!(
-                "The provided filename is missing a file extension. Allowed extensions are: {:?}",
-                SUPPORTED_GRAPH_FILE_EXTENSIONS
+                "The provided filename is missing a file extension. Allowed extensions are: \
+                 {SUPPORTED_GRAPH_FILE_EXTENSIONS:?}"
             )),
         },
     }
@@ -1428,15 +1431,23 @@ pub async fn run(
             Ok(clone::run(cwd, url, dir.as_deref(), *ci, *local, *depth)?)
         }
         #[allow(unused_variables)]
-        Command::Daemon { command, idle_time } => {
+        Command::Daemon {
+            command,
+            idle_time,
+            turbo_json_path,
+        } => {
             let event = CommandEventBuilder::new("daemon").with_parent(&root_telemetry);
             event.track_call();
             let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
             event.track_ui_mode(base.opts.run_opts.ui_mode);
 
             match command {
-                Some(command) => daemon::daemon_client(command, &base).await,
-                None => daemon::daemon_server(&base, idle_time, logger).await,
+                Some(command) => {
+                    daemon::daemon_client(command, &base, turbo_json_path.clone()).await
+                }
+                None => {
+                    daemon::daemon_server(&base, idle_time, turbo_json_path.clone(), logger).await
+                }
             }?;
 
             Ok(0)

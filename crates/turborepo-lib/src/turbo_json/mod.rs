@@ -14,18 +14,17 @@ use struct_iterable::Iterable;
 use turbopath::{AbsoluteSystemPath, RelativeUnixPath};
 use turborepo_errors::Spanned;
 use turborepo_repository::package_graph::ROOT_PKG_NAME;
+use turborepo_task_id::{TaskId, TaskName};
 use turborepo_unescape::UnescapedString;
 
 use crate::{
     cli::{EnvMode, OutputLogsMode},
-    config::{ConfigurationOptions, Error, InvalidEnvPrefixError},
-    run::{
-        task_access::TaskAccessTraceFile,
-        task_id::{TaskId, TaskName},
-    },
-    task_graph::{TaskDefinition, TaskOutputs},
+    config::{Error, InvalidEnvPrefixError},
+    run::task_access::TaskAccessTraceFile,
+    task_graph::{TaskDefinition, TaskInputs, TaskOutputs},
 };
 
+mod extend;
 mod loader;
 pub mod parser;
 
@@ -35,37 +34,10 @@ use crate::{boundaries::BoundariesConfig, config::UnnecessaryPackageTaskSyntaxEr
 
 const TURBO_ROOT: &str = "$TURBO_ROOT$";
 const TURBO_ROOT_SLASH: &str = "$TURBO_ROOT$/";
+pub const TURBO_DEFAULT: &str = "$TURBO_DEFAULT$";
 
-pub const CONFIG_FILE: &str = "turbo.json";
-pub const CONFIG_FILE_JSONC: &str = "turbo.jsonc";
 const ENV_PIPELINE_DELIMITER: &str = "$";
 const TOPOLOGICAL_PIPELINE_DELIMITER: &str = "^";
-
-/// Given a directory path, determines which turbo.json configuration file to
-/// use. Returns an error if both turbo.json and turbo.jsonc exist in the same
-/// directory. Returns the path to the config file to use, defaulting to
-/// turbo.json if neither exists.
-pub fn resolve_turbo_config_path(
-    dir_path: &turbopath::AbsoluteSystemPath,
-) -> Result<turbopath::AbsoluteSystemPathBuf, crate::config::Error> {
-    use crate::config::Error;
-
-    let turbo_json_path = dir_path.join_component(CONFIG_FILE);
-    let turbo_jsonc_path = dir_path.join_component(CONFIG_FILE_JSONC);
-
-    let turbo_json_exists = turbo_json_path.try_exists()?;
-    let turbo_jsonc_exists = turbo_jsonc_path.try_exists()?;
-
-    match (turbo_json_exists, turbo_jsonc_exists) {
-        (true, true) => Err(Error::MultipleTurboConfigs {
-            directory: dir_path.to_string(),
-        }),
-        (true, false) => Ok(turbo_json_path),
-        (false, true) => Ok(turbo_jsonc_path),
-        // Default to turbo.json if neither exists
-        (false, false) => Ok(turbo_json_path),
-    }
-}
 
 #[derive(Serialize, Deserialize, Debug, Default, PartialEq, Clone, Deserializable)]
 #[serde(rename_all = "camelCase")]
@@ -99,57 +71,25 @@ pub struct TurboJson {
 // Iterable is required to enumerate allowed keys
 #[derive(Clone, Debug, Default, Iterable, Serialize, Deserializable)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct RawRemoteCacheOptions {
+pub struct RawRemoteCacheOptions {
     #[serde(skip_serializing_if = "Option::is_none")]
-    api_url: Option<Spanned<String>>,
+    pub api_url: Option<Spanned<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    login_url: Option<Spanned<String>>,
+    pub login_url: Option<Spanned<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    team_slug: Option<Spanned<String>>,
+    pub team_slug: Option<Spanned<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    team_id: Option<Spanned<String>>,
+    pub team_id: Option<Spanned<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    signature: Option<Spanned<bool>>,
+    pub signature: Option<Spanned<bool>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    preflight: Option<Spanned<bool>>,
+    pub preflight: Option<Spanned<bool>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    timeout: Option<Spanned<u64>>,
+    pub timeout: Option<Spanned<u64>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    enabled: Option<Spanned<bool>>,
+    pub enabled: Option<Spanned<bool>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    upload_timeout: Option<Spanned<u64>>,
-}
-
-impl From<&RawRemoteCacheOptions> for ConfigurationOptions {
-    fn from(remote_cache_opts: &RawRemoteCacheOptions) -> Self {
-        Self {
-            api_url: remote_cache_opts
-                .api_url
-                .as_ref()
-                .map(|s| s.as_inner().clone()),
-            login_url: remote_cache_opts
-                .login_url
-                .as_ref()
-                .map(|s| s.as_inner().clone()),
-            team_slug: remote_cache_opts
-                .team_slug
-                .as_ref()
-                .map(|s| s.as_inner().clone()),
-            team_id: remote_cache_opts
-                .team_id
-                .as_ref()
-                .map(|s| s.as_inner().clone()),
-            signature: remote_cache_opts.signature.as_ref().map(|s| *s.as_inner()),
-            preflight: remote_cache_opts.preflight.as_ref().map(|s| *s.as_inner()),
-            timeout: remote_cache_opts.timeout.as_ref().map(|s| *s.as_inner()),
-            upload_timeout: remote_cache_opts
-                .upload_timeout
-                .as_ref()
-                .map(|s| *s.as_inner()),
-            enabled: remote_cache_opts.enabled.as_ref().map(|s| *s.as_inner()),
-            ..Self::default()
-        }
-    }
+    pub upload_timeout: Option<Spanned<u64>>,
 }
 
 #[derive(Serialize, Default, Debug, Clone, Iterable, Deserializable)]
@@ -183,7 +123,7 @@ pub struct RawTurboJson {
     pub pipeline: Option<Spanned<Pipeline>>,
     // Configuration options when interfacing with the remote cache
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) remote_cache: Option<RawRemoteCacheOptions>,
+    pub remote_cache: Option<RawRemoteCacheOptions>,
     #[serde(skip_serializing_if = "Option::is_none", rename = "ui")]
     pub ui: Option<Spanned<UIMode>>,
     #[serde(
@@ -322,42 +262,6 @@ pub struct RawTaskDefinition {
     with: Option<Vec<Spanned<UnescapedString>>>,
 }
 
-macro_rules! set_field {
-    ($this:ident, $other:ident, $field:ident) => {{
-        if let Some(field) = $other.$field {
-            $this.$field = field.into();
-        }
-    }};
-}
-
-impl RawTaskDefinition {
-    // merge accepts a RawTaskDefinition and
-    // merges it into RawTaskDefinition.
-    pub fn merge(&mut self, other: RawTaskDefinition) {
-        set_field!(self, other, outputs);
-
-        let other_has_range = other.cache.as_ref().is_some_and(|c| c.range.is_some());
-        let self_does_not_have_range = self.cache.as_ref().is_some_and(|c| c.range.is_none());
-
-        if other.cache.is_some()
-            // If other has range info and we're missing it, carry it over
-            || (other_has_range && self_does_not_have_range)
-        {
-            self.cache = other.cache;
-        }
-        set_field!(self, other, depends_on);
-        set_field!(self, other, inputs);
-        set_field!(self, other, output_logs);
-        set_field!(self, other, persistent);
-        set_field!(self, other, interruptible);
-        set_field!(self, other, env);
-        set_field!(self, other, pass_through_env);
-        set_field!(self, other, interactive);
-        set_field!(self, other, env_mode);
-        set_field!(self, other, with);
-    }
-}
-
 impl TryFrom<Vec<Spanned<UnescapedString>>> for TaskOutputs {
     type Error = Error;
     fn try_from(outputs: Vec<Spanned<UnescapedString>>) -> Result<Self, Self::Error> {
@@ -397,6 +301,36 @@ impl TryFrom<Vec<Spanned<UnescapedString>>> for TaskOutputs {
             inclusions,
             exclusions,
         })
+    }
+}
+
+impl TryFrom<Option<Vec<Spanned<UnescapedString>>>> for TaskInputs {
+    type Error = Error;
+
+    fn try_from(inputs: Option<Vec<Spanned<UnescapedString>>>) -> Result<Self, Self::Error> {
+        let mut globs = Vec::with_capacity(inputs.as_ref().map_or(0, |inputs| inputs.len()));
+
+        let mut default = false;
+        for input in inputs.into_iter().flatten() {
+            // If the inputs contain "$TURBO_DEFAULT$", we need to include the "default"
+            // file hashes as well. NOTE: we intentionally don't remove
+            // "$TURBO_DEFAULT$" from the inputs if it exists in the off chance that
+            // the user has a file named "$TURBO_DEFAULT$" in their package (pls
+            // no).
+            if input.as_str() == TURBO_DEFAULT {
+                default = true;
+            } else if Utf8Path::new(input.as_str()).is_absolute() {
+                let (span, text) = input.span_and_text("turbo.json");
+                return Err(Error::AbsolutePathInConfig {
+                    field: "inputs",
+                    span,
+                    text,
+                });
+            }
+            globs.push(input.to_string());
+        }
+
+        Ok(TaskInputs { globs, default })
     }
 }
 
@@ -468,23 +402,7 @@ impl TaskDefinition {
             .transpose()?
             .unwrap_or_default();
 
-        let inputs = raw_task
-            .inputs
-            .unwrap_or_default()
-            .into_iter()
-            .map(|input| {
-                if Utf8Path::new(&input.value).is_absolute() {
-                    let (span, text) = input.span_and_text("turbo.json");
-                    Err(Error::AbsolutePathInConfig {
-                        field: "inputs",
-                        span,
-                        text,
-                    })
-                } else {
-                    Ok(input.to_string())
-                }
-            })
-            .collect::<Result<Vec<_>, _>>()?;
+        let inputs = TaskInputs::try_from(raw_task.inputs)?;
 
         let pass_through_env = raw_task
             .pass_through_env
@@ -916,7 +834,7 @@ fn replace_turbo_root_token(
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
+    use std::{assert_matches::assert_matches, sync::Arc};
 
     use anyhow::Result;
     use biome_deserialize::json::deserialize_from_json_str;
@@ -925,16 +843,16 @@ mod tests {
     use serde_json::json;
     use test_case::test_case;
     use turbopath::RelativeUnixPath;
+    use turborepo_task_id::TaskName;
     use turborepo_unescape::UnescapedString;
 
     use super::{
         replace_turbo_root_token_in_string, validate_with_has_no_topo, FutureFlags, Pipeline,
-        RawTurboJson, SpacesJson, Spanned, TurboJson, UIMode,
+        RawTurboJson, SpacesJson, Spanned, TurboJson, UIMode, *,
     };
     use crate::{
         boundaries::BoundariesConfig,
         cli::OutputLogsMode,
-        run::task_id::TaskName,
         task_graph::{TaskDefinition, TaskOutputs},
         turbo_json::RawTaskDefinition,
     };
@@ -1058,7 +976,7 @@ mod tests {
               exclusions: vec![],
           },
           cache: false,
-          inputs: vec!["package/a/src/**".to_string()],
+          inputs: TaskInputs::new(vec!["package/a/src/**".to_string()]),
           output_logs: OutputLogsMode::Full,
           pass_through_env: Some(vec!["AWS_SECRET_KEY".to_string()]),
           task_dependencies: vec![Spanned::<TaskName<'_>>::new("cli#build".into()).with_range(26..37)],
@@ -1104,7 +1022,7 @@ mod tests {
                 exclusions: vec![],
             },
             cache: false,
-            inputs: vec!["package\\a\\src\\**".to_string()],
+            inputs: TaskInputs::new(vec!["package\\a\\src\\**".to_string()]),
             output_logs: OutputLogsMode::Full,
             pass_through_env: Some(vec!["AWS_SECRET_KEY".to_string()]),
             task_dependencies: vec![Spanned::<TaskName<'_>>::new("cli#build".into()).with_range(30..41)],
@@ -1131,7 +1049,7 @@ mod tests {
             ..RawTaskDefinition::default()
         },
         TaskDefinition {
-            inputs: vec!["../../config.txt".to_owned()],
+            inputs: TaskInputs::new(vec!["../../config.txt".to_owned()]),
             outputs: TaskOutputs {
                 inclusions: vec!["../../coverage/**".to_owned()],
                 exclusions: vec!["../../coverage/index.html".to_owned()],
@@ -1504,5 +1422,37 @@ mod tests {
             error.to_string(),
             "`with` cannot use dependency relationships."
         );
+    }
+
+    #[test]
+    fn test_absolute_paths_error_in_inputs() {
+        assert_matches!(
+            TaskInputs::try_from(Some(vec![Spanned::new(UnescapedString::from(
+                if cfg!(windows) {
+                    "C:\\win32"
+                } else {
+                    "/dev/null"
+                }
+            ))])),
+            Err(Error::AbsolutePathInConfig { .. })
+        );
+    }
+
+    #[test]
+    fn test_detects_turbo_default() {
+        let inputs = TaskInputs::try_from(Some(vec![Spanned::new(UnescapedString::from(
+            TURBO_DEFAULT,
+        ))]))
+        .unwrap();
+        assert!(inputs.default);
+    }
+
+    #[test]
+    fn test_keeps_turbo_default() {
+        let inputs = TaskInputs::try_from(Some(vec![Spanned::new(UnescapedString::from(
+            TURBO_DEFAULT,
+        ))]))
+        .unwrap();
+        assert_eq!(inputs.globs, vec![TURBO_DEFAULT.to_string()]);
     }
 }

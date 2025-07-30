@@ -224,8 +224,8 @@ impl Tracer {
                 Err(err) => {
                     if !import.starts_with(".") {
                         // Try to resolve the import as a type import via `@/types/<import>`
-                        let type_package = format!("@types/{}", import);
-                        debug!("trying to resolve type import: {}", type_package);
+                        let type_package = format!("@types/{import}");
+                        debug!("trying to resolve type import: {type_package}");
                         let resolved_type_import = resolver
                             .resolve(file_dir, type_package.as_str())
                             .ok()

@@ -203,14 +203,13 @@ impl Diagnostic for GitDaemonDiagnostic {
 
                     if version.major == 2 && version.minor < 37 || version.major == 1 {
                         chan.not_applicable(format!(
-                            "Git version {} is too old, please upgrade to 2.37 or newer",
-                            version
+                            "Git version {version} is too old, please upgrade to 2.37 or newer"
                         ))
                         .await;
                         return;
                     } else {
                         chan.log_line(
-                            format!("Using supported Git version - {}", version).to_string(),
+                            format!("Using supported Git version - {version}").to_string(),
                         )
                         .await;
                     }
@@ -264,7 +263,7 @@ impl Diagnostic for GitDaemonDiagnostic {
                                             .await;
                                     }
                                     Err(e) => {
-                                        chan.failed(format!("Failed to set git settings: {}", e))
+                                        chan.failed(format!("Failed to set git settings: {e}"))
                                             .await;
                                         return;
                                     }
@@ -287,8 +286,7 @@ impl Diagnostic for GitDaemonDiagnostic {
                 }
                 Ok(_) => unreachable!(), // the vec of futures has exactly 3 elements
                 Err(e) => {
-                    chan.failed(format!("Failed to get git version: {}", e))
-                        .await;
+                    chan.failed(format!("Failed to get git version: {e}")).await;
                     return;
                 }
             }
@@ -317,12 +315,13 @@ impl Diagnostic for DaemonDiagnostic {
                 can_kill_server: false,
                 can_start_server: true,
                 paths,
+                custom_turbo_json_path: None,
             };
 
             let mut client = match connector.connect().await {
                 Ok(client) => client,
                 Err(e) => {
-                    chan.failed(format!("Failed to connect to daemon: {}", e))
+                    chan.failed(format!("Failed to connect to daemon: {e}"))
                         .await;
                     return;
                 }
@@ -336,14 +335,14 @@ impl Diagnostic for DaemonDiagnostic {
                         .await;
                     let lock = pidlock::Pidlock::new(pid_path);
                     let pid = if let Ok(Some(owner)) = lock.get_owner() {
-                        format!(" (pid {})", owner)
+                        format!(" (pid {owner})")
                     } else {
                         "".to_string()
                     };
-                    chan.done(format!("Daemon is running{}", pid)).await;
+                    chan.done(format!("Daemon is running{pid}")).await;
                 }
                 Err(e) => {
-                    chan.failed(format!("Failed to get daemon status: {}", e))
+                    chan.failed(format!("Failed to get daemon status: {e}"))
                         .await;
                 }
             }
@@ -366,7 +365,7 @@ impl Diagnostic for LSPDiagnostic {
             let pidlock = pidlock::Pidlock::new(lsp_root);
             match pidlock.get_owner() {
                 Ok(Some(pid)) => {
-                    chan.done(format!("Turborepo Extension is running (pid {})", pid))
+                    chan.done(format!("Turborepo Extension is running (pid {pid})"))
                         .await;
                 }
                 Ok(None) => {
@@ -377,8 +376,7 @@ impl Diagnostic for LSPDiagnostic {
                         .await;
                 }
                 Err(e) => {
-                    chan.failed(format!("Failed to get LSP status: {}", e))
-                        .await;
+                    chan.failed(format!("Failed to get LSP status: {e}")).await;
                 }
             }
         });
@@ -441,7 +439,7 @@ impl Diagnostic for RemoteCacheDiagnostic {
                         .await
                 }
                 Err(e) => {
-                    chan.failed(format!("Failed to link: {}", e)).await;
+                    chan.failed(format!("Failed to link: {e}")).await;
                 }
             }
         });
@@ -474,7 +472,7 @@ impl Diagnostic for UpdateDiagnostic {
 
             match version {
                 Ok(Ok(Some(version))) => {
-                    chan.log_line(format!("Turborepo {} is available", version).to_string())
+                    chan.log_line(format!("Turborepo {version} is available").to_string())
                         .await;
 
                     let Some(resp) = chan
@@ -532,7 +530,7 @@ impl Diagnostic for UpdateDiagnostic {
                     chan.done("Turborepo on latest version".to_string()).await
                 }
                 Ok(Err(message)) => {
-                    chan.failed(format!("Failed to check for updates: {}", message))
+                    chan.failed(format!("Failed to check for updates: {message}"))
                         .await;
                 }
                 Err(_) => {

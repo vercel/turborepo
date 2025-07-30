@@ -249,7 +249,7 @@ mod tests {
             .iter()
             .map(|s| AnchoredSystemPathBuf::from_raw(s).unwrap());
         match hash_files(&turbo_root, files, allow_missing) {
-            Err(e) => assert!(want_err, "unexpected error {}", e),
+            Err(e) => assert!(want_err, "unexpected error {e}"),
             Ok(hashes) => assert_eq!(hashes, expected),
         }
     }
@@ -402,10 +402,10 @@ mod tests {
             file_path.ensure_dir().unwrap();
             file_path.create_with_contents(contents).unwrap();
             if let Some(hash) = expected_hash {
-                println!("unix_path: {}", unix_path);
-                println!("unix_pkg_path: {}", unix_pkg_path);
+                println!("unix_path: {unix_path}");
+                println!("unix_pkg_path: {unix_pkg_path}");
                 let unix_pkg_file_path = unix_path.strip_prefix(&unix_pkg_path).unwrap();
-                println!("unix_pkg_file_path: {}", unix_pkg_file_path);
+                println!("unix_pkg_file_path: {unix_pkg_file_path}");
                 expected.insert(unix_pkg_file_path.to_owned(), (*hash).to_owned());
             }
         }
