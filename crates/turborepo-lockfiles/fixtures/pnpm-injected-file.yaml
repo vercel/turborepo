@@ -1,0 +1,18 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+  services/application:
+    dependencies:
+      library:
+        specifier: workspace:^
+        version: file:../../../libraries/library
+    dependenciesMeta:
+      library:
+        injected: true
+
+packages: {}
+snapshots: {}

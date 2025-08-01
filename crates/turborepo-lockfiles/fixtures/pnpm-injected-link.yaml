@@ -1,0 +1,29 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+  .:
+    devDependencies:
+      turbo:
+        specifier: 2.0.0-canary.0
+        version: 2.0.0-canary.0
+
+  services/application:
+    dependencies:
+      library:
+        specifier: workspace:^
+        version: link:../../../libraries/library
+    dependenciesMeta:
+      library:
+        injected: true
+
+packages:
+  turbo@2.0.0-canary.0:
+    resolution: {integrity: sha512-test}
+    hasBin: true
+
+snapshots:
+  turbo@2.0.0-canary.0: {}

@@ -174,6 +174,7 @@ pub struct PackageResolution {
 struct LockfileSettings {
     auto_install_peers: Option<bool>,
     exclude_links_from_lockfile: Option<bool>,
+    inject_workspace_packages: Option<bool>,
 }
 
 impl PnpmLockfile {
@@ -473,10 +474,14 @@ impl crate::Lockfile for PnpmLockfile {
                     .find_resolution(dependency)
                     .ok_or_else(|| Error::MissingInjectedPackage(dependency.clone()))?;
 
-                let entry = self
-                    .get_packages(version)
-                    .ok_or_else(|| crate::Error::MissingPackage(version.into()))?;
-                pruned_packages.insert(version.to_string(), entry.clone());
+                // Skip adding to packages if this is a local workspace link (link: or file: protocol)
+                // These don't have entries in the packages section as they're just symlinks
+                if !version.starts_with("link:") && !version.starts_with("file:") {
+                    let entry = self
+                        .get_packages(version)
+                        .ok_or_else(|| crate::Error::MissingPackage(version.into()))?;
+                    pruned_packages.insert(version.to_string(), entry.clone());
+                }
             }
         }
 
@@ -649,6 +654,10 @@ mod tests {
     const PNPM6_TURBO: &[u8] = include_bytes!("../../fixtures/pnpm6turbo.yaml").as_slice();
     const PNPM8_TURBO: &[u8] = include_bytes!("../../fixtures/pnpm8turbo.yaml").as_slice();
     const PNPM10_PATCH: &[u8] = include_bytes!("../../fixtures/pnpm-10-patch.lock").as_slice();
+    const PNPM_INJECTED_LINK: &[u8] =
+        include_bytes!("../../fixtures/pnpm-injected-link.yaml").as_slice();
+    const PNPM_INJECTED_FILE: &[u8] =
+        include_bytes!("../../fixtures/pnpm-injected-file.yaml").as_slice();
 
     use super::*;
     use crate::{Lockfile, Package};
@@ -1477,6 +1486,32 @@ c:
         assert_eq!(
             missing_peer.unwrap_err().to_string(),
             crate::Error::MissingWorkspace("apps/docs".to_string()).to_string()
+        );
+    }
+
+    #[test]
+    fn test_injected_link_dependency_subgraph() {
+        let lockfile = PnpmLockfile::from_bytes(PNPM_INJECTED_LINK).unwrap();
+
+        // This should not error - injected link: dependencies shouldn't require package entries
+        let result = lockfile.subgraph(&["services/application".to_string()], &[]);
+
+        assert!(
+            result.is_ok(),
+            "Subgraph should succeed for injected link: dependencies"
+        );
+    }
+
+    #[test]
+    fn test_injected_file_dependency_subgraph() {
+        let lockfile = PnpmLockfile::from_bytes(PNPM_INJECTED_FILE).unwrap();
+
+        // This should not error - injected file: dependencies shouldn't require package entries
+        let result = lockfile.subgraph(&["services/application".to_string()], &[]);
+
+        assert!(
+            result.is_ok(),
+            "Subgraph should succeed for injected file: dependencies"
         );
     }
 }
