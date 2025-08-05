@@ -244,30 +244,46 @@ impl GitRepo {
             // because at this point we know we're in a GITHUB CI environment
             // and we should really know by now what the base ref is
             // so it's better to just error if something went wrong
-            return match self.execute_git_command(&["rev-parse", &github_base_ref], "") {
-                Ok(_) => {
-                    eprintln!("Resolved base ref from GitHub Actions event: {github_base_ref}");
-                    Ok(github_base_ref)
-                }
-                Err(e) => {
-                    eprintln!(
-                        "Failed to resolve base ref '{github_base_ref}' from GitHub Actions \
-                         event: {e}"
-                    );
-                    Err(Error::UnableToResolveRef)
-                }
-            };
+            
+            // Try the github_base_ref first
+            if let Ok(_) = self.execute_git_command(&["rev-parse", &github_base_ref], "") {
+                eprintln!("Resolved base ref from GitHub Actions event: {github_base_ref}");
+                return Ok(github_base_ref);
+            }
+            
+            // Try the remote version of github_base_ref
+            let remote_github_base_ref = format!("origin/{}", github_base_ref);
+            if let Ok(_) = self.execute_git_command(&["rev-parse", &remote_github_base_ref], "") {
+                eprintln!("Resolved base ref from GitHub Actions event (remote): {remote_github_base_ref}");
+                return Ok(remote_github_base_ref);
+            }
+            
+            eprintln!(
+                "Failed to resolve base ref '{github_base_ref}' or '{remote_github_base_ref}' from GitHub Actions event"
+            );
+            return Err(Error::UnableToResolveRef);
         }
 
-        let main_result = self.execute_git_command(&["rev-parse", "main"], "");
-        if main_result.is_ok() {
+        // Try local main branch
+        if let Ok(_) = self.execute_git_command(&["rev-parse", "main"], "") {
             return Ok("main".to_string());
         }
 
-        let master_result = self.execute_git_command(&["rev-parse", "master"], "");
-        if master_result.is_ok() {
+        // Try remote main branch
+        if let Ok(_) = self.execute_git_command(&["rev-parse", "origin/main"], "") {
+            return Ok("origin/main".to_string());
+        }
+
+        // Try local master branch
+        if let Ok(_) = self.execute_git_command(&["rev-parse", "master"], "") {
             return Ok("master".to_string());
         }
+
+        // Try remote master branch
+        if let Ok(_) = self.execute_git_command(&["rev-parse", "origin/master"], "") {
+            return Ok("origin/master".to_string());
+        }
+
         Err(Error::UnableToResolveRef)
     }
 
@@ -1046,6 +1062,115 @@ mod tests {
 
         assert_eq!(actual.as_deref(), expected);
 
+        Ok(())
+    }
+
+    #[test]
+    fn test_resolve_base_falls_back_to_remote_main() -> Result<(), Error> {
+        let (repo_root, repo) = setup_repository(None)?;
+        let root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+
+        let file = root.join_component("todo.txt");
+        file.create_with_contents("1. test remote fallback")?;
+        let first_commit = commit_file(&repo, Path::new("todo.txt"), None);
+
+        // Delete the local main branch that was created by the commit
+        repo.find_reference("refs/heads/main").unwrap().delete().unwrap();
+
+        // Create a remote tracking branch for main
+        repo.reference(
+            "refs/remotes/origin/main",
+            first_commit,
+            false,
+            "create remote main",
+        ).unwrap();
+
+        let git_repo = GitRepo::find(&root).unwrap();
+        let result = git_repo.resolve_base(None, CIEnv::none()).unwrap();
+
+        assert_eq!(result, "origin/main");
+        Ok(())
+    }
+
+    #[test]
+    fn test_resolve_base_falls_back_to_remote_master() -> Result<(), Error> {
+        let (repo_root, repo) = setup_repository(None)?;
+        let root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+
+        let file = root.join_component("todo.txt");
+        file.create_with_contents("1. test remote fallback")?;
+        let first_commit = commit_file(&repo, Path::new("todo.txt"), None);
+
+        // Delete the local main branch that was created by the commit
+        repo.find_reference("refs/heads/main").unwrap().delete().unwrap();
+
+        // Create a remote tracking branch for master (no main exists)
+        repo.reference(
+            "refs/remotes/origin/master",
+            first_commit,
+            false,
+            "create remote master",
+        ).unwrap();
+
+        let git_repo = GitRepo::find(&root).unwrap();
+        let result = git_repo.resolve_base(None, CIEnv::none()).unwrap();
+
+        assert_eq!(result, "origin/master");
+        Ok(())
+    }
+
+    #[test]
+    fn test_resolve_base_github_actions_falls_back_to_remote() -> Result<(), Error> {
+        let (repo_root, repo) = setup_repository(None)?;
+        let root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+
+        let file = root.join_component("todo.txt");
+        file.create_with_contents("1. test github remote fallback")?;
+        let first_commit = commit_file(&repo, Path::new("todo.txt"), None);
+
+        // Delete the local main branch that was created by the commit
+        repo.find_reference("refs/heads/main").unwrap().delete().unwrap();
+
+        // Create a remote tracking branch for feature-branch
+        repo.reference(
+            "refs/remotes/origin/feature-branch",
+            first_commit,
+            false,
+            "create remote feature-branch",
+        ).unwrap();
+
+        let env = CIEnv {
+            is_github_actions: true,
+            github_base_ref: Ok("feature-branch".to_string()),
+            github_event_path: Err(VarError::NotPresent),
+        };
+
+        let git_repo = GitRepo::find(&root).unwrap();
+        let result = git_repo.resolve_base(None, env).unwrap();
+
+        assert_eq!(result, "origin/feature-branch");
+        Ok(())
+    }
+
+    #[test]
+    fn test_resolve_base_github_actions_errors_when_branch_missing() -> Result<(), Error> {
+        let (repo_root, repo) = setup_repository(None)?;
+        let root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+
+        let file = root.join_component("todo.txt");
+        file.create_with_contents("1. test error case")?;
+        let _first_commit = commit_file(&repo, Path::new("todo.txt"), None);
+
+        let env = CIEnv {
+            is_github_actions: true,
+            github_base_ref: Ok("non-existent-branch".to_string()),
+            github_event_path: Err(VarError::NotPresent),
+        };
+
+        let git_repo = GitRepo::find(&root).unwrap();
+        let result = git_repo.resolve_base(None, env);
+
+        assert_matches!(result, Err(Error::UnableToResolveRef));
         Ok(())
     }
 
