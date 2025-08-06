@@ -474,6 +474,9 @@ impl<'a> TaskHasher<'a> {
                     "NEXT_*",
                     "USE_OUTPUT_FOR_EDGE_FUNCTIONS",
                     "NOW_BUILDER",
+                    // GitHub Actions - https://docs.github.com/en/actions/reference/workflows-and-actions/variables
+                    "GITHUB_*",
+                    "RUNNER_*",
                     // Command Prompt casing of env variables
                     "APPDATA",
                     "PATH",
