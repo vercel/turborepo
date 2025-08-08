@@ -1,7 +1,7 @@
 import type { Config } from 'jest';
 import { config as baseConfig } from './base';
 
-export const config = {
+export const nestConfig = {
   ...baseConfig,
   rootDir: 'src',
   testRegex: '.*\\.spec\\.ts$',
