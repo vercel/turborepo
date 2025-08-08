@@ -1,9 +1,12 @@
-import type { Framework as FW } from "./types/frameworks";
-import frameworksJson from "./json/frameworks.json";
+import type { Framework as FW } from "./types/frameworks.js";
+import { createRequire } from "module";
+
+const require = createRequire(import.meta.url);
+const frameworksJson = require("./json/frameworks.json");
 
 export const frameworks = frameworksJson as Array<Framework>;
 export type Framework = FW;
-export type { FrameworkStrategy } from "./types/frameworks";
+export type { FrameworkStrategy } from "./types/frameworks.js";
 
 export {
   type BaseSchema,
@@ -25,7 +28,7 @@ export {
   type WorkspaceSchema as WorkspaceSchemaV2,
   isRootSchemaV2,
   isWorkspaceSchemaV2,
-} from "./types/config-v2";
+} from "./types/config-v2.js";
 
 export {
   type BaseSchemaV1,
@@ -38,6 +41,6 @@ export {
   type WorkspaceSchemaV1,
   isRootSchemaV1,
   isWorkspaceSchemaV1,
-} from "./types/config-v1";
+} from "./types/config-v1.js";
 
-export type { DryRun } from "./types/dry";
+export type { DryRun } from "./types/dry.js";

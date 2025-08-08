@@ -1,8 +1,12 @@
 {
   "extends": "@turbo/tsconfig/library.json",
   "compilerOptions": {
-    "rootDir": ".",
+    "rootDir": "src",
+    "outDir": "dist",
     "module": "ESNext",
+    "moduleResolution": "bundler",
+    "target": "ESNext",
     "lib": ["ESNext"]
-  }
+  },
+  "include": ["src/**/*"]
 }
