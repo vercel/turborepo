@@ -1,8 +1,6 @@
 import type { Framework as FW } from "./types/frameworks.js";
-import { createRequire } from "module";
-
-const require = createRequire(import.meta.url);
-const frameworksJson = require("./json/frameworks.json");
+// @ts-ignore - JSON imports work differently in ESM vs CJS
+import frameworksJson from "./json/frameworks.json";
 
 export const frameworks = frameworksJson as Array<Framework>;
 export type Framework = FW;
