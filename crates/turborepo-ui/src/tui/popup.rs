@@ -21,6 +21,7 @@ const BIND_LIST: &[&str] = [
     "d       - Scroll logs down",
     "Shift+u - Page logs up",
     "Shift+d - Page logs down",
+    "Shift+c - Clear logs",
     "t       - Jump to top of logs",
     "b       - Jump to bottom of logs",
 ]
