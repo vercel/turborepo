@@ -3,8 +3,10 @@ import { promisify } from "node:util";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createWriteStream, promises as fs } from "node:fs";
-import { x as extract } from "tar";
+import tar from "tar";
 import got from "got";
+
+const { x: extract } = tar;
 
 const pipeline = promisify(Stream.pipeline);
 

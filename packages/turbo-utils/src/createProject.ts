@@ -2,7 +2,7 @@ import path from "node:path";
 import retry from "async-retry";
 import picocolors from "picocolors";
 import fs from "fs-extra";
-import * as logger from "./logger";
+import * as logger from "./logger.js";
 import {
   downloadAndExtractExample,
   downloadAndExtractRepo,
@@ -10,10 +10,10 @@ import {
   existsInRepo,
   hasRepo,
   type RepoInfo,
-} from "./examples";
-import { isWriteable } from "./isWriteable";
-import { isFolderEmpty } from "./isFolderEmpty";
-import type { PackageJson } from "./types";
+} from "./examples.js";
+import { isWriteable } from "./isWriteable.js";
+import { isFolderEmpty } from "./isFolderEmpty.js";
+import type { PackageJson } from "./types.js";
 
 function isErrorLike(err: unknown): err is { message: string } {
   return (

@@ -15,10 +15,24 @@
   "bugs": {
     "url": "https://github.com/vercel/turborepo/issues"
   },
-  "module": "src/index.ts",
-  "main": "src/index.ts",
-  "types": "src/index.ts",
+  "type": "module",
+  "main": "dist/cjs/index.js",
+  "module": "dist/esm/index.js",
+  "types": "dist/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js",
+      "default": "./dist/esm/index.js"
+    }
+  },
   "scripts": {
+    "build": "pnpm build:esm && pnpm build:cjs && pnpm build:types && pnpm post-build",
+    "post-build": "echo '{ \"type\": \"commonjs\" }' > dist/cjs/package.json",
+    "build:esm": "tsc -p tsconfig.json",
+    "build:cjs": "tsc -p tsconfig.cjs.json",
+    "build:types": "tsc -p tsconfig.types.json",
     "test": "jest",
     "lint": "eslint src/",
     "check-types": "tsc --noEmit",

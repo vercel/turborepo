@@ -1,12 +1,8 @@
-import {
-  reset,
-  bold as pcBold,
-  underline as pcUnderline,
-  gray,
-  dim,
-} from "picocolors";
+import pc from "picocolors";
 import ora from "ora";
 import gradient from "gradient-string";
+
+const { reset, bold: pcBold, underline: pcUnderline, gray, dim } = pc;
 
 const BLUE = "#0099F7";
 const RED = "#F11712";

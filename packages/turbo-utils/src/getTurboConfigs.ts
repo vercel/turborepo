@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import yaml from "js-yaml";
-import { sync } from "fast-glob";
+import glob from "fast-glob";
 import JSON5 from "json5";
 import type {
   BaseSchemaV1,
@@ -10,9 +10,11 @@ import type {
   BaseSchemaV2,
   PipelineV2,
 } from "@turbo/types";
-import * as logger from "./logger";
-import { getTurboRoot } from "./getTurboRoot";
-import type { PackageJson, PNPMWorkspaceConfig } from "./types";
+import * as logger from "./logger.js";
+import { getTurboRoot } from "./getTurboRoot.js";
+import type { PackageJson, PNPMWorkspaceConfig } from "./types.js";
+
+const { sync } = glob;
 
 const ROOT_GLOB = "{turbo.json,turbo.jsonc}";
 const ROOT_WORKSPACE_GLOB = "package.json";
@@ -115,7 +117,7 @@ export function getTurboConfigs(cwd?: string, opts?: Options): TurboConfigs {
   if (turboRoot) {
     const workspaceGlobs = getWorkspaceGlobs(turboRoot);
     const workspaceConfigGlobs = workspaceGlobs.map(
-      (glob) => `${glob}/${ROOT_GLOB}`
+      (workspaceGlob) => `${workspaceGlob}/${ROOT_GLOB}`
     );
 
     const configPaths = sync([ROOT_GLOB, ...workspaceConfigGlobs], {
@@ -200,7 +202,7 @@ export function getWorkspaceConfigs(
   if (turboRoot) {
     const workspaceGlobs = getWorkspaceGlobs(turboRoot);
     const workspaceConfigGlobs = workspaceGlobs.map(
-      (glob) => `${glob}/package.json`
+      (workspaceGlob) => `${workspaceGlob}/package.json`
     );
 
     const configPaths = sync([ROOT_WORKSPACE_GLOB, ...workspaceConfigGlobs], {
