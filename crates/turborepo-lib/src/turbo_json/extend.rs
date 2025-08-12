@@ -1,6 +1,6 @@
 //! Module for code related to "extends" behavior for task definitions
 
-use super::ProcessedTaskDefinition;
+use super::processed::ProcessedTaskDefinition;
 
 impl FromIterator<ProcessedTaskDefinition> for ProcessedTaskDefinition {
     fn from_iter<T: IntoIterator<Item = ProcessedTaskDefinition>>(iter: T) -> Self {
@@ -56,7 +56,7 @@ mod test {
     use super::*;
     use crate::{
         cli::OutputLogsMode,
-        turbo_json::{ProcessedEnv, ProcessedInputs, ProcessedOutputs},
+        turbo_json::processed::{ProcessedEnv, ProcessedInputs, ProcessedOutputs},
     };
 
     // Shared test fixtures
