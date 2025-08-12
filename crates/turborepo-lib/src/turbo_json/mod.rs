@@ -160,7 +160,10 @@ pub struct RawTurboJson {
 
 #[derive(Serialize, Default, Debug, Copy, Clone, Iterable, Deserializable, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-pub struct FutureFlags {}
+pub struct FutureFlags {
+    #[deserializable(rename = "turbo_extends")]
+    turbo_extends: bool,
+}
 
 #[derive(Serialize, Default, Debug, PartialEq, Clone)]
 #[serde(transparent)]
@@ -1380,7 +1383,7 @@ mod tests {
                 "build": {}
             },
             "futureFlags": {
-                "bestFeature": true
+                "turboExtends": true
             }
         }"#;
 
@@ -1394,7 +1397,12 @@ mod tests {
         // Verify that futureFlags is parsed correctly
         assert!(raw_turbo_json.future_flags.is_some());
         let future_flags = raw_turbo_json.future_flags.as_ref().unwrap();
-        assert_eq!(future_flags.as_inner(), &FutureFlags {});
+        assert_eq!(
+            future_flags.as_inner(),
+            &FutureFlags {
+                turbo_extends: true
+            }
+        );
 
         // Verify that the futureFlags field doesn't cause errors during conversion to
         // TurboJson
