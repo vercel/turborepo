@@ -15,7 +15,7 @@ use crate::{
     task_graph::TaskDefinition,
     turbo_json::{
         validate_extends, validate_no_package_task_syntax, validate_with_has_no_topo,
-        RawTaskDefinition, TurboJsonLoader,
+        ProcessedTaskDefinition, TurboJsonLoader,
     },
 };
 
@@ -564,14 +564,12 @@ impl<'a> EngineBuilder<'a> {
         task_id: &Spanned<TaskId>,
         task_name: &TaskName,
     ) -> Result<TaskDefinition, Error> {
-        let raw_task_definition = RawTaskDefinition::from_iter(self.task_definition_chain(
-            turbo_json_loader,
-            task_id,
-            task_name,
-        )?);
+        let processed_task_definition = ProcessedTaskDefinition::from_iter(
+            self.task_definition_chain(turbo_json_loader, task_id, task_name)?,
+        );
         let path_to_root = self.path_to_root(task_id.as_inner())?;
-        Ok(TaskDefinition::from_raw(
-            raw_task_definition,
+        Ok(TaskDefinition::from_processed(
+            processed_task_definition,
             &path_to_root,
         )?)
     }
@@ -581,7 +579,7 @@ impl<'a> EngineBuilder<'a> {
         turbo_json_loader: &TurboJsonLoader,
         task_id: &Spanned<TaskId>,
         task_name: &TaskName,
-    ) -> Result<Vec<RawTaskDefinition>, Error> {
+    ) -> Result<Vec<ProcessedTaskDefinition>, Error> {
         let mut task_definitions = Vec::new();
 
         let root_turbo_json = turbo_json_loader.load(&PackageName::Root)?;
@@ -616,8 +614,8 @@ impl<'a> EngineBuilder<'a> {
                         validate_with_has_no_topo,
                     ]))?;
 
-                    if let Some(workspace_def) = workspace_json.tasks.get(task_name) {
-                        task_definitions.push(workspace_def.value.clone());
+                    if let Some(workspace_def) = workspace_json.task(task_id, task_name) {
+                        task_definitions.push(workspace_def);
                     }
                 }
                 Err(config::Error::NoTurboJSON) => (),

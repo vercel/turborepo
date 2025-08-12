@@ -1,11 +1,11 @@
 //! Module for code related to "extends" behavior for task definitions
 
-use super::RawTaskDefinition;
+use super::ProcessedTaskDefinition;
 
-impl FromIterator<RawTaskDefinition> for RawTaskDefinition {
-    fn from_iter<T: IntoIterator<Item = RawTaskDefinition>>(iter: T) -> Self {
+impl FromIterator<ProcessedTaskDefinition> for ProcessedTaskDefinition {
+    fn from_iter<T: IntoIterator<Item = ProcessedTaskDefinition>>(iter: T) -> Self {
         iter.into_iter()
-            .fold(RawTaskDefinition::default(), |mut def, other| {
+            .fold(ProcessedTaskDefinition::default(), |mut def, other| {
                 def.merge(other);
                 def
             })
@@ -20,10 +20,10 @@ macro_rules! set_field {
     }};
 }
 
-impl RawTaskDefinition {
-    // Merges another RawTaskDefinition into this one
+impl ProcessedTaskDefinition {
+    // Merges another ProcessedTaskDefinition into this one
     // By default any fields present on `other` will override present fields.
-    pub fn merge(&mut self, other: RawTaskDefinition) {
+    pub fn merge(&mut self, other: ProcessedTaskDefinition) {
         set_field!(self, other, outputs);
 
         let other_has_range = other.cache.as_ref().is_some_and(|c| c.range.is_some());
@@ -54,38 +54,72 @@ mod test {
     use turborepo_unescape::UnescapedString;
 
     use super::*;
-    use crate::cli::OutputLogsMode;
+    use crate::{
+        cli::OutputLogsMode,
+        turbo_json::{ProcessedEnv, ProcessedInputs, ProcessedOutputs},
+    };
 
     // Shared test fixtures
-    fn create_base_task() -> RawTaskDefinition {
-        RawTaskDefinition {
+    fn create_base_task() -> ProcessedTaskDefinition {
+        ProcessedTaskDefinition {
             cache: Some(Spanned::new(true)),
             persistent: Some(Spanned::new(false)),
-            outputs: Some(vec![Spanned::new(UnescapedString::from("dist/**"))]),
-            inputs: Some(vec![Spanned::new(UnescapedString::from("src/**"))]),
-            env: Some(vec![Spanned::new(UnescapedString::from("NODE_ENV"))]),
-            ..Default::default()
+            outputs: Some(ProcessedOutputs(vec![Spanned::new(UnescapedString::from(
+                "dist/**",
+            ))])),
+            inputs: Some(ProcessedInputs(vec![Spanned::new(UnescapedString::from(
+                "src/**",
+            ))])),
+            env: Some(ProcessedEnv(vec![Spanned::new(UnescapedString::from(
+                "NODE_ENV",
+            ))])),
+            depends_on: None,
+            pass_through_env: None,
+            output_logs: None,
+            interruptible: None,
+            interactive: None,
+            env_mode: None,
+            with: None,
         }
     }
 
-    fn create_override_task() -> RawTaskDefinition {
-        RawTaskDefinition {
+    fn create_override_task() -> ProcessedTaskDefinition {
+        ProcessedTaskDefinition {
             cache: Some(Spanned::new(false)),
             persistent: Some(Spanned::new(true)),
-            outputs: Some(vec![Spanned::new(UnescapedString::from("build/**"))]),
-            inputs: Some(vec![Spanned::new(UnescapedString::from("lib/**"))]),
-            env: Some(vec![Spanned::new(UnescapedString::from("PROD_ENV"))]),
+            outputs: Some(ProcessedOutputs(vec![Spanned::new(UnescapedString::from(
+                "build/**",
+            ))])),
+            inputs: Some(ProcessedInputs(vec![Spanned::new(UnescapedString::from(
+                "lib/**",
+            ))])),
+            env: Some(ProcessedEnv(vec![Spanned::new(UnescapedString::from(
+                "PROD_ENV",
+            ))])),
             output_logs: Some(Spanned::new(OutputLogsMode::Full)),
             interruptible: Some(Spanned::new(true)),
-            ..Default::default()
+            depends_on: None,
+            pass_through_env: None,
+            interactive: None,
+            env_mode: None,
+            with: None,
         }
     }
 
-    fn create_partial_task() -> RawTaskDefinition {
-        RawTaskDefinition {
+    fn create_partial_task() -> ProcessedTaskDefinition {
+        ProcessedTaskDefinition {
             persistent: Some(Spanned::new(true)),
             output_logs: Some(Spanned::new(OutputLogsMode::HashOnly)),
-            ..Default::default()
+            cache: None,
+            outputs: None,
+            inputs: None,
+            env: None,
+            depends_on: None,
+            pass_through_env: None,
+            interruptible: None,
+            interactive: None,
+            env_mode: None,
+            with: None,
         }
     }
 
@@ -153,7 +187,7 @@ mod test {
         let third = create_override_task();
 
         let tasks = vec![first.clone(), second.clone(), third.clone()];
-        let result: RawTaskDefinition = tasks.into_iter().collect();
+        let result: ProcessedTaskDefinition = tasks.into_iter().collect();
 
         // Fields present in the last task (third) should take priority
         assert_eq!(result.cache, third.cache);
@@ -171,20 +205,26 @@ mod test {
 
     #[test]
     fn test_from_iter_combines_across_multiple_tasks() {
-        let first = RawTaskDefinition {
+        let first = ProcessedTaskDefinition {
             cache: Some(Spanned::new(true)),
-            outputs: Some(vec![Spanned::new(UnescapedString::from("dist/**"))]),
+            outputs: Some(ProcessedOutputs(vec![Spanned::new(UnescapedString::from(
+                "dist/**",
+            ))])),
             ..Default::default()
         };
 
-        let second = RawTaskDefinition {
+        let second = ProcessedTaskDefinition {
             persistent: Some(Spanned::new(false)),
-            inputs: Some(vec![Spanned::new(UnescapedString::from("src/**"))]),
+            inputs: Some(ProcessedInputs(vec![Spanned::new(UnescapedString::from(
+                "src/**",
+            ))])),
             ..Default::default()
         };
 
-        let third = RawTaskDefinition {
-            env: Some(vec![Spanned::new(UnescapedString::from("NODE_ENV"))]),
+        let third = ProcessedTaskDefinition {
+            env: Some(ProcessedEnv(vec![Spanned::new(UnescapedString::from(
+                "NODE_ENV",
+            ))])),
             output_logs: Some(Spanned::new(OutputLogsMode::Full)),
             // Override cache from first task
             cache: Some(Spanned::new(false)),
@@ -192,7 +232,7 @@ mod test {
         };
 
         let tasks = vec![first.clone(), second.clone(), third.clone()];
-        let result: RawTaskDefinition = tasks.into_iter().collect();
+        let result: ProcessedTaskDefinition = tasks.into_iter().collect();
 
         // Last task's cache should override first task's cache
         assert_eq!(result.cache, third.cache);
@@ -211,18 +251,18 @@ mod test {
 
     #[test]
     fn test_from_iter_empty_iterator() {
-        let empty_vec: Vec<RawTaskDefinition> = vec![];
-        let result: RawTaskDefinition = empty_vec.into_iter().collect();
+        let empty_vec: Vec<ProcessedTaskDefinition> = vec![];
+        let result: ProcessedTaskDefinition = empty_vec.into_iter().collect();
 
         // Should be equivalent to default
-        assert_eq!(result, RawTaskDefinition::default());
+        assert_eq!(result, ProcessedTaskDefinition::default());
     }
 
     #[test]
     fn test_from_iter_single_task() {
         let single_task = create_base_task();
         let tasks = vec![single_task.clone()];
-        let result: RawTaskDefinition = tasks.into_iter().collect();
+        let result: ProcessedTaskDefinition = tasks.into_iter().collect();
 
         assert_eq!(result, single_task);
     }
