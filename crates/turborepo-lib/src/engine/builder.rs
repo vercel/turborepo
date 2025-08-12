@@ -585,7 +585,7 @@ impl<'a> EngineBuilder<'a> {
         let root_turbo_json = turbo_json_loader.load(&PackageName::Root)?;
         Error::from_validation(root_turbo_json.validate(&[validate_with_has_no_topo]))?;
 
-        if let Some(root_definition) = root_turbo_json.task(task_id, task_name) {
+        if let Some(root_definition) = root_turbo_json.task(task_id, task_name)? {
             task_definitions.push(root_definition)
         }
 
@@ -614,7 +614,7 @@ impl<'a> EngineBuilder<'a> {
                         validate_with_has_no_topo,
                     ]))?;
 
-                    if let Some(workspace_def) = workspace_json.task(task_id, task_name) {
+                    if let Some(workspace_def) = workspace_json.task(task_id, task_name)? {
                         task_definitions.push(workspace_def);
                     }
                 }

@@ -56,7 +56,7 @@ mod test {
     use super::*;
     use crate::{
         cli::OutputLogsMode,
-        turbo_json::processed::{ProcessedEnv, ProcessedInputs, ProcessedOutputs},
+        turbo_json::processed::{ProcessedEnv, ProcessedGlob, ProcessedInputs, ProcessedOutputs},
     };
 
     // Shared test fixtures
@@ -64,12 +64,14 @@ mod test {
         ProcessedTaskDefinition {
             cache: Some(Spanned::new(true)),
             persistent: Some(Spanned::new(false)),
-            outputs: Some(ProcessedOutputs(vec![Spanned::new(UnescapedString::from(
-                "dist/**",
-            ))])),
-            inputs: Some(ProcessedInputs(vec![Spanned::new(UnescapedString::from(
-                "src/**",
-            ))])),
+            outputs: Some(ProcessedOutputs(vec![ProcessedGlob::from_spanned_output(
+                Spanned::new(UnescapedString::from("dist/**")),
+            )
+            .unwrap()])),
+            inputs: Some(ProcessedInputs(vec![ProcessedGlob::from_spanned_input(
+                Spanned::new(UnescapedString::from("src/**")),
+            )
+            .unwrap()])),
             env: Some(ProcessedEnv(vec![Spanned::new(UnescapedString::from(
                 "NODE_ENV",
             ))])),
@@ -87,12 +89,14 @@ mod test {
         ProcessedTaskDefinition {
             cache: Some(Spanned::new(false)),
             persistent: Some(Spanned::new(true)),
-            outputs: Some(ProcessedOutputs(vec![Spanned::new(UnescapedString::from(
-                "build/**",
-            ))])),
-            inputs: Some(ProcessedInputs(vec![Spanned::new(UnescapedString::from(
-                "lib/**",
-            ))])),
+            outputs: Some(ProcessedOutputs(vec![ProcessedGlob::from_spanned_output(
+                Spanned::new(UnescapedString::from("build/**")),
+            )
+            .unwrap()])),
+            inputs: Some(ProcessedInputs(vec![ProcessedGlob::from_spanned_input(
+                Spanned::new(UnescapedString::from("lib/**")),
+            )
+            .unwrap()])),
             env: Some(ProcessedEnv(vec![Spanned::new(UnescapedString::from(
                 "PROD_ENV",
             ))])),
@@ -207,17 +211,19 @@ mod test {
     fn test_from_iter_combines_across_multiple_tasks() {
         let first = ProcessedTaskDefinition {
             cache: Some(Spanned::new(true)),
-            outputs: Some(ProcessedOutputs(vec![Spanned::new(UnescapedString::from(
-                "dist/**",
-            ))])),
+            outputs: Some(ProcessedOutputs(vec![ProcessedGlob::from_spanned_output(
+                Spanned::new(UnescapedString::from("dist/**")),
+            )
+            .unwrap()])),
             ..Default::default()
         };
 
         let second = ProcessedTaskDefinition {
             persistent: Some(Spanned::new(false)),
-            inputs: Some(ProcessedInputs(vec![Spanned::new(UnescapedString::from(
-                "src/**",
-            ))])),
+            inputs: Some(ProcessedInputs(vec![ProcessedGlob::from_spanned_input(
+                Spanned::new(UnescapedString::from("src/**")),
+            )
+            .unwrap()])),
             ..Default::default()
         };
 
