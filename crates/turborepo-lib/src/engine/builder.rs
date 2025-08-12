@@ -628,15 +628,35 @@ impl<'a> EngineBuilder<'a> {
         }
 
         if task_definitions.is_empty() && self.should_validate_engine {
-            let (span, text) = task_id.span_and_text("turbo.json");
-            return Err(Error::MissingPackageTask(Box::new(
-                MissingPackageTaskError {
-                    span,
-                    text,
-                    task_id: task_id.to_string(),
-                    task_name: task_name.to_string(),
-                },
-            )));
+            // Fallback: If the dependency refers to a non-root package task and the
+            // corresponding script exists in that package's package.json, synthesize a
+            // default task definition so it can be depended on without an explicit
+            // turbo.json entry in that package. Root tasks must still be declared in
+            // the root turbo.json (see MissingRootTaskInTurboJsonError tests), so we
+            // only allow this fallback for non-root packages.
+            if task_id.package() != ROOT_PKG_NAME {
+                let pkg_name =
+                    turborepo_repository::package_graph::PackageName::from(task_id.package());
+                if let Some(pkg_json) = self.package_graph.package_json(&pkg_name) {
+                    if pkg_json.scripts.contains_key(task_name.task()) {
+                        // Synthesize a minimal raw task definition, which will be merged and
+                        // converted below.
+                        task_definitions.push(crate::turbo_json::RawTaskDefinition::default());
+                    }
+                }
+            }
+
+            if task_definitions.is_empty() {
+                let (span, text) = task_id.span_and_text("turbo.json");
+                return Err(Error::MissingPackageTask(Box::new(
+                    MissingPackageTaskError {
+                        span,
+                        text,
+                        task_id: task_id.to_string(),
+                        task_name: task_name.to_string(),
+                    },
+                )));
+            }
         }
 
         Ok(task_definitions)
