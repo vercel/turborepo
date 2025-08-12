@@ -339,10 +339,10 @@ impl LanguageServer for Backend {
                 .map(|(p, t)| (Some(p), t))
                 .unwrap_or((None, &referenced_task));
 
-            if let (Some(package), Some(package_name)) = (package, package_json_name) {
-                if package_name != package {
-                    continue;
-                }
+            if let (Some(package), Some(package_name)) = (package, package_json_name)
+                && package_name != package
+            {
+                continue;
             };
 
             let Some(start) = data.find(&format!("\"{task}\"")) else {

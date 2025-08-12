@@ -25,10 +25,10 @@ fn test_splits(filename: &str, limit: Option<usize>) {
     let len = bytes.len();
     let expected = write_to_parser(&mut [bytes.clone()]);
     for i in 0..(len - 1) {
-        if let Some(limit) = limit {
-            if i > limit {
-                break;
-            }
+        if let Some(limit) = limit
+            && i > limit
+        {
+            break;
         }
         let bytes_copy = bytes.clone();
         let (start, end) = bytes_copy.split_at(i);

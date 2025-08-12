@@ -322,7 +322,7 @@ impl PnpmLockfile {
 
     // Create a projection of all fields in the lockfile that could affect all
     // workspaces
-    fn global_fields(&self) -> GlobalFields {
+    fn global_fields(&self) -> GlobalFields<'_> {
         GlobalFields {
             version: &self.lockfile_version.version,
             checksum: self.package_extensions_checksum.as_deref(),

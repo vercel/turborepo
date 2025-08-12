@@ -196,7 +196,7 @@ impl AnchoredSystemPathBuf {
         self.0.push(path.as_ref());
     }
 
-    pub fn components(&self) -> Utf8Components {
+    pub fn components(&self) -> Utf8Components<'_> {
         self.0.components()
     }
 

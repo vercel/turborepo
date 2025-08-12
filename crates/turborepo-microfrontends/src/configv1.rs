@@ -76,7 +76,7 @@ impl ConfigV1 {
         }
     }
 
-    pub fn development_tasks(&self) -> impl Iterator<Item = DevelopmentTask> {
+    pub fn development_tasks(&self) -> impl Iterator<Item = DevelopmentTask<'_>> {
         self.applications
             .iter()
             .map(|(application, config)| DevelopmentTask {

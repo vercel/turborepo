@@ -517,7 +517,7 @@ fn symbols_to_combinations<'a, T: Iterator<Item = GlobSymbol<'a>>>(
 }
 
 /// parses and escapes a glob, returning an iterator over the symbols
-fn glob_to_symbols(glob: &str) -> impl Iterator<Item = GlobSymbol> {
+fn glob_to_symbols(glob: &str) -> impl Iterator<Item = GlobSymbol<'_>> {
     let glob_bytes = glob.as_bytes();
     let mut escaped = false;
     let mut cursor = unic_segment::GraphemeCursor::new(0, glob.len());

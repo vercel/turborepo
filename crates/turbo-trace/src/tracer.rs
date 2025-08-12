@@ -387,10 +387,10 @@ impl Tracer {
         let resolver = Self::create_resolver(self.ts_config.as_deref());
 
         while let Some((file_path, file_depth)) = self.files.pop() {
-            if let Some(max_depth) = max_depth {
-                if file_depth > max_depth {
-                    continue;
-                }
+            if let Some(max_depth) = max_depth
+                && file_depth > max_depth
+            {
+                continue;
             }
             self.trace_file(&resolver, file_path, file_depth, &mut seen)
                 .await;

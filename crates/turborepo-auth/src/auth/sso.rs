@@ -71,22 +71,22 @@ pub async fn sso_login<T: Client + TokenClient + CacheClient>(
             }
         // No existing turbo token found. If the user is logging into Vercel,
         // check for an existing `vc` token with correct scope.
-        } else if login_url_configuration.contains("vercel.com") {
-            if let Ok(Some(token)) = extract_vercel_token() {
-                let token = Token::existing(token);
-                if token
-                    .is_valid_sso(
-                        api_client,
-                        sso_team,
-                        Some(valid_token_callback(
-                            &format!("Existing Vercel token for {sso_team} found!"),
-                            color_config,
-                        )),
-                    )
-                    .await?
-                {
-                    return Ok(token);
-                }
+        } else if login_url_configuration.contains("vercel.com")
+            && let Ok(Some(token)) = extract_vercel_token()
+        {
+            let token = Token::existing(token);
+            if token
+                .is_valid_sso(
+                    api_client,
+                    sso_team,
+                    Some(valid_token_callback(
+                        &format!("Existing Vercel token for {sso_team} found!"),
+                        color_config,
+                    )),
+                )
+                .await?
+            {
+                return Ok(token);
             }
         }
     }

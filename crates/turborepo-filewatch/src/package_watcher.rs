@@ -367,12 +367,12 @@ impl Subscriber {
         state: &mut State,
         package_state_tx: &mpsc::Sender<DiscoveryResult>,
     ) {
-        if let State::Pending { debouncer, .. } = state {
-            if debouncer.bump() {
-                // We successfully bumped the debouncer, which was already pending,
-                // so a new discovery will happen shortly.
-                return;
-            }
+        if let State::Pending { debouncer, .. } = state
+            && debouncer.bump()
+        {
+            // We successfully bumped the debouncer, which was already pending,
+            // so a new discovery will happen shortly.
+            return;
         }
         // We either failed to bump the debouncer, or we don't have a rediscovery
         // queued, but we need one.
