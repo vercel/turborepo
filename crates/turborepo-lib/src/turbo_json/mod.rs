@@ -782,8 +782,6 @@ fn gather_env_vars(
 // Takes an input/output glob that might start with TURBO_ROOT_PREFIX
 #[cfg(test)]
 mod tests {
-    use std::assert_matches::assert_matches;
-
     use anyhow::Result;
     use biome_deserialize::json::deserialize_from_json_str;
     use biome_json_parser::JsonParserOptions;
@@ -1064,13 +1062,8 @@ mod tests {
     ) -> Result<()> {
         let raw_task_outputs: Vec<UnescapedString> = serde_json::from_str(task_outputs_str)?;
         let turbo_root = RelativeUnixPath::new("../..")?;
-        let processed_outputs = ProcessedOutputs(
-            raw_task_outputs
-                .into_iter()
-                .map(|s| ProcessedGlob::from_spanned_output(Spanned::new(s)))
-                .collect::<Result<Vec<_>, _>>()
-                .map_err(|e| anyhow::anyhow!("{}", e))?,
-        );
+        let processed_outputs =
+            ProcessedOutputs::new(raw_task_outputs.into_iter().map(Spanned::new).collect())?;
         let task_outputs = TaskOutputs::from_processed(processed_outputs, turbo_root)?;
         assert_eq!(task_outputs, expected_task_outputs);
 
@@ -1355,20 +1348,5 @@ mod tests {
             error.to_string(),
             "`with` cannot use dependency relationships."
         );
-    }
-
-    #[test]
-    fn test_absolute_paths_error_in_inputs() {
-        let absolute_path = if cfg!(windows) {
-            "C:\\win32"
-        } else {
-            "/dev/null"
-        };
-
-        // The error should be caught when creating the ProcessedGlob
-        let result =
-            ProcessedGlob::from_spanned_input(Spanned::new(UnescapedString::from(absolute_path)));
-
-        assert_matches!(result, Err(Error::AbsolutePathInConfig { .. }));
     }
 }

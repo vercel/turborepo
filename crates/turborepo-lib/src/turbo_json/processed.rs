@@ -141,12 +141,23 @@ pub struct ProcessedPassThroughEnv(pub Vec<Spanned<UnescapedString>>);
 
 /// Processed outputs field with DSL detection
 #[derive(Debug, Clone, PartialEq)]
-pub struct ProcessedOutputs(pub Vec<ProcessedGlob>);
+pub struct ProcessedOutputs {
+    globs: Vec<ProcessedGlob>,
+}
 
 impl ProcessedOutputs {
+    pub fn new(raw_globs: Vec<Spanned<UnescapedString>>) -> Result<Self, Error> {
+        let globs = raw_globs
+            .into_iter()
+            .map(ProcessedGlob::from_spanned_input)
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(ProcessedOutputs { globs })
+    }
+
     /// Resolves all globs with the given turbo_root path
     pub fn resolve(&self, turbo_root_path: &RelativeUnixPath) -> Vec<String> {
-        self.0
+        self.globs
             .iter()
             .map(|glob| glob.resolve(turbo_root_path))
             .collect()
@@ -179,18 +190,7 @@ impl ProcessedTaskDefinition {
     pub fn from_raw(raw_task: RawTaskDefinition) -> Result<Self, crate::config::Error> {
         let inputs = raw_task.inputs.map(ProcessedInputs::new).transpose()?;
 
-        let outputs = raw_task
-            .outputs
-            .map(
-                |outputs| -> Result<ProcessedOutputs, crate::config::Error> {
-                    let globs = outputs
-                        .into_iter()
-                        .map(ProcessedGlob::from_spanned_output)
-                        .collect::<Result<Vec<_>, _>>()?;
-                    Ok(ProcessedOutputs(globs))
-                },
-            )
-            .transpose()?;
+        let outputs = raw_task.outputs.map(ProcessedOutputs::new).transpose()?;
 
         Ok(ProcessedTaskDefinition {
             cache: raw_task.cache,
@@ -211,7 +211,7 @@ impl ProcessedTaskDefinition {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
+    use std::{assert_matches::assert_matches, sync::Arc};
 
     use test_case::test_case;
     use turborepo_errors::Spanned;
@@ -297,9 +297,9 @@ mod tests {
         assert!(!inputs.globs[1].turbo_root);
 
         let outputs = processed.outputs.as_ref().unwrap();
-        assert!(outputs.0[0].turbo_root);
-        assert!(outputs.0[0].negated);
-        assert!(!outputs.0[1].turbo_root);
+        assert!(outputs.globs[0].turbo_root);
+        assert!(outputs.globs[0].negated);
+        assert!(!outputs.globs[1].turbo_root);
 
         // Resolve with turbo_root path
         let resolved_inputs = inputs.resolve(turbo_root);
@@ -325,5 +325,20 @@ mod tests {
                 turbo_root: false
             }]
         );
+    }
+
+    #[test]
+    fn test_absolute_paths_error_in_inputs() {
+        let absolute_path = if cfg!(windows) {
+            "C:\\win32"
+        } else {
+            "/dev/null"
+        };
+
+        // The error should be caught when creating the ProcessedGlob
+        let result =
+            ProcessedGlob::from_spanned_input(Spanned::new(UnescapedString::from(absolute_path)));
+
+        assert_matches!(result, Err(Error::AbsolutePathInConfig { .. }));
     }
 }

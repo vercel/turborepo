@@ -56,7 +56,7 @@ mod test {
     use super::*;
     use crate::{
         cli::OutputLogsMode,
-        turbo_json::processed::{ProcessedEnv, ProcessedGlob, ProcessedInputs, ProcessedOutputs},
+        turbo_json::processed::{ProcessedEnv, ProcessedInputs, ProcessedOutputs},
     };
 
     // Shared test fixtures
@@ -64,10 +64,10 @@ mod test {
         ProcessedTaskDefinition {
             cache: Some(Spanned::new(true)),
             persistent: Some(Spanned::new(false)),
-            outputs: Some(ProcessedOutputs(vec![ProcessedGlob::from_spanned_output(
-                Spanned::new(UnescapedString::from("dist/**")),
-            )
-            .unwrap()])),
+            outputs: Some(
+                ProcessedOutputs::new(vec![Spanned::new(UnescapedString::from("dist/**"))])
+                    .unwrap(),
+            ),
             inputs: Some(
                 ProcessedInputs::new(vec![Spanned::new(UnescapedString::from("src/**"))]).unwrap(),
             ),
@@ -88,10 +88,10 @@ mod test {
         ProcessedTaskDefinition {
             cache: Some(Spanned::new(false)),
             persistent: Some(Spanned::new(true)),
-            outputs: Some(ProcessedOutputs(vec![ProcessedGlob::from_spanned_output(
-                Spanned::new(UnescapedString::from("build/**")),
-            )
-            .unwrap()])),
+            outputs: Some(
+                ProcessedOutputs::new(vec![Spanned::new(UnescapedString::from("build/**"))])
+                    .unwrap(),
+            ),
             inputs: Some(
                 ProcessedInputs::new(vec![Spanned::new(UnescapedString::from("lib/**"))]).unwrap(),
             ),
@@ -209,10 +209,10 @@ mod test {
     fn test_from_iter_combines_across_multiple_tasks() {
         let first = ProcessedTaskDefinition {
             cache: Some(Spanned::new(true)),
-            outputs: Some(ProcessedOutputs(vec![ProcessedGlob::from_spanned_output(
-                Spanned::new(UnescapedString::from("dist/**")),
-            )
-            .unwrap()])),
+            outputs: Some(
+                ProcessedOutputs::new(vec![Spanned::new(UnescapedString::from("dist/**"))])
+                    .unwrap(),
+            ),
             ..Default::default()
         };
 
