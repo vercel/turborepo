@@ -25,10 +25,12 @@ use crate::{
 };
 
 mod extend;
+pub mod future_flags;
 mod loader;
 pub mod parser;
 mod processed;
 
+pub use future_flags::FutureFlags;
 pub use loader::{TurboJsonLoader, TurboJsonReader};
 pub use processed::ProcessedTaskDefinition;
 
@@ -154,12 +156,6 @@ pub struct RawTurboJson {
     #[deserializable(rename = "//")]
     #[serde(skip)]
     _comment: Option<String>,
-}
-
-#[derive(Serialize, Default, Debug, Copy, Clone, Iterable, Deserializable, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct FutureFlags {
-    turbo_extends: bool,
 }
 
 #[derive(Serialize, Default, Debug, PartialEq, Clone)]
