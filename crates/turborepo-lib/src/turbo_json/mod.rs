@@ -34,8 +34,6 @@ pub use processed::ProcessedTaskDefinition;
 
 use crate::{boundaries::BoundariesConfig, config::UnnecessaryPackageTaskSyntaxError};
 
-const TURBO_ROOT: &str = "$TURBO_ROOT$";
-const TURBO_ROOT_SLASH: &str = "$TURBO_ROOT$/";
 const TURBO_DEFAULT: &str = "$TURBO_DEFAULT$";
 
 const ENV_PIPELINE_DELIMITER: &str = "$";
