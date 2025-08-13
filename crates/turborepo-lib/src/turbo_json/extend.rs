@@ -71,9 +71,9 @@ mod test {
             inputs: Some(
                 ProcessedInputs::new(vec![Spanned::new(UnescapedString::from("src/**"))]).unwrap(),
             ),
-            env: Some(ProcessedEnv(vec![Spanned::new(UnescapedString::from(
-                "NODE_ENV",
-            ))])),
+            env: Some(
+                ProcessedEnv::new(vec![Spanned::new(UnescapedString::from("NODE_ENV"))]).unwrap(),
+            ),
             depends_on: None,
             pass_through_env: None,
             output_logs: None,
@@ -95,9 +95,9 @@ mod test {
             inputs: Some(
                 ProcessedInputs::new(vec![Spanned::new(UnescapedString::from("lib/**"))]).unwrap(),
             ),
-            env: Some(ProcessedEnv(vec![Spanned::new(UnescapedString::from(
-                "PROD_ENV",
-            ))])),
+            env: Some(
+                ProcessedEnv::new(vec![Spanned::new(UnescapedString::from("PROD_ENV"))]).unwrap(),
+            ),
             output_logs: Some(Spanned::new(OutputLogsMode::Full)),
             interruptible: Some(Spanned::new(true)),
             depends_on: None,
@@ -225,9 +225,9 @@ mod test {
         };
 
         let third = ProcessedTaskDefinition {
-            env: Some(ProcessedEnv(vec![Spanned::new(UnescapedString::from(
-                "NODE_ENV",
-            ))])),
+            env: Some(
+                ProcessedEnv::new(vec![Spanned::new(UnescapedString::from("NODE_ENV"))]).unwrap(),
+            ),
             output_logs: Some(Spanned::new(OutputLogsMode::Full)),
             // Override cache from first task
             cache: Some(Spanned::new(false)),

@@ -3,6 +3,7 @@
 use camino::Utf8Path;
 use turbopath::RelativeUnixPath;
 use turborepo_errors::Spanned;
+use turborepo_task_id::TaskName;
 use turborepo_unescape::UnescapedString;
 
 use super::RawTaskDefinition;
@@ -14,6 +15,8 @@ use crate::{
 const TURBO_DEFAULT: &str = "$TURBO_DEFAULT$";
 const TURBO_ROOT: &str = "$TURBO_ROOT$";
 const TURBO_ROOT_SLASH: &str = "$TURBO_ROOT$/";
+const ENV_PIPELINE_DELIMITER: &str = "$";
+const TOPOLOGICAL_PIPELINE_DELIMITER: &str = "^";
 
 /// A processed glob with separated components
 #[derive(Debug, Clone, PartialEq)]
@@ -101,9 +104,36 @@ impl ProcessedGlob {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ProcessedDependsOn(pub Spanned<Vec<Spanned<UnescapedString>>>);
 
+impl ProcessedDependsOn {
+    /// Creates a ProcessedDependsOn, validating that dependencies don't use env
+    /// prefix
+    pub fn new(raw_deps: Spanned<Vec<Spanned<UnescapedString>>>) -> Result<Self, Error> {
+        // Validate that no dependency starts with ENV_PIPELINE_DELIMITER ($)
+        for dep in raw_deps.value.iter() {
+            if dep.starts_with(ENV_PIPELINE_DELIMITER) {
+                let (span, text) = dep.span_and_text("turbo.json");
+                return Err(Error::InvalidDependsOnValue {
+                    field: "dependsOn",
+                    span,
+                    text,
+                });
+            }
+        }
+        Ok(ProcessedDependsOn(raw_deps))
+    }
+}
+
 /// Processed env field with DSL detection
 #[derive(Debug, Clone, PartialEq)]
-pub struct ProcessedEnv(pub Vec<Spanned<UnescapedString>>);
+pub struct ProcessedEnv(pub Vec<String>);
+
+impl ProcessedEnv {
+    /// Creates a ProcessedEnv, validating that env vars don't use invalid
+    /// prefixes
+    pub fn new(raw_env: Vec<Spanned<UnescapedString>>) -> Result<Self, Error> {
+        Ok(ProcessedEnv(extract_env_vars(raw_env)?))
+    }
+}
 
 /// Processed inputs field with DSL detection
 #[derive(Debug, Clone, PartialEq)]
@@ -137,7 +167,38 @@ impl ProcessedInputs {
 
 /// Processed pass_through_env field with DSL detection
 #[derive(Debug, Clone, PartialEq)]
-pub struct ProcessedPassThroughEnv(pub Vec<Spanned<UnescapedString>>);
+pub struct ProcessedPassThroughEnv(pub Vec<String>);
+
+impl ProcessedPassThroughEnv {
+    /// Creates a ProcessedPassThroughEnv, validating that env vars don't use
+    /// invalid prefixes
+    pub fn new(raw_env: Vec<Spanned<UnescapedString>>) -> Result<Self, Error> {
+        Ok(ProcessedPassThroughEnv(extract_env_vars(raw_env)?))
+    }
+}
+
+fn extract_env_vars(raw_env: Vec<Spanned<UnescapedString>>) -> Result<Vec<String>, Error> {
+    use crate::config::InvalidEnvPrefixError;
+
+    let mut env_vars = Vec::with_capacity(raw_env.len());
+    // Validate that no env var starts with ENV_PIPELINE_DELIMITER ($)
+    for var in raw_env {
+        if var.starts_with(ENV_PIPELINE_DELIMITER) {
+            let (span, text) = var.span_and_text("turbo.json");
+            return Err(Error::InvalidEnvPrefix(Box::new(InvalidEnvPrefixError {
+                key: "passThroughEnv".to_string(),
+                value: var.as_str().to_string(),
+                span,
+                text,
+                env_pipeline_delimiter: ENV_PIPELINE_DELIMITER,
+            })));
+        }
+
+        env_vars.push(String::from(var.into_inner()));
+    }
+    env_vars.sort();
+    Ok(env_vars)
+}
 
 /// Processed outputs field with DSL detection
 #[derive(Debug, Clone, PartialEq)]
@@ -166,7 +227,25 @@ impl ProcessedOutputs {
 
 /// Processed with field with DSL detection
 #[derive(Debug, Clone, PartialEq)]
-pub struct ProcessedWith(pub Vec<Spanned<UnescapedString>>);
+pub struct ProcessedWith(pub Vec<Spanned<TaskName<'static>>>);
+
+impl ProcessedWith {
+    /// Creates a ProcessedWith, validating that siblings don't use topological
+    /// prefix
+    pub fn new(raw_with: Vec<Spanned<UnescapedString>>) -> Result<Self, Error> {
+        // Validate that no sibling starts with TOPOLOGICAL_PIPELINE_DELIMITER (^)
+        let mut with = Vec::with_capacity(raw_with.len());
+        for sibling in raw_with {
+            if sibling.starts_with(TOPOLOGICAL_PIPELINE_DELIMITER) {
+                let (span, text) = sibling.span_and_text("turbo.json");
+                return Err(Error::InvalidTaskWith { span, text });
+            }
+            let (sibling, span) = sibling.split();
+            with.push(span.to(TaskName::from(String::from(sibling))));
+        }
+        Ok(ProcessedWith(with))
+    }
+}
 
 /// Intermediate representation for task definitions with DSL processing
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -188,23 +267,25 @@ pub struct ProcessedTaskDefinition {
 impl ProcessedTaskDefinition {
     /// Creates a processed task definition from raw task
     pub fn from_raw(raw_task: RawTaskDefinition) -> Result<Self, crate::config::Error> {
-        let inputs = raw_task.inputs.map(ProcessedInputs::new).transpose()?;
-
-        let outputs = raw_task.outputs.map(ProcessedOutputs::new).transpose()?;
-
         Ok(ProcessedTaskDefinition {
             cache: raw_task.cache,
-            depends_on: raw_task.depends_on.map(ProcessedDependsOn),
-            env: raw_task.env.map(ProcessedEnv),
-            inputs,
-            pass_through_env: raw_task.pass_through_env.map(ProcessedPassThroughEnv),
+            depends_on: raw_task
+                .depends_on
+                .map(ProcessedDependsOn::new)
+                .transpose()?,
+            env: raw_task.env.map(ProcessedEnv::new).transpose()?,
+            inputs: raw_task.inputs.map(ProcessedInputs::new).transpose()?,
+            pass_through_env: raw_task
+                .pass_through_env
+                .map(ProcessedPassThroughEnv::new)
+                .transpose()?,
             persistent: raw_task.persistent,
             interruptible: raw_task.interruptible,
-            outputs,
+            outputs: raw_task.outputs.map(ProcessedOutputs::new).transpose()?,
             output_logs: raw_task.output_logs,
             interactive: raw_task.interactive,
             env_mode: raw_task.env_mode,
-            with: raw_task.with.map(ProcessedWith),
+            with: raw_task.with.map(ProcessedWith::new).transpose()?,
         })
     }
 }

@@ -342,21 +342,13 @@ impl TaskDefinition {
             return Err(Error::InterruptibleButNotPersistent { span, text });
         }
 
-        let mut env_var_dependencies = HashSet::new();
         let mut topological_dependencies: Vec<Spanned<TaskName>> = Vec::new();
         let mut task_dependencies: Vec<Spanned<TaskName>> = Vec::new();
         if let Some(depends_on) = processed.depends_on {
             for dependency in depends_on.0.into_inner() {
-                let (span, text) = dependency.span_and_text("turbo.json");
                 let (dependency, depspan) = dependency.split();
                 let dependency: String = dependency.into();
-                if dependency.strip_prefix(ENV_PIPELINE_DELIMITER).is_some() {
-                    return Err(Error::InvalidDependsOnValue {
-                        field: "dependsOn",
-                        span,
-                        text,
-                    });
-                } else if let Some(topo_dependency) =
+                if let Some(topo_dependency) =
                     dependency.strip_prefix(TOPOLOGICAL_PIPELINE_DELIMITER)
                 {
                     topological_dependencies.push(depspan.to(topo_dependency.to_string().into()));
@@ -369,17 +361,7 @@ impl TaskDefinition {
         task_dependencies.sort_by(|a, b| a.value.cmp(&b.value));
         topological_dependencies.sort_by(|a, b| a.value.cmp(&b.value));
 
-        let env = processed
-            .env
-            .map(|env| -> Result<Vec<String>, Error> {
-                gather_env_vars(env.0, "env", &mut env_var_dependencies)?;
-                let mut env_var_dependencies: Vec<String> =
-                    env_var_dependencies.into_iter().collect();
-                env_var_dependencies.sort();
-                Ok(env_var_dependencies)
-            })
-            .transpose()?
-            .unwrap_or_default();
+        let env = processed.env.map(|env| env.0).unwrap_or_default();
 
         // Convert inputs with turbo_root resolution
         let inputs = processed
@@ -388,27 +370,9 @@ impl TaskDefinition {
             .transpose()?
             .unwrap_or_default();
 
-        let pass_through_env = processed
-            .pass_through_env
-            .map(|env| -> Result<Vec<String>, Error> {
-                let mut pass_through_env = HashSet::new();
-                gather_env_vars(env.0, "passThroughEnv", &mut pass_through_env)?;
-                let mut pass_through_env: Vec<String> = pass_through_env.into_iter().collect();
-                pass_through_env.sort();
-                Ok(pass_through_env)
-            })
-            .transpose()?;
+        let pass_through_env = processed.pass_through_env.map(|env| env.0);
 
-        let with = processed.with.map(|with_tasks| {
-            with_tasks
-                .0
-                .into_iter()
-                .map(|sibling| {
-                    let (sibling, span) = sibling.split();
-                    span.to(TaskName::from(String::from(sibling)))
-                })
-                .collect()
-        });
+        let with = processed.with.map(|with_tasks| with_tasks.0);
 
         Ok(TaskDefinition {
             outputs,

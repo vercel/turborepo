@@ -60,7 +60,12 @@ Configuration is collected from multiple sources with the following priority (hi
 ### Processing Steps
 
 1. **DSL Token Detection**: Identify and separate `$TURBO_ROOT$` and `!` prefixes from glob patterns
-2. **Early Validation**: Validate absolute paths and invalid token usage at parse time with span information
+2. **Early Validation**: Single-field validations at parse time with span information:
+   - Absolute paths in inputs/outputs
+   - Invalid `$TURBO_ROOT$` usage
+   - Environment variable prefixes (`$` not allowed)
+   - Dependency prefixes (`$` not allowed in `dependsOn`)
+   - Topological references (`^` not allowed in `with`)
 3. **Prefix Stripping**: Store clean glob patterns without DSL prefixes
 4. **Component Separation**: Track negation and turbo_root requirements as separate boolean flags
 
@@ -80,15 +85,21 @@ The resolution now follows a three-stage pipeline:
 1. **Raw → Processed** (`ProcessedTaskDefinition::from_raw`):
 
    - Parse glob patterns and extract DSL tokens
-   - Validate absolute paths with span information
+   - Validate single-field constraints with span information:
+     - Absolute paths in inputs/outputs (`ProcessedGlob::from_spanned_*`)
+     - Invalid environment variable prefixes (`ProcessedEnv::new`, `ProcessedPassThroughEnv::new`)
+     - Invalid dependency syntax (`ProcessedDependsOn::new`)
+     - Invalid sibling task references (`ProcessedWith::new`)
    - Strip prefixes and store components separately
 
 2. **Processed → Resolved** (`TaskDefinition::from_processed`):
 
    - Apply `$TURBO_ROOT$` token replacement using `resolve()` methods
    - Parse `dependsOn` into topological and task dependencies
-   - Extract environment variables from `env` and `passThroughEnv`
+   - Transform environment variables into sorted lists
    - Transform outputs into inclusion/exclusion patterns
-   - Validate configuration consistency (e.g., interactive tasks can't be cached)
+   - Validate multi-field constraints:
+     - Interactive tasks cannot be cached (requires `cache` and `interactive` fields)
+     - Interruptible tasks must be persistent (requires `interruptible` and `persistent` fields)
 
 3. **Inheritance**: The `extend` module handles merging multiple `ProcessedTaskDefinition`s before final resolution
