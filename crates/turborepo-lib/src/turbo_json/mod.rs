@@ -270,7 +270,7 @@ impl TaskOutputs {
     /// Creates TaskOutputs from ProcessedOutputs with resolved paths
     fn from_processed(
         outputs: processed::ProcessedOutputs,
-        turbo_root_path: &str,
+        turbo_root_path: &RelativeUnixPath,
     ) -> Result<Self, Error> {
         let mut inclusions = Vec::new();
         let mut exclusions = Vec::new();
@@ -301,7 +301,7 @@ impl TaskInputs {
     /// Creates TaskInputs from ProcessedInputs with resolved paths
     fn from_processed(
         inputs: processed::ProcessedInputs,
-        turbo_root_path: &str,
+        turbo_root_path: &RelativeUnixPath,
     ) -> Result<Self, Error> {
         let mut globs = Vec::new();
         let mut default = false;
@@ -331,7 +331,7 @@ impl TaskDefinition {
         // Convert outputs with turbo_root resolution
         let outputs = processed
             .outputs
-            .map(|outputs| TaskOutputs::from_processed(outputs, path_to_repo_root.as_str()))
+            .map(|outputs| TaskOutputs::from_processed(outputs, path_to_repo_root))
             .transpose()?
             .unwrap_or_default();
 
@@ -398,7 +398,7 @@ impl TaskDefinition {
         // Convert inputs with turbo_root resolution
         let inputs = processed
             .inputs
-            .map(|inputs| TaskInputs::from_processed(inputs, path_to_repo_root.as_str()))
+            .map(|inputs| TaskInputs::from_processed(inputs, path_to_repo_root))
             .transpose()?
             .unwrap_or_default();
 
@@ -1076,6 +1076,7 @@ mod tests {
         expected_task_outputs: TaskOutputs,
     ) -> Result<()> {
         let raw_task_outputs: Vec<UnescapedString> = serde_json::from_str(task_outputs_str)?;
+        let turbo_root = RelativeUnixPath::new("../..")?;
         let processed_outputs = ProcessedOutputs(
             raw_task_outputs
                 .into_iter()
@@ -1083,8 +1084,7 @@ mod tests {
                 .collect::<Result<Vec<_>, _>>()
                 .map_err(|e| anyhow::anyhow!("{}", e))?,
         );
-        // Use "../.." as a dummy turbo_root_path for tests
-        let task_outputs = TaskOutputs::from_processed(processed_outputs, "../..")?;
+        let task_outputs = TaskOutputs::from_processed(processed_outputs, turbo_root)?;
         assert_eq!(task_outputs, expected_task_outputs);
 
         Ok(())
@@ -1392,8 +1392,9 @@ mod tests {
         )
         .unwrap()]);
 
-        // Use "../.." as a dummy turbo_root_path for tests
-        let inputs = TaskInputs::from_processed(processed_inputs, "../..").unwrap();
+        let inputs =
+            TaskInputs::from_processed(processed_inputs, RelativeUnixPath::new("../..").unwrap())
+                .unwrap();
         assert!(inputs.default);
         assert_eq!(inputs.globs, vec![TURBO_DEFAULT.to_string()]);
     }

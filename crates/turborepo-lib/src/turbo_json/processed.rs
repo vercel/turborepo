@@ -1,10 +1,15 @@
 //! Processed task definition types with DSL token handling
 
+use camino::Utf8Path;
+use turbopath::RelativeUnixPath;
 use turborepo_errors::Spanned;
 use turborepo_unescape::UnescapedString;
 
 use super::RawTaskDefinition;
-use crate::cli::{EnvMode, OutputLogsMode};
+use crate::{
+    cli::{EnvMode, OutputLogsMode},
+    config::Error,
+};
 
 const TURBO_ROOT: &str = "$TURBO_ROOT$";
 const TURBO_ROOT_SLASH: &str = "$TURBO_ROOT$/";
@@ -13,63 +18,52 @@ const TURBO_ROOT_SLASH: &str = "$TURBO_ROOT$/";
 #[derive(Debug, Clone, PartialEq)]
 pub struct ProcessedGlob {
     /// The glob pattern without $TURBO_ROOT$ prefix
-    pub glob: Spanned<UnescapedString>,
+    glob: String,
     /// Whether the glob was negated (started with !)
-    pub negated: bool,
+    negated: bool,
     /// Whether the glob needs turbo_root prefix (had $TURBO_ROOT$/)
-    pub turbo_root: bool,
+    turbo_root: bool,
 }
 
 impl ProcessedGlob {
     /// Creates a ProcessedGlob from a raw glob string, stripping prefixes
     fn from_spanned_internal(
-        mut value: Spanned<UnescapedString>,
+        value: Spanned<UnescapedString>,
         field: &'static str,
     ) -> Result<Self, crate::config::Error> {
-        use camino::Utf8Path;
-
-        use crate::config::Error;
-
-        let original_value = value.clone();
         let mut negated = false;
         let mut turbo_root = false;
-        let mut start_idx = 0;
 
-        // Check for negation
-        if value.as_str().starts_with("!") {
+        let without_negation = if let Some(value) = value.strip_prefix('!') {
             negated = true;
-            start_idx = 1;
-        }
+            value
+        } else {
+            value.as_str()
+        };
 
-        // Check for TURBO_ROOT at the appropriate position
-        if value.as_str()[start_idx..].starts_with(TURBO_ROOT) {
-            // Validate it has the required slash
-            if !value.as_str()[start_idx..].starts_with(TURBO_ROOT_SLASH) {
-                let (span, text) = original_value.span_and_text("turbo.json");
-                return Err(Error::InvalidTurboRootNeedsSlash { span, text });
-            }
+        let glob = if let Some(stripped) = without_negation.strip_prefix(TURBO_ROOT_SLASH) {
             turbo_root = true;
-            // Strip the $TURBO_ROOT$/ prefix (keeping the content after it)
-            let new_value = value.as_str()[start_idx + TURBO_ROOT_SLASH.len()..].to_string();
-            *value.as_inner_mut() = UnescapedString::from(new_value);
-        } else if value.as_str().contains(TURBO_ROOT) {
-            // TURBO_ROOT found in the middle is not allowed
-            let (span, text) = original_value.span_and_text("turbo.json");
+            stripped
+        } else if without_negation.starts_with(TURBO_ROOT) {
+            // Leading $TURBO_ROOT$ without slash
+            let (span, text) = value.span_and_text("turbo.json");
+            return Err(Error::InvalidTurboRootNeedsSlash { span, text });
+        } else if without_negation.contains(TURBO_ROOT) {
+            // non leading $TURBO_ROOT$
+            let (span, text) = value.span_and_text("turbo.json");
             return Err(Error::InvalidTurboRootUse { span, text });
-        } else if negated {
-            // If negated but no TURBO_ROOT, strip the negation prefix
-            let new_value = value.as_str()[1..].to_string();
-            *value.as_inner_mut() = UnescapedString::from(new_value);
-        }
+        } else {
+            without_negation
+        };
 
         // Check for absolute paths (after stripping prefixes)
-        if Utf8Path::new(value.as_str()).is_absolute() {
-            let (span, text) = original_value.span_and_text("turbo.json");
+        if Utf8Path::new(glob).is_absolute() {
+            let (span, text) = value.span_and_text("turbo.json");
             return Err(Error::AbsolutePathInConfig { field, span, text });
         }
 
         Ok(ProcessedGlob {
-            glob: value,
+            glob: glob.to_owned(),
             negated,
             turbo_root,
         })
@@ -90,22 +84,15 @@ impl ProcessedGlob {
     }
 
     /// Creates a resolved glob string with the actual path
-    pub fn resolve(&self, turbo_root_path: &str) -> String {
-        let mut result = String::new();
+    pub fn resolve(&self, turbo_root_path: &RelativeUnixPath) -> String {
+        let prefix = if self.negated { "!" } else { "" };
 
-        if self.negated {
-            result.push('!');
-        }
-
+        let glob = &self.glob;
         if self.turbo_root {
-            result.push_str(turbo_root_path);
-            if !turbo_root_path.ends_with('/') && !self.glob.as_str().is_empty() {
-                result.push('/');
-            }
+            format!("{prefix}{turbo_root_path}/{glob}")
+        } else {
+            format!("{prefix}{glob}")
         }
-
-        result.push_str(self.glob.as_str());
-        result
     }
 }
 
@@ -123,7 +110,7 @@ pub struct ProcessedInputs(pub Vec<ProcessedGlob>);
 
 impl ProcessedInputs {
     /// Resolves all globs with the given turbo_root path
-    pub fn resolve(&self, turbo_root_path: &str) -> Vec<String> {
+    pub fn resolve(&self, turbo_root_path: &RelativeUnixPath) -> Vec<String> {
         self.0
             .iter()
             .map(|glob| glob.resolve(turbo_root_path))
@@ -141,7 +128,7 @@ pub struct ProcessedOutputs(pub Vec<ProcessedGlob>);
 
 impl ProcessedOutputs {
     /// Resolves all globs with the given turbo_root path
-    pub fn resolve(&self, turbo_root_path: &str) -> Vec<String> {
+    pub fn resolve(&self, turbo_root_path: &RelativeUnixPath) -> Vec<String> {
         self.0
             .iter()
             .map(|glob| glob.resolve(turbo_root_path))
@@ -261,6 +248,7 @@ mod tests {
     #[test_case("!$TURBO_ROOT$/README.md", "../..", "!../../README.md" ; "replace negated turbo root")]
     #[test_case("src/**/*.ts", "../..", "src/**/*.ts" ; "no replacement needed")]
     fn test_processed_glob_resolution(input: &str, replacement: &str, expected: &str) {
+        let replacement = RelativeUnixPath::new(replacement).unwrap();
         // Test with output variant
         let glob = ProcessedGlob::from_spanned_output(Spanned::new(UnescapedString::from(
             input.to_string(),
@@ -274,7 +262,7 @@ mod tests {
     #[test]
     fn test_processed_task_definition_resolve() {
         // Create a raw task definition with TURBO_ROOT tokens
-        let raw_task = super::RawTaskDefinition {
+        let raw_task = RawTaskDefinition {
             inputs: Some(vec![
                 Spanned::new(UnescapedString::from("$TURBO_ROOT$/config.txt")),
                 Spanned::new(UnescapedString::from("src/**/*.ts")),
@@ -288,6 +276,7 @@ mod tests {
 
         // Convert to processed task definition
         let processed = ProcessedTaskDefinition::from_raw(raw_task).unwrap();
+        let turbo_root = RelativeUnixPath::new("../..").unwrap();
 
         // Verify TURBO_ROOT detection
         let inputs = processed.inputs.as_ref().unwrap();
@@ -301,11 +290,11 @@ mod tests {
         assert!(!outputs.0[1].turbo_root);
 
         // Resolve with turbo_root path
-        let resolved_inputs = inputs.resolve("../..");
+        let resolved_inputs = inputs.resolve(turbo_root);
         assert_eq!(resolved_inputs[0], "../../config.txt");
         assert_eq!(resolved_inputs[1], "src/**/*.ts");
 
-        let resolved_outputs = outputs.resolve("../..");
+        let resolved_outputs = outputs.resolve(turbo_root);
         assert_eq!(resolved_outputs[0], "!../../README.md");
         assert_eq!(resolved_outputs[1], "dist/**");
     }
