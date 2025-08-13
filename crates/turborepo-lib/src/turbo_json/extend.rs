@@ -68,10 +68,9 @@ mod test {
                 Spanned::new(UnescapedString::from("dist/**")),
             )
             .unwrap()])),
-            inputs: Some(ProcessedInputs(vec![ProcessedGlob::from_spanned_input(
-                Spanned::new(UnescapedString::from("src/**")),
-            )
-            .unwrap()])),
+            inputs: Some(
+                ProcessedInputs::new(vec![Spanned::new(UnescapedString::from("src/**"))]).unwrap(),
+            ),
             env: Some(ProcessedEnv(vec![Spanned::new(UnescapedString::from(
                 "NODE_ENV",
             ))])),
@@ -93,10 +92,9 @@ mod test {
                 Spanned::new(UnescapedString::from("build/**")),
             )
             .unwrap()])),
-            inputs: Some(ProcessedInputs(vec![ProcessedGlob::from_spanned_input(
-                Spanned::new(UnescapedString::from("lib/**")),
-            )
-            .unwrap()])),
+            inputs: Some(
+                ProcessedInputs::new(vec![Spanned::new(UnescapedString::from("lib/**"))]).unwrap(),
+            ),
             env: Some(ProcessedEnv(vec![Spanned::new(UnescapedString::from(
                 "PROD_ENV",
             ))])),
@@ -220,10 +218,9 @@ mod test {
 
         let second = ProcessedTaskDefinition {
             persistent: Some(Spanned::new(false)),
-            inputs: Some(ProcessedInputs(vec![ProcessedGlob::from_spanned_input(
-                Spanned::new(UnescapedString::from("src/**")),
-            )
-            .unwrap()])),
+            inputs: Some(
+                ProcessedInputs::new(vec![Spanned::new(UnescapedString::from("src/**"))]).unwrap(),
+            ),
             ..Default::default()
         };
 

@@ -34,8 +34,6 @@ pub use processed::ProcessedTaskDefinition;
 
 use crate::{boundaries::BoundariesConfig, config::UnnecessaryPackageTaskSyntaxError};
 
-const TURBO_DEFAULT: &str = "$TURBO_DEFAULT$";
-
 const ENV_PIPELINE_DELIMITER: &str = "$";
 const TOPOLOGICAL_PIPELINE_DELIMITER: &str = "^";
 
@@ -301,22 +299,12 @@ impl TaskInputs {
         inputs: processed::ProcessedInputs,
         turbo_root_path: &RelativeUnixPath,
     ) -> Result<Self, Error> {
-        let mut globs = Vec::new();
-        let mut default = false;
-
         // Resolve all globs with the turbo_root path
         // Absolute path validation was already done during ProcessedGlob creation
-        let resolved = inputs.resolve(turbo_root_path);
-
-        for glob_str in resolved {
-            // Check for $TURBO_DEFAULT$
-            if glob_str == TURBO_DEFAULT {
-                default = true;
-            }
-            globs.push(glob_str);
-        }
-
-        Ok(TaskInputs { globs, default })
+        Ok(TaskInputs {
+            globs: inputs.resolve(turbo_root_path),
+            default: inputs.default,
+        })
     }
 }
 
@@ -1382,19 +1370,5 @@ mod tests {
             ProcessedGlob::from_spanned_input(Spanned::new(UnescapedString::from(absolute_path)));
 
         assert_matches!(result, Err(Error::AbsolutePathInConfig { .. }));
-    }
-
-    #[test]
-    fn test_detects_turbo_default() {
-        let processed_inputs = ProcessedInputs(vec![ProcessedGlob::from_spanned_input(
-            Spanned::new(UnescapedString::from(TURBO_DEFAULT)),
-        )
-        .unwrap()]);
-
-        let inputs =
-            TaskInputs::from_processed(processed_inputs, RelativeUnixPath::new("../..").unwrap())
-                .unwrap();
-        assert!(inputs.default);
-        assert_eq!(inputs.globs, vec![TURBO_DEFAULT.to_string()]);
     }
 }

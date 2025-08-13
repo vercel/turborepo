@@ -11,6 +11,7 @@ use crate::{
     config::Error,
 };
 
+const TURBO_DEFAULT: &str = "$TURBO_DEFAULT$";
 const TURBO_ROOT: &str = "$TURBO_ROOT$";
 const TURBO_ROOT_SLASH: &str = "$TURBO_ROOT$/";
 
@@ -106,12 +107,28 @@ pub struct ProcessedEnv(pub Vec<Spanned<UnescapedString>>);
 
 /// Processed inputs field with DSL detection
 #[derive(Debug, Clone, PartialEq)]
-pub struct ProcessedInputs(pub Vec<ProcessedGlob>);
+pub struct ProcessedInputs {
+    globs: Vec<ProcessedGlob>,
+    pub default: bool,
+}
 
 impl ProcessedInputs {
+    pub fn new(raw_globs: Vec<Spanned<UnescapedString>>) -> Result<Self, Error> {
+        let mut globs = Vec::with_capacity(raw_globs.len());
+        let mut default = false;
+        for raw_glob in raw_globs {
+            if raw_glob.as_str() == TURBO_DEFAULT {
+                default = true;
+            }
+            globs.push(ProcessedGlob::from_spanned_input(raw_glob)?);
+        }
+
+        Ok(ProcessedInputs { globs, default })
+    }
+
     /// Resolves all globs with the given turbo_root path
     pub fn resolve(&self, turbo_root_path: &RelativeUnixPath) -> Vec<String> {
-        self.0
+        self.globs
             .iter()
             .map(|glob| glob.resolve(turbo_root_path))
             .collect()
@@ -160,16 +177,7 @@ pub struct ProcessedTaskDefinition {
 impl ProcessedTaskDefinition {
     /// Creates a processed task definition from raw task
     pub fn from_raw(raw_task: RawTaskDefinition) -> Result<Self, crate::config::Error> {
-        let inputs = raw_task
-            .inputs
-            .map(|inputs| -> Result<ProcessedInputs, crate::config::Error> {
-                let globs = inputs
-                    .into_iter()
-                    .map(ProcessedGlob::from_spanned_input)
-                    .collect::<Result<Vec<_>, _>>()?;
-                Ok(ProcessedInputs(globs))
-            })
-            .transpose()?;
+        let inputs = raw_task.inputs.map(ProcessedInputs::new).transpose()?;
 
         let outputs = raw_task
             .outputs
@@ -284,9 +292,9 @@ mod tests {
 
         // Verify TURBO_ROOT detection
         let inputs = processed.inputs.as_ref().unwrap();
-        assert!(inputs.0[0].turbo_root);
-        assert!(!inputs.0[0].negated);
-        assert!(!inputs.0[1].turbo_root);
+        assert!(inputs.globs[0].turbo_root);
+        assert!(!inputs.globs[0].negated);
+        assert!(!inputs.globs[1].turbo_root);
 
         let outputs = processed.outputs.as_ref().unwrap();
         assert!(outputs.0[0].turbo_root);
@@ -301,5 +309,21 @@ mod tests {
         let resolved_outputs = outputs.resolve(turbo_root);
         assert_eq!(resolved_outputs[0], "!../../README.md");
         assert_eq!(resolved_outputs[1], "dist/**");
+    }
+
+    #[test]
+    fn test_detects_turbo_default() {
+        let raw_globs = vec![Spanned::new(UnescapedString::from(TURBO_DEFAULT))];
+
+        let inputs = ProcessedInputs::new(raw_globs).unwrap();
+        assert!(inputs.default);
+        assert_eq!(
+            inputs.globs,
+            vec![ProcessedGlob {
+                glob: TURBO_DEFAULT.to_string(),
+                negated: false,
+                turbo_root: false
+            }]
+        );
     }
 }
