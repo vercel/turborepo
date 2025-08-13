@@ -248,7 +248,7 @@ pub struct TaskArgs<'a> {
 }
 
 impl RunOpts {
-    pub fn task_args(&self) -> TaskArgs {
+    pub fn task_args(&self) -> TaskArgs<'_> {
         TaskArgs {
             pass_through_args: &self.pass_through_args,
             tasks: &self.tasks,

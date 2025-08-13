@@ -56,10 +56,10 @@ impl Framework {
             for conditional in env_conditionals {
                 let (key, expected_value) = (&conditional.when.key, &conditional.when.value);
 
-                if let Some(actual_value) = env_at_execution_start.get(key) {
-                    if expected_value.is_none() || expected_value.as_ref() == Some(actual_value) {
-                        env_vars.extend(conditional.include.iter().cloned());
-                    }
+                if let Some(actual_value) = env_at_execution_start.get(key)
+                    && (expected_value.is_none() || expected_value.as_ref() == Some(actual_value))
+                {
+                    env_vars.extend(conditional.include.iter().cloned());
                 }
             }
         }

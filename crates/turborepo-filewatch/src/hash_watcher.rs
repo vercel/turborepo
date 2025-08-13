@@ -490,24 +490,24 @@ impl Subscriber {
             // We need mutable access to 'state' to update it, as well as being able to
             // extract the pending state, so we need two separate if statements
             // to pull the value apart.
-            if let HashState::Pending(existing_version, _, pending_queries) = state {
-                if *existing_version == version {
-                    match result {
-                        Ok(hashes) => {
-                            for pending_query in pending_queries.drain(..) {
-                                // We don't care if the client has gone away
-                                let _ = pending_query.send(Ok(hashes.clone()));
-                            }
-                            *state = HashState::Hashes(hashes);
+            if let HashState::Pending(existing_version, _, pending_queries) = state
+                && *existing_version == version
+            {
+                match result {
+                    Ok(hashes) => {
+                        for pending_query in pending_queries.drain(..) {
+                            // We don't care if the client has gone away
+                            let _ = pending_query.send(Ok(hashes.clone()));
                         }
-                        Err(e) => {
-                            let error = e.to_string();
-                            for pending_query in pending_queries.drain(..) {
-                                // We don't care if the client has gone away
-                                let _ = pending_query.send(Err(Error::HashingError(error.clone())));
-                            }
-                            *state = HashState::Unavailable(error);
+                        *state = HashState::Hashes(hashes);
+                    }
+                    Err(e) => {
+                        let error = e.to_string();
+                        for pending_query in pending_queries.drain(..) {
+                            // We don't care if the client has gone away
+                            let _ = pending_query.send(Err(Error::HashingError(error.clone())));
                         }
+                        *state = HashState::Unavailable(error);
                     }
                 }
             }

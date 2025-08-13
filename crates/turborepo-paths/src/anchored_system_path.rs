@@ -80,7 +80,7 @@ impl AnchoredSystemPath {
             .map(|path| unsafe { AnchoredSystemPath::new_unchecked(path) })
     }
 
-    pub fn components(&self) -> impl Iterator<Item = Utf8Component> {
+    pub fn components(&self) -> impl Iterator<Item = Utf8Component<'_>> {
         self.0.components()
     }
 

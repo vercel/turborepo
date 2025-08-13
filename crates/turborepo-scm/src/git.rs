@@ -201,10 +201,10 @@ impl GitRepo {
          *
          * So environment variable is empty in a regular commit
          */
-        if let Ok(pr) = base_ref_env.github_base_ref {
-            if !pr.is_empty() {
-                return Some(pr);
-            }
+        if let Ok(pr) = base_ref_env.github_base_ref
+            && !pr.is_empty()
+        {
+            return Some(pr);
         }
 
         // we must be in a push event

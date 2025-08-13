@@ -57,7 +57,7 @@ fn glob_literals() -> &'static Regex {
     RE.get_or_init(|| Regex::new(r"(?<literal>[\?\*\$:<>\(\)\[\]{},])").unwrap())
 }
 
-fn escape_glob_literals(literal_glob: &str) -> Cow<str> {
+fn escape_glob_literals(literal_glob: &str) -> Cow<'_, str> {
     glob_literals().replace_all(literal_glob, "\\$literal")
 }
 
@@ -169,7 +169,7 @@ pub fn fix_glob_pattern(pattern: &str) -> String {
 ///
 /// also returns the position in the path of the first encountered collapse,
 /// for the purposes of calculating the new base path
-fn collapse_path(path: &str) -> Option<(Cow<str>, usize)> {
+fn collapse_path(path: &str) -> Option<(Cow<'_, str>, usize)> {
     let mut stack: Vec<&str> = vec![];
     let mut changed = false;
     let is_root = path.starts_with('/');

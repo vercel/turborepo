@@ -178,7 +178,7 @@ enum FlagToggle {
     CaseInsensitive(bool),
 }
 
-pub fn parse(expression: &str) -> Result<Tokenized, ParseError> {
+pub fn parse(expression: &str) -> Result<Tokenized<'_>, ParseError<'_>> {
     use nom::{
         branch, bytes::complete as bytes, character::complete as character, combinator, error,
         multi, sequence, IResult, Parser,

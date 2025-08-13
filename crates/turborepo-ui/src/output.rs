@@ -115,7 +115,7 @@ impl<W: Write> OutputClient<W> {
 
     /// A writer that will write to the underlying sink's out writer according
     /// to this client's behavior.
-    pub fn stdout(&self) -> OutputWriter<W> {
+    pub fn stdout(&self) -> OutputWriter<'_, W> {
         OutputWriter {
             logger: self,
             destination: Destination::Stdout,
@@ -125,7 +125,7 @@ impl<W: Write> OutputClient<W> {
 
     /// A writer that will write to the underlying sink's err writer according
     /// to this client's behavior.
-    pub fn stderr(&self) -> OutputWriter<W> {
+    pub fn stderr(&self) -> OutputWriter<'_, W> {
         OutputWriter {
             logger: self,
             destination: Destination::Stderr,

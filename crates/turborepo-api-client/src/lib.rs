@@ -182,10 +182,10 @@ impl Client for APIClient {
         Ok(response.json().await?)
     }
     fn add_ci_header(mut request_builder: RequestBuilder) -> RequestBuilder {
-        if is_ci() {
-            if let Some(vendor_constant) = Vendor::get_constant() {
-                request_builder = request_builder.header("x-artifact-client-ci", vendor_constant);
-            }
+        if is_ci()
+            && let Some(vendor_constant) = Vendor::get_constant()
+        {
+            request_builder = request_builder.header("x-artifact-client-ci", vendor_constant);
         }
 
         request_builder

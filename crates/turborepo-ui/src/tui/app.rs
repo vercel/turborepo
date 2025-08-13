@@ -133,7 +133,7 @@ impl<W> App<W> {
         self.tasks_by_status.task_name(self.selected_task_index)
     }
 
-    fn input_options(&self) -> Result<InputOptions, Error> {
+    fn input_options(&self) -> Result<InputOptions<'_>, Error> {
         let has_selection = self.get_full_task()?.has_selection();
         Ok(InputOptions {
             focus: &self.section_focus,
@@ -250,12 +250,12 @@ impl<W> App<W> {
         if let LayoutSections::Search {
             previous_selection, ..
         } = prev_focus
+            && restore_scroll
+            && self.select_task(&previous_selection).is_err()
         {
-            if restore_scroll && self.select_task(&previous_selection).is_err() {
-                // If the task that was selected is no longer in the task list we reset
-                // scrolling.
-                self.reset_scroll();
-            }
+            // If the task that was selected is no longer in the task list we reset
+            // scrolling.
+            self.reset_scroll();
         }
     }
 

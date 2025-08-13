@@ -1000,7 +1000,7 @@ where
 // It is possible to call this function using a mutable reference, which may appear to mutate the
 // parameter in place.
 #[must_use]
-pub fn escape(unescaped: &str) -> Cow<str> {
+pub fn escape(unescaped: &str) -> Cow<'_, str> {
     const ESCAPE: char = '\\';
 
     if unescaped.chars().any(is_meta_character) {
@@ -1045,7 +1045,7 @@ pub const fn is_contextual_meta_character(x: char) -> bool {
     matches!(x, '-')
 }
 
-fn parse_and_check(expression: &str) -> Result<Checked<Tokenized>, BuildError> {
+fn parse_and_check(expression: &str) -> Result<Checked<Tokenized<'_>>, BuildError> {
     let tokenized = token::parse(expression)?;
     let checked = rule::check(tokenized)?;
     Ok(checked)

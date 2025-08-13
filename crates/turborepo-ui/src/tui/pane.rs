@@ -41,7 +41,7 @@ impl<'a, W> TerminalPane<'a, W> {
         self.terminal_output.stdin.is_some()
     }
 
-    fn footer(&self) -> Line {
+    fn footer(&self) -> Line<'_> {
         let build_message_vec = |footer_text: &[&str]| -> Line {
             let mut messages = Vec::new();
             messages.extend_from_slice(footer_text);

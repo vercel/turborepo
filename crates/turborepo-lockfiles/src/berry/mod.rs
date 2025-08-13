@@ -177,10 +177,10 @@ impl BerryLockfile {
         for (locator, package) in &self.locator_package {
             for (name, range) in package.dependencies.iter().flatten() {
                 let mut descriptor = self.resolve_dependency(locator, name, range.as_ref())?;
-                if descriptor.protocol().is_none() {
-                    if let Some(range) = self.resolver.get(&descriptor) {
-                        descriptor.range = range.into();
-                    }
+                if descriptor.protocol().is_none()
+                    && let Some(range) = self.resolver.get(&descriptor)
+                {
+                    descriptor.range = range.into();
                 }
                 possible_extensions.remove(&descriptor);
             }
@@ -321,21 +321,20 @@ impl BerryLockfile {
             // Yarn 4 allows workspaces to depend directly on patched dependencies instead
             // of using resolutions. This results in the patched dependency appearing in the
             // closure instead of the original.
-            if locator.patch_file().is_some() {
-                if let Some((original, _)) =
+            if locator.patch_file().is_some()
+                && let Some((original, _)) =
                     self.patches.iter().find(|(_, patch)| patch == &&locator)
-                {
-                    patches.insert(original.as_owned(), locator.as_owned());
-                    // We include the patched dependency resolution
-                    let Locator { ident, reference } = original.as_owned();
-                    resolutions.insert(
-                        Descriptor {
-                            ident,
-                            range: reference,
-                        },
-                        original.as_owned(),
-                    );
-                }
+            {
+                patches.insert(original.as_owned(), locator.as_owned());
+                // We include the patched dependency resolution
+                let Locator { ident, reference } = original.as_owned();
+                resolutions.insert(
+                    Descriptor {
+                        ident,
+                        range: reference,
+                    },
+                    original.as_owned(),
+                );
             }
         }
 
@@ -391,10 +390,10 @@ impl BerryLockfile {
     ) -> Result<Descriptor<'static>, Error> {
         let mut dependency = Descriptor::new(name, range)?;
         // If there's no protocol we attempt to find a known one
-        if dependency.protocol().is_none() {
-            if let Some(range) = self.resolver.get(&dependency) {
-                dependency.range = range.to_string().into();
-            }
+        if dependency.protocol().is_none()
+            && let Some(range) = self.resolver.get(&dependency)
+        {
+            dependency.range = range.to_string().into();
         }
 
         for (resolution, reference) in &self.overrides {
@@ -410,7 +409,7 @@ impl BerryLockfile {
         Ok(dependency.into_owned())
     }
 
-    fn locator_for_workspace_path(&self, workspace_path: &str) -> Option<&Locator> {
+    fn locator_for_workspace_path(&self, workspace_path: &str) -> Option<&Locator<'_>> {
         self.workspace_path_to_locator
             .get(workspace_path)
             .or_else(|| {

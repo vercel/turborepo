@@ -126,7 +126,7 @@ struct RepoState {
 }
 
 impl RepoState {
-    fn get_change_mapper(&self) -> Option<ChangeMapper<GlobalDepsPackageChangeMapper>> {
+    fn get_change_mapper(&self) -> Option<ChangeMapper<'_, GlobalDepsPackageChangeMapper<'_>>> {
         let Ok(package_change_mapper) = GlobalDepsPackageChangeMapper::new(
             &self.pkg_dep_graph,
             self.root_turbo_json
