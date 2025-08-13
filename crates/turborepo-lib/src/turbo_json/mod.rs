@@ -66,6 +66,7 @@ pub struct TurboJson {
     pub(crate) global_env: Vec<String>,
     pub(crate) global_pass_through_env: Option<Vec<String>>,
     pub(crate) tasks: Pipeline,
+    pub(crate) future_flags: FutureFlags,
 }
 
 // Iterable is required to enumerate allowed keys
@@ -341,7 +342,7 @@ impl TaskDefinition {
         let mut topological_dependencies: Vec<Spanned<TaskName>> = Vec::new();
         let mut task_dependencies: Vec<Spanned<TaskName>> = Vec::new();
         if let Some(depends_on) = processed.depends_on {
-            for dependency in depends_on.0.into_inner() {
+            for dependency in depends_on.deps {
                 let (dependency, depspan) = dependency.split();
                 let dependency: String = dependency.into();
                 if let Some(topo_dependency) =
@@ -357,7 +358,7 @@ impl TaskDefinition {
         task_dependencies.sort_by(|a, b| a.value.cmp(&b.value));
         topological_dependencies.sort_by(|a, b| a.value.cmp(&b.value));
 
-        let env = processed.env.map(|env| env.0).unwrap_or_default();
+        let env = processed.env.map(|env| env.vars).unwrap_or_default();
 
         // Convert inputs with turbo_root resolution
         let inputs = processed
@@ -366,9 +367,9 @@ impl TaskDefinition {
             .transpose()?
             .unwrap_or_default();
 
-        let pass_through_env = processed.pass_through_env.map(|env| env.0);
+        let pass_through_env = processed.pass_through_env.map(|env| env.vars);
 
-        let with = processed.with.map(|with_tasks| with_tasks.0);
+        let with = processed.with.map(|with_tasks| with_tasks.tasks);
 
         Ok(TaskDefinition {
             outputs,
@@ -393,7 +394,8 @@ impl TaskDefinition {
         raw_task: RawTaskDefinition,
         path_to_repo_root: &RelativeUnixPath,
     ) -> Result<Self, Error> {
-        let processed = ProcessedTaskDefinition::from_raw(raw_task)?;
+        // Use default FutureFlags for backward compatibility
+        let processed = ProcessedTaskDefinition::from_raw(raw_task, &FutureFlags::default())?;
         Self::from_processed(processed, path_to_repo_root)
     }
 }
@@ -550,6 +552,10 @@ impl TryFrom<RawTurboJson> for TurboJson {
                 .unwrap_or_default()
                 .map(|s| s.into_iter().map(|s| s.into()).collect()),
             boundaries: raw_turbo.boundaries,
+            future_flags: raw_turbo
+                .future_flags
+                .map(|f| f.into_inner())
+                .unwrap_or_default(),
             // Remote Cache config is handled through layered config
         })
     }
@@ -575,12 +581,16 @@ impl TurboJson {
     fn read(
         repo_root: &AbsoluteSystemPath,
         path: &AbsoluteSystemPath,
-        _future_flags: FutureFlags,
+        future_flags: FutureFlags,
     ) -> Result<Option<TurboJson>, Error> {
         let Some(raw_turbo_json) = RawTurboJson::read(repo_root, path)? else {
             return Ok(None);
         };
-        TurboJson::try_from(raw_turbo_json).map(Some)
+
+        let mut turbo_json = TurboJson::try_from(raw_turbo_json)?;
+        // Override with root's future flags (only root turbo.json can define them)
+        turbo_json.future_flags = future_flags;
+        Ok(Some(turbo_json))
     }
 
     pub fn task(
@@ -589,11 +599,15 @@ impl TurboJson {
         task_name: &TaskName,
     ) -> Result<Option<ProcessedTaskDefinition>, Error> {
         match self.tasks.get(&task_id.as_task_name()) {
-            Some(entry) => ProcessedTaskDefinition::from_raw(entry.value.clone()).map(Some),
+            Some(entry) => {
+                ProcessedTaskDefinition::from_raw(entry.value.clone(), &self.future_flags).map(Some)
+            }
             None => self
                 .tasks
                 .get(task_name)
-                .map(|entry| ProcessedTaskDefinition::from_raw(entry.value.clone()))
+                .map(|entry| {
+                    ProcessedTaskDefinition::from_raw(entry.value.clone(), &self.future_flags)
+                })
                 .transpose(),
         }
     }
@@ -1022,8 +1036,10 @@ mod tests {
     ) -> Result<()> {
         let raw_task_outputs: Vec<UnescapedString> = serde_json::from_str(task_outputs_str)?;
         let turbo_root = RelativeUnixPath::new("../..")?;
-        let processed_outputs =
-            ProcessedOutputs::new(raw_task_outputs.into_iter().map(Spanned::new).collect())?;
+        let processed_outputs = ProcessedOutputs::new(
+            raw_task_outputs.into_iter().map(Spanned::new).collect(),
+            &FutureFlags::default(),
+        )?;
         let task_outputs = TaskOutputs::from_processed(processed_outputs, turbo_root)?;
         assert_eq!(task_outputs, expected_task_outputs);
 

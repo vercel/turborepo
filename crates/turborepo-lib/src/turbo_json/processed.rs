@@ -6,7 +6,7 @@ use turborepo_errors::Spanned;
 use turborepo_task_id::TaskName;
 use turborepo_unescape::UnescapedString;
 
-use super::RawTaskDefinition;
+use super::{FutureFlags, RawTaskDefinition};
 use crate::{
     cli::{EnvMode, OutputLogsMode},
     config::Error,
@@ -15,8 +15,27 @@ use crate::{
 const TURBO_DEFAULT: &str = "$TURBO_DEFAULT$";
 const TURBO_ROOT: &str = "$TURBO_ROOT$";
 const TURBO_ROOT_SLASH: &str = "$TURBO_ROOT$/";
+const TURBO_EXTENDS: &str = "$TURBO_EXTENDS$";
 const ENV_PIPELINE_DELIMITER: &str = "$";
 const TOPOLOGICAL_PIPELINE_DELIMITER: &str = "^";
+
+/// Helper function to check for and remove $TURBO_EXTENDS$ from an array
+/// Returns (processed_array, extends_found)
+fn extract_turbo_extends(
+    mut items: Vec<Spanned<UnescapedString>>,
+    future_flags: &FutureFlags,
+) -> (Vec<Spanned<UnescapedString>>, bool) {
+    if !future_flags.turbo_extends {
+        return (items, false);
+    }
+
+    if let Some(pos) = items.iter().position(|item| item.as_str() == TURBO_EXTENDS) {
+        items.remove(pos);
+        (items, true)
+    } else {
+        (items, false)
+    }
+}
 
 /// A processed glob with separated components
 #[derive(Debug, Clone, PartialEq)]
@@ -102,14 +121,22 @@ impl ProcessedGlob {
 
 /// Processed depends_on field with DSL detection
 #[derive(Debug, Clone, PartialEq)]
-pub struct ProcessedDependsOn(pub Spanned<Vec<Spanned<UnescapedString>>>);
+pub struct ProcessedDependsOn {
+    pub deps: Vec<Spanned<UnescapedString>>,
+    pub extends: bool,
+}
 
 impl ProcessedDependsOn {
     /// Creates a ProcessedDependsOn, validating that dependencies don't use env
-    /// prefix
-    pub fn new(raw_deps: Spanned<Vec<Spanned<UnescapedString>>>) -> Result<Self, Error> {
+    /// prefix and handling TURBO_EXTENDS if enabled
+    pub fn new(
+        raw_deps: Spanned<Vec<Spanned<UnescapedString>>>,
+        future_flags: &FutureFlags,
+    ) -> Result<Self, Error> {
+        let (processed_deps, extends) = extract_turbo_extends(raw_deps.into_inner(), future_flags);
+
         // Validate that no dependency starts with ENV_PIPELINE_DELIMITER ($)
-        for dep in raw_deps.value.iter() {
+        for dep in processed_deps.iter() {
             if dep.starts_with(ENV_PIPELINE_DELIMITER) {
                 let (span, text) = dep.span_and_text("turbo.json");
                 return Err(Error::InvalidDependsOnValue {
@@ -119,41 +146,65 @@ impl ProcessedDependsOn {
                 });
             }
         }
-        Ok(ProcessedDependsOn(raw_deps))
+        Ok(ProcessedDependsOn {
+            deps: processed_deps,
+            extends,
+        })
     }
 }
 
 /// Processed env field with DSL detection
 #[derive(Debug, Clone, PartialEq)]
-pub struct ProcessedEnv(pub Vec<String>);
+pub struct ProcessedEnv {
+    pub vars: Vec<String>,
+    pub extends: bool,
+}
 
 impl ProcessedEnv {
     /// Creates a ProcessedEnv, validating that env vars don't use invalid
-    /// prefixes
-    pub fn new(raw_env: Vec<Spanned<UnescapedString>>) -> Result<Self, Error> {
-        Ok(ProcessedEnv(extract_env_vars(raw_env)?))
+    /// prefixes and handling TURBO_EXTENDS if enabled
+    pub fn new(
+        raw_env: Vec<Spanned<UnescapedString>>,
+        future_flags: &FutureFlags,
+    ) -> Result<Self, Error> {
+        let (processed_env, extends) = extract_turbo_extends(raw_env, future_flags);
+
+        Ok(ProcessedEnv {
+            vars: extract_env_vars(processed_env, "env")?,
+            extends,
+        })
     }
 }
 
 /// Processed inputs field with DSL detection
 #[derive(Debug, Clone, PartialEq)]
 pub struct ProcessedInputs {
-    globs: Vec<ProcessedGlob>,
+    pub globs: Vec<ProcessedGlob>,
     pub default: bool,
+    pub extends: bool,
 }
 
 impl ProcessedInputs {
-    pub fn new(raw_globs: Vec<Spanned<UnescapedString>>) -> Result<Self, Error> {
-        let mut globs = Vec::with_capacity(raw_globs.len());
+    pub fn new(
+        raw_globs: Vec<Spanned<UnescapedString>>,
+        future_flags: &FutureFlags,
+    ) -> Result<Self, Error> {
+        let (processed_globs, extends) = extract_turbo_extends(raw_globs, future_flags);
+
+        let mut globs = Vec::with_capacity(processed_globs.len());
         let mut default = false;
-        for raw_glob in raw_globs {
+        for raw_glob in processed_globs {
             if raw_glob.as_str() == TURBO_DEFAULT {
                 default = true;
             }
             globs.push(ProcessedGlob::from_spanned_input(raw_glob)?);
         }
 
-        Ok(ProcessedInputs { globs, default })
+        Ok(ProcessedInputs {
+            globs,
+            default,
+            extends,
+        })
     }
 
     /// Resolves all globs with the given turbo_root path
@@ -167,17 +218,31 @@ impl ProcessedInputs {
 
 /// Processed pass_through_env field with DSL detection
 #[derive(Debug, Clone, PartialEq)]
-pub struct ProcessedPassThroughEnv(pub Vec<String>);
+pub struct ProcessedPassThroughEnv {
+    pub vars: Vec<String>,
+    pub extends: bool,
+}
 
 impl ProcessedPassThroughEnv {
     /// Creates a ProcessedPassThroughEnv, validating that env vars don't use
-    /// invalid prefixes
-    pub fn new(raw_env: Vec<Spanned<UnescapedString>>) -> Result<Self, Error> {
-        Ok(ProcessedPassThroughEnv(extract_env_vars(raw_env)?))
+    /// invalid prefixes and handling TURBO_EXTENDS if enabled
+    pub fn new(
+        raw_env: Vec<Spanned<UnescapedString>>,
+        future_flags: &FutureFlags,
+    ) -> Result<Self, Error> {
+        let (processed_env, extends) = extract_turbo_extends(raw_env, future_flags);
+
+        Ok(ProcessedPassThroughEnv {
+            vars: extract_env_vars(processed_env, "passThroughEnv")?,
+            extends,
+        })
     }
 }
 
-fn extract_env_vars(raw_env: Vec<Spanned<UnescapedString>>) -> Result<Vec<String>, Error> {
+fn extract_env_vars(
+    raw_env: Vec<Spanned<UnescapedString>>,
+    field_name: &str,
+) -> Result<Vec<String>, Error> {
     use crate::config::InvalidEnvPrefixError;
 
     let mut env_vars = Vec::with_capacity(raw_env.len());
@@ -186,7 +251,7 @@ fn extract_env_vars(raw_env: Vec<Spanned<UnescapedString>>) -> Result<Vec<String
         if var.starts_with(ENV_PIPELINE_DELIMITER) {
             let (span, text) = var.span_and_text("turbo.json");
             return Err(Error::InvalidEnvPrefix(Box::new(InvalidEnvPrefixError {
-                key: "passThroughEnv".to_string(),
+                key: field_name.to_string(),
                 value: var.as_str().to_string(),
                 span,
                 text,
@@ -203,17 +268,23 @@ fn extract_env_vars(raw_env: Vec<Spanned<UnescapedString>>) -> Result<Vec<String
 /// Processed outputs field with DSL detection
 #[derive(Debug, Clone, PartialEq)]
 pub struct ProcessedOutputs {
-    globs: Vec<ProcessedGlob>,
+    pub globs: Vec<ProcessedGlob>,
+    pub extends: bool,
 }
 
 impl ProcessedOutputs {
-    pub fn new(raw_globs: Vec<Spanned<UnescapedString>>) -> Result<Self, Error> {
-        let globs = raw_globs
+    pub fn new(
+        raw_globs: Vec<Spanned<UnescapedString>>,
+        future_flags: &FutureFlags,
+    ) -> Result<Self, Error> {
+        let (processed_globs, extends) = extract_turbo_extends(raw_globs, future_flags);
+
+        let globs = processed_globs
             .into_iter()
-            .map(ProcessedGlob::from_spanned_input)
+            .map(ProcessedGlob::from_spanned_output)
             .collect::<Result<Vec<_>, _>>()?;
 
-        Ok(ProcessedOutputs { globs })
+        Ok(ProcessedOutputs { globs, extends })
     }
 
     /// Resolves all globs with the given turbo_root path
@@ -227,23 +298,31 @@ impl ProcessedOutputs {
 
 /// Processed with field with DSL detection
 #[derive(Debug, Clone, PartialEq)]
-pub struct ProcessedWith(pub Vec<Spanned<TaskName<'static>>>);
+pub struct ProcessedWith {
+    pub tasks: Vec<Spanned<TaskName<'static>>>,
+    pub extends: bool,
+}
 
 impl ProcessedWith {
     /// Creates a ProcessedWith, validating that siblings don't use topological
-    /// prefix
-    pub fn new(raw_with: Vec<Spanned<UnescapedString>>) -> Result<Self, Error> {
+    /// prefix and handling TURBO_EXTENDS if enabled
+    pub fn new(
+        raw_with: Vec<Spanned<UnescapedString>>,
+        future_flags: &FutureFlags,
+    ) -> Result<Self, Error> {
+        let (processed_with, extends) = extract_turbo_extends(raw_with, future_flags);
+
         // Validate that no sibling starts with TOPOLOGICAL_PIPELINE_DELIMITER (^)
-        let mut with = Vec::with_capacity(raw_with.len());
-        for sibling in raw_with {
+        let mut tasks = Vec::with_capacity(processed_with.len());
+        for sibling in processed_with {
             if sibling.starts_with(TOPOLOGICAL_PIPELINE_DELIMITER) {
                 let (span, text) = sibling.span_and_text("turbo.json");
                 return Err(Error::InvalidTaskWith { span, text });
             }
             let (sibling, span) = sibling.split();
-            with.push(span.to(TaskName::from(String::from(sibling))));
+            tasks.push(span.to(TaskName::from(String::from(sibling))));
         }
-        Ok(ProcessedWith(with))
+        Ok(ProcessedWith { tasks, extends })
     }
 }
 
@@ -266,26 +345,41 @@ pub struct ProcessedTaskDefinition {
 
 impl ProcessedTaskDefinition {
     /// Creates a processed task definition from raw task
-    pub fn from_raw(raw_task: RawTaskDefinition) -> Result<Self, crate::config::Error> {
+    pub fn from_raw(
+        raw_task: RawTaskDefinition,
+        future_flags: &FutureFlags,
+    ) -> Result<Self, crate::config::Error> {
         Ok(ProcessedTaskDefinition {
             cache: raw_task.cache,
             depends_on: raw_task
                 .depends_on
-                .map(ProcessedDependsOn::new)
+                .map(|deps| ProcessedDependsOn::new(deps, future_flags))
                 .transpose()?,
-            env: raw_task.env.map(ProcessedEnv::new).transpose()?,
-            inputs: raw_task.inputs.map(ProcessedInputs::new).transpose()?,
+            env: raw_task
+                .env
+                .map(|env| ProcessedEnv::new(env, future_flags))
+                .transpose()?,
+            inputs: raw_task
+                .inputs
+                .map(|inputs| ProcessedInputs::new(inputs, future_flags))
+                .transpose()?,
             pass_through_env: raw_task
                 .pass_through_env
-                .map(ProcessedPassThroughEnv::new)
+                .map(|env| ProcessedPassThroughEnv::new(env, future_flags))
                 .transpose()?,
             persistent: raw_task.persistent,
             interruptible: raw_task.interruptible,
-            outputs: raw_task.outputs.map(ProcessedOutputs::new).transpose()?,
+            outputs: raw_task
+                .outputs
+                .map(|outputs| ProcessedOutputs::new(outputs, future_flags))
+                .transpose()?,
             output_logs: raw_task.output_logs,
             interactive: raw_task.interactive,
             env_mode: raw_task.env_mode,
-            with: raw_task.with.map(ProcessedWith::new).transpose()?,
+            with: raw_task
+                .with
+                .map(|with| ProcessedWith::new(with, future_flags))
+                .transpose()?,
         })
     }
 }
@@ -299,6 +393,66 @@ mod tests {
     use turborepo_unescape::UnescapedString;
 
     use super::*;
+    use crate::turbo_json::FutureFlags;
+
+    #[test]
+    fn test_extract_turbo_extends_with_flag_enabled() {
+        let items = vec![
+            Spanned::new(UnescapedString::from("item1")),
+            Spanned::new(UnescapedString::from("$TURBO_EXTENDS$")),
+            Spanned::new(UnescapedString::from("item2")),
+        ];
+
+        let (processed, extends) = extract_turbo_extends(
+            items,
+            &FutureFlags {
+                turbo_extends: true,
+            },
+        );
+
+        assert!(extends);
+        assert_eq!(processed.len(), 2);
+        assert_eq!(processed[0].as_str(), "item1");
+        assert_eq!(processed[1].as_str(), "item2");
+    }
+
+    #[test]
+    fn test_extract_turbo_extends_with_flag_disabled() {
+        let items = vec![
+            Spanned::new(UnescapedString::from("item1")),
+            Spanned::new(UnescapedString::from("$TURBO_EXTENDS$")),
+            Spanned::new(UnescapedString::from("item2")),
+        ];
+
+        let (processed, extends) = extract_turbo_extends(
+            items,
+            &FutureFlags {
+                turbo_extends: false,
+            },
+        );
+
+        assert!(!extends);
+        assert_eq!(processed.len(), 3);
+        assert_eq!(processed[1].as_str(), "$TURBO_EXTENDS$");
+    }
+
+    #[test]
+    fn test_extract_turbo_extends_no_marker() {
+        let items = vec![
+            Spanned::new(UnescapedString::from("item1")),
+            Spanned::new(UnescapedString::from("item2")),
+        ];
+
+        let (processed, extends) = extract_turbo_extends(
+            items,
+            &FutureFlags {
+                turbo_extends: true,
+            },
+        );
+
+        assert!(!extends);
+        assert_eq!(processed.len(), 2);
+    }
 
     #[test_case("$TURBO_ROOT$/config.txt", Ok((true, false)) ; "detects turbo root")]
     #[test_case("!$TURBO_ROOT$/README.md", Ok((true, true)) ; "detects negated turbo root")]
@@ -368,7 +522,8 @@ mod tests {
         };
 
         // Convert to processed task definition
-        let processed = ProcessedTaskDefinition::from_raw(raw_task).unwrap();
+        let processed =
+            ProcessedTaskDefinition::from_raw(raw_task, &FutureFlags::default()).unwrap();
         let turbo_root = RelativeUnixPath::new("../..").unwrap();
 
         // Verify TURBO_ROOT detection
@@ -396,7 +551,7 @@ mod tests {
     fn test_detects_turbo_default() {
         let raw_globs = vec![Spanned::new(UnescapedString::from(TURBO_DEFAULT))];
 
-        let inputs = ProcessedInputs::new(raw_globs).unwrap();
+        let inputs = ProcessedInputs::new(raw_globs, &FutureFlags::default()).unwrap();
         assert!(inputs.default);
         assert_eq!(
             inputs.globs,
@@ -421,5 +576,67 @@ mod tests {
             ProcessedGlob::from_spanned_input(Spanned::new(UnescapedString::from(absolute_path)));
 
         assert_matches!(result, Err(Error::AbsolutePathInConfig { .. }));
+    }
+
+    // Test that demonstrates the extends field is properly set when the helper is
+    // used
+    #[test]
+    fn test_processed_inputs_with_turbo_extends() {
+        let raw_globs: Vec<Spanned<UnescapedString>> = vec![
+            Spanned::new(UnescapedString::from("src/**")),
+            Spanned::new(UnescapedString::from("$TURBO_EXTENDS$")),
+            Spanned::new(UnescapedString::from("lib/**")),
+        ];
+
+        let inputs = ProcessedInputs::new(
+            raw_globs,
+            &FutureFlags {
+                turbo_extends: true,
+            },
+        )
+        .unwrap();
+
+        assert!(inputs.extends);
+        assert_eq!(inputs.globs.len(), 2);
+        assert_eq!(inputs.globs[0].glob, "src/**");
+        assert_eq!(inputs.globs[1].glob, "lib/**");
+    }
+
+    #[test]
+    fn test_processed_env_turbo_extends_disabled_errors() {
+        // When turbo_extends is disabled, $TURBO_EXTENDS$ triggers validation error
+        let raw_env: Vec<Spanned<UnescapedString>> = vec![
+            Spanned::new(UnescapedString::from("NODE_ENV")),
+            Spanned::new(UnescapedString::from("$TURBO_EXTENDS$")),
+            Spanned::new(UnescapedString::from("API_KEY")),
+        ];
+
+        let result = ProcessedEnv::new(
+            raw_env,
+            &FutureFlags {
+                turbo_extends: false,
+            },
+        );
+        assert!(result.is_err());
+        assert_matches!(result, Err(Error::InvalidEnvPrefix(_)));
+    }
+
+    #[test]
+    fn test_processed_depends_on_turbo_extends_disabled_errors() {
+        // When turbo_extends is disabled, $TURBO_EXTENDS$ triggers validation error
+        let raw_deps: Vec<Spanned<UnescapedString>> = vec![
+            Spanned::new(UnescapedString::from("build")),
+            Spanned::new(UnescapedString::from("$TURBO_EXTENDS$")),
+            Spanned::new(UnescapedString::from("test")),
+        ];
+
+        let result = ProcessedDependsOn::new(
+            Spanned::new(raw_deps),
+            &FutureFlags {
+                turbo_extends: false,
+            },
+        );
+        assert!(result.is_err());
+        assert_matches!(result, Err(Error::InvalidDependsOnValue { .. }));
     }
 }
