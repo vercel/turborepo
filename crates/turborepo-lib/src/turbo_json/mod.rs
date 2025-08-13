@@ -415,6 +415,7 @@ impl TaskDefinition {
 
         let with = processed.with.map(|with_tasks| {
             with_tasks
+                .0
                 .into_iter()
                 .map(|sibling| {
                     let (sibling, span) = sibling.split();

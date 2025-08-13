@@ -136,6 +136,10 @@ impl ProcessedOutputs {
     }
 }
 
+/// Processed with field with DSL detection
+#[derive(Debug, Clone, PartialEq)]
+pub struct ProcessedWith(pub Vec<Spanned<UnescapedString>>);
+
 /// Intermediate representation for task definitions with DSL processing
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct ProcessedTaskDefinition {
@@ -150,7 +154,7 @@ pub struct ProcessedTaskDefinition {
     pub output_logs: Option<Spanned<OutputLogsMode>>,
     pub interactive: Option<Spanned<bool>>,
     pub env_mode: Option<Spanned<EnvMode>>,
-    pub with: Option<Vec<Spanned<UnescapedString>>>,
+    pub with: Option<ProcessedWith>,
 }
 
 impl ProcessedTaskDefinition {
@@ -192,7 +196,7 @@ impl ProcessedTaskDefinition {
             output_logs: raw_task.output_logs,
             interactive: raw_task.interactive,
             env_mode: raw_task.env_mode,
-            with: raw_task.with,
+            with: raw_task.with.map(ProcessedWith),
         })
     }
 }
