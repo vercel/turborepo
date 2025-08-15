@@ -109,3 +109,12 @@ function gitCommit(message: string) {
     }
   );
 }
+
+export function removeGitDirectory(root: string): boolean {
+  try {
+    rmSync(path.join(root, ".git"), { recursive: true, force: true });
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
