@@ -25,7 +25,7 @@ use turborepo_scm::GitHashes;
 
 use crate::{
     config::{resolve_turbo_config_path, CONFIG_FILE, CONFIG_FILE_JSONC},
-    turbo_json::{TurboJson, TurboJsonLoader},
+    turbo_json::{TurboJson, TurboJsonLoader, TurboJsonReader},
 };
 
 #[derive(Clone)]
@@ -232,7 +232,7 @@ impl Subscriber {
         };
 
         let root_turbo_json = TurboJsonLoader::workspace(
-            self.repo_root.clone(),
+            TurboJsonReader::new(self.repo_root.clone()),
             config_path,
             pkg_dep_graph.packages(),
         )
