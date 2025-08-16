@@ -102,6 +102,10 @@ impl AnchoredSystemPath {
         buf.unwrap_or_else(|_| panic!("anchored system path is relative: {}", self.0.as_str()))
     }
 
+    pub fn extension(&self) -> Option<&str> {
+        self.0.extension()
+    }
+
     pub fn join_component(&self, segment: &str) -> AnchoredSystemPathBuf {
         debug_assert!(!segment.contains(std::path::MAIN_SEPARATOR));
         AnchoredSystemPathBuf(self.0.join(segment))
