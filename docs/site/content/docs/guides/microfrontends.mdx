@@ -82,14 +82,48 @@ Refer to the documentation for your framework, library, or runtime to learn how 
 
 Child applications need the `@vercel/microfrontends` package added to their `package.json` to be able to proxy their routing.
 
+<PackageManagerTabs>
+<Tab value="pnpm">
 ```diff title="./apps/docs/package.json"
 {
   "name": "docs",
   "devDependencies": {
-+   "@turbo/microfrontends": "workspace;*"
++   "@turbo/microfrontends": "workspace:*"
   }
 }
 ```
+</Tab>
+<Tab value="yarn">
+```diff title="./apps/docs/package.json"
+{
+  "name": "docs",
+  "devDependencies": {
++   "@turbo/microfrontends": "workspace:*"
+  }
+}
+```
+</Tab>
+<Tab value="npm">
+```diff title="./apps/docs/package.json"
+{
+  "name": "docs",
+  "devDependencies": {
++   "@turbo/microfrontends": "workspace:*"
+  }
+}
+```
+</Tab>
+<Tab value="bun (Beta)">
+```diff title="./apps/docs/package.json"
+{
+  "name": "docs",
+  "devDependencies": {
++   "@turbo/microfrontends": "workspace:*"
+  }
+}
+```
+</Tab>
+</PackageManagerTabs>
 
 ### 5. Set up your turbo.json
 
