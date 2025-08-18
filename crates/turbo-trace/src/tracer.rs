@@ -7,13 +7,13 @@ use oxc_resolver::{
     EnforceExtension, ResolveError, ResolveOptions, Resolver, TsconfigOptions, TsconfigReferences,
 };
 use swc_common::{
+    FileName, SourceMap,
     comments::SingleThreadedComments,
     errors::{ColorConfig, Handler},
     input::StringInput,
-    FileName, SourceMap,
 };
 use swc_ecma_ast::EsVersion;
-use swc_ecma_parser::{lexer::Lexer, Capturing, EsSyntax, Parser, Syntax, TsSyntax};
+use swc_ecma_parser::{Capturing, EsSyntax, Parser, Syntax, TsSyntax, lexer::Lexer};
 use swc_ecma_visit::VisitWith;
 use thiserror::Error;
 use tokio::task::JoinSet;
@@ -424,7 +424,7 @@ impl Tracer {
                     source_map: self.source_map.clone(),
                     files: HashMap::new(),
                     errors: vec![TraceError::GlobError(Arc::new(e))],
-                }
+                };
             }
         };
 

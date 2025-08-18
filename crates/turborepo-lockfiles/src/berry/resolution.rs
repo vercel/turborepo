@@ -1,6 +1,6 @@
 use std::{fmt, sync::OnceLock};
 
-use pest::{iterators::Pair, Parser};
+use pest::{Parser, iterators::Pair};
 use pest_derive::Parser;
 use regex::Regex;
 use semver::Version;

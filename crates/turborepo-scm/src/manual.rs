@@ -8,7 +8,7 @@ use hex::ToHex;
 use ignore::WalkBuilder;
 use sha1::{Digest, Sha1};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, IntoUnix};
-use wax::{any, Glob, Program};
+use wax::{Glob, Program, any};
 
 use crate::{Error, GitHashes};
 
@@ -51,7 +51,7 @@ pub(crate) fn hash_files(
             Err(Error::Io(ref io_error, _))
                 if allow_missing && io_error.kind() == ErrorKind::NotFound =>
             {
-                continue
+                continue;
             }
             Err(e) => return Err(e),
         };

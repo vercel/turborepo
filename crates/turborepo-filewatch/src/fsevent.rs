@@ -34,8 +34,8 @@ use fs::core_foundation::Boolean;
 use fsevent_sys as fs;
 use fsevent_sys::core_foundation as cf;
 use notify::{
-    event::{CreateKind, DataChange, Flag, MetadataKind, ModifyKind, RemoveKind, RenameMode},
     Config, Error, Event, EventHandler, EventKind, RecursiveMode, Result, Watcher, WatcherKind,
+    event::{CreateKind, DataChange, Flag, MetadataKind, ModifyKind, RemoveKind, RenameMode},
 };
 
 //use crate::event::*;

@@ -17,7 +17,7 @@ use serde::Deserialize;
 use thiserror::Error;
 use turbopath::RelativeUnixPathBuf;
 
-use self::resolution::{parse_resolution, Resolution};
+use self::resolution::{Resolution, parse_resolution};
 use super::Lockfile;
 
 #[derive(Debug, Error)]
@@ -592,7 +592,7 @@ mod test {
     use pretty_assertions::assert_eq;
 
     use super::*;
-    use crate::{transitive_closure, Package};
+    use crate::{Package, transitive_closure};
 
     #[test]
     fn test_deserialize_lockfile() {
@@ -1115,11 +1115,9 @@ mod test {
             "is-odd@patch:is-odd@npm%3A3.0.1#~/.yarn/patches/is-odd-npm-3.0.1-93c3c3f41b.patch"
         ));
 
-        let patches =
-            vec![
-                RelativeUnixPathBuf::new(".yarn/patches/is-odd-npm-3.0.1-93c3c3f41b.patch")
-                    .unwrap(),
-            ];
+        let patches = vec![
+            RelativeUnixPathBuf::new(".yarn/patches/is-odd-npm-3.0.1-93c3c3f41b.patch").unwrap(),
+        ];
         assert_eq!(lockfile.patches().unwrap(), patches);
         assert_eq!(subgraph.patches().unwrap(), patches);
     }

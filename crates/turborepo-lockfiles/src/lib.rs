@@ -18,11 +18,11 @@ pub use berry::{Error as BerryError, *};
 pub use bun::BunLockfile;
 pub use error::Error;
 pub use npm::*;
-pub use pnpm::{pnpm_global_change, pnpm_subgraph, PnpmLockfile};
+pub use pnpm::{PnpmLockfile, pnpm_global_change, pnpm_subgraph};
 use rayon::prelude::*;
 use serde::Serialize;
 use turbopath::RelativeUnixPathBuf;
-pub use yarn1::{yarn_subgraph, Yarn1Lockfile};
+pub use yarn1::{Yarn1Lockfile, yarn_subgraph};
 
 #[derive(Debug, PartialEq, Eq, Clone, PartialOrd, Ord, Hash, Serialize)]
 pub struct Package {

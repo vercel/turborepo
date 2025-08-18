@@ -9,10 +9,10 @@ use regex::Regex;
 pub use reqwest::Response;
 use reqwest::{Body, Method, RequestBuilder, StatusCode};
 use serde::Deserialize;
-use turborepo_ci::{is_ci, Vendor};
+use turborepo_ci::{Vendor, is_ci};
 use turborepo_vercel_api::{
-    token::ResponseTokenMetadata, APIError, CachingStatus, CachingStatusResponse,
-    PreflightResponse, Team, TeamsResponse, UserResponse, VerificationResponse, VerifiedSsoUser,
+    APIError, CachingStatus, CachingStatusResponse, PreflightResponse, Team, TeamsResponse,
+    UserResponse, VerificationResponse, VerifiedSsoUser, token::ResponseTokenMetadata,
 };
 use url::Url;
 
@@ -228,7 +228,7 @@ impl Client for APIClient {
                 return Error::InvalidJson {
                     err,
                     text: body.clone(),
-                }
+                };
             }
         };
 
@@ -242,7 +242,7 @@ impl Client for APIClient {
                     return Error::UnknownCachingStatus(
                         status_string.to_string(),
                         Backtrace::capture(),
-                    )
+                    );
                 }
             };
 
@@ -641,7 +641,7 @@ impl APIClient {
                     return Err(Error::InvalidUrl {
                         url: location.to_string(),
                         err: e,
-                    })
+                    });
                 }
             }
         } else {
@@ -787,7 +787,7 @@ mod test {
     use turborepo_vercel_api_mock::start_test_server;
     use url::Url;
 
-    use crate::{telemetry::TelemetryClient, APIClient, AnonAPIClient, CacheClient, Client};
+    use crate::{APIClient, AnonAPIClient, CacheClient, Client, telemetry::TelemetryClient};
 
     #[tokio::test]
     async fn test_do_preflight() -> Result<()> {

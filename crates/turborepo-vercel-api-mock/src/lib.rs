@@ -4,17 +4,17 @@ use std::{collections::HashMap, fs::OpenOptions, io::Write, net::SocketAddr, syn
 
 use anyhow::Result;
 use axum::{
+    Json, Router,
     body::Body,
     extract::Path,
-    http::{header::CONTENT_LENGTH, HeaderMap, HeaderValue, StatusCode},
+    http::{HeaderMap, HeaderValue, StatusCode, header::CONTENT_LENGTH},
     routing::{get, head, options, post, put},
-    Json, Router,
 };
 use futures_util::StreamExt;
 use tokio::{net::TcpListener, sync::Mutex};
 use turborepo_vercel_api::{
-    telemetry::TelemetryEvent, AnalyticsEvent, CachingStatus, CachingStatusResponse, Membership,
-    Role, Team, TeamsResponse, User, UserResponse, VerificationResponse,
+    AnalyticsEvent, CachingStatus, CachingStatusResponse, Membership, Role, Team, TeamsResponse,
+    User, UserResponse, VerificationResponse, telemetry::TelemetryEvent,
 };
 
 pub const EXPECTED_TOKEN: &str = "expected_token";

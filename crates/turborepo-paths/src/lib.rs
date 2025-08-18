@@ -224,7 +224,7 @@ pub fn categorize(path: &Utf8Path) -> UnknownPathType {
 mod tests {
     use test_case::test_case;
 
-    use crate::{check_path, IntoUnix, PathValidation};
+    use crate::{IntoUnix, PathValidation, check_path};
 
     #[test]
     fn test_into_unix() {

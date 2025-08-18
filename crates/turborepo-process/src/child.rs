@@ -24,7 +24,7 @@ use std::{
     time::Duration,
 };
 
-use portable_pty::{native_pty_system, Child as PtyChild, MasterPty as PtyController};
+use portable_pty::{Child as PtyChild, MasterPty as PtyController, native_pty_system};
 use tokio::{
     io::{AsyncBufRead, AsyncBufReadExt, BufReader},
     process::Command as TokioCommand,
@@ -757,7 +757,7 @@ impl Child {
 mod test {
     use std::{assert_matches::assert_matches, time::Duration};
 
-    use futures::{stream::FuturesUnordered, StreamExt};
+    use futures::{StreamExt, stream::FuturesUnordered};
     use test_case::test_case;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tracing_test::traced_test;
@@ -765,8 +765,8 @@ mod test {
 
     use super::{Child, ChildInput, ChildOutput, Command};
     use crate::{
-        child::{ChildExit, ShutdownStyle},
         PtySize,
+        child::{ChildExit, ShutdownStyle},
     };
 
     const STARTUP_DELAY: Duration = Duration::from_millis(500);

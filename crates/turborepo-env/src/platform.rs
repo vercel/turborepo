@@ -1,5 +1,5 @@
 use turborepo_ci::Vendor;
-use turborepo_ui::{ceprint, ceprintln, color, ColorConfig, BOLD, GREY, UNDERLINE, YELLOW};
+use turborepo_ui::{BOLD, ColorConfig, GREY, UNDERLINE, YELLOW, ceprint, ceprintln, color};
 
 use crate::EnvironmentVariableMap;
 

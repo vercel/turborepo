@@ -5,8 +5,8 @@ use std::{
     collections::HashMap,
     path::Path,
     sync::{
-        atomic::{AtomicUsize, Ordering},
         Arc,
+        atomic::{AtomicUsize, Ordering},
     },
     time::Duration,
 };
@@ -32,10 +32,10 @@ use turborepo_repository::{
 };
 
 use crate::{
+    NotifyError,
     cookies::{CookieRegister, CookieWriter, CookiedOptionalWatch},
     debouncer::Debouncer,
     optional_watch::OptionalWatch,
-    NotifyError,
 };
 
 #[derive(Debug, Error)]
@@ -575,7 +575,7 @@ mod test {
     use turbopath::AbsoluteSystemPathBuf;
     use turborepo_repository::{discovery::WorkspaceData, package_manager::PackageManager};
 
-    use crate::{cookies::CookieWriter, package_watcher::PackageWatcher, FileSystemWatcher};
+    use crate::{FileSystemWatcher, cookies::CookieWriter, package_watcher::PackageWatcher};
 
     #[tokio::test]
     #[tracing_test::traced_test]

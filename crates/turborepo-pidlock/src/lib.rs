@@ -241,7 +241,7 @@ impl Drop for Pidlock {
 mod tests {
     use std::{assert_matches::assert_matches, fs, io::Write, path::PathBuf};
 
-    use rand::{distributions::Alphanumeric, thread_rng, Rng};
+    use rand::{Rng, distributions::Alphanumeric, thread_rng};
 
     use super::{PidFileError, Pidlock, PidlockError, PidlockState};
 

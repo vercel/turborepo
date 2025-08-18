@@ -1,9 +1,9 @@
 use nom::{
+    Finish, IResult,
     branch::alt,
     bytes::complete::{is_not, tag},
     combinator::{opt, recognize},
     sequence::tuple,
-    Finish, IResult,
 };
 
 use super::SupportedLockfileVersion;
