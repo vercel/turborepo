@@ -57,28 +57,26 @@ Create a `microfrontends.json` or `microfrontends.jsonc` in your parent applicat
 {
   "version": "1",
   "applications": {
-    "docs": {
-      "local": {
-        "port": 3001
-      }
-    }
+    "docs": {}
   }
 }
 ```
 
 ### 3. Configure your development tasks
 
-Ensure each microfrontend has a development task in its `package.json`:
+Ensure each microfrontend has a development task in its `package.json` that points to the port that Turborepo supplies:
 
-```json title="./apps/checkout/package.json"
+```json title="./apps/docs/package.json"
 {
-  "name": "@acme/checkout",
+  "name": "docs",
   "scripts": {
-    "dev": "next dev", // [!code highlight]
+    "dev": "next dev --port $(microfrontends port)", // [!code highlight]
     "build": "next build"
   }
 }
 ```
+
+Refer to the documentation for your framework, library, or runtime to learn how to set the port for the script.
 
 ### 4. Set up your turbo.json
 
@@ -119,7 +117,7 @@ With the microfrontends configuration, Turborepo will:
 
 Turborepo provides two ways to assign ports to your microfrontends:
 
-### Explicit ports
+### Explicit port mapping
 
 Specify exact ports in your configuration:
 
@@ -161,7 +159,7 @@ An object where each key is an application identifier and the value contains:
 
 Individual microfrontend packages can reference a parent configuration using a `partOf` field. This allows child applications to inherit configuration from the parent application.
 
-```json title="./apps/checkout/microfrontends.json"
+```json title="./apps/docs/microfrontends.json"
 {
   "partOf": "web"
 }
