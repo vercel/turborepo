@@ -78,7 +78,20 @@ Ensure each microfrontend has a development task in its `package.json` that poin
 
 Refer to the documentation for your framework, library, or runtime to learn how to set the port for the script.
 
-### 4. Set up your turbo.json
+### 4. Add the `@turbo/microfrontends` package to child apps
+
+Child applications need the `@vercel/microfrontends` package added to their `package.json` to be able to proxy their routing.
+
+```diff title="./apps/docs/package.json"
+{
+  "name": "docs",
+  "devDependencies": {
++   "@turbo/microfrontends": "workspace;*"
+  }
+}
+```
+
+### 5. Set up your turbo.json
 
 Ensure Turborepo is handling your development workflows:
 
