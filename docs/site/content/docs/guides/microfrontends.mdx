@@ -24,7 +24,14 @@ Turborepo enhances microfrontend development with:
 - **Simplified code sharing**: Easily share UI components, utilities, and configurations across microfrontends
 - **Optimized builds**: Cache and parallelize builds across all your applications
 
-## Setting up microfrontends
+## Quick start
+
+1. `npx create-turbo@latest --example with-microfrontends`
+2. Run `turbo dev` in your terminal
+3. Visit `localhost:3000` in your browser. The logs for`web#dev` task show that the `web` application's `/` route compiled.
+4. Visit `localhost:3000/docs` in your browser. The logs for the `docs#dev` task show that the `docs` application's `/` route compiled.
+
+## Setting up microfrontends in your Turborepo
 
 <Callout>
   The tutorial below is using `npx create-turbo@latest` if you want to try for
