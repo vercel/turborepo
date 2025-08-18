@@ -1,0 +1,161 @@
+---
+title: Microfrontends
+description: Learn how to develop microfrontends with Turborepo.
+---
+
+import { PackageManagerTabs, Tab } from '#components/tabs';
+import { Callout } from '#components/callout';
+import { Files, File, Folder } from '#components/files';
+import { ExperimentalBadge } from '#components/experimental-badge';
+
+<ExperimentalBadge>Experimental</ExperimentalBadge>
+
+Turborepo simplifies local development for vertical microfrontends by coordinating multiple applications and providing a unified development experience.
+
+Vertical microfrontends are an architectural pattern where a web application is composed of multiple frontend applications. Each microfrontend can be developed, tested, and deployed separately, while appearing as a single cohesive application to your users.
+
+## How Turborepo helps
+
+Turborepo enhances microfrontend development with:
+
+- **Unified development experience**: Start all your microfrontends with a single command
+- **Automatic port assignment**: Each application gets a consistent, predictable port
+- **Task orchestration**: Dependencies between microfrontends are handled automatically
+- **Simplified code sharing**: Easily share UI components, utilities, and configurations across microfrontends
+- **Optimized builds**: Cache and parallelize builds across all your applications
+
+## Setting up microfrontends
+
+<Callout>
+  The tutorial below is using `npx create-turbo@latest` if you want to try for
+  yourself.
+</Callout>
+
+### 1. Create your applications
+
+Structure your repository with multiple applications:
+
+<Files>
+  <Folder name="apps" defaultOpen>
+    <Folder name="web" />
+    <Folder name="docs" />
+  </Folder>
+</Files>
+
+### 2. Add the configuration
+
+Create a `microfrontends.json` or `microfrontends.jsonc` in your parent application:
+
+```json title="./apps/web/microfrontends.json"
+{
+  "version": "1",
+  "applications": {
+    "docs": {
+      "local": {
+        "port": 3001
+      }
+    }
+  }
+}
+```
+
+### 3. Configure your development tasks
+
+Ensure each microfrontend has a development task in its `package.json`:
+
+```json title="./apps/checkout/package.json"
+{
+  "name": "@acme/checkout",
+  "scripts": {
+    "dev": "next dev", // [!code highlight]
+    "build": "next build"
+  }
+}
+```
+
+### 4. Set up your turbo.json
+
+Ensure Turborepo is handling your development workflows:
+
+```json title="./turbo.json"
+{
+  "tasks": {
+    "dev": {
+      "cache": false,
+      "persistent": true
+    }
+  }
+}
+```
+
+## Running microfrontends
+
+Start all your microfrontends simultaneously:
+
+```bash title="Terminal"
+turbo dev
+```
+
+Or run specific applications:
+
+```bash title="Terminal"
+turbo dev --filter=docs
+```
+
+With the microfrontends configuration, Turborepo will:
+
+1. Start each application on its designated port
+2. Handle dependencies between applications
+3. Provide a unified terminal UI for monitoring all applications
+
+## Port management
+
+Turborepo provides two ways to assign ports to your microfrontends:
+
+### Explicit ports
+
+Specify exact ports in your configuration:
+
+```json title="microfrontends.json"
+{
+  "applications": {
+    "app": {
+      "development": {
+        "local": {
+          "port": 3000
+        }
+      }
+    }
+  }
+}
+```
+
+### Automatic port generation
+
+If no port is specified, Turborepo generates a consistent port between 3000-8000 based on the application name. This ensures the same application always gets the same port across different machines and developers.
+
+### Configuration options
+
+#### `version`
+
+Specifies the configuration schema version. Currently only version `"1"` is supported.
+
+#### `applications`
+
+An object where each key is an application identifier and the value contains:
+
+- **`packageName`** (optional): The package name if different from the application's key in the configuration
+- **`development`**: Development configuration
+  - **`task`** (optional): The task name to run for development (defaults to `"dev"`)
+  - **`local`**: Local development settings
+    - **`port`** (optional): Specific port number. If not specified, a consistent port is generated based on the application name
+
+### Child configurations
+
+Individual microfrontend packages can reference a parent configuration using a `partOf` field. This allows child applications to inherit configuration from the parent application.
+
+```json title="./apps/checkout/microfrontends.json"
+{
+  "partOf": "web"
+}
+```
