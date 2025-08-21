@@ -1273,7 +1273,7 @@ mod tests {
                 "build": {}
             },
             "futureFlags": {
-                "turboExtends": true
+                "turboExtendsKeyword": true
             }
         }"#;
 
@@ -1290,7 +1290,7 @@ mod tests {
         assert_eq!(
             future_flags.as_inner(),
             &FutureFlags {
-                turbo_extends: true
+                turbo_extends_keyword: true
             }
         );
 

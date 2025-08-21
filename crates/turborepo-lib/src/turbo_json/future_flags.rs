@@ -34,7 +34,7 @@ pub struct FutureFlags {
     /// When enabled, allows using `$TURBO_EXTENDS$` in array fields.
     /// This will change the default behavior of overriding the field to instead
     /// append.
-    pub turbo_extends: bool,
+    pub turbo_extends_keyword: bool,
 }
 
 impl FutureFlags {

@@ -25,7 +25,7 @@ fn extract_turbo_extends(
     mut items: Vec<Spanned<UnescapedString>>,
     future_flags: &FutureFlags,
 ) -> (Vec<Spanned<UnescapedString>>, bool) {
-    if !future_flags.turbo_extends {
+    if !future_flags.turbo_extends_keyword {
         return (items, false);
     }
 
@@ -406,7 +406,7 @@ mod tests {
         let (processed, extends) = extract_turbo_extends(
             items,
             &FutureFlags {
-                turbo_extends: true,
+                turbo_extends_keyword: true,
             },
         );
 
@@ -427,7 +427,7 @@ mod tests {
         let (processed, extends) = extract_turbo_extends(
             items,
             &FutureFlags {
-                turbo_extends: false,
+                turbo_extends_keyword: false,
             },
         );
 
@@ -446,7 +446,7 @@ mod tests {
         let (processed, extends) = extract_turbo_extends(
             items,
             &FutureFlags {
-                turbo_extends: true,
+                turbo_extends_keyword: true,
             },
         );
 
@@ -591,7 +591,7 @@ mod tests {
         let inputs = ProcessedInputs::new(
             raw_globs,
             &FutureFlags {
-                turbo_extends: true,
+                turbo_extends_keyword: true,
             },
         )
         .unwrap();
@@ -614,7 +614,7 @@ mod tests {
         let result = ProcessedEnv::new(
             raw_env,
             &FutureFlags {
-                turbo_extends: false,
+                turbo_extends_keyword: false,
             },
         );
         assert!(result.is_err());
@@ -633,7 +633,7 @@ mod tests {
         let result = ProcessedDependsOn::new(
             Spanned::new(raw_deps),
             &FutureFlags {
-                turbo_extends: false,
+                turbo_extends_keyword: false,
             },
         );
         assert!(result.is_err());
