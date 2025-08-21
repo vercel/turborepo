@@ -6,7 +6,7 @@ use fixedbitset::FixedBitSet;
 use itertools::Itertools;
 use petgraph::{
     prelude::*,
-    visit::{depth_first_search, EdgeFiltered, IntoNeighbors, Reversed, VisitMap, Visitable},
+    visit::{EdgeFiltered, IntoNeighbors, Reversed, VisitMap, Visitable, depth_first_search},
 };
 use thiserror::Error;
 

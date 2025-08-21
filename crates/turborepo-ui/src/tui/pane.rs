@@ -5,7 +5,7 @@ use ratatui::{
 };
 use tui_term::widget::PseudoTerminal;
 
-use super::{app::LayoutSections, TerminalOutput};
+use super::{TerminalOutput, app::LayoutSections};
 
 const EXIT_INTERACTIVE_HINT: &str = "Ctrl-z - Stop interacting";
 const ENTER_INTERACTIVE_HINT: &str = "i - Interact";

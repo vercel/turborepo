@@ -7,7 +7,7 @@
 
 use std::time::Duration;
 
-use futures::{stream::FuturesUnordered, StreamExt};
+use futures::{StreamExt, stream::FuturesUnordered};
 use thiserror::Error;
 use tokio::{
     select,
@@ -15,7 +15,7 @@ use tokio::{
     task::{JoinError, JoinHandle},
 };
 use tracing::debug;
-use turborepo_api_client::{analytics::AnalyticsClient, APIAuth};
+use turborepo_api_client::{APIAuth, analytics::AnalyticsClient};
 pub use turborepo_vercel_api::AnalyticsEvent;
 use uuid::Uuid;
 
@@ -188,7 +188,7 @@ mod tests {
         select,
         sync::{mpsc, mpsc::UnboundedReceiver},
     };
-    use turborepo_api_client::{analytics::AnalyticsClient, APIAuth};
+    use turborepo_api_client::{APIAuth, analytics::AnalyticsClient};
     use turborepo_vercel_api::{AnalyticsEvent, CacheEvent, CacheSource};
     use uuid::Uuid;
 

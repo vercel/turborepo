@@ -17,7 +17,7 @@ use rayon::prelude::*;
 use regex::Regex;
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError, RelativeUnixPath};
-use wax::{walk::FileIterator, BuildError, Glob};
+use wax::{BuildError, Glob, walk::FileIterator};
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum WalkType {
@@ -481,8 +481,8 @@ mod test {
     use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 
     use crate::{
-        add_doublestar_to_dir, collapse_path, escape_glob_literals, fix_glob_pattern, globwalk,
-        Settings, ValidatedGlob, WalkError, WalkType,
+        Settings, ValidatedGlob, WalkError, WalkType, add_doublestar_to_dir, collapse_path,
+        escape_glob_literals, fix_glob_pattern, globwalk,
     };
 
     #[cfg(unix)]
@@ -1520,7 +1520,7 @@ mod test {
 
     #[test]
     #[cfg(not(windows))] // Windows doesn't support ':' at all, so just test not-Windows for correct
-                         // behavior
+    // behavior
     fn test_weird_filenames() {
         let files = &[
             "apps/foo",

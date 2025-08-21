@@ -2,11 +2,11 @@
 
 use std::{collections::HashSet, path::PathBuf};
 
-use build_fs_tree::{dir, file, Build, FileSystemTree};
+use build_fs_tree::{Build, FileSystemTree, dir, file};
 use tempfile::TempDir;
 use wax::{
-    walk::{Entry, FileIterator, WalkBehavior},
     Glob,
+    walk::{Entry, FileIterator, WalkBehavior},
 };
 
 // TODO: Rust's testing framework does not provide a mechanism for maintaining

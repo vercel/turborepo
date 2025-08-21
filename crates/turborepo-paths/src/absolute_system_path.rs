@@ -215,9 +215,11 @@ impl AbsoluteSystemPath {
 
     /// Intended for joining a path composed of literals
     pub fn join_components(&self, segments: &[&str]) -> AbsoluteSystemPathBuf {
-        debug_assert!(!segments
-            .iter()
-            .any(|segment| segment.contains(std::path::MAIN_SEPARATOR)));
+        debug_assert!(
+            !segments
+                .iter()
+                .any(|segment| segment.contains(std::path::MAIN_SEPARATOR))
+        );
         AbsoluteSystemPathBuf(
             self.0
                 .join(segments.join(std::path::MAIN_SEPARATOR_STR))
@@ -390,7 +392,7 @@ impl AbsoluteSystemPath {
                 (Some(self_component), Some(other_component))
                     if self_component != other_component =>
                 {
-                    return PathRelation::Divergent
+                    return PathRelation::Divergent;
                 }
                 // A matching component, continue iterating
                 (Some(_), Some(_)) => {}

@@ -3,8 +3,8 @@ use std::{io::Write, mem};
 use turborepo_vt100 as vt100;
 
 use super::{
-    event::{CacheResult, Direction, OutputLogs, TaskResult},
     Error,
+    event::{CacheResult, Direction, OutputLogs, TaskResult},
 };
 
 pub struct TerminalOutput<W> {

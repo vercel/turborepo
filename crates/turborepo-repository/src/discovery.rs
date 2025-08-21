@@ -10,7 +10,7 @@
 //! we can track areas of run that are performing sub-optimally.
 
 use tokio::time::error::Elapsed;
-use tokio_stream::{iter, StreamExt};
+use tokio_stream::{StreamExt, iter};
 use turbopath::AbsoluteSystemPathBuf;
 
 use crate::{
@@ -149,7 +149,7 @@ impl PackageDiscovery for LocalPackageDiscovery {
                 return Ok(DiscoveryResponse {
                     workspaces: vec![],
                     package_manager: self.package_manager.clone(),
-                })
+                });
             }
             Err(e) => return Err(Error::Failed(Box::new(e))),
         };

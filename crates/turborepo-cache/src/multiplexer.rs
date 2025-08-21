@@ -1,6 +1,6 @@
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
     Arc, Mutex,
+    atomic::{AtomicBool, Ordering},
 };
 
 use tracing::{debug, warn};
@@ -9,9 +9,9 @@ use turborepo_analytics::AnalyticsSender;
 use turborepo_api_client::{APIAuth, APIClient};
 
 use crate::{
+    CacheConfig, CacheError, CacheHitMetadata, CacheOpts,
     fs::FSCache,
     http::{HTTPCache, UploadMap},
-    CacheConfig, CacheError, CacheHitMetadata, CacheOpts,
 };
 
 pub struct CacheMultiplexer {
