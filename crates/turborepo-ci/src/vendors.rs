@@ -12,7 +12,7 @@ pub struct VendorEnvs {
     pub(crate) all: Vec<&'static str>,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 #[allow(dead_code)]
 pub struct Vendor {
     pub(crate) name: &'static str,
