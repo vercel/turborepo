@@ -562,11 +562,11 @@ unsafe fn callback_impl(
                 if *r || &path == p {
                     handle_event = true;
                     break;
-                } else if let Some(parent_path) = path.parent() {
-                    if parent_path == p {
-                        handle_event = true;
-                        break;
-                    }
+                } else if let Some(parent_path) = path.parent()
+                    && parent_path == p
+                {
+                    handle_event = true;
+                    break;
                 }
             }
         }
