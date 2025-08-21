@@ -78,6 +78,7 @@ impl<'a> TurboJsonReader<'a> {
         opts.env_mode = turbo_json.env_mode.map(|mode| *mode.as_inner());
         opts.cache_dir = cache_dir;
         opts.concurrency = turbo_json.concurrency.map(|c| c.as_inner().clone());
+        opts.future_flags = turbo_json.future_flags.map(|f| *f.as_inner());
         Ok(opts)
     }
 }
