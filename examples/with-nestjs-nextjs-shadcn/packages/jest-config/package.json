@@ -1,0 +1,42 @@
+{
+  "name": "@repo/jest-config",
+  "version": "0.0.0",
+  "private": true,
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./base": {
+      "import": "./dist/base.js",
+      "require": "./dist/base.js",
+      "types": "./dist/base.d.ts"
+    },
+    "./nest": {
+      "import": "./dist/nest.js",
+      "require": "./dist/nest.js",
+      "types": "./dist/nest.d.ts"
+    },
+    "./next": {
+      "import": "./dist/next.js",
+      "require": "./dist/next.js",
+      "types": "./dist/next.d.ts"
+    }
+  },
+  "devDependencies": {
+    "@jest/types": "^29.6.3",
+    "jest": "^29.7.0",
+    "next": "^15.4.2",
+    "typescript": "^5.8.2"
+  },
+  "scripts": {
+    "build": "tsc"
+  }
+}

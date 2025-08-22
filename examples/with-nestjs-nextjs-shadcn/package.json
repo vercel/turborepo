@@ -1,0 +1,35 @@
+{
+  "name": "shadcn-ui-monorepo-with-nestjs-nextjs-shadcn-example",
+  "version": "0.0.1",
+  "private": true,
+  "author": "Mahdi Rashidi <contact@mrashidi.me>",
+  "scripts": {
+    "build": "turbo build",
+    "dev": "turbo dev",
+    "lint": "turbo lint",
+    "format": "prettier --write \"**/*.{ts,tsx,md}\""
+  },
+  "devDependencies": {
+    "@repo/eslint-config": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
+    "@tailwindcss/postcss": "^4.1.12",
+    "autoprefixer": "^10.4.21",
+    "postcss": "^8.5.6",
+    "prettier": "^3.6.2",
+    "tailwindcss": "^4.1.12",
+    "turbo": "^2.5.5",
+    "typescript": "5.7.3"
+  },
+  "packageManager": "pnpm@10.4.1",
+  "engines": {
+    "node": ">=20"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@nestjs/core",
+      "@tailwindcss/oxide",
+      "core-js-pure",
+      "sharp"
+    ]
+  }
+}
