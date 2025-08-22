@@ -99,6 +99,7 @@ impl<'a> ResolvedConfigurationOptions for TurboJsonReader<'a> {
 mod test {
     use serde_json::json;
     use tempfile::tempdir;
+    use test_case::test_case;
 
     use super::*;
     use crate::config::CONFIG_FILE;
@@ -193,5 +194,27 @@ mod test {
         assert_eq!(config.team_id(), Some(team_id));
         assert!(config.signature());
         assert!(config.preflight());
+    }
+
+    #[test_case(None, false)]
+    #[test_case(Some(false), false)]
+    #[test_case(Some(true), true)]
+    fn test_dangerously_disable_package_manager_check(value: Option<bool>, expected: bool) {
+        let turbo_json = RawTurboJson::parse(
+            &serde_json::to_string_pretty(
+                &(if let Some(value) = value {
+                    json!({
+                        "dangerouslyDisablePackageManagerCheck": value
+                    })
+                } else {
+                    json!({})
+                }),
+            )
+            .unwrap(),
+            "turbo.json",
+        )
+        .unwrap();
+        let config = TurboJsonReader::turbo_json_to_config_options(turbo_json).unwrap();
+        assert_eq!(config.allow_no_package_manager(), expected);
     }
 }

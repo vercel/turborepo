@@ -316,6 +316,7 @@ impl RawTurboJson {
         let json_string = serde_json::to_string(&value).expect("should be able to serialize");
         Self::parse(&json_string, "turbo.json")
     }
+
     /// Parses a turbo.json file into the raw representation with span info
     /// attached.
     ///
