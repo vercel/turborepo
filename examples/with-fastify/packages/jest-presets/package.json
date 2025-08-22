@@ -1,0 +1,17 @@
+{
+  "name": "@repo/jest-presets",
+  "version": "0.0.0",
+  "private": true,
+  "license": "MIT",
+  "files": [
+    "node/jest-preset.js"
+  ],
+  "exports": {
+    "./node": "./node/jest-preset.js",
+    "./node/jest-preset": "./node/jest-preset.js"
+  },
+  "dependencies": {
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.5"
+  }
+}
