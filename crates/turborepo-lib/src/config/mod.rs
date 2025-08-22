@@ -23,7 +23,7 @@ use turborepo_cache::CacheConfig;
 use turborepo_errors::TURBO_SITE;
 use turborepo_repository::package_graph::PackageName;
 
-pub use crate::turbo_json::{RawTurboJson, UIMode};
+pub use crate::turbo_json::UIMode;
 use crate::{
     cli::{EnvMode, LogOrder},
     turbo_json::FutureFlags,
