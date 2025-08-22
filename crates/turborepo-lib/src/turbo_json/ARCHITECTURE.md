@@ -36,18 +36,39 @@ Configuration is collected from multiple sources with the following priority (hi
 
 ## Phase 2: TurboJson Loading
 
+### Schema Differentiation
+
+Turborepo uses two different schemas for `turbo.json` files depending on their location:
+
+- **Root `turbo.json`** (`RawRootTurboJson`): Located at the repository root
+
+  - Can define global configuration options (`globalEnv`, `globalDependencies`, `globalPassThroughEnv`)
+  - Can set repository-wide settings (`remoteCache`, `ui`, `daemon`, `envMode`, etc.)
+  - Can define `futureFlags` for experimental features
+  - Cannot use `extends` field
+
+- **Package `turbo.json`** (`RawPackageTurboJson`): Located in workspace packages
+  - Limited to task definitions and workspace-specific configuration
+  - Must use `extends: ["//"]` to inherit from root configuration
+  - Can define workspace-specific `tags` and `boundaries`
+  - Cannot define global settings or `futureFlags`
+
 ### Key Components
 
 - **`TurboJsonLoader`** (`crates/turborepo-lib/src/turbo_json/loader.rs`): Loads and resolves turbo.json files
-- **`RawTurboJson`**: Raw deserialized structure from JSON files
+- **`RawRootTurboJson`** (`crates/turborepo-lib/src/turbo_json/raw.rs`): Root turbo.json schema
+- **`RawPackageTurboJson`** (`crates/turborepo-lib/src/turbo_json/raw.rs`): Package turbo.json schema
+- **`RawTurboJson`** (`crates/turborepo-lib/src/turbo_json/raw.rs`): Unified raw structure that can represent either type
 - **`TurboJson`**: Validated structure containing raw task definitions
 
 ### Process
 
 1. **File Discovery**: Locate `turbo.json` or `turbo.jsonc` files
-2. **Parsing**: Deserialize JSON into `RawTurboJson` structures
-3. **Basic Validation**: Convert to `TurboJson` with structural validation
-4. **Workspace Resolution**: Apply workspace-specific overrides
+2. **Schema Detection**: Determine if file is at repository root or in a package
+3. **Parsing**: Deserialize JSON into appropriate schema (`RawRootTurboJson` or `RawPackageTurboJson`)
+4. **Unification**: Convert to unified `RawTurboJson` structure
+5. **Basic Validation**: Convert to `TurboJson` with structural validation
+6. **Workspace Resolution**: Apply workspace-specific overrides
 
 ## Phase 3: Processed Task Definition (Intermediate Representation)
 
