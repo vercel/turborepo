@@ -343,7 +343,6 @@ impl WithMetadata for RawPackageTurboJson {
 }
 
 impl RawRootTurboJson {
-    /// Parse a root turbo.json file
     pub fn parse(text: &str, file_path: &str) -> Result<Self, Error> {
         let turbo_json = parse_turbo_json::<RawRootTurboJson>(text, file_path)?;
 
@@ -369,16 +368,6 @@ impl RawTurboJson {
         let raw_root = RawRootTurboJson::parse(&json_string, "turbo.json")?;
         Ok(Self::from(raw_root))
     }
-}
-
-fn parse_root_turbo_json(text: &str, file_path: &str) -> Result<RawRootTurboJson, Error> {
-    let turbo_json = parse_turbo_json::<RawRootTurboJson>(text, file_path)?;
-
-    if turbo_json.experimental_spaces.is_some() {
-        warn!("`experimentalSpaces` key in turbo.json is deprecated and does not do anything")
-    }
-
-    Ok(turbo_json)
 }
 
 fn parse_turbo_json<T: Deserializable + WithMetadata>(
