@@ -709,7 +709,7 @@ mod test {
     use super::*;
     use crate::{
         engine::TaskNode,
-        turbo_json::{RawTurboJson, TurboJson},
+        turbo_json::{RawPackageTurboJson, RawRootTurboJson, RawTurboJson, TurboJson},
     };
 
     // Only used to prevent package graph construction from attempting to read
@@ -813,8 +813,13 @@ mod test {
     }
 
     fn turbo_json(value: serde_json::Value) -> TurboJson {
+        let is_package = value.as_object().unwrap().contains_key("extends");
         let json_text = serde_json::to_string(&value).unwrap();
-        let raw = RawTurboJson::parse(&json_text, "").unwrap();
+        let raw: RawTurboJson = if is_package {
+            RawPackageTurboJson::parse(&json_text, "").unwrap().into()
+        } else {
+            RawRootTurboJson::parse(&json_text, "").unwrap().into()
+        };
         TurboJson::try_from(raw).unwrap()
     }
 

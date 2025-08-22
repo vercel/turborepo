@@ -93,9 +93,73 @@ pub struct RawRemoteCacheOptions {
     pub upload_timeout: Option<Spanned<u64>>,
 }
 
+// Root turbo.json
+#[derive(Default, Debug, Clone, Iterable, Deserializable)]
+pub struct RawRootTurboJson {
+    span: Spanned<()>,
+
+    #[deserializable(rename = "$schema")]
+    schema: Option<UnescapedString>,
+
+    experimental_spaces: Option<SpacesJson>,
+
+    // Global root filesystem dependencies
+    global_dependencies: Option<Vec<Spanned<UnescapedString>>>,
+    global_env: Option<Vec<Spanned<UnescapedString>>>,
+    global_pass_through_env: Option<Vec<Spanned<UnescapedString>>>,
+    // Tasks is a map of task entries which define the task graph
+    // and cache behavior on a per task or per package-task basis.
+    tasks: Option<Pipeline>,
+
+    pipeline: Option<Spanned<Pipeline>>,
+    // Configuration options when interfacing with the remote cache
+    remote_cache: Option<RawRemoteCacheOptions>,
+    ui: Option<Spanned<UIMode>>,
+    #[deserializable(rename = "dangerouslyDisablePackageManagerCheck")]
+    allow_no_package_manager: Option<Spanned<bool>>,
+    daemon: Option<Spanned<bool>>,
+    env_mode: Option<Spanned<EnvMode>>,
+    cache_dir: Option<Spanned<UnescapedString>>,
+
+    no_update_notifier: Option<Spanned<bool>>,
+
+    tags: Option<Spanned<Vec<Spanned<String>>>>,
+
+    boundaries: Option<Spanned<BoundariesConfig>>,
+
+    concurrency: Option<Spanned<String>>,
+
+    future_flags: Option<Spanned<FutureFlags>>,
+
+    #[deserializable(rename = "//")]
+    _comment: Option<String>,
+}
+
+// Package turbo.json
+#[derive(Default, Debug, Clone, Iterable, Deserializable)]
+pub struct RawPackageTurboJson {
+    span: Spanned<()>,
+
+    #[deserializable(rename = "$schema")]
+    schema: Option<UnescapedString>,
+
+    extends: Option<Spanned<Vec<UnescapedString>>>,
+
+    tasks: Option<Pipeline>,
+
+    pipeline: Option<Spanned<Pipeline>>,
+
+    tags: Option<Spanned<Vec<Spanned<String>>>>,
+
+    boundaries: Option<Spanned<BoundariesConfig>>,
+
+    #[deserializable(rename = "//")]
+    _comment: Option<String>,
+}
+
+// Unified structure that represents either root or package turbo.json
 #[derive(Serialize, Default, Debug, Clone, Iterable, Deserializable)]
 #[serde(rename_all = "camelCase")]
-// The raw deserialized turbo.json file.
 pub struct RawTurboJson {
     #[serde(skip)]
     span: Spanned<()>,
@@ -400,23 +464,73 @@ impl TaskDefinition {
     }
 }
 
+impl From<RawRootTurboJson> for RawTurboJson {
+    fn from(root: RawRootTurboJson) -> Self {
+        RawTurboJson {
+            span: root.span,
+            schema: root.schema,
+            experimental_spaces: root.experimental_spaces,
+            global_dependencies: root.global_dependencies,
+            global_env: root.global_env,
+            global_pass_through_env: root.global_pass_through_env,
+            tasks: root.tasks,
+            pipeline: root.pipeline,
+            remote_cache: root.remote_cache,
+            ui: root.ui,
+            allow_no_package_manager: root.allow_no_package_manager,
+            daemon: root.daemon,
+            env_mode: root.env_mode,
+            cache_dir: root.cache_dir,
+            no_update_notifier: root.no_update_notifier,
+            tags: root.tags,
+            boundaries: root.boundaries,
+            concurrency: root.concurrency,
+            future_flags: root.future_flags,
+            _comment: root._comment,
+            extends: None, // Root configs never have extends
+        }
+    }
+}
+
+impl From<RawPackageTurboJson> for RawTurboJson {
+    fn from(pkg: RawPackageTurboJson) -> Self {
+        RawTurboJson {
+            span: pkg.span,
+            schema: pkg.schema,
+            extends: pkg.extends,
+            tasks: pkg.tasks,
+            pipeline: pkg.pipeline,
+            boundaries: pkg.boundaries,
+            _comment: pkg._comment,
+            ..Default::default()
+        }
+    }
+}
+
 impl RawTurboJson {
-    pub(crate) fn read(
+    fn read(
         repo_root: &AbsoluteSystemPath,
         path: &AbsoluteSystemPath,
     ) -> Result<Option<RawTurboJson>, Error> {
         let Some(contents) = path.read_existing_to_string()? else {
             return Ok(None);
         };
+
+        // Determine if this is a root turbo.json by checking if its parent is the repo
+        // root
+        let is_root = repo_root.is_parent(path);
         // Anchoring the path can fail if the path resides outside of the repository
         // Just display absolute path in that case.
         let root_relative_path = repo_root.anchor(path).map_or_else(
             |_| path.as_str().to_owned(),
             |relative| relative.to_string(),
         );
-        let raw_turbo_json = RawTurboJson::parse(&contents, &root_relative_path)?;
 
-        Ok(Some(raw_turbo_json))
+        Ok(Some(if is_root {
+            RawTurboJson::from(RawRootTurboJson::parse(&contents, &root_relative_path)?)
+        } else {
+            RawTurboJson::from(RawPackageTurboJson::parse(&contents, &root_relative_path)?)
+        }))
     }
 
     /// Produces a new turbo.json without any tasks that reference non-existent
@@ -753,7 +867,6 @@ fn gather_env_vars(
     Ok(())
 }
 
-// Takes an input/output glob that might start with TURBO_ROOT_PREFIX
 #[cfg(test)]
 mod tests {
     use anyhow::Result;
@@ -1111,7 +1224,7 @@ mod tests {
     #[test_case(r#"{ "tags": ["my-tag"] }"#, "one tag")]
     #[test_case(r#"{ "tags": ["my-tag", "my-other-tag"] }"#, "two tags")]
     fn test_tags(json: &str, name: &str) {
-        let json = RawTurboJson::parse(json, "").unwrap();
+        let json = RawRootTurboJson::parse(json, "").unwrap();
         insta::assert_json_snapshot!(name.replace(' ', "_"), json.tags);
     }
 
@@ -1119,7 +1232,7 @@ mod tests {
     #[test_case(r#"{ "ui": "stream" }"#, Some(UIMode::Stream) ; "stream")]
     #[test_case(r#"{}"#, None ; "missing")]
     fn test_ui(json: &str, expected: Option<UIMode>) {
-        let json = RawTurboJson::parse(json, "").unwrap();
+        let json = RawRootTurboJson::parse(json, "").unwrap();
         assert_eq!(json.ui.as_ref().map(|ui| *ui.as_inner()), expected);
     }
 
@@ -1127,14 +1240,14 @@ mod tests {
     #[test_case(r#"{ "experimentalSpaces": {} }"#, Some(SpacesJson { id: None }))]
     #[test_case(r#"{}"#, None)]
     fn test_spaces(json: &str, expected: Option<SpacesJson>) {
-        let json = RawTurboJson::parse(json, "").unwrap();
+        let json = RawRootTurboJson::parse(json, "").unwrap();
         assert_eq!(json.experimental_spaces, expected);
     }
 
     #[test_case(r#"{ "daemon": true }"#, r#"{"daemon":true}"# ; "daemon_on")]
     #[test_case(r#"{ "daemon": false }"#, r#"{"daemon":false}"# ; "daemon_off")]
     fn test_daemon(json: &str, expected: &str) {
-        let parsed = RawTurboJson::parse(json, "").unwrap();
+        let parsed: RawTurboJson = RawRootTurboJson::parse(json, "").unwrap().into();
         let actual = serde_json::to_string(&parsed).unwrap();
         assert_eq!(actual, expected);
     }
@@ -1142,7 +1255,7 @@ mod tests {
     #[test_case(r#"{ "ui": "tui" }"#, r#"{"ui":"tui"}"# ; "tui")]
     #[test_case(r#"{ "ui": "stream" }"#, r#"{"ui":"stream"}"# ; "stream")]
     fn test_ui_serialization(input: &str, expected: &str) {
-        let parsed = RawTurboJson::parse(input, "").unwrap();
+        let parsed: RawTurboJson = RawRootTurboJson::parse(input, "").unwrap().into();
         let actual = serde_json::to_string(&parsed).unwrap();
         assert_eq!(actual, expected);
     }
@@ -1151,7 +1264,7 @@ mod tests {
     #[test_case(r#"{"dangerouslyDisablePackageManagerCheck":false}"#, Some(false) ; "f")]
     #[test_case(r#"{}"#, None ; "missing")]
     fn test_allow_no_package_manager_serde(json_str: &str, expected: Option<bool>) {
-        let json = RawTurboJson::parse(json_str, "").unwrap();
+        let json: RawTurboJson = RawRootTurboJson::parse(json_str, "").unwrap().into();
         assert_eq!(
             json.allow_no_package_manager
                 .as_ref()
@@ -1298,6 +1411,75 @@ mod tests {
         // TurboJson
         let turbo_json = TurboJson::try_from(raw_turbo_json);
         assert!(turbo_json.is_ok());
+    }
+
+    #[test_case(
+        r#"{"extends": ["//"], "tasks": {"build": {}}}"#,
+        false ; "root config with extends should fail"
+    )]
+    #[test_case(
+        r#"{"globalEnv": ["NODE_ENV"], "globalDependencies": ["package.json"], "tasks": {"build": {}}}"#,
+        true ; "root config with global fields should succeed"
+    )]
+    #[test_case(
+        r#"{"futureFlags": {"turboExtendsKeyword": true}, "tasks": {"build": {}}}"#,
+        true ; "root config with futureFlags should succeed"
+    )]
+    #[test_case(
+        r#"{"remoteCache": {"enabled": true}, "tasks": {"build": {}}}"#,
+        true ; "root config with remoteCache should succeed"
+    )]
+    fn test_root_config_validation(json: &str, should_succeed: bool) {
+        let result = RawRootTurboJson::parse(json, "turbo.json");
+        assert_eq!(result.is_ok(), should_succeed);
+
+        if should_succeed {
+            let raw_config = RawTurboJson::from(result.unwrap());
+            assert!(raw_config.extends.is_none());
+        }
+    }
+
+    #[test_case(
+        r#"{"extends": ["//"], "tasks": {"build": {}}, "tags": ["frontend"]}"#,
+        true ; "package config with extends and tags should succeed"
+    )]
+    #[test_case(
+        r#"{"extends": ["//"], "boundaries": {}, "tasks": {"test": {}}}"#,
+        true ; "package config with extends and boundaries should succeed"
+    )]
+    #[test_case(
+        r#"{"globalEnv": ["NODE_ENV"], "tasks": {"test": {}}}"#,
+        false ; "package config with globalEnv should fail"
+    )]
+    #[test_case(
+        r#"{"extends": ["//"], "globalDependencies": ["package.json"], "tasks": {"test": {}}}"#,
+        false ; "package config with globalDependencies should fail"
+    )]
+    #[test_case(
+        r#"{"extends": ["//"], "futureFlags": {}, "tasks": {"test": {}}}"#,
+        false ; "package config with futureFlags should fail"
+    )]
+    #[test_case(
+        r#"{"extends": ["//"], "remoteCache": {"enabled": true}, "tasks": {"test": {}}}"#,
+        false ; "package config with remoteCache should fail"
+    )]
+    #[test_case(
+        r#"{"extends": ["//"], "ui": "tui", "tasks": {"test": {}}}"#,
+        false ; "package config with ui should fail"
+    )]
+    fn test_package_config_validation(json: &str, should_succeed: bool) {
+        let result = RawPackageTurboJson::parse(json, "packages/foo/turbo.json");
+        assert_eq!(result.is_ok(), should_succeed);
+
+        if should_succeed {
+            let package_config = result.unwrap();
+            let raw_config = RawTurboJson::from(package_config);
+            assert!(raw_config.extends.is_some());
+            // Verify root-only fields are None
+            assert!(raw_config.global_env.is_none());
+            assert!(raw_config.global_dependencies.is_none());
+            assert!(raw_config.future_flags.is_none());
+        }
     }
 
     #[test]
