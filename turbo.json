@@ -215,7 +215,9 @@
       "dependsOn": ["package:types", "package:lint"]
     },
     "package:types": {},
-    "package:lint": {},
+    "package:lint": {
+      "dependsOn": ["build"]
+    },
     // This is a synthetic tasks that lets us pull in other workspaces as dependencies
     // So changes in internal workspaces that we depend on, will trigger this task.
     "topo": {
