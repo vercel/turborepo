@@ -314,7 +314,9 @@ export async function create(
 
   // remove .git directory if --no-git flag is used
   if (noGit) {
-    removeGitDirectory(root);
+    if (!removeGitDirectory(root)) {
+        logger.warn("Failed to remove '.git' directory")
+    }
   }
 
   opts.telemetry?.trackCommandStatus({ command: "create", status: "end" });
