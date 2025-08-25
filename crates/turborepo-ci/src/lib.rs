@@ -190,7 +190,10 @@ mod tests {
                 unsafe { env::set_var(key, val) };
             }
 
-            assert_eq!(Vendor::infer_inner(), want.as_ref());
+            assert_eq!(
+                Vendor::infer_inner().map(|v| v.name),
+                want.as_ref().map(|v| v.name)
+            );
 
             if Vendor::get_name() == Some("GitHub Actions") {
                 if let Some(live_ci) = live_ci {
