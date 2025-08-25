@@ -10,5 +10,6 @@ export interface CreateCommandOptions {
   turboVersion?: string;
   example?: string;
   examplePath?: string;
+  noGit?: boolean;
   telemetry: CreateTurboTelemetry | undefined;
 }
