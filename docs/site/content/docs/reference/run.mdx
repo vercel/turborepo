@@ -531,6 +531,12 @@ Ignore the local filesystem cache for all tasks, using Remote Cache for reading 
 turbo run build --remote-only
 ```
 
+<Callout type="info" title="Remote cache unreachable">
+  When Remote Cache is configured but unreachable (network error, misconfiguration, or service
+  outage), Turborepo will print a one-time error early in the run and fall back to local cache if
+  enabled. This prevents long runs where each workspace silently reports a cache miss.
+</Callout>
+
 ### `--summarize`
 
 Generates a JSON file in `.turbo/runs` containing metadata about the run, including:

@@ -3,7 +3,7 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
 };
 
-use tracing::{debug, warn};
+use tracing::{debug, warn, error};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 use turborepo_analytics::AnalyticsSender;
 use turborepo_api_client::{APIAuth, APIClient};
@@ -20,6 +20,8 @@ pub struct CacheMultiplexer {
     // This does create a mild race condition where we might use the cache
     // even though another thread might be removing it, but that's fine.
     should_use_http_cache: AtomicBool,
+    // Ensures we only show one connection error message for remote cache
+    printed_remote_connect_error: AtomicBool,
     // Just for keeping track of whether we've already printed a warning about the remote cache
     // being read-only
     should_print_skipping_remote_put: AtomicBool,
@@ -67,6 +69,7 @@ impl CacheMultiplexer {
         Ok(CacheMultiplexer {
             should_print_skipping_remote_put: AtomicBool::new(true),
             should_use_http_cache: AtomicBool::new(http_cache.is_some()),
+            printed_remote_connect_error: AtomicBool::new(false),
             cache_config: opts.cache,
             fs: fs_cache,
             http: http_cache,
@@ -155,20 +158,45 @@ impl CacheMultiplexer {
 
         if self.cache_config.remote.read
             && let Some(http) = self.get_http_cache()
-            && let Ok(Some((CacheHitMetadata { source, time_saved }, files))) =
-                http.fetch(key).await
         {
-            // Store this into fs cache. We can ignore errors here because we know
-            // we have previously successfully stored in HTTP cache, and so the overall
-            // result is a success at fetching. Storing in lower-priority caches is an
-            // optimization.
-            if self.cache_config.local.write
-                && let Some(fs) = &self.fs
-            {
-                let _ = fs.put(anchor, key, &files, time_saved);
-            }
+            match http.fetch(key).await {
+                Ok(Some((CacheHitMetadata { source, time_saved }, files))) => {
+                    // Store this into fs cache. We can ignore errors here because we know
+                    // we have previously successfully stored in HTTP cache, and so the overall
+                    // result is a success at fetching. Storing in lower-priority caches is an
+                    // optimization.
+                    if self.cache_config.local.write
+                        && let Some(fs) = &self.fs
+                    {
+                        let _ = fs.put(anchor, key, &files, time_saved);
+                    }
 
-            return Ok(Some((CacheHitMetadata { source, time_saved }, files)));
+                    return Ok(Some((CacheHitMetadata { source, time_saved }, files)));
+                }
+                Ok(None) => { /* miss - fall through */ }
+                Err(CacheError::ConnectError) => {
+                    // Only print once per run to avoid noise across many workspaces
+                    if !self.printed_remote_connect_error.swap(true, Ordering::Relaxed) {
+                        error!(
+                            "Cannot access remote cache (connection failed). Falling back to local cache if available."
+                        );
+                    }
+                    // Disable further remote attempts for this run
+                    self.should_use_http_cache.store(false, Ordering::Relaxed);
+                }
+                Err(CacheError::ApiClientError(..)) => {
+                    // These are network/API level errors that indicate the remote cache is not accessible.
+                    if !self.printed_remote_connect_error.swap(true, Ordering::Relaxed) {
+                        error!(
+                            "Cannot access remote cache (API error). Falling back to local cache if available."
+                        );
+                    }
+                    self.should_use_http_cache.store(false, Ordering::Relaxed);
+                }
+                Err(other) => {
+                    debug!("failed to fetch from http cache: {:?}", other);
+                }
+            }
         }
 
         Ok(None)
