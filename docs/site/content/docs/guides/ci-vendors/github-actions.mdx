@@ -235,7 +235,7 @@ To use Remote Caching with GitHub Actions, add the following environment variabl
 to make them available to your `turbo` commands.
 
 - `TURBO_TOKEN` - The Bearer token to access the Remote Cache
-- `TURBO_TEAM` - The account to which the repository belongs
+- `TURBO_TEAM` - The slug of the Vercel team to share the artifacts with
 
 To use Remote Caching, retrieve the team and token for the Remote Cache for your provider. In this example, we'll use [Vercel Remote Cache](https://vercel.com/docs/monorepos/remote-caching).
 
@@ -257,7 +257,7 @@ Go to your GitHub repository settings and click on the **Secrets** and then **Ac
 </Step>
 
 <Step>
-Create a new repository variable (click the **Variables** tab) called `TURBO_TEAM` and enter [your Team URL](https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fsettings&title=Find+Team+URL).
+Create a new repository variable (click the **Variables** tab) called `TURBO_TEAM` and set it to your team slug - the part after `vercel.com/` in [your Team URL](https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fsettings&title=Find+Team+URL). For example, the slug for `vercel.com/acme` is `acme`. 
 
 <Callout type="good-to-know">
   Using a repository variable rather than a secret will keep GitHub Actions from
