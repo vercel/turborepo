@@ -252,7 +252,7 @@ describe("git", () => {
       options: { emptyFixture: true },
     });
 
-    it("successfully removes .git directory", async () => {
+    it("attempts to remove .git directory", async () => {
       const { root } = useFixture({ fixture: `remove-git` });
       const mockRmSync = jest.spyOn(fs, "rmSync").mockImplementation(() => {});
 
