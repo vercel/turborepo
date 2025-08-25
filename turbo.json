@@ -211,6 +211,11 @@
       "outputs": ["dist/**/*", ".next/**/*"],
       "dependsOn": ["^build"]
     },
+    "package-checks": {
+      "dependsOn": ["pub:types", "pub:lint"]
+    },
+    "package:types": {},
+    "package:lint": {},
     // This is a synthetic tasks that lets us pull in other workspaces as dependencies
     // So changes in internal workspaces that we depend on, will trigger this task.
     "topo": {
