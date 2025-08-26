@@ -55,7 +55,7 @@ pub struct Package {
 /// We cannot easily expose lockfiles as a standard
 /// graph due to overrides that various lockfile formats support. A dependency
 /// of `"package": "1.0.0"` might resolve to a different version depending on
-/// how it is imported. See
+/// how it is imported. See https://pnpm.io/settings#overrides
 pub trait Lockfile: Send + Sync + Any + std::fmt::Debug {
     /// Resolve a dependency declaration from a workspace package to a lockfile
     /// key
