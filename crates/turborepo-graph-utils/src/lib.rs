@@ -1,3 +1,7 @@
+//! Additional utilities to be used with `petgraph`
+//! Provides transitive closure calculation and cycle detection with cut
+//! candidates to break cycles
+
 mod walker;
 
 use std::{collections::HashSet, fmt::Display, hash::Hash};
