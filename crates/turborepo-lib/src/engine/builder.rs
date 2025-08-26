@@ -14,7 +14,7 @@ use crate::{
     config,
     task_graph::TaskDefinition,
     turbo_json::{
-        validate_extends, validate_no_package_task_syntax, validate_with_has_no_topo,
+        validator::{validate_extends, validate_no_package_task_syntax, validate_with_has_no_topo},
         ProcessedTaskDefinition, TurboJsonLoader,
     },
 };
