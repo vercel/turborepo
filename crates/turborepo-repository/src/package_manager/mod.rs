@@ -14,7 +14,7 @@ use std::{
 
 use bun::BunDetector;
 use itertools::{Either, Itertools};
-use lazy_regex::{lazy_regex, Lazy};
+use lazy_regex::{Lazy, lazy_regex};
 use miette::{Diagnostic, NamedSource, SourceSpan};
 use node_semver::SemverError;
 use npm::NpmDetector;

@@ -1,5 +1,5 @@
 use futures::FutureExt;
-use tokio::sync::watch::{self, error::RecvError, Ref};
+use tokio::sync::watch::{self, Ref, error::RecvError};
 
 #[derive(Debug)]
 pub struct OptionalWatch<T>(watch::Receiver<Option<T>>);

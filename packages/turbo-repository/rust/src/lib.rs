@@ -14,7 +14,7 @@ use turborepo_repository::{
         LockfileContents, PackageChangeMapper, PackageChanges,
     },
     inference::RepoState as WorkspaceState,
-    package_graph::{PackageGraph, PackageName, PackageNode, WorkspacePackage, ROOT_PKG_NAME},
+    package_graph::{PackageGraph, PackageName, PackageNode, ROOT_PKG_NAME, WorkspacePackage},
 };
 use turborepo_scm::SCM;
 mod internal;

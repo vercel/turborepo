@@ -170,8 +170,8 @@ mod tests {
     use turbopath::AbsoluteSystemPathBuf;
 
     use crate::{
-        logs::replay_logs, replay_logs_with_crlf, ColorConfig, LogWriter, PrefixedUI,
-        PrefixedWriter, BOLD, CYAN,
+        BOLD, CYAN, ColorConfig, LogWriter, PrefixedUI, PrefixedWriter, logs::replay_logs,
+        replay_logs_with_crlf,
     };
 
     #[test]

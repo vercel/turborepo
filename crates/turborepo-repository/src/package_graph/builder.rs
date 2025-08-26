@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 
 use miette::{Diagnostic, Report};
 use petgraph::graph::{Graph, NodeIndex};
-use tracing::{warn, Instrument};
+use tracing::{Instrument, warn};
 use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
 };
@@ -10,7 +10,7 @@ use turborepo_graph_utils as graph;
 use turborepo_lockfiles::Lockfile;
 
 use super::{
-    dep_splitter::DependencySplitter, PackageGraph, PackageInfo, PackageName, PackageNode,
+    PackageGraph, PackageInfo, PackageName, PackageNode, dep_splitter::DependencySplitter,
 };
 use crate::{
     discovery::{

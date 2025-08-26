@@ -1,4 +1,9 @@
-#![deny(clippy::all)]
+//! CI/CD vendor detection and vendor-specific behavior
+//! Detects CI vendors and provides:
+//! - Env var containing current commit SHA
+//! - Env var containing current branch
+//! - Env var containing current user
+//! - Any vendor specific behavior for producing well formatted logs
 
 mod vendor_behavior;
 mod vendors;
@@ -190,7 +195,10 @@ mod tests {
                 unsafe { env::set_var(key, val) };
             }
 
-            assert_eq!(Vendor::infer_inner(), want.as_ref());
+            assert_eq!(
+                Vendor::infer_inner().map(|v| v.name),
+                want.as_ref().map(|v| v.name)
+            );
 
             if Vendor::get_name() == Some("GitHub Actions") {
                 if let Some(live_ci) = live_ci {

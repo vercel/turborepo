@@ -4,9 +4,9 @@ use reqwest::Url;
 use tokio::sync::OnceCell;
 use tracing::warn;
 use turborepo_api_client::{CacheClient, Client, TokenClient};
-use turborepo_ui::{start_spinner, ColorConfig, BOLD};
+use turborepo_ui::{BOLD, ColorConfig, start_spinner};
 
-use crate::{auth::extract_vercel_token, error, ui, Error, LoginOptions, Token};
+use crate::{Error, LoginOptions, Token, auth::extract_vercel_token, error, ui};
 
 const DEFAULT_HOST_NAME: &str = "127.0.0.1";
 const DEFAULT_PORT: u16 = 9789;
@@ -71,22 +71,22 @@ pub async fn sso_login<T: Client + TokenClient + CacheClient>(
             }
         // No existing turbo token found. If the user is logging into Vercel,
         // check for an existing `vc` token with correct scope.
-        } else if login_url_configuration.contains("vercel.com") {
-            if let Ok(Some(token)) = extract_vercel_token() {
-                let token = Token::existing(token);
-                if token
-                    .is_valid_sso(
-                        api_client,
-                        sso_team,
-                        Some(valid_token_callback(
-                            &format!("Existing Vercel token for {sso_team} found!"),
-                            color_config,
-                        )),
-                    )
-                    .await?
-                {
-                    return Ok(token);
-                }
+        } else if login_url_configuration.contains("vercel.com")
+            && let Ok(Some(token)) = extract_vercel_token()
+        {
+            let token = Token::existing(token);
+            if token
+                .is_valid_sso(
+                    api_client,
+                    sso_team,
+                    Some(valid_token_callback(
+                        &format!("Existing Vercel token for {sso_team} found!"),
+                        color_config,
+                    )),
+                )
+                .await?
+            {
+                return Ok(token);
             }
         }
     }
@@ -149,14 +149,14 @@ mod tests {
     use async_trait::async_trait;
     use reqwest::{Method, RequestBuilder, Response};
     use turborepo_vercel_api::{
-        token::{ResponseTokenMetadata, Scope},
         CachingStatus, CachingStatusResponse, Membership, Role, Team, TeamsResponse, User,
         UserResponse, VerifiedSsoUser,
+        token::{ResponseTokenMetadata, Scope},
     };
     use turborepo_vercel_api_mock::start_test_server;
 
     use super::*;
-    use crate::{current_unix_time, LoginServer, LoginType};
+    use crate::{LoginServer, LoginType, current_unix_time};
     const EXPECTED_VERIFICATION_TOKEN: &str = "expected_verification_token";
 
     lazy_static::lazy_static! {
@@ -306,10 +306,10 @@ mod tests {
             &self,
             _hash: &str,
             _artifact_body: impl turborepo_api_client::Stream<
-                    Item = Result<turborepo_api_client::Bytes, turborepo_api_client::Error>,
-                > + Send
-                + Sync
-                + 'static,
+                Item = Result<turborepo_api_client::Bytes, turborepo_api_client::Error>,
+            > + Send
+            + Sync
+            + 'static,
             _body_len: usize,
             _duration: u64,
             _tag: Option<&str>,

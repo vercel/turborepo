@@ -1,3 +1,9 @@
+//! Cache management for task outputs
+//! Provides local and remote caching capabilities and a "multiplexed" cache
+//! which operates over both. When both are in use local is preferred and remote
+//! writes are done asynchronously. Under the hood cache artifacts are stored a
+//! gzipped tarballs.
+
 #![feature(error_generic_member_access)]
 #![feature(assert_matches)]
 #![feature(box_patterns)]

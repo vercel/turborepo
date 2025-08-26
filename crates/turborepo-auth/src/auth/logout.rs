@@ -2,10 +2,10 @@ use tracing::error;
 use turbopath::AbsoluteSystemPath;
 use turborepo_api_client::TokenClient;
 use turborepo_dirs::{config_dir, vercel_config_dir};
-use turborepo_ui::{cprintln, GREY};
+use turborepo_ui::{GREY, cprintln};
 
 use crate::{
-    Error, LogoutOptions, Token, TURBO_TOKEN_DIR, TURBO_TOKEN_FILE, VERCEL_TOKEN_DIR,
+    Error, LogoutOptions, TURBO_TOKEN_DIR, TURBO_TOKEN_FILE, Token, VERCEL_TOKEN_DIR,
     VERCEL_TOKEN_FILE,
 };
 
@@ -88,7 +88,7 @@ mod tests {
     use turborepo_api_client::Client;
     use turborepo_ui::ColorConfig;
     use turborepo_vercel_api::{
-        token::ResponseTokenMetadata, Team, TeamsResponse, UserResponse, VerifiedSsoUser,
+        Team, TeamsResponse, UserResponse, VerifiedSsoUser, token::ResponseTokenMetadata,
     };
     use url::Url;
 
