@@ -1,3 +1,7 @@
+//! Process ID lock file management used by the daemon
+//! Forked from the `pidlock` crate in order to add Windows support and the
+//! ability to query the owner of the pidlock.
+
 #![deny(clippy::all)]
 #![feature(assert_matches)]
 

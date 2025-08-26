@@ -1,3 +1,5 @@
+//! Environment variable filtering for tasks and hashing for cache keys.
+
 #![deny(clippy::all)]
 
 use std::{

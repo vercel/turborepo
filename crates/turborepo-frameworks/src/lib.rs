@@ -1,3 +1,7 @@
+//! Framework detection and configuration inference for Turborepo.
+//! Automatically identifies JavaScript frameworks and what environment
+//! variables impact it.
+
 use std::{collections::HashMap, sync::OnceLock};
 
 use serde::Deserialize;

@@ -1,3 +1,13 @@
+//! Package manager lockfile parsing, analysis, and serialization
+//!
+//! Parsing and analysis are used to track which external packages a workspace
+//! package depends on. This allows Turborepo to not perform a global
+//! invalidation on a lockfile change, but instead only the packages which
+//! depend on the changed external packages.
+//!
+//! Serialization is exclusively used by `turbo prune` and is far more error
+//! prone than deserialization and analysis.
+
 #![deny(clippy::all)]
 // the pest proc macro adds an empty doc comment.
 #![allow(clippy::empty_docs)]

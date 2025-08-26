@@ -1,4 +1,9 @@
-#![deny(clippy::all)]
+//! CI/CD vendor detection and vendor-specific behavior
+//! Detects CI vendors and provides:
+//! - Env var containing current commit SHA
+//! - Env var containing current branch
+//! - Env var containing current user
+//! - Any vendor specific behavior for producing well formatted logs
 
 mod vendor_behavior;
 mod vendors;

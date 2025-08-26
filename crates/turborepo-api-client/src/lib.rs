@@ -1,3 +1,7 @@
+//! HTTP client for interacting with the Remote Cache API.
+//! Provides authentication, caching, and telemetry endpoints for Remote Cache
+//! operations. By default configured for Vercel API
+
 #![feature(error_generic_member_access)]
 #![feature(assert_matches)]
 #![deny(clippy::all)]

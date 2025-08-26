@@ -1,3 +1,8 @@
+//! Glob pattern matching and directory walking
+//! This is a layer on top of `wax` that performs some corrections to user
+//! provided globs as well as escaping characters that `wax` considers special,
+//! but we do not support.
+
 #![feature(assert_matches)]
 #![deny(clippy::all)]
 
