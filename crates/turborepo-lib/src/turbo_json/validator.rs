@@ -1,10 +1,10 @@
 use miette::{NamedSource, SourceSpan};
 use turborepo_repository::package_graph::{PackageName, ROOT_PKG_NAME};
 
-use super::{Error, TurboJson, TOPOLOGICAL_PIPELINE_DELIMITER};
+use super::{Error, TOPOLOGICAL_PIPELINE_DELIMITER, TurboJson};
 use crate::config::UnnecessaryPackageTaskSyntaxError;
 
-pub type TurboJSONValidation = for<'a> fn(&'a TurboJson) -> Vec<Error>;
+pub type TurboJSONValidation = fn(&Validator, &TurboJson) -> Vec<Error>;
 
 /// Validator for TurboJson structures with context-aware validation
 pub struct Validator;
@@ -37,7 +37,7 @@ impl Validator {
         };
         validations
             .iter()
-            .flat_map(|validation| validation(turbo_json))
+            .flat_map(|validation| validation(self, turbo_json))
             .collect()
     }
 }
@@ -48,7 +48,10 @@ impl Default for Validator {
     }
 }
 
-pub fn validate_no_package_task_syntax(turbo_json: &TurboJson) -> Vec<Error> {
+pub fn validate_no_package_task_syntax(
+    _validator: &Validator,
+    turbo_json: &TurboJson,
+) -> Vec<Error> {
     turbo_json
         .tasks
         .iter()
@@ -65,7 +68,7 @@ pub fn validate_no_package_task_syntax(turbo_json: &TurboJson) -> Vec<Error> {
         .collect()
 }
 
-pub fn validate_extends(turbo_json: &TurboJson) -> Vec<Error> {
+pub fn validate_extends(_validator: &Validator, turbo_json: &TurboJson) -> Vec<Error> {
     match turbo_json.extends.first() {
         Some(package_name) if package_name != ROOT_PKG_NAME || turbo_json.extends.len() > 1 => {
             let (span, text) = turbo_json.extends.span_and_text("turbo.json");
@@ -95,7 +98,7 @@ pub fn validate_extends(turbo_json: &TurboJson) -> Vec<Error> {
     }
 }
 
-pub fn validate_with_has_no_topo(turbo_json: &TurboJson) -> Vec<Error> {
+pub fn validate_with_has_no_topo(_validator: &Validator, turbo_json: &TurboJson) -> Vec<Error> {
     turbo_json
         .tasks
         .iter()
@@ -141,7 +144,8 @@ mod test {
             ..Default::default()
         };
 
-        let errs = validate_with_has_no_topo(&turbo_json);
+        let validator = Validator::new();
+        let errs = validate_with_has_no_topo(&validator, &turbo_json);
         let error_messages: Vec<String> = errs.iter().map(|e| e.to_string()).collect();
         insta::assert_debug_snapshot!("validate_with_has_no_topo", error_messages);
     }
@@ -174,7 +178,8 @@ mod test {
             ..Default::default()
         };
 
-        let errs = validate_no_package_task_syntax(&turbo_json);
+        let validator = Validator::new();
+        let errs = validate_no_package_task_syntax(&validator, &turbo_json);
         let error_messages: Vec<String> = errs.iter().map(|e| e.to_string()).collect();
         let snapshot_name = format!("validate_no_package_task_syntax_{}", name);
         insta::assert_debug_snapshot!(snapshot_name, error_messages);
@@ -206,7 +211,8 @@ mod test {
             ..Default::default()
         };
 
-        let errs = validate_extends(&turbo_json);
+        let validator = Validator::new();
+        let errs = validate_extends(&validator, &turbo_json);
         let error_messages: Vec<String> = errs.iter().map(|e| e.to_string()).collect();
         let snapshot_name = format!("validate_extends_{}", name);
         insta::assert_debug_snapshot!(snapshot_name, error_messages);
