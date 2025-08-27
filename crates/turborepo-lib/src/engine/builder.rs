@@ -15,7 +15,7 @@ use crate::{
     task_graph::TaskDefinition,
     turbo_json::{
         validator::{validate_extends, validate_no_package_task_syntax, validate_with_has_no_topo},
-        ProcessedTaskDefinition, TurboJsonLoader,
+        ProcessedTaskDefinition, TurboJson, TurboJsonLoader,
     },
 };
 
@@ -580,12 +580,16 @@ impl<'a> EngineBuilder<'a> {
         task_id: &Spanned<TaskId>,
         task_name: &TaskName,
     ) -> Result<Vec<ProcessedTaskDefinition>, Error> {
+        let package_name = PackageName::from(task_id.package());
+        let mut turbo_json_chain =
+            Self::turbo_json_chain(turbo_json_loader, &package_name)?.into_iter();
         let mut task_definitions = Vec::new();
 
-        let root_turbo_json = turbo_json_loader.load(&PackageName::Root)?;
-        Error::from_validation(root_turbo_json.validate(&[validate_with_has_no_topo]))?;
-
-        if let Some(root_definition) = root_turbo_json.task(task_id, task_name)? {
+        if let Some(root_definition) = turbo_json_chain
+            .next()
+            .expect("root turbo.json is always in chain")
+            .task(task_id, task_name)?
+        {
             task_definitions.push(root_definition)
         }
 
@@ -605,23 +609,9 @@ impl<'a> EngineBuilder<'a> {
             };
         }
 
-        if task_id.package() != ROOT_PKG_NAME {
-            match turbo_json_loader.load(&PackageName::from(task_id.package())) {
-                Ok(workspace_json) => {
-                    Error::from_validation(workspace_json.validate(&[
-                        validate_no_package_task_syntax,
-                        validate_extends,
-                        validate_with_has_no_topo,
-                    ]))?;
-
-                    if let Some(workspace_def) = workspace_json.task(task_id, task_name)? {
-                        task_definitions.push(workspace_def);
-                    }
-                }
-                Err(config::Error::NoTurboJSON) => (),
-                Err(e) => {
-                    return Err(e.into());
-                }
+        if let Some(turbo_json) = turbo_json_chain.next() {
+            if let Some(workspace_def) = turbo_json.task(task_id, task_name)? {
+                task_definitions.push(workspace_def);
             }
         }
 
@@ -638,6 +628,32 @@ impl<'a> EngineBuilder<'a> {
         }
 
         Ok(task_definitions)
+    }
+
+    // Provide the chain of turbo.json's to load to fully resolve all extends for a
+    // package turbo.json.
+    fn turbo_json_chain<'b>(
+        turbo_json_loader: &'b TurboJsonLoader,
+        package_name: &PackageName,
+    ) -> Result<Vec<&'b TurboJson>, Error> {
+        let root_turbo_json = turbo_json_loader.load(&PackageName::Root)?;
+        Error::from_validation(root_turbo_json.validate(&[validate_with_has_no_topo]))?;
+        let workspace_json = match turbo_json_loader.load(package_name) {
+            Ok(turbo_json) if package_name == &PackageName::Root => None,
+            Ok(turbo_json) => {
+                Error::from_validation(turbo_json.validate(&[
+                    validate_no_package_task_syntax,
+                    validate_extends,
+                    validate_with_has_no_topo,
+                ]))?;
+                Some(turbo_json)
+            }
+            Err(config::Error::NoTurboJSON) => None,
+            Err(err) => return Err(err.into()),
+        };
+        let mut turbo_jsons = vec![root_turbo_json];
+        turbo_jsons.extend(workspace_json.into_iter());
+        Ok(turbo_jsons)
     }
 
     // Returns that path from a task's package directory to the repo root
