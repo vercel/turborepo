@@ -13,10 +13,7 @@ use super::Engine;
 use crate::{
     config,
     task_graph::TaskDefinition,
-    turbo_json::{
-        validator::{validate_extends, validate_no_package_task_syntax, validate_with_has_no_topo},
-        ProcessedTaskDefinition, TurboJson, TurboJsonLoader,
-    },
+    turbo_json::{validator::Validator, ProcessedTaskDefinition, TurboJson, TurboJsonLoader},
 };
 
 #[derive(Debug, thiserror::Error, Diagnostic)]
@@ -636,24 +633,26 @@ impl<'a> EngineBuilder<'a> {
         turbo_json_loader: &'b TurboJsonLoader,
         package_name: &PackageName,
     ) -> Result<Vec<&'b TurboJson>, Error> {
-        let root_turbo_json = turbo_json_loader.load(&PackageName::Root)?;
-        Error::from_validation(root_turbo_json.validate(&[validate_with_has_no_topo]))?;
-        let workspace_json = match turbo_json_loader.load(package_name) {
-            Ok(turbo_json) if package_name == &PackageName::Root => None,
+        let validator = Validator::new();
+
+        let mut turbo_jsons = vec![(
+            &PackageName::Root,
+            turbo_json_loader.load(&PackageName::Root)?,
+        )];
+
+        match turbo_json_loader.load(package_name) {
             Ok(turbo_json) => {
-                Error::from_validation(turbo_json.validate(&[
-                    validate_no_package_task_syntax,
-                    validate_extends,
-                    validate_with_has_no_topo,
-                ]))?;
-                Some(turbo_json)
+                turbo_jsons.push((package_name, turbo_json));
             }
-            Err(config::Error::NoTurboJSON) => None,
+            Err(config::Error::NoTurboJSON) => (),
             Err(err) => return Err(err.into()),
-        };
-        let mut turbo_jsons = vec![root_turbo_json];
-        turbo_jsons.extend(workspace_json.into_iter());
-        Ok(turbo_jsons)
+        }
+
+        for (package_name, turbo_json) in &turbo_jsons {
+            Error::from_validation(validator.validate_turbo_json(package_name, turbo_json))?;
+        }
+
+        Ok(turbo_jsons.into_iter().map(|(_, json)| json).collect())
     }
 
     // Returns that path from a task's package directory to the repo root

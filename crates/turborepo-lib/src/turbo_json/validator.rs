@@ -1,10 +1,52 @@
 use miette::{NamedSource, SourceSpan};
-use turborepo_repository::package_graph::ROOT_PKG_NAME;
+use turborepo_repository::package_graph::{PackageName, ROOT_PKG_NAME};
 
 use super::{Error, TurboJson, TOPOLOGICAL_PIPELINE_DELIMITER};
 use crate::config::UnnecessaryPackageTaskSyntaxError;
 
-pub type TurboJSONValidation = fn(&TurboJson) -> Vec<Error>;
+pub type TurboJSONValidation = for<'a> fn(&'a TurboJson) -> Vec<Error>;
+
+/// Validator for TurboJson structures with context-aware validation
+pub struct Validator;
+
+const ROOT_VALIDATIONS: &[TurboJSONValidation] = &[validate_with_has_no_topo];
+const PACKAGE_VALIDATIONS: &[TurboJSONValidation] = &[
+    validate_with_has_no_topo,
+    validate_no_package_task_syntax,
+    validate_extends,
+];
+
+impl Validator {
+    /// Creates a new validator instance
+    pub fn new() -> Self {
+        Self
+    }
+
+    /// Validates a TurboJson based on its package context
+    ///
+    /// Root turbo.json files have different validation rules than workspace
+    /// turbo.json files
+    pub fn validate_turbo_json(
+        &self,
+        package_name: &PackageName,
+        turbo_json: &TurboJson,
+    ) -> Vec<Error> {
+        let validations = match package_name {
+            PackageName::Root => ROOT_VALIDATIONS,
+            PackageName::Other(_) => PACKAGE_VALIDATIONS,
+        };
+        validations
+            .iter()
+            .flat_map(|validation| validation(turbo_json))
+            .collect()
+    }
+}
+
+impl Default for Validator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 pub fn validate_no_package_task_syntax(turbo_json: &TurboJson) -> Vec<Error> {
     turbo_json
@@ -72,6 +114,8 @@ pub fn validate_with_has_no_topo(turbo_json: &TurboJson) -> Vec<Error> {
 
 #[cfg(test)]
 mod test {
+    use std::assert_matches::assert_matches;
+
     use test_case::test_case;
     use turborepo_errors::Spanned;
     use turborepo_task_id::TaskName;
@@ -166,5 +210,40 @@ mod test {
         let error_messages: Vec<String> = errs.iter().map(|e| e.to_string()).collect();
         let snapshot_name = format!("validate_extends_{}", name);
         insta::assert_debug_snapshot!(snapshot_name, error_messages);
+    }
+
+    #[test]
+    fn test_validator_with_root_package() {
+        let validator = Validator::new();
+
+        // Root turbo.json can have package task syntax
+        let turbo_json = TurboJson {
+            tasks: Pipeline(
+                vec![(TaskName::from("app#build"), Spanned::default())]
+                    .into_iter()
+                    .collect(),
+            ),
+            ..Default::default()
+        };
+
+        let errs = validator.validate_turbo_json(&PackageName::Root, &turbo_json);
+        assert!(
+            errs.is_empty(),
+            "Root turbo.json should allow package task syntax"
+        );
+    }
+
+    #[test]
+    fn test_validator_with_missing_extends() {
+        let validator = Validator::new();
+
+        // Workspace turbo.json without extends should error
+        let turbo_json = TurboJson {
+            ..Default::default()
+        };
+
+        let errs = validator.validate_turbo_json(&PackageName::from("app"), &turbo_json);
+        assert_eq!(errs.len(), 1, "Workspace turbo.json should have extends");
+        assert_matches!(errs[0], Error::NoExtends { .. });
     }
 }
