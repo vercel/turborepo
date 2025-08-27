@@ -13,7 +13,7 @@ use super::Engine;
 use crate::{
     config,
     task_graph::TaskDefinition,
-    turbo_json::{validator::Validator, ProcessedTaskDefinition, TurboJson, TurboJsonLoader},
+    turbo_json::{ProcessedTaskDefinition, TurboJson, TurboJsonLoader, validator::Validator},
 };
 
 #[derive(Debug, thiserror::Error, Diagnostic)]
@@ -84,6 +84,16 @@ pub struct MissingRootTaskInTurboJsonError {
 }
 
 #[derive(Debug, thiserror::Error, Diagnostic)]
+#[error("Cannot extend from '{package_name}' without a package 'turbo.json'.")]
+pub struct MissingTurboJsonExtends {
+    package_name: String,
+    #[label("Extended from here")]
+    span: Option<SourceSpan>,
+    #[source_code]
+    text: NamedSource<String>,
+}
+
+#[derive(Debug, thiserror::Error, Diagnostic)]
 pub enum Error {
     #[error("Missing tasks in project")]
     MissingTasks(#[related] Vec<MissingTaskError>),
@@ -98,6 +108,9 @@ pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
     MissingPackageTask(Box<MissingPackageTaskError>),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    MissingTurboJsonExtends(Box<MissingTurboJsonExtends>),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Config(#[from] crate::config::Error),
@@ -634,25 +647,72 @@ impl<'a> EngineBuilder<'a> {
         package_name: &PackageName,
     ) -> Result<Vec<&'b TurboJson>, Error> {
         let validator = Validator::new();
+        let mut turbo_jsons = Vec::with_capacity(2);
 
-        let mut turbo_jsons = vec![(
-            &PackageName::Root,
-            turbo_json_loader.load(&PackageName::Root)?,
-        )];
+        enum ReadReq {
+            // An inferred check we perform for each package to see if there is a package specific
+            // turbo.json
+            Infer(PackageName),
+            // A specifically requested read from a package name being present in `extends`
+            Request(Spanned<PackageName>),
+        }
 
-        match turbo_json_loader.load(package_name) {
-            Ok(turbo_json) => {
-                turbo_jsons.push((package_name, turbo_json));
+        impl ReadReq {
+            fn package_name(&self) -> &PackageName {
+                match self {
+                    ReadReq::Infer(package_name) => package_name,
+                    ReadReq::Request(package_name) => package_name.as_inner(),
+                }
             }
-            Err(config::Error::NoTurboJSON) => (),
-            Err(err) => return Err(err.into()),
+
+            fn required(&self) -> Option<(Option<SourceSpan>, NamedSource<String>)> {
+                match self {
+                    ReadReq::Infer(_) => None,
+                    ReadReq::Request(spanned) => Some(spanned.span_and_text("turbo.json")),
+                }
+            }
         }
 
-        for (package_name, turbo_json) in &turbo_jsons {
-            Error::from_validation(validator.validate_turbo_json(package_name, turbo_json))?;
+        let mut read_stack = vec![ReadReq::Infer(package_name.clone())];
+
+        while let Some(read_req) = read_stack.pop() {
+            let package_name = read_req.package_name();
+            let turbo_json = turbo_json_loader
+                .load(package_name)
+                .map(Some)
+                .or_else(|err| {
+                    if let Some((span, text)) = read_req.required()
+                        && matches!(err, config::Error::NoTurboJSON)
+                    {
+                        Err(Error::MissingTurboJsonExtends(Box::new(
+                            MissingTurboJsonExtends {
+                                package_name: read_req.package_name().to_string(),
+                                span,
+                                text,
+                            },
+                        )))
+                    } else if matches!(err, config::Error::NoTurboJSON) {
+                        Ok(None)
+                    } else {
+                        Err(err.into())
+                    }
+                })?;
+            if let Some(turbo_json) = turbo_json {
+                Error::from_validation(validator.validate_turbo_json(package_name, turbo_json))?;
+                turbo_jsons.push(turbo_json);
+                // Add the new turbo.json we are extending from
+                let (extends, span) = turbo_json.extends.clone().split();
+                for package_name in extends {
+                    let package_name = PackageName::from(package_name);
+                    read_stack.push(ReadReq::Request(span.clone().to(package_name)));
+                }
+            } else if turbo_jsons.is_empty() {
+                // If there is no package turbo.json extend from root by default
+                read_stack.push(ReadReq::Infer(PackageName::Root));
+            }
         }
 
-        Ok(turbo_jsons.into_iter().map(|(_, json)| json).collect())
+        Ok(turbo_jsons.into_iter().rev().collect())
     }
 
     // Returns that path from a task's package directory to the repo root
@@ -1481,14 +1541,12 @@ mod test {
             },
         );
         let turbo_jsons = vec![(PackageName::Root, {
-            let mut t_json = turbo_json(json!({
+            turbo_json(json!({
                 "tasks": {
-                    "web#dev": { "persistent": true },
+                    "web#dev": { "persistent": true, "with": ["api#serve"] },
                     "api#serve": { "persistent": true }
                 }
-            }));
-            t_json.with_task(TaskName::from("web#dev"), &TaskName::from("api#serve"));
-            t_json
+            }))
         })]
         .into_iter()
         .collect();
