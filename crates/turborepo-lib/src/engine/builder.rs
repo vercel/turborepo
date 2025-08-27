@@ -13,7 +13,7 @@ use super::Engine;
 use crate::{
     config,
     task_graph::TaskDefinition,
-    turbo_json::{ProcessedTaskDefinition, TurboJson, TurboJsonLoader, validator::Validator},
+    turbo_json::{validator::Validator, ProcessedTaskDefinition, TurboJson, TurboJsonLoader},
 };
 
 #[derive(Debug, thiserror::Error, Diagnostic)]

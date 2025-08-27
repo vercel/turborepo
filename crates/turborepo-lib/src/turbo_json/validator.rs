@@ -1,7 +1,7 @@
 use miette::{NamedSource, SourceSpan};
 use turborepo_repository::package_graph::{PackageName, ROOT_PKG_NAME};
 
-use super::{Error, TOPOLOGICAL_PIPELINE_DELIMITER, TurboJson};
+use super::{Error, TurboJson, TOPOLOGICAL_PIPELINE_DELIMITER};
 use crate::config::UnnecessaryPackageTaskSyntaxError;
 
 pub type TurboJSONValidation = fn(&Validator, &TurboJson) -> Vec<Error>;
