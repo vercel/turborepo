@@ -35,7 +35,6 @@ pub use processed::ProcessedTaskDefinition;
 pub use raw::{
     RawPackageTurboJson, RawRemoteCacheOptions, RawRootTurboJson, RawTaskDefinition, RawTurboJson,
 };
-use validator::TurboJSONValidation;
 
 use crate::boundaries::BoundariesConfig;
 
@@ -418,13 +417,6 @@ impl TurboJson {
                 })
                 .transpose(),
         }
-    }
-
-    pub fn validate(&self, validations: &[TurboJSONValidation]) -> Vec<Error> {
-        validations
-            .iter()
-            .flat_map(|validation| validation(self))
-            .collect()
     }
 
     pub fn has_root_tasks(&self) -> bool {
