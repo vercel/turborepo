@@ -315,7 +315,7 @@ export async function create(
   // remove .git directory if --no-git flag is used
   if (noGit) {
     if (!removeGitDirectory(root)) {
-        logger.warn("Failed to remove '.git' directory")
+      logger.warn("Failed to remove '.git' directory");
     }
   }
 
