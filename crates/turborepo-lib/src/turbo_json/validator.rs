@@ -1,7 +1,7 @@
 use miette::{NamedSource, SourceSpan};
 use turborepo_repository::package_graph::{PackageName, ROOT_PKG_NAME};
 
-use super::{Error, TurboJson, TOPOLOGICAL_PIPELINE_DELIMITER};
+use super::{Error, TOPOLOGICAL_PIPELINE_DELIMITER, TurboJson};
 use crate::config::UnnecessaryPackageTaskSyntaxError;
 
 pub type TurboJSONValidation = fn(&Validator, &TurboJson) -> Vec<Error>;
@@ -69,33 +69,36 @@ pub fn validate_no_package_task_syntax(
 }
 
 pub fn validate_extends(_validator: &Validator, turbo_json: &TurboJson) -> Vec<Error> {
-    match turbo_json.extends.first() {
-        Some(package_name) if package_name != ROOT_PKG_NAME || turbo_json.extends.len() > 1 => {
-            let (span, text) = turbo_json.extends.span_and_text("turbo.json");
-            vec![Error::ExtendFromNonRoot { span, text }]
-        }
-        None => {
-            let path = turbo_json
-                .path
-                .as_ref()
-                .map_or("turbo.json", |p| p.as_ref());
+    if turbo_json.extends.is_empty() {
+        let path = turbo_json
+            .path
+            .as_ref()
+            .map_or("turbo.json", |p| p.as_ref());
 
-            let (span, text) = match turbo_json.text {
-                Some(ref text) => {
-                    let len = text.len();
-                    let span: SourceSpan = (0, len - 1).into();
-                    (Some(span), text.to_string())
-                }
-                None => (None, String::new()),
-            };
+        let (span, text) = match turbo_json.text {
+            Some(ref text) => {
+                let len = text.len();
+                let span: SourceSpan = (0, len - 1).into();
+                (Some(span), text.to_string())
+            }
+            None => (None, String::new()),
+        };
 
-            vec![Error::NoExtends {
-                span,
-                text: NamedSource::new(path, text),
-            }]
-        }
-        _ => vec![],
+        return vec![Error::NoExtends {
+            span,
+            text: NamedSource::new(path, text),
+        }];
     }
+    turbo_json
+        .extends
+        .iter()
+        .any(|package_name| package_name != ROOT_PKG_NAME)
+        .then(|| {
+            let (span, text) = turbo_json.extends.span_and_text("turbo.json");
+            Error::ExtendFromNonRoot { span, text }
+        })
+        .into_iter()
+        .collect()
 }
 
 pub fn validate_with_has_no_topo(_validator: &Validator, turbo_json: &TurboJson) -> Vec<Error> {
@@ -204,6 +207,10 @@ mod test {
     #[test_case(
         vec!["package-a", "package-b"],
         "multiple_extends_not_including_root"
+    )]
+    #[test_case(
+        vec!["some-package", "//"],
+        "extends_from_non_root_package_then_root"
     )]
     fn test_validate_extends(extends: Vec<&str>, name: &str) {
         let turbo_json = TurboJson {
