@@ -407,6 +407,7 @@ mod tests {
             items,
             &FutureFlags {
                 turbo_extends_keyword: true,
+                non_root_extends: false,
             },
         );
 
@@ -428,6 +429,7 @@ mod tests {
             items,
             &FutureFlags {
                 turbo_extends_keyword: false,
+                non_root_extends: false,
             },
         );
 
@@ -447,6 +449,7 @@ mod tests {
             items,
             &FutureFlags {
                 turbo_extends_keyword: true,
+                non_root_extends: false,
             },
         );
 
@@ -592,6 +595,7 @@ mod tests {
             raw_globs,
             &FutureFlags {
                 turbo_extends_keyword: true,
+                non_root_extends: false,
             },
         )
         .unwrap();
@@ -615,6 +619,7 @@ mod tests {
             raw_env,
             &FutureFlags {
                 turbo_extends_keyword: false,
+                non_root_extends: false,
             },
         );
         assert!(result.is_err());
@@ -634,6 +639,7 @@ mod tests {
             Spanned::new(raw_deps),
             &FutureFlags {
                 turbo_extends_keyword: false,
+                non_root_extends: false,
             },
         );
         assert!(result.is_err());

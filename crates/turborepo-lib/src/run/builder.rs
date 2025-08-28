@@ -541,6 +541,7 @@ impl RunBuilder {
         .with_root_tasks(root_turbo_json.tasks.keys().cloned())
         .with_tasks_only(self.opts.run_opts.only)
         .with_workspaces(filtered_pkgs.cloned().collect())
+        .with_future_flags(self.opts.future_flags)
         .with_tasks(tasks);
 
         if self.add_all_tasks {

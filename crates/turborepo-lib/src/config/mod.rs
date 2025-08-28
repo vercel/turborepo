@@ -140,6 +140,13 @@ pub enum Error {
         #[source_code]
         text: NamedSource<String>,
     },
+    #[error("You must extend from the root of the workspace first.")]
+    ExtendsRootFirst {
+        #[label("'//' should be first")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource<String>,
+    },
     #[error("`{field}` cannot contain an environment variable.")]
     InvalidDependsOnValue {
         field: &'static str,
