@@ -1,13 +1,15 @@
 use miette::{NamedSource, SourceSpan};
 use turborepo_repository::package_graph::{PackageName, ROOT_PKG_NAME};
 
-use super::{Error, TOPOLOGICAL_PIPELINE_DELIMITER, TurboJson};
+use super::{Error, FutureFlags, TurboJson, TOPOLOGICAL_PIPELINE_DELIMITER};
 use crate::config::UnnecessaryPackageTaskSyntaxError;
 
 pub type TurboJSONValidation = fn(&Validator, &TurboJson) -> Vec<Error>;
 
 /// Validator for TurboJson structures with context-aware validation
-pub struct Validator;
+pub struct Validator {
+    non_root_extends: bool,
+}
 
 const ROOT_VALIDATIONS: &[TurboJSONValidation] = &[validate_with_has_no_topo];
 const PACKAGE_VALIDATIONS: &[TurboJSONValidation] = &[
@@ -19,7 +21,14 @@ const PACKAGE_VALIDATIONS: &[TurboJSONValidation] = &[
 impl Validator {
     /// Creates a new validator instance
     pub fn new() -> Self {
-        Self
+        Self {
+            non_root_extends: false,
+        }
+    }
+
+    pub fn with_future_flags(mut self, future_flags: FutureFlags) -> Self {
+        self.non_root_extends = future_flags.non_root_extends;
+        self
     }
 
     /// Validates a TurboJson based on its package context
@@ -68,7 +77,7 @@ pub fn validate_no_package_task_syntax(
         .collect()
 }
 
-pub fn validate_extends(_validator: &Validator, turbo_json: &TurboJson) -> Vec<Error> {
+pub fn validate_extends(validator: &Validator, turbo_json: &TurboJson) -> Vec<Error> {
     if turbo_json.extends.is_empty() {
         let path = turbo_json
             .path
@@ -89,16 +98,41 @@ pub fn validate_extends(_validator: &Validator, turbo_json: &TurboJson) -> Vec<E
             text: NamedSource::new(path, text),
         }];
     }
-    turbo_json
-        .extends
-        .iter()
-        .any(|package_name| package_name != ROOT_PKG_NAME)
-        .then(|| {
-            let (span, text) = turbo_json.extends.span_and_text("turbo.json");
-            Error::ExtendFromNonRoot { span, text }
-        })
-        .into_iter()
-        .collect()
+    if let Some(package_name) = turbo_json.extends.first()
+        && package_name != ROOT_PKG_NAME
+        && validator.non_root_extends
+    {
+        let path = turbo_json
+            .path
+            .as_ref()
+            .map_or("turbo.json", |p| p.as_ref());
+
+        let (span, text) = match turbo_json.text {
+            Some(ref text) => {
+                let len = text.len();
+                let span: SourceSpan = (0, len - 1).into();
+                (Some(span), text.to_string())
+            }
+            None => (None, String::new()),
+        };
+        // Root needs to be first
+        return vec![Error::ExtendsRootFirst {
+            span,
+            text: NamedSource::new(path, text),
+        }];
+    }
+    // If we allow for non-root extends we don't need to perform this check
+    (!validator.non_root_extends
+        && turbo_json
+            .extends
+            .iter()
+            .any(|package_name| package_name != ROOT_PKG_NAME))
+    .then(|| {
+        let (span, text) = turbo_json.extends.span_and_text("turbo.json");
+        Error::ExtendFromNonRoot { span, text }
+    })
+    .into_iter()
+    .collect()
 }
 
 pub fn validate_with_has_no_topo(_validator: &Validator, turbo_json: &TurboJson) -> Vec<Error> {
@@ -218,11 +252,16 @@ mod test {
             ..Default::default()
         };
 
-        let validator = Validator::new();
-        let errs = validate_extends(&validator, &turbo_json);
-        let error_messages: Vec<String> = errs.iter().map(|e| e.to_string()).collect();
-        let snapshot_name = format!("validate_extends_{}", name);
-        insta::assert_debug_snapshot!(snapshot_name, error_messages);
+        for non_root_extends in [false, true] {
+            let validator = Validator { non_root_extends };
+            let errs = validate_extends(&validator, &turbo_json);
+            let error_messages: Vec<String> = errs.iter().map(|e| e.to_string()).collect();
+            let mut snapshot_name = format!("validate_extends_{}", name);
+            if non_root_extends {
+                snapshot_name.push_str("_true");
+            }
+            insta::assert_debug_snapshot!(snapshot_name, error_messages);
+        }
     }
 
     #[test]

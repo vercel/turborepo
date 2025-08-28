@@ -13,7 +13,9 @@ use super::Engine;
 use crate::{
     config,
     task_graph::TaskDefinition,
-    turbo_json::{validator::Validator, ProcessedTaskDefinition, TurboJson, TurboJsonLoader},
+    turbo_json::{
+        validator::Validator, FutureFlags, ProcessedTaskDefinition, TurboJson, TurboJsonLoader,
+    },
 };
 
 #[derive(Debug, thiserror::Error, Diagnostic)]
@@ -94,6 +96,16 @@ pub struct MissingTurboJsonExtends {
 }
 
 #[derive(Debug, thiserror::Error, Diagnostic)]
+#[error("Cyclic extends detected: {}", cycle.join(" -> "))]
+pub struct CyclicExtends {
+    cycle: Vec<String>,
+    #[label("Cycle detected here")]
+    span: Option<SourceSpan>,
+    #[source_code]
+    text: NamedSource<String>,
+}
+
+#[derive(Debug, thiserror::Error, Diagnostic)]
 pub enum Error {
     #[error("Missing tasks in project")]
     MissingTasks(#[related] Vec<MissingTaskError>),
@@ -111,6 +123,9 @@ pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
     MissingTurboJsonExtends(Box<MissingTurboJsonExtends>),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    CyclicExtends(Box<CyclicExtends>),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Config(#[from] crate::config::Error),
@@ -137,6 +152,7 @@ pub struct EngineBuilder<'a> {
     tasks_only: bool,
     add_all_tasks: bool,
     should_validate_engine: bool,
+    validator: Validator,
 }
 
 impl<'a> EngineBuilder<'a> {
@@ -157,7 +173,13 @@ impl<'a> EngineBuilder<'a> {
             tasks_only: false,
             add_all_tasks: false,
             should_validate_engine: true,
+            validator: Validator::new(),
         }
+    }
+
+    pub fn with_future_flags(mut self, future_flags: FutureFlags) -> Self {
+        self.validator = self.validator.with_future_flags(future_flags);
+        self
     }
 
     pub fn with_tasks_only(mut self, tasks_only: bool) -> Self {
@@ -591,8 +613,9 @@ impl<'a> EngineBuilder<'a> {
         task_name: &TaskName,
     ) -> Result<Vec<ProcessedTaskDefinition>, Error> {
         let package_name = PackageName::from(task_id.package());
-        let mut turbo_json_chain =
-            Self::turbo_json_chain(turbo_json_loader, &package_name)?.into_iter();
+        let mut turbo_json_chain = self
+            .turbo_json_chain(turbo_json_loader, &package_name)?
+            .into_iter();
         let mut task_definitions = Vec::new();
 
         if let Some(root_definition) = turbo_json_chain
@@ -619,7 +642,7 @@ impl<'a> EngineBuilder<'a> {
             };
         }
 
-        if let Some(turbo_json) = turbo_json_chain.next() {
+        for turbo_json in turbo_json_chain {
             if let Some(workspace_def) = turbo_json.task(task_id, task_name)? {
                 task_definitions.push(workspace_def);
             }
@@ -643,10 +666,11 @@ impl<'a> EngineBuilder<'a> {
     // Provide the chain of turbo.json's to load to fully resolve all extends for a
     // package turbo.json.
     fn turbo_json_chain<'b>(
+        &self,
         turbo_json_loader: &'b TurboJsonLoader,
         package_name: &PackageName,
     ) -> Result<Vec<&'b TurboJson>, Error> {
-        let validator = Validator::new();
+        let validator = &self.validator;
         let mut turbo_jsons = Vec::with_capacity(2);
 
         enum ReadReq {
@@ -673,10 +697,37 @@ impl<'a> EngineBuilder<'a> {
             }
         }
 
-        let mut read_stack = vec![ReadReq::Infer(package_name.clone())];
+        let mut read_stack = vec![(ReadReq::Infer(package_name.clone()), vec![])];
+        let mut visited = std::collections::HashSet::new();
 
-        while let Some(read_req) = read_stack.pop() {
+        while let Some((read_req, mut path)) = read_stack.pop() {
             let package_name = read_req.package_name();
+
+            // Check for cycle by seeing if this package is already in the current path
+            if let Some(cycle_index) = path.iter().position(|p: &PackageName| p == package_name) {
+                // Found a cycle - build the cycle portion for error
+                let mut cycle = path[cycle_index..]
+                    .iter()
+                    .map(|p| p.to_string())
+                    .collect::<Vec<_>>();
+                cycle.push(package_name.to_string());
+
+                let (span, text) = read_req
+                    .required()
+                    .unwrap_or_else(|| (None, NamedSource::new("turbo.json", String::new())));
+
+                return Err(Error::CyclicExtends(Box::new(CyclicExtends {
+                    cycle,
+                    span,
+                    text,
+                })));
+            }
+
+            // Skip if we've already fully processed this package
+            if visited.contains(package_name) {
+                continue;
+            }
+
             let turbo_json = turbo_json_loader
                 .load(package_name)
                 .map(Some)
@@ -700,15 +751,23 @@ impl<'a> EngineBuilder<'a> {
             if let Some(turbo_json) = turbo_json {
                 Error::from_validation(validator.validate_turbo_json(package_name, turbo_json))?;
                 turbo_jsons.push(turbo_json);
+                visited.insert(package_name.clone());
+
+                // Add current package to path for cycle detection
+                path.push(package_name.clone());
+
                 // Add the new turbo.json we are extending from
                 let (extends, span) = turbo_json.extends.clone().split();
-                for package_name in extends {
-                    let package_name = PackageName::from(package_name);
-                    read_stack.push(ReadReq::Request(span.clone().to(package_name)));
+                for extend_package in extends {
+                    let extend_package_name = PackageName::from(extend_package);
+                    read_stack.push((
+                        ReadReq::Request(span.clone().to(extend_package_name)),
+                        path.clone(),
+                    ));
                 }
             } else if turbo_jsons.is_empty() {
                 // If there is no package turbo.json extend from root by default
-                read_stack.push(ReadReq::Infer(PackageName::Root));
+                read_stack.push((ReadReq::Infer(PackageName::Root), path));
             }
         }
 
@@ -1738,5 +1797,64 @@ mod test {
                 .as_str(),
             "../.."
         );
+    }
+
+    #[test]
+    fn test_cyclic_extends() {
+        let repo_root_dir = TempDir::with_prefix("repo").unwrap();
+        let repo_root = AbsoluteSystemPathBuf::new(repo_root_dir.path().to_str().unwrap()).unwrap();
+        let package_graph = mock_package_graph(
+            &repo_root,
+            package_jsons! {
+                repo_root,
+                "app1" => [],
+                "app2" => []
+            },
+        );
+
+        // Create a self-referencing cycle: Root extends itself
+        let turbo_jsons = vec![
+            (
+                PackageName::Root,
+                turbo_json(json!({
+                    "extends": ["//"],  // Root extending itself creates a cycle
+                    "tasks": {
+                        "build": {}
+                    }
+                })),
+            ),
+            (
+                PackageName::from("app1"),
+                turbo_json(json!({
+                    "extends": ["//"],
+                    "tasks": {}
+                })),
+            ),
+            (
+                PackageName::from("app2"),
+                turbo_json(json!({
+                    "extends": ["//"],
+                    "tasks": {}
+                })),
+            ),
+        ]
+        .into_iter()
+        .collect();
+
+        let loader = TurboJsonLoader::noop(turbo_jsons);
+        let engine_result = EngineBuilder::new(&repo_root, &package_graph, &loader, false)
+            .with_tasks(Some(Spanned::new(TaskName::from("build"))))
+            .with_workspaces(vec![PackageName::from("app1")])
+            .build();
+
+        assert!(engine_result.is_err());
+        if let Err(Error::CyclicExtends(box CyclicExtends { cycle, .. })) = engine_result {
+            // The cycle should contain root (//) since it's a self-reference
+            assert!(cycle.contains(&"//".to_string()));
+            // Should have at least 2 entries to show the cycle (// -> //)
+            assert!(cycle.len() >= 2);
+        } else {
+            panic!("Expected CyclicExtends error, got {:?}", engine_result);
+        }
     }
 }

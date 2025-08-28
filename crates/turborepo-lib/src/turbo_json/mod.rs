@@ -1023,7 +1023,8 @@ mod tests {
         assert_eq!(
             future_flags.as_inner(),
             &FutureFlags {
-                turbo_extends_keyword: true
+                turbo_extends_keyword: true,
+                non_root_extends: false,
             }
         );
 
