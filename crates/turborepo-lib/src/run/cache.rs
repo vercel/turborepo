@@ -11,13 +11,13 @@ use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
 };
 use turborepo_cache::{
-    AsyncCache, CacheError, CacheHitMetadata, CacheOpts, CacheSource, http::UploadMap,
+    http::UploadMap, AsyncCache, CacheError, CacheHitMetadata, CacheOpts, CacheSource,
 };
 use turborepo_repository::package_graph::PackageInfo;
 use turborepo_scm::SCM;
 use turborepo_task_id::TaskId;
-use turborepo_telemetry::events::{TrackedErrors, task::PackageTaskEventBuilder};
-use turborepo_ui::{ColorConfig, ColorSelector, GREY, LogWriter, color, tui::event::CacheResult};
+use turborepo_telemetry::events::{task::PackageTaskEventBuilder, TrackedErrors};
+use turborepo_ui::{color, tui::event::CacheResult, ColorConfig, ColorSelector, LogWriter, GREY};
 
 use crate::{
     cli::OutputLogsMode,
