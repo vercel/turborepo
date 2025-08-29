@@ -19,7 +19,7 @@ export async function GET(): Promise<Response> {
     const processed = await processMarkdownContent(content);
     return `- [${data.title}](${formatFilePath(file)}): ${data.description}
 
-   ${processed}`;
+${processed}`;
   });
 
   const scanned = await Promise.all(scan);
