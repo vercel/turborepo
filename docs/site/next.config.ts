@@ -6,6 +6,11 @@ import { REDIRECTS_FOR_V2_DOCS } from "./lib/redirects/v2-docs.mjs";
 const withMDX = createMDX();
 const vercelToolbar = withVercelToolbar();
 
+const llmMarkdownRedirects = {
+  source: "/docs/:path*.md",
+  destination: "/llms.md/:path*",
+};
+
 const config: NextConfig = {
   reactStrictMode: true,
   images: {
@@ -40,17 +45,9 @@ const config: NextConfig = {
                 source: "/api/feedback",
                 destination: "https://vercel.com/api/feedback",
               },
-              {
-                source: "/docs/:path*.mdx",
-                destination: "/llms.mdx/:path*",
-              },
+              llmMarkdownRedirects,
             ]
-          : [
-              {
-                source: "/docs/:path*.md",
-                destination: "/llms.md/:path*",
-              },
-            ],
+          : [llmMarkdownRedirects],
     };
   },
   // Next.js still expects these to return Promises even without await
