@@ -3,7 +3,9 @@
 import * as fs from "node:fs/promises";
 import fg from "fast-glob";
 import matter from "gray-matter";
-import { PRODUCT_SLOGANS } from "../../lib/constants";
+import { remark } from "remark";
+import remarkStringify from "remark-stringify";
+import remarkMdx from "remark-mdx";
 
 export const revalidate = false;
 
@@ -16,29 +18,28 @@ export async function GET(): Promise<Response> {
     "!./content/docs/telemetry.mdx",
   ]);
 
-  const scan = files.sort().map(async (file) => {
+  const scan = files.map(async (file) => {
     const fileContent = await fs.readFile(file);
-    const { data } = matter(fileContent.toString());
+    const { content, data } = matter(fileContent.toString());
 
+    const processed = await processContent(content);
     return `- [${data.title}](${file
       .replace("./content/docs", "")
-      .replace(/\.mdx$/, ".md")}): ${data.description}`;
+      .replace(/\.mdx$/, ".md")}): ${data.description}
+
+   ${processed}`;
   });
 
   const scanned = await Promise.all(scan);
 
-  const header = `
-# Turborepo documentation
+  return new Response(scanned.join("\n\n"));
+}
 
-Generated at: ${new Date().toUTCString()}
+async function processContent(content: string): Promise<string> {
+  const file = await remark()
+    .use(remarkMdx)
+    .use(remarkStringify)
+    .process(content);
 
-## Turborepo
-
-> ${PRODUCT_SLOGANS.turbo}
-
-## Docs
-
-`;
-
-  return new Response(header.concat(scanned.join("\n")));
+  return String(file);
 }

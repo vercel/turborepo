@@ -40,8 +40,17 @@ const config: NextConfig = {
                 source: "/api/feedback",
                 destination: "https://vercel.com/api/feedback",
               },
+              {
+                source: "/docs/:path*.mdx",
+                destination: "/llms.mdx/:path*",
+              },
             ]
-          : undefined,
+          : [
+              {
+                source: "/docs/:path*.md",
+                destination: "/llms.md/:path*",
+              },
+            ],
     };
   },
   // Next.js still expects these to return Promises even without await
