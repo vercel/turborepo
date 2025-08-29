@@ -20,8 +20,7 @@ export async function GET(
   );
   const txt = await processMarkdownContent(content);
 
-  const header = `
-# ${data.title}
+  const header = `# ${data.title}
 Description: ${data.description}
 
 `;
