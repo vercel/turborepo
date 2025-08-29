@@ -1,0 +1,42 @@
+{
+  "lockfileVersion": 0,
+  "workspaces": {
+    "": {
+      "name": "bun-catalog-test",
+      "devDependencies": {
+        "turbo": "^2.3.3"
+      }
+    },
+    "apps/web": {
+      "name": "web",
+      "dependencies": {
+        "react": "catalog:",
+        "lodash": "catalog:"
+      }
+    },
+    "apps/docs": {
+      "name": "docs", 
+      "dependencies": {
+        "react": "catalog:frontend",
+        "next": "catalog:frontend"
+      }
+    }
+  },
+  "packages": {
+    "turbo": ["turbo@2.3.3", "", {}, "sha512-example"],
+    "react": ["react@18.2.0", "", {}, "sha512-react"],
+    "lodash": ["lodash@4.17.21", "", {}, "sha512-lodash"],
+    "docs/react": ["react@19.0.0", "", {}, "sha512-react19"],
+    "docs/next": ["next@14.0.0", "", {}, "sha512-next14"]
+  },
+  "catalog": {
+    "react": "^18.2.0",
+    "lodash": "^4.17.21"
+  },
+  "catalogs": {
+    "frontend": {
+      "react": "^19.0.0",
+      "next": "^14.0.0"
+    }
+  }
+}
