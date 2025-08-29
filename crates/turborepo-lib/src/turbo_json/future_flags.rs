@@ -28,6 +28,7 @@ use struct_iterable::Iterable;
 /// before it becomes the default behavior in a future version.
 #[derive(Serialize, Default, Debug, Copy, Clone, Iterable, Deserializable, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
+#[deserializable()]
 pub struct FutureFlags {
     /// Enable `$TURBO_EXTENDS$`
     ///
@@ -35,6 +36,12 @@ pub struct FutureFlags {
     /// This will change the default behavior of overriding the field to instead
     /// append.
     pub turbo_extends_keyword: bool,
+    /// Enable extending from a non-root `turbo.json`
+    ///
+    /// When enabled, allows using extends targeting `turbo.json`s other than
+    /// root. All `turbo.json` must still extend from the root `turbo.json`
+    /// first.
+    pub non_root_extends: bool,
 }
 
 impl FutureFlags {

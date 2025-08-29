@@ -13,15 +13,15 @@ Run build with package task in non-root turbo.json
         unnecessary-package-task-syntax)
         
           x "my-app#build". Use "build" instead.
-            ,-\(apps(\/|\\)my-app(\/|\\)turbo.json:8:21\) (re)
-          7 |         // this comment verifies that turbo can read .json files
+            ,-\(apps(\/|\\)my-app(\/|\\)turbo.json:6:21\) (re)
+          5 |         // this comment verifies that turbo can read .json files
         with comments
-          8 | ,->     "my-app#build": {
-          9 | |         "outputs": ("banana.txt", "apple.json"),
-         10 | |         "inputs": ("$TURBO_DEFAULT$", ".env.local")
-         11 | |->     }
+          6 | ,->     "my-app#build": {
+          7 | |         "outputs": ("banana.txt", "apple.json"),
+          8 | |         "inputs": ("$TURBO_DEFAULT$", ".env.local")
+          9 | |->     }
             : `---- unnecessary package syntax found here
-         12 |       }
+         10 |       }
             `----
   
 

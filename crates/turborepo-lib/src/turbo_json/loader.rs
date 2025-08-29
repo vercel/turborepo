@@ -1000,6 +1000,76 @@ mod test {
     }
 
     #[test]
+    fn test_context_aware_parsing() {
+        // Test that the reader correctly determines root vs package contexts
+        let root_dir = tempdir().unwrap();
+        let repo_root = AbsoluteSystemPath::from_std_path(root_dir.path()).unwrap();
+
+        // Create a root turbo.json with root-only fields
+        let root_turbo_json = repo_root.join_component("turbo.json");
+        root_turbo_json
+            .create_with_contents(
+                r#"{
+            "globalEnv": ["NODE_ENV"],
+            "tasks": {"build": {}}
+        }"#,
+            )
+            .unwrap();
+
+        // Create a package turbo.json with extends
+        let pkg_dir = repo_root.join_components(&["packages", "foo"]);
+        pkg_dir.create_dir_all().unwrap();
+        let pkg_turbo_json = pkg_dir.join_component("turbo.json");
+        pkg_turbo_json
+            .create_with_contents(
+                r#"{
+            "extends": ["//"],
+            "tasks": {"test": {}}
+        }"#,
+            )
+            .unwrap();
+
+        let reader = TurboJsonReader::new(repo_root.to_owned());
+
+        // Reading root turbo.json should work with globalEnv
+        let root_result = reader.read(&root_turbo_json);
+        assert!(root_result.is_ok());
+        let root_json = root_result.unwrap().unwrap();
+        assert!(!root_json.global_env.is_empty());
+
+        // Reading package turbo.json should work with extends
+        let pkg_result = reader.read(&pkg_turbo_json);
+        assert!(pkg_result.is_ok());
+        let pkg_json = pkg_result.unwrap().unwrap();
+        assert!(!pkg_json.extends.is_empty());
+
+        // Now test invalid cases
+        // Root turbo.json with extends should fail
+        root_turbo_json
+            .create_with_contents(
+                r#"{
+            "extends": ["//"],
+            "tasks": {"build": {}}
+        }"#,
+            )
+            .unwrap();
+        let invalid_root = reader.read(&root_turbo_json);
+        assert!(invalid_root.is_err());
+
+        // Package turbo.json with globalEnv should fail
+        pkg_turbo_json
+            .create_with_contents(
+                r#"{
+            "globalEnv": ["NODE_ENV"],
+            "tasks": {"test": {}}
+        }"#,
+            )
+            .unwrap();
+        let invalid_pkg = reader.read(&pkg_turbo_json);
+        assert!(invalid_pkg.is_err());
+    }
+
+    #[test]
     fn test_invalid_workspace_turbo_json() {
         let root_dir = tempdir().unwrap();
         let repo_root = AbsoluteSystemPath::from_std_path(root_dir.path()).unwrap();

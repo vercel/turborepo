@@ -18,7 +18,10 @@ use turborepo_unescape::UnescapedString;
 
 use crate::{
     boundaries::{BoundariesConfig, Permissions, Rule},
-    turbo_json::{Pipeline, RawRemoteCacheOptions, RawTaskDefinition, RawTurboJson, Spanned},
+    turbo_json::{
+        Pipeline, RawPackageTurboJson, RawRemoteCacheOptions, RawRootTurboJson, RawTaskDefinition,
+        RawTurboJson, Spanned,
+    },
 };
 
 #[derive(Debug, Error, Diagnostic)]
@@ -87,63 +90,6 @@ impl DeserializationVisitor for PipelineVisitor {
         }
 
         Some(Pipeline(result))
-    }
-}
-
-impl WithMetadata for RawTurboJson {
-    fn add_text(&mut self, text: Arc<str>) {
-        self.span.add_text(text.clone());
-        self.extends.add_text(text.clone());
-        self.tags.add_text(text.clone());
-        if let Some(tags) = &mut self.tags {
-            tags.value.add_text(text.clone());
-        }
-        self.global_dependencies.add_text(text.clone());
-        self.global_env.add_text(text.clone());
-        self.global_pass_through_env.add_text(text.clone());
-        self.boundaries.add_text(text.clone());
-        if let Some(boundaries) = &mut self.boundaries {
-            boundaries.value.add_text(text.clone());
-        }
-
-        self.tasks.add_text(text.clone());
-        self.cache_dir.add_text(text.clone());
-        self.pipeline.add_text(text.clone());
-        self.remote_cache.add_text(text.clone());
-        self.ui.add_text(text.clone());
-        self.allow_no_package_manager.add_text(text.clone());
-        self.daemon.add_text(text.clone());
-        self.env_mode.add_text(text.clone());
-        self.no_update_notifier.add_text(text.clone());
-        self.concurrency.add_text(text.clone());
-        self.future_flags.add_text(text);
-    }
-
-    fn add_path(&mut self, path: Arc<str>) {
-        self.span.add_path(path.clone());
-        self.extends.add_path(path.clone());
-        self.tags.add_path(path.clone());
-        if let Some(tags) = &mut self.tags {
-            tags.value.add_path(path.clone());
-        }
-        self.global_dependencies.add_path(path.clone());
-        self.global_env.add_path(path.clone());
-        self.global_pass_through_env.add_path(path.clone());
-        self.boundaries.add_path(path.clone());
-        if let Some(boundaries) = &mut self.boundaries {
-            boundaries.value.add_path(path.clone());
-        }
-        self.tasks.add_path(path.clone());
-        self.cache_dir.add_path(path.clone());
-        self.pipeline.add_path(path.clone());
-        self.remote_cache.add_path(path.clone());
-        self.ui.add_path(path.clone());
-        self.allow_no_package_manager.add_path(path.clone());
-        self.daemon.add_path(path.clone());
-        self.env_mode.add_path(path.clone());
-        self.no_update_notifier.add_path(path.clone());
-        self.concurrency.add_path(path.clone());
-        self.future_flags.add_path(path);
     }
 }
 
@@ -309,65 +255,178 @@ impl WithMetadata for RawRemoteCacheOptions {
     }
 }
 
-impl RawTurboJson {
-    // A simple helper for tests
-    #[cfg(test)]
-    pub fn parse_from_serde(value: serde_json::Value) -> Result<RawTurboJson, Error> {
-        let json_string = serde_json::to_string(&value).expect("should be able to serialize");
-        Self::parse(&json_string, "turbo.json")
-    }
-    /// Parses a turbo.json file into the raw representation with span info
-    /// attached.
-    ///
-    /// # Arguments
-    ///
-    /// * `text`: The text contents of the turbo.json file
-    /// * `file_path`: The path to the turbo.json file. Just used for error
-    ///   display, so doesn't need to actually be a correct path.
-    ///
-    /// returns: Result<RawTurboJson, Error>
-    pub fn parse(text: &str, file_path: &str) -> Result<RawTurboJson, Error> {
-        let result = deserialize_from_json_str::<RawTurboJson>(
-            text,
-            JsonParserOptions::default()
-                .with_allow_comments()
-                .with_allow_trailing_commas(),
-            file_path,
-        );
-
-        if !result.diagnostics().is_empty() {
-            let diagnostics = result
-                .into_diagnostics()
-                .into_iter()
-                .map(|d| {
-                    d.with_file_source_code(text)
-                        .with_file_path(file_path)
-                        .as_ref()
-                        .into()
-                })
-                .collect();
-
-            return Err(Error {
-                diagnostics,
-                backtrace: backtrace::Backtrace::capture(),
-            });
+impl WithMetadata for RawRootTurboJson {
+    fn add_text(&mut self, text: Arc<str>) {
+        self.span.add_text(text.clone());
+        self.tags.add_text(text.clone());
+        if let Some(tags) = &mut self.tags {
+            tags.value.add_text(text.clone());
+        }
+        self.global_dependencies.add_text(text.clone());
+        self.global_env.add_text(text.clone());
+        self.global_pass_through_env.add_text(text.clone());
+        self.boundaries.add_text(text.clone());
+        if let Some(boundaries) = &mut self.boundaries {
+            boundaries.value.add_text(text.clone());
         }
 
-        // It's highly unlikely that biome would fail to produce a deserialized value
-        // *and* not return any errors, but it's still possible. In that case, we
-        // just print that there is an error and return.
-        let mut turbo_json = result.into_deserialized().ok_or_else(|| Error {
-            diagnostics: vec![],
-            backtrace: backtrace::Backtrace::capture(),
-        })?;
+        self.tasks.add_text(text.clone());
+        self.cache_dir.add_text(text.clone());
+        self.pipeline.add_text(text.clone());
+        self.remote_cache.add_text(text.clone());
+        self.ui.add_text(text.clone());
+        self.allow_no_package_manager.add_text(text.clone());
+        self.daemon.add_text(text.clone());
+        self.env_mode.add_text(text.clone());
+        self.no_update_notifier.add_text(text.clone());
+        self.concurrency.add_text(text.clone());
+        self.future_flags.add_text(text);
+    }
+
+    fn add_path(&mut self, path: Arc<str>) {
+        self.span.add_path(path.clone());
+        self.tags.add_path(path.clone());
+        if let Some(tags) = &mut self.tags {
+            tags.value.add_path(path.clone());
+        }
+        self.global_dependencies.add_path(path.clone());
+        self.global_env.add_path(path.clone());
+        self.global_pass_through_env.add_path(path.clone());
+        self.boundaries.add_path(path.clone());
+        if let Some(boundaries) = &mut self.boundaries {
+            boundaries.value.add_path(path.clone());
+        }
+        self.tasks.add_path(path.clone());
+        self.cache_dir.add_path(path.clone());
+        self.pipeline.add_path(path.clone());
+        self.remote_cache.add_path(path.clone());
+        self.ui.add_path(path.clone());
+        self.allow_no_package_manager.add_path(path.clone());
+        self.daemon.add_path(path.clone());
+        self.env_mode.add_path(path.clone());
+        self.no_update_notifier.add_path(path.clone());
+        self.concurrency.add_path(path.clone());
+        self.future_flags.add_path(path);
+    }
+}
+
+impl WithMetadata for RawPackageTurboJson {
+    fn add_text(&mut self, text: Arc<str>) {
+        self.span.add_text(text.clone());
+        self.extends.add_text(text.clone());
+        self.tags.add_text(text.clone());
+        if let Some(tags) = &mut self.tags {
+            tags.value.add_text(text.clone());
+        }
+        self.boundaries.add_text(text.clone());
+        if let Some(boundaries) = &mut self.boundaries {
+            boundaries.value.add_text(text.clone());
+        }
+        self.tasks.add_text(text.clone());
+        self.pipeline.add_text(text);
+    }
+
+    fn add_path(&mut self, path: Arc<str>) {
+        self.span.add_path(path.clone());
+        self.extends.add_path(path.clone());
+        self.tags.add_path(path.clone());
+        if let Some(tags) = &mut self.tags {
+            tags.value.add_path(path.clone());
+        }
+        self.boundaries.add_path(path.clone());
+        if let Some(boundaries) = &mut self.boundaries {
+            boundaries.value.add_path(path.clone());
+        }
+        self.tasks.add_path(path.clone());
+        self.pipeline.add_path(path);
+    }
+}
+
+impl RawRootTurboJson {
+    pub fn parse(text: &str, file_path: &str) -> Result<Self, Error> {
+        let turbo_json = parse_turbo_json::<RawRootTurboJson>(text, file_path)?;
 
         if turbo_json.experimental_spaces.is_some() {
             warn!("`experimentalSpaces` key in turbo.json is deprecated and does not do anything")
         }
 
-        turbo_json.add_text(Arc::from(text));
-        turbo_json.add_path(Arc::from(file_path));
-
         Ok(turbo_json)
+    }
+}
+
+impl RawPackageTurboJson {
+    pub fn parse(text: &str, file_path: &str) -> Result<Self, Error> {
+        parse_turbo_json::<RawPackageTurboJson>(text, file_path)
+    }
+}
+
+impl RawTurboJson {
+    // A simple helper for tests
+    #[cfg(test)]
+    pub fn parse_from_serde(value: serde_json::Value) -> Result<RawTurboJson, Error> {
+        let json_string = serde_json::to_string(&value).expect("should be able to serialize");
+        let raw_root = RawRootTurboJson::parse(&json_string, "turbo.json")?;
+        Ok(Self::from(raw_root))
+    }
+}
+
+fn parse_turbo_json<T: Deserializable + WithMetadata>(
+    text: &str,
+    file_path: &str,
+) -> Result<T, Error> {
+    let result = deserialize_from_json_str::<T>(
+        text,
+        JsonParserOptions::default()
+            .with_allow_comments()
+            .with_allow_trailing_commas(),
+        file_path,
+    );
+
+    if !result.diagnostics().is_empty() {
+        let diagnostics = result
+            .into_diagnostics()
+            .into_iter()
+            .map(|d| {
+                d.with_file_source_code(text)
+                    .with_file_path(file_path)
+                    .as_ref()
+                    .into()
+            })
+            .collect();
+
+        return Err(Error {
+            diagnostics,
+            backtrace: backtrace::Backtrace::capture(),
+        });
+    }
+
+    let mut turbo_json = result.into_deserialized().ok_or_else(|| Error {
+        diagnostics: vec![],
+        backtrace: backtrace::Backtrace::capture(),
+    })?;
+    turbo_json.add_text(Arc::from(text));
+    turbo_json.add_path(Arc::from(file_path));
+
+    Ok(turbo_json)
+}
+
+#[cfg(test)]
+mod tests {
+    use insta::assert_snapshot;
+    use test_case::test_case;
+
+    use super::*;
+
+    #[test_case(r#"{"daemon": true}"#; "daemon in package turbo.json")]
+    fn test_root_only_fields_in_package_turbo_json(json: &str) {
+        let result = RawPackageTurboJson::parse(json, "packages/foo/turbo.json");
+        assert!(result.is_err());
+
+        let report = miette::Report::new(result.unwrap_err());
+        let mut msg = String::new();
+        miette::NarratableReportHandler::new()
+            .render_report(&mut msg, report.as_ref())
+            .unwrap();
+        assert_snapshot!(msg);
     }
 }
