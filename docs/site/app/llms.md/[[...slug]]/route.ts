@@ -1,9 +1,9 @@
 // This file is mostly a copy-paste from https://fumadocs.vercel.app/docs/ui/llms.
 
-import * as fs from "node:fs/promises";
 import { notFound } from "next/navigation";
 import { type NextRequest } from "next/server";
 import { repoDocsPages } from "../../source";
+import { parseFileContent, processMarkdownContent } from "../../lib/llms-utils";
 
 export const revalidate = false;
 
@@ -15,8 +15,9 @@ export async function GET(
   const page = repoDocsPages.getPage(slug);
   if (!page) notFound();
 
-  const fileContent = await fs.readFile(page.data._file.absolutePath);
-  return new Response(fileContent);
+  const { content } = await parseFileContent(page.data._file.absolutePath);
+  const txt = await processMarkdownContent(content);
+  return new Response(txt);
 }
 
 export function generateStaticParams() {
