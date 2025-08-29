@@ -15,9 +15,18 @@ export async function GET(
   const page = repoDocsPages.getPage(slug);
   if (!page) notFound();
 
-  const { content } = await parseFileContent(page.data._file.absolutePath);
+  const { data, content } = await parseFileContent(
+    page.data._file.absolutePath
+  );
   const txt = await processMarkdownContent(content);
-  return new Response(txt);
+
+  const header = `
+# ${data.title}
+Description: ${data.description}
+
+`;
+
+  return new Response(header.concat(txt));
 }
 
 export function generateStaticParams() {
