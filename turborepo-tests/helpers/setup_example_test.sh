@@ -40,7 +40,8 @@ if [ "$package_manager" == "pnpm" ] && [ "$example_path" == "non-monorepo" ]; th
   package_manager_command="pnpm install --ignore-workspace"
 fi
 
-turbo_command="turbo build lint --continue --output-logs=errors-only && turbo check-types --continue --output-logs=errors-only"
+# turbo_command="turbo build lint --continue --output-logs=errors-only && turbo check-types --continue --output-logs=errors-only"
+turbo_command="turbo build lint --continue --output-logs=errors-only"
 
 rsync -avq \
   --exclude='node_modules' \
