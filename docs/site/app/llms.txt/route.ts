@@ -1,28 +1,22 @@
 // This file is mostly a copy-paste from https://fumadocs.vercel.app/docs/ui/llms.
 
-import * as fs from "node:fs/promises";
-import fg from "fast-glob";
-import matter from "gray-matter";
+import {
+  scanDocumentationFiles,
+  parseFileContent,
+  formatFilePath,
+} from "../lib/llms-utils";
 import { PRODUCT_SLOGANS } from "../../lib/constants";
 
 export const revalidate = false;
 
 export async function GET(): Promise<Response> {
   // all scanned content
-  const files = await fg([
-    "./content/docs/**/*.mdx",
-    "!./content/docs/acknowledgments.mdx",
-    "!./content/docs/community.mdx",
-    "!./content/docs/telemetry.mdx",
-  ]);
+  const files = await scanDocumentationFiles();
 
   const scan = files.sort().map(async (file) => {
-    const fileContent = await fs.readFile(file);
-    const { data } = matter(fileContent.toString());
+    const { data } = await parseFileContent(file);
 
-    return `- [${data.title}](${file
-      .replace("./content/docs", "")
-      .replace(/\.mdx$/, ".md")}): ${data.description}`;
+    return `- [${data.title}](${formatFilePath(file)}): ${data.description}`;
   });
 
   const scanned = await Promise.all(scan);

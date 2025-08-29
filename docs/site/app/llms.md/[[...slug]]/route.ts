@@ -2,7 +2,7 @@
 
 import * as fs from "node:fs/promises";
 import { notFound } from "next/navigation";
-import { type NextRequest, NextResponse } from "next/server";
+import { type NextRequest } from "next/server";
 import { repoDocsPages } from "../../source";
 
 export const revalidate = false;
@@ -16,7 +16,7 @@ export async function GET(
   if (!page) notFound();
 
   const fileContent = await fs.readFile(page.data._file.absolutePath);
-  return new NextResponse(fileContent);
+  return new Response(fileContent);
 }
 
 export function generateStaticParams() {

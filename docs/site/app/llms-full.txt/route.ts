@@ -1,31 +1,23 @@
 // This file is mostly a copy-paste from https://fumadocs.vercel.app/docs/ui/llms.
 
-import * as fs from "node:fs/promises";
-import fg from "fast-glob";
-import matter from "gray-matter";
-import { remark } from "remark";
-import remarkStringify from "remark-stringify";
-import remarkMdx from "remark-mdx";
+import {
+  scanDocumentationFiles,
+  parseFileContent,
+  processMarkdownContent,
+  formatFilePath,
+} from "../lib/llms-utils";
 
 export const revalidate = false;
 
 export async function GET(): Promise<Response> {
   // all scanned content
-  const files = await fg([
-    "./content/docs/**/*.mdx",
-    "!./content/docs/acknowledgments.mdx",
-    "!./content/docs/community.mdx",
-    "!./content/docs/telemetry.mdx",
-  ]);
+  const files = await scanDocumentationFiles();
 
   const scan = files.map(async (file) => {
-    const fileContent = await fs.readFile(file);
-    const { content, data } = matter(fileContent.toString());
+    const { content, data } = await parseFileContent(file);
 
-    const processed = await processContent(content);
-    return `- [${data.title}](${file
-      .replace("./content/docs", "")
-      .replace(/\.mdx$/, ".md")}): ${data.description}
+    const processed = await processMarkdownContent(content);
+    return `- [${data.title}](${formatFilePath(file)}): ${data.description}
 
    ${processed}`;
   });
@@ -33,13 +25,4 @@ export async function GET(): Promise<Response> {
   const scanned = await Promise.all(scan);
 
   return new Response(scanned.join("\n\n"));
-}
-
-async function processContent(content: string): Promise<string> {
-  const file = await remark()
-    .use(remarkMdx)
-    .use(remarkStringify)
-    .process(content);
-
-  return String(file);
 }
