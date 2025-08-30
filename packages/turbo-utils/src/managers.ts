@@ -1,7 +1,7 @@
 import os from "node:os";
 import type { Options } from "execa";
 import execa from "execa";
-import type { PackageManager } from "./types";
+import type { PackageManager } from "./types.js";
 
 async function exec(command: string, args: Array<string> = [], opts?: Options) {
   // run the check from tmpdir to avoid corepack conflicting -
