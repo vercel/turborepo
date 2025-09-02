@@ -45,7 +45,7 @@ You'll need a directory to put the package in. Let's create one at `./packages/m
 Next, create the `package.json` for the package. By adding this file, you'll fulfill [the two requirements for an Internal Package](/docs/crafting-your-repository/structuring-a-repository#specifying-packages-in-a-monorepo), making it discoverable to Turborepo and the rest of your Workspace.
 
 <Callout type="warn">
-  **Critical**: The `name` field in your `package.json` determines how your package can be imported throughout your workspace. The name you choose here (e.g., `@repo/math`) is exactly how other packages will import it (e.g., `import { add } from '@repo/math/add'`). Simply adding a `package.json` file is not enough - the `name` field must be correctly set for your package to be discoverable.
+The `name` field in your `package.json` determines how your package can be imported throughout your workspace. The name you choose here (e.g. `@repo/math`) is exactly how other packages will import it (e.g. `import { add } from '@repo/math/add'`).
 </Callout>
 
 <PackageManagerTabs>
