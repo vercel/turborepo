@@ -337,17 +337,6 @@ The `@repo/math` package built before the `web` application built so that the ru
 </Step>
 </Steps>
 
-## Troubleshooting
-
-### Package not found or import errors
-
-If you're encountering import errors or your package isn't being discovered, check these common issues:
-
-- **Verify the `name` field**: Ensure the `name` in your `package.json` matches exactly how you're trying to import it. For example, if your package.json has `"name": "@repo/math"`, you must import it as `import { add } from '@repo/math/add'`.
-- **Check workspace configuration**: Make sure your package is located in a directory that's included in your workspace configuration (e.g., `pnpm-workspace.yaml`, `lerna.json`, or Yarn workspaces).
-- **Run package manager install**: After creating a new package or changing dependencies, run your package manager's install command (`pnpm install`, `npm install`, etc.) to update the workspace's lockfile.
-- **Verify the package location**: Ensure your package directory is in the correct location according to your workspace configuration (typically `packages/*` or `apps/*`).
-
 ## Best practices for Internal Packages
 
 ### One "purpose" per package
