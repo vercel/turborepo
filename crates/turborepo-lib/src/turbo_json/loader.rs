@@ -199,13 +199,15 @@ impl TurboJsonLoader {
                 micro_frontends_configs,
             } => {
                 let turbo_json_path = packages.get(package).ok_or_else(|| Error::NoTurboJSON)?;
+                let is_root = package == &PackageName::Root;
                 let turbo_json = load_from_file(
                     reader,
-                    if package == &PackageName::Root {
+                    if is_root {
                         LoadTurboJsonPath::File(turbo_json_path)
                     } else {
                         LoadTurboJsonPath::Dir(turbo_json_path)
                     },
+                    is_root,
                 );
                 if let Some(mfe_configs) = micro_frontends_configs {
                     mfe_configs.update_turbo_json(package, turbo_json)
@@ -288,6 +290,7 @@ enum LoadTurboJsonPath<'a> {
 fn load_from_file(
     reader: &TurboJsonReader,
     turbo_json_path: LoadTurboJsonPath,
+    is_root: bool,
 ) -> Result<TurboJson, Error> {
     let result = match turbo_json_path {
         LoadTurboJsonPath::Dir(turbo_json_dir_path) => {
@@ -295,12 +298,12 @@ fn load_from_file(
             let turbo_jsonc_path = turbo_json_dir_path.join_component(CONFIG_FILE_JSONC);
 
             // Load both turbo.json and turbo.jsonc
-            let turbo_json = reader.read(&turbo_json_path);
-            let turbo_jsonc = reader.read(&turbo_jsonc_path);
+            let turbo_json = reader.read(&turbo_json_path, is_root);
+            let turbo_jsonc = reader.read(&turbo_jsonc_path, is_root);
 
             select_turbo_json(turbo_json_dir_path, turbo_json, turbo_jsonc)
         }
-        LoadTurboJsonPath::File(turbo_json_path) => reader.read(turbo_json_path),
+        LoadTurboJsonPath::File(turbo_json_path) => reader.read(turbo_json_path, is_root),
     };
 
     // Handle errors or success
@@ -318,7 +321,7 @@ fn load_from_root_package_json(
     turbo_json_path: &AbsoluteSystemPath,
     root_package_json: &PackageJson,
 ) -> Result<TurboJson, Error> {
-    let mut turbo_json = match reader.read(turbo_json_path) {
+    let mut turbo_json = match reader.read(turbo_json_path, true) {
         // we're synthesizing, but we have a starting point
         // Note: this will have to change to support task inference in a monorepo
         // for now, we're going to error on any "root" tasks and turn non-root tasks into root
@@ -415,7 +418,7 @@ fn load_task_access_trace_turbo_json(
     root_package_json: &PackageJson,
 ) -> Result<TurboJson, Error> {
     let trace_json_path = reader.repo_root().join_components(&TASK_ACCESS_CONFIG_PATH);
-    let turbo_from_trace = reader.read(&trace_json_path);
+    let turbo_from_trace = reader.read(&trace_json_path, true);
 
     // check the zero config case (turbo trace file, but no turbo.json file)
     if let Ok(Some(turbo_from_trace)) = turbo_from_trace {
@@ -472,8 +475,12 @@ impl TurboJsonReader {
         self
     }
 
-    pub fn read(&self, path: &AbsoluteSystemPath) -> Result<Option<TurboJson>, Error> {
-        TurboJson::read(&self.repo_root, path, self.future_flags)
+    pub fn read(
+        &self,
+        path: &AbsoluteSystemPath,
+        is_root: bool,
+    ) -> Result<Option<TurboJson>, Error> {
+        TurboJson::read(&self.repo_root, path, is_root, self.future_flags)
     }
 
     pub fn repo_root(&self) -> &AbsoluteSystemPath {
@@ -946,7 +953,7 @@ mod test {
         turbo_jsonc_path.create_with_contents("{}")?;
 
         // Test load_from_file with turbo.json path
-        let result = load_from_file(&reader, LoadTurboJsonPath::Dir(repo_root));
+        let result = load_from_file(&reader, LoadTurboJsonPath::Dir(repo_root), true);
 
         // The function should return an error when both files exist
         assert!(result.is_err());
@@ -974,7 +981,7 @@ mod test {
         turbo_json_path.create_with_contents("{}")?;
 
         // Test load_from_file
-        let result = load_from_file(&reader, LoadTurboJsonPath::Dir(repo_root));
+        let result = load_from_file(&reader, LoadTurboJsonPath::Dir(repo_root), true);
 
         assert!(result.is_ok());
 
@@ -992,7 +999,7 @@ mod test {
         turbo_jsonc_path.create_with_contents("{}")?;
 
         // Test load_from_file
-        let result = load_from_file(&reader, LoadTurboJsonPath::Dir(repo_root));
+        let result = load_from_file(&reader, LoadTurboJsonPath::Dir(repo_root), true);
 
         assert!(result.is_ok());
 
@@ -1032,13 +1039,13 @@ mod test {
         let reader = TurboJsonReader::new(repo_root.to_owned());
 
         // Reading root turbo.json should work with globalEnv
-        let root_result = reader.read(&root_turbo_json);
+        let root_result = reader.read(&root_turbo_json, true);
         assert!(root_result.is_ok());
         let root_json = root_result.unwrap().unwrap();
         assert!(!root_json.global_env.is_empty());
 
         // Reading package turbo.json should work with extends
-        let pkg_result = reader.read(&pkg_turbo_json);
+        let pkg_result = reader.read(&pkg_turbo_json, false);
         assert!(pkg_result.is_ok());
         let pkg_json = pkg_result.unwrap().unwrap();
         assert!(!pkg_json.extends.is_empty());
@@ -1053,7 +1060,7 @@ mod test {
         }"#,
             )
             .unwrap();
-        let invalid_root = reader.read(&root_turbo_json);
+        let invalid_root = reader.read(&root_turbo_json, true);
         assert!(invalid_root.is_err());
 
         // Package turbo.json with globalEnv should fail
@@ -1065,7 +1072,7 @@ mod test {
         }"#,
             )
             .unwrap();
-        let invalid_pkg = reader.read(&pkg_turbo_json);
+        let invalid_pkg = reader.read(&pkg_turbo_json, false);
         assert!(invalid_pkg.is_err());
     }
 

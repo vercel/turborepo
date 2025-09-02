@@ -228,14 +228,12 @@ impl RawTurboJson {
     pub(super) fn read(
         repo_root: &AbsoluteSystemPath,
         path: &AbsoluteSystemPath,
+        is_root: bool,
     ) -> Result<Option<RawTurboJson>, Error> {
         let Some(contents) = path.read_existing_to_string()? else {
             return Ok(None);
         };
 
-        // Determine if this is a root turbo.json by checking if its parent is the repo
-        // root
-        let is_root = repo_root.is_parent(path);
         // Anchoring the path can fail if the path resides outside of the repository
         // Just display absolute path in that case.
         let root_relative_path = repo_root.anchor(path).map_or_else(
