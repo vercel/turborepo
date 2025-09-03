@@ -201,10 +201,10 @@ impl GitRepo {
          *
          * So environment variable is empty in a regular commit
          */
-        if let Ok(pr) = base_ref_env.github_base_ref {
-            if !pr.is_empty() {
-                return Some(pr);
-            }
+        if let Ok(pr) = base_ref_env.github_base_ref
+            && !pr.is_empty()
+        {
+            return Some(pr);
         }
 
         // we must be in a push event
@@ -429,10 +429,10 @@ mod tests {
     use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError};
     use which::which;
 
-    use super::{previous_content, CIEnv, InvalidRange};
+    use super::{CIEnv, InvalidRange, previous_content};
     use crate::{
-        git::{GitHubCommit, GitHubEvent},
         Error, GitRepo, SCM,
+        git::{GitHubCommit, GitHubEvent},
     };
 
     fn setup_repository(
@@ -560,23 +560,27 @@ mod tests {
             .output()?;
         assert!(output.status.success());
 
-        assert!(changed_files(
-            tmp_dir.path().to_owned(),
-            tmp_dir.path().to_owned(),
-            Some("HEAD~1"),
-            Some("HEAD"),
-            false,
-        )
-        .is_ok());
+        assert!(
+            changed_files(
+                tmp_dir.path().to_owned(),
+                tmp_dir.path().to_owned(),
+                Some("HEAD~1"),
+                Some("HEAD"),
+                false,
+            )
+            .is_ok()
+        );
 
-        assert!(changed_files(
-            tmp_dir.path().to_owned(),
-            tmp_dir.path().to_owned(),
-            Some("HEAD"),
-            None,
-            true,
-        )
-        .is_ok());
+        assert!(
+            changed_files(
+                tmp_dir.path().to_owned(),
+                tmp_dir.path().to_owned(),
+                Some("HEAD"),
+                None,
+                true,
+            )
+            .is_ok()
+        );
 
         Ok(())
     }

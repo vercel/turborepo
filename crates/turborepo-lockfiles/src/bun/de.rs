@@ -108,7 +108,7 @@ mod test {
     use test_case::test_case;
 
     use super::*;
-    use crate::{bun::WorkspaceEntry, BunLockfile};
+    use crate::{BunLockfile, bun::WorkspaceEntry};
 
     macro_rules! fixture {
         ($name:ident, $kind:ty, $cons:expr) => {

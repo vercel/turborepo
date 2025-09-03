@@ -108,8 +108,8 @@ mod test {
     use std::{assert_matches::assert_matches, time::Duration};
 
     use crate::{
-        retry::{make_retryable_request, RetryStrategy},
         Error,
+        retry::{RetryStrategy, make_retryable_request},
     };
 
     #[tokio::test]

@@ -1,44 +1,38 @@
 // This file is mostly a copy-paste from https://fumadocs.vercel.app/docs/ui/llms.
 
-import * as fs from "node:fs/promises";
-import fg from "fast-glob";
-import matter from "gray-matter";
-import { remark } from "remark";
-import remarkStringify from "remark-stringify";
-import remarkMdx from "remark-mdx";
+import {
+  scanDocumentationFiles,
+  parseFileContent,
+  formatFilePath,
+} from "../lib/llms-utils";
+import { PRODUCT_SLOGANS } from "../../lib/constants";
 
 export const revalidate = false;
 
 export async function GET(): Promise<Response> {
   // all scanned content
-  const files = await fg([
-    "./content/docs/**/*.mdx",
-    "!./content/docs/acknowledgments.mdx",
-    "!./content/docs/community.mdx",
-    "!./content/docs/telemetry.mdx",
-  ]);
+  const files = await scanDocumentationFiles();
 
-  const scan = files.map(async (file) => {
-    const fileContent = await fs.readFile(file);
-    const { content, data } = matter(fileContent.toString());
+  const scan = files.sort().map(async (file) => {
+    const { data } = await parseFileContent(file);
 
-    const processed = await processContent(content);
-    return `file: ${file}
-   meta: ${JSON.stringify(data, null, 2)}
-
-   ${processed}`;
+    return `- [${data.title}](${formatFilePath(file)}): ${data.description}`;
   });
 
   const scanned = await Promise.all(scan);
 
-  return new Response(scanned.join("\n\n"));
-}
+  const header = `
+# Turborepo documentation
 
-async function processContent(content: string): Promise<string> {
-  const file = await remark()
-    .use(remarkMdx)
-    .use(remarkStringify)
-    .process(content);
+Generated at: ${new Date().toUTCString()}
 
-  return String(file);
+## Turborepo
+
+> ${PRODUCT_SLOGANS.turbo}
+
+## Docs
+
+`;
+
+  return new Response(header.concat(scanned.join("\n")));
 }

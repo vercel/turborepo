@@ -38,7 +38,9 @@ impl<W: Write> LogWriter<W> {
             Error::CannotWriteLogs(err)
         })?;
 
-        self.log_file = Some(BufWriter::new(log_file));
+        // We keep the buffer smaller to ensure the log file does not too far behind the
+        // displayed logs.
+        self.log_file = Some(BufWriter::with_capacity(512, log_file));
 
         Ok(())
     }
@@ -170,8 +172,8 @@ mod tests {
     use turbopath::AbsoluteSystemPathBuf;
 
     use crate::{
-        logs::replay_logs, replay_logs_with_crlf, ColorConfig, LogWriter, PrefixedUI,
-        PrefixedWriter, BOLD, CYAN,
+        BOLD, CYAN, ColorConfig, LogWriter, PrefixedUI, PrefixedWriter, logs::replay_logs,
+        replay_logs_with_crlf,
     };
 
     #[test]

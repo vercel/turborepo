@@ -61,7 +61,7 @@ impl Parser {
     /// Returns a reference to an `EntireScreen` object containing the
     /// terminal state where all contents including scrollback and displayed.
     #[must_use]
-    pub fn entire_screen(&self) -> crate::EntireScreen {
+    pub fn entire_screen(&self) -> crate::EntireScreen<'_> {
         crate::EntireScreen::new(self.screen())
     }
 }

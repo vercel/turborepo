@@ -14,7 +14,7 @@ use crate::{
         OutputLogsMode, RunArgs,
     },
     config::{ConfigurationOptions, CONFIG_FILE},
-    turbo_json::UIMode,
+    turbo_json::{FutureFlags, UIMode},
     Args,
 };
 
@@ -77,6 +77,7 @@ pub struct Opts {
     pub runcache_opts: RunCacheOpts,
     pub scope_opts: ScopeOpts,
     pub tui_opts: TuiOpts,
+    pub future_flags: FutureFlags,
 }
 
 impl Opts {
@@ -180,6 +181,7 @@ impl Opts {
         let api_client_opts = APIClientOpts::from(inputs);
         let repo_opts = RepoOpts::from(inputs);
         let tui_opts = TuiOpts::from(inputs);
+        let future_flags = config.future_flags();
 
         Ok(Self {
             repo_opts,
@@ -189,6 +191,7 @@ impl Opts {
             runcache_opts,
             api_client_opts,
             tui_opts,
+            future_flags,
         })
     }
 }
@@ -248,7 +251,7 @@ pub struct TaskArgs<'a> {
 }
 
 impl RunOpts {
-    pub fn task_args(&self) -> TaskArgs {
+    pub fn task_args(&self) -> TaskArgs<'_> {
         TaskArgs {
             pass_through_args: &self.pass_through_args,
             tasks: &self.tasks,
@@ -747,6 +750,7 @@ mod test {
             cache_opts,
             runcache_opts,
             tui_opts,
+            future_flags: Default::default(),
         };
         let synthesized = opts.synthesize_command();
         assert_eq!(synthesized, expected);

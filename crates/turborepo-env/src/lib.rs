@@ -1,3 +1,5 @@
+//! Environment variable filtering for tasks and hashing for cache keys.
+
 #![deny(clippy::all)]
 
 use std::{
@@ -309,10 +311,10 @@ fn wildcard_to_regex_pattern(pattern: &str) -> String {
                 regex_string.push(regex::escape(&pattern[previous_index..i]));
 
                 // Add a dynamic segment if it isn't adjacent to another dynamic segment.
-                if let Some(last_segment) = regex_string.last() {
-                    if last_segment != REGEX_WILDCARD_SEGMENT {
-                        regex_string.push(REGEX_WILDCARD_SEGMENT.to_string());
-                    }
+                if let Some(last_segment) = regex_string.last()
+                    && last_segment != REGEX_WILDCARD_SEGMENT
+                {
+                    regex_string.push(REGEX_WILDCARD_SEGMENT.to_string());
                 }
             }
 

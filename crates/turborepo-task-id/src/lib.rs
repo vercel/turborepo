@@ -1,3 +1,17 @@
+//! Identifiers for Turborepo tasks
+//!
+//! Consists of `TaskName`s and `TaskId`s
+//! `TaskId`s are fully qualified tasks that include the package and the task
+//! name e.g. `turbo#build` is the `build` task for the `turbo` package.
+//!
+//! `TaskName`s are what we accept as a user input for a "task".
+//! They do not need to be fully qualified, but can be.
+//! For example `dependsOn` takes `TaskName`s which allows for
+//! `"dependsOn": ["build", "schema#gen"]` where the package's build task is run
+//! along with the `schema` package's `gen` task.
+//!
+//! All `TaskId`s are valid `TaskName`s, but not vice versa.
+
 use std::{
     borrow::{Borrow, Cow},
     fmt,
@@ -104,7 +118,7 @@ impl<'a> TaskId<'a> {
         &self.task
     }
 
-    pub fn as_non_workspace_task_name(&self) -> TaskName {
+    pub fn as_non_workspace_task_name(&self) -> TaskName<'_> {
         let task: &str = &self.task;
         TaskName {
             package: None,
@@ -112,7 +126,7 @@ impl<'a> TaskId<'a> {
         }
     }
 
-    pub fn as_task_name(&self) -> TaskName {
+    pub fn as_task_name(&self) -> TaskName<'_> {
         let package: &str = &self.package;
         let task: &str = &self.task;
         TaskName {
@@ -130,7 +144,7 @@ impl<'a> TaskId<'a> {
     }
 
     /// Borrows a TaskId reference as a TaskId
-    pub fn as_borrowed(&self) -> TaskId {
+    pub fn as_borrowed(&self) -> TaskId<'_> {
         let TaskId { package, task } = self;
         let package = shorten_cow(package);
         let task = shorten_cow(task);

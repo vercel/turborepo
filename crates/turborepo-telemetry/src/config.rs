@@ -16,7 +16,7 @@ use sha2::{Digest, Sha256};
 use tracing::{error, trace};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_dirs::config_dir;
-use turborepo_ui::{color, ColorConfig, BOLD, GREY, UNDERLINE};
+use turborepo_ui::{BOLD, ColorConfig, GREY, UNDERLINE, color};
 use uuid::Uuid;
 
 static DEBUG_ENV_VAR: &str = "TURBO_TELEMETRY_DEBUG";

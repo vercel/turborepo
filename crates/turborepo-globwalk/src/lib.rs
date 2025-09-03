@@ -1,3 +1,8 @@
+//! Glob pattern matching and directory walking
+//! This is a layer on top of `wax` that performs some corrections to user
+//! provided globs as well as escaping characters that `wax` considers special,
+//! but we do not support.
+
 #![feature(assert_matches)]
 #![deny(clippy::all)]
 
@@ -17,7 +22,7 @@ use rayon::prelude::*;
 use regex::Regex;
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError, RelativeUnixPath};
-use wax::{walk::FileIterator, BuildError, Glob};
+use wax::{BuildError, Glob, walk::FileIterator};
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum WalkType {
@@ -57,7 +62,7 @@ fn glob_literals() -> &'static Regex {
     RE.get_or_init(|| Regex::new(r"(?<literal>[\?\*\$:<>\(\)\[\]{},])").unwrap())
 }
 
-fn escape_glob_literals(literal_glob: &str) -> Cow<str> {
+fn escape_glob_literals(literal_glob: &str) -> Cow<'_, str> {
     glob_literals().replace_all(literal_glob, "\\$literal")
 }
 
@@ -169,7 +174,7 @@ pub fn fix_glob_pattern(pattern: &str) -> String {
 ///
 /// also returns the position in the path of the first encountered collapse,
 /// for the purposes of calculating the new base path
-fn collapse_path(path: &str) -> Option<(Cow<str>, usize)> {
+fn collapse_path(path: &str) -> Option<(Cow<'_, str>, usize)> {
     let mut stack: Vec<&str> = vec![];
     let mut changed = false;
     let is_root = path.starts_with('/');
@@ -481,8 +486,8 @@ mod test {
     use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 
     use crate::{
-        add_doublestar_to_dir, collapse_path, escape_glob_literals, fix_glob_pattern, globwalk,
-        Settings, ValidatedGlob, WalkError, WalkType,
+        Settings, ValidatedGlob, WalkError, WalkType, add_doublestar_to_dir, collapse_path,
+        escape_glob_literals, fix_glob_pattern, globwalk,
     };
 
     #[cfg(unix)]
@@ -1520,7 +1525,7 @@ mod test {
 
     #[test]
     #[cfg(not(windows))] // Windows doesn't support ':' at all, so just test not-Windows for correct
-                         // behavior
+    // behavior
     fn test_weird_filenames() {
         let files = &[
             "apps/foo",

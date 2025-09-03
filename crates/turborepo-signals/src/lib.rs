@@ -11,7 +11,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use futures::{stream::FuturesUnordered, Stream, StreamExt};
+use futures::{Stream, StreamExt, stream::FuturesUnordered};
 use signals::Signal;
 use tokio::{
     pin,

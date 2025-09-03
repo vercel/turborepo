@@ -84,6 +84,7 @@ use walkdir::{DirEntry, Error, WalkDir};
 
 pub use crate::walk::glob::{GlobEntry, GlobWalker};
 use crate::{
+    BuildError, Pattern,
     walk::{
         filter::{
             CancelWalk, HierarchicalIterator, Isomeric, SeparatingFilter, SeparatingFilterInput,
@@ -91,7 +92,6 @@ use crate::{
         },
         glob::FilterAny,
     },
-    BuildError, Pattern,
 };
 
 type FileFiltrate<T> = Result<T, WalkError>;
@@ -1083,16 +1083,16 @@ impl From<EntryResidue> for TreeResidue<()> {
 mod tests {
     use std::{collections::HashSet, path::PathBuf};
 
-    use build_fs_tree::{dir, file, Build, FileSystemTree};
+    use build_fs_tree::{Build, FileSystemTree, dir, file};
     use path_slash::PathBufExt;
     use tempfile::TempDir;
 
     use crate::{
-        walk::{
-            filter::{HierarchicalIterator, Separation, TreeResidue},
-            Entry, FileIterator, LinkBehavior, PathExt, WalkBehavior,
-        },
         Glob,
+        walk::{
+            Entry, FileIterator, LinkBehavior, PathExt, WalkBehavior,
+            filter::{HierarchicalIterator, Separation, TreeResidue},
+        },
     };
 
     macro_rules! assert_set_eq {
