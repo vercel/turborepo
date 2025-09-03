@@ -176,7 +176,7 @@ impl<'t> MatchedText<'t> {
         }
     }
 
-    pub fn to_candidate_path(&self) -> CandidatePath {
+    pub fn to_candidate_path(&self) -> CandidatePath<'_> {
         CandidatePath::from(self.complete())
     }
 }

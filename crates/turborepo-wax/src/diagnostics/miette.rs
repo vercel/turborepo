@@ -9,10 +9,10 @@ use tardar::{
 use thiserror::Error;
 
 use crate::{
+    Checked, Glob,
     diagnostics::SpanExt as _,
     rule,
     token::{self, TokenKind, TokenTree, Tokenized},
-    Checked, Glob,
 };
 
 /// APIs for diagnosing globs.
@@ -150,9 +150,11 @@ mod tests {
         let glob = Glob::new("../foo").unwrap();
         let diagnostics: Vec<_> = glob.diagnose().collect();
 
-        assert!(diagnostics.iter().any(|diagnostic| diagnostic
-            .code()
-            .map_or(false, |code| code.to_string() == CODE_SEMANTIC_LITERAL)));
+        assert!(diagnostics.iter().any(|diagnostic| {
+            diagnostic
+                .code()
+                .map_or(false, |code| code.to_string() == CODE_SEMANTIC_LITERAL)
+        }));
     }
 
     #[test]
@@ -160,8 +162,10 @@ mod tests {
         let glob = Glob::new("**/foo/").unwrap();
         let diagnostics: Vec<_> = glob.diagnose().collect();
 
-        assert!(diagnostics.iter().any(|diagnostic| diagnostic
-            .code()
-            .map_or(false, |code| code.to_string() == CODE_TERMINATING_SEPARATOR)));
+        assert!(diagnostics.iter().any(|diagnostic| {
+            diagnostic
+                .code()
+                .map_or(false, |code| code.to_string() == CODE_TERMINATING_SEPARATOR)
+        }));
     }
 }

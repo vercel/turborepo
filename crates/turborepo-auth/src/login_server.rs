@@ -2,7 +2,7 @@ use std::{net::SocketAddr, sync::Arc};
 
 use anyhow::Result;
 use async_trait::async_trait;
-use axum::{extract::Query, response::Redirect, routing::get, Router};
+use axum::{Router, extract::Query, response::Redirect, routing::get};
 use serde::Deserialize;
 use tokio::sync::OnceCell;
 use url::Url;

@@ -16,12 +16,12 @@ struct Args {
 /// Find the llvm-profdata binary using rustup
 fn find_llvm_profdata() -> Result<std::path::PathBuf> {
     // First try to find it in PATH
-    if let Ok(output) = Command::new("which").arg("llvm-profdata").output() {
-        if output.status.success() {
-            let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            if !path.is_empty() {
-                return Ok(std::path::PathBuf::from(path));
-            }
+    if let Ok(output) = Command::new("which").arg("llvm-profdata").output()
+        && output.status.success()
+    {
+        let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if !path.is_empty() {
+            return Ok(std::path::PathBuf::from(path));
         }
     }
 
@@ -108,12 +108,12 @@ fn find_llvm_profdata() -> Result<std::path::PathBuf> {
 /// Find the llvm-cov binary using the same approach as llvm-profdata
 fn find_llvm_cov() -> Result<std::path::PathBuf> {
     // First try to find it in PATH
-    if let Ok(output) = Command::new("which").arg("llvm-cov").output() {
-        if output.status.success() {
-            let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            if !path.is_empty() {
-                return Ok(std::path::PathBuf::from(path));
-            }
+    if let Ok(output) = Command::new("which").arg("llvm-cov").output()
+        && output.status.success()
+    {
+        let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if !path.is_empty() {
+            return Ok(std::path::PathBuf::from(path));
         }
     }
 
@@ -228,22 +228,18 @@ fn main() -> Result<()> {
 
     let mut object_args = Vec::new();
     for line in binaries_json.lines() {
-        if let Ok(json) = serde_json::from_str::<serde_json::Value>(line) {
-            if let Some(profile) = json.get("profile") {
-                if let Some(test) = profile.get("test") {
-                    if test.as_bool() == Some(true) {
-                        if let Some(filenames) = json.get("filenames") {
-                            if let Some(filenames_array) = filenames.as_array() {
-                                for filename in filenames_array {
-                                    if let Some(path) = filename.as_str() {
-                                        if !path.contains("dSYM") {
-                                            object_args.push(format!("--object={path}"));
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
+        if let Ok(json) = serde_json::from_str::<serde_json::Value>(line)
+            && let Some(profile) = json.get("profile")
+            && let Some(test) = profile.get("test")
+            && test.as_bool() == Some(true)
+            && let Some(filenames) = json.get("filenames")
+            && let Some(filenames_array) = filenames.as_array()
+        {
+            for filename in filenames_array {
+                if let Some(path) = filename.as_str()
+                    && !path.contains("dSYM")
+                {
+                    object_args.push(format!("--object={path}"));
                 }
             }
         }

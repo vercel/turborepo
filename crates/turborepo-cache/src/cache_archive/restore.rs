@@ -6,14 +6,14 @@ use tar::Entry;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 
 use crate::{
+    CacheError,
     cache_archive::{
-        restore_directory::{restore_directory, CachedDirTree},
+        restore_directory::{CachedDirTree, restore_directory},
         restore_regular::restore_regular,
         restore_symlink::{
             canonicalize_linkname, restore_symlink, restore_symlink_allow_missing_target,
         },
     },
-    CacheError,
 };
 
 pub struct CacheReader<'a> {
@@ -185,7 +185,7 @@ mod tests {
 
     use anyhow::Result;
     use tar::Header;
-    use tempfile::{tempdir, TempDir};
+    use tempfile::{TempDir, tempdir};
     use test_case::test_case;
     use tracing::debug;
     use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
