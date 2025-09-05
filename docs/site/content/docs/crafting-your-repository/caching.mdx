@@ -220,6 +220,16 @@ It's possible to create scenarios where caching ends up being slower than not ca
 
 While these situations are rare, be sure to test the behavior of your projects to determine if disabling caching in specific places provides a performance benefit.
 
+### Remote cache unreachable
+
+If Remote Caching is configured but cannot be reached (for example due to network errors, incorrect configuration, or the remote service being down), Turborepo now reports a one-time error early in the run:
+
+```text
+Cannot access remote cache (connection failed). Falling back to local cache if available.
+```
+
+After this, Turborepo disables further remote cache attempts for the current run and continues using the local cache when enabled. This avoids long runs where every workspace silently reports a cache miss.
+
 ## Next steps
 
 Now that you've seen how Turborepo's caching makes your repository faster, let's take a look at how to develop applications and libraries in your Turborepo.
