@@ -605,6 +605,12 @@ impl<W> App<W> {
         task.parser.screen_mut().set_scrollback(0);
         Ok(())
     }
+
+    pub fn clear_task_logs(&mut self) -> Result<(), Error> {
+        let task = self.get_full_task_mut()?;
+        task.clear_logs();
+        Ok(())
+    }
 }
 
 impl<W: Write> App<W> {
@@ -898,6 +904,9 @@ fn update(
             app.is_task_selection_pinned = true;
             app.scroll_momentum.reset();
             app.jump_to_logs_bottom()?;
+        }
+        Event::ClearLogs => {
+            app.clear_task_logs()?;
         }
         Event::EnterInteractive => {
             app.is_task_selection_pinned = true;
