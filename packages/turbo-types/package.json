@@ -13,10 +13,28 @@
   "bugs": {
     "url": "https://github.com/vercel/turborepo/issues"
   },
-  "main": "src/index.ts",
-  "types": "src/index.ts",
+  "type": "module",
+  "main": "dist/cjs/index.js",
+  "module": "dist/esm/index.js",
+  "types": "dist/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js",
+      "default": "./dist/esm/index.js"
+    },
+    "./src/json/frameworks.json": {
+      "import": "./src/json/frameworks.json",
+      "default": "./src/json/frameworks.json"
+    }
+  },
   "scripts": {
-    "build": "tsc && pnpm generate-schema",
+    "build": "pnpm build:esm && pnpm build:cjs && pnpm build:types && pnpm post-build && pnpm generate-schema",
+    "post-build": "echo '{ \"type\": \"commonjs\" }' > dist/cjs/package.json",
+    "build:esm": "tsc -p tsconfig.json",
+    "build:cjs": "tsc -p tsconfig.cjs.json",
+    "build:types": "tsc -p tsconfig.types.json",
     "lint": "eslint src/",
     "lint:prettier": "prettier -c . --cache",
     "generate-schema": "tsx scripts/generate-schema.ts",
