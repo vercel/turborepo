@@ -9,10 +9,10 @@ use std::{
 use biome_deserialize_macros::Deserializable;
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::{
-    builder::NonEmptyStringValueParser, ArgAction, ArgGroup, CommandFactory, Parser, Subcommand,
-    ValueEnum,
+    ArgAction, ArgGroup, CommandFactory, Parser, Subcommand, ValueEnum,
+    builder::NonEmptyStringValueParser,
 };
-use clap_complete::{generate, Shell};
+use clap_complete::{Shell, generate};
 pub use error::Error;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, error, log::warn};
@@ -20,16 +20,17 @@ use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::AnonAPIClient;
 use turborepo_repository::inference::{RepoMode, RepoState};
 use turborepo_telemetry::{
-    events::{command::CommandEventBuilder, generic::GenericEventBuilder, EventBuilder, EventType},
-    init_telemetry, track_usage, TelemetryHandle,
+    TelemetryHandle,
+    events::{EventBuilder, EventType, command::CommandEventBuilder, generic::GenericEventBuilder},
+    init_telemetry, track_usage,
 };
 use turborepo_ui::{ColorConfig, GREY};
 
 use crate::{
     cli::error::print_potential_tasks,
     commands::{
-        bin, boundaries, clone, config, daemon, generate, get_mfe_port, info, link, login, logout,
-        ls, prune, query, run, scan, telemetry, unlink, CommandBase,
+        CommandBase, bin, boundaries, clone, config, daemon, generate, get_mfe_port, info, link,
+        login, logout, ls, prune, query, run, scan, telemetry, unlink,
     },
     get_version,
     run::watch::WatchClient,
@@ -48,10 +49,9 @@ const DEFAULT_NUM_WORKERS: u32 = 10;
 const SUPPORTED_GRAPH_FILE_EXTENSIONS: [&str; 8] =
     ["svg", "png", "jpg", "pdf", "json", "html", "mermaid", "dot"];
 
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, ValueEnum, Deserializable, Serialize)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum, Deserializable, Serialize)]
 pub enum OutputLogsMode {
     #[serde(rename = "full")]
-    #[default]
     Full,
     #[serde(rename = "none")]
     None,
@@ -61,6 +61,12 @@ pub enum OutputLogsMode {
     NewOnly,
     #[serde(rename = "errors-only")]
     ErrorsOnly,
+}
+
+impl Default for OutputLogsMode {
+    fn default() -> Self {
+        Self::Full
+    }
 }
 
 impl Display for OutputLogsMode {
@@ -87,15 +93,20 @@ impl From<OutputLogsMode> for turborepo_ui::tui::event::OutputLogs {
     }
 }
 
-#[derive(Copy, Clone, Debug, Default, PartialEq, Serialize, ValueEnum, Deserialize, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Serialize, ValueEnum, Deserialize, Eq)]
 pub enum LogOrder {
     #[serde(rename = "auto")]
-    #[default]
     Auto,
     #[serde(rename = "stream")]
     Stream,
     #[serde(rename = "grouped")]
     Grouped,
+}
+
+impl Default for LogOrder {
+    fn default() -> Self {
+        Self::Auto
+    }
 }
 
 impl Display for LogOrder {
@@ -362,7 +373,49 @@ impl Args {
                 process::exit(1);
             }
             Err(e) if e.use_stderr() => {
-                let err_str = e.to_string();
+                let mut err_str = e.to_string();
+
+                // Replace pipe separators in usage line with newlines for better readability
+                // The usage line typically looks like: "Usage: turbo <--opt1|--opt2|--opt3>"
+                if let Some(usage_start) = err_str.find("Usage: ") {
+                    if let Some(usage_end) = err_str[usage_start..].find('\n') {
+                        let usage_end = usage_start + usage_end;
+                        let usage_line = &err_str[usage_start..usage_end];
+
+                        // Check if this usage line contains the pipe-separated options pattern
+                        if usage_line.contains('<')
+                            && usage_line.contains('>')
+                            && usage_line.contains('|')
+                        {
+                            // Find the angle bracket enclosed section
+                            if let Some(bracket_start) = usage_line.find('<') {
+                                if let Some(bracket_end) = usage_line.rfind('>') {
+                                    let prefix = &usage_line[..bracket_start];
+                                    let options_str = &usage_line[bracket_start + 1..bracket_end];
+                                    let suffix = &usage_line[bracket_end + 1..];
+
+                                    // Split the options by pipe and format them as a list
+                                    let formatted_options: Vec<String> = options_str
+                                        .split('|')
+                                        .map(|opt| format!("    {}", opt))
+                                        .collect();
+
+                                    // Build the new usage string
+                                    let new_usage = format!(
+                                        "{} [OPTIONS] [TASKS]... [-- \
+                                         <PASS_THROUGH_ARGS>...]\n\nOptions:\n{}",
+                                        prefix.trim_end(),
+                                        formatted_options.join("\n")
+                                    );
+
+                                    // Replace the old usage line with the new formatted one
+                                    err_str.replace_range(usage_start..usage_end, &new_usage);
+                                }
+                            }
+                        }
+                    }
+                }
+
                 // A cleaner solution would be to implement our own clap::error::ErrorFormatter
                 // but that would require copying the default formatter just to remove this
                 // line: https://docs.rs/clap/latest/src/clap/error/format.rs.html#100
@@ -574,9 +627,6 @@ impl Args {
 pub enum Command {
     /// Get the path to the Turbo binary
     Bin,
-    /// Get the port assigned to the current microfrontend
-    #[clap(name = "get-mfe-port")]
-    GetMfePort,
     #[clap(hide = true)]
     Boundaries {
         #[clap(short = 'F', long, group = "scope-filter-group")]
@@ -609,15 +659,6 @@ pub enum Command {
         turbo_json_path: Option<Utf8PathBuf>,
         #[clap(subcommand)]
         command: Option<DaemonCommand>,
-    },
-    /// Visualize your monorepo's package graph in the browser
-    Devtools {
-        /// Port for the WebSocket server
-        #[clap(long, default_value_t = turborepo_devtools::DEFAULT_PORT)]
-        port: u16,
-        /// Don't automatically open the browser
-        #[clap(long)]
-        no_open: bool,
     },
     /// Generate a new app / package
     #[clap(aliases = ["g", "gen"])]
@@ -1164,15 +1205,20 @@ impl RunArgs {
     }
 }
 
-#[derive(ValueEnum, Clone, Copy, Debug, Default, PartialEq, Serialize)]
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Serialize)]
 pub enum LogPrefix {
     #[serde(rename = "auto")]
-    #[default]
     Auto,
     #[serde(rename = "none")]
     None,
     #[serde(rename = "task")]
     Task,
+}
+
+impl Default for LogPrefix {
+    fn default() -> Self {
+        Self::Auto
+    }
 }
 
 impl Display for LogPrefix {
@@ -1405,15 +1451,6 @@ pub async fn run(
 
             Ok(0)
         }
-        Command::GetMfePort => {
-            let event = CommandEventBuilder::new("get-mfe-port").with_parent(&root_telemetry);
-            event.track_call();
-
-            let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
-            get_mfe_port::run(&base).await?;
-
-            Ok(0)
-        }
         Command::Boundaries { ignore, reason, .. } => {
             let event = CommandEventBuilder::new("boundaries").with_parent(&root_telemetry);
             let ignore = *ignore;
@@ -1456,13 +1493,6 @@ pub async fn run(
                 }
             }?;
 
-            Ok(0)
-        }
-        Command::Devtools { port, no_open } => {
-            let event = CommandEventBuilder::new("devtools").with_parent(&root_telemetry);
-            event.track_call();
-
-            crate::commands::devtools::run(repo_root, *port, *no_open).await?;
             Ok(0)
         }
         Command::Generate {
@@ -1510,11 +1540,7 @@ pub async fn run(
             event.track_call();
             let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
             event.track_ui_mode(base.opts.run_opts.ui_mode);
-            if scan::run(base).await {
-                Ok(0)
-            } else {
-                Ok(1)
-            }
+            if scan::run(base).await { Ok(0) } else { Ok(1) }
         }
         Command::Config => {
             CommandEventBuilder::new("config")
@@ -3170,15 +3196,17 @@ mod test {
         assert!(Args::try_parse_from(["turbo", "build", "--anon-profile", ""]).is_err());
         assert!(Args::try_parse_from(["turbo", "build", "--profile", "foo.json"]).is_ok());
         assert!(Args::try_parse_from(["turbo", "build", "--anon-profile", "foo.json"]).is_ok());
-        assert!(Args::try_parse_from([
-            "turbo",
-            "build",
-            "--profile",
-            "foo.json",
-            "--anon-profile",
-            "bar.json"
-        ])
-        .is_err());
+        assert!(
+            Args::try_parse_from([
+                "turbo",
+                "build",
+                "--profile",
+                "foo.json",
+                "--anon-profile",
+                "bar.json"
+            ])
+            .is_err()
+        );
     }
 
     #[test]
@@ -3319,19 +3347,23 @@ mod test {
                 .collect(),
         )
         .unwrap();
-        assert!(inferred_run
-            .execution_args
-            .as_ref()
-            .is_some_and(|e| e.single_package));
-        assert!(explicit_run
-            .command
-            .as_ref()
-            .and_then(|cmd| if let Command::Run { execution_args, .. } = cmd {
-                Some(execution_args.single_package)
-            } else {
-                None
-            })
-            .unwrap_or(false));
+        assert!(
+            inferred_run
+                .execution_args
+                .as_ref()
+                .is_some_and(|e| e.single_package)
+        );
+        assert!(
+            explicit_run
+                .command
+                .as_ref()
+                .and_then(|cmd| if let Command::Run { execution_args, .. } = cmd {
+                    Some(execution_args.single_package)
+                } else {
+                    None
+                })
+                .unwrap_or(false)
+        );
     }
 
     #[test_case::test_case(&["turbo", "watch", "build", "--no-daemon"]; "after watch")]
