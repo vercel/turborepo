@@ -9,10 +9,10 @@ use std::{
 use biome_deserialize_macros::Deserializable;
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::{
-    ArgAction, ArgGroup, CommandFactory, Parser, Subcommand, ValueEnum,
-    builder::NonEmptyStringValueParser,
+    builder::NonEmptyStringValueParser, ArgAction, ArgGroup, CommandFactory, Parser, Subcommand,
+    ValueEnum,
 };
-use clap_complete::{Shell, generate};
+use clap_complete::{generate, Shell};
 pub use error::Error;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, error, log::warn};
@@ -20,17 +20,16 @@ use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::AnonAPIClient;
 use turborepo_repository::inference::{RepoMode, RepoState};
 use turborepo_telemetry::{
-    TelemetryHandle,
-    events::{EventBuilder, EventType, command::CommandEventBuilder, generic::GenericEventBuilder},
-    init_telemetry, track_usage,
+    events::{command::CommandEventBuilder, generic::GenericEventBuilder, EventBuilder, EventType},
+    init_telemetry, track_usage, TelemetryHandle,
 };
 use turborepo_ui::{ColorConfig, GREY};
 
 use crate::{
     cli::error::print_potential_tasks,
     commands::{
-        CommandBase, bin, boundaries, clone, config, daemon, generate, get_mfe_port, info, link,
-        login, logout, ls, prune, query, run, scan, telemetry, unlink,
+        bin, boundaries, clone, config, daemon, generate, get_mfe_port, info, link, login, logout,
+        ls, prune, query, run, scan, telemetry, unlink, CommandBase,
     },
     get_version,
     run::watch::WatchClient,
@@ -1538,7 +1537,11 @@ pub async fn run(
             event.track_call();
             let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
             event.track_ui_mode(base.opts.run_opts.ui_mode);
-            if scan::run(base).await { Ok(0) } else { Ok(1) }
+            if scan::run(base).await {
+                Ok(0)
+            } else {
+                Ok(1)
+            }
         }
         Command::Config => {
             CommandEventBuilder::new("config")
@@ -3194,17 +3197,15 @@ mod test {
         assert!(Args::try_parse_from(["turbo", "build", "--anon-profile", ""]).is_err());
         assert!(Args::try_parse_from(["turbo", "build", "--profile", "foo.json"]).is_ok());
         assert!(Args::try_parse_from(["turbo", "build", "--anon-profile", "foo.json"]).is_ok());
-        assert!(
-            Args::try_parse_from([
-                "turbo",
-                "build",
-                "--profile",
-                "foo.json",
-                "--anon-profile",
-                "bar.json"
-            ])
-            .is_err()
-        );
+        assert!(Args::try_parse_from([
+            "turbo",
+            "build",
+            "--profile",
+            "foo.json",
+            "--anon-profile",
+            "bar.json"
+        ])
+        .is_err());
     }
 
     #[test]
@@ -3345,23 +3346,19 @@ mod test {
                 .collect(),
         )
         .unwrap();
-        assert!(
-            inferred_run
-                .execution_args
-                .as_ref()
-                .is_some_and(|e| e.single_package)
-        );
-        assert!(
-            explicit_run
-                .command
-                .as_ref()
-                .and_then(|cmd| if let Command::Run { execution_args, .. } = cmd {
-                    Some(execution_args.single_package)
-                } else {
-                    None
-                })
-                .unwrap_or(false)
-        );
+        assert!(inferred_run
+            .execution_args
+            .as_ref()
+            .is_some_and(|e| e.single_package));
+        assert!(explicit_run
+            .command
+            .as_ref()
+            .and_then(|cmd| if let Command::Run { execution_args, .. } = cmd {
+                Some(execution_args.single_package)
+            } else {
+                None
+            })
+            .unwrap_or(false));
     }
 
     #[test_case::test_case(&["turbo", "watch", "build", "--no-daemon"]; "after watch")]
