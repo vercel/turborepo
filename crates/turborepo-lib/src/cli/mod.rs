@@ -9,10 +9,10 @@ use std::{
 use biome_deserialize_macros::Deserializable;
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::{
-    builder::NonEmptyStringValueParser, ArgAction, ArgGroup, CommandFactory, Parser, Subcommand,
-    ValueEnum,
+    ArgAction, ArgGroup, CommandFactory, Parser, Subcommand, ValueEnum,
+    builder::NonEmptyStringValueParser,
 };
-use clap_complete::{generate, Shell};
+use clap_complete::{Shell, generate};
 pub use error::Error;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, error, log::warn};
@@ -20,16 +20,17 @@ use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::AnonAPIClient;
 use turborepo_repository::inference::{RepoMode, RepoState};
 use turborepo_telemetry::{
-    events::{command::CommandEventBuilder, generic::GenericEventBuilder, EventBuilder, EventType},
-    init_telemetry, track_usage, TelemetryHandle,
+    TelemetryHandle,
+    events::{EventBuilder, EventType, command::CommandEventBuilder, generic::GenericEventBuilder},
+    init_telemetry, track_usage,
 };
 use turborepo_ui::{ColorConfig, GREY};
 
 use crate::{
     cli::error::print_potential_tasks,
     commands::{
-        bin, boundaries, clone, config, daemon, generate, get_mfe_port, info, link, login, logout,
-        ls, prune, query, run, scan, telemetry, unlink, CommandBase,
+        CommandBase, bin, boundaries, clone, config, daemon, generate, get_mfe_port, info, link,
+        login, logout, ls, prune, query, run, scan, telemetry, unlink,
     },
     get_version,
     run::watch::WatchClient,
@@ -357,6 +358,46 @@ pub enum LinkTarget {
     Spaces,
 }
 
+/// Formats clap error messages to improve readability of pipe-separated options
+fn format_error_message(mut err_str: String) -> String {
+    // Replace pipe separators in usage line with newlines for better readability
+    // The usage line typically looks like: "Usage: turbo <--opt1|--opt2|--opt3>"
+    if let Some(usage_start) = err_str.find("Usage: ") {
+        if let Some(usage_end) = err_str[usage_start..].find('\n') {
+            let usage_end = usage_start + usage_end;
+            let usage_line = &err_str[usage_start..usage_end];
+
+            // Check if this usage line contains the pipe-separated options pattern
+            if usage_line.contains('<') && usage_line.contains('>') && usage_line.contains('|') {
+                // Find the angle bracket enclosed section
+                if let Some(bracket_start) = usage_line.find('<') {
+                    if let Some(bracket_end) = usage_line.rfind('>') {
+                        let prefix = &usage_line[..bracket_start];
+                        let options_str = &usage_line[bracket_start + 1..bracket_end];
+
+                        // Split the options by pipe and format them as a list
+                        let formatted_options: Vec<String> = options_str
+                            .split('|')
+                            .map(|opt| format!("    {}", opt))
+                            .collect();
+
+                        // Build the new usage string
+                        let new_usage = format!(
+                            "{} [OPTIONS] [TASKS]... [-- <PASS_THROUGH_ARGS>...]\n\nOptions:\n{}",
+                            prefix.trim_end(),
+                            formatted_options.join("\n")
+                        );
+
+                        // Replace the old usage line with the new formatted one
+                        err_str.replace_range(usage_start..usage_end, &new_usage);
+                    }
+                }
+            }
+        }
+    }
+    err_str
+}
+
 impl Args {
     pub fn new(os_args: Vec<OsString>) -> Self {
         let clap_args = match Args::parse(os_args) {
@@ -372,49 +413,7 @@ impl Args {
                 process::exit(1);
             }
             Err(e) if e.use_stderr() => {
-                let mut err_str = e.to_string();
-
-                // Replace pipe separators in usage line with newlines for better readability
-                // The usage line typically looks like: "Usage: turbo <--opt1|--opt2|--opt3>"
-                if let Some(usage_start) = err_str.find("Usage: ") {
-                    if let Some(usage_end) = err_str[usage_start..].find('\n') {
-                        let usage_end = usage_start + usage_end;
-                        let usage_line = &err_str[usage_start..usage_end];
-
-                        // Check if this usage line contains the pipe-separated options pattern
-                        if usage_line.contains('<')
-                            && usage_line.contains('>')
-                            && usage_line.contains('|')
-                        {
-                            // Find the angle bracket enclosed section
-                            if let Some(bracket_start) = usage_line.find('<') {
-                                if let Some(bracket_end) = usage_line.rfind('>') {
-                                    let prefix = &usage_line[..bracket_start];
-                                    let options_str = &usage_line[bracket_start + 1..bracket_end];
-                                    let suffix = &usage_line[bracket_end + 1..];
-
-                                    // Split the options by pipe and format them as a list
-                                    let formatted_options: Vec<String> = options_str
-                                        .split('|')
-                                        .map(|opt| format!("    {}", opt))
-                                        .collect();
-
-                                    // Build the new usage string
-                                    let new_usage = format!(
-                                        "{} [OPTIONS] [TASKS]... [-- \
-                                         <PASS_THROUGH_ARGS>...]\n\nOptions:\n{}",
-                                        prefix.trim_end(),
-                                        formatted_options.join("\n")
-                                    );
-
-                                    // Replace the old usage line with the new formatted one
-                                    err_str.replace_range(usage_start..usage_end, &new_usage);
-                                }
-                            }
-                        }
-                    }
-                }
-
+                let err_str = format_error_message(e.to_string());
                 // A cleaner solution would be to implement our own clap::error::ErrorFormatter
                 // but that would require copying the default formatter just to remove this
                 // line: https://docs.rs/clap/latest/src/clap/error/format.rs.html#100
@@ -1539,11 +1538,7 @@ pub async fn run(
             event.track_call();
             let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
             event.track_ui_mode(base.opts.run_opts.ui_mode);
-            if scan::run(base).await {
-                Ok(0)
-            } else {
-                Ok(1)
-            }
+            if scan::run(base).await { Ok(0) } else { Ok(1) }
         }
         Command::Config => {
             CommandEventBuilder::new("config")
@@ -3199,15 +3194,17 @@ mod test {
         assert!(Args::try_parse_from(["turbo", "build", "--anon-profile", ""]).is_err());
         assert!(Args::try_parse_from(["turbo", "build", "--profile", "foo.json"]).is_ok());
         assert!(Args::try_parse_from(["turbo", "build", "--anon-profile", "foo.json"]).is_ok());
-        assert!(Args::try_parse_from([
-            "turbo",
-            "build",
-            "--profile",
-            "foo.json",
-            "--anon-profile",
-            "bar.json"
-        ])
-        .is_err());
+        assert!(
+            Args::try_parse_from([
+                "turbo",
+                "build",
+                "--profile",
+                "foo.json",
+                "--anon-profile",
+                "bar.json"
+            ])
+            .is_err()
+        );
     }
 
     #[test]
@@ -3348,19 +3345,23 @@ mod test {
                 .collect(),
         )
         .unwrap();
-        assert!(inferred_run
-            .execution_args
-            .as_ref()
-            .is_some_and(|e| e.single_package));
-        assert!(explicit_run
-            .command
-            .as_ref()
-            .and_then(|cmd| if let Command::Run { execution_args, .. } = cmd {
-                Some(execution_args.single_package)
-            } else {
-                None
-            })
-            .unwrap_or(false));
+        assert!(
+            inferred_run
+                .execution_args
+                .as_ref()
+                .is_some_and(|e| e.single_package)
+        );
+        assert!(
+            explicit_run
+                .command
+                .as_ref()
+                .and_then(|cmd| if let Command::Run { execution_args, .. } = cmd {
+                    Some(execution_args.single_package)
+                } else {
+                    None
+                })
+                .unwrap_or(false)
+        );
     }
 
     #[test_case::test_case(&["turbo", "watch", "build", "--no-daemon"]; "after watch")]
