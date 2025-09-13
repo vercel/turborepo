@@ -294,6 +294,7 @@ impl GitRepo {
             "-r",
             "--name-only",
             "--no-commit-id",
+            "-z",
             &valid_from,
             to_commit,
         ];
@@ -311,13 +312,19 @@ impl GitRepo {
             // Add untracked files or unstaged changes, i.e. files that are not in git at
             // all
             let ls_files_output = self.execute_git_command(
-                &["ls-files", "--others", "--modified", "--exclude-standard"],
+                &[
+                    "ls-files",
+                    "--others",
+                    "--modified",
+                    "--exclude-standard",
+                    "-z",
+                ],
                 pathspec,
             )?;
             self.add_files_from_stdout(&mut files, turbo_root, ls_files_output);
             // Include any files that have been staged, but not committed
             let diff_output =
-                self.execute_git_command(&["diff", "--name-only", "--cached"], pathspec)?;
+                self.execute_git_command(&["diff", "--name-only", "--cached", "-z"], pathspec)?;
             self.add_files_from_stdout(&mut files, turbo_root, diff_output);
         }
 
@@ -351,8 +358,8 @@ impl GitRepo {
         turbo_root: &AbsoluteSystemPath,
         stdout: Vec<u8>,
     ) {
-        let stdout = String::from_utf8(stdout).unwrap();
-        for line in stdout.lines() {
+        let stdout = String::from_utf8_lossy(&stdout);
+        for line in stdout.split('\0') {
             let path = RelativeUnixPath::new(line).unwrap();
             let anchored_to_turbo_root_file_path = self
                 .reanchor_path_from_git_root_to_turbo_root(turbo_root, path)
