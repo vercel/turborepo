@@ -360,6 +360,9 @@ impl GitRepo {
     ) {
         let stdout = String::from_utf8_lossy(&stdout);
         for line in stdout.split('\0') {
+            if line.is_empty() {
+                continue;
+            }
             let path = RelativeUnixPath::new(line).unwrap();
             let anchored_to_turbo_root_file_path = self
                 .reanchor_path_from_git_root_to_turbo_root(turbo_root, path)
