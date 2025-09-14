@@ -531,4 +531,8 @@ impl RunStopper {
     pub async fn stop(&self) {
         self.manager.stop().await;
     }
+
+    pub async fn stop_tasks(&self, tasks: &HashSet<(PackageName, String)>) {
+        self.manager.stop_tasks(tasks).await;
+    }
 }

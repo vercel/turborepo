@@ -23,6 +23,12 @@ use crate::{
     DaemonConnector, DaemonPaths,
 };
 
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+struct Task {
+    package: PackageName,
+    task: String,
+}
+
 #[derive(Debug)]
 enum ChangedPackages {
     All,
@@ -47,6 +53,7 @@ impl ChangedPackages {
 pub struct WatchClient {
     run: Arc<Run>,
     watched_packages: HashSet<PackageName>,
+    tasks: Arc<Mutex<HashSet<Task>>>,
     persistent_tasks_handle: Option<RunHandle>,
     connector: DaemonConnector,
     base: CommandBase,
@@ -155,10 +162,13 @@ impl WatchClient {
             custom_turbo_json_path,
         };
 
+        let tasks = Arc::new(Mutex::new(HashSet::new()));
+
         Ok(Self {
             base,
             run,
             watched_packages,
+            tasks,
             connector,
             handler,
             telemetry,
@@ -170,6 +180,17 @@ impl WatchClient {
     }
 
     pub async fn start(&mut self) -> Result<(), Error> {
+        let initial_tasks = self
+            .run
+            .engine()
+            .task_ids()
+            .map(|task_id| Task {
+                package: task_id.package().into(),
+                task: task_id.task().to_string(),
+            })
+            .collect();
+        *self.tasks.lock().expect("poisoned lock") = initial_tasks;
+
         let connector = self.connector.clone();
         let mut client = connector.connect().await?;
 
@@ -201,20 +222,24 @@ impl WatchClient {
                 let some_changed_packages = {
                     let mut changed_packages_guard =
                         changed_packages.lock().expect("poisoned lock");
-                    (!changed_packages_guard.is_empty())
-                        .then(|| std::mem::take(changed_packages_guard.deref_mut()))
+                    if changed_packages_guard.is_empty() {
+                        None
+                    } else {
+                        Some(std::mem::take(changed_packages_guard.deref_mut()))
+                    }
                 };
 
                 if let Some(changed_packages) = some_changed_packages {
+                    let tasks_to_run = self.derive_tasks_to_run(&changed_packages);
                     // Clean up currently running tasks
-                    if let Some(RunHandle { stopper, run_task }) = run_handle.take() {
-                        // Shut down the tasks for the run
-                        stopper.stop().await;
-                        // Run should exit shortly after we stop all child tasks, wait for it to
-                        // finish to ensure all messages are flushed.
-                        let _ = run_task.await;
+                    if let Some(run_handle) = run_handle.as_mut() {
+                        let tasks_to_stop = tasks_to_run
+                            .iter()
+                            .map(|task| (task.package.clone(), task.task.clone()))
+                            .collect();
+                        run_handle.stopper.stop_tasks(&tasks_to_stop).await;
                     }
-                    run_handle = Some(self.execute_run(changed_packages).await?);
+                    run_handle = Some(self.execute_run(tasks_to_run, changed_packages).await?);
                 }
             }
         };
@@ -230,6 +255,44 @@ impl WatchClient {
             }
             run_result = run_fut => {
                 run_result
+            }
+        }
+    }
+
+    fn derive_tasks_to_run(&self, changed_packages: &ChangedPackages) -> HashSet<Task> {
+        let tasks = self.tasks.lock().expect("poisoned lock");
+        match changed_packages {
+            ChangedPackages::All => tasks.iter().cloned().collect(),
+            ChangedPackages::Some(packages) => {
+                let mut tasks_to_run = HashSet::new();
+                let mut packages_to_visit = packages.clone();
+                let mut visited_packages = HashSet::new();
+
+                while let Some(package) = packages_to_visit.iter().next().cloned() {
+                    packages_to_visit.remove(&package);
+                    if visited_packages.contains(&package) {
+                        continue;
+                    }
+                    visited_packages.insert(package.clone());
+
+                    for task in tasks.iter() {
+                        if task.package == package {
+                            tasks_to_run.insert(task.clone());
+                        }
+                    }
+
+                    for dependent in self
+                        .run
+                        .pkg_dep_graph()
+                        .ancestors(&turborepo_repository::package_graph::PackageNode::Workspace(
+                            package.clone(),
+                        ))
+                    {
+                        packages_to_visit.insert(dependent.as_package_name().clone());
+                    }
+                }
+
+                tasks_to_run
             }
         }
     }
@@ -287,17 +350,18 @@ impl WatchClient {
     ///    be interrupted
     ///
     /// Returns a handle to the task running (2)
-    async fn execute_run(&mut self, changed_packages: ChangedPackages) -> Result<RunHandle, Error> {
+    async fn execute_run(
+        &mut self,
+        tasks_to_run: HashSet<Task>,
+        changed_packages: ChangedPackages,
+    ) -> Result<RunHandle, Error> {
         // Should we recover here?
         trace!("handling run with changed packages: {changed_packages:?}");
         match changed_packages {
-            ChangedPackages::Some(packages) => {
-                let packages = packages
-                    .into_iter()
-                    .filter(|pkg| {
-                        // If not in the watched packages set, ignore
-                        self.watched_packages.contains(pkg)
-                    })
+            ChangedPackages::Some(_packages) => {
+                let packages = tasks_to_run
+                    .iter()
+                    .map(|task| task.package.clone())
                     .collect();
 
                 let mut opts = self.base.opts().clone();
@@ -318,6 +382,12 @@ impl WatchClient {
 
                 let run = RunBuilder::new(new_base)?
                     .with_entrypoint_packages(packages)
+                    .with_tasks_to_run(
+                        tasks_to_run
+                            .into_iter()
+                            .map(|task| (task.package, task.task))
+                            .collect(),
+                    )
                     .hide_prelude()
                     .build(&signal_handler, telemetry)
                     .await?;

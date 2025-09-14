@@ -381,6 +381,7 @@ pub struct Child {
     stdin: Arc<Mutex<Option<ChildInput>>>,
     output: Arc<Mutex<Option<ChildOutput>>>,
     label: String,
+    command: Command,
 }
 
 #[derive(Clone, Debug)]
@@ -416,6 +417,7 @@ impl Child {
         pty_size: Option<PtySize>,
     ) -> io::Result<Self> {
         let label = command.label();
+        let command_clone = command.clone();
         let SpawnResult {
             handle: mut child,
             io: ChildIO { stdin, output },
@@ -468,6 +470,7 @@ impl Child {
             stdin: Arc::new(Mutex::new(stdin)),
             output: Arc::new(Mutex::new(output)),
             label,
+            command: command_clone,
         })
     }
 
@@ -687,6 +690,10 @@ impl Child {
 
     pub fn label(&self) -> &str {
         &self.label
+    }
+
+    pub fn command(&self) -> &Command {
+        &self.command
     }
 }
 

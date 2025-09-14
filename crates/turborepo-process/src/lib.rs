@@ -177,6 +177,33 @@ impl ProcessManager {
     pub fn set_pty_size(&self, rows: u16, cols: u16) {
         self.state.lock().expect("not poisoned").size = Some(PtySize { rows, cols });
     }
+
+    pub async fn stop_tasks(&self, tasks: &std::collections::HashSet<(turborepo_repository::package_graph::PackageName, String)>) {
+        let mut set = JoinSet::new();
+
+        {
+            let mut lock = self.state.lock().expect("not poisoned");
+            lock.children.retain(|child| {
+                if let Some((package, task)) = child.command().task_name() {
+                    if tasks.contains(&(package.into(), task.to_string())) {
+                        let mut child = child.clone();
+                        set.spawn(async move { child.stop().await });
+                        false
+                    } else {
+                        true
+                    }
+                } else {
+                    true
+                }
+            });
+        }
+
+        debug!("waiting for {} processes to exit", set.len());
+
+        while let Some(out) = set.join_next().await {
+            trace!("process exited: {:?}", out);
+        }
+    }
 }
 
 impl ProcessManagerInner {

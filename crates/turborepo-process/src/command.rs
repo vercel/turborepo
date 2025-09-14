@@ -106,6 +106,20 @@ impl Command {
     pub fn program(&self) -> &OsStr {
         &self.program
     }
+
+    pub fn task_name(&self) -> Option<(String, String)> {
+        let package = self
+            .env
+            .get(&OsString::from("TURBO_PACKAGE_NAME"))?
+            .to_str()?
+            .to_string();
+        let task = self
+            .env
+            .get(&OsString::from("TURBO_TASK_NAME"))?
+            .to_str()?
+            .to_string();
+        Some((package, task))
+    }
 }
 
 impl From<Command> for tokio::process::Command {
