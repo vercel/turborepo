@@ -23,7 +23,7 @@ use turborepo_cache::CacheConfig;
 use turborepo_errors::TURBO_SITE;
 use turborepo_repository::package_graph::PackageName;
 
-pub use crate::turbo_json::{RawTurboJson, UIMode};
+pub use crate::turbo_json::UIMode;
 use crate::{
     cli::{EnvMode, LogOrder},
     turbo_json::FutureFlags,
@@ -136,6 +136,13 @@ pub enum Error {
     #[error("You can only extend from the root of the workspace.")]
     ExtendFromNonRoot {
         #[label("non-root workspace found here")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource<String>,
+    },
+    #[error("You must extend from the root of the workspace first.")]
+    ExtendsRootFirst {
+        #[label("'//' should be first")]
         span: Option<SourceSpan>,
         #[source_code]
         text: NamedSource<String>,

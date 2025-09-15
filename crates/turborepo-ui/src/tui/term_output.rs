@@ -170,4 +170,11 @@ impl<W> TerminalOutput<W> {
     pub fn copy_selection(&self) -> Option<String> {
         self.parser.screen().selected_text()
     }
+
+    pub fn clear_logs(&mut self) {
+        self.output.clear();
+
+        // clear screen and reset cursor
+        self.process(b"\x1bc");
+    }
 }

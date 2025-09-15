@@ -466,6 +466,36 @@ impl AbsoluteSystemPath {
 
         Ok(())
     }
+
+    /// Checks if this path is the direct parent of the given path.
+    ///
+    /// Returns `true` if this path is the immediate parent directory
+    /// of `possible_child`, `false` otherwise.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use turbopath::AbsoluteSystemPath;
+    /// # use std::path::Path;
+    /// # #[cfg(unix)]
+    /// # {
+    /// let parent = AbsoluteSystemPath::new("/foo/bar").unwrap();
+    /// let child = AbsoluteSystemPath::new("/foo/bar/baz").unwrap();
+    /// let grandchild = AbsoluteSystemPath::new("/foo/bar/baz/qux").unwrap();
+    /// let sibling = AbsoluteSystemPath::new("/foo/qux").unwrap();
+    ///
+    /// assert!(parent.is_parent(&child));
+    /// assert!(!parent.is_parent(&grandchild)); // Not direct parent
+    /// assert!(!parent.is_parent(&sibling));
+    /// assert!(!parent.is_parent(&parent)); // Not parent of itself
+    /// # }
+    /// ```
+    pub fn is_parent(&self, possible_child: &AbsoluteSystemPath) -> bool {
+        let Some(parent) = possible_child.parent() else {
+            return false;
+        };
+        parent == self
+    }
 }
 
 impl<'a> From<&'a AbsoluteSystemPath> for CandidatePath<'a> {
@@ -682,5 +712,26 @@ mod tests {
 
         let relation = abs_path.relation_to_path(&other_path);
         assert_eq!(relation, expected);
+    }
+
+    #[test_case(&["foo", "bar"], &["foo", "bar", "baz"], true ; "parent is direct parent of child")]
+    #[test_case(&["foo"], &["foo", "bar"], true ; "root parent is direct parent")]
+    #[test_case(&["foo", "bar"], &["foo", "bar", "baz", "qux"], false ; "not direct parent of grandchild")]
+    #[test_case(&["foo", "bar"], &["foo", "baz"], false ; "not parent of sibling")]
+    #[test_case(&["foo", "bar"], &["foo"], false ; "child is not parent of parent")]
+    #[test_case(&["foo", "bar"], &["foo", "bar"], false ; "path is not parent of itself")]
+    #[test_case(&[], &["foo"], true ; "root is parent of top-level dir")]
+    #[test_case(&["foo", "bar"], &["completely", "different"], false ; "unrelated paths")]
+    fn test_is_parent(parent_components: &[&str], child_components: &[&str], expected: bool) {
+        let root = if cfg!(windows) { "C:\\" } else { "/" };
+
+        let parent_path = AbsoluteSystemPathBuf::try_from(root)
+            .unwrap()
+            .join_components(parent_components);
+        let child_path = AbsoluteSystemPathBuf::try_from(root)
+            .unwrap()
+            .join_components(child_components);
+
+        assert_eq!(parent_path.is_parent(&child_path), expected);
     }
 }
