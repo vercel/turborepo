@@ -1,8 +1,8 @@
 {
   "name": "@turbo/types",
   "version": "2.5.7-canary.0",
+  "type": "module",
   "description": "Turborepo types",
-  "type": "commonjs",
   "homepage": "https://turborepo.com",
   "license": "MIT",
   "repository": {
@@ -13,28 +13,21 @@
   "bugs": {
     "url": "https://github.com/vercel/turborepo/issues"
   },
-  "type": "module",
-  "main": "dist/cjs/index.js",
-  "module": "dist/esm/index.js",
-  "types": "dist/types/index.d.ts",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/types/index.d.ts",
-      "import": "./dist/esm/index.js",
-      "require": "./dist/cjs/index.js",
-      "default": "./dist/esm/index.js"
-    },
-    "./src/json/frameworks.json": {
-      "import": "./src/json/frameworks.json",
-      "default": "./src/json/frameworks.json"
+      "types": {
+        "import": "./dist/index.d.ts",
+        "require": "./dist/index.d.cts"
+      },
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
     }
   },
   "scripts": {
-    "build": "pnpm build:esm && pnpm build:cjs && pnpm build:types && pnpm post-build && pnpm generate-schema",
-    "post-build": "echo '{ \"type\": \"commonjs\" }' > dist/cjs/package.json",
-    "build:esm": "tsc -p tsconfig.json",
-    "build:cjs": "tsc -p tsconfig.cjs.json",
-    "build:types": "tsc -p tsconfig.types.json",
+    "build": "bunchee && pnpm generate-schema",
     "lint": "eslint src/",
     "lint:prettier": "prettier -c . --cache",
     "generate-schema": "tsx scripts/generate-schema.ts",
@@ -47,12 +40,13 @@
     "@turbo/eslint-config": "workspace:*",
     "@turbo/tsconfig": "workspace:*",
     "@types/node": "^20",
+    "bunchee": "^6.3.4",
     "publint": "^0.3.12",
     "ts-json-schema-generator": "2.3.0",
     "tsx": "4.19.1"
   },
   "files": [
-    "src",
+    "dist",
     "schemas"
   ],
   "publishConfig": {
