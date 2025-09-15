@@ -485,6 +485,7 @@ impl<'a> TaskHasher<'a> {
                     "HOMEPATH",
                     "PNPM_HOME",
                     "NPM_CONFIG_STORE_DIR",
+                    "PROTO_HOME",
                 ];
                 let pass_through_env_vars = self.env_at_execution_start.pass_through_env(
                     builtin_pass_through,
