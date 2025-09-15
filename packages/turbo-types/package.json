@@ -18,10 +18,7 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": {
-        "import": "./dist/index.d.ts",
-        "require": "./dist/index.d.cts"
-      },
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
     }
@@ -46,6 +43,7 @@
     "tsx": "4.19.1"
   },
   "files": [
+    "src/index.ts",
     "dist",
     "schemas"
   ],
