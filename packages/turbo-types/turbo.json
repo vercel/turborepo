@@ -5,7 +5,7 @@
     // can watch this workspace for file changes.
     "topo": {},
     "build": {
-      "outputs": ["schemas/**"],
+      "outputs": ["dist/**", "schemas/**"],
       "dependsOn": ["^topo"]
     },
     "copy-schema": {
