@@ -1,5 +1,4 @@
 import type { Framework as FW } from "./types/frameworks.js";
-// @ts-ignore - JSON imports work differently in ESM vs CJS
 import frameworksJson from "./json/frameworks.json";
 
 export const frameworks = frameworksJson as Array<Framework>;
