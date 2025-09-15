@@ -2,7 +2,6 @@ import path from "node:path";
 import fs from "fs-extra";
 import type { Project } from "@turbo/workspaces";
 import type { NodePlopAPI, PlopGenerator } from "node-plop";
-import nodePlop from "node-plop";
 import { register } from "ts-node";
 import { Separator } from "inquirer";
 import { searchUp, getTurboConfigs, logger } from "@turbo/utils";
@@ -56,6 +55,7 @@ export async function getPlop({
     }
 
     try {
+      const { default: nodePlop } = await import("node-plop");
       plop = await nodePlop(configPath, {
         destBasePath: configPath,
         force: false,
@@ -73,6 +73,7 @@ export async function getPlop({
         }
 
         try {
+          const { default: nodePlop } = await import("node-plop");
           return await nodePlop(plopFile, {
             destBasePath: project.paths.root,
             force: false,
@@ -89,6 +90,7 @@ export async function getPlop({
 
     if (!plop && workspaceConfigs.length > 0) {
       // if no root config, use the first workspace config as the entrypoint
+      const { default: nodePlop } = await import("node-plop");
       plop = await nodePlop(workspaceConfigs[0].config, {
         destBasePath: workspaceConfigs[0].root,
         force: false,
