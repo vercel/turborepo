@@ -31,7 +31,7 @@ jobs:
     env:
       TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
       TURBO_TEAM: ${{ vars.TURBO_TEAM }}
-      TURBO_CACHE: ${{ github.event_name == 'pull_request' && 'remote:r' || 'remote:rw' }}
+      TURBO_CACHE: remote:r
 
     steps:
       - name: Determine fetch depth
