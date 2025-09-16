@@ -40,7 +40,7 @@ jobs:
     env:
       TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
       TURBO_TEAM: ${{ vars.TURBO_TEAM }}
-      TURBO_CACHE: remote:r
+      TURBO_CACHE: remote:rw
 
     steps:
       # on main -> current + prev commit
