@@ -18,14 +18,9 @@
   "types": "./dist/index.d.cts",
   "exports": {
     ".": {
-      "import": {
-        "types": "./dist/index.d.ts",
-        "default": "./dist/index.js"
-      },
-      "require": {
-        "types": "./dist/index.d.cts",
-        "default": "./dist/index.cjs"
-      }
+      "types": "./dist/index.d.cts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
     }
   },
   "zshy": "./src/index.ts",
@@ -35,7 +30,6 @@
     "lint:prettier": "prettier -c . --cache",
     "generate-schema": "tsx scripts/generate-schema.ts",
     "copy-schema": "cp schemas/schema.json ../turbo/schema.json",
-    "package:lint": "publint --strict",
     "package:types": "attw --profile node16 --pack --ignore-rules=false-cjs"
   },
   "devDependencies": {
