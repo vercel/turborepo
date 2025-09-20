@@ -5,12 +5,9 @@ use tracing::warn;
 use turbopath::{AbsoluteSystemPath, RelativeUnixPath, RelativeUnixPathBuf};
 use turborepo_microfrontends::{Config as MFEConfig, Error, MICROFRONTENDS_PACKAGE};
 use turborepo_repository::package_graph::{PackageGraph, PackageName};
+use turborepo_task_id::{TaskId, TaskName};
 
-use crate::{
-    config,
-    run::task_id::{TaskId, TaskName},
-    turbo_json::TurboJson,
-};
+use crate::{config, turbo_json::TurboJson};
 
 #[derive(Debug, Clone)]
 pub struct MicrofrontendsConfigs {
@@ -309,7 +306,7 @@ mod test {
                 $(
                     let mut _dev_tasks = std::collections::HashMap::new();
                     for _dev_task in $dev_tasks.as_slice() {
-                        let _dev_task_id = crate::run::task_id::TaskName::from(*_dev_task).task_id().unwrap().into_owned();
+                        let _dev_task_id = turborepo_task_id::TaskName::from(*_dev_task).task_id().unwrap().into_owned();
                         let _dev_application = _dev_task_id.package().to_owned();
                         _dev_tasks.insert(_dev_task_id, _dev_application);
                     }
@@ -362,7 +359,7 @@ mod test {
             PackageName::from(self.package_name)
         }
 
-        pub fn expected(&self) -> Option<FindResult> {
+        pub fn expected(&self) -> Option<FindResult<'_>> {
             match self.result {
                 Some(TestFindResult {
                     dev: Some(dev),
@@ -382,7 +379,7 @@ mod test {
         }
 
         fn str_to_task(s: &str) -> TaskId<'static> {
-            crate::run::task_id::TaskName::from(s)
+            turborepo_task_id::TaskName::from(s)
                 .task_id()
                 .unwrap()
                 .into_owned()

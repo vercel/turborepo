@@ -1,3 +1,7 @@
+//! Platform-specific directory utilities
+//! A small patch on top of `dirs_next` that makes use of turbopath and respects
+//! `VERCEL_CONFIG_DIR_PATH` as an override.
+
 use dirs_next::config_dir as dirs_config_dir;
 use thiserror::Error;
 use turbopath::{AbsoluteSystemPathBuf, PathError};

@@ -226,7 +226,7 @@ fn encode_map<'a, I: Iterator<Item = (&'a str, &'a str)>>(
     Ok(())
 }
 
-fn maybe_wrap(s: &str) -> Cow<str> {
+fn maybe_wrap(s: &str) -> Cow<'_, str> {
     match should_wrap_key(s) {
         // yarn uses JSON.stringify to escape strings
         // we approximate this behavior using serde_json

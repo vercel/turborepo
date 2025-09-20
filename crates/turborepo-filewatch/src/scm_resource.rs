@@ -28,7 +28,7 @@ impl SCMResource {
         Self { scm, semaphore }
     }
 
-    pub async fn acquire_scm(&self) -> SCMPermit {
+    pub async fn acquire_scm(&self) -> SCMPermit<'_> {
         let _permit = self
             .semaphore
             .acquire()

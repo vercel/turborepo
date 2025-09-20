@@ -50,8 +50,8 @@ use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathRelation};
 #[cfg(feature = "manual_recursive_watch")]
 use {
     notify::{
-        event::{CreateKind, EventAttributes},
         ErrorKind,
+        event::{CreateKind, EventAttributes},
     },
     std::io,
     tracing::trace,
@@ -488,7 +488,7 @@ mod test {
 
     #[cfg(not(target_os = "windows"))]
     use notify::event::RenameMode;
-    use notify::{event::ModifyKind, Event, EventKind};
+    use notify::{Event, EventKind, event::ModifyKind};
     use tokio::sync::broadcast;
     use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 

@@ -13,6 +13,7 @@ use turborepo_env::{BySource, DetailedMap, EnvironmentVariableMap};
 use turborepo_frameworks::{infer_framework, Slug as FrameworkSlug};
 use turborepo_repository::package_graph::{PackageInfo, PackageName};
 use turborepo_scm::SCM;
+use turborepo_task_id::TaskId;
 use turborepo_telemetry::events::{
     generic::GenericEventBuilder, task::PackageTaskEventBuilder, EventBuilder,
 };
@@ -22,7 +23,6 @@ use crate::{
     engine::TaskNode,
     hash::{FileHashes, LockFilePackages, TaskHashable, TurboHash},
     opts::RunOpts,
-    run::task_id::TaskId,
     task_graph::TaskDefinition,
     DaemonClient, DaemonConnector,
 };

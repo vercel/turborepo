@@ -13,7 +13,7 @@ use turborepo_scm::SCM;
 use turborepo_unescape::UnescapedString;
 
 use super::ConfigCache;
-use crate::{config::RawTurboJson, gitignore::ensure_turbo_is_gitignored};
+use crate::{gitignore::ensure_turbo_is_gitignored, turbo_json::RawTurboJson};
 
 // Environment variable key that will be used to enable, and set the expected
 // trace location

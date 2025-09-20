@@ -34,6 +34,7 @@ pub enum Event {
     PageDown,
     JumpToLogsTop,
     JumpToLogsBottom,
+    ClearLogs,
     SetStdin {
         task: String,
         stdin: Box<dyn std::io::Write + Send>,

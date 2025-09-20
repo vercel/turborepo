@@ -199,7 +199,7 @@ where
     builder.s
 }
 
-fn wrap_string(s: &str) -> Cow<str> {
+fn wrap_string(s: &str) -> Cow<'_, str> {
     match simple_string().is_match(s) {
         // Simple strings require no wrapping
         true => Cow::from(s),

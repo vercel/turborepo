@@ -1,3 +1,7 @@
+//! Additional utilities to be used with `petgraph`
+//! Provides transitive closure calculation and cycle detection with cut
+//! candidates to break cycles
+
 mod walker;
 
 use std::{collections::HashSet, fmt::Display, hash::Hash};
@@ -6,7 +10,7 @@ use fixedbitset::FixedBitSet;
 use itertools::Itertools;
 use petgraph::{
     prelude::*,
-    visit::{depth_first_search, EdgeFiltered, IntoNeighbors, Reversed, VisitMap, Visitable},
+    visit::{EdgeFiltered, IntoNeighbors, Reversed, VisitMap, Visitable, depth_first_search},
 };
 use thiserror::Error;
 

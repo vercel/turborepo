@@ -5,9 +5,9 @@ use reqwest::Url;
 use tokio::sync::OnceCell;
 use tracing::{debug, warn};
 use turborepo_api_client::{CacheClient, Client, TokenClient};
-use turborepo_ui::{start_spinner, ColorConfig, BOLD};
+use turborepo_ui::{BOLD, ColorConfig, start_spinner};
 
-use crate::{auth::extract_vercel_token, error, ui, LoginOptions, Token};
+use crate::{LoginOptions, Token, auth::extract_vercel_token, error, ui};
 
 const DEFAULT_HOST_NAME: &str = "127.0.0.1";
 const DEFAULT_PORT: u16 = 9789;
@@ -155,7 +155,7 @@ mod tests {
     use turborepo_vercel_api_mock::start_test_server;
 
     use super::*;
-    use crate::{login_server, LoginServer};
+    use crate::{LoginServer, login_server};
 
     struct MockLoginServer {
         hits: Arc<AtomicUsize>,
@@ -314,10 +314,10 @@ mod tests {
             &self,
             _hash: &str,
             _artifact_body: impl turborepo_api_client::Stream<
-                    Item = Result<turborepo_api_client::Bytes, turborepo_api_client::Error>,
-                > + Send
-                + Sync
-                + 'static,
+                Item = Result<turborepo_api_client::Bytes, turborepo_api_client::Error>,
+            > + Send
+            + Sync
+            + 'static,
             _body_len: usize,
             _duration: u64,
             _tag: Option<&str>,

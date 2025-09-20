@@ -22,6 +22,7 @@ use turborepo_repository::{
 };
 use turborepo_scm::SCM;
 use turborepo_signals::{SignalHandler, SignalSubscriber};
+use turborepo_task_id::TaskName;
 use turborepo_telemetry::events::{
     command::CommandEventBuilder,
     generic::{DaemonInitStatus, GenericEventBuilder},
@@ -42,12 +43,13 @@ use {
 use crate::{
     cli::DryRunMode,
     commands::CommandBase,
+    config::resolve_turbo_config_path,
     engine::{Engine, EngineBuilder},
     microfrontends::MicrofrontendsConfigs,
     opts::Opts,
-    run::{scope, task_access::TaskAccess, task_id::TaskName, Error, Run, RunCache},
+    run::{scope, task_access::TaskAccess, Error, Run, RunCache},
     shim::TurboState,
-    turbo_json::{resolve_turbo_config_path, TurboJson, TurboJsonLoader, UIMode},
+    turbo_json::{TurboJson, TurboJsonLoader, TurboJsonReader, UIMode},
     DaemonConnector,
 };
 
@@ -406,16 +408,19 @@ impl RunBuilder {
         task_access.restore_config().await;
 
         let root_turbo_json_path = self.opts.repo_opts.root_turbo_json_path.clone();
+        let future_flags = self.opts.future_flags;
+
+        let reader = TurboJsonReader::new(self.repo_root.clone()).with_future_flags(future_flags);
 
         let turbo_json_loader = if task_access.is_enabled() {
             TurboJsonLoader::task_access(
-                self.repo_root.clone(),
+                reader,
                 root_turbo_json_path.clone(),
                 root_package_json.clone(),
             )
         } else if is_single_package {
             TurboJsonLoader::single_package(
-                self.repo_root.clone(),
+                reader,
                 root_turbo_json_path.clone(),
                 root_package_json.clone(),
             )
@@ -424,20 +429,20 @@ impl RunBuilder {
         (self.opts.repo_opts.allow_no_turbo_json || micro_frontend_configs.is_some())
         {
             TurboJsonLoader::workspace_no_turbo_json(
-                self.repo_root.clone(),
+                reader,
                 pkg_dep_graph.packages(),
                 micro_frontend_configs.clone(),
             )
         } else if let Some(micro_frontends) = &micro_frontend_configs {
             TurboJsonLoader::workspace_with_microfrontends(
-                self.repo_root.clone(),
+                reader,
                 root_turbo_json_path.clone(),
                 pkg_dep_graph.packages(),
                 micro_frontends.clone(),
             )
         } else {
             TurboJsonLoader::workspace(
-                self.repo_root.clone(),
+                reader,
                 root_turbo_json_path.clone(),
                 pkg_dep_graph.packages(),
             )
@@ -536,6 +541,7 @@ impl RunBuilder {
         .with_root_tasks(root_turbo_json.tasks.keys().cloned())
         .with_tasks_only(self.opts.run_opts.only)
         .with_workspaces(filtered_pkgs.cloned().collect())
+        .with_future_flags(self.opts.future_flags)
         .with_tasks(tasks);
 
         if self.add_all_tasks {

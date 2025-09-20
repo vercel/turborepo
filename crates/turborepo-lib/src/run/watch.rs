@@ -16,10 +16,10 @@ use turborepo_ui::sender::UISender;
 
 use crate::{
     commands::CommandBase,
+    config::resolve_turbo_config_path,
     daemon::{proto, DaemonConnectorError, DaemonError},
     get_version, opts,
     run::{self, builder::RunBuilder, scope::target_selector::InvalidSelectorError, Run},
-    turbo_json::resolve_turbo_config_path,
     DaemonConnector, DaemonPaths,
 };
 

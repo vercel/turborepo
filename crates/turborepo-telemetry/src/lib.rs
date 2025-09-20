@@ -13,7 +13,7 @@ use std::time::Duration;
 
 use config::{ConfigError, TelemetryConfig};
 use events::TelemetryEvent;
-use futures::{stream::FuturesUnordered, StreamExt};
+use futures::{StreamExt, stream::FuturesUnordered};
 use once_cell::sync::OnceCell;
 use thiserror::Error;
 use tokio::{
@@ -23,7 +23,7 @@ use tokio::{
 };
 use tracing::{debug, error, trace};
 use turborepo_api_client::telemetry;
-use turborepo_ui::{color, ColorConfig, BOLD, GREY};
+use turborepo_ui::{BOLD, ColorConfig, GREY, color};
 use uuid::Uuid;
 
 const BUFFER_THRESHOLD: usize = 10;

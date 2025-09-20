@@ -9,7 +9,6 @@ pub(crate) mod package_discovery;
 pub(crate) mod scope;
 pub(crate) mod summary;
 pub mod task_access;
-pub mod task_id;
 mod ui;
 pub mod watch;
 

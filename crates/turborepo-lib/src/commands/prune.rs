@@ -16,7 +16,10 @@ use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_ui::BOLD;
 
 use super::CommandBase;
-use crate::turbo_json::{RawTurboJson, CONFIG_FILE, CONFIG_FILE_JSONC};
+use crate::{
+    config::{CONFIG_FILE, CONFIG_FILE_JSONC},
+    turbo_json::{RawRootTurboJson, RawTurboJson},
+};
 
 pub const DEFAULT_OUTPUT_DIR: &str = "out";
 
@@ -470,7 +473,8 @@ impl<'a> Prune<'a> {
             return Ok(None);
         };
 
-        let turbo_json = RawTurboJson::parse(&turbo_json_contents, turbo_json_name.as_str())?;
+        let turbo_json =
+            RawRootTurboJson::parse(&turbo_json_contents, turbo_json_name.as_str())?.into();
         Ok(Some((turbo_json, turbo_json_name)))
     }
 }

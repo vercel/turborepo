@@ -23,8 +23,9 @@ use turborepo_repository::{
 };
 use turborepo_scm::GitHashes;
 
-use crate::turbo_json::{
-    resolve_turbo_config_path, TurboJson, TurboJsonLoader, CONFIG_FILE, CONFIG_FILE_JSONC,
+use crate::{
+    config::{resolve_turbo_config_path, CONFIG_FILE, CONFIG_FILE_JSONC},
+    turbo_json::{TurboJson, TurboJsonLoader, TurboJsonReader},
 };
 
 #[derive(Clone)]
@@ -125,7 +126,7 @@ struct RepoState {
 }
 
 impl RepoState {
-    fn get_change_mapper(&self) -> Option<ChangeMapper<GlobalDepsPackageChangeMapper>> {
+    fn get_change_mapper(&self) -> Option<ChangeMapper<'_, GlobalDepsPackageChangeMapper<'_>>> {
         let Ok(package_change_mapper) = GlobalDepsPackageChangeMapper::new(
             &self.pkg_dep_graph,
             self.root_turbo_json
@@ -231,7 +232,7 @@ impl Subscriber {
         };
 
         let root_turbo_json = TurboJsonLoader::workspace(
-            self.repo_root.clone(),
+            TurboJsonReader::new(self.repo_root.clone()),
             config_path,
             pkg_dep_graph.packages(),
         )
