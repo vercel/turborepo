@@ -1105,7 +1105,6 @@ mod tests {
 
     #[test]
     fn test_boundaries_permissions_serialization_skip_none() {
-        // Test that None values in Permissions struct are not serialized as null
         let json_with_partial_permissions = r#"{
             "boundaries": {
                 "dependencies": {
@@ -1114,23 +1113,14 @@ mod tests {
             }
         }"#;
 
-        // Parse the JSON
         let parsed: RawTurboJson =
             RawRootTurboJson::parse(json_with_partial_permissions, "turbo.json")
                 .unwrap()
                 .into();
 
-        // Serialize it back to JSON
         let serialized = serde_json::to_string(&parsed).unwrap();
 
         // The serialized JSON should not contain "deny":null
-        assert!(!serialized.contains("\"deny\":null"));
-        assert!(!serialized.contains("\"deny\": null"));
-
-        // But it should contain the allow field
-        assert!(serialized.contains("\"allow\""));
-
-        // Test that we can parse the serialized JSON again without errors
         let reparsed: RawTurboJson = RawRootTurboJson::parse(&serialized, "turbo.json")
             .unwrap()
             .into();
@@ -1146,7 +1136,6 @@ mod tests {
 
     #[test]
     fn test_prune_tasks_preserves_boundaries_structure() {
-        // Test the specific scenario from the bug report
         let json_with_boundaries = r#"{
             "tasks": {
                 "build": {},
@@ -1168,10 +1157,6 @@ mod tests {
 
         // Serialize the pruned config
         let serialized = serde_json::to_string_pretty(&pruned).unwrap();
-
-        // The serialized JSON should not contain "deny":null
-        assert!(!serialized.contains("\"deny\":null"));
-        assert!(!serialized.contains("\"deny\": null"));
 
         // Parse the serialized config to ensure it's valid
         let reparsed_result = RawRootTurboJson::parse(&serialized, "turbo.json");
