@@ -1190,6 +1190,6 @@ mod tests {
         let deps = boundaries.dependencies.as_ref().unwrap();
         assert!(deps.allow.is_some());
         assert!(deps.deny.is_none()); // This should be None, not serialized as
-        // null
+                                      // null
     }
 }
