@@ -6,25 +6,25 @@ use std::{
 use rayon::prelude::*;
 use serde::Serialize;
 use thiserror::Error;
-use tracing::{debug, Span};
+use tracing::{Span, debug};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
 use turborepo_cache::CacheHitMetadata;
 use turborepo_env::{BySource, DetailedMap, EnvironmentVariableMap};
-use turborepo_frameworks::{infer_framework, Slug as FrameworkSlug};
+use turborepo_frameworks::{Slug as FrameworkSlug, infer_framework};
 use turborepo_repository::package_graph::{PackageInfo, PackageName};
 use turborepo_scm::SCM;
 use turborepo_task_id::TaskId;
 use turborepo_telemetry::events::{
-    generic::GenericEventBuilder, task::PackageTaskEventBuilder, EventBuilder,
+    EventBuilder, generic::GenericEventBuilder, task::PackageTaskEventBuilder,
 };
 
 use crate::{
+    DaemonClient, DaemonConnector,
     cli::EnvMode,
     engine::TaskNode,
     hash::{FileHashes, LockFilePackages, TaskHashable, TurboHash},
     opts::RunOpts,
     task_graph::TaskDefinition,
-    DaemonClient, DaemonConnector,
 };
 
 #[derive(Debug, Error)]
@@ -149,9 +149,9 @@ impl PackageInputsHashes {
                                     );
                                 })
                                 .ok() // If we timed out, we don't need to
-                                      // error,
-                                      // just return None so we can move on to
-                                      // local
+                            // error,
+                            // just return None so we can move on to
+                            // local
                         })
                         .and_then(|result| {
                             match result {
@@ -456,6 +456,8 @@ impl<'a> TaskHasher<'a> {
                     "DISPLAY",
                     "TMP",
                     "TEMP",
+                    // Windows
+                    "WINDIR",
                     // VSCode IDE - https://github.com/microsoft/vscode-js-debug/blob/5b0f41dbe845d693a541c1fae30cec04c878216f/src/targets/node/nodeLauncherBase.ts#L320
                     "VSCODE_*",
                     "ELECTRON_RUN_AS_NODE",
