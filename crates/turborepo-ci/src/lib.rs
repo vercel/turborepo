@@ -235,8 +235,8 @@ mod tests {
         let end_output = end_fn(end_time);
 
         // The section identifier should be sanitized (@ -> at, / -> -)
-        assert!(start_output.contains("section_start:1234567890:atorganisation-package:build"));
-        assert!(end_output.contains("section_end:1234567900:atorganisation-package:build"));
+        assert!(start_output.contains("section_start:1234567890:at-organisation-package:build"));
+        assert!(end_output.contains("section_end:1234567900:at-organisation-package:build"));
 
         // The description should contain the original group name
         assert!(start_output.contains("@organisation/package:build"));

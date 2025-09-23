@@ -302,7 +302,7 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                                 // GitLab CI section names only allow /a-zA-Z0-9._-/ characters
                                 // Replace @ with 'at' and / with '-' for section identifier
                                 let sanitized_group_name =
-                                    group_name.replace('@', "at").replace('/', "-");
+                                    group_name.replace('@', "at-").replace('/', "-");
                                 format!(
                                     "\\e[0Ksection_start:{timestamp}:{sanitized_group_name}\\r\\
                                      e[0K{group_name}"
@@ -314,7 +314,7 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                                 let timestamp = end_time.timestamp();
                                 // Use the same sanitization for section end
                                 let sanitized_group_name =
-                                    group_name.replace('@', "at").replace('/', "-");
+                                    group_name.replace('@', "at-").replace('/', "-");
                                 format!(
                                     "\\e[0Ksection_end:{timestamp}:{sanitized_group_name}\\r\\e[0K"
                                 )
