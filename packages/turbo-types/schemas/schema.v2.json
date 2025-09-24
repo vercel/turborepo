@@ -106,18 +106,18 @@
         "futureFlags": {
           "type": "object",
           "properties": {
-            "turbo_extends_keyword": {
+            "turboExtendsKeyword": {
               "type": "boolean",
               "description": "Enable `$TURBO_EXTENDS$`\n\n When enabled, allows using `$TURBO_EXTENDS$` in array fields.  This will change the default behavior of overriding the field to instead append."
             },
-            "non_root_extends": {
+            "nonRootExtends": {
               "type": "boolean",
               "description": "Enable extending from a non-root `turbo.json`\n\nWhen enabled, allows using extends targeting `turbo.json`s other than root. All `turbo.json` must still extend from the root `turbo.json` first."
             }
           },
           "required": [
-            "turbo_extends_keyword",
-            "non_root_extends"
+            "turboExtendsKeyword",
+            "nonRootExtends"
           ],
           "additionalProperties": false,
           "description": "Opt into breaking changes prior to major releases, experimental features, and beta features.",
