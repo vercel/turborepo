@@ -1,9 +1,10 @@
 use crate::term::BufWrite as _;
 
 /// Represents a foreground or background color for cells.
-#[derive(Eq, PartialEq, Debug, Copy, Clone)]
+#[derive(Eq, PartialEq, Debug, Default, Copy, Clone)]
 pub enum Color {
     /// The default terminal color.
+    #[default]
     Default,
 
     /// An indexed terminal color.
@@ -11,12 +12,6 @@ pub enum Color {
 
     /// An RGB terminal color. The parameters are (red, green, blue).
     Rgb(u8, u8, u8),
-}
-
-impl Default for Color {
-    fn default() -> Self {
-        Self::Default
-    }
 }
 
 const TEXT_MODE_BOLD: u8 = 0b0000_0001;
