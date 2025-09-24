@@ -732,16 +732,18 @@ impl<'a> EngineBuilder<'a> {
                 .load(package_name)
                 .map(Some)
                 .or_else(|err| {
-                    if let Some((span, text)) = read_req.required()
-                        && matches!(err, config::Error::NoTurboJSON)
-                    {
-                        Err(Error::MissingTurboJsonExtends(Box::new(
-                            MissingTurboJsonExtends {
-                                package_name: read_req.package_name().to_string(),
-                                span,
-                                text,
-                            },
-                        )))
+                    if let Some((span, text)) = read_req.required() {
+                        if matches!(err, config::Error::NoTurboJSON) {
+                            Err(Error::MissingTurboJsonExtends(Box::new(
+                                MissingTurboJsonExtends {
+                                    package_name: read_req.package_name().to_string(),
+                                    span,
+                                    text,
+                                },
+                            )))
+                        } else {
+                            Err(err.into())
+                        }
                     } else if matches!(err, config::Error::NoTurboJSON) {
                         Ok(None)
                     } else {
