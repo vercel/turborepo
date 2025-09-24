@@ -469,4 +469,80 @@ mod test {
         assert_eq!(lockfile.turbo_version().as_deref(), Some("1.5.5"));
         Ok(())
     }
+
+    #[test]
+    fn test_subgraph_with_empty_inputs() -> Result<(), Error> {
+        let lockfile = NpmLockfile::load(include_bytes!("../fixtures/npm-lock.json"))?;
+
+        // Test with empty workspace packages and packages
+        let subgraph = lockfile.subgraph(&[], &[])?;
+        let subgraph_npm = subgraph.as_ref() as &dyn Any;
+        let subgraph_npm = subgraph_npm.downcast_ref::<NpmLockfile>().unwrap();
+
+        // Should contain root package if it exists
+        assert!(subgraph_npm.packages.contains_key(""));
+        assert_eq!(subgraph_npm.packages.len(), 1);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_resolve_package_with_invalid_workspace() -> Result<(), Error> {
+        let lockfile = NpmLockfile::load(include_bytes!("../fixtures/npm-lock.json"))?;
+
+        // Test with invalid workspace
+        let result = lockfile.resolve_package("invalid/workspace", "lodash", "^4.17.21");
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), Error::MissingWorkspace(_)));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_global_change_detection() -> Result<(), Error> {
+        let lockfile1 = NpmLockfile::load(include_bytes!("../fixtures/npm-lock.json"))?;
+        let lockfile2 = NpmLockfile::load(include_bytes!("../fixtures/npm-lock.json"))?;
+
+        // Same lockfile should not show global change
+        assert!(!lockfile1.global_change(&lockfile2));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_all_dependencies_with_invalid_key() -> Result<(), Error> {
+        let lockfile = NpmLockfile::load(include_bytes!("../fixtures/npm-lock.json"))?;
+
+        // Test with invalid package key
+        let result = lockfile.all_dependencies("invalid-package-key")?;
+        assert!(result.is_none());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_human_name_with_nonexistent_package() -> Result<(), Error> {
+        let lockfile = NpmLockfile::load(include_bytes!("../fixtures/npm-lock.json"))?;
+
+        let package = Package {
+            key: "nonexistent-package".to_string(),
+            version: "1.0.0".to_string(),
+        };
+
+        let result = lockfile.human_name(&package);
+        assert!(result.is_none());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_patches_with_empty_lockfile() -> Result<(), Error> {
+        let lockfile = NpmLockfile::load(include_bytes!("../fixtures/npm-lock.json"))?;
+
+        // NPM lockfile should have no patches by default
+        let patches = lockfile.patches()?;
+        assert!(patches.is_empty());
+
+        Ok(())
+    }
 }
