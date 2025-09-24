@@ -105,15 +105,25 @@
         },
         "futureFlags": {
           "type": "object",
-          "additionalProperties": {},
-          "description": "Opt into breaking changes prior to major releases, experimental features, and beta features.",
+          "properties": {
+            "turboExtendsKeyword": {
+              "type": "boolean",
+              "description": "Enable `$TURBO_EXTENDS$`\n\nWhen enabled, allows using `$TURBO_EXTENDS$` in array fields. This will change the default behavior of overriding the field to instead append.",
+              "default": false
+            },
+            "nonRootExtends": {
+              "type": "boolean",
+              "description": "Enable extending from a non-root `turbo.json`\n\nWhen enabled, allows using extends targeting `turbo.json`s other than root. All `turbo.json` must still extend from the root `turbo.json` first.",
+              "default": false
+            }
+          },
+          "additionalProperties": false,
+          "description": "Opt into experimental features, beta features, and breaking changes prior to major releases.",
           "default": {}
         }
       },
       "additionalProperties": false,
-      "required": [
-        "tasks"
-      ]
+      "required": ["tasks"]
     },
     "Pipeline": {
       "type": "object",
@@ -206,13 +216,7 @@
     },
     "OutputLogs": {
       "type": "string",
-      "enum": [
-        "full",
-        "hash-only",
-        "new-only",
-        "errors-only",
-        "none"
-      ]
+      "enum": ["full", "hash-only", "new-only", "errors-only", "none"]
     },
     "RemoteCache": {
       "type": "object",
@@ -265,10 +269,7 @@
     },
     "UI": {
       "type": "string",
-      "enum": [
-        "tui",
-        "stream"
-      ]
+      "enum": ["tui", "stream"]
     },
     "RelativeUnixPath": {
       "type": "string",
@@ -276,10 +277,7 @@
     },
     "EnvMode": {
       "type": "string",
-      "enum": [
-        "strict",
-        "loose"
-      ]
+      "enum": ["strict", "loose"]
     },
     "RootBoundariesConfig": {
       "type": "object",
@@ -357,9 +355,7 @@
             "type": "string"
           },
           "description": "This key is only available in Workspace Configs and cannot be used in your root turbo.json.\n\nTells turbo to extend your root `turbo.json` and overrides with the keys provided in your Workspace Configs.\n\nCurrently, only the \"//\" value is allowed.",
-          "default": [
-            "//"
-          ]
+          "default": ["//"]
         },
         "tags": {
           "type": "array",
@@ -373,10 +369,7 @@
           "description": "Configuration for `turbo boundaries` that is specific to this package"
         }
       },
-      "required": [
-        "extends",
-        "tasks"
-      ],
+      "required": ["extends", "tasks"],
       "additionalProperties": false,
       "description": "A `turbo.json` file in a package in the monorepo (not the root)"
     },
@@ -395,3 +388,4 @@
     }
   }
 }
+
