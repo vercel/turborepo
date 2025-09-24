@@ -202,14 +202,14 @@ export interface RootSchema extends BaseSchema {
      *   When enabled, allows using `$TURBO_EXTENDS$` in array fields.
      *   This will change the default behavior of overriding the field to instead append.
      */
-    turboExtendsKeyword: boolean;
+    turboExtendsKeyword?: boolean;
 
     /** Enable extending from a non-root `turbo.json`
      *
      * When enabled, allows using extends targeting `turbo.json`s other than
      * root. All `turbo.json` must still extend from the root `turbo.json` first.
      */
-    nonRootExtends: boolean;
+    nonRootExtends?: boolean;
   };
 }
 
