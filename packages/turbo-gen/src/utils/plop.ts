@@ -2,6 +2,7 @@ import path from "node:path";
 import fs from "fs-extra";
 import type { Project } from "@turbo/workspaces";
 import type { NodePlopAPI, PlopGenerator } from "node-plop";
+import nodePlop from "node-plop";
 import { register } from "ts-node";
 import { Separator } from "inquirer";
 import { searchUp, getTurboConfigs, logger } from "@turbo/utils";
@@ -26,13 +27,13 @@ export type Generator = PlopGenerator & {
   name: string;
 };
 
-export async function getPlop({
+export function getPlop({
   project,
   configPath,
 }: {
   project: Project;
   configPath?: string;
-}): Promise<NodePlopAPI | undefined> {
+}): NodePlopAPI | undefined {
   // init ts-node for plop to support ts configs
   register({
     transpileOnly: true,
@@ -55,8 +56,7 @@ export async function getPlop({
     }
 
     try {
-      const { default: nodePlop } = await import("node-plop");
-      plop = await nodePlop(configPath, {
+      plop = nodePlop(configPath, {
         destBasePath: configPath,
         force: false,
       });
@@ -65,33 +65,26 @@ export async function getPlop({
     }
   } else {
     // look for a root config
-    const rootConfigPromises = SUPPORTED_ROOT_GENERATOR_CONFIGS.map(
-      async (possiblePath) => {
-        const plopFile = path.join(project.paths.root, possiblePath);
-        if (!fs.existsSync(plopFile)) {
-          return null;
-        }
-
-        try {
-          const { default: nodePlop } = await import("node-plop");
-          return await nodePlop(plopFile, {
-            destBasePath: project.paths.root,
-            force: false,
-          });
-        } catch (e) {
-          logger.error(e);
-          return null;
-        }
+    for (const possiblePath of SUPPORTED_ROOT_GENERATOR_CONFIGS) {
+      const plopFile = path.join(project.paths.root, possiblePath);
+      if (!fs.existsSync(plopFile)) {
+        continue;
       }
-    );
 
-    const rootConfigs = await Promise.all(rootConfigPromises);
-    plop = rootConfigs.find((config) => config !== null) || undefined;
+      try {
+        plop = nodePlop(plopFile, {
+          destBasePath: project.paths.root,
+          force: false,
+        });
+        break;
+      } catch (e) {
+        logger.error(e);
+      }
+    }
 
     if (!plop && workspaceConfigs.length > 0) {
       // if no root config, use the first workspace config as the entrypoint
-      const { default: nodePlop } = await import("node-plop");
-      plop = await nodePlop(workspaceConfigs[0].config, {
+      plop = nodePlop(workspaceConfigs[0].config, {
         destBasePath: workspaceConfigs[0].root,
         force: false,
       });
@@ -101,9 +94,9 @@ export async function getPlop({
 
   if (plop) {
     // add in all the workspace configs
-    const loadPromises = workspaceConfigs.map(async (c) => {
+    workspaceConfigs.forEach((c) => {
       try {
-        await plop.load(c.config, {
+        plop.load(c.config, {
           destBasePath: c.root,
           force: false,
         });
@@ -111,20 +104,19 @@ export async function getPlop({
         logger.error(e);
       }
     });
-    await Promise.all(loadPromises);
   }
 
   return plop;
 }
 
-export async function getCustomGenerators({
+export function getCustomGenerators({
   project,
   configPath,
 }: {
   project: Project;
   configPath?: string;
-}): Promise<Array<Generator | Separator>> {
-  const plop = await getPlop({ project, configPath });
+}): Array<Generator | Separator> {
+  const plop = getPlop({ project, configPath });
 
   if (!plop) {
     return [];
@@ -174,7 +166,7 @@ export async function getCustomGenerators({
   return gensWithSeparators;
 }
 
-export async function getCustomGenerator({
+export function getCustomGenerator({
   project,
   generator,
   configPath,
@@ -182,8 +174,8 @@ export async function getCustomGenerator({
   project: Project;
   generator: string;
   configPath?: string;
-}): Promise<string | undefined> {
-  const plop = await getPlop({ project, configPath });
+}): string | undefined {
+  const plop = getPlop({ project, configPath });
   if (!plop) {
     return undefined;
   }
@@ -257,7 +249,7 @@ export async function runCustomGenerator({
   bypassArgs?: Array<string>;
   configPath?: string;
 }): Promise<void> {
-  const plop = await getPlop({ project, configPath });
+  const plop = getPlop({ project, configPath });
   if (!plop) {
     throw new GeneratorError("Unable to load generators", {
       type: "plop_unable_to_load_config",
