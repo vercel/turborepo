@@ -215,4 +215,38 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn test_gitlab_ci_group_name_sanitization() {
+        use chrono::DateTime;
+
+        let gitlab_vendor = get_vendor("GitLab CI");
+        let behavior = gitlab_vendor.behavior.as_ref().unwrap();
+
+        // Test with a package name containing @ and /
+        let group_name = "@organisation/package:build".to_string();
+        let start_time = DateTime::from_timestamp(1234567890, 0).unwrap();
+        let end_time = DateTime::from_timestamp(1234567900, 0).unwrap();
+
+        let start_fn = (behavior.group_prefix)(group_name.clone());
+        let end_fn = (behavior.group_suffix)(group_name.clone());
+
+        let start_output = start_fn(start_time);
+        let end_output = end_fn(end_time);
+
+        // The section identifier should be sanitized (@ -> at, / -> -)
+        assert!(start_output.contains("section_start:1234567890:at-organisation-package:build"));
+        assert!(end_output.contains("section_end:1234567900:at-organisation-package:build"));
+
+        // The description should contain the original group name
+        assert!(start_output.contains("@organisation/package:build"));
+
+        // Test with a simple package name (should work unchanged)
+        let simple_group_name = "simple-package:build".to_string();
+        let simple_start_fn = (behavior.group_prefix)(simple_group_name.clone());
+        let simple_start_output = simple_start_fn(start_time);
+
+        assert!(simple_start_output.contains("section_start:1234567890:simple-package:build"));
+        assert!(simple_start_output.contains("simple-package:build"));
+    }
 }

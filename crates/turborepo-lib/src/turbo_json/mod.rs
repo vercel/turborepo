@@ -1102,4 +1102,79 @@ mod tests {
             assert!(raw_config.future_flags.is_none());
         }
     }
+
+    #[test]
+    fn test_boundaries_permissions_serialization_skip_none() {
+        let json_with_partial_permissions = r#"{
+            "boundaries": {
+                "dependencies": {
+                    "allow": ["package-a"]
+                }
+            }
+        }"#;
+
+        let parsed: RawTurboJson =
+            RawRootTurboJson::parse(json_with_partial_permissions, "turbo.json")
+                .unwrap()
+                .into();
+
+        let serialized = serde_json::to_string(&parsed).unwrap();
+
+        // The serialized JSON should not contain "deny":null
+        let reparsed: RawTurboJson = RawRootTurboJson::parse(&serialized, "turbo.json")
+            .unwrap()
+            .into();
+
+        // Verify the structure is preserved
+        assert!(reparsed.boundaries.is_some());
+        let boundaries = reparsed.boundaries.as_ref().unwrap();
+        assert!(boundaries.dependencies.is_some());
+        let deps = boundaries.dependencies.as_ref().unwrap();
+        assert!(deps.allow.is_some());
+        assert!(deps.deny.is_none()); // This should be None, not null
+    }
+
+    #[test]
+    fn test_prune_tasks_preserves_boundaries_structure() {
+        let json_with_boundaries = r#"{
+            "tasks": {
+                "build": {},
+                "app-a#build": {}
+            },
+            "boundaries": {
+                "dependencies": {
+                    "allow": []
+                }
+            }
+        }"#;
+
+        let parsed: RawTurboJson = RawRootTurboJson::parse(json_with_boundaries, "turbo.json")
+            .unwrap()
+            .into();
+
+        // Simulate the prune operation
+        let pruned = parsed.prune_tasks(&["app-a"]);
+
+        // Serialize the pruned config
+        let serialized = serde_json::to_string_pretty(&pruned).unwrap();
+
+        // Parse the serialized config to ensure it's valid
+        let reparsed_result = RawRootTurboJson::parse(&serialized, "turbo.json");
+        assert!(
+            reparsed_result.is_ok(),
+            "Failed to parse pruned config: {:?}",
+            reparsed_result.err()
+        );
+
+        let reparsed: RawTurboJson = reparsed_result.unwrap().into();
+
+        // Verify boundaries structure is preserved
+        assert!(reparsed.boundaries.is_some());
+        let boundaries = reparsed.boundaries.as_ref().unwrap();
+        assert!(boundaries.dependencies.is_some());
+        let deps = boundaries.dependencies.as_ref().unwrap();
+        assert!(deps.allow.is_some());
+        assert!(deps.deny.is_none()); // This should be None, not serialized as
+                                      // null
+    }
 }
