@@ -629,8 +629,14 @@ impl BunLockfile {
         let package_names: HashSet<String> = idents
             .iter()
             .map(|ident| {
-                // Extract package name from ident (e.g., "foo@1.0.0" -> "foo")
-                ident.split('@').next().unwrap_or(ident).to_string()
+                // Extract package name from ident
+                // e.g., "foo@1.0.0" -> "foo"
+                // e.g., "@scope/package@1.0.0" -> "@scope/package"
+                ident
+                    .rsplit_once('@')
+                    .map(|(name, _version)| name)
+                    .unwrap_or(ident)
+                    .to_string()
             })
             .collect();
 
