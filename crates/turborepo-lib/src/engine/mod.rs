@@ -587,7 +587,7 @@ pub enum ValidateError {
         concurrency: u32,
     },
     #[error(
-        "Cannot run interactive task \"{task}\" without Terminal UI. Set `\"ui\": true` in \
+        "Cannot run interactive task \"{task}\" without Terminal UI. Set `\"ui\": \"tui\"` in \
          `turbo.json`, use the `--ui=tui` flag, or set `TURBO_UI=true` as an environment variable."
     )]
     InteractiveNeedsUI { task: String },
