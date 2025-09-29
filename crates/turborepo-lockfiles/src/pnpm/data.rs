@@ -1499,12 +1499,11 @@ c:
         assert!(pnpm_subgraph.importers.contains_key("."));
 
         // Should contain the requested package
-        assert!(
-            pnpm_subgraph
-                .packages
-                .as_ref()
-                .unwrap()
-                .contains_key("/is-odd@3.0.1"));
+        assert!(pnpm_subgraph
+            .packages
+            .as_ref()
+            .unwrap()
+            .contains_key("/is-odd@3.0.1"));
     }
 
     #[test]
