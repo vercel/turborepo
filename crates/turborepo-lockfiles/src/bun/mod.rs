@@ -1,7 +1,8 @@
 //! # Bun Lockfile Support
 //!
-//! This module provides comprehensive support for Bun lockfiles (`bun.lockb`), handling both
-//! binary and JSON formats with support for lockfile versions 0 and 1.
+//! This module provides comprehensive support for Bun lockfiles (`bun.lockb`),
+//! handling both binary and JSON formats with support for lockfile versions 0
+//! and 1.
 //!
 //! ## Lockfile Version Support
 //!
@@ -14,7 +15,6 @@
 //! - Enhanced workspace dependency resolution with optimized lookup strategies
 //! - Improved catalog support with multiple catalog types
 //! - Advanced override functionality with precedence rules
-//! - Trusted dependencies support
 //! - Optimized subgraph filtering for workspace dependencies
 //!
 //! ## Key Features
@@ -22,9 +22,12 @@
 //! ### Catalog Resolution
 //! The module supports Bun's catalog system for dependency version management:
 //! - **Default catalog**: Available via `catalog` field in lockfile
-//! - **Named catalogs**: Available via `catalogs` field with custom catalog names
-//! - **Resolution precedence**: Named catalogs take precedence over default catalog
-//! - **Workspace integration**: Catalogs work seamlessly with workspace dependencies
+//! - **Named catalogs**: Available via `catalogs` field with custom catalog
+//!   names
+//! - **Resolution precedence**: Named catalogs take precedence over default
+//!   catalog
+//! - **Workspace integration**: Catalogs work seamlessly with workspace
+//!   dependencies
 //!
 //! Example catalog usage:
 //! ```json
@@ -42,40 +45,44 @@
 //!
 //! ### Override Functionality
 //! Provides dependency override capabilities similar to npm/yarn:
-//! - **Package overrides**: Replace specific package versions across the dependency tree
+//! - **Package overrides**: Replace specific package versions across the
+//!   dependency tree
 //! - **Scoped overrides**: Apply overrides to specific dependency contexts
-//! - **Patch integration**: Overrides work in conjunction with patch dependencies
-//! - **Subgraph filtering**: Overrides are properly handled during dependency pruning
-//!
-//! ### Trusted Dependencies
-//! Supports Bun's trusted dependencies feature:
-//! - **Security control**: Explicitly mark packages as trusted for execution
-//! - **Installation optimization**: Trusted packages may have different installation behavior
-//! - **Subgraph preservation**: Trusted dependencies are maintained during filtering
+//! - **Patch integration**: Overrides work in conjunction with patch
+//!   dependencies
+//! - **Subgraph filtering**: Overrides are properly handled during dependency
+//!   pruning
 //!
 //! ### V1 Workspace Optimizations
 //! Version 1 lockfiles include several workspace-specific optimizations:
-//! - **Direct workspace resolution**: Optimized lookup for workspace dependencies
-//! - **Transitive workspace tracking**: Proper handling of workspace-to-workspace dependencies  
+//! - **Direct workspace resolution**: Optimized lookup for workspace
+//!   dependencies
+//! - **Transitive workspace tracking**: Proper handling of
+//!   workspace-to-workspace dependencies
 //! - **Nested workspace support**: Full support for nested workspace structures
-//! - **Dependency deduplication**: Smart deduplication of workspace dependencies
+//! - **Dependency deduplication**: Smart deduplication of workspace
+//!   dependencies
 //!
 //! ### Subgraph Filtering Behavior
 //! The module provides sophisticated dependency subgraph extraction:
-//! - **Workspace-aware filtering**: Preserves workspace dependency relationships
-//! - **Override preservation**: Maintains override behavior in filtered subgraphs
-//! - **Trusted dependency inclusion**: Ensures trusted dependencies are included
-//! - **Patch dependency handling**: Properly includes patched dependencies and their patches
+//! - **Workspace-aware filtering**: Preserves workspace dependency
+//!   relationships
+//! - **Override preservation**: Maintains override behavior in filtered
+//!   subgraphs
+//! - **Patch dependency handling**: Properly includes patched dependencies and
+//!   their patches
 //! - **Transitive closure**: Calculates complete transitive dependency closures
 //!
 //! ## Implementation Details
 //!
-//! The module handles both binary (`.lockb`) and JSON formats, with automatic format detection
-//! and conversion. It provides full round-trip compatibility, ensuring that lockfiles can be
-//! read, modified, and written back without data loss.
+//! The module handles both binary (`.lockb`) and JSON formats, with automatic
+//! format detection and conversion. It provides full round-trip compatibility,
+//! ensuring that lockfiles can be read, modified, and written back without data
+//! loss.
 //!
 //! Key data structures:
-//! - [`BunLockfile`]: Main lockfile representation with metadata and entry mappings
+//! - [`BunLockfile`]: Main lockfile representation with metadata and entry
+//!   mappings
 //! - [`BunLockfileData`]: Raw lockfile data structure matching Bun's format
 //! - [`WorkspaceEntry`]: Workspace package representation
 //! - [`PackageEntry`]: External package representation
@@ -133,10 +140,8 @@ impl Serialize for Negatable {
             Negatable::Single(platform) => serializer.serialize_str(platform),
             Negatable::Multiple(platforms) => platforms.serialize(serializer),
             Negatable::Negated(platforms) => {
-                let negated_platforms: Vec<String> = platforms
-                    .iter()
-                    .map(|p| format!("!{}", p))
-                    .collect();
+                let negated_platforms: Vec<String> =
+                    platforms.iter().map(|p| format!("!{}", p)).collect();
                 negated_platforms.serialize(serializer)
             }
         }
@@ -149,7 +154,7 @@ impl<'de> Deserialize<'de> for Negatable {
         D: Deserializer<'de>,
     {
         let value: Value = Value::deserialize(deserializer)?;
-        
+
         match value {
             Value::String(s) => {
                 if s == "none" {
@@ -171,12 +176,18 @@ impl<'de> Deserialize<'de> for Negatable {
                         )),
                     })
                     .collect();
-                
+
                 let platforms = platforms?;
                 if platforms.iter().any(|p| p.starts_with('!')) {
                     let negated_platforms: Vec<String> = platforms
                         .into_iter()
-                        .map(|p| if p.starts_with('!') { p[1..].to_string() } else { p })
+                        .map(|p| {
+                            if p.starts_with('!') {
+                                p[1..].to_string()
+                            } else {
+                                p
+                            }
+                        })
                         .collect();
                     Ok(Negatable::Negated(negated_platforms))
                 } else {
@@ -201,7 +212,7 @@ impl Negatable {
             Negatable::Negated(platforms) => !platforms.contains(&platform.to_string()),
         }
     }
-    
+
     /// Returns true if this is an empty/none constraint
     pub fn is_none(&self) -> bool {
         matches!(self, Negatable::None)
@@ -239,7 +250,7 @@ impl LockfileVersion {
             _ => None,
         }
     }
-    
+
     fn as_i32(self) -> i32 {
         self as i32
     }
@@ -259,8 +270,6 @@ pub struct BunLockfileData {
     packages: Map<String, PackageEntry>,
     #[serde(default, skip_serializing_if = "Map::is_empty")]
     patched_dependencies: Map<String, String>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    trusted_dependencies: Vec<String>,
     #[serde(default, skip_serializing_if = "Map::is_empty")]
     overrides: Map<String, String>,
     #[serde(default, skip_serializing_if = "Map::is_empty")]
@@ -314,7 +323,7 @@ struct PackageInfo {
     /// Operating system constraint for this package
     #[serde(default, skip_serializing_if = "Negatable::is_none")]
     os: Negatable,
-    /// CPU architecture constraint for this package  
+    /// CPU architecture constraint for this package
     #[serde(default, skip_serializing_if = "Negatable::is_none")]
     cpu: Negatable,
     // We do not care about the rest here
@@ -343,7 +352,7 @@ impl Lockfile for BunLockfile {
             .get(workspace_path)
             .ok_or_else(|| crate::Error::MissingWorkspace(workspace_path.into()))?;
         let workspace_name = &workspace_entry.name;
-        
+
         // Handle catalog references
         let resolved_version = if version.starts_with("catalog:") {
             // Try to resolve catalog reference
@@ -356,14 +365,15 @@ impl Lockfile for BunLockfile {
         } else {
             version
         };
-        
+
         // Apply overrides to the resolved version if any exist for this package
         let override_version = self.apply_overrides(name, resolved_version);
-        
+
         // V1 optimization: Check if this is a workspace dependency that can be resolved
         // directly from the workspaces section without requiring a packages entry
         if self.data.lockfile_version >= 1 {
-            if let Some(workspace_target_path) = self.resolve_workspace_dependency(override_version) {
+            if let Some(workspace_target_path) = self.resolve_workspace_dependency(override_version)
+            {
                 if let Some(target_workspace) = self.data.workspaces.get(workspace_target_path) {
                     // This is a workspace dependency, create a synthetic package entry
                     let workspace_version = target_workspace.version.as_deref().unwrap_or("0.0.0");
@@ -374,7 +384,7 @@ impl Lockfile for BunLockfile {
                 }
             }
         }
-        
+
         let workspace_key = format!("{workspace_name}/{name}");
         if let Some((_key, entry)) = self.package_entry(&workspace_key) {
             // Check if the entry matches the override version (if different from resolved)
@@ -382,7 +392,12 @@ impl Lockfile for BunLockfile {
                 // Look for a packages entry that matches the override version
                 let override_ident = format!("{name}@{override_version}");
                 // Try to find a package entry that matches the override
-                if let Some((_override_key, override_entry)) = self.data.packages.iter().find(|(_, entry)| entry.ident == override_ident) {
+                if let Some((_override_key, override_entry)) = self
+                    .data
+                    .packages
+                    .iter()
+                    .find(|(_, entry)| entry.ident == override_ident)
+                {
                     let mut pkg_version = override_entry.version().to_string();
                     // Check for any patches
                     if let Some(patch) = self.data.patched_dependencies.get(&override_entry.ident) {
@@ -395,7 +410,7 @@ impl Lockfile for BunLockfile {
                     }));
                 }
             }
-            
+
             let mut version = entry.version().to_string();
             // Check for any patches
             if let Some(patch) = self.data.patched_dependencies.get(&entry.ident) {
@@ -481,7 +496,7 @@ impl Lockfile for BunLockfile {
         let Some(other_bun) = any_other.downcast_ref::<Self>() else {
             return true;
         };
-        
+
         // Check if lockfile version changed
         self.data.lockfile_version != other_bun.data.lockfile_version
     }
@@ -513,16 +528,21 @@ impl BunLockfile {
     }
 
     /// Checks if a version string is a workspace dependency reference
-    /// Returns the workspace path if it is (e.g., "packages/ui" -> Some("packages/ui"))
+    /// Returns the workspace path if it is (e.g., "packages/ui" ->
+    /// Some("packages/ui"))
     fn resolve_workspace_dependency<'a>(&self, version: &'a str) -> Option<&'a str> {
         // Workspace dependencies are referenced by their relative path
         // e.g., "@repo/ui": "packages/ui"
         // We need to check if this path exists in our workspaces
-        if !version.contains('/') || version.starts_with('^') || version.starts_with('~') || version.starts_with('=') {
+        if !version.contains('/')
+            || version.starts_with('^')
+            || version.starts_with('~')
+            || version.starts_with('=')
+        {
             // Not a workspace path - contains version characters or no slash
             return None;
         }
-        
+
         // Check if this path exists in workspaces
         if self.data.workspaces.contains_key(version) {
             Some(version)
@@ -532,7 +552,8 @@ impl BunLockfile {
     }
 
     /// Resolves a catalog reference to the actual version
-    /// Supports both default catalog ("catalog:") and named catalogs ("catalog:group:")
+    /// Supports both default catalog ("catalog:") and named catalogs
+    /// ("catalog:group:")
     fn resolve_catalog_version(&self, name: &str, catalog_ref: &str) -> Option<&str> {
         if let Some(stripped) = catalog_ref.strip_prefix("catalog:") {
             if stripped.is_empty() {
@@ -609,7 +630,7 @@ impl BunLockfile {
                 }
             })
             .collect();
-        
+
         // Extract package names from idents for filtering
         let package_names: HashSet<String> = idents
             .iter()
@@ -618,7 +639,7 @@ impl BunLockfile {
                 ident.split('@').next().unwrap_or(ident).to_string()
             })
             .collect();
-        
+
         // Filter overrides to only include packages in the subgraph
         let new_overrides = self
             .data
@@ -632,16 +653,7 @@ impl BunLockfile {
                 }
             })
             .collect();
-        
-        // Filter trusted dependencies to only include packages in the subgraph
-        let new_trusted_dependencies = self
-            .data
-            .trusted_dependencies
-            .iter()
-            .filter(|name| package_names.contains(name.as_str()))
-            .cloned()
-            .collect();
-        
+
         // For catalogs, we might want to keep them all since they could be referenced
         // by workspace dependencies, but we could also filter to only used ones
         // For now, keeping them all for simplicity
@@ -652,7 +664,6 @@ impl BunLockfile {
                 workspaces: new_workspaces,
                 packages: new_packages,
                 patched_dependencies: new_patched_dependencies,
-                trusted_dependencies: new_trusted_dependencies,
                 overrides: new_overrides,
                 catalog: self.data.catalog.clone(),
                 catalogs: self.data.catalogs.clone(),
@@ -687,11 +698,11 @@ impl FromStr for BunLockfile {
         .map_err(Error::from)?;
         let strict_json = format.print().map_err(Error::from)?;
         let data: BunLockfileData = serde_json::from_str(strict_json.as_code())?;
-        
+
         // Validate that we support this lockfile version
         let _version = LockfileVersion::from_i32(data.lockfile_version)
             .ok_or_else(|| super::Error::UnsupportedVersion(data.lockfile_version))?;
-        
+
         let mut key_to_entry = HashMap::with_capacity(data.packages.len());
         for (path, info) in data.packages.iter() {
             if let Some(prev_path) = key_to_entry.insert(info.ident.clone(), path.clone()) {
@@ -943,7 +954,7 @@ mod test {
             "packages": {}
         }))
         .unwrap();
-        
+
         let v1_contents = serde_json::to_string(&json!({
             "lockfileVersion": 1,
             "workspaces": {
@@ -954,18 +965,18 @@ mod test {
             "packages": {}
         }))
         .unwrap();
-        
+
         let v0_lockfile = BunLockfile::from_str(&v0_contents).unwrap();
         let v1_lockfile = BunLockfile::from_str(&v1_contents).unwrap();
-        
+
         // Version change should be detected
         assert!(v0_lockfile.global_change(&v1_lockfile));
-        
+
         // Same version should not be a global change
         assert!(!v0_lockfile.global_change(&v0_lockfile));
         assert!(!v1_lockfile.global_change(&v1_lockfile));
     }
-    
+
     #[test]
     fn test_bun_global_change_function() {
         let v0_contents = serde_json::to_string(&json!({
@@ -978,7 +989,7 @@ mod test {
             "packages": {}
         }))
         .unwrap();
-        
+
         let v1_contents = serde_json::to_string(&json!({
             "lockfileVersion": 1,
             "workspaces": {
@@ -989,7 +1000,7 @@ mod test {
             "packages": {}
         }))
         .unwrap();
-        
+
         // Test the standalone function
         assert!(bun_global_change(v0_contents.as_bytes(), v1_contents.as_bytes()).unwrap());
         assert!(!bun_global_change(v0_contents.as_bytes(), v0_contents.as_bytes()).unwrap());
@@ -1011,7 +1022,6 @@ mod test {
             "packages": {
                 "foo": ["foo@1.0.0", {}, "sha512-hello"]
             },
-            "trustedDependencies": ["foo", "bar"],
             "overrides": {
                 "foo": "1.0.0"
             },
@@ -1026,20 +1036,22 @@ mod test {
             }
         }))
         .unwrap();
-        
+
         let lockfile = BunLockfile::from_str(&contents).unwrap();
-        
+
         // Check that new fields are parsed
-        assert_eq!(lockfile.data.trusted_dependencies.len(), 2);
-        assert_eq!(lockfile.data.trusted_dependencies[0], "foo");
-        assert_eq!(lockfile.data.trusted_dependencies[1], "bar");
-        
         assert_eq!(lockfile.data.overrides.len(), 1);
-        assert_eq!(lockfile.data.overrides.get("foo"), Some(&"1.0.0".to_string()));
-        
+        assert_eq!(
+            lockfile.data.overrides.get("foo"),
+            Some(&"1.0.0".to_string())
+        );
+
         assert_eq!(lockfile.data.catalog.len(), 1);
-        assert_eq!(lockfile.data.catalog.get("react"), Some(&"^18.0.0".to_string()));
-        
+        assert_eq!(
+            lockfile.data.catalog.get("react"),
+            Some(&"^18.0.0".to_string())
+        );
+
         assert_eq!(lockfile.data.catalogs.len(), 1);
         let frontend_catalog = lockfile.data.catalogs.get("frontend").unwrap();
         assert_eq!(frontend_catalog.len(), 2);
@@ -1093,15 +1105,15 @@ mod test {
             }
         }))
         .unwrap();
-        
+
         let lockfile = BunLockfile::from_str(&contents).unwrap();
-        
+
         // Resolve foo - should get override version instead of original
         let result = lockfile
             .resolve_package("", "foo", "^1.0.0")
             .unwrap()
             .unwrap();
-        
+
         // Should resolve to overridden version
         assert_eq!(result.key, "foo@2.0.0");
         assert_eq!(result.version, "2.0.0");
@@ -1127,22 +1139,22 @@ mod test {
             }
         }))
         .unwrap();
-        
+
         let lockfile = BunLockfile::from_str(&contents).unwrap();
-        
+
         // Resolve bar - should get original version since no override exists for bar
         let result = lockfile
             .resolve_package("", "bar", "^1.0.0")
             .unwrap()
             .unwrap();
-        
+
         // Should resolve to original version (no override)
-        assert_eq!(result.key, "bar@1.0.0");    
+        assert_eq!(result.key, "bar@1.0.0");
         assert_eq!(result.version, "1.0.0");
     }
 
     #[test]
-    fn test_subgraph_filters_overrides_and_trusted_deps() {
+    fn test_subgraph_filters_overrides() {
         let contents = serde_json::to_string(&json!({
             "lockfileVersion": 0,
             "workspaces": {
@@ -1168,36 +1180,29 @@ mod test {
                 "foo": "2.0.0",
                 "bar": "2.0.0",
                 "unused": "1.0.0"
-            },
-            "trustedDependencies": ["foo", "bar", "unused"]
+            }
         }))
         .unwrap();
-        
+
         let lockfile = BunLockfile::from_str(&contents).unwrap();
-        
+
         // Create subgraph with only foo package
         let subgraph = lockfile
             .subgraph(&["apps/web".into()], &["foo@1.0.0".into()])
             .unwrap();
         let subgraph_data = subgraph.lockfile().unwrap();
-        
+
         // Check that overrides are filtered
         assert_eq!(subgraph_data.overrides.len(), 1);
         assert!(subgraph_data.overrides.contains_key("foo"));
         assert!(!subgraph_data.overrides.contains_key("bar"));
         assert!(!subgraph_data.overrides.contains_key("unused"));
-        
-        // Check that trusted dependencies are filtered
-        assert_eq!(subgraph_data.trusted_dependencies.len(), 1);
-        assert!(subgraph_data.trusted_dependencies.contains(&"foo".to_string()));
-        assert!(!subgraph_data.trusted_dependencies.contains(&"bar".to_string()));
-        assert!(!subgraph_data.trusted_dependencies.contains(&"unused".to_string()));
-        
+
         // Check that workspaces are correct
         assert_eq!(subgraph_data.workspaces.len(), 2);
         assert!(subgraph_data.workspaces.contains_key(""));
         assert!(subgraph_data.workspaces.contains_key("apps/web"));
-        
+
         // Check that packages are correct
         assert_eq!(subgraph_data.packages.len(), 1);
         assert!(subgraph_data.packages.contains_key("foo"));
@@ -1210,7 +1215,7 @@ mod test {
             "lockfileVersion": 0,
             "workspaces": {
                 "": {
-                    "name": "test", 
+                    "name": "test",
                     "dependencies": {
                         "lodash": "^4.17.20"
                     }
@@ -1228,15 +1233,15 @@ mod test {
             }
         }))
         .unwrap();
-        
+
         let lockfile = BunLockfile::from_str(&contents).unwrap();
-        
+
         // Resolve lodash - should get override version with patch
         let result = lockfile
             .resolve_package("", "lodash", "^4.17.20")
             .unwrap()
             .unwrap();
-        
+
         // Should resolve to overridden version with patch
         assert_eq!(result.key, "lodash@4.17.21");
         assert_eq!(result.version, "4.17.21+patches/lodash@4.17.21.patch");
@@ -1245,7 +1250,7 @@ mod test {
     #[test]
     fn test_catalog_resolution_methods() {
         let lockfile = BunLockfile::from_str(CATALOG_LOCKFILE).unwrap();
-        
+
         // Test resolving from default catalog
         assert_eq!(
             lockfile.resolve_catalog_version("react", "catalog:"),
@@ -1255,7 +1260,7 @@ mod test {
             lockfile.resolve_catalog_version("lodash", "catalog:"),
             Some("^4.17.21")
         );
-        
+
         // Test resolving from named catalog
         assert_eq!(
             lockfile.resolve_catalog_version("react", "catalog:frontend"),
@@ -1265,37 +1270,39 @@ mod test {
             lockfile.resolve_catalog_version("next", "catalog:frontend"),
             Some("^14.0.0")
         );
-        
+
         // Test resolving non-existent package from default catalog
         assert_eq!(
             lockfile.resolve_catalog_version("non-existent", "catalog:"),
             None
         );
-        
+
         // Test resolving from non-existent catalog
         assert_eq!(
             lockfile.resolve_catalog_version("react", "catalog:non-existent"),
             None
         );
-        
+
         // Test resolving package not in named catalog
         assert_eq!(
             lockfile.resolve_catalog_version("lodash", "catalog:frontend"),
             None
         );
-        
+
         // Test non-catalog version
-        assert_eq!(
-            lockfile.resolve_catalog_version("react", "^18.0.0"),
-            None
-        );
+        assert_eq!(lockfile.resolve_catalog_version("react", "^18.0.0"), None);
     }
 
     #[test_case("apps/web", "react", "catalog:", "react@18.2.0" ; "default catalog react")]
     #[test_case("apps/web", "lodash", "catalog:", "lodash@4.17.21" ; "default catalog lodash")]
     #[test_case("apps/docs", "react", "catalog:frontend", "react@19.0.0" ; "frontend catalog react")]
     #[test_case("apps/docs", "next", "catalog:frontend", "next@14.0.0" ; "frontend catalog next")]
-    fn test_resolve_package_with_catalog(workspace: &str, name: &str, version: &str, expected: &str) {
+    fn test_resolve_package_with_catalog(
+        workspace: &str,
+        name: &str,
+        version: &str,
+        expected: &str,
+    ) {
         let lockfile = BunLockfile::from_str(CATALOG_LOCKFILE).unwrap();
         let result = lockfile
             .resolve_package(workspace, name, version)
@@ -1307,19 +1314,19 @@ mod test {
     #[test]
     fn test_resolve_package_catalog_not_found() {
         let lockfile = BunLockfile::from_str(CATALOG_LOCKFILE).unwrap();
-        
+
         // Test resolving non-existent package from catalog
         let result = lockfile
             .resolve_package("apps/web", "non-existent", "catalog:")
             .unwrap();
         assert!(result.is_none());
-        
+
         // Test resolving from non-existent catalog
         let result = lockfile
             .resolve_package("apps/web", "react", "catalog:non-existent")
             .unwrap();
         assert!(result.is_none());
-        
+
         // Test resolving package not in named catalog
         let result = lockfile
             .resolve_package("apps/docs", "lodash", "catalog:frontend")
@@ -1351,15 +1358,15 @@ mod test {
             }
         }))
         .unwrap();
-        
+
         let lockfile = BunLockfile::from_str(&contents).unwrap();
-        
+
         // Resolve react - should get override version instead of catalog version
         let result = lockfile
             .resolve_package("", "react", "catalog:")
             .unwrap()
             .unwrap();
-        
+
         // Should resolve to overridden version
         assert_eq!(result.key, "react@19.0.0");
         assert_eq!(result.version, "19.0.0");
@@ -1375,9 +1382,15 @@ mod test {
 
         // Check that catalogs are preserved in subgraph
         assert_eq!(subgraph_data.catalog.len(), 2);
-        assert_eq!(subgraph_data.catalog.get("react"), Some(&"^18.2.0".to_string()));
-        assert_eq!(subgraph_data.catalog.get("lodash"), Some(&"^4.17.21".to_string()));
-        
+        assert_eq!(
+            subgraph_data.catalog.get("react"),
+            Some(&"^18.2.0".to_string())
+        );
+        assert_eq!(
+            subgraph_data.catalog.get("lodash"),
+            Some(&"^4.17.21".to_string())
+        );
+
         assert_eq!(subgraph_data.catalogs.len(), 1);
         let frontend_catalog = subgraph_data.catalogs.get("frontend").unwrap();
         assert_eq!(frontend_catalog.len(), 2);
@@ -1390,13 +1403,13 @@ mod test {
     #[test]
     fn test_v1_workspace_dependency_resolution() {
         let lockfile = BunLockfile::from_str(V1_WORKSPACE_LOCKFILE).unwrap();
-        
+
         // Test resolving a workspace dependency from apps/web to packages/ui
         let result = lockfile
             .resolve_package("apps/web", "@repo/ui", "packages/ui")
             .unwrap()
             .unwrap();
-        
+
         // Should resolve directly from workspace entry without needing packages entry
         assert_eq!(result.key, "@repo/ui@0.1.0");
         assert_eq!(result.version, "0.1.0");
@@ -1405,13 +1418,14 @@ mod test {
     #[test]
     fn test_v1_nested_workspace_dependency_resolution() {
         let lockfile = BunLockfile::from_str(V1_WORKSPACE_LOCKFILE).unwrap();
-        
-        // Test resolving a workspace dependency from packages/ui to packages/shared-utils
+
+        // Test resolving a workspace dependency from packages/ui to
+        // packages/shared-utils
         let result = lockfile
             .resolve_package("packages/ui", "@repo/shared-utils", "packages/shared-utils")
             .unwrap()
             .unwrap();
-        
+
         assert_eq!(result.key, "@repo/shared-utils@0.2.0");
         assert_eq!(result.version, "0.2.0");
     }
@@ -1419,13 +1433,13 @@ mod test {
     #[test]
     fn test_v1_non_workspace_dependency_resolution() {
         let lockfile = BunLockfile::from_str(V1_WORKSPACE_LOCKFILE).unwrap();
-        
+
         // Test resolving a regular dependency - should still work normally
         let result = lockfile
             .resolve_package("packages/shared-utils", "lodash", "^4.17.21")
             .unwrap()
             .unwrap();
-        
+
         assert_eq!(result.key, "lodash@4.17.21");
         assert_eq!(result.version, "4.17.21");
     }
@@ -1433,12 +1447,12 @@ mod test {
     #[test]
     fn test_v1_workspace_dependency_not_found() {
         let lockfile = BunLockfile::from_str(V1_WORKSPACE_LOCKFILE).unwrap();
-        
+
         // Test resolving a non-existent workspace dependency
         let result = lockfile
             .resolve_package("apps/web", "@repo/non-existent", "packages/non-existent")
             .unwrap();
-        
+
         // Should return None since workspace doesn't exist
         assert!(result.is_none());
     }
@@ -1446,7 +1460,7 @@ mod test {
     #[test]
     fn test_v1_lockfile_version_detection() {
         let lockfile = BunLockfile::from_str(V1_WORKSPACE_LOCKFILE).unwrap();
-        
+
         // Verify lockfile version is correctly parsed as 1
         assert_eq!(lockfile.data.lockfile_version, 1);
     }
@@ -1456,23 +1470,23 @@ mod test {
         // Test with V0 lockfile (basic-bun.lock is v0)
         let v0_lockfile = BunLockfile::from_str(BASIC_LOCKFILE).unwrap();
         assert_eq!(v0_lockfile.data.lockfile_version, 0);
-        
+
         // V0 should resolve workspace deps through packages section
         let v0_result = v0_lockfile
             .resolve_package("apps/docs", "@repo/ui", "packages/ui")
             .unwrap()
             .unwrap();
-        
-        // Test with V1 lockfile  
+
+        // Test with V1 lockfile
         let v1_lockfile = BunLockfile::from_str(V1_WORKSPACE_LOCKFILE).unwrap();
         assert_eq!(v1_lockfile.data.lockfile_version, 1);
-        
+
         // V1 should resolve workspace deps directly from workspaces section
         let v1_result = v1_lockfile
             .resolve_package("apps/web", "@repo/ui", "packages/ui")
             .unwrap()
             .unwrap();
-        
+
         // Both should resolve, but v1 uses direct workspace resolution
         assert_eq!(v0_result.key, "@repo/ui@workspace:packages/ui");
         assert_eq!(v1_result.key, "@repo/ui@0.1.0");
@@ -1481,19 +1495,28 @@ mod test {
     #[test]
     fn test_resolve_workspace_dependency_helper() {
         let lockfile = BunLockfile::from_str(V1_WORKSPACE_LOCKFILE).unwrap();
-        
+
         // Should recognize workspace paths
-        assert_eq!(lockfile.resolve_workspace_dependency("packages/ui"), Some("packages/ui"));
-        assert_eq!(lockfile.resolve_workspace_dependency("packages/shared-utils"), Some("packages/shared-utils"));
-        
+        assert_eq!(
+            lockfile.resolve_workspace_dependency("packages/ui"),
+            Some("packages/ui")
+        );
+        assert_eq!(
+            lockfile.resolve_workspace_dependency("packages/shared-utils"),
+            Some("packages/shared-utils")
+        );
+
         // Should not recognize version strings
         assert_eq!(lockfile.resolve_workspace_dependency("^4.17.21"), None);
         assert_eq!(lockfile.resolve_workspace_dependency("~1.0.0"), None);
         assert_eq!(lockfile.resolve_workspace_dependency("=1.0.0"), None);
-        
+
         // Should not recognize non-existent paths
-        assert_eq!(lockfile.resolve_workspace_dependency("packages/non-existent"), None);
-        
+        assert_eq!(
+            lockfile.resolve_workspace_dependency("packages/non-existent"),
+            None
+        );
+
         // Should not recognize strings without slashes
         assert_eq!(lockfile.resolve_workspace_dependency("react"), None);
     }
@@ -1501,27 +1524,27 @@ mod test {
     #[test]
     fn test_v1_subgraph_with_workspace_dependencies() {
         let lockfile = BunLockfile::from_str(V1_WORKSPACE_LOCKFILE).unwrap();
-        
+
         // Create subgraph including apps/web but not packages/ui
         // Note: In v1, workspace packages don't appear in packages section, so we
         // don't need to include them in the packages list for subgraph
         let subgraph = lockfile
             .subgraph(&["apps/web".into()], &["react@18.0.0".into()])
             .unwrap();
-        
+
         // Test resolution before getting data to avoid move
         let ui_result = subgraph
             .resolve_package("apps/web", "@repo/ui", "packages/ui")
             .unwrap();
         assert!(ui_result.is_none()); // UI workspace not included in subgraph workspaces
-        
+
         // Now get the data
         let subgraph_data = subgraph.lockfile().unwrap();
-        
+
         // Check that the workspace is included
         assert!(subgraph_data.workspaces.contains_key("apps/web"));
         assert!(subgraph_data.workspaces.contains_key("")); // root always included
-        
+
         // Check that external packages are filtered correctly
         assert_eq!(subgraph_data.packages.len(), 1);
         assert!(subgraph_data.packages.contains_key("react"));
@@ -1530,12 +1553,15 @@ mod test {
     #[test]
     fn test_v1_subgraph_includes_workspace_dependencies() {
         let lockfile = BunLockfile::from_str(V1_WORKSPACE_LOCKFILE).unwrap();
-        
+
         // Create subgraph that includes both apps/web and the workspace it depends on
         let subgraph = lockfile
-            .subgraph(&["apps/web".into(), "packages/ui".into()], &["react@18.0.0".into()])
+            .subgraph(
+                &["apps/web".into(), "packages/ui".into()],
+                &["react@18.0.0".into()],
+            )
             .unwrap();
-        
+
         // Test resolution before getting data to avoid move
         let ui_result = subgraph
             .resolve_package("apps/web", "@repo/ui", "packages/ui")
@@ -1543,50 +1569,55 @@ mod test {
             .unwrap();
         assert_eq!(ui_result.key, "@repo/ui@0.1.0");
         assert_eq!(ui_result.version, "0.1.0");
-        
+
         // Now get the data
         let subgraph_data = subgraph.lockfile().unwrap();
-        
+
         // Check that both workspaces are included
         assert!(subgraph_data.workspaces.contains_key("apps/web"));
         assert!(subgraph_data.workspaces.contains_key("packages/ui"));
-        assert!(subgraph_data.workspaces.contains_key("")); // root always included
+        assert!(subgraph_data.workspaces.contains_key("")); // root always
+        // included
     }
 
     #[test]
     fn test_v1_subgraph_transitively_includes_workspace_deps() {
         let lockfile = BunLockfile::from_str(V1_WORKSPACE_LOCKFILE).unwrap();
-        
+
         // Create subgraph that includes packages/ui and its dependencies
         // packages/ui depends on packages/shared-utils (workspace) and react (external)
         let subgraph = lockfile
             .subgraph(
-                &["packages/ui".into(), "packages/shared-utils".into()], 
-                &["react@18.0.0".into(), "lodash@4.17.21".into()]
+                &["packages/ui".into(), "packages/shared-utils".into()],
+                &["react@18.0.0".into(), "lodash@4.17.21".into()],
             )
             .unwrap();
-        
+
         // Test resolution before getting data to avoid move
         let shared_utils_result = subgraph
             .resolve_package("packages/ui", "@repo/shared-utils", "packages/shared-utils")
             .unwrap()
             .unwrap();
         assert_eq!(shared_utils_result.key, "@repo/shared-utils@0.2.0");
-        
+
         let lodash_result = subgraph
             .resolve_package("packages/shared-utils", "lodash", "^4.17.21")
             .unwrap()
             .unwrap();
         assert_eq!(lodash_result.key, "lodash@4.17.21");
-        
+
         // Now get the data
         let subgraph_data = subgraph.lockfile().unwrap();
-        
+
         // Check workspaces
         assert!(subgraph_data.workspaces.contains_key("packages/ui"));
-        assert!(subgraph_data.workspaces.contains_key("packages/shared-utils"));
+        assert!(
+            subgraph_data
+                .workspaces
+                .contains_key("packages/shared-utils")
+        );
         assert!(subgraph_data.workspaces.contains_key("")); // root always included
-        
+
         // Check packages
         assert!(subgraph_data.packages.contains_key("react"));
         assert!(subgraph_data.packages.contains_key("lodash"));
@@ -1618,7 +1649,7 @@ mod test {
                     }
                 },
                 "packages/utils": {
-                    "name": "@repo/utils", 
+                    "name": "@repo/utils",
                     "version": "2.0.0",
                     "dependencies": {
                         "lodash": "catalog:"
@@ -1644,13 +1675,12 @@ mod test {
             },
             "patchedDependencies": {
                 "lodash@4.17.21": "patches/lodash-security.patch"
-            },
-            "trustedDependencies": ["react", "lodash"]
+            }
         }))
         .unwrap();
-        
+
         let lockfile = BunLockfile::from_str(&contents).unwrap();
-        
+
         // Test catalog resolution with override
         let lodash_result = lockfile
             .resolve_package("", "lodash", "catalog:")
@@ -1658,8 +1688,11 @@ mod test {
             .unwrap();
         // Should resolve catalog to 4.17.20, then override to 4.17.21, then apply patch
         assert_eq!(lodash_result.key, "lodash@4.17.21");
-        assert_eq!(lodash_result.version, "4.17.21+patches/lodash-security.patch");
-        
+        assert_eq!(
+            lodash_result.version,
+            "4.17.21+patches/lodash-security.patch"
+        );
+
         // Test V1 workspace dependency from packages/ui to packages/utils
         let utils_result = lockfile
             .resolve_package("packages/ui", "@repo/utils", "packages/utils")
@@ -1667,7 +1700,7 @@ mod test {
             .unwrap();
         assert_eq!(utils_result.key, "@repo/utils@2.0.0");
         assert_eq!(utils_result.version, "2.0.0");
-        
+
         // Test catalog resolution from named catalog
         let react_result = lockfile
             .resolve_package("packages/ui", "react", "catalog:ui")
@@ -1675,10 +1708,9 @@ mod test {
             .unwrap();
         assert_eq!(react_result.key, "react@18.0.0");
         assert_eq!(react_result.version, "18.0.0");
-        
+
         // Verify all fields are preserved
         assert_eq!(lockfile.data.lockfile_version, 1);
-        assert_eq!(lockfile.data.trusted_dependencies.len(), 2);
         assert_eq!(lockfile.data.overrides.len(), 1);
         assert_eq!(lockfile.data.catalog.len(), 1);
         assert_eq!(lockfile.data.catalogs.len(), 1);
@@ -1749,22 +1781,25 @@ mod test {
             "patchedDependencies": {
                 "lodash@4.17.21": "patches/lodash.patch",
                 "express@4.18.0": "patches/express.patch"
-            },
-            "trustedDependencies": ["react", "lodash", "express", "unused-package"]
+            }
         }))
         .unwrap();
-        
+
         let lockfile = BunLockfile::from_str(&contents).unwrap();
-        
+
         // Create subgraph for web app only
         let subgraph = lockfile
             .subgraph(
-                &["apps/web".into(), "packages/ui".into(), "packages/shared".into()],
-                &["react@19.0.0".into(), "lodash@4.17.21".into()]
+                &[
+                    "apps/web".into(),
+                    "packages/ui".into(),
+                    "packages/shared".into(),
+                ],
+                &["react@19.0.0".into(), "lodash@4.17.21".into()],
             )
             .unwrap();
         let subgraph_data = subgraph.lockfile().unwrap();
-        
+
         // Verify workspace filtering
         assert_eq!(subgraph_data.workspaces.len(), 4); // root + 3 specified
         assert!(subgraph_data.workspaces.contains_key(""));
@@ -1772,31 +1807,32 @@ mod test {
         assert!(subgraph_data.workspaces.contains_key("packages/ui"));
         assert!(subgraph_data.workspaces.contains_key("packages/shared"));
         assert!(!subgraph_data.workspaces.contains_key("apps/api"));
-        
+
         // Verify package filtering
         assert_eq!(subgraph_data.packages.len(), 2);
         assert!(subgraph_data.packages.contains_key("react-19"));
         assert!(subgraph_data.packages.contains_key("lodash-override"));
         assert!(!subgraph_data.packages.contains_key("express"));
-        
+
         // Verify overrides filtering
         assert_eq!(subgraph_data.overrides.len(), 2);
         assert!(subgraph_data.overrides.contains_key("react"));
         assert!(subgraph_data.overrides.contains_key("lodash"));
         assert!(!subgraph_data.overrides.contains_key("express"));
-        
+
         // Verify patches filtering
         assert_eq!(subgraph_data.patched_dependencies.len(), 1);
-        assert!(subgraph_data.patched_dependencies.contains_key("lodash@4.17.21"));
-        assert!(!subgraph_data.patched_dependencies.contains_key("express@4.18.0"));
-        
-        // Verify trusted dependencies filtering
-        assert_eq!(subgraph_data.trusted_dependencies.len(), 2);
-        assert!(subgraph_data.trusted_dependencies.contains(&"react".to_string()));
-        assert!(subgraph_data.trusted_dependencies.contains(&"lodash".to_string()));
-        assert!(!subgraph_data.trusted_dependencies.contains(&"express".to_string()));
-        assert!(!subgraph_data.trusted_dependencies.contains(&"unused-package".to_string()));
-        
+        assert!(
+            subgraph_data
+                .patched_dependencies
+                .contains_key("lodash@4.17.21")
+        );
+        assert!(
+            !subgraph_data
+                .patched_dependencies
+                .contains_key("express@4.18.0")
+        );
+
         // Verify catalogs are preserved (they're kept for potential references)
         assert_eq!(subgraph_data.catalog.len(), 1);
         assert_eq!(subgraph_data.catalogs.len(), 1);
@@ -1873,20 +1909,19 @@ mod test {
             "patchedDependencies": {
                 "react@18.2.0": "patches/react-performance.patch",
                 "lodash@4.17.21": "patches/lodash-security.patch"
-            },
-            "trustedDependencies": ["react", "lodash", "typescript"]
+            }
         });
-        
+
         let original_str = serde_json::to_string(&original_json).unwrap();
         let lockfile = BunLockfile::from_str(&original_str).unwrap();
-        
+
         // Serialize back to bytes
         let serialized_bytes = lockfile.encode().unwrap();
         let serialized_str = std::str::from_utf8(&serialized_bytes).unwrap();
-        
+
         // Parse again to verify roundtrip
-        let roundtrip_lockfile = BunLockfile::from_str(serialized_str).unwrap(); 
-        
+        let roundtrip_lockfile = BunLockfile::from_str(serialized_str).unwrap();
+
         // Verify all data is preserved
         assert_eq!(roundtrip_lockfile.data.lockfile_version, 1);
         assert_eq!(roundtrip_lockfile.data.workspaces.len(), 2);
@@ -1895,26 +1930,40 @@ mod test {
         assert_eq!(roundtrip_lockfile.data.catalogs.len(), 2);
         assert_eq!(roundtrip_lockfile.data.overrides.len(), 2);
         assert_eq!(roundtrip_lockfile.data.patched_dependencies.len(), 2);
-        assert_eq!(roundtrip_lockfile.data.trusted_dependencies.len(), 3);
-        
+
         // Verify specific values
-        assert_eq!(roundtrip_lockfile.data.catalog.get("lodash"), Some(&"^4.17.21".to_string()));
-        assert_eq!(roundtrip_lockfile.data.overrides.get("react"), Some(&"18.2.0".to_string()));
-        assert_eq!(roundtrip_lockfile.data.patched_dependencies.get("react@18.2.0"), Some(&"patches/react-performance.patch".to_string()));
-        assert!(roundtrip_lockfile.data.trusted_dependencies.contains(&"typescript".to_string()));
-        
+        assert_eq!(
+            roundtrip_lockfile.data.catalog.get("lodash"),
+            Some(&"^4.17.21".to_string())
+        );
+        assert_eq!(
+            roundtrip_lockfile.data.overrides.get("react"),
+            Some(&"18.2.0".to_string())
+        );
+        assert_eq!(
+            roundtrip_lockfile
+                .data
+                .patched_dependencies
+                .get("react@18.2.0"),
+            Some(&"patches/react-performance.patch".to_string())
+        );
+
         // Verify catalog resolution still works
         let react_result = roundtrip_lockfile
             .resolve_package("", "react", "catalog:ui")
             .unwrap()
             .unwrap();
         assert_eq!(react_result.key, "react@18.2.0");
-        assert_eq!(react_result.version, "18.2.0+patches/react-performance.patch");
+        assert_eq!(
+            react_result.version,
+            "18.2.0+patches/react-performance.patch"
+        );
     }
 
     #[test]
     fn test_integration_nested_workspace_with_all_features() {
-        // Test deeply nested workspace dependencies with catalogs, overrides, and patches
+        // Test deeply nested workspace dependencies with catalogs, overrides, and
+        // patches
         let contents = serde_json::to_string(&json!({
             "lockfileVersion": 1,
             "workspaces": {
@@ -1982,39 +2031,39 @@ mod test {
             "patchedDependencies": {
                 "styled-components@5.3.6": "patches/styled-components-ssr.patch",
                 "lodash@4.17.21": "patches/lodash-security.patch"
-            },
-            "trustedDependencies": ["react", "styled-components", "lodash"]
+            }
         }))
         .unwrap();
-        
+
         let lockfile = BunLockfile::from_str(&contents).unwrap();
-        
+
         // Test deep workspace dependency chain resolution
         let ui_result = lockfile
             .resolve_package("apps/frontend", "@company/ui", "libs/ui")
             .unwrap()
             .unwrap();
         assert_eq!(ui_result.key, "@company/ui@0.5.0");
-        
+
         let tokens_result = lockfile
             .resolve_package("libs/ui", "@company/tokens", "libs/design-tokens")
             .unwrap()
             .unwrap();
         assert_eq!(tokens_result.key, "@company/tokens@0.2.0");
-        
+
         let utils_result = lockfile
             .resolve_package("libs/ui", "@company/utils", "libs/utils")
             .unwrap()
             .unwrap();
         assert_eq!(utils_result.key, "@company/utils@1.1.0");
-        
-        // Test circular workspace dependency (utils -> tokens, tokens referenced by utils)
+
+        // Test circular workspace dependency (utils -> tokens, tokens referenced by
+        // utils)
         let tokens_from_utils = lockfile
             .resolve_package("libs/utils", "@company/tokens", "libs/design-tokens")
             .unwrap()
             .unwrap();
         assert_eq!(tokens_from_utils.key, "@company/tokens@0.2.0");
-        
+
         // Test catalog resolution with overrides and patches
         let react_result = lockfile
             .resolve_package("libs/ui", "react", "catalog:frontend")
@@ -2022,20 +2071,26 @@ mod test {
             .unwrap();
         assert_eq!(react_result.key, "react@18.2.5"); // Override applied
         assert_eq!(react_result.version, "18.2.5"); // No patch for react
-        
+
         let styled_result = lockfile
             .resolve_package("libs/ui", "styled-components", "catalog:frontend")
             .unwrap()
             .unwrap();
         assert_eq!(styled_result.key, "styled-components@5.3.6"); // Override applied
-        assert_eq!(styled_result.version, "5.3.6+patches/styled-components-ssr.patch"); // Patch applied
-        
+        assert_eq!(
+            styled_result.version,
+            "5.3.6+patches/styled-components-ssr.patch"
+        ); // Patch applied
+
         let lodash_result = lockfile
             .resolve_package("libs/utils", "lodash", "catalog:")
             .unwrap()
             .unwrap();
         assert_eq!(lodash_result.key, "lodash@4.17.21"); // Override applied
-        assert_eq!(lodash_result.version, "4.17.21+patches/lodash-security.patch"); // Patch applied
+        assert_eq!(
+            lodash_result.version,
+            "4.17.21+patches/lodash-security.patch"
+        ); // Patch applied
     }
 
     #[test]
@@ -2076,7 +2131,7 @@ mod test {
             }
         }))
         .unwrap();
-        
+
         let v1_contents = serde_json::to_string(&json!({
             "lockfileVersion": 1,
             "workspaces": {
@@ -2107,46 +2162,46 @@ mod test {
             }
         }))
         .unwrap();
-        
+
         let v0_lockfile = BunLockfile::from_str(&v0_contents).unwrap();
         let v1_lockfile = BunLockfile::from_str(&v1_contents).unwrap();
-        
+
         // Test workspace dependency resolution differences
         let v0_utils_result = v0_lockfile
             .resolve_package("packages/lib", "@test/utils", "packages/utils")
             .unwrap();
-        
+
         let v1_utils_result = v1_lockfile
             .resolve_package("packages/lib", "@test/utils", "packages/utils")
             .unwrap()
             .unwrap();
-        
-        // V0 might not resolve workspace dependencies that don't have proper packages entries
-        // Let's test what we can resolve
+
+        // V0 might not resolve workspace dependencies that don't have proper packages
+        // entries Let's test what we can resolve
         if let Some(v0_utils) = v0_utils_result {
             // V0 resolves through packages section
             assert_eq!(v0_utils.key, "@test/utils@workspace:packages/utils");
             assert_eq!(v0_utils.version, "workspace:packages/utils");
         }
-        
+
         // V1 resolves directly from workspaces section
         assert_eq!(v1_utils_result.key, "@test/utils@2.0.0");
         assert_eq!(v1_utils_result.version, "2.0.0");
-        
+
         // Both should handle catalog + override the same way
         let v0_react_result = v0_lockfile
             .resolve_package("packages/lib", "react", "catalog:")
             .unwrap()
             .unwrap();
-        
+
         let v1_react_result = v1_lockfile
             .resolve_package("packages/lib", "react", "catalog:")
             .unwrap()
             .unwrap();
-        
+
         assert_eq!(v0_react_result.key, "react@18.0.0");
         assert_eq!(v1_react_result.key, "react@18.0.0");
-        
+
         // Verify global change detection works
         assert!(v0_lockfile.global_change(&v1_lockfile));
         assert!(v1_lockfile.global_change(&v0_lockfile));
@@ -2180,52 +2235,51 @@ mod test {
                 "empty": {}
             },
             "overrides": {},
-            "patchedDependencies": {},
-            "trustedDependencies": []
+            "patchedDependencies": {}
         }))
         .unwrap();
-        
+
         let lockfile = BunLockfile::from_str(&contents).unwrap();
-        
+
         // Test missing catalog reference
-        let missing_catalog_result = lockfile
-            .resolve_package("packages/broken", "missing-catalog", "catalog:nonexistent");
+        let missing_catalog_result =
+            lockfile.resolve_package("packages/broken", "missing-catalog", "catalog:nonexistent");
         assert!(missing_catalog_result.unwrap().is_none());
-        
+
         // Test missing catalog entry in default catalog
-        let invalid_catalog_result = lockfile
-            .resolve_package("packages/broken", "invalid-catalog", "catalog:");
+        let invalid_catalog_result =
+            lockfile.resolve_package("packages/broken", "invalid-catalog", "catalog:");
         assert!(invalid_catalog_result.unwrap().is_none());
-        
+
         // Test missing workspace dependency
-        let missing_workspace_result = lockfile
-            .resolve_package("packages/broken", "missing-workspace", "packages/nonexistent");
+        let missing_workspace_result = lockfile.resolve_package(
+            "packages/broken",
+            "missing-workspace",
+            "packages/nonexistent",
+        );
         assert!(missing_workspace_result.unwrap().is_none());
-        
+
         // Regular dependency should still work
         let regular_result = lockfile
             .resolve_package("packages/broken", "regular-dep", "^1.0.0")
             .unwrap()
             .unwrap();
         assert_eq!(regular_result.key, "regular-dep@1.0.0");
-        
+
         // Test missing workspace error
-        let missing_workspace_error = lockfile
-            .resolve_package("packages/nonexistent", "some-dep", "^1.0.0");
+        let missing_workspace_error =
+            lockfile.resolve_package("packages/nonexistent", "some-dep", "^1.0.0");
         assert!(missing_workspace_error.is_err());
-        
+
         // Test subgraph with empty filters
-        let empty_subgraph = lockfile
-            .subgraph(&[], &[])
-            .unwrap();
+        let empty_subgraph = lockfile.subgraph(&[], &[]).unwrap();
         let empty_data = empty_subgraph.lockfile().unwrap();
         assert_eq!(empty_data.workspaces.len(), 1); // Only root
         assert_eq!(empty_data.packages.len(), 0);
         assert_eq!(empty_data.overrides.len(), 0);
-        assert_eq!(empty_data.trusted_dependencies.len(), 0);
     }
 
-    #[test] 
+    #[test]
     fn test_integration_catalog_precedence_and_resolution_order() {
         // Test the order of resolution: catalog -> override -> patch
         let contents = serde_json::to_string(&json!({
@@ -2259,27 +2313,30 @@ mod test {
             }
         }))
         .unwrap();
-        
+
         let lockfile = BunLockfile::from_str(&contents).unwrap();
-        
+
         // Test resolution order: catalog:group1 (2.0.0) -> override (3.0.0) -> patch
         let result = lockfile
             .resolve_package("", "test-package", "catalog:group1")
             .unwrap()
             .unwrap();
-        
+
         assert_eq!(result.key, "test-package@3.0.0"); // Override wins
         assert_eq!(result.version, "3.0.0+patches/test-package.patch"); // Patch applied
-        
+
         // Test without catalog reference - should use override and patch
         let result_no_catalog = lockfile
             .resolve_package("", "test-package", "^1.0.0")
             .unwrap()
             .unwrap();
-        
+
         assert_eq!(result_no_catalog.key, "test-package@3.0.0"); // Override applied
-        assert_eq!(result_no_catalog.version, "3.0.0+patches/test-package.patch"); // Patch applied
-        
+        assert_eq!(
+            result_no_catalog.version,
+            "3.0.0+patches/test-package.patch"
+        ); // Patch applied
+
         // Test catalog resolution helper methods
         assert_eq!(
             lockfile.resolve_catalog_version("test-package", "catalog:"),
@@ -2289,16 +2346,10 @@ mod test {
             lockfile.resolve_catalog_version("test-package", "catalog:group1"),
             Some("^2.0.0")
         );
-        
+
         // Test override application
-        assert_eq!(
-            lockfile.apply_overrides("test-package", "2.0.0"),
-            "3.0.0"
-        );
-        assert_eq!(
-            lockfile.apply_overrides("other-package", "1.0.0"),
-            "1.0.0"
-        );
+        assert_eq!(lockfile.apply_overrides("test-package", "2.0.0"), "3.0.0");
+        assert_eq!(lockfile.apply_overrides("other-package", "1.0.0"), "1.0.0");
     }
 
     #[test]
@@ -2315,7 +2366,7 @@ mod test {
                     "version": "1.0.0",
                     "dependencies": {
                         "@company/shared": "libs/shared",
-                        "@company/ui": "libs/ui", 
+                        "@company/ui": "libs/ui",
                         "react": "catalog:frontend",
                         "express": "catalog:backend"
                     }
@@ -2367,33 +2418,32 @@ mod test {
             },
             "patchedDependencies": {
                 "react@18.2.0": "patches/react.patch"
-            },
-            "trustedDependencies": ["react", "express", "lodash"]
+            }
         }))
         .unwrap();
-        
+
         let lockfile = BunLockfile::from_str(&contents).unwrap();
-        
+
         // Test workspace dependency resolution
         let shared_result = lockfile
             .resolve_package("apps/main", "@company/shared", "libs/shared")
             .unwrap()
             .unwrap();
         assert_eq!(shared_result.key, "@company/shared@0.1.0");
-        
+
         let ui_result = lockfile
             .resolve_package("apps/main", "@company/ui", "libs/ui")
             .unwrap()
             .unwrap();
         assert_eq!(ui_result.key, "@company/ui@0.2.0");
-        
+
         // Test transitive workspace dependency
         let shared_from_ui = lockfile
             .resolve_package("libs/ui", "@company/shared", "libs/shared")
             .unwrap()
             .unwrap();
         assert_eq!(shared_from_ui.key, "@company/shared@0.1.0");
-        
+
         // Test catalog + override + patch resolution for external deps
         let react_result = lockfile
             .resolve_package("apps/main", "react", "catalog:frontend")
@@ -2401,14 +2451,14 @@ mod test {
             .unwrap();
         assert_eq!(react_result.key, "react@18.2.0");
         assert_eq!(react_result.version, "18.2.0+patches/react.patch");
-        
+
         let express_result = lockfile
             .resolve_package("apps/main", "express", "catalog:backend")
             .unwrap()
             .unwrap();
         assert_eq!(express_result.key, "express@4.18.2"); // Override applied
         assert_eq!(express_result.version, "4.18.2"); // No patch
-        
+
         // Test regular dependency without catalog
         let uuid_result = lockfile
             .resolve_package("libs/shared", "uuid", "^9.0.0")
@@ -2416,19 +2466,25 @@ mod test {
             .unwrap();
         assert_eq!(uuid_result.key, "uuid@9.0.0");
         assert_eq!(uuid_result.version, "9.0.0");
-        
+
         // Test subgraph preserves all dependency types
         let subgraph = lockfile
             .subgraph(
                 &["apps/main".into(), "libs/shared".into(), "libs/ui".into()],
-                &["react@18.2.0".into(), "express@4.18.2".into(), "lodash@4.17.21".into(), "uuid@9.0.0".into(), "styled-components@5.3.0".into()]
+                &[
+                    "react@18.2.0".into(),
+                    "express@4.18.2".into(),
+                    "lodash@4.17.21".into(),
+                    "uuid@9.0.0".into(),
+                    "styled-components@5.3.0".into(),
+                ],
             )
             .unwrap();
         let subgraph_data = subgraph.lockfile().unwrap();
-        
+
         // Verify all workspaces included
         assert_eq!(subgraph_data.workspaces.len(), 4); // root + 3 libs
-        
+
         // Verify all packages included
         assert_eq!(subgraph_data.packages.len(), 5);
         assert!(subgraph_data.packages.contains_key("react-patched"));
@@ -2436,16 +2492,16 @@ mod test {
         assert!(subgraph_data.packages.contains_key("lodash"));
         assert!(subgraph_data.packages.contains_key("uuid"));
         assert!(subgraph_data.packages.contains_key("styled-components"));
-        
+
         // Verify filtering works correctly
         assert_eq!(subgraph_data.overrides.len(), 2); // react and express
-        assert_eq!(subgraph_data.trusted_dependencies.len(), 3); // react, express, lodash
         assert_eq!(subgraph_data.patched_dependencies.len(), 1); // react patch
     }
 
-    #[test] 
+    #[test]
     fn test_integration_all_dependency_types_with_features() {
-        // Test all types of dependencies (regular, dev, optional, peer) with all features
+        // Test all types of dependencies (regular, dev, optional, peer) with all
+        // features
         let contents = serde_json::to_string(&json!({
             "lockfileVersion": 1,
             "workspaces": {
@@ -2459,7 +2515,7 @@ mod test {
                         "runtime-dep": "catalog:"
                     },
                     "devDependencies": {
-                        "dev-dep": "catalog:dev", 
+                        "dev-dep": "catalog:dev",
                         "@test/dev-workspace": "packages/dev-workspace"
                     },
                     "optionalDependencies": {
@@ -2503,7 +2559,7 @@ mod test {
             },
             "overrides": {
                 "runtime-dep": "2.0.0",
-                "dev-dep": "3.0.0", 
+                "dev-dep": "3.0.0",
                 "optional-dep": "1.5.0",
                 "peer-dep": "4.0.0"
             },
@@ -2511,13 +2567,12 @@ mod test {
                 "runtime-dep@2.0.0": "patches/runtime.patch",
                 "dev-dep@3.0.0": "patches/dev.patch",
                 "optional-dep@1.5.0": "patches/optional.patch"
-            },
-            "trustedDependencies": ["runtime-dep", "dev-dep", "optional-dep", "peer-dep"]
+            }
         }))
         .unwrap();
-        
+
         let lockfile = BunLockfile::from_str(&contents).unwrap();
-        
+
         // Test runtime dependency with catalog + override + patch
         let runtime_result = lockfile
             .resolve_package("packages/comprehensive", "runtime-dep", "catalog:")
@@ -2525,7 +2580,7 @@ mod test {
             .unwrap();
         assert_eq!(runtime_result.key, "runtime-dep@2.0.0");
         assert_eq!(runtime_result.version, "2.0.0+patches/runtime.patch");
-        
+
         // Test dev dependency with named catalog + override + patch
         let dev_result = lockfile
             .resolve_package("packages/comprehensive", "dev-dep", "catalog:dev")
@@ -2533,7 +2588,7 @@ mod test {
             .unwrap();
         assert_eq!(dev_result.key, "dev-dep@3.0.0");
         assert_eq!(dev_result.version, "3.0.0+patches/dev.patch");
-        
+
         // Test optional dependency with catalog + override + patch
         let optional_result = lockfile
             .resolve_package("packages/comprehensive", "optional-dep", "catalog:")
@@ -2541,7 +2596,7 @@ mod test {
             .unwrap();
         assert_eq!(optional_result.key, "optional-dep@1.5.0");
         assert_eq!(optional_result.version, "1.5.0+patches/optional.patch");
-        
+
         // Test peer dependency with named catalog + override (no patch)
         let peer_result = lockfile
             .resolve_package("packages/comprehensive", "peer-dep", "catalog:peer")
@@ -2549,15 +2604,19 @@ mod test {
             .unwrap();
         assert_eq!(peer_result.key, "peer-dep@4.0.0");
         assert_eq!(peer_result.version, "4.0.0");
-        
+
         // Test workspace dev dependency
         let dev_workspace_result = lockfile
-            .resolve_package("packages/comprehensive", "@test/dev-workspace", "packages/dev-workspace")
+            .resolve_package(
+                "packages/comprehensive",
+                "@test/dev-workspace",
+                "packages/dev-workspace",
+            )
             .unwrap()
             .unwrap();
         assert_eq!(dev_workspace_result.key, "@test/dev-workspace@2.0.0");
         assert_eq!(dev_workspace_result.version, "2.0.0");
-        
+
         // Test regular dependency from dev workspace
         let dev_workspace_dep_result = lockfile
             .resolve_package("packages/dev-workspace", "dev-workspace-dep", "^1.0.0")
@@ -2565,22 +2624,25 @@ mod test {
             .unwrap();
         assert_eq!(dev_workspace_dep_result.key, "dev-workspace-dep@1.0.0");
         assert_eq!(dev_workspace_dep_result.version, "1.0.0");
-        
+
         // Test subgraph includes all dependency types
         let subgraph = lockfile
             .subgraph(
-                &["packages/comprehensive".into(), "packages/dev-workspace".into()],
+                &[
+                    "packages/comprehensive".into(),
+                    "packages/dev-workspace".into(),
+                ],
                 &[
                     "runtime-dep@2.0.0".into(),
                     "dev-dep@3.0.0".into(),
                     "optional-dep@1.5.0".into(),
                     "peer-dep@4.0.0".into(),
-                    "dev-workspace-dep@1.0.0".into()
-                ]
+                    "dev-workspace-dep@1.0.0".into(),
+                ],
             )
             .unwrap();
         let subgraph_data = subgraph.lockfile().unwrap();
-        
+
         // Verify all packages included
         assert_eq!(subgraph_data.packages.len(), 5);
         assert!(subgraph_data.packages.contains_key("runtime-override"));
@@ -2588,11 +2650,10 @@ mod test {
         assert!(subgraph_data.packages.contains_key("optional-override"));
         assert!(subgraph_data.packages.contains_key("peer-override"));
         assert!(subgraph_data.packages.contains_key("dev-workspace-dep"));
-        
+
         // Verify all overrides and patches preserved
         assert_eq!(subgraph_data.overrides.len(), 4);
         assert_eq!(subgraph_data.patched_dependencies.len(), 3);
-        assert_eq!(subgraph_data.trusted_dependencies.len(), 4);
     }
 
     #[test]
@@ -2616,11 +2677,10 @@ mod test {
             },
             "patchedDependencies": {
                 "react@18.0.0": "patches/react.patch"
-            },
-            "trustedDependencies": ["react"]
+            }
         }))
         .unwrap();
-        
+
         let base_lockfile_v1 = serde_json::to_string(&json!({
             "lockfileVersion": 1,
             "workspaces": {
@@ -2639,26 +2699,31 @@ mod test {
             },
             "patchedDependencies": {
                 "react@18.0.0": "patches/react.patch"
-            },
-            "trustedDependencies": ["react"]
+            }
         }))
         .unwrap();
-        
+
         let v0_lockfile = BunLockfile::from_str(&base_lockfile_v0).unwrap();
         let v1_lockfile = BunLockfile::from_str(&base_lockfile_v1).unwrap();
-        
+
         // Version change should be detected as global change
         assert!(v0_lockfile.global_change(&v1_lockfile));
         assert!(v1_lockfile.global_change(&v0_lockfile));
-        
+
         // Same version should not be global change
         assert!(!v0_lockfile.global_change(&v0_lockfile));
         assert!(!v1_lockfile.global_change(&v1_lockfile));
-        
+
         // Test with standalone function as well
-        assert!(bun_global_change(base_lockfile_v0.as_bytes(), base_lockfile_v1.as_bytes()).unwrap());
-        assert!(!bun_global_change(base_lockfile_v0.as_bytes(), base_lockfile_v0.as_bytes()).unwrap());
-        assert!(!bun_global_change(base_lockfile_v1.as_bytes(), base_lockfile_v1.as_bytes()).unwrap());
+        assert!(
+            bun_global_change(base_lockfile_v0.as_bytes(), base_lockfile_v1.as_bytes()).unwrap()
+        );
+        assert!(
+            !bun_global_change(base_lockfile_v0.as_bytes(), base_lockfile_v0.as_bytes()).unwrap()
+        );
+        assert!(
+            !bun_global_change(base_lockfile_v1.as_bytes(), base_lockfile_v1.as_bytes()).unwrap()
+        );
     }
 
     #[test]
@@ -2726,7 +2791,7 @@ mod test {
             },
             "catalog": {
                 "patched-override": "^1.0.0",
-                "deep-patch": "^1.0.0",  
+                "deep-patch": "^1.0.0",
                 "transitive-catalog": "^1.0.0"
             },
             "catalogs": {
@@ -2752,29 +2817,23 @@ mod test {
                 "patched-override@3.0.0": "patches/patched-override-complex.patch",
                 "deep-patch@2.0.0": "patches/deep-patch-security.patch",
                 "transitive-catalog@1.2.0": "patches/transitive-fix.patch"
-            },
-            "trustedDependencies": [
-                "overridden-catalog",
-                "patched-override", 
-                "multi-override",
-                "deep-patch",
-                "optional-catalog",
-                "transitive-catalog",
-                "leaf-dependency"
-            ]
+            }
         }))
         .unwrap();
-        
+
         let lockfile = BunLockfile::from_str(&contents).unwrap();
-        
+
         // Test complex catalog + override + patch chain
         let patched_override_result = lockfile
             .resolve_package("", "patched-override", "catalog:")
             .unwrap()
             .unwrap();
         assert_eq!(patched_override_result.key, "patched-override@3.0.0");
-        assert_eq!(patched_override_result.version, "3.0.0+patches/patched-override-complex.patch");
-        
+        assert_eq!(
+            patched_override_result.version,
+            "3.0.0+patches/patched-override-complex.patch"
+        );
+
         // Test catalog override from named catalog
         let overridden_catalog_result = lockfile
             .resolve_package("", "overridden-catalog", "catalog:special")
@@ -2782,7 +2841,7 @@ mod test {
             .unwrap();
         assert_eq!(overridden_catalog_result.key, "overridden-catalog@2.0.0");
         assert_eq!(overridden_catalog_result.version, "2.0.0");
-        
+
         // Test multi-level resolution (named catalog -> override)
         let multi_override_result = lockfile
             .resolve_package("apps/complex", "multi-override", "catalog:multi")
@@ -2790,7 +2849,7 @@ mod test {
             .unwrap();
         assert_eq!(multi_override_result.key, "multi-override@5.0.0");
         assert_eq!(multi_override_result.version, "5.0.0");
-        
+
         // Test workspace dependencies in complex app
         let workspace_lib_result = lockfile
             .resolve_package("apps/complex", "@workspace/lib", "libs/workspace-lib")
@@ -2798,23 +2857,30 @@ mod test {
             .unwrap();
         assert_eq!(workspace_lib_result.key, "@workspace/lib@1.0.0");
         assert_eq!(workspace_lib_result.version, "1.0.0");
-        
+
         // Test transitive workspace dependencies
         let dev_lib_result = lockfile
-            .resolve_package("libs/workspace-lib", "@workspace/dev-lib", "libs/dev-workspace-lib")
+            .resolve_package(
+                "libs/workspace-lib",
+                "@workspace/dev-lib",
+                "libs/dev-workspace-lib",
+            )
             .unwrap()
             .unwrap();
         assert_eq!(dev_lib_result.key, "@workspace/dev-lib@2.0.0");
         assert_eq!(dev_lib_result.version, "2.0.0");
-        
+
         // Test transitive catalog resolution
         let transitive_result = lockfile
             .resolve_package("libs/workspace-lib", "transitive-catalog", "catalog:")
             .unwrap()
             .unwrap();
         assert_eq!(transitive_result.key, "transitive-catalog@1.2.0");
-        assert_eq!(transitive_result.version, "1.2.0+patches/transitive-fix.patch");
-        
+        assert_eq!(
+            transitive_result.version,
+            "1.2.0+patches/transitive-fix.patch"
+        );
+
         // Test regular dependency at the end of the chain
         let leaf_result = lockfile
             .resolve_package("libs/dev-workspace-lib", "leaf-dependency", "^1.0.0")
@@ -2822,14 +2888,14 @@ mod test {
             .unwrap();
         assert_eq!(leaf_result.key, "leaf-dependency@1.0.0");
         assert_eq!(leaf_result.version, "1.0.0");
-        
+
         // Test complex subgraph that includes all features
         let complex_subgraph = lockfile
             .subgraph(
                 &[
                     "apps/complex".into(),
                     "libs/workspace-lib".into(),
-                    "libs/dev-workspace-lib".into()
+                    "libs/dev-workspace-lib".into(),
                 ],
                 &[
                     "overridden-catalog@2.0.0".into(),
@@ -2838,15 +2904,15 @@ mod test {
                     "deep-patch@2.0.0".into(),
                     "optional-catalog@1.5.0".into(),
                     "transitive-catalog@1.2.0".into(),
-                    "leaf-dependency@1.0.0".into()
-                ]
+                    "leaf-dependency@1.0.0".into(),
+                ],
             )
             .unwrap();
         // Verify resolution still works in subgraph before getting data
         let subgraph_resolution = complex_subgraph
             .resolve_package("apps/complex", "multi-override", "catalog:multi")
             .unwrap();
-        
+
         // Handle the case where the resolution might not work in the subgraph
         if let Some(resolution) = subgraph_resolution {
             assert_eq!(resolution.key, "multi-override@5.0.0");
@@ -2854,15 +2920,15 @@ mod test {
         }
 
         let complex_subgraph_data = complex_subgraph.lockfile().unwrap();
-        
+
         // Verify comprehensive filtering
         assert_eq!(complex_subgraph_data.workspaces.len(), 4); // root + 3 workspaces
         assert_eq!(complex_subgraph_data.packages.len(), 7); // All specified packages
         assert_eq!(complex_subgraph_data.overrides.len(), 6); // All applicable overrides
         assert_eq!(complex_subgraph_data.patched_dependencies.len(), 3); // All applicable patches
-        assert_eq!(complex_subgraph_data.trusted_dependencies.len(), 7); // All applicable trusted deps
         assert_eq!(complex_subgraph_data.catalog.len(), 3); // Catalogs preserved
-        assert_eq!(complex_subgraph_data.catalogs.len(), 3); // Named catalogs preserved
+        assert_eq!(complex_subgraph_data.catalogs.len(), 3); // Named catalogs
+        // preserved
     }
 
     #[test]
@@ -2870,47 +2936,55 @@ mod test {
         // Test "none" value
         let none_json = serde_json::to_value(&Negatable::None).unwrap();
         assert_eq!(none_json, Value::String("none".to_string()));
-        
+
         let none_deserialized: Negatable = serde_json::from_value(none_json).unwrap();
         assert_eq!(none_deserialized, Negatable::None);
-        
+
         // Test single platform
         let single_json = serde_json::to_value(&Negatable::Single("darwin".to_string())).unwrap();
         assert_eq!(single_json, Value::String("darwin".to_string()));
-        
+
         let single_deserialized: Negatable = serde_json::from_value(single_json).unwrap();
         assert_eq!(single_deserialized, Negatable::Single("darwin".to_string()));
-        
+
         // Test multiple platforms
         let multiple = Negatable::Multiple(vec!["darwin".to_string(), "linux".to_string()]);
         let multiple_json = serde_json::to_value(&multiple).unwrap();
-        assert_eq!(multiple_json, Value::Array(vec![
-            Value::String("darwin".to_string()),
-            Value::String("linux".to_string())
-        ]));
-        
+        assert_eq!(
+            multiple_json,
+            Value::Array(vec![
+                Value::String("darwin".to_string()),
+                Value::String("linux".to_string())
+            ])
+        );
+
         let multiple_deserialized: Negatable = serde_json::from_value(multiple_json).unwrap();
         assert_eq!(multiple_deserialized, multiple);
-        
+
         // Test negated platforms
         let negated = Negatable::Negated(vec!["win32".to_string()]);
         let negated_json = serde_json::to_value(&negated).unwrap();
-        assert_eq!(negated_json, Value::Array(vec![
-            Value::String("!win32".to_string())
-        ]));
-        
+        assert_eq!(
+            negated_json,
+            Value::Array(vec![Value::String("!win32".to_string())])
+        );
+
         let negated_deserialized: Negatable = serde_json::from_value(negated_json).unwrap();
         assert_eq!(negated_deserialized, negated);
-        
+
         // Test multiple negated platforms
         let multi_negated = Negatable::Negated(vec!["win32".to_string(), "freebsd".to_string()]);
         let multi_negated_json = serde_json::to_value(&multi_negated).unwrap();
-        assert_eq!(multi_negated_json, Value::Array(vec![
-            Value::String("!win32".to_string()),
-            Value::String("!freebsd".to_string())
-        ]));
-        
-        let multi_negated_deserialized: Negatable = serde_json::from_value(multi_negated_json).unwrap();
+        assert_eq!(
+            multi_negated_json,
+            Value::Array(vec![
+                Value::String("!win32".to_string()),
+                Value::String("!freebsd".to_string())
+            ])
+        );
+
+        let multi_negated_deserialized: Negatable =
+            serde_json::from_value(multi_negated_json).unwrap();
         assert_eq!(multi_negated_deserialized, multi_negated);
     }
 
@@ -2921,27 +2995,28 @@ mod test {
         assert!(none.allows("darwin"));
         assert!(none.allows("linux"));
         assert!(none.allows("win32"));
-        
+
         // Test single platform
         let darwin_only = Negatable::Single("darwin".to_string());
         assert!(darwin_only.allows("darwin"));
         assert!(!darwin_only.allows("linux"));
         assert!(!darwin_only.allows("win32"));
-        
+
         // Test multiple platforms
         let unix_only = Negatable::Multiple(vec!["darwin".to_string(), "linux".to_string()]);
         assert!(unix_only.allows("darwin"));
         assert!(unix_only.allows("linux"));
         assert!(!unix_only.allows("win32"));
-        
+
         // Test negated platforms
         let not_windows = Negatable::Negated(vec!["win32".to_string()]);
         assert!(not_windows.allows("darwin"));
         assert!(not_windows.allows("linux"));
         assert!(!not_windows.allows("win32"));
-        
+
         // Test multiple negated platforms
-        let not_windows_or_freebsd = Negatable::Negated(vec!["win32".to_string(), "freebsd".to_string()]);
+        let not_windows_or_freebsd =
+            Negatable::Negated(vec!["win32".to_string(), "freebsd".to_string()]);
         assert!(not_windows_or_freebsd.allows("darwin"));
         assert!(not_windows_or_freebsd.allows("linux"));
         assert!(!not_windows_or_freebsd.allows("win32"));
@@ -2953,16 +3028,22 @@ mod test {
         // Test single negated string
         let single_negated_json = Value::String("!win32".to_string());
         let single_negated: Negatable = serde_json::from_value(single_negated_json).unwrap();
-        assert_eq!(single_negated, Negatable::Negated(vec!["win32".to_string()]));
-        
+        assert_eq!(
+            single_negated,
+            Negatable::Negated(vec!["win32".to_string()])
+        );
+
         // Test array with mixed negated and regular (should be treated as all negated)
         let mixed_array_json = Value::Array(vec![
             Value::String("!win32".to_string()),
-            Value::String("!freebsd".to_string())
+            Value::String("!freebsd".to_string()),
         ]);
         let mixed_array: Negatable = serde_json::from_value(mixed_array_json).unwrap();
-        assert_eq!(mixed_array, Negatable::Negated(vec!["win32".to_string(), "freebsd".to_string()]));
-        
+        assert_eq!(
+            mixed_array,
+            Negatable::Negated(vec!["win32".to_string(), "freebsd".to_string()])
+        );
+
         // Test empty array - should be treated as multiple with empty list
         let empty_array_json = Value::Array(vec![]);
         let empty_array: Negatable = serde_json::from_value(empty_array_json).unwrap();
@@ -2981,7 +3062,7 @@ mod test {
             },
             "packages": {
                 "fsevents@2.3.2": [
-                    "fsevents@2.3.2", 
+                    "fsevents@2.3.2",
                     {
                         "os": "darwin",
                         "cpu": ["x64", "arm64"],
@@ -3014,23 +3095,35 @@ mod test {
         .unwrap();
 
         let lockfile = BunLockfile::from_str(&contents).unwrap();
-        
+
         // Test fsevents with darwin-only OS constraint
         let fsevents_entry = lockfile.data.packages.get("fsevents@2.3.2").unwrap();
         let fsevents_info = fsevents_entry.info.as_ref().unwrap();
         assert_eq!(fsevents_info.os, Negatable::Single("darwin".to_string()));
-        assert_eq!(fsevents_info.cpu, Negatable::Multiple(vec!["x64".to_string(), "arm64".to_string()]));
-        
+        assert_eq!(
+            fsevents_info.cpu,
+            Negatable::Multiple(vec!["x64".to_string(), "arm64".to_string()])
+        );
+
         // Test node-pty with multiple OS constraint and negated CPU
         let node_pty_entry = lockfile.data.packages.get("node-pty@0.10.1").unwrap();
         let node_pty_info = node_pty_entry.info.as_ref().unwrap();
-        assert_eq!(node_pty_info.os, Negatable::Multiple(vec!["darwin".to_string(), "linux".to_string()]));
-        assert_eq!(node_pty_info.cpu, Negatable::Negated(vec!["win32".to_string()]));
-        
+        assert_eq!(
+            node_pty_info.os,
+            Negatable::Multiple(vec!["darwin".to_string(), "linux".to_string()])
+        );
+        assert_eq!(
+            node_pty_info.cpu,
+            Negatable::Negated(vec!["win32".to_string()])
+        );
+
         // Test win32-process with negated OS constraints
         let win32_entry = lockfile.data.packages.get("win32-process@1.0.0").unwrap();
         let win32_info = win32_entry.info.as_ref().unwrap();
-        assert_eq!(win32_info.os, Negatable::Negated(vec!["darwin".to_string(), "linux".to_string()]));
+        assert_eq!(
+            win32_info.os,
+            Negatable::Negated(vec!["darwin".to_string(), "linux".to_string()])
+        );
         assert_eq!(win32_info.cpu, Negatable::None); // Default
     }
 
@@ -3064,7 +3157,7 @@ mod test {
                     }
                 ],
                 "anti-windows@1.0.0": [
-                    "anti-windows@1.0.0", 
+                    "anti-windows@1.0.0",
                     {
                         "os": ["!win32"],
                         "dependencies": {
@@ -3077,29 +3170,39 @@ mod test {
 
         let contents = serde_json::to_string(&original_lockfile).unwrap();
         let lockfile = BunLockfile::from_str(&contents).unwrap();
-        
+
         // Serialize back to JSON
         let lockfile_json = lockfile.lockfile().unwrap();
         let serialized = serde_json::to_value(&lockfile_json).unwrap();
-        
+
         // Verify platform-specific package is preserved
-        let platform_dep = serialized["packages"]["platform-dep@1.0.0"][1].as_object().unwrap();
+        let platform_dep = serialized["packages"]["platform-dep@1.0.0"][1]
+            .as_object()
+            .unwrap();
         assert_eq!(platform_dep["os"], Value::String("darwin".to_string()));
-        assert_eq!(platform_dep["cpu"], Value::Array(vec![
-            Value::String("x64".to_string()),
-            Value::String("arm64".to_string())
-        ]));
-        
+        assert_eq!(
+            platform_dep["cpu"],
+            Value::Array(vec![
+                Value::String("x64".to_string()),
+                Value::String("arm64".to_string())
+            ])
+        );
+
         // Verify cross-platform package doesn't have os/cpu fields
-        let cross_platform = serialized["packages"]["cross-platform@2.0.0"][1].as_object().unwrap();
+        let cross_platform = serialized["packages"]["cross-platform@2.0.0"][1]
+            .as_object()
+            .unwrap();
         assert!(!cross_platform.contains_key("os"));
         assert!(!cross_platform.contains_key("cpu"));
-        
+
         // Verify negated platform constraint is preserved
-        let anti_windows = serialized["packages"]["anti-windows@1.0.0"][1].as_object().unwrap();
-        assert_eq!(anti_windows["os"], Value::Array(vec![
-            Value::String("!win32".to_string())
-        ]));
+        let anti_windows = serialized["packages"]["anti-windows@1.0.0"][1]
+            .as_object()
+            .unwrap();
+        assert_eq!(
+            anti_windows["os"],
+            Value::Array(vec![Value::String("!win32".to_string())])
+        );
     }
 
     #[test]
@@ -3136,20 +3239,26 @@ mod test {
         .unwrap();
 
         let lockfile = BunLockfile::from_str(&contents).unwrap();
-        
+
         // Create subgraph including platform-specific package
         let subgraph = lockfile
-            .subgraph(&["apps/web".into()], &["fsevents@2.3.2".into(), "common-dep@1.0.0".into()])
+            .subgraph(
+                &["apps/web".into()],
+                &["fsevents@2.3.2".into(), "common-dep@1.0.0".into()],
+            )
             .unwrap();
-            
+
         let subgraph_data = subgraph.lockfile().unwrap();
-        
+
         // Verify platform constraints are preserved in subgraph
         let fsevents_entry = subgraph_data.packages.get("fsevents@2.3.2").unwrap();
         let fsevents_info = fsevents_entry.info.as_ref().unwrap();
         assert_eq!(fsevents_info.os, Negatable::Single("darwin".to_string()));
-        assert_eq!(fsevents_info.cpu, Negatable::Multiple(vec!["x64".to_string(), "arm64".to_string()]));
-        
+        assert_eq!(
+            fsevents_info.cpu,
+            Negatable::Multiple(vec!["x64".to_string(), "arm64".to_string()])
+        );
+
         // Verify common package doesn't have platform constraints
         let common_entry = subgraph_data.packages.get("common-dep@1.0.0").unwrap();
         let common_info = common_entry.info.as_ref().unwrap();
@@ -3201,33 +3310,39 @@ mod test {
         .unwrap();
 
         let lockfile = BunLockfile::from_str(&contents).unwrap();
-        
+
         // Test multi-platform package
         let multi_entry = lockfile.data.packages.get("multi-platform@1.0.0").unwrap();
         let multi_info = multi_entry.info.as_ref().unwrap();
-        assert_eq!(multi_info.os, Negatable::Multiple(vec![
-            "darwin".to_string(), 
-            "linux".to_string(), 
-            "freebsd".to_string()
-        ]));
-        assert_eq!(multi_info.cpu, Negatable::Multiple(vec![
-            "x64".to_string(), 
-            "arm64".to_string(), 
-            "arm".to_string()
-        ]));
-        
+        assert_eq!(
+            multi_info.os,
+            Negatable::Multiple(vec![
+                "darwin".to_string(),
+                "linux".to_string(),
+                "freebsd".to_string()
+            ])
+        );
+        assert_eq!(
+            multi_info.cpu,
+            Negatable::Multiple(vec![
+                "x64".to_string(),
+                "arm64".to_string(),
+                "arm".to_string()
+            ])
+        );
+
         // Test negated constraints
         let no_mobile_entry = lockfile.data.packages.get("no-mobile@1.0.0").unwrap();
         let no_mobile_info = no_mobile_entry.info.as_ref().unwrap();
-        assert_eq!(no_mobile_info.os, Negatable::Negated(vec![
-            "android".to_string(), 
-            "ios".to_string()
-        ]));
-        assert_eq!(no_mobile_info.cpu, Negatable::Negated(vec![
-            "arm".to_string(), 
-            "arm64".to_string()
-        ]));
-        
+        assert_eq!(
+            no_mobile_info.os,
+            Negatable::Negated(vec!["android".to_string(), "ios".to_string()])
+        );
+        assert_eq!(
+            no_mobile_info.cpu,
+            Negatable::Negated(vec!["arm".to_string(), "arm64".to_string()])
+        );
+
         // Test explicit "none" values
         let special_entry = lockfile.data.packages.get("special-none@1.0.0").unwrap();
         let special_info = special_entry.info.as_ref().unwrap();
