@@ -531,19 +531,13 @@ impl BunLockfile {
     /// Returns the workspace path if it is (e.g., "packages/ui" ->
     /// Some("packages/ui"))
     fn resolve_workspace_dependency<'a>(&self, version: &'a str) -> Option<&'a str> {
-        // Workspace dependencies are referenced by their relative path
-        // e.g., "@repo/ui": "packages/ui"
-        // We need to check if this path exists in our workspaces
-        if !version.contains('/')
-            || version.starts_with('^')
-            || version.starts_with('~')
-            || version.starts_with('=')
-        {
-            // Not a workspace path - contains version characters or no slash
+        // Quick filter: if it starts with version characters, it's definitely not a
+        // workspace
+        if version.starts_with('^') || version.starts_with('~') || version.starts_with('=') {
             return None;
         }
 
-        // Check if this path exists in workspaces
+        // Definitive check: does this path exist in our workspaces?
         if self.data.workspaces.contains_key(version) {
             Some(version)
         } else {
