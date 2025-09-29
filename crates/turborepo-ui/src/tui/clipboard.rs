@@ -36,10 +36,10 @@ fn detect_copy_provider() -> Provider {
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
 fn detect_copy_provider() -> Provider {
     // Wayland
-    if std::env::var("WAYLAND_DISPLAY").is_ok() {
-        if let Some(provider) = check_prog("wl-copy", &["--type", "text/plain"]) {
-            return provider;
-        }
+    if std::env::var("WAYLAND_DISPLAY").is_ok()
+        && let Some(provider) = check_prog("wl-copy", &["--type", "text/plain"])
+    {
+        return provider;
     }
     // X11
     if std::env::var("DISPLAY").is_ok() {
@@ -55,10 +55,10 @@ fn detect_copy_provider() -> Provider {
         return provider;
     }
     // Tmux
-    if std::env::var("TMUX").is_ok() {
-        if let Some(provider) = check_prog("tmux", &["load-buffer", "-"]) {
-            return provider;
-        }
+    if std::env::var("TMUX").is_ok()
+        && let Some(provider) = check_prog("tmux", &["load-buffer", "-"])
+    {
+        return provider;
     }
 
     Provider::OSC52

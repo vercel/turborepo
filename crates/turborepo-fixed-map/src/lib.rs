@@ -1,3 +1,8 @@
+//! A specialized map data structure with fixed keys determined at construction.
+//! Provides thread-safe, one-time initialization of values for predefined keys.
+//! This is exclusively used so we can lazily load `turbo.json`, cache the
+//! results, and return a reference to the loaded `turbo.json`.
+
 #![deny(clippy::all)]
 
 use std::sync::OnceLock;

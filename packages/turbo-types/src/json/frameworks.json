@@ -27,6 +27,15 @@
     }
   },
   {
+    "slug": "expo",
+    "name": "Expo",
+    "envWildcards": ["EXPO_PUBLIC_*"],
+    "dependencyMatch": {
+      "strategy": "all",
+      "dependencies": ["expo"]
+    }
+  },
+  {
     "slug": "gatsby",
     "name": "Gatsby",
     "envWildcards": ["GATSBY_*"],

@@ -340,11 +340,11 @@ turbo run build --global-deps=".env.*" --global-deps=".eslintrc" --global-deps="
   `turbo.json` to make sure they are always accounted for.
 </Callout>
 
-### `--graph <file type>`
+### `--graph <file name>`
 
-Default: `jpg`
+Default: `dot`
 
-This command will generate an `svg`, `png`, `jpg`, `pdf`, `json`, `html`, or [other supported output formats](https://graphviz.org/doc/info/output.html) of the current task graph.
+This command can output a graph file: `svg`, `png`, `jpg`, `pdf`, `json`, `html`, `mermaid`, or `dot`.
 
 If [Graphviz](https://graphviz.org/) is not installed, or no filename is provided, this command prints the dot graph to `stdout`.
 
@@ -388,11 +388,11 @@ Control the `<package>:<task>:` prefix for log lines produced when running tasks
 turbo run dev --log-prefix=none
 ```
 
-| Option   | Description                                 |
-| -------- | ------------------------------------------- |
-| `prefix` | Force prepending the prefix to logs         |
-| `none`   | No prefixes                                 |
-| `auto`   | `turbo` decides based on its own heuristics |
+| Option | Description                                             |
+| ------ | ------------------------------------------------------- |
+| `task` | Force prepending the `<package>:<task>:` prefix to logs |
+| `none` | No prefixes                                             |
+| `auto` | `turbo` decides based on its own heuristics             |
 
 ### `--no-cache`
 

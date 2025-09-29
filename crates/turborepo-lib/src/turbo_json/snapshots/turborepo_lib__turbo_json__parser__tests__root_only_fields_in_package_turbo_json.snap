@@ -1,0 +1,15 @@
+---
+source: crates/turborepo-lib/src/turbo_json/parser.rs
+expression: msg
+---
+Failed to parse turbo.json.
+    Diagnostic severity: error
+diagnostic code: turbo_json_parse_error
+
+Error: Found an unknown key `daemon`.
+    Diagnostic severity: error
+
+Begin snippet for packages/foo/turbo.json starting at line 1, column 1
+
+snippet line 1: {"daemon": true}
+    label at line 1, columns 2 to 9

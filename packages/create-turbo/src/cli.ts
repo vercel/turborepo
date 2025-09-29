@@ -85,6 +85,11 @@ createTurboCli
   --example-path foo/bar
 `
   )
+  .option(
+    "--no-git",
+    "Remove the .git directory after creating the project",
+    false
+  )
   .version(cliPkg.version, "-v, --version", "Output the current version")
   .helpOption("-h, --help", "Display help for command")
   .action(create);

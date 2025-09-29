@@ -49,7 +49,11 @@ updates:
       # Types are just...broken?
       - dependency-name: "express"
       - dependency-name: "@types/express"
-      # Remix is behind on updating these peer deps and npm doesn't like it
+      # Remix is messed up in npm
+      - dependency-name: "@remix-run/node"
+      - dependency-name: "@remix-run/react"
+      - dependency-name: "@remix-run/server-runtime"
+      - dependency-name: "@remix-run/dev"
       - dependency-name: "react"
       - dependency-name: "react-dom"
       - dependency-name: "@types/react"

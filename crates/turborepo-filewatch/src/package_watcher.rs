@@ -5,8 +5,8 @@ use std::{
     collections::HashMap,
     path::Path,
     sync::{
-        atomic::{AtomicUsize, Ordering},
         Arc,
+        atomic::{AtomicUsize, Ordering},
     },
     time::Duration,
 };
@@ -32,10 +32,10 @@ use turborepo_repository::{
 };
 
 use crate::{
+    NotifyError,
     cookies::{CookieRegister, CookieWriter, CookiedOptionalWatch},
     debouncer::Debouncer,
     optional_watch::OptionalWatch,
-    NotifyError,
 };
 
 #[derive(Debug, Error)]
@@ -367,12 +367,12 @@ impl Subscriber {
         state: &mut State,
         package_state_tx: &mpsc::Sender<DiscoveryResult>,
     ) {
-        if let State::Pending { debouncer, .. } = state {
-            if debouncer.bump() {
-                // We successfully bumped the debouncer, which was already pending,
-                // so a new discovery will happen shortly.
-                return;
-            }
+        if let State::Pending { debouncer, .. } = state
+            && debouncer.bump()
+        {
+            // We successfully bumped the debouncer, which was already pending,
+            // so a new discovery will happen shortly.
+            return;
         }
         // We either failed to bump the debouncer, or we don't have a rediscovery
         // queued, but we need one.
@@ -575,7 +575,7 @@ mod test {
     use turbopath::AbsoluteSystemPathBuf;
     use turborepo_repository::{discovery::WorkspaceData, package_manager::PackageManager};
 
-    use crate::{cookies::CookieWriter, package_watcher::PackageWatcher, FileSystemWatcher};
+    use crate::{FileSystemWatcher, cookies::CookieWriter, package_watcher::PackageWatcher};
 
     #[tokio::test]
     #[tracing_test::traced_test]

@@ -3,7 +3,7 @@ use std::future::Future;
 use reqwest::Method;
 pub use turborepo_vercel_api::{AnalyticsEvent, CacheEvent, CacheSource};
 
-use crate::{retry, APIAuth, APIClient, Error};
+use crate::{APIAuth, APIClient, Error, retry};
 
 pub trait AnalyticsClient {
     fn record_analytics(

@@ -15,7 +15,7 @@ pub use login_server::*;
 use serde::Deserialize;
 use turbopath::AbsoluteSystemPath;
 use turborepo_api_client::{CacheClient, Client, TokenClient};
-use turborepo_vercel_api::{token::ResponseTokenMetadata, User};
+use turborepo_vercel_api::{User, token::ResponseTokenMetadata};
 
 pub struct TeamInfo<'a> {
     pub id: &'a str,
@@ -314,8 +314,8 @@ mod tests {
     use tempfile::tempdir;
     use turbopath::AbsoluteSystemPathBuf;
     use turborepo_vercel_api::{
-        token::Scope, CachingStatus, CachingStatusResponse, Team, TeamsResponse, User,
-        UserResponse, VerifiedSsoUser,
+        CachingStatus, CachingStatusResponse, Team, TeamsResponse, User, UserResponse,
+        VerifiedSsoUser, token::Scope,
     };
     use url::Url;
 
@@ -537,10 +537,10 @@ mod tests {
             &self,
             _hash: &str,
             _artifact_body: impl turborepo_api_client::Stream<
-                    Item = Result<turborepo_api_client::Bytes, turborepo_api_client::Error>,
-                > + Send
-                + Sync
-                + 'static,
+                Item = Result<turborepo_api_client::Bytes, turborepo_api_client::Error>,
+            > + Send
+            + Sync
+            + 'static,
             _body_len: usize,
             _duration: u64,
             _tag: Option<&str>,
