@@ -359,7 +359,7 @@ mod test {
             PackageName::from(self.package_name)
         }
 
-        pub fn expected(&self) -> Option<FindResult> {
+        pub fn expected(&self) -> Option<FindResult<'_>> {
             match self.result {
                 Some(TestFindResult {
                     dev: Some(dev),

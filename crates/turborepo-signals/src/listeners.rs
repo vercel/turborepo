@@ -1,4 +1,4 @@
-use futures::{stream, Stream};
+use futures::{Stream, stream};
 
 use crate::signals::Signal;
 
@@ -23,10 +23,14 @@ pub fn get_signal() -> Result<impl Stream<Item = Option<Signal>>, Error> {
     use tokio::signal::unix;
     let mut sigint = unix::signal(unix::SignalKind::interrupt())?;
     let mut sigterm = unix::signal(unix::SignalKind::terminate())?;
+    let mut sighup = unix::signal(unix::SignalKind::hangup())?;
 
     Ok(stream::once(async move {
         tokio::select! {
             res = sigint.recv() => {
+                res.map(|_| Signal::Interrupt)
+            }
+            res = sighup.recv() => {
                 res.map(|_| Signal::Interrupt)
             }
             res = sigterm.recv() => {

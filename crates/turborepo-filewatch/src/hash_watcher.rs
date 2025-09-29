@@ -1,8 +1,8 @@
 use std::{
     collections::{HashMap, HashSet},
     sync::{
-        atomic::{AtomicUsize, Ordering},
         Arc,
+        atomic::{AtomicUsize, Ordering},
     },
     time::Duration,
 };
@@ -20,11 +20,11 @@ use turborepo_repository::discovery::DiscoveryResponse;
 use turborepo_scm::{Error as SCMError, GitHashes, SCM};
 
 use crate::{
+    NotifyError, OptionalWatch,
     debouncer::Debouncer,
     globwatcher::{GlobError, GlobSet},
     package_watcher::DiscoveryData,
     scm_resource::SCMResource,
-    NotifyError, OptionalWatch,
 };
 
 pub struct HashWatcher {
@@ -490,24 +490,24 @@ impl Subscriber {
             // We need mutable access to 'state' to update it, as well as being able to
             // extract the pending state, so we need two separate if statements
             // to pull the value apart.
-            if let HashState::Pending(existing_version, _, pending_queries) = state {
-                if *existing_version == version {
-                    match result {
-                        Ok(hashes) => {
-                            for pending_query in pending_queries.drain(..) {
-                                // We don't care if the client has gone away
-                                let _ = pending_query.send(Ok(hashes.clone()));
-                            }
-                            *state = HashState::Hashes(hashes);
+            if let HashState::Pending(existing_version, _, pending_queries) = state
+                && *existing_version == version
+            {
+                match result {
+                    Ok(hashes) => {
+                        for pending_query in pending_queries.drain(..) {
+                            // We don't care if the client has gone away
+                            let _ = pending_query.send(Ok(hashes.clone()));
                         }
-                        Err(e) => {
-                            let error = e.to_string();
-                            for pending_query in pending_queries.drain(..) {
-                                // We don't care if the client has gone away
-                                let _ = pending_query.send(Err(Error::HashingError(error.clone())));
-                            }
-                            *state = HashState::Unavailable(error);
+                        *state = HashState::Hashes(hashes);
+                    }
+                    Err(e) => {
+                        let error = e.to_string();
+                        for pending_query in pending_queries.drain(..) {
+                            // We don't care if the client has gone away
+                            let _ = pending_query.send(Err(Error::HashingError(error.clone())));
                         }
+                        *state = HashState::Unavailable(error);
                     }
                 }
             }
@@ -689,7 +689,7 @@ mod tests {
     };
 
     use git2::Repository;
-    use tempfile::{tempdir, TempDir};
+    use tempfile::{TempDir, tempdir};
     use turbopath::{
         AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeUnixPathBuf,
     };
@@ -697,11 +697,11 @@ mod tests {
 
     use super::{FileHashes, HashState};
     use crate::{
+        FileSystemWatcher,
         cookies::CookieWriter,
         globwatcher::GlobSet,
         hash_watcher::{HashSpec, HashWatcher, InputGlobs},
         package_watcher::PackageWatcher,
-        FileSystemWatcher,
     };
 
     fn commit_all(repo: &Repository) {

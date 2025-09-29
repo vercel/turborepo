@@ -9,7 +9,7 @@ use std::{
 use nom::Finish;
 use turbopath::{AbsoluteSystemPath, RelativeUnixPathBuf};
 
-use crate::{wait_for_success, Error, GitHashes, GitRepo};
+use crate::{Error, GitHashes, GitRepo, wait_for_success};
 
 impl GitRepo {
     #[tracing::instrument(skip(self, root_path, hashes))]

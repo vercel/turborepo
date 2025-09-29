@@ -12,6 +12,7 @@
 #![doc(
     html_logo_url = "https://raw.githubusercontent.com/olson-sean-k/wax/master/doc/wax.svg?sanitize=true"
 )]
+#![allow(dead_code)]
 #![allow(clippy::all)]
 #![deny(
     clippy::cast_lossless,
@@ -1000,7 +1001,7 @@ where
 // It is possible to call this function using a mutable reference, which may appear to mutate the
 // parameter in place.
 #[must_use]
-pub fn escape(unescaped: &str) -> Cow<str> {
+pub fn escape(unescaped: &str) -> Cow<'_, str> {
     const ESCAPE: char = '\\';
 
     if unescaped.chars().any(is_meta_character) {
@@ -1045,7 +1046,7 @@ pub const fn is_contextual_meta_character(x: char) -> bool {
     matches!(x, '-')
 }
 
-fn parse_and_check(expression: &str) -> Result<Checked<Tokenized>, BuildError> {
+fn parse_and_check(expression: &str) -> Result<Checked<Tokenized<'_>>, BuildError> {
     let tokenized = token::parse(expression)?;
     let checked = rule::check(tokenized)?;
     Ok(checked)
@@ -1933,33 +1934,43 @@ mod tests {
     fn query_glob_variance() {
         assert!(Glob::new("").unwrap().variance().is_invariant());
         assert!(Glob::new("/a/file.ext").unwrap().variance().is_invariant());
-        assert!(Glob::new("/a/{file.ext}")
-            .unwrap()
-            .variance()
-            .is_invariant());
-        assert!(Glob::new("{a/b/file.ext}")
-            .unwrap()
-            .variance()
-            .is_invariant());
+        assert!(
+            Glob::new("/a/{file.ext}")
+                .unwrap()
+                .variance()
+                .is_invariant()
+        );
+        assert!(
+            Glob::new("{a/b/file.ext}")
+                .unwrap()
+                .variance()
+                .is_invariant()
+        );
         assert!(Glob::new("{a,a}").unwrap().variance().is_invariant());
         #[cfg(windows)]
         assert!(Glob::new("{a,A}").unwrap().variance().is_invariant());
         assert!(Glob::new("<a/b:2>").unwrap().variance().is_invariant());
         #[cfg(unix)]
-        assert!(Glob::new("/[a]/file.ext")
-            .unwrap()
-            .variance()
-            .is_invariant());
+        assert!(
+            Glob::new("/[a]/file.ext")
+                .unwrap()
+                .variance()
+                .is_invariant()
+        );
         #[cfg(unix)]
-        assert!(Glob::new("/[a-a]/file.ext")
-            .unwrap()
-            .variance()
-            .is_invariant());
+        assert!(
+            Glob::new("/[a-a]/file.ext")
+                .unwrap()
+                .variance()
+                .is_invariant()
+        );
         #[cfg(unix)]
-        assert!(Glob::new("/[a-aaa-a]/file.ext")
-            .unwrap()
-            .variance()
-            .is_invariant());
+        assert!(
+            Glob::new("/[a-aaa-a]/file.ext")
+                .unwrap()
+                .variance()
+                .is_invariant()
+        );
 
         assert!(Glob::new("/a/{b,c}").unwrap().variance().is_variant());
         assert!(Glob::new("<a/b:1,>").unwrap().variance().is_variant());
@@ -1968,14 +1979,18 @@ mod tests {
         assert!(Glob::new("/a/*.ext").unwrap().variance().is_variant());
         assert!(Glob::new("/a/b*").unwrap().variance().is_variant());
         #[cfg(unix)]
-        assert!(Glob::new("/a/(?i)file.ext")
-            .unwrap()
-            .variance()
-            .is_variant());
+        assert!(
+            Glob::new("/a/(?i)file.ext")
+                .unwrap()
+                .variance()
+                .is_variant()
+        );
         #[cfg(windows)]
-        assert!(Glob::new("/a/(?-i)file.ext")
-            .unwrap()
-            .variance()
-            .is_variant());
+        assert!(
+            Glob::new("/a/(?-i)file.ext")
+                .unwrap()
+                .variance()
+                .is_variant()
+        );
     }
 }

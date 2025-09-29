@@ -1,3 +1,12 @@
+//! `@vercel/microfrontends` configuration parsing
+//! This crate is only concerned with parsing the minimal amount of information
+//! that Turborepo needs to correctly invoke a local proxy. This allows this
+//! crate to avoid being kept in lock step with `@vercel/microfrontends`.
+//!
+//! The information required for the local proxy is the default package and the
+//! package names that are a part of microfrontend and their development task
+//! names.
+
 #![feature(assert_matches)]
 #![deny(clippy::all)]
 mod configv1;

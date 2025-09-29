@@ -114,7 +114,7 @@ pub fn set_path(
  * get_root returns the document root, or information on the error
  * encountered with the input json_document_string.
  */
-fn get_root(json_document_string: &str) -> Result<jsonc_parser::ast::Value, RewriteError> {
+fn get_root(json_document_string: &str) -> Result<jsonc_parser::ast::Value<'_>, RewriteError> {
     let parse_result_result = parse_to_ast(
         json_document_string,
         &Default::default(),

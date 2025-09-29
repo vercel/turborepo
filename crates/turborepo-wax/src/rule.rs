@@ -23,9 +23,9 @@ use miette::{Diagnostic, LabeledSpan, SourceCode};
 use thiserror::Error;
 
 use crate::{
+    Any, BuildError, Glob, Pattern,
     diagnostics::{CompositeSpan, CorrelatedSpan, SpanExt as _},
     token::{self, InvariantSize, Token, TokenKind, TokenTree, Tokenized},
-    Any, BuildError, Glob, Pattern,
 };
 
 /// Maximum invariant size.

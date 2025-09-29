@@ -2,7 +2,7 @@ use camino::Utf8PathBuf;
 use turbopath::{AbsoluteSystemPath, RelativeUnixPath};
 
 use super::{ConfigurationOptions, Error, ResolvedConfigurationOptions};
-use crate::turbo_json::{RawRemoteCacheOptions, RawTurboJson};
+use crate::turbo_json::{RawRemoteCacheOptions, RawRootTurboJson, RawTurboJson};
 
 pub struct TurboJsonReader<'a> {
     repo_root: &'a AbsoluteSystemPath,
@@ -78,6 +78,7 @@ impl<'a> TurboJsonReader<'a> {
         opts.env_mode = turbo_json.env_mode.map(|mode| *mode.as_inner());
         opts.cache_dir = cache_dir;
         opts.concurrency = turbo_json.concurrency.map(|c| c.as_inner().clone());
+        opts.future_flags = turbo_json.future_flags.map(|f| *f.as_inner());
         Ok(opts)
     }
 }
@@ -88,8 +89,16 @@ impl<'a> ResolvedConfigurationOptions for TurboJsonReader<'a> {
         existing_config: &ConfigurationOptions,
     ) -> Result<ConfigurationOptions, Error> {
         let turbo_json_path = existing_config.root_turbo_json_path(self.repo_root)?;
-        let turbo_json = RawTurboJson::read(self.repo_root, &turbo_json_path)
-            .map(|turbo_json| turbo_json.unwrap_or_default())?;
+        let root_relative_turbo_json_path = self.repo_root.anchor(&turbo_json_path).map_or_else(
+            |_| turbo_json_path.as_str().to_owned(),
+            |relative| relative.to_string(),
+        );
+        let turbo_json = match turbo_json_path.read_existing_to_string()? {
+            Some(contents) => {
+                RawRootTurboJson::parse(&contents, &root_relative_turbo_json_path)?.into()
+            }
+            None => RawTurboJson::default(),
+        };
         Self::turbo_json_to_config_options(turbo_json)
     }
 }
@@ -98,6 +107,7 @@ impl<'a> ResolvedConfigurationOptions for TurboJsonReader<'a> {
 mod test {
     use serde_json::json;
     use tempfile::tempdir;
+    use test_case::test_case;
 
     use super::*;
     use crate::config::CONFIG_FILE;
@@ -164,7 +174,7 @@ mod test {
         let login_url = "localhost:3001";
         let team_slug = "acme-packers";
         let team_id = "id-123";
-        let turbo_json = RawTurboJson::parse(
+        let turbo_json = RawRootTurboJson::parse(
             &serde_json::to_string_pretty(&json!({
                 "remoteCache": {
                     "enabled": true,
@@ -181,7 +191,8 @@ mod test {
             .unwrap(),
             "junk",
         )
-        .unwrap();
+        .unwrap()
+        .into();
         let config = TurboJsonReader::turbo_json_to_config_options(turbo_json).unwrap();
         assert!(config.enabled());
         assert_eq!(config.timeout(), timeout);
@@ -192,5 +203,28 @@ mod test {
         assert_eq!(config.team_id(), Some(team_id));
         assert!(config.signature());
         assert!(config.preflight());
+    }
+
+    #[test_case(None, false)]
+    #[test_case(Some(false), false)]
+    #[test_case(Some(true), true)]
+    fn test_dangerously_disable_package_manager_check(value: Option<bool>, expected: bool) {
+        let turbo_json = RawRootTurboJson::parse(
+            &serde_json::to_string_pretty(
+                &(if let Some(value) = value {
+                    json!({
+                        "dangerouslyDisablePackageManagerCheck": value
+                    })
+                } else {
+                    json!({})
+                }),
+            )
+            .unwrap(),
+            "turbo.json",
+        )
+        .unwrap()
+        .into();
+        let config = TurboJsonReader::turbo_json_to_config_options(turbo_json).unwrap();
+        assert_eq!(config.allow_no_package_manager(), expected);
     }
 }

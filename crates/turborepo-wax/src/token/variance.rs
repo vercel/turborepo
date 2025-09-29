@@ -7,9 +7,8 @@ use std::{
 use itertools::Itertools as _;
 
 use crate::{
-    encode,
+    PATHS_ARE_CASE_INSENSITIVE, encode,
     token::{self, Separator, Token},
-    PATHS_ARE_CASE_INSENSITIVE,
 };
 
 pub trait Invariance:
@@ -593,9 +592,8 @@ mod tests {
     use std::path::{Path, PathBuf};
 
     use crate::token::{
-        self,
+        self, TokenTree,
         variance::{self, Boundedness, InvariantSize, Variance},
-        TokenTree,
     };
 
     #[test]

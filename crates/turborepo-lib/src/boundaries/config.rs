@@ -31,6 +31,8 @@ pub struct Rule {
 
 #[derive(Serialize, Default, Debug, Clone, Iterable, Deserializable, PartialEq)]
 pub struct Permissions {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub allow: Option<Spanned<Vec<Spanned<String>>>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub deny: Option<Spanned<Vec<Spanned<String>>>>,
 }

@@ -149,7 +149,7 @@ impl PackageGraph {
     pub fn builder(
         repo_root: &AbsoluteSystemPath,
         root_package_json: PackageJson,
-    ) -> PackageGraphBuilder<LocalPackageDiscoveryBuilder> {
+    ) -> PackageGraphBuilder<'_, LocalPackageDiscoveryBuilder> {
         PackageGraphBuilder::new(repo_root, root_package_json)
     }
 
