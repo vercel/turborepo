@@ -462,15 +462,18 @@ impl Lockfile for BunLockfile {
         let optional_peers = &info.optional_peers;
         for (dependency, version) in info.all_dependencies() {
             let parent_key = format!("{entry_key}/{dependency}");
-            let Some((dep_key, _)) = self.package_entry(&parent_key) else {
-                // This is an optional peer dependency
-                if optional_peers.contains(&dependency.to_string()) {
+            let Some((_dep_key, dep_entry)) = self.package_entry(&parent_key) else {
+                // This is an optional peer dependency or optional dependency
+                if optional_peers.contains(&dependency.to_string())
+                    || info.optional_dependencies.contains_key(dependency)
+                {
                     continue;
                 }
 
                 return Err(crate::Error::MissingPackage(dependency.to_string()));
             };
-            deps.insert(dep_key.to_string(), version.to_string());
+            // Use the ident (not the scoped key) so it can be passed to all_dependencies
+            deps.insert(dep_entry.ident.clone(), version.to_string());
         }
 
         Ok(Some(deps))
@@ -887,29 +890,29 @@ mod test {
     }
 
     const TURBO_GEN_DEPS: &[&str] = [
-        "@turbo/gen/chalk",
-        "@turbo/gen/minimatch",
-        "@turbo/workspaces",
-        "commander",
-        "fs-extra",
-        "inquirer",
-        "node-plop",
-        "proxy-agent",
-        "ts-node",
-        "update-check",
-        "validate-npm-package-name",
+        "@turbo/workspaces@1.13.4",
+        "chalk@2.4.2",
+        "commander@10.0.1",
+        "fs-extra@10.1.0",
+        "inquirer@8.2.6",
+        "minimatch@9.0.5",
+        "node-plop@0.26.3",
+        "proxy-agent@6.5.0",
+        "ts-node@10.9.2",
+        "update-check@1.5.4",
+        "validate-npm-package-name@5.0.1",
     ]
     .as_slice();
     // Both @turbo/gen and log-symbols depend on the same version of chalk
     // log-symbols version wins out, but this is okay since they are the same exact
     // version of chalk.
     const TURBO_GEN_CHALK_DEPS: &[&str] = [
-        "log-symbols/chalk/ansi-styles",
-        "log-symbols/chalk/escape-string-regexp",
-        "log-symbols/chalk/supports-color",
+        "ansi-styles@3.2.1",
+        "escape-string-regexp@1.0.5",
+        "supports-color@5.5.0",
     ]
     .as_slice();
-    const CHALK_DEPS: &[&str] = ["ansi-styles", "supports-color"].as_slice();
+    const CHALK_DEPS: &[&str] = ["ansi-styles@4.3.0", "supports-color@7.2.0"].as_slice();
 
     #[test_case("@turbo/gen@1.13.4", TURBO_GEN_DEPS)]
     #[test_case("chalk@2.4.2", TURBO_GEN_CHALK_DEPS)]
@@ -1399,6 +1402,8 @@ mod test {
     }
 
     const V1_WORKSPACE_LOCKFILE_1: &str = include_str!("../../fixtures/bun-v1-1.lock");
+    const V1_CREATE_TURBO_LOCKFILE: &str = include_str!("../../fixtures/bun-v1-create-turbo.lock");
+    const V1_ISSUE_10410_LOCKFILE: &str = include_str!("../../fixtures/bun-v1-issue-10410.lock");
 
     #[test]
     fn test_v1_workspace_dependency_resolution() {
@@ -1463,6 +1468,170 @@ mod test {
 
         // Verify lockfile version is correctly parsed as 1
         assert_eq!(lockfile.data.lockfile_version, 1);
+    }
+
+    #[test]
+    fn test_v1_create_turbo_lockfile_parse() {
+        let lockfile = BunLockfile::from_str(V1_CREATE_TURBO_LOCKFILE).unwrap();
+        assert_eq!(lockfile.data.lockfile_version, 1);
+
+        // Verify workspaces are parsed correctly
+        assert_eq!(lockfile.data.workspaces.len(), 6);
+        assert!(lockfile.data.workspaces.contains_key(""));
+        assert!(lockfile.data.workspaces.contains_key("apps/docs"));
+        assert!(lockfile.data.workspaces.contains_key("apps/web"));
+        assert!(lockfile.data.workspaces.contains_key("packages/ui"));
+        assert!(
+            lockfile
+                .data
+                .workspaces
+                .contains_key("packages/eslint-config")
+        );
+        assert!(
+            lockfile
+                .data
+                .workspaces
+                .contains_key("packages/typescript-config")
+        );
+
+        // Verify packages are parsed
+        assert!(lockfile.data.packages.len() > 0);
+        assert!(lockfile.data.packages.contains_key("react"));
+        assert!(lockfile.data.packages.contains_key("next"));
+        assert!(lockfile.data.packages.contains_key("turbo"));
+    }
+
+    #[test]
+    fn test_v1_create_turbo_workspace_resolution() {
+        let lockfile = BunLockfile::from_str(V1_CREATE_TURBO_LOCKFILE).unwrap();
+
+        // Test resolving workspace dependency from apps/docs to packages/ui
+        let result = lockfile
+            .resolve_package("apps/docs", "@repo/ui", "*")
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(result.key, "@repo/ui@workspace:packages/ui");
+        assert_eq!(result.version, "workspace:packages/ui");
+
+        // Test resolving external dependency
+        let react_result = lockfile
+            .resolve_package("apps/docs", "react", "^19.1.0")
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(react_result.key, "react@19.1.1");
+        assert_eq!(react_result.version, "19.1.1");
+    }
+
+    #[test]
+    fn test_v1_create_turbo_turbo_version() {
+        let lockfile = BunLockfile::from_str(V1_CREATE_TURBO_LOCKFILE).unwrap();
+        let turbo_version = lockfile.turbo_version();
+        assert_eq!(turbo_version, Some("2.5.8".to_string()));
+    }
+
+    #[test]
+    fn test_optional_dependencies_not_in_lockfile() {
+        // Test that optional dependencies that are not present in the lockfile
+        // don't cause errors when calculating transitive closures
+        let lockfile_content = r#"{
+            "lockfileVersion": 1,
+            "workspaces": {
+                "": {
+                    "name": "test-app",
+                    "dependencies": {
+                        "@emnapi/runtime": "^1.0.0"
+                    }
+                }
+            },
+            "packages": {
+                "@emnapi/runtime": [
+                    "@emnapi/runtime@1.5.0",
+                    "",
+                    {
+                        "dependencies": {
+                            "tslib": "^2.4.0"
+                        },
+                        "optionalDependencies": {
+                            "@emnapi/wasi-threads": "^1.0.0"
+                        }
+                    },
+                    "sha512"
+                ],
+                "tslib": [
+                    "tslib@2.8.1",
+                    "",
+                    {},
+                    "sha512"
+                ]
+            }
+        }"#;
+
+        let lockfile = BunLockfile::from_str(lockfile_content).unwrap();
+
+        // This should not error even though @emnapi/wasi-threads is not in the packages
+        let deps = lockfile
+            .all_dependencies("@emnapi/runtime@1.5.0")
+            .unwrap()
+            .unwrap();
+
+        // Should only contain tslib, not @emnapi/wasi-threads
+        assert_eq!(deps.len(), 1);
+        let keys: Vec<_> = deps.keys().collect();
+        assert_eq!(keys.len(), 1);
+        assert!(keys[0].contains("tslib"));
+        assert!(!deps.values().any(|v| v.contains("@emnapi/wasi-threads")));
+    }
+
+    #[test]
+    fn test_v1_issue_10410_bundled_dependencies() {
+        let lockfile = BunLockfile::from_str(V1_ISSUE_10410_LOCKFILE).unwrap();
+        assert_eq!(lockfile.data.lockfile_version, 1);
+
+        // This lockfile has bundled dependencies which should be resolved correctly
+        // @tailwindcss/oxide-wasm32-wasi has scoped bundled dependencies
+        let result = lockfile
+            .resolve_package("apps/web", "@tailwindcss/vite", "^4.1.13")
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(result.key, "@tailwindcss/vite@4.1.13");
+
+        // Test that we can get all dependencies without errors
+        // This should not fail with "No lockfile entry found for
+        // '@emnapi/wasi-threads'"
+        let deps = lockfile
+            .all_dependencies("@tailwindcss/oxide-wasm32-wasi@4.1.13")
+            .unwrap()
+            .unwrap();
+
+        // Should be able to find bundled dependencies under the scoped path
+        assert!(deps.len() > 0);
+
+        // Test transitive closure calculation for apps/web
+        // This is the scenario that was failing with the warning
+        let workspace_entry = &lockfile.data.workspaces["apps/web"];
+        let mut unresolved_deps = HashMap::new();
+        if let Some(deps) = &workspace_entry.dependencies {
+            for (name, version) in deps {
+                unresolved_deps.insert(name.clone(), version.clone());
+            }
+        }
+        if let Some(dev_deps) = &workspace_entry.dev_dependencies {
+            for (name, version) in dev_deps {
+                unresolved_deps.insert(name.clone(), version.clone());
+            }
+        }
+
+        // This should complete without errors - previously threw warning about
+        // '@emnapi/wasi-threads'
+        let closure = crate::transitive_closure(&lockfile, "apps/web", unresolved_deps, false);
+        assert!(
+            closure.is_ok(),
+            "Transitive closure failed: {}",
+            closure.unwrap_err()
+        );
     }
 
     #[test]

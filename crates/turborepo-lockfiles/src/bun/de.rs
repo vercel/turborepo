@@ -227,4 +227,18 @@ mod test {
         let result = BunLockfile::from_str(contents);
         assert!(result.is_ok(), "{}", result.unwrap_err());
     }
+
+    #[test]
+    fn test_v1_create_turbo() {
+        let contents = include_str!("../../fixtures/bun-v1-create-turbo.lock");
+        let result = BunLockfile::from_str(contents);
+        assert!(result.is_ok(), "{}", result.unwrap_err());
+    }
+
+    #[test]
+    fn test_v1_issue_10410() {
+        let contents = include_str!("../../fixtures/bun-v1-issue-10410.lock");
+        let result = BunLockfile::from_str(contents);
+        assert!(result.is_ok(), "{}", result.unwrap_err());
+    }
 }
