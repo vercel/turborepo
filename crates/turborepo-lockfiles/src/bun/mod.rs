@@ -178,19 +178,27 @@ impl<'de> Deserialize<'de> for Negatable {
                     .collect();
 
                 let platforms = platforms?;
-                if platforms.iter().any(|p| p.starts_with('!')) {
+
+                let has_negated = platforms.iter().any(|p| p.starts_with('!'));
+                let has_non_negated = platforms.iter().any(|p| !p.starts_with('!'));
+
+                if has_negated && has_non_negated {
+                    // Mixed array: non-negated values define the allowlist, ignore negated values
+                    // This matches npm behavior where explicit allows take precedence
+                    let allowed_platforms: Vec<String> = platforms
+                        .into_iter()
+                        .filter(|p| !p.starts_with('!'))
+                        .collect();
+                    Ok(Negatable::Multiple(allowed_platforms))
+                } else if has_negated {
+                    // All negated: strip '!' prefix and treat as blocklist
                     let negated_platforms: Vec<String> = platforms
                         .into_iter()
-                        .map(|p| {
-                            if let Some(stripped) = p.strip_prefix('!') {
-                                stripped.to_string()
-                            } else {
-                                p
-                            }
-                        })
+                        .map(|p| p.strip_prefix('!').unwrap().to_string())
                         .collect();
                     Ok(Negatable::Negated(negated_platforms))
                 } else {
+                    // All non-negated: treat as allowlist
                     Ok(Negatable::Multiple(platforms))
                 }
             }
@@ -3192,6 +3200,35 @@ mod test {
     }
 
     #[test]
+    fn test_negatable_mixed_array_behavior() {
+        // Test that mixed arrays with non-negated values work correctly
+        let mixed_json = Value::Array(vec![
+            Value::String("linux".to_string()),
+            Value::String("!darwin".to_string()),
+        ]);
+        let mixed: Negatable = serde_json::from_value(mixed_json).unwrap();
+
+        // Should only allow linux (negated darwin is ignored in mixed array)
+        assert!(mixed.allows("linux"));
+        assert!(!mixed.allows("darwin"));
+        assert!(!mixed.allows("win32"));
+        assert!(!mixed.allows("freebsd"));
+
+        // Test contradictory case: platform is both allowed and blocked
+        let contradictory_json = Value::Array(vec![
+            Value::String("linux".to_string()),
+            Value::String("darwin".to_string()),
+            Value::String("!linux".to_string()),
+        ]);
+        let contradictory: Negatable = serde_json::from_value(contradictory_json).unwrap();
+
+        // Non-negated values win, so both linux and darwin are allowed
+        assert!(contradictory.allows("linux"));
+        assert!(contradictory.allows("darwin"));
+        assert!(!contradictory.allows("win32"));
+    }
+
+    #[test]
     fn test_negatable_deserialization_edge_cases() {
         // Test single negated string
         let single_negated_json = Value::String("!win32".to_string());
@@ -3201,15 +3238,47 @@ mod test {
             Negatable::Negated(vec!["win32".to_string()])
         );
 
-        // Test array with mixed negated and regular (should be treated as all negated)
-        let mixed_array_json = Value::Array(vec![
+        // Test array with all negated elements
+        let all_negated_json = Value::Array(vec![
             Value::String("!win32".to_string()),
             Value::String("!freebsd".to_string()),
         ]);
-        let mixed_array: Negatable = serde_json::from_value(mixed_array_json).unwrap();
+        let all_negated: Negatable = serde_json::from_value(all_negated_json).unwrap();
         assert_eq!(
-            mixed_array,
+            all_negated,
             Negatable::Negated(vec!["win32".to_string(), "freebsd".to_string()])
+        );
+
+        // Test mixed array (some negated, some not) - non-negated values should be used
+        let mixed_array_json = Value::Array(vec![
+            Value::String("linux".to_string()),
+            Value::String("!darwin".to_string()),
+        ]);
+        let mixed_array: Negatable = serde_json::from_value(mixed_array_json).unwrap();
+        assert_eq!(mixed_array, Negatable::Multiple(vec!["linux".to_string()]));
+
+        // Test reverse mixed array - non-negated values should still be used
+        let reverse_mixed_json = Value::Array(vec![
+            Value::String("!linux".to_string()),
+            Value::String("darwin".to_string()),
+            Value::String("win32".to_string()),
+        ]);
+        let reverse_mixed: Negatable = serde_json::from_value(reverse_mixed_json).unwrap();
+        assert_eq!(
+            reverse_mixed,
+            Negatable::Multiple(vec!["darwin".to_string(), "win32".to_string()])
+        );
+
+        // Test contradictory mixed array (platform both allowed and blocked)
+        let contradictory_json = Value::Array(vec![
+            Value::String("linux".to_string()),
+            Value::String("!linux".to_string()),
+            Value::String("darwin".to_string()),
+        ]);
+        let contradictory: Negatable = serde_json::from_value(contradictory_json).unwrap();
+        assert_eq!(
+            contradictory,
+            Negatable::Multiple(vec!["linux".to_string(), "darwin".to_string()])
         );
 
         // Test empty array - should be treated as multiple with empty list
