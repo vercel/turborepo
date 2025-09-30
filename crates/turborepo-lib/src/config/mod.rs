@@ -23,8 +23,11 @@ use turborepo_cache::CacheConfig;
 use turborepo_errors::TURBO_SITE;
 use turborepo_repository::package_graph::PackageName;
 
-use crate::cli::{EnvMode, LogOrder};
-pub use crate::turbo_json::{RawTurboJson, UIMode};
+pub use crate::turbo_json::UIMode;
+use crate::{
+    cli::{EnvMode, LogOrder},
+    turbo_json::FutureFlags,
+};
 
 pub const CONFIG_FILE: &str = "turbo.json";
 pub const CONFIG_FILE_JSONC: &str = "turbo.jsonc";
@@ -133,6 +136,13 @@ pub enum Error {
     #[error("You can only extend from the root of the workspace.")]
     ExtendFromNonRoot {
         #[label("non-root workspace found here")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource<String>,
+    },
+    #[error("You must extend from the root of the workspace first.")]
+    ExtendsRootFirst {
+        #[label("'//' should be first")]
         span: Option<SourceSpan>,
         #[source_code]
         text: NamedSource<String>,
@@ -312,6 +322,8 @@ pub struct ConfigurationOptions {
     pub(crate) concurrency: Option<String>,
     pub(crate) no_update_notifier: Option<bool>,
     pub(crate) sso_login_callback_port: Option<u16>,
+    #[serde(skip)]
+    future_flags: Option<FutureFlags>,
 }
 
 #[derive(Default)]
@@ -470,6 +482,10 @@ impl ConfigurationOptions {
 
     pub fn sso_login_callback_port(&self) -> Option<u16> {
         self.sso_login_callback_port
+    }
+
+    pub fn future_flags(&self) -> FutureFlags {
+        self.future_flags.unwrap_or_default()
     }
 }
 

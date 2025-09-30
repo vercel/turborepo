@@ -23,7 +23,7 @@ use thiserror::Error;
 pub use crate::{
     color_selector::ColorSelector,
     line::LineWriter,
-    logs::{replay_logs, replay_logs_with_crlf, LogWriter},
+    logs::{LogWriter, replay_logs, replay_logs_with_crlf},
     output::{OutputClient, OutputClientBehavior, OutputSink, OutputWriter},
     prefixed::{PrefixedUI, PrefixedWriter},
     tui::{TaskTable, TerminalPane},

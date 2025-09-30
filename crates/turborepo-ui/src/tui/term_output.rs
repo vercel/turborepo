@@ -3,8 +3,8 @@ use std::{io::Write, mem};
 use turborepo_vt100 as vt100;
 
 use super::{
-    event::{CacheResult, Direction, OutputLogs, TaskResult},
     Error,
+    event::{CacheResult, Direction, OutputLogs, TaskResult},
 };
 
 pub struct TerminalOutput<W> {
@@ -169,5 +169,12 @@ impl<W> TerminalOutput<W> {
 
     pub fn copy_selection(&self) -> Option<String> {
         self.parser.screen().selected_text()
+    }
+
+    pub fn clear_logs(&mut self) {
+        self.output.clear();
+
+        // clear screen and reset cursor
+        self.process(b"\x1bc");
     }
 }

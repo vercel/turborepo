@@ -24,7 +24,7 @@ use std::{
     time::Duration,
 };
 
-use portable_pty::{native_pty_system, Child as PtyChild, MasterPty as PtyController};
+use portable_pty::{Child as PtyChild, MasterPty as PtyController, native_pty_system};
 use tokio::{
     io::{AsyncBufRead, AsyncBufReadExt, BufReader},
     process::Command as TokioCommand,
@@ -581,9 +581,18 @@ impl Child {
 
         let writer_fut = async {
             let mut result = Ok(());
-            while let Some(bytes) = byte_rx.recv().await {
-                if let Err(err) = stdout_pipe.write_all(&bytes) {
-                    result = Err(err);
+            loop {
+                match tokio::time::timeout(Duration::from_millis(200), byte_rx.recv()).await {
+                    Ok(Some(bytes)) => {
+                        result = stdout_pipe.write_all(&bytes);
+                    }
+                    Ok(None) => break,
+                    Err(_) => {
+                        // Flush the writer periodically if there hasn't been any new output
+                        result = stdout_pipe.flush();
+                    }
+                }
+                if result.is_err() {
                     break;
                 }
             }
@@ -757,7 +766,7 @@ impl Child {
 mod test {
     use std::{assert_matches::assert_matches, time::Duration};
 
-    use futures::{stream::FuturesUnordered, StreamExt};
+    use futures::{StreamExt, stream::FuturesUnordered};
     use test_case::test_case;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tracing_test::traced_test;
@@ -765,8 +774,8 @@ mod test {
 
     use super::{Child, ChildInput, ChildOutput, Command};
     use crate::{
-        child::{ChildExit, ShutdownStyle},
         PtySize,
+        child::{ChildExit, ShutdownStyle},
     };
 
     const STARTUP_DELAY: Duration = Duration::from_millis(500);

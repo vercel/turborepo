@@ -3,7 +3,7 @@ mod de;
 mod dep_path;
 mod ser;
 
-pub use data::{pnpm_global_change, PnpmLockfile};
+pub use data::{PnpmLockfile, pnpm_global_change};
 
 use crate::Lockfile;
 

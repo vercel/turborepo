@@ -108,7 +108,7 @@ mod tests {
     use super::prune_patches;
     use crate::{
         package_json::PackageJson,
-        package_manager::{yarn::YarnDetector, PackageManager},
+        package_manager::{PackageManager, yarn::YarnDetector},
     };
 
     #[test]

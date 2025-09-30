@@ -8,15 +8,15 @@ use regex::Regex;
 
 use super::SplitAtDepth;
 use crate::{
+    BuildError, CandidatePath, Glob, Pattern,
     capture::MatchedText,
     encode::CompileError,
     token::{self, Token, TokenTree},
     walk::{
-        filter::{HierarchicalIterator, Separation},
         Entry, EntryResidue, FileIterator, JoinAndGetDepth, TreeEntry, WalkBehavior, WalkError,
         WalkTree,
+        filter::{HierarchicalIterator, Separation},
     },
-    BuildError, CandidatePath, Glob, Pattern,
 };
 
 /// APIs for matching globs against directory trees.

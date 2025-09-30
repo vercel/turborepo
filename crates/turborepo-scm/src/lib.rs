@@ -267,7 +267,7 @@ mod tests {
     use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 
     use super::find_git_root;
-    use crate::{wait_for_success, Error};
+    use crate::{Error, wait_for_success};
 
     fn tmp_dir() -> (tempfile::TempDir, AbsoluteSystemPathBuf) {
         let tmp_dir = tempfile::tempdir().unwrap();

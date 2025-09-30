@@ -1,9 +1,9 @@
 use tokio::sync::{mpsc, oneshot};
 
 use super::{
+    Error, Event, TaskResult,
     app::FRAMERATE,
     event::{CacheResult, OutputLogs, PaneSize},
-    Error, Event, TaskResult,
 };
 use crate::sender::{TaskSender, UISender};
 
