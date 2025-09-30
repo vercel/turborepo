@@ -669,6 +669,16 @@ impl BunLockfile {
         // by workspace dependencies, but we could also filter to only used ones
         // For now, keeping them all for simplicity
 
+        // Filter key_to_entry to only include entries whose values (package keys)
+        // exist in new_packages. This maintains the invariant that key_to_entry
+        // only maps to valid entries in data.packages.
+        let new_key_to_entry: HashMap<_, _> = self
+            .key_to_entry
+            .iter()
+            .filter(|(_, package_key)| new_packages.contains_key(package_key.as_str()))
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect();
+
         Ok(Self {
             data: BunLockfileData {
                 lockfile_version: self.data.lockfile_version,
@@ -679,7 +689,7 @@ impl BunLockfile {
                 catalog: self.data.catalog.clone(),
                 catalogs: self.data.catalogs.clone(),
             },
-            key_to_entry: self.key_to_entry.clone(),
+            key_to_entry: new_key_to_entry,
         })
     }
 }
@@ -810,6 +820,72 @@ mod test {
             subgraph_data.workspaces.keys().collect::<Vec<_>>(),
             vec!["", "apps/docs"]
         );
+    }
+
+    #[test]
+    fn test_subgraph_filters_key_to_entry() {
+        // Test that subgraph properly filters key_to_entry to only include
+        // entries for packages that exist in the filtered packages map.
+        // This maintains the invariant that every value in key_to_entry
+        // must be a valid key in data.packages.
+        let lockfile = BunLockfile::from_str(BASIC_LOCKFILE_V0).unwrap();
+
+        // Verify the original lockfile has multiple packages
+        let original_package_count = lockfile.data.packages.len();
+        let original_key_to_entry_count = lockfile.key_to_entry.len();
+        assert!(
+            original_package_count > 1,
+            "Test requires lockfile with multiple packages"
+        );
+        assert!(
+            original_key_to_entry_count > 0,
+            "Test requires lockfile with key_to_entry mappings"
+        );
+
+        // Create a subgraph with only a subset of packages
+        let subgraph = lockfile
+            .subgraph(&["apps/docs".into()], &["is-odd@3.0.1".into()])
+            .unwrap();
+
+        // Verify the subgraph has fewer packages
+        let subgraph_package_count = subgraph.data.packages.len();
+        assert!(
+            subgraph_package_count < original_package_count,
+            "Subgraph should have fewer packages than original"
+        );
+
+        // Verify all keys in key_to_entry map to valid packages in data.packages
+        for (lookup_key, package_key) in &subgraph.key_to_entry {
+            assert!(
+                subgraph.data.packages.contains_key(package_key),
+                "key_to_entry[{:?}] = {:?}, but {:?} not in packages",
+                lookup_key,
+                package_key,
+                package_key
+            );
+        }
+
+        // Verify that filtered-out packages are not in key_to_entry
+        // For example, "chalk" should be in the original but not in the subgraph
+        let has_chalk_in_original = lockfile
+            .key_to_entry
+            .values()
+            .any(|key| key.contains("chalk"));
+        let has_chalk_in_subgraph = subgraph
+            .key_to_entry
+            .values()
+            .any(|key| key.contains("chalk"));
+
+        if has_chalk_in_original {
+            assert!(
+                !has_chalk_in_subgraph,
+                "chalk should be filtered out of subgraph's key_to_entry"
+            );
+        }
+
+        // Verify the subgraph only has packages we requested
+        assert_eq!(subgraph.data.packages.len(), 1);
+        assert!(subgraph.data.packages.contains_key("is-odd"));
     }
 
     // There are multiple aliases that resolve to the same ident, here we test that
