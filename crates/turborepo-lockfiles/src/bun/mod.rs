@@ -858,10 +858,8 @@ mod test {
         for (lookup_key, package_key) in &subgraph.key_to_entry {
             assert!(
                 subgraph.data.packages.contains_key(package_key),
-                "key_to_entry[{:?}] = {:?}, but {:?} not in packages",
-                lookup_key,
-                package_key,
-                package_key
+                "key_to_entry[{lookup_key:?}] = {package_key:?}, but {package_key:?} not in \
+                 packages"
             );
         }
 
