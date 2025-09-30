@@ -1398,11 +1398,11 @@ mod test {
         assert_eq!(frontend_catalog.get("next"), Some(&"^14.0.0".to_string()));
     }
 
-    const V1_WORKSPACE_LOCKFILE: &str = include_str!("../../fixtures/bun-v1-workspace.lock");
+    const V1_WORKSPACE_LOCKFILE_1: &str = include_str!("../../fixtures/bun-v1-1.lock");
 
     #[test]
     fn test_v1_workspace_dependency_resolution() {
-        let lockfile = BunLockfile::from_str(V1_WORKSPACE_LOCKFILE).unwrap();
+        let lockfile = BunLockfile::from_str(V1_WORKSPACE_LOCKFILE_1).unwrap();
 
         // Test resolving a workspace dependency from apps/web to packages/ui
         let result = lockfile
@@ -1417,7 +1417,7 @@ mod test {
 
     #[test]
     fn test_v1_nested_workspace_dependency_resolution() {
-        let lockfile = BunLockfile::from_str(V1_WORKSPACE_LOCKFILE).unwrap();
+        let lockfile = BunLockfile::from_str(V1_WORKSPACE_LOCKFILE_1).unwrap();
 
         // Test resolving a workspace dependency from packages/ui to
         // packages/shared-utils
@@ -1432,7 +1432,7 @@ mod test {
 
     #[test]
     fn test_v1_non_workspace_dependency_resolution() {
-        let lockfile = BunLockfile::from_str(V1_WORKSPACE_LOCKFILE).unwrap();
+        let lockfile = BunLockfile::from_str(V1_WORKSPACE_LOCKFILE_1).unwrap();
 
         // Test resolving a regular dependency - should still work normally
         let result = lockfile
@@ -1446,7 +1446,7 @@ mod test {
 
     #[test]
     fn test_v1_workspace_dependency_not_found() {
-        let lockfile = BunLockfile::from_str(V1_WORKSPACE_LOCKFILE).unwrap();
+        let lockfile = BunLockfile::from_str(V1_WORKSPACE_LOCKFILE_1).unwrap();
 
         // Test resolving a non-existent workspace dependency
         let result = lockfile
@@ -1459,7 +1459,7 @@ mod test {
 
     #[test]
     fn test_v1_lockfile_version_detection() {
-        let lockfile = BunLockfile::from_str(V1_WORKSPACE_LOCKFILE).unwrap();
+        let lockfile = BunLockfile::from_str(V1_WORKSPACE_LOCKFILE_1).unwrap();
 
         // Verify lockfile version is correctly parsed as 1
         assert_eq!(lockfile.data.lockfile_version, 1);
@@ -1477,7 +1477,7 @@ mod test {
             .unwrap();
 
         // Test with V1 lockfile
-        let v1_lockfile = BunLockfile::from_str(V1_WORKSPACE_LOCKFILE).unwrap();
+        let v1_lockfile = BunLockfile::from_str(V1_WORKSPACE_LOCKFILE_1).unwrap();
         assert_eq!(v1_lockfile.data.lockfile_version, 1);
 
         // V1 should resolve workspace deps directly from workspaces section
@@ -1493,7 +1493,7 @@ mod test {
 
     #[test]
     fn test_resolve_workspace_dependency_helper() {
-        let lockfile = BunLockfile::from_str(V1_WORKSPACE_LOCKFILE).unwrap();
+        let lockfile = BunLockfile::from_str(V1_WORKSPACE_LOCKFILE_1).unwrap();
 
         // Should recognize workspace paths
         assert_eq!(
@@ -1522,7 +1522,7 @@ mod test {
 
     #[test]
     fn test_v1_subgraph_with_workspace_dependencies() {
-        let lockfile = BunLockfile::from_str(V1_WORKSPACE_LOCKFILE).unwrap();
+        let lockfile = BunLockfile::from_str(V1_WORKSPACE_LOCKFILE_1).unwrap();
 
         // Create subgraph including apps/web but not packages/ui
         // Note: In v1, workspace packages don't appear in packages section, so we
@@ -1551,7 +1551,7 @@ mod test {
 
     #[test]
     fn test_v1_subgraph_includes_workspace_dependencies() {
-        let lockfile = BunLockfile::from_str(V1_WORKSPACE_LOCKFILE).unwrap();
+        let lockfile = BunLockfile::from_str(V1_WORKSPACE_LOCKFILE_1).unwrap();
 
         // Create subgraph that includes both apps/web and the workspace it depends on
         let subgraph = lockfile
@@ -1581,7 +1581,7 @@ mod test {
 
     #[test]
     fn test_v1_subgraph_transitively_includes_workspace_deps() {
-        let lockfile = BunLockfile::from_str(V1_WORKSPACE_LOCKFILE).unwrap();
+        let lockfile = BunLockfile::from_str(V1_WORKSPACE_LOCKFILE_1).unwrap();
 
         // Create subgraph that includes packages/ui and its dependencies
         // packages/ui depends on packages/shared-utils (workspace) and react (external)
