@@ -762,16 +762,16 @@ mod test {
 
     use super::*;
 
-    const BASIC_LOCKFILE: &str = include_str!("../../fixtures/basic-bun.lock");
-    const PATCH_LOCKFILE: &str = include_str!("../../fixtures/bun-patch.lock");
-    const CATALOG_LOCKFILE: &str = include_str!("../../fixtures/bun-catalog.lock");
+    const BASIC_LOCKFILE_V0: &str = include_str!("../../fixtures/basic-bun-v0.lock");
+    const PATCH_LOCKFILE: &str = include_str!("../../fixtures/bun-patch-v0.lock");
+    const CATALOG_LOCKFILE: &str = include_str!("../../fixtures/bun-catalog-v0.lock");
 
     #[test_case("", "turbo", "^2.3.3", "turbo@2.3.3" ; "root")]
     #[test_case("apps/docs", "is-odd", "3.0.1", "is-odd@3.0.1" ; "docs is odd")]
     #[test_case("apps/web", "is-odd", "3.0.0", "is-odd@3.0.0" ; "web is odd")]
     #[test_case("packages/ui", "node-plop/inquirer/rxjs/tslib", "^1.14.0", "tslib@1.14.1" ; "full key")]
     fn test_resolve_package(workspace: &str, name: &str, version: &str, expected: &str) {
-        let lockfile = BunLockfile::from_str(BASIC_LOCKFILE).unwrap();
+        let lockfile = BunLockfile::from_str(BASIC_LOCKFILE_V0).unwrap();
         let result = lockfile
             .resolve_package(workspace, name, version)
             .unwrap()
@@ -781,7 +781,7 @@ mod test {
 
     #[test]
     fn test_subgraph() {
-        let lockfile = BunLockfile::from_str(BASIC_LOCKFILE).unwrap();
+        let lockfile = BunLockfile::from_str(BASIC_LOCKFILE_V0).unwrap();
         let subgraph = lockfile
             .subgraph(&["apps/docs".into()], &["is-odd@3.0.1".into()])
             .unwrap();
@@ -806,7 +806,7 @@ mod test {
     #[test]
     fn test_deduplicated_idents() {
         // chalk@2.4.2
-        let lockfile = BunLockfile::from_str(BASIC_LOCKFILE).unwrap();
+        let lockfile = BunLockfile::from_str(BASIC_LOCKFILE_V0).unwrap();
         let subgraph = lockfile
             .subgraph(&["apps/docs".into()], &["chalk@2.4.2".into()])
             .unwrap();
@@ -915,7 +915,7 @@ mod test {
     #[test_case("chalk@2.4.2", TURBO_GEN_CHALK_DEPS)]
     #[test_case("chalk@4.1.2", CHALK_DEPS)]
     fn test_all_dependencies(key: &str, expected: &[&str]) {
-        let lockfile = BunLockfile::from_str(BASIC_LOCKFILE).unwrap();
+        let lockfile = BunLockfile::from_str(BASIC_LOCKFILE_V0).unwrap();
         let mut expected = expected.to_vec();
         expected.sort();
 
@@ -1467,8 +1467,7 @@ mod test {
 
     #[test]
     fn test_v0_vs_v1_workspace_behavior() {
-        // Test with V0 lockfile (basic-bun.lock is v0)
-        let v0_lockfile = BunLockfile::from_str(BASIC_LOCKFILE).unwrap();
+        let v0_lockfile = BunLockfile::from_str(BASIC_LOCKFILE_V0).unwrap();
         assert_eq!(v0_lockfile.data.lockfile_version, 0);
 
         // V0 should resolve workspace deps through packages section

@@ -216,14 +216,14 @@ mod test {
 
     #[test]
     fn test_full_parse() {
-        let contents = include_str!("../../fixtures/basic-bun.lock");
+        let contents = include_str!("../../fixtures/basic-bun-v0.lock");
         let result = BunLockfile::from_str(contents);
         assert!(result.is_ok(), "{}", result.unwrap_err());
     }
 
     #[test]
     fn test_patch() {
-        let contents = include_str!("../../fixtures/bun-patch.lock");
+        let contents = include_str!("../../fixtures/bun-patch-v0.lock");
         let result = BunLockfile::from_str(contents);
         assert!(result.is_ok(), "{}", result.unwrap_err());
     }
