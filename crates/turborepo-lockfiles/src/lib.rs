@@ -25,7 +25,7 @@ use std::{
 };
 
 pub use berry::{Error as BerryError, *};
-pub use bun::BunLockfile;
+pub use bun::{BunLockfile, bun_global_change};
 pub use error::Error;
 pub use npm::*;
 pub use pnpm::{PnpmLockfile, pnpm_global_change, pnpm_subgraph};
