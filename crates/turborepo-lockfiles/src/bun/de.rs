@@ -303,8 +303,7 @@ mod test {
                 let closure = closure.unwrap();
                 assert!(
                     !closure.is_empty(),
-                    "Expected non-empty transitive closure for workspace '{}'",
-                    workspace_path
+                    "Expected non-empty transitive closure for workspace '{workspace_path}'"
                 );
             }
         }

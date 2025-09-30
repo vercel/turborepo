@@ -17,7 +17,7 @@ pub enum Error {
     #[error("Turborepo doesn't support npm lockfiles without a 'packages' field")]
     UnsupportedNpmVersion,
     #[error("Unsupported bun lockfile version: {0}")]
-    UnsupportedVersion(i32),
+    UnsupportedBunVersion(i32),
     #[error(transparent)]
     Pnpm(#[from] crate::pnpm::Error),
     #[error(transparent)]

@@ -141,7 +141,7 @@ impl Serialize for Negatable {
             Negatable::Multiple(platforms) => platforms.serialize(serializer),
             Negatable::Negated(platforms) => {
                 let negated_platforms: Vec<String> =
-                    platforms.iter().map(|p| format!("!{}", p)).collect();
+                    platforms.iter().map(|p| format!("!{p}")).collect();
                 negated_platforms.serialize(serializer)
             }
         }
@@ -159,8 +159,8 @@ impl<'de> Deserialize<'de> for Negatable {
             Value::String(s) => {
                 if s == "none" {
                     Ok(Negatable::None)
-                } else if s.starts_with('!') {
-                    Ok(Negatable::Negated(vec![s[1..].to_string()]))
+                } else if let Some(stripped) = s.strip_prefix('!') {
+                    Ok(Negatable::Negated(vec![stripped.to_string()]))
                 } else {
                     Ok(Negatable::Single(s))
                 }
@@ -182,8 +182,8 @@ impl<'de> Deserialize<'de> for Negatable {
                     let negated_platforms: Vec<String> = platforms
                         .into_iter()
                         .map(|p| {
-                            if p.starts_with('!') {
-                                p[1..].to_string()
+                            if let Some(stripped) = p.strip_prefix('!') {
+                                stripped.to_string()
                             } else {
                                 p
                             }
@@ -204,6 +204,7 @@ impl<'de> Deserialize<'de> for Negatable {
 
 impl Negatable {
     /// Returns true if this constraint allows the given platform
+    #[allow(dead_code)]
     pub fn allows(&self, platform: &str) -> bool {
         match self {
             Negatable::None => true,
@@ -251,6 +252,7 @@ impl LockfileVersion {
         }
     }
 
+    #[allow(dead_code)]
     fn as_i32(self) -> i32 {
         self as i32
     }
@@ -371,18 +373,16 @@ impl Lockfile for BunLockfile {
 
         // V1 optimization: Check if this is a workspace dependency that can be resolved
         // directly from the workspaces section without requiring a packages entry
-        if self.data.lockfile_version >= 1 {
-            if let Some(workspace_target_path) = self.resolve_workspace_dependency(override_version)
-            {
-                if let Some(target_workspace) = self.data.workspaces.get(workspace_target_path) {
-                    // This is a workspace dependency, create a synthetic package entry
-                    let workspace_version = target_workspace.version.as_deref().unwrap_or("0.0.0");
-                    return Ok(Some(crate::Package {
-                        key: format!("{}@{}", name, workspace_version),
-                        version: workspace_version.to_string(),
-                    }));
-                }
-            }
+        if self.data.lockfile_version >= 1
+            && let Some(workspace_target_path) = self.resolve_workspace_dependency(override_version)
+            && let Some(target_workspace) = self.data.workspaces.get(workspace_target_path)
+        {
+            // This is a workspace dependency, create a synthetic package entry
+            let workspace_version = target_workspace.version.as_deref().unwrap_or("0.0.0");
+            return Ok(Some(crate::Package {
+                key: format!("{name}@{workspace_version}"),
+                version: workspace_version.to_string(),
+            }));
         }
 
         let workspace_key = format!("{workspace_name}/{name}");
@@ -704,7 +704,7 @@ impl FromStr for BunLockfile {
 
         // Validate that we support this lockfile version
         let _version = LockfileVersion::from_i32(data.lockfile_version)
-            .ok_or_else(|| super::Error::UnsupportedVersion(data.lockfile_version))?;
+            .ok_or(super::Error::UnsupportedBunVersion(data.lockfile_version))?;
 
         let mut key_to_entry = HashMap::with_capacity(data.packages.len());
         for (path, info) in data.packages.iter() {
@@ -1495,7 +1495,7 @@ mod test {
         );
 
         // Verify packages are parsed
-        assert!(lockfile.data.packages.len() > 0);
+        assert!(!lockfile.data.packages.is_empty());
         assert!(lockfile.data.packages.contains_key("react"));
         assert!(lockfile.data.packages.contains_key("next"));
         assert!(lockfile.data.packages.contains_key("turbo"));
@@ -1607,7 +1607,7 @@ mod test {
             .unwrap();
 
         // Should be able to find bundled dependencies under the scoped path
-        assert!(deps.len() > 0);
+        assert!(!deps.is_empty());
 
         // Test transitive closure calculation for apps/web
         // This is the scenario that was failing with the warning
@@ -3109,7 +3109,7 @@ mod test {
         assert_eq!(none_deserialized, Negatable::None);
 
         // Test single platform
-        let single_json = serde_json::to_value(&Negatable::Single("darwin".to_string())).unwrap();
+        let single_json = serde_json::to_value(Negatable::Single("darwin".to_string())).unwrap();
         assert_eq!(single_json, Value::String("darwin".to_string()));
 
         let single_deserialized: Negatable = serde_json::from_value(single_json).unwrap();
