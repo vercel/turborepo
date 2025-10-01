@@ -9,7 +9,6 @@ pub(crate) mod package_discovery;
 pub(crate) mod scope;
 pub(crate) mod summary;
 pub mod task_access;
-pub mod task_id;
 mod ui;
 pub mod watch;
 
@@ -268,9 +267,17 @@ impl Run {
 
         let (sender, receiver) = TuiSender::new();
         let color_config = self.color_config;
+        let scrollback_len = self.opts.tui_opts.scrollback_length;
         let repo_root = self.repo_root.clone();
         let handle = tokio::task::spawn(async move {
-            Ok(tui::run_app(task_names, receiver, color_config, &repo_root).await?)
+            Ok(tui::run_app(
+                task_names,
+                receiver,
+                color_config,
+                &repo_root,
+                scrollback_len,
+            )
+            .await?)
         });
 
         Ok(Some((sender, handle)))
@@ -330,8 +337,8 @@ impl Run {
                                 .format(bytes_total.saturating_sub(bytes_uploaded) as f64);
 
                             spinner.set_message(format!(
-                                "...Finishing writing to cache... ({} remaining, {})",
-                                bytes_remaining, bytes_per_second
+                                "...Finishing writing to cache... ({bytes_remaining} remaining, \
+                                 {bytes_per_second})"
                             ));
                         }
                     };

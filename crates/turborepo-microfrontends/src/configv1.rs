@@ -4,36 +4,37 @@ use biome_deserialize_macros::Deserializable;
 use biome_json_parser::JsonParserOptions;
 use serde::Serialize;
 
-use crate::Error;
+use crate::{DevelopmentTask, Error};
 
 pub enum ParseResult {
     Actual(ConfigV1),
     Reference(String),
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserializable, Default)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserializable, Default, Clone)]
 pub struct ConfigV1 {
     version: Option<String>,
     applications: BTreeMap<String, Application>,
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserializable, Default)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserializable, Default, Clone)]
 struct ChildConfig {
     part_of: String,
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserializable, Default)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserializable, Default, Clone)]
 struct Application {
+    package_name: Option<String>,
     development: Option<Development>,
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserializable, Default)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserializable, Default, Clone)]
 struct Development {
     task: Option<String>,
     local: Option<LocalHost>,
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserializable, Default)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserializable, Default, Clone, Copy)]
 struct LocalHost {
     port: Option<u16>,
 }
@@ -75,10 +76,14 @@ impl ConfigV1 {
         }
     }
 
-    pub fn development_tasks(&self) -> impl Iterator<Item = (&str, Option<&str>)> {
+    pub fn development_tasks(&self) -> impl Iterator<Item = DevelopmentTask<'_>> {
         self.applications
             .iter()
-            .map(|(application, config)| (application.as_str(), config.task()))
+            .map(|(application, config)| DevelopmentTask {
+                application_name: application,
+                package: config.package_name(application),
+                task: config.task(),
+            })
     }
 
     pub fn port(&self, name: &str) -> Option<u16> {
@@ -99,6 +104,10 @@ impl Application {
     fn port(&self, name: &str) -> u16 {
         self.user_port()
             .unwrap_or_else(|| generate_port_from_name(name))
+    }
+
+    fn package_name<'a>(&'a self, key: &'a str) -> &'a str {
+        self.package_name.as_deref().unwrap_or(key)
     }
 }
 
@@ -181,6 +190,69 @@ mod test {
                 assert_eq!(
                     config_v1.applications.get("docs").unwrap().task(),
                     Some("serve")
+                );
+            }
+            ParseResult::Reference(_) => panic!("expected to get main config"),
+        }
+    }
+
+    #[test]
+    fn test_package_name_parse() {
+        let input = r#"{
+        "applications": {
+          "web": {
+            "packageName": "@acme/web"
+          },
+          "docs": {"development": {"task": "serve"}}
+        }
+    }"#;
+
+        let config = ConfigV1::from_str(input, "somewhere").unwrap();
+        match config {
+            ParseResult::Actual(config_v1) => {
+                assert_eq!(
+                    config_v1.applications.get("web").unwrap().package_name,
+                    Some("@acme/web".into())
+                );
+                assert_eq!(
+                    config_v1.applications.get("docs").unwrap().package_name,
+                    None
+                );
+            }
+            ParseResult::Reference(_) => panic!("expected to get main config"),
+        }
+    }
+
+    #[test]
+    fn test_package_name_development_tasks() {
+        let input = r#"{
+        "applications": {
+          "web": {
+            "packageName": "@acme/web"
+          },
+          "docs": {"development": {"task": "serve"}}
+        }
+    }"#;
+
+        let config = ConfigV1::from_str(input, "somewhere").unwrap();
+        match config {
+            ParseResult::Actual(config_v1) => {
+                let mut dev_tasks = config_v1.development_tasks().collect::<Vec<_>>();
+                dev_tasks.sort();
+                assert_eq!(
+                    dev_tasks,
+                    vec![
+                        DevelopmentTask {
+                            application_name: "docs",
+                            package: "docs",
+                            task: Some("serve")
+                        },
+                        DevelopmentTask {
+                            application_name: "web",
+                            package: "@acme/web",
+                            task: None
+                        },
+                    ]
                 );
             }
             ParseResult::Reference(_) => panic!("expected to get main config"),

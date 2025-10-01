@@ -83,6 +83,7 @@ struct PackageDetails<'a> {
     name: &'a str,
     tasks: Vec<PackageTask<'a>>,
     dependencies: Vec<&'a str>,
+    dependents: Vec<&'a str>,
 }
 
 #[derive(Clone, Serialize)]
@@ -96,6 +97,7 @@ struct PackageDetailsDisplay<'a> {
     path: &'a AnchoredSystemPath,
     tasks: ItemsWithCount<PackageTask<'a>>,
     dependencies: Vec<&'a str>,
+    dependents: Vec<&'a str>,
 }
 
 impl<'a> From<PackageDetails<'a>> for PackageDetailsDisplay<'a> {
@@ -104,6 +106,7 @@ impl<'a> From<PackageDetails<'a>> for PackageDetailsDisplay<'a> {
             name: val.name,
             path: val.path,
             dependencies: val.dependencies,
+            dependents: val.dependents,
             tasks: ItemsWithCount {
                 count: val.tasks.len(),
                 items: val.tasks,
@@ -195,13 +198,13 @@ impl<'a> RepositoryDetails<'a> {
         cprintln!(self.color_config, GREY, "({})\n", self.package_manager);
 
         for (package_name, entry) in &self.packages {
-            println!("  {} {}", package_name, GREY.apply_to(entry));
+            println!("  {package_name} {}", GREY.apply_to(entry));
         }
     }
 
     fn json_print(&self) -> Result<(), cli::Error> {
         let as_json = serde_json::to_string_pretty(&self)?;
-        println!("{}", as_json);
+        println!("{as_json}");
         Ok(())
     }
 
@@ -252,11 +255,23 @@ impl<'a> PackageDetails<'a> {
             .collect();
         package_dep_names.sort();
 
+        let mut package_rdep_names: Vec<&str> = package_graph
+            .ancestors(&package_node)
+            .into_iter()
+            .filter_map(|dependent| match dependent {
+                PackageNode::Root | PackageNode::Workspace(PackageName::Root) => None,
+                PackageNode::Workspace(PackageName::Other(dep_name)) if dep_name == package => None,
+                PackageNode::Workspace(PackageName::Other(dep_name)) => Some(dep_name.as_str()),
+            })
+            .collect();
+        package_rdep_names.sort();
+
         Ok(Self {
             color_config,
             path: package_path,
             name: package,
             dependencies: package_dep_names,
+            dependents: package_rdep_names,
             tasks: package_json
                 .scripts
                 .iter()

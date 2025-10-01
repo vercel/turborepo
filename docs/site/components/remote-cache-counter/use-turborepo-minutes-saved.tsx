@@ -1,5 +1,5 @@
 import useSWR from "swr";
-import type { TurborepoMinutesSaved } from "@/app/api/remote-cache-minutes-saved/route";
+import type { TurborepoMinutesSaved } from "#app/api/remote-cache-minutes-saved/route.ts";
 
 export function useTurborepoMinutesSaved(): TurborepoMinutesSaved | undefined {
   const swr = useSWR<TurborepoMinutesSaved, unknown>(

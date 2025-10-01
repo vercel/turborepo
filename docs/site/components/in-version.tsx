@@ -34,7 +34,7 @@ export async function InVersion({
 
   const now = Date.now();
   if (cache && now - cache.timestamp < CACHE_DURATION) {
-    // eslint-disable-next-line no-console
+    // eslint-disable-next-line no-console -- Purposeful.
     console.log("Using cached latest");
   } else {
     // Fetch latest version of turbo
@@ -44,7 +44,7 @@ export async function InVersion({
         cache = { latestVersion: tags.latest, timestamp: now };
       }
     } catch (err) {
-      // eslint-disable-next-line no-console
+      // eslint-disable-next-line no-console -- Purposeful.
       console.error("unable to fetch latest version", err);
       return null;
     }

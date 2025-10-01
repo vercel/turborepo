@@ -18,7 +18,7 @@ Check
   Tasks to Run
   build
     Task                           = build\s* (re)
-    Hash                           = 7ece7b62aad25615
+    Hash                           = fe0059df5e6291b2
     Cached \(Local\)                 = false\s* (re)
     Cached \(Remote\)                = false\s* (re)
     Command                        = echo building > foo.txt\s* (re)
@@ -26,6 +26,7 @@ Check
     Log File                       = .turbo(\/|\\)turbo-build.log\s* (re)
     Dependencies                   =\s* (re)
     Dependents                     = test\s* (re)
+    With                           =\s* (re)
     Inputs Files Considered        = 5\s* (re)
     Env Vars                       = 
     Env Vars Values                = 
@@ -36,7 +37,7 @@ Check
     Framework                      = 
   test
     Task                           = test\s* (re)
-    Hash                           = cb5839f7284aa5f3
+    Hash                           = 7cfbd8e30495d802
     Cached \(Local\)                 = false\s* (re)
     Cached \(Remote\)                = false\s* (re)
     Command                        = cat foo.txt\s* (re)
@@ -44,6 +45,7 @@ Check
     Log File                       = .turbo(\/|\\)turbo-test.log\s* (re)
     Dependencies                   = build\s* (re)
     Dependents                     =\s* (re)
+    With                           =\s* (re)
     Inputs Files Considered        = 5\s* (re)
     Env Vars                       = 
     Env Vars Values                = 

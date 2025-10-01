@@ -23,11 +23,14 @@ use turborepo_cache::CacheConfig;
 use turborepo_errors::TURBO_SITE;
 use turborepo_repository::package_graph::PackageName;
 
-pub use crate::turbo_json::{RawTurboJson, UIMode};
+pub use crate::turbo_json::UIMode;
 use crate::{
     cli::{EnvMode, LogOrder},
-    turbo_json::{CONFIG_FILE, CONFIG_FILE_JSONC},
+    turbo_json::FutureFlags,
 };
+
+pub const CONFIG_FILE: &str = "turbo.json";
+pub const CONFIG_FILE_JSONC: &str = "turbo.jsonc";
 
 #[derive(Debug, Error, Diagnostic)]
 #[error("Environment variables should not be prefixed with \"{env_pipeline_delimiter}\"")]
@@ -74,8 +77,8 @@ pub enum Error {
     #[error(transparent)]
     PackageJson(#[from] turborepo_repository::package_json::Error),
     #[error(
-        "Could not find turbo.json or turbo.jsonc.\nFollow directions at https://turbo.build/repo/docs to create \
-         one."
+        "Could not find turbo.json or turbo.jsonc.\nFollow directions at https://turborepo.com/docs \
+         to create one."
     )]
     NoTurboJSON,
     #[error(
@@ -133,6 +136,13 @@ pub enum Error {
     #[error("You can only extend from the root of the workspace.")]
     ExtendFromNonRoot {
         #[label("non-root workspace found here")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource<String>,
+    },
+    #[error("You must extend from the root of the workspace first.")]
+    ExtendsRootFirst {
+        #[label("'//' should be first")]
         span: Option<SourceSpan>,
         #[source_code]
         text: NamedSource<String>,
@@ -225,12 +235,30 @@ pub enum Error {
         #[source_code]
         text: NamedSource<String>,
     },
+    #[error(
+        "The \"futureFlags\" key can only be used in the root turbo.json. Please remove it from \
+         Package Configurations."
+    )]
+    FutureFlagsInPackage {
+        #[label("futureFlags key found here")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource<String>,
+    },
+    #[error(
+        "TURBO_TUI_SCROLLBACK_LENGTH: Invalid value. Use a number for how many lines to keep in \
+         scrollback."
+    )]
+    InvalidTuiScrollbackLength(#[source] std::num::ParseIntError),
+    #[error("TURBO_SSO_LOGIN_CALLBACK_PORT: Invalid value. Use a number for the callback port.")]
+    InvalidSsoLoginCallbackPort(#[source] std::num::ParseIntError),
 }
 
 const DEFAULT_API_URL: &str = "https://vercel.com/api";
 const DEFAULT_LOGIN_URL: &str = "https://vercel.com";
 const DEFAULT_TIMEOUT: u64 = 30;
 const DEFAULT_UPLOAD_TIMEOUT: u64 = 60;
+const DEFAULT_TUI_SCROLLBACK_LENGTH: u64 = 2048;
 
 // We intentionally don't derive Serialize so that different parts
 // of the code that want to display the config can tune how they
@@ -290,6 +318,12 @@ pub struct ConfigurationOptions {
     pub(crate) remote_cache_read_only: Option<bool>,
     pub(crate) run_summary: Option<bool>,
     pub(crate) allow_no_turbo_json: Option<bool>,
+    pub(crate) tui_scrollback_length: Option<u64>,
+    pub(crate) concurrency: Option<String>,
+    pub(crate) no_update_notifier: Option<bool>,
+    pub(crate) sso_login_callback_port: Option<u16>,
+    #[serde(skip)]
+    future_flags: Option<FutureFlags>,
 }
 
 #[derive(Default)]
@@ -344,6 +378,11 @@ impl ConfigurationOptions {
     /// Note: 0 implies no timeout
     pub fn upload_timeout(&self) -> u64 {
         self.upload_timeout.unwrap_or(DEFAULT_UPLOAD_TIMEOUT)
+    }
+
+    pub fn tui_scrollback_length(&self) -> u64 {
+        self.tui_scrollback_length
+            .unwrap_or(DEFAULT_TUI_SCROLLBACK_LENGTH)
     }
 
     pub fn ui(&self) -> UIMode {
@@ -430,25 +469,23 @@ impl ConfigurationOptions {
             return Ok(path.clone());
         }
 
-        // Check if both files exist
-        let turbo_json_path = repo_root.join_component(CONFIG_FILE);
-        let turbo_jsonc_path = repo_root.join_component(CONFIG_FILE_JSONC);
-        let turbo_json_exists = turbo_json_path.try_exists()?;
-        let turbo_jsonc_exists = turbo_jsonc_path.try_exists()?;
-
-        match (turbo_json_exists, turbo_jsonc_exists) {
-            (true, true) => Err(Error::MultipleTurboConfigs {
-                directory: repo_root.to_string(),
-            }),
-            (true, false) => Ok(turbo_json_path),
-            (false, true) => Ok(turbo_jsonc_path),
-            // Default to turbo.json if neither exists
-            (false, false) => Ok(turbo_json_path),
-        }
+        resolve_turbo_config_path(repo_root)
     }
 
     pub fn allow_no_turbo_json(&self) -> bool {
         self.allow_no_turbo_json.unwrap_or_default()
+    }
+
+    pub fn no_update_notifier(&self) -> bool {
+        self.no_update_notifier.unwrap_or_default()
+    }
+
+    pub fn sso_login_callback_port(&self) -> Option<u16> {
+        self.sso_login_callback_port
+    }
+
+    pub fn future_flags(&self) -> FutureFlags {
+        self.future_flags.unwrap_or_default()
     }
 }
 
@@ -545,6 +582,32 @@ impl TurborepoConfigBuilder {
     }
 }
 
+/// Given a directory path, determines which turbo.json configuration file to
+/// use. Returns an error if both turbo.json and turbo.jsonc exist in the same
+/// directory. Returns the path to the config file to use, defaulting to
+/// turbo.json if neither exists.
+pub fn resolve_turbo_config_path(
+    dir_path: &turbopath::AbsoluteSystemPath,
+) -> Result<turbopath::AbsoluteSystemPathBuf, crate::config::Error> {
+    use crate::config::Error;
+
+    let turbo_json_path = dir_path.join_component(CONFIG_FILE);
+    let turbo_jsonc_path = dir_path.join_component(CONFIG_FILE_JSONC);
+
+    let turbo_json_exists = turbo_json_path.try_exists()?;
+    let turbo_jsonc_exists = turbo_jsonc_path.try_exists()?;
+
+    match (turbo_json_exists, turbo_jsonc_exists) {
+        (true, true) => Err(Error::MultipleTurboConfigs {
+            directory: dir_path.to_string(),
+        }),
+        (true, false) => Ok(turbo_json_path),
+        (false, true) => Ok(turbo_jsonc_path),
+        // Default to turbo.json if neither exists
+        (false, false) => Ok(turbo_json_path),
+    }
+}
+
 #[cfg(test)]
 mod test {
     use std::{collections::HashMap, ffi::OsString};
@@ -552,12 +615,9 @@ mod test {
     use tempfile::TempDir;
     use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 
-    use crate::{
-        config::{
-            ConfigurationOptions, TurborepoConfigBuilder, DEFAULT_API_URL, DEFAULT_LOGIN_URL,
-            DEFAULT_TIMEOUT,
-        },
-        turbo_json::{CONFIG_FILE, CONFIG_FILE_JSONC},
+    use crate::config::{
+        ConfigurationOptions, TurborepoConfigBuilder, CONFIG_FILE, CONFIG_FILE_JSONC,
+        DEFAULT_API_URL, DEFAULT_LOGIN_URL, DEFAULT_TIMEOUT,
     };
 
     #[test]

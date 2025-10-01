@@ -1,5 +1,5 @@
 import React from "react";
-import cn from "classnames";
+import { cn } from "#components/cn.ts";
 import type { ImageFigureProps } from "./image-figure";
 import type { ThemedImageProps } from "./themed-image";
 import { ThemedImage } from "./themed-image";
@@ -27,10 +27,8 @@ export function ThemedImageFigure(
       <div
         className={cn(
           "border-box relative inline-block max-w-full overflow-hidden text-[0px]",
-          {
-            "rounded-md": borderRadius,
-            "shadow-lg": shadow,
-          }
+          borderRadius ? "rounded-md" : "",
+          shadow ? "shadow-lg" : ""
         )}
       >
         {}

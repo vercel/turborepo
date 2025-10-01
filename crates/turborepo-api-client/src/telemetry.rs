@@ -3,7 +3,7 @@ use std::future::Future;
 use reqwest::Method;
 use turborepo_vercel_api::telemetry::TelemetryEvent;
 
-use crate::{retry, AnonAPIClient, Error};
+use crate::{AnonAPIClient, Error, retry};
 
 const TELEMETRY_ENDPOINT: &str = "/api/turborepo/v1/events";
 

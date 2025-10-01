@@ -7,7 +7,7 @@ import { z } from "zod";
 import { createCssVariablesTheme } from "shiki";
 
 export const { docs: repoDocs, meta: repoMeta } = defineDocs({
-  dir: "content/repo-docs",
+  dir: "content/docs",
   docs: {
     schema: frontmatterSchema,
   },
@@ -58,7 +58,6 @@ const theme = createCssVariablesTheme({
   variableDefaults: {},
 });
 
-// eslint-disable-next-line import/no-default-export
 export default defineConfig({
   mdxOptions: {
     rehypeCodeOptions: {

@@ -19,7 +19,7 @@ export function Avatar({
           width={32}
         />
       </div>
-      <dl className="whitespace-no-wrap ml-2 text-left text-sm font-medium leading-4">
+      <dl className="whitespace-no-wrap ml-2 text-accent text-left text-sm leading-4">
         <dt className="sr-only">Name</dt>
         <dd className="text-foreground mb-0.5">{name}</dd>
         {xUsername ? (
@@ -27,7 +27,7 @@ export function Avatar({
             <dt className="sr-only">X</dt>
             <dd>
               <a
-                className="betterhover:hover:text-blue-600 betterhover:hover:underline text-xs text-blue-500 no-underline"
+                className="text-foreground/70 text-xs no-underline"
                 href={`https://x.com/${xUsername}`}
                 rel="noopener noreferrer"
                 target="_blank"

@@ -1,8 +1,8 @@
 import Link from "next/link";
 import type { Metadata } from "next/types";
-import { blog, externalBlog } from "@/app/source";
-import { createMetadata } from "@/lib/create-metadata";
-import { FaviconHandler } from "@/app/_components/favicon-handler";
+import { blog, externalBlog } from "#app/source.ts";
+import { createMetadata } from "#lib/create-metadata.ts";
+import { FaviconHandler } from "#app/_components/favicon-handler.tsx";
 
 export function generateMetadata(): Metadata {
   const rawMetadata = createMetadata({
@@ -24,11 +24,11 @@ export function generateMetadata(): Metadata {
 }
 
 function Page(): JSX.Element {
-  const posts = [...blog.getPages(), ...externalBlog.getPages()]
-    .filter((post) => post.data.title !== "Turbopack Performance Benchmarks")
-    .sort((a, b) => {
+  const posts = [...blog.getPages(), ...externalBlog.getPages()].sort(
+    (a, b) => {
       return Number(new Date(b.data.date)) - Number(new Date(a.data.date));
-    });
+    }
+  );
 
   return (
     <main className="mx-auto mt-8 flex w-full min-w-0 max-w-6xl flex-col gap-4 px-6 pt-14 md:px-12">
@@ -37,7 +37,7 @@ function Page(): JSX.Element {
         <h1 className="mb-6 mt-2 text-center text-4xl font-bold leading-tight tracking-tight text-slate-900 dark:text-slate-100 lg:text-5xl">
           Blog
         </h1>
-        <p className="text-center text-gray-500 dark:text-gray-400">
+        <p className="text-center text-gray-900 dark:text-gray-900">
           The latest updates and releases from the Turborepo team at Vercel.
         </p>
       </div>

@@ -1,3 +1,5 @@
+#![allow(clippy::sliced_string_as_bytes)]
+
 mod config;
 mod imports;
 mod tags;
@@ -489,8 +491,7 @@ impl Run {
 
         for ext in &not_supported_extensions {
             result.warnings.push(format!(
-                "{} files are currently not supported, boundaries checks will not apply to them",
-                ext
+                "{ext} files are currently not supported, boundaries checks will not apply to them"
             ));
         }
 

@@ -1,186 +1,219 @@
-"use client";
-
-import React, { useState } from "react";
-import cn from "classnames";
+import { DynamicCodeBlock } from "fumadocs-ui/components/dynamic-codeblock";
+import type { Metadata } from "next";
+import { createCssVariablesTheme } from "shiki";
 import Link from "next/link";
-import { motion } from "framer-motion";
-import { Clients } from "@/app/_clients/clients";
-import { FadeIn } from "@/app/_components/home-shared/fade-in";
-import { PackLogo } from "@/app/_components/logos/pack-logo";
-import { RepoLogo } from "@/app/_components/logos/repo-logo";
-import { TurboheroBackground } from "@/app/_components/turbohero-background";
-import { Turborepo } from "@/app/_components/turborepo";
-import { Turbopack } from "@/app/_components/turbopack";
-import { PRODUCT_SLOGANS } from "@/lib/constants";
-import styles from "./index.module.css";
+import { Button } from "#components/button.tsx";
+import { Grid } from "#components/grid/grid.tsx";
+import { GridCell } from "#components/grid/grid-cell.tsx";
+import { Snippet } from "#components/snippet.tsx";
+import { Testimonials } from "#components/testimonials.tsx";
+import { ArrowRight } from "#components/icons/arrow-right.tsx";
+import { RemoteCacheCounterClient } from "#components/remote-cache-counter/client.tsx";
+import { CiProviders } from "./graphics/providers";
+import { RemoteCachingGraphic } from "./graphics/remote-caching";
+import { EffortlessGraphic } from "./graphics/effortless";
+import { DottedLines } from "./graphics/dotted-lines";
 
-function Background(): JSX.Element {
-  return (
-    <div className="pointer-events-none absolute left-0 top-0 h-full w-full overflow-hidden">
-      <div
-        className={cn(
-          "absolute z-[-1] h-full w-full [--gradient-stop-1:60%] [--gradient-stop-2:85%] lg:[--gradient-stop-1:50%] lg:[--gradient-stop-2:90%]",
-          "[--gradient-color-1=rgba(0,0,0,1)] [--gradient-color-2=rgba(0,0,0,0.8)] [--gradient-color-3=rgba(0,0,0,0)]",
-          "dark:[--gradient-color-1=rgba(255,255,255,1)] dark:[--gradient-color-2=rgba(255,255,255,0.8)] dark:[--gradient-color-3=rgba(255,255,255,0)]"
-        )}
-        style={{
-          background:
-            "linear-gradient(180deg, var(--gradient-color-1) 0%, var(--gradient-color-2) var(--gradient-stop-1), var(--gradient-color-3) var(--gradient-stop-2), 100% transparent)",
-        }}
-      />
-      <span className={cn(styles.leftLights, "opacity-50 dark:opacity-100")} />
-      <span className={cn(styles.rightLights, "opacity-50 dark:opacity-100")} />
-      <span className="absolute bottom-0 left-0 h-48 w-full bg-gradient-to-t from-white to-transparent dark:from-black" />
-      <span className="absolute left-0 top-[20vh] h-[50vh] w-full bg-gradient-to-b from-white to-transparent dark:from-black" />
-      <TurboheroBackground />
-    </div>
-  );
-}
+// Copied from source.config.ts
+const theme = createCssVariablesTheme({
+  name: "css-variables",
+  variablePrefix: "--shiki-",
+  variableDefaults: {},
+});
 
-const variants = {
-  hidden: { opacity: 0 },
-  active: { opacity: 1 },
+const FEATURES = [
+  {
+    title: "Works with any provider",
+    description: "Integrate with any CI provider for speed at all scales",
+    illustration: <CiProviders />,
+  },
+  {
+    title: "Remote Caching",
+    description: "Never do the same work twice",
+    illustration: <RemoteCachingGraphic />,
+  },
+  {
+    title: "Effortless monorepos",
+    description: "Easily define your workflows for local development and CI",
+    illustration: <EffortlessGraphic />,
+  },
+];
+
+const simpleTurboJson = `{
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"]
+    }
+  }
+}`;
+
+const remoteCachingCommands = `# Login to Remote Cache
+turbo login
+# Link to Remote Cache
+turbo link
+
+# Run tasks
+turbo run build`;
+
+export const metadata: Metadata = {
+  alternates: { canonical: "https://turbo.build" },
 };
 
-function Card({
-  alt,
-  href,
-  title,
-  icon: Icon,
-  className,
-  children,
-}: {
-  href: string;
-  icon: React.ElementType;
-  title: "repo" | "pack";
-  alt?: string;
-  className?: string;
-  children: React.ReactNode;
-}): JSX.Element {
-  const [hovering, setHovering] = useState(false);
+export default function HomePage() {
   return (
-    <Link
-      className={cn(
-        styles["counter-border"],
-        "h-[304]px w-[calc(100%_-_0px)] sm:h-[352px] sm:!w-[488px]"
-      )}
-      href={href}
-      onMouseEnter={() => {
-        setHovering(true);
-      }}
-      onMouseLeave={() => {
-        setHovering(false);
-      }}
-    >
-      <motion.i
-        animate={hovering ? "active" : "hidden"}
-        aria-hidden="true"
-        initial="hidden"
-        variants={variants}
-      />
-      <div
-        className={cn(
-          "relative flex h-full w-full max-w-full flex-col items-center justify-center overflow-hidden rounded-xl border border-[rgba(255,255,255,0.05)] p-3 !pb-12 pt-8 md:!pb-4 md:!pt-4",
-          className
-        )}
+    <div className="py-6 max-w-6xl px-3 sm:px-6 md:py-12 lg:px-12 mx-auto">
+      <Grid
+        columns={{
+          sm: 1,
+          md: 2,
+        }}
+        className="relative border border-gray-400"
       >
-        <div className="mb-7 flex flex-1 items-center justify-center md:mb-0">
-          <Icon />
+        <div className="absolute -top-[2px]">
+          <div className="border-t-[1px] absolute w-[11px] h-[11px] -left-[6px] top-[1px] md:w-[21px] md:h-[21px] md:-left-[11px] md:top-[1px] border-gray-600" />
+          <div className="border-l-[1px] absolute w-[11px] h-[11px] -top-[4px] -left-[1px] md:w-[21px] md:h-[21px] md:-top-[11px] md:-left-[1px] border-gray-600" />
         </div>
-
-        <div className="flex flex-1 flex-col items-center">
-          {title === "pack" ? (
-            <PackLogo
-              alt={alt}
-              className="mb-3 w-[160px] fill-black md:w-[220px] dark:fill-white"
-            />
-          ) : (
-            <RepoLogo
-              alt={alt}
-              className="mb-3 w-[160px] fill-black md:w-[220px] dark:fill-white"
-            />
-          )}
-          {children}
-        </div>
-      </div>
-    </Link>
-  );
-}
-
-function SiteCards(): JSX.Element {
-  return (
-    <div className="lg:!mt-15 container z-10 mt-8 flex w-full flex-col items-center justify-center gap-6 px-6 sm:mx-0 md:!mt-14 md:mb-0 lg:!translate-y-0 lg:!flex-row">
-      <FadeIn delay={0.1}>
-        <Card
-          alt="Turborepo"
-          className="turborepoCardBg"
-          href="/repo"
-          icon={Turborepo}
-          title="repo"
-        >
-          <p className="!w-[280px] text-center font-mono text-lg opacity-50 md:!w-[340px] dark:opacity-70">
-            The build system for JavaScript and TypeScript codebases.
+        <GridCell className="relative border-b col-span-2 px-6 py-12 xs:px-6 xs:py-12 md:p-16">
+          <DottedLines className="absolute top-0 bottom-0 left-0 right-0 overflow-hidden text-center flex items-center justify-center" />
+          <div className="relative z-1 flex flex-col justify-center">
+            <h1 className="mb-4 text-6xl font-semibold tracking-tighter text-center md:text-7xl">
+              Make ship happen
+            </h1>
+            <p className="max-w-[380px] m-auto mb-4 font-normal text-center text-gray-900 text-lg md:text-xl">
+              Turborepo is the build system for JavaScript and TypeScript
+              codebases
+            </p>
+            <div className="flex justify-center mt-2 mb-10">
+              <div className="relative inline-flex w-full xs:w-auto">
+                <div className="absolute inset-0 rounded-lg xs:rounded-[22px] bg-gradient-to-r from-[#FF1E56] to-[#0196FF] w-full xs:w-auto"></div>
+                <div className="relative text-center rounded-md xs:rounded-[20px] m-[2px] bg-background-100 dark:bg-black px-4 py-1.5 md:px-5 md:py-0.5 w-full xs:w-auto">
+                  <span className="flex flex-col gap-0 items-center xs:flex-row sm:gap-1 text-base sm:text-xl leading-tight bg-gradient-to-r from-[#FF1E56] to-[#0196FF] bg-clip-text text-transparent">
+                    <RemoteCacheCounterClient className="" />
+                    <span>hours of compute saved</span>
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div className="w-full flex flex-wrap h-fit gap-3 2xs:gap-2 sm:gap-4 justify-center items-center">
+              <Button asChild className="text-sm sm:h-12 sm:text-base">
+                <Link href="/docs">Get started</Link>
+              </Button>
+              <Snippet
+                code="npm i turbo"
+                className="flex h-fit min-w-[160px] max-w-[180px] xs:w-auto sm:h-12 items-center border border-[var(--ds-gray-alpha-400)] justify-start font-mono bg-[var(--ds-background-100)]"
+              />
+            </div>
+          </div>
+        </GridCell>
+        <GridCell className="border-0 h-fit col-span-2 px-6 py-14 xs:px-6 xs:py-10 md:px-9 lg:px-12">
+          <h2 className="mb-1 text-[32px] font-semibold tracking-tighter">
+            Scale your workflows
+          </h2>
+          <p className="max-w-prose text-balance text-gray-900 text-base">
+            Optimize your local and CI tasks to save years of engineering time
+            and compute.
           </p>
-        </Card>
-      </FadeIn>
-      <FadeIn delay={0.2}>
-        <Card
-          alt="Turbopack"
-          className="turbopackCardBg"
-          href="/pack"
-          icon={Turbopack}
-          title="pack"
-        >
-          <p className="!w-[280px] text-center font-mono text-lg opacity-50 md:!w-[340px] dark:opacity-70 ">
-            High-performance bundler for React Server Components and TypeScript
-            codebases.
-          </p>
-        </Card>
-      </FadeIn>
-    </div>
-  );
-}
+          <div className="my-8 grid h-fit gap-y-12 md:grid-cols-3 md:gap-x-8">
+            {FEATURES.map((feature) => (
+              <div key={feature.title} className="w-full">
+                {feature.illustration}
+                <h3 className="mt-2 text-2xl font-semibold tracking-tighter">
+                  {feature.title}
+                </h3>
+                <p className="mt-1.5 text-gray-900 text-base md:mt-2 text-pretty">
+                  {feature.description}
+                </p>
+              </div>
+            ))}
+          </div>
+        </GridCell>
+        <GridCell className="col-span-2 px-6 py-14 xs:px-6 xs:py-10 md:px-9 lg:px-12">
+          <div className="flex flex-col items-start justify-between gap-y-4 md:flex-row">
+            <div className="flex flex-col gap-y-1">
+              <h2 className="text-[32px] font-semibold tracking-tighter">
+                Simple setup
+              </h2>
+              <p className="text-gray-900 text-copy-16 text-pretty">
+                Start a new repository or migrate an existing repo incrementally
+                in minutes.
+              </p>
+            </div>
+            <Button
+              asChild
+              className="text-sm sm:h-12 sm:text-base"
+              variant="outline"
+            >
+              <Link href="/repo/docs">
+                Read the docs
+                <ArrowRight />
+              </Link>
+            </Button>
+          </div>
+          <div className="mt-6 grid w-full grid-cols-1 gap-x-4 md:grid-cols-2">
+            <div className="mb-6 md:mb-0">
+              <DynamicCodeBlock
+                lang="json"
+                code={simpleTurboJson}
+                options={
+                  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Types are fixed in a higher version of Fumadocs than we are on
+                  {
+                    themes: {
+                      light: theme,
+                      dark: theme,
+                    },
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Types are fixed in a higher version of Fumadocs than we are on
+                  } as any
+                }
+              />
+              <span className="text-xs text-gray-900">
+                Declaring a build task
+              </span>
+            </div>
+            <div>
+              <DynamicCodeBlock
+                lang="bash"
+                code={remoteCachingCommands}
+                options={
+                  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Types are fixed in a higher version of Fumadocs than we are on
+                  {
+                    themes: {
+                      light: theme,
+                      dark: theme,
+                    },
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Types are fixed in a higher version of Fumadocs than we are on
+                  } as any
+                }
+              />
+              <span className="text-xs text-gray-900">
+                Linking to Remote Cache and running tasks
+              </span>
+            </div>
+          </div>
+        </GridCell>
+        <GridCell className="col-span-2 px-6 py-14 xs:px-6 xs:py-10 md:px-9 lg:px-12 border-b">
+          <h2 className="text-[32px] font-semibold tracking-tighter">
+            What builders say about Turborepo
+          </h2>
 
-function Teams(): JSX.Element {
-  return (
-    <div className="mx-auto ">
-      <p className="mb-2 bg-contain text-center text-sm font-semibold uppercase tracking-wide text-[#666666] md:!mb-4 dark:text-[#888888]">
-        Trusted by teams from
-        <br className="inline md:hidden" /> around the world
-      </p>
-      <div className="z-50 grid grid-flow-col grid-rows-6 sm:grid-rows-3 md:grid-rows-2 lg:grid-rows-1">
-        <Clients
-          companyList={[
-            "Vercel",
-            "AWS",
-            "Microsoft",
-            "Adobe",
-            "Disney",
-            "Netflix",
-          ]}
-          staticWidth
-        />
-      </div>
+          <Testimonials />
+        </GridCell>
+        <GridCell className="col-span-2 px-6 py-14 xs:px-6 xs:py-10 md:px-9 lg:px-12">
+          <div className="flex flex-col items-start gap-y-6 md:flex-row md:items-center md:justify-between md:gap-x-6">
+            <h2 className="text-[32px] font-semibold tracking-tighter md:text-[40px]">
+              Deploy your Turborepo today.
+            </h2>
+            <div className="flex flex-wrap gap-3 justify-start md:justify-end items-center">
+              <Button asChild className="text-sm sm:h-12 sm:text-base">
+                <Link href="/docs">Get started</Link>
+              </Button>
+              <Snippet
+                code="npm i turbo"
+                className="flex h-fit min-w-[160px] max-w-[180px] xs:w-auto sm:h-12 items-center border border-[var(--ds-gray-alpha-400)] justify-start font-mono bg-[var(--ds-background-100)]"
+              />
+            </div>
+          </div>
+        </GridCell>
+      </Grid>
     </div>
-  );
-}
-
-export default function LandingPage(): JSX.Element {
-  return (
-    <main className="pt-14 relative flex h-full w-full flex-col bg-white dark:bg-black items-center justify-center overflow-hidden [--geist-foreground:#fff] [--gradient-stop-1:0px] [--gradient-stop-2:120px] sm:[--gradient-stop-1:0px] sm:[--gradient-stop-2:120px] dark:[--geist-foreground:#000]">
-      <Background />
-      <FadeIn className="z-10 flex h-full w-full flex-col items-center justify-center">
-        <h1 className="mx-6 mt-12 w-[300px] bg-gradient-to-b from-black/80 to-black bg-clip-text pb-4  text-center text-5xl font-extrabold leading-tight text-transparent md:!w-full lg:!mt-20 lg:text-6xl xl:leading-snug dark:from-white dark:to-[#AAAAAA]">
-          Make Ship Happen
-        </h1>
-        <p className="mx-6 max-h-[112px] w-[315px] text-center font-mono text-xl text-[#666666] md:max-h-[96px] md:w-[700px] md:text-xl dark:text-[#888888]">
-          {PRODUCT_SLOGANS.turbo}
-        </p>
-      </FadeIn>
-      <SiteCards />
-      <FadeIn className="z-10 py-16" delay={0.3}>
-        <Teams />
-      </FadeIn>
-    </main>
   );
 }

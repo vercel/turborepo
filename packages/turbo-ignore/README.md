@@ -100,4 +100,4 @@ When deploying on [Vercel](https://vercel.com), `turbo-ignore` can make a more a
 
 ---
 
-For more information about Turborepo, visit [turbo.build](https://turbo.build) and follow us on X ([@turborepo](https://x.com/turborepo))!
+For more information about Turborepo, visit [turborepo.com](https://turborepo.com) and follow us on X ([@turborepo](https://x.com/turborepo))!

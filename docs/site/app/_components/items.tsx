@@ -8,7 +8,9 @@ import {
 } from "./logos";
 import type { ContextItem, ContextList } from "./types";
 
-export const PLATFORM_MENU_ITEMS = ({ theme }: ContextList): ContextItem[] => [
+export const PLATFORM_MENU_ITEMS = ({
+  theme,
+}: ContextList): Array<ContextItem> => [
   {
     name: "copy-logo",
     "aria-label": "Copy Logo as SVG to Clipboard",
@@ -58,7 +60,7 @@ export const PLATFORM_MENU_ITEMS = ({ theme }: ContextList): ContextItem[] => [
   },
 ];
 
-export const PRODUCT_MENU_ITEMS = (): ContextItem[] => [
+export const PRODUCT_MENU_ITEMS = (): Array<ContextItem> => [
   {
     name: "vercel",
     "aria-label": "Open Vercel Home in New Tab",

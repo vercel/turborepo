@@ -8,9 +8,9 @@ ogImage: '/images/blog/turbo-1-5-0/x-card.png'
 
 <h1 className="text-center">Turborepo 1.5</h1>
 
-import { Authors } from '#/components/authors';
-import { Callout } from '#/components/callout';
-import { Date } from '#/components/blog/date';
+import { Authors } from '#components/authors';
+import { Callout } from '#components/callout';
+import { Date } from '#components/blog/date';
 
 <Date>Monday, September 19th, 2022</Date>
 
@@ -29,7 +29,7 @@ import { Date } from '#/components/blog/date';
 
 Turborepo 1.5 is a **huge leap forward for our documentation and DX**, as well as bringing big improvements to `turbo prune`:
 
-- [**The Monorepo Handbook**](/repo/docs/guides): We've built the missing manual for your monorepo - a guide on workspaces, code sharing, integrating common tools and much more.
+- [**The Monorepo Handbook**](/docs/guides): We've built the missing manual for your monorepo - a guide on workspaces, code sharing, integrating common tools and much more.
 - [**Drop the `run`**](#drop-the-run): `turbo run <task>` can now be shortened to `turbo <task>`
 - [**`turbo prune` now supports pnpm and yarn 2+**](#prune-now-supported-on-pnpm-and-yarn-2): Pruning your monorepo is now supported in `pnpm` and `yarn@berry`.
 - [**Improved environment variables in `turbo.json`**](#environment-variables-in-turbojson): Environment variables are now first-class citizens in your Turborepo pipeline configuration.
@@ -43,13 +43,13 @@ Setting up a monorepo for the first time often means navigating a lot of new con
 
 This often meant that folks who wanted to set up a monorepo from scratch had to piece information together from different documentation sites. First `pnpm`, then `tsup`, then back to `changesets`, then back to Turborepo for dessert.
 
-We want to fill this gap with [the Monorepo Handbook](/repo/docs/guides). We've built guides on how to integrate all the tools you'll need to make ship happen with your monorepo, including guides on:
+We want to fill this gap with [the Monorepo Handbook](/docs/guides). We've built guides on how to integrate all the tools you'll need to make ship happen with your monorepo, including guides on:
 
-- [Installing Packages](/repo/docs/crafting-your-repository/managing-dependencies)
-- [Linting](/repo/docs/guides/tools/eslint)
-- [Development Tasks](/repo/docs/crafting-your-repository/developing-applications)
-- [Building Apps](/repo/docs/crafting-your-repository/constructing-ci)
-- [Publishing Packages](/repo/docs/guides/publishing-libraries)
+- [Installing Packages](/docs/crafting-your-repository/managing-dependencies)
+- [Linting](/docs/guides/tools/eslint)
+- [Development Tasks](/docs/crafting-your-repository/developing-applications)
+- [Building Apps](/docs/crafting-your-repository/constructing-ci)
+- [Publishing Packages](/docs/guides/publishing-libraries)
 
 ## Drop the `run`
 
@@ -78,11 +78,11 @@ If your task name conflicts with a built-in `turbo` subcommand, we'll run our su
 
 ## Prune now supported on pnpm and yarn 2+
 
-We're delighted to announce that [`turbo prune`](/repo/docs/reference/prune) now supports in pnpm, yarn, and yarn 2+.
+We're delighted to announce that [`turbo prune`](/docs/reference/prune) now supports in pnpm, yarn, and yarn 2+.
 
 You can use `turbo prune` to create a pruned subset of your monorepo with a dedicated lockfile--with the correct dependencies needed for a given target application and its dependencies. This is especially useful for using efficiently Turborepo within a Docker image.
 
-As part of the new handbook, we've also added a section on using `turbo prune` to [build docker images](/repo/docs/guides/tools/docker).
+As part of the new handbook, we've also added a section on using `turbo prune` to [build docker images](/docs/guides/tools/docker).
 
 Check out our previous [blog on prune](/blog/turbo-0-4-0#experimental-pruned-workspaces) to learn more.
 
@@ -111,7 +111,7 @@ We've introduced two new keys to `turbo.json` - `env` and `globalEnv`. These all
 }
 ```
 
-`globalEnv` and `env` allow you to specify a list of environment variables _without_ `$` prefixes. This makes the configuration file significantly easier to read. Read more [in our updated docs](/repo/docs/crafting-your-repository/using-environment-variables#adding-environment-variables-to-task-hashes).
+`globalEnv` and `env` allow you to specify a list of environment variables _without_ `$` prefixes. This makes the configuration file significantly easier to read. Read more [in our updated docs](/docs/crafting-your-repository/using-environment-variables#adding-environment-variables-to-task-hashes).
 
 To help migrate from the previous syntax, we've prepared a codemod. You can run `npx @turbo/codemod migrate-env-var-dependencies`.
 

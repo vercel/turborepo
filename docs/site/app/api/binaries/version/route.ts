@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 
-type NonEmptyArray<T> = T[] & { 0: T };
+type NonEmptyArray<T> = Array<T> & { 0: T };
 
 const REGISTRY = "https://registry.npmjs.org";
 const DEFAULT_TAG = "latest";

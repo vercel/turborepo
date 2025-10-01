@@ -1,4 +1,4 @@
-import { VercelLogo } from "@/app/_components/logos";
+import { VercelLogo } from "#app/_components/logos.tsx";
 import { ThemeAwareImage } from "./theme-aware-image";
 
 const size = 24;

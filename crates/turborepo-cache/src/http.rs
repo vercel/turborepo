@@ -10,15 +10,15 @@ use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 use turborepo_analytics::AnalyticsSender;
 use turborepo_api_client::{
-    analytics::{self, AnalyticsEvent},
     APIAuth, APIClient, CacheClient, Response,
+    analytics::{self, AnalyticsEvent},
 };
 
 use crate::{
+    CacheError, CacheHitMetadata, CacheOpts, CacheSource,
     cache_archive::{CacheReader, CacheWriter},
     signature_authentication::ArtifactSignatureAuthenticator,
     upload_progress::{UploadProgress, UploadProgressQuery},
-    CacheError, CacheHitMetadata, CacheOpts, CacheSource,
 };
 
 pub type UploadMap = HashMap<String, UploadProgressQuery<10, 100>>;
@@ -294,13 +294,13 @@ mod test {
     use tempfile::tempdir;
     use turbopath::AbsoluteSystemPathBuf;
     use turborepo_analytics::start_analytics;
-    use turborepo_api_client::{analytics, APIClient};
+    use turborepo_api_client::{APIClient, analytics};
     use turborepo_vercel_api_mock::start_test_server;
 
     use crate::{
-        http::{APIAuth, HTTPCache},
-        test_cases::{get_test_cases, validate_analytics, TestCase},
         CacheOpts, CacheSource,
+        http::{APIAuth, HTTPCache},
+        test_cases::{TestCase, get_test_cases, validate_analytics},
     };
 
     #[tokio::test]
@@ -331,7 +331,7 @@ mod test {
         let duration = test_case.duration;
 
         let api_client = APIClient::new(
-            format!("http://localhost:{}", port),
+            format!("http://localhost:{port}"),
             Some(Duration::from_secs(200)),
             None,
             "2.0.0",

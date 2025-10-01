@@ -29,7 +29,7 @@ jobs:
               sudo apt update
               sudo apt install -y g++-aarch64-linux-gnu libc6-dev-arm64-cross xz-utils
               mkdir zig
-              curl --show-error --location https://ziglang.org/builds/zig-linux-x86_64-0.14.0-dev.3028+cdc9d65b0.tar.xz | tar -J -xf - -C zig --strip-components 1
+              curl --show-error --location https://ziglang.org/download/0.14.0/zig-linux-x86_64-0.14.0.tar.xz | tar -J -xf - -C zig --strip-components 1
               export PATH=$PATH:$(pwd)/zig
               echo "$(pwd)/zig" >> $GITHUB_PATH
 
@@ -41,7 +41,7 @@ jobs:
               curl https://sh.rustup.rs -sSf | bash -s -- -y
               npm i -g pnpm@8.9.0
               mkdir ../zig
-              curl --show-error --location https://ziglang.org/builds/zig-linux-x86_64-0.14.0-dev.3028+cdc9d65b0.tar.xz | tar -J -xf - -C ../zig --strip-components 1
+              curl --show-error --location https://ziglang.org/download/0.14.0/zig-linux-x86_64-0.14.0.tar.xz | tar -J -xf - -C ../zig --strip-components 1
               export PATH=$PATH:$(pwd)/../zig
               echo "$(pwd)/../zig" >> $GITHUB_PATH
             setup: |

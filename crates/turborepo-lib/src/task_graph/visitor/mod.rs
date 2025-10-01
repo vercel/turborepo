@@ -26,6 +26,7 @@ use turborepo_env::{platform::PlatformEnv, EnvironmentVariableMap};
 use turborepo_errors::TURBO_SITE;
 use turborepo_process::ProcessManager;
 use turborepo_repository::package_graph::{PackageGraph, PackageName, ROOT_PKG_NAME};
+use turborepo_task_id::TaskId;
 use turborepo_telemetry::events::{
     generic::GenericEventBuilder, task::PackageTaskEventBuilder, EventBuilder, TrackedErrors,
 };
@@ -42,7 +43,6 @@ use crate::{
         global_hash::GlobalHashableInputs,
         summary::{self, GlobalHashSummary, RunTracker},
         task_access::TaskAccess,
-        task_id::TaskId,
         RunCache,
     },
     task_hash::{self, PackageInputsHashes, TaskHashTrackerState, TaskHasher},

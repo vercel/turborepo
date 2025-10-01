@@ -2,14 +2,18 @@
   "name": "@turbo/utils",
   "version": "0.0.0",
   "private": true,
+  "type": "commonjs",
   "description": "",
-  "homepage": "https://turbo.build/repo",
+  "homepage": "https://turborepo.com",
   "keywords": [],
   "author": "Vercel",
   "license": "MIT",
+  "files": [
+    "src"
+  ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/vercel/turborepo",
+    "url": "git+https://github.com/vercel/turborepo.git",
     "directory": "packages/turbo-utils"
   },
   "bugs": {
@@ -22,9 +26,12 @@
     "test": "jest",
     "lint": "eslint src/",
     "check-types": "tsc --noEmit",
-    "lint:prettier": "prettier -c . --cache --ignore-path=../../.prettierignore"
+    "lint:prettier": "prettier -c . --cache --ignore-path=../../.prettierignore",
+    "package:lint": "publint --strict",
+    "package:types": "attw --profile node16 --pack"
   },
   "devDependencies": {
+    "@arethetypeswrong/cli": "^0.18.2",
     "@jest/globals": "^29.7.0",
     "@manypkg/find-root": "^1.1.0",
     "@turbo/eslint-config": "workspace:*",
@@ -48,6 +55,7 @@
     "json5": "^2.2.3",
     "ora": "4.1.1",
     "picocolors": "1.0.1",
+    "publint": "^0.3.12",
     "tar": "6.1.13",
     "ts-jest": "^29.2.5",
     "typescript": "5.5.4"

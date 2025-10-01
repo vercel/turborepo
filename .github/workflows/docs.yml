@@ -18,10 +18,22 @@ jobs:
         uses: actions/checkout@v4
 
       - uses: ./.github/actions/setup-node
-        with:
-          node-version: 20
 
       - name: Run link checker
         run: cd docs/link-checker && pnpm run check-links
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  docs-quality:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - uses: ./.github/actions/setup-node
+
+      - name: Install Global Turbo
+        uses: ./.github/actions/install-global-turbo
+
+      - name: Run docs specific checks
+        run: turbo run check-spelling check-types lint

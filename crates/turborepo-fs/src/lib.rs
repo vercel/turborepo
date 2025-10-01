@@ -1,3 +1,6 @@
+//! File system utilities for used by Turborepo.
+//! At the moment only used for `turbo prune` to copy over package directories.
+
 #![deny(clippy::all)]
 
 use std::{
@@ -5,6 +8,7 @@ use std::{
     io,
 };
 
+// `fs_err` preserves paths in the error messages unlike `std::fs`
 use fs_err as fs;
 use ignore::WalkBuilder;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};

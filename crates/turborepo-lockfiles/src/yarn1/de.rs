@@ -1,13 +1,13 @@
 use std::sync::OnceLock;
 
 use nom::{
+    IResult,
     branch::alt,
     bytes::complete::{escaped_transform, is_not, tag, take_till},
     character::complete::{anychar, char as nom_char, crlf, newline, none_of, satisfy, space1},
     combinator::{all_consuming, map, not, opt, peek, recognize, value},
     multi::{count, many0, many1},
     sequence::{delimited, pair, preceded, separated_pair, terminated, tuple},
-    IResult,
 };
 use regex::Regex;
 use serde_json::Value;

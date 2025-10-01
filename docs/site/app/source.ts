@@ -1,5 +1,4 @@
 import { createMDXSource } from "fumadocs-mdx";
-import { createOpenAPI, attachFile } from "fumadocs-openapi/server";
 import { loader } from "fumadocs-core/source";
 import {
   repoDocs,
@@ -10,9 +9,7 @@ import {
   blogMeta,
   externalBlogDocs,
   externalBlogMeta,
-  openapiDocs,
-  openapiMeta,
-} from "@/.source";
+} from "#.source/index.ts";
 
 export const extraPages = loader({
   baseUrl: "/",
@@ -20,7 +17,7 @@ export const extraPages = loader({
 });
 
 export const repoDocsPages = loader({
-  baseUrl: "/repo/docs",
+  baseUrl: "/docs",
   source: createMDXSource(repoDocs, repoMeta),
 });
 
@@ -33,13 +30,3 @@ export const externalBlog = loader({
   baseUrl: "/blog",
   source: createMDXSource(externalBlogDocs, externalBlogMeta),
 });
-
-export const openapiPages = loader({
-  baseUrl: "/repo/docs/openapi",
-  source: createMDXSource(openapiDocs, openapiMeta),
-  pageTree: {
-    attachFile,
-  },
-});
-
-export const openapi = createOpenAPI();

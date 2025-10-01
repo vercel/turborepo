@@ -6,7 +6,7 @@ tag: 'web development'
 ogImage: '/images/blog/turbo-1-6-0/x-card.png'
 ---
 
-import { Tabs, Tab } from '#/components/tabs';
+import { Tabs, Tab } from '#components/tabs';
 
 <h1 className="text-center">Turborepo 1.6</h1>
 
@@ -43,7 +43,7 @@ Turborepo helps speed up tasks in your codebase. Until now, we'd built Turborepo
 
 Turborepo is fantastic in monorepos because they have so many tasks to handle. Each package and app needs to be built, linted, and tested.
 
-But we got to thinking: lots of codebases that _aren't_ monorepos run plenty of tasks. Most CI/CD processes do a lot of duplicated work that would benefit from a [cache](/repo/docs/crafting-your-repository/caching).
+But we got to thinking: lots of codebases that _aren't_ monorepos run plenty of tasks. Most CI/CD processes do a lot of duplicated work that would benefit from a [cache](/docs/crafting-your-repository/caching).
 
 So we're excited to announce that **any codebase can now use Turborepo**.
 
@@ -68,7 +68,7 @@ Try it out now by [starting from the example](https://github.com/vercel/turbo/tr
    </Tab>
   <Tab value="pnpm">
   ```bash title="Terminal"
-  pnpm install turbo --save-dev
+  pnpm add turbo --save-dev
    ```
 
   </Tab>
@@ -139,8 +139,8 @@ turbo build lint
 
 Congratulations - **you just ran your first build with `turbo`**. You can try:
 
-- Running through the full [Quickstart](/repo/docs).
-- Check out our updated [Core Concepts docs](/repo/docs/crafting-your-repository/caching) to understand what makes Turborepo special.
+- Running through the full [Quickstart](/docs).
+- Check out our updated [Core Concepts docs](/docs/crafting-your-repository/caching) to understand what makes Turborepo special.
 
 ## When should I use Turborepo?
 
@@ -176,7 +176,7 @@ turbo run lint test
 
 Because you've said that `build` should be run before `lint` and `test`, it'll _automatically run `build` for you_ when you run `lint` or `test`.
 
-Not only that, but it'll figure out the optimal schedule for you. Head to our core concepts doc on [optimizing for speed](/repo/docs/crafting-your-repository/configuring-tasks).
+Not only that, but it'll figure out the optimal schedule for you. Head to our core concepts doc on [optimizing for speed](/docs/crafting-your-repository/configuring-tasks).
 
 ### When you want to run tasks in parallel
 
@@ -209,7 +209,7 @@ Turborepo will figure out the fastest possible way to run all your tasks in para
 
 ## Prune now supported on npm
 
-Over the last several releases, we've been adding support for [`turbo prune`](/repo/docs/reference/prune) on different workspace managers. This has been a challenge - `turbo prune` creates a subset of your monorepo, including pruning the dependencies in your lockfile. This means we've had to implement logic for each workspace manager separately.
+Over the last several releases, we've been adding support for [`turbo prune`](/docs/reference/prune) on different workspace managers. This has been a challenge - `turbo prune` creates a subset of your monorepo, including pruning the dependencies in your lockfile. This means we've had to implement logic for each workspace manager separately.
 
 We're delighted to announce that `turbo prune` now works for `npm`, completing support for all major package managers. This means that if your monorepo uses `npm`, `yarn`, `yarn 2+` or `pnpm`, you'll be able to deploy to Docker with ease.
 

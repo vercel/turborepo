@@ -161,11 +161,11 @@ impl Run {
                 if let Ok(line) = line {
                     result
                         .warnings
-                        .push(format!("ignoring import on line {} in {}", line, file_path));
+                        .push(format!("ignoring import on line {line} in {file_path}"));
                 } else {
                     result
                         .warnings
-                        .push(format!("ignoring import in {}", file_path));
+                        .push(format!("ignoring import in {file_path}"));
                 }
 
                 return Ok(());

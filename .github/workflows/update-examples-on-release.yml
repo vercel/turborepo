@@ -9,10 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
+      - uses: ./.github/actions/setup-node
 
       - name: Upgrade corepack
         shell: bash
@@ -37,6 +34,7 @@ jobs:
       - name: Commit and push
         run: |
           git commit -am "release(turborepo): update examples to latest"
+          git pull origin main
           git push origin ${{ steps.branch.outputs.STAGE_BRANCH }}
 
       - name: Create pull request

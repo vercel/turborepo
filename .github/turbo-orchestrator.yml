@@ -30,10 +30,10 @@
 
 labeler:
   labels:
-    # needs: triage when not any of the turborepo team
-    - label: "needs: triage"
+    # Removes the PR from release notes when its chore or ci
+    - label: "release-notes-ignore"
       when:
-        isNotPRAuthorMatch: "^(padmaia|anthonyshew|dimitropoulos|tknickman|chris-olszewski|NicholasLYang)$"
+        isPRTitleMatch: "^(?:(\bchore\b|\bci\b)|.*?\\((\bchore\b|\bci\b)\\)).*?:"
 
     # areas
     - label: "area: ci"

@@ -6,55 +6,21 @@ use globwalk::{GlobError, ValidatedGlob};
 use serde::{Deserialize, Serialize};
 use turbopath::{AnchoredSystemPath, AnchoredSystemPathBuf, RelativeUnixPathBuf};
 use turborepo_errors::Spanned;
+use turborepo_task_id::{TaskId, TaskName};
 pub use visitor::{Error as VisitorError, Visitor};
 
-use crate::{
-    cli::{EnvMode, OutputLogsMode},
-    run::task_id::{TaskId, TaskName},
-    turbo_json::RawTaskDefinition,
-};
-
-// TaskOutputs represents the patterns for including and excluding files from
-// outputs
-#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
-pub struct TaskOutputs {
-    pub inclusions: Vec<String>,
-    pub exclusions: Vec<String>,
-}
-
-impl TaskOutputs {
-    // We consider an empty outputs to be a log output and nothing else
-    pub fn is_empty(&self) -> bool {
-        self.inclusions.len() == 1
-            && self.inclusions[0].ends_with(".log")
-            && self.exclusions.is_empty()
-    }
-
-    pub fn validated_inclusions(&self) -> Result<Vec<ValidatedGlob>, GlobError> {
-        self.inclusions
-            .iter()
-            .map(|i| ValidatedGlob::from_str(i))
-            .collect()
-    }
-
-    pub fn validated_exclusions(&self) -> Result<Vec<ValidatedGlob>, GlobError> {
-        self.exclusions
-            .iter()
-            .map(|e| ValidatedGlob::from_str(e))
-            .collect()
-    }
-}
+use crate::cli::{EnvMode, OutputLogsMode};
 
 // Constructed from a RawTaskDefinition
 #[derive(Debug, PartialEq, Clone, Eq)]
 pub struct TaskDefinition {
     pub outputs: TaskOutputs,
-    pub(crate) cache: bool,
+    pub cache: bool,
 
     // This field is custom-marshalled from `env` and `depends_on``
-    pub(crate) env: Vec<String>,
+    pub env: Vec<String>,
 
-    pub(crate) pass_through_env: Option<Vec<String>>,
+    pub pass_through_env: Option<Vec<String>>,
 
     // TopologicalDependencies are tasks from package dependencies.
     // E.g. "build" is a topological dependency in:
@@ -70,10 +36,10 @@ pub struct TaskDefinition {
 
     // Inputs indicate the list of files this Task depends on. If any of those files change
     // we can conclude that any cached outputs or logs for this Task should be invalidated.
-    pub(crate) inputs: Vec<String>,
+    pub inputs: TaskInputs,
 
     // OutputMode determines how we should log the output.
-    pub(crate) output_logs: OutputLogsMode,
+    pub output_logs: OutputLogsMode,
 
     // Persistent indicates whether the Task is expected to exit or not
     // Tasks marked Persistent do not exit (e.g. watch mode or dev servers)
@@ -98,6 +64,22 @@ pub struct TaskDefinition {
     pub with: Option<Vec<Spanned<TaskName<'static>>>>,
 }
 
+// TaskOutputs represents the patterns for including and excluding files from
+// outputs
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TaskOutputs {
+    pub inclusions: Vec<String>,
+    pub exclusions: Vec<String>,
+}
+
+// Structure for holding the inputs for a task
+#[derive(Debug, PartialEq, Clone, Eq, Default)]
+pub struct TaskInputs {
+    pub globs: Vec<String>,
+    // Set when $TURBO_DEFAULT$ is in inputs
+    pub default: bool,
+}
+
 impl Default for TaskDefinition {
     fn default() -> Self {
         Self {
@@ -115,16 +97,6 @@ impl Default for TaskDefinition {
             env_mode: Default::default(),
             with: Default::default(),
         }
-    }
-}
-
-impl FromIterator<RawTaskDefinition> for RawTaskDefinition {
-    fn from_iter<T: IntoIterator<Item = RawTaskDefinition>>(iter: T) -> Self {
-        iter.into_iter()
-            .fold(RawTaskDefinition::default(), |mut def, other| {
-                def.merge(other);
-                def
-            })
     }
 }
 
@@ -187,6 +159,43 @@ impl TaskDefinition {
         }
 
         repo_relative_globs
+    }
+}
+
+impl TaskInputs {
+    pub fn new(globs: Vec<String>) -> Self {
+        Self {
+            globs,
+            default: false,
+        }
+    }
+
+    pub fn with_default(mut self, default: bool) -> Self {
+        self.default = default;
+        self
+    }
+}
+
+impl TaskOutputs {
+    // We consider an empty outputs to be a log output and nothing else
+    pub fn is_empty(&self) -> bool {
+        self.inclusions.len() == 1
+            && self.inclusions[0].ends_with(".log")
+            && self.exclusions.is_empty()
+    }
+
+    pub fn validated_inclusions(&self) -> Result<Vec<ValidatedGlob>, GlobError> {
+        self.inclusions
+            .iter()
+            .map(|i| ValidatedGlob::from_str(i))
+            .collect()
+    }
+
+    pub fn validated_exclusions(&self) -> Result<Vec<ValidatedGlob>, GlobError> {
+        self.exclusions
+            .iter()
+            .map(|e| ValidatedGlob::from_str(e))
+            .collect()
     }
 }
 

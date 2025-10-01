@@ -1,3 +1,5 @@
+//! Environment variable filtering for tasks and hashing for cache keys.
+
 #![deny(clippy::all)]
 
 use std::{
@@ -32,7 +34,7 @@ impl EnvironmentVariableMap {
     // This is the value that is used upstream as a task hash input,
     // so we need it to be deterministic
     pub fn to_hashable(&self) -> EnvironmentVariablePairs {
-        let mut list: Vec<_> = self.iter().map(|(k, v)| format!("{}={}", k, v)).collect();
+        let mut list: Vec<_> = self.iter().map(|(k, v)| format!("{k}={v}")).collect();
         list.sort();
 
         list
@@ -294,7 +296,7 @@ fn wildcard_to_regex_pattern(pattern: &str) -> String {
     let mut previous_index = 0;
     let mut previous_char: Option<char> = None;
 
-    for (i, char) in pattern.chars().enumerate() {
+    for (i, char) in pattern.char_indices() {
         if char == WILDCARD {
             if previous_char == Some(WILDCARD_ESCAPE) {
                 // Found a literal *
@@ -309,10 +311,10 @@ fn wildcard_to_regex_pattern(pattern: &str) -> String {
                 regex_string.push(regex::escape(&pattern[previous_index..i]));
 
                 // Add a dynamic segment if it isn't adjacent to another dynamic segment.
-                if let Some(last_segment) = regex_string.last() {
-                    if last_segment != REGEX_WILDCARD_SEGMENT {
-                        regex_string.push(REGEX_WILDCARD_SEGMENT.to_string());
-                    }
+                if let Some(last_segment) = regex_string.last()
+                    && last_segment != REGEX_WILDCARD_SEGMENT
+                {
+                    regex_string.push(REGEX_WILDCARD_SEGMENT.to_string());
                 }
             }
 

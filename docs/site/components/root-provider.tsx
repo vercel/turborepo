@@ -2,8 +2,8 @@
 
 import { RootProvider as FumaRootProvider } from "fumadocs-ui/provider";
 import type { ReactNode } from "react";
-import { SearchDialog } from "@/components/search-dialog";
-import { LocalStorageProvider } from "./local-storage-hook";
+import { SearchDialog } from "#components/search-dialog.tsx";
+import { TopLevelMobileMenuProvider } from "./docs-layout/use-mobile-menu-context";
 
 export function RootProvider({
   children,
@@ -11,8 +11,8 @@ export function RootProvider({
   children: ReactNode;
 }): JSX.Element {
   return (
-    <LocalStorageProvider>
+    <TopLevelMobileMenuProvider>
       <FumaRootProvider search={{ SearchDialog }}>{children}</FumaRootProvider>
-    </LocalStorageProvider>
+    </TopLevelMobileMenuProvider>
   );
 }

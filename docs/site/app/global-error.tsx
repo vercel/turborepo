@@ -1,15 +1,17 @@
 "use client";
 
-import type Error from "next/error";
 import { useEffect } from "react";
 
-export default function GlobalError({
-  error,
-}: {
-  error: Error & { digest?: string };
-}): JSX.Element {
+interface NextErrorType {
+  digest?: string;
+  message: string;
+  stack?: string;
+}
+
+// We use named export as the primary export
+export function GlobalError({ error }: { error: NextErrorType }): JSX.Element {
   useEffect(() => {
-    // eslint-disable-next-line no-console
+    // eslint-disable-next-line no-console -- This console log is intentional for error reporting
     console.log(error);
   }, [error]);
 
@@ -21,3 +23,5 @@ export default function GlobalError({
     </html>
   );
 }
+
+export default GlobalError;

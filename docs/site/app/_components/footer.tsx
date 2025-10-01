@@ -4,9 +4,9 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { ReactNode, ReactElement } from "react";
 import { useState } from "react";
-import cn from "classnames";
+import { cn } from "#components/cn.ts";
+import { gitHubRepoUrl } from "#lib/constants.ts";
 import { VercelLogo } from "./logos";
-import { gitHubRepoUrl } from "@/lib/constants";
 
 function findError<T extends object>(error: T): boolean {
   if (Object.prototype.toString.call(error) === "[object Error]") {
@@ -69,12 +69,12 @@ const navigation = {
     { name: "Governance", href: "/governance" },
   ],
   repo: [
-    { name: "Documentation", href: "/repo/docs" },
+    { name: "Documentation", href: "/docs" },
     {
       name: "API Reference",
-      href: "/repo/docs/reference",
+      href: "/docs/reference",
     },
-    { name: "Telemetry", href: "/repo/docs/telemetry" },
+    { name: "Telemetry", href: "/docs/telemetry" },
   ],
   support: [
     {
@@ -83,18 +83,18 @@ const navigation = {
     },
     {
       name: "Community",
-      href: "https://vercel.community/tag/turborepo",
+      href: "https://community.vercel.com/tag/turborepo",
     },
   ],
   company: [
     { name: "Vercel", href: "https://vercel.com" },
     {
       name: "Open Source Software",
-      href: "https://vercel.com/oss?utm_source=turbo.build&utm_medium=referral&utm_campaign=footer-ossLink",
+      href: "https://vercel.com/oss?utm_source=turborepo.com&utm_medium=referral&utm_campaign=footer-ossLink",
     },
     {
       name: "Contact Sales",
-      href: "https://vercel.com/solutions/turborepo?utm_source=turbo.build&utm_medium=referral&utm_campaign=footer-enterpriseLink",
+      href: "https://vercel.com/solutions/turborepo?utm_source=turborepo.com&utm_medium=referral&utm_campaign=footer-enterpriseLink",
     },
     { name: "X", href: "https://x.com/vercel" },
   ],
@@ -183,7 +183,7 @@ function FooterContent(): JSX.Element {
           <div>
             <a
               className="text-current"
-              href="https://vercel.com?utm_source=turbo.build&utm_medium=referral&utm_campaign=footer-logoLink"
+              href="https://vercel.com?utm_source=turborepo.com&utm_medium=referral&utm_campaign=footer-logoLink"
               rel="noopener noreferrer"
               target="_blank"
               title="vercel.com homepage"
@@ -217,14 +217,14 @@ function SubmitForm(): JSX.Element {
         })
           .then((res) => res.json())
           .then(() => {
-            return router.push("/confirm");
+            router.push("/confirm");
           })
           .catch((e: unknown) => {
             if (isError(e)) {
               // eslint-disable-next-line no-console -- We'd like to see something weird is happening in Logs.
               console.error(e.message);
             }
-            return router.push("/confirm");
+            router.push("/confirm");
           });
         ev.preventDefault();
       }}
@@ -259,7 +259,7 @@ function SubmitForm(): JSX.Element {
 
 export function Footer({ menu }: { menu?: boolean }): ReactElement {
   return (
-    <footer className="relative bg-[#FAFAFA] pb-[env(safe-area-inset-bottom)] dark:bg-[#111111]">
+    <footer className="relative bg-background-100 pb-[env(safe-area-inset-bottom)] dark:bg-[#111111]">
       <div className="pointer-events-none absolute top-0 h-12 w-full -translate-y-full bg-gradient-to-t from-[#FAFAFA] to-transparent dark:from-black" />
       <div
         className={cn(

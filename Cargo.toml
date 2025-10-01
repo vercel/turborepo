@@ -2,11 +2,14 @@
 resolver = "2"
 
 members = [
-  "crates/tower-uds",
   "crates/turbo-trace",
   "crates/turborepo*",
+  "crates/coverage",
   "packages/turbo-repository/rust",
 ]
+
+[workspace.package]
+edition = "2024"
 
 [workspace.metadata.groups]
 # Only the libraries, does not include the turborepo binary.
@@ -65,6 +68,7 @@ turborepo-lockfiles = { path = "crates/turborepo-lockfiles" }
 turborepo-microfrontends = { path = "crates/turborepo-microfrontends" }
 turborepo-process = { path = "crates/turborepo-process" }
 turborepo-repository = { path = "crates/turborepo-repository" }
+turborepo-task-id = { path = "crates/turborepo-task-id" }
 turborepo-ui = { path = "crates/turborepo-ui" }
 turborepo-unescape = { path = "crates/turborepo-unescape" }
 turborepo-scm = { path = "crates/turborepo-scm" }
@@ -82,8 +86,8 @@ async-compression = { version = "0.3.13", default-features = false, features = [
   "gzip",
   "tokio",
 ] }
-async-graphql = "7.0.7"
-async-graphql-axum = "7.0.7"
+async-graphql = "7.0.17"
+async-graphql-axum = "7.0.16"
 async-trait = "0.1.64"
 atty = "0.2.14"
 axum = "0.7.5"

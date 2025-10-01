@@ -151,8 +151,7 @@ impl Run {
             let (span, text) = tags_span.span_and_text("turbo.json");
             let help = span.is_none().then(|| {
                 format!(
-                    "`{}` doesn't any tags defined in its `turbo.json` file",
-                    relation_package_name
+                    "`{relation_package_name}` doesn't any tags defined in its `turbo.json` file"
                 )
             });
 

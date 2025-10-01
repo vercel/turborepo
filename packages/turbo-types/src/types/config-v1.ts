@@ -25,7 +25,7 @@ export interface PipelineV1 {
    * same package (e.g. "A package's test and lint commands depend on its own build being
    * completed first.")
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#dependson
+   * Documentation: https://turborepo.com/docs/reference/configuration#dependson
    *
    * @defaultValue `[]`
    */
@@ -39,7 +39,7 @@ export interface PipelineV1 {
    * You no longer need to use the $ prefix.
    * (e.g. $GITHUB_TOKEN → GITHUB_TOKEN)
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#env
+   * Documentation: https://turborepo.com/docs/reference/configuration#env
    *
    * @defaultValue `[]`
    */
@@ -50,7 +50,7 @@ export interface PipelineV1 {
    * task's environment, but should not contribute to the task's cache key,
    * e.g. `AWS_SECRET_KEY`.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#passthroughenv
+   * Documentation: https://turborepo.com/docs/reference/configuration#passthroughenv
    *
    * @defaultValue `null`
    */
@@ -71,7 +71,7 @@ export interface PipelineV1 {
    * produce no artifacts other than logs (such as linters). Logs are always treated as a
    * cacheable artifact and never need to be specified.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#outputs
+   * Documentation: https://turborepo.com/docs/reference/configuration#outputs
    *
    * @defaultValue `[]`
    */
@@ -82,7 +82,7 @@ export interface PipelineV1 {
    *
    * Setting cache to false is useful for long-running "watch" or development mode tasks.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#cache
+   * Documentation: https://turborepo.com/docs/reference/configuration#cache
    *
    * @defaultValue `true`
    */
@@ -99,7 +99,7 @@ export interface PipelineV1 {
    *
    * If omitted or empty, all files in the package are considered as inputs.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#inputs
+   * Documentation: https://turborepo.com/docs/reference/configuration#inputs
    *
    * @defaultValue `[]`
    */
@@ -118,7 +118,7 @@ export interface PipelineV1 {
    *
    * "none": Hides all task output
    *
-   * Documentation: https://turbo.build/repo/docs/reference/run#--output-logs-option
+   * Documentation: https://turborepo.com/docs/reference/run#--output-logs-option
    *
    * @defaultValue `"full"`
    */
@@ -129,7 +129,7 @@ export interface PipelineV1 {
    * turbo that this is a long-running task and will ensure that other tasks
    * cannot depend on it.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#persistent
+   * Documentation: https://turborepo.com/docs/reference/configuration#persistent
    *
    * @defaultValue `false`
    */
@@ -140,7 +140,7 @@ export interface PipelineV1 {
    * Interactive tasks must be marked with "cache": false as the input
    * they receive from stdin can change the outcome of the task.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#interactive
+   * Documentation: https://turborepo.com/docs/reference/configuration#interactive
    *
    * @defaultValue `false`
    */
@@ -148,14 +148,14 @@ export interface PipelineV1 {
 }
 
 export interface BaseSchemaV1 {
-  /** @defaultValue `https://turbo.build/schema.v1.json` */
+  /** @defaultValue `https://turborepo.com/schema.v1.json` */
   $schema?: string;
   /**
    * An object representing the task dependency graph of your project. turbo interprets
    * these conventions to schedule, execute, and cache the outputs of tasks in
    * your project.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#tasks
+   * Documentation: https://turborepo.com/docs/reference/configuration#tasks
    *
    * @defaultValue `{}`
    */
@@ -201,7 +201,7 @@ export interface RemoteCacheV1 {
    * Indicates if the remote cache is enabled. When `false`, Turborepo will disable
    * all remote cache operations, even if the repo has a valid token. If true, remote caching
    * is enabled, but still requires the user to login and link their repo to a remote cache.
-   * Documentation: https://turbo.build/repo/docs/core-concepts/remote-caching
+   * Documentation: https://turborepo.com/docs/core-concepts/remote-caching
    *
    * @defaultValue `true`
    */
@@ -223,7 +223,7 @@ export interface RootSchemaV1 extends BaseSchemaV1 {
    * that are not represented in the traditional dependency graph
    * (e.g. a root tsconfig.json, jest.config.ts, .eslintrc, etc.)
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#globaldependencies
+   * Documentation: https://turborepo.com/docs/reference/configuration#globaldependencies
    *
    * @defaultValue `[]`
    */
@@ -234,7 +234,7 @@ export interface RootSchemaV1 extends BaseSchemaV1 {
    *
    * The variables included in this list will affect all task hashes.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#globalenv
+   * Documentation: https://turborepo.com/docs/reference/configuration#globalenv
    *
    * @defaultValue `[]`
    */
@@ -244,7 +244,7 @@ export interface RootSchemaV1 extends BaseSchemaV1 {
    * An allowlist of environment variables that should be made to all tasks, but
    * should not contribute to the task's cache key, e.g. `AWS_SECRET_KEY`.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#globalpassthroughenv
+   * Documentation: https://turborepo.com/docs/reference/configuration#globalpassthroughenv
    *
    * @defaultValue `null`
    */
@@ -261,7 +261,7 @@ export interface RootSchemaV1 extends BaseSchemaV1 {
   /**
    * Configuration options that control how turbo interfaces with the remote cache.
    *
-   * Documentation: https://turbo.build/repo/docs/core-concepts/remote-caching
+   * Documentation: https://turborepo.com/docs/core-concepts/remote-caching
    *
    * @defaultValue `{}`
    */
@@ -270,7 +270,7 @@ export interface RootSchemaV1 extends BaseSchemaV1 {
   /**
    * Enable use of the new UI for `turbo`
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#ui
+   * Documentation: https://turborepo.com/docs/reference/configuration#ui
    *
    * @defaultValue `false`
    */

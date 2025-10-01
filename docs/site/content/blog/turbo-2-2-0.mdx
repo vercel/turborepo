@@ -8,10 +8,10 @@ ogImage: /images/blog/turbo-2-2-0/x-card.png
 
 <h1 className="text-center">Turborepo 2.2</h1>
 
-import { Authors } from '#/components/authors';
-import { Date } from '#/components/blog/date';
-import { Callout } from '#/components/callout';
-import { ExperimentalBadge } from '#/components/experimental-badge';
+import { Authors } from '#components/authors';
+import { Date } from '#components/blog/date';
+import { Callout } from '#components/callout';
+import { ExperimentalBadge } from '#components/experimental-badge';
 
 <Date>Friday, October 18th, 2024</Date>
 
@@ -35,7 +35,7 @@ Update today by running `npx @turbo/codemod migrate` or get started with `npx cr
 
 ## Query your repository <ExperimentalBadge>Experimental</ExperimentalBadge>
 
-In Turborepo 2.2, we're introducing [`turbo query`](/repo/docs/reference/query)—a new command that
+In Turborepo 2.2, we're introducing [`turbo query`](/docs/reference/query)—a new command that
 allows running [GraphQL](https://graphql.org/) queries against Turborepo's repository data. Turborepo computes lots of data about your repository
 in order to execute your tasks with maximum efficiency. This includes your package dependency graph, changed packages, task dependencies, log output from your tasks, and more.
 This data can be useful for scripting, refactoring, determine what to run in CI, and discovering other insights into your codebase.
@@ -52,7 +52,7 @@ turbo query query.gql
 
 ### Examples
 
-Get the name and path for all [affected packages](/repo/docs/reference/run#--affected) that have a `test` task.
+Get the name and path for all [affected packages](/docs/reference/run#--affected) that have a `test` task.
 
 ```graphql title="affected-packages.gql"
 {
@@ -93,13 +93,13 @@ query {
 }
 ```
 
-Turborepo has added APIs for structured data in the past, such as [run summaries](/repo/docs/reference/run#--summarize), [dry run](/repo/docs/reference/run#--dry----dry-run), and [`ls`](/repo/docs/reference/ls).
+Turborepo has added APIs for structured data in the past, such as [run summaries](/docs/reference/run#--summarize), [dry run](/docs/reference/run#--dry----dry-run), and [`ls`](/docs/reference/ls).
 However, these APIs have some limitations. First, they're centered around a single run, not general repository info. Second, as we added more fields, the output quickly became very large.
 We needed a way to query repository data in a run-agnostic fashion, and make the returned data more customizable.
 
 We would like to thank [@maschwenk](https://github.com/maschwenk), [@rafaeltab](https://github.com/rafaeltab) and [@weyert](https://github.com/weyert) for their early feedback on this feature.
 
-To learn more, [visit the documentation](/repo/docs/reference/query), and leave feedback for this new experimental command on the `turbo query` [RFC](https://github.com/vercel/turborepo/discussions/9170).
+To learn more, [visit the documentation](/docs/reference/query), and leave feedback for this new experimental command on the `turbo query` [RFC](https://github.com/vercel/turborepo/discussions/9170).
 
 ## Improved cache safety
 
@@ -109,40 +109,40 @@ With Turborepo 2.2, we're releasing some improvements to help configure cache in
 ### Platform environment variables
 
 When deploying your applications, you likely already have environment variables configured in your production environment. Now, for supported platforms, Turborepo will
-automatically check these environment variables against your `turbo.json` configuration to ensure that you've correctly [accounted for them](/repo/docs/crafting-your-repository/using-environment-variables#adding-environment-variables-to-task-hashes),
+automatically check these environment variables against your `turbo.json` configuration to ensure that you've correctly [accounted for them](/docs/crafting-your-repository/using-environment-variables#adding-environment-variables-to-task-hashes),
 and will warn you about any missing environment variables.
 
-Any platform can support this feature by implementing the [`TURBO_PLATFORM_ENV`](/repo/docs/reference/system-environment-variables) environment variable in to the build environment.
+Any platform can support this feature by implementing the [`TURBO_PLATFORM_ENV`](/docs/reference/system-environment-variables) environment variable in to the build environment.
 
 [Vercel](https://vercel.com) is supported today, and we will update documentation as more platforms become available.
 
-Learn more about [platform environment variables](/repo/docs/crafting-your-repository/using-environment-variables#platform-environment-variables).
+Learn more about [platform environment variables](/docs/crafting-your-repository/using-environment-variables#platform-environment-variables).
 
 ### Warnings for empty cache configurations
 
 When running tasks, Turborepo will now warn you if a task is configured to cache an empty directory.
 This can be a common mistake, and can lead to accidental broken builds. This is enabled by default in 2.2.
 
-Learn more about [configuring outputs](/repo/docs/crafting-your-repository/configuring-tasks#specifying-outputs).
+Learn more about [configuring outputs](/docs/crafting-your-repository/configuring-tasks#specifying-outputs).
 
 ### Improvements to `eslint-config-turbo`
 
-Turborepo automatically adds prefix wildcards to your env key for [common frameworks](/repo/docs/crafting-your-repository/using-environment-variables#framework-inference).
+Turborepo automatically adds prefix wildcards to your env key for [common frameworks](/docs/crafting-your-repository/using-environment-variables#framework-inference).
 If you're using one of the supported frameworks, you don't need to specify environment variables that begin with the framework's prefix.
 
 Now in Turborepo 2.2, `eslint-config-turbo` supports this feature as well, ensuring the warnings from the plugin are accurate and actionable.
 
-Learn more about [`eslint-config-turbo`](/repo/docs/reference/eslint-config-turbo).
+Learn more about [`eslint-config-turbo`](/docs/reference/eslint-config-turbo).
 
 ## Zero-configuration comparisons with `--affected`
 
-In Turborepo 2.1, we released the [`--affected`](/repo/docs/reference/run#--affected) flag which can be used with [`turbo run`](/repo/docs/reference/run) and [`turbo ls`](/repo/docs/reference/ls) to automatically target changed packages.
-In 2.2, we're taking it a step further by introducing automatic comparisons when running [`--affected`](/repo/docs/reference/run#--affected) in a GitHub workflow—making common use cases even smarter.
+In Turborepo 2.1, we released the [`--affected`](/docs/reference/run#--affected) flag which can be used with [`turbo run`](/docs/reference/run) and [`turbo ls`](/docs/reference/ls) to automatically target changed packages.
+In 2.2, we're taking it a step further by introducing automatic comparisons when running [`--affected`](/docs/reference/run#--affected) in a GitHub workflow—making common use cases even smarter.
 
 - For workflows running in response to a [pull request](https://docs.github.com/en/actions/writing-workflows/choosing-when-your-workflow-runs/events-that-trigger-workflows#pull_request), the base of the comparison is automatically set to the base of the pull request. This ensures `turbo` considers any files changed in the pull request when determining the affected packages.
 - For workflows running in response to a [push](https://docs.github.com/en/actions/writing-workflows/choosing-when-your-workflow-runs/events-that-trigger-workflows#push), the base of the comparison is automatically set to commit before your latest push.
 
-Learn more about [`--affected`](/repo/docs/crafting-your-repository/constructing-ci#using---affected-in-github-actions).
+Learn more about [`--affected`](/docs/crafting-your-repository/constructing-ci#using---affected-in-github-actions).
 
 ## Community
 

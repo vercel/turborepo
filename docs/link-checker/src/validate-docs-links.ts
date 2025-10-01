@@ -1,4 +1,4 @@
-import { collectLinkErrors } from "./markdown";
+import { collectLinkErrors } from "./markdown.ts";
 
 /*
   This script validates internal links in /docs and /errors including internal,

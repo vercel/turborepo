@@ -35,10 +35,16 @@ export type LinkError = {
 
 /** where to look for docs (.mdx files) */
 const DOCS_PATH = ".";
-const EXCLUDED_HASHES = ["top"];
+const EXCLUDED_HASHES: string[] = [
+  // Start: hashlinks created by Fumadocs
+  "create-turbo-config",
+  "add-package-manager",
+  "set-default-outputs",
+  // End: hashlinks created by Fumadocs
+];
 
 /** These paths exist, just not in our Markdown files */
-const EXCLUDED_PATHS = ["/api/remote-cache-spec", "/repo"];
+const EXCLUDED_PATHS = ["/api/remote-cache-spec", "/discord", "/docs/openapi"];
 
 const slugger = new GitHubSlugger();
 
@@ -86,7 +92,8 @@ const markdownProcessor = unified()
   });
 
 const filePathToUrl = (filePath: string): string =>
-  filePath.replace("repo-docs", "/repo/docs").replace(".mdx", "");
+  // "/" prefix makes it easier to compare internal links
+  "/" + filePath.replace(".mdx", "");
 
 const validateFrontmatter = (path: string, data: Record<string, unknown>) => {
   if (!data.title) {
@@ -190,6 +197,23 @@ const validateHashLink = (doc: Document, href: string) => {
     return [];
   }
 
+  if (
+    doc.headings.includes(
+      // Handles when the link has the experimental badge in it.
+      // Because we're parsing the raw document (not the rendered output), the JSX declaration is still present.
+      hashLink.replace(
+        "-experimental",
+        "-experimentalbadgeexperimentalexperimentalbadge"
+      )
+    )
+  ) {
+    console.warn(
+      `The hash link "${hashLink}" passed when including the <ExperimentalBadge /> JSX declaration.`
+    );
+    console.log();
+    return [];
+  }
+
   let linkError: LinkError = {
     type: "hash",
     href,
@@ -235,6 +259,9 @@ const traverseTreeAndValidateLinks = (
  */
 export const collectLinkErrors = async (): Promise<LinkError[]> => {
   const allMdxFilePaths = await getAllMdxFilePaths();
+  if (allMdxFilePaths.length === 0) {
+    throw new Error("No files were found for processing.");
+  }
 
   const documentMap = new Map(
     await Promise.all(allMdxFilePaths.map(prepareDocumentMapEntry))

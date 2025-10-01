@@ -8,13 +8,13 @@ ogImage: /images/blog/turbo-2-4/x-card.png
 
 <h1 className="text-center">Turborepo 2.4</h1>
 
-import { Authors } from '#/components/authors';
-import { Date } from '#/components/blog/date';
-import { Tab, Tabs } from '#/components/tabs';
-import { Accordions, Accordion } from '#/components/accordion';
-import { ExperimentalBadge } from '#/components/experimental-badge';
-import { Kbd } from '#/components/kbd';
-import { Callout } from '#/components/callout';
+import { Authors } from '#components/authors';
+import { Date } from '#components/blog/date';
+import { Tab, Tabs } from '#components/tabs';
+import { Accordions, Accordion } from '#components/accordion';
+import { ExperimentalBadge } from '#components/experimental-badge';
+import { Kbd } from '#components/kbd';
+import { Callout } from '#components/callout';
 
 <Date>Friday, January 31st, 2025</Date>
 
@@ -54,7 +54,7 @@ This early iteration of Boundaries includes finding two types of monorepo mistak
   proposals for these built-in diagnostics as well as custom-built Boundaries.
 </Callout>
 
-To learn more, [visit the documentation](/repo/docs/reference/boundaries).
+To learn more, [visit the documentation](/docs/reference/boundaries).
 
 ## Terminal UI improvements
 
@@ -81,11 +81,11 @@ We've added more functionality to the terminal UI to make it easier to work with
 - **<Kbd>u</Kbd> and <Kbd>d</Kbd> to scroll logs**: You can now press <Kbd>u</Kbd> to scroll your logs up and <Kbd>d</Kbd> to scroll your logs down.
 - **<Kbd>m</Kbd> to learn more**: Pressing <Kbd>m</Kbd> will show a popup listing all of the available keybinds.
 
-[Visit the documentation to learn more.](/repo/docs/crafting-your-repository/developing-applications)
+[Visit the documentation to learn more.](/docs/crafting-your-repository/developing-applications)
 
 ## Watch Mode caching <ExperimentalBadge>Experimental</ExperimentalBadge>
 
-[Watch Mode](/repo/docs/crafting-your-repository/developing-applications#watch-mode) is a monorepo-aware watcher that re-runs tasks according to your [Task Graph](/repo/docs/core-concepts/package-and-task-graph#task-graph). This opens up brand new ways to work in monorepos by leveraging a single, global, dependency-aware watcher, rather than many smaller, less powerful watcher scripts.
+[Watch Mode](/docs/crafting-your-repository/developing-applications#watch-mode) is a monorepo-aware watcher that re-runs tasks according to your [Task Graph](/docs/core-concepts/package-and-task-graph#task-graph). This opens up brand new ways to work in monorepos by leveraging a single, global, dependency-aware watcher, rather than many smaller, less powerful watcher scripts.
 
 In this release, we're adding caching as an experimental feature in Watch Mode. To activate it, use the `--experimental-write-cache` flag:
 
@@ -93,13 +93,13 @@ In this release, we're adding caching as an experimental feature in Watch Mode. 
 turbo watch dev --experimental-write-cache
 ```
 
-To learn more about Watch Mode, [visit the documentation](/repo/docs/reference/watch).
+To learn more about Watch Mode, [visit the documentation](/docs/reference/watch).
 
 ## Circular dependency recommendations
 
-Circular dependencies are loops in your package graph that create non-deterministic cycles in Turborepo's [Task Graph](/repo/docs/core-concepts/package-and-task-graph#task-graph). However, if there is a loop in your task graph, Turborepo is unable to determine which task comes before which, since they both depend on each other.
+Circular dependencies are loops in your package graph that create non-deterministic cycles in Turborepo's [Task Graph](/docs/core-concepts/package-and-task-graph#task-graph). However, if there is a loop in your task graph, Turborepo is unable to determine which task comes before which, since they both depend on each other.
 
-While adopting Turborepo in your monorepo, you may find circular dependencies as Turborepo create a more sophisticated, faster Task Graph than your previous task runner. Previously, Turborepo would naively list all of the packages involved in the cycle or cycles that exist in the repository's [Package Graph](/repo/docs/core-concepts/package-and-task-graph#package-graph). Now, Turborepo will include the dependency relationships that need to be broken up to get rid of the cycles in your graph.
+While adopting Turborepo in your monorepo, you may find circular dependencies as Turborepo create a more sophisticated, faster Task Graph than your previous task runner. Previously, Turborepo would naively list all of the packages involved in the cycle or cycles that exist in the repository's [Package Graph](/docs/core-concepts/package-and-task-graph#package-graph). Now, Turborepo will include the dependency relationships that need to be broken up to get rid of the cycles in your graph.
 
 Compare the before and after of the terminal printouts below:
 
@@ -138,7 +138,7 @@ Compare the before and after of the terminal printouts below:
 
 ## `schema.json` in `node_modules`
 
-A `schema.json` file provides auto-complete and validation in your editor for JSON files. We have a web-accessible version of the `schema.json` for `turbo.json` hosted at [`https://turbo.build/schema.json`](https://turbo.build/schema.json), but some developers prefer to get the file from `node_modules` to stay synced with the installed version of `turbo`.
+A `schema.json` file provides auto-complete and validation in your editor for JSON files. We have a web-accessible version of the `schema.json` for `turbo.json` hosted at [`https://turborepo.com/schema.json`](https://turborepo.com/schema.json), but some developers prefer to get the file from `node_modules` to stay synced with the installed version of `turbo`.
 
 Starting in this release, `schema.json` is available in `node_modules` once you've run your package manager's install command:
 
@@ -151,11 +151,11 @@ Starting in this release, `schema.json` is available in `node_modules` once you'
 <Callout title="node_modules location">
   We recommend installing `turbo` at the root of your repository, so the path
   for the schema should point to `node_modules` at the root of your repository.
-  In [Package Configurations](/repo/docs/reference/package-configurations), you
-  may need to use a path like `../../node_modules/turbo/schema.json`.
+  In [Package Configurations](/docs/reference/package-configurations), you may
+  need to use a path like `../../node_modules/turbo/schema.json`.
 </Callout>
 
-[Visit the documentation](/repo/docs/getting-started/editor-integration#sourcing-from-node_modules) for more information.
+[Visit the documentation](/docs/getting-started/editor-integration#sourcing-from-node_modules) for more information.
 
 ## ESLint Flat Config support
 
@@ -200,7 +200,7 @@ export default [
 
 The configuration and plugin remain backward compatible for those still using ESLint v8 to ensure a smooth transition.
 
-For more information, [visit the documentation](/repo/docs/reference/eslint-config-turbo).
+For more information, [visit the documentation](/docs/reference/eslint-config-turbo).
 
 ## Other changes
 
@@ -259,8 +259,8 @@ For more information, [visit the documentation](/repo/docs/reference/eslint-conf
     - docs: improve clarity on `--cache`. ([#9489](https://github.com/vercel/turborepo/pull/9489))
     - docs: mark `--no-cache` and `--remote-only` as deprecated. ([#9488](https://github.com/vercel/turborepo/pull/9488))
     - docs: describe using a custom URL with `create-turbo`. ([#9507](https://github.com/vercel/turborepo/pull/9507))
-    - docs: fix formatting on `/repo/docs/getting-started/installation` ([#9509](https://github.com/vercel/turborepo/pull/9509))
-    - docs: fix formatting on `/repo/docs/getting-started/installation` ([#9514](https://github.com/vercel/turborepo/pull/9514))
+    - docs: fix formatting on `/docs/getting-started/installation` ([#9509](https://github.com/vercel/turborepo/pull/9509))
+    - docs: fix formatting on `/docs/getting-started/installation` ([#9514](https://github.com/vercel/turborepo/pull/9514))
     - docs: update ESLint documentation with ESLint v9 ([#9515](https://github.com/vercel/turborepo/pull/9515))
     - docs: options one-pager ([#9533](https://github.com/vercel/turborepo/pull/9533))
     - docs(typo): fix typo on turbo-ignore page ([#9576](https://github.com/vercel/turborepo/pull/9576))
@@ -301,6 +301,6 @@ For more information, [visit the documentation](/repo/docs/reference/eslint-conf
 
 Turborepo is the result of the combined work of all of its contributors, including our core team: [Anthony](https://github.com/anthonyshew), [Chris](https://github.com/chris-olszewski), [Dimitri](https://github.com/dimitropoulos), [Nicholas](https://github.com/NicholasLYang), and [Tom](https://github.com/tknickman).
 
-Thank you for your continued support, feedback, and collaboration to make Turborepo your build tool of choice. To learn how to get involved, [visit the Community page](/repo/docs/community).
+Thank you for your continued support, feedback, and collaboration to make Turborepo your build tool of choice. To learn how to get involved, [visit the Community page](/docs/community).
 
 We also thank everyone who contributed to this release of Turborepo: @aaronccasanova, @AlvaroParker, @ankur-arch, @arosequist, @atimmer, @bgw, @bitttttten, @chaficnajjar, @codexshell, @eps1lon, @gianelli99, @glitched-w0rld, @JasonnnW3000, @jbrocksfellas, @jeremy-code, @jonathandsouza, @Juneezee, @kayumuzzaman, @krlvi, @maciej-ka, @ognevny, @olets, @pkerschbaum, @romanofski, @shivam-pawar, @takaebato, @tevem1207, @thebrubaker, @Tofandel, @trivikr, @yamz8, and @zsh77.

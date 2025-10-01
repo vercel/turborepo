@@ -53,7 +53,7 @@ export const createMetadata = ({
   canonicalPath: string;
 }): Metadata => {
   if (!description) {
-    // eslint-disable-next-line no-console
+    // eslint-disable-next-line no-console -- We want to be alerted during a build if this happens
     console.warn(`Warning: ${canonicalPath} does not have a description.`);
   }
 

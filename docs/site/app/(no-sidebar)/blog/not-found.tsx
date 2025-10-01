@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { blog, externalBlog } from "@/app/source";
+import { blog, externalBlog } from "#app/source.ts";
 import { NotFoundTemplate } from "../../_components/not-found-template";
 
 export default function NotFound(): JSX.Element {
@@ -13,7 +13,7 @@ export default function NotFound(): JSX.Element {
     <NotFoundTemplate
       content={
         <div className="flex flex-col gap-12 mx-auto">
-          <p className="text-center text-gray-500 dark:text-gray-400">
+          <p className="text-center text-gray-900 dark:text-gray-900">
             The latest updates and releases from the Turborepo team at Vercel.
           </p>
           {posts.map((post) => {

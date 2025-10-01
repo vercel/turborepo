@@ -8,10 +8,10 @@ ogImage: /images/blog/turbo-2-0/x-card.png
 
 <h1 className="text-center">Turborepo 2.0</h1>
 
-import { Authors } from '#/components/authors';
-import { Date } from '#/components/blog/date';
-import { Callout } from '#/components/callout';
-import { Video } from '#/components/video';
+import { Authors } from '#components/authors';
+import { Date } from '#components/blog/date';
+import { Callout } from '#components/callout';
+import { Video } from '#components/video';
 
 <Date>Tuesday, June 4, 2024</Date>
 
@@ -22,15 +22,15 @@ Turborepo 2.0 improves the developer experience of JavaScript and TypeScript rep
 - [**New terminal UI**](#new-terminal-ui): Interactive tasks and clearer logs
 - [**Watch Mode**](#watch-mode): Dependency-aware task watcher for any tooling in your repository
 - [**All-new documentation**](#all-new-documentation): Core monorepo concepts, refreshed API reference, and ecosystem tooling guides
-- **Licensing and maintenance updates**: Upgraded to MIT license and added [Long Term Support policy](/repo/docs/getting-started/support-policy#lts-policy)
+- **Licensing and maintenance updates**: Upgraded to MIT license and added [Long Term Support policy](/docs/support-policy#lts-policy)
 
 Update today by running `npx @turbo/codemod migrate` or get started with `npx create-turbo@latest`.
 
-Visit [the upgrading guide](/repo/docs/crafting-your-repository/upgrading#upgrading-to-20) for update instructions. [Breaking changes](#breaking-changes) are listed below.
+Visit [the upgrading guide](/docs/crafting-your-repository/upgrading#upgrading-to-20) for update instructions. [Breaking changes](#breaking-changes) are listed below.
 
 ## New terminal UI
 
-In [Turborepo 1.13](https://turbo.build/blog/turbo-1-13-0), we released an experimental interface to learn how a refined terminal UI could improve development velocity. Through [the RFC process](https://github.com/vercel/turbo/discussions/7802), we were able to work with the community on designing a revamped local experience, driven by your feedback. Thank you to those who participated.
+In [Turborepo 1.13](https://turborepo.com/blog/turbo-1-13-0), we released an experimental interface to learn how a refined terminal UI could improve development velocity. Through [the RFC process](https://github.com/vercel/turbo/discussions/7802), we were able to work with the community on designing a revamped local experience, driven by your feedback. Thank you to those who participated.
 
 Today, we’re releasing the new UI as stable, along with the highly requested features that it enables.
 
@@ -75,7 +75,7 @@ To mark a task as interactive, add `"persistent": true` to its definition:
 
 With the task selected in the UI, use the `Enter` key to enter the task’s shell and `CTRL+Z` to exit.
 
-To learn more about persistent and interactive tasks, [visit the documentation](/repo/docs/reference/configuration#persistent).
+To learn more about persistent and interactive tasks, [visit the documentation](/docs/reference/configuration#persistent).
 
 ## Watch Mode
 
@@ -89,7 +89,7 @@ turbo watch dev lint test
 
 Using `turbo watch`, Turborepo will re-run tasks whenever you make changes to your source code. Tasks will be run using your dependency graph and configuration from `turbo.json`, just like `turbo run`.
 
-[Learn more about Watch Mode in the documentation.](/repo/docs/crafting-your-repository/developing-applications#watch-mode)
+[Learn more about Watch Mode in the documentation.](/docs/crafting-your-repository/developing-applications#watch-mode)
 
 ## All-new documentation
 
@@ -99,11 +99,11 @@ With this release, we’re also publishing revitalized documentation that builds
 - Guides on integrating your favorite tools with Turborepo
 - Clearer information architecture and improved search
 
-[Visit the Turborepo documentation.](/repo/docs)
+[Visit the Turborepo documentation.](/docs)
 
 ## Breaking changes
 
-Visit [the upgrading guide](/repo/docs/crafting-your-repository/upgrading#upgrading-to-20) for instructions on how to update to 2.0.
+Visit [the upgrading guide](/docs/crafting-your-repository/upgrading#upgrading-to-20) for instructions on how to update to 2.0.
 
 ### Configuration
 
@@ -136,7 +136,7 @@ Visit [the upgrading guide](/repo/docs/crafting-your-repository/upgrading#upgrad
 
 ### Other
 
-- Minimum package manager version support for npm and pnpm updated to 8 ([Source](/repo/docs/getting-started/support-policy#package-managers))
+- Minimum package manager version support for npm and pnpm updated to 8 ([Source](/docs/support-policy#package-managers))
 - Remove package manager argument from `create-turbo`, replaced by option ([PR](https://github.com/vercel/turbo/pull/8150))
 
 ## Community

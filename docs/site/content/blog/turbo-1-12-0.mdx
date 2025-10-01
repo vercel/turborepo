@@ -8,9 +8,9 @@ ogImage: /images/blog/turbo-1-12-0/x-card.png
 
 <h1 className="text-center">Turborepo 1.12</h1>
 
-import { Authors } from '#/components/authors';
-import { Date } from '#/components/blog/date';
-import { ThemeAwareImage } from '#/components/theme-aware-image';
+import { Authors } from '#components/authors';
+import { Date } from '#components/blog/date';
+import { ThemeAwareImage } from '#components/theme-aware-image';
 
 <Date>Tuesday, January 30th, 2024</Date>
 
@@ -20,7 +20,7 @@ Turborepo 1.12 adds popular community-requested features and feedback improvemen
 
 - [**Colors in task logs**](#colors-in-task-logs): Colors from original shell logs used by default
 - [**Errors overhaul**](#errors-overhaul): Improved error messages for misconfigurations
-- [**Improved `inputs` ergonomics**](#improved---inputs-ergonomics): Use Turborepo's defaults with your input customizations
+- [**Improved `inputs` ergonomics**](#improved-inputs-ergonomics): Use Turborepo's defaults with your input customizations
 - [**Telemetry**](#telemetry): Help us focus on what matters most to Turborepo users
 
 We're also done cleaning up our migration to Rust in this release by removing the `--go-fallback` flag and shrinking the `turbo` binary by 58% compared to 1.11.
@@ -107,17 +107,17 @@ Today, we're adding `$TURBO_DEFAULT$` as a special value when used in the `input
 
 This microsyntax allows you to use the Turborepo defaults you're used to while adding in your own custom globs to fine tune the default input behavior.
 
-[Check out the `inputs` documentation](/repo/docs/reference/configuration#inputs) for more information.
+[Check out the `inputs` documentation](/docs/reference/configuration#inputs) for more information.
 
 ## Telemetry
 
 Turborepo was released almost two years ago, and `turbo` has developed considerably over the past two years. As the community has grown, the value of your feedback is immeasurable in helping us stay focused on what matters most to Turborepo users.
 
-Until now, our feedback gathering process has been manual, slow, and error prone. While we will always highly appreciate users who file [GitHub Issues](https://github.com/vercel/turbo/issues), speak to us in [GitHub Discussions](https://github.com/vercel/turbo/discussions), and chat with the community in [Discord](https://turbo.build/discord), this feedback only captures the sentiment of a small corner of the Turboverse.
+Until now, our feedback gathering process has been manual, slow, and error prone. While we will always highly appreciate users who file [GitHub Issues](https://github.com/vercel/turbo/issues), speak to us in [GitHub Discussions](https://github.com/vercel/turbo/discussions), and chat with the community in [Discord](https://turborepo.com/discord), this feedback only captures the sentiment of a small corner of the Turboverse.
 
 Today, we're introducing a **completely anonymous**, automated approach to feedback to learn more about the ways that the community is using Turborepo. As we continue to iterate on `turbo`, this information will help us ensure performance, confirm stability, design new features, and drive the project's direction.
 
-We're creating the build system of the future and this information will be highly valuable to guide us in that effort. For more information, visit [turbo.build/repo/docs/telemetry](https://turbo.build/repo/docs/telemetry).
+We're creating the build system of the future and this information will be highly valuable to guide us in that effort. For more information, visit [turborepo.com/docs/telemetry](https://turborepo.com/docs/telemetry).
 
 If you'd like to opt out of telemetry, run:
 

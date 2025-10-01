@@ -29,34 +29,80 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - uses: dorny/paths-filter@v3
+      - name: Check path changes
         id: filter
-        with:
-          filters: |
-            docs:
-              - "docs/**"
-            basic-example:
-              - "examples/basic/**"
-              - "turborepo-tests/example-basic-*/**"
-              - "turborepo-tests/helpers/**"
-            kitchen-sink-example:
-              - "examples/kitchen-sink/**"
-              - "turborepo-tests/example-kitchen-sink-*/**"
-              - "turborepo-tests/helpers/**"
-            non-monorepo-example:
-              - "examples/non-monorepo/**"
-              - "turborepo-tests/example-non-monorepo-*/**"
-              - "turborepo-tests/helpers/**"
-            with-svelte-example:
-              - "examples/with-svelte/**"
-              - "turborepo-tests/example-with-svelte-*/**"
-              - "turborepo-tests/helpers/**"
-            with-tailwind-example:
-              - "examples/with-tailwind/**"
-              - "turborepo-tests/example-with-svelte-*/**"
-              - "turborepo-tests/helpers/**"
-            rest:
-              - "!(examples/**|docs/**)**"
+        run: |
+          # Determine the base and head commits to compare
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            # For pull requests, compare the base branch to the current HEAD
+            git fetch origin ${{ github.base_ref }}
+            BASE_COMMIT="origin/${{ github.base_ref }}"
+            HEAD_COMMIT="HEAD"
+          else
+            # For pushes, use the before and after SHAs
+            BASE_COMMIT="${{ github.event.before }}"
+            HEAD_COMMIT="${{ github.event.after }}"
+          fi
+
+          echo "Comparing changes between $BASE_COMMIT and $HEAD_COMMIT"
+
+          # Function to check if files in given paths have changed
+          check_path_changes() {
+            local name=$1
+            shift
+            local paths=("$@")
+
+            # Create a command that checks all paths
+            local cmd="git diff --name-only $BASE_COMMIT $HEAD_COMMIT -- "
+            for path in "${paths[@]}"; do
+              cmd+="\"$path\" "
+            done
+
+            # Run the command and check if there are any results
+            if eval "$cmd" | grep -q .; then
+              echo "$name=true" >> $GITHUB_OUTPUT
+              echo "Changes detected in $name paths"
+            else
+              echo "$name=false" >> $GITHUB_OUTPUT
+              echo "No changes in $name paths"
+            fi
+          }
+
+          # Function to make path checking more readable
+          check_paths() {
+            local name=$1
+            local path_string=$2
+
+            # Convert the comma-separated string to an array
+            IFS=',' read -ra path_array <<< "$path_string"
+
+            # Call the check_path_changes function with the name and paths
+            check_path_changes "$name" "${path_array[@]}"
+          }
+
+          # Check each path pattern with a more readable syntax
+          echo "Checking path patterns..."
+
+          check_paths "docs" "docs/"
+          check_paths "basic-example" "examples/basic/,turborepo-tests/example-basic-*/,turborepo-tests/helpers/"
+          check_paths "kitchen-sink-example" "examples/kitchen-sink/,turborepo-tests/example-kitchen-sink-*/,turborepo-tests/helpers/"
+          check_paths "non-monorepo-example" "examples/non-monorepo/,turborepo-tests/example-non-monorepo-*/,turborepo-tests/helpers/"
+          check_paths "with-svelte-example" "examples/with-svelte/,turborepo-tests/example-with-svelte-*/,turborepo-tests/helpers/"
+          check_paths "with-tailwind-example" "examples/with-tailwind/,turborepo-tests/example-with-svelte-*/,turborepo-tests/helpers/"
+
+          # Handle the "rest" pattern - files that are NOT in examples/ or docs/
+          CHANGED_FILES=$(git diff --name-only $BASE_COMMIT $HEAD_COMMIT)
+
+          # Filter to only include files that do NOT start with examples/ or docs/
+          FILES_NOT_IN_EXAMPLES_OR_DOCS=$(echo "$CHANGED_FILES" | grep -v -E "^(examples/|docs/)" || true)
+
+          if [ -n "$FILES_NOT_IN_EXAMPLES_OR_DOCS" ]; then
+            echo "rest=true" >> $GITHUB_OUTPUT
+            echo "Changes detected outside examples/ and docs/ directories"
+          else
+            echo "rest=false" >> $GITHUB_OUTPUT
+            echo "No changes outside examples/ and docs/ directories"
+          fi
 
   integration:
     name: Turborepo Integration
@@ -89,10 +135,13 @@ jobs:
         uses: ./.github/actions/setup-turborepo-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
-          node-version: "18.20.2"
+          node-version: "18.20.2" # TODO: Update integration tests with changed log output in Node.js 22
 
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@4bc047ad259df6fc24a6c9b0f9a0cb08cf17fbe5 # v2.0.1
 
       - name: Setup Graphviz
         uses: ts-graphviz/setup-graphviz@v2
@@ -141,7 +190,6 @@ jobs:
         uses: ./.github/actions/setup-turborepo-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
-          node-version: "18.20.2"
 
       - name: Run cargo fmt check
         run: |
@@ -157,7 +205,7 @@ jobs:
 
       - name: Run cargo clippy
         run: |
-          cargo clippy --workspace --features rustls-tls -- --deny clippy::all
+          cargo clippy --workspace --features rustls-tls --all-targets -- --deny clippy::all
 
   rust_check:
     # We test dependency changes only on main
@@ -174,11 +222,39 @@ jobs:
         uses: ./.github/actions/setup-turborepo-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
-          node-version: "18.20.2"
 
       - name: Run cargo check
         run: |
           cargo check --workspace
+
+  turbo_types_check:
+    name: "@turbo/types codegen check"
+    needs:
+      - find-changes
+    if: ${{ needs.find-changes.outputs.rest == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: "Setup Node"
+        uses: ./.github/actions/setup-node
+
+      - name: Install Global Turbo
+        uses: ./.github/actions/install-global-turbo
+
+      - name: Build turbo-types schemas
+        run: |
+          turbo build --filter=@turbo/types
+
+      - name: Check for uncommitted changes
+        run: |
+          if ! git diff --exit-code; then
+            echo "::error::Generated schema files are out of sync with TypeScript types"
+            echo "::error::Please run 'turbo build --filter=@turbo/types' and commit the changes"
+            git diff
+            exit 1
+          fi
 
   rust_test:
     strategy:
@@ -210,7 +286,6 @@ jobs:
         uses: ./.github/actions/setup-turborepo-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
-          node-version: "18.20.2"
 
       - name: Run sccache-cache
         uses: mozilla-actions/sccache-action@v0.0.6
@@ -341,6 +416,7 @@ jobs:
       - integration
       - rust_lint
       - rust_check
+      - turbo_types_check
       - rust_test
       - basic-example
       - kitchen-sink-example
@@ -367,6 +443,7 @@ jobs:
           subjob ${{needs.integration.result}}
           subjob ${{needs.rust_lint.result}}
           subjob ${{needs.rust_check.result}}
+          subjob ${{needs.turbo_types_check.result}}
           subjob ${{needs.rust_test.result}}
           subjob ${{needs.basic-example.result}}
           subjob ${{needs.kitchen-sink-example.result}}

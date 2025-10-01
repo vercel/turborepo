@@ -24,6 +24,7 @@ pub struct LoginOptions<'a, T: Client + TokenClient + CacheClient> {
     pub sso_team: Option<&'a str>,
     pub existing_token: Option<&'a str>,
     pub force: bool,
+    pub sso_login_callback_port: Option<u16>,
 }
 impl<'a, T: Client + TokenClient + CacheClient> LoginOptions<'a, T> {
     pub fn new(
@@ -40,6 +41,7 @@ impl<'a, T: Client + TokenClient + CacheClient> LoginOptions<'a, T> {
             sso_team: None,
             existing_token: None,
             force: false,
+            sso_login_callback_port: None,
         }
     }
 }
@@ -55,20 +57,51 @@ pub struct LogoutOptions<T> {
     pub path: Option<AbsoluteSystemPathBuf>,
 }
 
-fn extract_vercel_token() -> Result<Option<String>, Error> {
-    let vercel_config_dir =
-        turborepo_dirs::vercel_config_dir()?.ok_or_else(|| Error::ConfigDirNotFound)?;
+/// Attempts to get a valid token with automatic refresh if expired.
+/// Falls back to turborepo/config.json if refresh fails.
+pub async fn get_token_with_refresh() -> Result<Option<String>, Error> {
+    use crate::{TURBO_TOKEN_DIR, TURBO_TOKEN_FILE, Token};
 
-    let vercel_token_path =
-        vercel_config_dir.join_components(&[VERCEL_TOKEN_DIR, VERCEL_TOKEN_FILE]);
-    let contents = std::fs::read_to_string(vercel_token_path)?;
+    let vercel_config_dir = match turborepo_dirs::vercel_config_dir()? {
+        Some(dir) => dir,
+        None => return Ok(None),
+    };
 
-    #[derive(serde::Deserialize)]
-    struct VercelToken {
-        // This isn't actually dead code, it's used by serde to deserialize the JSON.
-        #[allow(dead_code)]
-        token: Option<String>,
+    let auth_path = vercel_config_dir.join_components(&[VERCEL_TOKEN_DIR, VERCEL_TOKEN_FILE]);
+
+    let auth_tokens = Token::from_auth_file(&auth_path)?;
+
+    if let Some(token) = &auth_tokens.token {
+        if auth_tokens.is_expired() {
+            // Try to refresh the token
+            if auth_tokens.refresh_token.is_some()
+                && let Ok(new_tokens) = auth_tokens.refresh_token().await
+            {
+                let _ = new_tokens.write_to_auth_file(&auth_path);
+                return Ok(new_tokens.token);
+            }
+
+            if let Ok(Some(config_dir)) = turborepo_dirs::config_dir() {
+                let turbo_config_path =
+                    config_dir.join_components(&[TURBO_TOKEN_DIR, TURBO_TOKEN_FILE]);
+                if let Ok(turbo_token) = Token::from_file(&turbo_config_path) {
+                    return Ok(Some(turbo_token.into_inner().to_string()));
+                }
+            }
+
+            Ok(None)
+        } else {
+            Ok(Some(token.clone()))
+        }
+    } else {
+        // No token in auth.json, try turborepo/config.json
+        if let Ok(Some(config_dir)) = turborepo_dirs::config_dir() {
+            let turbo_config_path =
+                config_dir.join_components(&[TURBO_TOKEN_DIR, TURBO_TOKEN_FILE]);
+            if let Ok(turbo_token) = Token::from_file(&turbo_config_path) {
+                return Ok(Some(turbo_token.into_inner().to_string()));
+            }
+        }
+        Ok(None)
     }
-
-    Ok(serde_json::from_str::<VercelToken>(&contents)?.token)
 }

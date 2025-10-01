@@ -32,7 +32,9 @@ export async function GET(req: NextApiRequest): Promise<Response> {
       ),
     ]);
 
-    const { searchParams } = new URL(req.url!);
+    // Default to empty string if URL is not available
+    const reqUrl = req.url || "";
+    const { searchParams } = new URL(reqUrl);
 
     let title: string | null = null;
 
@@ -91,7 +93,7 @@ export async function GET(req: NextApiRequest): Promise<Response> {
             }}
           >
             <div style={{ marginRight: 12 }}>by</div>
-            <VercelLogo fill="white" height={30} />
+            <VercelLogo fill="white" height={25} />
           </div>
         </div>
       ),
@@ -118,7 +120,7 @@ export async function GET(req: NextApiRequest): Promise<Response> {
       return new Response(undefined, {
         status: 302,
         headers: {
-          Location: "https://turbo.build/og-image.png",
+          Location: "https://turborepo.com/og-image.png",
         },
       });
     }

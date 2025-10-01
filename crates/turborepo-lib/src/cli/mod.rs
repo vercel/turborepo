@@ -277,7 +277,8 @@ pub struct Verbosity {
         conflicts_with = "v",
         value_name = "COUNT"
     )]
-    /// Verbosity level
+    /// Verbosity level. Useful when debugging Turborepo or creating logs for
+    /// issue reports
     pub verbosity: Option<u8>,
     #[clap(
         short = 'v',
@@ -495,10 +496,10 @@ impl Args {
 
     /// Fetch the execution args supplied to the command
     pub fn execution_args(&self) -> Option<&ExecutionArgs> {
-        if let Some(Command::Run { execution_args, .. }) = &self.command {
-            Some(execution_args)
-        } else {
-            self.execution_args.as_ref()
+        match &self.command {
+            Some(Command::Run { execution_args, .. }) => Some(execution_args),
+            Some(Command::Watch { execution_args, .. }) => Some(execution_args),
+            _ => self.execution_args.as_ref(),
         }
     }
 
@@ -610,6 +611,9 @@ pub enum Command {
         /// Set the idle timeout for turbod
         #[clap(long, default_value_t = String::from("4h0m0s"))]
         idle_time: String,
+        /// Path to a custom turbo.json file to watch from --root-turbo-json
+        #[clap(long)]
+        turbo_json_path: Option<Utf8PathBuf>,
         #[clap(subcommand)]
         command: Option<DaemonCommand>,
     },
@@ -653,7 +657,7 @@ pub enum Command {
         /// Use the given selector to specify package(s) to act as
         /// entry points. The syntax mirrors pnpm's syntax, and
         /// additional documentation and examples can be found in
-        /// turbo's documentation https://turbo.build/repo/docs/reference/command-line-reference/run#--filter
+        /// turbo's documentation https://turborepo.com/docs/reference/command-line-reference/run#--filter
         #[clap(short = 'F', long, group = "scope-filter-group")]
         filter: Vec<String>,
         /// Get insight into a specific package, such as
@@ -838,12 +842,12 @@ fn validate_graph_extension(s: &str) -> Result<String, String> {
         _ => match Utf8Path::new(s).extension() {
             Some(ext) if SUPPORTED_GRAPH_FILE_EXTENSIONS.contains(&ext) => Ok(s.to_string()),
             Some(ext) => Err(format!(
-                "Invalid file extension: '{}'. Allowed extensions are: {:?}",
-                ext, SUPPORTED_GRAPH_FILE_EXTENSIONS
+                "Invalid file extension: '{ext}'. Allowed extensions are: \
+                 {SUPPORTED_GRAPH_FILE_EXTENSIONS:?}"
             )),
             None => Err(format!(
-                "The provided filename is missing a file extension. Allowed extensions are: {:?}",
-                SUPPORTED_GRAPH_FILE_EXTENSIONS
+                "The provided filename is missing a file extension. Allowed extensions are: \
+                 {SUPPORTED_GRAPH_FILE_EXTENSIONS:?}"
             )),
         },
     }
@@ -895,7 +899,7 @@ pub struct ExecutionArgs {
     /// Use the given selector to specify package(s) to act as
     /// entry points. The syntax mirrors pnpm's syntax, and
     /// additional documentation and examples can be found in
-    /// turbo's documentation https://turbo.build/repo/docs/reference/command-line-reference/run#--filter
+    /// turbo's documentation https://turborepo.com/docs/reference/command-line-reference/run#--filter
     #[clap(short = 'F', long, group = "scope-filter-group")]
     pub filter: Vec<String>,
 
@@ -1427,15 +1431,23 @@ pub async fn run(
             Ok(clone::run(cwd, url, dir.as_deref(), *ci, *local, *depth)?)
         }
         #[allow(unused_variables)]
-        Command::Daemon { command, idle_time } => {
+        Command::Daemon {
+            command,
+            idle_time,
+            turbo_json_path,
+        } => {
             let event = CommandEventBuilder::new("daemon").with_parent(&root_telemetry);
             event.track_call();
             let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
             event.track_ui_mode(base.opts.run_opts.ui_mode);
 
             match command {
-                Some(command) => daemon::daemon_client(command, &base).await,
-                None => daemon::daemon_server(&base, idle_time, logger).await,
+                Some(command) => {
+                    daemon::daemon_client(command, &base, turbo_json_path.clone()).await
+                }
+                None => {
+                    daemon::daemon_server(&base, idle_time, turbo_json_path.clone(), logger).await
+                }
             }?;
 
             Ok(0)
@@ -1480,7 +1492,7 @@ pub async fn run(
             telemetry::configure(command, &mut base, child_event);
             Ok(0)
         }
-        Command::Scan {} => {
+        Command::Scan => {
             let event = CommandEventBuilder::new("scan").with_parent(&root_telemetry);
             event.track_call();
             let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;

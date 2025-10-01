@@ -1,8 +1,8 @@
-import classNames from "classnames";
 import {
   File as FumaFile,
   Folder as FumaFolder,
 } from "fumadocs-ui/components/files";
+import { cn } from "#components/cn.ts";
 
 export { Files } from "fumadocs-ui/components/files";
 
@@ -18,9 +18,11 @@ export function File({
 }): JSX.Element {
   return (
     <FumaFile
-      className={`${classNames({
-        "text-green-600 dark:text-green-400": green,
-      })} ${className}`}
+      // @ts-expect-error -- Not on the type...but it works.
+      className={cn(
+        green ? "text-green-700 dark:text-green-900" : "",
+        className
+      )}
       name={name}
       {...props}
     />
@@ -39,9 +41,11 @@ export function Folder({
 }): JSX.Element {
   return (
     <FumaFolder
-      className={`${classNames({
-        "text-green-600 dark:text-green-400": green,
-      })} ${className}`}
+      // @ts-expect-error -- Not on the type...but it works.
+      className={cn(
+        green ? "text-green-700 dark:text-green-900" : "",
+        className
+      )}
       name={name}
       {...props}
     />

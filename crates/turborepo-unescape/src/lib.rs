@@ -1,3 +1,6 @@
+//! Marker type for biome parsed JSON strings which are not escaped
+//! See https://github.com/biomejs/biome/issues/1596 for more information
+
 use std::{
     fmt::{self, Display},
     ops::{Deref, DerefMut},
@@ -38,7 +41,7 @@ impl DerefMut for UnescapedString {
 }
 
 fn unescape_str(s: String) -> Result<String, serde_json::Error> {
-    let wrapped_s = format!("\"{}\"", s);
+    let wrapped_s = format!("\"{s}\"");
 
     serde_json::from_str(&wrapped_s)
 }
@@ -54,7 +57,7 @@ impl Deserializable for UnescapedString {
         match unescape_str(str) {
             Ok(s) => Some(Self(s)),
             Err(e) => {
-                diagnostics.push(DeserializationDiagnostic::new(format!("{}", e)));
+                diagnostics.push(DeserializationDiagnostic::new(format!("{e}")));
                 None
             }
         }

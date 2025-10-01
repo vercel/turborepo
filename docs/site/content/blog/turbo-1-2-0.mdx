@@ -8,8 +8,8 @@ ogImage: '/images/blog/turbo-1-2-0/x-card.png'
 
 <h1 className="text-center">Turborepo 1.2</h1>
 
-import { Date } from '#/components/blog/date';
-import { Authors } from '#/components/authors';
+import { Date } from '#components/blog/date';
+import { Authors } from '#components/authors';
 
 <Date>Friday, April 8th, 2022</Date>
 
@@ -20,7 +20,7 @@ Since releasing Turborepo v1.1 in late January, we've seen incredible adoption a
 - **6.5k+** [GitHub Stars](https://github.com/vercel/turbo)
 - **140k+** weekly npm downloads (doubling since our [last blog post for v1.1](/blog/turbo-1-1-0))
 - **95+** OSS contributors
-- **900+** members of the [Turborepo Community Discord](https://turbo.build/discord)
+- **900+** members of the [Turborepo Community Discord](https://turborepo.com/discord)
 - **1.6 years** of Time Saved through Remote Caching on Vercel, saving more than 2.5 months every week
 
 We've further improved ergonomics, observability, and security with Turborepo v1.2 featuring:
@@ -58,7 +58,7 @@ turbo run test --filter={./apps/web}[HEAD^1]^...
 
 would tell `turbo` to ensure dependencies are built and to run the `test` script in all of the local dependencies of the app located in `./apps/web`, not including that app itself, if the app has changed since HEAD^1.
 
-For more details and examples, refer to the new [filtering documentation](/repo/docs/crafting-your-repository/running-tasks#using-filters).
+For more details and examples, refer to the new [filtering documentation](/docs/crafting-your-repository/running-tasks#using-filters).
 
 ## Debug and Automate with `--dry-run`
 
@@ -91,7 +91,7 @@ To enable this feature, set the `remoteCache` options in your `turbo.json` confi
 
 ```jsonc title="./turbo.json"
 {
-  "$schema": "[https://turbo.build/schema.json](https://turbo.build/schema.json)",
+  "$schema": "[https://turborepo.com/schema.json](https://turborepo.com/schema.json)",
   "remoteCache": {
     // Indicates if signature verification is enabled.
     "signature": true

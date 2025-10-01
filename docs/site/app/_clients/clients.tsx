@@ -1,20 +1,19 @@
-import type { ReactElement, JSX } from "react";
-import React from "react";
-import cn from "classnames";
+"use client";
+
+import type { ReactElement } from "react";
+import React, { useEffect, useState } from "react";
+import { useTheme } from "next-themes";
+import { cn } from "#components/cn.ts";
 import { users } from "./users";
 import { Logo } from "./client-logo";
 
 interface LogoWrapperProps {
   className: string;
-  children: JSX.Element;
+  children: ReactElement;
   staticWidth?: boolean;
 }
 
-function LogoWrapper({
-  className,
-  children,
-  staticWidth,
-}: LogoWrapperProps): JSX.Element {
+function LogoWrapper({ className, children, staticWidth }: LogoWrapperProps) {
   if (!staticWidth) return children;
   return (
     <div
@@ -32,40 +31,37 @@ export function Clients({
 }: {
   linked?: boolean;
   staticWidth?: boolean;
-  companyList?: string[];
-}): JSX.Element {
-  const showcaseDark: ReactElement[] = [];
-  const showcaseLight: ReactElement[] = [];
+  companyList?: Array<string>;
+}) {
+  const [mounted, setMounted] = useState(false);
+  const { resolvedTheme } = useTheme();
 
-  users
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // avoid hydration errors
+  if (!mounted) return null;
+
+  return users
     .filter((i) => (companyList ? companyList.includes(i.caption) : true))
-    .forEach((user) => {
-      if (user.pinned) {
-        showcaseDark.push(
-          <LogoWrapper
-            className="flex dark:hidden"
-            key={`${user.caption}-dark`}
-            staticWidth={staticWidth}
-          >
-            <Logo isLink={linked ?? false} theme="dark" user={user} />
-          </LogoWrapper>
-        );
-        showcaseLight.push(
-          <LogoWrapper
-            className="hidden dark:flex"
-            key={`${user.caption}-light`}
-            staticWidth={staticWidth}
-          >
-            <Logo isLink={linked ?? false} theme="light" user={user} />
-          </LogoWrapper>
-        );
-      }
-    });
+    .map((user) => {
+      const isDark = resolvedTheme === "dark";
+      const imgTheme = isDark ? "light" : "dark";
 
-  return (
-    <>
-      {showcaseDark}
-      {showcaseLight}
-    </>
-  );
+      return (
+        <LogoWrapper
+          className={isDark ? "hidden dark:flex" : "dark:hidden flex"}
+          key={`${user.caption}-${imgTheme}`}
+          staticWidth={staticWidth}
+        >
+          <Logo
+            className={isDark ? "hidden dark:flex" : "dark:hidden flex"}
+            isLink={linked ?? false}
+            theme={imgTheme}
+            user={user}
+          />
+        </LogoWrapper>
+      );
+    });
 }

@@ -6,15 +6,15 @@ use thiserror::Error;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 use turborepo_api_client::APIAuth;
 use turborepo_cache::{CacheOpts, RemoteCacheOpts};
+use turborepo_task_id::{TaskId, TaskName};
 
 use crate::{
     cli::{
         Command, ContinueMode, DryRunMode, EnvMode, ExecutionArgs, LogOrder, LogPrefix,
         OutputLogsMode, RunArgs,
     },
-    config::ConfigurationOptions,
-    run::task_id::{TaskId, TaskName},
-    turbo_json::{UIMode, CONFIG_FILE},
+    config::{ConfigurationOptions, CONFIG_FILE},
+    turbo_json::{FutureFlags, UIMode},
     Args,
 };
 
@@ -55,6 +55,7 @@ pub struct APIClientOpts {
     pub team_slug: Option<String>,
     pub login_url: String,
     pub preflight: bool,
+    pub sso_login_callback_port: Option<u16>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -75,6 +76,8 @@ pub struct Opts {
     pub run_opts: RunOpts,
     pub runcache_opts: RunCacheOpts,
     pub scope_opts: ScopeOpts,
+    pub tui_opts: TuiOpts,
+    pub future_flags: FutureFlags,
 }
 
 impl Opts {
@@ -177,6 +180,8 @@ impl Opts {
         let runcache_opts = RunCacheOpts::from(inputs);
         let api_client_opts = APIClientOpts::from(inputs);
         let repo_opts = RepoOpts::from(inputs);
+        let tui_opts = TuiOpts::from(inputs);
+        let future_flags = config.future_flags();
 
         Ok(Self {
             repo_opts,
@@ -185,6 +190,8 @@ impl Opts {
             scope_opts,
             runcache_opts,
             api_client_opts,
+            tui_opts,
+            future_flags,
         })
     }
 }
@@ -244,7 +251,7 @@ pub struct TaskArgs<'a> {
 }
 
 impl RunOpts {
-    pub fn task_args(&self) -> TaskArgs {
+    pub fn task_args(&self) -> TaskArgs<'_> {
         TaskArgs {
             pass_through_args: &self.pass_through_args,
             tasks: &self.tasks,
@@ -309,7 +316,7 @@ impl<'a> TryFrom<OptsInputs<'a>> for RunOpts {
 
     fn try_from(inputs: OptsInputs) -> Result<Self, Self::Error> {
         let concurrency = inputs
-            .execution_args
+            .config
             .concurrency
             .as_deref()
             .map(parse_concurrency)
@@ -446,6 +453,7 @@ impl<'a> From<OptsInputs<'a>> for APIClientOpts {
         let team_id = inputs.config.team_id().map(|s| s.to_string());
         let team_slug = inputs.config.team_slug().map(|s| s.to_string());
         let login_url = inputs.config.login_url().to_string();
+        let sso_login_callback_port = inputs.config.sso_login_callback_port();
 
         APIClientOpts {
             api_url,
@@ -456,6 +464,7 @@ impl<'a> From<OptsInputs<'a>> for APIClientOpts {
             team_slug,
             login_url,
             preflight,
+            sso_login_callback_port,
         }
     }
 }
@@ -539,6 +548,19 @@ impl ScopeOpts {
     }
 }
 
+#[derive(Clone, Debug, Serialize)]
+pub struct TuiOpts {
+    pub(crate) scrollback_length: u64,
+}
+
+impl<'a> From<OptsInputs<'a>> for TuiOpts {
+    fn from(inputs: OptsInputs) -> Self {
+        TuiOpts {
+            scrollback_length: inputs.config.tui_scrollback_length(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use clap::Parser;
@@ -548,16 +570,16 @@ mod test {
     use test_case::test_case;
     use turbopath::AbsoluteSystemPathBuf;
     use turborepo_cache::{CacheActions, CacheConfig, CacheOpts};
+    use turborepo_task_id::TaskId;
     use turborepo_ui::ColorConfig;
 
     use super::{APIClientOpts, RepoOpts, RunOpts, TaskArgs};
     use crate::{
         cli::{Command, ContinueMode, DryRunMode, RunArgs},
         commands::CommandBase,
-        config::ConfigurationOptions,
-        opts::{Opts, RunCacheOpts, ScopeOpts},
-        run::task_id::TaskId,
-        turbo_json::{UIMode, CONFIG_FILE},
+        config::{ConfigurationOptions, CONFIG_FILE},
+        opts::{Opts, RunCacheOpts, ScopeOpts, TuiOpts},
+        turbo_json::UIMode,
         Args,
     };
 
@@ -702,6 +724,10 @@ mod test {
             .root_turbo_json_path(&AbsoluteSystemPathBuf::default())
             .unwrap_or_else(|_| AbsoluteSystemPathBuf::default().join_component(CONFIG_FILE));
 
+        let tui_opts = TuiOpts {
+            scrollback_length: 2048,
+        };
+
         let opts = Opts {
             repo_opts: RepoOpts {
                 root_turbo_json_path,
@@ -717,11 +743,14 @@ mod test {
                 team_slug: None,
                 login_url: "".to_string(),
                 preflight: false,
+                sso_login_callback_port: None,
             },
             scope_opts,
             run_opts,
             cache_opts,
             runcache_opts,
+            tui_opts,
+            future_flags: Default::default(),
         };
         let synthesized = opts.synthesize_command();
         assert_eq!(synthesized, expected);

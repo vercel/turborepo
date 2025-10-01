@@ -1,5 +1,6 @@
 function testPlatform(re: RegExp): boolean | undefined {
-  return typeof window !== "undefined" && window.navigator != null
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition, eqeqeq -- Meaningfully different
+  return window.navigator != null
     ? re.test(window.navigator.platform)
     : undefined;
 }

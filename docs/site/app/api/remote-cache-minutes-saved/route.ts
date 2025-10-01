@@ -3,12 +3,12 @@ export const revalidate = 5;
 export const pathKey = `https://api.us-east.tinybird.co/v0/pipes/turborepo_time_saved_ticker.json?token=${process.env.TINYBIRD_TIME_SAVED_TOKEN}`;
 
 interface QueryResponse {
-  meta: { name: string; type: string }[];
-  data: {
+  meta: Array<{ name: string; type: string }>;
+  data: Array<{
     last_update_time: string;
     remote_cache_minutes_saved: number;
     local_cache_minutes_saved: number;
-  }[];
+  }>;
   rows: number;
   statistics: {
     elapsed: number;
@@ -27,9 +27,9 @@ export const getRemoteCacheSavedMinutes =
   async (): Promise<TurborepoMinutesSaved> => {
     if (!process.env.VERCEL && !process.env.TINYBIRD_TIME_SAVED_TOKEN) {
       return {
-        total: 100000,
-        remoteCacheMinutesSaved: 50000,
-        localCacheMinutesSaved: 50000,
+        total: 100000000,
+        remoteCacheMinutesSaved: 50000000,
+        localCacheMinutesSaved: 50000000,
       };
     }
 
@@ -40,11 +40,9 @@ export const getRemoteCacheSavedMinutes =
     const data = raw.data[0];
 
     return {
-      total:
-        (data?.remote_cache_minutes_saved ?? 0) +
-        (data?.local_cache_minutes_saved ?? 0),
-      remoteCacheMinutesSaved: data?.remote_cache_minutes_saved ?? 0,
-      localCacheMinutesSaved: data?.local_cache_minutes_saved ?? 0,
+      total: data.remote_cache_minutes_saved + data.local_cache_minutes_saved,
+      remoteCacheMinutesSaved: data.remote_cache_minutes_saved,
+      localCacheMinutesSaved: data.local_cache_minutes_saved,
     };
   };
 

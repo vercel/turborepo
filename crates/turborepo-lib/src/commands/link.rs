@@ -76,7 +76,7 @@ pub(crate) const REMOTE_CACHING_INFO: &str =
     "Remote Caching makes your caching multiplayer,\nsharing build outputs and logs between \
      developers and CI/CD systems.\n\nBuild and deploy faster.";
 pub(crate) const REMOTE_CACHING_URL: &str =
-    "https://turbo.build/repo/docs/core-concepts/remote-caching";
+    "https://turborepo.com/docs/core-concepts/remote-caching";
 
 /// Verifies that caching status for a team is enabled, or prompts the user to
 /// enable it.
@@ -153,14 +153,24 @@ pub async fn link(
     let homedir = homedir_path.to_string_lossy();
     let repo_root_with_tilde = base.repo_root.to_string().replacen(&*homedir, "~", 1);
     let api_client = base.api_client()?;
-    let token = base
-        .opts()
-        .api_client_opts
-        .token
-        .as_deref()
-        .ok_or_else(|| Error::TokenNotFound {
-            command: base.color_config.apply(BOLD.apply_to("`npx turbo login`")),
-        })?;
+
+    // Always try to get a valid token with automatic refresh if expired
+    let token = match turborepo_auth::get_token_with_refresh().await {
+        Ok(Some(refreshed_token)) => {
+            // Store the refreshed token temporarily for this command
+            Box::leak(refreshed_token.into_boxed_str())
+        }
+        Ok(None) | Err(_) => {
+            // Fall back to the token from config/CLI if refresh logic didn't work
+            base.opts()
+                .api_client_opts
+                .token
+                .as_deref()
+                .ok_or_else(|| Error::TokenNotFound {
+                    command: base.color_config.apply(BOLD.apply_to("`npx turbo login`")),
+                })?
+        }
+    };
 
     println!(
         "\n{}\n\n{}\n\nFor more information, visit: {}\n",
@@ -221,11 +231,7 @@ pub async fn link(
     let no_preexisting_slug =
         unset_path(&no_preexisting_id, &["teamslug"], false)?.unwrap_or(no_preexisting_id);
 
-    let after = set_path(
-        &no_preexisting_slug,
-        &["teamId"],
-        &format!("\"{}\"", team_id),
-    )?;
+    let after = set_path(&no_preexisting_slug, &["teamId"], &format!("\"{team_id}\""))?;
     let local_config_path = base.local_config_path();
     local_config_path
         .ensure_dir()
@@ -347,7 +353,7 @@ fn should_link_remote_cache(base: &CommandBase, location: &str) -> Result<bool, 
 fn enable_caching(url: &str) -> Result<(), Error> {
     webbrowser::open(url).map_err(|err| Error::OpenBrowser(url.to_string(), err))?;
 
-    println!("Visit {} in your browser to enable Remote Caching", url);
+    println!("Visit {url} in your browser to enable Remote Caching");
 
     // We return an error no matter what
     Err(Error::EnableCaching)

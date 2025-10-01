@@ -3,7 +3,10 @@ import Image from "next/image";
 
 type ImageProps = Parameters<typeof Image>[0];
 
-export type ImageFigureProps = ImageProps & {
+export type ImageFigureProps = Omit<
+  ImageProps,
+  "caption" | "margin" | "captionSpacing" | "shadow" | "alt" | "borderRadius"
+> & {
   caption?: string;
   margin?: number;
   captionSpacing?: number;

@@ -1,4 +1,4 @@
-use serde::{ser::SerializeTuple, Serialize};
+use serde::{Serialize, ser::SerializeTuple};
 
 use super::PackageEntry;
 
@@ -103,6 +103,16 @@ mod test {
                 dependencies: Some(("is-number".into(), "^6.0.0".into()))
                     .into_iter()
                     .collect(),
+                dev_dependencies: Some(("is-bigint".into(), "1.1.0".into()))
+                    .into_iter()
+                    .collect(),
+                peer_dependencies: Some(("is-even".into(), "1.0.0".into()))
+                    .into_iter()
+                    .collect(),
+                optional_peers: Some("is-even".into()).into_iter().collect(),
+                optional_dependencies: Some(("is-regexp".into(), "1.0.0".into()))
+                    .into_iter()
+                    .collect(),
                 ..Default::default()
             }),
             checksum: Some("sha".into()),
@@ -143,7 +153,7 @@ mod test {
     );
     #[test_case(json!({"name": "bun-test", "devDependencies": {"turbo": "^2.3.3"}}), basic_workspace() ; "basic")]
     #[test_case(json!({"name": "docs", "version": "0.1.0"}), workspace_with_version() ; "with version")]
-    #[test_case(json!(["is-odd@3.0.1", "", {"dependencies": {"is-number": "^6.0.0"}}, "sha"]), registry_pkg() ; "registry package")]
+    #[test_case(json!(["is-odd@3.0.1", "", {"dependencies": {"is-number": "^6.0.0"}, "devDependencies": {"is-bigint": "1.1.0"}, "peerDependencies": {"is-even": "1.0.0"}, "optionalDependencies": {"is-regexp": "1.0.0"}, "optionalPeers": ["is-even"]}, "sha"]), registry_pkg() ; "registry package")]
     #[test_case(json!(["docs", {"dependencies": {"is-odd": "3.0.1"}}]), workspace_pkg() ; "workspace package")]
     #[test_case(json!(["some-package@root:", {"bin": "bin", "binDir": "binDir"}]), root_pkg() ; "root package")]
     fn test_serialization<T: Serialize + PartialEq + std::fmt::Debug>(

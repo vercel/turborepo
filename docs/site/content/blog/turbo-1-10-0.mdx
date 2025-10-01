@@ -8,10 +8,10 @@ ogImage: '/images/blog/turbo-1-10-0/x-card.png'
 
 <h1 className="text-center">Turborepo 1.10</h1>
 
-import { Authors } from '#/components/authors';
-import { Callout } from '#/components/callout';
-import { ThemeAwareImage } from '#/components/theme-aware-image';
-import { Date } from '#/components/blog/date';
+import { Authors } from '#components/authors';
+import { Callout } from '#components/callout';
+import { ThemeAwareImage } from '#components/theme-aware-image';
+import { Date } from '#components/blog/date';
 
 <Date>Thursday, June 1st, 2023</Date>
 
@@ -57,10 +57,10 @@ Turborepo Generators allow you to add new code to your repository in a predictab
 Previously, you would need to copy code yourself and manually add dependencies to your new workspace. With Generators,
 we've automated the process of creating new workspaces and integrating them into your repository.
 
-You can [create a blank workspace from scratch](/repo/docs/guides/generating-code#add-an-empty-workspace), [copy an existing workspace](/repo/docs/guides/generating-code#copy-an-existing-workspace), or even create custom generators
+You can [create a blank workspace from scratch](/docs/guides/generating-code#add-an-empty-package), [copy an existing workspace](/docs/guides/generating-code#copy-an-existing-package), or even create custom generators
 for more control. Custom generators leverage [Plop](https://plopjs.com/) configurations, a common template definition strategy used in the JavaScript ecosystem.
 
-[Custom generators](/repo/docs/guides/generating-code#custom-generators) can also be used to scaffold more granular sets of code than workspaces. You can significantly speed up tasks like:
+[Custom generators](/docs/guides/generating-code#custom-generators) can also be used to scaffold more granular sets of code than workspaces. You can significantly speed up tasks like:
 
 - [Adding new components to your UI library](https://github.com/vercel/turbo/blob/main/examples/basic/packages/ui/turbo/generators/config.ts)
 - Creating new unit tests
@@ -72,13 +72,13 @@ Get started with your first generator by running:
 turbo gen
 ```
 
-For more, check out the [documentation](/repo/docs/guides/generating-code).
+For more, check out the [documentation](/docs/guides/generating-code).
 
 ## Improved Environment Variable Inputs
 
 ### Support for `.env` files
 
-[`.env` files](https://www.dotenv.org/docs/) are commonly used to load environment variables. This can cause problems when running with `turbo`, because these variables can be [invisible](/repo/docs/crafting-your-repository/using-environment-variables#avoid-creating-or-mutating-environment-variables-at-runtime), and are not easily
+[`.env` files](https://www.dotenv.org/docs/) are commonly used to load environment variables. This can cause problems when running with `turbo`, because these variables can be [invisible](/docs/crafting-your-repository/using-environment-variables#avoid-creating-or-mutating-environment-variables-at-runtime), and are not easily
 included in the hash for your task. This problem could cause unintended cache hits while working locally.
 
 Turborepo now makes this much easier with automatic support for `.env` files.
@@ -87,7 +87,7 @@ To ensure that Turborepo includes these variables in your hash, use the `dotEnv`
 
 ```json title="./turbo.json"
 {
-  "$schema": "https://turbo.build/schema.json",
+  "$schema": "https://turborepo.com/schema.json",
   "globalDotEnv": [".env"],
   "pipeline": {
     "build": {
@@ -117,12 +117,12 @@ To ensure that Turborepo includes these variables in your hash, use the `dotEnv`
   This feature does **not** handle system environment variables. If you are not
   using `.env` files outside of development, make sure your environment
   variables are still enumerated in either
-  [env](/repo/docs/reference/configuration#env), or
-  [globalEnv](/repo/docs/reference/configuration#globalenv) to ensure they are
+  [env](/docs/reference/configuration#env), or
+  [globalEnv](/docs/reference/configuration#globalenv) to ensure they are
   included in your hash.
 </Callout>
 
-For more, check out the [documentation](/repo/docs/reference/configuration#dotenv).
+For more, check out the documentation.
 
 ### Environment Variable Wildcards
 
@@ -132,7 +132,7 @@ With wildcards, you can now specify patterns of variables to include in your has
 
 ```json title="./turbo.json"
 {
-  "$schema": "https://turbo.build/schema.json",
+  "$schema": "https://turborepo.com/schema.json",
   "pipeline": {
     "build": {
       "env": ["ACME_*"]
@@ -141,7 +141,7 @@ With wildcards, you can now specify patterns of variables to include in your has
 }
 ```
 
-For more, check out the [documentation](/repo/docs/crafting-your-repository/using-environment-variables#wildcards).
+For more, check out the [documentation](/docs/reference/configuration#wildcards).
 
 ### Environment modes
 
@@ -150,9 +150,9 @@ Turborepo environment modes are now out of experimental mode and are available f
 By default, and when `turbo run` is invoked with `--env-mode=loose`, all environment variables from the machine are made available to every single Turborepo task.
 This ensures the greatest compatibility while accepting some risk that a task will implicitly have access to a environment variable that is not specified in your `turbo.json`.
 
-In the new strict mode, when `turbo` is invoked with `--env-mode=strict`, only [important system environment variables](/repo/docs/reference/system-environment-variables) and environment variables enumerated inside of `turbo.json` will be made available to a task.
+In the new strict mode, when `turbo` is invoked with `--env-mode=strict`, only [important system environment variables](/docs/reference/system-environment-variables) and environment variables enumerated inside of `turbo.json` will be made available to a task.
 
-For more, check out the [documentation](/repo/docs/crafting-your-repository/using-environment-variables#environment-modes).
+For more, check out the [documentation](/docs/crafting-your-repository/using-environment-variables#environment-modes).
 
 ## Community
 

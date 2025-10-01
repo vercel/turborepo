@@ -1,0 +1,225 @@
+---
+title: Caching
+description: Learn about caching in Turborepo.
+---
+
+import { Step, Steps } from '#components/steps';
+import { PackageManagerTabs, Tab } from '#components/tabs';
+import { Callout } from '#components/callout';
+
+Turborepo uses caching to speed up builds, ensuring you **never do the same work twice**. When your task is cacheable, Turborepo will restore the results of your task from cache using a fingerprint from the first time the task ran.
+
+![12 tasks are being ran in 3 packages, resulting in a ">>> FULL TURBO" cache hit. The total time it takes to restore these tasks from cache is 80 milliseconds.](/images/docs/why-turborepo-solution.png)
+
+Turborepo's caching results in significant time savings when working locally - and is even more powerful when [Remote Caching](/docs/core-concepts/remote-caching) is enabled, sharing a cache among your entire team and CI.
+
+On this page, you'll learn:
+
+- [How to hit your first Turborepo cache](#hit-your-first-turborepo-cache)
+- [How to enable Remote Caching](/docs/core-concepts/remote-caching)
+- [What Turborepo uses for the inputs and outputs to a hash](/docs/crafting-your-repository/caching#task-inputs)
+- [How to troubleshoot caching issues](#troubleshooting)
+
+<Callout type="good-to-know">
+  Turborepo assumes that your tasks are **deterministic**. If a task is able to
+  produce different outputs given the set of inputs that Turborepo is aware of,
+  caching may not work as expected.
+</Callout>
+
+## Hit your first Turborepo cache
+
+You can try out Turborepo's caching behavior in three steps:
+
+<Steps>
+<Step>
+### Create a new Turborepo project
+
+Use `npx create-turbo@latest` and follow the prompts to create a new Turborepo.
+
+```bash title="Terminal"
+npx create-turbo@latest
+```
+
+</Step>
+<Step>
+### Run a build for the first time
+
+If you have [`turbo` installed globally](/docs/getting-started/installation#global-installation), run `turbo build` in your repository.
+
+Alternatively, you can run the `build` script in `package.json` using your package manager.
+
+<PackageManagerTabs>
+
+<Tab value="pnpm">
+```bash title="Terminal"
+pnpm run build
+```
+
+</Tab>
+
+<Tab value="yarn">
+```bash title="Terminal"
+yarn build
+```
+
+</Tab>
+
+<Tab value="npm">
+
+```bash title="Terminal"
+npm run build
+```
+
+</Tab>
+
+<Tab value="bun (Beta)">
+
+```bash title="Terminal"
+bun run build
+```
+
+</Tab>
+</PackageManagerTabs>
+
+This will result in a cache miss, since you've never ran `turbo` before with this [set of inputs](/docs/crafting-your-repository/caching#task-inputs) in this repository. The inputs are turned into a hash to check for in your local filesystem cache or in [the Remote Cache](/docs/core-concepts/remote-caching).
+
+</Step>
+
+<Step>
+
+### Hit the cache
+
+Run `turbo build` again. You will see a message like this:
+
+![A terminal window showing two tasks that have been ran through `turbo`. They successfully complete in 116 milliseconds.](/images/docs/full-turbo.png)
+
+</Step>
+
+</Steps>
+
+Because the inputs' fingerprint is already in the cache, there's no reason to rebuild your applications from zero again. You can restore the results of the previous build from cache, saving resources and time.
+
+## Remote Caching
+
+Turborepo stores the results of tasks in the `.turbo/cache` directory on your machine. However, you can make your entire organization even faster by sharing this cache with your teammates and CI.
+
+To learn more about Remote Caching and its benefits, visit the [Remote Caching page](/docs/core-concepts/remote-caching).
+
+### Enabling Remote Cache
+
+First, authenticate with your Remote Cache provider:
+
+```bash title="Terminal"
+npx turbo login
+```
+
+Then, link the repository on your machine to Remote Cache:
+
+```bash title="Terminal"
+npx turbo link
+```
+
+Now, when you run a task, Turborepo will automatically send the outputs of the task to Remote Cache. If you run the same task on a different machine that is also authenticated to your Remote Cache, it will hit cache the first time it runs the task.
+
+For information on how to connect your CI machines to Remote Cache, visit [the Constructing CI guide](/docs/crafting-your-repository/constructing-ci#enabling-remote-caching).
+
+<Callout type="info">
+  By default, Turborepo uses [Vercel Remote
+  Cache](https://vercel.com/docs/monorepos/remote-caching) with zero
+  configuration. If you'd like to use a different Remote Cache, visit the
+  [Remote Caching API
+  documentation](/docs/core-concepts/remote-caching#self-hosting)
+</Callout>
+
+## What gets cached?
+
+Turborepo caches two types of outputs: Task outputs and Logs.
+
+### Task outputs
+
+Turborepo caches the file outputs of a task that are defined in [the `outputs` key](/docs/reference/configuration#outputs) of `turbo.json`. When there's a cache hit, Turborepo will restore the files from the cache.
+
+The `outputs` key is optional, see [the API reference](/docs/reference/configuration#outputs) for how Turborepo behaves in this case.
+
+<Callout type="warn" title="Providing file outputs">
+If you do not declare file outputs for a task, Turborepo will not cache them. This might be okay for some tasks (like linters) - but many tasks produce files that you will want to be cached.
+
+If you're running into errors with files not being available when you hit cache, make sure that you have defined the outputs for your task.
+
+</Callout>
+
+### Logs
+
+Turborepo always captures the terminal outputs of your tasks, restoring those logs to your terminal from the first time that the task ran.
+
+You can configure the verbosity of the replayed logs using [the `--output-logs` flag](/docs/reference/run#--output-logs-option) or [`outputLogs` configuration option](/docs/reference/configuration#outputlogs).
+
+## Task inputs
+
+Inputs are hashed by Turborepo, creating a "fingerprint" for the task run. When "fingerprints" match, running the task will hit the cache.
+
+Under the hood, Turborepo creates two hashes: a global hash and a task hash. If either of the hashes change, the task will miss cache.
+
+### Global hash inputs
+
+| Input                                                                                  | Example                                                                                                                                                    |
+| -------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Resolved task definition from root `turbo.json`<br /> and package `turbo.json`         | Changing [`outputs`](/docs/reference/configuration#outputs) in either root `turbo.json` or [Package Configuration](/docs/reference/package-configurations) |
+| Lockfile changes that affect the Workspace root                                        | Updating dependencies in root `package.json` will cause **all** tasks to miss cache                                                                        |
+| [`globalDependencies`](/docs/reference/configuration#globaldependencies) file contents | Changing `./.env` when it is listed in `globalDependencies` will cause **all** tasks to miss cache                                                         |
+| Values of variables listed in [`globalEnv`](/docs/reference/configuration#globalenv)   | Changing the value of `GITHUB_TOKEN` when it is listed in `globalEnv`                                                                                      |
+| Flag values that affect task runtime                                                   | Using behavior-changing flags like `--cache-dir`, `--framework-inference`, or `--env-mode`                                                                 |
+| Arbitrary passthrough arguments                                                        | `turbo build -- --arg=value` will miss cache compared to `turbo build` or `turbo build -- --arg=diff`                                                      |
+
+### Package hash inputs
+
+| Input                                                                   | Example                                                 |
+| ----------------------------------------------------------------------- | ------------------------------------------------------- |
+| [Package Configuration](/docs/reference/package-configurations) changes | Changing a package's `turbo.json`                       |
+| Lockfile changes that affect the package                                | Updating dependencies in a package's `package.json`     |
+| Package's `package.json` changes                                        | Updating the `name` field in a package's `package.json` |
+| File changes in source control                                          | Writing new code in `src/index.ts`                      |
+
+## Troubleshooting
+
+### Using dry runs
+
+Turborepo has a [`--dry` flag](/docs/reference/run#--dry----dry-run) that can be used to see what would happen if you ran a task without actually running it. This can be useful for debugging caching issues when you're not sure which tasks you're running.
+
+For more details, visit the [`--dry` API reference](/docs/reference/run#--dry----dry-run).
+
+### Using Run Summaries
+
+Turborepo has a [`--summarize` flag](/docs/reference/run#--summarize) that can be used to get an overview of all of a task's inputs, outputs, and more. Comparing two summaries will show why two task's hashes are different. This can be useful for:
+
+- Debugging inputs: There are many inputs to a task in Turborepo. If a task is missing cache when you expect it to hit, you can use a Run Summary to check which inputs are different that you weren't expecting.
+- Debugging outputs: If cache hits aren't restoring the files you're expecting, a Run Summary can help you understand what outputs are being restored from cache.
+
+<Callout type="info" title="Summaries viewer">
+  While there is not a Turborepo-native Run Summaries UI viewer, we encourage
+  you to use the community-built
+  [https://turbo.nullvoxpopuli.com](https://turbo.nullvoxpopuli.com) if you
+  would like to view your Run Summaries as a web view.
+</Callout>
+
+### Turning off caching
+
+Sometimes, you may not want to write the output of tasks to the cache. This can be set permanently for a task using [`"cache": false`](/docs/reference/configuration#cache) or for a whole run using [ the `--cache <options>` flag](/docs/reference/run#--no-cache).
+
+### Overwriting a cache
+
+If you want to force `turbo` to re-execute a task that has been cached, use [the `--force` flag](/docs/reference/run#--force). Note that this disables **reading** the cache, **not writing**.
+
+### Caching a task is slower than executing the task
+
+It's possible to create scenarios where caching ends up being slower than not caching. These cases are rare, but a few examples include:
+
+- **Tasks that execute extremely fast**: If a task executes faster than a network round-trip to the [Remote Cache](/docs/core-concepts/remote-caching), you should consider not caching the task.
+- **Tasks whose output assets are enormous**: It's possible to create an artifact that is so big that the time to upload or download it exceeds the time to regenerate it, like a complete Docker Container. In these cases, you should consider not caching the task.
+- **Scripts that have their own caching**: Some tasks have their own internal caching behavior. In these cases, configuration can quickly become complicated to make Turborepo's cache and the application cache work together.
+
+While these situations are rare, be sure to test the behavior of your projects to determine if disabling caching in specific places provides a performance benefit.
+
+## Next steps
+
+Now that you've seen how Turborepo's caching makes your repository faster, let's take a look at how to develop applications and libraries in your Turborepo.

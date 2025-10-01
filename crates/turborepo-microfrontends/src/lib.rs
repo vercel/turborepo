@@ -1,3 +1,12 @@
+//! `@vercel/microfrontends` configuration parsing
+//! This crate is only concerned with parsing the minimal amount of information
+//! that Turborepo needs to correctly invoke a local proxy. This allows this
+//! crate to avoid being kept in lock step with `@vercel/microfrontends`.
+//!
+//! The information required for the local proxy is the default package and the
+//! package names that are a part of microfrontend and their development task
+//! names.
+
 #![feature(assert_matches)]
 #![deny(clippy::all)]
 mod configv1;
@@ -23,14 +32,23 @@ pub const SUPPORTED_VERSIONS: &[&str] = ["1"].as_slice();
 
 /// The minimal amount of information Turborepo needs to correctly start a local
 /// proxy server for microfrontends
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Config {
     inner: ConfigInner,
     filename: String,
     path: Option<AnchoredSystemPathBuf>,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+pub struct DevelopmentTask<'a> {
+    // The key in the applications object in microfrontends.json
+    // This will match package unless packageName is provided
+    pub application_name: &'a str,
+    pub package: &'a str,
+    pub task: Option<&'a str>,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
 enum ConfigInner {
     V1(ConfigV1),
 }
@@ -103,9 +121,7 @@ impl Config {
         })
     }
 
-    pub fn development_tasks<'a>(
-        &'a self,
-    ) -> Box<dyn Iterator<Item = (&'a str, Option<&'a str>)> + 'a> {
+    pub fn development_tasks<'a>(&'a self) -> Box<dyn Iterator<Item = DevelopmentTask<'a>> + 'a> {
         match &self.inner {
             ConfigInner::V1(config_v1) => Box::new(config_v1.development_tasks()),
         }

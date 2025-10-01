@@ -5,5 +5,5 @@ export const PRODUCT_SLOGANS = {
 } as const;
 
 export const gitHubRepoUrl = "https://github.com/vercel/turborepo";
-export const PRODUCT_DOMAIN = "turbo.build";
+export const PRODUCT_DOMAIN = "turborepo.com";
 export const PREVIEW_DOMAIN_SUFFIX = "vercel.sh";

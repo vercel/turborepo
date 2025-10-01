@@ -8,9 +8,9 @@ ogImage: '/images/blog/turbo-1-9-0/x-card.png'
 
 <h1 className="text-center">Turborepo 1.9</h1>
 
-import { Authors } from '#/components/authors';
-import { ExperimentalBadge } from '#/components/experimental-badge';
-import { Date } from '#/components/blog/date';
+import { Authors } from '#components/authors';
+import { ExperimentalBadge } from '#components/experimental-badge';
+import { Date } from '#components/blog/date';
 
 <Date>Monday, April 11th, 2023</Date>
 
@@ -32,7 +32,7 @@ Turborepo 1.9 focuses on improving observability for your task runs to better un
 
 - [**Run Summaries**](#view-and-compare-task-runs): Use the `--summarize` flag to generate a summary of your task to compare against previous runs.
 - [**Easier Starters**](#bring-your-own-starter): Use the `--example` flag with `npx create-turbo` to start from official Turborepo examples or custom repositories.
-- [**Strict Environments** <ExperimentalBadge isLink={false} />](#strict-environments): Try enabling strict mode to restrict the environment variables your tasks have access to.
+- [**Strict Environments** <ExperimentalBadge isLink={false} />](#strict-environments-experimental): Try enabling strict mode to restrict the environment variables your tasks have access to.
 
 Update today by running `npx @turbo/codemod migrate`.
 
@@ -55,7 +55,7 @@ Summary:  /Users/acme/projects/acme/.turbo/runs/2Nn3X6nWDhP9ag8BnmivWRxHpHC.json
 
 You can then compare summaries using your favorite JSON diffing tool to understand why you got a cache hit or a cache miss.
 
-Learn more in the [docs](/repo/docs/reference/run#--summarize).
+Learn more in the [docs](/docs/reference/run#--summarize).
 
 ## Bring your own starter
 
@@ -106,7 +106,7 @@ In `strict` mode, this configuration will only expose four environment variables
 
 `--env-mode` also supports `loose` and `infer`.
 
-Learn more in the [docs](/repo/docs/reference/run#--env-mode).
+Learn more in the [docs](/docs/reference/run#--env-mode-option).
 
 ## Community
 

@@ -1,8 +1,8 @@
 use std::{
     collections::{HashMap, HashSet},
     sync::{
-        atomic::{AtomicUsize, Ordering},
         Arc,
+        atomic::{AtomicUsize, Ordering},
     },
     time::Duration,
 };
@@ -17,14 +17,14 @@ use tokio::{
 use tracing::{debug, trace};
 use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf};
 use turborepo_repository::discovery::DiscoveryResponse;
-use turborepo_scm::{package_deps::INPUT_INCLUDE_DEFAULT_FILES, Error as SCMError, GitHashes, SCM};
+use turborepo_scm::{Error as SCMError, GitHashes, SCM};
 
 use crate::{
+    NotifyError, OptionalWatch,
     debouncer::Debouncer,
     globwatcher::{GlobError, GlobSet},
     package_watcher::DiscoveryData,
     scm_resource::SCMResource,
-    NotifyError, OptionalWatch,
 };
 
 pub struct HashWatcher {
@@ -41,15 +41,15 @@ pub enum InputGlobs {
 }
 
 impl InputGlobs {
-    pub fn from_raw(mut raw: Vec<String>) -> Result<Self, GlobError> {
+    pub fn from_raw(raw: Vec<String>, include_default: bool) -> Result<Self, GlobError> {
         if raw.is_empty() {
-            Ok(Self::Default)
-        } else if let Some(default_pos) = raw.iter().position(|g| g == INPUT_INCLUDE_DEFAULT_FILES)
-        {
-            raw.remove(default_pos);
-            Ok(Self::DefaultWithExtras(GlobSet::from_raw_unfiltered(raw)?))
+            return Ok(Self::Default);
+        }
+        let glob_set = GlobSet::from_raw_unfiltered(raw)?;
+        if include_default {
+            Ok(Self::DefaultWithExtras(glob_set))
         } else {
-            Ok(Self::Specific(GlobSet::from_raw_unfiltered(raw)?))
+            Ok(Self::Specific(glob_set))
         }
     }
 
@@ -64,12 +64,16 @@ impl InputGlobs {
     fn as_inputs(&self) -> Vec<String> {
         match self {
             InputGlobs::Default => Vec::new(),
-            InputGlobs::DefaultWithExtras(glob_set) => {
-                let mut inputs = glob_set.as_inputs();
-                inputs.push(INPUT_INCLUDE_DEFAULT_FILES.to_string());
-                inputs
+            InputGlobs::DefaultWithExtras(glob_set) | InputGlobs::Specific(glob_set) => {
+                glob_set.as_inputs()
             }
-            InputGlobs::Specific(glob_set) => glob_set.as_inputs(),
+        }
+    }
+
+    pub fn include_default_files(&self) -> bool {
+        match self {
+            InputGlobs::Default | InputGlobs::DefaultWithExtras(..) => true,
+            InputGlobs::Specific(..) => false,
         }
     }
 }
@@ -486,24 +490,24 @@ impl Subscriber {
             // We need mutable access to 'state' to update it, as well as being able to
             // extract the pending state, so we need two separate if statements
             // to pull the value apart.
-            if let HashState::Pending(existing_version, _, pending_queries) = state {
-                if *existing_version == version {
-                    match result {
-                        Ok(hashes) => {
-                            for pending_query in pending_queries.drain(..) {
-                                // We don't care if the client has gone away
-                                let _ = pending_query.send(Ok(hashes.clone()));
-                            }
-                            *state = HashState::Hashes(hashes);
+            if let HashState::Pending(existing_version, _, pending_queries) = state
+                && *existing_version == version
+            {
+                match result {
+                    Ok(hashes) => {
+                        for pending_query in pending_queries.drain(..) {
+                            // We don't care if the client has gone away
+                            let _ = pending_query.send(Ok(hashes.clone()));
                         }
-                        Err(e) => {
-                            let error = e.to_string();
-                            for pending_query in pending_queries.drain(..) {
-                                // We don't care if the client has gone away
-                                let _ = pending_query.send(Err(Error::HashingError(error.clone())));
-                            }
-                            *state = HashState::Unavailable(error);
+                        *state = HashState::Hashes(hashes);
+                    }
+                    Err(e) => {
+                        let error = e.to_string();
+                        for pending_query in pending_queries.drain(..) {
+                            // We don't care if the client has gone away
+                            let _ = pending_query.send(Err(Error::HashingError(error.clone())));
                         }
+                        *state = HashState::Unavailable(error);
                     }
                 }
             }
@@ -542,6 +546,7 @@ impl Subscriber {
                     &repo_root,
                     &spec.package_path,
                     &inputs,
+                    spec.inputs.include_default_files(),
                     telemetry,
                 );
                 trace!("hashing complete for {:?}", spec);
@@ -684,7 +689,7 @@ mod tests {
     };
 
     use git2::Repository;
-    use tempfile::{tempdir, TempDir};
+    use tempfile::{TempDir, tempdir};
     use turbopath::{
         AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeUnixPathBuf,
     };
@@ -692,11 +697,11 @@ mod tests {
 
     use super::{FileHashes, HashState};
     use crate::{
+        FileSystemWatcher,
         cookies::CookieWriter,
         globwatcher::GlobSet,
         hash_watcher::{HashSpec, HashWatcher, InputGlobs},
         package_watcher::PackageWatcher,
-        FileSystemWatcher,
     };
 
     fn commit_all(repo: &Repository) {
@@ -714,11 +719,7 @@ mod tests {
             &repo.signature().unwrap(),
             "Commit",
             &tree,
-            previous_commit
-                .as_ref()
-                .as_ref()
-                .map(std::slice::from_ref)
-                .unwrap_or_default(),
+            previous_commit.as_ref().as_slice(),
         )
         .unwrap();
     }
@@ -1037,10 +1038,7 @@ mod tests {
             }
             tokio::time::sleep(Duration::from_millis(200)).await;
         }
-        panic!(
-            "failed to get expected hashes. Error {:?}, last hashes: {:?}",
-            error, last_value
-        );
+        panic!("failed to get expected hashes. Error {error:?}, last hashes: {last_value:?}");
     }
 
     fn make_expected(expected: Vec<(&str, &str)>) -> GitHashes {

@@ -23,7 +23,7 @@ use thiserror::Error;
 pub use crate::{
     color_selector::ColorSelector,
     line::LineWriter,
-    logs::{replay_logs, replay_logs_with_crlf, LogWriter},
+    logs::{LogWriter, replay_logs, replay_logs_with_crlf},
     output::{OutputClient, OutputClientBehavior, OutputSink, OutputWriter},
     prefixed::{PrefixedUI, PrefixedWriter},
     tui::{TaskTable, TerminalPane},
@@ -51,7 +51,7 @@ pub fn start_spinner(message: &str) -> ProgressBar {
     pb.set_style(
         ProgressStyle::default_spinner()
             // For more spinners check out the cli-spinners project:
-            // https://github.com/sindresorhus/cli-spinners/blob/master/spinners.json
+            // https://github.com/sindresorhus/cli-spinners/blob/main/spinners.json
             .tick_strings(&[
                 "   ",
                 GREY.apply_to(">  ").to_string().as_str(),
@@ -203,10 +203,7 @@ impl ColorConfig {
         let mut out = Vec::new();
         for (i, c) in text.char_indices() {
             let (r, g, b) = Self::rainbow_rgb(i);
-            out.push(format!(
-                "\x1b[1m\x1b[38;2;{};{};{}m{}\x1b[0m\x1b[0;1m",
-                r, g, b, c
-            ));
+            out.push(format!("\x1b[1m\x1b[38;2;{r};{g};{b}m{c}\x1b[0m\x1b[0;1m"));
         }
         out.push(RESET.to_string());
 

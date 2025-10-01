@@ -1,8 +1,8 @@
 "use client";
 
-import { FaceHappy, FaceSad, FaceSmile, FaceUnhappy } from "./faces";
 import { useState } from "react";
 import * as Popover from "@radix-ui/react-popover";
+import { FaceHappy, FaceSad, FaceSmile, FaceUnhappy } from "./faces";
 import { Check } from "./check";
 import { Textarea } from "./textarea";
 import { Button } from "./button";
@@ -22,12 +22,12 @@ export function FeedbackWidget() {
     { emoji: "😭", component: <FaceSad />, label: "Hate it" },
   ];
 
-  const handleSubmit = (e?: React.FormEvent<HTMLFormElement>): void => {
+  const handleSubmit = (e?: React.MouseEvent<HTMLButtonElement>): void => {
     e?.preventDefault();
 
     setLoading(true);
 
-    fetch("/api/feedback", {
+    void fetch("/api/feedback", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -35,7 +35,7 @@ export function FeedbackWidget() {
       body: JSON.stringify({
         url:
           window.location.hostname === "localhost"
-            ? `https://turbo.build/dev-mode${window.location.pathname}`
+            ? `https://turborepo.com/dev-mode${window.location.pathname}`
             : window.location.toString(),
         note: feedback,
         emotion: selectedEmoji,
@@ -72,7 +72,8 @@ export function FeedbackWidget() {
       <Popover.Trigger asChild>
         <Button
           type="button"
-          className="inline-flex items-center justify-center w-full bg-white text-black dark:bg-black dark:text-white border border-black/20 dark:border-white/20 hover:bg-gray-100 dark:hover:bg-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-opacity-75"
+          variant="outline"
+          size="sm"
           aria-label="Open feedback form"
         >
           Feedback
@@ -81,7 +82,7 @@ export function FeedbackWidget() {
 
       <Popover.Portal>
         <Popover.Content
-          className="w-[400px] max-xl:hidden animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95"
+          className="w-[400px] max-md:hidden z-50 animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95"
           sideOffset={5}
           align="end"
         >
@@ -94,7 +95,7 @@ export function FeedbackWidget() {
                 <p className="text-xl font-medium mb-2 text-black dark:text-white">
                   Your feedback has been received!
                 </p>
-                <p className="text-gray-400">Thank you for your help.</p>
+                <p className="text-gray-900">Thank you for your help.</p>
               </div>
             ) : (
               <form>
@@ -103,35 +104,60 @@ export function FeedbackWidget() {
                     placeholder="Your feedback..."
                     className="min-h-28 text-black dark:bg-black border-gray-700 dark:text-white placeholder:text-gray-500 resize-none"
                     value={feedback}
-                    onChange={(e) => setFeedback(e.target.value)}
+                    onChange={(e) => {
+                      setFeedback(e.target.value);
+                    }}
                   />
                 </div>
 
-                <div className="flex items-center justify-between text-black dark:text-gray-500">
+                {!selectedEmoji && feedback ? (
+                  <p
+                    className="text-red-900 text-right mb-4 text-sm"
+                    role="alert"
+                    aria-live="assertive"
+                    id="emoji-selection-error"
+                  >
+                    Please select an emoji.
+                  </p>
+                ) : (
+                  <div className="h-9" />
+                )}
+
+                <div className="flex items-center justify-between text-black dark:text-gray-900">
                   <div className="flex space-x-4">
-                    {emojis.map((item) => (
-                      <button
-                        type="button"
-                        key={item.label}
-                        onClick={() => setSelectedEmoji(item.emoji)}
-                        className={cn(
-                          "text-2xl w-7 h-7 p-1 transition-transform hover:scale-110",
-                          selectedEmoji === item.emoji
-                            ? "bg-blue-400/40 rounded-full"
-                            : ""
-                        )}
-                        aria-label={item.label}
-                      >
-                        <span className="relative">{item.component}</span>
-                      </button>
-                    ))}
+                    {emojis.map((item) => {
+                      return (
+                        <button
+                          type="button"
+                          key={item.label}
+                          onClick={() => {
+                            setSelectedEmoji(item.emoji);
+                          }}
+                          className={cn(
+                            "text-2xl w-7 h-7 p-1 transition-transform hover:scale-110",
+                            selectedEmoji === item.emoji
+                              ? "bg-blue-400 rounded-full"
+                              : ""
+                          )}
+                          aria-label={item.label}
+                          aria-describedby={
+                            !selectedEmoji && feedback
+                              ? "emoji-selection-error"
+                              : undefined
+                          }
+                        >
+                          <span className="relative">{item.component}</span>
+                        </button>
+                      );
+                    })}
                   </div>
 
                   <div className="flex items-center gap-2">
                     <Button
                       type="submit"
-                      className="border dark:text-white hover:bg-black/10 dark:hover:bg-white/10"
-                      onClick={(e: any) => handleSubmit(e)}
+                      onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+                        handleSubmit(e);
+                      }}
                       disabled={loading || !feedback || !selectedEmoji}
                     >
                       Send

@@ -30,7 +30,7 @@ function status(options: TelemetryCLIOptions) {
       "You have opted-out of Turborepo anonymous telemetry. No data will be collected from your machine."
     );
   }
-  logger.log("Learn more: https://turbo.build/repo/docs/telemetry");
+  logger.log("Learn more: https://turborepo.com/docs/telemetry");
 }
 
 function telemetry(action: TelemetryCLIAction, options: TelemetryCLIOptions) {

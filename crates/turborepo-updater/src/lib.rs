@@ -9,9 +9,10 @@ use console::style;
 use semver::Version as SemVerVersion;
 use serde::Deserialize;
 use thiserror::Error as ThisError;
+use turborepo_repository::package_manager::PackageManager;
 use update_informer::{
-    http_client::{GenericHttpClient, HttpClient},
     Check, Package, Registry, Result as UpdateResult, Version,
+    http_client::{GenericHttpClient, HttpClient},
 };
 
 mod ui;
@@ -21,7 +22,7 @@ const DEFAULT_TIMEOUT: Duration = Duration::from_millis(800);
 // 1 day
 const DEFAULT_INTERVAL: Duration = Duration::from_secs(60 * 60 * 24);
 
-const NOTIFIER_DISABLE_VARS: [&str; 2] = ["NO_UPDATE_NOTIFIER", "TURBO_NO_UPDATE_NOTIFIER"];
+const NOTIFIER_DISABLE_VARS: [&str; 1] = ["NO_UPDATE_NOTIFIER"];
 const ENVIRONMENTAL_DISABLE_VARS: [&str; 1] = ["CI"];
 
 #[derive(ThisError, Debug)]
@@ -68,11 +69,7 @@ impl Registry for NPMRegistry {
         let full_name = pkg.to_string();
         let split_name: Vec<&str> = full_name.split('/').collect();
         let name = split_name[1];
-        let url = format!(
-            "https://turbo.build/api/binaries/version?name={name}&tag={tag}",
-            name = name,
-            tag = tag
-        );
+        let url = format!("https://turborepo.com/api/binaries/version?name={name}&tag={tag}");
 
         let result: NpmVersionData = http.get(&url)?;
         Ok(Some(result.version))
@@ -89,10 +86,8 @@ fn get_tag_from_version(pre: &semver::Prerelease) -> VersionTag {
 fn should_skip_notification() -> bool {
     NOTIFIER_DISABLE_VARS
         .iter()
+        .chain(ENVIRONMENTAL_DISABLE_VARS.iter())
         .any(|var| std::env::var(var).is_ok())
-        || ENVIRONMENTAL_DISABLE_VARS
-            .iter()
-            .any(|var| std::env::var(var).is_ok())
         || !atty::is(atty::Stream::Stdout)
 }
 
@@ -103,6 +98,7 @@ pub fn display_update_check(
     current_version: &str,
     timeout: Option<Duration>,
     interval: Option<Duration>,
+    package_manager: &PackageManager,
 ) -> Result<(), UpdateNotifierError> {
     // bail early if the user has disabled update notifications
     if should_skip_notification() {
@@ -113,8 +109,17 @@ pub fn display_update_check(
 
     if let Ok(Some(version)) = version {
         let latest_version = version.to_string();
-        // TODO: make this package manager aware
-        let update_cmd = style("npx @turbo/codemod@latest update").cyan().bold();
+
+        let update_cmd = match package_manager {
+            PackageManager::Npm => style("npx @turbo/codemod@latest update").cyan().bold(),
+            PackageManager::Yarn | PackageManager::Berry => {
+                style("yarn dlx @turbo/codemod@latest update").cyan().bold()
+            }
+            PackageManager::Pnpm | PackageManager::Pnpm6 | PackageManager::Pnpm9 => {
+                style("pnpm dlx @turbo/codemod@latest update").cyan().bold()
+            }
+            PackageManager::Bun => style("bunx @turbo/codemod@latest update").cyan().bold(),
+        };
 
         let msg = format!(
             "
@@ -130,7 +135,7 @@ pub fn display_update_check(
         );
 
         if let Some(footer) = footer {
-            return ui::message(&format!("{}\n{}", msg, footer));
+            return ui::message(&format!("{msg}\n{footer}"));
         }
 
         return ui::message(&msg);
@@ -151,7 +156,7 @@ pub fn check_for_updates(
     // owner (in the supported owner/name format) to be channel/name.
     let parsed_version = SemVerVersion::parse(current_version)?;
     let tag = get_tag_from_version(&parsed_version.pre);
-    let package_name = format!("{}/{}", tag, package_name);
+    let package_name = format!("{tag}/{package_name}");
 
     let timeout = timeout.unwrap_or(DEFAULT_TIMEOUT);
     let interval = interval.unwrap_or(DEFAULT_INTERVAL);

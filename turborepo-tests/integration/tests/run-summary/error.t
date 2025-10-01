@@ -52,6 +52,7 @@ Validate that we got a full task summary for the failed task with an error in .e
     "directory": "apps(\/|\\\\)my-app", (re)
     "dependencies": [],
     "dependents": [],
+    "with": [],
     "resolvedTaskDefinition": {
       "outputs": [],
       "cache": true,

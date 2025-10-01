@@ -8,10 +8,10 @@ ogImage: /images/blog/turbo-2-3/x-card.png
 
 <h1 className="text-center">Turborepo 2.3</h1>
 
-import { Authors } from '#/components/authors';
-import { Date } from '#/components/blog/date';
-import { Tab, Tabs } from '#/components/tabs';
-import { Callout } from '#/components/callout';
+import { Authors } from '#components/authors';
+import { Date } from '#components/blog/date';
+import { Tab, Tabs } from '#components/tabs';
+import { Callout } from '#components/callout';
 
 <Date>Tuesday, November 14th, 2024</Date>
 
@@ -86,7 +86,7 @@ This is more convenient than the equivalent command using `--filter` (`turbo run
 turbo run web#build docs#lint
 ```
 
-[Learn more in the documentation.](/repo/docs/crafting-your-repository/running-tasks#filtering-by-package-name)
+[Learn more in the documentation.](/docs/crafting-your-repository/running-tasks#filtering-by-package)
 
 ## Simplified cache control
 
@@ -98,7 +98,7 @@ To refine this, we've introduced a new `--cache` flag that brings these flags to
 turbo run build --cache=local:rw,remote:r
 ```
 
-Using `local` and `remote`, you can control the reading and writing behavior of the `turbo` invocation. Learn more in the [documentation](/repo/docs/reference/run#--cache-options).
+Using `local` and `remote`, you can control the reading and writing behavior of the `turbo` invocation. Learn more in the [documentation](/docs/reference/run#--cache-options).
 
 ## Continued improvements for `turbo query`
 

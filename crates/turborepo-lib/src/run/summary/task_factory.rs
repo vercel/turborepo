@@ -2,6 +2,7 @@ use std::collections::HashSet;
 
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_repository::package_graph::{PackageGraph, PackageInfo, PackageName};
+use turborepo_task_id::TaskId;
 
 use super::{
     execution::TaskExecutionSummary,
@@ -12,7 +13,6 @@ use crate::{
     cli,
     engine::{Engine, TaskNode},
     opts::RunOpts,
-    run::task_id::TaskId,
     task_graph::TaskDefinition,
     task_hash::{get_external_deps_hash, TaskHashTracker},
 };
@@ -156,6 +156,16 @@ impl<'a> TaskSummaryFactory<'a> {
             path.join(&relative_log_file).to_string()
         });
 
+        let with = task_definition
+            .with
+            .as_ref()
+            .map(|with| {
+                with.iter()
+                    .map(|task| task.as_inner().to_string())
+                    .collect()
+            })
+            .unwrap_or_default();
+
         Ok(SharedTaskSummary {
             hash,
             inputs: expanded_inputs.into_iter().collect(),
@@ -180,6 +190,7 @@ impl<'a> TaskSummaryFactory<'a> {
             framework,
             dependencies,
             dependents,
+            with,
             env_mode: self.global_env_mode,
             environment_variables: TaskEnvVarSummary::new(
                 task_definition,

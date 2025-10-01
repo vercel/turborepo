@@ -16,7 +16,10 @@ use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_ui::BOLD;
 
 use super::CommandBase;
-use crate::turbo_json::{RawTurboJson, CONFIG_FILE, CONFIG_FILE_JSONC};
+use crate::{
+    config::{CONFIG_FILE, CONFIG_FILE_JSONC},
+    turbo_json::{RawRootTurboJson, RawTurboJson},
+};
 
 pub const DEFAULT_OUTPUT_DIR: &str = "out";
 
@@ -196,10 +199,15 @@ pub async fn prune(
             original_patches,
             pruned_patches
         );
-        let pruned_json = prune
-            .package_graph
-            .package_manager()
-            .prune_patched_packages(prune.package_graph.root_package_json(), &pruned_patches);
+
+        let repo_root = &prune.root;
+        let package_manager = prune.package_graph.package_manager();
+
+        let pruned_json = package_manager.prune_patched_packages(
+            prune.package_graph.root_package_json(),
+            &pruned_patches,
+            repo_root,
+        );
         let mut pruned_json_contents = serde_json::to_string_pretty(&pruned_json)?;
         // Add trailing newline to match Go behavior
         pruned_json_contents.push('\n');
@@ -465,7 +473,8 @@ impl<'a> Prune<'a> {
             return Ok(None);
         };
 
-        let turbo_json = RawTurboJson::parse(&turbo_json_contents, turbo_json_name.as_str())?;
+        let turbo_json =
+            RawRootTurboJson::parse(&turbo_json_contents, turbo_json_name.as_str())?.into();
         Ok(Some((turbo_json, turbo_json_name)))
     }
 }

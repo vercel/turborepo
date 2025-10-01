@@ -13,7 +13,7 @@ use turborepo_scm::SCM;
 use turborepo_unescape::UnescapedString;
 
 use super::ConfigCache;
-use crate::{config::RawTurboJson, gitignore::ensure_turbo_is_gitignored};
+use crate::{gitignore::ensure_turbo_is_gitignored, turbo_json::RawTurboJson};
 
 // Environment variable key that will be used to enable, and set the expected
 // trace location
@@ -259,7 +259,7 @@ impl TaskAccess {
                 let traced_config_json = serde_json::to_string_pretty(&traced_config)?;
                 let file_path = self.repo_root.join_components(&TASK_ACCESS_CONFIG_PATH);
                 let mut file = File::create(file_path)?;
-                write!(file, "{}", traced_config_json)?;
+                write!(file, "{traced_config_json}")?;
                 file.flush()?;
                 config_cache.save().await?;
             }

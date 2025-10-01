@@ -22,6 +22,7 @@ use turborepo_repository::{
 };
 use turborepo_scm::SCM;
 use turborepo_signals::{SignalHandler, SignalSubscriber};
+use turborepo_task_id::TaskName;
 use turborepo_telemetry::events::{
     command::CommandEventBuilder,
     generic::{DaemonInitStatus, GenericEventBuilder},
@@ -42,12 +43,13 @@ use {
 use crate::{
     cli::DryRunMode,
     commands::CommandBase,
+    config::resolve_turbo_config_path,
     engine::{Engine, EngineBuilder},
     microfrontends::MicrofrontendsConfigs,
     opts::Opts,
-    run::{scope, task_access::TaskAccess, task_id::TaskName, Error, Run, RunCache},
+    run::{scope, task_access::TaskAccess, Error, Run, RunCache},
     shim::TurboState,
-    turbo_json::{TurboJson, TurboJsonLoader, UIMode},
+    turbo_json::{TurboJson, TurboJsonLoader, TurboJsonReader, UIMode},
     DaemonConnector,
 };
 
@@ -136,6 +138,10 @@ impl RunBuilder {
             let _guard = signal_subscriber.listen().await;
             manager.stop().await;
         });
+    }
+
+    fn will_execute_tasks(&self) -> bool {
+        self.opts.run_opts.dry_run.is_none() && self.opts.run_opts.graph.is_none()
     }
 
     pub fn with_analytics_sender(mut self, analytics_sender: Option<AnalyticsSender>) -> Self {
@@ -258,8 +264,26 @@ impl RunBuilder {
             (_, Some(true)) | (false, None) => {
                 let can_start_server = true;
                 let can_kill_server = true;
-                let connector =
-                    DaemonConnector::new(can_start_server, can_kill_server, &self.repo_root);
+
+                // Determine custom turbo.json path if different from standard path
+                let custom_turbo_json_path =
+                    if let Ok(standard_path) = resolve_turbo_config_path(&self.repo_root) {
+                        if self.opts.repo_opts.root_turbo_json_path != standard_path {
+                            Some(self.opts.repo_opts.root_turbo_json_path.clone())
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    };
+
+                let connector = DaemonConnector::new(
+                    can_start_server,
+                    can_kill_server,
+                    &self.repo_root,
+                    custom_turbo_json_path,
+                );
+
                 match (connector.connect().await, self.opts.run_opts.daemon) {
                     (Ok(client), _) => {
                         run_telemetry.track_daemon_init(DaemonInitStatus::Started);
@@ -384,16 +408,19 @@ impl RunBuilder {
         task_access.restore_config().await;
 
         let root_turbo_json_path = self.opts.repo_opts.root_turbo_json_path.clone();
+        let future_flags = self.opts.future_flags;
+
+        let reader = TurboJsonReader::new(self.repo_root.clone()).with_future_flags(future_flags);
 
         let turbo_json_loader = if task_access.is_enabled() {
             TurboJsonLoader::task_access(
-                self.repo_root.clone(),
+                reader,
                 root_turbo_json_path.clone(),
                 root_package_json.clone(),
             )
         } else if is_single_package {
             TurboJsonLoader::single_package(
-                self.repo_root.clone(),
+                reader,
                 root_turbo_json_path.clone(),
                 root_package_json.clone(),
             )
@@ -402,20 +429,20 @@ impl RunBuilder {
         (self.opts.repo_opts.allow_no_turbo_json || micro_frontend_configs.is_some())
         {
             TurboJsonLoader::workspace_no_turbo_json(
-                self.repo_root.clone(),
+                reader,
                 pkg_dep_graph.packages(),
                 micro_frontend_configs.clone(),
             )
         } else if let Some(micro_frontends) = &micro_frontend_configs {
             TurboJsonLoader::workspace_with_microfrontends(
-                self.repo_root.clone(),
+                reader,
                 root_turbo_json_path.clone(),
                 pkg_dep_graph.packages(),
                 micro_frontends.clone(),
             )
         } else {
             TurboJsonLoader::workspace(
-                self.repo_root.clone(),
+                reader,
                 root_turbo_json_path.clone(),
                 pkg_dep_graph.packages(),
             )
@@ -464,9 +491,9 @@ impl RunBuilder {
             self.opts.run_opts.dry_run.is_some(),
         ));
 
-        let should_print_prelude = self.should_print_prelude_override.unwrap_or_else(|| {
-            self.opts.run_opts.dry_run.is_none() && self.opts.run_opts.graph.is_none()
-        });
+        let should_print_prelude = self
+            .should_print_prelude_override
+            .unwrap_or_else(|| self.will_execute_tasks());
 
         Ok(Run {
             version: self.version,
@@ -514,6 +541,7 @@ impl RunBuilder {
         .with_root_tasks(root_turbo_json.tasks.keys().cloned())
         .with_tasks_only(self.opts.run_opts.only)
         .with_workspaces(filtered_pkgs.cloned().collect())
+        .with_future_flags(self.opts.future_flags)
         .with_tasks(tasks);
 
         if self.add_all_tasks {
@@ -538,6 +566,7 @@ impl RunBuilder {
                     pkg_dep_graph,
                     self.opts.run_opts.concurrency,
                     self.opts.run_opts.ui_mode,
+                    self.will_execute_tasks(),
                 )
                 .map_err(Error::EngineValidation)?;
         }

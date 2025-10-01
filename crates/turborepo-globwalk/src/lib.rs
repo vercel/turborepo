@@ -1,3 +1,8 @@
+//! Glob pattern matching and directory walking
+//! This is a layer on top of `wax` that performs some corrections to user
+//! provided globs as well as escaping characters that `wax` considers special,
+//! but we do not support.
+
 #![feature(assert_matches)]
 #![deny(clippy::all)]
 
@@ -17,7 +22,7 @@ use rayon::prelude::*;
 use regex::Regex;
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError, RelativeUnixPath};
-use wax::{walk::FileIterator, BuildError, Glob};
+use wax::{BuildError, Glob, walk::FileIterator};
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum WalkType {
@@ -57,7 +62,7 @@ fn glob_literals() -> &'static Regex {
     RE.get_or_init(|| Regex::new(r"(?<literal>[\?\*\$:<>\(\)\[\]{},])").unwrap())
 }
 
-fn escape_glob_literals(literal_glob: &str) -> Cow<str> {
+fn escape_glob_literals(literal_glob: &str) -> Cow<'_, str> {
     glob_literals().replace_all(literal_glob, "\\$literal")
 }
 
@@ -154,7 +159,7 @@ pub fn fix_glob_pattern(pattern: &str) -> String {
     // strips trailing _unix_ slashes from windows paths, rather than
     // "converting" (leaving) them.
     let p0 = if needs_trailing_slash {
-        format!("{}/", converted)
+        format!("{converted}/")
     } else {
         converted.to_string()
     };
@@ -169,7 +174,7 @@ pub fn fix_glob_pattern(pattern: &str) -> String {
 ///
 /// also returns the position in the path of the first encountered collapse,
 /// for the purposes of calculating the new base path
-fn collapse_path(path: &str) -> Option<(Cow<str>, usize)> {
+fn collapse_path(path: &str) -> Option<(Cow<'_, str>, usize)> {
     let mut stack: Vec<&str> = vec![];
     let mut changed = false;
     let is_root = path.starts_with('/');
@@ -219,14 +224,14 @@ fn add_trailing_double_star(exclude_paths: &mut Vec<String>, glob: &str) {
         if stripped.ends_with("**") {
             exclude_paths.push(stripped.to_string());
         } else {
-            exclude_paths.push(format!("{}**", glob));
+            exclude_paths.push(format!("{glob}**"));
         }
     } else if glob.ends_with("/**") {
         exclude_paths.push(glob.to_string());
     } else {
         // Match Go globby behavior. If the glob doesn't already end in /**, add it
         // We use the unix style operator as wax expects unix style paths
-        exclude_paths.push(format!("{}/**", glob));
+        exclude_paths.push(format!("{glob}/**"));
         exclude_paths.push(glob.to_string());
     }
 }
@@ -432,7 +437,7 @@ fn walk_glob(
         .unwrap_or_else(|e| {
             // Per docs, only fails if exclusion list is too large, since we're using
             // pre-compiled globs
-            panic!("Failed to compile exclusion globs: {}", e,)
+            panic!("Failed to compile exclusion globs: {e}")
         });
 
     if settings.ignore_nested_packages {
@@ -481,8 +486,8 @@ mod test {
     use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 
     use crate::{
-        add_doublestar_to_dir, collapse_path, escape_glob_literals, fix_glob_pattern, globwalk,
-        Settings, ValidatedGlob, WalkError, WalkType,
+        Settings, ValidatedGlob, WalkError, WalkType, add_doublestar_to_dir, collapse_path,
+        escape_glob_literals, fix_glob_pattern, globwalk,
     };
 
     #[cfg(unix)]
@@ -548,7 +553,7 @@ mod test {
         include_exp: Option<&[&str]>,
         exclude_exp: Option<&[&str]>,
     ) {
-        let raw_path = format!("{}{}", ROOT, base_path);
+        let raw_path = format!("{ROOT}{base_path}");
         let base_path = AbsoluteSystemPathBuf::new(raw_path).unwrap();
         let include = include.iter().map(|s| s.to_string()).collect_vec();
         let exclude = exclude.iter().map(|s| s.to_string()).collect_vec();
@@ -568,7 +573,7 @@ mod test {
                 include,
                 include_exp
                     .iter()
-                    .map(|s| format!("{}{}", GLOB_ROOT, s))
+                    .map(|s| format!("{GLOB_ROOT}{s}"))
                     .collect_vec()
                     .as_slice()
             );
@@ -579,7 +584,7 @@ mod test {
                 exclude,
                 exclude_exp
                     .iter()
-                    .map(|s| format!("{}{}", GLOB_ROOT, s))
+                    .map(|s| format!("{GLOB_ROOT}{s}"))
                     .collect_vec()
                     .as_slice()
             );
@@ -751,10 +756,7 @@ mod test {
         assert_eq!(
             success.len(),
             result_count,
-            "{}: expected {} matches, but got {:#?}",
-            pattern,
-            result_count,
-            success
+            "{pattern}: expected {result_count} matches, but got {success:#?}"
         );
 
         None
@@ -1395,8 +1397,7 @@ mod test {
 
             assert_eq!(
                 success, expected,
-                "\n\n{:?}: expected \n{:#?} but got \n{:#?}",
-                walk_type, expected, success
+                "\n\n{walk_type:?}: expected \n{expected:#?} but got \n{success:#?}"
             );
         }
     }
@@ -1453,7 +1454,7 @@ mod test {
             let path = tmp.path().join(file);
             let parent = path.parent().unwrap();
             std::fs::create_dir_all(parent)
-                .unwrap_or_else(|_| panic!("failed to create {:?}", parent));
+                .unwrap_or_else(|_| panic!("failed to create {parent:?}"));
             std::fs::File::create(path).unwrap();
         }
         tmp
@@ -1524,7 +1525,7 @@ mod test {
 
     #[test]
     #[cfg(not(windows))] // Windows doesn't support ':' at all, so just test not-Windows for correct
-                         // behavior
+    // behavior
     fn test_weird_filenames() {
         let files = &[
             "apps/foo",
