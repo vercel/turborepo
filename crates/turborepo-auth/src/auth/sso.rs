@@ -6,7 +6,7 @@ use tracing::warn;
 use turborepo_api_client::{CacheClient, Client, TokenClient};
 use turborepo_ui::{BOLD, ColorConfig, start_spinner};
 
-use crate::{Error, LoginOptions, Token, auth::extract_vercel_token, error, ui};
+use crate::{Error, LoginOptions, Token, error, ui};
 
 const DEFAULT_HOST_NAME: &str = "127.0.0.1";
 const DEFAULT_PORT: u16 = 9789;
@@ -70,23 +70,29 @@ pub async fn sso_login<T: Client + TokenClient + CacheClient>(
                 return Ok(token);
             }
         // No existing turbo token found. If the user is logging into Vercel,
-        // check for an existing `vc` token with correct scope.
-        } else if login_url_configuration.contains("vercel.com")
-            && let Ok(Some(token)) = extract_vercel_token()
-        {
-            let token = Token::existing(token);
-            if token
-                .is_valid_sso(
-                    api_client,
-                    sso_team,
-                    Some(valid_token_callback(
-                        &format!("Existing Vercel token for {sso_team} found!"),
-                        color_config,
-                    )),
-                )
-                .await?
-            {
-                return Ok(token);
+        // check for an existing token with automatic refresh if expired.
+        } else if login_url_configuration.contains("vercel.com") {
+            match crate::auth::get_token_with_refresh().await {
+                Ok(Some(token_str)) => {
+                    let token = Token::existing(token_str);
+                    if token
+                        .is_valid_sso(
+                            api_client,
+                            sso_team,
+                            Some(valid_token_callback(
+                                &format!("Existing Vercel token for {sso_team} found!"),
+                                color_config,
+                            )),
+                        )
+                        .await?
+                    {
+                        return Ok(token);
+                    }
+                }
+                Ok(None) => {}
+                Err(e) => {
+                    tracing::debug!("error getting token with refresh: {}", e);
+                }
             }
         }
     }

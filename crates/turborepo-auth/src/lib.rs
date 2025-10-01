@@ -27,6 +27,22 @@ pub const VERCEL_TOKEN_FILE: &str = "auth.json";
 pub const TURBO_TOKEN_DIR: &str = "turborepo";
 pub const TURBO_TOKEN_FILE: &str = "config.json";
 
+const VERCEL_OAUTH_CLIENT_ID: &str = "cl_HYyOPBNtFMfHhaUn9L4QPfTZz6TP47bp";
+const VERCEL_OAUTH_TOKEN_URL: &str = "https://vercel.com/api/login/oauth/token";
+
+#[derive(Debug, Clone)]
+pub struct AuthTokens {
+    pub token: Option<String>,
+    pub refresh_token: Option<String>,
+    pub expires_at: Option<u64>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct OAuthTokenResponse {
+    access_token: String,
+    refresh_token: String,
+}
+
 /// Token.
 ///
 /// It's the result of a successful login or an existing token. This acts as
@@ -75,6 +91,38 @@ impl Token {
                 }
             }
             None => Err(Error::TokenNotFound),
+        }
+    }
+
+    /// Reads token, refresh token, and expiration from auth.json
+    pub fn from_auth_file(path: &AbsoluteSystemPath) -> Result<AuthTokens, Error> {
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct AuthWrapper {
+            token: Option<String>,
+            refresh_token: Option<String>,
+            expires_at: Option<u64>,
+        }
+
+        match path.read_existing_to_string()? {
+            Some(content) => {
+                let wrapper = serde_json::from_str::<AuthWrapper>(&content).map_err(|err| {
+                    Error::InvalidTokenFileFormat {
+                        path: path.to_string(),
+                        source: err,
+                    }
+                })?;
+                Ok(AuthTokens {
+                    token: wrapper.token,
+                    refresh_token: wrapper.refresh_token,
+                    expires_at: wrapper.expires_at,
+                })
+            }
+            None => Ok(AuthTokens {
+                token: None,
+                refresh_token: None,
+                expires_at: None,
+            }),
         }
     }
 
@@ -286,6 +334,14 @@ fn current_unix_time() -> u128 {
         .as_millis()
 }
 
+fn current_unix_time_secs() -> u64 {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("Time went backwards")
+        .as_secs()
+}
+
 // As of the time of writing, this should always be true, since a token that
 // isn't active returns an error when fetching metadata for the token.
 fn is_token_active(metadata: &ResponseTokenMetadata, current_time: u128) -> bool {
@@ -303,6 +359,98 @@ fn is_token_active(metadata: &ResponseTokenMetadata, current_time: u128) -> bool
     let all_scopes_active = earliest_expiration.is_none_or(|expiration| current_time < expiration);
 
     all_scopes_active && (active_at <= current_time)
+}
+
+impl AuthTokens {
+    /// Checks if the access token has expired based on expiresAt field
+    pub fn is_expired(&self) -> bool {
+        if let Some(expires_at) = self.expires_at {
+            let current_time = current_unix_time_secs();
+            println!("{}, {}", current_time, expires_at);
+            current_time >= expires_at
+        } else {
+            false
+        }
+    }
+
+    /// Attempts to refresh the access token using the refresh token
+    pub async fn refresh_token(&self) -> Result<AuthTokens, Error> {
+        let refresh_token = self
+            .refresh_token
+            .as_ref()
+            .ok_or_else(|| Error::TokenNotFound)?;
+
+        tracing::debug!(
+            "Attempting to refresh token with refresh_token: {}",
+            refresh_token
+        );
+
+        let client = reqwest::Client::new();
+        let params = [
+            ("refresh_token", refresh_token.as_str()),
+            ("grant_type", "refresh_token"),
+            ("client_id", VERCEL_OAUTH_CLIENT_ID),
+        ];
+
+        let response = client
+            .post(VERCEL_OAUTH_TOKEN_URL)
+            .form(&params)
+            .send()
+            .await?;
+
+        tracing::debug!("{}", response.url());
+
+        let status = response.status();
+        tracing::debug!("Token refresh response status: {}", status);
+
+        if !status.is_success() {
+            let body = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unable to read response body".to_string());
+            tracing::error!("Token refresh failed with status {}: {}", status, body);
+            return Err(Error::FailedToGetToken);
+        }
+
+        // Get the response text first for debugging
+        let response_text = response.text().await?;
+        tracing::debug!("Token refresh response body: {}", response_text);
+
+        let oauth_response: OAuthTokenResponse =
+            serde_json::from_str(&response_text).map_err(|e| {
+                tracing::error!(
+                    "Failed to parse OAuth response: {}. Body was: {}",
+                    e,
+                    response_text
+                );
+                e
+            })?;
+        tracing::info!("Token refresh successful");
+
+        Ok(AuthTokens {
+            token: Some(oauth_response.access_token),
+            refresh_token: Some(oauth_response.refresh_token),
+            expires_at: Some(current_unix_time_secs() + 8 * 60 * 60), // 8 hours from now
+        })
+    }
+
+    /// Writes the auth tokens to the auth.json file
+    pub fn write_to_auth_file(&self, path: &AbsoluteSystemPath) -> Result<(), Error> {
+        use serde_json::json;
+
+        let content = json!({
+            "// Note": "This is your Vercel credentials file. DO NOT SHARE!",
+            "// Docs": "https://vercel.com/docs/projects/project-configuration/global-configuration#auth.json",
+            "token": self.token,
+            "refreshToken": self.refresh_token,
+            "expiresAt": self.expires_at,
+        });
+
+        let json_string = serde_json::to_string_pretty(&content)?;
+        path.ensure_dir()?;
+        path.create_with_contents(json_string)?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
