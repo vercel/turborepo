@@ -55,9 +55,25 @@ Create a `microfrontends.json` or `microfrontends.jsonc` in your parent applicat
 
 ```json title="./apps/web/microfrontends.json"
 {
+  "$schema": "https://openapi.vercel.sh/microfrontends.json",
   "version": "1",
   "applications": {
-    "docs": {}
+    "web": {
+      "development": {
+        "local": 3000,
+        "fallback": "demo.com"
+      }
+    },
+    "docs": {
+      "routing": [
+        {
+          "paths": ["/docs", "/docs/:path*"]
+        }
+      ],
+      "development": {
+        "local": 3001
+      }
+    }
   }
 }
 ```
