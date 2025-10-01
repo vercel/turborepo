@@ -395,7 +395,6 @@ mod tests {
         let quick_scope = |expiry| Scope {
             expires_at: expiry,
             scope_type: "".to_string(),
-            origin: "".to_string(),
             created_at: 0,
             team_id: None,
         };
@@ -406,7 +405,6 @@ mod tests {
             id: "".to_string(),
             name: "".to_string(),
             token_type: "".to_string(),
-            origin: "".to_string(),
             created_at: 0,
         };
 
@@ -678,7 +676,6 @@ mod tests {
                     id: "test".to_string(),
                     name: "test".to_string(),
                     token_type: "test".to_string(),
-                    origin: "test".to_string(),
                     scopes: vec![],
                     active_at: current_unix_time() - 100,
                     created_at: 0,
@@ -728,7 +725,6 @@ mod tests {
                 id: "test".to_string(),
                 name: "test".to_string(),
                 token_type: "test".to_string(),
-                origin: "test".to_string(),
                 scopes: vec![],
                 active_at: current_time - 100,
                 created_at: 0,
@@ -745,7 +741,6 @@ mod tests {
                     id: "test".to_string(),
                     name: "test".to_string(),
                     token_type: "test".to_string(),
-                    origin: "test".to_string(),
                     scopes: vec![],
                     created_at: 0,
                     active_at: 0,
@@ -806,7 +801,6 @@ mod tests {
                     id: "test".to_string(),
                     name: "test".to_string(),
                     token_type: "".to_string(),
-                    origin: "test".to_string(),
                     scopes: vec![],
                     active_at: current_unix_time() - 100,
                     created_at: 0,
@@ -827,7 +821,6 @@ mod tests {
                 id: "test".to_string(),
                 name: "test".to_string(),
                 token_type: "sso".to_string(),
-                origin: "test".to_string(),
                 scopes: vec![],
                 active_at: current_unix_time() - 100,
                 created_at: 0,
@@ -860,7 +853,6 @@ mod tests {
                 id: "test".to_string(),
                 name: "test".to_string(),
                 token_type: "".to_string(),
-                origin: "test".to_string(),
                 scopes: vec![],
                 active_at: current_unix_time() - 100,
                 created_at: 0,
