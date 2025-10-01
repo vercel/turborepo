@@ -3,7 +3,7 @@ use std::sync::Arc;
 pub use error::Error;
 use reqwest::Url;
 use tokio::sync::OnceCell;
-use tracing::{debug, warn};
+use tracing::warn;
 use turborepo_api_client::{CacheClient, Client, TokenClient};
 use turborepo_ui::{BOLD, ColorConfig, start_spinner};
 
@@ -50,7 +50,6 @@ pub async fn login<T: Client + TokenClient + CacheClient>(
     // Check if passed in token exists first.
     if !force {
         if let Some(token) = existing_token {
-            debug!("found existing turbo token");
             let token = Token::existing(token.into());
             if token
                 .is_valid(
@@ -66,7 +65,6 @@ pub async fn login<T: Client + TokenClient + CacheClient>(
         } else if login_url_configuration.contains("vercel.com") {
             match crate::auth::get_token_with_refresh().await {
                 Ok(Some(token_str)) => {
-                    debug!("found existing Vercel token (possibly refreshed)");
                     let token = Token::existing(token_str);
                     if token
                         .is_valid(
@@ -81,12 +79,8 @@ pub async fn login<T: Client + TokenClient + CacheClient>(
                         return Ok(token);
                     }
                 }
-                Ok(None) => {
-                    debug!("no valid token found");
-                }
-                Err(e) => {
-                    debug!("error getting token with refresh: {}", e);
-                }
+                Ok(None) => {}
+                Err(_) => {}
             }
         }
     }

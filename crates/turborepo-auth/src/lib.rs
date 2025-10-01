@@ -366,7 +366,6 @@ impl AuthTokens {
     pub fn is_expired(&self) -> bool {
         if let Some(expires_at) = self.expires_at {
             let current_time = current_unix_time_secs();
-            println!("{}, {}", current_time, expires_at);
             current_time >= expires_at
         } else {
             false
@@ -379,11 +378,6 @@ impl AuthTokens {
             .refresh_token
             .as_ref()
             .ok_or_else(|| Error::TokenNotFound)?;
-
-        tracing::debug!(
-            "Attempting to refresh token with refresh_token: {}",
-            refresh_token
-        );
 
         let client = reqwest::Client::new();
         let params = [
@@ -398,39 +392,20 @@ impl AuthTokens {
             .send()
             .await?;
 
-        tracing::debug!("{}", response.url());
-
         let status = response.status();
-        tracing::debug!("Token refresh response status: {}", status);
 
         if !status.is_success() {
-            let body = response
-                .text()
-                .await
-                .unwrap_or_else(|_| "Unable to read response body".to_string());
-            tracing::error!("Token refresh failed with status {}: {}", status, body);
             return Err(Error::FailedToGetToken);
         }
 
-        // Get the response text first for debugging
         let response_text = response.text().await?;
-        tracing::debug!("Token refresh response body: {}", response_text);
 
-        let oauth_response: OAuthTokenResponse =
-            serde_json::from_str(&response_text).map_err(|e| {
-                tracing::error!(
-                    "Failed to parse OAuth response: {}. Body was: {}",
-                    e,
-                    response_text
-                );
-                e
-            })?;
-        tracing::info!("Token refresh successful");
+        let oauth_response: OAuthTokenResponse = serde_json::from_str(&response_text)?;
 
         Ok(AuthTokens {
             token: Some(oauth_response.access_token),
             refresh_token: Some(oauth_response.refresh_token),
-            expires_at: Some(current_unix_time_secs() + 8 * 60 * 60), // 8 hours from now
+            expires_at: Some(current_unix_time_secs() + 8 * 60 * 60),
         })
     }
 

@@ -90,9 +90,7 @@ pub async fn sso_login<T: Client + TokenClient + CacheClient>(
                     }
                 }
                 Ok(None) => {}
-                Err(e) => {
-                    tracing::debug!("error getting token with refresh: {}", e);
-                }
+                Err(_) => {}
             }
         }
     }
