@@ -85,16 +85,25 @@ fn translate_key_event(options: InputOptions, key_event: KeyEvent) -> Option<Eve
         KeyCode::Char('/') if matches!(options.focus, LayoutSections::TaskList) => {
             Some(Event::SearchEnter)
         }
+        // If we're in locked search and user presses `/` clear the search
+        KeyCode::Char('/') if matches!(options.focus, LayoutSections::SearchLocked { .. }) => {
+            Some(Event::SearchExit {
+                restore_scroll: false,
+            })
+        }
         KeyCode::Esc if options.is_help_popup_open => Some(Event::ToggleHelpPopup),
         KeyCode::Esc if matches!(options.focus, LayoutSections::Search { .. }) => {
             Some(Event::SearchExit {
                 restore_scroll: true,
             })
         }
-        KeyCode::Enter if matches!(options.focus, LayoutSections::Search { .. }) => {
+        KeyCode::Esc if matches!(options.focus, LayoutSections::SearchLocked { .. }) => {
             Some(Event::SearchExit {
                 restore_scroll: false,
             })
+        }
+        KeyCode::Enter if matches!(options.focus, LayoutSections::Search { .. }) => {
+            Some(Event::SearchLock)
         }
         KeyCode::Up if matches!(options.focus, LayoutSections::Search { .. }) => {
             Some(Event::SearchScroll {
