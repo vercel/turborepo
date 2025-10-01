@@ -6,10 +6,10 @@ use std::{
 };
 
 use ratatui::{
+    Frame, Terminal,
     backend::{Backend, CrosstermBackend},
     layout::{Constraint, Layout},
     widgets::{Clear, TableState},
-    Frame, Terminal,
 };
 use tokio::{
     sync::{mpsc, oneshot},
@@ -24,19 +24,19 @@ pub const FRAMERATE: Duration = Duration::from_millis(3);
 const RESIZE_DEBOUNCE_DELAY: Duration = Duration::from_millis(10);
 
 use super::{
+    AppReceiver, Debouncer, Error, Event, InputOptions, SizeInfo, TaskTable, TerminalPane,
     event::{CacheResult, Direction, OutputLogs, PaneSize, TaskResult},
     input,
     preferences::PreferenceLoader,
     search::SearchResults,
-    AppReceiver, Debouncer, Error, Event, InputOptions, SizeInfo, TaskTable, TerminalPane,
 };
 use crate::{
+    ColorConfig,
     tui::{
         scroll::ScrollMomentum,
         task::{Task, TasksByStatus},
         term_output::TerminalOutput,
     },
-    ColorConfig,
 };
 
 #[derive(Debug, Clone)]
@@ -605,6 +605,12 @@ impl<W> App<W> {
         task.parser.screen_mut().set_scrollback(0);
         Ok(())
     }
+
+    pub fn clear_task_logs(&mut self) -> Result<(), Error> {
+        let task = self.get_full_task_mut()?;
+        task.clear_logs();
+        Ok(())
+    }
 }
 
 impl<W: Write> App<W> {
@@ -898,6 +904,9 @@ fn update(
             app.is_task_selection_pinned = true;
             app.scroll_momentum.reset();
             app.jump_to_logs_bottom()?;
+        }
+        Event::ClearLogs => {
+            app.clear_task_logs()?;
         }
         Event::EnterInteractive => {
             app.is_task_selection_pinned = true;

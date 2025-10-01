@@ -255,6 +255,8 @@ impl ResolvedConfigurationOptions for EnvVars {
             root_turbo_json_path,
             log_order,
             sso_login_callback_port,
+            // Do not allow future flags to be set by env var
+            future_flags: None,
         };
 
         Ok(output)

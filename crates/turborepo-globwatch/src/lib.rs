@@ -25,23 +25,23 @@ use std::{
     io,
     path::{Path, PathBuf},
     sync::{
-        atomic::{AtomicU64, Ordering},
         Arc, Mutex,
+        atomic::{AtomicU64, Ordering},
     },
 };
 
-use futures::{channel::oneshot, future::Either, FutureExt, Stream, StreamExt as _};
+use futures::{FutureExt, Stream, StreamExt as _, channel::oneshot, future::Either};
 use itertools::Itertools;
 use merge_streams::MergeStreams;
 pub use notify::{Event, Watcher};
-pub use stop_token::{stream::StreamExt, StopSource, StopToken, TimedOutError};
+pub use stop_token::{StopSource, StopToken, TimedOutError, stream::StreamExt};
 use thiserror::Error;
 use tokio::sync::{
     mpsc::{UnboundedReceiver, UnboundedSender},
     watch,
 };
 use tokio_stream::wrappers::UnboundedReceiverStream;
-use tracing::{error, event, span, trace, warn, Level};
+use tracing::{Level, error, event, span, trace, warn};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError};
 
 /// WatchError wraps errors produced by GlobWatcher
@@ -159,10 +159,10 @@ impl GlobWatcher {
         self,
         token: stop_token::StopToken,
     ) -> impl Stream<Item = Result<Result<Event, ConfigError>, TimedOutError>>
-           + Send
-           + Sync
-           + 'static
-           + Unpin {
+    + Send
+    + Sync
+    + 'static
+    + Unpin {
         let Self {
             setup_handle,
             flush_dir,
@@ -522,59 +522,61 @@ fn glob_to_symbols(glob: &str) -> impl Iterator<Item = GlobSymbol<'_>> {
     let mut escaped = false;
     let mut cursor = unic_segment::GraphemeCursor::new(0, glob.len());
 
-    std::iter::from_fn(move || loop {
-        let start = cursor.cur_cursor();
-        if start == glob.len() {
-            return None;
-        }
+    std::iter::from_fn(move || {
+        loop {
+            let start = cursor.cur_cursor();
+            if start == glob.len() {
+                return None;
+            }
 
-        let end = match cursor.next_boundary(glob, 0) {
-            Ok(Some(end)) => end,
-            _ => return None,
-        };
+            let end = match cursor.next_boundary(glob, 0) {
+                Ok(Some(end)) => end,
+                _ => return None,
+            };
 
-        if escaped {
-            escaped = false;
+            if escaped {
+                escaped = false;
+                return if end - start == 1 {
+                    Some(GlobSymbol::Char(match glob_bytes[start] {
+                        b'a' => &[b'\x61'],
+                        b'b' => &[b'\x08'],
+                        b'n' => &[b'\n'],
+                        b'r' => &[b'\r'],
+                        b't' => &[b'\t'],
+                        _ => &glob_bytes[start..end],
+                    }))
+                } else {
+                    return Some(GlobSymbol::Char(&glob_bytes[start..end]));
+                };
+            }
+
             return if end - start == 1 {
-                Some(GlobSymbol::Char(match glob_bytes[start] {
-                    b'a' => &[b'\x61'],
-                    b'b' => &[b'\x08'],
-                    b'n' => &[b'\n'],
-                    b'r' => &[b'\r'],
-                    b't' => &[b'\t'],
-                    _ => &glob_bytes[start..end],
-                }))
+                match glob_bytes[start] {
+                    b'\\' => {
+                        escaped = true;
+                        continue;
+                    }
+                    b'[' => Some(GlobSymbol::OpenBracket),
+                    b']' => Some(GlobSymbol::CloseBracket),
+                    b'{' => Some(GlobSymbol::OpenBrace),
+                    b'}' => Some(GlobSymbol::CloseBrace),
+                    b'*' => {
+                        if glob_bytes.get(end) == Some(&b'*') {
+                            cursor.set_cursor(end + 1);
+                            Some(GlobSymbol::DoubleStar)
+                        } else {
+                            Some(GlobSymbol::Star)
+                        }
+                    }
+                    b'?' => Some(GlobSymbol::Question),
+                    b'!' => Some(GlobSymbol::Negation),
+                    b'/' => Some(GlobSymbol::PathSeparator),
+                    _ => Some(GlobSymbol::Char(&glob_bytes[start..end])),
+                }
             } else {
-                return Some(GlobSymbol::Char(&glob_bytes[start..end]));
+                Some(GlobSymbol::Char(&glob_bytes[start..end]))
             };
         }
-
-        return if end - start == 1 {
-            match glob_bytes[start] {
-                b'\\' => {
-                    escaped = true;
-                    continue;
-                }
-                b'[' => Some(GlobSymbol::OpenBracket),
-                b']' => Some(GlobSymbol::CloseBracket),
-                b'{' => Some(GlobSymbol::OpenBrace),
-                b'}' => Some(GlobSymbol::CloseBrace),
-                b'*' => {
-                    if glob_bytes.get(end) == Some(&b'*') {
-                        cursor.set_cursor(end + 1);
-                        Some(GlobSymbol::DoubleStar)
-                    } else {
-                        Some(GlobSymbol::Star)
-                    }
-                }
-                b'?' => Some(GlobSymbol::Question),
-                b'!' => Some(GlobSymbol::Negation),
-                b'/' => Some(GlobSymbol::PathSeparator),
-                _ => Some(GlobSymbol::Char(&glob_bytes[start..end])),
-            }
-        } else {
-            Some(GlobSymbol::Char(&glob_bytes[start..end]))
-        };
     })
 }
 

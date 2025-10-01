@@ -34,8 +34,8 @@ use fs::core_foundation::Boolean;
 use fsevent_sys as fs;
 use fsevent_sys::core_foundation as cf;
 use notify::{
-    event::{CreateKind, DataChange, Flag, MetadataKind, ModifyKind, RemoveKind, RenameMode},
     Config, Error, Event, EventHandler, EventKind, RecursiveMode, Result, Watcher, WatcherKind,
+    event::{CreateKind, DataChange, Flag, MetadataKind, ModifyKind, RemoveKind, RenameMode},
 };
 
 //use crate::event::*;
@@ -562,11 +562,11 @@ unsafe fn callback_impl(
                 if *r || &path == p {
                     handle_event = true;
                     break;
-                } else if let Some(parent_path) = path.parent() {
-                    if parent_path == p {
-                        handle_event = true;
-                        break;
-                    }
+                } else if let Some(parent_path) = path.parent()
+                    && parent_path == p
+                {
+                    handle_event = true;
+                    break;
                 }
             }
         }

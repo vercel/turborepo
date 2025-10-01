@@ -11,12 +11,12 @@ use pori::{Located, Location, Stateful};
 use thiserror::Error;
 
 use crate::{
+    PATHS_ARE_CASE_INSENSITIVE,
     diagnostics::{LocatedError, Span},
     token::{
         Alternative, Archetype, Class, Evaluation, Literal, Repetition, Separator, Token,
         TokenKind, Tokenized, Wildcard,
     },
-    PATHS_ARE_CASE_INSENSITIVE,
 };
 
 pub type Annotation = Span;
@@ -180,8 +180,8 @@ enum FlagToggle {
 
 pub fn parse(expression: &str) -> Result<Tokenized<'_>, ParseError<'_>> {
     use nom::{
-        branch, bytes::complete as bytes, character::complete as character, combinator, error,
-        multi, sequence, IResult, Parser,
+        IResult, Parser, branch, bytes::complete as bytes, character::complete as character,
+        combinator, error, multi, sequence,
     };
 
     use crate::token::parse::FlagToggle::CaseInsensitive;

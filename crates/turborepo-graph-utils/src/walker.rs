@@ -1,9 +1,9 @@
 use std::{collections::HashMap, hash::Hash};
 
-use futures::{future::join_all, stream::FuturesUnordered, StreamExt};
+use futures::{StreamExt, future::join_all, stream::FuturesUnordered};
 use petgraph::{
-    visit::{IntoNeighborsDirected, IntoNodeIdentifiers},
     Direction,
+    visit::{IntoNeighborsDirected, IntoNodeIdentifiers},
 };
 use tokio::{
     sync::{broadcast, mpsc, oneshot, watch},

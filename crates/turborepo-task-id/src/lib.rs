@@ -1,3 +1,17 @@
+//! Identifiers for Turborepo tasks
+//!
+//! Consists of `TaskName`s and `TaskId`s
+//! `TaskId`s are fully qualified tasks that include the package and the task
+//! name e.g. `turbo#build` is the `build` task for the `turbo` package.
+//!
+//! `TaskName`s are what we accept as a user input for a "task".
+//! They do not need to be fully qualified, but can be.
+//! For example `dependsOn` takes `TaskName`s which allows for
+//! `"dependsOn": ["build", "schema#gen"]` where the package's build task is run
+//! along with the `schema` package's `gen` task.
+//!
+//! All `TaskId`s are valid `TaskName`s, but not vice versa.
+
 use std::{
     borrow::{Borrow, Cow},
     fmt,

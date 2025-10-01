@@ -1,8 +1,8 @@
 use std::{
     collections::{HashMap, HashSet},
     sync::{
-        atomic::{AtomicUsize, Ordering},
         Arc,
+        atomic::{AtomicUsize, Ordering},
     },
     time::Duration,
 };
@@ -20,11 +20,11 @@ use turborepo_repository::discovery::DiscoveryResponse;
 use turborepo_scm::{Error as SCMError, GitHashes, SCM};
 
 use crate::{
+    NotifyError, OptionalWatch,
     debouncer::Debouncer,
     globwatcher::{GlobError, GlobSet},
     package_watcher::DiscoveryData,
     scm_resource::SCMResource,
-    NotifyError, OptionalWatch,
 };
 
 pub struct HashWatcher {
@@ -689,7 +689,7 @@ mod tests {
     };
 
     use git2::Repository;
-    use tempfile::{tempdir, TempDir};
+    use tempfile::{TempDir, tempdir};
     use turbopath::{
         AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeUnixPathBuf,
     };
@@ -697,11 +697,11 @@ mod tests {
 
     use super::{FileHashes, HashState};
     use crate::{
+        FileSystemWatcher,
         cookies::CookieWriter,
         globwatcher::GlobSet,
         hash_watcher::{HashSpec, HashWatcher, InputGlobs},
         package_watcher::PackageWatcher,
-        FileSystemWatcher,
     };
 
     fn commit_all(repo: &Repository) {

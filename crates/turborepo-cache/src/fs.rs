@@ -7,8 +7,8 @@ use turborepo_analytics::AnalyticsSender;
 use turborepo_api_client::{analytics, analytics::AnalyticsEvent};
 
 use crate::{
-    cache_archive::{CacheReader, CacheWriter},
     CacheError, CacheHitMetadata, CacheSource,
+    cache_archive::{CacheReader, CacheWriter},
 };
 
 pub struct FSCache {
@@ -185,7 +185,7 @@ mod test {
     use turborepo_vercel_api_mock::start_test_server;
 
     use super::*;
-    use crate::test_cases::{get_test_cases, validate_analytics, TestCase};
+    use crate::test_cases::{TestCase, get_test_cases, validate_analytics};
 
     #[tokio::test]
     async fn test_fs_cache() -> Result<()> {

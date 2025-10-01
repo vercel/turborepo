@@ -17,17 +17,17 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use itertools::{chain, Itertools};
+use itertools::{Itertools, chain};
 use jsonc_parser::{
-    ast::{ObjectPropName, StringLit},
     CollectOptions,
+    ast::{ObjectPropName, StringLit},
 };
 use serde_json::Value;
 use tokio::sync::watch::{Receiver, Sender};
 use tower_lsp::{
+    Client, LanguageServer,
     jsonrpc::{Error, Result as LspResult},
     lsp_types::*,
-    Client, LanguageServer,
 };
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_lib::{

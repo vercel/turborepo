@@ -1,4 +1,4 @@
-use futures::{stream, Stream};
+use futures::{Stream, stream};
 
 use crate::signals::Signal;
 

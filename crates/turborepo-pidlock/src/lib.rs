@@ -1,3 +1,7 @@
+//! Process ID lock file management used by the daemon
+//! Forked from the `pidlock` crate in order to add Windows support and the
+//! ability to query the owner of the pidlock.
+
 #![deny(clippy::all)]
 #![feature(assert_matches)]
 
@@ -241,7 +245,7 @@ impl Drop for Pidlock {
 mod tests {
     use std::{assert_matches::assert_matches, fs, io::Write, path::PathBuf};
 
-    use rand::{distributions::Alphanumeric, thread_rng, Rng};
+    use rand::{Rng, distributions::Alphanumeric, thread_rng};
 
     use super::{PidFileError, Pidlock, PidlockError, PidlockState};
 

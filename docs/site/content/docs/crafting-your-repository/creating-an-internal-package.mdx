@@ -42,7 +42,11 @@ You'll need a directory to put the package in. Let's create one at `./packages/m
 <Step>
 ### Add a package.json
 
-Next, create the `package.json` for the package. By adding this file, you'll fulfill [the two requirements for an Internal Package](/docs/crafting-your-repository/structuring-a-repository#specifying-packages-in-a-monorepo), making it discoverable to Turborepo and the rest of your Workspace:
+Next, create the `package.json` for the package. By adding this file, you'll fulfill [the two requirements for an Internal Package](/docs/crafting-your-repository/structuring-a-repository#specifying-packages-in-a-monorepo), making it discoverable to Turborepo and the rest of your Workspace.
+
+<Callout type="warn">
+The `name` field in your `package.json` determines how your package can be imported throughout your workspace. The name you choose here (e.g. `@repo/math`) is exactly how other packages will import it (e.g. `import { add } from '@repo/math/add'`).
+</Callout>
 
 <PackageManagerTabs>
 
@@ -159,9 +163,10 @@ Next, create the `package.json` for the package. By adding this file, you'll ful
 
 Let's break down this `package.json` piece-by-piece:
 
+- **`name`**: This is the most critical field for package discoverability. The value `@repo/math` becomes the exact identifier used in import statements throughout your workspace. If you change this name, you must update all import statements accordingly.
 - **`scripts`**: The `dev` and `build` script compile the package using [the TypeScript compiler](https://www.typescriptlang.org/docs/handbook/compiler-options.html). The `dev` script will watch for changes to source code and automatically recompile the package.
 - **`devDependencies`**: `typescript` and `@repo/typescript-config` are `devDependencies` so you can use those packages in the `@repo/math` package. In a real-world package, you will likely have more `devDependencies` and `dependencies` - but we can keep it simple for now.
-- **`exports`**: Defines multiple entrypoints for the package so it can be used in other packages (`import { add } from '@repo/math'`).
+- **`exports`**: Defines multiple entrypoints for the package so it can be used in other packages (`import { add } from '@repo/math/add'`).
 
 Notably, this `package.json` declares an Internal Package, `@repo/typescript-config`, as a dependency. Turborepo will recognize `@repo/math` as a dependent of `@repo/typescript-config` for ordering your tasks.
 

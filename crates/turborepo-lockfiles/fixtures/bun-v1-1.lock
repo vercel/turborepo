@@ -1,0 +1,49 @@
+{
+  "lockfileVersion": 1,
+  "workspaces": {
+    "": {
+      "name": "bun-v1-test",
+      "devDependencies": {
+        "turbo": "^2.3.3"
+      }
+    },
+    "apps/web": {
+      "name": "web",
+      "version": "1.0.0",
+      "dependencies": {
+        "@repo/ui": "packages/ui",
+        "react": "^18.0.0"
+      }
+    },
+    "apps/docs": {
+      "name": "docs", 
+      "version": "1.0.0",
+      "dependencies": {
+        "@repo/ui": "packages/ui",
+        "@repo/shared-utils": "packages/shared-utils"
+      }
+    },
+    "packages/ui": {
+      "name": "@repo/ui",
+      "version": "0.1.0", 
+      "dependencies": {
+        "react": "^18.0.0"
+      },
+      "devDependencies": {
+        "@repo/shared-utils": "packages/shared-utils"
+      }
+    },
+    "packages/shared-utils": {
+      "name": "@repo/shared-utils",
+      "version": "0.2.0",
+      "dependencies": {
+        "lodash": "^4.17.21"
+      }
+    }
+  },
+  "packages": {
+    "turbo": ["turbo@2.3.3", {}, "sha512-turbo"],
+    "react": ["react@18.0.0", {}, "sha512-react"],
+    "lodash": ["lodash@4.17.21", {}, "sha512-lodash"]
+  }
+}
