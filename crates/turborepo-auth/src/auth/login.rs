@@ -3,11 +3,11 @@ use std::sync::Arc;
 pub use error::Error;
 use reqwest::Url;
 use tokio::sync::OnceCell;
-use tracing::{debug, warn};
+use tracing::warn;
 use turborepo_api_client::{CacheClient, Client, TokenClient};
 use turborepo_ui::{BOLD, ColorConfig, start_spinner};
 
-use crate::{LoginOptions, Token, auth::extract_vercel_token, error, ui};
+use crate::{LoginOptions, Token, error, ui};
 
 const DEFAULT_HOST_NAME: &str = "127.0.0.1";
 const DEFAULT_PORT: u16 = 9789;
@@ -50,7 +50,6 @@ pub async fn login<T: Client + TokenClient + CacheClient>(
     // Check if passed in token exists first.
     if !force {
         if let Some(token) = existing_token {
-            debug!("found existing turbo token");
             let token = Token::existing(token.into());
             if token
                 .is_valid(
@@ -61,25 +60,27 @@ pub async fn login<T: Client + TokenClient + CacheClient>(
             {
                 return Ok(token);
             }
-        // If the user is logging into Vercel, check for an existing `vc` token.
+        // If the user is logging into Vercel, check for an existing `vc` token
+        // with automatic refresh if expired.
         } else if login_url_configuration.contains("vercel.com") {
-            // The extraction can return an error, but we don't want to fail the login if
-            // the token is not found.
-            if let Ok(Some(token)) = extract_vercel_token() {
-                debug!("found existing Vercel token");
-                let token = Token::existing(token);
-                if token
-                    .is_valid(
-                        api_client,
-                        Some(valid_token_callback(
-                            "Existing Vercel token found!",
-                            color_config,
-                        )),
-                    )
-                    .await?
-                {
-                    return Ok(token);
+            match crate::auth::get_token_with_refresh().await {
+                Ok(Some(token_str)) => {
+                    let token = Token::existing(token_str);
+                    if token
+                        .is_valid(
+                            api_client,
+                            Some(valid_token_callback(
+                                "Existing Vercel token found!",
+                                color_config,
+                            )),
+                        )
+                        .await?
+                    {
+                        return Ok(token);
+                    }
                 }
+                Ok(None) => {}
+                Err(_) => {}
             }
         }
     }
