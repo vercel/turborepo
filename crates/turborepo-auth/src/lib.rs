@@ -395,7 +395,6 @@ mod tests {
         let quick_scope = |expiry| Scope {
             expires_at: expiry,
             scope_type: "".to_string(),
-            origin: "".to_string(),
             created_at: 0,
             team_id: None,
         };

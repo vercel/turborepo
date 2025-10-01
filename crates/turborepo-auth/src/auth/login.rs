@@ -284,7 +284,6 @@ mod tests {
                 token_type: "token".to_string(),
                 scopes: vec![turborepo_vercel_api::token::Scope {
                     scope_type: "user".to_string(),
-                    origin: "github".to_string(),
                     team_id: None,
                     expires_at: None,
                     created_at: 1111111111111,
