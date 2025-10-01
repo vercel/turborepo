@@ -405,7 +405,7 @@ impl AuthTokens {
         Ok(AuthTokens {
             token: Some(oauth_response.access_token),
             refresh_token: Some(oauth_response.refresh_token),
-            expires_at: Some(current_unix_time_secs() + 8 * 60 * 60),
+            expires_at: Some(current_unix_time_secs() + 8 * 60 * 60), // 8 hours from now
         })
     }
 
