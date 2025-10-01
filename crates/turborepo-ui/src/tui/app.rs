@@ -186,6 +186,50 @@ impl<W> App<W> {
         Ok(())
     }
 
+    /// Navigate to the next matching task in locked search mode, with
+    /// wrap-around
+    fn next_matching_task(&mut self, results: SearchResults) {
+        let next_task = results
+            .first_match(
+                self.tasks_by_status
+                    .task_names_in_displayed_order()
+                    .skip(self.selected_task_index + 1),
+            )
+            .or_else(|| {
+                // Wrap around to first match
+                results.first_match(self.tasks_by_status.task_names_in_displayed_order())
+            })
+            .map(str::to_owned);
+
+        if let Some(task) = next_task {
+            // Safe to ignore error as we're in a navigation flow
+            let _ = self.select_task(&task);
+        }
+    }
+
+    /// Navigate to the previous matching task in locked search mode, with
+    /// wrap-around
+    fn previous_matching_task(&mut self, results: SearchResults) {
+        let num_rows = self.tasks_by_status.count_all();
+        let prev_task = results
+            .first_match(
+                self.tasks_by_status
+                    .task_names_in_displayed_order()
+                    .rev()
+                    .skip(num_rows - self.selected_task_index),
+            )
+            .or_else(|| {
+                // Wrap around to last match
+                results.first_match(self.tasks_by_status.task_names_in_displayed_order().rev())
+            })
+            .map(str::to_owned);
+
+        if let Some(task) = prev_task {
+            // Safe to ignore error as we're in a navigation flow
+            let _ = self.select_task(&task);
+        }
+    }
+
     #[tracing::instrument(skip(self))]
     pub fn next(&mut self) {
         let num_rows = self.tasks_by_status.count_all();
@@ -193,23 +237,8 @@ impl<W> App<W> {
             return;
         }
 
-        // If search is locked, jump to next matching task
         if let LayoutSections::SearchLocked { results } = &self.section_focus {
-            let next_task = results
-                .first_match(
-                    self.tasks_by_status
-                        .task_names_in_displayed_order()
-                        .skip(self.selected_task_index + 1),
-                )
-                .or_else(|| {
-                    // Wrap around to first match
-                    results.first_match(self.tasks_by_status.task_names_in_displayed_order())
-                })
-                .map(|s| s.to_owned());
-
-            if let Some(task) = next_task {
-                let _ = self.select_task(&task);
-            }
+            self.next_matching_task(results.clone());
         } else {
             self.selected_task_index = (self.selected_task_index + 1) % num_rows;
             self.task_list_scroll.select(Some(self.selected_task_index));
@@ -226,24 +255,8 @@ impl<W> App<W> {
             return;
         }
 
-        // If search is locked, jump to previous matching task
         if let LayoutSections::SearchLocked { results } = &self.section_focus {
-            let prev_task = results
-                .first_match(
-                    self.tasks_by_status
-                        .task_names_in_displayed_order()
-                        .rev()
-                        .skip(num_rows - self.selected_task_index),
-                )
-                .or_else(|| {
-                    // Wrap around to last match
-                    results.first_match(self.tasks_by_status.task_names_in_displayed_order().rev())
-                })
-                .map(|s| s.to_owned());
-
-            if let Some(task) = prev_task {
-                let _ = self.select_task(&task);
-            }
+            self.previous_matching_task(results.clone());
         } else {
             self.selected_task_index = self
                 .selected_task_index
@@ -324,35 +337,13 @@ impl<W> App<W> {
             debug!("scrolling search while not searching");
             return Ok(());
         };
-        let num_rows = self.tasks_by_status.count_all();
-        let new_selection = match direction {
-            Direction::Up => results
-                .first_match(
-                    self.tasks_by_status
-                        .task_names_in_displayed_order()
-                        .rev()
-                        // We skip all of the tasks that are at or after the current selection
-                        .skip(num_rows - self.selected_task_index),
-                )
-                .or_else(|| {
-                    // Wrap around to last match
-                    results.first_match(self.tasks_by_status.task_names_in_displayed_order().rev())
-                }),
-            Direction::Down => results
-                .first_match(
-                    self.tasks_by_status
-                        .task_names_in_displayed_order()
-                        .skip(self.selected_task_index + 1),
-                )
-                .or_else(|| {
-                    // Wrap around to first match
-                    results.first_match(self.tasks_by_status.task_names_in_displayed_order())
-                }),
-        };
-        if let Some(new_selection) = new_selection {
-            let new_selection = new_selection.to_owned();
-            self.select_task(&new_selection)?;
+        let results = results.clone();
+
+        match direction {
+            Direction::Down => self.next_matching_task(results),
+            Direction::Up => self.previous_matching_task(results),
         }
+
         Ok(())
     }
 

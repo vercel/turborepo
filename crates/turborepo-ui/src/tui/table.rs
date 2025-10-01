@@ -38,7 +38,7 @@ impl<'b> TaskTable<'b> {
 
     /// Provides a suggested width for the task table
     pub fn width_hint<'a>(tasks: impl Iterator<Item = &'a str>) -> u16 {
-        let min_width = TASK_HEADER.len().max(TASK_HEADER.len());
+        let min_width = TASK_HEADER.len();
         let task_name_width = tasks
             .map(|task| task.len())
             .max()
@@ -63,63 +63,64 @@ impl<'b> TaskTable<'b> {
         }
     }
 
+    /// Get base style for a task (dimmed or normal)
+    fn task_style(&self, task_name: &str) -> Style {
+        if self.should_dim_task(task_name) {
+            Style::default().add_modifier(Modifier::DIM)
+        } else {
+            Style::default()
+        }
+    }
+
+    /// Get styled status icon for a finished task
+    fn status_icon(&self, task_name: &str, result: TaskResult) -> Cell<'static> {
+        let should_dim = self.should_dim_task(task_name);
+        match result {
+            // matches Next.js (and many other CLI tools) https://github.com/vercel/next.js/blob/1a04d94aaec943d3cce93487fea3b8c8f8898f31/packages/next/src/build/output/log.ts
+            TaskResult::Success => {
+                let style = if should_dim {
+                    Style::default().green().add_modifier(Modifier::DIM)
+                } else {
+                    Style::default().green().bold()
+                };
+                Cell::new(Text::styled("✓", style))
+            }
+            TaskResult::CacheHit => {
+                let style = if should_dim {
+                    Style::default().magenta().add_modifier(Modifier::DIM)
+                } else {
+                    Style::default().magenta()
+                };
+                Cell::new(Text::styled("⊙", style))
+            }
+            TaskResult::Failure => {
+                let style = if should_dim {
+                    Style::default().red().add_modifier(Modifier::DIM)
+                } else {
+                    Style::default().red().bold()
+                };
+                Cell::new(Text::styled("⨯", style))
+            }
+        }
+    }
+
     fn finished_rows(&self) -> impl Iterator<Item = Row<'_>> + '_ {
         self.tasks_by_type.finished.iter().map(move |task| {
-            let should_dim = self.should_dim_task(task.name());
-            let base_style = if should_dim {
-                Style::default().add_modifier(Modifier::DIM)
-            } else {
-                Style::default()
-            };
-
+            let base_style = self.task_style(task.name());
             let name = if matches!(task.result(), TaskResult::CacheHit) {
                 Cell::new(Text::styled(task.name(), base_style.italic()))
             } else {
                 Cell::new(Text::styled(task.name(), base_style))
             };
 
-            Row::new(vec![
-                name,
-                match task.result() {
-                    // matches Next.js (and many other CLI tools) https://github.com/vercel/next.js/blob/1a04d94aaec943d3cce93487fea3b8c8f8898f31/packages/next/src/build/output/log.ts
-                    TaskResult::Success => {
-                        let style = if should_dim {
-                            Style::default().green().add_modifier(Modifier::DIM)
-                        } else {
-                            Style::default().green().bold()
-                        };
-                        Cell::new(Text::styled("✓", style))
-                    }
-                    TaskResult::CacheHit => {
-                        let style = if should_dim {
-                            Style::default().magenta().add_modifier(Modifier::DIM)
-                        } else {
-                            Style::default().magenta()
-                        };
-                        Cell::new(Text::styled("⊙", style))
-                    }
-                    TaskResult::Failure => {
-                        let style = if should_dim {
-                            Style::default().red().add_modifier(Modifier::DIM)
-                        } else {
-                            Style::default().red().bold()
-                        };
-                        Cell::new(Text::styled("⨯", style))
-                    }
-                },
-            ])
+            Row::new(vec![name, self.status_icon(task.name(), task.result())])
         })
     }
 
     fn running_rows(&self) -> impl Iterator<Item = Row<'_>> + '_ {
         let spinner = self.spinner.current();
         self.tasks_by_type.running.iter().map(move |task| {
-            let should_dim = self.should_dim_task(task.name());
-            let style = if should_dim {
-                Style::default().add_modifier(Modifier::DIM)
-            } else {
-                Style::default()
-            };
+            let style = self.task_style(task.name());
             Row::new(vec![
                 Cell::new(Text::styled(task.name(), style)),
                 Cell::new(Text::styled(spinner, style)),
@@ -129,12 +130,7 @@ impl<'b> TaskTable<'b> {
 
     fn planned_rows(&self) -> impl Iterator<Item = Row<'_>> + '_ {
         self.tasks_by_type.planned.iter().map(move |task| {
-            let should_dim = self.should_dim_task(task.name());
-            let style = if should_dim {
-                Style::default().add_modifier(Modifier::DIM)
-            } else {
-                Style::default()
-            };
+            let style = self.task_style(task.name());
             Row::new(vec![
                 Cell::new(Text::styled(task.name(), style)),
                 Cell::new(" "),
