@@ -344,7 +344,7 @@ Some tasks should always be run no matter what, like a deployment script after a
 
 ### Dependent tasks that can be run in parallel
 
-Some tasks can be ran in parallel despite being dependent on other packages. An example of tasks that fit this description are type checkers, since a type checker doesn't need to wait for outputs in dependencies to run successfully.
+Some tasks can be run in parallel despite being dependent on other packages. An example of tasks that fit this description are type checkers, since a type checker doesn't need to wait for outputs in dependencies to run successfully.
 
 Because of this, you may be tempted to define your `check-types` task like this:
 
