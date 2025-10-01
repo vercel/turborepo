@@ -6,7 +6,6 @@ pub struct ResponseTokenMetadata {
     pub name: String,
     #[serde(rename = "type")]
     pub token_type: String,
-    pub origin: String,
     pub scopes: Vec<Scope>,
     #[serde(rename = "activeAt")]
     pub active_at: u128,

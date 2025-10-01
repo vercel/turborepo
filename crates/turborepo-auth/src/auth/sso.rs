@@ -274,7 +274,6 @@ mod tests {
                 id: "test".to_string(),
                 name: "test".to_string(),
                 token_type: "test".to_string(),
-                origin: "test".to_string(),
                 scopes: vec![Scope {
                     scope_type: "team".to_string(),
                     origin: "saml".to_string(),
