@@ -1,6 +1,6 @@
 # `eslint-plugin-turbo`
 
-Ease configuration for Turborepo
+Easy ESLint configuration for Turborepo
 
 ## Installation
 
@@ -16,7 +16,56 @@ npm install eslint --save-dev
 npm install eslint-plugin-turbo --save-dev
 ```
 
-## Usage
+## Usage (Flat Config `eslint.config.js`)
+
+ESLint v9 uses the Flat Config format seen below:
+
+```js
+import turbo from "eslint-plugin-turbo";
+
+export default [turbo.configs["flat/recommended"]];
+```
+
+Otherwise, you may configure the rules you want to use under the rules section.
+
+```js
+import turbo from "eslint-plugin-turbo";
+
+export default [
+  {
+    plugins: {
+      turbo,
+    },
+    rules: {
+      "turbo/no-undeclared-env-vars": "error",
+    },
+  },
+];
+```
+
+## Example (Flat Config `eslint.config.js`)
+
+```js
+import turbo from "eslint-plugin-turbo";
+
+export default [
+  {
+    plugins: {
+      turbo,
+    },
+    rules: {
+      "turbo/no-undeclared-env-vars": [
+        "error",
+        {
+          allowList: ["^ENV_[A-Z]+$"],
+        },
+      ],
+    },
+  },
+];
+```
+
+## Usage (Legacy `eslintrc*`)
 
 Add `turbo` to the plugins section of your `.eslintrc` configuration file. You can omit the `eslint-plugin-` prefix:
 
@@ -36,7 +85,7 @@ Then configure the rules you want to use under the rules section.
 }
 ```
 
-### Example
+## Example (Legacy `eslintrc*`)
 
 ```json
 {

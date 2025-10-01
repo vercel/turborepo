@@ -1,0 +1,12 @@
+---
+source: crates/turborepo-lib/src/cli/mod.rs
+expression: err
+---
+error: unexpected argument '--no-daemon' found
+
+  tip: a similar argument exists: '--no-update-notifier'
+  tip: to pass '--no-daemon' as a value, use '-- --no-daemon'
+
+Usage: turbo watch --no-update-notifier <--cache-dir <CACHE_DIR>|--concurrency <CONCURRENCY>|--continue[=<CONTINUE>]|--single-package|--framework-inference [<BOOL>]|--global-deps <GLOBAL_DEPS>|--env-mode [<ENV_MODE>]|--filter <FILTER>|--affected|--output-logs <OUTPUT_LOGS>|--log-order <LOG_ORDER>|--only|--pkg-inference-root <PKG_INFERENCE_ROOT>|--log-prefix <LOG_PREFIX>|TASKS|PASS_THROUGH_ARGS>
+
+For more information, try '--help'.

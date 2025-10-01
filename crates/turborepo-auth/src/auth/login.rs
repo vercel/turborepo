@@ -5,9 +5,9 @@ use reqwest::Url;
 use tokio::sync::OnceCell;
 use tracing::{debug, warn};
 use turborepo_api_client::{CacheClient, Client, TokenClient};
-use turborepo_ui::{start_spinner, ColorConfig, BOLD};
+use turborepo_ui::{BOLD, ColorConfig, start_spinner};
 
-use crate::{auth::extract_vercel_token, error, ui, LoginOptions, Token};
+use crate::{LoginOptions, Token, auth::extract_vercel_token, error, ui};
 
 const DEFAULT_HOST_NAME: &str = "127.0.0.1";
 const DEFAULT_PORT: u16 = 9789;
@@ -29,6 +29,7 @@ pub async fn login<T: Client + TokenClient + CacheClient>(
         existing_token,
         force,
         sso_team: _,
+        sso_login_callback_port,
     } = *options; // Deref or we get double references for each of these
 
     // I created a closure that gives back a closure since the `is_valid` checks do
@@ -83,7 +84,8 @@ pub async fn login<T: Client + TokenClient + CacheClient>(
         }
     }
 
-    let redirect_url = format!("http://{DEFAULT_HOST_NAME}:{DEFAULT_PORT}");
+    let port = sso_login_callback_port.unwrap_or(DEFAULT_PORT);
+    let redirect_url = format!("http://{DEFAULT_HOST_NAME}:{port}");
     let mut login_url = Url::parse(login_url_configuration)?;
     let mut success_url = login_url.clone();
     success_url
@@ -117,7 +119,7 @@ pub async fn login<T: Client + TokenClient + CacheClient>(
     let token_cell = Arc::new(OnceCell::new());
     login_server
         .run(
-            DEFAULT_PORT,
+            port,
             crate::LoginType::Basic {
                 success_redirect: success_url.to_string(),
             },
@@ -147,13 +149,13 @@ mod tests {
     use async_trait::async_trait;
     use reqwest::{Method, RequestBuilder, Response};
     use turborepo_vercel_api::{
-        CachingStatus, CachingStatusResponse, Membership, Role, SpacesResponse, Team,
-        TeamsResponse, User, UserResponse, VerifiedSsoUser,
+        CachingStatus, CachingStatusResponse, Membership, Role, Team, TeamsResponse, User,
+        UserResponse, VerifiedSsoUser,
     };
     use turborepo_vercel_api_mock::start_test_server;
 
     use super::*;
-    use crate::{login_server, LoginServer};
+    use crate::{LoginServer, login_server};
 
     struct MockLoginServer {
         hits: Arc<AtomicUsize>,
@@ -247,13 +249,6 @@ mod tests {
         fn add_ci_header(_request_builder: RequestBuilder) -> RequestBuilder {
             unimplemented!("add_ci_header")
         }
-        async fn get_spaces(
-            &self,
-            _token: &str,
-            _team_id: Option<&str>,
-        ) -> turborepo_api_client::Result<SpacesResponse> {
-            unimplemented!("get_spaces")
-        }
         async fn verify_sso_token(
             &self,
             token: &str,
@@ -319,10 +314,11 @@ mod tests {
             &self,
             _hash: &str,
             _artifact_body: impl turborepo_api_client::Stream<
-                    Item = Result<turborepo_api_client::Bytes, turborepo_api_client::Error>,
-                > + Send
-                + Sync
-                + 'static,
+                Item = Result<turborepo_api_client::Bytes, turborepo_api_client::Error>,
+            > + Send
+            + Sync
+            + 'static,
+            _body_len: usize,
             _duration: u64,
             _tag: Option<&str>,
             _token: &str,

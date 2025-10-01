@@ -5,8 +5,8 @@ use std::{
     collections::HashMap,
     path::Path,
     sync::{
-        atomic::{AtomicUsize, Ordering},
         Arc,
+        atomic::{AtomicUsize, Ordering},
     },
     time::Duration,
 };
@@ -27,14 +27,15 @@ use turborepo_repository::{
         DiscoveryResponse, LocalPackageDiscoveryBuilder, PackageDiscovery, PackageDiscoveryBuilder,
         WorkspaceData,
     },
-    package_manager::{self, PackageManager, WorkspaceGlobs},
+    package_manager::{self, PackageManager},
+    workspaces::WorkspaceGlobs,
 };
 
 use crate::{
+    NotifyError,
     cookies::{CookieRegister, CookieWriter, CookiedOptionalWatch},
     debouncer::Debouncer,
     optional_watch::OptionalWatch,
-    NotifyError,
 };
 
 #[derive(Debug, Error)]
@@ -155,7 +156,7 @@ enum PackageState {
     InvalidGlobs(String),
     ValidWorkspaces {
         package_manager: PackageManager,
-        filter: WorkspaceGlobs,
+        filter: Box<WorkspaceGlobs>,
         workspaces: HashMap<AbsoluteSystemPathBuf, WorkspaceData>,
     },
 }
@@ -166,7 +167,7 @@ enum State {
         debouncer: Arc<Debouncer>,
         version: Version,
     },
-    Ready(PackageState),
+    Ready(Box<PackageState>),
 }
 
 // Because our package manager detection is coupled with the workspace globs, we
@@ -176,10 +177,11 @@ enum State {
 const INVALIDATION_PATHS: &[&str] = &[
     "package.json",
     "pnpm-workspace.yaml",
-    "pnpm-lock.yaml",
-    "package-lock.json",
-    "yarn.lock",
-    "bun.lockb",
+    package_manager::pnpm::LOCKFILE,
+    package_manager::npm::LOCKFILE,
+    package_manager::yarn::LOCKFILE,
+    package_manager::bun::LOCKFILE_BINARY,
+    package_manager::bun::LOCKFILE,
 ];
 
 impl Subscriber {
@@ -289,7 +291,7 @@ impl Subscriber {
             // ignore this update, as we know it is stale.
             if package_result.version == *version {
                 self.write_state(&package_result.state);
-                *state = State::Ready(package_result.state);
+                *state = State::Ready(Box::new(package_result.state));
             }
         }
     }
@@ -365,12 +367,12 @@ impl Subscriber {
         state: &mut State,
         package_state_tx: &mpsc::Sender<DiscoveryResult>,
     ) {
-        if let State::Pending { debouncer, .. } = state {
-            if debouncer.bump() {
-                // We successfully bumped the debouncer, which was already pending,
-                // so a new discovery will happen shortly.
-                return;
-            }
+        if let State::Pending { debouncer, .. } = state
+            && debouncer.bump()
+        {
+            // We successfully bumped the debouncer, which was already pending,
+            // so a new discovery will happen shortly.
+            return;
         }
         // We either failed to bump the debouncer, or we don't have a rediscovery
         // queued, but we need one.
@@ -400,8 +402,10 @@ impl Subscriber {
         // If we don't have a valid package manager and workspace globs, nothing to be
         // done here
         let PackageState::ValidWorkspaces {
-            filter, workspaces, ..
-        } = package_state
+            ref filter,
+            ref mut workspaces,
+            ..
+        } = **package_state
         else {
             return;
         };
@@ -445,13 +449,15 @@ impl Subscriber {
             tracing::debug!("handling change to workspace {path_workspace}");
             let package_json = path_workspace.join_component("package.json");
             let turbo_json = path_workspace.join_component("turbo.json");
+            let turbo_jsonc = path_workspace.join_component("turbo.jsonc");
 
-            let (package_exists, turbo_exists) = join!(
+            let (package_exists, turbo_json_exists, turbo_jsonc_exists) = join!(
                 // It's possible that an IO error could occur other than the file not existing, but
                 // we will treat it like the file doesn't exist. It's possible we'll need to
                 // revisit this, depending on what kind of errors occur.
                 tokio::fs::try_exists(&package_json).map(|result| result.unwrap_or(false)),
-                tokio::fs::try_exists(&turbo_json)
+                tokio::fs::try_exists(&turbo_json),
+                tokio::fs::try_exists(&turbo_jsonc)
             );
 
             changed |= if package_exists {
@@ -460,7 +466,14 @@ impl Subscriber {
                         path_workspace.to_owned(),
                         WorkspaceData {
                             package_json,
-                            turbo_json: turbo_exists.unwrap_or_default().then_some(turbo_json),
+                            turbo_json: turbo_json_exists
+                                .unwrap_or_default()
+                                .then_some(turbo_json)
+                                .or_else(|| {
+                                    turbo_jsonc_exists
+                                        .unwrap_or_default()
+                                        .then_some(turbo_jsonc)
+                                }),
                         },
                     )
                     .is_none()
@@ -505,7 +518,7 @@ impl Subscriber {
                 ..
             } => {
                 let resp = DiscoveryResponse {
-                    package_manager: *package_manager,
+                    package_manager: package_manager.clone(),
                     workspaces: workspaces.values().cloned().collect(),
                 };
                 // Note that we could implement PartialEq for DiscoveryResponse, but we
@@ -550,7 +563,7 @@ async fn discover_packages(repo_root: AbsoluteSystemPathBuf) -> PackageState {
         .collect::<HashMap<_, _>>();
     PackageState::ValidWorkspaces {
         package_manager: initial_discovery.package_manager,
-        filter,
+        filter: Box::new(filter),
         workspaces,
     }
 }
@@ -562,7 +575,7 @@ mod test {
     use turbopath::AbsoluteSystemPathBuf;
     use turborepo_repository::{discovery::WorkspaceData, package_manager::PackageManager};
 
-    use crate::{cookies::CookieWriter, package_watcher::PackageWatcher, FileSystemWatcher};
+    use crate::{FileSystemWatcher, cookies::CookieWriter, package_watcher::PackageWatcher};
 
     #[tokio::test]
     #[tracing_test::traced_test]

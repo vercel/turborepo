@@ -1,5 +1,6 @@
 mod env;
 mod file;
+mod override_env;
 mod turbo_json;
 
 use std::{collections::HashMap, ffi::OsString, io};
@@ -7,24 +8,29 @@ use std::{collections::HashMap, ffi::OsString, io};
 use camino::{Utf8Path, Utf8PathBuf};
 use convert_case::{Case, Casing};
 use derive_setters::Setters;
-use env::{EnvVars, OverrideEnvVars};
+use env::EnvVars;
 use file::{AuthFile, ConfigFile};
 use merge::Merge;
 use miette::{Diagnostic, NamedSource, SourceSpan};
+use override_env::OverrideEnvVars;
 use serde::Deserialize;
 use struct_iterable::Iterable;
 use thiserror::Error;
+use tracing::debug;
 use turbo_json::TurboJsonReader;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
+use turborepo_cache::CacheConfig;
 use turborepo_errors::TURBO_SITE;
 use turborepo_repository::package_graph::PackageName;
 
-pub use crate::turbo_json::{RawTurboJson, UIMode};
+pub use crate::turbo_json::UIMode;
 use crate::{
     cli::{EnvMode, LogOrder},
-    commands::CommandBase,
-    turbo_json::CONFIG_FILE,
+    turbo_json::FutureFlags,
 };
+
+pub const CONFIG_FILE: &str = "turbo.json";
+pub const CONFIG_FILE_JSONC: &str = "turbo.jsonc";
 
 #[derive(Debug, Error, Diagnostic)]
 #[error("Environment variables should not be prefixed with \"{env_pipeline_delimiter}\"")]
@@ -36,10 +42,25 @@ pub struct InvalidEnvPrefixError {
     pub value: String,
     pub key: String,
     #[source_code]
-    pub text: NamedSource,
+    pub text: NamedSource<String>,
     #[label("variable with invalid prefix declared here")]
     pub span: Option<SourceSpan>,
     pub env_pipeline_delimiter: &'static str,
+}
+
+#[derive(Debug, Error, Diagnostic)]
+#[diagnostic(
+    code(unnecessary_package_task_syntax),
+    url("{}/messages/{}", TURBO_SITE, self.code().unwrap().to_string().to_case(Case::Kebab))
+)]
+#[error("\"{actual}\". Use \"{wanted}\" instead.")]
+pub struct UnnecessaryPackageTaskSyntaxError {
+    pub actual: String,
+    pub wanted: String,
+    #[label("unnecessary package syntax found here")]
+    pub span: Option<SourceSpan>,
+    #[source_code]
+    pub text: NamedSource<String>,
 }
 
 #[allow(clippy::enum_variant_names)]
@@ -47,19 +68,24 @@ pub struct InvalidEnvPrefixError {
 pub enum Error {
     #[error("Authentication error: {0}")]
     Auth(#[from] turborepo_auth::Error),
-    #[error("Global config path not found")]
+    #[error("Global config path not found.")]
     NoGlobalConfigPath,
-    #[error("Global auth file path not found")]
+    #[error("Global authentication file path not found.")]
     NoGlobalAuthFilePath,
-    #[error("Global config directory not found")]
+    #[error("Global config directory not found.")]
     NoGlobalConfigDir,
     #[error(transparent)]
     PackageJson(#[from] turborepo_repository::package_json::Error),
     #[error(
-        "Could not find turbo.json.\nFollow directions at https://turbo.build/repo/docs to create \
-         one"
+        "Could not find turbo.json or turbo.jsonc.\nFollow directions at https://turborepo.com/docs \
+         to create one."
     )]
     NoTurboJSON,
+    #[error(
+        "Found both turbo.json and turbo.jsonc in the same directory: {directory}\nRemove either \
+         turbo.json or turbo.jsonc so there is only one."
+    )]
+    MultipleTurboConfigs { directory: String },
     #[error(transparent)]
     SerdeJson(#[from] serde_json::Error),
     #[error(transparent)]
@@ -68,16 +94,18 @@ pub enum Error {
     Camino(#[from] camino::FromPathBufError),
     #[error(transparent)]
     Reqwest(#[from] reqwest::Error),
-    #[error("Encountered an IO error while attempting to read {config_path}: {error}")]
+    #[error("Encountered an I/O error while attempting to read {config_path}: {error}")]
     FailedToReadConfig {
         config_path: AbsoluteSystemPathBuf,
         error: io::Error,
     },
-    #[error("Encountered an IO error while attempting to set {config_path}: {error}")]
+    #[error("Encountered an I/O error while attempting to set {config_path}: {error}")]
     FailedToSetConfig {
         config_path: AbsoluteSystemPathBuf,
         error: io::Error,
     },
+    #[error(transparent)]
+    Cache(#[from] turborepo_cache::config::Error),
     #[error(
         "Package tasks (<package>#<task>) are not allowed in single-package repositories: found \
          {task_id}"
@@ -86,8 +114,15 @@ pub enum Error {
     PackageTaskInSinglePackageMode {
         task_id: String,
         #[source_code]
-        text: NamedSource,
+        text: NamedSource<String>,
         #[label("package task found here")]
+        span: Option<SourceSpan>,
+    },
+    #[error("Interruptible tasks must be persistent.")]
+    InterruptibleButNotPersistent {
+        #[source_code]
+        text: NamedSource<String>,
+        #[label("`interruptible` set here")]
         span: Option<SourceSpan>,
     },
     #[error(transparent)]
@@ -95,63 +130,60 @@ pub enum Error {
     InvalidEnvPrefix(Box<InvalidEnvPrefixError>),
     #[error(transparent)]
     PathError(#[from] turbopath::PathError),
-    #[diagnostic(
-        code(unnecessary_package_task_syntax),
-        url("{}/messages/{}", TURBO_SITE, self.code().unwrap().to_string().to_case(Case::Kebab))
-    )]
-    #[error("\"{actual}\". Use \"{wanted}\" instead")]
-    UnnecessaryPackageTaskSyntax {
-        actual: String,
-        wanted: String,
-        #[label("unnecessary package syntax found here")]
-        span: Option<SourceSpan>,
-        #[source_code]
-        text: NamedSource,
-    },
-    #[error("You can only extend from the root workspace")]
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    UnnecessaryPackageTaskSyntax(Box<UnnecessaryPackageTaskSyntaxError>),
+    #[error("You can only extend from the root of the workspace.")]
     ExtendFromNonRoot {
         #[label("non-root workspace found here")]
         span: Option<SourceSpan>,
         #[source_code]
-        text: NamedSource,
+        text: NamedSource<String>,
     },
-    #[error("`{field}` cannot contain an environment variable")]
+    #[error("You must extend from the root of the workspace first.")]
+    ExtendsRootFirst {
+        #[label("'//' should be first")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource<String>,
+    },
+    #[error("`{field}` cannot contain an environment variable.")]
     InvalidDependsOnValue {
         field: &'static str,
         #[label("environment variable found here")]
         span: Option<SourceSpan>,
         #[source_code]
-        text: NamedSource,
+        text: NamedSource<String>,
     },
-    #[error("`{field}` cannot contain an absolute path")]
+    #[error("`{field}` cannot contain an absolute path.")]
     AbsolutePathInConfig {
         field: &'static str,
         #[label("absolute path found here")]
         span: Option<SourceSpan>,
         #[source_code]
-        text: NamedSource,
+        text: NamedSource<String>,
     },
-    #[error("No \"extends\" key found")]
+    #[error("No \"extends\" key found.")]
     NoExtends {
         #[label("add extends key here")]
         span: Option<SourceSpan>,
         #[source_code]
-        text: NamedSource,
+        text: NamedSource<String>,
     },
-    #[error("Tasks cannot be marked as interactive and cacheable")]
+    #[error("Tasks cannot be marked as interactive and cacheable.")]
     InteractiveNoCacheable {
         #[label("marked interactive here")]
         span: Option<SourceSpan>,
         #[source_code]
-        text: NamedSource,
+        text: NamedSource<String>,
     },
-    #[error("found `pipeline` field instead of `tasks`")]
-    #[diagnostic(help("changed in 2.0: `pipeline` has been renamed to `tasks`"))]
+    #[error("Found `pipeline` field instead of `tasks`.")]
+    #[diagnostic(help("Changed in 2.0: `pipeline` has been renamed to `tasks`."))]
     PipelineField {
-        #[label("rename `pipeline` field to `tasks`")]
+        #[label("Rename `pipeline` field to `tasks`")]
         span: Option<SourceSpan>,
         #[source_code]
-        text: NamedSource,
+        text: NamedSource<String>,
     },
     #[error("Failed to create APIClient: {0}")]
     ApiClient(#[source] turborepo_api_client::Error),
@@ -161,9 +193,9 @@ pub enum Error {
     InvalidSignature,
     #[error("TURBO_REMOTE_CACHE_ENABLED should be either 1 or 0.")]
     InvalidRemoteCacheEnabled,
-    #[error("TURBO_REMOTE_CACHE_TIMEOUT: error parsing timeout.")]
+    #[error("TURBO_REMOTE_CACHE_TIMEOUT: Error parsing timeout.")]
     InvalidRemoteCacheTimeout(#[source] std::num::ParseIntError),
-    #[error("TURBO_REMOTE_CACHE_UPLOAD_TIMEOUT: error parsing timeout.")]
+    #[error("TURBO_REMOTE_CACHE_UPLOAD_TIMEOUT: Error parsing timeout.")]
     InvalidUploadTimeout(#[source] std::num::ParseIntError),
     #[error("TURBO_PREFLIGHT should be either 1 or 0.")]
     InvalidPreflight,
@@ -173,21 +205,60 @@ pub enum Error {
     #[diagnostic(transparent)]
     TurboJsonParseError(#[from] crate::turbo_json::parser::Error),
     #[error("found absolute path in `cacheDir`")]
-    #[diagnostic(help("if absolute paths are required, use `--cache-dir` or `TURBO_CACHE_DIR`"))]
+    #[diagnostic(help("If absolute paths are required, use `--cache-dir` or `TURBO_CACHE_DIR`."))]
     AbsoluteCacheDir {
-        #[label("make `cacheDir` value a relative unix path")]
+        #[label("Make `cacheDir` value a relative unix path.")]
         span: Option<SourceSpan>,
         #[source_code]
-        text: NamedSource,
+        text: NamedSource<String>,
     },
-    #[error("Cannot load turbo.json for in {0} single package mode")]
+    #[error("Cannot load turbo.json for {0} in single package mode.")]
     InvalidTurboJsonLoad(PackageName),
+    #[error("\"$TURBO_ROOT$\" must be used at the start of glob.")]
+    InvalidTurboRootUse {
+        #[label("\"$TURBO_ROOT$\" must be used at the start of glob.")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource<String>,
+    },
+    #[error("\"$TURBO_ROOT$\" must be followed by a '/'.")]
+    InvalidTurboRootNeedsSlash {
+        #[label("\"$TURBO_ROOT$\" must be followed by a '/'.")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource<String>,
+    },
+    #[error("`with` cannot use dependency relationships.")]
+    InvalidTaskWith {
+        #[label("Remove `^` from start of task name.")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource<String>,
+    },
+    #[error(
+        "The \"futureFlags\" key can only be used in the root turbo.json. Please remove it from \
+         Package Configurations."
+    )]
+    FutureFlagsInPackage {
+        #[label("futureFlags key found here")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource<String>,
+    },
+    #[error(
+        "TURBO_TUI_SCROLLBACK_LENGTH: Invalid value. Use a number for how many lines to keep in \
+         scrollback."
+    )]
+    InvalidTuiScrollbackLength(#[source] std::num::ParseIntError),
+    #[error("TURBO_SSO_LOGIN_CALLBACK_PORT: Invalid value. Use a number for the callback port.")]
+    InvalidSsoLoginCallbackPort(#[source] std::num::ParseIntError),
 }
 
 const DEFAULT_API_URL: &str = "https://vercel.com/api";
 const DEFAULT_LOGIN_URL: &str = "https://vercel.com";
 const DEFAULT_TIMEOUT: u64 = 30;
 const DEFAULT_UPLOAD_TIMEOUT: u64 = 60;
+const DEFAULT_TUI_SCROLLBACK_LENGTH: u64 = 2048;
 
 // We intentionally don't derive Serialize so that different parts
 // of the code that want to display the config can tune how they
@@ -211,18 +282,20 @@ pub struct ConfigurationOptions {
     #[serde(alias = "teamslug")]
     #[serde(alias = "TeamSlug")]
     #[serde(alias = "TEAMSLUG")]
+    /// corresponds to env var TURBO_TEAM
     pub(crate) team_slug: Option<String>,
     #[serde(alias = "teamid")]
     #[serde(alias = "TeamId")]
     #[serde(alias = "TEAMID")]
+    /// corresponds to env var TURBO_TEAMID
     pub(crate) team_id: Option<String>,
+    /// corresponds to env var TURBO_TOKEN
     pub(crate) token: Option<String>,
     pub(crate) signature: Option<bool>,
     pub(crate) preflight: Option<bool>,
     pub(crate) timeout: Option<u64>,
     pub(crate) upload_timeout: Option<u64>,
     pub(crate) enabled: Option<bool>,
-    pub(crate) spaces_id: Option<String>,
     #[serde(rename = "ui")]
     pub(crate) ui: Option<UIMode>,
     #[serde(rename = "dangerouslyDisablePackageManagerCheck")]
@@ -239,10 +312,18 @@ pub struct ConfigurationOptions {
     pub(crate) root_turbo_json_path: Option<AbsoluteSystemPathBuf>,
     pub(crate) force: Option<bool>,
     pub(crate) log_order: Option<LogOrder>,
+    #[serde(skip)]
+    pub(crate) cache: Option<CacheConfig>,
     pub(crate) remote_only: Option<bool>,
     pub(crate) remote_cache_read_only: Option<bool>,
     pub(crate) run_summary: Option<bool>,
     pub(crate) allow_no_turbo_json: Option<bool>,
+    pub(crate) tui_scrollback_length: Option<u64>,
+    pub(crate) concurrency: Option<String>,
+    pub(crate) no_update_notifier: Option<bool>,
+    pub(crate) sso_login_callback_port: Option<u16>,
+    #[serde(skip)]
+    future_flags: Option<FutureFlags>,
 }
 
 #[derive(Default)]
@@ -299,8 +380,9 @@ impl ConfigurationOptions {
         self.upload_timeout.unwrap_or(DEFAULT_UPLOAD_TIMEOUT)
     }
 
-    pub fn spaces_id(&self) -> Option<&str> {
-        self.spaces_id.as_deref()
+    pub fn tui_scrollback_length(&self) -> u64 {
+        self.tui_scrollback_length
+            .unwrap_or(DEFAULT_TUI_SCROLLBACK_LENGTH)
     }
 
     pub fn ui(&self) -> UIMode {
@@ -329,6 +411,15 @@ impl ConfigurationOptions {
     }
 
     pub fn daemon(&self) -> Option<bool> {
+        // hardcode to off in CI
+        if turborepo_ci::is_ci() {
+            if Some(true) == self.daemon {
+                debug!("Ignoring daemon setting and disabling the daemon because we're in CI");
+            }
+
+            return Some(false);
+        }
+
         self.daemon
     }
 
@@ -344,6 +435,10 @@ impl ConfigurationOptions {
                 ".turbo/cache"
             })
         })
+    }
+
+    pub fn cache(&self) -> Option<CacheConfig> {
+        self.cache
     }
 
     pub fn force(&self) -> bool {
@@ -366,14 +461,31 @@ impl ConfigurationOptions {
         self.run_summary.unwrap_or_default()
     }
 
-    pub fn root_turbo_json_path(&self, repo_root: &AbsoluteSystemPath) -> AbsoluteSystemPathBuf {
-        self.root_turbo_json_path
-            .clone()
-            .unwrap_or_else(|| repo_root.join_component(CONFIG_FILE))
+    pub fn root_turbo_json_path(
+        &self,
+        repo_root: &AbsoluteSystemPath,
+    ) -> Result<AbsoluteSystemPathBuf, Error> {
+        if let Some(path) = &self.root_turbo_json_path {
+            return Ok(path.clone());
+        }
+
+        resolve_turbo_config_path(repo_root)
     }
 
     pub fn allow_no_turbo_json(&self) -> bool {
         self.allow_no_turbo_json.unwrap_or_default()
+    }
+
+    pub fn no_update_notifier(&self) -> bool {
+        self.no_update_notifier.unwrap_or_default()
+    }
+
+    pub fn sso_login_callback_port(&self) -> Option<u16> {
+        self.sso_login_callback_port
+    }
+
+    pub fn future_flags(&self) -> FutureFlags {
+        self.future_flags.unwrap_or_default()
     }
 }
 
@@ -406,23 +518,18 @@ fn get_lowercased_env_vars() -> HashMap<OsString, OsString> {
 }
 
 impl TurborepoConfigBuilder {
-    pub fn new(base: &CommandBase) -> Self {
+    pub fn new(repo_root: &AbsoluteSystemPath) -> Self {
         Self {
-            repo_root: base.repo_root.to_owned(),
+            repo_root: repo_root.to_owned(),
             override_config: Default::default(),
-            global_config_path: base.override_global_config_path.clone(),
+            global_config_path: None,
             environment: None,
         }
     }
 
-    // Getting all of the paths.
-    #[allow(dead_code)]
-    fn root_package_json_path(&self) -> AbsoluteSystemPathBuf {
-        self.repo_root.join_component("package.json")
-    }
-    #[allow(dead_code)]
-    fn root_turbo_json_path(&self) -> AbsoluteSystemPathBuf {
-        self.repo_root.join_component("turbo.json")
+    pub fn with_global_config_path(mut self, path: AbsoluteSystemPathBuf) -> Self {
+        self.global_config_path = Some(path);
+        self
     }
 
     fn get_environment(&self) -> HashMap<OsString, OsString> {
@@ -450,9 +557,9 @@ impl TurborepoConfigBuilder {
 
         // These are ordered from highest to lowest priority
         let sources: [Box<dyn ResolvedConfigurationOptions>; 7] = [
-            Box::new(override_env_var_config),
             Box::new(&self.override_config),
             Box::new(env_var_config),
+            Box::new(override_env_var_config),
             Box::new(local_config),
             Box::new(global_auth),
             Box::new(global_config),
@@ -475,6 +582,32 @@ impl TurborepoConfigBuilder {
     }
 }
 
+/// Given a directory path, determines which turbo.json configuration file to
+/// use. Returns an error if both turbo.json and turbo.jsonc exist in the same
+/// directory. Returns the path to the config file to use, defaulting to
+/// turbo.json if neither exists.
+pub fn resolve_turbo_config_path(
+    dir_path: &turbopath::AbsoluteSystemPath,
+) -> Result<turbopath::AbsoluteSystemPathBuf, crate::config::Error> {
+    use crate::config::Error;
+
+    let turbo_json_path = dir_path.join_component(CONFIG_FILE);
+    let turbo_jsonc_path = dir_path.join_component(CONFIG_FILE_JSONC);
+
+    let turbo_json_exists = turbo_json_path.try_exists()?;
+    let turbo_jsonc_exists = turbo_jsonc_path.try_exists()?;
+
+    match (turbo_json_exists, turbo_jsonc_exists) {
+        (true, true) => Err(Error::MultipleTurboConfigs {
+            directory: dir_path.to_string(),
+        }),
+        (true, false) => Ok(turbo_json_path),
+        (false, true) => Ok(turbo_jsonc_path),
+        // Default to turbo.json if neither exists
+        (false, false) => Ok(turbo_json_path),
+    }
+}
+
 #[cfg(test)]
 mod test {
     use std::{collections::HashMap, ffi::OsString};
@@ -483,8 +616,8 @@ mod test {
     use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 
     use crate::config::{
-        ConfigurationOptions, TurborepoConfigBuilder, DEFAULT_API_URL, DEFAULT_LOGIN_URL,
-        DEFAULT_TIMEOUT,
+        ConfigurationOptions, TurborepoConfigBuilder, CONFIG_FILE, CONFIG_FILE_JSONC,
+        DEFAULT_API_URL, DEFAULT_LOGIN_URL, DEFAULT_TIMEOUT,
     };
 
     #[test]
@@ -499,7 +632,6 @@ mod test {
         assert!(defaults.enabled());
         assert!(!defaults.preflight());
         assert_eq!(defaults.timeout(), DEFAULT_TIMEOUT);
-        assert_eq!(defaults.spaces_id(), None);
         assert!(!defaults.allow_no_package_manager());
         let repo_root = AbsoluteSystemPath::new(if cfg!(windows) {
             "C:\\fake\\repo"
@@ -508,7 +640,7 @@ mod test {
         })
         .unwrap();
         assert_eq!(
-            defaults.root_turbo_json_path(repo_root),
+            defaults.root_turbo_json_path(repo_root).unwrap(),
             repo_root.join_component("turbo.json")
         )
     }
@@ -544,23 +676,16 @@ mod test {
             vercel_artifacts_owner.into(),
         );
 
-        let override_config = ConfigurationOptions {
-            token: Some("unseen".into()),
-            team_id: Some("unseen".into()),
-            ..Default::default()
-        };
-
         let builder = TurborepoConfigBuilder {
             repo_root,
-            override_config,
+            override_config: Default::default(),
             global_config_path: Some(global_config_path),
             environment: Some(env),
         };
 
         let config = builder.build().unwrap();
-        assert_eq!(config.team_id().unwrap(), vercel_artifacts_owner);
-        assert_eq!(config.token().unwrap(), vercel_artifacts_token);
-        assert_eq!(config.spaces_id().unwrap(), "my-spaces-id");
+        assert_eq!(config.team_id().unwrap(), turbo_teamid);
+        assert_eq!(config.token().unwrap(), turbo_token);
     }
 
     #[test]
@@ -607,5 +732,67 @@ mod test {
         assert!(config.signature());
         assert!(!config.preflight());
         assert_eq!(config.timeout(), 123);
+    }
+
+    #[test]
+    fn test_multiple_turbo_configs() {
+        let tmp_dir = TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPath::from_std_path(tmp_dir.path()).unwrap();
+
+        // Create both turbo.json and turbo.jsonc
+        let turbo_json_path = repo_root.join_component(CONFIG_FILE);
+        let turbo_jsonc_path = repo_root.join_component(CONFIG_FILE_JSONC);
+
+        turbo_json_path.create_with_contents("{}").unwrap();
+        turbo_jsonc_path.create_with_contents("{}").unwrap();
+
+        // Test ConfigurationOptions.root_turbo_json_path
+        let config = ConfigurationOptions::default();
+        let result = config.root_turbo_json_path(repo_root);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_only_turbo_json() {
+        let tmp_dir = TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPath::from_std_path(tmp_dir.path()).unwrap();
+
+        // Create only turbo.json
+        let turbo_json_path = repo_root.join_component(CONFIG_FILE);
+        turbo_json_path.create_with_contents("{}").unwrap();
+
+        // Test ConfigurationOptions.root_turbo_json_path
+        let config = ConfigurationOptions::default();
+        let result = config.root_turbo_json_path(repo_root);
+
+        assert_eq!(result.unwrap(), turbo_json_path);
+    }
+
+    #[test]
+    fn test_only_turbo_jsonc() {
+        let tmp_dir = TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPath::from_std_path(tmp_dir.path()).unwrap();
+
+        // Create only turbo.jsonc
+        let turbo_jsonc_path = repo_root.join_component(CONFIG_FILE_JSONC);
+        turbo_jsonc_path.create_with_contents("{}").unwrap();
+
+        // Test ConfigurationOptions.root_turbo_json_path
+        let config = ConfigurationOptions::default();
+        let result = config.root_turbo_json_path(repo_root);
+
+        assert_eq!(result.unwrap(), turbo_jsonc_path);
+    }
+
+    #[test]
+    fn test_no_turbo_config() {
+        let tmp_dir = TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPath::from_std_path(tmp_dir.path()).unwrap();
+
+        // Test ConfigurationOptions.root_turbo_json_path
+        let config = ConfigurationOptions::default();
+        let result = config.root_turbo_json_path(repo_root);
+
+        assert_eq!(result.unwrap(), repo_root.join_component(CONFIG_FILE));
     }
 }

@@ -16,7 +16,11 @@ use tracing::{debug, warn};
 pub use turbo_state::TurboState;
 use turbo_updater::display_update_check;
 use turbopath::AbsoluteSystemPathBuf;
-use turborepo_repository::inference::{RepoMode, RepoState};
+use turborepo_repository::{
+    inference::{RepoMode, RepoState},
+    package_manager,
+    package_manager::PackageManager,
+};
 use turborepo_ui::ColorConfig;
 use which::which;
 
@@ -29,7 +33,7 @@ pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
     MultipleCwd(Box<MultipleCwd>),
-    #[error("No value assigned to `--cwd` flag")]
+    #[error("No value assigned to `--cwd` flag.")]
     #[diagnostic(code(turbo::shim::empty_cwd))]
     EmptyCwd {
         #[backtrace]
@@ -39,20 +43,32 @@ pub enum Error {
         #[label = "Requires a path to be passed after it"]
         flag_range: SourceSpan,
     },
+    #[error("No value assigned to `--root-turbo-json` flag.")]
+    #[diagnostic(code(turbo::shim::empty_root_turbo_json))]
+    EmptyRootTurboJson {
+        #[backtrace]
+        backtrace: Backtrace,
+        #[source_code]
+        args_string: String,
+        #[label = "Requires a path to be passed after it"]
+        flag_range: SourceSpan,
+    },
+    #[error("The {flag} flag is not supported. {suggestion}")]
+    UnsupportedFlag { flag: String, suggestion: String },
     #[error(transparent)]
     #[diagnostic(transparent)]
     Cli(#[from] cli::Error),
     #[error(transparent)]
     Inference(#[from] turborepo_repository::inference::Error),
-    #[error("failed to execute local turbo process")]
+    #[error("Failed to execute local `turbo` process.")]
     LocalTurboProcess(#[source] std::io::Error),
-    #[error("failed to resolve local turbo path: {0}")]
+    #[error("Failed to resolve local `turbo` path: {0}")]
     LocalTurboPath(String),
-    #[error("failed to find npx: {0}")]
+    #[error("Failed to find `npx`: {0}")]
     Which(#[from] which::Error),
-    #[error("failed to execute turbo via npx")]
+    #[error("Failed to execute `turbo` via `npx`.")]
     NpxTurboProcess(#[source] std::io::Error),
-    #[error("failed to resolve repository root: {0}")]
+    #[error("Failed to resolve repository root: {0}")]
     RepoRootPath(AbsoluteSystemPathBuf),
     #[error(transparent)]
     Path(#[from] turbopath::PathError),
@@ -74,8 +90,16 @@ fn run_correct_turbo(
     subscriber: &TurboSubscriber,
     ui: ColorConfig,
 ) -> Result<i32, Error> {
+    let package_manager = repo_state.package_manager.as_ref();
+
     if let Some(turbo_state) = LocalTurboState::infer(&repo_state.root) {
-        try_check_for_updates(&shim_args, turbo_state.version());
+        let mut builder = crate::config::TurborepoConfigBuilder::new(&repo_state.root);
+        if let Some(root_turbo_json) = &shim_args.root_turbo_json {
+            builder = builder.with_root_turbo_json_path(Some(root_turbo_json.clone()));
+        }
+        let config = builder.build().unwrap_or_default();
+
+        try_check_for_updates(&shim_args, turbo_state.version(), &config, package_manager);
 
         if turbo_state.local_is_self() {
             env::set_var(
@@ -95,7 +119,12 @@ fn run_correct_turbo(
         spawn_npx_turbo(&repo_state, local_config.turbo_version(), shim_args)
     } else {
         let version = get_version();
-        try_check_for_updates(&shim_args, version);
+        let mut builder = crate::config::TurborepoConfigBuilder::new(&repo_state.root);
+        if let Some(root_turbo_json) = &shim_args.root_turbo_json {
+            builder = builder.with_root_turbo_json_path(Some(root_turbo_json.clone()));
+        }
+        let config = builder.build().unwrap_or_default();
+        try_check_for_updates(&shim_args, version, &config, package_manager);
         // cli::run checks for this env var, rather than an arg, so that we can support
         // calling old versions without passing unknown flags.
         env::set_var(
@@ -105,8 +134,36 @@ fn run_correct_turbo(
         debug!("Running command as global turbo");
         let should_warn_on_global = env::var(TURBO_GLOBAL_WARNING_DISABLED)
             .map_or(true, |disable| !matches!(disable.as_str(), "1" | "true"));
+
+        let declared_version = repo_state
+            .root_package_json
+            .dependencies
+            .as_ref()
+            .and_then(|deps| deps.get("turbo"))
+            .or_else(|| {
+                repo_state
+                    .root_package_json
+                    .dev_dependencies
+                    .as_ref()
+                    .and_then(|deps| deps.get("turbo"))
+            });
+
         if should_warn_on_global {
-            warn!("No locally installed `turbo` found. Using version: {version}.");
+            if let Some(declared_version) = declared_version {
+                warn!(
+                    "No locally installed `turbo` found in your repository. Using globally \
+                     installed version ({version}), which can cause unexpected \
+                     behavior.\n\nInstalling the version in your repository ({declared_version}) \
+                     before calling `turbo` will result in more predictable behavior across \
+                     environments."
+                );
+            } else {
+                warn!(
+                    "No locally installed `turbo` found in your repository. Using globally \
+                     installed version ({version}). Using a specified version in your repository \
+                     will result in more predictable behavior."
+                );
+            }
         }
         Ok(cli::run(Some(repo_state), subscriber, ui)?)
     }
@@ -251,8 +308,15 @@ fn is_turbo_binary_path_set() -> bool {
     env::var("TURBO_BINARY_PATH").is_ok()
 }
 
-fn try_check_for_updates(args: &ShimArgs, current_version: &str) {
-    if args.should_check_for_update() {
+fn try_check_for_updates(
+    args: &ShimArgs,
+    current_version: &str,
+    config: &crate::config::ConfigurationOptions,
+    package_manager: Result<&PackageManager, &package_manager::Error>,
+) {
+    let package_manager = package_manager.unwrap_or(&PackageManager::Npm);
+
+    if args.should_check_for_update() && !config.no_update_notifier() {
         // custom footer for update message
         let footer = format!(
             "Follow {username} for updates: {url}",
@@ -276,6 +340,7 @@ fn try_check_for_updates(args: &ShimArgs, current_version: &str) {
             // use default for timeout (800ms)
             None,
             interval,
+            package_manager,
         );
     }
 }
@@ -288,8 +353,17 @@ pub fn run() -> Result<i32, Error> {
         let _ = miette::set_hook(Box::new(|_| {
             Box::new(
                 miette::MietteHandlerOpts::new()
+                    .show_related_errors_as_nested()
                     .color(false)
                     .unicode(false)
+                    .build(),
+            )
+        }));
+    } else {
+        let _ = miette::set_hook(Box::new(|_| {
+            Box::new(
+                miette::MietteHandlerOpts::new()
+                    .show_related_errors_as_nested()
                     .build(),
             )
         }));

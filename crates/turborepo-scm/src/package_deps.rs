@@ -1,15 +1,14 @@
-use std::{collections::HashMap, str::FromStr};
+#![cfg(feature = "git2")]
+use std::str::FromStr;
 
 use globwalk::ValidatedGlob;
 use tracing::debug;
-use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, PathError, RelativeUnixPathBuf};
+use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, PathError};
 use turborepo_telemetry::events::task::{FileHashMethod, PackageTaskEventBuilder};
 
-use crate::{hash_object::hash_objects, Error, Git, SCM};
-
-pub type GitHashes = HashMap<RelativeUnixPathBuf, String>;
-
-pub const INPUT_INCLUDE_DEFAULT_FILES: &str = "$TURBO_DEFAULT$";
+#[cfg(feature = "git2")]
+use crate::hash_object::hash_objects;
+use crate::{Error, GitHashes, GitRepo, SCM};
 
 impl SCM {
     pub fn get_hashes_for_files(
@@ -31,17 +30,9 @@ impl SCM {
         turbo_root: &AbsoluteSystemPath,
         package_path: &AnchoredSystemPath,
         inputs: &[S],
+        include_default_files: bool,
         telemetry: Option<PackageTaskEventBuilder>,
     ) -> Result<GitHashes, Error> {
-        // If the inputs contain "$TURBO_DEFAULT$", we need to include the "default"
-        // file hashes as well. NOTE: we intentionally don't remove
-        // "$TURBO_DEFAULT$" from the inputs if it exists in the off chance that
-        // the user has a file named "$TURBO_DEFAULT$" in their package (pls
-        // no).
-        let include_default_files = inputs
-            .iter()
-            .any(|input| input.as_ref() == INPUT_INCLUDE_DEFAULT_FILES);
-
         match self {
             SCM::Manual => {
                 if let Some(telemetry) = telemetry {
@@ -111,7 +102,7 @@ impl SCM {
     }
 }
 
-impl Git {
+impl GitRepo {
     fn get_package_file_hashes<S: AsRef<str>>(
         &self,
         turbo_root: &AbsoluteSystemPath,
@@ -203,6 +194,7 @@ impl Git {
             //   downstream.
             inputs.push("package.json".to_string());
             inputs.push("turbo.json".to_string());
+            inputs.push("turbo.jsonc".to_string());
         }
 
         // The input patterns are relative to the package.
@@ -291,9 +283,9 @@ impl Git {
 
 #[cfg(test)]
 mod tests {
-    use std::{assert_matches::assert_matches, process::Command};
+    use std::{assert_matches::assert_matches, collections::HashMap, process::Command};
 
-    use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
+    use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeUnixPathBuf};
 
     use super::*;
     use crate::manual::get_package_file_hashes_without_git;
@@ -377,6 +369,7 @@ mod tests {
                 &repo_root,
                 &pkg_path,
                 &[],
+                false,
                 Some(PackageTaskEventBuilder::new("my-pkg", "test")),
             )
             .unwrap();
@@ -449,7 +442,7 @@ mod tests {
         commit_all(&repo_root);
         let git = SCM::new(&repo_root);
         let SCM::Git(git) = git else {
-            panic!("expected git, found {:?}", git);
+            panic!("expected git, found {git:?}");
         };
 
         // remove a file
@@ -506,13 +499,15 @@ mod tests {
             "2f26c7b914476b3c519e4f0fbc0d16c52a60d178".to_string(),
         );
 
-        let input_tests: &[(&[&str], &[&str])] = &[
+        let input_tests: &[(&[&str], bool, &[&str])] = &[
             (
                 &["uncommitted-file"],
+                false,
                 &["package.json", "turbo.json", "uncommitted-file"],
             ),
             (
                 &["**/*-file"],
+                false,
                 &[
                     "committed-file",
                     "uncommitted-file",
@@ -524,6 +519,7 @@ mod tests {
             ),
             (
                 &["../**/*-file"],
+                false,
                 &[
                     "committed-file",
                     "uncommitted-file",
@@ -536,6 +532,7 @@ mod tests {
             ),
             (
                 &["**/{uncommitted,committed}-file"],
+                false,
                 &[
                     "committed-file",
                     "uncommitted-file",
@@ -545,6 +542,7 @@ mod tests {
             ),
             (
                 &["../**/{new-root,uncommitted,committed}-file"],
+                false,
                 &[
                     "committed-file",
                     "uncommitted-file",
@@ -555,6 +553,7 @@ mod tests {
             ),
             (
                 &["$TURBO_DEFAULT$"],
+                true,
                 &[
                     "committed-file",
                     "uncommitted-file",
@@ -566,6 +565,7 @@ mod tests {
             ),
             (
                 &["$TURBO_DEFAULT$", "!dir/*"],
+                true,
                 &[
                     "committed-file",
                     "uncommitted-file",
@@ -576,6 +576,7 @@ mod tests {
             ),
             (
                 &["$TURBO_DEFAULT$", "!committed-file", "dir/ignored-file"],
+                true,
                 &[
                     "uncommitted-file",
                     "package.json",
@@ -587,6 +588,7 @@ mod tests {
             ),
             (
                 &["!committed-file", "$TURBO_DEFAULT$", "dir/ignored-file"],
+                true,
                 &[
                     "uncommitted-file",
                     "package.json",
@@ -597,18 +599,15 @@ mod tests {
                 ],
             ),
         ];
-        for (inputs, expected_files) in input_tests {
+        for (inputs, include_default_files, expected_files) in input_tests {
             let expected: GitHashes = HashMap::from_iter(expected_files.iter().map(|key| {
                 let key = RelativeUnixPathBuf::new(*key).unwrap();
                 let value = all_expected.get(&key).unwrap().clone();
                 (key, value)
             }));
-            let include_default_files = inputs
-                .iter()
-                .any(|input| input == &INPUT_INCLUDE_DEFAULT_FILES);
 
             let hashes = git
-                .get_package_file_hashes(&repo_root, &package_path, inputs, include_default_files)
+                .get_package_file_hashes(&repo_root, &package_path, inputs, *include_default_files)
                 .unwrap();
             assert_eq!(hashes, expected);
         }

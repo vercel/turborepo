@@ -93,7 +93,7 @@ impl TurboSubscriber {
     /// - If the `TURBO_LOG_VERBOSITY` env var is set, it will be used to set
     ///   the verbosity level. Otherwise, the default is `WARN`. See the
     ///   documentation on the RUST_LOG env var for syntax.
-    /// - If the verbosity argument (usually detemined by a flag) is provided,
+    /// - If the verbosity argument (usually determined by a flag) is provided,
     ///   it overrides the default global log level. This means it overrides the
     ///   `TURBO_LOG_VERBOSITY` global setting, but not per-module settings.
     ///
@@ -317,9 +317,9 @@ impl<'a, FG: Color, BG: Color> Visit for MessageVisitor<'a, FG, BG> {
         if field.name() == "message" {
             if self.colorize {
                 let value = value.fg::<FG>().bg::<BG>();
-                let _ = write!(self.writer, "{:?}", value);
+                let _ = write!(self.writer, "{value:?}");
             } else {
-                let _ = write!(self.writer, "{:?}", value);
+                let _ = write!(self.writer, "{value:?}");
             }
         }
     }
@@ -332,9 +332,9 @@ fn write_string<FG: Color, BG: Color>(
 ) -> Result<(), std::fmt::Error> {
     if colorize {
         let value = value.fg::<FG>().bg::<BG>();
-        write!(writer, "{} ", value)
+        write!(writer, "{value} ")
     } else {
-        write!(writer, "{} ", value)
+        write!(writer, "{value} ")
     }
 }
 

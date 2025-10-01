@@ -4,10 +4,10 @@
   "private": true,
   "scripts": {
     "dev": "vite --port 3000",
-    "build": "run-p type-check \"build-only {@}\" --",
+    "build": "run-p check-types \"build-only {@}\" --",
     "preview": "vite preview",
     "build-only": "vite build",
-    "type-check": "vue-tsc --noEmit -p tsconfig.app.json --composite false",
+    "check-types": "vue-tsc --noEmit -p tsconfig.app.json --composite false",
     "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix --ignore-path .gitignore"
   },
   "dependencies": {
@@ -24,7 +24,7 @@
     "eslint-plugin-vue": "^9.22.0",
     "npm-run-all2": "^6.1.2",
     "tsconfig": "workspace:*",
-    "typescript": "~5.3.3",
+    "typescript": "5.5.4",
     "vite": "^5.1.4",
     "vue-tsc": "^2.0.4"
   }

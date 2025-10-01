@@ -1,4 +1,5 @@
-import { spyConsole, validateLogs } from "@turbo/test-utils";
+import { spyConsole } from "@turbo/test-utils";
+import { describe, it, expect } from "@jest/globals";
 import { getTurboVersion } from "../src/getTurboVersion";
 
 describe("getWorkspace()", () => {
@@ -12,10 +13,11 @@ describe("getWorkspace()", () => {
         "./__fixtures__/app"
       )
     ).toEqual("1.2.3");
-    validateLogs(
-      ['Using turbo version "1.2.3" from arguments'],
-      mockConsole.log,
-      { prefix: "≫  " }
+
+    expect(mockConsole.log).toHaveBeenNthCalledWith(
+      1,
+      "≫  ",
+      'Using turbo version "1.2.3" from arguments'
     );
   });
 
@@ -65,5 +67,21 @@ describe("getWorkspace()", () => {
     expect(getTurboVersion({}, "./__fixtures__/invalid_turbo_json")).toEqual(
       null
     );
+  });
+
+  describe("pnpm catalog", () => {
+    const fixture = "./__fixtures__/turbo_catalog";
+
+    it("warns on catalog usage", () => {
+      getTurboVersion({}, fixture);
+      expect(mockConsole.warn).toHaveBeenCalledWith(
+        "≫  ",
+        "Cannot infer turbo version due to use of `catalog` protocol. Remove `turbo` from your PNPM catalog to ensure correct turbo version is used"
+      );
+    });
+
+    it("falls back to inferring major from turbo.json", () => {
+      expect(getTurboVersion({}, fixture)).toEqual("^2");
+    });
   });
 });

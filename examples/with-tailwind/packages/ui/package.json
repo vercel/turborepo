@@ -9,26 +9,28 @@
   ],
   "exports": {
     "./styles.css": "./dist/index.css",
-    "./card": "./src/card.tsx"
+    "./*": "./dist/*.js"
   },
   "license": "MIT",
   "scripts": {
-    "build": "tailwindcss -i ./src/styles.css -o ./dist/index.css",
-    "lint": "eslint src/",
-    "dev": "tailwindcss -i ./src/styles.css -o ./dist/index.css --watch",
-    "type-check": "tsc --noEmit"
+    "build:styles": "tailwindcss -i ./src/styles.css -o ./dist/index.css",
+    "build:components": "tsc",
+    "check-types": "tsc --noEmit",
+    "dev:styles": "tailwindcss -i ./src/styles.css -o ./dist/index.css --watch",
+    "dev:components": "tsc --watch",
+    "lint": "eslint src --max-warnings 0"
   },
   "peerDependencies": {
-    "react": "^18.2.0"
+    "react": "^19"
   },
   "devDependencies": {
     "@repo/eslint-config": "workspace:*",
     "@repo/tailwind-config": "workspace:*",
     "@repo/typescript-config": "workspace:*",
-    "@types/react": "^18.2.61",
-    "autoprefixer": "^10.4.18",
-    "postcss": "^8.4.35",
-    "tailwindcss": "^3.4.1",
-    "typescript": "^5.3.3"
+    "@tailwindcss/cli": "^4.1.5",
+    "@types/react": "^19.1.0",
+    "eslint": "^9.33.0",
+    "tailwindcss": "^4.1.5",
+    "typescript": "5.9.2"
   }
 }

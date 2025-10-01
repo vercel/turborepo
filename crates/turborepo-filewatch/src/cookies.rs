@@ -1,4 +1,6 @@
-//! Cookies are the file watcher's way of synchronizing file system events. They
+//! Cookies.
+//!
+//! They are the file watcher's way of synchronizing file system events. They
 //! are files that are added to the file system that are named with the format
 //! `[id].cookie`, where `[id]` is an increasing serial number, e.g.
 //! `1.cookie`, `2.cookie`, and so on. The daemon can then watch for the
@@ -45,7 +47,7 @@ use tokio::{
 use tracing::trace;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathRelation};
 
-use crate::{optional_watch::SomeRef, NotifyError, OptionalWatch};
+use crate::{NotifyError, OptionalWatch, optional_watch::SomeRef};
 
 #[derive(Debug, Error)]
 pub enum CookieError {
@@ -303,7 +305,7 @@ fn handle_cookie_file_request(
 ) {
     if let Some(req) = req {
         *serial += 1;
-        let cookie_path = root.join_component(&format!("{}.cookie", serial));
+        let cookie_path = root.join_component(&format!("{serial}.cookie"));
         let mut opts = OpenOptions::new();
         opts.truncate(true).create(true).write(true);
         let result = {
@@ -514,7 +516,7 @@ impl CookieRegister {
 mod test {
     use std::time::Duration;
 
-    use notify::{event::CreateKind, Event, EventKind};
+    use notify::{Event, EventKind, event::CreateKind};
     use tokio::{
         sync::{broadcast, mpsc, oneshot},
         task::JoinSet,
@@ -522,7 +524,7 @@ mod test {
     use turbopath::AbsoluteSystemPathBuf;
 
     use super::{CookieWatcher, CookiedRequest};
-    use crate::{cookies::CookieWriter, NotifyError, OptionalWatch};
+    use crate::{NotifyError, OptionalWatch, cookies::CookieWriter};
 
     struct TestQuery {
         resp: oneshot::Sender<()>,

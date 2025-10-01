@@ -11,11 +11,11 @@ type Map<K, V> = std::collections::BTreeMap<K, V>;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("unable to parse: {0}")]
+    #[error("Unable to parse: {0}")]
     SymlParse(String),
-    #[error("unable to convert to structured syml: {0}")]
+    #[error("Unable to convert to structured syml: {0}")]
     SymlStructure(#[from] serde_json::Error),
-    #[error("unexpected non-utf8 yarn.lock")]
+    #[error("Unexpected non-utf8 yarn.lock")]
     NonUTF8(#[from] std::str::Utf8Error),
 }
 
@@ -127,6 +127,13 @@ impl Lockfile for Yarn1Lockfile {
         let entry = self.inner.get(key)?;
         Some(entry.version.clone())
     }
+
+    fn human_name(&self, package: &crate::Package) -> Option<String> {
+        let entry = self.inner.get(&package.key)?;
+        let name = entry.name.as_deref()?;
+        let version = &entry.version;
+        Some(format!("{name}@{version}"))
+    }
 }
 
 pub fn yarn_subgraph(contents: &[u8], packages: &[String]) -> Result<Vec<u8>, crate::Error> {
@@ -163,9 +170,11 @@ mod test {
 
     const MINIMAL: &str = include_str!("../../fixtures/yarn1.lock");
     const FULL: &str = include_str!("../../fixtures/yarn1full.lock");
+    const GH_8849: &str = include_str!("../../fixtures/gh_8849.lock");
 
     #[test_case(MINIMAL ; "minimal lockfile")]
     #[test_case(FULL ; "full lockfile")]
+    #[test_case(GH_8849 ; "gh 8849")]
     fn test_roundtrip(input: &str) {
         let lockfile = Yarn1Lockfile::from_str(input).unwrap();
         assert_eq!(input, lockfile.to_string());
@@ -181,8 +190,7 @@ mod test {
         ] {
             assert!(
                 lockfile.inner.contains_key(key),
-                "missing {} in lockfile",
-                key
+                "missing {key} in lockfile"
             );
         }
     }

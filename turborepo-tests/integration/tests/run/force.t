@@ -30,6 +30,7 @@ baseline to generate cache
   Cached:    0 cached, 1 total
     Time:\s*[\.0-9]+m?s  (re)
   
+   WARNING  no output files found for task my-app#build. Please check your `outputs` key in `turbo.json`
 
 # env var=true, missing flag: cache bypass
   $ TURBO_FORCE=true ${TURBO} run build --output-logs=hash-only --filter=my-app
@@ -42,6 +43,7 @@ baseline to generate cache
   Cached:    0 cached, 1 total
     Time:\s*[\.0-9]+m?s  (re)
   
+   WARNING  no output files found for task my-app#build. Please check your `outputs` key in `turbo.json`
 # env var=true, --flag=true: cache bypass
   $ TURBO_FORCE=true ${TURBO} run build --output-logs=hash-only --filter=my-app --force=true
   \xe2\x80\xa2 Packages in scope: my-app (esc)
@@ -53,6 +55,7 @@ baseline to generate cache
   Cached:    0 cached, 1 total
     Time:\s*[\.0-9]+m?s  (re)
   
+   WARNING  no output files found for task my-app#build. Please check your `outputs` key in `turbo.json`
 # env var=true, --flag=false: cache hit
   $ TURBO_FORCE=true ${TURBO} run build --output-logs=hash-only --filter=my-app --force=false
   \xe2\x80\xa2 Packages in scope: my-app (esc)
@@ -75,6 +78,7 @@ baseline to generate cache
   Cached:    0 cached, 1 total
     Time:\s*[\.0-9]+m?s  (re)
   
+   WARNING  no output files found for task my-app#build. Please check your `outputs` key in `turbo.json`
 
 # env var=false, missing flag, cache hit
   $ TURBO_FORCE=false ${TURBO} run build --output-logs=hash-only --filter=my-app
@@ -98,6 +102,7 @@ baseline to generate cache
   Cached:    0 cached, 1 total
     Time:\s*[\.0-9]+m?s  (re)
   
+   WARNING  no output files found for task my-app#build. Please check your `outputs` key in `turbo.json`
 # env var=false, --flag=false: cache hit
   $ TURBO_FORCE=false ${TURBO} run build --output-logs=hash-only --filter=my-app --force=false
   \xe2\x80\xa2 Packages in scope: my-app (esc)
@@ -120,6 +125,7 @@ baseline to generate cache
   Cached:    0 cached, 1 total
     Time:\s*[\.0-9]+m?s  (re)
   
+   WARNING  no output files found for task my-app#build. Please check your `outputs` key in `turbo.json`
 
 # missing env var, missing flag: cache hit
   $ ${TURBO} run build --output-logs=hash-only --filter=my-app
@@ -143,6 +149,7 @@ baseline to generate cache
   Cached:    0 cached, 1 total
     Time:\s*[\.0-9]+m?s  (re)
   
+   WARNING  no output files found for task my-app#build. Please check your `outputs` key in `turbo.json`
 # missing env var, --flag=false: cache hit
   $ ${TURBO} run build --output-logs=hash-only --filter=my-app --force=false
   \xe2\x80\xa2 Packages in scope: my-app (esc)
@@ -165,3 +172,4 @@ baseline to generate cache
   Cached:    0 cached, 1 total
     Time:\s*[\.0-9]+m?s  (re)
   
+   WARNING  no output files found for task my-app#build. Please check your `outputs` key in `turbo.json`

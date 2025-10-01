@@ -1,9 +1,11 @@
 import path from "node:path";
-import { readJsonSync, writeJsonSync, rmSync, existsSync } from "fs-extra";
+import fs from "fs-extra";
 import type { PackageJson } from "@turbo/utils";
 import { isDefaultExample } from "../utils/isDefaultExample";
-import type { TransformInput, TransformResult } from "./types";
+import type { TransformInput, TransformResult, MetaJson } from "./types";
 import { TransformError } from "./errors";
+
+const REPO_NAMES = ["turbo", "turborepo"];
 
 const meta = {
   name: "official-starter",
@@ -20,7 +22,8 @@ export async function transform(args: TransformInput): TransformResult {
   const defaultExample = isDefaultExample(example.name);
   const isOfficialStarter =
     !example.repo ||
-    (example.repo.username === "vercel" && example.repo.name === "turbo");
+    (example.repo.username === "vercel" &&
+      REPO_NAMES.includes(example.repo.name));
 
   if (!isOfficialStarter) {
     return { result: "not-applicable", ...meta };
@@ -29,19 +32,22 @@ export async function transform(args: TransformInput): TransformResult {
   // paths
   const rootPackageJsonPath = path.join(prompts.root, "package.json");
   const rootMetaJsonPath = path.join(prompts.root, "meta.json");
-  const hasPackageJson = existsSync(rootPackageJsonPath);
+  const hasPackageJson = fs.existsSync(rootPackageJsonPath);
 
-  // 1. remove meta file (used for generating the examples page on turbo.build)
+  let metaJson: MetaJson | undefined;
+
+  // 1. remove meta file (used for generating the examples page on turborepo.com)
   try {
-    rmSync(rootMetaJsonPath, { force: true });
+    metaJson = fs.readJsonSync(rootMetaJsonPath) as MetaJson;
+    fs.rmSync(rootMetaJsonPath, { force: true });
   } catch (_err) {
     // do nothing
   }
 
   if (hasPackageJson) {
-    let packageJsonContent;
+    let packageJsonContent: PackageJson | undefined;
     try {
-      packageJsonContent = readJsonSync(rootPackageJsonPath) as
+      packageJsonContent = fs.readJsonSync(rootPackageJsonPath) as
         | PackageJson
         | undefined;
     } catch {
@@ -71,7 +77,7 @@ export async function transform(args: TransformInput): TransformResult {
       }
 
       try {
-        writeJsonSync(rootPackageJsonPath, packageJsonContent, {
+        fs.writeJsonSync(rootPackageJsonPath, packageJsonContent, {
           spaces: 2,
         });
       } catch (err) {
@@ -83,5 +89,5 @@ export async function transform(args: TransformInput): TransformResult {
     }
   }
 
-  return { result: "success", ...meta };
+  return { result: "success", metaJson, ...meta };
 }

@@ -68,13 +68,13 @@ pub(crate) async fn validate_analytics(
     source: analytics::CacheSource,
     port: u16,
 ) -> Result<()> {
-    let response = reqwest::get(format!("http://localhost:{}/v8/artifacts/events", port)).await?;
+    let response = reqwest::get(format!("http://localhost:{port}/v8/artifacts/events")).await?;
     assert_eq!(response.status(), 200);
     let analytics_events: Vec<AnalyticsEvent> = response.json().await?;
 
     assert_eq!(analytics_events.len(), test_cases.len() * 2);
 
-    println!("{:#?}", analytics_events);
+    println!("{analytics_events:#?}");
     for test_case in test_cases {
         println!("finding {}", test_case.hash);
         // We should have a hit and a miss event for both test cases

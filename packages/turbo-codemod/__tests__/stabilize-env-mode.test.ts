@@ -1,10 +1,72 @@
 import { setupTestFixtures } from "@turbo/test-utils";
-import { transformer } from "../src/transforms/stabilize-env-mode";
+import { describe, it, expect } from "@jest/globals";
+import type { SchemaV2 } from "@turbo/types";
+import {
+  transformer,
+  migrateRootConfig,
+  migrateTaskConfigs,
+} from "../src/transforms/stabilize-env-mode";
 
 describe("stabilize-env-mode", () => {
   const { useFixture } = setupTestFixtures({
     directory: __dirname,
     test: "stabilize-env-mode",
+  });
+
+  it("skips migrateRootConfig when no pipeline key", () => {
+    const config: SchemaV2 = {
+      $schema: "./docs/public/schema.json",
+      globalDependencies: ["$GLOBAL_ENV_KEY"],
+      tasks: {
+        test: {
+          outputs: ["coverage/**/*"],
+          dependsOn: ["^build"],
+        },
+        lint: {
+          outputs: [],
+        },
+        dev: {
+          cache: false,
+        },
+        build: {
+          outputs: ["dist/**/*", ".next/**/*", "!.next/cache/**"],
+          dependsOn: ["^build", "$TASK_ENV_KEY", "$ANOTHER_ENV_KEY"],
+        },
+      },
+    };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument -- Testing a situation outside of types that users can get themselves into at runtime
+    const doneConfig = migrateRootConfig(config as any);
+
+    expect(doneConfig).toEqual(config);
+  });
+
+  it("skips migrateTaskConfigs when no pipeline key", () => {
+    const config: SchemaV2 = {
+      $schema: "./docs/public/schema.json",
+      globalDependencies: ["$GLOBAL_ENV_KEY"],
+      tasks: {
+        test: {
+          outputs: ["coverage/**/*"],
+          dependsOn: ["^build"],
+        },
+        lint: {
+          outputs: [],
+        },
+        dev: {
+          cache: false,
+        },
+        build: {
+          outputs: ["dist/**/*", ".next/**/*", "!.next/cache/**"],
+          dependsOn: ["^build", "$TASK_ENV_KEY", "$ANOTHER_ENV_KEY"],
+        },
+      },
+    };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument -- Testing a situation outside of types that users can get themselves into at runtime
+    const doneConfig = migrateTaskConfigs(config as any);
+
+    expect(doneConfig).toEqual(config);
   });
 
   it("migrates env-mode has-both", () => {
@@ -20,7 +82,7 @@ describe("stabilize-env-mode", () => {
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turbo.build/schema.json",
+      $schema: "https://turborepo.com/schema.json",
       globalPassThroughEnv: [
         "EXPERIMENTAL_GLOBAL_PASSTHROUGH",
         "GLOBAL_PASSTHROUGH",
@@ -34,8 +96,8 @@ describe("stabilize-env-mode", () => {
 
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toMatchInlineSnapshot(`
-      Object {
-        "turbo.json": Object {
+      {
+        "turbo.json": {
           "action": "modified",
           "additions": 2,
           "deletions": 4,
@@ -57,7 +119,7 @@ describe("stabilize-env-mode", () => {
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turbo.build/schema.json",
+      $schema: "https://turborepo.com/schema.json",
       globalPassThroughEnv: [
         "DUPLICATE_GLOBAL",
         "EXPERIMENTAL_GLOBAL_PASSTHROUGH",
@@ -76,8 +138,8 @@ describe("stabilize-env-mode", () => {
 
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toMatchInlineSnapshot(`
-      Object {
-        "turbo.json": Object {
+      {
+        "turbo.json": {
           "action": "modified",
           "additions": 2,
           "deletions": 6,
@@ -99,7 +161,7 @@ describe("stabilize-env-mode", () => {
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turbo.build/schema.json",
+      $schema: "https://turborepo.com/schema.json",
       globalPassThroughEnv: [],
       pipeline: {
         build: {
@@ -110,8 +172,8 @@ describe("stabilize-env-mode", () => {
 
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toMatchInlineSnapshot(`
-      Object {
-        "turbo.json": Object {
+      {
+        "turbo.json": {
           "action": "modified",
           "additions": 2,
           "deletions": 2,
@@ -133,7 +195,7 @@ describe("stabilize-env-mode", () => {
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turbo.build/schema.json",
+      $schema: "https://turborepo.com/schema.json",
       pipeline: {
         build: {},
       },
@@ -141,8 +203,8 @@ describe("stabilize-env-mode", () => {
 
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toMatchInlineSnapshot(`
-      Object {
-        "turbo.json": Object {
+      {
+        "turbo.json": {
           "action": "unchanged",
           "additions": 0,
           "deletions": 0,
@@ -164,7 +226,7 @@ describe("stabilize-env-mode", () => {
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turbo.build/schema.json",
+      $schema: "https://turborepo.com/schema.json",
       globalPassThroughEnv: ["GLOBAL_PASSTHROUGH"],
       pipeline: {
         build: {
@@ -175,8 +237,8 @@ describe("stabilize-env-mode", () => {
 
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toMatchInlineSnapshot(`
-      Object {
-        "turbo.json": Object {
+      {
+        "turbo.json": {
           "action": "unchanged",
           "additions": 0,
           "deletions": 0,
@@ -198,7 +260,7 @@ describe("stabilize-env-mode", () => {
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turbo.build/schema.json",
+      $schema: "https://turborepo.com/schema.json",
       globalPassThroughEnv: ["GLOBAL_PASSTHROUGH"],
       pipeline: {
         build: {
@@ -209,8 +271,8 @@ describe("stabilize-env-mode", () => {
 
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toMatchInlineSnapshot(`
-      Object {
-        "turbo.json": Object {
+      {
+        "turbo.json": {
           "action": "modified",
           "additions": 2,
           "deletions": 2,
@@ -232,7 +294,7 @@ describe("stabilize-env-mode", () => {
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turbo.build/schema.json",
+      $schema: "https://turborepo.com/schema.json",
       globalPassThroughEnv: [
         "EXPERIMENTAL_GLOBAL_PASSTHROUGH",
         "GLOBAL_PASSTHROUGH",
@@ -270,18 +332,18 @@ describe("stabilize-env-mode", () => {
 
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toMatchInlineSnapshot(`
-      Object {
-        "apps/docs/turbo.json": Object {
+      {
+        "apps/docs/turbo.json": {
           "action": "modified",
           "additions": 1,
           "deletions": 1,
         },
-        "apps/website/turbo.json": Object {
+        "apps/website/turbo.json": {
           "action": "modified",
           "additions": 1,
           "deletions": 2,
         },
-        "turbo.json": Object {
+        "turbo.json": {
           "action": "modified",
           "additions": 2,
           "deletions": 4,

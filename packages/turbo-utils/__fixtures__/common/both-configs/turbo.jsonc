@@ -1,0 +1,15 @@
+{
+  // This is a comment in turbo.jsonc
+  "$schema": "https://turborepo.com/schema.json",
+  "globalEnv": ["UNORDERED", "CI"],
+  "tasks": {
+    "build": {
+      // A different comment
+      "dependsOn": ["^build"]
+    },
+    "lint": {
+      // This task is only in the jsonc file
+      "outputs": []
+    }
+  }
+}

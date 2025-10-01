@@ -18,7 +18,7 @@ impl<'a> NpmDetector<'a> {
     }
 }
 
-impl<'a> Iterator for NpmDetector<'a> {
+impl Iterator for NpmDetector<'_> {
     type Item = Result<PackageManager, Error>;
 
     fn next(&mut self) -> Option<Self::Item> {

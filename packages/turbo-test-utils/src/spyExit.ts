@@ -1,7 +1,8 @@
-type Spy = jest.SpyInstance | undefined;
+import { afterAll, afterEach, beforeEach, jest } from "@jest/globals";
+import type { MockInstance } from "jest-mock";
 
 export interface SpyExit {
-  exit: Spy;
+  exit: MockInstance<(code?: number) => never> | undefined;
 }
 
 export function spyExit() {

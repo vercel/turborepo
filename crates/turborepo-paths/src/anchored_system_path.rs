@@ -45,12 +45,12 @@ impl AsRef<Path> for AnchoredSystemPath {
 const EMPTY: &str = "";
 
 impl AnchoredSystemPath {
-    pub(crate) unsafe fn new_unchecked<'a>(path: impl AsRef<Path> + 'a) -> &'a Self {
+    pub(crate) unsafe fn new_unchecked(path: &(impl AsRef<Path> + ?Sized)) -> &Self {
         let path = path.as_ref();
         unsafe { &*(path as *const Path as *const Self) }
     }
 
-    pub fn new<'a>(path: impl AsRef<str> + 'a) -> Result<&'a Self, PathError> {
+    pub fn new(path: &(impl AsRef<str> + ?Sized)) -> Result<&Self, PathError> {
         let path_str = path.as_ref();
         let path = Path::new(path_str);
         if path.is_absolute() {
@@ -80,7 +80,7 @@ impl AnchoredSystemPath {
             .map(|path| unsafe { AnchoredSystemPath::new_unchecked(path) })
     }
 
-    pub fn components(&self) -> impl Iterator<Item = Utf8Component> {
+    pub fn components(&self) -> impl Iterator<Item = Utf8Component<'_>> {
         self.0.components()
     }
 
@@ -108,9 +108,11 @@ impl AnchoredSystemPath {
     }
 
     pub fn join_components(&self, segments: &[&str]) -> AnchoredSystemPathBuf {
-        debug_assert!(!segments
-            .iter()
-            .any(|segment| segment.contains(std::path::MAIN_SEPARATOR)));
+        debug_assert!(
+            !segments
+                .iter()
+                .any(|segment| segment.contains(std::path::MAIN_SEPARATOR))
+        );
         AnchoredSystemPathBuf(
             self.0
                 .join(segments.join(std::path::MAIN_SEPARATOR_STR))
@@ -138,7 +140,7 @@ impl AnchoredSystemPath {
                 (Some(self_component), Some(other_component))
                     if self_component != other_component =>
                 {
-                    return PathRelation::Divergent
+                    return PathRelation::Divergent;
                 }
                 // A matching component, continue iterating
                 (Some(_), Some(_)) => {}

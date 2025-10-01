@@ -241,6 +241,8 @@ mod test {
             panic!("expected an error")
         }
 
-        child.kill().unwrap();
+        let _ = child.kill();
+        // Make sure to wait on the child to not leave a zombie process
+        let _ = child.wait();
     }
 }

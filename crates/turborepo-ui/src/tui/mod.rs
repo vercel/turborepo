@@ -5,6 +5,9 @@ pub mod event;
 mod handle;
 mod input;
 mod pane;
+mod popup;
+mod preferences;
+pub mod scroll;
 mod search;
 mod size;
 mod spinner;
@@ -17,7 +20,7 @@ use clipboard::copy_to_clipboard;
 use debouncer::Debouncer;
 use event::{Event, TaskResult};
 pub use handle::{AppReceiver, TuiSender};
-use input::{input, InputOptions};
+use input::InputOptions;
 pub use pane::TerminalPane;
 use size::SizeInfo;
 pub use table::TaskTable;
@@ -25,14 +28,16 @@ pub use term_output::TerminalOutput;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("failed to send event to TUI: {0}")]
+    #[error("Failed to send event to TUI: {0}")]
     Mpsc(String),
-    #[error("No task found with name '{name}'")]
+    #[error("No task found with name '{name}'.")]
     TaskNotFound { name: String },
-    #[error("No task at index {index} (only {len} tasks) ")]
+    #[error("No task at index {index} (only {len} tasks)")]
     TaskNotFoundIndex { index: usize, len: usize },
     #[error("Unable to write to stdin for '{name}': {e}")]
     Stdin { name: String, e: std::io::Error },
     #[error(transparent)]
     Io(#[from] std::io::Error),
+    #[error("Unable to persist preferences.")]
+    Preferences(#[from] preferences::Error),
 }

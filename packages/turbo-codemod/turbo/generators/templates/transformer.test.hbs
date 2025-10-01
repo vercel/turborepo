@@ -1,11 +1,12 @@
+import { describe, it, expect } from '@jest/globals';
 import { transformer } from "../src/transforms/{{ name }}";
 import { setupTestFixtures } from "./test-utils";
 
 describe("{{ name }}", () => {
-  
+
   const { useFixture } = setupTestFixtures({ test: "{{ name }}" });
 
-  test("basic", () => {
+  it("basic", () => {
     // load the fixture for the test
     const { root, read, readJson } = useFixture({
       fixture: "specific-fixture",

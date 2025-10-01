@@ -148,7 +148,7 @@ within a component (**never path separators**). Zero-or-more wildcards cannot be
 adjacent to other zero-or-more wildcards. The `*` wildcard is eager and will
 match the longest possible text while the `$` wildcard is lazy and will match
 the shortest possible text. When followed by a literal, `*` stops at the last
-occurrence of that literal while `$` stops at the first occurence.
+occurrence of that literal while `$` stops at the first occurrence.
 
 The exactly-one wildcard `?` matches any single character within a component
 (**never path separators**). Exactly-one wildcards do not group automatically,
@@ -300,8 +300,8 @@ within a glob expression so long as they do not split tree wildcards (e.g.,
 can be negated by preceding the corresponding character with a minus `-`. Flags
 are toggled in the order in which they appear within `(?...)`.
 
-The only supported flag is the case-insensitivty flag `i`. By default, glob
-expressions use the same case sensitivity as the target platforms's file system
+The only supported flag is the case-insensitivity flag `i`. By default, glob
+expressions use the same case sensitivity as the target platforms' file system
 APIs (case-sensitive on Unix and case-insensitive on Windows), but `i` can be
 used to toggle this explicitly as needed. For example,
 `(?-i)photos/**/*.(?i){jpg,jpeg}` matches file paths beneath a `photos`
@@ -371,7 +371,7 @@ features = [
 
 ## Unsupported Path Features
 
-Any components not recognized as separators nor patterns are interpreted as
+Any components not recognized as separators or patterns are interpreted as
 literals. In combination with strict rules, this means **some platform-specific
 path features cannot be used directly in globs**. This limitation is by design
 and additional code may be necessary to bridge this gap for some use cases.
@@ -433,7 +433,7 @@ assert!(glob.has_semantic_literals());
 
 ### Schemes and Prefixes
 
-While globs can be rooted, they cannot include schemes nor Windows path
+While globs can be rooted, they cannot include schemes or Windows path
 prefixes. For example, the Windows UNC share path `\\server\share\src` cannot be
 represented directly as a glob.
 
@@ -449,7 +449,7 @@ Globs are strictly nominal and do not support any non-nominal constraints. It is
 not possible to directly filter or otherwise select paths or files based on
 additional metadata (such as a modification timestamp) in a glob expression.
 However, it is possible for user code to query any such metadata for a matching
-path or effeciently apply such filtering when matching directory trees using
+path or efficiently apply such filtering when matching directory trees using
 `FileIterator::filter_tree`.
 
 For such additional features, including metadata filters and transformations
@@ -468,7 +468,7 @@ match nor capture some literal byte strings.
 
 At the time of writing, Wax is experimental and unstable. It is possible that
 glob expression syntax and semantics may change between versions in the `0.y.z`
-series without warning nor deprecation.
+series without warning or deprecation.
 
 [miette]: https://github.com/zkat/miette
 [nym]: https://github.com/olson-sean-k/nym

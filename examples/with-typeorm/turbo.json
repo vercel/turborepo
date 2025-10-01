@@ -1,5 +1,5 @@
 {
-  "$schema": "https://turbo.build/schema.json",
+  "$schema": "https://turborepo.com/schema.json",
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
@@ -9,7 +9,7 @@
     "lint": {
       "dependsOn": ["^lint"]
     },
-    "type-check": {},
+    "check-types": {},
     "test": {
       "cache": false,
       "inputs": ["**/*.test.ts", "**/*.test.tsx", "vitest.config.ts"]

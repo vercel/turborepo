@@ -1,4 +1,4 @@
-import { cyan, bold, yellow } from "picocolors";
+import picocolors from "picocolors";
 import checkForUpdate from "update-check";
 import { logger } from "@turbo/utils";
 import { getWorkspaceDetails } from "@turbo/workspaces";
@@ -23,9 +23,13 @@ export async function notifyUpdate(): Promise<void> {
 
       logger.log();
       logger.log(
-        yellow(bold("A new version of `@turbo/codemod` is available!"))
+        picocolors.yellow(
+          picocolors.bold("A new version of `@turbo/codemod` is available!")
+        )
       );
-      logger.log(`You can update by running: ${cyan(upgradeCommand)}`);
+      logger.log(
+        `You can update by running: ${picocolors.cyan(upgradeCommand)}`
+      );
       logger.log();
     }
     process.exit();

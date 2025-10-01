@@ -17,29 +17,29 @@ use serde::Deserialize;
 use thiserror::Error;
 use turbopath::RelativeUnixPathBuf;
 
-use self::resolution::{parse_resolution, Resolution};
+use self::resolution::{Resolution, parse_resolution};
 use super::Lockfile;
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("unable to parse yaml: {0}")]
+    #[error("Unable to parse yaml: {0}")]
     Parse(#[from] serde_yaml::Error),
-    #[error("unable to parse identifier: {0}")]
+    #[error("Unable to parse identifier: {0}")]
     Identifiers(#[from] identifiers::Error),
-    #[error("unable to find original package in patch locator {0}")]
+    #[error("Unable to find original package in patch locator {0}")]
     PatchMissingOriginalLocator(Locator<'static>),
-    #[error("unable to parse resolutions field: {0}")]
+    #[error("Unable to parse resolutions field: {0}")]
     Resolutions(#[from] resolution::Error),
-    #[error("unable to find entry for {0}")]
+    #[error("Unable to find entry for {0}")]
     MissingPackageForLocator(Locator<'static>),
-    #[error("unable to find any locator for {0}")]
+    #[error("Unable to find any locator for {0}")]
     MissingLocator(Descriptor<'static>),
     #[error("Descriptor collision {descriptor} and {other}")]
     DescriptorCollision {
         descriptor: Descriptor<'static>,
         other: String,
     },
-    #[error("unable to parse as patch reference: {0}")]
+    #[error("Unable to parse as patch reference: {0}")]
     InvalidPatchReference(String),
 }
 
@@ -98,6 +98,7 @@ struct BerryPackage {
 struct DependencyMeta {
     optional: Option<bool>,
     unplugged: Option<bool>,
+    built: Option<bool>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -176,10 +177,10 @@ impl BerryLockfile {
         for (locator, package) in &self.locator_package {
             for (name, range) in package.dependencies.iter().flatten() {
                 let mut descriptor = self.resolve_dependency(locator, name, range.as_ref())?;
-                if descriptor.protocol().is_none() {
-                    if let Some(range) = self.resolver.get(&descriptor) {
-                        descriptor.range = range.into();
-                    }
+                if descriptor.protocol().is_none()
+                    && let Some(range) = self.resolver.get(&descriptor)
+                {
+                    descriptor.range = range.into();
                 }
                 possible_extensions.remove(&descriptor);
             }
@@ -320,21 +321,20 @@ impl BerryLockfile {
             // Yarn 4 allows workspaces to depend directly on patched dependencies instead
             // of using resolutions. This results in the patched dependency appearing in the
             // closure instead of the original.
-            if locator.patch_file().is_some() {
-                if let Some((original, _)) =
+            if locator.patch_file().is_some()
+                && let Some((original, _)) =
                     self.patches.iter().find(|(_, patch)| patch == &&locator)
-                {
-                    patches.insert(original.as_owned(), locator.as_owned());
-                    // We include the patched dependency resolution
-                    let Locator { ident, reference } = original.as_owned();
-                    resolutions.insert(
-                        Descriptor {
-                            ident,
-                            range: reference,
-                        },
-                        original.as_owned(),
-                    );
-                }
+            {
+                patches.insert(original.as_owned(), locator.as_owned());
+                // We include the patched dependency resolution
+                let Locator { ident, reference } = original.as_owned();
+                resolutions.insert(
+                    Descriptor {
+                        ident,
+                        range: reference,
+                    },
+                    original.as_owned(),
+                );
             }
         }
 
@@ -390,10 +390,10 @@ impl BerryLockfile {
     ) -> Result<Descriptor<'static>, Error> {
         let mut dependency = Descriptor::new(name, range)?;
         // If there's no protocol we attempt to find a known one
-        if dependency.protocol().is_none() {
-            if let Some(range) = self.resolver.get(&dependency) {
-                dependency.range = range.to_string().into();
-            }
+        if dependency.protocol().is_none()
+            && let Some(range) = self.resolver.get(&dependency)
+        {
+            dependency.range = range.to_string().into();
         }
 
         for (resolution, reference) in &self.overrides {
@@ -409,7 +409,7 @@ impl BerryLockfile {
         Ok(dependency.into_owned())
     }
 
-    fn locator_for_workspace_path(&self, workspace_path: &str) -> Option<&Locator> {
+    fn locator_for_workspace_path(&self, workspace_path: &str) -> Option<&Locator<'_>> {
         self.workspace_path_to_locator
             .get(workspace_path)
             .or_else(|| {
@@ -439,9 +439,7 @@ impl Lockfile for BerryLockfile {
             .locator_for_workspace_path(workspace_path)
             .ok_or_else(|| crate::Error::MissingWorkspace(workspace_path.to_string()))?;
 
-        let dependency = self
-            .resolve_dependency(workspace_locator, name, version)
-            .map_err(Error::from)?;
+        let dependency = self.resolve_dependency(workspace_locator, name, version)?;
 
         let Some(locator) = self.resolutions.get(&dependency) else {
             return Ok(None);
@@ -530,6 +528,14 @@ impl Lockfile for BerryLockfile {
         let entry = self.locator_package.get(key)?;
         Some(entry.version.clone())
     }
+
+    fn human_name(&self, package: &crate::Package) -> Option<String> {
+        let locator = Locator::try_from(package.key.as_str()).ok()?;
+        let berry_package = self.locator_package.get(&locator)?;
+        let name = locator.ident.to_string();
+        let version = &berry_package.version;
+        Some(format!("{name}@{version}"))
+    }
 }
 
 impl LockfileData {
@@ -586,7 +592,7 @@ mod test {
     use pretty_assertions::assert_eq;
 
     use super::*;
-    use crate::{transitive_closure, Package};
+    use crate::{Package, transitive_closure};
 
     #[test]
     fn test_deserialize_lockfile() {
@@ -1109,11 +1115,9 @@ mod test {
             "is-odd@patch:is-odd@npm%3A3.0.1#~/.yarn/patches/is-odd-npm-3.0.1-93c3c3f41b.patch"
         ));
 
-        let patches =
-            vec![
-                RelativeUnixPathBuf::new(".yarn/patches/is-odd-npm-3.0.1-93c3c3f41b.patch")
-                    .unwrap(),
-            ];
+        let patches = vec![
+            RelativeUnixPathBuf::new(".yarn/patches/is-odd-npm-3.0.1-93c3c3f41b.patch").unwrap(),
+        ];
         assert_eq!(lockfile.patches().unwrap(), patches);
         assert_eq!(subgraph.patches().unwrap(), patches);
     }

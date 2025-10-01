@@ -1,6 +1,6 @@
 use std::{fmt, sync::OnceLock};
 
-use pest::{iterators::Pair, Parser};
+use pest::{Parser, iterators::Pair};
 use pest_derive::Parser;
 use regex::Regex;
 use semver::Version;
@@ -15,14 +15,14 @@ fn tag_regex() -> &'static Regex {
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("unable to parse: {0}")]
+    #[error("Unable to parse: {0}")]
     // Boxed due to this enum variant being much larger than the others
     Pest(#[from] Box<pest::error::Error<Rule>>),
-    #[error("unexpected end of input")]
+    #[error("Unexpected end of input.")]
     UnexpectedEOI,
-    #[error("unexpected token")]
+    #[error("Unexpected token.")]
     UnexpectedToken(Rule),
-    #[error("invalid identifier used as specifier: {0}")]
+    #[error("Invalid identifier used as specifier: {0}")]
     InvalidSpecifier(#[from] super::identifiers::Error),
 }
 
@@ -116,10 +116,10 @@ impl Resolution {
             // Since we have already checked the ident portion of the locator for equality
             // we can avoid an allocation caused by constructing a locator by just checking
             // the reference portion.
-            if let Some(desc) = &from.description {
-                if !Self::eq_with_protocol(&locator.reference, desc, "npm:") {
-                    return None;
-                }
+            if let Some(desc) = &from.description
+                && !Self::eq_with_protocol(&locator.reference, desc, "npm:")
+            {
+                return None;
             }
         }
 
@@ -129,14 +129,13 @@ impl Resolution {
             return None;
         }
 
-        if let Some(resolution_range) = &self.descriptor.description {
-            if resolution_range != &dependency.range
+        if let Some(resolution_range) = &self.descriptor.description
+            && resolution_range != &dependency.range
                 // Yarn4 encodes the default npm protocol in yarn.lock, but not in resolutions field of package.json
                 // We check if the ranges match when we add `npm:` to range coming from resolutions.
                 && !Self::eq_with_protocol(&dependency.range, resolution_range, "npm:")
-            {
-                return None;
-            }
+        {
+            return None;
         }
 
         // We have a match an we now override the dependency

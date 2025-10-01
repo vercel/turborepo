@@ -1,0 +1,11 @@
+{
+  // Root turbo.jsonc file
+  "$schema": "https://turborepo.com/schema.json",
+  "globalEnv": ["CI"],
+  "tasks": {
+    "build": {
+      // Environment variables for build
+      "env": ["ENV_1"]
+    }
+  }
+}

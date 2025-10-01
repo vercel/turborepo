@@ -1,4 +1,8 @@
-import path from "path";
+import path from "node:path";
+import childProcess from "node:child_process";
+import fs from "node:fs";
+import { setupTestFixtures } from "@turbo/test-utils";
+import { describe, it, expect, jest } from "@jest/globals";
 import {
   DEFAULT_IGNORE,
   GIT_REPO_COMMAND,
@@ -6,9 +10,8 @@ import {
   isInGitRepository,
   isInMercurialRepository,
   tryGitInit,
+  removeGitDirectory,
 } from "../src/utils/git";
-import childProcess from "child_process";
-import { setupTestFixtures } from "@turbo/test-utils";
 
 describe("git", () => {
   // just to make sure this doesn't get lost
@@ -240,6 +243,43 @@ describe("git", () => {
         });
       });
       mockExecSync.mockRestore();
+    });
+  });
+
+  describe("removeGitDirectory", () => {
+    const { useFixture } = setupTestFixtures({
+      directory: path.join(__dirname, "../"),
+      options: { emptyFixture: true },
+    });
+
+    it("attempts to remove .git directory", async () => {
+      const { root } = useFixture({ fixture: `remove-git` });
+      const mockRmSync = jest.spyOn(fs, "rmSync").mockImplementation(() => {});
+
+      const result = removeGitDirectory(root);
+      expect(result).toBe(true);
+
+      expect(mockRmSync).toHaveBeenCalledWith(path.join(root, ".git"), {
+        recursive: true,
+        force: true,
+      });
+      mockRmSync.mockRestore();
+    });
+
+    it("returns false on error", async () => {
+      const { root } = useFixture({ fixture: `remove-git-error` });
+      const mockRmSync = jest.spyOn(fs, "rmSync").mockImplementation(() => {
+        throw new Error("Permission denied");
+      });
+
+      const result = removeGitDirectory(root);
+      expect(result).toBe(false);
+
+      expect(mockRmSync).toHaveBeenCalledWith(path.join(root, ".git"), {
+        recursive: true,
+        force: true,
+      });
+      mockRmSync.mockRestore();
     });
   });
 });

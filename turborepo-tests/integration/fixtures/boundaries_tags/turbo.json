@@ -1,0 +1,32 @@
+{
+  "boundaries": {
+    "tags": {
+      "web": {
+        "dependencies": {
+          "allow": [
+            "types",
+            "@vercel/package-as-tag"
+          ],
+          "deny": [
+            "unsafe"
+          ]
+        },
+        "dependents": {
+          "allow": []
+        }
+      },
+      "types": {
+        "dependencies": {
+          "deny": [
+            "@vercel/package-as-tag"
+          ]
+        },
+        "dependents": {
+          "allow": [
+            "web"
+          ]
+        }
+      }
+    }
+  }
+}

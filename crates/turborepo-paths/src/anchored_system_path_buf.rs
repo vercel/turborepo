@@ -8,7 +8,7 @@ use std::{
 use camino::{Utf8Component, Utf8Components, Utf8Path, Utf8PathBuf};
 use serde::{Deserialize, Serialize};
 
-use crate::{check_path, AbsoluteSystemPath, AnchoredSystemPath, PathError, PathValidation};
+use crate::{AbsoluteSystemPath, AnchoredSystemPath, PathError, PathValidation, check_path};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize)]
 #[serde(transparent)]
@@ -73,6 +73,8 @@ impl<'a> From<&'a AnchoredSystemPathBuf> for wax::CandidatePath<'a> {
 }
 
 impl AnchoredSystemPathBuf {
+    /// Note: This does not handle resolutions, so `../` in a path won't
+    /// resolve.
     pub fn new(
         root: impl AsRef<AbsoluteSystemPath>,
         path: impl AsRef<AbsoluteSystemPath>,
@@ -125,8 +127,7 @@ impl AnchoredSystemPathBuf {
         let traverse_count = these_components.len() - prefix_len;
         // For every remaining non-matching segment in self, add a directory traversal
         // Then, add every non-matching segment from other
-        let path = std::iter::repeat(Utf8Component::ParentDir)
-            .take(traverse_count)
+        let path = std::iter::repeat_n(Utf8Component::ParentDir, traverse_count)
             .chain(other_components.into_iter().skip(prefix_len))
             .collect::<Utf8PathBuf>();
 
@@ -195,7 +196,7 @@ impl AnchoredSystemPathBuf {
         self.0.push(path.as_ref());
     }
 
-    pub fn components(&self) -> Utf8Components {
+    pub fn components(&self) -> Utf8Components<'_> {
         self.0.components()
     }
 
@@ -280,7 +281,7 @@ mod tests {
                 assert_eq!(result.as_str(), expected)
             }
             (Err(result), Err(expected)) => assert_eq!(result, expected),
-            (result, expected) => panic!("Expected {:?}, got {:?}", expected, result),
+            (result, expected) => panic!("Expected {expected:?}, got {result:?}"),
         }
     }
 }

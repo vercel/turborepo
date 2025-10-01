@@ -115,7 +115,7 @@ impl<W: Write> OutputClient<W> {
 
     /// A writer that will write to the underlying sink's out writer according
     /// to this client's behavior.
-    pub fn stdout(&self) -> OutputWriter<W> {
+    pub fn stdout(&self) -> OutputWriter<'_, W> {
         OutputWriter {
             logger: self,
             destination: Destination::Stdout,
@@ -125,7 +125,7 @@ impl<W: Write> OutputClient<W> {
 
     /// A writer that will write to the underlying sink's err writer according
     /// to this client's behavior.
-    pub fn stderr(&self) -> OutputWriter<W> {
+    pub fn stderr(&self) -> OutputWriter<'_, W> {
         OutputWriter {
             logger: self,
             destination: Destination::Stderr,
@@ -153,7 +153,10 @@ impl<W: Write> OutputClient<W> {
             .flatten()
             .or(primary.footer);
 
-        if matches!(behavior, OutputClientBehavior::Grouped) {
+        // Only output group logs header and footers if there are logs to be printed
+        if matches!(behavior, OutputClientBehavior::Grouped)
+            && buffers.as_ref().is_some_and(|b| !b.is_empty())
+        {
             let buffers = buffers
                 .as_ref()
                 .expect("grouped logging requires buffer to be present");
@@ -238,7 +241,7 @@ impl<W: Write> OutputClient<W> {
     }
 }
 
-impl<'a, W: Write> Write for OutputWriter<'a, W> {
+impl<W: Write> Write for OutputWriter<'_, W> {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         for line in buf.split_inclusive(|b| *b == b'\n') {
             self.buffer.extend_from_slice(line);
@@ -462,6 +465,29 @@ mod test {
         for line in out.lines() {
             assert!(line.starts_with("task "));
         }
+    }
+
+    #[test]
+    fn test_grouped_logs_no_output_no_marginals() -> io::Result<()> {
+        let sink = OutputSink::new(Vec::new(), Vec::new());
+        let mut logger = sink.logger(OutputClientBehavior::Grouped);
+        logger.with_header_footer(
+            Some(Arc::new(|_| "header\n".into())),
+            Some(Arc::new(|_| "footer\n".into())),
+        );
+
+        // Don't write any logs
+        let logs = logger.finish(false)?;
+
+        // Should have empty buffer since no logs were written
+        assert!(logs.is_none() || logs.unwrap().is_empty());
+
+        let SinkWriters { out, err } = Arc::into_inner(sink.writers).unwrap().into_inner().unwrap();
+        // Headers and footers should not be written when there are no logs
+        assert_eq!(out, b"");
+        assert_eq!(err, b"");
+
+        Ok(())
     }
 
     #[test]

@@ -2,30 +2,41 @@ use std::{
     collections::BTreeMap,
     io::{self, Stdout, Write},
     mem,
-    sync::mpsc,
-    time::{Duration, Instant},
+    time::Duration,
 };
 
 use ratatui::{
+    Frame, Terminal,
     backend::{Backend, CrosstermBackend},
     layout::{Constraint, Layout},
-    widgets::TableState,
-    Frame, Terminal,
+    widgets::{Clear, TableState},
+};
+use tokio::{
+    sync::{mpsc, oneshot},
+    time::Instant,
 };
 use tracing::{debug, trace};
+use turbopath::AbsoluteSystemPathBuf;
 
-const FRAMERATE: Duration = Duration::from_millis(3);
+use crate::tui::popup::{popup, popup_area};
+
+pub const FRAMERATE: Duration = Duration::from_millis(3);
 const RESIZE_DEBOUNCE_DELAY: Duration = Duration::from_millis(10);
 
 use super::{
+    AppReceiver, Debouncer, Error, Event, InputOptions, SizeInfo, TaskTable, TerminalPane,
     event::{CacheResult, Direction, OutputLogs, PaneSize, TaskResult},
     input,
+    preferences::PreferenceLoader,
     search::SearchResults,
-    AppReceiver, Debouncer, Error, Event, InputOptions, SizeInfo, TaskTable, TerminalPane,
 };
-use crate::tui::{
-    task::{Task, TasksByStatus},
-    term_output::TerminalOutput,
+use crate::{
+    ColorConfig,
+    tui::{
+        scroll::ScrollMomentum,
+        task::{Task, TasksByStatus},
+        term_output::TerminalOutput,
+    },
 };
 
 #[derive(Debug, Clone)]
@@ -42,16 +53,25 @@ pub struct App<W> {
     size: SizeInfo,
     tasks: BTreeMap<String, TerminalOutput<W>>,
     tasks_by_status: TasksByStatus,
-    focus: LayoutSections,
-    tty_stdin: bool,
-    scroll: TableState,
+    section_focus: LayoutSections,
+    task_list_scroll: TableState,
     selected_task_index: usize,
-    has_user_scrolled: bool,
+    is_task_selection_pinned: bool,
+    showing_help_popup: bool,
     done: bool,
+    preferences: PreferenceLoader,
+    scrollback_len: u64,
+    scroll_momentum: ScrollMomentum,
 }
 
 impl<W> App<W> {
-    pub fn new(rows: u16, cols: u16, tasks: Vec<String>) -> Self {
+    pub fn new(
+        rows: u16,
+        cols: u16,
+        tasks: Vec<String>,
+        preferences: PreferenceLoader,
+        scrollback_len: u64,
+    ) -> Self {
         debug!("tasks: {tasks:?}");
         let size = SizeInfo::new(rows, cols, tasks.iter().map(|s| s.as_str()));
 
@@ -68,37 +88,42 @@ impl<W> App<W> {
             running: Vec::new(),
         };
 
-        let has_user_interacted = false;
-        let selected_task_index: usize = 0;
-
         let pane_rows = size.pane_rows();
         let pane_cols = size.pane_cols();
+
+        // Attempt to load previous selection. If there isn't one, go to index 0.
+        let selected_task_index = preferences
+            .active_task()
+            .and_then(|active_task| tasks_by_status.active_index(active_task))
+            .unwrap_or(0);
 
         Self {
             size,
             done: false,
-            focus: LayoutSections::TaskList,
-            // Check if stdin is a tty that we should read input from
-            tty_stdin: atty::is(atty::Stream::Stdin),
+            section_focus: LayoutSections::TaskList,
             tasks: tasks_by_status
                 .task_names_in_displayed_order()
                 .map(|task_name| {
                     (
                         task_name.to_owned(),
-                        TerminalOutput::new(pane_rows, pane_cols, None),
+                        TerminalOutput::new(pane_rows, pane_cols, None, scrollback_len),
                     )
                 })
                 .collect(),
-            tasks_by_status,
-            scroll: TableState::default().with_selected(selected_task_index),
             selected_task_index,
-            has_user_scrolled: has_user_interacted,
+            tasks_by_status,
+            task_list_scroll: TableState::default().with_selected(selected_task_index),
+            showing_help_popup: false,
+            is_task_selection_pinned: preferences.active_task().is_some(),
+            preferences,
+            scrollback_len,
+            scroll_momentum: ScrollMomentum::new(),
         }
     }
 
     #[cfg(test)]
     fn is_focusing_pane(&self) -> bool {
-        match self.focus {
+        match self.section_focus {
             LayoutSections::Pane => true,
             LayoutSections::TaskList | LayoutSections::Search { .. } => false,
         }
@@ -108,13 +133,25 @@ impl<W> App<W> {
         self.tasks_by_status.task_name(self.selected_task_index)
     }
 
-    fn input_options(&self) -> Result<InputOptions, Error> {
+    fn input_options(&self) -> Result<InputOptions<'_>, Error> {
         let has_selection = self.get_full_task()?.has_selection();
         Ok(InputOptions {
-            focus: &self.focus,
-            tty_stdin: self.tty_stdin,
+            focus: &self.section_focus,
             has_selection,
+            is_help_popup_open: self.showing_help_popup,
         })
+    }
+
+    fn update_sidebar_toggle(&mut self) {
+        let value = !self.preferences.is_task_list_visible();
+        self.preferences.set_is_task_list_visible(Some(value));
+    }
+
+    fn update_task_selection_pinned_state(&mut self) -> Result<(), Error> {
+        // Preferences assume a pinned state when there is an active task.
+        // This `None` creates "un-pinned-ness" on the next TUI startup.
+        self.preferences.set_active_task(None);
+        Ok(())
     }
 
     pub fn get_full_task(&self) -> Result<&TerminalOutput<W>, Error> {
@@ -132,62 +169,98 @@ impl<W> App<W> {
         let active_task = self.active_task()?.to_owned();
         self.tasks
             .get_mut(&active_task)
-            .ok_or_else(|| Error::TaskNotFound { name: active_task })
+            .ok_or(Error::TaskNotFound { name: active_task })
+    }
+
+    fn persist_active_task(&mut self) -> Result<(), Error> {
+        let active_task = self.active_task()?;
+        self.preferences.set_active_task(
+            self.is_task_selection_pinned
+                .then(|| active_task.to_owned()),
+        );
+        Ok(())
     }
 
     #[tracing::instrument(skip(self))]
     pub fn next(&mut self) {
         let num_rows = self.tasks_by_status.count_all();
-        let next_index = (self.selected_task_index + 1).clamp(0, num_rows - 1);
-        self.selected_task_index = next_index;
-        self.scroll.select(Some(next_index));
-        self.has_user_scrolled = true;
+        if num_rows > 0 {
+            self.selected_task_index = (self.selected_task_index + 1) % num_rows;
+            self.task_list_scroll.select(Some(self.selected_task_index));
+            self.is_task_selection_pinned = true;
+            self.persist_active_task().ok();
+        }
     }
 
     #[tracing::instrument(skip(self))]
     pub fn previous(&mut self) {
-        let i = match self.selected_task_index {
-            0 => 0,
-            i => i - 1,
-        };
-        self.selected_task_index = i;
-        self.scroll.select(Some(i));
-        self.has_user_scrolled = true;
+        let num_rows = self.tasks_by_status.count_all();
+        if num_rows > 0 {
+            self.selected_task_index = self
+                .selected_task_index
+                .checked_sub(1)
+                .unwrap_or(num_rows - 1);
+            self.task_list_scroll.select(Some(self.selected_task_index));
+            self.is_task_selection_pinned = true;
+            self.persist_active_task().ok();
+        }
     }
 
     #[tracing::instrument(skip_all)]
-    pub fn scroll_terminal_output(&mut self, direction: Direction) -> Result<(), Error> {
-        self.get_full_task_mut()?.scroll(direction)?;
+    pub fn scroll_terminal_output(
+        &mut self,
+        direction: Direction,
+        use_momentum: bool,
+    ) -> Result<(), Error> {
+        let lines = if use_momentum {
+            self.scroll_momentum.on_scroll_event(direction)
+        } else {
+            self.scroll_momentum.reset();
+            1
+        };
+
+        if lines > 0 {
+            self.get_full_task_mut()?.scroll_by(direction, lines)?;
+        }
+        Ok(())
+    }
+
+    pub fn scroll_terminal_output_by_page(&mut self, direction: Direction) -> Result<(), Error> {
+        let pane_rows = self.size.pane_rows();
+        let task = self.get_full_task_mut()?;
+        // Scroll by the height of the terminal pane
+        task.scroll_by(direction, usize::from(pane_rows))?;
+
         Ok(())
     }
 
     pub fn enter_search(&mut self) -> Result<(), Error> {
-        self.focus = LayoutSections::Search {
+        self.section_focus = LayoutSections::Search {
             previous_selection: self.active_task()?.to_string(),
             results: SearchResults::new(&self.tasks_by_status),
         };
         // We set scroll as we want to keep the current selection
-        self.has_user_scrolled = true;
+        self.is_task_selection_pinned = true;
         Ok(())
     }
 
     pub fn exit_search(&mut self, restore_scroll: bool) {
         let mut prev_focus = LayoutSections::TaskList;
-        mem::swap(&mut self.focus, &mut prev_focus);
+        mem::swap(&mut self.section_focus, &mut prev_focus);
         if let LayoutSections::Search {
             previous_selection, ..
         } = prev_focus
+            && restore_scroll
+            && self.select_task(&previous_selection).is_err()
         {
-            if restore_scroll && self.select_task(&previous_selection).is_err() {
-                // If the task that was selected is no longer in the task list we reset
-                // scrolling.
-                self.reset_scroll();
-            }
+            // If the task that was selected is no longer in the task list we reset
+            // scrolling.
+            self.reset_scroll();
         }
     }
 
     pub fn search_scroll(&mut self, direction: Direction) -> Result<(), Error> {
-        let LayoutSections::Search { results, .. } = &self.focus else {
+        let LayoutSections::Search { results, .. } = &self.section_focus else {
             debug!("scrolling search while not searching");
             return Ok(());
         };
@@ -213,7 +286,7 @@ impl<W> App<W> {
     }
 
     pub fn search_enter_char(&mut self, c: char) -> Result<(), Error> {
-        let LayoutSections::Search { results, .. } = &mut self.focus else {
+        let LayoutSections::Search { results, .. } = &mut self.section_focus else {
             debug!("modifying search query while not searching");
             return Ok(());
         };
@@ -223,7 +296,7 @@ impl<W> App<W> {
     }
 
     pub fn search_remove_char(&mut self) -> Result<(), Error> {
-        let LayoutSections::Search { results, .. } = &mut self.focus else {
+        let LayoutSections::Search { results, .. } = &mut self.section_focus else {
             debug!("modified search query while not searching");
             return Ok(());
         };
@@ -240,7 +313,7 @@ impl<W> App<W> {
     }
 
     fn update_search_results(&mut self) {
-        let LayoutSections::Search { results, .. } = &self.focus else {
+        let LayoutSections::Search { results, .. } = &self.section_focus else {
             return;
         };
 
@@ -255,7 +328,7 @@ impl<W> App<W> {
             .or_else(|| results.first_match(self.tasks_by_status.task_names_in_displayed_order()))
         {
             let new_selection = result.to_owned();
-            self.has_user_scrolled = true;
+            self.is_task_selection_pinned = true;
             self.select_task(&new_selection).expect("todo");
         }
     }
@@ -322,7 +395,8 @@ impl<W> App<W> {
             .ok_or_else(|| Error::TaskNotFound { name: task.into() })?;
 
         let running = self.tasks_by_status.running.remove(running_idx);
-        self.tasks_by_status.finished.push(running.finish(result));
+        self.tasks_by_status
+            .insert_finished_task(running.finish(result));
 
         self.tasks
             .get_mut(task)
@@ -344,10 +418,10 @@ impl<W> App<W> {
     }
 
     pub fn interact(&mut self) -> Result<(), Error> {
-        if matches!(self.focus, LayoutSections::Pane) {
-            self.focus = LayoutSections::TaskList
+        if matches!(self.section_focus, LayoutSections::Pane) {
+            self.section_focus = LayoutSections::TaskList
         } else if self.has_stdin()? {
-            self.focus = LayoutSections::Pane;
+            self.section_focus = LayoutSections::Pane;
         }
         Ok(())
     }
@@ -363,7 +437,12 @@ impl<W> App<W> {
         // Make sure all tasks have a terminal output
         for task in &tasks {
             self.tasks.entry(task.clone()).or_insert_with(|| {
-                TerminalOutput::new(self.size.pane_rows(), self.size.pane_cols(), None)
+                TerminalOutput::new(
+                    self.size.pane_rows(),
+                    self.size.pane_cols(),
+                    None,
+                    self.scrollback_len,
+                )
             });
         }
         // Trim the terminal output to only tasks that exist in new list
@@ -384,7 +463,7 @@ impl<W> App<W> {
             self.reset_scroll();
         }
 
-        if let LayoutSections::Search { results, .. } = &mut self.focus {
+        if let LayoutSections::Search { results, .. } = &mut self.section_focus {
             results.update_tasks(&self.tasks_by_status);
         }
         self.update_search_results();
@@ -399,14 +478,19 @@ impl<W> App<W> {
         // Make sure all tasks have a terminal output
         for task in &tasks {
             self.tasks.entry(task.clone()).or_insert_with(|| {
-                TerminalOutput::new(self.size.pane_rows(), self.size.pane_cols(), None)
+                TerminalOutput::new(
+                    self.size.pane_rows(),
+                    self.size.pane_cols(),
+                    None,
+                    self.scrollback_len,
+                )
             });
         }
 
         self.tasks_by_status
             .restart_tasks(tasks.iter().map(|s| s.as_str()));
 
-        if let LayoutSections::Search { results, .. } = &mut self.focus {
+        if let LayoutSections::Search { results, .. } = &mut self.section_focus {
             results.update_tasks(&self.tasks_by_status);
         }
 
@@ -475,7 +559,7 @@ impl<W> App<W> {
     }
 
     fn select_task(&mut self, task_name: &str) -> Result<(), Error> {
-        if !self.has_user_scrolled {
+        if !self.is_task_selection_pinned {
             return Ok(());
         }
 
@@ -489,15 +573,15 @@ impl<W> App<W> {
             });
         };
         self.selected_task_index = new_index_to_highlight;
-        self.scroll.select(Some(new_index_to_highlight));
+        self.task_list_scroll.select(Some(new_index_to_highlight));
 
         Ok(())
     }
 
     /// Resets scroll state
     pub fn reset_scroll(&mut self) {
-        self.has_user_scrolled = false;
-        self.scroll.select(Some(0));
+        self.is_task_selection_pinned = false;
+        self.task_list_scroll.select(Some(0));
         self.selected_task_index = 0;
     }
 
@@ -508,6 +592,24 @@ impl<W> App<W> {
         self.tasks.values_mut().for_each(|term| {
             term.resize(pane_rows, pane_cols);
         })
+    }
+
+    pub fn jump_to_logs_top(&mut self) -> Result<(), Error> {
+        let task = self.get_full_task_mut()?;
+        task.parser.screen_mut().set_scrollback(usize::MAX);
+        Ok(())
+    }
+
+    pub fn jump_to_logs_bottom(&mut self) -> Result<(), Error> {
+        let task = self.get_full_task_mut()?;
+        task.parser.screen_mut().set_scrollback(0);
+        Ok(())
+    }
+
+    pub fn clear_task_logs(&mut self) -> Result<(), Error> {
+        let task = self.get_full_task_mut()?;
+        task.clear_logs();
+        Ok(())
     }
 }
 
@@ -526,7 +628,7 @@ impl<W: Write> App<W> {
 
     #[tracing::instrument(skip_all)]
     pub fn forward_input(&mut self, bytes: &[u8]) -> Result<(), Error> {
-        if matches!(self.focus, LayoutSections::Pane) {
+        if matches!(self.section_focus, LayoutSections::Pane) {
             let task_output = self.get_full_task_mut()?;
             if let Some(stdin) = &mut task_output.stdin {
                 stdin.write_all(bytes).map_err(|e| Error::Stdin {
@@ -558,16 +660,30 @@ impl<W: Write> App<W> {
 
 /// Handle the rendering of the `App` widget based on events received by
 /// `receiver`
-pub fn run_app(tasks: Vec<String>, receiver: AppReceiver) -> Result<(), Error> {
-    let mut terminal = startup()?;
+pub async fn run_app(
+    tasks: Vec<String>,
+    receiver: AppReceiver,
+    color_config: ColorConfig,
+    repo_root: &AbsoluteSystemPathBuf,
+    scrollback_len: u64,
+) -> Result<(), Error> {
+    let mut terminal = startup(color_config)?;
     let size = terminal.size()?;
+    let preferences = PreferenceLoader::new(repo_root);
 
-    let mut app: App<Box<dyn io::Write + Send>> = App::new(size.height, size.width, tasks);
+    let mut app: App<Box<dyn io::Write + Send>> =
+        App::new(size.height, size.width, tasks, preferences, scrollback_len);
+    let (crossterm_tx, crossterm_rx) = mpsc::channel(1024);
+    input::start_crossterm_stream(crossterm_tx);
 
-    let (result, callback) = match run_app_inner(&mut terminal, &mut app, receiver) {
-        Ok(callback) => (Ok(()), callback),
-        Err(err) => (Err(err), None),
-    };
+    let (result, callback) =
+        match run_app_inner(&mut terminal, &mut app, receiver, crossterm_rx).await {
+            Ok(callback) => (Ok(()), callback),
+            Err(err) => {
+                debug!("tui shutting down: {err}");
+                (Err(err), None)
+            }
+        };
 
     cleanup(terminal, app, callback)?;
 
@@ -576,23 +692,25 @@ pub fn run_app(tasks: Vec<String>, receiver: AppReceiver) -> Result<(), Error> {
 
 // Break out inner loop so we can use `?` without worrying about cleaning up the
 // terminal.
-fn run_app_inner<B: Backend + std::io::Write>(
+async fn run_app_inner<B: Backend + std::io::Write>(
     terminal: &mut Terminal<B>,
     app: &mut App<Box<dyn io::Write + Send>>,
-    receiver: AppReceiver,
-) -> Result<Option<mpsc::SyncSender<()>>, Error> {
+    mut receiver: AppReceiver,
+    mut crossterm_rx: mpsc::Receiver<crossterm::event::Event>,
+) -> Result<Option<oneshot::Sender<()>>, Error> {
     // Render initial state to paint the screen
     terminal.draw(|f| view(app, f))?;
     let mut last_render = Instant::now();
     let mut resize_debouncer = Debouncer::new(RESIZE_DEBOUNCE_DELAY);
     let mut callback = None;
     let mut needs_rerender = true;
-    while let Some(event) = poll(app.input_options()?, &receiver, last_render + FRAMERATE) {
+    while let Some(event) = poll(app.input_options()?, &mut receiver, &mut crossterm_rx).await {
         // If we only receive ticks, then there's been no state change so no update
         // needed
         if !matches!(event, Event::Tick) {
             needs_rerender = true;
         }
+
         let mut event = Some(event);
         let mut resize_event = None;
         if matches!(event, Some(Event::Resize { .. })) {
@@ -625,12 +743,33 @@ fn run_app_inner<B: Backend + std::io::Write>(
 
 /// Blocking poll for events, will only return None if app handle has been
 /// dropped
-fn poll(input_options: InputOptions, receiver: &AppReceiver, deadline: Instant) -> Option<Event> {
-    match input(input_options) {
-        Ok(Some(event)) => Some(event),
-        Ok(None) => receiver.recv(deadline).ok(),
-        // Unable to read from stdin, shut down and attempt to clean up
-        Err(_) => Some(Event::InternalStop),
+async fn poll(
+    input_options: InputOptions<'_>,
+    receiver: &mut AppReceiver,
+    crossterm_rx: &mut mpsc::Receiver<crossterm::event::Event>,
+) -> Option<Event> {
+    let input_closed = crossterm_rx.is_closed();
+
+    if input_closed {
+        receiver.recv().await
+    } else {
+        // tokio::select is messing with variable read detection
+        #[allow(unused_assignments)]
+        let mut event = None;
+        loop {
+            tokio::select! {
+                e = crossterm_rx.recv() => {
+                    event = e.and_then(|e| input_options.handle_crossterm_event(e));
+                }
+                e = receiver.recv() => {
+                    event = e;
+                }
+            }
+            if event.is_some() {
+                break;
+            }
+        }
+        event
     }
 }
 
@@ -644,7 +783,10 @@ pub fn terminal_big_enough() -> Result<bool, Error> {
 
 /// Configures terminal for rendering App
 #[tracing::instrument]
-fn startup() -> io::Result<Terminal<CrosstermBackend<Stdout>>> {
+fn startup(color_config: ColorConfig) -> io::Result<Terminal<CrosstermBackend<Stdout>>> {
+    if color_config.should_strip_ansi {
+        crossterm::style::force_color_output(false);
+    }
     crossterm::terminal::enable_raw_mode()?;
     let mut stdout = io::stdout();
     // Ensure all pending writes are flushed before we switch to alternative screen
@@ -672,7 +814,7 @@ fn startup() -> io::Result<Terminal<CrosstermBackend<Stdout>>> {
 fn cleanup<B: Backend + io::Write>(
     mut terminal: Terminal<B>,
     mut app: App<Box<dyn io::Write + Send>>,
-    callback: Option<mpsc::SyncSender<()>>,
+    callback: Option<oneshot::Sender<()>>,
 ) -> io::Result<()> {
     terminal.clear()?;
     crossterm::execute!(
@@ -682,6 +824,7 @@ fn cleanup<B: Backend + io::Write>(
     )?;
     let tasks_started = app.tasks_by_status.tasks_started();
     app.persist_tasks(tasks_started)?;
+    app.preferences.flush_to_disk().ok();
     crossterm::terminal::disable_raw_mode()?;
     terminal.show_cursor()?;
     // We can close the channel now that terminal is back restored to a normal state
@@ -692,7 +835,7 @@ fn cleanup<B: Backend + io::Write>(
 fn update(
     app: &mut App<Box<dyn io::Write + Send>>,
     event: Event,
-) -> Result<Option<mpsc::SyncSender<()>>, Error> {
+) -> Result<Option<oneshot::Sender<()>>, Error> {
     match event {
         Event::StartTask { task, output_logs } => {
             app.start_task(&task, output_logs)?;
@@ -708,9 +851,11 @@ fn update(
             app.set_status(task, status, result)?;
         }
         Event::InternalStop => {
+            debug!("shutting down due to internal failure");
             app.done = true;
         }
         Event::Stop(callback) => {
+            debug!("shutting down due to message");
             app.done = true;
             return Ok(Some(callback));
         }
@@ -727,20 +872,58 @@ fn update(
             app.next();
         }
         Event::ScrollUp => {
-            app.has_user_scrolled = true;
-            app.scroll_terminal_output(Direction::Up)?;
+            app.is_task_selection_pinned = true;
+            app.scroll_momentum.reset();
+            app.scroll_terminal_output(Direction::Up, false)?
         }
         Event::ScrollDown => {
-            app.has_user_scrolled = true;
-            app.scroll_terminal_output(Direction::Down)?;
+            app.is_task_selection_pinned = true;
+            app.scroll_momentum.reset();
+            app.scroll_terminal_output(Direction::Down, false)?;
+        }
+        Event::ScrollWithMomentum(direction) => {
+            app.is_task_selection_pinned = true;
+            app.scroll_terminal_output(direction, true)?;
+        }
+        Event::PageUp => {
+            app.is_task_selection_pinned = true;
+            app.scroll_momentum.reset();
+            app.scroll_terminal_output_by_page(Direction::Up)?;
+        }
+        Event::PageDown => {
+            app.is_task_selection_pinned = true;
+            app.scroll_momentum.reset();
+            app.scroll_terminal_output_by_page(Direction::Down)?;
+        }
+        Event::JumpToLogsTop => {
+            app.is_task_selection_pinned = true;
+            app.scroll_momentum.reset();
+            app.jump_to_logs_top()?;
+        }
+        Event::JumpToLogsBottom => {
+            app.is_task_selection_pinned = true;
+            app.scroll_momentum.reset();
+            app.jump_to_logs_bottom()?;
+        }
+        Event::ClearLogs => {
+            app.clear_task_logs()?;
         }
         Event::EnterInteractive => {
-            app.has_user_scrolled = true;
+            app.is_task_selection_pinned = true;
             app.interact()?;
         }
         Event::ExitInteractive => {
-            app.has_user_scrolled = true;
+            app.is_task_selection_pinned = true;
             app.interact()?;
+        }
+        Event::TogglePinnedTask => {
+            app.update_task_selection_pinned_state()?;
+        }
+        Event::ToggleSidebar => {
+            app.update_sidebar_toggle();
+        }
+        Event::ToggleHelpPopup => {
+            app.showing_help_popup = !app.showing_help_popup;
         }
         Event::Input { bytes } => {
             app.forward_input(&bytes)?;
@@ -793,80 +976,132 @@ fn update(
 
 fn view<W>(app: &mut App<W>, f: &mut Frame) {
     let cols = app.size.pane_cols();
-    let horizontal = Layout::horizontal([Constraint::Fill(1), Constraint::Length(cols)]);
+    let horizontal = if app.preferences.is_task_list_visible() {
+        Layout::horizontal([Constraint::Fill(1), Constraint::Length(cols)])
+    } else {
+        Layout::horizontal([Constraint::Max(0), Constraint::Length(cols)])
+    };
     let [table, pane] = horizontal.areas(f.size());
 
     let active_task = app.active_task().unwrap().to_string();
 
     let output_logs = app.tasks.get(&active_task).unwrap();
-    let pane_to_render: TerminalPane<W> = TerminalPane::new(output_logs, &active_task, &app.focus);
+    let pane_to_render: TerminalPane<W> = TerminalPane::new(
+        output_logs,
+        &active_task,
+        &app.section_focus,
+        app.preferences.is_task_list_visible(),
+    );
 
     let table_to_render = TaskTable::new(&app.tasks_by_status);
 
-    f.render_stateful_widget(&table_to_render, table, &mut app.scroll);
+    f.render_stateful_widget(&table_to_render, table, &mut app.task_list_scroll);
     f.render_widget(&pane_to_render, pane);
+
+    if app.showing_help_popup {
+        let area = popup_area(*f.buffer_mut().area());
+        let area = area.intersection(*f.buffer_mut().area());
+        f.render_widget(Clear, area); // Clears background underneath popup
+        f.render_widget(popup(area), area);
+    }
 }
 
 #[cfg(test)]
 mod test {
+    use tempfile::tempdir;
+    use turbopath::AbsoluteSystemPathBuf;
+
     use super::*;
     use crate::tui::event::CacheResult;
 
     #[test]
-    fn test_scroll() {
+    fn test_scroll() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
         let mut app: App<bool> = App::new(
             100,
             100,
             vec!["foo".to_string(), "bar".to_string(), "baz".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
         );
         assert_eq!(
-            app.scroll.selected(),
+            app.task_list_scroll.selected(),
             Some(0),
             "starts with first selection"
         );
         app.next();
         assert_eq!(
-            app.scroll.selected(),
+            app.task_list_scroll.selected(),
             Some(1),
             "scroll starts from 0 and goes to 1"
         );
         app.previous();
-        assert_eq!(app.scroll.selected(), Some(0), "scroll stays in bounds");
+        assert_eq!(
+            app.task_list_scroll.selected(),
+            Some(0),
+            "scroll stays in bounds"
+        );
         app.next();
         app.next();
-        assert_eq!(app.scroll.selected(), Some(2), "scroll moves forwards");
+        assert_eq!(
+            app.task_list_scroll.selected(),
+            Some(2),
+            "scroll moves forwards"
+        );
         app.next();
-        assert_eq!(app.scroll.selected(), Some(2), "scroll stays in bounds");
+        assert_eq!(app.task_list_scroll.selected(), Some(0), "scroll wraps");
+        app.previous();
+        assert_eq!(
+            app.task_list_scroll.selected(),
+            Some(2),
+            "scroll stays in bounds"
+        );
+        Ok(())
     }
 
     #[test]
     fn test_selection_follows() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
         let mut app: App<bool> = App::new(
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
         );
         app.next();
-        assert_eq!(app.scroll.selected(), Some(1), "selected b");
+        assert_eq!(app.task_list_scroll.selected(), Some(1), "selected b");
         assert_eq!(app.active_task()?, "b", "selected b");
         app.start_task("b", OutputLogs::Full).unwrap();
-        assert_eq!(app.scroll.selected(), Some(0), "b stays selected");
+        assert_eq!(app.task_list_scroll.selected(), Some(0), "b stays selected");
         assert_eq!(app.active_task()?, "b", "selected b");
         app.start_task("a", OutputLogs::Full).unwrap();
-        assert_eq!(app.scroll.selected(), Some(0), "b stays selected");
+        assert_eq!(app.task_list_scroll.selected(), Some(0), "b stays selected");
         assert_eq!(app.active_task()?, "b", "selected b");
         app.finish_task("a", TaskResult::Success).unwrap();
-        assert_eq!(app.scroll.selected(), Some(0), "b stays selected");
+        assert_eq!(app.task_list_scroll.selected(), Some(0), "b stays selected");
         assert_eq!(app.active_task()?, "b", "selected b");
         Ok(())
     }
 
     #[test]
     fn test_restart_task() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
         let mut app: App<()> = App::new(
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
         );
         app.next();
         app.next();
@@ -929,47 +1164,71 @@ mod test {
 
     #[test]
     fn test_selection_stable() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
         let mut app: App<bool> = App::new(
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
         );
         app.next();
         app.next();
-        assert_eq!(app.scroll.selected(), Some(2), "selected c");
+        assert_eq!(app.task_list_scroll.selected(), Some(2), "selected c");
         assert_eq!(app.tasks_by_status.task_name(2)?, "c", "selected c");
         // start c which moves it to "running" which is before "planned"
         app.start_task("c", OutputLogs::Full)?;
-        assert_eq!(app.scroll.selected(), Some(0), "selection stays on c");
+        assert_eq!(
+            app.task_list_scroll.selected(),
+            Some(0),
+            "selection stays on c"
+        );
         assert_eq!(app.tasks_by_status.task_name(0)?, "c", "selected c");
         app.start_task("a", OutputLogs::Full)?;
-        assert_eq!(app.scroll.selected(), Some(0), "selection stays on c");
+        assert_eq!(
+            app.task_list_scroll.selected(),
+            Some(0),
+            "selection stays on c"
+        );
         assert_eq!(app.tasks_by_status.task_name(0)?, "c", "selected c");
         // c
         // a
         // b <-
         app.next();
         app.next();
-        assert_eq!(app.scroll.selected(), Some(2), "selected b");
+        assert_eq!(app.task_list_scroll.selected(), Some(2), "selected b");
         assert_eq!(app.tasks_by_status.task_name(2)?, "b", "selected b");
         app.finish_task("a", TaskResult::Success)?;
-        assert_eq!(app.scroll.selected(), Some(1), "b stays selected");
+        assert_eq!(app.task_list_scroll.selected(), Some(1), "b stays selected");
         assert_eq!(app.tasks_by_status.task_name(1)?, "b", "selected b");
         // c <-
         // b
         // a
         app.previous();
         app.finish_task("c", TaskResult::Success)?;
-        assert_eq!(app.scroll.selected(), Some(2), "c stays selected");
+        assert_eq!(app.task_list_scroll.selected(), Some(2), "c stays selected");
         assert_eq!(app.tasks_by_status.task_name(2)?, "c", "selected c");
         Ok(())
     }
 
     #[test]
     fn test_forward_stdin() -> Result<(), Error> {
-        let mut app: App<Vec<u8>> = App::new(100, 100, vec!["a".to_string(), "b".to_string()]);
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let mut app: App<Vec<u8>> = App::new(
+            100,
+            100,
+            vec!["a".to_string(), "b".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        );
         app.next();
-        assert_eq!(app.scroll.selected(), Some(1), "selected b");
+        assert_eq!(app.task_list_scroll.selected(), Some(1), "selected b");
         assert_eq!(app.tasks_by_status.task_name(1)?, "b", "selected b");
         // start c which moves it to "running" which is before "planned"
         app.start_task("a", OutputLogs::Full)?;
@@ -1000,7 +1259,17 @@ mod test {
 
     #[test]
     fn test_interact() -> Result<(), Error> {
-        let mut app: App<Vec<u8>> = App::new(100, 100, vec!["a".to_string(), "b".to_string()]);
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let mut app: App<Vec<u8>> = App::new(
+            100,
+            100,
+            vec!["a".to_string(), "b".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        );
         assert!(!app.is_focusing_pane(), "app starts focused on table");
         app.insert_stdin("a", Some(Vec::new()))?;
 
@@ -1022,9 +1291,19 @@ mod test {
 
     #[test]
     fn test_task_status() -> Result<(), Error> {
-        let mut app: App<Vec<u8>> = App::new(100, 100, vec!["a".to_string(), "b".to_string()]);
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let mut app: App<Vec<u8>> = App::new(
+            100,
+            100,
+            vec!["a".to_string(), "b".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        );
         app.next();
-        assert_eq!(app.scroll.selected(), Some(1), "selected b");
+        assert_eq!(app.task_list_scroll.selected(), Some(1), "selected b");
         assert_eq!(app.tasks_by_status.task_name(1)?, "b", "selected b");
         // set status for a
         app.set_status("a".to_string(), "building".to_string(), CacheResult::Hit)?;
@@ -1039,12 +1318,18 @@ mod test {
 
     #[test]
     fn test_restarting_task_no_scroll() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
         let mut app: App<()> = App::new(
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
         );
-        assert_eq!(app.scroll.selected(), Some(0), "selected a");
+        assert_eq!(app.task_list_scroll.selected(), Some(0), "selected a");
         assert_eq!(app.tasks_by_status.task_name(0)?, "a", "selected a");
         app.start_task("a", OutputLogs::None)?;
         app.start_task("b", OutputLogs::None)?;
@@ -1053,14 +1338,14 @@ mod test {
         app.finish_task("c", TaskResult::Success)?;
         app.finish_task("a", TaskResult::Success)?;
 
-        assert_eq!(app.scroll.selected(), Some(0), "selected b");
+        assert_eq!(app.task_list_scroll.selected(), Some(0), "selected b");
         assert_eq!(app.tasks_by_status.task_name(0)?, "b", "selected b");
 
         app.restart_tasks(vec!["c".to_string()])?;
 
         assert_eq!(
             app.tasks_by_status
-                .task_name(app.scroll.selected().unwrap())?,
+                .task_name(app.task_list_scroll.selected().unwrap())?,
             "c",
             "selected c"
         );
@@ -1069,13 +1354,19 @@ mod test {
 
     #[test]
     fn test_restarting_task() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
         let mut app: App<()> = App::new(
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
         );
         app.next();
-        assert_eq!(app.scroll.selected(), Some(1), "selected b");
+        assert_eq!(app.task_list_scroll.selected(), Some(1), "selected b");
         assert_eq!(app.tasks_by_status.task_name(1)?, "b", "selected b");
         app.start_task("a", OutputLogs::None)?;
         app.start_task("b", OutputLogs::None)?;
@@ -1084,14 +1375,14 @@ mod test {
         app.finish_task("c", TaskResult::Success)?;
         app.finish_task("a", TaskResult::Success)?;
 
-        assert_eq!(app.scroll.selected(), Some(0), "selected b");
+        assert_eq!(app.task_list_scroll.selected(), Some(0), "selected b");
         assert_eq!(app.tasks_by_status.task_name(0)?, "b", "selected b");
 
         app.restart_tasks(vec!["c".to_string()])?;
 
         assert_eq!(
             app.tasks_by_status
-                .task_name(app.scroll.selected().unwrap())?,
+                .task_name(app.task_list_scroll.selected().unwrap())?,
             "b",
             "selected b"
         );
@@ -1100,7 +1391,17 @@ mod test {
 
     #[test]
     fn test_resize() -> Result<(), Error> {
-        let mut app: App<Vec<u8>> = App::new(20, 24, vec!["a".to_string(), "b".to_string()]);
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let mut app: App<Vec<u8>> = App::new(
+            20,
+            24,
+            vec!["a".to_string(), "b".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        );
         let pane_rows = app.size.pane_rows();
         let pane_cols = app.size.pane_cols();
         for (name, task) in app.tasks.iter() {
@@ -1131,10 +1432,16 @@ mod test {
 
     #[test]
     fn test_update_empty_task_list() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
         let mut app: App<()> = App::new(
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
         );
         app.next();
         app.update_tasks(Vec::new())?;
@@ -1145,10 +1452,16 @@ mod test {
 
     #[test]
     fn test_restart_missing_task() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
         let mut app: App<()> = App::new(
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
         );
         app.next();
         app.restart_tasks(vec!["d".to_string()])?;
@@ -1161,31 +1474,43 @@ mod test {
 
     #[test]
     fn test_search_backspace_exits_search() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
         let mut app: App<()> = App::new(
             100,
             100,
             vec!["a".to_string(), "b".to_string(), "c".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
         );
         app.enter_search()?;
-        assert!(matches!(app.focus, LayoutSections::Search { .. }));
+        assert!(matches!(app.section_focus, LayoutSections::Search { .. }));
         app.search_remove_char()?;
-        assert!(matches!(app.focus, LayoutSections::TaskList));
+        assert!(matches!(app.section_focus, LayoutSections::TaskList));
         app.enter_search()?;
         app.search_enter_char('a')?;
-        assert!(matches!(app.focus, LayoutSections::Search { .. }));
+        assert!(matches!(app.section_focus, LayoutSections::Search { .. }));
         app.search_remove_char()?;
-        assert!(matches!(app.focus, LayoutSections::Search { .. }));
+        assert!(matches!(app.section_focus, LayoutSections::Search { .. }));
         app.search_remove_char()?;
-        assert!(matches!(app.focus, LayoutSections::TaskList));
+        assert!(matches!(app.section_focus, LayoutSections::TaskList));
         Ok(())
     }
 
     #[test]
     fn test_search_moves_with_typing() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
         let mut app: App<()> = App::new(
             100,
             100,
             vec!["a".to_string(), "ab".to_string(), "abc".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
         );
         app.enter_search()?;
         app.search_enter_char('a')?;
@@ -1205,10 +1530,16 @@ mod test {
 
     #[test]
     fn test_search_scroll() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
         let mut app: App<()> = App::new(
             100,
             100,
             vec!["a".to_string(), "ab".to_string(), "abc".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
         );
         app.enter_search()?;
         app.search_enter_char('b')?;
@@ -1232,10 +1563,16 @@ mod test {
 
     #[test]
     fn test_exit_search_restore_selection() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
         let mut app: App<()> = App::new(
             100,
             100,
             vec!["a".to_string(), "abc".to_string(), "b".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
         );
         app.next();
         assert_eq!(app.active_task()?, "abc");
@@ -1251,10 +1588,16 @@ mod test {
 
     #[test]
     fn test_exit_search_keep_selection() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
         let mut app: App<()> = App::new(
             100,
             100,
             vec!["a".to_string(), "abc".to_string(), "b".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
         );
         app.next();
         assert_eq!(app.active_task()?, "abc");
@@ -1270,10 +1613,16 @@ mod test {
 
     #[test]
     fn test_select_update_task_removes_task() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
         let mut app: App<()> = App::new(
             100,
             100,
             vec!["a".to_string(), "ab".to_string(), "abc".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
         );
         app.enter_search()?;
         app.search_enter_char('b')?;
@@ -1286,10 +1635,16 @@ mod test {
 
     #[test]
     fn test_select_restart_tasks_reorders_tasks() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
         let mut app: App<()> = App::new(
             100,
             100,
             vec!["a".to_string(), "ab".to_string(), "abc".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
         );
         app.enter_search()?;
         app.search_enter_char('b')?;

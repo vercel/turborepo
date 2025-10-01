@@ -1,0 +1,13 @@
+{
+  "name": "app-a",
+  "description": "An application that uses other Internal Packages",
+  "scripts": {
+    "build": "mkdir -p dist && echo \"Your application output!\" > dist/app-output.txt && echo \"Application A is built!\"",
+    "lint": "echo \"Linted!\"",
+    "check-types": "echo \"Types checked!\""
+  },
+  "dependencies": {
+    "pkg-a": "workspace:*",
+    "tooling-config": "workspace:*"
+  }
+}

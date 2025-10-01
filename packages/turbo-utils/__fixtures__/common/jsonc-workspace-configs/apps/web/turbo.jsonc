@@ -1,0 +1,11 @@
+{
+  // Web app turbo.jsonc file
+  "$schema": "https://turborepo.com/schema.json",
+  "extends": ["//"],
+  "tasks": {
+    "build": {
+      // Web-specific environment variables
+      "env": ["ENV_2"]
+    }
+  }
+}

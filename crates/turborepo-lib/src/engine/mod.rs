@@ -16,8 +16,9 @@ use petgraph::Graph;
 use thiserror::Error;
 use turborepo_errors::Spanned;
 use turborepo_repository::package_graph::{PackageGraph, PackageName};
+use turborepo_task_id::TaskId;
 
-use crate::{run::task_id::TaskId, task_graph::TaskDefinition, turbo_json::UIMode};
+use crate::{task_graph::TaskDefinition, turbo_json::UIMode};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum TaskNode {
@@ -28,6 +29,23 @@ pub enum TaskNode {
 impl From<TaskId<'static>> for TaskNode {
     fn from(value: TaskId<'static>) -> Self {
         Self::Task(value)
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error("Expected a task node, but got workspace root.")]
+    Root,
+}
+
+impl TryFrom<TaskNode> for TaskId<'static> {
+    type Error = Error;
+
+    fn try_from(node: TaskNode) -> Result<Self, Self::Error> {
+        match node {
+            TaskNode::Root => Err(Error::Root),
+            TaskNode::Task(id) => Ok(id),
+        }
     }
 }
 
@@ -45,7 +63,7 @@ pub struct Engine<S = Built> {
     task_definitions: HashMap<TaskId<'static>, TaskDefinition>,
     task_locations: HashMap<TaskId<'static>, Spanned<()>>,
     package_tasks: HashMap<PackageName, Vec<petgraph::graph::NodeIndex>>,
-    pub(crate) has_persistent_tasks: bool,
+    pub(crate) has_non_interruptible_tasks: bool,
 }
 
 impl Engine<Building> {
@@ -60,7 +78,7 @@ impl Engine<Building> {
             task_definitions: HashMap::default(),
             task_locations: HashMap::default(),
             package_tasks: HashMap::default(),
-            has_persistent_tasks: false,
+            has_non_interruptible_tasks: false,
         }
     }
 
@@ -87,8 +105,8 @@ impl Engine<Building> {
         task_id: TaskId<'static>,
         definition: TaskDefinition,
     ) -> Option<TaskDefinition> {
-        if definition.persistent {
-            self.has_persistent_tasks = true;
+        if definition.persistent && !definition.interruptible {
+            self.has_non_interruptible_tasks = true;
         }
         self.task_definitions.insert(task_id, definition)
     }
@@ -99,7 +117,7 @@ impl Engine<Building> {
         let has_location = self
             .task_locations
             .get(&task_id)
-            .map_or(false, |existing| existing.range.is_some());
+            .is_some_and(|existing| existing.range.is_some());
 
         if !has_location {
             self.task_locations.insert(task_id, location);
@@ -115,7 +133,7 @@ impl Engine<Building> {
             task_definitions,
             task_locations,
             package_tasks,
-            has_persistent_tasks: has_persistent_task,
+            has_non_interruptible_tasks,
             ..
         } = self;
         Engine {
@@ -126,7 +144,7 @@ impl Engine<Building> {
             task_definitions,
             task_locations,
             package_tasks,
-            has_persistent_tasks: has_persistent_task,
+            has_non_interruptible_tasks,
         }
     }
 }
@@ -169,7 +187,7 @@ impl Engine<Built> {
                         .get(task)
                         .expect("task should have definition");
 
-                    if def.persistent {
+                    if def.persistent && !def.interruptible {
                         return None;
                     }
                 }
@@ -179,7 +197,7 @@ impl Engine<Built> {
                     .any(|idx| {
                         node_distances
                             .get(&(**idx, node_idx))
-                            .map_or(false, |dist| *dist != i32::MAX)
+                            .is_some_and(|dist| *dist != i32::MAX)
                     })
                     .then_some(node.clone())
             },
@@ -208,13 +226,13 @@ impl Engine<Built> {
             task_locations: self.task_locations.clone(),
             package_tasks: self.package_tasks.clone(),
             // We've filtered out persistent tasks
-            has_persistent_tasks: false,
+            has_non_interruptible_tasks: false,
         }
     }
 
-    /// Creates an `Engine` with persistent tasks filtered out. Used in watch
-    /// mode to re-run the non-persistent tasks.
-    pub fn create_engine_without_persistent_tasks(&self) -> Engine<Built> {
+    /// Creates an `Engine` with only interruptible tasks, i.e. non-persistent
+    /// tasks and persistent tasks that are allowed to be interrupted
+    pub fn create_engine_for_interruptible_tasks(&self) -> Engine<Built> {
         let new_graph = self.task_graph.filter_map(
             |node_idx, node| match &self.task_graph[node_idx] {
                 TaskNode::Task(task) => {
@@ -223,7 +241,7 @@ impl Engine<Built> {
                         .get(task)
                         .expect("task should have definition");
 
-                    if !def.persistent {
+                    if !def.persistent || def.interruptible {
                         Some(node.clone())
                     } else {
                         None
@@ -260,12 +278,13 @@ impl Engine<Built> {
             task_definitions: self.task_definitions.clone(),
             task_locations: self.task_locations.clone(),
             package_tasks: self.package_tasks.clone(),
-            has_persistent_tasks: false,
+            has_non_interruptible_tasks: false,
         }
     }
 
-    /// Creates an `Engine` that is only the persistent tasks.
-    pub fn create_engine_for_persistent_tasks(&self) -> Engine<Built> {
+    /// Creates an `Engine` that is only the tasks that are not interruptible,
+    /// i.e. persistent and not allowed to be restarted
+    pub fn create_engine_for_non_interruptible_tasks(&self) -> Engine<Built> {
         let mut new_graph = self.task_graph.filter_map(
             |node_idx, node| match &self.task_graph[node_idx] {
                 TaskNode::Task(task) => {
@@ -274,7 +293,7 @@ impl Engine<Built> {
                         .get(task)
                         .expect("task should have definition");
 
-                    if def.persistent {
+                    if def.persistent && !def.interruptible {
                         Some(node.clone())
                     } else {
                         None
@@ -320,7 +339,7 @@ impl Engine<Built> {
             task_definitions: self.task_definitions.clone(),
             task_locations: self.task_locations.clone(),
             package_tasks: self.package_tasks.clone(),
-            has_persistent_tasks: true,
+            has_non_interruptible_tasks: true,
         }
     }
 
@@ -330,6 +349,22 @@ impl Engine<Built> {
 
     pub fn dependents(&self, task_id: &TaskId) -> Option<HashSet<&TaskNode>> {
         self.neighbors(task_id, petgraph::Direction::Incoming)
+    }
+
+    pub fn transitive_dependents(&self, task_id: &TaskId<'static>) -> HashSet<&TaskNode> {
+        turborepo_graph_utils::transitive_closure(
+            &self.task_graph,
+            self.task_lookup.get(task_id).cloned(),
+            petgraph::Direction::Incoming,
+        )
+    }
+
+    pub fn transitive_dependencies(&self, task_id: &TaskId<'static>) -> HashSet<&TaskNode> {
+        turborepo_graph_utils::transitive_closure(
+            &self.task_graph,
+            self.task_lookup.get(task_id).cloned(),
+            petgraph::Direction::Outgoing,
+        )
     }
 
     fn neighbors(
@@ -360,6 +395,13 @@ impl Engine<Built> {
         self.task_graph.node_weights()
     }
 
+    pub fn task_ids(&self) -> impl Iterator<Item = &TaskId<'static>> {
+        self.tasks().filter_map(|task| match task {
+            crate::engine::TaskNode::Task(task_id) => Some(task_id),
+            crate::engine::TaskNode::Root => None,
+        })
+    }
+
     /// Return all tasks that have a command to be run
     pub fn tasks_with_command(&self, pkg_graph: &PackageGraph) -> Vec<String> {
         self.tasks()
@@ -370,7 +412,10 @@ impl Engine<Built> {
             .filter_map(|task| {
                 let pkg_name = PackageName::from(task.package());
                 let json = pkg_graph.package_json(&pkg_name)?;
-                json.command(task.task()).map(|_| task.to_string())
+                // TODO: delegate to command factory to filter down tasks to those that will
+                // have a runnable command.
+                (task.task() == "proxy" || json.command(task.task()).is_some())
+                    .then(|| task.to_string())
             })
             .collect()
     }
@@ -384,6 +429,7 @@ impl Engine<Built> {
         package_graph: &PackageGraph,
         concurrency: u32,
         ui_mode: UIMode,
+        will_execute_tasks: bool,
     ) -> Result<(), Vec<ValidateError>> {
         // TODO(olszewski) once this is hooked up to a real run, we should
         // see if using rayon to parallelize would provide a speedup
@@ -432,7 +478,7 @@ impl Engine<Built> {
                             .task_locations
                             .get(dep_id)
                             .map(|spanned| spanned.span_and_text("turbo.json"))
-                            .unwrap_or((None, NamedSource::new("", "")));
+                            .unwrap_or((None, NamedSource::new("", String::new())));
 
                         return Err(ValidateError::DependencyOnPersistentTask {
                             span,
@@ -453,12 +499,12 @@ impl Engine<Built> {
                     .scripts
                     .get(task_id.task())
                     // handle legacy behaviour from go where an empty string may appear
-                    .map_or(false, |script| !script.is_empty());
+                    .is_some_and(|script| !script.is_empty());
 
                 let task_is_persistent = self
                     .task_definitions
                     .get(task_id)
-                    .map_or(false, |task_def| task_def.persistent);
+                    .is_some_and(|task_def| task_def.persistent);
 
                 Ok(task_is_persistent && package_has_task)
             })
@@ -473,14 +519,18 @@ impl Engine<Built> {
 
         // there must always be at least one concurrency 'slot' available for
         // non-persistent tasks otherwise we get race conditions
-        if persistent_count >= concurrency {
+        if will_execute_tasks && persistent_count >= concurrency {
             validation_errors.push(ValidateError::PersistentTasksExceedConcurrency {
                 persistent_count,
                 concurrency,
             })
         }
 
-        validation_errors.extend(self.validate_interactive(ui_mode));
+        if will_execute_tasks {
+            validation_errors.extend(self.validate_interactive(ui_mode));
+        }
+
+        validation_errors.sort();
 
         match validation_errors.is_empty() {
             true => Ok(()),
@@ -510,7 +560,7 @@ impl Engine<Built> {
     }
 }
 
-#[derive(Debug, Error, Diagnostic)]
+#[derive(Debug, Error, Diagnostic, PartialEq, PartialOrd, Eq, Ord)]
 pub enum ValidateError {
     #[error("Cannot find task definition for {task_id} in package {package_name}")]
     MissingTask {
@@ -524,7 +574,7 @@ pub enum ValidateError {
         #[label("persistent task")]
         span: Option<SourceSpan>,
         #[source_code]
-        text: NamedSource,
+        text: NamedSource<String>,
         persistent_task: String,
         dependant: String,
     },
@@ -537,8 +587,8 @@ pub enum ValidateError {
         concurrency: u32,
     },
     #[error(
-        "Cannot run interactive task \"{task}\" without experimental UI. Set `\"experimentalUI\": \
-         true` in `turbo.json` or `TURBO_EXPERIMENTAL_UI=true` as an environment variable"
+        "Cannot run interactive task \"{task}\" without Terminal UI. Set `\"ui\": true` in \
+         `turbo.json`, use the `--ui=tui` flag, or set `TURBO_UI=true` as an environment variable."
     )]
     InteractiveNeedsUI { task: String },
 }
@@ -563,9 +613,9 @@ mod test {
         discovery::{DiscoveryResponse, PackageDiscovery, WorkspaceData},
         package_json::PackageJson,
     };
+    use turborepo_task_id::TaskName;
 
     use super::*;
-    use crate::run::task_id::TaskName;
 
     struct DummyDiscovery<'a>(&'a TempDir);
 
@@ -599,7 +649,7 @@ mod test {
                     };
 
                     let package = PackageJson {
-                        name: Some(name.to_string()),
+                        name: Some(Spanned::new(name.to_string())),
                         scripts,
                         ..Default::default()
                     };
@@ -667,20 +717,91 @@ mod test {
 
         // if our limit is less than, it should fail
         engine
-            .validate(&graph, 1, UIMode::Stream)
+            .validate(&graph, 1, UIMode::Stream, true)
             .expect_err("not enough");
 
         // if our limit is less than, it should fail
         engine
-            .validate(&graph, 2, UIMode::Stream)
+            .validate(&graph, 2, UIMode::Stream, true)
             .expect_err("not enough");
 
         // we have two persistent tasks, and a slot for all other tasks, so this should
         // pass
-        engine.validate(&graph, 3, UIMode::Stream).expect("ok");
+        engine
+            .validate(&graph, 3, UIMode::Stream, true)
+            .expect("ok");
 
         // if our limit is greater, then it should pass
-        engine.validate(&graph, 4, UIMode::Stream).expect("ok");
+        engine
+            .validate(&graph, 4, UIMode::Stream, true)
+            .expect("ok");
+    }
+
+    #[tokio::test]
+    async fn test_interactive_validation() {
+        let tmp = tempfile::TempDir::new().unwrap();
+
+        let mut engine = Engine::new();
+
+        // add two packages with a persistent build task
+        for package in ["a", "b"] {
+            let task_id = TaskId::new(package, "build");
+            engine.get_index(&task_id);
+            engine.add_definition(
+                task_id,
+                TaskDefinition {
+                    persistent: true,
+                    interactive: true,
+                    ..Default::default()
+                },
+            );
+        }
+
+        let engine = engine.seal();
+
+        let graph_builder = PackageGraph::builder(
+            AbsoluteSystemPath::from_std_path(tmp.path()).unwrap(),
+            PackageJson::default(),
+        )
+        .with_package_discovery(DummyDiscovery(&tmp));
+
+        let graph = graph_builder.build().await.unwrap();
+
+        assert!(engine.validate(&graph, 3, UIMode::Stream, false).is_ok());
+        assert!(engine.validate(&graph, 3, UIMode::Stream, true).is_err());
+    }
+
+    #[tokio::test]
+    async fn test_dry_run_skips_concurrency_validation() {
+        let tmp = tempfile::TempDir::new().unwrap();
+
+        let mut engine = Engine::new();
+
+        // add two packages with a persistent build task
+        for package in ["a", "b"] {
+            let task_id = TaskId::new(package, "build");
+            engine.get_index(&task_id);
+            engine.add_definition(
+                task_id,
+                TaskDefinition {
+                    persistent: true,
+                    ..Default::default()
+                },
+            );
+        }
+
+        let engine = engine.seal();
+
+        let graph_builder = PackageGraph::builder(
+            AbsoluteSystemPath::from_std_path(tmp.path()).unwrap(),
+            PackageJson::default(),
+        )
+        .with_package_discovery(DummyDiscovery(&tmp));
+
+        let graph = graph_builder.build().await.unwrap();
+
+        assert!(engine.validate(&graph, 1, UIMode::Stream, false).is_ok());
+        assert!(engine.validate(&graph, 1, UIMode::Stream, true).is_err());
     }
 
     #[tokio::test]
@@ -711,20 +832,20 @@ mod test {
 
         let engine = engine.seal();
 
-        let persistent_tasks_engine = engine.create_engine_for_persistent_tasks();
-        for node in persistent_tasks_engine.tasks() {
+        let non_interruptible_tasks_engine = engine.create_engine_for_non_interruptible_tasks();
+        for node in non_interruptible_tasks_engine.tasks() {
             if let TaskNode::Task(task_id) = node {
-                let def = persistent_tasks_engine
+                let def = non_interruptible_tasks_engine
                     .task_definition(task_id)
                     .expect("task should have definition");
                 assert!(def.persistent, "task should be persistent");
             }
         }
 
-        let non_persistent_tasks_engine = engine.create_engine_without_persistent_tasks();
-        for node in non_persistent_tasks_engine.tasks() {
+        let interruptible_tasks_engine = engine.create_engine_for_interruptible_tasks();
+        for node in interruptible_tasks_engine.tasks() {
             if let TaskNode::Task(task_id) = node {
-                let def = non_persistent_tasks_engine
+                let def = interruptible_tasks_engine
                     .task_definition(task_id)
                     .expect("task should have definition");
                 assert!(!def.persistent, "task should not be persistent");

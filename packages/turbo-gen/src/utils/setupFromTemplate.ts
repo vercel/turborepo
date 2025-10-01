@@ -1,6 +1,6 @@
 import path from "node:path";
 import type { Project } from "@turbo/workspaces";
-import { pathExists, copy } from "fs-extra";
+import fs from "fs-extra";
 import { GeneratorError } from "./error";
 
 export async function setupFromTemplate({
@@ -16,7 +16,7 @@ export async function setupFromTemplate({
   const toCopy = `simple-${template}`;
 
   // required to ensure we don't overwrite any existing files at this location
-  if (await pathExists(configDirectory)) {
+  if (await fs.pathExists(configDirectory)) {
     throw new GeneratorError(
       `Generator config directory already exists at ${configDirectory}`,
       { type: "config_directory_already_exists" }
@@ -24,7 +24,7 @@ export async function setupFromTemplate({
   }
 
   // copy templates to project
-  await copy(path.join(__dirname, "templates", toCopy), configDirectory, {
+  await fs.copy(path.join(__dirname, "templates", toCopy), configDirectory, {
     recursive: true,
   });
 }

@@ -1,20 +1,59 @@
-use std::sync::Arc;
+use std::{collections::HashMap, fmt, sync::Arc};
 
 use async_graphql::Object;
 use itertools::Itertools;
+use turborepo_errors::Spanned;
 use turborepo_repository::package_graph::{PackageName, PackageNode};
 
 use crate::{
-    query::{Array, Error},
+    query::{task::RepositoryTask, Array, Error},
     run::Run,
 };
 
+#[derive(Clone)]
 pub struct Package {
-    pub run: Arc<Run>,
-    pub name: PackageName,
+    run: Arc<Run>,
+    name: PackageName,
+}
+
+impl fmt::Debug for Package {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Package").field("name", &self.name).finish()
+    }
 }
 
 impl Package {
+    pub fn new(run: Arc<Run>, name: PackageName) -> Result<Self, Error> {
+        run.pkg_dep_graph()
+            .package_info(&name)
+            .ok_or_else(|| Error::PackageNotFound(name.clone()))?;
+
+        Ok(Self { run, name })
+    }
+
+    pub fn run(&self) -> &Arc<Run> {
+        &self.run
+    }
+
+    /// This uses a different naming convention because we already have a
+    /// `name` resolver defined for GraphQL
+    pub fn get_name(&self) -> &PackageName {
+        &self.name
+    }
+
+    pub fn get_tasks(&self) -> HashMap<String, Spanned<String>> {
+        self.run
+            .pkg_dep_graph()
+            .package_json(&self.name)
+            .map(|json| {
+                json.scripts
+                    .iter()
+                    .map(|(k, v)| (k.clone(), v.clone()))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
     pub fn direct_dependents_count(&self) -> usize {
         self.run
             .pkg_dep_graph()
@@ -182,5 +221,17 @@ impl Package {
             })
             .sorted_by(|a, b| a.name.cmp(&b.name))
             .collect())
+    }
+
+    async fn tasks(&self) -> Array<RepositoryTask> {
+        self.get_tasks()
+            .into_iter()
+            .sorted_by(|a, b| a.0.cmp(&b.0))
+            .map(|(name, script)| RepositoryTask {
+                name,
+                package: self.clone(),
+                script: Some(script),
+            })
+            .collect()
     }
 }

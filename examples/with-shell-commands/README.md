@@ -1,6 +1,6 @@
 # Turborepo starter with shell commands
 
-This is an official starter Turborepo meant for debugging, learning, and exploring.
+This Turborepo starter is maintained by the Turborepo core team. This template is great for issue reproductions and exploring building task graphs without frameworks.
 
 ## Using this example
 
@@ -27,16 +27,16 @@ This Turborepo includes the following packages:
 ### Apps and Packages
 
 - `app-a`: A final package that depends on all other packages in the graph and has no dependents. This could resemble an application in your monorepo that consumes everything in your monorepo through its topological tree.
-- `app-b`: Another final package with many dependencies. No dependents, lost of dependencies.
+- `app-b`: Another final package with many dependencies. No dependents, lots of dependencies.
 - `pkg-a`: A package that has all scripts in the root `package.json`.
 - `pkg-b`: A package with _almost_ all scripts in the root `package.json`.
 - `tooling-config`: A package to simulate a common configuration used for all of your repository. This could resemble a configuration for tools like TypeScript or ESLint that are installed into all of your packages.
 
 ### Some scripts to try
 
-If you haven't yet, [install global `turbo`](https://turbo.build/repo/docs/installing#install-globally) to run tasks.
+If you haven't yet, [install global `turbo`](https://turborepo.com/docs/installing#install-globally) to run tasks.
 
-- `turbo build lint typecheck`: Runs all tasks in the default graph.
+- `turbo build lint check-types`: Runs all tasks in the default graph.
 - `turbo build`: A basic command to build `app-a` and `app-b` in parallel.
 - `turbo build --filter=app-a`: Building only `app-a` and its dependencies.
 - `turbo lint`: A basic command for running lints in all packages in parallel.

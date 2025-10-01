@@ -14,14 +14,14 @@ export type RelativeUnixPath = string;
 export type EnvWildcard = string;
 
 export interface BaseSchema {
-  /** @defaultValue `https://turbo.build/schema.v2.json` */
+  /** @defaultValue `https://turborepo.com/schema.v2.json` */
   $schema?: string;
   /**
    * An object representing the task dependency graph of your project. turbo interprets
    * these conventions to schedule, execute, and cache the outputs of tasks in
    * your project.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#tasks
+   * Documentation: https://turborepo.com/docs/reference/configuration#tasks
    *
    * @defaultValue `{}`
    */
@@ -52,6 +52,15 @@ export interface WorkspaceSchema extends BaseSchema {
    * @defaultValue `["//"]`
    */
   extends: Array<string>;
+  /**
+   * Used to tag a package for boundaries rules. Boundaries rules can restrict
+   * which packages a tag group can import or be imported by.
+   */
+  tags?: Array<string>;
+  /**
+   * Configuration for `turbo boundaries` that is specific to this package
+   */
+  boundaries?: BoundariesConfig;
 }
 
 export interface RootSchema extends BaseSchema {
@@ -67,9 +76,9 @@ export interface RootSchema extends BaseSchema {
    *
    * - any root level file that impacts package tasks
    * that are not represented in the traditional dependency graph
-   * (e.g. a root tsconfig.json, jest.config.js, .eslintrc, etc.)
+   * (e.g. a root tsconfig.json, jest.config.ts, .eslintrc, etc.)
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#globaldependencies
+   * Documentation: https://turborepo.com/docs/reference/configuration#globaldependencies
    *
    * @defaultValue `[]`
    */
@@ -80,7 +89,7 @@ export interface RootSchema extends BaseSchema {
    *
    * The variables included in this list will affect all task hashes.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#globalenv
+   * Documentation: https://turborepo.com/docs/reference/configuration#globalenv
    *
    * @defaultValue `[]`
    */
@@ -90,7 +99,7 @@ export interface RootSchema extends BaseSchema {
    * An allowlist of environment variables that should be made to all tasks, but
    * should not contribute to the task's cache key, e.g. `AWS_SECRET_KEY`.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#globalpassthroughenv
+   * Documentation: https://turborepo.com/docs/reference/configuration#globalpassthroughenv
    *
    * @defaultValue `null`
    */
@@ -99,7 +108,7 @@ export interface RootSchema extends BaseSchema {
   /**
    * Configuration options that control how turbo interfaces with the remote cache.
    *
-   * Documentation: https://turbo.build/repo/docs/core-concepts/remote-caching
+   * Documentation: https://turborepo.com/docs/core-concepts/remote-caching
    *
    * @defaultValue `{}`
    */
@@ -108,11 +117,23 @@ export interface RootSchema extends BaseSchema {
   /**
    * Enable use of the UI for `turbo`.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#ui
+   * Documentation: https://turborepo.com/docs/reference/configuration#ui
    *
    * @defaultValue `"stream"`
    */
   ui?: UI;
+
+  /**
+   * Set/limit the maximum concurrency for task execution. Must be an integer greater than or equal to `1` or a percentage value like `50%`.
+   *
+   *  - Use `1` to force serial execution (one task at a time).
+   *  - Use `100%` to use all available logical processors.
+   *
+   * Documentation: https://turborepo.com/docs/reference/configuration#concurrency
+   *
+   * @defaultValue `"10"`
+   */
+  concurrency?: string;
 
   /**
    * Disable check for `packageManager` in root `package.json`
@@ -129,7 +150,7 @@ export interface RootSchema extends BaseSchema {
   /**
    * Specify the filesystem cache directory.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#cachedir
+   * Documentation: https://turborepo.com/docs/reference/configuration#cachedir
    *
    * @defaultValue `".turbo/cache"`
    */
@@ -138,7 +159,7 @@ export interface RootSchema extends BaseSchema {
   /**
    * Turborepo runs a background process to pre-calculate some expensive operations. This standalone process (daemon) is a performance optimization, and not required for proper functioning of `turbo`.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#daemon
+   * Documentation: https://turborepo.com/docs/reference/configuration#daemon
    *
    * @defaultValue `false`
    */
@@ -150,11 +171,32 @@ export interface RootSchema extends BaseSchema {
    * - `"strict"`: Filter environment variables to only those that are specified in the `env` and `globalEnv` keys in `turbo.json`.
    * - `"loose"`: Allow all environment variables for the process to be available.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#envmode
+   * Documentation: https://turborepo.com/docs/reference/configuration#envmode
    *
    * @defaultValue `"strict"`
    */
   envMode?: EnvMode;
+
+  /**
+   * Configuration for `turbo boundaries`. Allows users to restrict a package's dependencies and dependents
+   */
+  boundaries?: RootBoundariesConfig;
+
+  /**
+   * When set to `true`, disables the update notification that appears when a new version of `turbo` is available.
+   *
+   * Documentation: https://turborepo.com/docs/reference/configuration#noupdatenotifier
+   *
+   * @defaultValue `false`
+   */
+  noUpdateNotifier?: boolean;
+
+  /**
+   * Opt into breaking changes prior to major releases, experimental features, and beta features.
+   *
+   * @defaultValue `{}`
+   */
+  futureFlags?: Record<string, unknown>;
 }
 
 export interface Pipeline {
@@ -170,7 +212,7 @@ export interface Pipeline {
    * same package (e.g. "A package's test and lint commands depend on its own build being
    * completed first.")
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#dependson
+   * Documentation: https://turborepo.com/docs/reference/configuration#dependson
    *
    * @defaultValue `[]`
    */
@@ -184,7 +226,7 @@ export interface Pipeline {
    * You no longer need to use the $ prefix.
    * (e.g. $GITHUB_TOKEN → GITHUB_TOKEN)
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#env
+   * Documentation: https://turborepo.com/docs/reference/configuration#env
    *
    * @defaultValue `[]`
    */
@@ -195,7 +237,7 @@ export interface Pipeline {
    * task's environment, but should not contribute to the task's cache key,
    * e.g. `AWS_SECRET_KEY`.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#passthroughenv
+   * Documentation: https://turborepo.com/docs/reference/configuration#passthroughenv
    *
    * @defaultValue `null`
    */
@@ -208,7 +250,7 @@ export interface Pipeline {
    * produce no artifacts other than logs (such as linters). Logs are always treated as a
    * cacheable artifact and never need to be specified.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#outputs
+   * Documentation: https://turborepo.com/docs/reference/configuration#outputs
    *
    * @defaultValue `[]`
    */
@@ -219,7 +261,7 @@ export interface Pipeline {
    *
    * Setting cache to false is useful for long-running "watch" or development mode tasks.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#cache
+   * Documentation: https://turborepo.com/docs/reference/configuration#cache
    *
    * @defaultValue `true`
    */
@@ -236,7 +278,7 @@ export interface Pipeline {
    *
    * If omitted or empty, all files in the package are considered as inputs.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#inputs
+   * Documentation: https://turborepo.com/docs/reference/configuration#inputs
    *
    * @defaultValue `[]`
    */
@@ -255,7 +297,7 @@ export interface Pipeline {
    *
    * "none": Hides all task output
    *
-   * Documentation: https://turbo.build/repo/docs/reference/run#--output-logs-option
+   * Documentation: https://turborepo.com/docs/reference/run#--output-logs-option
    *
    * @defaultValue `"full"`
    */
@@ -266,7 +308,7 @@ export interface Pipeline {
    * turbo that this is a long-running task and will ensure that other tasks
    * cannot depend on it.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#persistent
+   * Documentation: https://turborepo.com/docs/reference/configuration#persistent
    *
    * @defaultValue `false`
    */
@@ -277,11 +319,35 @@ export interface Pipeline {
    * Interactive tasks must be marked with "cache": false as the input
    * they receive from stdin can change the outcome of the task.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#interactive
+   * Documentation: https://turborepo.com/docs/reference/configuration#interactive
    *
    * @defaultValue `false`
    */
   interactive?: boolean;
+
+  /**
+   * Label a persistent task as interruptible to allow it to be restarted by `turbo watch`.
+   * `turbo watch` watches for changes to your packages and automatically
+   * restarts tasks that are affected. However, if a task is persistent, it will
+   * not be restarted by default. To enable restarting persistent tasks, set
+   * `interruptible` to true.
+   *
+   * Documentation: https://turborepo.com/docs/reference/configuration#interruptible
+   *
+   * @defaultValue `false`
+   */
+  interruptible?: boolean;
+
+  /**
+   * A list of tasks that will run alongside this task.
+   *
+   * Tasks in this list will not be run until completion before this task starts execution.
+   *
+   * Documentation: https://turborepo.com/docs/reference/configuration#with
+   *
+   * @defaultValue `[]`
+   */
+  with?: Array<string>;
 }
 
 export interface RemoteCache {
@@ -299,7 +365,7 @@ export interface RemoteCache {
    * Indicates if the remote cache is enabled. When `false`, Turborepo will disable
    * all remote cache operations, even if the repo has a valid token. If true, remote caching
    * is enabled, but still requires the user to login and link their repo to a remote cache.
-   * Documentation: https://turbo.build/repo/docs/core-concepts/remote-caching
+   * Documentation: https://turborepo.com/docs/core-concepts/remote-caching
    *
    * @defaultValue `true`
    */
@@ -316,14 +382,14 @@ export interface RemoteCache {
   preflight?: boolean;
   /**
    * Set endpoint for API calls to the remote cache.
-   * Documentation: https://turbo.build/repo/docs/core-concepts/remote-caching#self-hosting
+   * Documentation: https://turborepo.com/docs/core-concepts/remote-caching#self-hosting
    *
    * @defaultValue `"https://vercel.com/api"`
    */
   apiUrl?: string;
   /**
    * Set endpoint for requesting tokens during `turbo login`.
-   * Documentation: https://turbo.build/repo/docs/core-concepts/remote-caching#self-hosting
+   * Documentation: https://turborepo.com/docs/core-concepts/remote-caching#self-hosting
    *
    * @defaultValue `"https://vercel.com"`
    */
@@ -336,6 +402,68 @@ export interface RemoteCache {
    * @defaultValue `30`
    */
   timeout?: number;
+  /**
+   * Sets a timeout for remote cache uploads. Value is given in seconds and
+   * only whole values are accepted. If `0` is passed, then there is no timeout
+   * for any remote cache uploads.
+   *
+   * @defaultValue `60`
+   */
+  uploadTimeout?: number;
+
+  /**
+   * The ID of the Remote Cache team. Value will be passed as `teamId` in the
+   * querystring for all Remote Cache HTTP calls. Must start with `team_` or it will
+   * not be used.
+   */
+  teamId?: string;
+
+  /**
+   * The slug of the Remote Cache team. Value will be passed as `slug` in the
+   * querystring for all Remote Cache HTTP calls.
+   */
+  teamSlug?: string;
+}
+
+export interface Permissions {
+  /**
+   * Lists which tags are allowed. Any tag not included will be banned
+   * If omitted, all tags are permitted
+   */
+  allow?: Array<string>;
+  /**
+   * Lists which tags are banned.
+   */
+  deny?: Array<string>;
+}
+
+interface TagRules {
+  /**
+   * Rules for a tag's dependencies. Restricts which packages a tag can import
+   */
+  dependencies?: Permissions;
+  /**
+   * Rules for a tag's dependents. Restricts which packages can import this tag.
+   */
+  dependents?: Permissions;
+}
+
+export type BoundariesRulesMap = Record<string, TagRules>;
+
+export interface BoundariesConfig {
+  /**
+   * Declares any implicit dependencies, i.e. any dependency not declared in a package.json.
+   * These can include dependencies automatically injected by a framework or a testing library.
+   */
+  implicitDependencies?: Array<string>;
+}
+
+export interface RootBoundariesConfig extends BoundariesConfig {
+  /**
+   * The boundaries rules for tags. Restricts which packages
+   * can import a tag and which packages a tag can import
+   */
+  tags?: BoundariesRulesMap;
 }
 
 export const isRootSchemaV2 = (schema: Schema): schema is RootSchema =>

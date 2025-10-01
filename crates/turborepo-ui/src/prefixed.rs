@@ -8,8 +8,9 @@ use tracing::error;
 
 use crate::{ColorConfig, LineWriter};
 
-/// Writes messages with different prefixes, depending on log level. Note that
-/// this does output the prefix when message is empty, unlike the Go
+/// Writes messages with different prefixes, depending on log level.
+///
+/// Note that this does output the prefix when message is empty, unlike the Go
 /// implementation. We do this because this behavior is what we actually
 /// want for replaying logs.
 pub struct PrefixedUI<W> {
@@ -78,7 +79,7 @@ impl<W: Write> PrefixedUI<W> {
         // There's no reason to propagate this error
         // because we don't want our entire program to crash
         // due to a log failure.
-        if let Err(err) = writeln!(writer, "{}{}", prefix, message) {
+        if let Err(err) = writeln!(writer, "{prefix}{message}") {
             error!("cannot write to logs: {:?}", err);
         }
     }

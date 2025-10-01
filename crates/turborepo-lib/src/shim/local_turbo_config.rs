@@ -51,7 +51,7 @@ impl LocalTurboConfig {
         }
 
         // If there isn't a package manager, just try to parse all known lockfiles
-        // This isn't the most effecient, but since we'll be hitting network to download
+        // This isn't the most efficient, but since we'll be hitting network to download
         // the correct binary the unnecessary file reads aren't costly relative to the
         // download.
         PackageManager::supported_managers().iter().find_map(|pm| {

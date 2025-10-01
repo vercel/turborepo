@@ -5,7 +5,9 @@ use std::{
 
 use clap::ValueEnum;
 use itertools::Itertools;
+use tracing::warn;
 use turbopath::AbsoluteSystemPathBuf;
+use turborepo_cache::CacheConfig;
 
 use super::{ConfigurationOptions, Error, ResolvedConfigurationOptions};
 use crate::{
@@ -39,6 +41,11 @@ const TURBO_MAPPING: &[(&str, &str)] = [
     ("turbo_remote_cache_read_only", "remote_cache_read_only"),
     ("turbo_run_summary", "run_summary"),
     ("turbo_allow_no_turbo_json", "allow_no_turbo_json"),
+    ("turbo_cache", "cache"),
+    ("turbo_tui_scrollback_length", "tui_scrollback_length"),
+    ("turbo_concurrency", "concurrency"),
+    ("turbo_no_update_notifier", "no_update_notifier"),
+    ("turbo_sso_login_callback_port", "sso_login_callback_port"),
 ]
 .as_slice();
 
@@ -77,17 +84,58 @@ impl ResolvedConfigurationOptions for EnvVars {
             .map(|value| value.ok_or_else(|| Error::InvalidPreflight))
             .transpose()?;
 
-        // Process enabled
-        let enabled = self
-            .truthy_value("enabled")
-            .map(|value| value.ok_or_else(|| Error::InvalidRemoteCacheEnabled))
-            .transpose()?;
-
         let force = self.truthy_value("force").flatten();
-        let remote_only = self.truthy_value("remote_only").flatten();
-        let remote_cache_read_only = self.truthy_value("remote_cache_read_only").flatten();
+        let mut remote_only = self.truthy_value("remote_only").flatten();
+
+        let mut remote_cache_read_only = self.truthy_value("remote_cache_read_only").flatten();
+
         let run_summary = self.truthy_value("run_summary").flatten();
         let allow_no_turbo_json = self.truthy_value("allow_no_turbo_json").flatten();
+        let mut cache: Option<turborepo_cache::CacheConfig> = self
+            .output_map
+            .get("cache")
+            .map(|c| c.parse())
+            .transpose()?;
+
+        if remote_only.is_some_and(|t| t) {
+            if let Some(cache) = cache {
+                // If TURBO_REMOTE_ONLY and TURBO_CACHE result in the same behavior, remove
+                // REMOTE_ONLY to avoid deprecation warning or mixing of old/new
+                // cache flag error.
+                if cache == CacheConfig::remote_only() {
+                    remote_only = None;
+                }
+            }
+        }
+        if remote_cache_read_only.is_some_and(|t| t) {
+            if let Some(cache) = cache {
+                // If TURBO_REMOTE_CACHE_READ_ONLY and TURBO_CACHE result in the same behavior,
+                // remove REMOTE_CACHE_READ_ONLY to avoid deprecation warning or
+                // mixing of old/new cache flag error.
+                if cache == CacheConfig::remote_read_only() {
+                    remote_cache_read_only = None;
+                }
+            }
+        }
+
+        // If TURBO_FORCE is set it wins out over TURBO_CACHE
+        if force.is_some_and(|t| t) {
+            cache = None;
+        }
+
+        if remote_only.is_some() {
+            warn!(
+                "TURBO_REMOTE_ONLY is deprecated and will be removed in a future major version. \
+                 Use TURBO_CACHE=remote:rw"
+            );
+        }
+
+        if remote_cache_read_only.is_some() {
+            warn!(
+                "TURBO_REMOTE_CACHE_READ_ONLY is deprecated and will be removed in a future major \
+                 version. Use TURBO_CACHE=remote:r"
+            );
+        }
 
         // Process timeout
         let timeout = self
@@ -104,13 +152,23 @@ impl ResolvedConfigurationOptions for EnvVars {
             .transpose()
             .map_err(Error::InvalidUploadTimeout)?;
 
-        // Process experimentalUI
+        let tui_scrollback_length = self
+            .output_map
+            .get("tui_scrollback_length")
+            .filter(|s| !s.is_empty())
+            .map(|s| s.parse())
+            .transpose()
+            .map_err(Error::InvalidTuiScrollbackLength)?;
+
+        // Process ui
         let ui =
             self.truthy_value("ui")
                 .flatten()
                 .map(|ui| if ui { UIMode::Tui } else { UIMode::Stream });
 
         let allow_no_package_manager = self.truthy_value("allow_no_package_manager").flatten();
+
+        let no_update_notifier = self.truthy_value("no_update_notifier").flatten();
 
         // Process daemon
         let daemon = self.truthy_value("daemon").flatten();
@@ -149,10 +207,19 @@ impl ResolvedConfigurationOptions for EnvVars {
                 )
             })?;
 
-        // We currently don't pick up a Spaces ID via env var, we likely won't
-        // continue using the Spaces name, we can add an env var when we have the
-        // name we want to stick with.
-        let spaces_id = None;
+        let concurrency = self
+            .output_map
+            .get("concurrency")
+            .filter(|s| !s.is_empty())
+            .cloned();
+
+        let sso_login_callback_port = self
+            .output_map
+            .get("sso_login_callback_port")
+            .filter(|s| !s.is_empty())
+            .map(|s| s.parse())
+            .transpose()
+            .map_err(Error::InvalidSsoLoginCallbackPort)?;
 
         let output = ConfigurationOptions {
             api_url: self.output_map.get("api_url").cloned(),
@@ -162,10 +229,12 @@ impl ResolvedConfigurationOptions for EnvVars {
             token: self.output_map.get("token").cloned(),
             scm_base: self.output_map.get("scm_base").cloned(),
             scm_head: self.output_map.get("scm_head").cloned(),
+            concurrency,
+            cache,
             // Processed booleans
             signature,
             preflight,
-            enabled,
+            enabled: None,
             ui,
             allow_no_package_manager,
             daemon,
@@ -174,75 +243,27 @@ impl ResolvedConfigurationOptions for EnvVars {
             remote_cache_read_only,
             run_summary,
             allow_no_turbo_json,
+            no_update_notifier,
 
             // Processed numbers
             timeout,
             upload_timeout,
-            spaces_id,
+            tui_scrollback_length,
+
             env_mode,
             cache_dir,
             root_turbo_json_path,
             log_order,
+            sso_login_callback_port,
+            // Do not allow future flags to be set by env var
+            future_flags: None,
         };
 
         Ok(output)
     }
 }
 
-const VERCEL_ARTIFACTS_MAPPING: &[(&str, &str)] = [
-    ("vercel_artifacts_token", "token"),
-    ("vercel_artifacts_owner", "team_id"),
-]
-.as_slice();
-
-pub struct OverrideEnvVars<'a> {
-    environment: &'a HashMap<OsString, OsString>,
-    output_map: HashMap<&'static str, String>,
-}
-
-impl<'a> OverrideEnvVars<'a> {
-    pub fn new(environment: &'a HashMap<OsString, OsString>) -> Result<Self, Error> {
-        let vercel_artifacts_mapping: HashMap<_, _> =
-            VERCEL_ARTIFACTS_MAPPING.iter().copied().collect();
-
-        let output_map = map_environment(vercel_artifacts_mapping, environment)?;
-        Ok(Self {
-            environment,
-            output_map,
-        })
-    }
-
-    fn ui(&self) -> Option<UIMode> {
-        let value = self
-            .environment
-            .get(OsStr::new("ci"))
-            .or_else(|| self.environment.get(OsStr::new("no_color")))?;
-        match truth_env_var(value.to_str()?)? {
-            true => Some(UIMode::Stream),
-            false => None,
-        }
-    }
-}
-
-impl<'a> ResolvedConfigurationOptions for OverrideEnvVars<'a> {
-    fn get_configuration_options(
-        &self,
-        _existing_config: &ConfigurationOptions,
-    ) -> Result<ConfigurationOptions, Error> {
-        let ui = self.ui();
-        let output = ConfigurationOptions {
-            team_id: self.output_map.get("team_id").cloned(),
-            token: self.output_map.get("token").cloned(),
-            api_url: None,
-            ui,
-            ..Default::default()
-        };
-
-        Ok(output)
-    }
-}
-
-fn truth_env_var(s: &str) -> Option<bool> {
+pub fn truth_env_var(s: &str) -> Option<bool> {
     match s {
         "true" | "1" => Some(true),
         "false" | "0" => Some(false),
@@ -251,7 +272,13 @@ fn truth_env_var(s: &str) -> Option<bool> {
 }
 
 fn map_environment<'a>(
+    // keys are environment variable names
+    // values are properties of ConfigurationOptions we want to store the
+    // values in
     mapping: HashMap<&str, &'a str>,
+
+    // keys are environment variable names
+    // values are the values of those environment variables
     environment: &HashMap<OsString, OsString>,
 ) -> Result<HashMap<&'a str, String>, Error> {
     let mut output_map = HashMap::new();
@@ -276,7 +303,7 @@ mod test {
     use super::*;
     use crate::{
         cli::LogOrder,
-        config::{DEFAULT_API_URL, DEFAULT_LOGIN_URL},
+        config::{DEFAULT_API_URL, DEFAULT_LOGIN_URL, DEFAULT_TUI_SCROLLBACK_LENGTH},
     };
 
     #[test]
@@ -321,11 +348,16 @@ mod test {
         env.insert("turbo_remote_cache_read_only".into(), "1".into());
         env.insert("turbo_run_summary".into(), "true".into());
         env.insert("turbo_allow_no_turbo_json".into(), "true".into());
+        env.insert("turbo_remote_cache_upload_timeout".into(), "200".into());
+        env.insert("turbo_tui_scrollback_length".into(), "2048".into());
+        env.insert("turbo_concurrency".into(), "50%".into());
+        env.insert("turbo_sso_login_callback_port".into(), "3000".into());
 
         let config = EnvVars::new(&env)
             .unwrap()
             .get_configuration_options(&ConfigurationOptions::default())
             .unwrap();
+        assert_eq!(config.sso_login_callback_port(), Some(3000));
         assert!(config.preflight());
         assert!(config.force());
         assert_eq!(config.log_order(), LogOrder::Grouped);
@@ -333,6 +365,7 @@ mod test {
         assert!(config.remote_cache_read_only());
         assert!(config.run_summary());
         assert!(config.allow_no_turbo_json());
+        assert_eq!(config.upload_timeout(), 200);
         assert_eq!(turbo_api, config.api_url.unwrap());
         assert_eq!(turbo_login, config.login_url.unwrap());
         assert_eq!(turbo_team, config.team_slug.unwrap());
@@ -348,6 +381,7 @@ mod test {
             config.root_turbo_json_path,
             Some(AbsoluteSystemPathBuf::new(root_turbo_json).unwrap())
         );
+        assert_eq!(config.concurrency, Some("50%".to_owned()));
     }
 
     #[test]
@@ -371,6 +405,9 @@ mod test {
         env.insert("turbo_remote_cache_read_only".into(), "".into());
         env.insert("turbo_run_summary".into(), "".into());
         env.insert("turbo_allow_no_turbo_json".into(), "".into());
+        env.insert("turbo_tui_scrollback_length".into(), "".into());
+        env.insert("turbo_concurrency".into(), "".into());
+        env.insert("turbo_sso_login_callback_port".into(), "".into());
 
         let config = EnvVars::new(&env)
             .unwrap()
@@ -394,31 +431,11 @@ mod test {
         assert!(!config.remote_cache_read_only());
         assert!(!config.run_summary());
         assert!(!config.allow_no_turbo_json());
-    }
-
-    #[test]
-    fn test_override_env_setting() {
-        let mut env: HashMap<OsString, OsString> = HashMap::new();
-
-        let vercel_artifacts_token = "correct-horse-battery-staple";
-        let vercel_artifacts_owner = "bobby_tables";
-
-        env.insert(
-            "vercel_artifacts_token".into(),
-            vercel_artifacts_token.into(),
+        assert_eq!(
+            config.tui_scrollback_length(),
+            DEFAULT_TUI_SCROLLBACK_LENGTH
         );
-        env.insert(
-            "vercel_artifacts_owner".into(),
-            vercel_artifacts_owner.into(),
-        );
-        env.insert("ci".into(), "1".into());
-
-        let config = OverrideEnvVars::new(&env)
-            .unwrap()
-            .get_configuration_options(&ConfigurationOptions::default())
-            .unwrap();
-        assert_eq!(vercel_artifacts_token, config.token.unwrap());
-        assert_eq!(vercel_artifacts_owner, config.team_id.unwrap());
-        assert_eq!(Some(UIMode::Stream), config.ui);
+        assert_eq!(config.concurrency, None);
+        assert_eq!(config.sso_login_callback_port(), None);
     }
 }

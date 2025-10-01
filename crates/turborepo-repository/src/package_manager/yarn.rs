@@ -37,7 +37,7 @@ impl<'a> YarnDetector<'a> {
             .trim()
             .parse()
             .map_err(|err| Error::InvalidVersion {
-                explanation: format!("{} {}", yarn_version_output, err),
+                explanation: format!("{yarn_version_output} {err}"),
                 span: None,
                 text: NamedSource::new("yarn --version", yarn_version_output),
             })
@@ -75,7 +75,7 @@ pub(crate) fn prune_patches<R: AsRef<RelativeUnixPath>>(
     pruned_json
 }
 
-impl<'a> Iterator for YarnDetector<'a> {
+impl Iterator for YarnDetector<'_> {
     type Item = Result<PackageManager, Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -108,7 +108,7 @@ mod tests {
     use super::prune_patches;
     use crate::{
         package_json::PackageJson,
-        package_manager::{yarn::YarnDetector, PackageManager},
+        package_manager::{PackageManager, yarn::YarnDetector},
     };
 
     #[test]

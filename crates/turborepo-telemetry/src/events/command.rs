@@ -58,6 +58,7 @@ impl EventBuilder for CommandEventBuilder {
 pub enum LoginMethod {
     SSO,
     Standard,
+    Manual,
 }
 
 impl CommandEventBuilder {
@@ -83,7 +84,7 @@ impl CommandEventBuilder {
     // args
     pub fn track_arg_usage(&self, arg: &str, is_set: bool) -> &Self {
         self.track(Event {
-            key: format!("arg:{}", arg),
+            key: format!("arg:{arg}"),
             value: if is_set { "set" } else { "default" }.to_string(),
             is_sensitive: EventType::NonSensitive,
             send_in_ci: true,
@@ -93,10 +94,21 @@ impl CommandEventBuilder {
 
     pub fn track_arg_value(&self, arg: &str, val: impl Display, is_sensitive: EventType) -> &Self {
         self.track(Event {
-            key: format!("arg:{}", arg),
+            key: format!("arg:{arg}"),
             value: val.to_string(),
             is_sensitive,
             send_in_ci: true,
+        });
+        self
+    }
+
+    // ui
+    pub fn track_ui_mode(&self, val: impl Display) -> &Self {
+        self.track(Event {
+            key: "ui".to_string(),
+            value: val.to_string(),
+            is_sensitive: EventType::NonSensitive,
+            send_in_ci: false,
         });
         self
     }
@@ -140,6 +152,7 @@ impl CommandEventBuilder {
             value: match method {
                 LoginMethod::SSO => "sso".to_string(),
                 LoginMethod::Standard => "standard".to_string(),
+                LoginMethod::Manual => "manual".to_string(),
             },
             is_sensitive: EventType::NonSensitive,
             send_in_ci: false,

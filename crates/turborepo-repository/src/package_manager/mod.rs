@@ -1,42 +1,36 @@
-mod bun;
-mod npm;
-mod pnpm;
-mod yarn;
+pub mod berry;
+pub mod bun;
+pub mod npm;
+pub mod npmrc;
+pub mod pnpm;
+pub mod yarn;
+pub mod yarnrc;
 
 use std::{
     backtrace,
     fmt::{self, Display},
     fs,
-    process::Command,
-    str::FromStr,
 };
 
 use bun::BunDetector;
-use globwalk::{fix_glob_pattern, ValidatedGlob};
 use itertools::{Either, Itertools};
-use lazy_regex::{lazy_regex, Lazy};
+use lazy_regex::{Lazy, lazy_regex};
 use miette::{Diagnostic, NamedSource, SourceSpan};
 use node_semver::SemverError;
 use npm::NpmDetector;
 use regex::Regex;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use thiserror::Error;
-use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError, RelativeUnixPath};
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, RelativeUnixPath};
 use turborepo_errors::Spanned;
 use turborepo_lockfiles::Lockfile;
-use wax::{Any, Glob, Program};
-use which::which;
 
 use crate::{
     discovery,
     package_json::{self, PackageJson},
     package_manager::{pnpm::PnpmDetector, yarn::YarnDetector},
+    workspaces::WorkspaceGlobs,
 };
-
-#[derive(Debug, Deserialize)]
-struct PnpmWorkspace {
-    pub packages: Vec<String>,
-}
 
 #[derive(Debug, Deserialize)]
 struct PackageJsonWorkspaces {
@@ -68,8 +62,7 @@ impl From<Workspaces> for Vec<String> {
     }
 }
 
-#[derive(Debug, Serialize, PartialEq, Eq, Clone, Copy)]
-#[serde(rename_all = "lowercase")]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum PackageManager {
     Berry,
     Npm,
@@ -78,137 +71,6 @@ pub enum PackageManager {
     Pnpm6,
     Yarn,
     Bun,
-}
-
-impl Display for PackageManager {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            PackageManager::Berry => write!(f, "berry"),
-            PackageManager::Npm => write!(f, "npm"),
-            PackageManager::Pnpm => write!(f, "pnpm"),
-            PackageManager::Pnpm6 => write!(f, "pnpm6"),
-            PackageManager::Pnpm9 => write!(f, "pnpm9"),
-            PackageManager::Yarn => write!(f, "yarn"),
-            PackageManager::Bun => write!(f, "bun"),
-        }
-    }
-}
-
-// WorkspaceGlobs is suitable for finding package.json files via globwalk
-#[derive(Clone)]
-pub struct WorkspaceGlobs {
-    directory_inclusions: Any<'static>,
-    directory_exclusions: Any<'static>,
-    package_json_inclusions: Vec<ValidatedGlob>,
-    pub raw_inclusions: Vec<String>,
-    pub raw_exclusions: Vec<String>,
-    validated_exclusions: Vec<ValidatedGlob>,
-}
-
-impl fmt::Debug for WorkspaceGlobs {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("WorkspaceGlobs")
-            .field("inclusions", &self.raw_inclusions)
-            .field("exclusions", &self.raw_exclusions)
-            .finish()
-    }
-}
-
-impl PartialEq for WorkspaceGlobs {
-    fn eq(&self, other: &Self) -> bool {
-        // Use the literals for comparison, not the compiled globs
-        self.raw_inclusions == other.raw_inclusions && self.raw_exclusions == other.raw_exclusions
-    }
-}
-
-impl Eq for WorkspaceGlobs {}
-
-fn glob_with_contextual_error<S: AsRef<str>>(raw: S) -> Result<Glob<'static>, Error> {
-    let raw = raw.as_ref();
-    let fixed = fix_glob_pattern(raw);
-    Glob::new(&fixed)
-        .map(|g| g.into_owned())
-        .map_err(|e| Error::Glob(fixed, Box::new(e)))
-}
-
-fn any_with_contextual_error(
-    precompiled: Vec<Glob<'static>>,
-    text: Vec<String>,
-) -> Result<wax::Any<'static>, Error> {
-    wax::any(precompiled).map_err(|e| {
-        let text = text.iter().join(",");
-        Error::Glob(text, Box::new(e))
-    })
-}
-
-impl WorkspaceGlobs {
-    pub fn new<S: Into<String>>(inclusions: Vec<S>, exclusions: Vec<S>) -> Result<Self, Error> {
-        // take ownership of the inputs
-        let raw_inclusions: Vec<String> = inclusions
-            .into_iter()
-            .map(|s| s.into())
-            .collect::<Vec<String>>();
-        let package_json_inclusions = raw_inclusions
-            .iter()
-            .map(|s| {
-                let mut s: String = s.clone();
-                if s.ends_with('/') {
-                    s.push_str("package.json");
-                } else {
-                    s.push_str("/package.json");
-                }
-                ValidatedGlob::from_str(&s)
-            })
-            .collect::<Result<Vec<ValidatedGlob>, _>>()?;
-        let raw_exclusions: Vec<String> = exclusions
-            .into_iter()
-            .map(|s| s.into())
-            .collect::<Vec<String>>();
-        let inclusion_globs = raw_inclusions
-            .iter()
-            .map(glob_with_contextual_error)
-            .collect::<Result<Vec<_>, _>>()?;
-        let exclusion_globs = raw_exclusions
-            .iter()
-            .map(glob_with_contextual_error)
-            .collect::<Result<Vec<_>, _>>()?;
-        let validated_exclusions = raw_exclusions
-            .iter()
-            .map(|e| ValidatedGlob::from_str(e))
-            .collect::<Result<Vec<_>, _>>()?;
-        Ok(Self {
-            directory_inclusions: any_with_contextual_error(
-                inclusion_globs,
-                raw_inclusions.clone(),
-            )?,
-            directory_exclusions: any_with_contextual_error(
-                exclusion_globs,
-                raw_exclusions.clone(),
-            )?,
-            package_json_inclusions,
-            validated_exclusions,
-            raw_exclusions,
-            raw_inclusions,
-        })
-    }
-
-    /// Checks if the given `target` matches this `WorkspaceGlobs`.
-    ///
-    /// Errors:
-    /// This function returns an Err if `root` is not a valid anchor for
-    /// `target`
-    pub fn target_is_workspace(
-        &self,
-        root: &AbsoluteSystemPath,
-        target: &AbsoluteSystemPath,
-    ) -> Result<bool, PathError> {
-        let search_value = root.anchor(target)?;
-
-        let includes = self.directory_inclusions.is_match(&search_value);
-        let excludes = self.directory_exclusions.is_match(&search_value);
-
-        Ok(includes && !excludes)
-    }
 }
 
 #[derive(Debug, Error)]
@@ -247,14 +109,14 @@ impl Display for MissingWorkspaceError {
                  defined in the root package.json"
             }
         };
-        write!(f, "{}", err)
+        write!(f, "{err}")
     }
 }
 
-impl From<&PackageManager> for MissingWorkspaceError {
-    fn from(value: &PackageManager) -> Self {
+impl From<PackageManager> for MissingWorkspaceError {
+    fn from(value: PackageManager) -> Self {
         Self {
-            package_manager: *value,
+            package_manager: value,
         }
     }
 }
@@ -267,15 +129,15 @@ impl From<wax::BuildError> for Error {
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
-    #[error("io error: {0}")]
+    #[error("I/O error: {0}")]
     Io(#[from] std::io::Error, #[backtrace] backtrace::Backtrace),
     #[error(transparent)]
     Workspace(#[from] MissingWorkspaceError),
-    #[error("yaml parsing error: {0}")]
+    #[error("YAML parsing error: {0}")]
     ParsingYaml(#[from] serde_yaml::Error, #[backtrace] backtrace::Backtrace),
-    #[error("json parsing error: {0}")]
+    #[error("JSON parsing error: {0}")]
     ParsingJson(#[from] serde_json::Error, #[backtrace] backtrace::Backtrace),
-    #[error("globbing error: {0}")]
+    #[error("Globbing error: {0}")]
     Wax(Box<wax::BuildError>, #[backtrace] backtrace::Backtrace),
     #[error(transparent)]
     PackageJson(#[from] package_json::Error),
@@ -283,51 +145,50 @@ pub enum Error {
     Other(#[from] anyhow::Error),
     #[error(transparent)]
     NoPackageManager(#[from] NoPackageManager),
-    #[error("We detected multiple package managers in your repository: {}. Please remove one \
-    of them.", managers.join(", "))]
+    #[error("Multiple package managers in your repository: {}. Please use one package manager.", managers.join(", "))]
     MultiplePackageManagers { managers: Vec<String> },
-    #[error("invalid semantic version: {explanation}")]
+    #[error("Invalid semantic version: {explanation}")]
     #[diagnostic(code(invalid_semantic_version))]
     InvalidVersion {
         explanation: String,
         #[label("version found here")]
         span: Option<SourceSpan>,
         #[source_code]
-        text: NamedSource,
+        text: NamedSource<String>,
     },
     #[error("{0}: {1}")]
     // this will be something like "cannot find binary: <thing we tried to find>"
     Which(which::Error, String),
-    #[error("invalid utf8: {0}")]
+    #[error("Invalid utf8: {0}")]
     Utf8Error(#[from] std::string::FromUtf8Error),
     #[error(transparent)]
     Path(#[from] turbopath::PathError),
     #[error(
-        "could not parse the packageManager field in package.json, expected to match regular \
-         expression {pattern}"
+        "Could not parse the `packageManager` field in package.json, expected to match regular \
+         expression `{pattern}`."
     )]
     #[diagnostic(code(invalid_package_manager_field))]
     InvalidPackageManager {
         pattern: String,
-        #[label("invalid `packageManager` field")]
+        #[label("Invalid `packageManager` field")]
         span: Option<SourceSpan>,
         #[source_code]
-        text: NamedSource,
+        text: NamedSource<String>,
     },
     #[error(transparent)]
-    WalkError(#[from] globwalk::WalkError),
-    #[error("invalid workspace glob {0}: {1}")]
-    Glob(String, #[source] Box<wax::BuildError>),
-    #[error("invalid globwalk pattern {0}")]
-    Globwalk(#[from] globwalk::GlobError),
+    WorkspaceGlob(#[from] crate::workspaces::Error),
     #[error(transparent)]
     Lockfile(#[from] turborepo_lockfiles::Error),
-    #[error("lockfile not found at {0}")]
+    #[error("Lockfile not found at {0}")]
     LockfileMissing(AbsoluteSystemPathBuf),
-    #[error("discovering workspace: {0}")]
+    #[error("Discovering workspace: {0}")]
     WorkspaceDiscovery(#[from] discovery::Error),
-    #[error("missing packageManager field in package.json")]
+    #[error("Missing `packageManager` field in package.json")]
     MissingPackageManager,
+    #[error(transparent)]
+    Yarnrc(#[from] yarnrc::Error),
+    #[error("Only found bun.lockb, please run `bun install --save-text-lockfile`")]
+    BunBinaryLockfile,
 }
 
 impl From<std::convert::Infallible> for Error {
@@ -337,7 +198,7 @@ impl From<std::convert::Infallible> for Error {
 }
 
 static PACKAGE_MANAGER_PATTERN: Lazy<Regex> =
-    lazy_regex!(r"(?P<manager>bun|npm|pnpm|yarn)@(?P<version>\d+\.\d+\.\d+(-.+)?)");
+    lazy_regex!(r"(?P<manager>bun|npm|pnpm|yarn)@(?P<version>\d+\.\d+\.\d+(-.+)?|https?://.+)");
 
 impl PackageManager {
     pub fn supported_managers() -> &'static [Self] {
@@ -351,6 +212,18 @@ impl PackageManager {
             Self::Bun,
         ]
         .as_slice()
+    }
+
+    pub fn name(&self) -> &'static str {
+        match self {
+            PackageManager::Berry => "berry",
+            PackageManager::Npm => "npm",
+            PackageManager::Pnpm => "pnpm",
+            PackageManager::Pnpm6 => "pnpm6",
+            PackageManager::Pnpm9 => "pnpm9",
+            PackageManager::Yarn => "yarn",
+            PackageManager::Bun => "bun",
+        }
     }
 
     pub fn command(&self) -> &'static str {
@@ -384,7 +257,7 @@ impl PackageManager {
     pub fn get_default_exclusions(&self) -> impl Iterator<Item = String> {
         let ignores = match self {
             PackageManager::Pnpm | PackageManager::Pnpm6 | PackageManager::Pnpm9 => {
-                ["**/node_modules/**", "**/bower_components/**"].as_slice()
+                pnpm::get_default_exclusions()
             }
             PackageManager::Npm => ["**/node_modules/**"].as_slice(),
             PackageManager::Bun => ["**/node_modules", "**/.git"].as_slice(),
@@ -402,15 +275,8 @@ impl PackageManager {
             PackageManager::Pnpm | PackageManager::Pnpm6 | PackageManager::Pnpm9 => {
                 // Make sure to convert this to a missing workspace error
                 // so we can catch it in the case of single package mode.
-                let source = self.workspace_glob_source(root_path);
-                let workspace_yaml = fs::read_to_string(source)
-                    .map_err(|_| Error::Workspace(MissingWorkspaceError::from(self)))?;
-                let pnpm_workspace: PnpmWorkspace = serde_yaml::from_str(&workspace_yaml)?;
-                if pnpm_workspace.packages.is_empty() {
-                    return Err(MissingWorkspaceError::from(self).into());
-                } else {
-                    pnpm_workspace.packages
-                }
+                pnpm::get_configured_workspace_globs(root_path)
+                    .ok_or_else(|| Error::Workspace(MissingWorkspaceError::from(self.clone())))?
             }
             PackageManager::Berry
             | PackageManager::Npm
@@ -418,10 +284,10 @@ impl PackageManager {
             | PackageManager::Bun => {
                 let package_json_text = fs::read_to_string(self.workspace_glob_source(root_path))?;
                 let package_json: PackageJsonWorkspaces = serde_json::from_str(&package_json_text)
-                    .map_err(|_| Error::Workspace(MissingWorkspaceError::from(self)))?; // Make sure to convert this to a missing workspace error
+                    .map_err(|_| Error::Workspace(MissingWorkspaceError::from(self.clone())))?; // Make sure to convert this to a missing workspace error
 
                 if package_json.workspaces.as_ref().is_empty() {
-                    return Err(MissingWorkspaceError::from(self).into());
+                    return Err(MissingWorkspaceError::from(self.clone()).into());
                 } else {
                     package_json.workspaces.into()
                 }
@@ -447,34 +313,59 @@ impl PackageManager {
     }
 
     /// Try to extract the package manager from package.json.
-    pub fn get_package_manager(package_json: &PackageJson) -> Result<Self, Error> {
-        Self::read_package_manager(package_json)
+    /// Package Manager will be read from package.json only using the file
+    /// system if the version is a URL and we need to invoke the binary it
+    /// points to for version information.
+    pub fn get_package_manager(
+        repo_root: &AbsoluteSystemPath,
+        package_json: &PackageJson,
+    ) -> Result<Self, Error> {
+        Self::read_package_manager(repo_root, package_json)
     }
 
     // Attempts to read the package manager from the package.json
-    fn read_package_manager(pkg: &PackageJson) -> Result<Self, Error> {
+    fn read_package_manager(
+        repo_root: &AbsoluteSystemPath,
+        pkg: &PackageJson,
+    ) -> Result<Self, Error> {
         let Some(package_manager) = &pkg.package_manager else {
             return Err(Error::MissingPackageManager);
         };
 
         let (manager, version) = Self::parse_package_manager_string(package_manager)?;
-        let version = version.parse().map_err(|err: SemverError| {
-            let (span, text) = package_manager.span_and_text("package.json");
-            Error::InvalidVersion {
-                explanation: err.to_string(),
-                span,
-                text,
+        // if version is a https attempt to check that instead
+        if version.starts_with("http") {
+            match manager {
+                "npm" => Ok(PackageManager::Npm),
+                "bun" => Ok(PackageManager::Bun),
+                "yarn" => Ok(YarnDetector::new(repo_root)
+                    .next()
+                    .ok_or_else(|| Error::MissingPackageManager)??),
+                "pnpm" => Ok(PnpmDetector::new(repo_root)
+                    .next()
+                    .ok_or_else(|| Error::MissingPackageManager)??),
+                _ => unreachable!(
+                    "found invalid package manager even though regex should have caught it"
+                ),
             }
-        })?;
-
-        match manager {
-            "npm" => Ok(PackageManager::Npm),
-            "bun" => Ok(PackageManager::Bun),
-            "yarn" => Ok(YarnDetector::detect_berry_or_yarn(&version)?),
-            "pnpm" => Ok(PnpmDetector::detect_pnpm6_or_pnpm(&version)?),
-            _ => unreachable!(
-                "found invalid package manager even though regex should have caught it"
-            ),
+        } else {
+            let version = version.parse().map_err(|err: SemverError| {
+                let (span, text) = package_manager.span_and_text("package.json");
+                Error::InvalidVersion {
+                    explanation: err.to_string(),
+                    span,
+                    text,
+                }
+            })?;
+            match manager {
+                "npm" => Ok(PackageManager::Npm),
+                "bun" => Ok(PackageManager::Bun),
+                "yarn" => Ok(YarnDetector::detect_berry_or_yarn(&version)?),
+                "pnpm" => Ok(PnpmDetector::detect_pnpm6_or_pnpm(&version)?),
+                _ => unreachable!(
+                    "found invalid package manager even though regex should have caught it"
+                ),
+            }
         }
     }
 
@@ -489,11 +380,11 @@ impl PackageManager {
 
         match detected_package_managers.as_slice() {
             [] => Err(NoPackageManager.into()),
-            [package_manager] => Ok(*package_manager),
+            [package_manager] => Ok(package_manager.clone()),
             _ => {
                 let managers = detected_package_managers
                     .iter()
-                    .map(|mgr| mgr.to_string())
+                    .map(|mgr| mgr.name().to_string())
                     .collect();
                 Err(Error::MultiplePackageManagers { managers })
             }
@@ -506,7 +397,8 @@ impl PackageManager {
         package_json: &PackageJson,
         repo_root: &AbsoluteSystemPath,
     ) -> Result<Self, Error> {
-        Self::get_package_manager(package_json).or_else(|_| Self::detect_package_manager(repo_root))
+        Self::get_package_manager(repo_root, package_json)
+            .or_else(|_| Self::detect_package_manager(repo_root))
     }
 
     pub(crate) fn parse_package_manager_string(
@@ -529,16 +421,9 @@ impl PackageManager {
     pub fn get_package_jsons(
         &self,
         repo_root: &AbsoluteSystemPath,
-    ) -> Result<impl Iterator<Item = AbsoluteSystemPathBuf>, Error> {
+    ) -> Result<impl Iterator<Item = AbsoluteSystemPathBuf> + use<>, Error> {
         let globs = self.get_workspace_globs(repo_root)?;
-
-        let files = globwalk::globwalk(
-            repo_root,
-            &globs.package_json_inclusions,
-            &globs.validated_exclusions,
-            globwalk::WalkType::Files,
-        )?;
-        Ok(files.into_iter())
+        Ok(globs.get_package_jsons(repo_root)?)
     }
 
     pub fn lockfile_name(&self) -> &'static str {
@@ -553,7 +438,7 @@ impl PackageManager {
     pub fn workspace_configuration_path(&self) -> Option<&'static str> {
         match self {
             PackageManager::Pnpm | PackageManager::Pnpm6 | PackageManager::Pnpm9 => {
-                Some("pnpm-workspace.yaml")
+                Some(pnpm::WORKSPACE_CONFIGURATION_PATH)
             }
             PackageManager::Npm
             | PackageManager::Berry
@@ -569,19 +454,9 @@ impl PackageManager {
         root_package_json: &PackageJson,
     ) -> Result<Box<dyn Lockfile>, Error> {
         let lockfile_path = self.lockfile_path(root_path);
-        let contents = match self {
-            PackageManager::Bun => {
-                let binary = "bun";
-                Command::new(which(binary).map_err(|e| Error::Which(e, binary.to_string()))?)
-                    .arg(lockfile_path.to_string())
-                    .current_dir(root_path.to_string())
-                    .output()?
-                    .stdout
-            }
-            _ => lockfile_path
-                .read()
-                .map_err(|_| Error::LockfileMissing(lockfile_path.clone()))?,
-        };
+        let contents = lockfile_path
+            .read()
+            .map_err(|_| Error::LockfileMissing(lockfile_path.clone()))?;
         self.parse_lockfile(root_package_json, &contents)
     }
 
@@ -619,11 +494,12 @@ impl PackageManager {
         &self,
         package_json: &PackageJson,
         patches: &[R],
+        repo_root: &AbsoluteSystemPath,
     ) -> PackageJson {
         match self {
             PackageManager::Berry => yarn::prune_patches(package_json, patches),
             PackageManager::Pnpm9 | PackageManager::Pnpm6 | PackageManager::Pnpm => {
-                pnpm::prune_patches(package_json, patches)
+                pnpm::prune_patches(package_json, patches, repo_root)
             }
             PackageManager::Yarn | PackageManager::Npm | PackageManager::Bun => {
                 unreachable!("bun, npm, and yarn 1 don't have a concept of patches")
@@ -635,14 +511,14 @@ impl PackageManager {
         turbo_root.join_component(self.lockfile_name())
     }
 
-    pub fn arg_separator(&self, user_args: &[String]) -> Option<&str> {
+    pub fn arg_separator(&self, user_args: &[impl AsRef<str>]) -> Option<&str> {
         match self {
             PackageManager::Yarn | PackageManager::Bun => {
                 // Yarn and bun warn and swallows a "--" token. If the user is passing "--", we
                 // need to prepend our own so that the user's doesn't get
                 // swallowed. If they are not passing their own, we don't need
                 // the "--" token and can avoid the warning.
-                if user_args.iter().any(|arg| arg == "--") {
+                if user_args.iter().any(|arg| arg.as_ref() == "--") {
                     Some("--")
                 } else {
                     None
@@ -652,6 +528,24 @@ impl PackageManager {
             PackageManager::Pnpm | PackageManager::Pnpm9 | PackageManager::Berry => None,
         }
     }
+
+    /// Returns whether or not the package manager will select a package in the
+    /// workspace as a dependency if the `workspace:` protocol isn't used.
+    /// For example if a package in the workspace has `"lib": "1.2.3"` and
+    /// there's a package in the workspace with the name of `lib` and
+    /// version `1.2.3` if this is true, then the local `lib` package will
+    /// be used where `false` would use a `lib` package from the registry.
+    pub fn link_workspace_packages(&self, repo_root: &AbsoluteSystemPath) -> bool {
+        match self {
+            PackageManager::Berry => berry::link_workspace_packages(repo_root),
+            PackageManager::Pnpm9 | PackageManager::Pnpm | PackageManager::Pnpm6 => {
+                let pnpm_version = pnpm::PnpmVersion::try_from(self)
+                    .expect("attempted to extract pnpm version from non-pnpm package manager");
+                pnpm::link_workspace_packages(pnpm_version, repo_root)
+            }
+            PackageManager::Yarn | PackageManager::Bun | PackageManager::Npm => true,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -659,6 +553,8 @@ mod tests {
     use std::collections::HashSet;
 
     use pretty_assertions::assert_eq;
+    use tempfile::TempDir;
+    use test_case::test_case;
 
     use super::*;
 
@@ -677,7 +573,7 @@ mod tests {
                 return ancestor.to_owned();
             }
         }
-        panic!("Couldn't find Turborepo root from {}", cwd);
+        panic!("Couldn't find Turborepo root from {cwd}");
     }
 
     #[test]
@@ -717,7 +613,7 @@ mod tests {
             let found = mgr.get_package_jsons(&basic).unwrap();
             let mut found = Vec::from_iter(found);
             found.sort();
-            assert_eq!(found, basic_expected, "{}", mgr);
+            assert_eq!(found, basic_expected, "{}", mgr.name());
         }
     }
 
@@ -830,6 +726,13 @@ mod tests {
                 expected_version: "1.0.1".to_owned(),
                 expected_error: false,
             },
+            TestCase {
+                name: "supports custom URL".to_owned(),
+                package_manager: Spanned::new("npm@https://some-npm-fork".to_owned()),
+                expected_manager: "npm".to_owned(),
+                expected_version: "https://some-npm-fork".to_owned(),
+                expected_error: false,
+            },
         ];
 
         for case in tests {
@@ -846,31 +749,33 @@ mod tests {
 
     #[test]
     fn test_read_package_manager() -> Result<(), Error> {
+        let dir = TempDir::new()?;
+        let repo_root = AbsoluteSystemPath::from_std_path(dir.path())?;
         let mut package_json = PackageJson {
             package_manager: Some(Spanned::new("npm@8.19.4".to_string())),
             ..Default::default()
         };
-        let package_manager = PackageManager::read_package_manager(&package_json)?;
+        let package_manager = PackageManager::read_package_manager(repo_root, &package_json)?;
         assert_eq!(package_manager, PackageManager::Npm);
 
         package_json.package_manager = Some(Spanned::new("yarn@2.0.0".to_string()));
-        let package_manager = PackageManager::read_package_manager(&package_json)?;
+        let package_manager = PackageManager::read_package_manager(repo_root, &package_json)?;
         assert_eq!(package_manager, PackageManager::Berry);
 
         package_json.package_manager = Some(Spanned::new("yarn@1.9.0".to_string()));
-        let package_manager = PackageManager::read_package_manager(&package_json)?;
+        let package_manager = PackageManager::read_package_manager(repo_root, &package_json)?;
         assert_eq!(package_manager, PackageManager::Yarn);
 
         package_json.package_manager = Some(Spanned::new("pnpm@6.0.0".to_string()));
-        let package_manager = PackageManager::read_package_manager(&package_json)?;
+        let package_manager = PackageManager::read_package_manager(repo_root, &package_json)?;
         assert_eq!(package_manager, PackageManager::Pnpm6);
 
         package_json.package_manager = Some(Spanned::new("pnpm@7.2.0".to_string()));
-        let package_manager = PackageManager::read_package_manager(&package_json)?;
+        let package_manager = PackageManager::read_package_manager(repo_root, &package_json)?;
         assert_eq!(package_manager, PackageManager::Pnpm);
 
         package_json.package_manager = Some(Spanned::new("bun@1.0.1".to_string()));
-        let package_manager = PackageManager::read_package_manager(&package_json)?;
+        let package_manager = PackageManager::read_package_manager(repo_root, &package_json)?;
         assert_eq!(package_manager, PackageManager::Bun);
 
         Ok(())
@@ -921,17 +826,16 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn test_workspace_globs_trailing_slash() {
-        let globs =
-            WorkspaceGlobs::new(vec!["scripts/", "packages/**"], vec!["package/template"]).unwrap();
-        assert_eq!(
-            &globs
-                .package_json_inclusions
-                .iter()
-                .map(|i| i.as_str())
-                .collect::<Vec<_>>(),
-            &["scripts/package.json", "packages/**/package.json"]
+    #[test_case(PackageManager::Npm)]
+    #[test_case(PackageManager::Yarn)]
+    #[test_case(PackageManager::Bun)]
+    fn test_link_workspace_packages_enabled_by_default(pm: PackageManager) {
+        let tmpdir = tempfile::tempdir().unwrap();
+        let repo_root = AbsoluteSystemPath::from_std_path(tmpdir.path()).unwrap();
+        let actual = pm.link_workspace_packages(repo_root);
+        assert!(
+            actual,
+            "all package managers without a special implementation should use workspace packages"
         );
     }
 }

@@ -2,6 +2,7 @@ import childProcess from "node:child_process";
 import * as turboUtils from "@turbo/utils";
 import * as turboWorkspaces from "@turbo/workspaces";
 import { setupTestFixtures, spyExit } from "@turbo/test-utils";
+import { describe, it, expect, jest } from "@jest/globals";
 import { migrate } from "../src/commands/migrate";
 import * as checkGitStatus from "../src/utils/checkGitStatus";
 import * as getCurrentVersion from "../src/commands/migrate/steps/getCurrentVersion";
@@ -9,7 +10,7 @@ import * as getLatestVersion from "../src/commands/migrate/steps/getLatestVersio
 import * as getTurboUpgradeCommand from "../src/commands/migrate/steps/getTurboUpgradeCommand";
 import { getWorkspaceDetailsMockReturnValue } from "./test-utils";
 
-jest.mock("@turbo/workspaces", () => ({
+jest.mock<typeof import("@turbo/workspaces")>("@turbo/workspaces", () => ({
   __esModule: true,
   ...jest.requireActual("@turbo/workspaces"),
 }));
@@ -76,7 +77,7 @@ describe("migrate", () => {
       version: "1.0.0",
     });
     expect(readJson("turbo.json")).toStrictEqual({
-      $schema: "https://turbo.build/schema.json",
+      $schema: "https://turborepo.com/schema.json",
       pipeline: {
         build: {
           outputs: [".next/**", "!.next/cache/**"],
@@ -233,7 +234,7 @@ describe("migrate", () => {
       version: "1.0.0",
     });
     expect(readJson("turbo.json")).toStrictEqual({
-      $schema: "https://turbo.build/schema.json",
+      $schema: "https://turborepo.com/schema.json",
       pipeline: {
         build: {
           outputs: [".next/**", "!.next/cache/**"],
@@ -318,7 +319,7 @@ describe("migrate", () => {
       version: "1.0.0",
     });
     expect(readJson("turbo.json")).toStrictEqual({
-      $schema: "https://turbo.build/schema.json",
+      $schema: "https://turborepo.com/schema.json",
       pipeline: {
         build: {
           outputs: [".next/**", "!.next/cache/**"],
@@ -524,7 +525,7 @@ describe("migrate", () => {
       version: "1.0.0",
     });
     expect(readJson("turbo.json")).toStrictEqual({
-      $schema: "https://turbo.build/schema.json",
+      $schema: "https://turborepo.com/schema.json",
       pipeline: {
         build: {
           outputs: [".next/**", "!.next/cache/**"],
@@ -632,7 +633,7 @@ describe("migrate", () => {
       version: "1.0.0",
     });
     expect(readJson("turbo.json")).toStrictEqual({
-      $schema: "https://turbo.build/schema.json",
+      $schema: "https://turborepo.com/schema.json",
       pipeline: {
         build: {
           outputs: [".next/**", "!.next/cache/**"],
@@ -980,7 +981,7 @@ describe("migrate", () => {
       version: "1.0.0",
     });
     expect(readJson("turbo.json")).toStrictEqual({
-      $schema: "https://turbo.build/schema.json",
+      $schema: "https://turborepo.com/schema.json",
       tasks: {
         build: {
           outputs: [".next/**", "!.next/cache/**"],

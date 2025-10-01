@@ -23,7 +23,7 @@ use thiserror::Error;
 pub use crate::{
     color_selector::ColorSelector,
     line::LineWriter,
-    logs::{replay_logs, LogWriter},
+    logs::{LogWriter, replay_logs, replay_logs_with_crlf},
     output::{OutputClient, OutputClientBehavior, OutputSink, OutputWriter},
     prefixed::{PrefixedUI, PrefixedWriter},
     tui::{TaskTable, TerminalPane},
@@ -35,9 +35,9 @@ pub enum Error {
     Tui(#[from] tui::Error),
     #[error(transparent)]
     Wui(#[from] wui::Error),
-    #[error("cannot read logs: {0}")]
+    #[error("Cannot read logs: {0}")]
     CannotReadLogs(#[source] std::io::Error),
-    #[error("cannot write logs: {0}")]
+    #[error("Cannot write logs: {0}")]
     CannotWriteLogs(#[source] std::io::Error),
 }
 
@@ -51,7 +51,7 @@ pub fn start_spinner(message: &str) -> ProgressBar {
     pb.set_style(
         ProgressStyle::default_spinner()
             // For more spinners check out the cli-spinners project:
-            // https://github.com/sindresorhus/cli-spinners/blob/master/spinners.json
+            // https://github.com/sindresorhus/cli-spinners/blob/main/spinners.json
             .tick_strings(&[
                 "   ",
                 GREY.apply_to(">  ").to_string().as_str(),
@@ -120,6 +120,28 @@ macro_rules! cwriteln {
     }};
 }
 
+#[macro_export]
+macro_rules! ceprintln {
+    ($ui:expr, $color:expr, $format_string:expr $(, $arg:expr)*) => {{
+        let formatted_str = format!($format_string $(, $arg)*);
+
+        let colored_str = $color.apply_to(formatted_str);
+
+        eprintln!("{}", $ui.apply(colored_str))
+    }};
+}
+
+#[macro_export]
+macro_rules! ceprint {
+    ($ui:expr, $color:expr, $format_string:expr $(, $arg:expr)*) => {{
+        let formatted_str = format!($format_string $(, $arg)*);
+
+        let colored_str = $color.apply_to(formatted_str);
+
+        eprint!("{}", $ui.apply(colored_str))
+    }};
+}
+
 /// Helper struct to apply any necessary formatting to UI output
 #[derive(Debug, Clone, Copy)]
 pub struct ColorConfig {
@@ -181,10 +203,7 @@ impl ColorConfig {
         let mut out = Vec::new();
         for (i, c) in text.char_indices() {
             let (r, g, b) = Self::rainbow_rgb(i);
-            out.push(format!(
-                "\x1b[1m\x1b[38;2;{};{};{}m{}\x1b[0m\x1b[0;1m",
-                r, g, b, c
-            ));
+            out.push(format!("\x1b[1m\x1b[38;2;{r};{g};{b}m{c}\x1b[0m\x1b[0;1m"));
         }
         out.push(RESET.to_string());
 

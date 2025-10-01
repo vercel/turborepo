@@ -1,9 +1,10 @@
-import path from "path";
+import path from "node:path";
+import execa from "execa";
 import * as turboUtils from "@turbo/utils";
 import { setupTestFixtures } from "@turbo/test-utils";
+import { describe, it, expect, jest } from "@jest/globals";
 import { getWorkspaceDetails, convert } from "../src";
 import { generateConvertMatrix } from "./test-utils";
-import execa from "execa";
 
 jest.mock("execa", () => jest.fn());
 
@@ -13,7 +14,7 @@ describe("Node entrypoint", () => {
   });
 
   describe("convert", () => {
-    test.each(generateConvertMatrix())(
+    it.each(generateConvertMatrix())(
       "detects $fixtureType project using $fixtureManager and converts to $toManager (interactive=$interactive dry=$dry install=$install)",
       async ({
         fixtureManager,

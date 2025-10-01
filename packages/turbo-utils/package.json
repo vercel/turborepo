@@ -2,14 +2,18 @@
   "name": "@turbo/utils",
   "version": "0.0.0",
   "private": true,
+  "type": "commonjs",
   "description": "",
-  "homepage": "https://turbo.build/repo",
+  "homepage": "https://turborepo.com",
   "keywords": [],
   "author": "Vercel",
   "license": "MIT",
+  "files": [
+    "src"
+  ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/vercel/turborepo",
+    "url": "git+https://github.com/vercel/turborepo.git",
     "directory": "packages/turbo-utils"
   },
   "bugs": {
@@ -22,9 +26,13 @@
     "test": "jest",
     "lint": "eslint src/",
     "check-types": "tsc --noEmit",
-    "lint:prettier": "prettier -c . --cache --ignore-path=../../.prettierignore"
+    "lint:prettier": "prettier -c . --cache --ignore-path=../../.prettierignore",
+    "package:lint": "publint --strict",
+    "package:types": "attw --profile node16 --pack"
   },
   "devDependencies": {
+    "@arethetypeswrong/cli": "^0.18.2",
+    "@jest/globals": "^29.7.0",
     "@manypkg/find-root": "^1.1.0",
     "@turbo/eslint-config": "workspace:*",
     "@turbo/test-utils": "workspace:*",
@@ -33,7 +41,6 @@
     "@types/async-retry": "^1.4.5",
     "@types/fs-extra": "^9.0.13",
     "@types/gradient-string": "^1.1.2",
-    "@types/jest": "^27.4.0",
     "@types/js-yaml": "^4.0.5",
     "@types/node": "^20.5.7",
     "@types/tar": "^6.1.4",
@@ -43,13 +50,14 @@
     "fs-extra": "^11.1.1",
     "got": "^11.8.6",
     "gradient-string": "^2.0.0",
-    "jest": "^27.4.3",
+    "jest": "^29.7.0",
     "js-yaml": "^4.1.0",
     "json5": "^2.2.3",
     "ora": "4.1.1",
     "picocolors": "1.0.1",
+    "publint": "^0.3.12",
     "tar": "6.1.13",
-    "ts-jest": "^27.1.1",
-    "typescript": "5.3.3"
+    "ts-jest": "^29.2.5",
+    "typescript": "5.5.4"
   }
 }

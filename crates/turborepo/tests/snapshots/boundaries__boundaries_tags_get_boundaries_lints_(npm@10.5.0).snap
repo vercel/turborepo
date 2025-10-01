@@ -1,0 +1,36 @@
+---
+source: crates/turborepo/tests/boundaries.rs
+expression: query_output
+---
+{
+  "data": {
+    "boundaries": {
+      "items": [
+        {
+          "message": "Package `@vercel/allowed-and-denied-tag` found with tag listed in denylist for `@vercel/my-app`: `unsafe`",
+          "import": "@vercel/allowed-and-denied-tag"
+        },
+        {
+          "message": "Package `@vercel/not-allowed-dependency` found with tag listed in denylist for `@vercel/package-with-boundaries-rules`: `@vercel/not-allowed-dependency`",
+          "import": "@vercel/not-allowed-dependency"
+        },
+        {
+          "message": "Package `@vercel/not-allowed-dependent` found without any tag listed in allowlist for `@vercel/allowed-and-denied-tag`",
+          "import": "@vercel/not-allowed-dependent"
+        },
+        {
+          "message": "Package `@vercel/not-allowed-dependent` found without any tag listed in allowlist for `@vercel/allowed-tag`",
+          "import": "@vercel/not-allowed-dependent"
+        },
+        {
+          "message": "Package `@vercel/not-allowed-dependent` found without any tag listed in allowlist for `@vercel/my-app`",
+          "import": "@vercel/not-allowed-dependent"
+        },
+        {
+          "message": "Package `@vercel/package-as-tag` found with tag listed in denylist for `@vercel/allowed-tag`: `@vercel/package-as-tag`",
+          "import": "@vercel/package-as-tag"
+        }
+      ]
+    }
+  }
+}

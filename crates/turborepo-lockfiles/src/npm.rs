@@ -63,9 +63,9 @@ impl Lockfile for NpmLockfile {
             // ResolvePackage based on information coming from internal packages'
             // package.json First we check if the workspace uses a nested version of
             // the package
-            format!("{}/node_modules/{}", workspace_path, name),
+            format!("{workspace_path}/node_modules/{name}"),
             // Next we check for a top level version of the package
-            format!("node_modules/{}", name),
+            format!("node_modules/{name}"),
         ];
         possible_keys
             .into_iter()
@@ -151,6 +151,13 @@ impl Lockfile for NpmLockfile {
     fn turbo_version(&self) -> Option<String> {
         let turbo_entry = self.packages.get("node_modules/turbo")?;
         turbo_entry.version.clone()
+    }
+
+    fn human_name(&self, package: &Package) -> Option<String> {
+        let npm_package = self.packages.get(&package.key)?;
+        let version = npm_package.version.as_deref()?;
+        let name = package.key.split("node_modules/").last()?;
+        Some(format!("{name}@{version}"))
     }
 }
 

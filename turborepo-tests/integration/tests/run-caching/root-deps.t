@@ -16,6 +16,7 @@ Warm the cache
   Cached:    0 cached, 1 total
     Time:\s+[.0-9]+m?s  (re)
   
+   WARNING  no output files found for task another#build. Please check your `outputs` key in `turbo.json`
 
 Confirm cache hit
   $ ${TURBO} build --filter=another --output-logs=hash-only
@@ -43,6 +44,7 @@ All tasks should be a cache miss, even ones that don't depend on changed package
   Cached:    0 cached, 1 total
     Time:\s+[.0-9]+m?s  (re)
   
+   WARNING  no output files found for task another#build. Please check your `outputs` key in `turbo.json`
 
 Verify that all packages are in scope on a internal root dep change
   $ ${TURBO} build --filter='[HEAD]' --dry=json | jq '.packages'

@@ -1,8 +1,8 @@
 {
-  "$schema": "https://turbo.build/schema.json",
+  "$schema": "https://turborepo.com/schema.json",
   "tasks": {
     "build": {
-      "inputs": ["$TURBO_DEFAULT", ".env*"],
+      "inputs": ["$TURBO_DEFAULT$", ".env*"],
       "outputs": ["dist/**", ".next/**", "!.next/cache/**"],
       "dependsOn": ["^build"]
     },

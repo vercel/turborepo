@@ -1,31 +1,34 @@
 {
   "name": "web",
   "version": "1.0.0",
+  "type": "module",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --port 3001 --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
-    "type-check": "tsc --noEmit"
+    "lint": "next lint --max-warnings 0",
+    "check-types": "tsc --noEmit"
   },
   "dependencies": {
     "@repo/ui": "workspace:*",
-    "next": "^14.2.3",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "next": "^15.4.2",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
   },
   "devDependencies": {
-    "@next/eslint-plugin-next": "^14.2.3",
+    "@next/eslint-plugin-next": "^15.4.6",
     "@repo/eslint-config": "workspace:*",
     "@repo/tailwind-config": "workspace:*",
     "@repo/typescript-config": "workspace:*",
-    "@types/node": "^20.11.24",
-    "@types/react": "^18.2.61",
-    "@types/react-dom": "^18.2.19",
-    "autoprefixer": "^10.4.18",
-    "postcss": "^8.4.35",
-    "tailwindcss": "^3.4.1",
-    "typescript": "^5.3.3"
+    "@tailwindcss/postcss": "^4.1.5",
+    "@types/node": "^22.15.30",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.1",
+    "autoprefixer": "^10.4.20",
+    "eslint": "^9.33.0",
+    "postcss": "^8.5.3",
+    "tailwindcss": "^4.1.5",
+    "typescript": "5.9.2"
   }
 }

@@ -1,4 +1,5 @@
-import { spyConsole, validateLogs } from "@turbo/test-utils";
+import { spyConsole } from "@turbo/test-utils";
+import { describe, it, expect } from "@jest/globals";
 import { getWorkspace } from "../src/getWorkspace";
 
 describe("getWorkspace()", () => {
@@ -9,10 +10,10 @@ describe("getWorkspace()", () => {
         workspace: "test-workspace",
       })
     ).toEqual("test-workspace");
-    validateLogs(
-      ['Using "test-workspace" as workspace from arguments'],
-      mockConsole.log,
-      { prefix: "≫  " }
+    expect(mockConsole.log).toHaveBeenNthCalledWith(
+      1,
+      "≫  ",
+      'Using "test-workspace" as workspace from arguments'
     );
   });
 

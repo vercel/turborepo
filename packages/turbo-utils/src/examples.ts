@@ -91,7 +91,7 @@ export function existsInRepo(nameOrUrl: string): Promise<boolean> {
     return isUrlOk(url.href);
   } catch {
     return isUrlOk(
-      `https://api.github.com/repos/vercel/turbo/contents/examples/${encodeURIComponent(
+      `https://api.github.com/repos/vercel/turborepo/contents/examples/${encodeURIComponent(
         nameOrUrl
       )}`
     );

@@ -1,0 +1,40 @@
+name: "Run Turbo Tests"
+description: "Setup the environment and run Turbo tests"
+inputs:
+  github-token:
+    description: "GitHub token for GitHub"
+    required: true
+  turbo-token:
+    description: "Turbo token for authentication"
+    required: true
+  turbo-team:
+    description: "Turbo team for authentication"
+    required: true
+  test-filter:
+    description: "Filter for the turbo run command"
+    required: true
+runs:
+  using: "composite"
+  steps:
+    - name: Disable corepack
+      shell: bash
+      run: corepack disable
+
+    - name: Setup Turborepo Environment
+      uses: ./.github/actions/setup-turborepo-environment
+      with:
+        github-token: "${{ inputs.github-token }}"
+
+    - name: Install Global Turbo
+      uses: ./.github/actions/install-global-turbo
+
+    - name: Run Turbo Tests
+      shell: bash
+      run: |
+        turbo run test \
+          --filter="${{ inputs.test-filter }}" \
+          --continue \
+          --token=${{ inputs.turbo-token }} \
+          --team=${{ inputs.turbo-team }} \
+          --env-mode=strict \
+          --concurrency=1

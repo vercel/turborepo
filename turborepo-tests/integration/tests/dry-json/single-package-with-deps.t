@@ -33,13 +33,13 @@ Setup
       {
         "taskId": "build",
         "task": "build",
-        "hash": "7ece7b62aad25615",
+        "hash": "fe0059df5e6291b2",
         "inputs": {
           ".gitignore": "03b541460c1b836f96f9c0a941ceb48e91a9fd83",
           "package-lock.json": "1c117cce37347befafe3a9cba1b8a609b3600021",
           "package.json": "8606ff4b95a5330740d8d9d0948faeada64f1f32",
           "somefile.txt": "45b983be36b73c0788dc9cbcb76cbb80fc7bb057",
-          "turbo.json": "ce5bdbed55601768de641f5d8d005a8f5be8d3f7"
+          "turbo.json": "3bc68ed1f2a5a308cb0166f9ed073c2fc7980ac7"
         },
         "hashOfExternalDependencies": "",
         "cache": {
@@ -59,6 +59,7 @@ Setup
         "dependents": [
           "test"
         ],
+        "with": [],
         "resolvedTaskDefinition": {
           "outputs": [
             "foo.txt"
@@ -68,6 +69,7 @@ Setup
           "inputs": [],
           "outputLogs": "full",
           "persistent": false,
+          "interruptible": false,
           "env": [],
           "passThroughEnv": null,
           "interactive": false
@@ -88,13 +90,13 @@ Setup
       {
         "taskId": "test",
         "task": "test",
-        "hash": "cb5839f7284aa5f3",
+        "hash": "7cfbd8e30495d802",
         "inputs": {
           ".gitignore": "03b541460c1b836f96f9c0a941ceb48e91a9fd83",
           "package-lock.json": "1c117cce37347befafe3a9cba1b8a609b3600021",
           "package.json": "8606ff4b95a5330740d8d9d0948faeada64f1f32",
           "somefile.txt": "45b983be36b73c0788dc9cbcb76cbb80fc7bb057",
-          "turbo.json": "ce5bdbed55601768de641f5d8d005a8f5be8d3f7"
+          "turbo.json": "3bc68ed1f2a5a308cb0166f9ed073c2fc7980ac7"
         },
         "hashOfExternalDependencies": "",
         "cache": {
@@ -112,6 +114,7 @@ Setup
           "build"
         ],
         "dependents": [],
+        "with": [],
         "resolvedTaskDefinition": {
           "outputs": [],
           "cache": true,
@@ -121,6 +124,7 @@ Setup
           "inputs": [],
           "outputLogs": "full",
           "persistent": false,
+          "interruptible": false,
           "env": [],
           "passThroughEnv": null,
           "interactive": false

@@ -1,16 +1,25 @@
-use std::{backtrace::Backtrace, collections::HashSet, path::PathBuf, process::Command};
+use std::{
+    backtrace::Backtrace,
+    collections::HashSet,
+    env::{self, VarError},
+    fs::{self},
+    path::PathBuf,
+    process::Command,
+};
 
+use serde::Deserialize;
 use tracing::warn;
 use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeUnixPath,
 };
+use turborepo_ci::Vendor;
 
-use crate::{Error, Git, SCM};
+use crate::{Error, GitRepo, SCM};
 
-#[derive(Debug)]
-pub enum ChangedFiles {
-    All,
-    Some(HashSet<AnchoredSystemPathBuf>),
+#[derive(Debug, PartialEq, Eq)]
+pub struct InvalidRange {
+    pub from_ref: Option<String>,
+    pub to_ref: Option<String>,
 }
 
 impl SCM {
@@ -28,6 +37,7 @@ impl SCM {
         }
     }
 
+    /// get the actual changed files between two git refs
     pub fn changed_files(
         &self,
         turbo_root: &AbsoluteSystemPath,
@@ -36,13 +46,17 @@ impl SCM {
         include_uncommitted: bool,
         allow_unknown_objects: bool,
         merge_base: bool,
-    ) -> Result<ChangedFiles, Error> {
-        fn unable_to_detect_range(error: impl std::error::Error) -> Result<ChangedFiles, Error> {
+    ) -> Result<Result<HashSet<AnchoredSystemPathBuf>, InvalidRange>, Error> {
+        fn unable_to_detect_range(
+            error: impl std::error::Error,
+            from_ref: Option<String>,
+            to_ref: Option<String>,
+        ) -> Result<Result<HashSet<AnchoredSystemPathBuf>, InvalidRange>, Error> {
             warn!(
                 "unable to detect git range, assuming all files have changed: {}",
                 error
             );
-            Ok(ChangedFiles::All)
+            Ok(Err(InvalidRange { from_ref, to_ref }))
         }
         match self {
             Self::Git(git) => {
@@ -53,15 +67,23 @@ impl SCM {
                     include_uncommitted,
                     merge_base,
                 ) {
-                    Ok(files) => Ok(ChangedFiles::Some(files)),
+                    Ok(files) => Ok(Ok(files)),
                     Err(ref error @ Error::Git(ref message, _))
-                        if allow_unknown_objects && message.contains("no merge base") =>
+                        if allow_unknown_objects
+                            && (message.contains("no merge base")
+                                || message.contains("bad object")) =>
                     {
-                        unable_to_detect_range(error)
+                        unable_to_detect_range(
+                            error,
+                            from_commit.map(|c| c.to_string()),
+                            to_commit.map(|c| c.to_string()),
+                        )
                     }
-                    Err(Error::UnableToResolveRef) => {
-                        unable_to_detect_range(Error::UnableToResolveRef)
-                    }
+                    Err(Error::UnableToResolveRef) => unable_to_detect_range(
+                        Error::UnableToResolveRef,
+                        from_commit.map(|c| c.to_string()),
+                        to_commit.map(|c| c.to_string()),
+                    ),
                     Err(e) => Err(e),
                 }
             }
@@ -81,7 +103,75 @@ impl SCM {
     }
 }
 
-impl Git {
+const UNKNOWN_SHA: &str = "0000000000000000000000000000000000000000";
+
+#[derive(Debug, Deserialize, Clone)]
+struct GitHubCommit {
+    id: String,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct GitHubEvent {
+    #[serde(default)]
+    before: String,
+
+    #[serde(default)]
+    commits: Vec<GitHubCommit>,
+
+    #[serde(default)]
+    forced: bool,
+}
+
+impl GitHubEvent {
+    fn get_parent_ref_of_first_commit(&self) -> Option<String> {
+        if self.commits.is_empty() {
+            // commits can be empty when you push a branch with no commits
+            return None;
+        }
+
+        if self.commits.len() >= 2048 {
+            // GitHub API limit for number of commits shown in this field
+            return None;
+        }
+
+        // Extract the base ref from the push event
+        let first_commit = self.commits.first()?;
+        let id = &first_commit.id;
+        Some(format!("{id}^"))
+    }
+}
+
+#[derive(Debug)]
+pub struct CIEnv {
+    is_github_actions: bool,
+    github_base_ref: Result<String, VarError>,
+    github_event_path: Result<String, VarError>,
+}
+
+impl Default for CIEnv {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl CIEnv {
+    pub fn new() -> Self {
+        Self {
+            is_github_actions: Vendor::is("GitHub Actions"),
+            github_base_ref: env::var("GITHUB_BASE_REF"),
+            github_event_path: env::var("GITHUB_EVENT_PATH"),
+        }
+    }
+    pub fn none() -> Self {
+        Self {
+            is_github_actions: false,
+            github_base_ref: Err(VarError::NotPresent),
+            github_event_path: Err(VarError::NotPresent),
+        }
+    }
+}
+
+impl GitRepo {
     fn get_current_branch(&self) -> Result<String, Error> {
         let output = self.execute_git_command(&["branch", "--show-current"], "")?;
         let output = String::from_utf8(output)?;
@@ -94,19 +184,89 @@ impl Git {
         Ok(output.trim().to_owned())
     }
 
-    fn resolve_base<'a>(&self, base_override: Option<&'a str>) -> Result<&'a str, Error> {
+    /// for GitHub Actions environment variables, see: https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/store-information-in-variables#default-environment-variables
+    pub fn get_github_base_ref(base_ref_env: CIEnv) -> Option<String> {
+        // make sure we're running in a CI environment
+        if !base_ref_env.is_github_actions {
+            return None;
+        }
+
+        /*
+         * The name of the base ref or target branch of the pull request in a
+         * workflow run.
+         *
+         * This variable only has a value when the event that triggers a workflow run
+         * is either `pull_request` or `pull_request_target`.
+         * For example, `main`
+         *
+         * So environment variable is empty in a regular commit
+         */
+        if let Ok(pr) = base_ref_env.github_base_ref
+            && !pr.is_empty()
+        {
+            return Some(pr);
+        }
+
+        // we must be in a push event
+        // try reading from the GITHUB_EVENT_PATH file
+        if let Ok(event_path) = base_ref_env.github_event_path {
+            // Try to open the event file and read the contents
+            let data = fs::read_to_string(event_path).ok()?;
+
+            // Parse the JSON data from the file
+            let json: GitHubEvent = serde_json::from_str(&data).ok()?;
+
+            // Extract the base ref from the pull request event if available
+            let base_ref = &json.before;
+
+            // the base_ref will be UNKNOWN_SHA on first push
+            // we also use this behavior in force pushes
+            if base_ref == UNKNOWN_SHA || json.forced {
+                return json.get_parent_ref_of_first_commit();
+            }
+
+            if base_ref.is_empty() {
+                return None;
+            }
+
+            return Some(base_ref.to_string());
+        }
+        None
+    }
+
+    fn resolve_base(&self, base_override: Option<&str>, env: CIEnv) -> Result<String, Error> {
         if let Some(valid_from) = base_override {
-            return Ok(valid_from);
+            return Ok(valid_from.to_string());
+        }
+
+        if let Some(github_base_ref) = Self::get_github_base_ref(env) {
+            // we don't fall through to checking against main or master
+            // because at this point we know we're in a GITHUB CI environment
+            // and we should really know by now what the base ref is
+            // so it's better to just error if something went wrong
+            return match self.execute_git_command(&["rev-parse", &github_base_ref], "") {
+                Ok(_) => {
+                    eprintln!("Resolved base ref from GitHub Actions event: {github_base_ref}");
+                    Ok(github_base_ref)
+                }
+                Err(e) => {
+                    eprintln!(
+                        "Failed to resolve base ref '{github_base_ref}' from GitHub Actions \
+                         event: {e}"
+                    );
+                    Err(Error::UnableToResolveRef)
+                }
+            };
         }
 
         let main_result = self.execute_git_command(&["rev-parse", "main"], "");
         if main_result.is_ok() {
-            return Ok("main");
+            return Ok("main".to_string());
         }
 
         let master_result = self.execute_git_command(&["rev-parse", "master"], "");
         if master_result.is_ok() {
-            return Ok("master");
+            return Ok("master".to_string());
         }
         Err(Error::UnableToResolveRef)
     }
@@ -124,13 +284,19 @@ impl Git {
 
         let mut files = HashSet::new();
 
-        let valid_from = self.resolve_base(from_commit)?;
+        let valid_from = self.resolve_base(from_commit, CIEnv::new())?;
 
-        let mut args = if let Some(to_commit) = to_commit {
-            vec!["diff", "--name-only", valid_from, to_commit]
-        } else {
-            vec!["diff", "--name-only", valid_from]
-        };
+        // If a to commit is not specified for `diff-tree` it will change the comparison
+        // to be between the provided commit and it's parent
+        let to_commit = to_commit.unwrap_or("HEAD");
+        let mut args = vec![
+            "diff-tree",
+            "-r",
+            "--name-only",
+            "--no-commit-id",
+            &valid_from,
+            to_commit,
+        ];
 
         if merge_base {
             args.push("--merge-base");
@@ -142,16 +308,23 @@ impl Git {
         // We only care about non-tracked files if we haven't specified both ends up the
         // comparison
         if include_uncommitted {
-            // Add untracked files, i.e. files that are not in git at all
-            let output = self
-                .execute_git_command(&["ls-files", "--others", "--exclude-standard"], pathspec)?;
-            self.add_files_from_stdout(&mut files, turbo_root, output);
+            // Add untracked files or unstaged changes, i.e. files that are not in git at
+            // all
+            let ls_files_output = self.execute_git_command(
+                &["ls-files", "--others", "--modified", "--exclude-standard"],
+                pathspec,
+            )?;
+            self.add_files_from_stdout(&mut files, turbo_root, ls_files_output);
+            // Include any files that have been staged, but not committed
+            let diff_output =
+                self.execute_git_command(&["diff", "--name-only", "--cached"], pathspec)?;
+            self.add_files_from_stdout(&mut files, turbo_root, diff_output);
         }
 
         Ok(files)
     }
 
-    fn execute_git_command(&self, args: &[&str], pathspec: &str) -> Result<Vec<u8>, Error> {
+    pub fn execute_git_command(&self, args: &[&str], pathspec: &str) -> Result<Vec<u8>, Error> {
         let mut command = Command::new(self.bin.as_std_path());
         command
             .args(args)
@@ -204,7 +377,7 @@ impl Git {
         file_path: &AbsoluteSystemPath,
     ) -> Result<Vec<u8>, Error> {
         let anchored_file_path = self.root.anchor(file_path)?;
-        let valid_from = self.resolve_base(from_commit)?;
+        let valid_from = self.resolve_base(from_commit, CIEnv::new())?;
         let arg = format!("{}:{}", valid_from, anchored_file_path.as_str());
 
         self.execute_git_command(&["show", &arg], "")
@@ -244,19 +417,23 @@ mod tests {
     use std::{
         assert_matches::assert_matches,
         collections::HashSet,
+        env::VarError,
         fs,
         path::{Path, PathBuf},
         process::Command,
     };
 
     use git2::{Oid, Repository, RepositoryInitOptions};
-    use tempfile::TempDir;
+    use tempfile::{NamedTempFile, TempDir};
     use test_case::test_case;
     use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError};
     use which::which;
 
-    use super::{previous_content, ChangedFiles};
-    use crate::{Error, Git, SCM};
+    use super::{CIEnv, InvalidRange, previous_content};
+    use crate::{
+        Error, GitRepo, SCM,
+        git::{GitHubCommit, GitHubEvent},
+    };
 
     fn setup_repository(
         init_opts: Option<&RepositoryInitOptions>,
@@ -288,7 +465,7 @@ mod tests {
         // Replicating the `--filter` behavior where we only do a merge base
         // if both ends of the git range are specified.
         let merge_base = to_commit.is_some();
-        let ChangedFiles::Some(files) = scm.changed_files(
+        let Ok(files) = scm.changed_files(
             &turbo_root,
             from_commit,
             to_commit,
@@ -323,11 +500,7 @@ mod tests {
             &repo.signature().unwrap(),
             "Commit",
             &tree,
-            previous_commit
-                .as_ref()
-                .as_ref()
-                .map(std::slice::from_ref)
-                .unwrap_or_default(),
+            previous_commit.as_ref().as_slice(),
         )
         .unwrap()
     }
@@ -335,6 +508,26 @@ mod tests {
     fn commit_delete(repo: &Repository, path: &Path, previous_commit: Oid) -> Oid {
         let mut index = repo.index().unwrap();
         index.remove_path(path).unwrap();
+        let tree_oid = index.write_tree().unwrap();
+        index.write().unwrap();
+        let tree = repo.find_tree(tree_oid).unwrap();
+        let previous_commit = repo.find_commit(previous_commit).unwrap();
+
+        repo.commit(
+            Some("HEAD"),
+            &repo.signature().unwrap(),
+            &repo.signature().unwrap(),
+            "Commit",
+            &tree,
+            std::slice::from_ref(&&previous_commit),
+        )
+        .unwrap()
+    }
+
+    fn commit_rename(repo: &Repository, source: &Path, dest: &Path, previous_commit: Oid) -> Oid {
+        let mut index = repo.index().unwrap();
+        index.remove_path(source).unwrap();
+        index.add_path(dest).unwrap();
         let tree_oid = index.write_tree().unwrap();
         index.write().unwrap();
         let tree = repo.find_tree(tree_oid).unwrap();
@@ -367,23 +560,27 @@ mod tests {
             .output()?;
         assert!(output.status.success());
 
-        assert!(changed_files(
-            tmp_dir.path().to_owned(),
-            tmp_dir.path().to_owned(),
-            Some("HEAD~1"),
-            Some("HEAD"),
-            false,
-        )
-        .is_ok());
+        assert!(
+            changed_files(
+                tmp_dir.path().to_owned(),
+                tmp_dir.path().to_owned(),
+                Some("HEAD~1"),
+                Some("HEAD"),
+                false,
+            )
+            .is_ok()
+        );
 
-        assert!(changed_files(
-            tmp_dir.path().to_owned(),
-            tmp_dir.path().to_owned(),
-            Some("HEAD"),
-            None,
-            true,
-        )
-        .is_ok());
+        assert!(
+            changed_files(
+                tmp_dir.path().to_owned(),
+                tmp_dir.path().to_owned(),
+                Some("HEAD"),
+                None,
+                true,
+            )
+            .is_ok()
+        );
 
         Ok(())
     }
@@ -416,6 +613,38 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn test_renamed_files() -> Result<(), Error> {
+        let (repo_root, repo) = setup_repository(None)?;
+
+        let file = repo_root.path().join("foo.js");
+        let file_path = Path::new("foo.js");
+        fs::write(&file, "let z = 0;")?;
+
+        let first_commit_oid = commit_file(&repo, file_path, None);
+
+        fs::rename(file, repo_root.path().join("bar.js")).unwrap();
+
+        let new_file_path = Path::new("bar.js");
+        let _second_commit_oid = commit_rename(&repo, file_path, new_file_path, first_commit_oid);
+
+        let first_commit_sha = first_commit_oid.to_string();
+        let git_root = repo_root.path().to_owned();
+        let turborepo_root = repo_root.path().to_owned();
+        let files = changed_files(
+            git_root,
+            turborepo_root,
+            Some(&first_commit_sha),
+            Some("HEAD"),
+            false,
+        )?;
+
+        assert_eq!(
+            files,
+            HashSet::from(["foo.js".to_string(), "bar.js".to_string()])
+        );
+        Ok(())
+    }
     #[test]
     fn test_merge_base() -> Result<(), Error> {
         let (repo_root, repo) = setup_repository(None)?;
@@ -489,9 +718,42 @@ mod tests {
         )?;
         assert_eq!(files, HashSet::from(["bar.js".to_string()]));
 
+        // Test that uncommitted file in index is not marked as changed when not
+        // checking uncommitted
+        let files = changed_files(
+            repo_root.path().to_path_buf(),
+            turbo_root.to_path_buf(),
+            Some("HEAD"),
+            None,
+            false,
+        )?;
+        assert_eq!(files, HashSet::new());
+
+        // Test that uncommitted file in index is marked as changed when
+        // checking uncommitted
+        let files = changed_files(
+            repo_root.path().to_path_buf(),
+            turbo_root.to_path_buf(),
+            Some("HEAD"),
+            None,
+            true,
+        )?;
+        assert_eq!(files, HashSet::from(["bar.js".to_string()]));
+
         // Add file to index
         index.add_path(Path::new("bar.js")).unwrap();
         index.write().unwrap();
+
+        // Test that uncommitted file in index is not marked as changed when not
+        // checking uncommitted
+        let files = changed_files(
+            repo_root.path().to_path_buf(),
+            turbo_root.to_path_buf(),
+            Some("HEAD"),
+            None,
+            false,
+        )?;
+        assert_eq!(files, HashSet::new());
 
         // Test that uncommitted file in index is still marked as changed
         let files = changed_files(
@@ -783,10 +1045,10 @@ mod tests {
             repo.branch(branch, &commit, true).unwrap();
         });
 
-        let thing = Git::find(&root).unwrap();
-        let actual = thing.resolve_base(target_branch).ok();
+        let thing = GitRepo::find(&root).unwrap();
+        let actual = thing.resolve_base(target_branch, CIEnv::none()).ok();
 
-        assert_eq!(actual, expected);
+        assert_eq!(actual.as_deref(), expected);
 
         Ok(())
     }
@@ -860,8 +1122,194 @@ mod tests {
             .changed_files(&root, None, Some("HEAD"), true, true, false)
             .unwrap();
 
-        assert_matches!(actual, ChangedFiles::All);
+        assert_eq!(
+            actual,
+            Err(InvalidRange {
+                from_ref: None,
+                to_ref: Some("HEAD".to_string()),
+            })
+        );
 
         Ok(())
+    }
+
+    struct TestCase {
+        env: CIEnv,
+        event_json: &'static str,
+    }
+
+    #[test_case(
+        TestCase {
+            env: CIEnv {
+                is_github_actions: true,
+                github_base_ref: Err(VarError::NotPresent),
+                github_event_path: Err(VarError::NotPresent),
+            },
+            event_json: r#""#,
+        },
+        None
+        ; "GITHUB_BASE_REF and GITHUB_EVENT_PATH are not set"
+    )]
+    #[test_case(
+        TestCase {
+            env: CIEnv {
+                is_github_actions: true,
+                github_base_ref: Ok("".to_string()),
+                github_event_path: Err(VarError::NotPresent),
+            },
+            event_json: r#""#,
+        },
+        None
+        ; "GITHUB_BASE_REF is set to an empty string"
+    )]
+    #[test_case(
+        TestCase {
+            env: CIEnv {
+                is_github_actions: true,
+                github_base_ref: Ok("The choice is yours, and yours alone".to_string()),
+                github_event_path: Err(VarError::NotPresent),
+            },
+            event_json: r#""#,
+        },
+        Some("The choice is yours, and yours alone")
+        ; "GITHUB_BASE_REF is set to a non-empty string"
+    )]
+    #[test_case(
+        TestCase {
+            env: CIEnv {
+                is_github_actions: true,
+                github_base_ref: Err(VarError::NotPresent),
+                github_event_path: Ok("Olmec refused to give up the location of the Shrine of the Silver Monkey".to_string()),
+            },
+            event_json: r#""#,
+        },
+        None
+        ; "GITHUB_EVENT_PATH is set, but the file fails to open"
+    )]
+    #[test_case(
+        TestCase {
+            env: CIEnv {
+                is_github_actions: true,
+                github_base_ref: Err(VarError::NotPresent),
+                github_event_path: Ok("the_room_of_the_three_gargoyles.json".to_string()),
+            },
+            event_json: r#"first you must pass the temple guards!"#,
+        },
+        None
+        ; "GITHUB_EVENT_PATH is set, is not valid JSON"
+    )]
+    #[test_case(
+        TestCase {
+            env: CIEnv {
+                is_github_actions: true,
+                github_base_ref: Err(VarError::NotPresent),
+                github_event_path: Ok("olmecs_temple.json".to_string()),
+            },
+            event_json: r#"{}"#,
+        },
+        None
+        ; "no 'before' key in the JSON"
+    )]
+    #[test_case(
+        TestCase {
+            env: CIEnv {
+                is_github_actions: true,
+                github_base_ref: Err(VarError::NotPresent),
+                github_event_path: Ok("olmecs_temple.json".to_string()),
+            },
+            event_json: r#"{"forced":true}"#,
+        },
+        None
+        ; "force push"
+    )]
+    #[test_case(
+        TestCase {
+            env: CIEnv {
+                is_github_actions: true,
+                github_base_ref: Err(VarError::NotPresent),
+                github_event_path: Ok("shrine_of_the_silver_monkey.json".to_string()),
+            },
+            event_json: r#"{"before":"e83c5163316f89bfbde7d9ab23ca2e25604af290"}"#,
+        },
+        Some("e83c5163316f89bfbde7d9ab23ca2e25604af290")
+        ; "found a valid 'before' key in the JSON"
+    )]
+    #[test_case(
+        TestCase {
+            env: CIEnv {
+                is_github_actions: true,
+                github_base_ref: Err(VarError::NotPresent),
+                github_event_path: Ok("shrine_of_the_silver_monkey.json".to_string()),
+            },
+            event_json: r#"{"before":"0000000000000000000000000000000000000000"}"#,
+        },
+        None
+        ; "UNKNOWN_SHA but no commits found"
+    )]
+    #[test_case(
+        TestCase {
+            env: CIEnv {
+                is_github_actions: true,
+                github_base_ref: Err(VarError::NotPresent),
+                github_event_path: Ok("shrine_of_the_silver_monkey.json".to_string()),
+            },
+            event_json: r#"{"before":"0000000000000000000000000000000000000000","commits":[]}"#,
+        },
+        None
+        ; "empty commits"
+    )]
+    #[test_case(
+        TestCase {
+            env: CIEnv {
+                is_github_actions: true,
+                github_base_ref: Err(VarError::NotPresent),
+                github_event_path: Ok("shrine_of_the_silver_monkey.json".to_string()),
+            },
+            event_json: r#"{"before":"0000000000000000000000000000000000000000","commits":[{"id":"yep"}]}"#,
+        },
+        Some("yep^")
+        ; "first commit has a parent"
+    )]
+    fn test_get_github_base_ref(test_case: TestCase, expected: Option<&str>) -> Result<(), Error> {
+        // note: we must bind here because otherwise the temporary file will be dropped
+        let temp_file = if test_case.env.github_event_path.is_ok() {
+            let temp_file = NamedTempFile::new().expect("Failed to create temporary file");
+            fs::write(temp_file.path(), test_case.event_json)
+                .expect("Failed to write to temporary file");
+            Ok(temp_file)
+        } else {
+            Err(VarError::NotPresent)
+        };
+
+        let actual = GitRepo::get_github_base_ref(CIEnv {
+            is_github_actions: test_case.env.is_github_actions,
+            github_base_ref: test_case.env.github_base_ref,
+            github_event_path: temp_file
+                .as_ref()
+                .map(|p| p.path().to_str().unwrap().to_string())
+                .map_err(|e| e.clone()),
+        });
+        assert_eq!(actual, expected.map(|s| s.to_string()));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_thousands_of_commits() {
+        let commits = vec![
+            GitHubCommit {
+                id: "insert-famous-sha-here".to_string(),
+            };
+            2049 // 2049 is one over the limit
+        ];
+
+        let github_event = GitHubEvent {
+            before: "".to_string(),
+            commits,
+            forced: false,
+        };
+        let actual = github_event.get_parent_ref_of_first_commit();
+
+        assert_eq!(None, actual);
     }
 }

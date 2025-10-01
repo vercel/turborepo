@@ -13,14 +13,14 @@ use crate::{engine::Engine, opts::GraphOpts, spawn_child};
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("failed to produce graph output: {0}")]
+    #[error("Failed to produce graph output: {0}")]
     GraphOutput(#[source] std::io::Error),
-    #[error("invalid graph filename {raw_filename}: {reason}")]
+    #[error("Invalid graph filename {raw_filename}: {reason}")]
     InvalidFilename {
         raw_filename: String,
         reason: String,
     },
-    #[error("failed to spawn graphviz (dot): {0}")]
+    #[error("Failed to spawn graphviz (dot): {0}")]
     Graphviz(io::Error),
 }
 

@@ -193,7 +193,7 @@ pub fn turbo_version_has_shim(version: &str) -> bool {
         version.major > 1
     } else {
         // In the case that we don't get passed a valid semver we should avoid a panic.
-        // We shouldn't hit this we introduce back infering package version from schema
+        // We shouldn't hit this we introduce back inferring package version from schema
         // or package.json.
         true
     }

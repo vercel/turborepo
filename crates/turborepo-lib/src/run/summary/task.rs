@@ -4,11 +4,11 @@ use serde::Serialize;
 use turbopath::{AnchoredSystemPathBuf, RelativeUnixPathBuf};
 use turborepo_cache::CacheHitMetadata;
 use turborepo_env::{DetailedMap, EnvironmentVariableMap};
+use turborepo_task_id::TaskId;
 
 use super::{execution::TaskExecutionSummary, EnvMode};
 use crate::{
     cli::OutputLogsMode,
-    run::task_id::TaskId,
     task_graph::{TaskDefinition, TaskOutputs},
 };
 
@@ -71,11 +71,13 @@ pub(crate) struct SharedTaskSummary<T> {
     pub cli_arguments: Vec<String>,
     pub outputs: Option<Vec<String>>,
     pub excluded_outputs: Option<Vec<String>>,
-    pub log_file: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub log_file: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub directory: Option<String>,
     pub dependencies: Vec<T>,
     pub dependents: Vec<T>,
+    pub with: Vec<String>,
     pub resolved_task_definition: TaskSummaryTaskDefinition,
     pub expanded_outputs: Vec<AnchoredSystemPathBuf>,
     pub framework: String,
@@ -101,6 +103,7 @@ pub struct TaskSummaryTaskDefinition {
     inputs: Vec<String>,
     output_logs: OutputLogsMode,
     persistent: bool,
+    interruptible: bool,
     env: Vec<String>,
     pass_through_env: Option<Vec<String>>,
     interactive: bool,
@@ -233,6 +236,7 @@ impl From<SharedTaskSummary<TaskId<'static>>> for SharedTaskSummary<String> {
             execution,
             env_mode,
             environment_variables,
+            with,
             ..
         } = value;
         Self {
@@ -255,6 +259,7 @@ impl From<SharedTaskSummary<TaskId<'static>>> for SharedTaskSummary<String> {
                 .into_iter()
                 .map(|task_id| task_id.task().to_string())
                 .collect(),
+            with,
             resolved_task_definition,
             framework,
             execution,
@@ -280,8 +285,10 @@ impl From<TaskDefinition> for TaskSummaryTaskDefinition {
             mut inputs,
             output_logs,
             persistent,
+            interruptible,
             interactive,
             env_mode,
+            with: _,
         } = value;
 
         let mut outputs = inclusions;
@@ -304,15 +311,16 @@ impl From<TaskDefinition> for TaskSummaryTaskDefinition {
         depends_on.sort();
         outputs.sort();
         env.sort();
-        inputs.sort();
+        inputs.globs.sort();
 
         Self {
             outputs,
             cache,
             depends_on,
-            inputs,
+            inputs: inputs.globs,
             output_logs,
             persistent,
+            interruptible,
             interactive,
             env,
             pass_through_env,
@@ -372,6 +380,7 @@ mod test {
             "inputs": [],
             "outputLogs": "full",
             "persistent": false,
+            "interruptible": false,
             "interactive": false,
             "env": [],
             "passThroughEnv": null,

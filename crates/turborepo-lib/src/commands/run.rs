@@ -1,36 +1,11 @@
-use std::future::Future;
+use std::sync::Arc;
 
 use tracing::error;
+use turborepo_signals::{listeners::get_signal, SignalHandler};
 use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_ui::sender::UISender;
 
-use crate::{commands::CommandBase, run, run::builder::RunBuilder, signal::SignalHandler};
-
-#[cfg(windows)]
-pub fn get_signal() -> Result<impl Future<Output = Option<()>>, run::Error> {
-    let mut ctrl_c = tokio::signal::windows::ctrl_c().map_err(run::Error::SignalHandler)?;
-    Ok(async move { ctrl_c.recv().await })
-}
-
-#[cfg(not(windows))]
-pub fn get_signal() -> Result<impl Future<Output = Option<()>>, run::Error> {
-    use tokio::signal::unix;
-    let mut sigint =
-        unix::signal(unix::SignalKind::interrupt()).map_err(run::Error::SignalHandler)?;
-    let mut sigterm =
-        unix::signal(unix::SignalKind::terminate()).map_err(run::Error::SignalHandler)?;
-
-    Ok(async move {
-        tokio::select! {
-            res = sigint.recv() => {
-                res
-            }
-            res = sigterm.recv() => {
-                res
-            }
-        }
-    })
-}
+use crate::{commands::CommandBase, run, run::builder::RunBuilder};
 
 pub async fn run(base: CommandBase, telemetry: CommandEventBuilder) -> Result<i32, run::Error> {
     let signal = get_signal()?;
@@ -40,10 +15,12 @@ pub async fn run(base: CommandBase, telemetry: CommandEventBuilder) -> Result<i3
 
     let run_fut = async {
         let (analytics_sender, analytics_handle) = run_builder.start_analytics();
-        let mut run = run_builder
-            .with_analytics_sender(analytics_sender)
-            .build(&handler, telemetry)
-            .await?;
+        let run = Arc::new(
+            run_builder
+                .with_analytics_sender(analytics_sender)
+                .build(&handler, telemetry)
+                .await?,
+        );
 
         let (sender, handle) = run.start_ui()?.unzip();
 
@@ -55,7 +32,7 @@ pub async fn run(base: CommandBase, telemetry: CommandEventBuilder) -> Result<i3
 
         // We only stop if it's the TUI, for the web UI we don't need to stop
         if let Some(UISender::Tui(sender)) = sender {
-            sender.stop();
+            sender.stop().await;
         }
 
         if let Some(handle) = handle {

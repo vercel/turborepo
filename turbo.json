@@ -1,5 +1,5 @@
 {
-  "$schema": "https://turbo.build/schema.json",
+  "$schema": "https://turborepo.com/schema.json",
   "ui": "tui",
   // The following are used by tools such as pnpm, gh actions to setup pnpm, etc.
   "globalPassThroughEnv": [
@@ -197,7 +197,6 @@
         "**/*tslint.json"
       ]
     },
-
     "//#check:toml": {},
     "check-types": {
       "dependsOn": ["^build"]
@@ -212,13 +211,17 @@
       "outputs": ["dist/**/*", ".next/**/*"],
       "dependsOn": ["^build"]
     },
+    "package-checks": {
+      "dependsOn": ["package:types", "package:lint"]
+    },
+    "package:types": {},
+    "package:lint": {
+      "dependsOn": ["build"]
+    },
     // This is a synthetic tasks that lets us pull in other workspaces as dependencies
     // So changes in internal workspaces that we depend on, will trigger this task.
     "topo": {
       "dependsOn": ["^topo"]
     }
-  },
-  "experimentalSpaces": {
-    "id": "space_WTrAuWxqVUapGgZDX7KiZV1v"
   }
 }

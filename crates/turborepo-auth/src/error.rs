@@ -13,7 +13,7 @@ pub enum Error {
     APIError(#[from] turborepo_api_client::Error),
 
     #[error(
-        "loginUrl is configured to \"{value}\", but cannot be a base URL. This happens in \
+        "`loginUrl` is configured to \"{value}\", but cannot be a base URL. This happens in \
          situations like using a `data:` URL."
     )]
     LoginUrlCannotBeABase { value: String },
@@ -36,9 +36,12 @@ pub enum Error {
     SSOTokenExpired(String),
     #[error("token not found")]
     TokenNotFound,
-    #[error("invalid token file format: {0}")]
-    InvalidTokenFileFormat(#[source] serde_json::Error),
-
+    #[error("'{path}' is an invalid token file: {source}")]
+    InvalidTokenFileFormat {
+        path: String,
+        #[source]
+        source: serde_json::Error,
+    },
     #[error("config directory not found")]
     ConfigDirNotFound,
     #[error("failed to read auth file path: {path}")]

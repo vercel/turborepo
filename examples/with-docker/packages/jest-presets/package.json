@@ -6,7 +6,12 @@
   "files": [
     "node/jest-preset.js"
   ],
+  "exports": {
+    "./node": "./node/jest-preset.js",
+    "./node/jest-preset": "./node/jest-preset.js"
+  },
   "dependencies": {
-    "ts-jest": "^29.1.1"
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.5"
   }
 }

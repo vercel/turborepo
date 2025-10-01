@@ -6,7 +6,7 @@ use tokio::sync::Mutex;
 
 use crate::{
     tui::event::{CacheResult, TaskResult},
-    wui::{event::WebUIEvent, server::SharedState},
+    wui::{event::WebUIEvent, query::SharedState},
 };
 
 /// Subscribes to the Web UI events and updates the state
@@ -150,7 +150,7 @@ mod test {
     use super::*;
     use crate::{
         tui::event::OutputLogs,
-        wui::{sender::WebUISender, server::Query},
+        wui::{query::RunQuery, sender::WebUISender},
     };
 
     #[tokio::test]
@@ -200,7 +200,7 @@ mod test {
         );
 
         // Now let's check with the GraphQL API
-        let schema = Schema::new(Query::new(state), EmptyMutation, EmptySubscription);
+        let schema = Schema::new(RunQuery::new(Some(state)), EmptyMutation, EmptySubscription);
         let result = schema
             .execute("query { currentRun { tasks { name state { status } } } }")
             .await;

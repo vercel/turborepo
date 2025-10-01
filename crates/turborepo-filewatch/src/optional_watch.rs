@@ -1,5 +1,5 @@
 use futures::FutureExt;
-use tokio::sync::watch::{self, error::RecvError, Ref};
+use tokio::sync::watch::{self, Ref, error::RecvError};
 
 #[derive(Debug)]
 pub struct OptionalWatch<T>(watch::Receiver<Option<T>>);
@@ -48,7 +48,7 @@ impl<T> OptionalWatch<T> {
 
 pub struct SomeRef<'a, T>(pub(crate) Ref<'a, Option<T>>);
 
-impl<'a, T> std::ops::Deref for SomeRef<'a, T> {
+impl<T> std::ops::Deref for SomeRef<'_, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {

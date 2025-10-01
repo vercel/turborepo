@@ -3,18 +3,24 @@ use std::{
     hash::Hash,
 };
 
+use either::Either;
 use napi::Error;
 use napi_derive::napi;
-use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
+use tracing::debug;
+use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
 use turborepo_repository::{
-    change_mapper::{ChangeMapper, DefaultPackageChangeMapper, PackageChanges},
+    change_mapper::{
+        ChangeMapper, DefaultPackageChangeMapper, DefaultPackageChangeMapperWithLockfile,
+        LockfileContents, PackageChangeMapper, PackageChanges,
+    },
     inference::RepoState as WorkspaceState,
-    package_graph::{PackageGraph, PackageName, PackageNode, WorkspacePackage, ROOT_PKG_NAME},
+    package_graph::{PackageGraph, PackageName, PackageNode, ROOT_PKG_NAME, WorkspacePackage},
 };
+use turborepo_scm::SCM;
 mod internal;
 
 #[napi]
-#[derive(PartialEq, Eq, Hash, Clone)]
+#[derive(PartialEq, Eq, Hash, Clone, Debug)]
 pub struct Package {
     pub name: String,
     /// The absolute path to the package root.
@@ -182,18 +188,50 @@ impl Workspace {
         Ok(map)
     }
 
+    pub fn get_lockfile_contents(
+        &self,
+        changed_files: &HashSet<AnchoredSystemPathBuf>,
+        workspace_root: &AbsoluteSystemPath,
+        from_commit: &str,
+    ) -> LockfileContents {
+        let lockfile_name = self.graph.package_manager().lockfile_name();
+        if changed_files.contains(AnchoredSystemPath::new(&lockfile_name).unwrap()) {
+            let git = SCM::new(workspace_root);
+            let anchored_path = workspace_root.join_component(lockfile_name);
+            git.previous_content(Some(from_commit), &anchored_path)
+                .map(LockfileContents::Changed)
+                .inspect_err(|e| debug!("{e}"))
+                .ok()
+                .unwrap_or(LockfileContents::UnknownChange)
+        } else {
+            LockfileContents::Unchanged
+        }
+    }
+
     /// Given a set of "changed" files, returns a set of packages that are
     /// "affected" by the changes. The `files` argument is expected to be a list
     /// of strings relative to the monorepo root and use the current system's
     /// path separator.
     #[napi]
-    pub async fn affected_packages(&self, files: Vec<String>) -> Result<Vec<Package>, Error> {
+    pub async fn affected_packages(
+        &self,
+        files: Vec<String>,
+        base: Option<&str>, // this is required when optimize_global_invalidations is true
+        optimize_global_invalidations: Option<bool>,
+    ) -> Result<Vec<Package>, Error> {
+        let base = optimize_global_invalidations
+            .unwrap_or(false)
+            .then(|| {
+                base.ok_or_else(|| {
+                    Error::from_reason("optimizeGlobalInvalidations true, but no base commit given")
+                })
+            })
+            .transpose()?;
         let workspace_root = match AbsoluteSystemPath::new(&self.absolute_path) {
             Ok(path) => path,
             Err(e) => return Err(Error::from_reason(e.to_string())),
         };
-
-        let hash_set_of_paths: HashSet<AnchoredSystemPathBuf> = files
+        let changed_files: HashSet<AnchoredSystemPathBuf> = files
             .into_iter()
             .filter_map(|path| {
                 let path_components = path.split(std::path::MAIN_SEPARATOR).collect::<Vec<&str>>();
@@ -203,9 +241,25 @@ impl Workspace {
             .collect();
 
         // Create a ChangeMapper with no ignore patterns
-        let default_package_detector = DefaultPackageChangeMapper::new(&self.graph);
-        let mapper = ChangeMapper::new(&self.graph, vec![], default_package_detector);
-        let package_changes = match mapper.changed_packages(hash_set_of_paths, None) {
+        let change_detector = if base.is_some() {
+            Either::Left(DefaultPackageChangeMapperWithLockfile::new(&self.graph))
+        } else {
+            Either::Right(DefaultPackageChangeMapper::new(&self.graph))
+        };
+        let mapper = ChangeMapper::new(&self.graph, vec![], change_detector);
+
+        let lockfile_contents = if let Some(base) = base {
+            self.get_lockfile_contents(&changed_files, workspace_root, base)
+        } else if changed_files.contains(
+            AnchoredSystemPath::new(self.graph.package_manager().lockfile_name())
+                .expect("the lockfile name will not be an absolute path"),
+        ) {
+            LockfileContents::UnknownChange
+        } else {
+            LockfileContents::Unchanged
+        };
+
+        let package_changes = match mapper.changed_packages(changed_files, lockfile_contents) {
             Ok(changes) => changes,
             Err(e) => return Err(Error::from_reason(e.to_string())),
         };
@@ -219,7 +273,7 @@ impl Workspace {
                     path: info.package_path().to_owned(),
                 })
                 .collect::<Vec<WorkspacePackage>>(),
-            PackageChanges::Some(packages) => packages.into_iter().collect(),
+            PackageChanges::Some(packages) => packages.into_keys().collect(),
         };
 
         let mut serializable_packages: Vec<Package> = packages
@@ -237,5 +291,40 @@ impl Workspace {
         serializable_packages.sort_by_key(|p| p.name.clone());
 
         Ok(serializable_packages)
+    }
+
+    /// Given a path (relative to the workspace root), returns the
+    /// package that contains it.
+    ///
+    /// This is a naive implementation that simply "iterates-up". If this
+    /// function is expected to be called many times for files that are deep
+    /// within the same package, we could optimize this by caching the
+    /// containing-package of every ancestor.
+    #[napi]
+    pub async fn find_package_by_path(&self, path: String) -> Result<Package, Error> {
+        let package_mapper = DefaultPackageChangeMapper::new(&self.graph);
+        let anchored_path = AnchoredSystemPath::new(&path)
+            .map_err(|e| Error::from_reason(e.to_string()))?
+            .clean();
+        match package_mapper.detect_package(&anchored_path) {
+            turborepo_repository::change_mapper::PackageMapping::All(
+                _all_package_change_reason,
+            ) => Err(Error::from_reason("file belongs to many packages")),
+            turborepo_repository::change_mapper::PackageMapping::None => Err(Error::from_reason(
+                "iterated to the root of the workspace and found no package",
+            )),
+            turborepo_repository::change_mapper::PackageMapping::Package((package, _reason)) => {
+                let workspace_root = match AbsoluteSystemPath::new(&self.absolute_path) {
+                    Ok(path) => path,
+                    Err(e) => return Err(Error::from_reason(e.to_string())),
+                };
+                let package_path = workspace_root.resolve(&package.path);
+                Ok(Package::new(
+                    package.name.to_string(),
+                    workspace_root,
+                    &package_path,
+                ))
+            }
+        }
     }
 }

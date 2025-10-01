@@ -1,9 +1,9 @@
 use nom::{
+    Finish, IResult,
     branch::alt,
     bytes::complete::{is_not, tag},
     combinator::{opt, recognize},
     sequence::tuple,
-    Finish, IResult,
 };
 
 use super::SupportedLockfileVersion;
@@ -12,9 +12,9 @@ use super::SupportedLockfileVersion;
 pub enum Error {
     #[error(transparent)]
     Nom(#[from] nom::error::Error<String>),
-    #[error("dependency path '{0}' contains no '@'")]
+    #[error("Dependency path '{0}' contains no '@'.")]
     MissingAt(String),
-    #[error("dependency path '{0}' has an empty version following '@'")]
+    #[error("Dependency path '{0}' has an empty version following '@'.")]
     MissingVersion(String),
 }
 
@@ -79,7 +79,7 @@ impl<'a> DepPath<'a> {
 // order to parse 6+ it partially converts to the old format.
 // The conversion only replaces the '@' separator with '/', we avoid this
 // conversion by allowing for a '@' or a '/' to be used as a separator.
-fn parse_dep_path(i: &str) -> IResult<&str, DepPath> {
+fn parse_dep_path(i: &str) -> IResult<&str, DepPath<'_>> {
     let (i, host) = parse_host(i)?;
     let (i, _) = nom::character::complete::char('/')(i)?;
     let (i, name) = parse_name(i)?;
@@ -95,7 +95,7 @@ fn parse_dep_path(i: &str) -> IResult<&str, DepPath> {
     ))
 }
 
-fn parse_dep_path_v9(input: &str) -> Result<DepPath, Error> {
+fn parse_dep_path_v9(input: &str) -> Result<DepPath<'_>, Error> {
     if input.is_empty() {
         return Err(Error::MissingAt(input.to_owned()));
     }

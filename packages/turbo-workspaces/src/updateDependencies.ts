@@ -1,6 +1,6 @@
 import path from "node:path";
-import { writeJSONSync } from "fs-extra";
-import { green } from "picocolors";
+import fs from "fs-extra";
+import picocolors from "picocolors";
 import type { DependencyList, DependencyGroups } from "@turbo/utils";
 import type {
   Project,
@@ -99,7 +99,7 @@ export function updateDependencies({
   const toLog = (key: keyof DependencyGroups) => {
     const total = stats[key].length;
     if (total > 0) {
-      return `${green(total.toString())} ${key}`;
+      return `${picocolors.green(total.toString())} ${key}`;
     }
     return undefined;
   };
@@ -131,7 +131,7 @@ export function updateDependencies({
   }
 
   if (!options?.dry) {
-    writeJSONSync(workspace.paths.packageJson, workspacePackageJson, {
+    fs.writeJSONSync(workspace.paths.packageJson, workspacePackageJson, {
       spaces: 2,
     });
   }

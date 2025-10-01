@@ -1,4 +1,13 @@
-#![feature(trait_upcasting)]
+//! Package manager lockfile parsing, analysis, and serialization
+//!
+//! Parsing and analysis are used to track which external packages a workspace
+//! package depends on. This allows Turborepo to not perform a global
+//! invalidation on a lockfile change, but instead only the packages which
+//! depend on the changed external packages.
+//!
+//! Serialization is exclusively used by `turbo prune` and is far more error
+//! prone than deserialization and analysis.
+
 #![deny(clippy::all)]
 // the pest proc macro adds an empty doc comment.
 #![allow(clippy::empty_docs)]
@@ -16,14 +25,14 @@ use std::{
 };
 
 pub use berry::{Error as BerryError, *};
-pub use bun::BunLockfile;
+pub use bun::{BunLockfile, bun_global_change};
 pub use error::Error;
 pub use npm::*;
-pub use pnpm::{pnpm_global_change, pnpm_subgraph, PnpmLockfile};
+pub use pnpm::{PnpmLockfile, pnpm_global_change, pnpm_subgraph};
 use rayon::prelude::*;
 use serde::Serialize;
 use turbopath::RelativeUnixPathBuf;
-pub use yarn1::{yarn_subgraph, Yarn1Lockfile};
+pub use yarn1::{Yarn1Lockfile, yarn_subgraph};
 
 #[derive(Debug, PartialEq, Eq, Clone, PartialOrd, Ord, Hash, Serialize)]
 pub struct Package {
@@ -31,40 +40,82 @@ pub struct Package {
     pub version: String,
 }
 
-// This trait will only be used when migrating the Go lockfile implementations
-// to Rust. Once the migration is complete we will leverage petgraph for doing
-// our graph calculations.
+/// A trait for exposing common operations for lockfile parsing, analysis, and
+/// encoding.
+///
+/// External packages are identified by key strings which have no shared
+/// structure other than being able to uniquely identify a package in the
+/// corresponding lockfile. When programming against these keys they should be
+/// viewed as a black box and any logic for handling them should live in the
+/// specific lockfile implementation which might have additional understanding
+/// of them. Using `human_name` can provide a version of the key that is
+/// formatted for human viewing. The fact that keys are still represented as
+/// `String`s is a vestige of the translation from Go.
+///
+/// We cannot easily expose lockfiles as a standard
+/// graph due to overrides that various lockfile formats support. A dependency
+/// of `"package": "1.0.0"` might resolve to a different version depending on
+/// how it is imported. See https://pnpm.io/settings#overrides
 pub trait Lockfile: Send + Sync + Any + std::fmt::Debug {
-    // Given a workspace, a package it imports and version returns the key, resolved
-    // version, and if it was found
+    /// Resolve a dependency declaration from a workspace package to a lockfile
+    /// key
     fn resolve_package(
         &self,
         workspace_path: &str,
         name: &str,
         version: &str,
     ) -> Result<Option<Package>, Error>;
-    // Given a lockfile key return all (prod/dev/optional) dependencies of that
-    // package
+
+    /// Given a lockfile key return all (prod/dev/optional) direct dependencies
+    /// of that package.
     fn all_dependencies(&self, key: &str) -> Result<Option<HashMap<String, String>>, Error>;
 
+    /// Given a list of workspace packages and external packages that are
+    /// dependencies of the workspace packages, produce a lockfile that only
+    /// references said packages.
+    ///
+    /// The caller is expected to have calculated the correct `packages` for the
+    /// provided `workspace_packages` using `resolve_package` and
+    /// `all_dependencies` as otherwise `subgraph` might fail or produce an
+    /// incorrect lockfile.
     fn subgraph(
         &self,
         workspace_packages: &[String],
         packages: &[String],
     ) -> Result<Box<dyn Lockfile>, Error>;
 
+    /// Encode the lockfile to a string of bytes that can be written to disk
     fn encode(&self) -> Result<Vec<u8>, Error>;
 
     /// All patch files referenced in the lockfile
+    ///
+    /// Useful for identifying any patch files that are referenced by the
+    /// lockfile
     fn patches(&self) -> Result<Vec<RelativeUnixPathBuf>, Error> {
         Ok(Vec::new())
     }
 
     /// Determine if there's a global change between two lockfiles
+    ///
+    /// This generally is only `true` across lockfile version changes or when a
+    /// setting changes where it is safer to view everything as changed rather
+    /// than try to understand the change.
     fn global_change(&self, other: &dyn Lockfile) -> bool;
 
     /// Return any turbo version found in the lockfile
+    ///
+    /// Used for identifying which version of `turbo` the lockfile references if
+    /// no local `turbo` binary is found.
     fn turbo_version(&self) -> Option<String>;
+
+    /// A human friendly version of a lockfile key.
+    /// Usually of the form `package@version`, but version might include
+    /// additional information to convey difference from other packages in
+    /// the lockfile e.g. differing peer dependencies.
+    #[allow(unused)]
+    fn human_name(&self, package: &Package) -> Option<String> {
+        None
+    }
 }
 
 /// Takes a lockfile, and a map of workspace directory paths -> (package name,
@@ -88,7 +139,6 @@ pub fn all_transitive_closures<L: Lockfile + ?Sized>(
         .collect()
 }
 
-// this should get replaced by petgraph in the future :)
 #[tracing::instrument(skip_all)]
 pub fn transitive_closure<L: Lockfile + ?Sized>(
     lockfile: &L,

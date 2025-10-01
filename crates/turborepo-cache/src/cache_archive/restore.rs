@@ -6,14 +6,14 @@ use tar::Entry;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 
 use crate::{
+    CacheError,
     cache_archive::{
-        restore_directory::{restore_directory, CachedDirTree},
+        restore_directory::{CachedDirTree, restore_directory},
         restore_regular::restore_regular,
         restore_symlink::{
             canonicalize_linkname, restore_symlink, restore_symlink_allow_missing_target,
         },
     },
-    CacheError,
 };
 
 pub struct CacheReader<'a> {
@@ -185,7 +185,7 @@ mod tests {
 
     use anyhow::Result;
     use tar::Header;
-    use tempfile::{tempdir, TempDir};
+    use tempfile::{TempDir, tempdir};
     use test_case::test_case;
     use tracing::debug;
     use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
@@ -283,7 +283,7 @@ mod tests {
     fn compress_tar(archive_path: &AbsoluteSystemPathBuf) -> Result<AbsoluteSystemPathBuf> {
         let mut input_file = File::open(archive_path)?;
 
-        let output_file_path = format!("{}.zst", archive_path);
+        let output_file_path = format!("{archive_path}.zst");
         let output_file = File::create(&output_file_path)?;
 
         let mut zw = zstd::stream::Encoder::new(output_file, 0)?;
@@ -883,10 +883,7 @@ mod tests {
 
                 match (cache_reader.restore(anchor), &test.expected_output) {
                     (Ok(restored_files), Err(expected_error)) => {
-                        panic!(
-                            "expected error: {:?}, received {:?}",
-                            expected_error, restored_files
-                        );
+                        panic!("expected error: {expected_error:?}, received {restored_files:?}");
                     }
                     (Ok(restored_files), Ok(expected_files)) => {
                         assert_eq!(&restored_files, expected_files);
@@ -896,7 +893,7 @@ mod tests {
                         continue;
                     }
                     (Err(err), Ok(_)) => {
-                        panic!("unexpected error: {:?}", err);
+                        panic!("unexpected error: {err:?}");
                     }
                 };
 

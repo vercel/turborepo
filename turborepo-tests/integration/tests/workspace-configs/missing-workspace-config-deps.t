@@ -5,7 +5,7 @@ Setup
 # The workspace does not have a turbo.json config. This test checks that both regular dependencies
 # and Topological dependencies are retained from the root config.
 
-# 1. First run, assert that dependet tasks run `dependsOn`
+# 1. First run, assert that dependent tasks run `dependsOn`
   $ ${TURBO} run missing-workspace-config-task-with-deps --filter=missing-workspace-config > tmp.log
 # Validate in pieces. `omit-key` task has two dependsOn values, and those tasks
 # can run in non-deterministic order. So we need to validate the logs in the pieces.

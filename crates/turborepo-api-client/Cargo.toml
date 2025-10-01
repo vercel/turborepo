@@ -1,7 +1,7 @@
 [package]
 name = "turborepo-api-client"
 version = "0.1.0"
-edition = "2021"
+edition = { workspace = true }
 license = "MIT"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -11,8 +11,9 @@ rustls-tls = ["reqwest/rustls-tls-native-roots"]
 
 [dev-dependencies]
 anyhow = { workspace = true }
-http = "0.2.9"
+http = "1.1.0"
 httpmock = { workspace = true }
+insta = { workspace = true }
 port_scanner = { workspace = true }
 test-case = { workspace = true }
 turborepo-vercel-api-mock = { workspace = true }
@@ -22,7 +23,6 @@ workspace = true
 
 [dependencies]
 bytes.workspace = true
-chrono = { workspace = true, features = ["serde"] }
 lazy_static = { workspace = true }
 regex = { workspace = true }
 reqwest = { workspace = true, features = ["json", "stream"] }
@@ -32,9 +32,7 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tokio-stream = "0.1.15"
-tokio-util = { version = "0.7.10", features = ["codec"] }
 tracing = { workspace = true }
-turbopath = { workspace = true }
 turborepo-ci = { workspace = true }
 turborepo-vercel-api = { workspace = true }
 url = { workspace = true }

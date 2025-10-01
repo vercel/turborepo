@@ -8,15 +8,15 @@ use regex::Regex;
 
 use super::SplitAtDepth;
 use crate::{
+    BuildError, CandidatePath, Glob, Pattern,
     capture::MatchedText,
     encode::CompileError,
     token::{self, Token, TokenTree},
     walk::{
-        filter::{HierarchicalIterator, Separation},
         Entry, EntryResidue, FileIterator, JoinAndGetDepth, TreeEntry, WalkBehavior, WalkError,
         WalkTree,
+        filter::{HierarchicalIterator, Separation},
     },
-    BuildError, CandidatePath, Glob, Pattern,
 };
 
 /// APIs for matching globs against directory trees.
@@ -540,15 +540,16 @@ impl FilterAnyProgram {
         use FilterAnyProgram::{Exhaustive, Nonexhaustive, Partitioned};
 
         match self {
-            Exhaustive(ref exhaustive) | Partitioned { ref exhaustive, .. }
+            Exhaustive(exhaustive) | Partitioned { exhaustive, .. }
                 if exhaustive.is_match(candidate.as_ref()) =>
             {
                 Some(EntryResidue::Tree)
             }
-            Nonexhaustive(ref nonexhaustive)
-            | Partitioned {
-                ref nonexhaustive, ..
-            } if nonexhaustive.is_match(candidate.as_ref()) => Some(EntryResidue::File),
+            Nonexhaustive(nonexhaustive) | Partitioned { nonexhaustive, .. }
+                if nonexhaustive.is_match(candidate.as_ref()) =>
+            {
+                Some(EntryResidue::File)
+            }
             _ => None,
         }
     }

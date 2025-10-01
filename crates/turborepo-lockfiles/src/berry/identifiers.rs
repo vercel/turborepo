@@ -64,7 +64,7 @@ pub struct Locator<'a> {
     pub reference: Cow<'a, str>,
 }
 
-impl<'a> Ident<'a> {
+impl Ident<'_> {
     /// Clones underlying strings and changes lifetime to represent this
     pub fn to_owned(&self) -> Ident<'static> {
         let Ident { scope, name } = self;
@@ -91,7 +91,7 @@ impl<'a> TryFrom<&'a str> for Ident<'a> {
     }
 }
 
-impl<'a> fmt::Display for Ident<'a> {
+impl fmt::Display for Ident<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
         if let Some(scope) = self.scope.as_deref() {
             f.write_fmt(format_args!("@{scope}/"))?;
@@ -114,7 +114,7 @@ impl<'a> TryFrom<&'a str> for Descriptor<'a> {
     }
 }
 
-impl<'a> fmt::Display for Descriptor<'a> {
+impl fmt::Display for Descriptor<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_fmt(format_args!("{}@{}", self.ident, self.range))
     }
@@ -186,7 +186,7 @@ impl<'a> TryFrom<&'a str> for Locator<'a> {
     }
 }
 
-impl<'a> fmt::Display for Locator<'a> {
+impl fmt::Display for Locator<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_fmt(format_args!("{}@{}", self.ident, self.reference))
     }
@@ -250,7 +250,7 @@ impl<'a> Locator<'a> {
             })
     }
 
-    pub fn patched_locator(&self) -> Option<Locator> {
+    pub fn patched_locator(&self) -> Option<Locator<'_>> {
         // THis has an issue of cutting off the last char
         Locator::from_patch_reference(&self.reference)
     }

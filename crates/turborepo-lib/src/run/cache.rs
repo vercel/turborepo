@@ -4,14 +4,18 @@ use std::{
     time::Duration,
 };
 
+use itertools::Itertools;
 use tokio::sync::oneshot;
-use tracing::{debug, error};
+use tracing::{debug, error, log::warn};
 use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
 };
-use turborepo_cache::{http::UploadMap, AsyncCache, CacheError, CacheHitMetadata, CacheSource};
+use turborepo_cache::{
+    http::UploadMap, AsyncCache, CacheError, CacheHitMetadata, CacheOpts, CacheSource,
+};
 use turborepo_repository::package_graph::PackageInfo;
 use turborepo_scm::SCM;
+use turborepo_task_id::TaskId;
 use turborepo_telemetry::events::{task::PackageTaskEventBuilder, TrackedErrors};
 use turborepo_ui::{color, tui::event::CacheResult, ColorConfig, ColorSelector, LogWriter, GREY};
 
@@ -20,23 +24,22 @@ use crate::{
     daemon::{DaemonClient, DaemonConnector},
     hash::{FileHashes, TurboHash},
     opts::RunCacheOpts,
-    run::task_id::TaskId,
     task_graph::{TaskDefinition, TaskOutputs},
 };
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("Error replaying logs: {0}")]
+    #[error("Failed to replay logs: {0}")]
     Ui(#[from] turborepo_ui::Error),
-    #[error("Error accessing cache: {0}")]
+    #[error("Failed to access cache: {0}")]
     Cache(#[from] turborepo_cache::CacheError),
-    #[error("Error finding outputs to save: {0}")]
+    #[error("Failed to find outputs to save: {0}")]
     Globwalk(#[from] globwalk::WalkError),
     #[error("Invalid globwalk pattern: {0}")]
     Glob(#[from] globwalk::GlobError),
     #[error("Error with daemon: {0}")]
     Daemon(#[from] crate::daemon::DaemonError),
-    #[error("no connection to daemon")]
+    #[error("No connection to daemon")]
     NoDaemon,
     #[error(transparent)]
     Scm(#[from] turborepo_scm::Error),
@@ -47,6 +50,7 @@ pub enum Error {
 pub struct RunCache {
     task_output_logs: Option<OutputLogsMode>,
     cache: AsyncCache,
+    warnings: Arc<Mutex<Vec<String>>>,
     reads_disabled: bool,
     writes_disabled: bool,
     repo_root: AbsoluteSystemPathBuf,
@@ -63,10 +67,12 @@ pub trait CacheOutput {
 }
 
 impl RunCache {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         cache: AsyncCache,
         repo_root: &AbsoluteSystemPath,
-        opts: &RunCacheOpts,
+        run_cache_opts: RunCacheOpts,
+        cache_opts: &CacheOpts,
         color_selector: ColorSelector,
         daemon_client: Option<DaemonClient<DaemonConnector>>,
         ui: ColorConfig,
@@ -75,13 +81,14 @@ impl RunCache {
         let task_output_logs = if is_dry_run {
             Some(OutputLogsMode::None)
         } else {
-            opts.task_output_logs_override
+            run_cache_opts.task_output_logs_override
         };
         RunCache {
             task_output_logs,
             cache,
-            reads_disabled: opts.skip_reads,
-            writes_disabled: opts.skip_writes,
+            warnings: Default::default(),
+            reads_disabled: !cache_opts.cache.remote.read && !cache_opts.cache.local.read,
+            writes_disabled: !cache_opts.cache.remote.write && !cache_opts.cache.local.write,
             repo_root: repo_root.to_owned(),
             color_selector,
             daemon_client,
@@ -122,12 +129,18 @@ impl RunCache {
             log_file_path,
             daemon_client: self.daemon_client.clone(),
             ui: self.ui,
+            warnings: self.warnings.clone(),
         }
     }
 
     pub async fn shutdown_cache(
         &self,
     ) -> Result<(Arc<Mutex<UploadMap>>, oneshot::Receiver<()>), CacheError> {
+        if let Ok(warnings) = self.warnings.lock() {
+            for warning in warnings.iter().sorted() {
+                warn!("{}", warning);
+            }
+        }
         // Ignore errors coming from cache already shutting down
         self.cache.start_shutdown().await
     }
@@ -144,11 +157,16 @@ pub struct TaskCache {
     daemon_client: Option<DaemonClient<DaemonConnector>>,
     ui: ColorConfig,
     task_id: TaskId<'static>,
+    warnings: Arc<Mutex<Vec<String>>>,
 }
 
 impl TaskCache {
     pub fn output_logs(&self) -> OutputLogsMode {
         self.task_output_logs
+    }
+
+    pub fn is_caching_disabled(&self) -> bool {
+        self.caching_disabled
     }
 
     /// Will read log file and write to output a line at a time
@@ -178,18 +196,16 @@ impl TaskCache {
     pub fn output_writer<W: Write>(&self, writer: W) -> Result<LogWriter<W>, Error> {
         let mut log_writer = LogWriter::default();
 
-        if self.caching_disabled || self.run_cache.writes_disabled {
-            log_writer.with_writer(writer);
-            return Ok(log_writer);
-        }
-
+        // We always write a log file even if we do not cache it. This would
+        // allow users to "stream" specific logs from a single task if the TUI
+        // was being used.
         log_writer.with_log_file(&self.log_file_path)?;
 
-        if !matches!(
-            self.task_output_logs,
-            OutputLogsMode::None | OutputLogsMode::HashOnly | OutputLogsMode::ErrorsOnly
-        ) {
-            log_writer.with_writer(writer);
+        match self.task_output_logs {
+            OutputLogsMode::None | OutputLogsMode::HashOnly | OutputLogsMode::ErrorsOnly => {}
+            OutputLogsMode::Full | OutputLogsMode::NewOnly => {
+                log_writer.with_writer(writer);
+            }
         }
 
         Ok(log_writer)
@@ -360,6 +376,18 @@ impl TaskCache {
             globwalk::WalkType::All,
         )?;
 
+        // If we're only caching the log output, *and* output globs are not empty,
+        // we should warn the user
+        if files_to_be_cached.len() == 1 && !self.repo_relative_globs.is_empty() {
+            let _ = self.warnings.lock().map(|mut warnings| {
+                warnings.push(format!(
+                    "no output files found for task {}. Please check your `outputs` key in \
+                     `turbo.json`",
+                    self.task_id
+                ))
+            });
+        }
+
         let mut relative_paths = files_to_be_cached
             .into_iter()
             .map(|path| {
@@ -479,11 +507,11 @@ impl ConfigCache {
 
         // empty inputs to get all files
         let inputs: Vec<String> = vec![];
-        let hash_object = match scm.get_package_file_hashes(repo_root, anchored_root, &inputs, None)
-        {
-            Ok(hash_object) => hash_object,
-            Err(_) => return Err(CacheError::ConfigCacheError),
-        };
+        let hash_object =
+            match scm.get_package_file_hashes(repo_root, anchored_root, &inputs, false, None) {
+                Ok(hash_object) => hash_object,
+                Err(_) => return Err(CacheError::ConfigCacheError),
+            };
 
         // return the hash
         Ok(FileHashes(hash_object).hash())

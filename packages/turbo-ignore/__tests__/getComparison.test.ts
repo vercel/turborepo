@@ -1,6 +1,7 @@
 // eslint-disable-next-line camelcase -- This is a test file
 import child_process from "node:child_process";
 import { spyConsole, mockEnv, validateLogs } from "@turbo/test-utils";
+import { describe, it, expect, jest } from "@jest/globals";
 import { getComparison } from "../src/getComparison";
 
 describe("getComparison()", () => {
@@ -9,37 +10,38 @@ describe("getComparison()", () => {
   it("uses headRelative comparison when not running Vercel CI", () => {
     expect(getComparison({ workspace: "test-workspace" }))
       .toMatchInlineSnapshot(`
-        Object {
-          "ref": "HEAD^",
-          "type": "headRelative",
-        }
-      `);
+      {
+        "ref": "HEAD^",
+        "type": "headRelative",
+      }
+    `);
     expect(mockConsole.log).toHaveBeenCalledTimes(0);
   });
 
   it("uses fallback comparison if provided when not running Vercel CI", () => {
     expect(getComparison({ workspace: "test-workspace", fallback: "HEAD^2" }))
       .toMatchInlineSnapshot(`
-        Object {
-          "ref": "HEAD^2",
-          "type": "customFallback",
-        }
-      `);
-    validateLogs(["Falling back to ref HEAD^2"], mockConsole.log, {
-      prefix: "≫  ",
-    });
+      {
+        "ref": "HEAD^2",
+        "type": "customFallback",
+      }
+    `);
+    expect(mockConsole.log).toHaveBeenNthCalledWith(
+      1,
+      "≫  ",
+      "Falling back to ref HEAD^2"
+    );
   });
 
   it("returns null when running in Vercel CI with no VERCEL_GIT_PREVIOUS_SHA", () => {
     process.env.VERCEL = "1";
     process.env.VERCEL_GIT_COMMIT_REF = "my-branch";
     expect(getComparison({ workspace: "test-workspace" })).toBeNull();
-    validateLogs(
-      [
-        'No previous deployments found for "test-workspace" on branch "my-branch"',
-      ],
-      mockConsole.log,
-      { prefix: "≫  " }
+
+    expect(mockConsole.log).toHaveBeenNthCalledWith(
+      1,
+      "≫  ",
+      'No previous deployments found for "test-workspace" on branch "my-branch"'
     );
   });
 
@@ -48,40 +50,35 @@ describe("getComparison()", () => {
     process.env.VERCEL_GIT_COMMIT_REF = "my-branch";
     expect(getComparison({ workspace: "test-workspace", fallback: "HEAD^2" }))
       .toMatchInlineSnapshot(`
-        Object {
-          "ref": "HEAD^2",
-          "type": "customFallback",
-        }
-      `);
+      {
+        "ref": "HEAD^2",
+        "type": "customFallback",
+      }
+    `);
 
-    validateLogs(
+    validateLogs(mockConsole.log, [
       [
+        "≫  ",
         'No previous deployments found for "test-workspace" on branch "my-branch"',
-        "Falling back to ref HEAD^2",
       ],
-      mockConsole.log,
-      { prefix: "≫  " }
-    );
+      ["≫  ", "Falling back to ref HEAD^2"],
+    ]);
   });
 
   it("modifies output when running in Vercel CI with no VERCEL_GIT_PREVIOUS_SHA and no VERCEL_GIT_COMMIT_REF", () => {
     process.env.VERCEL = "1";
     expect(getComparison({ workspace: "test-workspace", fallback: "HEAD^2" }))
       .toMatchInlineSnapshot(`
-        Object {
-          "ref": "HEAD^2",
-          "type": "customFallback",
-        }
-      `);
+      {
+        "ref": "HEAD^2",
+        "type": "customFallback",
+      }
+    `);
 
-    validateLogs(
-      [
-        'No previous deployments found for "test-workspace"',
-        "Falling back to ref HEAD^2",
-      ],
-      mockConsole.log,
-      { prefix: "≫  " }
-    );
+    validateLogs(mockConsole.log, [
+      ["≫  ", 'No previous deployments found for "test-workspace"'],
+      ["≫  ", "Falling back to ref HEAD^2"],
+    ]);
   });
 
   it("uses previousDeploy when running in Vercel CI with VERCEL_GIT_PREVIOUS_SHA", () => {
@@ -94,18 +91,16 @@ describe("getComparison()", () => {
     process.env.VERCEL_GIT_COMMIT_REF = "my-branch";
     expect(getComparison({ workspace: "test-workspace" }))
       .toMatchInlineSnapshot(`
-        Object {
-          "ref": "mygitsha",
-          "type": "previousDeploy",
-        }
-      `);
+      {
+        "ref": "mygitsha",
+        "type": "previousDeploy",
+      }
+    `);
 
-    validateLogs(
-      [
-        'Found previous deployment ("mygitsha") for "test-workspace" on branch "my-branch"',
-      ],
-      mockConsole.log,
-      { prefix: "≫  " }
+    expect(mockConsole.log).toHaveBeenNthCalledWith(
+      1,
+      "≫  ",
+      'Found previous deployment ("mygitsha") for "test-workspace" on branch "my-branch"'
     );
 
     mockExec.mockRestore();
@@ -123,20 +118,19 @@ describe("getComparison()", () => {
     process.env.VERCEL_GIT_COMMIT_REF = "my-branch";
     expect(getComparison({ workspace: "test-workspace", fallback: "HEAD^2" }))
       .toMatchInlineSnapshot(`
-        Object {
-          "ref": "HEAD^2",
-          "type": "customFallback",
-        }
-      `);
+      {
+        "ref": "HEAD^2",
+        "type": "customFallback",
+      }
+    `);
 
-    validateLogs(
+    validateLogs(mockConsole.log, [
       [
+        "≫  ",
         'Previous deployment ("mygitsha") for "test-workspace" on branch "my-branch" is unreachable.',
-        "Falling back to ref HEAD^2",
       ],
-      mockConsole.log,
-      { prefix: "≫  " }
-    );
+      ["≫  ", "Falling back to ref HEAD^2"],
+    ]);
 
     mockExec.mockRestore();
   });
@@ -153,12 +147,10 @@ describe("getComparison()", () => {
     process.env.VERCEL_GIT_COMMIT_REF = "my-branch";
     expect(getComparison({ workspace: "test-workspace" })).toBeNull();
 
-    validateLogs(
-      [
-        'Previous deployment ("mygitsha") for "test-workspace" on branch "my-branch" is unreachable.',
-      ],
-      mockConsole.log,
-      { prefix: "≫  " }
+    expect(mockConsole.log).toHaveBeenNthCalledWith(
+      1,
+      "≫  ",
+      'Previous deployment ("mygitsha") for "test-workspace" on branch "my-branch" is unreachable.'
     );
 
     mockExec.mockRestore();
@@ -173,16 +165,16 @@ describe("getComparison()", () => {
     process.env.VERCEL_GIT_PREVIOUS_SHA = "mygitsha";
     expect(getComparison({ workspace: "test-workspace" }))
       .toMatchInlineSnapshot(`
-        Object {
-          "ref": "mygitsha",
-          "type": "previousDeploy",
-        }
-      `);
+      {
+        "ref": "mygitsha",
+        "type": "previousDeploy",
+      }
+    `);
 
-    validateLogs(
-      ['Found previous deployment ("mygitsha") for "test-workspace"'],
-      mockConsole.log,
-      { prefix: "≫  " }
+    expect(mockConsole.log).toHaveBeenNthCalledWith(
+      1,
+      "≫  ",
+      'Found previous deployment ("mygitsha") for "test-workspace"'
     );
 
     mockExec.mockRestore();
@@ -199,10 +191,10 @@ describe("getComparison()", () => {
     process.env.VERCEL_GIT_PREVIOUS_SHA = "mygitsha";
     expect(getComparison({ workspace: "test-workspace" })).toBeNull();
 
-    validateLogs(
-      ['Previous deployment ("mygitsha") for "test-workspace" is unreachable.'],
-      mockConsole.log,
-      { prefix: "≫  " }
+    expect(mockConsole.log).toHaveBeenNthCalledWith(
+      1,
+      "≫  ",
+      'Previous deployment ("mygitsha") for "test-workspace" is unreachable.'
     );
 
     mockExec.mockRestore();

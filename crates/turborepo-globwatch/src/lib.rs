@@ -18,7 +18,6 @@
     unused_must_use,
     unsafe_code
 )]
-#![feature(extract_if)]
 
 use std::{
     collections::HashMap,
@@ -26,23 +25,23 @@ use std::{
     io,
     path::{Path, PathBuf},
     sync::{
-        atomic::{AtomicU64, Ordering},
         Arc, Mutex,
+        atomic::{AtomicU64, Ordering},
     },
 };
 
-use futures::{channel::oneshot, future::Either, FutureExt, Stream, StreamExt as _};
+use futures::{FutureExt, Stream, StreamExt as _, channel::oneshot, future::Either};
 use itertools::Itertools;
 use merge_streams::MergeStreams;
 pub use notify::{Event, Watcher};
-pub use stop_token::{stream::StreamExt, StopSource, StopToken, TimedOutError};
+pub use stop_token::{StopSource, StopToken, TimedOutError, stream::StreamExt};
 use thiserror::Error;
 use tokio::sync::{
     mpsc::{UnboundedReceiver, UnboundedSender},
     watch,
 };
 use tokio_stream::wrappers::UnboundedReceiverStream;
-use tracing::{error, event, span, trace, warn, Level};
+use tracing::{Level, error, event, span, trace, warn};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError};
 
 /// WatchError wraps errors produced by GlobWatcher
@@ -160,10 +159,10 @@ impl GlobWatcher {
         self,
         token: stop_token::StopToken,
     ) -> impl Stream<Item = Result<Result<Event, ConfigError>, TimedOutError>>
-           + Send
-           + Sync
-           + 'static
-           + Unpin {
+    + Send
+    + Sync
+    + 'static
+    + Unpin {
         let Self {
             setup_handle,
             flush_dir,
@@ -211,10 +210,10 @@ impl GlobWatcher {
                             Either::Left(mut e) => {
                                 // if we receive an event for a file in the flush dir, we need to
                                 // remove it from the events list, and send a signal to the flush
-                                // requestor. flushes should not be considered as events.
+                                // requester. flushes should not be considered as events.
                                 for flush_id in e
                                     .paths
-                                    .extract_if(|p| p.starts_with(flush_dir.as_path()))
+                                    .extract_if(.., |p| p.starts_with(flush_dir.as_path()))
                                     .filter_map(|p| {
                                         get_flush_id(
                                             p.strip_prefix(flush_dir.as_path())
@@ -228,7 +227,7 @@ impl GlobWatcher {
                                         .expect("only fails if holder panics")
                                         .remove(&flush_id)
                                     {
-                                        // if this fails, it just means the requestor has gone away
+                                        // if this fails, it just means the requester has gone away
                                         // and we can ignore it
                                         tx.send(()).ok();
                                     }
@@ -363,7 +362,7 @@ impl<T: Watcher> WatchConfig<T> {
         // we watch the parent directory instead.
         // More information at https://github.com/notify-rs/notify/issues/403
         #[cfg(windows)]
-        let watched_path = path.parent().expect("turbo is unusable at filesytem root");
+        let watched_path = path.parent().expect("turbo is unusable at filesystem root");
         #[cfg(not(windows))]
         let watched_path = path;
 
@@ -424,7 +423,7 @@ enum GlobSymbol<'a> {
     DoubleStar,
     Question,
     Negation,
-    PathSeperator,
+    PathSeparator,
 }
 
 /// Gets the minimum set of paths that can be watched for a given glob,
@@ -456,8 +455,8 @@ enum GlobSymbol<'a> {
 /// note: it is currently extremely conservative, handling only `**`, braces,
 /// and `?`. any other case watches the entire directory.
 fn glob_to_paths(glob: &str) -> Vec<PathBuf> {
-    // get all the symbols and chunk them by path seperator
-    let chunks = glob_to_symbols(glob).group_by(|s| s != &GlobSymbol::PathSeperator);
+    // get all the symbols and chunk them by path separator
+    let chunks = glob_to_symbols(glob).group_by(|s| s != &GlobSymbol::PathSeparator);
     let chunks = chunks
         .into_iter()
         .filter_map(|(not_sep, chunk)| (not_sep).then_some(chunk));
@@ -508,7 +507,7 @@ fn symbols_to_combinations<'a, T: Iterator<Item = GlobSymbol<'a>>>(
             GlobSymbol::DoubleStar => return None,
             GlobSymbol::Question => return None,
             GlobSymbol::Negation => return None,
-            GlobSymbol::PathSeperator => return None,
+            GlobSymbol::PathSeparator => return None,
         }
     }
 
@@ -518,64 +517,66 @@ fn symbols_to_combinations<'a, T: Iterator<Item = GlobSymbol<'a>>>(
 }
 
 /// parses and escapes a glob, returning an iterator over the symbols
-fn glob_to_symbols(glob: &str) -> impl Iterator<Item = GlobSymbol> {
+fn glob_to_symbols(glob: &str) -> impl Iterator<Item = GlobSymbol<'_>> {
     let glob_bytes = glob.as_bytes();
     let mut escaped = false;
     let mut cursor = unic_segment::GraphemeCursor::new(0, glob.len());
 
-    std::iter::from_fn(move || loop {
-        let start = cursor.cur_cursor();
-        if start == glob.len() {
-            return None;
-        }
+    std::iter::from_fn(move || {
+        loop {
+            let start = cursor.cur_cursor();
+            if start == glob.len() {
+                return None;
+            }
 
-        let end = match cursor.next_boundary(glob, 0) {
-            Ok(Some(end)) => end,
-            _ => return None,
-        };
+            let end = match cursor.next_boundary(glob, 0) {
+                Ok(Some(end)) => end,
+                _ => return None,
+            };
 
-        if escaped {
-            escaped = false;
+            if escaped {
+                escaped = false;
+                return if end - start == 1 {
+                    Some(GlobSymbol::Char(match glob_bytes[start] {
+                        b'a' => &[b'\x61'],
+                        b'b' => &[b'\x08'],
+                        b'n' => &[b'\n'],
+                        b'r' => &[b'\r'],
+                        b't' => &[b'\t'],
+                        _ => &glob_bytes[start..end],
+                    }))
+                } else {
+                    return Some(GlobSymbol::Char(&glob_bytes[start..end]));
+                };
+            }
+
             return if end - start == 1 {
-                Some(GlobSymbol::Char(match glob_bytes[start] {
-                    b'a' => &[b'\x61'],
-                    b'b' => &[b'\x08'],
-                    b'n' => &[b'\n'],
-                    b'r' => &[b'\r'],
-                    b't' => &[b'\t'],
-                    _ => &glob_bytes[start..end],
-                }))
+                match glob_bytes[start] {
+                    b'\\' => {
+                        escaped = true;
+                        continue;
+                    }
+                    b'[' => Some(GlobSymbol::OpenBracket),
+                    b']' => Some(GlobSymbol::CloseBracket),
+                    b'{' => Some(GlobSymbol::OpenBrace),
+                    b'}' => Some(GlobSymbol::CloseBrace),
+                    b'*' => {
+                        if glob_bytes.get(end) == Some(&b'*') {
+                            cursor.set_cursor(end + 1);
+                            Some(GlobSymbol::DoubleStar)
+                        } else {
+                            Some(GlobSymbol::Star)
+                        }
+                    }
+                    b'?' => Some(GlobSymbol::Question),
+                    b'!' => Some(GlobSymbol::Negation),
+                    b'/' => Some(GlobSymbol::PathSeparator),
+                    _ => Some(GlobSymbol::Char(&glob_bytes[start..end])),
+                }
             } else {
-                return Some(GlobSymbol::Char(&glob_bytes[start..end]));
+                Some(GlobSymbol::Char(&glob_bytes[start..end]))
             };
         }
-
-        return if end - start == 1 {
-            match glob_bytes[start] {
-                b'\\' => {
-                    escaped = true;
-                    continue;
-                }
-                b'[' => Some(GlobSymbol::OpenBracket),
-                b']' => Some(GlobSymbol::CloseBracket),
-                b'{' => Some(GlobSymbol::OpenBrace),
-                b'}' => Some(GlobSymbol::CloseBrace),
-                b'*' => {
-                    if glob_bytes.get(end) == Some(&b'*') {
-                        cursor.set_cursor(end + 1);
-                        Some(GlobSymbol::DoubleStar)
-                    } else {
-                        Some(GlobSymbol::Star)
-                    }
-                }
-                b'?' => Some(GlobSymbol::Question),
-                b'!' => Some(GlobSymbol::Negation),
-                b'/' => Some(GlobSymbol::PathSeperator),
-                _ => Some(GlobSymbol::Char(&glob_bytes[start..end])),
-            }
-        } else {
-            Some(GlobSymbol::Char(&glob_bytes[start..end]))
-        };
     })
 }
 
@@ -611,9 +612,9 @@ mod test {
         );
     }
 
-    #[test_case("🇳🇴/🇳🇴", vec![Char("🇳🇴".as_bytes()), PathSeperator, Char("🇳🇴".as_bytes())])]
-    #[test_case("foo/**", vec![Char(b"f"), Char(b"o"), Char(b"o"), PathSeperator, DoubleStar])]
-    #[test_case("foo/{a,b}", vec![Char(b"f"), Char(b"o"), Char(b"o"), PathSeperator, OpenBrace, Char(b"a"), Char(b","), Char(b"b"), CloseBrace])]
+    #[test_case("🇳🇴/🇳🇴", vec![Char("🇳🇴".as_bytes()), PathSeparator, Char("🇳🇴".as_bytes())])]
+    #[test_case("foo/**", vec![Char(b"f"), Char(b"o"), Char(b"o"), PathSeparator, DoubleStar])]
+    #[test_case("foo/{a,b}", vec![Char(b"f"), Char(b"o"), Char(b"o"), PathSeparator, OpenBrace, Char(b"a"), Char(b","), Char(b"b"), CloseBrace])]
     #[test_case("\\f", vec![Char(b"f")])]
     #[test_case("\\\\f", vec![Char(b"\\"), Char(b"f")])]
     #[test_case("\\🇳🇴", vec![Char("🇳🇴".as_bytes())])]

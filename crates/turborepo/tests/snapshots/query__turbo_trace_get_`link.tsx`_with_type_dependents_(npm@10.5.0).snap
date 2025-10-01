@@ -1,0 +1,20 @@
+---
+source: crates/turborepo/tests/query.rs
+expression: query_output
+---
+{
+  "data": {
+    "file": {
+      "path": "link.tsx",
+      "dependents": {
+        "files": {
+          "items": [
+            {
+              "path": "import_just_type.ts"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "name": "@repo/ui",
+  "version": "1.0.0",
+  "description": "This is solidJS UI library package.",
+  "type": "module",
+  "main": "index.ts",
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "lint": "eslint . --max-warnings 0"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@repo/eslint-config": "workspace:*",
+    "@repo/tailwind-config": "workspace:*",
+    "vite": "^6.2.0",
+    "vite-plugin-solid": "^2.11.6"
+  },
+  "dependencies": {
+    "@tailwindcss/vite": "^4.0.9",
+    "eslint": "^9.21.0",
+    "solid-js": "^1.9.5",
+    "tailwindcss": "^4.0.9",
+    "clsx": "^2.1.1",
+    "path": "^0.12.7",
+    "tailwind-merge": "^3.0.1",
+    "vite-tsconfig-paths": "^5.1.4"
+  }
+}

@@ -4,24 +4,21 @@ use miette::Diagnostic;
 use serde::Serialize;
 use thiserror::Error;
 use turbopath::AnchoredSystemPath;
-use turborepo_repository::{
-    package_graph::{PackageName, PackageNode},
-    package_manager::PackageManager,
-};
+use turborepo_repository::package_graph::{PackageName, PackageNode};
+use turborepo_signals::{listeners::get_signal, SignalHandler};
 use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_ui::{color, cprint, cprintln, ColorConfig, BOLD, BOLD_GREEN, GREY};
 
 use crate::{
     cli,
-    cli::{Command, ExecutionArgs, OutputFormat},
-    commands::{run::get_signal, CommandBase},
+    cli::OutputFormat,
+    commands::CommandBase,
     run::{builder::RunBuilder, Run},
-    signal::SignalHandler,
 };
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
-    #[error("package `{package}` not found")]
+    #[error("Package `{package}` not found.")]
     PackageNotFound { package: String },
 }
 
@@ -32,17 +29,17 @@ struct ItemsWithCount<T> {
 }
 
 #[derive(Clone, Serialize)]
-#[serde(into = "RepositoryDetailsDisplay<'a>")]
+#[serde(into = "RepositoryDetailsDisplay")]
 struct RepositoryDetails<'a> {
     color_config: ColorConfig,
-    package_manager: &'a PackageManager,
+    package_manager: &'static str,
     packages: Vec<(&'a PackageName, &'a AnchoredSystemPath)>,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct RepositoryDetailsDisplay<'a> {
-    package_manager: &'a PackageManager,
+struct RepositoryDetailsDisplay {
+    package_manager: &'static str,
     packages: ItemsWithCount<PackageDetailDisplay>,
 }
 
@@ -52,8 +49,8 @@ struct PackageDetailDisplay {
     path: String,
 }
 
-impl<'a> From<RepositoryDetails<'a>> for RepositoryDetailsDisplay<'a> {
-    fn from(val: RepositoryDetails<'a>) -> Self {
+impl<'a> From<RepositoryDetails<'a>> for RepositoryDetailsDisplay {
+    fn from(val: RepositoryDetails) -> Self {
         RepositoryDetailsDisplay {
             package_manager: val.package_manager,
             packages: ItemsWithCount {
@@ -82,9 +79,11 @@ struct PackageTask<'a> {
 struct PackageDetails<'a> {
     #[serde(skip)]
     color_config: ColorConfig,
+    path: &'a AnchoredSystemPath,
     name: &'a str,
     tasks: Vec<PackageTask<'a>>,
     dependencies: Vec<&'a str>,
+    dependents: Vec<&'a str>,
 }
 
 #[derive(Clone, Serialize)]
@@ -95,15 +94,19 @@ struct PackageDetailsList<'a> {
 #[derive(Serialize)]
 struct PackageDetailsDisplay<'a> {
     name: &'a str,
+    path: &'a AnchoredSystemPath,
     tasks: ItemsWithCount<PackageTask<'a>>,
     dependencies: Vec<&'a str>,
+    dependents: Vec<&'a str>,
 }
 
 impl<'a> From<PackageDetails<'a>> for PackageDetailsDisplay<'a> {
     fn from(val: PackageDetails<'a>) -> Self {
         PackageDetailsDisplay {
             name: val.name,
+            path: val.path,
             dependencies: val.dependencies,
+            dependents: val.dependents,
             tasks: ItemsWithCount {
                 count: val.tasks.len(),
                 items: val.tasks,
@@ -113,25 +116,13 @@ impl<'a> From<PackageDetails<'a>> for PackageDetailsDisplay<'a> {
 }
 
 pub async fn run(
-    mut base: CommandBase,
+    base: CommandBase,
     packages: Vec<String>,
     telemetry: CommandEventBuilder,
-    filter: Vec<String>,
-    affected: bool,
     output: Option<OutputFormat>,
 ) -> Result<(), cli::Error> {
     let signal = get_signal()?;
     let handler = SignalHandler::new(signal);
-
-    // We fake a run command, so we can construct a `Run` type
-    base.args_mut().command = Some(Command::Run {
-        run_args: Box::default(),
-        execution_args: Box::new(ExecutionArgs {
-            filter,
-            affected,
-            ..Default::default()
-        }),
-    });
 
     let run_builder = RunBuilder::new(base)?;
     let run = run_builder.build(&handler, telemetry).await?;
@@ -186,7 +177,7 @@ impl<'a> RepositoryDetails<'a> {
 
         Self {
             color_config,
-            package_manager: package_graph.package_manager(),
+            package_manager: package_graph.package_manager().name(),
             packages,
         }
     }
@@ -207,13 +198,13 @@ impl<'a> RepositoryDetails<'a> {
         cprintln!(self.color_config, GREY, "({})\n", self.package_manager);
 
         for (package_name, entry) in &self.packages {
-            println!("  {} {}", package_name, GREY.apply_to(entry));
+            println!("  {package_name} {}", GREY.apply_to(entry));
         }
     }
 
     fn json_print(&self) -> Result<(), cli::Error> {
         let as_json = serde_json::to_string_pretty(&self)?;
-        println!("{}", as_json);
+        println!("{as_json}");
         Ok(())
     }
 
@@ -247,6 +238,12 @@ impl<'a> PackageDetails<'a> {
             })?;
 
         let transitive_dependencies = package_graph.transitive_closure(Some(&package_node));
+        let package_path = package_graph
+            .package_info(package_node.as_package_name())
+            .ok_or_else(|| Error::PackageNotFound {
+                package: package.to_string(),
+            })?
+            .package_path();
 
         let mut package_dep_names: Vec<&str> = transitive_dependencies
             .into_iter()
@@ -258,10 +255,23 @@ impl<'a> PackageDetails<'a> {
             .collect();
         package_dep_names.sort();
 
+        let mut package_rdep_names: Vec<&str> = package_graph
+            .ancestors(&package_node)
+            .into_iter()
+            .filter_map(|dependent| match dependent {
+                PackageNode::Root | PackageNode::Workspace(PackageName::Root) => None,
+                PackageNode::Workspace(PackageName::Other(dep_name)) if dep_name == package => None,
+                PackageNode::Workspace(PackageName::Other(dep_name)) => Some(dep_name.as_str()),
+            })
+            .collect();
+        package_rdep_names.sort();
+
         Ok(Self {
             color_config,
+            path: package_path,
             name: package,
             dependencies: package_dep_names,
+            dependents: package_rdep_names,
             tasks: package_json
                 .scripts
                 .iter()
@@ -278,6 +288,8 @@ impl<'a> PackageDetails<'a> {
         } else {
             self.dependencies.join(", ")
         };
+
+        cprintln!(self.color_config, GREY, "{} ", self.path);
         println!(
             "{} {}: {}",
             name,

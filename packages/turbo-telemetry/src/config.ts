@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, rmSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { logger } from "@turbo/utils";
-import { gray } from "picocolors";
+import picocolors from "picocolors";
 import { z } from "zod";
 import utils from "./utils";
 
@@ -167,7 +167,7 @@ export class TelemetryConfig {
       logger.grey(
         "You can learn more, including how to opt-out if you'd not like to participate in this anonymous program, by visiting the following URL:"
       );
-      logger.underline(gray("https://turbo.build/repo/docs/telemetry"));
+      logger.underline(picocolors.gray("https://turborepo.com/docs/telemetry"));
     }
 
     this.alertShown();

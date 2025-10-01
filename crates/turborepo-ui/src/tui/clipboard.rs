@@ -36,10 +36,10 @@ fn detect_copy_provider() -> Provider {
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
 fn detect_copy_provider() -> Provider {
     // Wayland
-    if std::env::var("WAYLAND_DISPLAY").is_ok() {
-        if let Some(provider) = check_prog("wl-copy", &["--type", "text/plain"]) {
-            return provider;
-        }
+    if std::env::var("WAYLAND_DISPLAY").is_ok()
+        && let Some(provider) = check_prog("wl-copy", &["--type", "text/plain"])
+    {
+        return provider;
     }
     // X11
     if std::env::var("DISPLAY").is_ok() {
@@ -55,10 +55,10 @@ fn detect_copy_provider() -> Provider {
         return provider;
     }
     // Tmux
-    if std::env::var("TMUX").is_ok() {
-        if let Some(provider) = check_prog("tmux", &["load-buffer", "-"]) {
-            return provider;
-        }
+    if std::env::var("TMUX").is_ok()
+        && let Some(provider) = check_prog("tmux", &["load-buffer", "-"])
+    {
+        return provider;
     }
 
     Provider::OSC52
@@ -93,8 +93,13 @@ fn copy_impl(s: &str, provider: &Provider) -> std::io::Result<()> {
                 .stderr(Stdio::null())
                 .spawn()
                 .unwrap();
-            std::io::Write::write_all(&mut child.stdin.as_ref().unwrap(), s.as_bytes())?;
-            child.wait()?;
+            // Do not exit early if we fail to write to the clipboard, make sure we attempt
+            // to wait on the clipboard to exit to avoid a zombie process.
+            let write_result =
+                std::io::Write::write_all(&mut child.stdin.as_ref().unwrap(), s.as_bytes());
+            let wait_result = child.wait();
+            write_result?;
+            wait_result?;
         }
 
         #[cfg(windows)]

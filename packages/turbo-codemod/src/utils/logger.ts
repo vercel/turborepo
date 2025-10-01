@@ -1,4 +1,4 @@
-import { green, dim, bold, red, yellow, gray } from "picocolors";
+import picocolors from "picocolors";
 import type { UtilityArgs } from "../types";
 
 export class Logger {
@@ -16,18 +16,38 @@ export class Logger {
   }
 
   modified(...args: Array<unknown>) {
-    this._log(green(` MODIFIED `), ...args, this.dry ? dim(`(dry run)`) : "");
+    this._log(
+      picocolors.green(" MODIFIED "),
+      ...args,
+      this.dry ? picocolors.dim("(dry run)") : ""
+    );
   }
   unchanged(...args: Array<unknown>) {
-    this._log(gray(` UNCHANGED `), ...args, this.dry ? dim(`(dry run)`) : "");
+    this._log(
+      picocolors.gray(" UNCHANGED "),
+      ...args,
+      this.dry ? picocolors.dim("(dry run)") : ""
+    );
   }
   skipped(...args: Array<unknown>) {
-    this._log(yellow(` SKIPPED `), ...args, this.dry ? dim(`(dry run)`) : "");
+    this._log(
+      picocolors.yellow(" SKIPPED "),
+      ...args,
+      this.dry ? picocolors.dim("(dry run)") : ""
+    );
   }
   error(...args: Array<unknown>) {
-    this._log(red(` ERROR `), ...args, this.dry ? dim(`(dry run)`) : "");
+    this._log(
+      picocolors.red(" ERROR "),
+      ...args,
+      this.dry ? picocolors.dim("(dry run)") : ""
+    );
   }
   info(...args: Array<unknown>) {
-    this._log(bold(` INFO `), ...args, this.dry ? dim(`(dry run)`) : "");
+    this._log(
+      picocolors.bold(" INFO "),
+      ...args,
+      this.dry ? picocolors.dim("(dry run)") : ""
+    );
   }
 }

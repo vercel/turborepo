@@ -55,5 +55,19 @@ export class Workspace {
    * of strings relative to the monorepo root and use the current system's
    * path separator.
    */
-  affectedPackages(files: Array<string>): Promise<Array<Package>>;
+  affectedPackages(
+    files: Array<string>,
+    base?: string | undefined | null,
+    optimizeGlobalInvalidations?: boolean | undefined | null
+  ): Promise<Array<Package>>;
+  /**
+   * Given a path (relative to the workspace root), returns the
+   * package that contains it.
+   *
+   * This is a naive implementation that simply "iterates-up". If this function is
+   * expected to be called many times for files that are deep within the same
+   * package, we could optimize this by caching the containing-package of
+   * every ancestor.
+   */
+  findPackageByPath(path: string): Promise<Package>;
 }

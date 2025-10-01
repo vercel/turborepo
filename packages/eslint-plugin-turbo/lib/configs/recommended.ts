@@ -1,3 +1,4 @@
+import type { Linter } from "eslint";
 import { RULES } from "../constants";
 import { Project } from "../utils/calculate-inputs";
 
@@ -16,6 +17,6 @@ const config = {
   rules: {
     [`turbo/${RULES.noUndeclaredEnvVars}`]: "error",
   },
-};
+} satisfies Linter.Config;
 
 export default config;

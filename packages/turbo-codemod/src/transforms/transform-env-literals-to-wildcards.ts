@@ -1,11 +1,12 @@
 import path from "node:path";
-import { readJsonSync, existsSync } from "fs-extra";
+import fs from "fs-extra";
 import { type PackageJson, getTurboConfigs } from "@turbo/utils";
 import type { RootSchemaV1, SchemaV1, EnvWildcard } from "@turbo/types";
 import type { Transformer, TransformerArgs } from "../types";
 import { getTransformerHelpers } from "../utils/getTransformerHelpers";
 import type { TransformerResults } from "../runner";
 import { loadTurboJson } from "../utils/loadTurboJson";
+import { isPipelineKeyMissing } from "../utils/is-pipeline-key-missing";
 
 // transformer details
 const TRANSFORMER = "transform-env-literals-to-wildcards";
@@ -27,7 +28,11 @@ function transformEnvVarName(envVarName: string): EnvWildcard {
   return output;
 }
 
-function migrateRootConfig(config: RootSchemaV1) {
+export function migrateRootConfig(config: RootSchemaV1) {
+  if (isPipelineKeyMissing(config)) {
+    return config;
+  }
+
   const { globalEnv, globalPassThroughEnv } = config;
 
   if (Array.isArray(globalEnv)) {
@@ -40,7 +45,11 @@ function migrateRootConfig(config: RootSchemaV1) {
   return migrateTaskConfigs(config);
 }
 
-function migrateTaskConfigs(config: SchemaV1) {
+export function migrateTaskConfigs(config: SchemaV1) {
+  if (isPipelineKeyMissing(config)) {
+    return config;
+  }
+
   for (const [_, taskDef] of Object.entries(config.pipeline)) {
     const { env, passThroughEnv } = taskDef;
 
@@ -71,7 +80,7 @@ export function transformer({
   let packageJSON = {};
 
   try {
-    packageJSON = readJsonSync(packageJsonPath) as PackageJson;
+    packageJSON = fs.readJsonSync(packageJsonPath) as PackageJson;
   } catch (e) {
     // readJSONSync probably failed because the file doesn't exist
   }
@@ -85,7 +94,7 @@ export function transformer({
 
   log.info("Rewriting env vars to support wildcards");
   const turboConfigPath = path.join(root, "turbo.json");
-  if (!existsSync(turboConfigPath)) {
+  if (!fs.existsSync(turboConfigPath)) {
     return runner.abortTransform({
       reason: `No turbo.json found at ${root}. Is the path correct?`,
     });

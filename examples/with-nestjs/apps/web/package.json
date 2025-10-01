@@ -1,37 +1,28 @@
 {
   "name": "web",
-  "version": "0.0.0",
+  "version": "0.1.0",
+  "type": "module",
   "private": true,
   "scripts": {
-    "dev": "next dev --port 3001",
+    "dev": "next dev --turbopack --port 3001",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint . --max-warnings 0",
-    "test": "jest",
-    "test:watch": "jest --watch",
-    "test:e2e": "playwright test"
+    "lint": "next lint --max-warnings 0",
+    "check-types": "tsc --noEmit"
   },
   "dependencies": {
     "@repo/ui": "workspace:*",
-    "next": "^14.1.1",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "next": "^15.4.2",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
   },
   "devDependencies": {
-    "@next/eslint-plugin-next": "^14.1.1",
-    "@playwright/test": "^1.44.0",
-    "@repo/api": "workspace:*",
     "@repo/eslint-config": "workspace:*",
-    "@repo/jest-config": "workspace:*",
     "@repo/typescript-config": "workspace:*",
-    "@testing-library/jest-dom": "^6.4.5",
-    "@testing-library/react": "^15.0.7",
-    "@types/jest": "^29.5.2",
-    "@types/node": "^20.11.24",
-    "@types/react": "^18.2.61",
-    "@types/react-dom": "^18.2.19",
-    "jest": "^29.5.0",
-    "jest-environment-jsdom": "^29.7.0",
-    "typescript": "^5.3.3"
+    "@types/node": "^22.15.3",
+    "@types/react": "19.1.0",
+    "@types/react-dom": "19.1.1",
+    "eslint": "^9.31.0",
+    "typescript": "5.8.2"
   }
 }

@@ -1,5 +1,6 @@
 import { setupTestFixtures } from "@turbo/test-utils";
 import { type Schema } from "@turbo/types";
+import { describe, it, expect } from "@jest/globals";
 import { transformer } from "../src/transforms/migrate-dot-env";
 
 describe("migrate-dot-env", () => {
@@ -20,7 +21,7 @@ describe("migrate-dot-env", () => {
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turbo.build/schema.json",
+      $schema: "https://turborepo.com/schema.json",
       globalDependencies: [".env"],
       tasks: {
         "build-one": {
@@ -35,8 +36,8 @@ describe("migrate-dot-env", () => {
 
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toMatchInlineSnapshot(`
-      Object {
-        "turbo.json": Object {
+      {
+        "turbo.json": {
           "action": "modified",
           "additions": 3,
           "deletions": 3,
@@ -58,7 +59,7 @@ describe("migrate-dot-env", () => {
     });
 
     expect(readJson("turbo.json") || "{}").toStrictEqual({
-      $schema: "https://turbo.build/schema.json",
+      $schema: "https://turborepo.com/schema.json",
       tasks: {
         "build-one": {
           inputs: ["$TURBO_DEFAULT$", "build-one/.env"],
@@ -71,7 +72,7 @@ describe("migrate-dot-env", () => {
     });
 
     expect(readJson("apps/docs/turbo.json") || "{}").toStrictEqual({
-      $schema: "https://turbo.build/schema.json",
+      $schema: "https://turborepo.com/schema.json",
       extends: ["//"],
       tasks: {
         build: {},
@@ -79,7 +80,7 @@ describe("migrate-dot-env", () => {
     });
 
     expect(readJson("apps/web/turbo.json") || "{}").toStrictEqual({
-      $schema: "https://turbo.build/schema.json",
+      $schema: "https://turborepo.com/schema.json",
       extends: ["//"],
       tasks: {
         build: {
@@ -89,7 +90,7 @@ describe("migrate-dot-env", () => {
     });
 
     expect(readJson("packages/ui/turbo.json") || "{}").toStrictEqual({
-      $schema: "https://turbo.build/schema.json",
+      $schema: "https://turborepo.com/schema.json",
       extends: ["//"],
       tasks: {
         "build-three": {
@@ -100,23 +101,23 @@ describe("migrate-dot-env", () => {
 
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toMatchInlineSnapshot(`
-      Object {
-        "apps/docs/turbo.json": Object {
+      {
+        "apps/docs/turbo.json": {
           "action": "unchanged",
           "additions": 0,
           "deletions": 0,
         },
-        "apps/web/turbo.json": Object {
+        "apps/web/turbo.json": {
           "action": "modified",
           "additions": 1,
           "deletions": 0,
         },
-        "packages/ui/turbo.json": Object {
+        "packages/ui/turbo.json": {
           "action": "modified",
           "additions": 1,
           "deletions": 1,
         },
-        "turbo.json": Object {
+        "turbo.json": {
           "action": "modified",
           "additions": 2,
           "deletions": 2,
@@ -144,8 +145,8 @@ describe("migrate-dot-env", () => {
 
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toMatchInlineSnapshot(`
-      Object {
-        "turbo.json": Object {
+      {
+        "turbo.json": {
           "action": "skipped",
           "additions": 3,
           "deletions": 3,
@@ -167,7 +168,7 @@ describe("migrate-dot-env", () => {
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turbo.build/schema.json",
+      $schema: "https://turborepo.com/schema.json",
       globalDependencies: [".env"],
       tasks: {
         "build-one": {
@@ -182,8 +183,8 @@ describe("migrate-dot-env", () => {
 
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toMatchInlineSnapshot(`
-      Object {
-        "turbo.json": Object {
+      {
+        "turbo.json": {
           "action": "modified",
           "additions": 3,
           "deletions": 3,
@@ -211,8 +212,8 @@ describe("migrate-dot-env", () => {
 
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toMatchInlineSnapshot(`
-      Object {
-        "turbo.json": Object {
+      {
+        "turbo.json": {
           "action": "skipped",
           "additions": 3,
           "deletions": 3,
@@ -234,15 +235,15 @@ describe("migrate-dot-env", () => {
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turbo.build/schema.json",
+      $schema: "https://turborepo.com/schema.json",
       globalDependencies: ["$NEXT_PUBLIC_API_KEY", "$STRIPE_API_KEY", ".env"],
       tasks: {},
     });
 
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toMatchInlineSnapshot(`
-      Object {
-        "turbo.json": Object {
+      {
+        "turbo.json": {
           "action": "unchanged",
           "additions": 0,
           "deletions": 0,
@@ -264,7 +265,7 @@ describe("migrate-dot-env", () => {
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turbo.build/schema.json",
+      $schema: "https://turborepo.com/schema.json",
       tasks: {
         "build-one": {
           dependsOn: ["build-two"],
@@ -280,8 +281,8 @@ describe("migrate-dot-env", () => {
 
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toMatchInlineSnapshot(`
-      Object {
-        "turbo.json": Object {
+      {
+        "turbo.json": {
           "action": "unchanged",
           "additions": 0,
           "deletions": 0,

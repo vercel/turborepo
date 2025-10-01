@@ -1,8 +1,8 @@
 use std::{
     collections::{HashMap, HashSet},
     sync::{
-        atomic::{AtomicUsize, Ordering},
         Arc,
+        atomic::{AtomicUsize, Ordering},
     },
     time::Duration,
 };
@@ -17,16 +17,14 @@ use tokio::{
 use tracing::{debug, trace};
 use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf};
 use turborepo_repository::discovery::DiscoveryResponse;
-use turborepo_scm::{
-    package_deps::{GitHashes, INPUT_INCLUDE_DEFAULT_FILES},
-    Error as SCMError, SCM,
-};
+use turborepo_scm::{Error as SCMError, GitHashes, SCM};
 
 use crate::{
+    NotifyError, OptionalWatch,
     debouncer::Debouncer,
     globwatcher::{GlobError, GlobSet},
     package_watcher::DiscoveryData,
-    NotifyError, OptionalWatch,
+    scm_resource::SCMResource,
 };
 
 pub struct HashWatcher {
@@ -43,15 +41,15 @@ pub enum InputGlobs {
 }
 
 impl InputGlobs {
-    pub fn from_raw(mut raw: Vec<String>) -> Result<Self, GlobError> {
+    pub fn from_raw(raw: Vec<String>, include_default: bool) -> Result<Self, GlobError> {
         if raw.is_empty() {
-            Ok(Self::Default)
-        } else if let Some(default_pos) = raw.iter().position(|g| g == INPUT_INCLUDE_DEFAULT_FILES)
-        {
-            raw.remove(default_pos);
-            Ok(Self::DefaultWithExtras(GlobSet::from_raw_unfiltered(raw)?))
+            return Ok(Self::Default);
+        }
+        let glob_set = GlobSet::from_raw_unfiltered(raw)?;
+        if include_default {
+            Ok(Self::DefaultWithExtras(glob_set))
         } else {
-            Ok(Self::Specific(GlobSet::from_raw_unfiltered(raw)?))
+            Ok(Self::Specific(glob_set))
         }
     }
 
@@ -66,12 +64,16 @@ impl InputGlobs {
     fn as_inputs(&self) -> Vec<String> {
         match self {
             InputGlobs::Default => Vec::new(),
-            InputGlobs::DefaultWithExtras(glob_set) => {
-                let mut inputs = glob_set.as_inputs();
-                inputs.push(INPUT_INCLUDE_DEFAULT_FILES.to_string());
-                inputs
+            InputGlobs::DefaultWithExtras(glob_set) | InputGlobs::Specific(glob_set) => {
+                glob_set.as_inputs()
             }
-            InputGlobs::Specific(glob_set) => glob_set.as_inputs(),
+        }
+    }
+
+    pub fn include_default_files(&self) -> bool {
+        match self {
+            InputGlobs::Default | InputGlobs::DefaultWithExtras(..) => true,
+            InputGlobs::Specific(..) => false,
         }
     }
 }
@@ -90,13 +92,13 @@ impl HashSpec {
 
 #[derive(Error, Debug)]
 pub enum Error {
-    #[error("package hashing encountered an error: {0}")]
+    #[error("Package hashing encountered an error: {0}")]
     HashingError(String),
-    #[error("file hashing is not available: {0}")]
+    #[error("File hashing is not available: {0}")]
     Unavailable(String),
-    #[error("package not found: {} {:?}", .0.package_path, .0.inputs)]
+    #[error("Package not found: {} {:?}", .0.package_path, .0.inputs)]
     UnknownPackage(HashSpec),
-    #[error("unsupported: glob traverses out of the package")]
+    #[error("Unsupported: glob traverses out of the package")]
     UnsupportedGlob,
 }
 
@@ -155,7 +157,7 @@ struct Subscriber {
     repo_root: AbsoluteSystemPathBuf,
     package_discovery: watch::Receiver<Option<DiscoveryData>>,
     query_rx: mpsc::Receiver<Query>,
-    scm: SCM,
+    scm: SCMResource,
     next_version: AtomicUsize,
 }
 
@@ -327,7 +329,7 @@ impl Subscriber {
         Self {
             repo_root,
             package_discovery,
-            scm,
+            scm: SCMResource::new(scm),
             query_rx,
             next_version: AtomicUsize::new(0),
         }
@@ -488,24 +490,24 @@ impl Subscriber {
             // We need mutable access to 'state' to update it, as well as being able to
             // extract the pending state, so we need two separate if statements
             // to pull the value apart.
-            if let HashState::Pending(existing_version, _, pending_queries) = state {
-                if *existing_version == version {
-                    match result {
-                        Ok(hashes) => {
-                            for pending_query in pending_queries.drain(..) {
-                                // We don't care if the client has gone away
-                                let _ = pending_query.send(Ok(hashes.clone()));
-                            }
-                            *state = HashState::Hashes(hashes);
+            if let HashState::Pending(existing_version, _, pending_queries) = state
+                && *existing_version == version
+            {
+                match result {
+                    Ok(hashes) => {
+                        for pending_query in pending_queries.drain(..) {
+                            // We don't care if the client has gone away
+                            let _ = pending_query.send(Ok(hashes.clone()));
                         }
-                        Err(e) => {
-                            let error = e.to_string();
-                            for pending_query in pending_queries.drain(..) {
-                                // We don't care if the client has gone away
-                                let _ = pending_query.send(Err(Error::HashingError(error.clone())));
-                            }
-                            *state = HashState::Unavailable(error);
+                        *state = HashState::Hashes(hashes);
+                    }
+                    Err(e) => {
+                        let error = e.to_string();
+                        for pending_query in pending_queries.drain(..) {
+                            // We don't care if the client has gone away
+                            let _ = pending_query.send(Err(Error::HashingError(error.clone())));
                         }
+                        *state = HashState::Unavailable(error);
                     }
                 }
             }
@@ -532,12 +534,21 @@ impl Subscriber {
         let debouncer_copy = debouncer.clone();
         tokio::task::spawn(async move {
             debouncer_copy.debounce().await;
+            let scm_permit = scm.acquire_scm().await;
+            // We awkwardly copy the actual SCM instance since we're sending it to a
+            // different thread which requires it be 'static.
+            let scm_instance = scm_permit.clone();
             // Package hashing involves blocking IO calls, so run on a blocking thread.
-            tokio::task::spawn_blocking(move || {
+            let blocking_handle = tokio::task::spawn_blocking(move || {
                 let telemetry = None;
                 let inputs = spec.inputs.as_inputs();
-                let result =
-                    scm.get_package_file_hashes(&repo_root, &spec.package_path, &inputs, telemetry);
+                let result = scm_instance.get_package_file_hashes(
+                    &repo_root,
+                    &spec.package_path,
+                    &inputs,
+                    spec.inputs.include_default_files(),
+                    telemetry,
+                );
                 trace!("hashing complete for {:?}", spec);
                 let _ = tx.blocking_send(HashUpdate {
                     spec,
@@ -545,6 +556,10 @@ impl Subscriber {
                     result,
                 });
             });
+            // We wait for the git task to finish so `scm_permit` only gets dropped once the
+            // resource is no longer being used.
+            // We should not shut down if a SCM task panics
+            blocking_handle.await.ok();
         });
         (version, debouncer)
     }
@@ -674,19 +689,19 @@ mod tests {
     };
 
     use git2::Repository;
-    use tempfile::{tempdir, TempDir};
+    use tempfile::{TempDir, tempdir};
     use turbopath::{
         AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeUnixPathBuf,
     };
-    use turborepo_scm::{package_deps::GitHashes, SCM};
+    use turborepo_scm::{GitHashes, SCM};
 
     use super::{FileHashes, HashState};
     use crate::{
+        FileSystemWatcher,
         cookies::CookieWriter,
         globwatcher::GlobSet,
         hash_watcher::{HashSpec, HashWatcher, InputGlobs},
         package_watcher::PackageWatcher,
-        FileSystemWatcher,
     };
 
     fn commit_all(repo: &Repository) {
@@ -704,11 +719,7 @@ mod tests {
             &repo.signature().unwrap(),
             "Commit",
             &tree,
-            previous_commit
-                .as_ref()
-                .as_ref()
-                .map(std::slice::from_ref)
-                .unwrap_or_default(),
+            previous_commit.as_ref().as_slice(),
         )
         .unwrap();
     }
@@ -1027,10 +1038,7 @@ mod tests {
             }
             tokio::time::sleep(Duration::from_millis(200)).await;
         }
-        panic!(
-            "failed to get expected hashes. Error {:?}, last hashes: {:?}",
-            error, last_value
-        );
+        panic!("failed to get expected hashes. Error {error:?}, last hashes: {last_value:?}");
     }
 
     fn make_expected(expected: Vec<(&str, &str)>) -> GitHashes {

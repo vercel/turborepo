@@ -1,0 +1,27 @@
+[package]
+name = "turborepo-process"
+version = "0.1.0"
+edition = { workspace = true }
+license = "MIT"
+
+[dev-dependencies]
+test-case = { workspace = true }
+tracing-test = { version = "0.2.4", features = ["no-env-filter"] }
+
+[dependencies]
+atty = { workspace = true }
+console = { workspace = true }
+futures = { workspace = true }
+itertools = { workspace = true }
+libc = "0.2.140"
+nix = "0.26.2"
+portable-pty = "0.8.1"
+tokio = { workspace = true, features = ["full", "time"] }
+tracing.workspace = true
+turbopath = { workspace = true }
+
+[lints]
+workspace = true
+
+[target.'cfg(target_os = "windows")'.dev-dependencies]
+windows-sys = { version = "0.59", features = ["Win32_System_Threading"] }

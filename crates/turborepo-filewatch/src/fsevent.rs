@@ -34,8 +34,8 @@ use fs::core_foundation::Boolean;
 use fsevent_sys as fs;
 use fsevent_sys::core_foundation as cf;
 use notify::{
-    event::{CreateKind, DataChange, Flag, MetadataKind, ModifyKind, RemoveKind, RenameMode},
     Config, Error, Event, EventHandler, EventKind, RecursiveMode, Result, Watcher, WatcherKind,
+    event::{CreateKind, DataChange, Flag, MetadataKind, ModifyKind, RemoveKind, RenameMode},
 };
 
 //use crate::event::*;
@@ -277,9 +277,9 @@ extern "C" fn release_context(info: *const libc::c_void) {
     }
 }
 
-extern "C" {
+unsafe extern "C" {
     /// Indicates whether the run loop is waiting for an event.
-    fn CFRunLoopIsWaiting(runloop: cf::CFRunLoopRef) -> cf::Boolean;
+    safe fn CFRunLoopIsWaiting(runloop: cf::CFRunLoopRef) -> cf::Boolean;
 }
 
 // CoreFoundation false value
@@ -428,7 +428,7 @@ impl FsEventWatcher {
         // We need to associate the stream context with our callback in order to
         // propagate events to the rest of the system. This will be owned by the
         // stream, and will be freed when the stream is closed. This means we
-        // will leak the context if we panic before reacing
+        // will leak the context if we panic before reaching
         // `FSEventStreamRelease`.
         let stream_context_info = Box::into_raw(Box::new(StreamContextInfo {
             event_handler: self.event_handler.clone(),
@@ -515,10 +515,11 @@ impl FsEventWatcher {
 extern "C" fn callback(
     stream_ref: fs::FSEventStreamRef,
     info: *mut libc::c_void,
-    num_events: libc::size_t,                        // size_t numEvents
-    event_paths: *mut libc::c_void,                  // void *eventPaths
-    event_flags: *const fs::FSEventStreamEventFlags, // const FSEventStreamEventFlags eventFlags[]
-    event_ids: *const fs::FSEventStreamEventId,      // const FSEventStreamEventId eventIds[]
+    num_events: libc::size_t,       // size_t numEvents
+    event_paths: *mut libc::c_void, // void *eventPaths
+    event_flags: *const fs::FSEventStreamEventFlags, /* const FSEventStreamEventFlags
+                                     * eventFlags[] */
+    event_ids: *const fs::FSEventStreamEventId, // const FSEventStreamEventId eventIds[]
 ) {
     unsafe {
         callback_impl(
@@ -542,30 +543,30 @@ unsafe fn callback_impl(
 ) {
     let event_paths = event_paths as *const *const libc::c_char;
     let info = info as *const StreamContextInfo;
-    let event_handler = &(*info).event_handler;
+    let event_handler = unsafe { &(*info).event_handler };
 
     for p in 0..num_events {
-        let raw_path = CStr::from_ptr(*event_paths.add(p))
+        let raw_path = unsafe { CStr::from_ptr(*event_paths.add(p)) }
             .to_str()
             .expect("Invalid UTF8 string.");
-        let path = PathBuf::from(format!("/{}", raw_path));
+        let path = PathBuf::from(format!("/{raw_path}"));
 
-        let flag = *event_flags.add(p);
+        let flag = unsafe { *event_flags.add(p) };
         let flag = StreamFlags::from_bits(flag).unwrap_or_else(|| {
-            panic!("Unable to decode StreamFlags: {}", flag);
+            panic!("Unable to decode StreamFlags: {flag}");
         });
 
         let mut handle_event = false;
-        for (p, r) in &(*info).recursive_info {
+        for (p, r) in unsafe { &(*info).recursive_info } {
             if path.starts_with(p) {
                 if *r || &path == p {
                     handle_event = true;
                     break;
-                } else if let Some(parent_path) = path.parent() {
-                    if parent_path == p {
-                        handle_event = true;
-                        break;
-                    }
+                } else if let Some(parent_path) = path.parent()
+                    && parent_path == p
+                {
+                    handle_event = true;
+                    break;
                 }
             }
         }
@@ -601,7 +602,7 @@ impl Watcher for FsEventWatcher {
         let (tx, rx) = std::sync::mpsc::channel();
         self.configure_raw_mode(config, tx);
         rx.recv()
-            .map_err(|err| Error::generic(&format!("internal channel disconnect: {:?}", err)))?
+            .map_err(|err| Error::generic(&format!("internal channel disconnect: {err:?}")))?
     }
 
     fn kind() -> WatcherKind {

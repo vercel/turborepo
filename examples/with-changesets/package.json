@@ -1,20 +1,20 @@
 {
   "private": true,
   "scripts": {
-    "build": "turbo build",
-    "dev": "turbo dev",
-    "lint": "turbo lint",
-    "clean": "turbo clean && rm -rf node_modules",
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "clean": "turbo run clean && rm -rf node_modules",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "changeset": "changeset",
     "version-packages": "changeset version",
-    "release": "turbo build --filter=docs^... && changeset publish"
+    "release": "turbo run build --filter=@acme/docs^... && changeset publish"
   },
   "devDependencies": {
     "@changesets/cli": "^2.27.1",
     "eslint": "^8.57.0",
     "prettier": "^3.2.5",
-    "turbo": "^2.0.3"
+    "turbo": "^2.5.0"
   },
   "packageManager": "pnpm@8.15.6",
   "engines": {

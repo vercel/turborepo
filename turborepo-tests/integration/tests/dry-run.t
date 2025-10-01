@@ -27,7 +27,7 @@ Setup
     Engines Values                        = 
 
 # Part 3 are Tasks to Run, and we have to validate each task separately
-  $ cat tmp-3.txt | grep "my-app#build" -A 17
+  $ cat tmp-3.txt | grep "my-app#build" -A 18
   my-app#build
     Task                           = build\s* (re)
     Package                        = my-app\s* (re)
@@ -40,6 +40,7 @@ Setup
     Log File                       = apps(\/|\\)my-app(\/|\\)\.turbo(\/|\\)turbo-build\.log\s* (re)
     Dependencies                   =\s* (re)
     Dependents                     =\s* (re)
+    With                           =\s* (re)
     Inputs Files Considered        = 2\s* (re)
     Env Vars                       =\s* (re)
     Env Vars Values                =\s* (re)
@@ -47,7 +48,7 @@ Setup
     Passed Through Env Vars        =\s* (re)
     Passed Through Env Vars Values =\s* (re)
 
-  $ cat tmp-3.txt | grep "util#build" -A 17
+  $ cat tmp-3.txt | grep "util#build" -A 18
   util#build
     Task                           = build\s* (re)
     Package                        = util\s* (re)
@@ -60,6 +61,7 @@ Setup
     Log File                       = packages(\/|\\)util(\/|\\)\.turbo(\/|\\)turbo-build\.log\s* (re)
     Dependencies                   =\s* (re)
     Dependents                     =\s* (re)
+    With                           =\s* (re)
     Inputs Files Considered        = 1\s* (re)
     Env Vars                       = NODE_ENV\s* (re)
     Env Vars Values                =\s* (re)

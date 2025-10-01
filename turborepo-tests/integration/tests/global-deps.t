@@ -12,6 +12,7 @@ Run a build
   Cached:    0 cached, 1 total
     Time:\s*[\.0-9]+m?s  (re)
   
+   WARNING  no output files found for task my-app#build. Please check your `outputs` key in `turbo.json`
 
   $ echo "new text" > global_deps/foo.txt
   $ ${TURBO} build -F my-app --output-logs=hash-only
@@ -24,6 +25,7 @@ Run a build
   Cached:    0 cached, 1 total
     Time:\s*[\.0-9]+m?s  (re)
   
+   WARNING  no output files found for task my-app#build. Please check your `outputs` key in `turbo.json`
   $ echo "Submit a PR!" >> global_deps/CONTRIBUTING.md
   $ ${TURBO} build -F my-app --output-logs=hash-only
   \xe2\x80\xa2 Packages in scope: my-app (esc)

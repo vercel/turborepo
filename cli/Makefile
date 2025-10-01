@@ -5,7 +5,7 @@ CLI_DIR = $(shell pwd)
 
 # This only builds JS packages
 build:
-	cd $(CLI_DIR)/../ && turbo build \
+	cd $(CLI_DIR)/../ && turbo build copy-schema \
 		--filter=create-turbo \
 		--filter=@turbo/codemod \
 		--filter=turbo-ignore \
@@ -54,8 +54,7 @@ publish-turbo: build
 	npm config set --location=project "//registry.npmjs.org/:_authToken" $(NPM_TOKEN)
 
 	# Publishes the native npm modules.
-	# TODO: do this without goreleaser.
-	goreleaser release --rm-dist -f combined-shim.yml $(SKIP_PUBLISH)
+	turbo release-native -- $(SKIP_PUBLISH)
 
 	# Split packing from the publish step so that npm locates the correct .npmrc file.
 	cd $(CLI_DIR)/../packages/turbo && pnpm pack --pack-destination=$(CLI_DIR)/../

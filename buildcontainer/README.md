@@ -16,11 +16,11 @@ Should you wish to see working [examples](#examples) instead of reading
 
 ## Credits
 
-This project is rather cookbook combing various projects into one. Special to [osxcross](https://github.com/tpoechtrager/osxcross) for amazing cross-compile environment for OSX.
+This project is rather cookbook combining various projects into one. Special to [osxcross](https://github.com/tpoechtrager/osxcross) for amazing cross-compile environment for OSX.
 
 ## Docker
 
-Docker images are available on both [Github](https://ghcr.io/goreleaser/goreleaser-cross) and [Docker hub](https://hub.docker.com/r/goreleaser/goreleaser-cross).
+Docker images are available on both [GitHub](https://ghcr.io/goreleaser/goreleaser-cross) and [Docker hub](https://hub.docker.com/r/goreleaser/goreleaser-cross).
 
 Images from version v1.17.4 are multi-arch. Supported host are listed in the table below
 

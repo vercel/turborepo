@@ -10,15 +10,15 @@ use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 use turborepo_analytics::AnalyticsSender;
 use turborepo_api_client::{
-    analytics::{self, AnalyticsEvent},
     APIAuth, APIClient, CacheClient, Response,
+    analytics::{self, AnalyticsEvent},
 };
 
 use crate::{
+    CacheError, CacheHitMetadata, CacheOpts, CacheSource,
     cache_archive::{CacheReader, CacheWriter},
     signature_authentication::ArtifactSignatureAuthenticator,
     upload_progress::{UploadProgress, UploadProgressQuery},
-    CacheError, CacheHitMetadata, CacheOpts, CacheSource,
 };
 
 pub type UploadMap = HashMap<String, UploadProgressQuery<10, 100>>;
@@ -44,7 +44,7 @@ impl HTTPCache {
         let signer_verifier = if opts
             .remote_cache_opts
             .as_ref()
-            .map_or(false, |remote_cache_opts| remote_cache_opts.signature)
+            .is_some_and(|remote_cache_opts| remote_cache_opts.signature)
         {
             Some(ArtifactSignatureAuthenticator {
                 team_id: api_auth
@@ -105,11 +105,11 @@ impl HTTPCache {
 
         tracing::debug!("uploading {}", hash);
 
-        match self
-            .client
+        self.client
             .put_artifact(
                 hash,
                 progress,
+                bytes,
                 duration,
                 tag.as_deref(),
                 &self.api_auth.token,
@@ -117,19 +117,9 @@ impl HTTPCache {
                 self.api_auth.team_slug.as_deref(),
             )
             .await
-        {
-            Ok(_) => {
-                tracing::debug!("uploaded {}", hash);
-                Ok(())
-            }
-            Err(turborepo_api_client::Error::ReqwestError(e)) if e.is_timeout() => {
-                Err(CacheError::TimeoutError(hash.to_string()))
-            }
-            Err(turborepo_api_client::Error::ReqwestError(e)) if e.is_connect() => {
-                Err(CacheError::ConnectError)
-            }
-            Err(e) => Err(e.into()),
-        }
+            .map_err(|err| Self::convert_api_error(hash, err))?;
+        tracing::debug!("uploaded {}", hash);
+        Ok(())
     }
 
     #[tracing::instrument(skip_all)]
@@ -277,24 +267,40 @@ impl HTTPCache {
         let mut cache_reader = CacheReader::from_reader(body, true)?;
         cache_reader.restore(root)
     }
+
+    fn convert_api_error(hash: &str, err: turborepo_api_client::Error) -> CacheError {
+        match err {
+            turborepo_api_client::Error::ReqwestError(e) if e.is_timeout() => {
+                CacheError::TimeoutError(hash.to_string())
+            }
+            turborepo_api_client::Error::ReqwestError(e) if e.is_connect() => {
+                CacheError::ConnectError
+            }
+            turborepo_api_client::Error::UnknownStatus { code, .. } if code == "forbidden" => {
+                CacheError::ForbiddenRemoteCacheWrite
+            }
+            e => e.into(),
+        }
+    }
 }
 
 #[cfg(test)]
 mod test {
-    use std::time::Duration;
+    use std::{backtrace::Backtrace, time::Duration};
 
     use anyhow::Result;
     use futures::future::try_join_all;
+    use insta::assert_snapshot;
     use tempfile::tempdir;
     use turbopath::AbsoluteSystemPathBuf;
     use turborepo_analytics::start_analytics;
-    use turborepo_api_client::{analytics, APIClient};
+    use turborepo_api_client::{APIClient, analytics};
     use turborepo_vercel_api_mock::start_test_server;
 
     use crate::{
-        http::{APIAuth, HTTPCache},
-        test_cases::{get_test_cases, validate_analytics, TestCase},
         CacheOpts, CacheSource,
+        http::{APIAuth, HTTPCache},
+        test_cases::{TestCase, get_test_cases, validate_analytics},
     };
 
     #[tokio::test]
@@ -325,13 +331,18 @@ mod test {
         let duration = test_case.duration;
 
         let api_client = APIClient::new(
-            format!("http://localhost:{}", port),
+            format!("http://localhost:{port}"),
             Some(Duration::from_secs(200)),
             None,
             "2.0.0",
             true,
         )?;
-        let opts = CacheOpts::default();
+        let opts = CacheOpts {
+            cache_dir: ".turbo/cache".into(),
+            cache: Default::default(),
+            workers: 0,
+            remote_cache_opts: None,
+        };
         let api_auth = APIAuth {
             team_id: Some("my-team".to_string()),
             token: "my-token".to_string(),
@@ -379,5 +390,43 @@ mod test {
         analytics_handle.close_with_timeout().await;
 
         Ok(())
+    }
+
+    #[test]
+    fn test_forbidden_error() {
+        let err = HTTPCache::convert_api_error(
+            "hash",
+            turborepo_api_client::Error::UnknownStatus {
+                code: "forbidden".into(),
+                message: "Not authorized".into(),
+                backtrace: Backtrace::capture(),
+            },
+        );
+        assert_snapshot!(err.to_string(), @"Insufficient permissions to write to remote cache. Please verify that your role has write access for Remote Cache Artifact at https://vercel.com/docs/accounts/team-members-and-roles/access-roles/team-level-roles?resource=Remote+Cache+Artifact");
+    }
+
+    #[test]
+    fn test_unknown_status() {
+        let err = HTTPCache::convert_api_error(
+            "hash",
+            turborepo_api_client::Error::UnknownStatus {
+                code: "unknown".into(),
+                message: "Special message".into(),
+                backtrace: Backtrace::capture(),
+            },
+        );
+        assert_snapshot!(err.to_string(), @"failed to contact remote cache: Unknown status unknown: Special message");
+    }
+
+    #[test]
+    fn test_cache_disabled() {
+        let err = HTTPCache::convert_api_error(
+            "hash",
+            turborepo_api_client::Error::CacheDisabled {
+                status: turborepo_vercel_api::CachingStatus::Disabled,
+                message: "Cache disabled".into(),
+            },
+        );
+        assert_snapshot!(err.to_string(), @"failed to contact remote cache: Cache disabled");
     }
 }

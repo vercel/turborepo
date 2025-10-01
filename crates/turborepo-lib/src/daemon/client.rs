@@ -14,8 +14,8 @@ use super::{
     Paths,
 };
 use crate::{
-    daemon::{proto, proto::PackageChangeEvent},
-    globwatcher::HashGlobSetupError,
+    daemon::proto::{self, PackageChangeEvent},
+    task_graph::TaskInputs,
 };
 
 #[derive(Debug, Clone)]
@@ -163,13 +163,14 @@ impl<T> DaemonClient<T> {
     pub async fn get_file_hashes(
         &mut self,
         package_path: &AnchoredSystemPath,
-        inputs: &[String],
+        inputs: &TaskInputs,
     ) -> Result<GetFileHashesResponse, DaemonError> {
         let response = self
             .client
             .get_file_hashes(proto::GetFileHashesRequest {
                 package_path: package_path.to_string(),
-                input_globs: inputs.to_vec(),
+                input_globs: inputs.globs.to_vec(),
+                include_default: Some(inputs.default),
             })
             .await?
             .into_inner();
@@ -228,9 +229,6 @@ pub enum DaemonError {
     #[error("invalid timeout specified ({0})")]
     #[allow(dead_code)]
     InvalidTimeout(String),
-    /// The server is unable to start file watching.
-    #[error("unable to start file watching")]
-    SetupFileWatching(#[from] HashGlobSetupError),
 
     #[error("unable to display output: {0}")]
     DisplayError(#[from] serde_json::Error),

@@ -5,6 +5,7 @@ Setup
   $ rm -rf .turbo/runs
 
   $ ${TURBO} run build --summarize -- someargs > /dev/null # first run (should be cache miss)
+   WARNING  no output files found for task my-app#build. Please check your `outputs` key in `turbo.json`
 
 # HACK: Generated run summaries are named with a ksuid, which is a time-sorted ID. This _generally_ works
 # but we're seeing in this test that sometimes a summary file is not sorted (with /bin/ls) in the order we expect

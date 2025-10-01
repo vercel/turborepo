@@ -11,7 +11,7 @@ use tokio::{
 };
 use turbo_updater::check_for_updates;
 use turbopath::AbsoluteSystemPathBuf;
-use turborepo_scm::Git;
+use turborepo_scm::GitRepo;
 
 use crate::{
     commands::{
@@ -157,7 +157,7 @@ impl Diagnostic for GitDaemonDiagnostic {
                     // get the current setting
                     let stdout = Stdio::piped();
 
-                    let Ok(git_path) = Git::find_bin() else {
+                    let Ok(git_path) = GitRepo::find_bin() else {
                         return Err("git not found");
                     };
 
@@ -203,14 +203,13 @@ impl Diagnostic for GitDaemonDiagnostic {
 
                     if version.major == 2 && version.minor < 37 || version.major == 1 {
                         chan.not_applicable(format!(
-                            "Git version {} is too old, please upgrade to 2.37 or newer",
-                            version
+                            "Git version {version} is too old, please upgrade to 2.37 or newer"
                         ))
                         .await;
                         return;
                     } else {
                         chan.log_line(
-                            format!("Using supported Git version - {}", version).to_string(),
+                            format!("Using supported Git version - {version}").to_string(),
                         )
                         .await;
                     }
@@ -221,7 +220,7 @@ impl Diagnostic for GitDaemonDiagnostic {
                     if fsmonitor.trim() != "true" || untrackedcache.trim() != "true" {
                         chan.log_line("Git FS Monitor not configured".to_string())
                             .await;
-                        chan.log_line( "For more information, see https://turbo.build/repo/docs/reference/command-line-reference/scan#fs-monitor".to_string()).await;
+                        chan.log_line( "For more information, see https://turborepo.com/docs/reference/command-line-reference/scan#fs-monitor".to_string()).await;
                         let Some(resp) = chan
                             .request(
                                 "Configure it for this repo now?".to_string(),
@@ -264,7 +263,7 @@ impl Diagnostic for GitDaemonDiagnostic {
                                             .await;
                                     }
                                     Err(e) => {
-                                        chan.failed(format!("Failed to set git settings: {}", e))
+                                        chan.failed(format!("Failed to set git settings: {e}"))
                                             .await;
                                         return;
                                     }
@@ -287,8 +286,7 @@ impl Diagnostic for GitDaemonDiagnostic {
                 }
                 Ok(_) => unreachable!(), // the vec of futures has exactly 3 elements
                 Err(e) => {
-                    chan.failed(format!("Failed to get git version: {}", e))
-                        .await;
+                    chan.failed(format!("Failed to get git version: {e}")).await;
                     return;
                 }
             }
@@ -317,12 +315,13 @@ impl Diagnostic for DaemonDiagnostic {
                 can_kill_server: false,
                 can_start_server: true,
                 paths,
+                custom_turbo_json_path: None,
             };
 
             let mut client = match connector.connect().await {
                 Ok(client) => client,
                 Err(e) => {
-                    chan.failed(format!("Failed to connect to daemon: {}", e))
+                    chan.failed(format!("Failed to connect to daemon: {e}"))
                         .await;
                     return;
                 }
@@ -336,14 +335,14 @@ impl Diagnostic for DaemonDiagnostic {
                         .await;
                     let lock = pidlock::Pidlock::new(pid_path);
                     let pid = if let Ok(Some(owner)) = lock.get_owner() {
-                        format!(" (pid {})", owner)
+                        format!(" (pid {owner})")
                     } else {
                         "".to_string()
                     };
-                    chan.done(format!("Daemon is running{}", pid)).await;
+                    chan.done(format!("Daemon is running{pid}")).await;
                 }
                 Err(e) => {
-                    chan.failed(format!("Failed to get daemon status: {}", e))
+                    chan.failed(format!("Failed to get daemon status: {e}"))
                         .await;
                 }
             }
@@ -366,19 +365,18 @@ impl Diagnostic for LSPDiagnostic {
             let pidlock = pidlock::Pidlock::new(lsp_root);
             match pidlock.get_owner() {
                 Ok(Some(pid)) => {
-                    chan.done(format!("Turborepo Extension is running (pid {})", pid))
+                    chan.done(format!("Turborepo Extension is running (pid {pid})"))
                         .await;
                 }
                 Ok(None) => {
                     chan.log_line("Unable to find LSP instance".to_string())
                         .await;
-                    chan.log_line( "For more information, see https://turbo.build/repo/docs/reference/command-line-reference/scan#lsp".to_string()).await;
+                    chan.log_line( "For more information, see https://turborepo.com/docs/reference/command-line-reference/scan#lsp".to_string()).await;
                     chan.failed("Turborepo Extension is not running".to_string())
                         .await;
                 }
                 Err(e) => {
-                    chan.failed(format!("Failed to get LSP status: {}", e))
-                        .await;
+                    chan.failed(format!("Failed to get LSP status: {e}")).await;
                 }
             }
         });
@@ -403,15 +401,12 @@ impl Diagnostic for RemoteCacheDiagnostic {
         tokio::task::spawn(async move {
             chan.started("Remote Cache".to_string()).await;
 
-            let result = {
+            let (has_team_id, has_team_slug) = {
                 let base = base.lock().await;
-                base.config()
-                    .map(|c| (c.team_id().is_some(), c.team_slug().is_some()))
-            };
-
-            let Ok((has_team_id, has_team_slug)) = result else {
-                chan.failed("Malformed config file".to_string()).await;
-                return;
+                (
+                    base.opts().api_client_opts.team_id.is_some(),
+                    base.opts().api_client_opts.team_slug.is_some(),
+                )
             };
 
             chan.log_line("Checking credentials".to_string()).await;
@@ -429,7 +424,7 @@ impl Diagnostic for RemoteCacheDiagnostic {
                     return;
                 };
                 stopped.await.unwrap();
-                let link_res = link(&mut base, false, crate::cli::LinkTarget::RemoteCache).await;
+                let link_res = link(&mut base, None, false, false).await;
                 resume.send(()).unwrap();
                 link_res
             };
@@ -444,7 +439,7 @@ impl Diagnostic for RemoteCacheDiagnostic {
                         .await
                 }
                 Err(e) => {
-                    chan.failed(format!("Failed to link: {}", e)).await;
+                    chan.failed(format!("Failed to link: {e}")).await;
                 }
             }
         });
@@ -477,7 +472,7 @@ impl Diagnostic for UpdateDiagnostic {
 
             match version {
                 Ok(Ok(Some(version))) => {
-                    chan.log_line(format!("Turborepo {} is available", version).to_string())
+                    chan.log_line(format!("Turborepo {version} is available").to_string())
                         .await;
 
                     let Some(resp) = chan
@@ -535,7 +530,7 @@ impl Diagnostic for UpdateDiagnostic {
                     chan.done("Turborepo on latest version".to_string()).await
                 }
                 Ok(Err(message)) => {
-                    chan.failed(format!("Failed to check for updates: {}", message))
+                    chan.failed(format!("Failed to check for updates: {message}"))
                         .await;
                 }
                 Err(_) => {

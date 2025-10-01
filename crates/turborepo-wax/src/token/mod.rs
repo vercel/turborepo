@@ -7,24 +7,24 @@ use std::{
     collections::VecDeque,
     mem,
     ops::Deref,
-    path::{PathBuf, MAIN_SEPARATOR},
+    path::{MAIN_SEPARATOR, PathBuf},
     slice, str,
 };
 
 use itertools::Itertools as _;
 
 pub use crate::token::{
-    parse::{parse, Annotation, ParseError, ROOT_SEPARATOR_EXPRESSION},
+    parse::{Annotation, ParseError, ROOT_SEPARATOR_EXPRESSION, parse},
     variance::{
-        invariant_text_prefix, is_exhaustive, Boundedness, InvariantSize, InvariantText, Variance,
+        Boundedness, InvariantSize, InvariantText, Variance, invariant_text_prefix, is_exhaustive,
     },
 };
 use crate::{
+    PATHS_ARE_CASE_INSENSITIVE, StrExt as _,
     token::variance::{
         CompositeBreadth, CompositeDepth, ConjunctiveVariance, DisjunctiveVariance,
         IntoInvariantText, Invariance, UnitBreadth, UnitDepth, UnitVariance,
     },
-    StrExt as _, PATHS_ARE_CASE_INSENSITIVE,
 };
 
 pub trait TokenTree<'t>: Sized {
@@ -291,9 +291,7 @@ impl<'t, A> TokenKind<'t, A> {
 
     pub fn unroot(&mut self) -> bool {
         match self {
-            TokenKind::Wildcard(Wildcard::Tree { ref mut has_root }) => {
-                mem::replace(has_root, false)
-            }
+            TokenKind::Wildcard(Wildcard::Tree { has_root }) => mem::replace(has_root, false),
             _ => false,
         }
     }
@@ -355,12 +353,12 @@ impl<A> From<Wildcard> for TokenKind<'static, A> {
 impl<'i, 't, A> UnitBreadth for &'i TokenKind<'t, A> {
     fn unit_breadth(self) -> Boundedness {
         match self {
-            TokenKind::Alternative(ref alternative) => alternative.unit_breadth(),
-            TokenKind::Class(ref class) => class.unit_breadth(),
-            TokenKind::Literal(ref literal) => literal.unit_breadth(),
-            TokenKind::Repetition(ref repetition) => repetition.unit_breadth(),
-            TokenKind::Separator(ref separator) => separator.unit_breadth(),
-            TokenKind::Wildcard(ref wildcard) => wildcard.unit_breadth(),
+            TokenKind::Alternative(alternative) => alternative.unit_breadth(),
+            TokenKind::Class(class) => class.unit_breadth(),
+            TokenKind::Literal(literal) => literal.unit_breadth(),
+            TokenKind::Repetition(repetition) => repetition.unit_breadth(),
+            TokenKind::Separator(separator) => separator.unit_breadth(),
+            TokenKind::Wildcard(wildcard) => wildcard.unit_breadth(),
         }
     }
 }
@@ -368,12 +366,12 @@ impl<'i, 't, A> UnitBreadth for &'i TokenKind<'t, A> {
 impl<'i, 't, A> UnitDepth for &'i TokenKind<'t, A> {
     fn unit_depth(self) -> Boundedness {
         match self {
-            TokenKind::Alternative(ref alternative) => alternative.unit_depth(),
-            TokenKind::Class(ref class) => class.unit_depth(),
-            TokenKind::Literal(ref literal) => literal.unit_depth(),
-            TokenKind::Repetition(ref repetition) => repetition.unit_depth(),
-            TokenKind::Separator(ref separator) => separator.unit_depth(),
-            TokenKind::Wildcard(ref wildcard) => wildcard.unit_depth(),
+            TokenKind::Alternative(alternative) => alternative.unit_depth(),
+            TokenKind::Class(class) => class.unit_depth(),
+            TokenKind::Literal(literal) => literal.unit_depth(),
+            TokenKind::Repetition(repetition) => repetition.unit_depth(),
+            TokenKind::Separator(separator) => separator.unit_depth(),
+            TokenKind::Wildcard(wildcard) => wildcard.unit_depth(),
         }
     }
 }
@@ -387,11 +385,11 @@ where
 {
     fn unit_variance(self) -> Variance<T> {
         match self {
-            TokenKind::Alternative(ref alternative) => alternative.unit_variance(),
-            TokenKind::Class(ref class) => class.unit_variance(),
-            TokenKind::Literal(ref literal) => literal.unit_variance(),
-            TokenKind::Repetition(ref repetition) => repetition.unit_variance(),
-            TokenKind::Separator(ref separator) => separator.unit_variance(),
+            TokenKind::Alternative(alternative) => alternative.unit_variance(),
+            TokenKind::Class(class) => class.unit_variance(),
+            TokenKind::Literal(literal) => literal.unit_variance(),
+            TokenKind::Repetition(repetition) => repetition.unit_variance(),
+            TokenKind::Separator(separator) => separator.unit_variance(),
             TokenKind::Wildcard(_) => Variance::Variant(Boundedness::Open),
         }
     }
@@ -786,7 +784,7 @@ pub enum Position {
 impl Position {
     pub fn depth(&self) -> usize {
         match self {
-            Position::Conjunctive { ref depth } | Position::Disjunctive { ref depth, .. } => *depth,
+            Position::Conjunctive { depth } | Position::Disjunctive { depth, .. } => *depth,
         }
     }
 
@@ -885,7 +883,7 @@ where
     fn next(&mut self) -> Option<Self::Item> {
         if let Some((position, token)) = self.buffer.pop_front() {
             match token.kind() {
-                TokenKind::Alternative(ref alternative) => {
+                TokenKind::Alternative(alternative) => {
                     self.buffer
                         .extend(alternative.branches().iter().enumerate().flat_map(
                             |(branch, tokens)| {
@@ -895,7 +893,7 @@ where
                             },
                         ));
                 }
-                TokenKind::Repetition(ref repetition) => {
+                TokenKind::Repetition(repetition) => {
                     self.buffer.extend(
                         repetition
                             .tokens()
@@ -963,7 +961,7 @@ impl<'i, 't, A> Component<'i, 't, A> {
                         self.tokens()
                             .iter()
                             .map(|token| match token.kind() {
-                                TokenKind::Literal(ref literal) => literal,
+                                TokenKind::Literal(literal) => literal,
                                 _ => unreachable!(), // See predicate above.
                             })
                             .collect(),
@@ -1048,14 +1046,14 @@ where
                 .tokens()
                 .iter()
                 .filter_map(|token| match token.kind() {
-                    TokenKind::Alternative(ref alternative) => Some(
+                    TokenKind::Alternative(alternative) => Some(
                         alternative
                             .branches()
                             .iter()
                             .flat_map(literals)
                             .collect::<Vec<_>>(),
                     ),
-                    TokenKind::Repetition(ref repetition) => {
+                    TokenKind::Repetition(repetition) => {
                         Some(literals(repetition.tokens()).collect::<Vec<_>>())
                     }
                     _ => None,

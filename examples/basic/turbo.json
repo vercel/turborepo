@@ -1,5 +1,5 @@
 {
-  "$schema": "https://turbo.build/schema.json",
+  "$schema": "https://turborepo.com/schema.json",
   "ui": "tui",
   "tasks": {
     "build": {
@@ -9,6 +9,9 @@
     },
     "lint": {
       "dependsOn": ["^lint"]
+    },
+    "check-types": {
+      "dependsOn": ["^check-types"]
     },
     "dev": {
       "cache": false,

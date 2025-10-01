@@ -4,8 +4,8 @@ Setup
 
 Run without --root-turbo-json should fail
   $ ${TURBO} build
-    x Could not find turbo.json.
-    | Follow directions at https://turbo.build/repo/docs to create one
+    x Could not find turbo.json or turbo.jsonc.
+    | Follow directions at https://turborepo.com/docs to create one.
   
   [1]
 
@@ -25,6 +25,7 @@ Run with --root-turbo-json should use specified config
   Cached:    0 cached, 1 total
     Time:\s*[\.0-9]+m?s  (re)
   
+   WARNING  no output files found for task my-app#build. Please check your `outputs` key in `turbo.json`
 
 Run with TURBO_ROOT_TURBO_JSON should use specified config
   $ TURBO_ROOT_TURBO_JSON=turborepo.json ${TURBO} build --filter=my-app

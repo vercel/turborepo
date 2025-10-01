@@ -6,12 +6,7 @@ interface LinkProps extends AnchorHTMLAttributes<HTMLAnchorElement> {
   href: string;
 }
 
-export function Link({
-  children,
-  href,
-  newTab,
-  ...other
-}: LinkProps): JSX.Element {
+export function Link({ children, href, newTab, ...other }: LinkProps) {
   return (
     <a
       href={href}
