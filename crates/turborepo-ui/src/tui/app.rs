@@ -298,6 +298,11 @@ impl<W> App<W> {
     }
 
     pub fn enter_search(&mut self) -> Result<(), Error> {
+        // Ensure task list is visible when searching
+        if !self.preferences.is_task_list_visible() {
+            self.preferences.set_is_task_list_visible(Some(true));
+        }
+
         self.section_focus = LayoutSections::Search {
             previous_selection: self.active_task()?.to_string(),
             results: SearchResults::new(&self.tasks_by_status),
@@ -2030,6 +2035,40 @@ mod test {
         assert_eq!(app.active_task()?, initial_task);
         app.search_scroll(Direction::Up)?;
         assert_eq!(app.active_task()?, initial_task);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_search_shows_hidden_task_list() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let mut app: App<()> = App::new(
+            100,
+            100,
+            vec![
+                "app-a".to_string(),
+                "app-b".to_string(),
+                "pkg-a".to_string(),
+            ],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        );
+
+        // Hide the task list
+        app.preferences.set_is_task_list_visible(Some(false));
+        assert!(!app.preferences.is_task_list_visible());
+
+        // Enter search mode
+        app.enter_search()?;
+
+        // Task list should now be visible
+        assert!(
+            app.preferences.is_task_list_visible(),
+            "task list should be visible after entering search"
+        );
 
         Ok(())
     }
