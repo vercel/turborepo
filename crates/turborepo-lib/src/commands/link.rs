@@ -19,7 +19,7 @@ use thiserror::Error;
 use turborepo_api_client::{CacheClient, Client};
 #[cfg(not(test))]
 use turborepo_ui::CYAN;
-use turborepo_ui::{BOLD, DialoguerTheme, GREY};
+use turborepo_ui::{DialoguerTheme, BOLD, GREY};
 use turborepo_vercel_api::{CachingStatus, Team};
 
 use crate::{
@@ -395,10 +395,10 @@ mod test {
     use turborepo_vercel_api_mock::start_test_server;
 
     use crate::{
-        Args,
-        commands::{CommandBase, link},
+        commands::{link, CommandBase},
         config::TurborepoConfigBuilder,
         opts::Opts,
+        Args,
     };
 
     #[tokio::test]
