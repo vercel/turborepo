@@ -18,7 +18,7 @@ Vertical microfrontends are an architectural pattern where a web application is 
 
 Turborepo enhances microfrontend development with:
 
-- **Unified development experience**: Start all your microfrontends with a single command
+- **Unified development experience**: Use a single host (like `localhost:3000`) to develop many applications
 - **Automatic port assignment**: Each application gets a consistent, predictable port
 - **Task orchestration**: Dependencies between microfrontends are handled automatically
 - **Simplified code sharing**: Easily share UI components, utilities, and configurations across microfrontends
@@ -157,7 +157,7 @@ turbo dev --filter=docs
 With the microfrontends configuration, Turborepo will:
 
 1. Start each application on its designated port
-2. Handle dependencies between applications
+2. Handle routing between applications
 3. Provide a unified terminal UI for monitoring all applications
 
 ## Port management
@@ -204,7 +204,7 @@ An object where each key is an application identifier and the value contains:
 
 ### Child configurations
 
-Individual microfrontend packages can reference a parent configuration using a `partOf` field. This allows child applications to inherit configuration from the parent application.
+Individual microfrontend packages can declare they're membership of a parent microfrontend using a `partOf` field. In the configuration below, the `partOf` field explicitly makes the app in `./apps/docs` a child of the `web` application.
 
 ```json title="./apps/docs/microfrontends.json"
 {
