@@ -467,21 +467,18 @@ impl Lockfile for BunLockfile {
             return Ok(Some(deps));
         };
 
-        let optional_peers = &info.optional_peers;
         for (dependency, version) in info.all_dependencies() {
-            let parent_key = format!("{entry_key}/{dependency}");
-            let Some((_dep_key, dep_entry)) = self.package_entry(&parent_key) else {
-                // This is an optional peer dependency or optional dependency
-                if optional_peers.contains(&dependency.to_string())
-                    || info.optional_dependencies.contains_key(dependency)
-                {
+            let is_optional = info.optional_dependencies.contains_key(dependency)
+                || info.optional_peers.contains(dependency);
+
+            if is_optional {
+                let parent_key = format!("{entry_key}/{dependency}");
+                if self.package_entry(&parent_key).is_none() {
                     continue;
                 }
+            }
 
-                return Err(crate::Error::MissingPackage(dependency.to_string()));
-            };
-            // Use the ident (not the scoped key) so it can be passed to all_dependencies
-            deps.insert(dep_entry.ident.clone(), version.to_string());
+            deps.insert(dependency.to_string(), version.to_string());
         }
 
         Ok(Some(deps))
@@ -972,29 +969,25 @@ mod test {
     }
 
     const TURBO_GEN_DEPS: &[&str] = [
-        "@turbo/workspaces@1.13.4",
-        "chalk@2.4.2",
-        "commander@10.0.1",
-        "fs-extra@10.1.0",
-        "inquirer@8.2.6",
-        "minimatch@9.0.5",
-        "node-plop@0.26.3",
-        "proxy-agent@6.5.0",
-        "ts-node@10.9.2",
-        "update-check@1.5.4",
-        "validate-npm-package-name@5.0.1",
+        "@turbo/workspaces",
+        "chalk",
+        "commander",
+        "fs-extra",
+        "inquirer",
+        "minimatch",
+        "node-plop",
+        "proxy-agent",
+        "ts-node",
+        "update-check",
+        "validate-npm-package-name",
     ]
     .as_slice();
     // Both @turbo/gen and log-symbols depend on the same version of chalk
     // log-symbols version wins out, but this is okay since they are the same exact
     // version of chalk.
-    const TURBO_GEN_CHALK_DEPS: &[&str] = [
-        "ansi-styles@3.2.1",
-        "escape-string-regexp@1.0.5",
-        "supports-color@5.5.0",
-    ]
-    .as_slice();
-    const CHALK_DEPS: &[&str] = ["ansi-styles@4.3.0", "supports-color@7.2.0"].as_slice();
+    const TURBO_GEN_CHALK_DEPS: &[&str] =
+        ["ansi-styles", "escape-string-regexp", "supports-color"].as_slice();
+    const CHALK_DEPS: &[&str] = ["ansi-styles", "supports-color"].as_slice();
 
     #[test_case("@turbo/gen@1.13.4", TURBO_GEN_DEPS)]
     #[test_case("chalk@2.4.2", TURBO_GEN_CHALK_DEPS)]
@@ -2086,6 +2079,126 @@ mod test {
         // Verify catalogs are preserved (they're kept for potential references)
         assert_eq!(subgraph_data.catalog.len(), 1);
         assert_eq!(subgraph_data.catalogs.len(), 1);
+    }
+
+    #[test]
+    fn test_subgraph_includes_transitive_dependencies() {
+        let contents = serde_json::to_string(&json!({
+            "lockfileVersion": 1,
+            "workspaces": {
+                "": {
+                    "name": "test-root"
+                },
+                "apps/acme-client": {
+                    "name": "acme-client",
+                    "version": "0.0.1",
+                    "dependencies": {
+                        "@hookform/resolvers": "^5.0.1"
+                    }
+                }
+            },
+            "packages": {
+                "@hookform/resolvers": ["@hookform/resolvers@5.2.2", "", {
+                    "dependencies": {
+                        "@standard-schema/utils": "^0.3.0"
+                    },
+                    "peerDependencies": {
+                        "react-hook-form": "^7.55.0"
+                    }
+                }, "sha512-test"],
+                "@standard-schema/utils": ["@standard-schema/utils@0.3.0", "", {}, "sha512-test2"],
+                "react-hook-form": ["react-hook-form@7.62.0", "", {}, "sha512-test3"]
+            }
+        }))
+        .unwrap();
+
+        let lockfile = BunLockfile::from_str(&contents).unwrap();
+
+        // Simulate what turbo prune would call: Get transitive closure first
+        let unresolved_deps: std::collections::HashMap<String, String> =
+            [("@hookform/resolvers".to_string(), "^5.0.1".to_string())]
+                .into_iter()
+                .collect();
+        let closure =
+            crate::transitive_closure(&lockfile, "apps/acme-client", unresolved_deps, false)
+                .unwrap();
+
+        // Convert closure to idents
+        let package_idents: Vec<String> = closure.iter().map(|pkg| pkg.key.clone()).collect();
+
+        // Create subgraph with the transitive closure
+        let subgraph = lockfile
+            .subgraph(&["apps/acme-client".into()], &package_idents)
+            .unwrap();
+        let subgraph_data = subgraph.lockfile().unwrap();
+
+        // Verify @hookform/resolvers is included
+        assert!(
+            subgraph_data
+                .packages
+                .values()
+                .any(|entry| entry.ident == "@hookform/resolvers@5.2.2"),
+            "@hookform/resolvers should be in subgraph"
+        );
+
+        // Verify @standard-schema/utils is included (transitive dependency)
+        assert!(
+            subgraph_data
+                .packages
+                .values()
+                .any(|entry| entry.ident == "@standard-schema/utils@0.3.0"),
+            "@standard-schema/utils should be in subgraph as transitive dependency"
+        );
+
+        // Verify peer dependency is also included
+        assert!(
+            subgraph_data
+                .packages
+                .values()
+                .any(|entry| entry.ident == "react-hook-form@7.62.0"),
+            "react-hook-form should be in subgraph as peer dependency"
+        );
+    }
+
+    #[test]
+    fn test_transitive_deps_next_eslint() {
+        let contents = serde_json::to_string(&json!({
+            "lockfileVersion": 1,
+            "workspaces": {
+                "": {
+                    "name": "test-monorepo",
+                    "devDependencies": {
+                        "@next/eslint-plugin-next": "^15.5.4"
+                    }
+                }
+            },
+            "packages": {
+                "@next/eslint-plugin-next": ["@next/eslint-plugin-next@15.5.4", "", {
+                    "dependencies": {
+                        "fast-glob": "3.3.1"
+                    }
+                }, "sha512-test"],
+                "fast-glob": ["fast-glob@3.3.1", "", {}, "sha512-test2"]
+            }
+        }))
+        .unwrap();
+
+        let lockfile = BunLockfile::from_str(&contents).unwrap();
+
+        // Simulate turbo prune
+        let unresolved_deps: std::collections::HashMap<String, String> = [(
+            "@next/eslint-plugin-next".to_string(),
+            "^15.5.4".to_string(),
+        )]
+        .into_iter()
+        .collect();
+        let closure = crate::transitive_closure(&lockfile, "", unresolved_deps, false).unwrap();
+
+        // fast-glob should be in the transitive closure
+        assert!(
+            closure.iter().any(|pkg| pkg.key == "fast-glob@3.3.1"),
+            "fast-glob should be in transitive closure"
+        );
     }
 
     #[test]
